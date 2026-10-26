@@ -43,72 +43,73 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Блэкаут в мире измерения: приводит чанки к состоянию сети ({@link PowerGrid}) под бюджетом времени тика.
- * Не сохраняется: всё выводится из отключений, отметок на чанках и самих блоков.
+ * Blackout in a dimension's world: brings chunks into line with the power grid ({@link PowerGrid}) within the tick time
+ * budget. Non-persistent: everything is derived from outages, chunk marks and the blocks themselves.
  * <ul>
- *   <li>Каскад ({@link Sweep}): чанки района отключения по времени, когда до их квартала доходит отключение (или
- *   возврат света). Загруженный чанк переводится сразу (лампы — в двойников или обратно); чанк вне загруженного
- *   мира не грузится — он переведётся, когда его загрузят ({@link #onChunkLoad}).</li>
- *   <li>Лампы меняются прямо в палитре секции ({@link ChunkLights#applyInPlace}): для мира лампа и двойник — один
- *   и тот же блок, кроме света ({@link GridLights#inPlace}: ни блок-сущности, ни другой формы), и соседям, картам
- *   высот, столкновениям знать не о чем; свет — {@code checkBlock} по месту, клиентам — изменение блока. Через
- *   {@code setBlock} с Create и Sable лампа стоит ≈10 мкс, а в городе бывает 2.5 млн невидимых блоков света (до 7400 на
- *   чанк): очередь шла бы минутами. Лампы от сигнала сверяются с сигналом сразу, если соседи чанка загружены; на краю
- *   загруженного мира (соседей нет, а на выделенном сервере они могут не прийти вовсе) — когда загрузятся. Через мир
- *   ({@link ChunkLights#apply}) — только плоты аппаратов Sable: там блоки аппарата читает его физика.</li>
- *   <li>Единица работы — не чанк, а {@link #UNIT_WORK} работы по стольким чанкам очереди, сколько уместится (не больше
- *   {@link #CHUNKS_PER_UNIT}): лампа в палитре — 1, через мир — {@link #WORLD_LAMP}, проход секций чанка с лампами —
- *   {@link #SCAN_COST}; чанк без ламп — проверка палитр, микросекунды. Проход продолжается с места остановки
- *   ({@link ChunkLights.Pass#next}) и кончается на последней лампе чанка: ни повторных проходов с начала, ни
- *   холостого второго.</li>
- *   <li>Чанков блэкаут не грузит никогда: на диске погашенных ламп нет ({@link ChunkSaves}), и чанк, загруженный
- *   в тёмном квартале, гаснет сам при загрузке.</li>
+ *   <li>Cascade ({@link Sweep}): chunks of the outage area ordered by the time the outage (or power restoration) reaches
+ *   their district. A loaded chunk is converted immediately (lamps to unlit counterparts or back); a chunk outside the
+ *   loaded world is not loaded — it is converted when loaded ({@link #onChunkLoad}).</li>
+ *   <li>Lamps change directly in the section palette ({@link ChunkLights#applyInPlace}): for the world a lamp and its
+ *   counterpart are identical except for light ({@link GridLights#inPlace}: no block entity or different shape), so
+ *   neighbors, heightmaps and collisions need no updates; lighting uses {@code checkBlock} at the position, clients get
+ *   a block change. With Create and Sable, a lamp via {@code setBlock} costs ≈10 µs; a city may have 2.5 million invisible
+ *   light blocks (up to 7400 per chunk): the queue would take minutes. Signal-controlled lamps are checked against their
+ *   signal immediately if chunk neighbors are loaded; at the loaded world's edge (no neighbors, which on a dedicated
+ *   server may never arrive), when those neighbors load. Only Sable craft plots go through the world
+ *   ({@link ChunkLights#apply}): craft physics reads their blocks.</li>
+ *   <li>A work unit is not a chunk, but {@link #UNIT_WORK} of work across as many queued chunks as fit (at most
+ *   {@link #CHUNKS_PER_UNIT}): a lamp in the palette costs 1, through the world {@link #WORLD_LAMP}, scanning sections of
+ *   a chunk with lamps {@link #SCAN_COST}; a chunk without lamps needs a palette check, microseconds. A pass resumes
+ *   where it stopped ({@link ChunkLights.Pass#next}) and ends at the chunk's last lamp: no repeated scans from the start
+ *   or empty second pass.</li>
+ *   <li>Blackout never loads chunks: unlit counterparts do not exist on disk ({@link ChunkSaves}); a chunk loaded in a
+ *   dark district goes dark during loading.</li>
  * </ul>
  */
 public final class BlackoutWorld {
-    /** Работы в единице (≈0.3 мс): её мера — лампа, переведённая в палитре. */
+    /** Work per unit (≈0.3 ms): measured in lamps converted in the palette. */
     public static final int UNIT_WORK = 256;
-    /** Лампа через мир ({@code setBlock} со светом, клиентами и Sable; с Create и Sable ≈10 мкс) — как столько ламп в палитре. */
+    /** A lamp through the world ({@code setBlock} with lighting, clients and Sable; ≈10 µs with Create and Sable) costs this many palette lamps. */
     static final int WORLD_LAMP = 8;
-    /** Ламп через мир за единицу (зажигание двойников не от блэкаута, сверка сигнала). */
+    /** World-path lamps per unit (relighting counterparts unrelated to blackout, signal checks). */
     static final int LAMPS_PER_UNIT = UNIT_WORK / WORLD_LAMP;
-    /** Чанков за единицу работы: у чанка без ламп — проверка палитр секций, микросекунды. */
+    /** Chunks per work unit: a chunk without lamps needs section palette checks, microseconds. */
     static final int CHUNKS_PER_UNIT = 256;
     /**
-     * Единица дольше этого (настенное время) — в лог с разбивкой ({@link #logSlowUnit}): в 2.5 раза больше бюджета тика
-     * по умолчанию (4 мс) — такая единица одна съедает тик блэкаута; самая долгая в /incoming grid status не говорит, из чего она.
+     * A unit longer than this (wall time) is logged with a breakdown ({@link #logSlowUnit}): 2.5 times the default tick budget
+     * (4 ms) — one such unit consumes the blackout tick; the longest unit in /incoming grid status does not show its contents.
      */
     private static final long SLOW_UNIT_NANOS = 10_000_000L;
-    /** Игровое время последней записи о долгой единице. */
+    /** Game time of the last slow-unit log entry. */
     private long slowLogged = Long.MIN_VALUE / 2;
-    /** Чанки ближе этого к игроку (в чанках, по большей из осей) идут в очередь раньше остальных. */
+    /** Chunks closer than this to a player (chunks, maximum axis distance) are queued before the others. */
     static final int NEAR_CHUNKS = 8;
     /**
-     * Проход секций чанка по блокам — как столько ламп в палитре: палитра помнит и переведённые состояния, и чанк,
-     * где ламп уже нет, может потребовать прохода (≈0.2 мс на чанк города).
+     * Scanning a chunk's section blocks costs this many palette lamps: the palette remembers converted states too, so a
+     * chunk with no lamps left may need a scan (≈0.2 ms per city chunk).
      */
     private static final int SCAN_COST = 128;
-    /** Раз во сколько тиков обходить плоты аппаратов Sable ({@link #relightPlots}). */
+    /** Ticks between scans of Sable craft plots ({@link #relightPlots}). */
     public static final int PLOT_SCAN = 100;
-    /** Звук квартала — игрокам ближе этого (блоки по горизонтали). */
+    /** District sound is sent to players closer than this (horizontal blocks). */
     private static final double DISTRICT_SOUND_RANGE = 96;
 
-    /** Каскад одного отключения (или возврата света): чанки района по времени прихода. */
+    /** Cascade of one outage (or power restoration): area chunks ordered by arrival time. */
     private static final class Sweep {
         final Outage outage;
         final boolean restore;
         final int minX, maxX, maxZ;
-        /** Следующий ряд чанков (z), который ещё не разобран. */
+        /** Next unprocessed chunk row (z). */
         int row;
         final Long2ObjectOpenHashMap<LongArrayList> byDue = new Long2ObjectOpenHashMap<>();
         long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
-        /** Следующий момент, чанки которого ещё не выданы. */
+        /** Next time whose chunks have not yet been issued. */
         long cursor = Long.MIN_VALUE;
 
         Sweep(Outage outage, boolean restore) {
             this.outage = outage;
             this.restore = restore;
-            // квартал внутри радиуса может задевать чанки за ним: запас в полторы клетки
+            // a district within the radius may include chunks beyond it: margin of one and a half cells
             double r = outage.radius() + Districts.CELL * 16 * 1.5;
             minX = (int) Math.floor((outage.x() - r) / 16);
             maxX = (int) Math.floor((outage.x() + r) / 16);
@@ -120,7 +121,7 @@ public final class BlackoutWorld {
             return row > maxZ;
         }
 
-        /** Разобрать один ряд чанков: у каждого чанка района — время, когда до его квартала доходит каскад. */
+        /** Process one chunk row: each area chunk gets the time the cascade reaches its district. */
         void buildRow() {
             int z = row++;
             for (int x = minX; x <= maxX; x++) {
@@ -142,90 +143,90 @@ public final class BlackoutWorld {
 
     private final List<Sweep> sweeps = new ArrayList<>();
     /**
-     * Чанки, которые пора перевести: из каскада, загрузки, поставленной лампы. Сначала — чанки у игроков
-     * ({@link #NEAR_CHUNKS}), потом остальные: в городе с миллионами ламп очередь идёт минутами, и свет рядом с
-     * игроком не ждёт дальних кварталов.
+     * Chunks due for conversion: from a cascade, loading or lamp placement. Player-near chunks first
+     * ({@link #NEAR_CHUNKS}), then the rest: in a city with millions of lamps the queue takes minutes, and lights near a
+     * player do not wait for distant districts.
      */
     private final LongArrayFIFOQueue near = new LongArrayFIFOQueue(), ready = new LongArrayFIFOQueue();
-    /** Очередь, из которой взят чанк в работе: недоделанный возвращается в её начало. */
+    /** Queue from which the active chunk was taken: an unfinished chunk returns to its head. */
     private LongArrayFIFOQueue taken = ready;
-    /** Чанки игроков этого измерения на начало тика. */
+    /** Chunks of this dimension's players at tick start. */
     private final LongArrayList players = new LongArrayList();
-    /** Чанки в очереди: каждый — один раз, сколько бы поводов ни пришло. */
+    /** Queued chunks: each appears once, regardless of how many triggers arrive. */
     private final LongOpenHashSet queued = new LongOpenHashSet();
     /**
-     * Лампы, погашенные при загрузке чанка ({@link ChunkSaves}), чей свет пришёл с диска: убрать его первой же
-     * работой по чанку (в загруженных соседей снижение света заходит само, в незагруженных света нет).
+     * Lamps darkened on chunk load ({@link ChunkSaves}) whose light came from disk: remove it in the first work on the chunk
+     * (light reduction spreads into loaded neighbors itself; unloaded neighbors have no light).
      */
     private final Long2ObjectOpenHashMap<LongArrayList> staleLight = new Long2ObjectOpenHashMap<>();
     /**
-     * Лампы от сигнала, зажжённые на краю загруженного мира ({@link ChunkLights#applyInPlace}): сверить с сигналом,
-     * как только соседи чанка загружены ({@link #neighbourLoaded}).
+     * Signal-controlled lamps lit at the loaded world's edge ({@link ChunkLights#applyInPlace}): check against the signal
+     * as soon as chunk neighbors are loaded ({@link #neighbourLoaded}).
      */
     private final Long2ObjectOpenHashMap<LongArrayList> resignal = new Long2ObjectOpenHashMap<>();
-    /** Двойники не от блэкаута, которые пора зажечь ({@link #relightLater}): каждое место — один раз. */
+    /** Counterparts unrelated to blackout due for relighting ({@link #relightLater}): each position once. */
     private final LongLinkedOpenHashSet relight = new LongLinkedOpenHashSet();
     /**
-     * Двойники из {@link #relight}, чей чанк ещё не готов (или соседи не загружены), — по чанкам: снова в {@link #relight}
-     * с загрузкой соседнего чанка и раз в секунду, а не каждый тик впереди очереди.
+     * Counterparts from {@link #relight} whose chunk is not ready (or whose neighbors are not loaded), grouped by chunk:
+     * return to {@link #relight} on neighboring chunk load and once a second, instead of leading the queue every tick.
      */
     private final Long2ObjectOpenHashMap<LongArrayList> relightWaiting = new Long2ObjectOpenHashMap<>();
-    /** Чанки плотов Sable с лампами, которые ждут полной загрузки (переводятся через мир): в очередь раз в секунду. */
+    /** Sable plot chunks with lamps waiting for full loading (converted through the world): queued once a second. */
     private final LongOpenHashSet plotsWaiting = new LongOpenHashSet();
     /**
-     * Чанк, пройденный не до конца: откуда продолжать ({@link ChunkLights.Pass#next} × 2 + «гасить»). Место только
-     * движется вперёд, поэтому чанк кончается за конечное число проходов, что бы ни делали с его блоками другие моды.
-     * Другое направление (свет вернули посреди гашения), новый повод (лампу поставили раньше места) или выгрузка — с начала.
-     * Место есть у чанков в очереди и у плотов, ждущих полной загрузки ({@link #plotsWaiting}).
+     * Partly scanned chunk: resume position ({@link ChunkLights.Pass#next} × 2 + “darken”). The position only moves forward,
+     * so the chunk finishes in a finite number of passes whatever other mods do to its blocks. Opposite direction (power
+     * restored during darkening), a new trigger (a lamp placed before the position), or unload starts it over.
+     * Queued chunks and plots waiting for full loading ({@link #plotsWaiting}) have a resume position.
      */
     private final Long2IntOpenHashMap resume = new Long2IntOpenHashMap();
-    /** Квартал → когда в нём последний раз играл звук (щелчок и гул на весь квартал — один раз). */
+    /** District → when its sound last played (click and hum for the whole district — once). */
     private final Long2LongOpenHashMap sounded = new Long2LongOpenHashMap();
     private boolean restored;
 
     /**
-     * Куда уходит бюджет (для /incoming grid status): по каждому виду работы — сколько раз и сколько времени, за окно
-     * в {@link #STATS_WINDOW} тиков. Очередь, которая тратит единицы и не движется, видна здесь по видам.
+     * Where the budget goes (for /incoming grid status): counts and time for each work kind, over a window of
+     * {@link #STATS_WINDOW} ticks. A queue consuming units without advancing is visible here by kind.
      */
     public enum Work {
-        /** Единица очереди чанков (из них — всё ниже, кроме зажигания и каскада). */
+        /** Chunk queue unit (includes everything below except relighting and cascade). */
         UNIT,
-        /** Чанк не в памяти — выброшен. */
+        /** Chunk not in memory — dropped. */
         GONE,
-        /** Переводить нечего (палитры) — закрыт без прохода. */
+        /** Nothing to convert (palettes) — closed without a scan. */
         IDLE,
-        /** Свет с диска: по местам ламп, чанк снова первым. */
+        /** Disk light: at lamp positions, chunk returns to the head. */
         STALE,
-        /** Сверка ламп от сигнала, чанк снова первым. */
+        /** Signal-controlled lamp check, chunk returns to the head. */
         RESIGNAL,
-        /** Проход через мир, пройден до конца. */
+        /** World-path pass, completed. */
         PASS_DONE,
-        /** Проход через мир, лампы сверх лимита — чанк снова первым. */
+        /** World-path pass, lamps beyond the limit — chunk returns to the head. */
         PASS_MORE,
-        /** Проход в палитре (край загруженного мира). */
+        /** Palette pass (loaded world's edge). */
         EDGE,
-        /** Переведено ламп (времени нет — оно в проходах). */
+        /** Lamps converted (no separate time — included in passes). */
         LAMPS,
-        /** Лампа после setBlock — не то, что ставили (блок вернул или заменил другой мод). */
+        /** Lamp after setBlock differs from what was placed (another mod restored or replaced the block). */
         REVERTED,
-        /** Единица зажигания двойников не от блэкаута. */
+        /** Relighting unit for counterparts unrelated to blackout. */
         RELIGHT,
-        /** Двойник ждёт соседей своего чанка (снова в конец очереди зажигания). */
+        /** Counterpart waiting for its chunk's neighbors (returns to the relight queue tail). */
         RELIGHT_WAIT,
-        /** Строка каскада (кварталы и сроки чанков района). */
+        /** Cascade row (districts and deadlines of area chunks). */
         BUILD
     }
 
-    /** Окно счётчиков работы, тиков. */
+    /** Work counter window, ticks. */
     public static final int STATS_WINDOW = 100;
     private final long[] count = new long[Work.values().length], nanos = new long[Work.values().length];
     private long[] lastCount = new long[Work.values().length], lastNanos = new long[Work.values().length];
     private long statsWindow;
-    /** Чанк, который очередь брала больше всего раз подряд (за окно и за прошлое окно): застрявшая голова очереди. */
+    /** Chunk taken by the queue most often in succession (over this window and the previous one): stuck queue head. */
     private long headChunk, repeatChunk, lastRepeatChunk;
     private int headRepeat, repeatMax, lastRepeatMax;
 
-    /** Счётчики с создания мира (для проверок: окно в 100 тиков их не делит). */
+    /** Counters since world creation (for checks: the 100-tick window does not split them). */
     private final long[] total = new long[Work.values().length];
 
     private void note(Work w, long n, long t) {
@@ -234,17 +235,17 @@ public final class BlackoutWorld {
         total[w.ordinal()] += n;
     }
 
-    /** Сколько работы каждого вида с загрузки мира (по {@link Work}). */
+    /** Work of each kind since world load (by {@link Work}). */
     public long[] totals() {
         return total.clone();
     }
 
-    /** Счётчики прошлого окна: {сколько, нс} по {@link Work}. */
+    /** Previous window counters: {count, ns} by {@link Work}. */
     public long[][] work() {
         return new long[][]{lastCount.clone(), lastNanos.clone()};
     }
 
-    /** Прошлое окно: чанк, взятый больше всего раз подряд, и сколько раз ({@code null}, если никакой — дважды). */
+    /** Previous window: chunk taken most often in succession and how often ({@code null} if none was taken twice). */
     @Nullable
     public ChunkPos repeatedChunk() {
         return lastRepeatMax > 1 ? new ChunkPos(lastRepeatChunk) : null;
@@ -254,7 +255,7 @@ public final class BlackoutWorld {
         return lastRepeatMax;
     }
 
-    /** Для {@link ModAttachments#BLACKOUT_WORLD}: своё у каждого мира, живёт, пока мир загружен, не сохраняется. */
+    /** For {@link ModAttachments#BLACKOUT_WORLD}: separate for each world, lives while the world is loaded, non-persistent. */
     public BlackoutWorld() {
         resume.defaultReturnValue(-1);
     }
@@ -263,22 +264,22 @@ public final class BlackoutWorld {
         return level.getData(ModAttachments.BLACKOUT_WORLD);
     }
 
-    // ---------------------------------------------------------------- события
+    // ---------------------------------------------------------------- events
 
-    /** Новое отключение: его каскад — с этого тика. */
+    /** New outage: its cascade starts this tick. */
     void onOutage(Outage o) {
         sweeps.add(new Sweep(o, false));
     }
 
-    /** Отключению назначили возврат света: каскад возврата вместо прежнего (если он уже шёл). */
+    /** Power restoration assigned to an outage: restoration cascade replaces the previous one (if already running). */
     void onRestore(Outage o) {
         sweeps.removeIf(s -> s.restore && s.outage.id() == o.id());
         sweeps.add(new Sweep(o, true));
     }
 
     /**
-     * Привести чанк к сети при первой возможности (загружен, задет каскадом). Чанк уже в очереди продолжает проход
-     * с места остановки: повторный повод (сверка сигнала раз в секунду, событие) не начинает его заново.
+     * Bring a chunk into line with the grid at the first opportunity (loaded, reached by a cascade). An already queued chunk
+     * resumes its pass: a repeated trigger (once-per-second signal check, event) does not restart it.
      */
     void enqueue(long chunk) {
         if (!queued.add(chunk)) return;
@@ -286,7 +287,7 @@ public final class BlackoutWorld {
         (nearPlayer(chunk) ? near : ready).enqueue(chunk);
     }
 
-    /** Поставлена лампа: чанк — в очередь, и проход, уже ушедший дальше места лампы, возвращается к ней. */
+    /** A lamp was placed: queue the chunk, and return a pass already beyond the lamp's position to it. */
     void lampPlaced(ServerLevel level, BlockPos pos) {
         long c = ChunkPos.asLong(pos);
         int r = resume.get(c);
@@ -295,12 +296,12 @@ public final class BlackoutWorld {
         enqueue(c);
     }
 
-    /** Чанк не дальше {@link #NEAR_CHUNKS} от игрока (по чанкам игроков на начало тика). */
+    /** Chunk within {@link #NEAR_CHUNKS} of a player (using player chunks at tick start). */
     private boolean nearPlayer(long chunk) {
         return playerDistance(chunk) <= NEAR_CHUNKS;
     }
 
-    /** Расстояние до ближайшего игрока в чанках (по большей из осей); без игроков — {@code Integer.MAX_VALUE}. */
+    /** Nearest player distance in chunks (maximum axis distance); no players — {@code Integer.MAX_VALUE}. */
     private int playerDistance(long chunk) {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk), best = Integer.MAX_VALUE;
         for (int i = 0; i < players.size(); i++) {
@@ -311,8 +312,8 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Чанки общей очереди, к которым подошёл игрок, — в очередь у игроков (в её конец, место прохода сохраняется):
-     * иначе чанк, попавший в очередь до прихода игрока, ждёт весь дальний город.
+     * General-queue chunks approached by a player move to the player-near queue (its tail, retaining pass position):
+     * otherwise a chunk queued before the player's arrival would wait for the entire distant city.
      */
     void promoteNear() {
         if (players.isEmpty() || ready.isEmpty()) return;
@@ -331,17 +332,17 @@ public final class BlackoutWorld {
         return taken.dequeueLong();
     }
 
-    /** Двойник не от блэкаута (поршень, аппарат) — зажечь в конце тика, если ток есть. */
+    /** Counterpart unrelated to blackout (piston, craft) — relight at tick end if power is available. */
     public void relightLater(BlockPos pos) {
         relight.add(pos.asLong());
     }
 
-    /** Есть ли ток у блока: плот аппарата Sable — всегда (своё питание), остальное — по кварталу. */
+    /** Whether a block has power: a Sable craft plot always does (its own supply), elsewhere it depends on the district. */
     public static boolean powered(ServerLevel level, BlockPos pos) {
         return SubLevels.isInPlot(level, Vec3.atCenterOf(pos)) || !PowerGrid.get(level).dark(pos.getX() >> 4, pos.getZ() >> 4, level.getGameTime());
     }
 
-    /** Двойники не от блэкаута — по {@link #LAMPS_PER_UNIT} за единицу работы. */
+    /** Counterparts unrelated to blackout: {@link #LAMPS_PER_UNIT} per work unit. */
     private void relightPlaced(ServerLevel level, WorkClock clock) {
         while (!relight.isEmpty() && clock.canStart()) {
             long c0 = clock.begin(), t0 = System.nanoTime();
@@ -351,8 +352,8 @@ public final class BlackoutWorld {
                 for (int n = 0; n < LAMPS_PER_UNIT && !relight.isEmpty(); n++) {
                     BlockPos pos = BlockPos.of(relight.removeFirstLong());
                     boolean plot = SubLevels.isInPlot(level, Vec3.atCenterOf(pos));
-                    // чанк готов (иначе getBlockState грузит его сразу); в мире — ещё и соседи (Sable читает соседей),
-                    // в плоте соседние чанки держит сам аппарат
+                    // chunk ready (otherwise getBlockState loads it immediately); in the world, neighbors too (Sable reads neighbors),
+                    // in a plot the craft itself holds neighboring chunks
                     if (!Terrain.ready(level, pos) || !plot && !NuclearTickets.aroundLoaded(level, pos)) {
                         long c = ChunkPos.asLong(pos);
                         if (inMemory(level, c) != null) {
@@ -376,8 +377,8 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Двойников чанка можно зажигать (как в {@link #relightPlaced}): чанк полностью загружен и, вне плота Sable, загружены
-     * соседи. Загрузка соседа проверяет это сама ({@link #neighbourLoaded}).
+     * The chunk's counterparts can be relit (as in {@link #relightPlaced}): chunk fully loaded and, outside a Sable plot,
+     * neighbors loaded. Neighbor load checks this itself ({@link #neighbourLoaded}).
      */
     private static boolean relightReady(ServerLevel level, long c) {
         ChunkPos p = new ChunkPos(c);
@@ -385,29 +386,29 @@ public final class BlackoutWorld {
                 && (SubLevels.containing(level, p) != null || NuclearTickets.neighbourhoodLoaded(level, p));
     }
 
-    /** Ждущие двойники чанка — снова к зажиганию. */
+    /** Return the chunk's waiting counterparts to relighting. */
     private void retryRelight(long chunk) {
         LongArrayList waiting = relightWaiting.remove(chunk);
         if (waiting != null) relight.addAll(waiting);
     }
 
     /**
-     * Лампы в плотах аппаратов Sable: сборка аппарата ставит блоки прямо в секции плота (без {@code onPlace}), тики
-     * блоков в плоте не идут, а сохраняет плот Sable своим кодеком, мимо {@link ChunkSaves}. У аппарата своё питание:
-     * раз в {@link #PLOT_SCAN} тиков чанки плотов с двойниками (по палитрам) зажигаются — страховка: двойник, у которого
-     * при сборке есть собранный сосед, зажигается сразу ({@code Unlit.neighborChanged}). Обход — только палитры и
-     * секции с двойниками; сами лампы — под бюджетом ({@link #relightPlaced}).
+     * Lamps in Sable craft plots: craft assembly places blocks directly in plot sections (without {@code onPlace}), block
+     * ticks do not run in the plot, and Sable saves the plot using its own codec, bypassing {@link ChunkSaves}. A craft has its
+     * own power: every {@link #PLOT_SCAN} ticks, plot chunks with counterparts (by palettes) are relit — a fallback: a
+     * counterpart with an assembled neighbor during assembly relights immediately ({@code Unlit.neighborChanged}). Scans
+     * only palettes and sections with counterparts; lamps themselves stay within the budget ({@link #relightPlaced}).
      */
     public void relightPlots(ServerLevel level, List<SubLevelAccess> ships) {
         for (SubLevelAccess sub : ships) {
             var box = sub.boundingBox();
             double dx = box.maxX() - box.minX(), dy = box.maxY() - box.minY(), dz = box.maxZ() - box.minZ();
-            // габариты — в мире: в плоте аппарат, уменьшенный в мире, крупнее во столько раз
+            // bounds are in world space: a craft scaled down in the world is that many times larger in its plot
             double r = (Math.sqrt(dx * dx + dy * dy + dz * dz) / 2 + 2) / SubLevels.minScale(sub);
             Vec3 c = SubLevels.toPlot(sub, SubLevels.center(sub));
             for (int cx = Mth.floor(c.x - r) >> 4; cx <= Mth.floor(c.x + r) >> 4; cx++) {
                 for (int cz = Mth.floor(c.z - r) >> 4; cz <= Mth.floor(c.z + r) >> 4; cz++) {
-                    // чанк чужого плота или не плота — не трогать (и не грузить)
+                    // do not touch (or load) a chunk in another plot or outside a plot
                     if (SubLevels.containing(level, new ChunkPos(cx, cz)) != sub) continue;
                     if (!(level.getChunk(cx, cz, ChunkStatus.FULL, false) instanceof LevelChunk chunk) || !ChunkLights.anyUnlit(chunk.getSections())) continue;
                     int x0 = cx << 4, z0 = cz << 4;
@@ -431,8 +432,8 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Чанк выгружен: свет с диска уберёт следующая загрузка. Несверенные лампы от сигнала ушли на диск такими, как
-     * были, — как у любого чанка с края загруженного мира, их сверит следующее обновление соседа.
+     * Chunk unloaded: the next load removes disk light. Unchecked signal-controlled lamps went to disk as they were —
+     * as in any chunk at the loaded world's edge, the next neighbor update checks them.
      */
     void forget(long chunk) {
         staleLight.remove(chunk);
@@ -442,7 +443,7 @@ public final class BlackoutWorld {
         plotsWaiting.remove(chunk);
     }
 
-    /** Загружен чанк: соседние чанки, чьи лампы ждали соседей для сверки с сигналом, — в очередь. */
+    /** Chunk loaded: queue neighboring chunks whose lamps were waiting for neighbors to check their signal. */
     void neighbourLoaded(ChunkPos pos) {
         if (resignal.isEmpty() && relightWaiting.isEmpty()) return;
         for (int dx = -1; dx <= 1; dx++) {
@@ -454,45 +455,45 @@ public final class BlackoutWorld {
         }
     }
 
-    /** Чанк загружен с погашенными в палитре лампами {@code at}: их свет с диска убрать (см. {@link #staleLight}). */
+    /** Chunk loaded with lamps at {@code at} darkened in its palette: remove their disk light (see {@link #staleLight}). */
     void staleLight(ChunkPos chunk, LongArrayList at) {
         if (at.isEmpty()) staleLight.remove(chunk.toLong());
         else staleLight.put(chunk.toLong(), at);
     }
 
-    /** Сколько чанков ждёт перевода и двойников — зажигания (для /incoming grid status). */
+    /** Chunks awaiting conversion and counterparts awaiting relighting (for /incoming grid status). */
     public int[] backlog() {
         return new int[]{near.size() + ready.size(), relight.size()};
     }
 
     /**
-     * Есть ли работа без отключений: очереди, свет с диска, сверка ламп. Мир без отключений и без работы не тикает
-     * ({@link Blackouts#work}).
+     * Whether work exists without outages: queues, disk light, lamp checks. A world with neither outages nor work does not
+     * tick ({@link Blackouts#work}).
      */
     public boolean busy() {
         return !idle() || !staleLight.isEmpty() || !resignal.isEmpty();
     }
 
     /**
-     * Очередь занята, а у чанка {@code chunk} ждёт свет с диска или сверка сигнала (проверки). Ждущие сверки других
-     * чанков не в счёт: краевой чанк чужой проверки с лампой от сигнала ждёт соседей, пока не выгрузится.
+     * The queue is busy and chunk {@code chunk} has disk light or a signal check waiting (checks). Other chunks' pending
+     * checks do not count: an edge chunk of another check with a signal-controlled lamp waits for neighbors until unload.
      */
     public boolean busy(ChunkPos chunk) {
         return !idle() || staleLight.containsKey(chunk.toLong()) || resignal.containsKey(chunk.toLong());
     }
 
-    /** Чем занята очередь (проверки). */
+    /** What the queue is busy with (checks). */
     public String busyState() {
         return "queue " + (idle() ? "empty" : "not empty") + ", disk light cleanup pending in " + staleLight.size() + " chunks, signal recheck in " + resignal.size();
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
-    /** @param clock бюджет тика сервера для блэкаута, общий для всех измерений (уже запущен) */
+    /** @param clock server tick blackout budget, shared by all dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         long now = level.getGameTime();
         if (now / STATS_WINDOW != statsWindow) {
-            // мир не тикал целое окно — прошлое окно пустое
+            // world did not tick for a whole window — previous window is empty
             boolean adjacent = now / STATS_WINDOW == statsWindow + 1;
             lastCount = adjacent ? count.clone() : new long[count.length];
             lastNanos = adjacent ? nanos.clone() : new long[nanos.length];
@@ -512,7 +513,7 @@ public final class BlackoutWorld {
         if (now % 20 == 0) {
             grid.prune(now);
             sounded.long2LongEntrySet().removeIf(e -> now - e.getLongValue() > 200);
-            // чанк ушёл из памяти, не став полным (кольцо вокруг краевых чанков): события выгрузки у него нет
+            // chunk left memory without becoming full (ring around edge chunks): it has no unload event
             var chunkMap = level.getChunkSource().chunkMap;
             staleLight.keySet().removeIf(c -> chunkMap.getVisibleChunkIfPresent(c) == null);
             resignal.keySet().removeIf(c -> chunkMap.getVisibleChunkIfPresent(c) == null);
@@ -522,13 +523,13 @@ public final class BlackoutWorld {
                 resume.remove(c);
                 return true;
             });
-            // сосед вернулся к полной загрузке без события (опускался ниже у края видимости) — сверка сигнала сейчас
+            // neighbor returned to full loading without an event (dropped below it at the visibility edge) — check signal now
             for (long c : resignal.keySet()) {
                 ChunkPos p = new ChunkPos(c);
                 if (level.getChunkSource().getChunkNow(p.x, p.z) != null && NuclearTickets.neighbourhoodLoaded(level, p)) enqueue(c);
             }
-            // плоты Sable соседей по событиям не получают: ждущие двойники и чанки плотов — раз в секунду, когда готовы
-            // (иначе все ждущие двойники раз в секунду шли бы впереди очереди и снова ложились ждать)
+            // Sable plots receive no neighbor events: waiting counterparts and plot chunks are checked once a second when ready
+            // (otherwise every waiting counterpart would lead the queue once a second and return to waiting)
             for (long c : relightWaiting.keySet().toLongArray()) {
                 if (relightReady(level, c)) retryRelight(c);
             }
@@ -536,7 +537,7 @@ public final class BlackoutWorld {
                 ChunkPos p = new ChunkPos(c);
                 if (level.getChunkSource().getChunkNow(p.x, p.z) != null) {
                     plotsWaiting.remove(c);
-                    // место прохода сохранено (resume): продолжить с него
+                    // pass position retained (resume): continue from it
                     if (queued.add(c)) (nearPlayer(c) ? near : ready).enqueue(c);
                 }
             }
@@ -568,7 +569,7 @@ public final class BlackoutWorld {
         }
     }
 
-    /** Единица дольше {@link #SLOW_UNIT_NANOS} — писать ли её в лог ({@link #logSlowUnit}): не чаще раза в 10 с. */
+    /** Whether to log a unit longer than {@link #SLOW_UNIT_NANOS} ({@link #logSlowUnit}): at most once per 10 s. */
     private boolean slow(ServerLevel level, long took) {
         long now = level.getGameTime();
         if (took <= SLOW_UNIT_NANOS || now < slowLogged + 200) return false;
@@ -577,23 +578,23 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Долгая единица — в лог с разбивкой по видам работы: что в ней было и сколько времени каждого вида. У единицы
-     * очереди остаток («outside kinds») — время, которое не легло ни в один вид: пауза GC, вытеснение потока (у встроенного
-     * сервера рядом клиент), звук квартала. Остаток больше половины единицы — не работа блэкаута: строка INFO, не WARN
-     * (одна пауза GC уже дольше порога). Зажигание и строка каскада на виды не делятся — у них только время и объём.
+     * Log a slow unit with a breakdown by work kind: what it contained and each kind's time. For a queue unit, the remainder
+     * (“outside kinds”) is time assigned to no kind: GC pause, thread preemption (the integrated server runs beside the
+     * client), district sound. A remainder exceeding half the unit is not blackout work: INFO, not WARN (one GC pause already
+     * exceeds the threshold). Relighting and cascade rows have no kind breakdown — only time and amount.
      */
     private void logSlowUnit(ServerLevel level, String unit, long took, String what, long[] counted, long[] timed) {
         StringBuilder kinds = new StringBuilder();
         long inKinds = 0;
         for (Work w : Work.values()) {
             long n = count[w.ordinal()] - counted[w.ordinal()], t = nanos[w.ordinal()] - timed[w.ordinal()];
-            // единица целиком (очередь, зажигание, каскад) — это и есть took
+            // the whole unit (queue, relighting, cascade) is took
             if (w == Work.UNIT || w == Work.RELIGHT || w == Work.BUILD || n == 0 && t == 0) continue;
             inKinds += t;
             kinds.append(' ').append(w.name().toLowerCase(Locale.ROOT)).append('=').append(n);
             if (t > 0) kinds.append('/').append(ms(t)).append("ms");
         }
-        // по видам раскладывается только время единицы очереди (у зажигания и каскада видов нет)
+        // only a queue unit's time is split by kind (relighting and cascade have no kinds)
         boolean split = unit.equals("queue");
         long outside = Math.max(0, took - inKinds);
         if (split) kinds.append("; outside kinds ").append(ms(outside)).append("ms");
@@ -608,14 +609,14 @@ public final class BlackoutWorld {
     }
 
     /**
-     * После загрузки мира: каскады отключений, которые ещё идут, — заново; кварталы, до которых каскад уже дошёл,
-     * выдаются в первом же тике (загруженные чанки переводятся, остальные — при загрузке).
+     * After world load: restart outage cascades still running; districts already reached by a cascade are issued in the
+     * first tick (loaded chunks convert, the rest on load).
      */
     private void restore(ServerLevel level, PowerGrid grid, long now) {
         restored = true;
         for (Outage o : grid.outages()) {
             long dark = grid.swept(o.id(), false);
-            // отключение, начатое до первого тика (команда, взрыв), уже со своим каскадом
+            // an outage started before the first tick (command, explosion) already has its own cascade
             boolean hasDark = sweeps.stream().anyMatch(sw -> !sw.restore && sw.outage.id() == o.id());
             boolean hasLight = sweeps.stream().anyMatch(sw -> sw.restore && sw.outage.id() == o.id());
             if (!hasDark && dark < o.lastDark()) sweeps.add(new Sweep(o, false));
@@ -623,7 +624,7 @@ public final class BlackoutWorld {
         }
     }
 
-    /** Отключения, чей свет пора возвращать: каскад возврата (один на отключение). */
+    /** Outages due for power restoration: restoration cascade (one per outage). */
     private void scheduleRestoreSweeps(PowerGrid grid, long now) {
         for (Outage o : grid.outages()) {
             if (o.restoreAt() == Outage.NEVER || now < o.restoreAt()) continue;
@@ -633,12 +634,12 @@ public final class BlackoutWorld {
         }
     }
 
-    /** Разобрать каскады (ряд чанков — единица работы) и выдать чанки, до которых каскад дошёл. */
+    /** Process cascades (a chunk row is a work unit) and issue chunks reached by the cascade. */
     private void advanceSweeps(ServerLevel level, PowerGrid grid, long now, WorkClock clock) {
         Iterator<Sweep> it = sweeps.iterator();
         while (it.hasNext()) {
             Sweep s = it.next();
-            // отключение забыто (свет вернулся везде) или ему назначен другой возврат — каскад больше не нужен
+            // outage forgotten (power restored everywhere) or assigned another restoration — cascade no longer needed
             Optional<Outage> current = grid.outages().stream().filter(o -> o.id() == s.outage.id()).findFirst();
             if (current.isEmpty() || s.restore && !current.get().equals(s.outage)) {
                 it.remove();
@@ -656,7 +657,7 @@ public final class BlackoutWorld {
             while (s.cursor <= now && s.cursor <= s.last) {
                 LongArrayList chunks = s.byDue.remove(s.cursor);
                 if (chunks != null) {
-                    // квартал — от игрока наружу: у игрока лампы гаснут и загораются первыми
+                    // district outward from the player: lamps near the player go dark and relight first
                     if (!players.isEmpty()) {
                         long[] order = chunks.toLongArray();
                         LongArrays.quickSort(order, (a, b) -> Integer.compare(playerDistance(a), playerDistance(b)));
@@ -665,13 +666,13 @@ public final class BlackoutWorld {
                     for (int i = 0; i < chunks.size(); i++) {
                         long c = chunks.getLong(i);
                         if (inMemory(level, c) != null) enqueue(c);
-                        // не в памяти: переведётся при загрузке, а LOD Distant Horizons вдали — копией с диска
+                        // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
                         else FarLods.request(level, c, false);
                     }
                 }
                 s.cursor++;
             }
-            // пройденное — в сохранение: пройден целиком — после перезапуска не повторяется
+            // save progress: fully processed — not repeated after restart
             grid.swept(s.outage.id(), s.restore, s.done() ? Long.MAX_VALUE : Math.min(now, s.last));
             if (s.done()) {
                 it.remove();
@@ -682,9 +683,9 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Чанк из очереди, не больше {@code limit} ламп или мест: загружен — сперва убрать свет с диска и сверить лампы от
-     * сигнала, потом перевести лампы; осталось ещё — чанк первым в очереди. Не загружен — пропустить (переведётся сам
-     * при загрузке). Возвращает, сколько сделано (ламп и мест).
+     * Chunk from the queue, at most {@code limit} lamps or positions: if loaded, first remove disk light and check
+     * signal-controlled lamps, then convert lamps; if more remains, return the chunk to the queue head. If unloaded, skip
+     * (it converts itself on load). Returns work done (lamps and positions).
      */
     private int handle(ServerLevel level, PowerGrid grid, long c, long now, int limit) {
         headRepeat = c == headChunk ? headRepeat + 1 : 1;
@@ -704,12 +705,12 @@ public final class BlackoutWorld {
             return 0;
         }
         long t0 = System.nanoTime();
-        // край загруженного мира: чанк в памяти, соседи — нет (и не будут, пока игрок не подойдёт); ждать их нельзя —
-        // блоки меняются в палитре, без соседей (ChunkLights.applyInPlace)
+        // loaded world's edge: chunk in memory, neighbors absent (and will be until a player approaches); cannot wait for them —
+        // blocks change in the palette, without neighbors (ChunkLights.applyInPlace)
         boolean edge = level.getChunkSource().getChunkNow(pos.x, pos.z) == null || !NuclearTickets.neighbourhoodLoaded(level, pos);
         LongArrayList stale = staleLight.get(c);
         if (stale != null) {
-            // снижение света по окрестности; в незагруженного соседа оно не заходит — край мира, игрокам не выдан
+            // light reduction in the neighborhood; does not enter an unloaded neighbor — world's edge, not sent to players
             var light = level.getChunkSource().getLightEngine();
             int n = 0;
             for (; n < limit && !stale.isEmpty(); n++) light.checkBlock(BlockPos.of(stale.removeLong(stale.size() - 1)));
@@ -720,7 +721,7 @@ public final class BlackoutWorld {
         }
         LongArrayList signalled = resignal.get(c);
         if (signalled != null && !edge) {
-            // сигнал читается у соседей — теперь они загружены
+            // signal is read from neighbors — they are now loaded
             int n = 0;
             int most = Math.max(1, limit / WORLD_LAMP);
             for (; n < most && !signalled.isEmpty(); n++) ChunkLights.resignal(level, BlockPos.of(signalled.removeLong(signalled.size() - 1)));
@@ -730,12 +731,12 @@ public final class BlackoutWorld {
             return n * WORLD_LAMP;
         }
         boolean dark = grid.dark(pos.x, pos.z, now);
-        // переводить нечего (в большинстве чанков ламп нет) — только отметки
+        // nothing to convert (most chunks have no lamps) — marks only
         boolean needed = ChunkLights.needs(chunk, dark);
-        // отметка — до перевода: упади он посередине, погашенные уже отмечены
+        // mark before conversion: if it fails halfway, darkened lamps are already marked
         if (dark && needed) chunk.setData(ModAttachments.GRID_DARK, true);
-        // плот аппарата Sable — через мир: блоки аппарата читает его физика (соседние чанки плота держит сам аппарат,
-        // вне плота соседей нет — край мира тут не мерка); плот, опущенный ниже полной загрузки, ждёт её с местом прохода
+        // Sable craft plot — through the world: craft physics reads its blocks (the craft itself holds neighboring plot chunks;
+        // no neighbors outside the plot — the world's edge is no criterion here); a plot below full loading waits with its pass position
         boolean world = needed && SubLevels.containing(level, pos) != null;
         if (world && level.getChunkSource().getChunkNow(pos.x, pos.z) == null) {
             queued.remove(c);
@@ -753,7 +754,7 @@ public final class BlackoutWorld {
             LongArrayList lamps = new LongArrayList();
             pass = ChunkLights.applyInPlace(level, chunk, dark, limit, from, !edge, lamps);
             if (edge) {
-                // сигнал читается у соседей — сверка, когда они загрузятся
+                // signal is read from neighbors — check when they load
                 if (!lamps.isEmpty()) resignal.computeIfAbsent(c, k -> new LongArrayList()).addAll(lamps);
             } else {
                 for (int i = 0; i < lamps.size(); i++) ChunkLights.resignal(level, BlockPos.of(lamps.getLong(i)));
@@ -766,33 +767,33 @@ public final class BlackoutWorld {
         note(!needed ? Work.IDLE : edge ? Work.EDGE : pass.done() ? Work.PASS_DONE : Work.PASS_MORE, 1, System.nanoTime() - t0);
         if (changed > 0) {
             districtSound(level, chunk, dark, now);
-            // LOD Distant Horizons: квартал гаснет (и зажигается) и вдали, а не при сохранении чанка
+            // Distant Horizons LODs: a district goes dark (and relights) in the distance too, without waiting for chunk save
             DhUpdates.mark(level, pos, level.getGameTime() + DhUpdates.SETTLE);
         }
-        // проход секций по блокам (4096 блоков — как много ламп) — тоже работа, даже если ламп в них уже нет
+        // scanning section blocks (4096 blocks cost many lamps) is work too, even if no lamps remain
         int work = changed * cost + resignalled * WORLD_LAMP + (needed ? SCAN_COST : 0);
         if (!pass.done()) {
-            // башня морских фонарей — не одна единица: остальное — следующими, с места остановки
+            // a sea lantern tower is not one unit: the rest in following units, from the resume position
             resume.put(c, pass.next() << 1 | (dark ? 1 : 0));
             taken.enqueueFirst(c);
             return work;
         }
         queued.remove(c);
         if (!dark && chunk.hasData(ModAttachments.GRID_DARK)) {
-            // без отметки — не трогать: снятие помечает чанк несохранённым
+            // no mark — do not touch: removal marks the chunk unsaved
             chunk.removeData(ModAttachments.GRID_DARK);
         }
         return work;
     }
 
-    /** Щелчок реле и обрыв гула (или гул, набирающий силу) — тем, кто рядом с кварталом, один раз на квартал. */
+    /** Relay click and hum cutoff (or rising hum) for those near the district, once per district. */
     private void districtSound(ServerLevel level, LevelChunk chunk, boolean dark, long now) {
         ChunkPos pos = chunk.getPos();
         long district = Districts.of(pos.x, pos.z);
         if (sounded.containsKey(district)) return;
         sounded.put(district, now);
         int x = pos.getMiddleBlockX(), z = pos.getMiddleBlockZ();
-        // высота — у чанка в руках: чанк на краю бывает ниже полной загрузки, и level.getHeight грузил бы его сразу
+        // height comes from the chunk in hand: an edge chunk may be below full loading, and level.getHeight would load it immediately
         Vec3 at = new Vec3(x + 0.5, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) + 1, z + 0.5);
         S2C.GridDistrict packet = new S2C.GridDistrict(at, !dark);
         for (ServerPlayer p : level.players()) {
@@ -802,8 +803,8 @@ public final class BlackoutWorld {
     }
 
     /**
-     * Чанк в памяти: полностью загруженный или опущенный ниже (у края видимости), но не выгруженный; null — его нет
-     * в памяти (как в {@code ScarQueue}).
+     * Chunk in memory: fully loaded or below full loading (at the visibility edge), but not unloaded; null — absent from
+     * memory (as in {@code ScarQueue}).
      */
     @Nullable
     static LevelChunk inMemory(ServerLevel level, long pos) {
@@ -811,7 +812,7 @@ public final class BlackoutWorld {
         return holder != null && holder.getChunkIfPresentUnchecked(ChunkStatus.FULL) instanceof LevelChunk chunk ? chunk : null;
     }
 
-    /** Для проверок: пройдены ли все каскады. */
+    /** For checks: whether all cascades have been processed. */
     public boolean idle() {
         return sweeps.isEmpty() && relight.isEmpty() && queueEmpty();
     }

@@ -11,14 +11,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Диагностика зоны за волной для прогонов на ноутбуке: только считает и пишет строки «DIAG …», поведение не меняет.
- * Включается свойством JVM {@code -Dincoming.nukeDiag=true}; без него ни одной строки и ни одного потока.
- * Не состояние мира — замер (как {@code WorkScheduler.ownNanos}).
+ * Post-wave zone diagnostics for laptop runs: only counts and logs “DIAG …”, no behavior changes.
+ * Enabled by JVM property {@code -Dincoming.nukeDiag=true}; without it no lines or threads.
+ * Measurement, not world state (as {@code WorkScheduler.ownNanos}).
  */
 public final class NukeDiag {
     public static final boolean ON = Boolean.getBoolean("incoming.nukeDiag");
 
-    /** Почему работа чанка в очереди руин отложена (счёт попыток за окно отчёта). */
+    /** Why chunk work in the ruin queue was deferred (attempt counts over report window). */
     enum Wait {
         BELOW_FULL("chunk itself below full load"),
         SERVER_PLAN("server-thread plan waits for the REACH window"),
@@ -40,7 +40,7 @@ public final class NukeDiag {
     private static final long[] WAITS = new long[Wait.values().length];
     private static final AtomicLong READS = new AtomicLong(), READ_NANOS = new AtomicLong(), READ_MAX = new AtomicLong();
     private static final AtomicLong READS_IN_FLIGHT = new AtomicLong();
-    /** Тик дольше, мс: его стеки — в лог. */
+    /** Tick longer than this, ms: log its stack traces. */
     private static final long LONG_TICK_MS = 250;
     private static volatile long tickStart;
     private static final List<StackTraceElement[]> samples = new ArrayList<>();
@@ -52,7 +52,7 @@ public final class NukeDiag {
         if (ON) WAITS[w.ordinal()]++;
     }
 
-    /** Чтение окна с диска отдано: ответ — {@link #readDone}. */
+    /** Disk window read submitted: completion via {@link #readDone}. */
     static long readStart() {
         if (!ON) return 0;
         READS_IN_FLIGHT.incrementAndGet();
@@ -68,7 +68,7 @@ public final class NukeDiag {
         READ_MAX.accumulateAndGet(took, Math::max);
     }
 
-    /** Строка причин ожидания очереди руин и чтений окон за окно отчёта; счётчики — с нуля. */
+    /** Log ruin-queue waiting reasons and window reads over report window; reset counters. */
     static String takeWaits() {
         StringBuilder sb = new StringBuilder();
         for (Wait w : Wait.values()) {
@@ -83,9 +83,9 @@ public final class NukeDiag {
     }
 
     /**
-     * Очередь потока ввода-вывода чанков мира: записи, ждущие диска ({@code IOWorker.pendingWrites} — выгруженные чанки
-     * с данными NBT в памяти), и задачи почтового ящика (чтения впереди записей); куча сейчас. Поля читаются отражением
-     * и без синхронизации — число для отчёта, не для решений.
+     * World chunk I/O queue: disk-pending writes ({@code IOWorker.pendingWrites} — unloaded chunks with NBT in memory),
+     * mailbox tasks (reads ahead of writes); current heap. Fields read reflectively without synchronization — report
+     * numbers, not decision inputs.
      */
     public static String io(net.minecraft.server.level.ServerLevel level) {
         String queue;
@@ -104,7 +104,7 @@ public final class NukeDiag {
         return queue + "; mod reads in flight " + READS_IN_FLIGHT.get() + "; heap " + ((rt.totalMemory() - rt.freeMemory()) >> 20) + " of " + (rt.maxMemory() >> 20) + " MB";
     }
 
-    // ---------------------------------------------------------------- долгий тик: стеки потока сервера
+    // ---------------------------------------------------------------- slow tick: server thread stacks
 
     public static void onTickPre(ServerTickEvent.Pre e) {
         if (!ON) return;
@@ -123,7 +123,7 @@ public final class NukeDiag {
             samples.clear();
         }
         if (start == 0 || ms < LONG_TICK_MS) return;
-        // одинаковые верхушки стека вместе: сколько снимков в каждой (снимок — раз в 20 мс после первых 100 мс тика)
+        // group identical stack tops: sample count for each (sample every 20 ms after the tick's first 100 ms)
         Map<String, Integer> count = new HashMap<>();
         Map<String, StackTraceElement[]> full = new HashMap<>();
         for (StackTraceElement[] st : got) {

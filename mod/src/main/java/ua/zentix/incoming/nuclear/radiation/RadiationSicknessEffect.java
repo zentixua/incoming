@@ -11,10 +11,10 @@ import net.neoforged.neoforge.common.EffectCure;
 import java.util.Set;
 
 /**
- * Лучевая болезнь; что происходит, решает {@link RadiationTicker} по дозе и времени. У игрока эффект — метка стадии
- * для интерфейса (уровень = стадия), его обновляет тикер игроков. У моба эффект сам ведёт течение: раз в секунду
- * на тике моба ({@link RadiationTicker#tickMob}) — так болезнь тикает только у облучённых, без перебора всех мобов.
- * Молоко и другие средства её не лечат.
+ * Radiation sickness; {@link RadiationTicker} determines behavior from dose and time. For a player, the effect is a UI
+ * stage marker (level = stage), updated by the player ticker. For a mob, the effect drives the course itself: once a
+ * second on the mob tick ({@link RadiationTicker#tickMob}) — only exposed mobs' sickness ticks, without scanning all mobs.
+ * Milk and other remedies do not cure it.
  */
 public class RadiationSicknessEffect extends MobEffect {
     public RadiationSicknessEffect() {
@@ -23,7 +23,7 @@ public class RadiationSicknessEffect extends MobEffect {
 
     @Override
     public boolean shouldApplyEffectTickThisTick(int duration, int amplifier) {
-        // раз в секунду; у бесконечного эффекта (у моба) сюда приходит счётчик тиков самого моба
+        // once a second; an infinite effect (mob) supplies the mob's own tick counter here
         return duration % 20 == 0;
     }
 
@@ -35,6 +35,6 @@ public class RadiationSicknessEffect extends MobEffect {
 
     @Override
     public void fillEffectCures(Set<EffectCure> cures, MobEffectInstance effectInstance) {
-        // лекарства нет
+        // no cure
     }
 }

@@ -12,16 +12,17 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Свет копии чанка не из мира (руины, след подрыва, лампы квартала — {@code nuclear/world/FarLods}) для LOD Voxy: у копии
- * света нет (мир его не считал), а Voxy берёт свет вокселя как есть — без него LOD чёрные, а со светом с диска у
- * погашенного квартала горели бы прежние лампы. Считается по правилам ванили внутри одного чанка (так же свой свет
- * LOD считает Distant Horizons, {@code DhLightingEngine}): свет блоков — от светимости блока, свет неба — 15 сверху
- * вниз сквозь прозрачное без потерь, дальше во все шесть сторон с потерей не меньше 1 на блок, у мутного (вода,
- * листва) — на его непрозрачность. Не по ванили: соседние чанки не светят внутрь (у края чанка свет соседа не виден —
- * на дальности LOD это доли блока), форма блока не учитывается (полублок гасит, как целый, если непрозрачен).
+ * Lighting of a chunk copy outside the world (ruins, detonation scorch, district lamps — {@code nuclear/world/FarLods})
+ * for Voxy LODs: a copy has no light (the world has not computed it), and Voxy takes voxel light as is — without it LODs
+ * are black; with disk lighting, a dark district's old lamps would still glow. Computed by vanilla rules within one chunk
+ * (Distant Horizons computes its own LOD light the same way, {@code DhLightingEngine}): block light comes from block
+ * emission; skylight travels down through transparent blocks at 15 without loss, then in all six directions losing at
+ * least 1 per block, or the opacity of translucent material (water, leaves). Deviations from vanilla: neighboring chunks
+ * do not shine inward (neighbor light is absent at chunk edges — fractions of a block at LOD distance); block shape is
+ * ignored (an opaque slab attenuates like a full block).
  */
 public final class CopyLight {
-    /** Свет каждого места: {@code [секция][y·256 + z·16 + x]}, 0–15. */
+    /** Light at each position: {@code [section][y·256 + z·16 + x]}, 0–15. */
     final byte[][] block, sky;
     private final int sections;
 
@@ -32,14 +33,14 @@ public final class CopyLight {
     }
 
     /**
-     * Свет секций чанка снизу вверх ({@code sections[i]} — секция с номером {@code minSection + i}; null — воздух).
+     * Chunk section light from bottom to top ({@code sections[i]} — section {@code minSection + i}; null — air).
      *
-     * @param hasSky у измерения есть небо ({@code DimensionType.hasSkyLight}); нет — свет неба 0
+     * @param hasSky whether the dimension has skylight ({@code DimensionType.hasSkyLight}); if not, skylight is 0
      */
     public static CopyLight of(LevelChunkSection[] sections, boolean hasSky) {
         CopyLight l = new CopyLight(sections.length);
         int cells = sections.length * 4096;
-        // непрозрачность (0–15) и светимость каждого места: состояний в чанке — сотни, мест — сотни тысяч
+        // opacity (0–15) and emission at each position: hundreds of states in a chunk, hundreds of thousands of positions
         byte[] opacity = new byte[cells];
         byte[] emission = new byte[cells];
         Map<BlockState, Integer> props = new IdentityHashMap<>();
@@ -59,7 +60,7 @@ public final class CopyLight {
         return l;
     }
 
-    /** Непрозрачность (биты 0–3) и светимость (4–7) состояния; свет неба, идущий вниз без потерь, — бит 8. */
+    /** State opacity (bits 0–3) and emission (4–7); skylight traveling down without loss is bit 8. */
     private static int properties(BlockState state) {
         int opacity = Math.max(0, Math.min(15, state.getLightBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
         int emission = Math.max(0, Math.min(15, state.getLightEmission(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
@@ -77,7 +78,7 @@ public final class CopyLight {
                 int light = 15;
                 for (int y = height - 1; y >= 0; y--) {
                     int cell = cell(x, y, z), o = opacity[cell];
-                    // 15 идёт вниз сквозь прозрачное без потерь, меньше — теряет хотя бы 1 на блок
+                    // 15 travels down through transparent blocks without loss; lower values lose at least 1 per block
                     light = light == 15 && o == 0 ? 15 : Math.max(0, light - Math.max(1, o));
                     if (light == 0) break;
                     sky[cell >> 12][cell & 4095] = (byte) light;
@@ -99,8 +100,8 @@ public final class CopyLight {
     }
 
     /**
-     * Свет из мест очереди — во все шесть сторон внутри чанка, с потерей не меньше 1 на блок (у мутного — его
-     * непрозрачность): место встаёт в очередь снова, только когда свет в нём вырос (не больше 15 раз).
+     * Light from queued positions spreads in all six directions within the chunk, losing at least 1 per block (the opacity
+     * for translucent material): a position is queued again only when its light increases (at most 15 times).
      */
     private void spread(byte[][] layer, byte[] opacity, int[] seeds, int count) {
         int height = sections * 16;
@@ -124,12 +125,15 @@ public final class CopyLight {
 
     private static final int[] DX = {1, -1, 0, 0, 0, 0}, DY = {0, 0, 1, -1, 0, 0}, DZ = {0, 0, 0, 0, 1, -1};
 
-    /** Место в чанке: y от низа первой секции; индекс внутри секции — как у {@link DataLayer} и палитр (y·256 + z·16 + x). */
+    /**
+     * Position within a chunk: y from the bottom of the first section; index within a section as in {@link DataLayer}
+     * and palettes (y·256 + z·16 + x).
+     */
     static int cell(int x, int y, int z) {
         return (y >> 4) << 12 | (y & 15) << 8 | z << 4 | x;
     }
 
-    /** Свет места (x, y от низа первой секции, z). */
+    /** Light at a position (x, y from the bottom of the first section, z). */
     int block(int x, int y, int z) {
         return get(block, cell(x, y, z));
     }
@@ -138,19 +142,19 @@ public final class CopyLight {
         return get(sky, cell(x, y, z));
     }
 
-    /** Свет блоков секции {@code i} слоем Minecraft; null — темно везде. */
+    /** Block light of section {@code i} as a Minecraft layer; null — dark everywhere. */
     @Nullable
     public DataLayer blockLayer(int i) {
         return layer(block[i]);
     }
 
-    /** Свет неба секции {@code i}; null — темно везде (под землёй или без неба). */
+    /** Skylight of section {@code i}; null — dark everywhere (underground or without a sky). */
     @Nullable
     public DataLayer skyLayer(int i) {
         return layer(sky[i]);
     }
 
-    /** Секция {@code i} вся под открытым небом (свет неба 15 везде). */
+    /** Section {@code i} is entirely under open sky (skylight 15 everywhere). */
     public boolean fullSky(int i) {
         for (byte b : sky[i]) if (b != 15) return false;
         return true;

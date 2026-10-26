@@ -17,35 +17,35 @@ import ua.zentix.incoming.nuclear.model.PromptRadiationModel;
 import ua.zentix.incoming.util.Terrain;
 
 /**
- * Защита от радиации блоками: ослабление по массе вещества на пути (кг/м², {@link PromptRadiationModel#transmission}).
- * Блок — метр вещества своей плотности ({@link #density}) при любом {@code effects_scale}: масштаб сжимает радиусы
- * подрыва, а стены, окна и кроны вокруг тела остаются своего размера. Путь луча в каждом блоке — по сетке
- * (Amanatides–Woo), а не шагами: угол стены срезает мало. Чанки читаются только готовые ({@link Terrain#ready}): за
- * неготовым — воздух.
+ * Radiation shielding by blocks: attenuation by material mass along the path (kg/m²,
+ * {@link PromptRadiationModel#transmission}). A block is a meter of material at its density ({@link #density}) for any
+ * {@code effects_scale}: scale compresses burst radii, while walls, windows and crowns around the body retain their
+ * size. Ray path in each block follows the grid (Amanatides–Woo), not fixed steps: a wall corner clips only a little.
+ * Only ready chunks are read ({@link Terrain#ready}): beyond an unready chunk, air.
  */
 public final class Shielding {
-    /** Луч к подрыву — не дальше стольких блоков: защита — то, что рядом с телом (стены, подвал, окоп), а не рельеф вдали. */
+    /** Ray toward burst stops at this many blocks: shielding is near the body (walls, basement, trench), not distant terrain. */
     private static final double PROMPT_RANGE = 64;
-    /** Рассеянная воздухом часть радиации первой минуты: приходит с неба, а не по прямой от шара (оценка). */
+    /** Air-scattered share of first-minute radiation: arrives from sky instead of directly from the ball (estimate). */
     private static final double SKY_SHARE = 0.3;
     private static final double SKY_RANGE = 32;
-    /** Направления на осадки вокруг. */
+    /** Directions toward surrounding fallout. */
     private static final int AZIMUTHS = 8;
-    /** Кольца, блоки: на каждом — точка поверхности, где лежат осадки, и луч к ней. */
+    /** Rings, blocks: each has a surface point with fallout and a ray to it. */
     private static final double[] RINGS = {1, 2, 4, 8, 16};
-    /** Границы колец (между точками, по логарифму). */
+    /** Ring boundaries (between sample points, logarithmic). */
     private static final double[] EDGES = {0, 1.5, 3, 6, 12};
-    /** Высота тела над осадками и дальность, дальше которой гамма осадков не доходит (пробег в воздухе), м. */
+    /** Body height above fallout and maximum fallout gamma range (air attenuation range), m. */
     private static final double BODY_M = 1, AIR_RANGE_M = 100;
-    /** Лучи считаются, пока масса меньше этого (кг/м²): дальше пропускание меньше 10⁻⁹. */
+    /** Trace rays while mass is below this (kg/m²): transmittance beyond it is below 10⁻⁹. */
     private static final double MASS_LIMIT = 30 * PromptRadiationModel.HALF_PROMPT;
 
     private Shielding() {}
 
     /**
-     * Доля радиации первой минуты, доходящая до {@code eye}: {@link #SKY_SHARE} рассеянного — по двум лучам к небу
-     * (вверх и под 45° к подрыву), остальное — по прямой к подрыву. Окоп и подвал без потолка спасают от прямого, но не
-     * от рассеянного.
+     * First-minute radiation fraction reaching {@code eye}: {@link #SKY_SHARE} scattered share uses two sky rays
+     * (upward and 45° toward burst), the rest directly toward burst. An open trench or basement blocks direct radiation,
+     * not scattered radiation.
      */
     public static double prompt(Level level, Vec3 eye, Vec3 burst) {
         Vec3 dir = burst.subtract(eye);
@@ -60,11 +60,11 @@ public final class Shielding {
     }
 
     /**
-     * Доля мощности дозы осадков на открытой ровной земле, доходящая до тела в {@code at} (середина тела). Осадки
-     * лежат на всём, что открыто небу: на земле, крышах, кронах. Ровная земля вокруг тела в метре над ней светит долей
-     * ln(1 + r²)/ln(1 + R²) изнутри радиуса r (R — {@link #AIR_RANGE_M}); на кольцах {@link #RINGS} по
-     * {@link #AZIMUTHS} направлениям — точка открытой поверхности (карта высот) и луч к ней, дальнее последнего кольца —
-     * по его лучам. Под крышей осадки светят сквозь крышу и стены, в яме — сквозь край ямы, в пещере — сквозь толщу.
+     * Fraction of open flat-ground fallout dose rate reaching the body at {@code at} (body center). Fallout lies on
+     * everything open to sky: ground, roofs, crowns. Flat ground around a body one meter above it contributes
+     * ln(1 + r²)/ln(1 + R²) from inside radius r (R — {@link #AIR_RANGE_M}); sample {@link #RINGS} along {@link #AZIMUTHS}
+     * directions — exposed surface point (heightmap) and ray to it; beyond the last ring, use its rays. Under a roof,
+     * fallout shines through roof and walls; in a pit, through its edge; in a cave, through the overburden.
      */
     public static double fallout(Level level, Vec3 at) {
         double total = Math.log1p(Mth.square(AIR_RANGE_M / BODY_M));
@@ -88,7 +88,7 @@ public final class Shielding {
         return sum;
     }
 
-    /** Масса вещества на отрезке, кг/м²: плотность каждого блока × путь в нём. */
+    /** Material mass along a segment, kg/m²: each block's density × path within it. */
     public static double mass(Level level, Vec3 from, Vec3 to) {
         double dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
         double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -130,17 +130,17 @@ public final class Shielding {
     }
 
     /**
-     * Плотность блока, кг/м³, с долей объёма, которую он занимает (полублок — половина). Вещество — по звуку блока (так
-     * игра сама делит материалы): дерево 600, земля и песок 1600, металл 7800, камень, кирпич и бетон 2300, вода 1000.
-     * Стекло — окно (1 см стекла, а не метр), листва — крона, шерсть — войлок, снег и лёд — свои.
+     * Block density, kg/m³, weighted by occupied volume (slab — half). Material from block sound (the game's material
+     * classification): wood 600, earth and sand 1600, metal 7800, stone, brick and concrete 2300, water 1000.
+     * Glass means a window (1 cm glass, not a meter), leaves a crown, wool felt; snow and ice have their own values.
      */
     static double density(Level level, BlockPos p) {
         return density(level, p, level.getBlockState(p));
     }
 
     /**
-     * Плотность блока {@code s} на месте {@code p} ({@link #density(Level, BlockPos)}), кг/м³; блок — метр, поэтому это и
-     * его масса, кг. Блока на месте может уже не быть (снесённый волной — у звука обломков): форма и звук — его.
+     * Density of block {@code s} at {@code p} ({@link #density(Level, BlockPos)}), kg/m³; a block is a meter, so also its mass,
+     * kg. The block may already be absent (removed by the blast, for debris sound): use its shape and sound.
      */
     public static double density(LevelReader level, BlockPos p, BlockState s) {
         if (s.isAir()) return 0;
@@ -152,14 +152,14 @@ public final class Shielding {
         return material(level, p, s) * fill + liquid * (1 - fill);
     }
 
-    /** Окно ли блок {@code s}: стекло по звуку блока (вещество — {@link #density}: окно, а не метр стекла), не лёд. */
+    /** Whether block {@code s} is a window: glass by block sound (material as {@link #density}: a window, not a meter of glass), not ice. */
     public static boolean window(LevelReader level, BlockPos p, BlockState s) {
         return !s.is(BlockTags.LEAVES) && !s.is(BlockTags.ICE) && !s.is(BlockTags.SNOW) && s.getSoundType(level, p, null) == SoundType.GLASS;
     }
 
     /**
-     * Плотность вещества блока {@code s}, кг/м³ (без доли объёма, {@link #density}): по звуку блока; у стекла — окно, у
-     * листвы — крона.
+     * Material density of block {@code s}, kg/m³ (without volume fraction, {@link #density}): by block sound; glass is a window,
+     * leaves a crown.
      */
     public static double material(LevelReader level, BlockPos p, BlockState s) {
         if (s.is(BlockTags.LEAVES)) return 50;

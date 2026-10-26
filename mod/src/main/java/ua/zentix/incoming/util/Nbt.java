@@ -4,7 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/** Вектор в NBT тремя числами: {@code <prefix>_x/_y/_z}, без префикса — {@code x/y/z} (формат уже сохранённых миров). */
+/** NBT vector as three numbers: {@code <prefix>_x/_y/_z}, or {@code x/y/z} without prefix (existing world format). */
 public final class Nbt {
     private Nbt() {}
 
@@ -14,7 +14,7 @@ public final class Nbt {
         tag.putDouble(key(prefix, "z"), v.z);
     }
 
-    /** Вектор или {@code null}, если его нет в теге. */
+    /** Vector or {@code null} if absent from the tag. */
     @Nullable
     public static Vec3 getVec(CompoundTag tag, String prefix) {
         if (!tag.contains(key(prefix, "x"))) return null;

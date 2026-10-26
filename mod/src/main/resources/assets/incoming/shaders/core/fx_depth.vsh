@@ -1,6 +1,6 @@
 #version 150
 
-// Расстояние до мира за пикселем (client/fx/layer/SceneDepth): квадрат во весь кадр.
+// World distance behind a pixel (client/fx/layer/SceneDepth): fullscreen quad.
 in vec3 Position;
 
 void main() {

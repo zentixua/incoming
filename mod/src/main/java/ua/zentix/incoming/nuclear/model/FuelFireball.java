@@ -1,104 +1,104 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Огненный шар топлива в баке изделия при ударе (CCPS 1994, «Guidelines for Evaluating the Characteristics of Vapor Cloud
- * Explosions, Flash Fires and BLEVEs»): диаметр D = 5,8·M^⅓ м, горит t = 0,45·M^⅓ с (M — кг топлива, до 30 т), с
- * поверхности излучает 200–350 кВт/м² — середина {@link #SURFACE_POWER}. Шаром горит не всё топливо: доля
- * {@link #POOL_SHARE} остаётся в воронке. Один закон у сервера (что шар поджигает) и у картинки и звука клиента
- * ({@code CloudModel}).
+ * Fuel-tank fireball at impact (CCPS 1994, “Guidelines for Evaluating the Characteristics of Vapor Cloud Explosions,
+ * Flash Fires and BLEVEs”): diameter D = 5.8·M^⅓ m, burn time t = 0.45·M^⅓ s (M — kg fuel, up to 30 t), surface emission
+ * 200–350 kW/m² — midpoint {@link #SURFACE_POWER}. Not all fuel burns in the ball: {@link #POOL_SHARE} remains in the
+ * crater. One law for the server (what the ball ignites) and client visuals and sound ({@code CloudModel}).
  */
 public final class FuelFireball {
-    /** Излучение поверхности шара, Вт/м²: середина 200–350 кВт/м² (CCPS). */
+    /** Ball surface emission, W/m²: midpoint of 200–350 kW/m² (CCPS). */
     public static final double SURFACE_POWER = 275e3;
-    /** Джоулей в калории: световой импульс поджига — в кал/см², как у ядерки ({@link ThermalModel#IGNITE}). */
+    /** Joules per calorie: ignition fluence uses cal/cm², as for nuclear ({@link ThermalModel#IGNITE}). */
     private static final double J_PER_CAL_CM2 = 4.1868e4;
     /**
-     * Доля топлива к удару, что остаётся в воронке и догорает там, а не разлетается брызгами в огненный шар: опыты Sandia с
-     * крылом С-141 в масштабе ~1/42, бьющим в песок с глиной (Tieszen, Attaway, «Fuel dispersal in high-speed aircraft/soil
-     * impact scenarios», SAND95-2529, 1996, OSTI 188568), — в воронке от почти нуля при ударе по касательной до 25–50 % при
-     * крутом. Шахед бьёт под 60°, ракета под 45° — круто; взят нижний край: у опытов не было заряда, а взрыв БЧ рядом с баком
-     * выбрасывает топливо из воронки (⚠ оценка внутри диапазона). Шар — остальное ({@link #ballKg}).
+     * Share of impact fuel remaining in the crater and burning there instead of spraying into the fireball: Sandia
+     * experiments with a ~1/42-scale C-141 wing hitting sand and clay (Tieszen, Attaway, “Fuel dispersal in high-speed
+     * aircraft/soil impact scenarios”, SAND95-2529, 1996, OSTI 188568) — from nearly zero retained at grazing impact to 25–50 %
+     * at steep impact. Shahed hits at 60°, missile at 45° — steep; use the lower edge: experiments had no charge, whereas a
+     * warhead explosion beside the tank ejects fuel from the crater (⚠ estimate within the range). The rest forms the ball
+     * ({@link #ballKg}).
      */
     public static final double POOL_SHARE = 0.25;
 
     private FuelFireball() {}
 
-    /** Сколько топлива из {@code fuelKg} кг к удару сгорает шаром, кг: всё, кроме доли воронки ({@link #POOL_SHARE}). */
+    /** Fuel from {@code fuelKg} kg at impact burning in the ball, kg: all except crater share ({@link #POOL_SHARE}). */
     public static double ballKg(double fuelKg) {
         return Math.max(0, fuelKg) * (1 - POOL_SHARE);
     }
 
-    /** Диаметр шара из {@code fuelKg} кг топлива в шаре ({@link #ballKg}), м. */
+    /** Ball diameter from {@code fuelKg} kg of fuel in the ball ({@link #ballKg}), m. */
     public static double diameter(double fuelKg) {
         return fuelKg <= 0 ? 0 : 5.8 * Math.cbrt(fuelKg);
     }
 
-    /** Сколько горит шар из {@code fuelKg} кг топлива в шаре, с. */
+    /** Burn duration for a ball of {@code fuelKg} kg fuel in the ball, s. */
     public static double seconds(double fuelKg) {
         return fuelKg <= 0 ? 0 : 0.45 * Math.cbrt(fuelKg);
     }
 
     /**
-     * Световой импульс на поверхность внутри шара из {@code fuelKg} кг топлива в шаре, кал/см²: излучение поверхности ×
-     * время горения (поверхность в шаре видит пламя со всех сторон — оценка сверху для граней, повёрнутых от центра).
-     * Место в мире, которое шар накрыл не всё горение, берёт меньше — {@link Sweep#exposure}.
+     * Thermal fluence on a surface inside a ball of {@code fuelKg} kg fuel in the ball, cal/cm²: surface emission × burn time
+     * (a surface inside sees flame on all sides — upper estimate for faces turned away from center).
+     * A world position covered for only part of the burn receives less — {@link Sweep#exposure}.
      */
     public static double exposure(double fuelKg) {
         return SURFACE_POWER * seconds(fuelKg) / J_PER_CAL_CM2;
     }
 
     /**
-     * Радиус шара диаметра {@code d}, м, что горит {@code s} с, в возрасте t, с (0 — погас или ещё нет): растёт к D/2 за
-     * первую пятую горения (⚠ оценка формы).
+     * Radius of a ball of diameter {@code d}, m, burning for {@code s} s, at age t, s (0 — extinguished or not yet present):
+     * grows to D/2 over the first fifth of the burn (⚠ shape estimate).
      */
     public static double radius(double d, double s, double t) {
         return t >= 0 && t < s ? 0.5 * d * Math.min(1, Math.sqrt(t / (0.2 * s))) : 0;
     }
 
     /**
-     * Середина шара радиуса r, растущего от точки взрыва на высоте {@code hob} м над поверхностью, над этой точкой, м: у
-     * наземного — полусфера (центр видимой части — на 0,45 радиуса над землёй), у разрыва в воздухе шар свободный — центр в
-     * точке взрыва; между — по доле радиуса, что уходит в землю (⚠ оценка формы: шар, срезанный землёй, к полусфере —
-     * линейно по высоте подрыва). Тот же закон у шара продуктов детонации.
+     * Center of a ball of radius r growing from a blast point {@code hob} m above the surface, above that point, m:
+     * surface burst — hemisphere (visible center 0.45 radius above ground); free airburst — center at blast point;
+     * between them, by radius fraction below ground (⚠ shape estimate: ground-clipped sphere to hemisphere linear in burst
+     * height). Same law for the detonation-product ball.
      */
     public static double onGround(double r, double hob) {
         return r <= 0 ? 0 : 0.45 * r * Math.clamp(1 - hob / r, 0, 1);
     }
 
     /**
-     * Всплытие горящего шара диаметра {@code d}, что горит {@code s} с, к возрасту t, м: от земли к середине 0,75·D в
-     * конец горения (CCPS) — ровно за горение (⚠ оценка формы: CCPS даёт только конечную высоту).
+     * Rise of a burning ball of diameter {@code d}, burning {@code s} s, by age t, m: from ground to center at 0.75·D at burn
+     * end (CCPS), over exactly the burn duration (⚠ shape estimate: CCPS gives only final height).
      */
     public static double lift(double d, double s, double t, double hob) {
         if (d <= 0) return 0;
         return (0.75 * d - onGround(0.5 * d, hob)) * Math.min(1, t / Math.max(s, 1e-6));
     }
 
-    /** Высота середины шара над точкой взрыва в возрасте t, м (0 — шара нет): {@link #onGround} его радиуса и {@link #lift}. */
+    /** Ball center height above the blast point at age t, m (0 — no ball): {@link #onGround} at its radius plus {@link #lift}. */
     public static double height(double d, double s, double t, double hob) {
         double r = radius(d, s, t);
         return r <= 0 ? 0 : onGround(r, hob) + lift(d, s, t, hob);
     }
 
-    /** Шагов горения в {@link Sweep}. */
+    /** Burn steps in {@link Sweep}. */
     static final int SWEEP_STEPS = 24;
 
     /**
-     * Путь шара за горение — где он и какой по шагам ({@link #radius}, {@link #height}, снос ветром на высоте его середины:
-     * u(z) = u₁₀·(z/10)^α, как у облака) — и что он даёт месту рядом. Один шар у картинки клиента ({@code CloudModel}: тот
-     * же рост и подъём; снос там — термик облака, у которого шар — середина, с ним этот расходится меньше метра) и у
-     * поджига сервера ({@code Craters.ignite}). Метры от точки взрыва.
+     * Ball path over the burn — position and size per step ({@link #radius}, {@link #height}, wind drift at center height:
+     * u(z) = u₁₀·(z/10)^α, as for the cloud) — and its effect on a nearby position. One ball for client visuals
+     * ({@code CloudModel}: same growth and rise; drift there uses the cloud thermal centered on the ball, differing from this
+     * by less than a meter) and server ignition ({@code Craters.ignite}). Meters from the blast point.
      *
-     * @param x  середина шара по шагам, по x
-     * @param y  высота середины
-     * @param z  по z
-     * @param r  радиус (0 — шага нет)
-     * @param dt шаг, с
+     * @param x  ball center per step, x
+     * @param y  center height
+     * @param z  z coordinate
+     * @param r  radius (0 — no step)
+     * @param dt step, s
      */
     public record Sweep(double[] x, double[] y, double[] z, double[] r, double dt) {
         /**
-         * Шар из {@code ballKg} кг топлива ({@link #ballKg}) на высоте {@code hob} над поверхностью, ветер на 10 м
-         * {@code windX}, {@code windZ} м/с, показатель профиля ветра {@code alpha}.
+         * Ball of {@code ballKg} kg fuel ({@link #ballKg}) at {@code hob} above the surface, 10 m wind
+         * {@code windX}, {@code windZ} m/s, wind profile exponent {@code alpha}.
          */
         public static Sweep of(double ballKg, double hob, double windX, double windZ, double alpha) {
             double d = diameter(ballKg), s = seconds(ballKg), dt = s / SWEEP_STEPS;
@@ -106,7 +106,7 @@ public final class FuelFireball {
             double along = 0;
             for (int i = 0; i < SWEEP_STEPS && s > 0; i++) {
                 double t = (i + 0.5) * dt, h = height(d, s, t, hob);
-                // снос до середины шага: ветер на высоте середины шара (к началу шага — тот же закон)
+                // drift to step midpoint: wind at ball center height (same law at step start)
                 along += Math.pow(Math.max(height(d, s, i * dt, hob) + hob, 1) / 10, alpha) * 0.5 * dt;
                 x[i] = windX * along;
                 z[i] = windZ * along;
@@ -118,10 +118,10 @@ public final class FuelFireball {
         }
 
         /**
-         * Световой импульс в месте (px, py, pz) м от точки взрыва, кал/см²: пока место в шаре — излучение поверхности
-         * {@link #SURFACE_POWER} (как {@link FuelFireball#exposure}), вне шара — доля, под которой шар виден с места, (r/d)²
-         * (сфера перед гранью, повёрнутой к ней; ⚠ оценка сверху, как и в шаре — наклон грани не берётся). Шар, что
-         * поднялся над местом, светит на него и дальше, но всё слабее; место, где шара не было, импульса почти не берёт.
+         * Thermal fluence at (px, py, pz) m from the blast point, cal/cm²: inside the ball, surface emission
+         * {@link #SURFACE_POWER} (as {@link FuelFireball#exposure}); outside, the fraction subtended by the ball, (r/d)²
+         * (sphere before a face directed toward it; ⚠ upper estimate, as inside — face inclination ignored). A ball risen above
+         * the position keeps illuminating it, more weakly; a position the ball never occupied receives almost no fluence.
          */
         public double exposure(double px, double py, double pz) {
             double sum = 0;

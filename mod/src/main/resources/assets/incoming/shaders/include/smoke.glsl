@@ -1,46 +1,46 @@
-// Сетка дыма у камеры (client/fx/smoke/SmokeGrid, client/fx/layer/SmokePass): дым, пыль и огонь обычных взрывов (и
-// других источников) — трёхмерная текстура ослабления в каскадах вокруг глаза. Общее у лучей пелены (fx_pall), вывода
-// на кадр (тень дыма на мире, fx_pall_composite), квадратов слоя и проб источников (pall_front.glsl: что дым закрывает
-// перед точкой). Числа вещества — копии SmokeGrid (SmokeGlslTest сверяет).
+// Camera smoke grid (client/fx/smoke/SmokeGrid, client/fx/layer/SmokePass): conventional blast smoke, dust, fire (and other
+// sources), 3D extinction texture in eye-centered cascades. Shared by pall rays (fx_pall), frame composite (smoke world
+// shadow, fx_pall_composite), layer quads and source probes (pall_front.glsl: foreground smoke occlusion).
+// Material constants copied from SmokeGrid (SmokeGlslTest checks).
 //
-// Текстура: по s — x мира (две страницы по N клеток), по t — z мира, по r — высота (N слоёв на каскад, каскады подряд).
-// Страница 0: ослабление сажи, пыли и капель (1/блок) и Σ ослабление × ΔT (кК); страница 1: Σ ослабление пыли × её
-// альбедо ω' (rgb) и Σ ослабление × подъём (блоков/с). Каскад c (столбец c SmokeCascade): угол от глаза (xyz) и клетка
-// (w); у каждого каскада свои клубы — плотность в точке — сумма каскадов, где она есть. SmokeCascade[3].x — 1, если
-// сетка в этом кадре заполнена. Коробка каскада c (SmokeLo[c], SmokeHi[c]: от глаза, w у SmokeLo — 1, если в каскаде
-// есть клубы) — где его клубы (три σ) внутри каскада: вне её каскад пуст, и ни выборок, ни шагов по клетке там нет.
+// Texture: s world x (two N-cell pages), t world z, r height (N layers per cascade, cascades consecutive).
+// Page 0: soot/dust/droplet extinction (1/block), Σ extinction × ΔT (kK); page 1: Σ dust extinction × dust albedo ω'
+// (rgb), Σ extinction × rise (blocks/s). Cascade c (SmokeCascade column c): eye-relative corner (xyz), cell (w);
+// each has its own billows, local density sums contributing cascades. SmokeCascade[3].x is 1 when grid filled this frame.
+// Cascade c box (SmokeLo[c], SmokeHi[c], eye-relative; SmokeLo.w is 1 if cascade has billows) bounds its billows (three σ)
+// inside cascade: outside, empty, no samples or cell steps.
 
 uniform sampler3D SmokeGrid;
 uniform mat4 SmokeCascade;
-// рамка всего дыма от глаза
+// eye-relative whole-smoke bounds
 uniform vec3 SmokeMin;
 uniform vec3 SmokeMax;
-// коробки каскадов от глаза (столбец c)
+// eye-relative cascade boxes (column c)
 uniform mat4 SmokeLo;
 uniform mat4 SmokeHi;
 
 const int SMOKE_N = 64;
 const int SMOKE_CASCADES = 3;
-// альбедо ω' и асимметрия g' после дельта-Эддингтона: сажа, пыль (альбедо — по клетке), капли (SmokeGrid)
+// delta-Eddington albedo ω', asymmetry g': soot, dust (cell albedo), droplets (SmokeGrid)
 const float SMOKE_SOOT_W = 0.2;
 const float SMOKE_SOOT_G = 0.33333334;
 const float SMOKE_DUST_G = 0.375;
 const float SMOKE_DROP_W = 0.99963975;
 const float SMOKE_DROP_G = 0.45945945;
-// воздух вокруг, K (SmokeGrid.AIR_K)
+// ambient air, K (SmokeGrid.AIR_K)
 const float SMOKE_AIR_K = 288.15;
 
 bool smokeOn() {
     return SmokeCascade[3].x > 0.5;
 }
 
-// Точка p (от глаза) в коробке клубов каскада c
+// Eye-relative p within cascade c billow box
 bool smokeIn(vec3 p, int c) {
     return SmokeLo[c].w > 0.5 && all(greaterThanEqual(p, SmokeLo[c].xyz)) && all(lessThanEqual(p, SmokeHi[c].xyz));
 }
 
-// Страница page (0 или 1) сетки в точке p (от глаза): сумма каскадов, в чьих коробках точка есть; у края каскада — по
-// крайней клетке (клубы каскада до края не доходят: SmokeGrid кладёт клуб в каскад, только если он там весь)
+// Grid page (0 or 1) at eye-relative p: sum cascades whose boxes contain point; cascade edge clamps to outer cell
+// (billows never reach edge: SmokeGrid assigns a billow only if entirely inside)
 vec4 smokeFetch(vec3 p, float page) {
     vec4 sum = vec4(0.0);
     float n = float(SMOKE_N);
@@ -53,13 +53,13 @@ vec4 smokeFetch(vec3 p, float page) {
     return sum;
 }
 
-// Ослабление дыма в точке p (от глаза), 1/блок: сажа, пыль и капли вместе (без клубов шума — среднее поле)
+// Smoke extinction at eye-relative p, 1/block: soot/dust/droplets combined (mean field without noise billows)
 float smokeSigma(vec3 p) {
     vec4 s = smokeFetch(p, 0.0);
     return s.x + s.y + s.z;
 }
 
-// Клетка самого мелкого каскада, в чьей коробке есть точка p, блоков (вне коробок — клетка последнего)
+// Finest cascade cell whose box contains p, blocks (outside boxes, last cascade cell)
 float smokeCell(vec3 p) {
     for (int c = 0; c < SMOKE_CASCADES; c++) {
         if (smokeIn(p, c)) return SmokeCascade[c].w;
@@ -67,8 +67,8 @@ float smokeCell(vec3 p) {
     return SmokeCascade[SMOKE_CASCADES - 1].w;
 }
 
-// Пустое место у точки p на луче dir: в коробке — шаг на клетку её каскада (gap = cell); вне коробок — до входа в
-// ближнюю впереди (gap; cell — клетка её каскада); впереди коробок нет — 1e9
+// Empty space near p along dir: inside box, its cascade cell step (gap = cell); outside, distance to nearest box entry
+// ahead (gap; cell its cascade cell); no boxes ahead — 1e9
 float smokeGap(vec3 p, vec3 dir, out float cell) {
     for (int c = 0; c < SMOKE_CASCADES; c++) {
         if (smokeIn(p, c)) {
@@ -89,7 +89,7 @@ float smokeGap(vec3 p, vec3 dir, out float cell) {
     return best;
 }
 
-// Толща дыма на отрезке от a по dir длиной len — steps выборок среднего поля в серединах равных частей
+// Smoke depth from a along dir over len: steps mean-field samples at equal-segment midpoints
 float smokeTau(vec3 a, vec3 dir, float len, int steps) {
     if (len <= 0.0) return 0.0;
     float ds = len / float(steps), tau = 0.0;
@@ -97,8 +97,7 @@ float smokeTau(vec3 a, vec3 dir, float len, int steps) {
     return tau * ds;
 }
 
-// Сколько пропускает дым между глазом и точкой dir·len (шесть выборок по его рамке на луче): квадраты слоя и пробы
-// источников за дымом
+// Smoke transmittance between eye and dir·len (six samples over ray bounds): layer quads/source probes behind smoke
 float smokeThrough(vec3 dir, float len) {
     if (!smokeOn()) return 1.0;
     vec2 span = pallBox(dir, SmokeMin, SmokeMax);
@@ -107,11 +106,11 @@ float smokeThrough(vec3 dir, float len) {
     return exp(-smokeTau(dir * t0, dir, t1 - t0, 6));
 }
 
-// Доля света солнца, что дым пропускает к точке p (от глаза): толща к солнцу sun — выборками на 2, 8, 24, 64 и 160
-// блоках (дым над точкой — от метров до сотен)
+// Sunlight transmitted by smoke to eye-relative p: sunward depth sampled at 2, 8, 24, 64, 160 blocks
+// (smoke above point spans meters to hundreds)
 float smokeSun(vec3 p, vec3 sun) {
     if (!smokeOn()) return 1.0;
-    // прямая к солнцу мимо рамки дыма — тени нет
+    // sun ray misses smoke bounds — no shadow
     vec2 span = pallBox(sun, SmokeMin - p, SmokeMax - p);
     if (span.y <= max(span.x, 0.0)) return 1.0;
     float tau = smokeSigma(p + sun * 2.0) * 4.0 + smokeSigma(p + sun * 8.0) * 9.0 + smokeSigma(p + sun * 24.0) * 26.0

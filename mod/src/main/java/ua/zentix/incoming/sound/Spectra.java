@@ -1,9 +1,9 @@
 package ua.zentix.incoming.sound;
 
 /**
- * Октавные спектры петель моторов (63 Гц – 8 кГц, дБ без взвешивания, сумма — 0 дБ) — то, что звучит в игре.
- * Файл пишет {@code tools/build_sounds.py} (функция {@code spectra}), руками не править: собранная заново петля
- * меняет и свой спектр, а с ним — слышимость на сервере и громкость на клиенте.
+ * Engine loop octave spectra (63 Hz–8 kHz, unweighted dB, total 0 dB) — the sounds played in the game.
+ * Written by {@code tools/build_sounds.py} ({@code spectra} function), do not edit manually: rebuilding a loop changes
+ * its spectrum, hence server audibility and client volume.
  */
 public final class Spectra {
     // @spectra-begin

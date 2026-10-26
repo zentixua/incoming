@@ -4,7 +4,7 @@ package ua.zentix.incoming.nuclear.model;
  * Conventional free-field ground motion in SI units; independent of the nuclear path and of Minecraft.
  * <p>
  * Drake &amp; Little, TM 5-855-1 (1986), ch. 5: V = 160 f (R/W^(1/3))^(-n) ft/s, R in ft, W in lb TNT.
- * Сверено с формулой TM через её опубликованное воспроизведение: Chew &amp; Leong, APCOM 2013, p. 2,
+ * Checked against the TM formula through its published reproduction: Chew &amp; Leong, APCOM 2013, p. 2,
  * eqs. (1.2), (1.3), https://www.sci-en-tech.com/apcom2013/APCOM2013-Proceedings/PDF_FullPaper/1836.pdf .
  * Acceleration in (1.2) is in g, velocity in (1.3) in ft/s: a0/V0 = (50 g_ft/160) c/R, not V0/d0.
  * The coefficient is NOT an SI coefficient. This empirical homogeneous-medium law omits layers, cavities and

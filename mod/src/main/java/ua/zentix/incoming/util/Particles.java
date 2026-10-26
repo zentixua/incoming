@@ -6,10 +6,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Частицы на клиенте с той же семантикой, что у команды {@code particle <тип> x y z dx dy dz speed count force}:
- * при count = 0 — одна частица со скоростью (dx, dy, dz)·speed, иначе count частиц с разбросом
- * по Гауссу (dx, dy, dz) и случайной скоростью·speed. «force» — видны издалека (дальше 32 блоков).
- * Так эффект, подобранный командой {@code particle}, переносится без подбора заново. На сервере ничего не делает.
+ * Client particles with command semantics {@code particle <type> x y z dx dy dz speed count force}: count = 0 means one
+ * particle with velocity (dx, dy, dz)·speed; otherwise count particles with Gaussian spread (dx, dy, dz) and random
+ * velocity·speed. “force” means visible from afar (beyond 32 blocks). Thus a command-tuned {@code particle} effect
+ * transfers without retuning. Does nothing on the server.
  */
 public final class Particles {
     private Particles() {}

@@ -1,10 +1,10 @@
 #version 150
 
-// Свечение (client/fx/layer/FxBloom): уровень пирамиды вниз — 13 выборок (Jimenez 2014). Пиксель (x, y) уровня — точка
-// (2x + 1, 2y + 1) прошлого; выборка с линейным фильтром у каждой — среднее четырёх пикселей. Веса в сумме — 1: энергия
-// сохраняется.
+// Bloom (client/fx/layer/FxBloom): pyramid downsample — 13 samples (Jimenez 2014). Level pixel (x, y) corresponds to
+// (2x + 1, 2y + 1) in the previous level; each linear-filtered sample averages four pixels. Weights sum to 1:
+// energy conserved.
 uniform sampler2D Sampler0;
-// xy — 1 / размер прошлого уровня
+// xy — 1 / previous-level size
 uniform vec4 BloomStep;
 
 out vec4 fragColor;

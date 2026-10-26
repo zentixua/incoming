@@ -41,7 +41,7 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<IcbmEntity>> ICBM =
             projectile("icbm", EntityType.Builder.of(IcbmEntity::new, MobCategory.MISC).sized(2.0f, 2.0f), 32);
 
-    /** Мобильная пусковая у стреляющего: стоит на земле, позиция не меняется. */
+    /** Mobile launcher near the shooter: stands on ground, position unchanged. */
     public static final DeferredHolder<EntityType<?>, EntityType<LauncherEntity>> LAUNCHER = REGISTER.register("launcher",
             () -> EntityType.Builder.<LauncherEntity>of(LauncherEntity::new, MobCategory.MISC)
                     .sized(3.2f, 2.4f)
@@ -52,8 +52,8 @@ public final class ModEntities {
                     .build(Incoming.MOD_ID + ":launcher"));
 
     /**
-     * Отработавший ускоритель: падает по баллистике, как обломок. Живёт секунды и в мир не сохраняется
-     * ({@code noSave}): чанк, выгруженный посреди его падения, не хранит его до следующей загрузки.
+     * Spent booster: falls ballistically like debris. Lives seconds, not world-saved ({@code noSave}): a chunk unloaded
+     * mid-fall does not retain it until next load.
      */
     public static final DeferredHolder<EntityType<?>, EntityType<SpentBoosterEntity>> SPENT_BOOSTER = REGISTER.register("spent_booster",
             () -> EntityType.Builder.<SpentBoosterEntity>of(SpentBoosterEntity::new, MobCategory.MISC)
@@ -66,9 +66,9 @@ public final class ModEntities {
                     .build(Incoming.MOD_ID + ":spent_booster"));
 
     /**
-     * Обломки: летят по баллистике, падают блоком или рассыпаются. Как у falling_block — позиция раз в несколько тиков.
-     * В мир не сохраняются ({@code noSave}): район цели отпускается вскоре после взрыва, и обломки, ещё летящие в его
-     * чанках, иначе сохранялись бы с ними и висели там до следующей загрузки (в одном сохранении — 10 427 обломков).
+     * Debris: flies ballistically, lands as a block or breaks apart. Like falling_block, position every few ticks.
+     * Not world-saved ({@code noSave}): target area releases shortly after explosion; debris still flying in its chunks
+     * would otherwise save with them and hang until next load (one save had 10 427 debris entities).
      */
     public static final DeferredHolder<EntityType<?>, EntityType<DebrisEntity>> DEBRIS = REGISTER.register("debris",
             () -> EntityType.Builder.<DebrisEntity>of(DebrisEntity::new, MobCategory.MISC)
@@ -81,8 +81,8 @@ public final class ModEntities {
                     .build(Incoming.MOD_ID + ":debris"));
 
     /**
-     * Зенитная ракета — вид полёта, который ведёт {@code defense.DefenseWorld}: позиция — каждый тик (14 блоков/тик), не
-     * сохраняется ({@code noSave}): полёт — секунды, после перезапуска его нет.
+     * Surface-to-air missile — flight tracked by {@code defense.DefenseWorld}: position every tick (14 blocks/tick),
+     * not saved ({@code noSave}): flight lasts seconds, absent after restart.
      */
     public static final DeferredHolder<EntityType<?>, EntityType<InterceptorEntity>> INTERCEPTOR = REGISTER.register("interceptor",
             () -> EntityType.Builder.<InterceptorEntity>of(InterceptorEntity::new, MobCategory.MISC)
@@ -102,14 +102,14 @@ public final class ModEntities {
                     .sized(1, 0.2f).clientTrackingRange(8).updateInterval(20)
                     .fireImmune().noSummon().noSave().build(Incoming.MOD_ID + ":surface_damage"));
 
-    /** Сущность, которой летит оружие (у B-2 — сам бомбардировщик до сброса): из паспорта оружия. */
+    /** Entity carrying a weapon (B-2 — bomber itself until release): from the weapon spec. */
     public static EntityType<? extends StrikeProjectile> of(WeaponType weapon) {
         return weapon.spec().airframe().entity().get();
     }
 
     /**
-     * Снаряды быстрые (до 12 блоков за тик у B-2), поэтому позиция уходит клиентам каждый тик,
-     * а дальность отслеживания больше ванильной: их должно быть видно и слышно издалека.
+     * Fast projectiles (B-2 up to 12 blocks/tick), so clients get position every tick and tracking range exceeds vanilla:
+     * they must be visible and audible from afar.
      */
     private static <T extends Entity> DeferredHolder<EntityType<?>, EntityType<T>> projectile(String name, EntityType.Builder<T> builder, int trackingChunks) {
         return REGISTER.register(name, () -> builder

@@ -1,18 +1,18 @@
-// Свечение (bloom) слоя эффектов — client/fx/layer/FxBloom; числа и законы те же, что там (FxBloomTest).
+// Effects layer bloom — client/fx/layer/FxBloom; same constants and laws (FxBloomTest).
 
-// белая точка плёночной кривой запекания огня (FxBloom.WHITE = filmInverse(1)): ярче неё кадр различий не показывает,
-// свечение берёт свет не ярче неё
+// fire bake film-curve white point (FxBloom.WHITE = filmInverse(1)): frame cannot distinguish brighter values,
+// bloom light capped there
 const float BLOOM_WHITE = 7.241657;
-// байт Emit вершины (FxBloom.SKIP, EMITTER, SPOT): 0 — не светится; 1 — светится своими пятнами (в проходе свечения его
-// нет); 2 + код — светится (код — 0…BLOOM_STEPS); 130 — пятно мелкого светящегося (только в проходе свечения)
+// vertex Emit byte (FxBloom.SKIP, EMITTER, SPOT): 0 non-emitter; 1 emits through its own spots (absent in bloom pass);
+// 2 + code emitter (code 0…BLOOM_STEPS); 130 small-emitter spot (bloom pass only)
 const float BLOOM_STEPS = 125.0;
 
-// Пересвет по коду: во сколько раз свет ярче показанного (0 — как показан, BLOOM_STEPS — белая точка)
+// Overexposure from code: light relative to displayed light (0 — as displayed, BLOOM_STEPS — white point)
 float bloomGain(float code) {
     return pow(BLOOM_WHITE, clamp(code, 0.0, BLOOM_STEPS) / BLOOM_STEPS);
 }
 
-// свет пятна — в 16 битах UV2 вершины (FxBloom.magnitude): 2^((код − BLOOM_MAG_ZERO) / BLOOM_MAG_STEP), код 0 — нуль
+// spot light in 16-bit vertex UV2 (FxBloom.magnitude): 2^((code − BLOOM_MAG_ZERO) / BLOOM_MAG_STEP), code 0 is zero
 const float BLOOM_MAG_ZERO = 16384.0;
 const float BLOOM_MAG_STEP = 1024.0;
 
@@ -21,21 +21,21 @@ float bloomMag(float code) {
     return pow(2.0, (code - BLOOM_MAG_ZERO) / BLOOM_MAG_STEP);
 }
 
-// Доля пикселя, которую квадрат прохода свечения закрывает перед ореолом. Ореол — свет огня, рассеянный воздухом вокруг
-// него (блик и вуаль в глазу — свои квадраты, FarSprites.glare): что стоит перед ним, то его и поглощает. Светящееся
-// (emits = 1) — непрозрачностью или своим светом (ядра и факел, что только светят): его свет уже показан, ореол на нём
-// высветлил бы складки огня; остальное, что ближе самого дальнего светящегося (дым, пыль, обломки), — непрозрачностью
+// Pixel fraction covered ahead of halo by a bloom-pass quad. Halo is fire light scattered by surrounding air (eye glare
+// and veil are separate quads, FarSprites.glare): foreground absorbs it. Emitters (emits = 1) cover by opacity or their
+// light (purely additive cores and jets): light already shown, a halo there would wash out fire folds; other material
+// closer than the farthest emitter (smoke, dust, debris) covers by opacity
 float bloomCovers(float alpha, float light, float emits) {
     if (emits > 0.5) return clamp(max(alpha, light), 0.0, 1.0);
     return alpha;
 }
 
-// Сколько ореола проходит в пикселе, закрытом долей covered (сумма bloomCovers смешиванием «поверх»)
+// Halo transmitted through a pixel with covered fraction covered (bloomCovers summed by “over” blending)
 float bloomThrough(float covered) {
     return 1.0 - clamp(covered, 0.0, 1.0);
 }
 
-// Кривая ореола: свет x (белый экран — 1) → доля до белого; смешивание «экраном» — сложение света до этой кривой
+// Halo curve: light x (white screen — 1) → fraction toward white; screen blending adds light before this curve
 float bloomCurve(float x) {
     return 1.0 - exp(-max(x, 0.0));
 }

@@ -1,51 +1,48 @@
 package ua.zentix.incoming.util;
 
 /**
- * Устойчивость приземного воздуха по Паскуиллу (классы A–F, здесь 0..5 и дробные между ними), профиль ветра и
- * расплывание дыма по формулам Бриггса для открытой местности — одна функция на сервер и клиент: класс считают отсюда
- * воздух мира ({@link Air}), дым, облака взрывов и полёт.
+ * Pasquill surface-air stability (A–F, here 0..5 with fractional classes), wind profile and Briggs rural smoke dispersion —
+ * one server/client function: world air ({@link Air}), smoke, blast clouds and flight derive class here.
  * <p>
- * Класс — по таблице Паскуилла (Pasquill 1961; Turner 1964, «A diurnal stability classification scheme»): днём — по
- * ветру у земли (10 м) и солнцу (сильное — выше 60°, умеренное — 35–60°, слабое — 15–35°), ночью — по ветру и облачности
- * (ясно — столбец «≤ 3/8»), сплошные облака (дождь, гроза) днём и ночью — D. Половинные классы таблицы (A–B) — середина,
- * между столбцами ветра и высотами солнца — плавно.
+ * Class from Pasquill table (Pasquill 1961; Turner 1964, “A diurnal stability classification scheme”): daytime by surface
+ * wind (10 m) and sun (strong above 60°, moderate 35–60°, slight 15–35°); nighttime by wind and cloud cover (clear is
+ * “≤ 3/8” column); overcast (rain, thunderstorm) gives D day and night. Table half-classes (A–B) use midpoint; smooth
+ * between wind columns and sun elevations.
  * <p>
- * Расплывание (Briggs 1973 для открытой местности, по Hanna, Briggs, Hosker, «Handbook on Atmospheric Diffusion», 1982),
- * x — путь по ветру, м: σ_y = a·x·(1 + 0,0001x)^−½; σ_z: A 0,20x; B 0,12x; C 0,08x(1 + 0,0002x)^−½;
- * D 0,06x(1 + 0,0015x)^−½; E 0,03x(1 + 0,0003x)^−1; F 0,016x(1 + 0,0003x)^−1 (a: 0,22, 0,16, 0,11, 0,08, 0,06, 0,04).
- * Формулы — для дыма у земли; на высоте, где земли нет, — та же диффузия по времени (x = u·t).
+ * Dispersion (Briggs 1973 rural, via Hanna, Briggs, Hosker, “Handbook on Atmospheric Diffusion”, 1982), downwind path
+ * x in m: σ_y = a·x·(1 + 0.0001x)^−½; σ_z: A 0.20x; B 0.12x; C 0.08x(1 + 0.0002x)^−½;
+ * D 0.06x(1 + 0.0015x)^−½; E 0.03x(1 + 0.0003x)^−1; F 0.016x(1 + 0.0003x)^−1 (a: 0.22, 0.16, 0.11, 0.08, 0.06, 0.04).
+ * Formulas are for near-ground smoke; aloft without ground, same time diffusion (x = u·t).
  */
 public final class Stability {
     public static final double A = 0, B = 1, C = 2, D = 3, E = 4, F = 5;
-    /** Частота Брента–Вяйсяля стандартной атмосферы у земли, 1/с: g = 9,80665, T = 288,15 K, c_p = 1005 Дж/(кг·K). */
+    /** Standard-atmosphere surface Brunt–Väisälä frequency, 1/s: g = 9.80665, T = 288.15 K, c_p = 1005 J/(kg·K). */
     public static final double STANDARD_N = Math.sqrt(9.80665 / StandardAtmosphere.T0 * (-0.0065 + 9.80665 / 1005));
     private static final double[] SIGMA_Y = {0.22, 0.16, 0.11, 0.08, 0.06, 0.04};
-    /** Ветер у земли — середины столбцов таблицы (&lt;2, 2–3, 3–5, 5–6, &gt;6 м/с). */
+    /** Surface wind — table column midpoints (&lt;2, 2–3, 3–5, 5–6, &gt;6 m/s). */
     private static final double[] WIND = {1, 2.5, 4, 5.5, 7};
-    /** Днём: солнце сильное, умеренное, слабое; ночью: ясно. */
+    /** Daytime: strong, moderate, slight sun; nighttime: clear. */
     private static final double[] STRONG = {A, 0.5, B, C, C}, MODERATE = {0.5, B, 1.5, 2.5, D}, SLIGHT = {B, C, C, D, D},
             NIGHT = {F, F, E, D, D};
     /**
-     * Частота Брента–Вяйсяля, 1/с: днём и нейтрально — стандартная атмосфера ISO 2533, N² = g/T·(dT/dz + g/c_p) при
-     * −6,5 K/км у земли — 0,0105; ночная инверсия — 0,02–0,04 (⚠ оценки; класс E — 0,02, F — 0,03). Дневной слой
-     * перемешивания (N ≈ 0) не выделен: дым поднимается в нём не выше, чем в стандартной атмосфере.
+     * Brunt–Väisälä frequency, 1/s: daytime and neutral — ISO 2533 standard atmosphere, N² = g/T·(dT/dz + g/c_p), giving 0.0105
+     * at −6.5 K/km near ground; nocturnal inversion 0.02–0.04 (⚠ estimates: E 0.02, F 0.03). No separate daytime mixing layer
+     * (N ≈ 0): smoke rises no higher there than in standard atmosphere.
      */
     private static final double[] BRUNT = {STANDARD_N, STANDARD_N, STANDARD_N, STANDARD_N, 0.02, 0.03};
     /**
-     * Показатель степенного профиля ветра u(z) = u_ref·(z/z_ref)^p по классу для открытой (сельской) местности: A 0,07,
-     * B 0,07, C 0,10, D 0,15, E 0,35, F 0,55 — рекомендованные EPA значения (J. S. Irwin, «A theoretical variation of the
-     * wind profile power-law exponent as a function of surface roughness and stability», Atmos. Environ. 13, 1979;
-     * EPA, J. Tikvart, memo 29.10.1987, https://gaftp.epa.gov/air/aqmg/SCRAM/mchisrs/R443_TIKVART_29_OCT_87.pdf).
-     * Измерены в приземном слое (до сотен метров); {@link Wind} продолжает профиль до своей высоты отсчёта 1 км —
-     * приближение.
+     * Wind power-profile exponent u(z) = u_ref·(z/z_ref)^p by class for open (rural) terrain: A 0.07, B 0.07, C 0.10,
+     * D 0.15, E 0.35, F 0.55 — EPA recommended values (J. S. Irwin, “A theoretical variation of the wind profile power-law
+     * exponent as a function of surface roughness and stability”, Atmos. Environ. 13, 1979; EPA, J. Tikvart, memo 29.10.1987,
+     * https://gaftp.epa.gov/air/aqmg/SCRAM/mchisrs/R443_TIKVART_29_OCT_87.pdf). Measured in the surface layer (up to hundreds
+     * of meters); {@link Wind} extends the profile to its 1 km reference height — approximation.
      */
     private static final double[] ALPHA = {0.07, 0.07, 0.10, 0.15, 0.35, 0.55};
 
     private Stability() {}
 
     /**
-     * Класс по ветру у земли u10 (м/с), синусу высоты солнца sun и доле сплошной облачности overcast (0..1: дождь,
-     * гроза).
+     * Class by surface wind u10 (m/s), sun elevation sine sun and overcast share overcast (0..1: rain, thunderstorm).
      */
     public static double of(double u10, double sun, double overcast) {
         double e = Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sun))));
@@ -59,12 +56,12 @@ public final class Stability {
         return lerp(day, D, Math.max(0, Math.min(1, overcast)));
     }
 
-    /** σ_y на пути x метров по ветру в классе c, м (между классами — линейно, как у множителя a). */
+    /** σ_y over x meters downwind in class c, m (linear between classes, as coefficient a). */
     public static double sigmaY(double c, double x) {
         return between(SIGMA_Y, c) * x / Math.sqrt(1 + 0.0001 * x);
     }
 
-    /** σ_z на пути x метров по ветру в классе c, м. */
+    /** σ_z over x meters downwind in class c, m. */
     public static double sigmaZ(double c, double x) {
         c = Math.max(A, Math.min(F, c));
         int k = (int) Math.min(4, Math.floor(c));
@@ -72,7 +69,7 @@ public final class Stability {
         return t == 0 ? lo : lo + (sigmaZ(k + 1, x) - lo) * t;
     }
 
-    /** σ_z класса k по Бриггсу. */
+    /** Briggs σ_z for class k. */
     private static double sigmaZ(int k, double x) {
         return switch (k) {
             case 0 -> 0.20 * x;
@@ -84,17 +81,17 @@ public final class Stability {
         };
     }
 
-    /** Частота Брента–Вяйсяля в классе c, 1/с. */
+    /** Brunt–Väisälä frequency in class c, 1/s. */
     public static double brunt(double c) {
         return between(BRUNT, c);
     }
 
-    /** Показатель степенного профиля ветра в классе c. */
+    /** Wind power-profile exponent in class c. */
     public static double alpha(double c) {
         return between(ALPHA, c);
     }
 
-    /** Число строки по классу c (между классами — линейно). */
+    /** Row value by class c (linear between classes). */
     private static double between(double[] row, double c) {
         c = Math.max(A, Math.min(F, c));
         int k = (int) Math.min(4, Math.floor(c));

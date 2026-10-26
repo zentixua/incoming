@@ -11,23 +11,22 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Остановки потока сервера дольше {@link #STALL_MS} — в тике или между тиками (задачи чанков, пакеты игроков): когда
- * поток пошёл дальше, строка WARN «Server thread stalled for N s» с самыми частыми местами по снимкам его стека. Ваниль пишет
- * только накопленное отставание («Can't keep up») и стек — лишь когда сервер падает через 60 с, а строка «Mod work over
- * 30 s» видит только тики: где сервер стоит между тиками (бывает ~14 с, и игроки отключаются), по логам без этого
- * замера не узнать.
+ * Server-thread stalls longer than {@link #STALL_MS}, inside or between ticks (chunk tasks, player packets): once it
+ * resumes, WARN “Server thread stalled for N s” with the most frequent sampled stack locations. Vanilla logs only
+ * accumulated lag (“Can't keep up”), and a stack only when crashing after 60 s; “Mod work over 30 s” sees only ticks:
+ * without this measurement, logs cannot reveal between-tick stalls (sometimes ~14 s, disconnecting players).
  * <p>
- * Только замер, поведение не меняет. Поток-наблюдатель просыпается раз в {@link #SAMPLE_MS} и сравнивает отметку тика;
- * стек снимает только во время остановки. Пауза одиночной игры (меню) — не остановка. Не состояние мира — замер (как
- * {@code WorkScheduler.ownNanos}), поэтому статика.
+ * Measurement only, no behavior changes. Observer thread wakes every {@link #SAMPLE_MS}, compares tick mark, and samples
+ * stacks only during a stall. Singleplayer pause (menu) is not a stall. Measurement, not world state (as
+ * {@code WorkScheduler.ownNanos}), hence static.
  */
 public final class StallWatch {
     static final long STALL_MS = 2000;
     private static final long SAMPLE_MS = 500;
     private static final int MAX_SAMPLES = 120;
-    /** Когда поток сервера последний раз прошёл начало или конец тика, {@code System.nanoTime}. */
+    /** When server thread last passed tick start or end, {@code System.nanoTime}. */
     private static volatile long progress;
-    /** Последний промежуток между отметками дольше {@link #STALL_MS}, нс: длина остановки для строки (0 — забрана). */
+    /** Last mark interval exceeding {@link #STALL_MS}, ns: stall duration for log (0 — consumed). */
     private static volatile long lastGap;
     private static volatile boolean inTick;
     private static volatile Thread watcher;
@@ -48,12 +47,12 @@ public final class StallWatch {
 
     private static void mark() {
         long now = System.nanoTime(), gap = now - progress;
-        // до отметки: наблюдатель, увидев новую отметку, читает уже эту длину
+        // before the mark: an observer seeing the new mark already reads this duration
         if (gap > STALL_MS * 1_000_000L) lastGap = gap;
         progress = now;
     }
 
-    /** Сколько остановок записано в лог (проверки). */
+    /** Stalls logged (checks). */
     public static int reported() {
         return reported;
     }
@@ -77,7 +76,7 @@ public final class StallWatch {
         List<StackTraceElement[]> samples = new ArrayList<>();
         long stalledAt = 0, pausedAt = 0;
         boolean stalledInTick = false;
-        // остановка сервера (сохранение миров) — не остановка потока: наблюдатель кончается с сервером
+        // server shutdown (world saving) is not a thread stall: observer ends with server
         while (server.isRunning()) {
             try {
                 Thread.sleep(SAMPLE_MS);
@@ -86,7 +85,7 @@ public final class StallWatch {
             }
             long at = progress;
             if (stalledAt != 0 && at != stalledAt) {
-                // длина — до первой отметки после остановки (её пишет поток сервера); к пробуждению прошли и другие тики
+                // duration ends at first mark after stall (written by server thread); other ticks have passed by observer wakeup
                 long gap = lastGap;
                 lastGap = 0;
                 report(gap > 0 ? gap : at - stalledAt, stalledInTick, samples);
@@ -94,9 +93,8 @@ public final class StallWatch {
                 stalledAt = 0;
             }
             if (server.isPaused()) {
-                // пауза одиночной игры: тиков нет, пока игрок в меню, — ждать первого тика после неё. Паузу ставит
-                // начало тика, событий тика при ней нет: остановка между тиками, на которой игрок нажал Esc, кончилась
-                // сейчас (длина — с точностью до пробуждения)
+                // singleplayer pause: no ticks while player in menu — wait for first tick afterward. Pause is set at tick start, with
+                // no tick events during it: a between-tick stall where player pressed Esc ended now (duration accurate to wakeup)
                 if (stalledAt != 0) report(System.nanoTime() - stalledAt, stalledInTick, samples);
                 pausedAt = at;
                 samples.clear();
@@ -112,9 +110,9 @@ public final class StallWatch {
         }
     }
 
-    /** Строка остановки: длина, где (в тике или между тиками) и до трёх мест по числу снимков, сверху стека. */
+    /** Stall log: duration, location (inside/between ticks), and up to three stack-top locations by sample count. */
     private static void report(long nanos, boolean tick, List<StackTraceElement[]> samples) {
-        // одинаковые верхушки стека вместе: сколько снимков в каждой
+        // group identical stack tops: sample count for each
         Map<String, Integer> count = new LinkedHashMap<>();
         Map<String, StackTraceElement[]> first = new LinkedHashMap<>();
         for (StackTraceElement[] st : samples) {

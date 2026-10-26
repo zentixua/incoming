@@ -30,15 +30,15 @@ import ua.zentix.incoming.registry.ModAttachments;
 import java.util.Locale;
 
 /**
- * /incoming grid — сеть и блэкаут (операторы):
+ * /incoming grid — power grid and blackout (operators):
  * <pre>
- *   /incoming grid status                                отключения, узлы, очередь (все измерения)
- *   /incoming grid node add [x y z] [радиус]             узел сети (подстанция на карте) — без блока
- *   /incoming grid node remove &lt;номер&gt; | node list
- *   /incoming grid node knockout &lt;номер&gt;              вывести узел из строя, как удар по нему
- *   /incoming grid blackout [x y z] [радиус]             обесточить район (без узла)
- *   /incoming grid restore                               вернуть свет везде (все измерения)
- *   /incoming grid restore at x y z &lt;радиус&gt;            вернуть свет в районе
+ *   /incoming grid status                                outages, nodes, queue (all dimensions)
+ *   /incoming grid node add [x y z] [radius]             grid node (substation on the map) — no block
+ *   /incoming grid node remove &lt;number&gt; | node list
+ *   /incoming grid node knockout &lt;number&gt;              knock out a node, as a strike would
+ *   /incoming grid blackout [x y z] [radius]             cut power to an area (without a node)
+ *   /incoming grid restore                               restore lights everywhere (all dimensions)
+ *   /incoming grid restore at x y z &lt;radius&gt;            restore lights in an area
  * </pre>
  */
 final class GridCommand {
@@ -78,14 +78,14 @@ final class GridCommand {
         return IncomingConfig.SERVER.gridNodeRadius.get();
     }
 
-    /** Все измерения: ядерный удар в Незере гасит Незер, а оператор стоит в верхнем мире. */
+    /** All dimensions: a nuclear strike in the Nether blacks out the Nether while the operator is in the Overworld. */
     private static int status(CommandContext<CommandSourceStack> ctx) {
         int outages = 0, nodes = 0, queued = 0, lamps = 0;
         for (ServerLevel level : ctx.getSource().getServer().getAllLevels()) {
             PowerGrid grid = PowerGrid.get(level);
             outages += grid.outages().size();
             for (Node ignored : grid.nodes()) nodes++;
-            // мир, где блэкаута не было, — без очередей (и без лишнего состояния)
+            // a world with no blackout has no queues (and no extra state)
             if (!level.hasData(ModAttachments.BLACKOUT_WORLD)) continue;
             int[] backlog = BlackoutWorld.get(level).backlog();
             queued += backlog[0];
@@ -93,12 +93,12 @@ final class GridCommand {
         }
         int o = outages, n = nodes, q = queued, l = lamps;
         ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.status", o, n, q, l), false);
-        // почему очередь идёт с такой скоростью: единиц за тик при бюджете, оценка следующей и самая долгая
+        // why the queue runs at this rate: units per tick within the budget, the next unit's estimate and the longest unit
         WorkClock clock = Blackouts.clock(ctx.getSource().getServer());
         String estimate = String.format(Locale.ROOT, "%.2f", clock.estimateNanos() / 1e6), largest = String.format(Locale.ROOT, "%.2f", clock.largestRecentNanos() / 1e6);
         int units = clock.unitsLastTick(), budget = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.status_clock", units, budget, estimate, largest), false);
-        // куда ушёл бюджет за прошлое окно: виды работы — сколько раз и сколько времени
+        // where the budget went over the previous window: work kinds — counts and time
         for (ServerLevel level : ctx.getSource().getServer().getAllLevels()) {
             if (!level.hasData(ModAttachments.BLACKOUT_WORLD)) continue;
             long[][] work = BlackoutWorld.get(level).work();
@@ -180,7 +180,7 @@ final class GridCommand {
         return o.id();
     }
 
-    /** Без места — во всех измерениях; с местом — в измерении того, кто вызвал. */
+    /** Without a position — in all dimensions; with a position — in the caller's dimension. */
     private static int restore(CommandContext<CommandSourceStack> ctx, @Nullable Vec3 at, int radius) {
         int restored = 0;
         if (at == null) {

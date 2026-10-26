@@ -15,7 +15,7 @@ import net.minecraft.world.phys.HitResult;
 
 import java.util.function.Supplier;
 
-/** Двойник фонаря: висит и держится так же (свойства «подвешен» и «в воде» — те же). */
+/** Lantern counterpart: hangs and is supported the same way (same “hanging” and “waterlogged” properties). */
 public class UnlitLanternBlock extends LanternBlock implements Unlit {
     private final Supplier<Block> lit;
 

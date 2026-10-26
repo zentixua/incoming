@@ -16,24 +16,25 @@ import ua.zentix.incoming.grid.ChunkLights;
 import java.util.function.Supplier;
 
 /**
- * Обесточенный двойник лампы сети: та же модель, те же свойства состояния, звук, прочность и добыча, что у лампы,
- * только без света. Так лампа гаснет везде — и в свете мира, и у шейдеров (Complementary светит лампы по id блока,
- * а не по освещению вокруг), и в LOD Distant Horizons загруженных чанков (он считает свет по тому, светится ли блок).
- * Предмета у двойника нет: в мире он только от блэкаута, и возврат света однозначен ({@link ua.zentix.incoming.grid.GridLights}).
+ * Unpowered grid lamp counterpart: same model, state properties, sound, strength and drops as the lamp, only without
+ * light. The lamp thus goes dark everywhere — world lighting, shaders (Complementary makes lamps glow by block ID,
+ * not surrounding light), and Distant Horizons LODs of loaded chunks (light is computed from block emission).
+ * Counterparts have no item: they occur in the world only through blackout, so restoration is unambiguous
+ * ({@link ua.zentix.incoming.grid.GridLights}).
  */
 public interface Unlit {
-    /** Лампа, двойником которой блок является. */
+    /** Lamp of which this block is a counterpart. */
     Block lit();
 
-    /** «Светокамень (нет питания)» — по имени лампы, без своего перевода на каждого двойника. */
+    /** “Glowstone (no power)” — from the lamp name, without a separate translation for every counterpart. */
     static MutableComponent name(Supplier<Block> lit) {
         return Component.translatable("block.incoming.unlit", lit.get().getName());
     }
 
     /**
-     * Двойник появился не от блэкаута — его сдвинул поршень, собрал и разобрал аппарат Create, перенёс в плот
-     * аппарат Sable: в светлом квартале (в плоте — всегда: у аппарата своё питание) лампа снова зажигается
-     * ({@link BlackoutWorld#relightLater}; не тиком блока — в плоте Sable тики блоков не идут).
+     * A counterpart appeared outside blackout — moved by a piston, assembled and disassembled by a Create contraption,
+     * moved into a plot by a Sable craft: in a lit district (always in a plot: a craft has its own power), the lamp relights
+     * ({@link BlackoutWorld#relightLater}; not by block tick — Sable plots have no block ticks).
      */
     static void placed(BlockState state, Level level, BlockPos pos, BlockState oldState) {
         if (level instanceof ServerLevel server && !oldState.is(state.getBlock()) && BlackoutWorld.powered(server, pos)) {
@@ -42,25 +43,25 @@ public interface Unlit {
     }
 
     /**
-     * Двойник в плоте аппарата Sable получил обновление соседа — зажечь сразу, в этом же тике. Сборка аппарата ставит
-     * блоки прямо в секции плота (без {@code onPlace}), а потом оповещает соседей каждого собранного блока: так
-     * двойник узнаёт, что он в плоте, до автосохранения (плот Sable сохраняет своим кодеком, мимо
-     * {@link ua.zentix.incoming.grid.ChunkSaves}, а автосохранение идёт раньше конца тика сервера).
+     * A counterpart in a Sable craft plot received a neighbor update — relight immediately, in this tick. Craft assembly
+     * places blocks directly in plot sections (without {@code onPlace}), then notifies each assembled block's neighbors:
+     * this lets the counterpart learn it is in a plot before autosave (Sable saves the plot through its own codec, bypassing
+     * {@link ua.zentix.incoming.grid.ChunkSaves}, and autosave runs before the server tick ends).
      */
     static void neighborChanged(BlockState state, Level level, BlockPos pos) {
         if (level instanceof ServerLevel server && SubLevels.isInPlot(server, Vec3.atCenterOf(pos))) ChunkLights.relight(server, pos, state);
     }
 
     /**
-     * Страховка: случайный тик двойника там, где ток есть, — снова лампа. Так зажигаются двойники, которых не
-     * видят ни очередь блэкаута, ни {@link #placed}: в плоте аппарата Sable (сборка ставит блоки прямо в секции),
-     * в чанке, оставшемся тёмным по любой другой причине.
+     * Fallback: a counterpart's random tick where power exists makes it a lamp again. This relights counterparts seen by
+     * neither the blackout queue nor {@link #placed}: in Sable craft plots (assembly places blocks directly in sections),
+     * or in a chunk left dark for any other reason.
      */
     static void randomTick(BlockState state, ServerLevel level, BlockPos pos) {
         if (BlackoutWorld.powered(level, pos)) BlackoutWorld.get(level).relightLater(pos);
     }
 
-    /** Выбор блока (средняя кнопка) даёт лампу. */
+    /** Pick block (middle button) gives the lamp. */
     static ItemStack clone(Supplier<Block> lit) {
         return new ItemStack(lit.get());
     }

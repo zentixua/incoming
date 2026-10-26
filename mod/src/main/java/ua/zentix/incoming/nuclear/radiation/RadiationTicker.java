@@ -33,33 +33,33 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
 
 /**
- * Радиация (DESIGN-nuke §4). Игроки — раз в секунду: мощность дозы осадков в точке игрока с защитой стенами и крышей
- * ({@link Shielding#fallout}), заражение под чёрным дождём (смывается водой), накопление дозы и стадии лучевой болезни
- * по {@link SicknessModel}: умрёт ли облучённый, решает его доза и своя случайность ({@link #fate}). Мобы (не нежить) —
- * та же доза и та же болезнь, но без перебора тысяч мобов каждую секунду: дозу осадков им добавляет {@code MobFallout}
- * порциями под бюджетом ядерной работы, а болезнь тикает на самом мобе — эффектом {@link RadiationSicknessEffect}, пока
- * идёт её течение.
+ * Radiation (DESIGN-nuke §4). Players once a second: local fallout dose rate with wall and roof shielding
+ * ({@link Shielding#fallout}), black-rain contamination (washed off by water), accumulated dose and sickness stages
+ * from {@link SicknessModel}: death depends on dose and individual randomness ({@link #fate}). Mobs (except undead)
+ * have the same dose and sickness without scanning thousands each second: {@code MobFallout} adds fallout doses in
+ * batches under the nuclear work budget, while sickness ticks on the mob itself via {@link RadiationSicknessEffect}
+ * throughout its course.
  */
 public final class RadiationTicker {
-    /** 1 Р ≈ 0.01 Гр в теле. */
+    /** 1 R ≈ 0.01 Gy in the body. */
     public static final double GY_PER_R = 0.01;
-    /** Секунда в игровых часах: 20 тиков из 1000. */
+    /** A second in game hours: 20 of 1000 ticks. */
     private static final double HOURS_PER_SECOND = 20 / 1000.0;
     private static final ResourceLocation HEALTH_PENALTY = Incoming.id("radiation_sickness");
 
     private RadiationTicker() {}
 
     public static RadiationDose dose(LivingEntity e) {
-        // без дозы — без вложения: getData повесил бы его на каждого моба, которого коснулся свет
+        // no dose, no attachment: getData would attach one to every mob touched by the flash
         return e.getExistingData(ModAttachments.RADIATION).orElse(RadiationDose.NONE);
     }
 
-    /** Болеет ли моб лучевой болезнью (при включённом {@code mob_radiation}): мобы, кроме нежити; не стойки брони. */
+    /** Whether a mob can get radiation sickness (with {@code mob_radiation} enabled): mobs except undead; not armor stands. */
     public static boolean affectsMob(LivingEntity e) {
         return e instanceof Mob && !e.getType().is(EntityTypeTags.UNDEAD);
     }
 
-    /** Доза, Гр: проникающая радиация подрыва или осадки. Моб с дозой от 1 Гр заболевает (эффект ведёт течение). */
+    /** Dose, Gy: prompt burst radiation or fallout. A mob with dose from 1 Gy gets sick (effect drives the course). */
     public static void addDose(LivingEntity e, float gy) {
         RadiationDose r = dose(e);
         float total = r.doseGy() + gy;
@@ -76,7 +76,7 @@ public final class RadiationTicker {
         p.removeEffect(ModEffects.RADIATION_SICKNESS);
     }
 
-    /** Показания счётчика заново целиком: вход в мир, возрождение, смена измерения. */
+    /** Resend full counter reading: login, respawn, dimension change. */
     public static void sync(ServerPlayer p) {
         RadiationDose r = dose(p);
         PacketDistributor.sendToPlayer(p, new S2C.Radiation(r.doseGy(), r.rate(), r.contamination(), stage(p, r).ordinal()));
@@ -111,13 +111,13 @@ public final class RadiationTicker {
         RadiationDose r = dose(p);
         double contamination = r.contamination();
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
-            // дождь пачкает, а не смывает: заражение растёт к двойной мощности поля, но не убывает
+            // rain contaminates instead of washing off: contamination rises toward twice the field rate, never decreases
             contamination = Math.max(contamination, Math.min(contamination + field * 0.05, field * 2));
         }
         if (p.isInWater()) contamination *= 0.8;
         if (contamination < 0.01) contamination = 0;
         double rate = (field >= MobFallout.BACKGROUND ? field * Shielding.fallout(level, middle(p)) : 0) + contamination;
-        // в творческом режиме счётчик показывает поле, но доза не копится и болезни нет
+        // in creative mode the counter shows the field, but no dose accumulates and no sickness develops
         double gy = r.doseGy() + (p.isCreative() ? 0 : rate * GY_PER_R * HOURS_PER_SECOND);
         long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : now;
         RadiationDose next = new RadiationDose((float) gy, (float) contamination, exposed, (float) rate);
@@ -125,7 +125,7 @@ public final class RadiationTicker {
         sickness(level, p, next);
     }
 
-    /** Середина тела: там считается защита от осадков. */
+    /** Body center: fallout shielding is evaluated there. */
     public static Vec3 middle(LivingEntity e) {
         return e.position().add(0, e.getBbHeight() * 0.5, 0);
     }
@@ -136,8 +136,8 @@ public final class RadiationTicker {
     }
 
     /**
-     * Случайность облучённого 0..1 ({@link SicknessModel#fated}): своя у каждого и у каждого облучения — от UUID и мига,
-     * когда доза перевалила 1 Гр. Не меняется, пока доза растёт: умрёт ли он, решает только доза.
+     * Exposed subject randomness 0..1 ({@link SicknessModel#fated}): unique per subject and exposure, from UUID and the time
+     * dose crossed 1 Gy. Does not change as dose grows: only dose determines death.
      */
     static double fate(LivingEntity e, RadiationDose r) {
         long h = HashCommon.mix(e.getUUID().getMostSignificantBits() ^ HashCommon.mix(e.getUUID().getLeastSignificantBits() ^ r.exposedAt()));
@@ -149,8 +149,8 @@ public final class RadiationTicker {
     }
 
     /**
-     * Секунда болезни моба (из {@link RadiationSicknessEffect}). До первичной реакции ничего, потом те же стадии, что
-     * у игрока; false — течение кончилось выздоровлением, эффект снимается.
+     * One second of mob sickness (from {@link RadiationSicknessEffect}). Nothing before prodrome, then the same stages
+     * as a player; false — recovered, course ended, remove effect.
      */
     static boolean tickMob(ServerLevel level, LivingEntity e) {
         RadiationDose r = dose(e);
@@ -160,7 +160,7 @@ public final class RadiationTicker {
         return stage(e, r) != SicknessModel.Stage.NONE;
     }
 
-    /** Стадии лучевой болезни: тошнота и рвота, скрытый период, разгар (слабость, голод, меньше здоровья), гибель. */
+    /** Radiation sickness stages: nausea and vomiting, latent period, manifest illness (weakness, hunger, reduced health), death. */
     private static void sickness(ServerLevel level, LivingEntity p, RadiationDose r) {
         SicknessModel.Stage stage = stage(p, r);
         AttributeInstance health = p.getAttribute(Attributes.MAX_HEALTH);
@@ -170,7 +170,7 @@ public final class RadiationTicker {
             if (penalty > 0) health.addTransientModifier(new AttributeModifier(HEALTH_PENALTY, -penalty, AttributeModifier.Operation.ADD_VALUE));
         }
         if (!(p instanceof ServerPlayer player)) {
-            // у моба эффект болезни ведёт течение сам (снимается, когда tickMob вернёт false); тошнота мобу — ничто
+            // mob sickness effect drives its own course (removed when tickMob returns false); nausea means nothing to a mob
             if (stage == SicknessModel.Stage.MANIFEST || stage == SicknessModel.Stage.FATAL) manifest(level, p, r, stage);
             return;
         }
@@ -194,7 +194,7 @@ public final class RadiationTicker {
         }
     }
 
-    /** Разгар у всех: слабость, а при смертельной дозе — урон каждую секунду. */
+    /** Manifest illness for everyone: weakness, and at lethal dose, damage every second. */
     private static void manifest(ServerLevel level, LivingEntity e, RadiationDose r, SicknessModel.Stage stage) {
         int weakness = SicknessModel.weaknessAmplifier(r.doseGy());
         if (weakness >= 0) e.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 60, weakness, true, false, false));
@@ -209,7 +209,7 @@ public final class RadiationTicker {
                 p.getX(), p.getEyeY() - 0.2, p.getZ(), 12, 0.1, 0.1, 0.1, 0.12);
     }
 
-    /** В разгаре болезни при дозе ≥ 2 Гр естественного восстановления здоровья нет. */
+    /** No natural health regeneration during manifest illness at dose ≥ 2 Gy. */
     public static void onHeal(LivingHealEvent e) {
         LivingEntity p = e.getEntity();
         if (p.level().isClientSide()) return;

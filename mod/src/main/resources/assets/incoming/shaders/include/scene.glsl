@@ -1,8 +1,8 @@
-// Мир кадра за пикселем, для проходов, что светят на мир (fx_pall_composite — свет огненных шаров ядерки, fx_heat — свет
-// вспышки и огня обычного оружия): место, нормаль по соседям, затенение грани Minecraft, канал пикселя под светом.
-// Карта расстояния до мира (SceneDepth), обратная матрица вида и проекции, взгляд и затенение граней — параметрами; нужен
-// pall.glsl (pallScene, pallLinear) — до этого файла.
-// Место мира за пикселем at (от глаза): Sampler1 — расстояние вдоль взгляда
+// World behind frame pixel for world-lighting passes (fx_pall_composite — nuclear ball light; fx_heat — conventional
+// flash/fire light): position, neighbor-derived normal, Minecraft face shade, lit pixel channel. World distance map
+// (SceneDepth), inverse view/projection, gaze and face shade passed as parameters; requires pall.glsl (pallScene,
+// pallLinear) before this file.
+// World position behind pixel at (eye-relative): Sampler1 is distance along view
 vec3 sceneAt(sampler2D depth, mat4 invViewProj, vec3 forward, ivec2 at, ivec2 size) {
     ivec2 c = clamp(at, ivec2(0), size - 1);
     vec2 ndc = (vec2(c) + 0.5) / vec2(size) * 2.0 - 1.0;
@@ -11,9 +11,9 @@ vec3 sceneAt(sampler2D depth, mat4 invViewProj, vec3 forward, ivec2 at, ivec2 si
     return dir * (pallScene(texelFetch(depth, c, 0).r) / max(dot(dir, forward), 1e-3));
 }
 
-// Нормаль поверхности мира в p (пиксель at) по соседним пикселям, к глазу: на каждой оси экрана — сосед, что ближе по
-// месту (на краю предмета другой — фон за ним или другой предмет); у края экрана — внутренний (внешнего нет: sceneAt
-// взял бы сам пиксель, разность 0 — и нормаль 0)
+// Eye-facing world surface normal at p (pixel at) from neighboring pixels: per screen axis choose nearest position
+// (at object edge the other is background or another object); at screen edge choose inward (no outward neighbor:
+// sceneAt would return same pixel, zero difference and zero normal)
 vec3 sceneNormal(sampler2D depth, mat4 invViewProj, vec3 forward, ivec2 at, ivec2 size, vec3 p) {
     vec3 r = sceneAt(depth, invViewProj, forward, at + ivec2(1, 0), size) - p, l = p - sceneAt(depth, invViewProj, forward, at - ivec2(1, 0), size);
     vec3 u = sceneAt(depth, invViewProj, forward, at + ivec2(0, 1), size) - p, d = p - sceneAt(depth, invViewProj, forward, at - ivec2(0, 1), size);
@@ -26,18 +26,18 @@ vec3 sceneNormal(sampler2D depth, mat4 invViewProj, vec3 forward, ivec2 at, ivec
     return mix(n, -n, step(0.0, dot(n, p)));
 }
 
-// Затенение грани Minecraft по оси, ближайшей к нормали n (ClientLevel.getShade): оно уже в пикселе мира, а свет шара по
-// грани — по косинусу к ней; в цвете блока его быть не должно
+// Minecraft face shade for axis nearest normal n (ClientLevel.getShade): already in world pixel, while ball face light
+// follows its incidence cosine; exclude shade from block color
 float faceShade(vec4 shade, vec3 n) {
     vec3 a = abs(n);
     if (a.y >= a.x && a.y >= a.z) return n.y > 0.0 ? shade.x : shade.y;
     return a.z >= a.x ? shade.z : shade.w;
 }
 
-// Один канал пикселя мира под светом шаров (MushroomField.relit): мир на экране world, доля его прежнего света на экране
-// kept (тень), свет открытого неба на белом блоке на экране open (с затенением грани), свет шаров на белой стене added
-// (линейный). Цвет блока — пиксель, делённый на свет открытого неба (в пещере и доме свет Minecraft слабее — и свет шара на нём меньше: туда он и
-// не доходит), не белее белого. Линейный итог
+// One world pixel channel under ball light (MushroomField.relit): display world, remaining display-light share kept
+// (shadow), open-sky light on white block open (display, face-shaded), ball light on white wall added (linear).
+// Block color is pixel / open-sky light (weaker Minecraft light indoors/in caves also reduces ball light, which cannot
+// reach there), capped at white. Linear result
 float relit(float world, float kept, float open, float added) {
     float lin = pallLinear(world);
     return lin * pallLinear(kept) + min(lin / max(pallLinear(open), 1e-4), 1.0) * added;

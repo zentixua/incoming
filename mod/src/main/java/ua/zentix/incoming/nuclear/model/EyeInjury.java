@@ -1,66 +1,65 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Глаза и вспышка (Glasstone &amp; Dolan 1977, §12.83–12.88): ослепление — засветка всего поля зрения, временная, и ожог
- * сетчатки — постоянное слепое пятно там, где на сетчатке был шар.
+ * Eyes and flash (Glasstone &amp; Dolan 1977, §12.83–12.88): flash blindness — temporary bleaching of the whole visual
+ * field; retinal burn — a permanent blind spot where the ball was imaged on the retina.
  *
- * <p>Опора — рис. 12.88a (ясный день) и 12.88b (ночь): дальности для наблюдателя на земле при подрыве на 10 000 футов, до
- * которых ослепление длится около 10 с (так, что не прочесть приборы при тусклом свете) и до которых обжигается
- * сетчатка смотревшего на шар (моргание за 0,25 с уже учтено: оно спасает только от больших мощностей). Ночью дальности
- * больше: зрачок шире, а глаз, привыкший к темноте, засвечивается сильнее (§12.84). Подрывы мода ниже 10 000 футов, и
- * воздуха на пути к далёкому глазу у них больше: дальности рисунка — их верхняя оценка.
+ * <p>Reference: fig. 12.88a (clear day) and 12.88b (night): ground-observer ranges for a burst at 10 000 ft, within which
+ * blindness lasts about 10 s (unable to read instruments in dim light) and a person looking at the ball suffers retinal
+ * burn (0.25 s blink already included: protects only against large yields). Night ranges are longer: wider pupil and
+ * stronger bleaching of a dark-adapted eye (§12.84). The mod's bursts are below 10 000 ft, with more air on the path to a
+ * distant eye: figure ranges are upper estimates for them.
  *
- * <p>Засветка растёт с импульсом у глаза: 10 с при импульсе на дальности рисунка и дольше ближе — по логарифму импульса
- * (как время восстановления после засвета), до времени, за которое глаз приходит в себя после полного выцветания
- * пигмента: днём — около минуты (колбочки; проба на засвет у окулиста), ночью — около 10 минут (колбочки выходят на
- * плато темновой адаптации и снова видят местность под луной; палочкам для звёздного света нужно до получаса). Полное
- * выцветание поля — при освещённости сетчатки {@link #FULL_BLEACH_TD_S} от освещённой вспышкой земли перед глазом
- * (оценка). У G&amp;D засветка — «от нескольких секунд до минут» (§12.84).
+ * <p>Bleaching increases with eye fluence: 10 s at the figure's range, longer closer in, logarithmically with fluence
+ * (like recovery after bleaching), capped by recovery time after complete pigment bleaching: daytime — about a minute
+ * (cones; clinical photostress test), nighttime — about 10 minutes (cones reach the dark-adaptation plateau and see
+ * moonlit terrain again; rods need up to half an hour for starlight). Full-field bleaching occurs at retinal exposure
+ * {@link #FULL_BLEACH_TD_S} from flash-lit ground in front of the eye (estimate). G&amp;D gives “a few seconds to minutes”
+ * for blindness (§12.84).
  */
 public final class EyeInjury {
-    /** Мощности опорных точек рис. 12.88, кт. */
+    /** Anchor yields of fig. 12.88, kt. */
     private static final double[] YIELDS = {1, 10, 100, 1000, 10000};
-    /** Ослепление на 10 с, мили от эпицентра: день, ночь (подрыв на 10 000 футов, снято с рисунка ±1 миля). */
+    /** 10 s flash blindness, miles from epicenter: day, night (burst at 10 000 ft, read from figure ±1 mile). */
     private static final double[] FLASH_DAY_MI = {5.7, 12.7, 19.8, 15.1, 27.8};
     private static final double[] FLASH_NIGHT_MI = {40.3, 60, 67, 53.7, 74};
-    /** Ожог сетчатки, мили от эпицентра: день, ночь. */
+    /** Retinal burn, miles from epicenter: day, night. */
     private static final double[] RETINA_DAY_MI = {11.0, 18.5, 23.9, 32.7, 54.9};
     private static final double[] RETINA_NIGHT_MI = {19.3, 30.5, 42.7, 56.5, 84};
     private static final double MILE_M = 1609.344, FIGURE_HOB_M = 3048;
-    /** Видимость, для которой построен рисунок: ясно (та же, что «ясно» у света, {@link ThermalModel#VISIBILITY_CLEAR}). */
+    /** Visibility used for the figure: clear (same as “clear” for thermal light, {@link ThermalModel#VISIBILITY_CLEAR}). */
     private static final double FIGURE_VISIBILITY = ThermalModel.VISIBILITY_CLEAR;
 
-    /** Ослепление на краю дальности рисунка, с. */
+    /** Blindness at the figure's range limit, s. */
     public static final double EDGE_S = 10;
-    /** Глаз приходит в себя после полного выцветания пигмента, с: днём, ночью (плато колбочек темновой адаптации). */
+    /** Eye recovery after full pigment bleaching, s: day, night (cone dark-adaptation plateau). */
     public static final double FULL_DAY_S = 60, FULL_NIGHT_S = 600;
     /**
-     * Освещённость сетчатки, при которой пигмент выцветает почти весь (95 %), тд·с: три постоянные выцветания колбочек
-     * (~5·10⁶ тд·с, Раштон) — оценка.
+     * Retinal exposure bleaching almost all pigment (95 %), td·s: three cone bleaching constants
+     * (~5·10⁶ td·s, Rushton) — estimate.
      */
     public static final double FULL_BLEACH_TD_S = 1.5e7;
-    /** Альбедо земли перед глазом, световая отдача света шара (~6000 К), лм/Вт. */
+    /** Ground albedo in front of the eye, fireball light luminous efficacy (~6000 K), lm/W. */
     private static final double GROUND_ALBEDO = 0.2, LUMENS_PER_WATT = 93;
-    /** На сколько ступеней света ночное небо темнее дневного ({@code Level.updateSkyBrightness}). */
+    /** How many light levels darker the night sky is than daytime ({@code Level.updateSkyBrightness}). */
     private static final double NIGHT_DARKEN = 11;
-    /** Зрачок, мм: днём и у привыкшего к темноте. */
+    /** Pupil, mm: daytime and dark-adapted. */
     private static final double PUPIL_DAY_MM = 3, PUPIL_NIGHT_MM = 7;
 
     private EyeInjury() {}
 
     /**
-     * Насколько глаз привык к темноте (0 — день, 1 — ночь) при свете у глаза 0..15 (больший из неба и блоков): ночью
-     * небо темнее дня на 11 ступеней, и свет неба под открытым небом — 4; ещё темнее (подвал, пещера) — тоже ночь.
+     * Eye dark adaptation (0 — day, 1 — night) at eye light 0..15 (maximum of sky and block): night sky is 11 levels darker
+     * than day, giving skylight 4 under open sky; darker still (basement, cave) is also night.
      */
     public static double darkness(int light) {
         return clamp((15 - light) / NIGHT_DARKEN);
     }
 
     /**
-     * Сколько секунд ослеплён глаз (поле засвечено так, что не разглядеть тусклого) при импульсе {@code q} кал/см² у
-     * глаза.
+     * Seconds the eye is blinded (field bleached enough to obscure dim objects) at eye fluence {@code q} cal/cm².
      *
-     * @param dark насколько глаз привык к темноте в миг вспышки: 0 — день, 1 — ночь без огней
+     * @param dark eye dark adaptation at flash time: 0 — day, 1 — night without lights
      */
     public static double dazzleSeconds(double q, double yieldKt, double dark) {
         if (q <= 0) return 0;
@@ -70,47 +69,47 @@ public final class EyeInjury {
         return Math.max(0, Math.min(longest, t));
     }
 
-    /** Импульс у глаза, при котором ослепление — {@link #EDGE_S}: на дальности рисунка, кал/см². */
+    /** Eye fluence causing {@link #EDGE_S} blindness: at the figure's range, cal/cm². */
     static double edgeFluence(double yieldKt, double dark) {
         double day = fluenceAt(FLASH_DAY_MI, yieldKt), night = fluenceAt(FLASH_NIGHT_MI, yieldKt);
         return Math.exp(Math.log(day) + (Math.log(night) - Math.log(day)) * clamp(dark));
     }
 
     /**
-     * Импульс у глаза, при котором выцветает всё поле (свет освещённой земли перед глазом), кал/см². Земля здесь
-     * освещена всем импульсом, как поверхность лицом к шару: у низкого шара прямого света на ровную землю меньше (доля —
-     * синус его высоты над горизонтом), но небо вокруг шара светится рассеянным, — оценка сверху.
+     * Eye fluence bleaching the whole field (light from illuminated ground ahead), cal/cm². Ground here receives the full
+     * fluence like a surface facing the ball: a low ball gives less direct light on flat ground (fraction is its elevation
+     * sine), but the sky around it glows with scattered light — upper estimate.
      */
     static double fullBleachFluence(double dark) {
         double pupil = PUPIL_DAY_MM + (PUPIL_NIGHT_MM - PUPIL_DAY_MM) * clamp(dark);
         double area = Math.PI * pupil * pupil / 4;
-        // кал/см² → Дж/м² → лм·с/м² → кд·с/м² ламбертовой земли → тд·с
+        // cal/cm² → J/m² → lm·s/m² → cd·s/m² of Lambertian ground → td·s
         double tdPerCal = 4.184e4 * LUMENS_PER_WATT * GROUND_ALBEDO / Math.PI * area;
         return FULL_BLEACH_TD_S / tdPerCal;
     }
 
     /**
-     * До какой наклонной дальности, м, обжигается сетчатка смотревшего на шар при видимости {@code visibilityM}: энергия
-     * на единицу площади изображения от дальности не зависит, её отнимает только воздух (§12.86), поэтому граница — та же
-     * прозрачность воздуха, что на дальности рисунка в ясную погоду. Рисунок — для воздушного подрыва; у наземного свет
-     * шара тусклее (доля света и больший шар), но данных о сетчатке для него нет — та же дальность, оценка сверху.
+     * Slant range to retinal burn for a person looking at the ball at visibility {@code visibilityM}, m: energy per image
+     * area is independent of range, attenuated only by air (§12.86), so the boundary has the same air transmittance as the
+     * figure's clear-weather range. Figure is for an airburst; a surface burst's ball is dimmer (light fraction and larger
+     * ball), but no retinal data exists for it — same range, upper estimate.
      */
     public static double retinaRange(double yieldKt, double dark, double visibilityM) {
         double day = slant(at(RETINA_DAY_MI, yieldKt)), night = slant(at(RETINA_NIGHT_MI, yieldKt));
         return (day + (night - day) * clamp(dark)) * visibilityM / FIGURE_VISIBILITY;
     }
 
-    /** Импульс на дальности рисунка {@code miles} в ясную погоду (подрыв в воздухе), кал/см². */
+    /** Fluence at figure range {@code miles} in clear weather (airburst), cal/cm². */
     private static double fluenceAt(double[] miles, double yieldKt) {
         return ThermalModel.fluenceCalPerCm2(slant(at(miles, yieldKt)), yieldKt, false, FIGURE_VISIBILITY);
     }
 
-    /** Наклонная дальность до подрыва на высоте рисунка, м. */
+    /** Slant range to a burst at the figure's height, m. */
     private static double slant(double groundM) {
         return Math.hypot(groundM, FIGURE_HOB_M);
     }
 
-    /** Дальность по рисунку, м: линейно по логарифму мощности; мощность — в пределах рисунка. */
+    /** Figure range, m: linear in log yield; yield clamped to the figure's limits. */
     private static double at(double[] miles, double yieldKt) {
         double x = Math.log10(Math.max(YIELDS[0], Math.min(YIELDS[YIELDS.length - 1], yieldKt)));
         int i = Math.min(YIELDS.length - 2, (int) Math.floor(x));

@@ -23,12 +23,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Единственное место работы с летательными аппаратами Sable («sub-levels»), через sable-companion (MIT, вшит в jar).
- * Без Sable companion отдаёт заглушку: аппаратов нет, координаты не меняются.
+ * The sole integration point for Sable flying craft (“sub-levels”), through sable-companion (MIT, bundled in the jar).
+ * Without Sable, companion returns a stub: no craft, coordinates unchanged.
  * <p>
- * Как устроено: блоки аппарата живут в далёком «плоте» (plot) того же мира, а в мире рисуется их проекция.
- * С Sable ванильный {@code Level.clip} уже учитывает аппараты и возвращает попадание в координатах плота —
- * поэтому достаточно узнать, лежит ли точка в плоте, и спроецировать её в мир.
+ * Layout: craft blocks live in a distant plot in the same world; their projection is rendered in the world.
+ * With Sable, vanilla {@code Level.clip} already accounts for craft and returns hits in plot coordinates —
+ * so it is enough to check whether the point lies in a plot and project it into the world.
  */
 public final class SubLevels {
     private static volatile boolean broken;
@@ -40,7 +40,7 @@ public final class SubLevels {
         return SableCompanion.INSTANCE;
     }
 
-    /** Аппарат, в плоте которого лежит точка, или null. */
+    /** Craft whose plot contains the point, or null. */
     @Nullable
     public static SubLevelAccess containing(Level level, Position plotPos) {
         if (broken) return null;
@@ -56,7 +56,7 @@ public final class SubLevels {
         return containing(level, pos) != null;
     }
 
-    /** Мировые координаты точки плота (для точки вне плота — она же). */
+    /** World coordinates of a plot point (unchanged for a point outside a plot). */
     public static Vec3 toWorld(Level level, Vec3 pos) {
         if (broken) return pos;
         try {
@@ -67,7 +67,7 @@ public final class SubLevels {
         }
     }
 
-    /** Точка плота, которая сейчас находится в мировой точке world (для аппарата sub). */
+    /** Plot point currently at world position world (for craft sub). */
     public static Vec3 toPlot(SubLevelAccess sub, Vec3 world) {
         try {
             return sub.logicalPose().transformPositionInverse(world);
@@ -77,7 +77,7 @@ public final class SubLevels {
         }
     }
 
-    /** Центр аппарата в мире. */
+    /** Craft center in the world. */
     public static Vec3 center(SubLevelAccess sub) {
         try {
             Vector3d c = sub.boundingBox().center();
@@ -88,7 +88,7 @@ public final class SubLevels {
         }
     }
 
-    /** Во сколько раз аппарат в мире меньше, чем в плоте (наименьшая ось масштаба; 1 — если не узнать). */
+    /** How much smaller the craft is in the world than in its plot (smallest scale axis; 1 if unavailable). */
     public static double minScale(SubLevelAccess sub) {
         try {
             var s = sub.logicalPose().scale();
@@ -124,7 +124,7 @@ public final class SubLevels {
         return sub.logicalPose().transformPosition(nearest).distanceToSqr(source);
     }
 
-    /** Аппараты в радиусе (по габаритам). */
+    /** Craft within a radius (by bounds). */
     public static List<SubLevelAccess> near(Level level, Vec3 at, double radius) {
         List<SubLevelAccess> out = new ArrayList<>();
         if (broken) return out;
@@ -138,8 +138,8 @@ public final class SubLevels {
     }
 
     /**
-     * Может ли в кубе ±{@code radius} вокруг {@code at} быть аппарат: есть хоть один по габаритам — или Sable стоит,
-     * а связь с ним сломана (тогда «да»: лучше ванильный путь со всеми миксинами Sable).
+     * Whether a craft could be in the cube ±{@code radius} around {@code at}: at least one craft's bounds overlap — or Sable
+     * is installed but its integration is broken (then “yes”: better to take the vanilla path with all Sable mixins).
      */
     public static boolean mayHaveCraftNear(Level level, Vec3 at, double radius) {
         if (!ModList.get().isLoaded("sable")) return false;
@@ -148,12 +148,12 @@ public final class SubLevels {
         return broken || !near.isEmpty();
     }
 
-    /** Все аппараты мира. */
+    /** All craft in the world. */
     public static List<SubLevelAccess> all(Level level) {
         return near(level, Vec3.ZERO, 3.0e7);
     }
 
-    /** Чанк в сетке плотов Sable — и тогда, когда аппарат там не загружен (в отличие от {@link #containing}). */
+    /** Chunk in Sable's plot grid, even when the craft there is not loaded (unlike {@link #containing}). */
     public static boolean inPlotGrid(Level level, net.minecraft.world.level.ChunkPos chunk) {
         if (broken) return false;
         try {
@@ -164,7 +164,7 @@ public final class SubLevels {
         }
     }
 
-    /** Аппарат, в плоте которого лежит чанк, или null. */
+    /** Craft whose plot contains the chunk, or null. */
     @Nullable
     public static SubLevelAccess containing(Level level, net.minecraft.world.level.ChunkPos chunk) {
         if (broken) return null;
@@ -176,7 +176,7 @@ public final class SubLevels {
         }
     }
 
-    /** Id аппарата, в плоте которого лежит чанк, или null. */
+    /** ID of the craft whose plot contains the chunk, or null. */
     @Nullable
     public static UUID containingId(Level level, net.minecraft.world.level.ChunkPos chunk) {
         SubLevelAccess sub = containing(level, chunk);
@@ -202,9 +202,9 @@ public final class SubLevels {
     }
 
     /**
-     * Аппарат с точкой плота {@code plotPos} виден из {@code from}: луч до её места в мире не упирается ни в блоки мира,
-     * ни в другой аппарат — упереться в сам аппарат и значит его видеть (с Sable {@code Level.clip} отдаёт попадание
-     * в аппарат в координатах его плота). Только по готовым чанкам ({@link Terrain#readyAlong}).
+     * A craft at plot point {@code plotPos} is visible from {@code from}: the ray to its world position hits neither world
+     * blocks nor another craft — hitting the craft itself means seeing it (with Sable, {@code Level.clip} returns craft hits
+     * in its plot coordinates). Ready chunks only ({@link Terrain#readyAlong}).
      */
     public static boolean visibleFrom(ServerLevel level, Vec3 from, Vec3 plotPos) {
         SubLevelAccess craft = containing(level, plotPos);
@@ -218,7 +218,7 @@ public final class SubLevels {
         return struck != null && id != null && id.equals(uniqueId(struck));
     }
 
-    /** Имя аппарата для интерфейса. */
+    /** Craft name for the interface. */
     public static Component describe(@Nullable SubLevelAccess subLevel) {
         String name = subLevel == null ? null : name(subLevel);
         return name == null || name.isBlank()
@@ -226,7 +226,7 @@ public final class SubLevels {
                 : Component.translatable("incoming.target.aircraft.named", name);
     }
 
-    /** Имя аппарата, которое дал ему игрок; null — без имени. */
+    /** Craft name assigned by a player; null — unnamed. */
     @Nullable
     public static String name(SubLevelAccess subLevel) {
         try {
@@ -238,10 +238,10 @@ public final class SubLevels {
     }
 
     /**
-     * API Sable не обещает стабильности (README Sable). Если обновление сборки его сломает (класса или метода
-     * нет — {@link LinkageError}), мод продолжит работать без наведения на аппараты до перезапуска, а причина
-     * останется в логе. Исключение в отдельном вызове (аппарат в эту секунду дробится или уже удалён) — только
-     * этот вызов: иначе один сбой Sable отключал бы наведение на все аппараты до перезапуска игры.
+     * Sable's API does not promise stability (Sable README). If a modpack update breaks it (missing class or method —
+     * {@link LinkageError}), the mod continues without craft targeting until restart, and the reason stays in the log.
+     * An exception in an individual call (the craft is splitting or already removed) affects only that call: otherwise one
+     * Sable failure would disable targeting of all craft until the game restarts.
      */
     private static void fail(Throwable e) {
         if (e instanceof LinkageError) {

@@ -16,34 +16,34 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
- * Загрузка чанков для ядерного удара — пятно воронки и край очереди разрушений. Ванильные тикеты грузят и
- * генерируют чанк в фоне (тикет NeoForge {@code forceChunk} грузил бы его сразу, останавливая сервер), не
- * сохраняются в мире и сами пропадают при перезапуске; кто ждёт чанк — проверяет {@link Terrain#ready}.
+ * Chunk loading for a nuclear strike — crater footprint and destruction queue edge. Vanilla tickets load and generate
+ * chunks in the background (NeoForge {@code forceChunk} would load immediately, stalling the server), are not world-saved,
+ * and vanish on restart; callers awaiting a chunk check {@link Terrain#ready}.
  * <p>
- * Менять блоки можно только там, где загружены и соседи: Sable на каждое изменение блока читает соседние блоки
- * (физика аппаратов), и на краю загруженного мира это синхронно грузило бы соседний чанк — по 30–300 мс на столбец.
+ * Blocks can change only with loaded neighbors: Sable reads neighboring blocks on every block change (craft physics),
+ * which at the loaded-world edge would synchronously load the neighbor — 30–300 ms per column.
  * <p>
- * Чанки берутся через {@link AreaLoader}: тикет региона сразу сделал бы чанк тикающим, пока соседи ещё генерируются, —
- * и хранилище испытаний в нём грузило бы соседа синхронно (до 2,5 с у чанков очереди разрушений).
+ * Chunks acquired through {@link AreaLoader}: a region ticket would start ticking while neighbors still generate,
+ * making a trial spawner load a neighbor synchronously (up to 2.5 s for destruction-queue chunks).
  */
 public final class NuclearTickets {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_nuclear", Comparator.<UUID>naturalOrder());
     /**
-     * Свой тип для очереди разрушений: одинаковый тикет (тип, уровень, значение) у ванили один на всех, и снятие
-     * тикета очередью сняло бы тикет воронки на том же чанке.
+     * Separate type for destruction queue: vanilla shares identical tickets (type, level, value), so queue removal would
+     * remove a crater ticket on the same chunk.
      */
     private static final TicketType<UUID> SCAR = TicketType.create("incoming_nuclear_scar", Comparator.<UUID>naturalOrder());
-    /** Чанк и соседи вокруг — полностью загружены (и соседние столбцы, и края воронки). */
+    /** Chunk and neighbors fully loaded (neighboring columns and crater edges too). */
     private static final int RADIUS = 1;
 
     private NuclearTickets() {}
 
-    /** Чанк и все восемь соседей загружены целиком. */
+    /** Chunk and all eight neighbors fully loaded. */
     public static boolean neighbourhoodLoaded(ServerLevel level, ChunkPos pos) {
         return neighbourhoodLoaded(level, pos, 1);
     }
 
-    /** Чанк и все чанки в радиусе {@code r} вокруг загружены целиком. */
+    /** Chunk and every chunk within radius {@code r} fully loaded. */
     public static boolean neighbourhoodLoaded(ServerLevel level, ChunkPos pos, int r) {
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
@@ -54,14 +54,13 @@ public final class NuclearTickets {
     }
 
     /**
-     * Чанк в памяти: полностью загруженный, опущенный ниже (у края видимости) или ждущий выгрузки, — пока не пришёл
-     * его {@code ChunkEvent.Unload}; null — его нет в памяти или он ещё не бывал полностью загружен ({@code ChunkEvent.Load}
-     * поставит его сам). Держатель, у которого не осталось тикетов, ваниль убирает из видимой карты чанков сразу, а сам
-     * чанк выгружает позже, когда его можно сохранить ({@code ChunkMap.processUnloads} → {@code pendingUnloads} →
-     * {@code scheduleUnload}); вернувшийся за это время тикет возвращает держатель из {@code pendingUnloads} с тем же
-     * чанком и без нового {@code ChunkEvent.Load}. Поэтому «нет в видимой карте» ещё не значит «выгружен»: очередь,
-     * которая сняла бы такой чанк, больше его не увидела бы — чанк зоны остался бы без руин и держал бы квадрат зоны.
-     * AT: {@code ChunkMap.pendingUnloads}, только чтение.
+     * Chunk in memory: fully loaded, below full loading (visibility edge), or pending unload until its
+     * {@code ChunkEvent.Unload}; null — absent from memory or never fully loaded ({@code ChunkEvent.Load} adds it itself).
+     * Vanilla immediately removes a ticketless holder from the visible chunk map, unloading the chunk later when save-ready
+     * ({@code ChunkMap.processUnloads} → {@code pendingUnloads} → {@code scheduleUnload}); a ticket returning in that time
+     * revives the holder from {@code pendingUnloads} with the same chunk and no new {@code ChunkEvent.Load}. Thus “absent
+     * from visible map” does not mean “unloaded”: a queue removing it would never see it again — zone chunk left intact,
+     * holding the zone tile. AT: {@code ChunkMap.pendingUnloads}, read-only.
      */
     @Nullable
     public static LevelChunk inMemory(ServerLevel level, long pos) {
@@ -69,15 +68,15 @@ public final class NuclearTickets {
     }
 
     /**
-     * Сколько блоков от меняемого места читает Sable: на смену блока ({@code LevelChunk.setBlockState}) — соседей места,
-     * а у твёрдого соседа — и его соседей ({@code VoxelNeighborhoodState}).
+     * Blocks read by Sable around a changed position: on block change ({@code LevelChunk.setBlockState}), its neighbors,
+     * and solid neighbors' neighbors ({@code VoxelNeighborhoodState}).
      */
     public static final int SABLE_REACH = 2;
 
     /**
-     * Загружены все чанки в {@link #SABLE_REACH} блоках от места (по углам — с диагональными): неготовый чанк Sable
-     * грузил бы прямо в вызове (тик до 3,5 с в очереди руин: поток сервера ждёт чанк в
-     * {@code ColumnScar.replace}; GameTest {@code fallenLogNextToUnreadyChunkLoadsNothing}).
+     * All chunks within {@link #SABLE_REACH} blocks of a position loaded (including diagonal corners): Sable would load an
+     * unready chunk inside the call (ruin queue tick up to 3.5 s: server thread waits in {@code ColumnScar.replace};
+     * GameTest {@code fallenLogNextToUnreadyChunkLoadsNothing}).
      */
     public static boolean aroundLoaded(Level level, BlockPos pos) {
         for (int cx = (pos.getX() - SABLE_REACH) >> 4; cx <= (pos.getX() + SABLE_REACH) >> 4; cx++) {
@@ -93,8 +92,8 @@ public final class NuclearTickets {
     }
 
     /**
-     * Чанк на краю загруженного мира и чанки вокруг него в радиусе {@code radius} (сколько соседей нужно его руинам) —
-     * пока очередь разрушений его не пройдёт ({@link ScarQueue}).
+     * Chunk at the loaded world's edge and surrounding chunks within {@code radius} (neighbors its ruins need),
+     * held until the destruction queue processes it ({@link ScarQueue}).
      */
     static void holdForScar(ServerLevel level, ChunkPos pos, boolean hold, int radius) {
         hold(level, SCAR, pos, hold, radius);
@@ -105,7 +104,7 @@ public final class NuclearTickets {
     }
 
     private static void hold(ServerLevel level, TicketType<UUID> type, ChunkPos pos, boolean hold, int radius) {
-        // один район на чанк и тип, как один ванильный тикет (тип, уровень, значение): повторный hold ничего не добавляет
+        // one area per chunk and type, like one vanilla ticket (type, level, value): repeated hold adds nothing
         AreaLoader.Area area = new AreaLoader.Area(type, pos, radius, new UUID(0L, pos.toLong()));
         if (hold) StrikeWorld.get(level).areas().hold(level, area);
         else StrikeWorld.get(level).areas().release(level, area);

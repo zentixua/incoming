@@ -6,7 +6,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.world.NuclearTickets;
 import ua.zentix.incoming.util.Terrain;
 
-/** Блоки подстанций следуют за сетью: выбита — {@code powered=false}, пока в её район не начали возвращать свет. */
+/** Substation blocks follow the grid: knocked out — {@code powered=false} until power restoration starts in their area. */
 final class Substations {
     private Substations() {}
 
@@ -14,7 +14,7 @@ final class Substations {
         for (Node node : grid.nodes()) {
             if (!node.block()) continue;
             BlockPos pos = node.pos();
-            // чанк или соседи не готовы (Sable читает соседние блоки) — выровняется, когда станут (раз в секунду)
+            // chunk or neighbors not ready (Sable reads neighboring blocks) — sync when ready (once a second)
             if (!Terrain.ready(level, pos) || !NuclearTickets.aroundLoaded(level, pos)) continue;
             BlockState state = level.getBlockState(pos);
             if (!(state.getBlock() instanceof SubstationBlock)) continue;
