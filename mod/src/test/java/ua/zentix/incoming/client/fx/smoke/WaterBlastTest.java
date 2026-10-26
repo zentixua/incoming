@@ -4,7 +4,10 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,6 +55,99 @@ class WaterBlastTest {
         return tau;
     }
 
+    /** The original spatial grid, including its floating-point step accumulation. */
+    private static double[] grid(double end, double step) {
+        List<Double> points = new ArrayList<>();
+        for (double p = 0; p < end; p += step) points.add(p);
+        return points.stream().mapToDouble(Double::doubleValue).toArray();
+    }
+
+    /**
+     * The same 64-point quadrature as sight(), with exp(-dx²/2σh²) cached for the whole x grid. Points at the same
+     * height and vertical width share their y factor, including jets at different azimuths. All terms are positive:
+     * the sum of each group's maximum to the right bounds every ray there, so it can safely skip invisible rows.
+     */
+    private static final class SightGrid {
+        private record Vertical(double y, double sigma) {}
+
+        private final double[] x;
+        private final Vertical[] groups;
+        private final double[][] horizontal, maximum;
+
+        SightGrid(List<double[]> points, double[] x) {
+            this.x = x;
+            Map<Vertical, double[]> sums = new LinkedHashMap<>();
+            for (double[] q : points) {
+                double[] row = sums.computeIfAbsent(new Vertical(q[1], q[4]), key -> new double[x.length]);
+                double weight = q[5] / (2 * Math.PI * q[3] * q[4]);
+                for (int i = 0; i < x.length; i++) {
+                    double dx = x[i] - q[0];
+                    row[i] += weight * Math.exp(-dx * dx / (2 * q[3] * q[3]));
+                }
+            }
+            groups = sums.keySet().toArray(Vertical[]::new);
+            horizontal = sums.values().toArray(double[][]::new);
+            maximum = new double[groups.length][x.length];
+            for (int g = 0; g < groups.length; g++) {
+                double high = 0;
+                for (int i = x.length - 1; i >= 0; i--) maximum[g][i] = high = Math.max(high, horizontal[g][i]);
+            }
+        }
+
+        double[] vertical(double y) {
+            double[] weights = new double[groups.length];
+            for (int g = 0; g < groups.length; g++) {
+                double dy = y - groups[g].y();
+                weights[g] = Math.exp(-dy * dy / (2 * groups[g].sigma() * groups[g].sigma()));
+            }
+            return weights;
+        }
+
+        double sight(int i, double[] vertical) {
+            double tau = 0;
+            for (int g = 0; g < groups.length; g++) tau += horizontal[g][i] * vertical[g];
+            return tau;
+        }
+
+        int rightmost(double y, int first) {
+            if (first == x.length) return -1;
+            double[] weights = vertical(y);
+            double bound = 0;
+            for (int g = 0; g < groups.length; g++) bound += maximum[g][first] * weights[g];
+            if (bound < CloudModel.SEEN) return -1;
+            // A mixture can have separate lobes: scan from the outside, never assume monotonicity for a bisection.
+            for (int i = x.length - 1; i >= first; i--) {
+                if (sight(i, weights) >= CloudModel.SEEN) return i;
+            }
+            return -1;
+        }
+    }
+
+    /** Check the cached, factored sum against the old independent ray integral, including faint edges and landing. */
+    @Test
+    void cachedSightMatchesTheDirectQuadrature() {
+        for (WeaponType wt : WeaponType.values()) {
+            if (wt.spec().charge() <= 0) continue;
+            WaterBlast w = new WaterBlast(wt.spec().charge(), 0, DEEP, CloudModel.Air.STANDARD);
+            double[] x = {0, 0.5 * w.radius, 0.95 * w.radius, w.radius, 1.5 * w.radius};
+            for (double age : new double[]{0.025, 0.5, 1, 1.5, 1.975, 2}) {
+                List<double[]> points = spray(w, age * w.rise);
+                SightGrid cached = new SightGrid(points, x);
+                for (double y : new double[]{0, 0.1 * w.height, 0.5 * w.height, 0.98 * w.height, w.height, 1.5 * w.height}) {
+                    double[] vertical = cached.vertical(y);
+                    int rightmost = -1;
+                    for (int i = 0; i < x.length; i++) {
+                        double direct = sight(points, x[i], y);
+                        assertEquals(direct, cached.sight(i, vertical), Math.max(1e-14, 1e-12 * direct), wt.name());
+                        if (direct >= CloudModel.SEEN) rightmost = i;
+                    }
+                    assertEquals(rightmost, cached.rightmost(y, 0), wt.name());
+                    assertEquals(-1, cached.rightmost(y, rightmost + 1), wt.name());
+                }
+            }
+        }
+    }
+
     /**
      * Класс жалобы «удар в воду без столба» и его обратной стороны — «столб пеленой во весь кадр» (финальный проход 3.7.0:
      * залп «Града» по воде у берега закрывал кадр ровной серой заливкой): H и R таблицы Swisdak — видимый султан, и на них
@@ -70,17 +166,27 @@ class WaterBlastTest {
             double law = 29.7 * Math.cbrt(kg) / 1.4, wide = 8.3 * Math.cbrt(kg) / 1.3;
             assertEquals(law, w.height, 1e-9 * law, wt.name());
             assertEquals(wide, w.radius, 1e-9 * wide, wt.name());
-            double top = 0, side = 0;
+            double[] xs = grid(2 * wide, wide / 150), ys = grid(1.5 * law, law / 300);
+            List<Double> times = new ArrayList<>();
             for (double t = w.rise / 40; t <= 2 * w.rise; t += w.rise / 40) {
-                List<double[]> p = spray(w, t);
-                for (double y = 0; y < 1.5 * law; y += law / 300) {
-                    for (double x = 0; x < 2 * wide; x += wide / 150) {
-                        if (sight(p, x, y) < CloudModel.SEEN) continue;
-                        top = Math.max(top, y);
-                        side = Math.max(side, x);
-                    }
+                times.add(t);
+            }
+            // Visit the apex and outer-jet landing first, then every remaining original time sample. Finding the
+            // extrema early lets subsequent rows skip rays that cannot increase either measured dimension.
+            times.sort(Comparator.comparingDouble(t -> Math.min(Math.abs(t / w.rise - 1), Math.abs(t / w.rise - 2 * Math.cos(w.cone)))));
+            double top = 0;
+            int sideIndex = -1;
+            for (double t : times) {
+                SightGrid rays = new SightGrid(spray(w, t), xs);
+                for (int iy = ys.length - 1; iy >= 0; iy--) {
+                    double y = ys[iy];
+                    int edge = rays.rightmost(y, y > top ? 0 : sideIndex + 1);
+                    if (edge < 0) continue;
+                    top = Math.max(top, y);
+                    sideIndex = Math.max(sideIndex, edge);
                 }
             }
+            double side = sideIndex < 0 ? 0 : xs[sideIndex];
             assertTrue(top <= law && top >= 0.97 * law, wt.name() + ": видимый верх " + top + " против " + law);
             assertTrue(side <= wide && side >= 0.92 * wide, wt.name() + ": видимый радиус за полёт " + side + " против " + wide);
         }

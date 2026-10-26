@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -185,9 +186,14 @@ public final class CraterJob {
         double relief = lift - depth;
         BlockPos damagedPos = null;
         double damagedDepth = 0;
+        // Context for resistance overrides: the excavation footprint, without executing a vanilla explosion.
+        // VAPORIZE does not query resistance and needs no context.
+        Explosion excavation = mode == Mode.DIG
+                ? new Explosion(level, null, centre.x, centre.y, centre.z, (float) outer, false, Explosion.BlockInteraction.DESTROY)
+                : null;
         if (mode == Mode.DIG) {
             BlockState surface = level.getBlockState(m.setY(ground - 1));
-            if (surface.getBlock().defaultDestroyTime() < 0 || surface.getBlock().getExplosionResistance() >= BLAST_PROOF) return;
+            if (surface.getBlock().defaultDestroyTime() < 0 || surface.getExplosionResistance(level, m, excavation) >= BLAST_PROOF) return;
             if (relief < 0 && SurfaceBlocks.cohesive(surface)) {
                 // Cohesive material cannot lose a metre of collision shape for a 0.2 m excavation. Remove only full
                 // metres; retain and mark the fractional last block. Loose soil keeps the unbiased grain sampling.
@@ -211,7 +217,7 @@ public final class CraterJob {
             for (int y = mode == Mode.VAPORIZE ? top - 1 : ground - 1; y >= floor; y--) {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // water above the floor itself remains
-                if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getBlock().getExplosionResistance() >= BLAST_PROOF)) break;
+                if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getExplosionResistance(level, m, excavation) >= BLAST_PROOF)) break;
                 if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
