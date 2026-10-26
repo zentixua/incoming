@@ -287,6 +287,18 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+The light falling on the ground has an energy budget: 0.24% of the charge energy in visible light, and 30% of the
+burning fuel's energy across the whole spectrum, including the cooling glow. Both are estimates: the first extends
+[a small explosive test](https://doi.org/10.1134/S0010508214010122) to larger charges; the second uses a
+[TNO fireball estimate](https://publications.tno.nl/publication/34634119/QIKv78/TNO-2005-yellow.pdf), not a measurement of
+a crashed fuel tank. The explosive flash rises and fades within that same budget. Its time shape is one triangular
+approximation of the measured visible pulse, scaled with the cube root of charge mass; the unresolved millisecond
+peak is included in the broad pulse so it cannot vanish between frames.
+The source emits the same light by day and night. Direct illumination fades with distance squared,
+air absorption and the angle of the surface; the same flash is much easier to see against dark ground. Night adaptation,
+glare and bloom are presentation. Scattered light from an ordinary flash onto the world and shadows from distant terrain
+are not yet simulated.
+
 Near the ground the wind also depends on what stands around. Between houses and under trees it is several times weaker
 than over an open field; on a hilltop it is stronger, and in a hollow weaker. So the dust, the haze and the smoke of a
 fire linger in a street for a minute or two, and blow off a hill sooner. The game reads this from the blocks around the

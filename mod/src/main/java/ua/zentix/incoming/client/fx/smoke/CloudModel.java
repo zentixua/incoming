@@ -37,9 +37,9 @@ import ua.zentix.incoming.nuclear.model.FuelPool;
  * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка). Горение кончилось — шар не гаснет, а
  * остывает подсосом воздуха: тот же термик MTT ({@link #cooling}), начатый с шара в конец горения (его радиус и
  * температура), — температура газа T = T_a/(1 − g'/g) падает, пока шар растёт; светит, пока горячее точки Дрейпера
- * ({@value #DRAPER_K} K), яркость — чёрное тело этой температуры (по Планку: от 1500 до 1000 K — в тысячи раз). Излучение
- * шар остужает ещё быстрее (CCPS: 25–40 % тепла уходит светом) — здесь не считается, свечение кончается чуть позже
- * настоящего.
+ * ({@value #DRAPER_K} K). Спектр — Планк, но степень черноты задаёт бюджет {@link FireballRadiation}: у ВВ видимая
+ * энергия, у топлива полная излучённая энергия, включая охлаждение. Размер и время этим не меняются. Дополнительное
+ * радиационное охлаждение газа не считается — температура и форма временного профиля остаются приближением.
  * <p>
  * <b>Топливо в воронке.</b> Что не разлетелось брызгами в шар, остаётся в воронке, пропитав грунт, и догорает там:
  * доля {@link #POOL_SHARE}, закон — общий с сервером {@link FuelPool} (площадь — круг воронки, выгорание тонкого слоя): у
@@ -298,6 +298,8 @@ public final class CloudModel {
     public final double burnSeconds;
     /** Конец свечения шара, с: остывший до точки Дрейпера; дальше облако — термик. */
     public final double fireSeconds;
+    /** Излучение из энергетического бюджета: импульс ВВ и степень черноты топлива, без привыкания глаза. */
+    final FireballRadiation radiation;
     /** Остывание шара после горения: термик MTT от шара в конец горения ({@link #burnSeconds}). */
     public final Thermal cooling;
     /** Радиус шара в конец горения, м, и высота его центра тогда. */
@@ -411,6 +413,7 @@ public final class CloudModel {
         burnHeight = onGround(burnRadius) + lift(burnSeconds);
         cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air.lifted(hob));
         fireSeconds = glowEnd();
+        radiation = FireballRadiation.of(this);
         // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
         // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
         pool = onWater ? FuelPool.NONE : FuelPool.of(source.fuel(), source.fuelKg(), source.chargeKg());
@@ -633,8 +636,8 @@ public final class CloudModel {
 
     /**
      * Свет поверхности светящегося шара радиуса {@link #ballRadius} в возрасте t — в {@code out} (r, g, b, яркость Y; белая
-     * стена в полдень — 1): шары продуктов детонации и топлива вместе, каждый — чёрное тело своей температуры с долей
-     * площади (r/R)² (поток тот же, что у двух шаров).
+     * стена в полдень — 1): шары продуктов детонации и топлива вместе, каждый — серое тело своей температуры с долей
+     * площади (r/R)² (поток тот же, что у двух шаров) и степенью черноты из {@link #radiation}.
      */
     public void ballLight(double t, double[] out) {
         java.util.Arrays.fill(out, 0, 4, 0);
@@ -642,28 +645,30 @@ public final class CloudModel {
         if (big <= 0) return;
         if (t >= burnSeconds) {
             BlackBody.light(coolKelvin(t), out);
+            for (int i = 0; i < 4; i++) out[i] *= radiation.cooling();
             return;
         }
         double[] c = light;
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         if (he > 0) {
             BlackBody.light(heBallKelvin(t), c);
-            for (int i = 0; i < 4; i++) out[i] += c[i] * he * he / (big * big);
+            double emissivity = radiation.he(t, he, heBallKelvin(t));
+            for (int i = 0; i < 4; i++) out[i] += c[i] * emissivity * he * he / (big * big);
         }
         if (fuel > 0) {
             BlackBody.light(FUEL_BALL_K, c);
-            for (int i = 0; i < 4; i++) out[i] += c[i] * fuel * fuel / (big * big);
+            for (int i = 0; i < 4; i++) out[i] += c[i] * radiation.fuel() * fuel * fuel / (big * big);
         }
     }
 
     /**
-     * Свет, что шар в возрасте t отдаёт наружу при свете неба sky ({@link #glowShare(double, double)}), — в {@code out},
-     * как {@link #ballLight}: чёрное тело той доли шара, что ещё огонь, а не дым. Один выход источника для всех, кто его
-     * берёт (тело на экране, свет на дым, на мир, на облака): потемневший шар не светит на землю и небо ярче своего пламени.
+     * Свет источника в возрасте t, без экспозиции и зависимости от света неба. Плавное исчезновение у точки Дрейпера
+     * ({@link #glowShare(double)}) — подача, только уменьшает бюджет. Дневной/ночной переход тела в дым
+     * ({@link #glowShare(double, double)}) — отдельная подача на экране, не изменение потока источника.
      */
-    public void shownLight(double t, double sky, double[] out) {
+    public void emittedLight(double t, double[] out) {
         ballLight(t, out);
-        double g = glowShare(ballKelvin(t), sky);
+        double g = glowShare(ballKelvin(t));
         for (int i = 0; i < 4; i++) out[i] *= g;
     }
 
