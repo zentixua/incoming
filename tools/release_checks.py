@@ -61,9 +61,9 @@ def check_jar(path, version=None):
 def store_config(step, env=os.environ):
     modrinth = bool(env.get("MODRINTH_TOKEN"))
     cf = [bool(env.get(key)) for key in ("CURSEFORGE_TOKEN", "CURSEFORGE_ID", "CURSEFORGE_API_KEY")]
-    if any(cf) and not all(cf):
+    if cf[1] and not all(cf):
         raise ValueError("CurseForge is partially configured: set CURSEFORGE_TOKEN, CURSEFORGE_ID and "
-                         "CURSEFORGE_API_KEY (read API key for duplicate checks), or remove all three")
+                         "CURSEFORGE_API_KEY (read API key for duplicate checks), or unset CURSEFORGE_ID")
     if all(cf) and not re.fullmatch(r"[1-9][0-9]*", env["CURSEFORGE_ID"]):
         raise ValueError("CURSEFORGE_ID must be a positive numeric project ID")
     if step == "draft" and not modrinth:
@@ -121,7 +121,13 @@ def main():
     elif args.command == "stores":
         modrinth, curseforge = store_config(args.step)
         for name, enabled in (("Modrinth", modrinth), ("CurseForge", curseforge)):
-            print(f"{name}: {'configured' if enabled else 'disabled (no credentials)'}")
+            print(f"{name}: {'configured' if enabled else 'disabled'}")
+        if not curseforge:
+            warning = "CurseForge is disabled: CURSEFORGE_ID is not set. Modrinth publishing can continue."
+            print(f"::warning::{warning}")
+            if os.environ.get("GITHUB_STEP_SUMMARY"):
+                with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as output:
+                    output.write(f"\n**Warning:** {warning}\n")
     else:
         release_preflight()
 

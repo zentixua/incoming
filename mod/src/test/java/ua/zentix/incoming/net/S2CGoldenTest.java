@@ -149,7 +149,7 @@ class S2CGoldenTest {
                 golden(S2C.FarFlights.TYPE, S2C.FarFlights.CODEC, new S2C.FarFlights(List.of(
                         new S2C.FarFlight(A, 4, true, true, false, P, new Vec3(0.5, -1.25, 12), 90.5f, -30f, 15.25f, 2, 77, Q)))),
                 golden(S2C.MapPlayers.TYPE, S2C.MapPlayers.CODEC, new S2C.MapPlayers(List.of(
-                        new S2C.MapPlayer(A, "ENOTzRPG", -100.5, 2000.25, Sightings.Kind.PLAYER, true, 0),
+                        new S2C.MapPlayer(A, "Player01", -100.5, 2000.25, Sightings.Kind.PLAYER, true, 0),
                         new S2C.MapPlayer(B, "", 7, -8, Sightings.Kind.AIRCRAFT, false, 12)), true)),
                 golden(S2C.OpenRemote.TYPE, S2C.OpenRemote.CODEC, new S2C.OpenRemote()),
                 golden(S2C.ReplayTick.TYPE, S2C.ReplayTick.CODEC, new S2C.ReplayTick(123_456, true)),

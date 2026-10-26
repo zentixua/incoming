@@ -60,7 +60,7 @@ import java.util.Optional;
  * /incoming — the same as the designator, for operators and automation (command blocks, functions):
  * <pre>
  *   /incoming drone|missile|bunker                   where I am looking
- *   /incoming missile ENOTzRPG                       at a player or mob (an operator's projectile follows it)
+ *   /incoming missile Steve                          at a player or mob (an operator's projectile follows it)
  *   /incoming bunker at ~ ~-20 ~                     at a point
  *   /incoming missile at x z                         at a ground position: the server finds the height, as for a map position
  *   /incoming salvo drone 6 25 [me|look|name|at x y z|at x z] salvo: count, spread

@@ -19,7 +19,7 @@ class MapPlayersCodecTest {
     @Test
     void roundTrip() {
         S2C.MapPlayers sent = new S2C.MapPlayers(List.of(
-                new S2C.MapPlayer(UUID.randomUUID(), "ENOTzRPG", -1234.75, 98765.5, Sightings.Kind.PLAYER, false, 12),
+                new S2C.MapPlayer(UUID.randomUUID(), "Steve", -1234.75, 98765.5, Sightings.Kind.PLAYER, false, 12),
                 new S2C.MapPlayer(UUID.randomUUID(), "Друг_1", 0.125, -29_999_984.0, Sightings.Kind.PLAYER, true, 0),
                 new S2C.MapPlayer(UUID.randomUUID(), "", 7, 8, Sightings.Kind.AIRCRAFT, false, 600),
                 new S2C.MapPlayer(UUID.randomUUID(), "Шахед", -7, -8, Sightings.Kind.PROJECTILE, false, 0)), true);

@@ -138,6 +138,8 @@ page() {
   fi
 
   # Upload new images once; update retained images before removing obsolete entries.
+  # Empty, null or absent gallery text leaves existing text unchanged; only non-empty text replaces it.
+  # The project JSON fields above use a separate null-clears contract.
   # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
   for ((i = 0; i < n; i++)); do
@@ -148,7 +150,8 @@ page() {
     fi
     sha=$(sha1sum "$file" | cut -d' ' -f1)
     q=$(jq -r --argjson i "$i" '.gallery[$i] | "ordering=\($i)&featured=\(.featured // false)"
-      + "&title=\((.title // "") | @uri)&description=\((.description // "") | @uri)"' "$STORE_JSON")
+      + (if (.title // "") != "" then "&title=\(.title | @uri)" else "" end)
+      + (if (.description // "") != "" then "&description=\(.description | @uri)" else "" end)' "$STORE_JSON")
     existing_url=$(jq -r --arg s "$sha" '[.gallery[]?
       | select(((.url // "") + " " + (.raw_url // "")) | contains($s)) | .url][0] // empty' \
       "$tmp/project.json")

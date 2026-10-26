@@ -33,7 +33,8 @@ before firing near a build.
 | B-2 and bunker buster | A bomber drops a guided bomb that penetrates the ground and explodes underground; can carry a nuclear warhead. |
 | ICBM | A nuclear strike of 1–15 kt, with a 90 s flight timer by default. |
 
-One munition item pays for each launch; a Grad pack holds 40 rockets. A salvo is paid in full when ordered, with
+Each projectile costs one munition item; a Grad pack supplies 40 rockets. A nuclear cruise missile or B-2 bomb also
+costs one Nuclear Warhead item per projectile. A salvo is paid in full when ordered, with
 unfired munitions returned on abort or launch failure. Creative mode does not need munitions.
 
 Projectile sizes use one block per meter. Blast damage follows charge and material models with approximations.
@@ -58,7 +59,7 @@ fireball. A Geiger Counter measures dose and dose rate. See
 [survival and radiation](https://github.com/zentixua/incoming/blob/main/docs/guide/nuke.md#how-to-survive).
 
 If nuclear weapons are allowed for ordinary players, a launch needs another nearby player's second key when
-someone else is online. That player cannot recall a confirmed strike; an operator or the host can use `/incoming clear`.
+someone else is online. The launching player cannot recall an ordered nuclear strike, even while it waits for the second key; an operator or the host can use `/incoming clear`.
 
 Destroying a transformer substation cuts electric lights in its district: by default 512 blocks, with restoration
 starting after 15 minutes and spreading over 90 seconds. Nuclear blackout needs no substation, but each outage is
@@ -67,8 +68,8 @@ capped by `grid.max_radius` (4096 blocks by default) and has its own switch.
 ## Optional mods
 
 - **Create:** recipes use Create parts; vanilla substitutes are provided without it.
-- **Create Aeronautics and Sable 2.0.6+:** target craft; explosions break and push their blocks. Fragments currently pass through craft.
-- **Distant Horizons 3.3+ with API 7:** distant targeting terrain and damage updates without visiting supported chunks; updates are queued and asynchronous.
+- **Create Aeronautics and Sable 2.0.6+:** target craft; explosions break and push their blocks. Fragments pass through craft.
+- **Distant Horizons 3.3+ with API 7:** distant targeting terrain on clients. Damage updates also need DH where the world runs (single-player, LAN host or dedicated server); supported chunks update without visiting them, through queues and asynchronous writes.
 - **Voxy through Roxy (clients only):** distant terrain for rendering, targeting, sight lines and sound. Roxy uses the original Fabric Voxy 0.2.16-beta for **Minecraft 1.21.11** on NeoForge 1.21.1; install its Sodium and Forgified Fabric API dependencies too.
 - **LOD Server Support on server and clients:** server terrain for the targeting map, sight lines and sound; it does not serve a single-player world until opened to LAN.
 - **Iris, Sound Physics Remastered and Flashback:** shader rendering, world sound and replays. Sound Physics needs a per-sound setting for Incoming.
