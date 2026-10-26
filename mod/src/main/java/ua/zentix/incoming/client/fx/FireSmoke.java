@@ -309,8 +309,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     /**
      * Топливо в воронке горит огнём Minecraft на клетках (сервер, {@code warhead/FuelFires}) по закону {@code burn} с теплом
      * закона и сажей топлива, долей {@link FuelBurn#share} по возрасту ({@code age} с уже прошло с удара), — очаг среди
-     * пожаров клиента над серединой горящих клеток: его шлейф сливается с огнём, что поджёг шар топлива рядом
-     * ({@link #merge}), пламя светит на дым и мир. Огонь клеток — сами блоки; дерево он не считает ({@link FuelCells}).
+     * клиента над серединой горящих клеток: пламя светит на дым и мир. Огонь клеток — сами блоки; огонь города ядерки
+     * ({@link FireWatch}) их не считает ({@link FuelCells}).
      */
     static FireSmoke pool(ClientLevel level, FuelBurn burn, double age) {
         if (level != world) {

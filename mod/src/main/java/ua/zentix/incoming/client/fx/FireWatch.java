@@ -63,21 +63,38 @@ public final class FireWatch {
             }
             return;
         }
-        int side = 2 * radius + 1, all = side * side;
-        // чанки вне подрывов — мимо, без счёта (одна проверка расстояния), но не больше круга за тик
+        // обход — только рамка кругов подрывов в квадрате прорисовки: подрыв вдали от камеры не стоит обхода всего круга
+        int n = nukes.size();
+        double[] bx = new double[n], bz = new double[n], reach = new double[n];
+        for (int j = 0; j < n; j++) {
+            ClientNuclear.Active a = nukes.get(j);
+            bx[j] = a.d.burst().x;
+            bz[j] = a.d.burst().z;
+            reach[j] = a.d.ruinRadius() + NUKE_MARGIN;
+        }
+        Box box = box(bx, bz, reach, cx, cz, radius);
+        if (box == null) {
+            if (!SEEN.isEmpty()) {
+                SEEN.clear();
+                total = 0;
+            }
+            return;
+        }
+        int w = box.x1 - box.x0 + 1, all = w * (box.z1 - box.z0 + 1);
+        // каждый шаг — в счёт времени, и чанк мимо кругов тоже: рамка нескольких подрывов может быть почти всем квадратом
         for (int k = 0, step = 0; k < MAX_PER_TICK && step < all; step++) {
-            if (k > 0 && System.nanoTime() - t0 > BUDGET_NANOS) break;
+            if (step > 0 && System.nanoTime() - t0 > BUDGET_NANOS) break;
             int i = cursor++ % all;
             if (cursor >= all) {
                 cursor = 0;
                 phase = (phase + 1) % SAMPLE;
-                prune(lvl, cx, cz, radius);
+                prune(lvl, box);
             }
-            int x = cx - radius + i % side, z = cz - radius + i / side;
+            int x = box.x0 + i % w, z = box.z0 + i / w;
             long key = ChunkPos.asLong(x, z);
             long was = SEEN.remove(key);
             total -= (int) (was >>> 16);
-            if (!nuclear(nukes, x, z)) continue;
+            if (!nuclear(bx, bz, reach, x, z)) continue;
             k++;
             LevelChunk chunk = lvl.getChunkSource().getChunk(x, z, false);
             if (chunk == null) continue;
@@ -94,11 +111,38 @@ public final class FireWatch {
         slowest = Math.max(slowest, dt);
     }
 
+    /** Рамка чанков (включительно). */
+    record Box(int x0, int z0, int x1, int z1) {
+        boolean has(int x, int z) {
+            return x >= x0 && x <= x1 && z >= z0 && z <= z1;
+        }
+    }
+
+    /**
+     * Рамка чанков, которые задевают круги подрывов (середина {@code bx, bz}, радиус {@code reach}, блоки), внутри квадрата
+     * {@code radius} чанков от чанка камеры; ни одного — {@code null}.
+     */
+    @Nullable
+    static Box box(double[] bx, double[] bz, double[] reach, int cx, int cz, int radius) {
+        int x0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+        for (int j = 0; j < bx.length; j++) {
+            x0 = Math.min(x0, Math.floorDiv((int) Math.floor(bx[j] - reach[j]), 16));
+            z0 = Math.min(z0, Math.floorDiv((int) Math.floor(bz[j] - reach[j]), 16));
+            x1 = Math.max(x1, Math.floorDiv((int) Math.floor(bx[j] + reach[j]), 16));
+            z1 = Math.max(z1, Math.floorDiv((int) Math.floor(bz[j] + reach[j]), 16));
+        }
+        x0 = Math.max(x0, cx - radius);
+        z0 = Math.max(z0, cz - radius);
+        x1 = Math.min(x1, cx + radius);
+        z1 = Math.min(z1, cz + radius);
+        return x0 > x1 || z0 > z1 ? null : new Box(x0, z0, x1, z1);
+    }
+
     /** Чанк (x, z) задевает круг подрыва: середина не дальше радиуса и полудиагонали чанка. */
-    static boolean nuclear(List<ClientNuclear.Active> nukes, int x, int z) {
+    static boolean nuclear(double[] bx, double[] bz, double[] reach, int x, int z) {
         double mx = x * 16 + 8, mz = z * 16 + 8;
-        for (ClientNuclear.Active a : nukes) {
-            double r = a.d.ruinRadius() + NUKE_MARGIN + 12, dx = mx - a.d.burst().x, dz = mz - a.d.burst().z;
+        for (int j = 0; j < bx.length; j++) {
+            double r = reach[j] + 12, dx = mx - bx[j], dz = mz - bz[j];
             if (dx * dx + dz * dz <= r * r) return true;
         }
         return false;
@@ -136,12 +180,12 @@ public final class FireWatch {
         return state.getBlock() instanceof BaseFireBlock;
     }
 
-    /** Чанки, которых у клиента больше нет, и чанки за кругом обхода: их огонь не пересматривается и не гас бы. */
-    private static void prune(ClientLevel lvl, int cx, int cz, int radius) {
+    /** Чанки, которых у клиента больше нет, и чанки вне рамки обхода: их огонь не пересматривается и не гас бы. */
+    private static void prune(ClientLevel lvl, Box box) {
         for (var it = SEEN.long2LongEntrySet().iterator(); it.hasNext(); ) {
             Long2LongMap.Entry e = it.next();
             int x = ChunkPos.getX(e.getLongKey()), z = ChunkPos.getZ(e.getLongKey());
-            if (Math.abs(x - cx) > radius || Math.abs(z - cz) > radius || lvl.getChunkSource().getChunk(x, z, false) == null) {
+            if (!box.has(x, z) || lvl.getChunkSource().getChunk(x, z, false) == null) {
                 total -= (int) (e.getLongValue() >>> 16);
                 it.remove();
             }
