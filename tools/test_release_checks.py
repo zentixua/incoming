@@ -131,6 +131,45 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "different contents"):
                 curseforge.find_file("1", jar, request)
 
+    def test_curseforge_receipt_prevents_repeat_while_file_is_not_public(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jar = Path(temp) / "incoming-1.2.3.jar"
+            jar.write_bytes(b"jar")
+            deployments, states, creates = [], {}, []
+
+            def api(path, data=None):
+                if path.startswith("deployments?"):
+                    return deployments
+                if path == "deployments":
+                    creates.append(data)
+                    deployment = {"id": len(creates), "payload": data["payload"]}
+                    deployments.insert(0, deployment)
+                    return deployment
+                deployment_id = int(path.split("/")[1])
+                if data is None:
+                    return [{"state": states[deployment_id]}]
+                self.assertIs(False, data["auto_inactive"])
+                states[deployment_id] = data["state"]
+                return {}
+
+            self.assertEqual((True, 1), curseforge.reserve_upload("123", jar, "1.2.3", api))
+            with self.assertRaisesRegex(ValueError, "verify its outcome"):
+                curseforge.reserve_upload("123", jar, "1.2.3", api)
+            self.assertEqual(1, len(creates))
+            with patch.dict(os.environ, {"GITHUB_REPOSITORY": "example/mod", "GITHUB_RUN_ID": "1"}):
+                curseforge.record_upload("1", "success", api)
+            self.assertEqual((False, None), curseforge.reserve_upload("123", jar, "1.2.3", api))
+            self.assertEqual(1, len(creates))
+            states[1] = "failure"
+            with self.assertRaisesRegex(ValueError, "verify its outcome"):
+                curseforge.reserve_upload("123", jar, "1.2.3", api)
+            states[1] = "inactive"
+            self.assertEqual((True, 2), curseforge.reserve_upload("123", jar, "1.2.3", api))
+            jar.write_bytes(b"different jar")
+            with self.assertRaisesRegex(ValueError, "different jar"):
+                curseforge.reserve_upload("123", jar, "1.2.3", api)
+            self.assertEqual(2, len(creates))
+
 
 class ModrinthTests(unittest.TestCase):
     def run_page(self, missing=False, new=False):

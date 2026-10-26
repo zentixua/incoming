@@ -38,6 +38,9 @@ jobs:
     name: ${{ inputs.step }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: write
     env:
       HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
       HAS_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' && vars.CURSEFORGE_ID != '' }}
@@ -119,9 +122,13 @@ jobs:
           CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           JAR: ${{ steps.rel.outputs.jar }}
+          VERSION: ${{ steps.rel.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: python3 .github/scripts/curseforge_check.py "$JAR"
 
       - name: CurseForge
+        id: curseforge_upload
         if: ${{ !cancelled() && steps.curseforge.outputs.upload == 'true' }}
         uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
         with:
@@ -138,3 +145,12 @@ jobs:
           java: 21
           environment: ${{ steps.rel.outputs.environment }}
           dependencies: ${{ env.DEPENDENCIES }}
+
+      - name: "CurseForge: record the upload outcome"
+        if: ${{ always() && steps.curseforge.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEPLOYMENT_ID: ${{ steps.curseforge.outputs.deployment_id }}
+          OUTCOME: ${{ steps.curseforge_upload.outcome }}
+        run: python3 .github/scripts/curseforge_check.py --record "$DEPLOYMENT_ID" "$OUTCOME"
