@@ -11,32 +11,32 @@ import ua.zentix.incoming.nuclear.model.GroundShock;
 import java.util.Locale;
 
 /**
- * Волна грунта у игрока: удар бомбы о землю и взрыв в грунте приходят к нему по земле — толчок тела и гул земли с её
- * приходом R/c ({@link GroundShock}: скорость волны и пиковая скорость грунта по среде у источника), а не с пакетом. Где
- * грунт быстрее фронта в воздухе (скала, влажная глина), земля дрогнет и загудит раньше хлопка; в рыхлом грунте — после.
+ * Ground wave at the player: bomb ground impact and buried blast travel through the ground — body impulse and ground rumble on
+ * arrival R/c ({@link GroundShock}: wave speed and peak ground velocity from the source medium), rather than with the packet. Where
+ * ground is faster than the air front (rock, wet clay), the ground shakes and rumbles before the crack; in loose soil — after.
  * <p>
- * Толчок камеры — {@link CameraShake#ground}: сила — ощутимость человеком ({@link GroundShock.Sample#perceptibility}:
- * порог восприятия — 0) и скорость грунта по логарифму ({@link #strength}), длина — импульс грунта ({@link GroundShock.Sample#durationSeconds}) и
- * затухание тела после него ({@link #BODY_RING_S}). Гул —
- * {@code BOMB_QUAKE}, громкость — давление, которое излучает земля, ходящая со скоростью грунта
+ * Camera impulse — {@link CameraShake#ground}: strength — human perceptibility ({@link GroundShock.Sample#perceptibility}:
+ * perception threshold — 0) and logarithmic ground velocity ({@link #strength}); duration — ground impulse ({@link GroundShock.Sample#durationSeconds}) and
+ * subsequent body damping ({@link #BODY_RING_S}). Rumble —
+ * {@code BOMB_QUAKE}, volume from pressure radiated by ground moving at the ground velocity
  * ({@link BlastSounds#quake(double)}).
  */
 public final class GroundShake {
     /**
-     * Сколько тело ещё качается после толчка, с: стоящий человек по вертикали — звено с резонансом 4–6 Гц и затуханием
-     * 0,3–0,5 от критического (ISO 2631-1; Griffin, «Handbook of Human Vibration», 1990), толчок короче периода он
-     * отрабатывает за 2–3 периода — ⚠ оценка. Без этого импульс скалы в 70 мс у камеры был бы короче четверти кивка.
+     * Body sway duration after the impulse, s: a standing human vertically is a system with 4–6 Hz resonance and damping
+     * of 0.3–0.5 critical (ISO 2631-1; Griffin, “Handbook of Human Vibration”, 1990); an impulse shorter than its period takes
+     * 2–3 periods to settle — (est.). Otherwise a 70 ms rock impulse would last less than a quarter camera nod.
      */
     static final double BODY_RING_S = 0.4;
     /**
-     * Скорость грунта, с которой толчок начинает расти, и во сколько раз больше неё он уже полный, м/с: 0,1 мм/с — «не
-     * ощутимо» и ×1000, 100 мм/с — «очень сильно, пугает» (шкала восприятия по пиковой скорости из DIN 4150-2: 0,1 — не
-     * ощутимо, 0,3 — едва, 1 — ощутимо, 3 — ясно, 10 — сильно). Сила толчка — доля по логарифму, как у дрожи удара по
-     * давлению ({@link CameraShake#tremor}): ощутимость модели (KB с весом по частоте) насыщается уже у порога и силы не
-     * различает. Подача.
+     * Ground velocity where impulse starts growing, and its multiplier for full strength, m/s: 0.1 mm/s — “not
+     * perceptible”, ×1000, 100 mm/s — “very strong, frightening” (peak-velocity perception scale from DIN 4150-2: 0.1 — not
+     * perceptible, 0.3 — barely, 1 — perceptible, 3 — clear, 10 — strong). Impulse strength is a logarithmic fraction, like impact tremor by
+     * pressure ({@link CameraShake#tremor}): model perceptibility (frequency-weighted KB) saturates near the threshold and does not
+     * distinguish strengths. Presentation.
      */
     static final double QUIET_MPS = 1e-4, FULL_OVER_THRESHOLD = 1000;
-    /** Последняя волна грунта у игрока (строка сценария клиента). */
+    /** Last ground wave at the player (client scenario line). */
     private static String last = "-";
 
     private GroundShake() {}
@@ -46,8 +46,8 @@ public final class GroundShake {
     }
 
     /**
-     * Источник волны грунта {@code source} в {@code pos} случился в тик игры {@code sourceTick} (сервера): толчок и гул —
-     * когда волна дойдёт до ног игрока; {@code seed} — узор толчка.
+     * Ground wave source {@code source} at {@code pos} occurred at (server) game tick {@code sourceTick}: impulse and rumble —
+     * when the wave reaches the player's feet; {@code seed} — impulse pattern.
      */
     public static void schedule(Vec3 pos, GroundShock.Source source, long sourceTick, long seed) {
         Minecraft mc = Minecraft.getInstance();
@@ -58,25 +58,25 @@ public final class GroundShake {
         GroundShock.Sample s = GroundShock.sample(source, range);
         if (!(s.perceptibility() > 0) && !(s.peakVelocityMps() > 0)) return;
         double seconds = s.durationSeconds() + BODY_RING_S;
-        // сколько тиков с источника уже прошло у сервера, пока шёл пакет (и работа подрыва на сервере)
+        // ticks already elapsed since the source on the server during packet travel (and server detonation work)
         double age = Math.max(0, level.getGameTime() - sourceTick);
         last = String.format(Locale.ROOT, "ground r %.0f m arrival %.2f s ppv %.2f mm/s %.2f Hz felt %.2f jolt %.2f for %.2f s, %.0f ticks after the source",
                 range, s.arrivalSeconds(), 1000 * s.peakVelocityMps(), s.frequencyHz(), s.perceptibility(), strength(s), seconds, age);
-        // редкое событие (удар бомбы о землю, взрыв в грунте): строка — для разбора лога после игры
+        // rare event (bomb ground impact, buried blast): line for post-game log analysis
         Incoming.LOG.info("Ground wave at the player: {}", last);
         Effects.add(new Arrival(20 * s.arrivalSeconds(), 20 * seconds, age, BlastTime.ticks(), late -> arrive(s, seconds, late, seed)));
     }
 
     /**
-     * Ожидание волны грунта у ног. Возраст — тики с источника по монотонным часам клиента ({@link BlastTime}), а не по
-     * счётчику вызовов {@link Effects}: тот в тик рождения зовёт эффект дважды (сразу и в тике очереди), и толчок пришёл бы
-     * на тик раньше волны. Начало отсчёта — сколько у сервера уже прошло с источника ({@code ageAtBirth}). Волна дошла —
-     * {@code arrive} с тем, на сколько тиков позже прихода (с долей тика: приход R/c дробный); пакет опоздал на весь толчок
-     * (вошёл позже, сеть встала) — ничего: прошедший толчок не играется заново с начала.
+     * Waiting for the ground wave at the feet. Age — ticks since the source on the monotonic client clock ({@link BlastTime}), rather than
+     * the {@link Effects} call counter: it calls the effect twice on the birth tick (immediately and during queue ticking), so the impulse would arrive
+     * a tick before the wave. Initial age is time already elapsed on the server ({@code ageAtBirth}). Wave arrived —
+     * {@code arrive} with ticks since arrival (fractional: R/c arrival is fractional); packet delayed beyond the whole impulse
+     * (late join, stalled network) — nothing: a past impulse is not replayed from the start.
      *
-     * @param arrivalTicks приход волны, тики с источника
-     * @param lengthTicks  сколько после прихода земля и тело ходят, тики
-     * @param born         {@link BlastTime#ticks()} в миг, когда пакет пришёл
+     * @param arrivalTicks wave arrival, ticks since source
+     * @param lengthTicks  ground and body motion duration after arrival, ticks
+     * @param born         {@link BlastTime#ticks()} when the packet arrived
      */
     record Arrival(double arrivalTicks, double lengthTicks, double ageAtBirth, long born, java.util.function.DoubleConsumer arrive)
             implements Effects.Effect {
@@ -91,15 +91,15 @@ public final class GroundShake {
     }
 
     /**
-     * Сила толчка 0..1 у волны грунта {@code s}: ощутимость модели × доля по логарифму пиковой скорости грунта от
-     * {@link #QUIET_MPS} до {@link #FULL_OVER_THRESHOLD} раз больше.
+     * Impulse strength 0..1 for ground wave {@code s}: model perceptibility × logarithmic peak ground velocity fraction from
+     * {@link #QUIET_MPS} to {@link #FULL_OVER_THRESHOLD} times greater.
      */
     static double strength(GroundShock.Sample s) {
         double over = Math.log10(Math.max(s.peakVelocityMps(), 1e-12) / QUIET_MPS) / Math.log10(FULL_OVER_THRESHOLD);
         return s.perceptibility() * Math.clamp(over, 0, 1);
     }
 
-    /** Волна грунта дошла до ног {@code late} тиков назад: толчок идёт с того места, где он уже был бы, гул — сейчас. */
+    /** Ground wave reached the feet {@code late} ticks ago: impulse resumes at its expected point; rumble plays now. */
     private static void arrive(GroundShock.Sample s, double seconds, double late, long seed) {
         CameraShake.ground(strength(s), seconds, late, seed);
         BlastSounds.quake(s.peakVelocityMps());

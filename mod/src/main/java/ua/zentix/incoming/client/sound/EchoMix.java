@@ -6,47 +6,47 @@ import java.util.List;
 import java.util.SplittableRandom;
 
 /**
- * Эхо от рельефа — в звук (без Minecraft и OpenAL, проверяется юнит-тестами): отражения {@link TerrainEcho} сводятся
- * в {@link #SECTORS} дорожек по сторонам света вокруг уха. Дорожка — запись прямого удара («зерно»), пропущенная через
- * отклик рельефа этой стороны; воздух на лишнем пути съедает верха (отклик отражения — через фильтр нижних частот
- * {@link #CUTOFF} по лишнему пути). Отражение между двумя сторонами делится на обе с равной мощностью (cos/sin), так что
- * оно звучит со своего направления, а не с ближней стороны.
+ * Terrain echoes as sound (without Minecraft or OpenAL, covered by unit tests): {@link TerrainEcho} reflections
+ * mix into {@link #SECTORS} tracks around the ear by compass direction. A track is the direct-impact recording
+ * (“grain”) convolved with that direction's terrain response; air on the extra path absorbs highs (reflection
+ * response through a {@link #CUTOFF} low-pass based on extra path). A reflection between directions splits into
+ * both with equal power (cos/sin), so it sounds from its own direction, not the nearest compass point.
  * <p>
- * Отклик грани — рассеяние по Ламберту: склон в карте высот шероховат, каждая его точка возвращает удар со своей
- * задержкой и фазой, и от грани приходит не копия удара, а шум, растянутый на разброс пути через грань
- * ({@link TerrainEcho.Reflection#spread}). Его модель — бархатный шум (H. Järveläinen, M. Karjalainen, «Reverberation
- * modeling using velvet noise», AES 30th Conf., 2007): импульсы случайного знака в случайных местах, {@link #DENSITY}
- * в секунду (после фильтра воздуха — не гуще 2·срез: чаще неотличимо от сплошного шума), энергия грани поровну;
- * грань уже одного шага — один импульс. Задержки — точные, до отсчёта: сетка
- * задержек (раньше окна по 10 мс) делала из копий одного зерна периодический ряд, гребёнку с тоном 100 Гц и
- * гармониками («дуга» в эхе 3.5.0, проба P 21.10.2026: выступы 100–600 Гц до 32 дБ над соседними частотами). Свёртка
- * — через БПФ.
+ * Facet response is Lambertian scattering: a slope in the height map is rough, each point returns the impact
+ * with its own delay and phase; a facet returns noise spread over the path variation across it, not a copy of
+ * the impact ({@link TerrainEcho.Reflection#spread}). Modelled as velvet noise (H. Järveläinen, M. Karjalainen,
+ * “Reverberation modeling using velvet noise”, AES 30th Conf., 2007): random-sign impulses at random positions,
+ * {@link #DENSITY} per second (after air filtering, at most 2·cutoff: denser is indistinguishable from continuous
+ * noise), facet energy divided equally; a facet narrower than one step has one impulse. Delays are exact to the
+ * sample: a delay grid (formerly 10 ms windows) made copies of one grain into a periodic train, a comb with
+ * 100 Hz fundamental and harmonics (“arc” in 3.5.0 echoes, probe P 21.10.2026: 100–600 Hz peaks up to 32 dB above
+ * neighbouring frequencies). Convolution uses FFT.
  * <p>
- * Дорожка начинается со своего первого отражения (тишину до него не хранит) и не длиннее {@link #MAX_SECONDS}.
- * Если сумма вышла за {@link #PEAK}, дорожка ужата до него, а громкость при игре — поднята на столько же
+ * A track begins with its first reflection (preceding silence is not stored) and lasts at most {@link #MAX_SECONDS}.
+ * If the sum exceeds {@link #PEAK}, the track is scaled down to it, with playback gain raised by the same factor
  * ({@link Track#gain}).
  */
 public final class EchoMix {
-    /** Частота дорожек: эхо далёкого удара — низы, верха съел воздух. */
+    /** Track rate: distant-impact echoes are low-frequency; air absorbed the highs. */
     public static final int RATE = 11025;
-    /** Сторон вокруг уха. */
+    /** Directions around the ear. */
     public static final int SECTORS = 8;
     /**
-     * Импульсов бархатного шума в секунду: с 1500–2000 в секунду он звучит ровнее гауссова шума, без треска
-     * (Järveläinen, Karjalainen 2007).
+     * Velvet-noise impulses per second: from 1500–2000 per second, it sounds smoother than Gaussian noise, without
+     * crackle (Järveläinen, Karjalainen 2007).
      */
     static final double DENSITY = 2000;
     /**
-     * Импульсов на всё эхо не больше (производительность: память и время сведения в фоне). Ядерка над холмами набирает
-     * миллионы (грань в 96 блоков вдали — полсекунды разброса); сверх бюджета каждая грань реже поровну.
+     * Maximum impulses for all echoes (performance: background mixing memory and time). A nuke over hills produces
+     * millions (a distant 96-block facet has half a second of spread); above budget, thin every facet equally.
      */
     static final int PULSE_BUDGET = 400_000;
     static final double MAX_SECONDS = 30;
-    /** Наибольший отсчёт дорожки (без перегруза при записи в 16 бит). */
+    /** Maximum track sample (no clipping when writing 16-bit). */
     static final double PEAK = 0.98;
     /**
-     * Срез верхов отражения по лишнему пути: до {@code PATH[i]} блоков — фильтр {@code CUTOFF[i]} Гц (0 — без фильтра).
-     * Воздух на 2 кГц — ~9 дБ/км, на 4 кГц — ~23 дБ/км (ISO 9613-1).
+     * Reflection high cutoff by extra path: up to {@code PATH[i]} blocks, filter at {@code CUTOFF[i]} Hz (0 — no filter).
+     * Air at 2 kHz: ~9 dB/km, at 4 kHz: ~23 dB/km (ISO 9613-1).
      */
     static final double[] PATH = {250, 1000, 3000, Double.POSITIVE_INFINITY};
     static final double[] CUTOFF = {0, 2000, 900, 450};
@@ -54,12 +54,12 @@ public final class EchoMix {
     private EchoMix() {}
 
     /**
-     * Дорожка одной стороны.
+     * Track for one direction.
      *
-     * @param azimuth откуда звучит, рад ({@code atan2(dz, dx)}, как у {@link TerrainEcho.Reflection#azimuth})
-     * @param start   через сколько тиков после прямого удара начинается
-     * @param pcm     отсчёты, моно 16 бит, {@link #RATE}
-     * @param gain    во сколько раз громче играть (дорожка ужата до {@link #PEAK})
+     * @param azimuth sound direction, rad ({@code atan2(dz, dx)}, as in {@link TerrainEcho.Reflection#azimuth})
+     * @param start   ticks after direct impact before it starts
+     * @param pcm     samples, mono 16-bit, {@link #RATE}
+     * @param gain    playback gain multiplier (track scaled down to {@link #PEAK})
      */
     public record Track(double azimuth, double start, short[] pcm, float gain) {
         public double seconds() {
@@ -68,15 +68,15 @@ public final class EchoMix {
     }
 
     /**
-     * Всё эхо подрыва у слушателя.
+     * All detonation echoes at the listener.
      *
-     * @param t60 время спада хвоста (с) — для реверберации поверх дорожек: по разбросу задержек, с весом мощности
+     * @param t60 tail decay time (s) for reverb over the tracks: from delay spread, weighted by power
      */
     public record Mix(List<Track> tracks, double t60, int taps) {
         public static final Mix NONE = new Mix(List.of(), 0, 0);
     }
 
-    /** Импульсы отклика одной стороны: отсчёт от прямого удара, амплитуда, копия зерна. */
+    /** Response impulses of one direction: sample since direct impact, amplitude, grain copy. */
     private static final class Pulses {
         int size;
         long[] at = new long[64];
@@ -100,7 +100,7 @@ public final class EchoMix {
             return f;
         }
 
-        /** Отсчётов от первого импульса до последнего, не больше {@code max}. */
+        /** Samples from first to last impulse, at most {@code max}. */
         int span(int max) {
             long f = first(), l = 0;
             for (int i = 0; i < size; i++) l = Math.max(l, at[i]);
@@ -108,14 +108,14 @@ public final class EchoMix {
         }
     }
 
-    /** Отражения → дорожки. {@code grain} — моно, {@link #RATE}, громкость как у прямого удара. */
+    /** Reflections → tracks. {@code grain} is mono, {@link #RATE}, same loudness as direct impact. */
     public static Mix render(float[] grain, List<TerrainEcho.Reflection> reflections) {
         if (grain.length == 0 || reflections.isEmpty()) return Mix.NONE;
         Pulses[] sides = new Pulses[SECTORS];
         double width = 2 * Math.PI / SECTORS;
         double sumE = 0, sumT = 0, sumT2 = 0;
         int taps = 0;
-        // импульсов на грань: по разбросу; после фильтра воздуха гуще 2·срез в секунду — тот же сплошной шум
+        // impulses per facet from spread; after air filter, denser than 2·cutoff per second is the same continuous noise
         double want = 0;
         for (TerrainEcho.Reflection r : reflections) want += pulses(r, 1);
         double thin = Math.min(1, PULSE_BUDGET / Math.max(1, want));
@@ -127,7 +127,7 @@ public final class EchoMix {
             int k0 = (int) Math.floor(a) % SECTORS, k1 = (k0 + 1) % SECTORS;
             double f = a - Math.floor(a);
             double c = Math.cos(f * Math.PI / 2), s = Math.sin(f * Math.PI / 2);
-            // грань: импульсы по её разбросу прихода, знаки и места — от места грани (тот же рельеф — то же эхо)
+            // facet: impulses across its arrival spread, signs and positions from facet position (same terrain — same echoes)
             double span = span(r), early = Double.isFinite(r.early()) ? r.early() / 20 : seconds;
             int n = pulses(r, thin);
             SplittableRandom rnd = new SplittableRandom(Double.doubleToLongBits(r.x()) * 31 + Double.doubleToLongBits(r.z()) * 17
@@ -146,15 +146,15 @@ public final class EchoMix {
             taps++;
         }
         if (taps == 0) return Mix.NONE;
-        // одна длина БПФ на все стороны: спектр зерна — один раз
+        // one FFT length for all directions: grain spectrum computed once
         int grainLength = grain.length, max = (int) (MAX_SECONDS * RATE), longest = 0;
         for (Pulses p : sides) if (p != null) longest = Math.max(longest, p.span(max));
         int size = Integer.highestOneBit(Math.max(1, longest + grainLength - 2)) << 1;
         double[] gr = new double[size], gi = new double[size];
         for (int i = 0; i < grainLength; i++) gr[i] = grain[i];
         fft(gr, gi, false);
-        // две стороны на одно БПФ: у отклика и дорожки отсчёты вещественные, одна — в вещественной части, другая — в мнимой
-        // (свёртка линейна: (a + i·b) ∗ g = a ∗ g + i·(b ∗ g) при вещественном g)
+        // two directions in one FFT: response and track samples are real, one in real part, the other in imaginary
+        // (convolution is linear: (a + i·b) ∗ g = a ∗ g + i·(b ∗ g) for real g)
         List<Track> tracks = new ArrayList<>();
         double[] re = new double[size], im = new double[size], part = new double[size];
         for (int k = 0; k < SECTORS; k += 2) {
@@ -177,18 +177,18 @@ public final class EchoMix {
             if (tb != null) tracks.add(tb);
         }
         double mean = sumT / sumE, spread = Math.sqrt(Math.max(0, sumT2 / sumE - mean * mean));
-        // хвост гаснет за время, за которое приходит основная масса отражений
+        // tail fades over the time in which most reflections arrive
         double t60 = Math.max(1.5, Math.min(8, 1 + mean + 2 * spread));
         return new Mix(List.copyOf(tracks), t60, taps);
     }
 
-    /** Разброс прихода грани, с (не больше длины дорожки; без разброса — 0). */
+    /** Facet arrival spread, s (at most track length; no spread — 0). */
     private static double span(TerrainEcho.Reflection r) {
         double s = r.spread() / 20;
         return s > 0 ? Math.min(MAX_SECONDS, s) : 0;
     }
 
-    /** Импульсов у грани: по разбросу и плотности её копии зерна, реже в {@code thin} раз, не меньше одного. */
+    /** Facet impulse count: from spread and its grain-copy density, thinned by {@code thin}, at least one. */
     private static int pulses(TerrainEcho.Reflection r, double thin) {
         int v = variant(r.extraPath());
         double density = CUTOFF[v] > 0 ? Math.min(DENSITY, 2 * CUTOFF[v]) : DENSITY;
@@ -201,8 +201,8 @@ public final class EchoMix {
     }
 
     /**
-     * Отклик стороны от её первого импульса — в {@code out}: импульсы, у дальних — через фильтр воздуха (свёртка
-     * линейна, и фильтр отклика — то же, что фильтр зерна).
+     * Directional response from its first impulse into {@code out}: impulses, distant ones air-filtered (convolution
+     * is linear, so filtering response is equivalent to filtering grain).
      */
     private static void response(Pulses p, double[] out, double[] part, int max) {
         long first = p.first();
@@ -222,7 +222,7 @@ public final class EchoMix {
         }
     }
 
-    /** Дорожка стороны из её свёртки с зерном. */
+    /** Directional track from its convolution with the grain. */
     private static Track track(double azimuth, Pulses p, double[] y, int grain, int max) {
         int length = Math.min(max, p.span(max) + grain - 1);
         double peak = 0;
@@ -234,7 +234,7 @@ public final class EchoMix {
         return new Track(azimuth, p.first() * 20.0 / RATE, pcm, (float) (1 / scale));
     }
 
-    /** Быстрое преобразование Фурье на месте (длина — степень двойки); обратное — с делением на длину. */
+    /** In-place fast Fourier transform (power-of-two length); inverse divides by length. */
     static void fft(double[] re, double[] im, boolean inverse) {
         int n = re.length;
         for (int i = 1, j = 0; i < n; i++) {
@@ -277,19 +277,19 @@ public final class EchoMix {
         }
     }
 
-    /** Какая копия зерна у отражения с этим лишним путём (блоки). */
+    /** Which grain copy a reflection with this extra path (blocks) uses. */
     static int variant(double extraPath) {
         for (int i = 0; i < PATH.length; i++) if (extraPath < PATH[i]) return i;
         return PATH.length - 1;
     }
 
-    /** Угол в [0, 2π). */
+    /** Angle in [0, 2π). */
     static double wrap(double a) {
         double t = a % (2 * Math.PI);
         return t < 0 ? t + 2 * Math.PI : t;
     }
 
-    /** Фильтр нижних частот на месте (два однополюсных подряд — −12 дБ на октаву). */
+    /** In-place low-pass (two one-pole filters in series — −12 dB per octave). */
     static void lowpass(double[] y, double cutoff) {
         double a = 1 - Math.exp(-2 * Math.PI * cutoff / RATE);
         for (int pass = 0; pass < 2; pass++) {
@@ -302,8 +302,8 @@ public final class EchoMix {
     }
 
     /**
-     * Зерно с высотой тона {@code pitch}, как её играет движок: секунда звука берёт {@code pitch} секунд записи (ниже —
-     * длиннее), между отсчётами — по прямой.
+     * Grain at {@code pitch}, as played by the engine: one second of sound consumes {@code pitch} seconds of recording
+     * (lower means longer), linearly interpolated between samples.
      */
     public static float[] pitch(float[] grain, double pitch) {
         if (Math.abs(pitch - 1) < 1e-6 || grain.length == 0) return grain;
@@ -320,9 +320,8 @@ public final class EchoMix {
     }
 
     /**
-     * Начало записи прямого удара → зерно: отсчёты {@code samples} (−1..1, каналы вперемежку) частоты {@code rate}
-     * в моно {@link #RATE} (среднее по окну — без наложения частот), первые {@code seconds} секунд с затуханием на
-     * последней трети.
+     * Direct-impact recording opening → grain: {@code samples} (−1..1, interleaved channels) at {@code rate} to mono
+     * {@link #RATE} (window mean — no aliasing), first {@code seconds} seconds fading over the last third.
      */
     public static float[] grain(float[] samples, int channels, int rate, double seconds) {
         int frames = samples.length / Math.max(1, channels);

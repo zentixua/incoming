@@ -5,77 +5,78 @@ import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import java.util.Arrays;
 
 /**
- * Точки шлейфов — один круговой буфер на все снаряды: когда он полон, новая точка затирает самую старую (у самых
- * старых следов раньше тает хвост — новые не рвутся). У точки — место, тик рождения, вид шлейфа ({@link Trail}) и то, что
- * закон следа ({@code TrailModel}) дал ей при рождении (секунды на метр следа, срок жизни, срок льда, ветер там), свет
- * мира в ней, чей это шлейф и предыдущая точка той же ленты — по номеру записи за всё время: связь верна, пока та не
- * затёрта и не растаяла ({@link #holds}). Кадр обходит живые точки один раз от старых к новым и кладёт отрезок от
- * предыдущей к каждой: O(точек), без выделений.
+ * Trail points: one ring buffer for all projectiles; when full, new point overwrites oldest (oldest trails'
+ * tails fade sooner — new ones remain unbroken). A point stores position, birth tick, trail look ({@link Trail}),
+ * birth-time trail-law ({@code TrailModel}) values (seconds per trail metre, lifetime, ice lifetime, local wind),
+ * world light, owner and previous point in same ribbon by all-time record number: link valid until that point
+ * is overwritten or fades ({@link #holds}). Frame traverses live points once, oldest to newest, laying segment
+ * from previous to each: O(points), allocation-free.
  */
 final class TrailPoints {
-    /** Точек на все шлейфы, не больше: пакет РСЗО из 40 снарядов — 860 (тест), МБР за разгон в мире — ~50. */
+    /** Maximum points across all trails: 40-rocket MLRS pack uses 860 (test), ICBM boost in world ~50. */
     static final int CAPACITY = 16384;
-    /** Нет точки. */
+    /** No point. */
     static final long NONE = -1;
 
     final double[] x = new double[CAPACITY], y = new double[CAPACITY], z = new double[CAPACITY];
     final long[] birth = new long[CAPACITY];
-    /** Свет мира в точке, упакованный, как у {@code LevelRenderer#getLightColor}. */
+    /** Packed world light at point, as in {@code LevelRenderer#getLightColor}. */
     final int[] light = new int[CAPACITY];
-    /** Вид шлейфа; null — точки нет (растаяла или снята отбоем). */
+    /** Trail look; null — point absent (faded or removed by all-clear). */
     final Trail[] style = new Trail[CAPACITY];
     final int[] owner = new int[CAPACITY];
-    /** Секунды на метр следа ({@code TrailModel.inverseSpeed}): от скорости снаряда, когда он клал точку. */
+    /** Seconds per trail metre ({@code TrailModel.inverseSpeed}): from projectile speed when laying point. */
     final float[] inverse = new float[CAPACITY];
-    /** Сколько точка видна и сколько держится лёд инверсии, тиков; ветер на её высоте, м/с. */
+    /** Point visibility and contrail ice lifetime, ticks; wind at its altitude, m/s. */
     final float[] life = new float[CAPACITY], ice = new float[CAPACITY], wind = new float[CAPACITY];
     /**
-     * Избыток пара надо льдом там, кг/м³; масштаб всплытия, м, и частота Брента–Вяйсяля, 1/с, — при рождении
-     * ({@code TrailModel.excess}, {@code riseScale}): кадр их не пересчитывает.
+     * Vapour excess over ice there, kg/m³; buoyancy scale, m, and Brunt–Väisälä frequency, 1/s, at birth
+     * ({@code TrailModel.excess}, {@code riseScale}): frame does not recompute them.
      */
     final float[] excess = new float[CAPACITY], rise = new float[CAPACITY], brunt = new float[CAPACITY];
-    /** Путь снаряда от начала его пути к рождению точки, м ({@code FarFlightView}: докуда точка позади сопла). */
+    /** Projectile path length from path start to point birth, m ({@code FarFlightView}: how far point is behind nozzle). */
     final double[] path = new double[CAPACITY];
-    /** Высота точки над землёй при рождении, м ({@code TrailModel.wander}: ось следа вихри не уводят в землю); земля неизвестна — бесконечность. */
+    /** Point height above ground at birth, m ({@code TrailModel.wander}: vortices do not bend axis into ground); unknown ground — infinity. */
     final float[] clearance = new float[CAPACITY];
     /**
-     * Изгибы оси ({@code TrailModel.wander}) в целых возрастах, тиков, k и k + 1 (x, y, z — по шесть чисел на точку): кадр
-     * берёт между ними, а считает их раз в тик, а не в каждом кадре. bendAge — k (−1 — не посчитаны).
+     * Axis bends ({@code TrailModel.wander}) at whole ages k and k + 1, ticks (x, y, z — six numbers per point):
+     * frame interpolates, computed once per tick rather than each frame. bendAge is k (−1 — not computed).
      */
     final int[] bendAge = new int[CAPACITY];
     final float[] bend = new float[6 * CAPACITY];
-    /** Класс устойчивости при рождении: по нему посчитан срок жизни — по нему и расплывание. */
+    /** Stability class at birth: used for lifetime and spreading alike. */
     final float[] stability = new float[CAPACITY];
-    /** Облако старта, которому принадлежит вещество точки (струя тогда била в землю); null — след. */
+    /** Launch cloud owning point matter (jet struck ground then); null — trail. */
     final ua.zentix.incoming.client.fx.smoke.LaunchCloud[] cloud = new ua.zentix.incoming.client.fx.smoke.LaunchCloud[CAPACITY];
     /**
-     * У точки облака старта — доля её вещества, которую держит столб струи между соплом и землёй
-     * ({@code LaunchCloud.column}): пока струя бьёт в землю — по нынешнему месту сопла, потом — какой она была, когда
-     * струя землю отпустила (этот столб и остаётся следом).
+     * Launch-cloud point's matter fraction in nozzle-to-ground jet column ({@code LaunchCloud.column}): while
+     * jet strikes ground, from current nozzle position; afterward as it was when jet left ground (this column
+     * remains as trail).
      */
     final float[] column = new float[CAPACITY];
-    /** Номер предыдущей точки той же ленты или {@link #NONE}. */
+    /** Previous point record number in same ribbon, or {@link #NONE}. */
     final long[] prev = new long[CAPACITY];
     /**
-     * Точка — конец ленты ({@link #finish}): там лента сходит на нет. Без этого конец следа у догоревшего двигателя
-     * обрезан поперёк, и у залпа концы лент, легших друг на друга, видны полосами.
+     * Point ends ribbon ({@link #finish}): ribbon tapers there. Otherwise burnt-out engine's trail end cuts
+     * straight across, and overlapping salvo ribbon ends appear as stripes.
      */
     final boolean[] last = new boolean[CAPACITY];
-    /** Номер следующей записи. */
+    /** Next record number. */
     private long next;
-    /** Точки с номером меньше — растаяли или затёрты. */
+    /** Points with lower numbers faded or overwritten. */
     private long first;
 
-    /** Место номера записи в массивах. */
+    /** Record number's array slot. */
     static int index(long serial) {
         return (int) (serial % CAPACITY);
     }
 
     /**
-     * Новая точка ленты: prev — предыдущая точка той же ленты ({@link #NONE} — лента начинается здесь); что закон следа
-     * дал ей при рождении: inverse — секунды на метр, life и ice — тики, wind — м/с, excess — кг/м³, rise — м, brunt — 1/с, stability — класс.
+     * New ribbon point: prev is previous point in same ribbon ({@link #NONE} — ribbon starts here); trail-law
+     * birth values: inverse — seconds per metre, life and ice — ticks, wind — m/s, excess — kg/m³, rise — m,
+     * brunt — 1/s, stability — class.
      *
-     * @return номер записи
+     * @return record number
      */
     long add(double x, double y, double z, long birth, Trail style, int light, int owner, long prev, float inverse, float life, float ice,
              float wind, float excess, float rise, float brunt, float stability) {
@@ -101,29 +102,29 @@ final class TrailPoints {
         clearance[i] = Float.POSITIVE_INFINITY;
         bendAge[i] = -1;
         last[i] = false;
-        // лента продолжилась (путь снова есть) — прошлый конец уже не конец
+        // ribbon resumed (path present again) — previous end is no longer an end
         if (holds(prev)) last[index(prev)] = false;
         next++;
         first = Math.max(first, next - CAPACITY);
         return next - 1;
     }
 
-    /** Лента кончается этой точкой (догорел двигатель, путь кончился); новая точка после неё это снимет. */
+    /** Ribbon ends at this point (engine burnt out, path ended); a following new point clears this. */
     void finish(long serial) {
         if (holds(serial)) last[index(serial)] = true;
     }
 
-    /** Самая старая из возможно живых точек (номер). */
+    /** Oldest potentially live point (number). */
     long first() {
         return first;
     }
 
-    /** За последней записанной (номер). */
+    /** After last recorded point (number). */
     long end() {
         return next;
     }
 
-    /** Точка с этим номером ещё в буфере: не затёрта и не растаяла с хвоста. */
+    /** Point with this number remains in buffer: not overwritten or faded from tail. */
     boolean holds(long serial) {
         return serial >= first && serial < next;
     }
@@ -132,7 +133,7 @@ final class TrailPoints {
         return first == next;
     }
 
-    /** Растаявшие к моменту now — с хвоста буфера (дальше по нему живут и долгие, и короткие шлейфы — их отсеет кадр). */
+    /** Trim points faded by now from buffer tail (long and short trails coexist farther in buffer — frame filters them). */
     void expire(double now) {
         while (first < next) {
             int i = index(first);
@@ -143,12 +144,12 @@ final class TrailPoints {
         }
     }
 
-    /** Мир заморожен ({@code /tick freeze}) на тик: живые точки не стареют, как и частицы. */
+    /** World frozen ({@code /tick freeze}) for a tick: live points do not age, like particles. */
     void hold() {
         for (long s = first; s < next; s++) birth[index(s)]++;
     }
 
-    /** Шлейф снаряда пропадает сразу (отбой: полёт кончился без взрыва). */
+    /** Projectile trail vanishes immediately (all-clear: flight ended without explosion). */
     void kill(int owner) {
         for (long s = first; s < next; s++) {
             int i = index(s);

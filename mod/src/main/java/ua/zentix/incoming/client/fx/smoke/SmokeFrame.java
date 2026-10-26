@@ -9,24 +9,25 @@ import ua.zentix.incoming.client.fx.layer.SmokePass;
 import ua.zentix.incoming.client.nuclear.NukePall;
 
 /**
- * Дым обычных взрывов в кадре слоя эффектов: сетка дыма ({@link SmokeGrid}) — в кадр прохода пелены ({@link PallPass}),
- * с ядеркой или без неё (тогда кадр — только свет неба и воздух, {@link NukePall#lightFrame}). Шум клубов идёт с ветром
- * облаков; огненные шары облаков светят на дым и на мир (свободные столбцы шаров ядерки, {@link FarBlasts#fireballs}).
+ * Conventional blast smoke in effects-layer frame: smoke grid ({@link SmokeGrid}) into pall-pass frame
+ * ({@link PallPass}), with or without nuke (then frame contains only skylight and air, {@link NukePall#lightFrame}).
+ * Billow noise follows cloud wind; cloud fireballs light smoke and world (free nuclear-fireball columns,
+ * {@link FarBlasts#fireballs}).
  */
 public final class SmokeFrame {
-    /** Период двухфазного шума клубов, с ({@code fx_pall}: {@code smokeClumps}): за него клубы уходят на скорость × период (оценка). */
+    /** Two-phase billow-noise period, s ({@code fx_pall}: {@code smokeClumps}): billows travel speed × period over it (est.). */
     static final float PERIOD = 2;
-    /** Высота, на которой берётся ветер для шума клубов, блоков (облака — сотни блоков над землёй; оценка). */
+    /** Altitude for billow-noise wind, blocks (clouds hundreds of blocks above ground) (est.). */
     static final double NOISE_WIND_HEIGHT = 100;
 
-    /** Сетка этого кадра ({@link #build}). */
+    /** This frame's grid ({@link #build}). */
     private static SmokeGrid.Frame grid;
 
     private SmokeFrame() {}
 
     /**
-     * Сетка дыма кадра у глаза — до сбора квадратов дальней картинки: облака, чьи клубы не легли в сетку
-     * ({@link SmokeGrid.Source#placed}), рисуют себя квадратами в том же кадре.
+     * Frame smoke grid at eye, before collecting far-view quads: clouds whose billows were not placed in grid
+     * ({@link SmokeGrid.Source#placed}) draw themselves as quads in same frame.
      */
     public static void build(Vec3 eye, float partial) {
         SmokeGrid.enable(PallPass.available() && SmokePass.available());
@@ -34,10 +35,9 @@ public final class SmokeFrame {
     }
 
     /**
-     * Кадр прохода пелены с дымом этого кадра ({@link #build}): {@code pall} — кадр ядерки ({@link NukePall#frame}, null —
-     * ядерки нет). Объём
-     * невозможен (шейдеры не собрались) — облака взрывов целиком рисуют квадраты ({@link SmokeGrid#on}). null — ни пелены,
-     * ни дыма.
+     * Pall-pass frame with this frame's smoke ({@link #build}): {@code pall} is nuke frame
+     * ({@link NukePall#frame}, null — no nuke). If volume unavailable (shaders failed to build), blast clouds draw
+     * entirely as quads ({@link SmokeGrid#on}). null — neither pall nor smoke.
      */
     @Nullable
     public static PallPass.Frame frame(ClientLevel level, Vec3 eye, float partial, @Nullable PallPass.Frame pall) {
@@ -58,9 +58,9 @@ public final class SmokeFrame {
         f.smokeBalls.zero();
         f.smokeBallLight.zero();
         FarBlasts.fireballs(eye, partial, f.exposure, 0, f.smokeBalls, f.smokeBallLight);
-        // пламя пожаров светит на свой дым снизу — в свободные места
+        // fire flames light their own smoke from below, into free slots
         ua.zentix.incoming.client.fx.FireSmoke.lights(eye, f.exposure, 0, f.smokeBalls, f.smokeBallLight);
-        // свет шаров обычного оружия на мир — свой проход (HeatPass), здесь — только на дым сетки
+        // conventional fireball light on world uses own pass (HeatPass); only smoke-grid lighting here
         return f;
     }
 }

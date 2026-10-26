@@ -10,9 +10,9 @@ import net.minecraft.util.Mth;
 import ua.zentix.incoming.net.S2C;
 
 /**
- * Ядерный HUD вверху экрана: у запустившего — отсчёт до подрыва, у тех, по кому летит, — мигающее
- * «РАКЕТНОЕ НАПАДЕНИЕ» с отсчётом, у остальных в измерении — строка о пуске (первые 10 с). И взведение пуска
- * с пульта: 3 с отсчёта «ПУСК», повторный ЛКМ отменяет.
+ * Nuclear HUD at the top of the screen: the launcher sees a detonation countdown; those under attack see a flashing
+ * "MISSILE ATTACK" with a countdown; everyone else in the dimension sees a launch notice (the first 10 s). Also launch arming
+ * from the remote: a 3 s "LAUNCH" countdown; another left click cancels.
  */
 public final class NukeHud {
     private NukeHud() {}
@@ -38,8 +38,8 @@ public final class NukeHud {
         for (S2C.NukeWarning w : ClientNuclear.warnings()) {
             double left = Math.max(0, (w.detonateTime() - now) / 20.0);
             if (ClientNuclear.detonationOverdue(w, now)) {
-                // срок прошёл с запасом на отставание часов, а подрыва нет: сервер догружает место удара —
-                // не держать «0 с» молча (до запаса — «0 с»: часы клиента бывают впереди сервера)
+                // the deadline plus clock-lag allowance has passed without a detonation: the server is loading the impact site —
+                // do not silently hold "0 s" (before the allowance expires, show "0 s": the client clock can run ahead of the server)
                 if (w.alarm() || w.mine()) {
                     Component c = Component.translatable("incoming.nuke.delayed").withStyle(ChatFormatting.GOLD);
                     g.drawString(font, c, cx - font.width(c) / 2, y, alpha(pulse) | 0xFFFFFF);

@@ -11,27 +11,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Повтор Flashback и его перемотка. Перематывая, сервер повтора в одном своём тике ставит снимок куска записи и читает
- * пакеты от его начала до нужного места, а пакеты модов отдаёт клиенту сразу, как прочёл; Flashback NeoForge Fixed ещё
- * и кладёт в каждый снимок последний пакет каждого вида. Принятые как живые, взрывы и подрывы с начала куска
- * повторялись бы разом, со вспышкой и звуком, поэтому событие из перемотки — прошлое: картинки и звука удара нет,
- * ядерный подрыв виден в своём возрасте.
+ * Flashback replay and seeking. In one tick during seek, replay server loads a recording segment snapshot and reads
+ * packets from its start to the requested position, sending mod packets to client as soon as read; Flashback NeoForge
+ * Fixed also stores the last packet of each type in every snapshot. Treating them as live would replay all explosions
+ * and detonations from the segment's start at once, with flash and sound, so seek events are past: no impact visuals
+ * or sound, nuclear detonation displayed at its age.
  * <p>
- * В повторе событие ждёт метки конца тика сервера повтора ({@link FlashbackReplay}): пакеты одного соединения клиент
- * разбирает по порядку, и всё, что пришло до метки, прочитано не позже этого тика. Живое оно, если этот тик и два
- * прошлых — ход повтора ({@link Markers#SETTLE}): без перемотки и место сдвинулось вперёд не больше чем на
- * {@link Markers#STEP} (вывод видео с ускорением шагает и на несколько тиков). Решение — в разборе метки, а не по тикам
- * клиента: клиент тикает и посреди перемотки (Flashback не даёт ему только рисовать), а при выводе видео сервер стоит
- * между шагами.
+ * Replay events wait for the replay server end-of-tick marker ({@link FlashbackReplay}): client handles connection
+ * packets in order, so everything before the marker was read no later than that tick. Event is live if this tick and
+ * the two preceding ones are playback ({@link Markers#SETTLE}): no seek, position advances by at most
+ * {@link Markers#STEP} (accelerated video export steps several ticks). Decide when processing marker, not from client
+ * ticks: client ticks during seeking (Flashback only prevents rendering), while video export server stands between steps.
  * <p>
- * Не в повторе, без Flashback или без меток — всё вживую, сразу.
+ * Outside replay, without Flashback or without markers, everything is live immediately.
  */
 public final class Replay {
-    /** Тики клиента без единой метки, после которых ждущие события идут вживую: метки не приходят совсем. */
+    /** Client ticks without any marker before pending events become live: markers are not arriving at all. */
     private static final int NO_MARKERS = 600;
     private static final Markers MARKERS = new Markers();
     private static final List<Pending> PENDING = new ArrayList<>();
-    /** Сколько событий каждого вида прошло живыми и прошлым (для сценария повтора). */
+    /** Live and past event counts per type (for replay scenario). */
     private static final Map<String, int[]> COUNTS = new LinkedHashMap<>();
     private static int waited;
     private static boolean warned;
@@ -41,8 +40,8 @@ public final class Replay {
     private Replay() {}
 
     /**
-     * Событие от сервера ({@code kind} — вид для счёта): {@code action} получает, живое ли оно. Не в повторе — сразу
-     * и живое; в повторе — с меткой конца этого тика сервера повтора.
+     * Server event ({@code kind} for counting): {@code action} receives whether live. Outside replay, immediate and live;
+     * in replay, with this replay server tick's end marker.
      */
     public static void event(String kind, BooleanConsumer action) {
         if (!active()) {
@@ -53,8 +52,8 @@ public final class Replay {
     }
 
     /**
-     * Метка конца тика сервера повтора: события, пришедшие до неё, — живые или прошлое; первая метка хода повтора
-     * после перемотки сперва зовёт {@code rewound} (всё, что шло до перемотки, — с другого места записи).
+     * Replay server end-of-tick marker: prior events become live or past; first playback marker after seek calls
+     * {@code rewound} first (everything before seeking belongs to another recording position).
      */
     public static void marker(int place, boolean seeking, Runnable rewound) {
         Markers.Verdict v = MARKERS.next(place, seeking);
@@ -62,7 +61,7 @@ public final class Replay {
         flush(v == Markers.Verdict.LIVE);
     }
 
-    /** Тик клиента: ждущие события, если повтор закрыт или метки не приходят совсем, — вживую. */
+    /** Client tick: pending events become live if replay closed or no markers arrive at all. */
     public static void tick() {
         if (PENDING.isEmpty()) return;
         if (!active()) {
@@ -76,29 +75,29 @@ public final class Replay {
         }
     }
 
-    /** Выход из мира: ждущие события и метки прошлого повтора не держать. */
+    /** World exit: do not retain old replay's pending events and markers. */
     public static void reset() {
         PENDING.clear();
         MARKERS.reset();
         waited = 0;
     }
 
-    /** Клиент смотрит повтор Flashback. */
+    /** Client is viewing a Flashback replay. */
     public static boolean active() {
         return FlashbackReplay.isReplay(Minecraft.getInstance().getSingleplayerServer());
     }
 
-    /** Меток с открытия повтора. */
+    /** Markers since replay opened. */
     public static long markers() {
         return MARKERS.count;
     }
 
-    /** Повтор идёт или стоит без перемотки: события следующего тика сервера будут живыми, если и он — ход. */
+    /** Replay playing or stationary without seeking: next server tick's events live if that tick is playback too. */
     public static boolean steady() {
         return MARKERS.steady();
     }
 
-    /** Копия счёта событий: вид → {живые, прошлое}. */
+    /** Event count copy: kind → {live, past}. */
     public static Map<String, int[]> counts() {
         Map<String, int[]> copy = new LinkedHashMap<>();
         COUNTS.forEach((k, v) -> copy.put(k, v.clone()));
@@ -116,32 +115,31 @@ public final class Replay {
         }
     }
 
-    /** Метки сервера повтора по порядку; без Minecraft — для проверок. */
+    /** Replay server markers in order; no Minecraft, for tests. */
     static final class Markers {
         /**
-         * На сколько тиков место может уйти вперёд за тик сервера в ходе повтора: при выводе видео с ускорением сервер
-         * шагает по нескольку тиков за кадр. Так Flashback отличает перемотку и сам: последние 20 тиков до места он
-         * проходит по тику.
+         * Maximum position advance per server tick during playback: accelerated video export steps several ticks per
+         * frame. Flashback itself distinguishes seeking this way: final 20 ticks to destination run tick by tick.
          */
         static final int STEP = 20;
         /**
-         * Сколько меток хода повтора подряд события ещё прошлое. Первая — последнее чтение перемотки или первый тик после
-         * неё. Вторая — потому что Flashback NeoForge Fixed с начала снимка не отдаёт пакеты сразу, а копит их и отдаёт
-         * в конце тика сервера повтора ({@code MixinReplayServer.catchUpNewViewers}), уже после метки последнего чтения:
-         * всё прочитанное перемоткой приходит перед второй меткой.
+         * Consecutive playback markers whose events are still past. First is last seek read or first tick after it.
+         * Second is needed because Flashback NeoForge Fixed accumulates packets from snapshot start rather than
+         * sending immediately, delivering at replay server tick end ({@code MixinReplayServer.catchUpNewViewers}) after
+         * the final read's marker: all seek-read packets arrive before the second marker.
          */
         static final int SETTLE = 2;
 
         enum Verdict {
-            /** События этого тика — живые. */
+            /** This tick's events are live. */
             LIVE,
-            /** Прошлое: перемотка, первая метка повтора или вторая метка хода после перемотки. */
+            /** Past: seeking, first replay marker, or second playback marker after seeking. */
             PAST,
-            /** Прошлое, и это первая метка хода повтора после перемотки. */
+            /** Past, and first playback marker after seeking. */
             SETTLED
         }
 
-        /** Меток хода повтора подряд, до {@code SETTLE + 1}. */
+        /** Consecutive playback markers, up to {@code SETTLE + 1}. */
         private int streak;
         private int place;
         long count;
@@ -155,7 +153,7 @@ public final class Replay {
             return streak > SETTLE ? Verdict.LIVE : streak == 1 ? Verdict.SETTLED : Verdict.PAST;
         }
 
-        /** События следующей метки будут живыми, если и она — ход. */
+        /** Next marker's events will be live if it too is playback. */
         boolean steady() {
             return streak >= SETTLE;
         }

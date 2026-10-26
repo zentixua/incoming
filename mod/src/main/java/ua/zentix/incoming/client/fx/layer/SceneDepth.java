@@ -27,13 +27,13 @@ import java.nio.FloatBuffer;
 import java.util.Locale;
 
 /**
- * Расстояние до мира за каждым пикселем кадра — одной текстурой (метры по оси взгляда, 32 бита), по глубине
- * Minecraft и глубине мода LOD ({@link LodDepth}: Distant Horizons или Voxy; ближнее из двух; неба — 10⁹). Слой
- * эффектов читает её, чтобы клуб мягко таял там, где входит в землю или стену, и пропадал за LOD, которых
- * аппаратная глубина не видит.
+ * World distance behind each frame pixel in one texture (metres along the view axis, 32-bit), from
+ * Minecraft depth and LOD mod depth ({@link LodDepth}: Distant Horizons or Voxy; nearest of the two; sky — 10⁹). The effects
+ * layer reads it for billows to fade softly into ground or walls, and disappear behind LOD that
+ * hardware depth cannot see.
  * <p>
- * Отдельным проходом в свою текстуру, а не чтением глубины прямо в шейдере частиц: глубина Minecraft привязана
- * к кадру, в который рисуется слой, а читать текстуру, в которую рисуешь, OpenGL не разрешает.
+ * Separate pass to a custom texture, rather than reading depth directly in the particle shader: Minecraft depth is attached
+ * to the layer's target framebuffer, and OpenGL forbids reading a texture being rendered into.
  */
 public final class SceneDepth {
     @Nullable
@@ -42,9 +42,9 @@ public final class SceneDepth {
     private static final LodDepth.View LOD = new LodDepth.View();
     private static final Matrix4f INVERSE = new Matrix4f();
     private static final int[] VIEWPORT = new int[4];
-    /** Чем закрыт слой в последнем кадре: 0 — ничем, 1 — миром, 2 — миром и LOD. */
+    /** Last frame's layer occlusion: 0 — none, 1 — world, 2 — world and LOD. */
     private static int last;
-    /** Диагностика прогонов ({@code -Dincoming.nukeDiag=true}): колонка расстояний раз в секунду, см. {@link #diag}. */
+    /** Run diagnostics ({@code -Dincoming.nukeDiag=true}): distance column once per second, see {@link #diag}. */
     private static final boolean DIAG = Boolean.getBoolean("incoming.nukeDiag");
     private static final float[] DIAG_ROWS = {0.1f, 0.3f, 0.45f, 0.55f, 0.65f, 0.75f, 0.9f};
     private static long nextDiag;
@@ -52,8 +52,8 @@ public final class SceneDepth {
     private SceneDepth() {}
 
     /**
-     * Заполнить текстуру расстояний для этого кадра по проекции мира; −1 — не вышло (шейдер не загрузился, кадр
-     * без глубины): тогда слой рисуется без мягких краёв.
+     * Fill this frame's distance texture from the world projection; −1 — failed (shader not loaded, framebuffer
+     * lacks depth): draw the layer without soft edges then.
      */
     static int update(Matrix4f projection) {
         ShaderInstance s = shader;
@@ -93,14 +93,14 @@ public final class SceneDepth {
     }
 
     /**
-     * Строка лога по средней колонке кадра сверху вниз: глубина Minecraft и её расстояние, глубина LOD и её расстояние,
-     * итог текстуры расстояний. Читает три текстуры обратно (ждёт видеокарту) — только при диагностике прогонов.
+     * Log line for the frame's centre column, top to bottom: Minecraft depth and distance, LOD depth and distance,
+     * resulting distance texture. Reads back three textures (waits for GPU) — only for run diagnostics.
      */
     private static void diag(int worldDepth, int w, int h, int drawn, int mainFbo) {
         long now = System.currentTimeMillis();
         if (now < nextDiag) return;
         nextDiag = now + 1000;
-        // во что на самом деле рисовался мир: кадр, привязанный к AFTER_LEVEL, и его глубина — против кадра Minecraft
+        // actual world render target: framebuffer bound at AFTER_LEVEL and its depth versus the Minecraft framebuffer
         int[] drawnDepth = attachment(drawn), mainDepth = attachment(mainFbo);
         Incoming.LOG.info(String.format(Locale.ROOT,
                 "Effects layer depth source: main target depth texture %d, drawn framebuffer %d depth %s %d, main framebuffer %d depth %s %d",
@@ -141,13 +141,13 @@ public final class SceneDepth {
         Incoming.LOG.info(b.toString());
     }
 
-    /** Тип «кадр окна» в {@link #attachment}: у него вложений нет, спрашивать о них — ошибка OpenGL. */
+    /** Window framebuffer type in {@link #attachment}: it has no attachments; querying them is an OpenGL error. */
     private static final int WINDOW = -1;
 
     /**
-     * Глубина кадра {@code fbo}: тип вложения (текстура, буфер, нет) и его имя; у кадра окна (0) — {@link #WINDOW}, без
-     * вопросов OpenGL: {@code GL_DEPTH_ATTACHMENT} у него нет (ошибка {@code GL_INVALID_OPERATION} осталась бы тому, кто
-     * спросит после).
+     * Depth of framebuffer {@code fbo}: attachment type (texture, renderbuffer, absent) and name; window framebuffer (0) — {@link #WINDOW}, with no
+     * OpenGL query: it has no {@code GL_DEPTH_ATTACHMENT} (the {@code GL_INVALID_OPERATION} error would leak to the
+     * next caller).
      */
     private static int[] attachment(int fbo) {
         if (fbo == 0) return new int[]{WINDOW, 0};
@@ -170,7 +170,7 @@ public final class SceneDepth {
         };
     }
 
-    /** Текстура целиком в память (размер — её собственный); null — не вышло. */
+    /** Entire texture to memory (its own size); null — failed. */
     private static float @Nullable [] read(int id, int format) {
         if (id <= 0) return null;
         GlStateManager._bindTexture(id);
@@ -189,9 +189,9 @@ public final class SceneDepth {
     }
 
     /**
-     * Привязанная текстура (уровень 0) в {@code out} числами. Оставь другой код привязанным {@code GL_PIXEL_PACK_BUFFER},
-     * OpenGL писал бы в него (адрес {@code out} — как смещение в нём), а не в память: на время чтения он снимается
-     * и потом возвращается.
+     * Bound texture (level 0) into {@code out} as numbers. If other code left {@code GL_PIXEL_PACK_BUFFER} bound,
+     * OpenGL would write there (treating {@code out} as an offset), rather than to memory: unbind it during readback,
+     * then restore it.
      */
     private static void texImage(int format, FloatBuffer out) {
         int pack = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
@@ -204,13 +204,13 @@ public final class SceneDepth {
         }
     }
 
-    /** Расстояние по оси взгляда в середине кадра по горизонтали на высоте ny (NDC) — как {@code along} в {@code fx_depth}. */
+    /** View-axis distance at horizontal frame centre, height ny (NDC) — like {@code along} in {@code fx_depth}. */
     private static float along(Matrix4f inverse, float ny, float z) {
         Vector4f v = inverse.transform(new Vector4f(0, ny, z, 1));
         return -v.z / v.w;
     }
 
-    /** Чем закрыт слой в последнем кадре — для строки сценария. */
+    /** Last frame's layer occlusion — for the scenario line. */
     static String describe() {
         return switch (last) {
             case 2 -> "world and LOD (" + LOD.describe() + lodShare() + ")";
@@ -220,8 +220,8 @@ public final class SceneDepth {
     }
 
     /**
-     * Доля кадра, где за пикселем LOD дальше прорисовки Minecraft, и ближний из них — по текстуре расстояний,
-     * прочитанной обратно (ждёт видеокарту: только для строки сценария).
+     * Frame fraction with LOD beyond Minecraft render distance behind the pixel, and their nearest distance — from the read-back
+     * distance texture (waits for GPU: only for the scenario line).
      */
     private static String lodShare() {
         if (texture < 0 || width <= 0) return "";
@@ -248,7 +248,7 @@ public final class SceneDepth {
         }
     }
 
-    /** Своя текстура и кадр под размер кадра игры (заново при смене размера окна). */
+    /** Custom texture and framebuffer sized to the game frame (recreated on window resize). */
     private static boolean ensure(int w, int h) {
         if (fbo >= 0 && w == width && h == height) return true;
         if (texture < 0) texture = GlStateManager._genTexture();

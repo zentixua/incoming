@@ -23,14 +23,14 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import java.nio.FloatBuffer;
 
 /**
- * Сетка дыма ({@link SmokeGrid}) в видеопамяти: трёхмерная текстура RGBA16F (2N × N × N·каскады, 12 МБ), таблица клубов
- * (RGBA32F, {@link SmokeGrid#MAX_BLOBS} × {@link SmokeGrid#BLOB_ROWS}) и заполнение — шейдер {@code fx_smoke_fill}: слой
- * текстуры за слоем, клуб — прямоугольниками клеток, сложением; перед этим вся текстура — нули. Шейдеры, что читают сетку
- * ({@code smoke.glsl}: лучи пелены, вывод на кадр, квадраты слоя, пробы), получают её на своём блоке текстуры {@link #UNIT}
- * ({@link #bind}) и числа кадра.
+ * Smoke grid ({@link SmokeGrid}) in VRAM: RGBA16F 3D texture (2N × N × N·cascades, 12 MB), billow table
+ * (RGBA32F, {@link SmokeGrid#MAX_BLOBS} × {@link SmokeGrid#BLOB_ROWS}) and filling via {@code fx_smoke_fill} shader: texture
+ * layer by layer, billows as cell rectangles with additive blending; clear the whole texture to zero first. Shaders reading the grid
+ * ({@code smoke.glsl}: pall rays, frame composite, layer quads, probes) receive it at its own texture unit {@link #UNIT}
+ * ({@link #bind}) and frame parameters.
  */
 public final class SmokePass {
-    /** Блок текстуры сетки: за шумом пелены (12) и окном наружного воздуха (13). */
+    /** Grid texture unit: after pall noise (12) and outdoor-air window (13). */
     static final int UNIT = 14;
     @Nullable
     static ShaderInstance fill;
@@ -38,37 +38,37 @@ public final class SmokePass {
     private static boolean failed;
     @Nullable
     private static FloatBuffer blobBuffer, vertexBuffer;
-    /** Сетка этого кадра заполнена (её числа годны шейдерам). */
+    /** This frame's grid is filled (its parameters are valid for shaders). */
     private static boolean filled;
     private static final int[] VIEWPORT = new int[4];
 
     private SmokePass() {}
 
-    /** Сетка может быть: шейдер заполнения собрался и текстуры вышли. */
+    /** Grid is available: fill shader compiled and textures created. */
     public static boolean available() {
         return fill != null && !failed;
     }
 
-    /** Есть ли в этом кадре сетка (заполнена {@link #fill}). */
+    /** Whether this frame has a grid (filled by {@link #fill}). */
     public static boolean filled() {
         return filled;
     }
 
-    /** Новый кадр: сетка ещё не заполнена (шейдеры читают пустую). */
+    /** New frame: grid not yet filled (shaders read an empty grid). */
     static void begin() {
         filled = false;
     }
 
     /**
-     * Заполнить сетку кадра {@code f}; false — не вышло (нет шейдера или текстур) или дыма нет. Привязанный кадр, вид
-     * и смешивание — потом вернуть как были (зовёт {@code PallPass} внутри своих проходов).
+     * Fill frame {@code f} grid; false — failed (no shader or textures) or no smoke. Restore bound framebuffer, viewport
+     * and blending afterwards (called by {@code PallPass} within its passes).
      */
     static boolean fill(SmokeGrid.Frame f) {
         filled = false;
         ShaderInstance s = fill;
         if (s == null || failed || f.empty() || !ensure()) return false;
         int n = SmokeGrid.N, layers = SmokeGrid.CASCADES * n;
-        // таблица клубов
+        // billow table
         blobBuffer.clear();
         blobBuffer.put(f.blobs, 0, SmokeGrid.BLOB_ROWS * SmokeGrid.MAX_BLOBS * 4).flip();
         GlStateManager._bindTexture(blobs);
@@ -76,7 +76,7 @@ public final class SmokePass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, SmokeGrid.MAX_BLOBS, SmokeGrid.BLOB_ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, blobBuffer);
-        // вершины прямоугольников всех слоёв
+        // rectangle vertices for all layers
         int vertices = f.layerStart[layers];
         if (vertexBuffer == null || vertexBuffer.capacity() < vertices * 3) {
             if (vertexBuffer != null) MemoryUtil.memFree(vertexBuffer);
@@ -87,7 +87,7 @@ public final class SmokePass {
 
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
-        // вся сетка — нули (слоистая привязка: glClear чистит все слои)
+        // zero the entire grid (layered attachment: glClear clears every layer)
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, clearFbo);
         RenderSystem.viewport(0, 0, 2 * n, n);
         RenderSystem.colorMask(true, true, true, true);
@@ -98,7 +98,7 @@ public final class SmokePass {
         s.setSampler("Sampler0", blobs);
         s.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
         s.apply();
-        // сложение — после apply: программа без своего смешивания в JSON выключила бы его
+        // additive blending after apply: a program without custom blending in JSON would disable it
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE, GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE);
@@ -130,10 +130,10 @@ public final class SmokePass {
     }
 
     private static final org.joml.Matrix4f CORNER = new org.joml.Matrix4f();
-    /** Коробки клубов каскадов ({@code smoke.glsl}: {@code SmokeLo}, {@code SmokeHi}): столбец c, w у нижней — 1, если каскад не пуст. */
+    /** Cascade billow boxes ({@code smoke.glsl}: {@code SmokeLo}, {@code SmokeHi}): column c; lower w is 1 for a nonempty cascade. */
     private static final org.joml.Matrix4f BOX_LO = new org.joml.Matrix4f(), BOX_HI = new org.joml.Matrix4f();
 
-    /** Каскады кадра ({@code smoke.glsl}): столбец c — угол от глаза и клетка; столбец 3: x — 1, если сетка есть. */
+    /** Frame cascades ({@code smoke.glsl}): column c — eye-relative corner and cell size; column 3: x — 1 if the grid exists. */
     static org.joml.Matrix4f cornerMatrix(SmokeGrid.Frame f) {
         CORNER.zero();
         for (int c = 0; c < SmokeGrid.CASCADES; c++) {
@@ -144,10 +144,10 @@ public final class SmokePass {
     }
 
     /**
-     * Сетка кадра {@code f} — шейдеру {@code s}: текстура на блоке {@link #UNIT} ({@code SmokeGrid}), каскады
-     * ({@code SmokeCascade}) и рамка дыма ({@code SmokeMin}/{@code SmokeMax}). Сетки нет — каскады с нулём в
-     * {@code SmokeCascade[3].x}: шейдер её не читает. Звать до отрисовки шейдером (числа он передаст при {@code apply});
-     * номер блока сэмплера — в саму программу сразу (как {@code OpenAir.bind}).
+     * Frame {@code f} grid to shader {@code s}: texture at unit {@link #UNIT} ({@code SmokeGrid}), cascades
+     * ({@code SmokeCascade}) and smoke bounds ({@code SmokeMin}/{@code SmokeMax}). No grid — zero in cascade
+     * {@code SmokeCascade[3].x}: shader skips it. Call before shader drawing (numbers are sent by {@code apply});
+     * sampler unit index directly into the program immediately (like {@code OpenAir.bind}).
      */
     static void bind(ShaderInstance s, @Nullable SmokeGrid.Frame f) {
         boolean on = filled && f != null && !f.empty();
@@ -178,7 +178,7 @@ public final class SmokePass {
         ProgramManager.glUseProgram(program);
     }
 
-    /** Отвязать сетку с её блока (после прохода): другие программы на этом блоке могли бы ждать другой тип. */
+    /** Unbind the grid from its unit (after the pass): other programs may expect a different type there. */
     static void unbind() {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
@@ -186,7 +186,7 @@ public final class SmokePass {
         GlStateManager._activeTexture(unit);
     }
 
-    /** Текстуры, кадры и вершинный массив — один раз; не вышли — сетки нет до перезапуска. */
+    /** Textures, framebuffers and vertex array created once; failure disables the grid until restart. */
     private static boolean ensure() {
         if (grid >= 0) return true;
         if (failed) return false;

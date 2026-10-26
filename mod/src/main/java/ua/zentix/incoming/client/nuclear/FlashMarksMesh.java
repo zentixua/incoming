@@ -30,25 +30,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Следы вспышки в сетке секции ({@link AddSectionGeometryEvent}, без миксинов): грань со следом рисуется ещё раз
- * теми же четырёхугольниками модели блока, в том же слое, после всех блоков секции, с вершинами в тех же местах и
- * цветом вершин темнее — при равной глубине поздний побеждает, и грань выглядит обугленной, с текстурой блока под
- * гарью. Свет вершин — общий конвейер NeoForge ({@link QuadLighter}: сглаженный свет и тень сторон, как у блоков).
+ * Flash marks in the section mesh ({@link AddSectionGeometryEvent}, no mixins): draw each marked face again using
+ * the same block-model quads, in the same layer, after all section blocks, at the same vertex positions and
+ * with darker vertex colors — at equal depth the later draw wins, making the face look charred, with the block texture beneath
+ * the char. Vertex light uses the common NeoForge pipeline ({@link QuadLighter}: smooth light and directional shading as for blocks).
  * <p>
- * Ступень гари в углах грани — среднее по соседним граням той же плоскости (те, что могли бы обуглиться, но чистые,
- * идут нулём; край стены — нет): гарь переходит в чистое пятнами, а не клетками. Силуэт — полосы клеток 16×16
- * (пиксель текстуры) поверх обугленной грани: где тело заслонило шар, гарь слабее — {@code ступень · (1 − тень/3)}.
- * Метка рисуется, только пока на месте тот же блок (хеш) и грань открыта.
+ * Char grade at face corners is averaged over neighboring coplanar faces (clean faces that could char count as zero;
+ * wall edges do not): char blends into clean areas in patches rather than cells. The silhouette uses strips of 16×16 cells
+ * (texture pixels) over the charred face: where a body blocked the ball, char is weaker — {@code grade · (1 − shadow/3)}.
+ * A mark is drawn only while the same block (hash) occupies the location and the face is exposed.
  */
 public final class FlashMarksMesh {
-    /** Сколько темнеет цвет на полной гари: каналы R, G, B (чуть теплее к коричневому). */
+    /** How much full char darkens the color: R, G, B channels (slightly warmer toward brown). */
     private static final float DARK_R = 0.86f, DARK_G = 0.89f, DARK_B = 0.92f;
-    /** На сколько клетки силуэта впереди грани, блоки: зазор глубины виден примерно до 50 блоков. */
+    /** Silhouette-cell offset in front of the face, blocks: the depth gap is visible out to about 50 blocks. */
     private static final float LIFT = 1 / 256f;
 
     private FlashMarksMesh() {}
 
-    /** Секция строится заново: следы в ней — снимком сейчас, рисование — в потоке сборки. */
+    /** Section rebuild: snapshot its marks now, render on the build thread. */
     public static void onSection(AddSectionGeometryEvent e) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || e.getLevel() != mc.level) return;
@@ -61,10 +61,10 @@ public final class FlashMarksMesh {
         if (s != null) e.addRenderer(s::render);
     }
 
-    /** Вклад одного подрыва в грань: ступень и маска силуэта (null — без силуэта). */
+    /** One detonation's contribution to a face: grade and silhouette mask (null — no silhouette). */
     private record Part(int level, @Nullable long[] mask) {}
 
-    /** Грань секции со всеми вкладами. */
+    /** A section face with all contributions. */
     private static final class Face {
         final int key, hash;
         final List<Part> parts = new ArrayList<>(1);
@@ -79,14 +79,14 @@ public final class FlashMarksMesh {
             return false;
         }
 
-        /** Ступень грани без силуэта (для углов и соседей). */
+        /** Face grade without silhouette (for corners and neighbors). */
         int level() {
             int l = 0;
             for (Part p : parts) l = Math.max(l, p.level);
             return l;
         }
 
-        /** Доля гари клетки: наибольшая по подрывам, с тенью силуэта. */
+        /** Cell char share: maximum across detonations, with silhouette shadow. */
         double cell(int u, int v) {
             double out = 0;
             for (Part p : parts) {
@@ -97,14 +97,14 @@ public final class FlashMarksMesh {
         }
     }
 
-    /** Снимок следов секции для потока сборки. */
+    /** Section mark snapshot for the build thread. */
     private record Section(int cx, int sy, int cz, List<Face> faces, Neighbours neighbours) {
-        /** @param slices метки секции по видимым слоям ({@link FlashMarksClient#section}) */
+        /** @param slices section marks by visible layer ({@link FlashMarksClient#section}) */
         @Nullable
         static Section of(List<FlashMarksClient.Slice> slices, int cx, int y0, int cz, long now) {
             Int2ObjectOpenHashMap<Face> faces = new Int2ObjectOpenHashMap<>();
             for (FlashMarksClient.Slice l : slices) {
-                // силуэт подрыва заменяет его же гарь этой грани
+                // a detonation silhouette replaces that detonation's own char on this face
                 Int2ObjectOpenHashMap<long[]> masks = new Int2ObjectOpenHashMap<>();
                 for (int k = 0; k < l.shadows().length; k++) {
                     int m = l.shadows()[k];
@@ -166,8 +166,8 @@ public final class FlashMarksMesh {
         }
 
         /**
-         * Ступень гари в углах грани: {@code [u0v0, u1v0, u0v1, u1v1]} по осям клеток ({@link FlashShadows#axes}) —
-         * среднее по своей грани и соседним в плоскости, которые есть (со следом или чистые, но обугливаемые и открытые).
+         * Char grade at face corners: {@code [u0v0, u1v0, u0v1, u1v1]} along cell axes ({@link FlashShadows#axes}) —
+         * average of this face and available coplanar neighbors (marked, or clean but charrable and exposed).
          */
         private double[] corners(BlockAndTintGetter region, BlockPos pos, Direction dir, int own) {
             int[] ax = FlashShadows.axes(dir);
@@ -190,7 +190,7 @@ public final class FlashMarksMesh {
             return out;
         }
 
-        /** Ступень соседней грани той же стороны: со следом — его, чистая обугливаемая и открытая — 0, иначе −1. */
+        /** Grade of an adjacent face on the same side: marked — its grade; clean, charrable and exposed — 0; otherwise −1. */
         private int neighbour(BlockAndTintGetter region, BlockPos at, Direction dir) {
             int l = neighbours.level(at, dir);
             if (l > 0) return l;
@@ -201,7 +201,7 @@ public final class FlashMarksMesh {
         }
     }
 
-    /** Ступени граней в чанке секции и вокруг (для углов у края чанка): снимок карт {@link FlashMarksClient}. */
+    /** Face grades in and around the section's chunk (for corners at chunk edges): snapshot of {@link FlashMarksClient} maps. */
     private record Neighbours(int cx, int cz, Int2IntOpenHashMap[] maps) {
         static Neighbours around(int cx, int cz, long now) {
             Int2IntOpenHashMap[] maps = new Int2IntOpenHashMap[9];
@@ -219,13 +219,13 @@ public final class FlashMarksMesh {
         }
     }
 
-    // ---------------------------------------------------------------- четырёхугольники
+    // ---------------------------------------------------------------- quads
 
     /**
-     * Грань ещё раз: целиком, темнее по углам, в тех же местах вершин, что у модели (равная глубина — побеждает
-     * поздний). Силуэт — поверх: клетки в тени тела светлее, полосами, на {@link #LIFT} впереди грани — полосы в тех же
-     * местах дрались бы за глубину с гранью модели (интерполяция глубины по разным треугольникам расходится в последних
-     * битах) и шли бы светлыми строками. Вдали, где точности глубины не хватает на этот зазор, силуэт сливается с гарью.
+     * Draw the face again: whole, darker at corners, with the same vertex positions as the model (at equal depth the later draw
+     * wins). Silhouette on top: cells in the body shadow are lighter, drawn as strips {@link #LIFT} in front of the face — strips at the same
+     * positions would fight the model face for depth (depth interpolation across different triangles differs in its last
+     * bits), producing bright lines. Far away, where depth precision cannot resolve this gap, the silhouette merges into char.
      */
     private static void emit(BakedQuad q, Direction dir, Face f, double[] corners, QuadLighter lighter, VertexConsumer out, PoseStack.Pose pose) {
         int[] v = q.getVertices();
@@ -238,7 +238,7 @@ public final class FlashMarksMesh {
         }
         lighter.process(out, pose, new BakedQuad(copy, q.getTintIndex(), q.getDirection(), q.getSprite(), q.isShade(), q.hasAmbientOcclusion()), OverlayTexture.NO_OVERLAY);
         if (!f.masked()) return;
-        // углы четырёхугольника по осям клеток: роль вершины — (u больше, v больше)
+        // quad corners along cell axes: vertex role is (u greater, v greater)
         float u0 = Float.MAX_VALUE, u1 = -Float.MAX_VALUE, v0 = Float.MAX_VALUE, v1 = -Float.MAX_VALUE;
         for (int i = 0; i < 4; i++) {
             float pu = pos(v, i, ax[0]), pv = pos(v, i, ax[1]);
@@ -257,7 +257,7 @@ public final class FlashMarksMesh {
         if (at[0] < 0 || at[1] < 0 || at[2] < 0 || at[3] < 0 || u1 - u0 < 1e-4 || v1 - v0 < 1e-4) return;
         int normal = dir.getAxis().ordinal();
         float lift = LIFT * dir.getAxisDirection().getStep();
-        // полосы клеток с одной тенью: клетка (u, v) — [u/16, (u+1)/16] × [v/16, (v+1)/16] блока
+        // strips of cells with equal shadow: cell (u, v) is [u/16, (u+1)/16] × [v/16, (v+1)/16] blocks
         int n = FlashMarks.CELLS;
         for (int cv = 0; cv < n; cv++) {
             float sv0 = Math.max(v0, cv / (float) n), sv1 = Math.min(v1, (cv + 1) / (float) n);
@@ -269,7 +269,7 @@ public final class FlashMarksMesh {
                 while (end < n && f.cell(end, cv) / Math.max(1, f.level()) == share) end++;
                 float su0 = Math.max(u0, cu / (float) n), su1 = Math.min(u1, end / (float) n);
                 cu = end;
-                // без тени клетка уже тёмная — её рисует сама грань
+                // an unshadowed cell is already dark — the face itself draws it
                 if (su1 <= su0 || share >= 1) continue;
                 int[] sub = v.clone();
                 for (int i = 0; i < 4; i++) {
@@ -279,7 +279,7 @@ public final class FlashMarksMesh {
                     setPos(sub, i, ax[0], pu);
                     setPos(sub, i, ax[1], pv);
                     setPos(sub, i, normal, pos(v, i, normal) + lift);
-                    // текстура — по углам исходного четырёхугольника
+                    // texture from the original quad corners
                     for (int c = 0; c < 2; c++) {
                         float a = uv(v, at[0], c), b = uv(v, at[1], c), cc = uv(v, at[2], c), dd = uv(v, at[3], c);
                         float val = (a * (1 - s) + b * s) * (1 - t) + (cc * (1 - s) + dd * s) * t;
@@ -306,13 +306,13 @@ public final class FlashMarksMesh {
         return Float.intBitsToFloat(v[vertex * IQuadTransformer.STRIDE + IQuadTransformer.UV0 + c]);
     }
 
-    /** Ступень в точке грани по углам {@code [u0v0, u1v0, u0v1, u1v1]}. */
+    /** Grade at a face point from corners {@code [u0v0, u1v0, u0v1, u1v1]}. */
     private static double bilerp(double[] c, float u, float v) {
         double s = Math.clamp(u, 0, 1), t = Math.clamp(v, 0, 1);
         return (c[0] * (1 - s) + c[1] * s) * (1 - t) + (c[2] * (1 - s) + c[3] * s) * t;
     }
 
-    /** Цвет вершины (ABGR) темнее на ступень гари {@code level} из {@link FlashChar#LEVELS}. */
+    /** Vertex color (ABGR) darkened by char grade {@code level} out of {@link FlashChar#LEVELS}. */
     static int darken(int abgr, double level) {
         double f = Math.clamp(level / FlashChar.LEVELS, 0, 1);
         if (f <= 0) return abgr;

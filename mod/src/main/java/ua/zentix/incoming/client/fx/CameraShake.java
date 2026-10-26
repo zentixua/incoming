@@ -14,93 +14,93 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Тряска камеры без сдвига прицела: крутится только камера (курс, тангаж, крен), взгляд игрока остаётся на месте —
- * тряска самого взгляда сбивала бы прицел.
+ * Camera shake without moving the aim: only the camera rotates (yaw, pitch, roll), the player's view direction remains fixed —
+ * shaking the view direction itself would spoil aim.
  * <p>
- * Глаз видит скорость поворота: размах A° на частоте f — до 2π·f·A °/с (на каждом кадре — её доля). Поэтому толчки
- * грунта (подземный взрыв, удар бомбы о землю — {@link #ground}, с приходом волны грунта) медленные, как у тела: голову
- * качает само тело (резонанс стоящего человека по вертикали — 4–6 Гц, ISO 2631-1), а частую дрожь земли оно до глаз
- * почти не доносит; земля ходит вверх-вниз — голова кивает (тангаж), вбок качает меньше. Размахи меняются без скачков:
- * скачок на кадр — тот же рывок.
+ * The eye sees angular velocity: amplitude A° at frequency f gives up to 2π·f·A °/s (a fraction per frame). Ground
+ * impulses (underground blast, bomb ground impact — {@link #ground}, on ground wave arrival) are therefore slow, like the body: the body
+ * itself rocks the head (standing human vertical resonance — 4–6 Hz, ISO 2631-1), while rapid ground tremors barely
+ * reach the eyes; vertical ground motion makes the head nod (pitch), with less sideways sway. Amplitudes change continuously:
+ * a one-frame jump is still a jerk.
  * <p>
- * Наклон от ударной волны — ядерной и обычного взрыва: фронт бьёт стоящего разом (за миллисекунды обтекания тело получает
- * скорость наклона), ветер за ним толкает дальше, и тело отклоняется по ветру и выпрямляется ({@link BodySway} — маятник
- * с равновесием); голова — с телом. Наклон идёт с самого прихода фронта к телу, а не с начала тика, в котором его
- * заметили: удар — на кадре, где он был. Наклоны от нескольких волн складываются
- * (маятник при малых углах линеен). Дальше границы устойчивости человек шагает — наклон стоит на ней. В воздухе
- * (прыжок) тело на ноги не опирается — наклона нет, пока снова не встанет. Наклон тела — поворот камеры вокруг
- * горизонтали мира поперёк наклона, как есть: курс камеры вертится вокруг вертикали мира, поэтому сложить наклон с
- * курсом, тангажем и креном по отдельности нельзя — у взгляда вниз поворот вбок ушёл бы во вращение картинки.
+ * Sway from nuclear and conventional shock waves: the front hits a standing person at once (during milliseconds of diffraction loading the body gains
+ * angular velocity), the wind behind it keeps pushing, and the body leans downwind and straightens ({@link BodySway} — a pendulum
+ * with equilibrium); the head follows the body. Sway starts when the front reaches the body, rather than at the start of the tick that
+ * detected it: the hit appears in the frame when it happened. Lean from multiple waves adds
+ * (the pendulum is linear at small angles). Beyond the stability boundary a person steps — lean stays at that boundary. In the air
+ * (jumping), the body has no foot support — no lean until standing again. Body lean rotates the camera around the world
+ * horizontal perpendicular to the lean, as is: camera yaw rotates around the world vertical, so adding lean separately to
+ * yaw, pitch and roll is invalid — looking down would turn sideways sway into image rotation.
  * <p>
- * <b>Дрожь удара</b> ({@link #tremor}) — <b>подача</b> (принцип вида: камера — подача, факты не меняются): в миг прихода
- * фронта обычного взрыва картинка коротко дрожит вращением, как в хорошей съёмке удара и как было до 3.5.0. Её сила,
- * частота и длина — из самой волны у тела: размах — по давлению фронта, длина — по его импульсу, частота ниже у сильного
- * удара; без полос дальности. Вращение, без сдвига; начинается с нуля и гаснет к нулю — без рывка. Потом остаётся
- * наклон тела и качание головы ({@link BodySway}).
+ * <b>Impact tremor</b> ({@link #tremor}) — <b>presentation</b> (visual principle: the camera is presentation, facts stay unchanged): when a conventional blast
+ * front arrives, the image briefly trembles by rotation, as in good strike footage and as before 3.5.0. Strength,
+ * frequency and duration come from the wave at the body: amplitude by front pressure, duration by impulse, lower frequency for a stronger
+ * hit; no distance bands. Rotation without translation; starts at zero and fades to zero — no jerk. Then only
+ * body lean and head sway remain ({@link BodySway}).
  */
 public final class CameraShake {
-    /** Толчки грунта, что идут сейчас ({@link #ground}). */
+    /** Active ground impulses ({@link #ground}). */
     private static final List<Ground> GROUNDS = new ArrayList<>();
     /**
-     * Толчок грунта у полной силы, ° — кивок (тангаж), качание вбок (курс), крен — доля курса; частоты — тело стоящего
-     * человека (ISO 2631-1: 4–6 Гц по вертикали), Гц; нарастание — четверть периода тела, с. Подача: размах и частоту
-     * глаз видит, а настоящий сдвиг земли — доли миллиметра.
+     * Full-strength ground impulse, ° — nod (pitch), sideways sway (yaw), roll as a fraction of yaw; frequencies — standing
+     * human body (ISO 2631-1: 4–6 Hz vertically), Hz; rise time — a quarter body period, s. presentation: the eye sees amplitude and frequency,
+     * while real ground displacement is fractions of a millimetre.
      */
     static final double GROUND_PITCH = 1.6, GROUND_YAW = 0.7, GROUND_ROLL = 0.4, GROUND_HZ = 5.1, GROUND_RISE_S = 0.05;
 
-    /** Толчок грунта: с мига {@code from} (тики, с долей), сила 0..1, длина, с, сдвиг узора. */
+    /** Ground impulse: from {@code from} (fractional ticks), strength 0..1, duration, s, pattern offset. */
     private record Ground(double from, double strength, double seconds, double phase) {}
     private static long ticks;
-    /** Волны, что качают тело сейчас. */
+    /** Waves currently swaying the body. */
     private static final List<Sway> SWAYS = new ArrayList<>();
-    /** Больше стольких волн сразу — самая старая уходит. */
+    /** Beyond this simultaneous wave count the oldest is removed. */
     private static final int SWAYS_MAX = 8;
-    /** Дрожь от ударов, что идёт сейчас ({@link #tremor}). */
+    /** Active impact tremors ({@link #tremor}). */
     private static final List<Tremor> TREMORS = new ArrayList<>();
     /**
-     * Дрожь удара: с давления {@link #TREMOR_LOW_PA} (140 дБ — громкий хлопок) её нет, к {@link #TREMOR_HIGH_PA} (5 psi —
-     * сбивает с ног) — полная; сила — доля по логарифму давления в степени {@link #TREMOR_POWER} (у Эйзерлоха, GDC 2016,
-     * тряска — trauma² или trauma³: слабый удар почти не трясёт; у нас мягче, чтобы шахед в 100 м дрожал не слабее 3.4.1).
-     * Подача.
+     * Impact tremor: none at {@link #TREMOR_LOW_PA} pressure (140 dB — a loud crack), full at {@link #TREMOR_HIGH_PA} (5 psi —
+     * knocks a person down); strength — logarithmic pressure fraction raised to {@link #TREMOR_POWER} (Eiserloh, GDC 2016,
+     * uses trauma² or trauma³ for shake: a weak hit barely shakes; ours is gentler so a Shahed at 100 m shakes at least as much as in 3.4.1).
+     * Presentation.
      */
     static final double TREMOR_LOW_PA = 200, TREMOR_HIGH_PA = 35_000, TREMOR_POWER = 1.5;
-    /** Полный размах дрожи курса и тангажа, ° (как у ближнего удара в 3.4.1); крен — доля курса. Подача. */
+    /** Full tremor amplitude in yaw and pitch, ° (as for a nearby hit in 3.4.1); roll is a fraction of yaw. Presentation. */
     static final double TREMOR_YAW = 5, TREMOR_PITCH = 3.5, TREMOR_ROLL = 0.6;
-    /** Длина дрожи, с: от {@link #TREMOR_SHORT} у слабого импульса фазы до {@link #TREMOR_LONG} у сильного. Подача. */
+    /** Tremor duration, s: from {@link #TREMOR_SHORT} for weak phase impulse to {@link #TREMOR_LONG} for strong impulse. Presentation. */
     static final double TREMOR_SHORT = 0.3, TREMOR_LONG = 1.7;
-    /** Импульс фазы сжатия, Па·с, от которого дрожь длиннее кратчайшей и с которого — длиннейшая. Подача. */
+    /** Compression phase impulse, Pa·s, above which tremor exceeds the shortest duration and reaches the longest. Presentation. */
     static final double TREMOR_IMPULSE_LOW = 5, TREMOR_IMPULSE_HIGH = 300;
-    /** Частота дрожи, Гц: у слабого удара — {@link #TREMOR_HZ_WEAK}, у полного — {@link #TREMOR_HZ_STRONG}. Подача. */
+    /** Tremor frequency, Hz: {@link #TREMOR_HZ_WEAK} for a weak hit, {@link #TREMOR_HZ_STRONG} at full strength. Presentation. */
     static final double TREMOR_HZ_WEAK = 12.5, TREMOR_HZ_STRONG = 8.5;
 
-    /** Дрожь одного удара: с мига {@code from} (тики, с долей), сила 0..1, длина, с, частота, Гц, сдвиг узора. */
+    /** One impact tremor: from {@code from} (fractional ticks), strength 0..1, duration, s, frequency, Hz, pattern offset. */
     private record Tremor(double from, double strength, double seconds, double hz, double phase) {}
-    /** Насколько игрок стоит на ногах (1 — стоит, 0 — в воздухе), в прошлом тике и сейчас. */
+    /** Player foot support (1 — standing, 0 — airborne), previous tick and now. */
     private static double standing = 1, standingBefore = 1;
-    /** Насколько за тик меняется опора: тело встаёт на ноги и отрывается от них за четверть секунды. */
+    /** Support change per tick: the body gains and loses foot support over a quarter second. */
     private static final double STANDING_STEP = 0.2;
 
     /**
-     * Наклон тела ударом и ветром одной волны, рад ({@link BodySway#RATE} отсчётов в секунду), с мига {@code from} (тики
-     * клиента, с долей); куда дул её ветер — от взрыва вдоль земли (x, z, единичный).
+     * Body lean from one wave's hit and wind, rad ({@link BodySway#RATE} samples per second), from {@code from} (fractional
+     * client ticks); wind direction — away from the blast along the ground (x, z, unit vector).
      */
     private record Sway(double[] tilt, double[] neck, double from, double pushX, double pushZ) {}
 
     private CameraShake() {}
 
     /**
-     * Толчок земли по прежнему пакету без источника ({@code S2C.Quake}: тики по ступеням Z = R/W^⅓ — старые записи
-     * повтора Flashback): те же ступени силы (80, 60, 40 тиков — как размахи 1,6°, 0,9° и 0,35° прежде) и длины, с
-     * прихода пакета. Источник волны грунта — {@link GroundShake}.
+     * Ground impulse from the old source-free packet ({@code S2C.Quake}: ticks in Z = R/W^⅓ bands — old Flashback replay
+     * recordings): same strength bands (80, 60, 40 ticks — previously amplitudes of 1.6°, 0.9° and 0.35°) and durations, from
+     * packet arrival. Ground wave source — {@link GroundShake}.
      */
     public static void quake(int ticks) {
         ground(ticks >= 50 ? 1 : ticks >= 24 ? 0.56 : 0.22, ticks / 20.0, 0, ticks);
     }
 
     /**
-     * Волна грунта дошла до игрока: толчок силы {@code strength} 0..1 (насколько он ощутим — модель грунта), длиной
-     * {@code seconds}, с; {@code late} — сколько тиков назад она пришла (пакет мог опоздать и больше чем на тик — толчок
-     * идёт с того места, где он уже был бы); {@code seed} — узор. Толчки складываются и вместе не больше полного размаха.
+     * Ground wave reached the player: impulse strength {@code strength} 0..1 (perceptibility from the ground model), duration
+     * {@code seconds}, s; {@code late} — ticks since arrival (the packet may be more than a tick late — the impulse
+     * resumes at the point it would have reached); {@code seed} — pattern. Impulses add, jointly capped at full amplitude.
      */
     public static void ground(double strength, double seconds, double late, long seed) {
         double s = Mth.clamp(strength, 0, 1);
@@ -109,8 +109,8 @@ public final class CameraShake {
     }
 
     /**
-     * Толчок грунта в миг {@code t} тиков, ° (курс, тангаж, крен): нарастание за {@link #GROUND_RISE_S}, гаснет как
-     * (1 − s)² к концу; узор — две синусоиды тела, с нуля. Сумма — не больше полного размаха.
+     * Ground impulse at time {@code t} ticks, ° (yaw, pitch, roll): rises over {@link #GROUND_RISE_S}, fades as
+     * (1 − s)² to the end; pattern — two body sinusoids starting at zero. Sum capped at full amplitude.
      */
     static double[] groundAt(double t) {
         double yaw = 0, pitch = 0;
@@ -127,21 +127,21 @@ public final class CameraShake {
         return new double[]{yaw, pitch, GROUND_ROLL * yaw};
     }
 
-    /** Сила дрожи 0..1 у давления фронта {@code pPa}, Па: (доля по логарифму давления)^{@link #TREMOR_POWER}. */
+    /** Tremor strength 0..1 at front pressure {@code pPa}, Pa: (logarithmic pressure fraction)^{@link #TREMOR_POWER}. */
     static double tremorStrength(double pPa) {
         double x = Mth.clamp(Math.log(Math.max(pPa, 1e-9) / TREMOR_LOW_PA) / Math.log(TREMOR_HIGH_PA / TREMOR_LOW_PA), 0, 1);
         return Math.pow(x, TREMOR_POWER);
     }
 
-    /** Длина дрожи, с, у импульса фазы сжатия {@code impulse}, Па·с. */
+    /** Tremor duration, s, at compression phase impulse {@code impulse}, Pa·s. */
     static double tremorSeconds(double impulse) {
         double x = Mth.clamp(Math.log(Math.max(impulse, 1e-9) / TREMOR_IMPULSE_LOW) / Math.log(TREMOR_IMPULSE_HIGH / TREMOR_IMPULSE_LOW), 0, 1);
         return TREMOR_SHORT + (TREMOR_LONG - TREMOR_SHORT) * x;
     }
 
     /**
-     * Фронт обычного взрыва дошёл до тела: дрожь камеры по его давлению {@code pPa}, Па, и импульсу фазы сжатия
-     * {@code impulse}, Па·с; {@code late} — сколько тиков назад (0..1); {@code seed} — узор. Подача. Возвращает силу 0..1.
+     * Conventional blast front reached the body: camera tremor from its pressure {@code pPa}, Pa, and compression phase impulse
+     * {@code impulse}, Pa·s; {@code late} — ticks since arrival (0..1); {@code seed} — pattern. Presentation. Returns strength 0..1.
      */
     public static double tremor(double pPa, double impulse, double late, long seed) {
         double strength = tremorStrength(pPa);
@@ -152,9 +152,9 @@ public final class CameraShake {
     }
 
     /**
-     * Дрожь в миг {@code t} тиков, ° (курс, тангаж; крен — доля курса): узор — две синусоиды в отношении 1,73, с нуля,
-     * огибающая (1 − s)² гаснет к нулю за длину дрожи. Сумма дрожей — не больше полного размаха (предела числа дрожей
-     * нет: вытеснить идущую — рывок; каждая кончается за {@link #TREMOR_LONG} с).
+     * Tremor at time {@code t} ticks, ° (yaw, pitch; roll is a fraction of yaw): pattern — two sinusoids at ratio 1.73, starting at zero;
+     * envelope (1 − s)² fades to zero over the tremor duration. Sum capped at full amplitude (no tremor count
+     * limit: evicting an active tremor causes a jerk; each ends within {@link #TREMOR_LONG} s).
      */
     static double[] tremorAt(double t) {
         double yaw = 0, pitch = 0;
@@ -170,30 +170,30 @@ public final class CameraShake {
         return new double[]{yaw, pitch, TREMOR_ROLL * yaw};
     }
 
-    /** Узор дрожи, размах ~1, с нуля в s = 0: две синусоиды частот f и 1,73·f, у каждого удара свой сдвиг частоты. */
+    /** Tremor pattern, amplitude ~1, starting at zero at s = 0: two sinusoids of frequencies f and 1.73·f, each hit has its own frequency offset. */
     private static double shiver(double s, double hz, double phase) {
         double f = hz * (0.9 + 0.2 * phase);
         return 0.7 * Math.sin(Mth.TWO_PI * f * s) + 0.3 * Math.sin(Mth.TWO_PI * 1.73 * f * s);
     }
 
     /**
-     * Фронт волны (ядерной или обычного взрыва) ударил тело и ветер за ним качнул его ({@link BodySway#tilt}): давление фронта {@code pPa} и
-     * скоростной напор за фронтом вдоль земли {@code qPa}, Па, доля открытого к взрыву {@code open} (ветровая тень), с
-     * положительной фазой {@code tPlus}, с; {@code late} —
-     * сколько тиков назад (0..1) фронт прошёл тело; {@code away} — от взрыва к игроку (ветер дует от эпицентра),
-     * {@code yaw} — куда игрок смотрит, °. Наклон ложится поверх того, что осталось от прежних волн. Возвращает наклон
-     * тела по ветру, рад.
+     * A wave front (nuclear or conventional blast) hit the body and the wind behind it swayed it ({@link BodySway#tilt}): front pressure {@code pPa} and
+     * dynamic pressure behind the front along the ground {@code qPa}, Pa, exposed fraction toward the blast {@code open} (wind shadow), with
+     * positive phase {@code tPlus}, s; {@code late} —
+     * ticks since the front passed the body (0..1); {@code away} — from blast to player (wind blows away from the epicentre),
+     * {@code yaw} — player view direction, °. Lean is added to what remains of previous waves. Returns downwind body lean,
+     * rad.
      */
     public static double[] sway(double pPa, double qPa, double open, double tPlus, double late, Vec3 away, double yaw) {
         return sway(pPa, qPa, open, tPlus, tPlus, late, away, yaw, false).body();
     }
 
     /**
-     * Как {@link #sway(double, double, double, double, double, Vec3, double)}, но удар обтекания спадает по своей фазе
-     * {@code hitPhase}, с: у ядерной волны фаза ветра в игре — время модели × {@code effects_scale}, а обтекание тела —
-     * настоящие миллисекунды, и фаза удара — фаза модели. {@code neck} — камера качается и головой на шее
-     * ({@link BodySway#motion}); без неё — голова идёт с телом (<b>не по физике</b>: так пока у ядерной волны — её
-     * картинку этот шаг не менял).
+     * Like {@link #sway(double, double, double, double, double, Vec3, double)}, but diffraction loading decays over its own phase
+     * {@code hitPhase}, s: for a nuclear wave the in-game wind phase is model time × {@code effects_scale}, while body diffraction loading takes
+     * real milliseconds, and its impulse phase is the model phase. {@code neck} — the camera also sways with the head on the neck
+     * ({@link BodySway#motion}); without it the head follows the body (<b>not physical</b>: currently used for the nuclear wave — this
+     * step did not change its visuals).
      */
     public static BodySway.Motion sway(double pPa, double qPa, double open, double tPlus, double hitPhase, double late, Vec3 away, double yaw,
                                        boolean neck) {
@@ -210,8 +210,8 @@ public final class CameraShake {
     }
 
     /**
-     * Граница устойчивости, рад, для наклона в сторону (x, z) мира, когда игрок смотрит по курсу {@code yaw}°: вперёд
-     * {@link BodySway#FORWARD}, назад {@link BodySway#BACK}, вбок {@link BodySway#SIDE}, наискось — эллипсом между ними.
+     * Stability boundary, rad, for lean in world direction (x, z) when the player faces yaw {@code yaw}°: forward
+     * {@link BodySway#FORWARD}, backward {@link BodySway#BACK}, sideways {@link BodySway#SIDE}, diagonally — an ellipse between them.
      */
     static double edge(double yaw, double x, double z) {
         double r = Math.toRadians(yaw), sin = Math.sin(r), cos = Math.cos(r);
@@ -220,17 +220,17 @@ public final class CameraShake {
         return len / Math.hypot(ahead / (ahead > 0 ? BodySway.FORWARD : BodySway.BACK), side / BodySway.SIDE);
     }
 
-    /** Стоит ли игрок на ногах: на земле и его не несёт ({@link #carried}). */
+    /** Whether the player has foot support: grounded and not carried ({@link #carried}). */
     public static boolean standing(@Nullable Player p) {
         return p != null && p.onGround() && !carried(p);
     }
 
-    /** Ветер несёт игрока целиком или тот не стоит вовсе: верхом, вплавь, в полёте, во сне. */
+    /** Wind carries the whole player, or there is no standing support: riding, swimming, flying, sleeping. */
     public static boolean carried(Player p) {
         return p.isPassenger() || p.isSwimming() || p.isFallFlying() || p.isSleeping() || p.getAbilities().flying;
     }
 
-    /** Тик клиента; {@code onFeet} — игрок стоит на ногах ({@link #standing}). */
+    /** Client tick; {@code onFeet} — player has foot support ({@link #standing}). */
     public static void tick(boolean onFeet) {
         ticks++;
         standingBefore = standing;
@@ -249,8 +249,8 @@ public final class CameraShake {
     }
 
     /**
-     * Сила тряски в кадре: настройка {@code camera_shake} × ванильное «Искажения экрана» (Distortion Effects, доступность:
-     * им игрок убирает качание картинки — тошноту и портал; камера, которую качает волна, — то же качание).
+     * Shake strength in the frame: {@code camera_shake} setting × vanilla Distortion Effects (accessibility:
+     * lets players remove image sway — nausea and portal; a wave-swayed camera is the same kind of sway).
      */
     static double strength(double cameraShake, double distortion) {
         return cameraShake * Mth.clamp(distortion, 0, 1);
@@ -260,7 +260,7 @@ public final class CameraShake {
         Minecraft mc = Minecraft.getInstance();
         double k = strength(IncomingConfig.CLIENT.cameraShake.get(), mc.options.screenEffectScale().get());
         if (k <= 0 || GROUNDS.isEmpty() && SWAYS.isEmpty() && TREMORS.isEmpty() || mc.isPaused()) return;
-        // наклон — тела игрока: камере снаряда и глазам другой сущности его не видно
+        // lean belongs to the player's body: invisible to the projectile camera or another entity's eyes
         Player p = mc.player;
         double body = p != null && mc.getCameraEntity() == p ? p.getViewYRot((float) e.getPartialTick()) : Double.NaN;
         double[] o = offsets(e.getPartialTick(), e.getYaw(), e.getPitch(), e.getRoll(), body, k);
@@ -270,24 +270,24 @@ public final class CameraShake {
     }
 
     /**
-     * Поворот камеры тряской в кадре, ° (курс, тангаж — вниз больше нуля, крен — верх вправо больше нуля), при курсе
-     * {@code cameraYaw}, тангаже {@code cameraPitch} и крене {@code cameraRoll} камеры; {@code bodyYaw} — куда смотрит
-     * игрок, ° (по нему граница устойчивости: вид спереди от третьего лица смотрит назад), NaN — камера не на игроке,
-     * наклона тела нет; {@code k} — сила тряски из настроек.
+     * Camera shake rotation in the frame, ° (yaw, pitch — positive downward, roll — positive with top to the right), with camera yaw
+     * {@code cameraYaw}, pitch {@code cameraPitch} and roll {@code cameraRoll}; {@code bodyYaw} — player view direction,
+     * ° (sets the stability boundary: front third-person view looks backward); NaN — camera is not on the player,
+     * no body lean; {@code k} — shake strength from settings.
      */
     static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
         double t = ticks + partial;
-        // амплитуды: курс/тангаж, °
+        // amplitudes: yaw/pitch, °
         double yaw = 0, pitch = 0, roll = 0;
         if (!GROUNDS.isEmpty() && !Double.isNaN(bodyYaw)) {
-            // толчок грунта — у тела игрока, как дрожь удара: камере снаряда его не видно
+            // ground impulse is at the player's body, like impact tremor: invisible to the projectile camera
             double[] g = groundAt(t);
             yaw += g[0];
             pitch += g[1];
             roll += g[2];
         }
         if (!TREMORS.isEmpty() && !Double.isNaN(bodyYaw)) {
-            // дрожь удара — у головы игрока, как наклон: камере снаряда её не видно
+            // impact tremor is at the player's head, like lean: invisible to the projectile camera
             double[] tr = tremorAt(t);
             yaw += tr[0];
             pitch += tr[1];
@@ -296,7 +296,7 @@ public final class CameraShake {
         yaw *= k;
         pitch *= k;
         roll *= k;
-        // наклон тела и головы на шее по ветру всех волн, ° по осям мира
+        // body and neck-mounted head lean from all waves' wind, ° around world axes
         double leanX = 0, leanZ = 0, neckX = 0, neckZ = 0;
         for (Sway s : SWAYS) {
             double f = (ticks - s.from + partial) / 20 * BodySway.RATE;
@@ -312,8 +312,8 @@ public final class CameraShake {
         }
         double w = k * (standingBefore + (standing - standingBefore) * partial), body = w * Math.hypot(leanX, leanZ);
         if (Double.isNaN(bodyYaw) || !(body > 0) && !(neckX != 0 || neckZ != 0)) return new double[]{yaw, pitch, roll};
-        // тело отклоняется по ветру от взрыва — в лицо запрокидывает голову, в спину клонит вниз, сбоку наклоняет от
-        // взрыва; дальше границы устойчивости человек шагает — наклон тела стоит на ней; голова качается на шее поверх
+        // the body leans downwind away from the blast — a frontal hit tips the head back, a rear hit tips it down, a side hit tilts it away from
+        // the blast; beyond the stability boundary a person steps — body lean stays there; the head sways on the neck on top
         if (body > 0) {
             double bx = leanX / Math.hypot(leanX, leanZ), bz = leanZ / Math.hypot(leanX, leanZ);
             body = Math.min(body, Math.toDegrees(edge(bodyYaw, bx, bz)));
@@ -330,21 +330,21 @@ public final class CameraShake {
     }
 
     /**
-     * Камера с курсом {@code yaw}, тангажем {@code pitch} и креном {@code roll} (°) после наклона тела на {@code lean}° в
-     * сторону (x, z) мира (единичную): поворот вокруг горизонтали поперёк наклона — верх камеры уходит туда, куда клонится
-     * тело. Возвращает курс, тангаж и крен, которые дают этот поворот у {@code Camera.setRotation}:
-     * {@code rotationYXZ(π − курс, −тангаж, −крен)}.
+     * Camera with yaw {@code yaw}, pitch {@code pitch} and roll {@code roll} (°) after body lean of {@code lean}° in unit world
+     * direction (x, z): rotation around the horizontal perpendicular to the lean — the camera top moves in the direction the
+     * body leans. Returns yaw, pitch and roll that produce this rotation in {@code Camera.setRotation}:
+     * {@code rotationYXZ(π − yaw, −pitch, −roll)}.
      */
     static double[] leaned(double yaw, double pitch, double roll, double lean, double x, double z) {
         Matrix3d m = new Matrix3d().rotation(Math.toRadians(lean), z, 0, -x)
                 .mul(new Matrix3d().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll)));
-        // разложение R = Ry(a)·Rx(b)·Rz(c); у JOML mCR — столбец C, строка R
+        // decompose R = Ry(a)·Rx(b)·Rz(c); JOML mCR means column C, row R
         double b = Math.asin(Mth.clamp(-m.m21(), -1, 1)), a, c;
         if (Math.cos(b) > 1e-7) {
             a = Math.atan2(m.m20(), m.m22());
             c = Math.atan2(m.m01(), m.m11());
         } else {
-            // взгляд ровно в зенит или надир: курс и крен вертят картинку вокруг одной оси — крен оставляем прежним
+            // looking exactly at zenith or nadir: yaw and roll rotate the image around one axis — keep the previous roll
             c = -Math.toRadians(roll);
             double turn = Math.atan2(-m.m02(), m.m00());
             a = b < 0 ? turn - c : turn + c;

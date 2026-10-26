@@ -13,12 +13,12 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
- * Небо и туман: в миг вспышки — белые, потом янтарные, пока шар ярче неба ({@link #amber}: днём — секунды, ночью —
- * около 10 с; небо красит {@link NukeRenderer}), у эпицентра оранжево-бурые от пыли и дыма, в чёрном дожде — серо-бурые и близкие.
- * Ванильная погода не трогается: чёрный дождь местный.
+ * Sky and fog: white at the flash, then amber while the ball is brighter than the sky ({@link #amber}: seconds by day,
+ * about 10 s at night; {@link NukeRenderer} colors the sky); orange-brown from dust and smoke near ground zero; gray-brown and close in black rain.
+ * Vanilla weather is unchanged: black rain is local.
  */
 public final class NukeSky {
-    /** Сила чёрного дождя у камеры 0..1 (плавно нарастает и спадает). */
+    /** Black rain intensity at the camera 0..1 (smooth rise and fall). */
     private static float rain;
     private static boolean rainTarget;
 
@@ -52,15 +52,15 @@ public final class NukeSky {
         rainTarget = false;
     }
 
-    /** Середина шапки подрыва в мире ({@link MushroomField#centre}). */
+    /** World-space center of the detonation cap ({@link MushroomField#centre}). */
     private static final double[] CENTRE = new double[3];
 
     /**
-     * Янтарное небо от подрыва у камеры 0..1 — свет шара и шапки у глаза ({@link MushroomModel#light}: чёрное тело их
-     * видимой температуры, как (R/d)²) против света неба, к которому привык глаз ({@link Sight#adapted}), сквозь воздух
-     * ({@link ThermalModel#transmittance}: прямой и рассеянный свет вместе — янтарное небо и есть свет шара, рассеянный
-     * воздухом): днём — секунды, пока шар ярче неба, ночью — дольше, пока светится шапка; засвеченное небо видно, как и
-     * вспышку, за десятки километров.
+     * Amber sky from the detonation at the camera 0..1 — ball and cap light at the eye ({@link MushroomModel#light}: black body at their
+     * visible temperature, as (R/d)²) relative to the sky light the eye has adapted to ({@link Sight#adapted}), through the air
+     * ({@link ThermalModel#transmittance}: direct and scattered light together — the amber sky is the ball light scattered by
+     * the air): seconds by day while the ball is brighter than the sky; longer at night while the cap glows; the illuminated sky is visible, like
+     * the flash, from tens of kilometers away.
      */
     static float amber(ClientNuclear.Active a, Vec3 cam, float partial) {
         MushroomModel.Shape s = MushroomField.shape(a, partial);
@@ -70,9 +70,9 @@ public final class NukeSky {
         double dist = d.metres(Math.sqrt(Mth.square(CENTRE[0] - cam.x) + Mth.square(CENTRE[1] - cam.y) + Mth.square(CENTRE[2] - cam.z)));
         ClientLevel level = Minecraft.getInstance().level;
         float ambient = level == null ? 1 : FarView.ambient(level, partial);
-        // свет шара у глаза против света неба, к которому привык глаз, сквозь воздух по погоде в миг подрыва (как засветка
-        // неба вспышкой, NukeFlash: вспышка и янтарное небо — один свет) — не пучком, как блик шара (NukeRenderer.fireballs),
-        // а со светом, рассеянным по пути: наравне с небом — небо наполовину янтарное
+        // ball light at the eye relative to the sky light the eye has adapted to, through air in the weather at detonation (like sky
+        // glare from the flash, NukeFlash: the flash and amber sky are the same light) — with scattered light along the path,
+        // rather than as a beam like the ball glare (NukeRenderer.fireballs): equal to the sky — the sky is half amber
         double air = ThermalModel.transmittance(dist, d.visibility());
         double lit = Sight.adapted(MushroomModel.light(s, d.yieldKt(), d.surface(), dist), ambient) * air;
         return (float) (lit / (1 + lit));
@@ -82,7 +82,7 @@ public final class NukeSky {
         if (ClientNuclear.isEmpty() && rain <= 0) return;
         float partial = (float) e.getPartialTick();
         float r = e.getRed(), g = e.getGreen(), b = e.getBlue();
-        // бурая мгла у эпицентра: минута после прихода стены пыли, тем гуще, чем ближе
+        // brown haze near ground zero: a minute after dust-wall arrival, denser at shorter distances
         Vec3 cam = e.getCamera().getPosition();
         float dust = 0, amber = 0;
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
@@ -91,12 +91,12 @@ public final class NukeSky {
             double dist = cam.distanceTo(d.burst());
             double near = 1 - dist / (d.radiusMax() * 2);
             if (near <= 0) continue;
-            // мгла — пыль, которую принесла стена: от её прихода к камере
+            // haze is dust brought by the wall: measured from its arrival at the camera
             double t = (a.ticks(partial) - d.arrivalTicks(dist)) / (20.0 * d.scale());
             if (t < 0.5) continue;
             dust = Math.max(dust, (float) (0.45 * near * Math.exp(-t / 45) * CloudPuffs.smooth(0.5, 4, t)));
         }
-        // янтарная засветка, пока светятся шар и гриб
+        // amber glare while the ball and mushroom glow
         r = Mth.lerp(amber * 0.5f, r, 1f);
         g = Mth.lerp(amber * 0.5f, g, 0.6f);
         b = Mth.lerp(amber * 0.5f, b, 0.3f);
@@ -115,7 +115,7 @@ public final class NukeSky {
         e.setBlue(b);
     }
 
-    /** В чёрном дожде видно на 40–60 блоков. */
+    /** Visibility in black rain is 40–60 blocks. */
     public static void fog(ViewportEvent.RenderFog e) {
         if (rain <= 0) return;
         float far = Mth.lerp(rain, e.getFarPlaneDistance(), Math.min(e.getFarPlaneDistance(), 48));

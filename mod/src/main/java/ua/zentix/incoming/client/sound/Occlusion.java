@@ -2,17 +2,17 @@ package ua.zentix.incoming.client.sound;
 
 import net.minecraft.world.phys.Vec3;
 
-/** Открыт ли путь звука снаряда к уху (1) или за холмом/домом (0), сглажено; считается раз в тик на все слои снаряда. */
+/** Smoothed projectile sound-path openness to ear (1) or behind hill/house (0); computed once per tick for all its layers. */
 final class Occlusion {
     /**
-     * Доля пути к новому значению за тик: снаряд уходит за гребень и выходит из-за него за ~10 тиков (90 %; постоянная
-     * ~4,5 тика), а не щелчком (подача: зона Френеля у кромки — десятки метров на сотнях).
+     * Fraction toward a new value per tick: projectile crosses behind a ridge and back over ~10 ticks (90 %; time
+     * constant ~4.5 ticks), not with a click (presentation: edge Fresnel zone is tens of metres at hundreds of metres).
      */
     static final float SMOOTH = 0.2f;
     private float open = 1;
     private long tick = -1;
 
-    /** Путь от «запаздывающего» положения {@code at} до уха открыт (1) или закрыт (0); плавно, без щелчков. */
+    /** Path from “retarded” {@code at} to ear open (1) or closed (0); smooth, without clicks. */
     float open(double now, Vec3 ear, Vec3 at) {
         long t = (long) now;
         if (t != tick) {

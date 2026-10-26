@@ -25,67 +25,67 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Что заслоняет свет у камеры: полные непрозрачные блоки ({@link BlockState#isSolidRender}) в окне {@value #SIZE_XZ}×{@value #SIZE_Y}×{@value #SIZE_XZ} блоков вокруг глаза —
- * трёхмерной текстурой R8 (255 — заслон). По ней луч тени прохода света огня ({@code fx_heat}: {@code heatBlocked})
- * идёт по клеткам: мир Minecraft — блоки, и заслон на пути света известен точно, в кадре он или нет. По одной глубине
- * кадра это не решить: за видимой гранью может быть и толща дома, и пустота за столбом (ревью #399: луч сквозь цельный
- * дом под углом к взгляду проходил в 84 % случаев). Листва, стекло, вода, трава — не заслон (⚠ листва пропускает часть);
- * неполные блоки (плиты, ступени, слой снега, тропинка, пашня, ковёр) — тоже: заслон в целую клетку дал бы земле под
- * снегом тень от соседней клетки снега (ревью #399: у света под 10–30° — вся), а высоты в клетке окно не хранит (⚠ плита
- * и ступень свет пропускают).
+ * Light occluders near the camera: full opaque blocks ({@link BlockState#isSolidRender}) in a {@value #SIZE_XZ}×{@value #SIZE_Y}×{@value #SIZE_XZ}-block window around the eye —
+ * an R8 3D texture (255 — occluder). The fire-light pass shadow ray ({@code fx_heat}: {@code heatBlocked})
+ * traverses its cells: Minecraft is blocks, so light-path occluders are known exactly, on-screen or not. Frame depth alone
+ * cannot decide: behind a visible face there may be a solid house or empty space behind a post (review #399: a ray crossed a solid
+ * house oblique to the view in 84 % of cases). Leaves, glass, water, grass do not occlude (⚠ leaves transmit partly);
+ * neither do partial blocks (slabs, stairs, snow layers, paths, farmland, carpets): a full-cell occluder would shadow ground beneath
+ * snow with a neighbouring snow cell (review #399: completely for light at 10–30°); the window stores no subcell height (⚠ slabs
+ * and stairs transmit light).
  * <p>
- * Окно — по секциям 16³, по модулю размера (как {@link OpenAir}): новые секции окна — сперва нулями (не знаем — не
- * заслон), потом блоками от глаза к краю, не дольше {@link #FILL_NANOS} за кадр (производительность, не физика); каждый
- * кадр перечитываются {@value #REFRESH} секций по кругу (всё окно — за ~1,8 с при 60 кадрах) и секции у источников
- * света кадра в пределах их радиуса ({@link #near}: взрыв ломает блоки у самого огня) — им не больше половины бюджета,
- * по очереди, остальное — окну, хоть одна секция за кадр (иначе секции у огней одни съедали бы весь бюджет). Секция
- * без полных блоков или из одних них (воздух, толща камня — палитра это знает, {@code maybeHas}) — без обхода блоков.
- * Секция, чьи блоки с прошлого чтения те же (отпечаток палитры и хранилища номеров — сотни {@code long}), не читается и
- * не грузится: загрузка в текстуру, которую ещё читает прошлый кадр, ждёт видеокарту (шлагбаум LFX4: до ~40 загрузок за
- * кадр, время слоя у ночного взрыва 1,6 → 11,7 мс при том же времени процессора). Обновляется, только пока у прохода есть свет; сбрасывается при смене мира. Чанка у клиента
- * нет — не заслон.
+ * Window uses 16³ sections, wrapped modulo size (like {@link OpenAir}): new sections first zeroed (unknown — no
+ * occluder), then filled with blocks from eye to edge within {@link #FILL_NANOS} per frame (performance, not physics); each
+ * frame refreshes {@value #REFRESH} sections in rotation (whole window in ~1.8 s at 60 fps) and sections within frame
+ * light-source radii ({@link #near}: blasts break blocks next to the fire) — at most half the budget,
+ * in rotation; the rest goes to the window, at least one section per frame (otherwise fire sections alone would consume the whole budget). A section
+ * with no full blocks or only full blocks (air, solid stone — palette knows, {@code maybeHas}) needs no block scan.
+ * A section unchanged since last read (palette and index-storage fingerprint — hundreds of {@code long}s) is neither read nor
+ * uploaded: uploading to a texture still read by the previous frame waits for the GPU (look gate LFX4: up to ~40 uploads per
+ * frame, nighttime blast layer time 1.6 → 11.7 ms at unchanged CPU time). Updates only while the pass has light; resets on world change. No client
+ * chunk — no occluder.
  */
 public final class Solids {
-    /** Окно, блоки (кратно 16). */
+    /** Window, blocks (multiples of 16). */
     static final int SIZE_XZ = 192, SIZE_Y = 96;
     private static final int SX = SIZE_XZ / 16, SY = SIZE_Y / 16, ALL = SX * SY * SX;
-    /** Секций, перечитываемых за кадр по кругу (всё окно — за {@value #ALL}/{@value #REFRESH} кадров). */
+    /** Sections refreshed per frame in rotation (whole window in {@value #ALL}/{@value #REFRESH} frames). */
     static final int REFRESH = 8;
-    /** Чтение блоков за кадр — не дольше, нс. */
+    /** Maximum block-reading time per frame, ns. */
     static final long FILL_NANOS = 1_000_000;
-    /** Свой блок текстуры (12 — шум пелены, 13 — {@link OpenAir}, 14 — {@code SmokePass}). */
+    /** Custom texture unit (12 — pall noise, 13 — {@link OpenAir}, 14 — {@code SmokePass}). */
     static final int UNIT = 15;
 
     private static int texture = -1;
     private static ByteBuffer section, zeros, full;
-    /** Секция мира с блоками в каждом месте окна и секция, под которую место обнулено ({@link SectionPos#asLong}). */
+    /** World section whose blocks occupy each slot, and section for which it was zeroed ({@link SectionPos#asLong}). */
     private static final long[] STORED = new long[ALL], ZEROED = new long[ALL];
-    /** Отпечаток блоков секции при её чтении ({@link #print}). */
+    /** Section block fingerprint when read ({@link #print}). */
     private static final long[] PRINT = new long[ALL];
-    /** «Место обнулено при создании текстуры» в {@link #ZEROED}: обнулять его снова не нужно. */
+    /** “Slot zeroed at texture creation” in {@link #ZEROED}: no need to zero it again. */
     private static final long FRESH = Long.MIN_VALUE + 1;
     private static final int[] PENDING = new int[ALL];
     private static final long[] PENDING_KEY = new long[ALL];
-    /** Порядок чтения: расстояние² от глаза (блоки², целое) в старших битах, номер в младших 11. */
+    /** Read order: squared eye distance (blocks², integer) in high bits, index in low 11 bits. */
     private static final long[] ORDER = new long[ALL];
     private static final int[] NEAR_PENDING = new int[ALL];
     private static int refreshAt, nearTurn;
-    /** Полный непрозрачный блок — заслон (форма блока — без места: у полных блоков она от места не зависит). */
+    /** Full opaque block is an occluder (shape without position: full-block shape is position-independent). */
     private static final java.util.function.Predicate<BlockState> SOLID = st -> !st.isAir()
             && st.isSolidRender(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
     private static int x0, y0, z0;
     private static boolean ready;
     private static Vec3 eye = Vec3.ZERO;
     private static WeakReference<ClientLevel> world = new WeakReference<>(null);
-    /** Секции у источников света этого кадра (перечитываются каждый кадр). */
+    /** Sections near this frame's light sources (refreshed every frame). */
     private static final long[] NEAR = new long[32];
     private static int nears;
 
     private Solids() {}
 
     /**
-     * Источник света кадра в (x, y, z) мира радиусом r: секции, которые он задевает, — вне очереди окна (не больше
-     * половины бюджета, по очереди между собой), ближние к нему первыми (место на {@link #NEAR} кончается).
+     * Frame light source at world (x, y, z), radius r: touched sections bypass the window queue (at most
+     * half the budget, in their own rotation), nearest first (slots end at {@link #NEAR}).
      */
     static void near(double x, double y, double z, double r) {
         int x0 = SectionPos.blockToSectionCoord(x - r), x1 = SectionPos.blockToSectionCoord(x + r);
@@ -116,7 +116,7 @@ public final class Solids {
         NEAR[nears++] = key;
     }
 
-    /** Окно вокруг глаза к этому кадру; false — окна нет (теней нет). */
+    /** Window around the eye for this frame; false — no window (no shadows). */
     static boolean update(ClientLevel level, Vec3 eye) {
         try {
             return ready = fill(level, eye);
@@ -126,8 +126,8 @@ public final class Solids {
     }
 
     private static boolean fill(ClientLevel level, Vec3 eye) {
-        // распаковка — плотная, до любой загрузки (как у OpenAir): ваниль оставляет длину строки и пропуски от своих
-        // картинок, и драйвер читал бы за 4 КБ секции
+        // tightly packed unpacking before any upload (like OpenAir): vanilla leaves row length and skips from its
+        // images, and the driver would read beyond a 4 KB section
         GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
@@ -135,7 +135,7 @@ public final class Solids {
         GL11.glPixelStorei(GL12.GL_UNPACK_SKIP_IMAGES, 0);
         ensure();
         if (level != world.get()) {
-            // секции прежнего мира в окне — не наши: их места заново нулями (места, ещё нулевые с создания, — как есть)
+            // previous-world sections in the window are not ours: zero their slots again (slots still zero since creation stay as is)
             for (int k = 0; k < ALL; k++) {
                 if (STORED[k] != Long.MIN_VALUE || ZEROED[k] != FRESH) ZEROED[k] = Long.MIN_VALUE;
                 STORED[k] = Long.MIN_VALUE;
@@ -159,10 +159,10 @@ public final class Solids {
                     boolean due = Math.floorMod(i++ - refreshAt, ALL) < REFRESH || close;
                     if (STORED[slot] == key && (!due || PRINT[slot] == print(level, sx, sy, sz))) continue;
                     if (STORED[slot] != key && ZEROED[slot] != key) {
-                        // чужая секция в этом месте — сразу нулями: блоки той секции здесь — не наши заслоны
+                        // another section in this slot — zero immediately: its blocks are not our occluders here
                         if (ZEROED[slot] != FRESH) upload(sx, sy, sz, zeros);
                         ZEROED[slot] = key;
-                        // в месте теперь нули, не блоки прежней секции: та, вернувшись, читается заново
+                        // slot now contains zeroes, not previous section blocks: reread that section if it returns
                         STORED[slot] = Long.MIN_VALUE;
                     }
                     PENDING[pending] = slot;
@@ -179,13 +179,13 @@ public final class Solids {
         }
         refreshAt = (refreshAt + REFRESH) % ALL;
         long start = System.nanoTime();
-        // секции у огней — не больше половины бюджета, по очереди с кадра на кадр
+        // fire sections get at most half the budget, rotating between frames
         for (int k = 0; k < nearPending; k++) {
             if (k > 0 && System.nanoTime() - start > FILL_NANOS / 2) break;
             read(level, NEAR_PENDING[Math.floorMod(k + nearTurn, nearPending)]);
         }
         nearTurn = Math.floorMod(nearTurn + 1, ALL);
-        // остальное окно — от глаза к краю, хоть одна секция
+        // remaining window from eye to edge, at least one section
         int far = pending - nearPending;
         Arrays.sort(ORDER, 0, far);
         for (int k = 0; k < far; k++) {
@@ -206,16 +206,16 @@ public final class Solids {
         return (Math.floorMod(sx, SX) * SY + Math.floorMod(sy, SY)) * SX + Math.floorMod(sz, SX);
     }
 
-    /** Секций в одной пачке загрузки (дальше — ещё пачка в том же кадре). */
+    /** Sections per upload batch (more batches in the same frame if needed). */
     static final int BATCH = 128;
     private static int pbo = -1, batched;
     private static ByteBuffer batch;
     private static final int[] BATCH_AT = new int[BATCH * 3];
 
     /**
-     * Секция в пачку загрузки кадра ({@link #flush}): загрузка прямо из памяти в текстуру, которую ещё читает прошлый
-     * кадр, ждала видеокарту (шлагбаум LFX9: время слоя в первую секунду после ночного взрыва +6,7 мс при том же
-     * процессорном), а из буфера распаковки копия встаёт в очередь видеокарты.
+     * Add section to a frame upload batch ({@link #flush}): direct memory upload to a texture still read by the previous
+     * frame waited for the GPU (look gate LFX9: +6.7 ms layer time in the first second after a nighttime blast, same
+     * CPU time), whereas a pixel-unpack-buffer copy queues on the GPU.
      */
     private static void upload(int sx, int sy, int sz, ByteBuffer data) {
         if (batched == BATCH) flush();
@@ -227,9 +227,9 @@ public final class Solids {
     }
 
     /**
-     * Пачка — в текстуру (привязанную): буфер распаковки заводится заново на каждую пачку (старый, который ещё читает
-     * видеокарта, драйвер отпускает сам — ожидания нет), секции — из него по смещению; буфер отвязывается (иначе чужие
-     * загрузки текстур читали бы из него).
+     * Upload batch to the bound texture: create a fresh unpack buffer per batch (driver releases the old buffer still read by the
+     * GPU itself — no wait); sections use offsets within it; unbind buffer afterwards (otherwise other
+     * texture uploads would read from it).
      */
     private static void flush() {
         if (batched == 0) return;
@@ -246,7 +246,7 @@ public final class Solids {
         batched = 0;
     }
 
-    /** Секция pending-номера o: заслоны — в текстуру, место помнит её. */
+    /** Pending section o: upload occluders, remember the section in its slot. */
     private static void read(ClientLevel level, int o) {
         long key = PENDING_KEY[o];
         int sx = SectionPos.x(key), sy = SectionPos.y(key), sz = SectionPos.z(key);
@@ -256,8 +256,8 @@ public final class Solids {
     }
 
     /**
-     * Отпечаток блоков секции: состояния палитры по номерам и хранилище номеров (как у снимков руин ядерки), без обхода
-     * мест; секции нет (чанка нет, вне мира) или в ней один воздух — 0.
+     * Section block fingerprint: indexed palette states and index storage (as in nuclear ruin snapshots), without scanning
+     * positions; no section (no chunk, outside world) or only air — 0.
      */
     private static long print(ClientLevel level, int sx, int sy, int sz) {
         if (sy < level.getMinSection() || sy >= level.getMaxSection()) return 0;
@@ -274,9 +274,9 @@ public final class Solids {
     }
 
     /**
-     * Отпечаток: ширина номера, состояния палитры, слова хранилища — перемешиванием fmix64 (murmurHash3) после каждого:
-     * у умножения разница идёт только вверх, у {@code HashCommon.mix} старший бит выходит постоянным узором, и правки в
-     * соседних словах гасили бы друг друга (ревью #399); у fmix64 — лавина во все биты.
+     * Fingerprint: index width, palette states, storage words — fmix64 (murmurHash3) mixing after each:
+     * multiplication propagates differences only upward; {@code HashCommon.mix} gives the top bit a fixed pattern, so changes in
+     * neighbouring words would cancel (review #399); fmix64 avalanches into every bit.
      */
     static long fingerprint(int bits, int[] states, long[] raw) {
         long h = it.unimi.dsi.fastutil.HashCommon.murmurHash3(0x9E3779B97F4A7C15L ^ bits);
@@ -285,13 +285,13 @@ public final class Solids {
         return h;
     }
 
-    /** Заслоны секции (x — быстрее всех, потом y, потом z — как у текстуры): {@link #zeros}, {@link #full} или {@link #section}. */
+    /** Section occluders (x fastest, then y, then z — texture order): {@link #zeros}, {@link #full} or {@link #section}. */
     private static ByteBuffer blocks(ClientLevel level, int sx, int sy, int sz) {
         if (sy < level.getMinSection() || sy >= level.getMaxSection()) return zeros;
         LevelChunk chunk = level.getChunkSource().getChunkNow(sx, sz);
         if (chunk == null) return zeros;
         LevelChunkSection s = chunk.getSection(level.getSectionIndexFromSectionY(sy));
-        // палитра: заслонов нет или все — заслоны (maybeHas — «может быть»: нет — значит точно нет)
+        // palette: no occluders or all occluders (maybeHas means “possibly”: false means definitely none)
         if (s.hasOnlyAir() || !s.maybeHas(SOLID)) return zeros;
         if (!s.maybeHas(SOLID.negate())) return full;
         section.clear();
@@ -304,9 +304,9 @@ public final class Solids {
     }
 
     /**
-     * Окно этого кадра — шейдеру {@code s}: текстура на блоке {@link #UNIT} ({@code HeatSolids}), {@code HeatSolidsAt} —
-     * нижний угол окна от глаза кадра (xyz) и есть ли окно (w), {@code HeatSolidsWrap} — где этот угол в текстуре. Как
-     * {@link OpenAir#bind}: номер блока — в саму программу, при каждой привязке.
+     * This frame's window to shader {@code s}: texture on unit {@link #UNIT} ({@code HeatSolids}), {@code HeatSolidsAt} —
+     * eye-relative lower corner (xyz), window present (w), {@code HeatSolidsWrap} — that corner's texture position. Like
+     * {@link OpenAir#bind}: unit index directly into the program, on every bind.
      */
     static void bind(ShaderInstance s) {
         boolean on = ready && texture >= 0;
@@ -322,7 +322,7 @@ public final class Solids {
         ProgramManager.glUseProgram(program);
     }
 
-    /** Окно больше не на этом месте (после прохода): трёхмерная текстура снята с блока, чтобы не мешать чужим программам. */
+    /** Window no longer bound here (after the pass): 3D texture unbound from its unit to avoid interfering with other programs. */
     static void unbind() {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
@@ -343,7 +343,7 @@ public final class Solids {
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-        // всё окно — нулями одним вызовом (содержимое без данных не определено), места — «обнулены при создании»
+        // zero entire window in one call (uninitialized contents are undefined); slots marked “zeroed at creation”
         ByteBuffer blank = MemoryUtil.memCalloc(SIZE_XZ * SIZE_Y * SIZE_XZ);
         GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, blank);
         MemoryUtil.memFree(blank);

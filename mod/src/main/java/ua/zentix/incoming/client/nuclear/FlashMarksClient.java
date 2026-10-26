@@ -22,25 +22,25 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Следы вспышки у клиента: по чанку — то, что прислал сервер ({@link S2C.NukeFlashMarks}), пока чанк у клиента.
- * Слой подрыва виден, когда часы мира дошли до вспышки: повтор Flashback, перемотанный на миг до подрыва, показывает
- * стены чистыми (чанки перемотки приходят без руин, а следы клиент помнит). Смена видимости или следов — секции
- * чанка строятся заново ({@code setSectionDirty}), грани рисует {@link FlashMarksMesh}.
+ * Client flash marks: per chunk, what the server sent ({@link S2C.NukeFlashMarks}), while the chunk is on the client.
+ * A detonation layer becomes visible when the world clock reaches the flash: a Flashback replay sought to just before detonation shows
+ * clean walls (seek chunks arrive without ruins, while the client remembers the marks). Changes to visibility or marks rebuild
+ * the chunk sections ({@code setSectionDirty}); {@link FlashMarksMesh} draws the faces.
  * <p>
- * Читают и потоки сборки секций (Sodium может звать событие секции не в потоке клиента): карта — потокобезопасная,
- * следы — неизменяемые.
+ * Section-building threads also read these (Sodium may call the section event off the client thread): the map is thread-safe,
+ * the marks are immutable.
  */
 public final class FlashMarksClient {
-    /** Допуск часов: клиент узнаёт время раз в секунду, и часы прыгают назад, когда сервер догоняет отставание. */
+    /** Clock tolerance: the client receives the time once per second, and its clock jumps back when the server catches up. */
     private static final int CLOCK_SLACK = 20;
 
     private static final Map<Long, FlashMarks> CHUNKS = new ConcurrentHashMap<>();
-    /** Сколько слоёв чанка видно сейчас (поток клиента): смена — пересборка его секций. */
+    /** How many chunk layers are visible now (client thread): a change rebuilds its sections. */
     private static final Long2IntOpenHashMap SHOWN = new Long2IntOpenHashMap();
 
     private FlashMarksClient() {}
 
-    /** Пакет сервера (поток клиента): следы чанка целиком. */
+    /** Server packet (client thread): all marks for the chunk. */
     public static void receive(S2C.NukeFlashMarks p) {
         FlashMarks old = p.marks().isEmpty() ? CHUNKS.remove(p.chunk()) : CHUNKS.put(p.chunk(), p.marks());
         INDEX.remove(p.chunk());
@@ -49,17 +49,17 @@ public final class FlashMarksClient {
         SHOWN.put(p.chunk(), shown(p.marks(), now()));
     }
 
-    /** Метки одного видимого слоя в одной секции: гарь, силуэты и их маски ({@link FlashMarks.Layer}). */
+    /** Marks of one visible layer in one section: char, silhouettes and their masks ({@link FlashMarks.Layer}). */
     record Slice(int[] chars, int[] shadows, long[] masks) {}
 
-    /** Метки видимых слоёв чанка в секции {@code sy} (номер секции в мире), по порядку слоёв; null — нет. */
+    /** Marks of visible chunk layers in section {@code sy} (world section index), in layer order; null — none. */
     @Nullable
     static List<Slice> section(long chunk, int sy, long now) {
         Index i = index(chunk, now);
         return i == null ? null : i.sections.get(sy);
     }
 
-    /** Ступени граней видимых слоёв чанка (ключ {@link FlashChar#key} → наибольшая ступень); null — следов нет. */
+    /** Face grades of visible chunk layers ({@link FlashChar#key} → highest grade); null — no marks. */
     @Nullable
     static Int2IntOpenHashMap levels(long chunk, long now) {
         Index i = index(chunk, now);
@@ -67,8 +67,8 @@ public final class FlashMarksClient {
     }
 
     /**
-     * Видимые слои чанка, разобранные для меша один раз на эти следы и это число видимых слоёв: ступени граней и метки по
-     * секциям (секция строится заново — без прохода по всем меткам чанка). Только читаются.
+     * Visible chunk layers parsed for the mesh once for these marks and this visible-layer count: face grades and marks by
+     * section (rebuilding a section does not scan every mark in the chunk). Read-only.
      */
     private record Index(FlashMarks marks, int shown, Int2IntOpenHashMap levels, Int2ObjectOpenHashMap<List<Slice>> sections) {}
 
@@ -112,18 +112,18 @@ public final class FlashMarksClient {
         return built;
     }
 
-    /** Следы чанка как есть (проверки, сценарий). */
+    /** Chunk marks as stored (checks, scenario). */
     @Nullable
     public static FlashMarks of(long chunk) {
         return CHUNKS.get(chunk);
     }
 
-    /** Сколько чанков со следами у клиента. */
+    /** Number of chunks with marks on the client. */
     public static int chunks() {
         return CHUNKS.size();
     }
 
-    /** Часы дошли до вспышки слоя или ушли назад (перемотка): секции чанка — заново. */
+    /** The clock reached a layer flash or moved backward (seek): rebuild the chunk sections. */
     public static void tick() {
         if (CHUNKS.isEmpty()) return;
         long now = now();
@@ -148,8 +148,8 @@ public final class FlashMarksClient {
     }
 
     /**
-     * Пересобрать секции чанка, где есть следы, и секции соседа за краем, у которого следы есть: углы граней у края
-     * сглаживаются по граням соседнего чанка ({@link FlashMarksMesh}).
+     * Rebuild chunk sections containing marks, and sections across the edge in a marked neighbor: face corners at the edge
+     * are smoothed against faces in the neighboring chunk ({@link FlashMarksMesh}).
      */
     private static void dirty(long chunk, @Nullable FlashMarks m) {
         if (m == null || m.isEmpty()) return;
@@ -177,8 +177,8 @@ public final class FlashMarksClient {
     }
 
     /**
-     * Чанк ушёл с клиента: его следы — тоже (вернётся — сервер пришлёт снова). В повторе Flashback — остаются: снимок
-     * куска записи несёт лишь последний пакет следов, и перемотанный повтор иначе терял бы их у всех чанков, кроме одного.
+     * A chunk left the client: remove its marks too (the server resends them when it returns). Keep them in Flashback replay: a snapshot
+     * of a recording segment contains only the last marks packet; a sought replay would otherwise lose marks in all but one chunk.
      */
     public static void onChunkUnload(ChunkEvent.Unload e) {
         if (!e.getLevel().isClientSide() || ua.zentix.incoming.client.replay.Replay.active()) return;
@@ -188,7 +188,7 @@ public final class FlashMarksClient {
         INDEX.remove(key);
     }
 
-    /** Мир клиента сменился (измерение, выход). */
+    /** Client world changed (dimension, logout). */
     public static void onLevelUnload(LevelEvent.Unload e) {
         if (e.getLevel().isClientSide()) reset();
     }

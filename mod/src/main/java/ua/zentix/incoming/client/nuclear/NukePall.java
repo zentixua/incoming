@@ -25,15 +25,15 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Пелена после ударной волны у клиента ({@link PallField}): что рисует слой эффектов ({@link #frame} — до двух самых
- * заметных подрывов, таблица и свет кадра для {@link PallPass}, и в тех же лучах — грибы кадра, {@link MushroomField}),
- * и что пелена делает у камеры — глушит звук ({@link #muffle}) и сыплет пепел ({@link NukeAsh}). Своего пакета нет:
- * поле — по модели подрыва.
+ * Client pall after the shock wave ({@link PallField}): what the effects layer renders ({@link #frame} — up to two most
+ * noticeable detonations, table and frame light for {@link PallPass}, with frame mushrooms in the same rays, {@link MushroomField}),
+ * and what pall does at the camera — muffles sound ({@link #muffle}) and sheds ash ({@link NukeAsh}). No separate packet:
+ * the field follows the detonation model.
  */
 public final class NukePall {
-    /** Плитка шума у 15 кт, блоков на метр масштаба: клубы — по 60 м, мелкие края — по 20. */
+    /** Noise tile at 15 kt, blocks per scale meter: billows 60 m, small edges 20. */
     static final double TILE_M = 256;
-    /** Плотность пыли у камеры (1/блок) → глухость: в самой густой (видно на 40 м) — 0,9. */
+    /** Dust density at camera (1/block) → muffling: 0.9 in the densest dust (visibility 40 m). */
     static final double MUFFLE_PER_SIGMA = 25;
 
     private static final PallPass.Frame FRAME = new PallPass.Frame();
@@ -41,35 +41,35 @@ public final class NukePall {
     private static final double[] DRIFT = new double[2], SURGE = new double[3];
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f(), CULL = new Vector3f();
     private static final float[] GLOW = new float[8];
-    /** Числа стены пыли слота ({@link BlastWall#slot}) — в кадр и у камеры. */
+    /** Slot dust-wall parameters ({@link BlastWall#slot}) for the frame and camera. */
     private static final float[] WALL = new float[BlastWall.SLOT], WALL_TICK = new float[BlastWall.SLOT];
-    /** Цвет толстой пыли ({@code DUST} в {@code fx_pall.glsl}, цвет стены пыли). */
+    /** Thick-dust color ({@code DUST} in {@code fx_pall.glsl}, dust-wall color). */
     public static final double[] DUST = {0.60, 0.53, 0.45};
-    /** Цвет толстого дыма над пожарами ({@code SMOKE} в {@code fx_pall.glsl}) и пламени пожаров на экране ({@code FIRE}). */
+    /** Thick-smoke color above fires ({@code SMOKE} in {@code fx_pall.glsl}) and on-screen fire flame ({@code FIRE}). */
     static final double[] SMOKE = {0.30, 0.27, 0.24}, FIRE = {1.0, 0.541, 0.180};
-    /** Асимметрия пыли после дельта-Эддингтона и альбедо пыли и дыма по каналам ({@code PALL_DUST_G}, {@code PALL_DUST_W}, {@code PALL_SMOKE_W}). */
+    /** Dust asymmetry after delta-Eddington and per-channel dust and smoke albedos ({@code PALL_DUST_G}, {@code PALL_DUST_W}, {@code PALL_SMOKE_W}). */
     private static final double DUST_G = PallLight.truncated(PallLight.DUST_G);
     private static final double[] DUST_W = albedo(DUST), SMOKE_W = albedo(SMOKE);
-    /** Свет кадра и стена у пыли камеры ({@link #dustColor}). */
+    /** Frame light and wall for camera dust ({@link #dustColor}). */
     private static final Sky SKY = new Sky();
     private static final float[] DUST_WALL = new float[BlastWall.SLOT], DUST_GLOW = new float[8];
-    /** Подрывы слотов кадра — для огненного шторма после света кадра. */
+    /** Frame-slot detonations for the firestorm after frame lighting. */
     private static final ClientNuclear.Active[] SLOTTED = new ClientNuclear.Active[2];
     /**
-     * Плоскости пирамиды видимости, по которым пелена отсекается, — все, кроме дальней: дальняя плоскость — 4 прорисовки,
-     * а пелена видна и дальше (над LOD Distant Horizons, на горизонте).
+     * Frustum planes used to cull pall — all except far: the far plane is 4 render distances,
+     * while pall is visible farther (above Distant Horizons LOD, on the horizon).
      */
     private static final int SIDES_AND_NEAR = FrustumIntersection.PLANE_MASK_NX | FrustumIntersection.PLANE_MASK_PX
             | FrustumIntersection.PLANE_MASK_NY | FrustumIntersection.PLANE_MASK_PY | FrustumIntersection.PLANE_MASK_NZ;
-    /** Ослабление у камеры (1/блок), из него — водяной пыли, и глухость 0..1 — для звукового потока. */
+    /** Camera extinction (1/block), its mist component, and muffling 0..1 for the sound thread. */
     private static volatile float sigma, mist, muffle;
-    /** Толща пыли у камеры по вертикали — над ней и под ней до земли (пелена и голова стены): докуда идёт луч ({@link #frame}). */
+    /** Vertical dust optical depth at camera, above and below down to ground (pall and wall head): ray reach ({@link #frame}). */
     private static volatile float tauUp, tauDown;
     private static volatile double earX, earY, earZ;
 
     private NukePall() {}
 
-    /** Качество из настройки игрока. */
+    /** Quality from player settings. */
     static PallPass.Quality quality() {
         return switch (IncomingConfig.CLIENT.nukeDustQuality.get()) {
             case OFF -> PallPass.Quality.OFF;
@@ -80,14 +80,14 @@ public final class NukePall {
     }
 
     /**
-     * Глушит ли пелена звуки: только пока она есть на экране (не OFF) и звук вдали глушится по настройке «Глушить звук
-     * вдали и за преградой» (её и Sound Physics Remastered не отменяет: пыли он не знает).
+     * Whether pall muffles sounds: only while on screen (not OFF), and with "Muffle distant and occluded sounds"
+     * enabled (Sound Physics Remastered does not override it: it has no dust knowledge).
      */
     static boolean muffles() {
         return quality() != PallPass.Quality.OFF && IncomingConfig.CLIENT.soundMuffling.get();
     }
 
-    /** Тик клиента: пелена у камеры — звук и пепел; шум для объёма (пелены и гриба) — в фоне с первого подрыва. */
+    /** Client tick: pall at camera — sound and ash; volume noise (pall and mushroom) in the background from the first detonation. */
     static void tick(ClientLevel level, Vec3 cam) {
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
         FireStorms.tick(all);
@@ -99,15 +99,15 @@ public final class NukePall {
         }
         PallPass.prepare();
         double s = 0, wet = 0, densest = 0, dust = 0, headMax = 0, headWet = 0, up = 0, down = 0;
-        // пепел и ветер — от подрыва, чья пелена у камеры гуще всех; пелена на экране — от самой густой головы стены
+        // ash and wind from the detonation with densest camera pall; screen veil from the densest wall head
         ClientNuclear.Active nearest = null, headAt = null;
         for (ClientNuclear.Active a : all) {
             double ticks = a.ticks(0);
             Detonation d = a.d;
             double dx = cam.x - d.burst().x, dz = cam.z - d.burst().z;
-            // глаз над землёй под эпицентром и рельеф под ним (карта пелены)
+            // eye above ground zero and terrain below it (pall map)
             double eye = cam.y - d.groundY(), floor = a.ground.at(cam.x, cam.z);
-            // голова стены пыли у камеры — средняя, как в кадре (рельеф и вода под камерой — по карте пелены)
+            // dust-wall head at camera — mean, as in the frame (terrain and water below camera from pall map)
             double head = 0, wetHere = 0;
             if (a.wall.slot(a.seconds(0), WALL_TICK) && WALL_TICK[3] > 0) {
                 wetHere = a.ground.hasWater() ? a.ground.water(cam.x, cam.z) : 0;
@@ -133,12 +133,12 @@ public final class NukePall {
                 nearest = a;
             }
             s += here;
-            // над водой голова — брызги
+            // over water, head is spray
             wet += head * wetHere + (pall ? a.pall.mist(dx, dz, eye, floor, ticks, water) : 0);
             dust = Math.max(dust, a.pall.ashRate(dx, dz, ticks, water));
         }
-        // под землёй пыли нет: у глаза — доля наружного воздуха, как у луча пелены (свет неба / 15, fx/layer/OpenAir; в
-        // измерении без неба — весь воздух) — в штольне пыль не глушит звук, не обрывает луч и не встаёт пеленой у камеры
+        // no underground dust: at eye use outdoor-air fraction, like the pall ray (sky light / 15, fx/layer/OpenAir; all air in a
+        // skyless dimension) — in a mine tunnel dust does not muffle sound, clip the ray or form a camera veil
         double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(cam)) / 15.0 : 1;
         s *= open;
         wet *= open;
@@ -149,7 +149,7 @@ public final class NukePall {
         tauDown = (float) down;
         if (headAt != null && !drawsHead(headAt, cam)) NukeDust.veil(headAt, cam, headMax, headWet > 0.5);
         if (muffles()) {
-            // глухость меняется плавно: пелена накрывает за секунды
+            // muffling changes smoothly: pall covers over seconds
             float target = (float) (1 - Math.exp(-MUFFLE_PER_SIGMA * s));
             muffle += (target - muffle) * 0.1f;
         } else {
@@ -158,11 +158,11 @@ public final class NukePall {
         earX = cam.x;
         earY = cam.y;
         earZ = cam.z;
-        // обломки — из пыли: мгла брызг их не несёт
+        // debris comes from dust: spray haze carries none
         NukeAsh.tick(level, cam, dust, s - wet, nearest);
     }
 
-    /** Доля воды под пеленой подрыва (dx, dz — от эпицентра) — по его карте {@link PallGround}. */
+    /** Water fraction beneath detonation pall (dx, dz from ground zero), from its {@link PallGround} map. */
     static PallField.Water water(ClientNuclear.Active a) {
         double x0 = a.d.burst().x, z0 = a.d.burst().z;
         return (dx, dz) -> a.ground.water(x0 + dx, z0 + dz);
@@ -175,16 +175,16 @@ public final class NukePall {
         NukeAsh.reset();
     }
 
-    /** Пелена больше не глушит, разом (перемотка повтора, выход, настройка): петлям — фильтр без неё. */
+    /** Clear pall muffling at once (replay seek, logout, setting): loops receive a filter without it. */
     private static void unmuffle() {
         if (muffle > 0.01f) SoundFilters.restoreLoops();
         muffle = 0;
     }
 
     /**
-     * Насколько пелена глушит этот звук: 0 — никак, до 0,9 в самой густой пыли — по плотности у уха и пути через неё
-     * (звук у самого уха и интерфейс — нет; пелена выключена или звук вдали не глушится — {@link #muffles}). Зовут из
-     * звукового потока.
+     * How much pall muffles this sound: 0 — none, up to 0.9 in the densest dust, from ear density and path through dust
+     * (not for sound at the ear or UI; pall disabled or distant sound not muffled — {@link #muffles}). Called from
+     * the sound thread.
      */
     public static float muffle(SoundInstance sound) {
         float m = muffle;
@@ -196,12 +196,12 @@ public final class NukePall {
     }
 
     /**
-     * Пелена и грибы кадра для слоя эффектов: пелена — до двух подрывов, ближайших к камере по краю их пелены или головы
-     * стены ({@link #outside}), из тех, у
-     * кого в таблице хоть что-то есть (до фронта и после — пусто) и чья рамка в кадре ({@code frustum} — пирамида
-     * видимости от глаза, без дальней плоскости); грибы — {@link MushroomField#frame}. Пелена выключена в настройке —
-     * только грибы, на ступени LOW (другого гриба нет). null — ни пелены, ни гриба в кадре, ни шара, что светит на мир
-     * ({@link MushroomField#balls}): тогда слой не тратит на них ни одного прохода.
+     * Frame pall and mushrooms for the effects layer: pall from up to two detonations nearest the camera by their pall or wall-head edge
+     * ({@link #outside}), among those
+     * with anything in their table (empty before and after the front) and bounds in frame ({@code frustum} — eye frustum
+     * without far plane); mushrooms — {@link MushroomField#frame}. Pall disabled in settings means
+     * mushrooms only at LOW (no alternative mushroom). null — no pall or mushroom in frame, nor a ball lighting the world
+     * ({@link MushroomField#balls}): the layer spends no passes on them.
      */
     @Nullable
     public static PallPass.Frame frame(ClientLevel level, Vec3 eye, float partial, FrustumIntersection frustum) {
@@ -211,12 +211,12 @@ public final class NukePall {
         PallPass.Quality q = quality();
         PallPass.Frame f = FRAME;
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial)), air = Sight.KOSCHMIEDER / range;
-        // воздух до грибов, пелены и стены — в метрах модели (масштаб у всех подрывов один)
+        // air to mushrooms, pall and wall in model meters (all detonations share one scale)
         MushroomField.air(all.get(0).d, eye, range, f.air);
-        // свет кадра — до грибов: днём в кадр идёт и гриб, чья тень в нём (MushroomField.frame)
+        // frame light before mushrooms: by day include mushrooms whose shadow enters the frame (MushroomField.frame)
         light(level, eye, partial, f);
         f.mushroomCount = MushroomField.frame(all, eye, partial, frustum, f.sun, level.getMinBuildHeight(), level.getMaxBuildHeight(), f.mushrooms);
-        // свет шаров на мире — от всех подрывов: шар за спиной освещает землю перед глазом
+        // ball light on world from all detonations: a ball behind the viewer lights ground ahead
         openSky(level, f.openSky, f.faceShade);
         double open = 0.2126 * PallLight.linear(f.openSky.x) + 0.7152 * PallLight.linear(f.openSky.y) + 0.0722 * PallLight.linear(f.openSky.z);
         f.ballsLit = MushroomField.balls(all, eye, partial, air, f.exposure, open, f.balls, f.ballLight);
@@ -239,7 +239,7 @@ public final class NukePall {
         f.wall1.zero();
         f.wilson0.zero();
         f.wilson1.zero();
-        // мир кадра — чанки в дальности прорисовки (с запасом на край по чанкам): луч в пустоту прошёл их, ничего не задев
+        // frame world — chunks within render distance (chunk-edge margin): a ray into empty space crossed them without hitting anything
         f.floorFrom = Math.max(16, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16 - 24);
         f.min.set(Float.MAX_VALUE);
         f.max.set(-Float.MAX_VALUE);
@@ -247,7 +247,7 @@ public final class NukePall {
         float bottom = (float) (level.getMinBuildHeight() - eye.y);
         for (int i = 0; i < visible.size() && k < 2; i++) if (slot(visible.get(i), k, eye, partial, frustum, bottom, f)) SLOTTED[k++] = visible.get(i);
         if (k == 0 && f.mushroomCount == 0 && !f.ballsLit) return null;
-        // без пелены — рамка нулевая: луч в неё не входит (перевёрнутая рамка вышла бы всем лучом)
+        // without pall use zero bounds: the ray cannot enter (inverted bounds would span the entire ray)
         if (k == 0) {
             f.min.zero();
             f.max.zero();
@@ -255,17 +255,17 @@ public final class NukePall {
         MushroomField.fire(partial, f);
         float clouds = level.effects().getCloudHeight();
         FireStorms.frame(SLOTTED, k, eye, partial, frustum, Float.isNaN(clouds) ? 1e6f : (float) (clouds - eye.y), f);
-        // докуда идёт луч — по пыли у глаза и её толще над ним и под ним (pallClip); выключенная пелена не рисуется — и
-        // гриб за ней не прячет
+        // ray reach from eye dust and optical depth above and below it (pallClip); disabled pall is not rendered, and
+        // does not hide the mushroom behind it
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
         else f.eyeDust.set(sigma, tauUp, tauDown);
         return f;
     }
 
     /**
-     * Кадр прохода пелены без ядерки — для дыма обычных взрывов ({@code client/fx/smoke/BlastClouds}): воздух, солнце, небо,
-     * свет неба на экране и привыкание глаза — как у {@link #frame}; пелены, грибов, шаров, шторма, стены и воды нет (их
-     * числа — нули). Качество — как у грибов при выключенной пелене: не ниже LOW (дыма другого нет).
+     * Pall-pass frame without the nuke, for conventional explosion smoke ({@code client/fx/smoke/BlastClouds}): air, sun, sky,
+     * on-screen sky light and eye adaptation match {@link #frame}; no pall, mushrooms, balls, storm, wall or water (their
+     * parameters are zero). Quality matches mushrooms with pall disabled: at least LOW (no alternative smoke).
      */
     public static PallPass.Frame lightFrame(ClientLevel level, Vec3 eye, float partial) {
         PallPass.Frame f = FRAME;
@@ -310,10 +310,10 @@ public final class NukePall {
     }
 
     /**
-     * Свет открытого неба на белом блоке, как его рисует Minecraft, на экране — в {@code out}: карта освещения кадра
-     * (небо 15, свет блоков 0; время суток, яркость в настройках, зелья, измерение), и затенение граней блоков измерения
-     * в {@code shade} (верх, низ, север и юг, запад и восток). По ним вывод на кадр узнаёт цвет мира под светом шара:
-     * пиксель, делённый на свет неба и затенение своей грани, — цвет самого блока.
+     * Open-sky light on a white block as drawn by Minecraft, on screen, into {@code out}: frame lightmap
+     * (sky 15, block light 0; time of day, brightness setting, potions, dimension), and dimension block-face shading
+     * into {@code shade} (top, bottom, north and south, west and east). Used by frame output to infer world color under ball light:
+     * a pixel divided by sky light and its face shading gives the block's own color.
      */
     private static void openSky(ClientLevel level, Vector3f out, Vector4f shade) {
         int c = Minecraft.getInstance().gameRenderer.lightTexture().lightPixels.getPixelRGBA(0, 15);
@@ -322,15 +322,15 @@ public final class NukePall {
                 level.getShade(Direction.EAST, true));
     }
 
-    /** Есть ли что рисовать у подрыва: пелена, голова стены пыли или облако Вильсона. */
+    /** Whether the detonation has anything to draw: pall, dust-wall head or Wilson cloud. */
     private static boolean visible(ClientNuclear.Active a, float partial) {
         double t = a.seconds(partial);
         return a.pall.visible(a.ticks(partial)) || a.wall.reach(t) > 0 || a.wall.wilsonReach(t) > 0;
     }
 
     /**
-     * Насколько камера вне пелены подрыва и головы его стены (по земле), блоки; 0 — внутри. По одной пелене голова,
-     * которая дошла до камеры дальше пелены, уступала бы слот подрывам, в чьей пелене камера, и у глаза не рисовалась.
+     * How far the camera is outside detonation pall and wall head (along ground), blocks; 0 — inside. Pall alone would make a head
+     * that reached the camera beyond the pall lose its slot to detonations whose pall contains the camera, so it would not render at the eye.
      */
     private static double outside(ClientNuclear.Active a, Vec3 eye, float partial) {
         double r = Math.max(a.pall.extent(a.ticks(partial)), a.wall.reach(a.seconds(partial)));
@@ -338,11 +338,11 @@ public final class NukePall {
     }
 
     /**
-     * Слот k ({@code pall.glsl}): поле подрыва, его строки таблицы, базисная волна и рамка; false — слот не нужен (в таблице
-     * пусто и волны нет, или рамка вне кадра), он остаётся свободным для следующего подрыва. Чего под пеленой нет — суши
-     * или воды ({@link PallGround}), — того нет и в таблице: подрыв посреди моря, когда брызги выпали, а волна растаяла,
-     * слота не занимает. {@code bottom} — низ мира от глаза: в кадре подрыв и тогда, когда видна только земля под пеленой,
-     * — днём на ней тень пелены ({@code fx_pall_composite}), а долина или карьер под эпицентром бывают глубже низа пелены.
+     * Slot k ({@code pall.glsl}): detonation field, table rows, base surge and bounds; false — slot unneeded (table
+     * empty and no surge, or bounds out of frame), leaving it free for the next detonation. Land or water absent beneath pall
+     * ({@link PallGround}) is also absent from the table: a detonation at open sea uses no slot once spray has settled and the surge
+     * has faded. {@code bottom} is world bottom relative to eye: include a detonation even if only ground beneath the pall is visible,
+     * because by day it receives the pall shadow ({@code fx_pall_composite}), and a valley or quarry below ground zero may be deeper than the pall bottom.
      */
     private static boolean slot(ClientNuclear.Active a, int k, Vec3 eye, float partial, FrustumIntersection frustum, float bottom,
                                 PallPass.Frame f) {
@@ -354,7 +354,7 @@ public final class NukePall {
         double top = 1;
         boolean any = false;
         for (int i = 0; i < PallField.ROWS * PallPass.WIDTH; i++) {
-            // пыль, брызги или мгла
+            // dust, spray or haze
             any |= ROW[4 * i] > 0;
             top = Math.max(top, ROW[4 * i + 1]);
         }
@@ -362,7 +362,7 @@ public final class NukePall {
             any = true;
             top = Math.max(top, SURGE[1]);
         }
-        // стена пыли: голова и облако Вильсона — в том же объёме
+        // dust wall: head and Wilson cloud in the same volume
         double seconds = a.seconds(partial);
         boolean wall = a.wall.slot(seconds, WALL);
         any |= wall;
@@ -370,9 +370,9 @@ public final class NukePall {
         p.drift(ticks, DRIFT);
         double plume = p.plume(ticks);
         float cx = (float) (d.burst().x - eye.x), cz = (float) (d.burst().z - eye.z), ground = (float) (d.groundY() - eye.y);
-        // рамка: снос пыли и шлейф мглы — в любую сторону от эпицентра, ниже земли под ним — долины на всю высоту, над
-        // холмами слой — от их склонов (pallField); голова стены — на рельефе карты (pallWallSpans), облако Вильсона —
-        // вокруг точки подрыва
+        // bounds: dust drift and haze plume in any direction from ground zero; valleys below it over full height; above
+        // hills the layer starts at their slopes (pallField); wall head follows map terrain (pallWallSpans), Wilson cloud
+        // surrounds the detonation point
         float r = (float) Math.max(p.extent(ticks), Math.max(a.wall.reach(seconds) + 1, a.wall.wilsonReach(seconds)));
         LO.set(cx - r, (float) (ground - top), cz - r);
         HI.set(cx + r, (float) (ground + Math.max(a.ground.high(), 0) + top * (1 + PallField.BUMPS) * 1.05), cz + r);
@@ -391,9 +391,9 @@ public final class NukePall {
         m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir()));
         m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
         tableRows(m, k);
-        // вода слота: базисная волна и есть ли под пеленой вода (иначе шейдер карту воды не читает)
+        // slot water: base surge, and whether water exists beneath pall (otherwise shader skips the water map)
         (k == 0 ? f.water0 : f.water1).set((float) SURGE[0], (float) SURGE[1], (float) SURGE[2], water ? 1 : 0);
-        // свет шара и пожаров на пыли (CloudPuffs.pallLight)
+        // ball and fire light on dust (CloudPuffs.pallLight)
         a.puffs.pallLight(MushroomField.shape(a, partial), GLOW);
         (k == 0 ? f.glow0 : f.glow1).set(GLOW[0], GLOW[1], GLOW[2], GLOW[3]);
         (k == 0 ? f.hot0 : f.hot1).set(GLOW[4], GLOW[5], GLOW[6], GLOW[7]);
@@ -406,11 +406,11 @@ public final class NukePall {
     }
 
     /**
-     * Солнце, небо и пожары кадра. Свет солнца и неба — линейный ({@link PallLight}), белая горизонтальная стена под
-     * полуденным солнцем и небом — 1, как верх белого блока днём. Небо — каким его рисует Minecraft, в линейном
-     * ({@link PallLight#SKY}: в полдень — около пятой части дневного света), солнце — остальное до белого: синее неба взято
-     * из его пучка, вместе они — белый дневной свет. Свет солнца — что от него на белой стене к солнцу, неба — на белой
-     * стене под всем небом.
+     * Frame sun, sky and fires. Sun and sky light are linear ({@link PallLight}); a white horizontal wall under
+     * noon sun and sky is 1, like the top of a white block by day. Sky is Minecraft's drawn sky in linear space
+     * ({@link PallLight#SKY}: about a fifth of daylight at noon); sun supplies the rest to white: scattering removes sky blue
+     * from its beam, together they make white daylight. Sun light is its illumination of a white wall facing the sun; sky light
+     * is its illumination of a white wall under the whole sky.
      */
     private static void light(ClientLevel level, Vec3 eye, float partial, PallPass.Frame f) {
         sky(level, eye, partial, SKY);
@@ -420,31 +420,31 @@ public final class NukePall {
         f.base = SKY.base;
         f.exposure = SKY.exposure;
         f.glowOnSmoke = SKY.glowOnSmoke;
-        // зарево пожаров снизу на белой пелене, на экране поверх света неба (fx_pall берёт его разностью, pallLift; пыль
-        // и мгла — по своему альбедо): днём его почти не видно,
-        // ночью ярче ночного неба в десяток раз, но не как огонь (ярче — и вся мгла над горящим городом выходила
-        // ровно-оранжевой)
+        // fire glow from below on white pall, on screen above sky light (fx_pall uses its difference, pallLift; dust
+        // and haze use their own albedo): barely visible by day,
+        // ten times brighter than night sky at night, but not like fire (brighter made all haze above the burning city
+        // uniform orange)
         float fire = 0.6f * (1 - 0.75f * SKY.day);
         f.fireLight.set(fire, fire * 0.45f, fire * 0.16f);
-        // цвет тонкой пыли на экране (PallLight.thin) — квадратам слоя, перед которыми пелены почти нет
+        // on-screen thin-dust color (PallLight.thin) for layer quads with almost no pall in front
         float mu = Math.max(SKY.sy, 0.12f);
         f.ambient.set(thinDust(0, mu, f), thinDust(1, mu, f), thinDust(2, mu, f), 1);
     }
 
-    /** Солнце и небо кадра ({@link #light}): направление на солнце и сила дня, свет солнца и неба, свет неба на экране. */
+    /** Frame sun and sky ({@link #light}): sun direction and daylight strength, sun and sky light, on-screen sky light. */
     static final class Sky {
-        /** Направление на солнце (x, y; по z — 0) и сила дня 0..1. */
+        /** Sun direction (x, y; z = 0) and daylight strength 0..1. */
         float sx, sy, day;
-        /** Свет солнца и неба по каналам — линейный: белая горизонтальная стена в полдень — 1. */
+        /** Per-channel sun and sky light, linear: white horizontal wall at noon = 1. */
         final float[] sun = new float[3], sky = new float[3];
         /**
-         * Свет неба на экране (белая стена), привыкание глаза к нему ({@code Sight.adapted}: свечение гриба и свет шара
-         * в кадр) и сила отсвета пожаров на пыли при нём ({@link CloudPuffs#glowOnSmoke}).
+         * On-screen sky light (white wall), eye adaptation to it ({@code Sight.adapted}: mushroom glow and ball light
+         * into the frame), and resulting fire glow strength on dust ({@link CloudPuffs#glowOnSmoke}).
          */
         float base, exposure, glowOnSmoke;
     }
 
-    /** Солнце и небо в глазу {@code eye} — в {@code into} (как {@link #light}). */
+    /** Sun and sky at {@code eye} into {@code into} (as in {@link #light}). */
     static void sky(ClientLevel level, Vec3 eye, float partial, Sky into) {
         float angle = level.getTimeOfDay(partial) * Mth.TWO_PI;
         into.sx = -Mth.sin(angle);
@@ -454,30 +454,30 @@ public final class NukePall {
         into.day = day;
         Vec3 skyColor = level.getSkyColor(eye, partial);
         float night = 1 - day;
-        // ночью — не темнее света неба на клубах стены пыли и гриба (FarView.ambient, 0,17 на экране): цвет неба ночью почти
-        // чёрный, и пелена за фронтом была бы чёрным занавесом над городом, где стена пыли и мир ещё видны
+        // at night, no darker than sky light on wall and mushroom billows (FarView.ambient, 0.17 on screen): night sky color is almost
+        // black, so pall behind the front would form a black curtain over the city while the dust wall and world remain visible
         float ambient = FarView.ambient(level, partial);
         float floor = (float) PallLight.linear(nightSky(ambient, night));
         into.sky[0] = skyLight(skyColor.x, floor);
         into.sky[1] = skyLight(skyColor.y, floor);
         into.sky[2] = skyLight(skyColor.z, floor);
-        // низкое солнце — краснее (длинный путь через воздух): на экране 1, 0,63, 0,42 к полуденному
+        // low sun is redder (long path through air): screen 1, 0.63, 0.42 relative to noon
         float low = Mth.clamp(into.sy / 0.35f, 0, 1);
         into.sun[0] = sunLight(1, into.sky[0], day);
         into.sun[1] = sunLight((0.62 + 0.36 * low) / 0.98, into.sky[1], day);
         into.sun[2] = sunLight((0.38 + 0.52 * low) / 0.9, into.sky[2], day);
-        // отсвет стены и зарево пожаров (на экране) прибавляются к свету неба на экране — к этому
+        // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
-        // свечение гриба — чёрное тело в настоящей яркости (белая стена в полдень — 1): в кадр — с привыканием глаза к небу
+        // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
         into.exposure = (float) Sight.adapted(1, ambient);
         into.glowOnSmoke = (float) CloudPuffs.glowOnSmoke(ambient);
     }
 
     /**
-     * Пелена рисует голову стены подрыва {@code a} и пыль у глаза {@code eye} объёмом: качество не OFF, её шейдеры собрались
-     * и шум не сломался, и подрыв среди двух, что пелена берёт в кадр ({@link #frame}: ближайшие по краю пелены или головы,
-     * при равенстве — раньше в списке; без пирамиды видимости — клубы живут дольше взгляда). Нет — голову у глаза
-     * показывают пелена на экране и клубы у камеры ({@link NukeDust}).
+     * Pall renders detonation {@code a}'s wall head and dust at {@code eye} as a volume: quality not OFF, its shaders compiled
+     * and noise intact, and detonation among the two pall slots in the frame ({@link #frame}: nearest pall or head edge,
+     * list order breaks ties; no frustum — billows outlive the gaze). Otherwise a screen veil and camera billows
+     * ({@link NukeDust}) show the head at the eye.
      */
     static boolean drawsHead(ClientNuclear.Active a, Vec3 eye) {
         if (quality() == PallPass.Quality.OFF || !PallPass.available()) return false;
@@ -497,8 +497,8 @@ public final class NukePall {
     }
 
     /**
-     * Цвет пыли головы стены в точке (x, y, z) мира на экране, r, g, b в 0..1 — в {@code into} ({@link #dustLight}): пыль у
-     * камеры ({@link NukeDust}) — цвета самой стены там. false — стены нет.
+     * On-screen wall-head dust color at world (x, y, z), r, g, b in 0..1, into {@code into} ({@link #dustLight}): camera dust
+     * ({@link NukeDust}) matches the wall itself there. false — no wall.
      */
     static boolean dustColor(ClientNuclear.Active a, Sky sky, double x, double y, double z, float[] into) {
         double t = a.seconds(0);
@@ -511,26 +511,26 @@ public final class NukePall {
     }
 
     /**
-     * Цвет пыли головы стены на экране — как её светит {@code fx_pall} ({@code wall}, свет в {@code main}), по средней
-     * голове, без клубов (их тень — в обе стороны, в среднем ноль) и вне воды (над водой у камеры — брызги,
-     * {@link NukeWater}): рассеянный свет солнца и неба — на глубине под меньшей из толщ к верху головы и к её переднему
-     * краю, шара — под ближней освещённой им стороной: к шару или сверху, если его пучок к верху над точкой не идёт сквозь
-     * голову (шар за головой, ближе к эпицентру, и низко), пучки солнца и шара — сквозь толщу головы к ним, пожары —
-     * снизу. Днём пыль поэтому бурая в свете солнца и неба, а не в свете шара за стеной,
-     * ночью сторона стены от шара — в его тени, верх — в его свете. Фаза пучков — средняя по направлениям: клуб виден со
-     * всех сторон.
+     * On-screen wall-head dust color, as lit by {@code fx_pall} ({@code wall}, light in {@code main}), for the mean
+     * head without billows (their shadows go both ways, averaging to zero), outside water (camera spray over water,
+     * {@link NukeWater}): diffuse sun and sky light at the smaller optical depth to head top or leading
+     * edge; ball light beneath the nearest ball-lit side, toward ball or from above if its beam to the top over the point does not pass through
+     * the head (ball behind the head, closer to ground zero and low); sun and ball beams pass through head optical depth toward them; fires
+     * light from below. Thus by day dust is brown in sun and sky light rather than ball light from behind the wall;
+     * at night, the wall side away from the ball is in shadow, the top in its light. Beam phase is averaged over directions: the billow is seen from
+     * every side.
      *
-     * @param wall  стена слота ({@link BlastWall#slot})
-     * @param glow  свет стены ({@link CloudPuffs#pallLight})
-     * @param wind  куда дует ветер (радианы, {@link Detonation#windDir}): по нему снесена середина шапки
-     * @param gx    точка от эпицентра по x (блоки), gy — над землёй под эпицентром, gz — по z
-     * @param up    точка над рельефом под ней (блоки)
+     * @param wall  slot wall ({@link BlastWall#slot})
+     * @param glow  wall light ({@link CloudPuffs#pallLight})
+     * @param wind  wind direction (radians, {@link Detonation#windDir}): cap center drifts along it
+     * @param gx    point x from ground zero (blocks), gy above ground zero, gz along z
+     * @param up    point height above its terrain (blocks)
      */
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, float[] into) {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
         double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
-        // над точкой — до верха клина здесь, к краю — докуда клин выше точки, к свету — не выше верха головы (fx_pall: wall)
+        // above point, to local wedge top; toward edge, until wedge falls below point; toward light, no higher than head top (fx_pall: wall)
         double above = chord(wall, rx, rz, up, 0, 1, 0, Math.max(top * BlastWall.top(s / Math.max(wall[1], 1e-3)) - up, 0), 4);
         double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * Math.pow(Mth.clamp(up / Math.max(top, 1e-3), 0, 1), 1.2), 0), 4);
         double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
@@ -539,13 +539,13 @@ public final class NukePall {
         double lx = Math.cos(wind) * glow[2] - gx, ly = glow[7] - gy, lz = Math.sin(wind) * glow[2] - gz;
         double ll = Math.max(Math.sqrt(lx * lx + ly * ly + lz * lz), 1e-3);
         double toBall = chordNear(wall, rx, rz, up, lx / ll, ly / ll, lz / ll, toLight(ly / ll, toTop, reach), 4);
-        // рассеянный свет шара входит через ближнюю освещённую им сторону головы (fx_pall: capDeep): к шару — на толщу к
-        // нему; сверху — на толщу над точкой и ту толщу головы перед шаром, что его пучок к верху над точкой ещё проходит
-        // (шар низко и за головой: к верху у переднего края пучок идёт сквозь всю голову)
+        // diffuse ball light enters through the nearest ball-lit head side (fx_pall: capDeep): toward ball, its optical depth;
+        // from above, optical depth over the point plus head optical depth in front of the ball still crossed by its beam toward the top above the point
+        // (ball low and behind head: the beam to the top at the leading edge crosses the whole head)
         double muS = Math.max(sky.sy, 0.12), muB = Mth.clamp(ly / ll, 0.12, 1);
         double deepB = Math.min(toBall, above + Math.max(toBall - above / muB, 0)), slabB = deepB + below;
         double r = Math.hypot(gx, gz), fireR = Math.max(glow[3], 1e-3);
-        // свет шара — пучок от середины шапки, как у тела гриба (CloudPuffs.ball), × привыкание глаза
+        // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double smoke = 0.77 * (1 - CloudPuffs.smooth(0.92 * fireR, 1.04 * fireR, r));
@@ -564,32 +564,32 @@ public final class NukePall {
             }
             lin[c] = w * (Math.max(field, 0) + beams + from);
         }
-        // на экран — как пелена (fx_pall: к белому, плечо)
+        // to screen like pall (fx_pall: toward white, shoulder)
         PallLight.screen(lin, into);
     }
 
     /**
-     * Строки таблицы слота k ({@link PallField#row}) в его mat4 (по столбцам, как {@code mat4} шейдера): пыль — S[2].z, мгла
-     * — S[2].w, брызги — S[3].w ({@code pallField}).
+     * Table rows of slot k ({@link PallField#row}) in its mat4 (column-major, like shader {@code mat4}): dust — S[2].z, haze
+     * — S[2].w, spray — S[3].w ({@code pallField}).
      */
     static void tableRows(org.joml.Matrix4f m, int k) {
         m.m22(tableRow(k, PallField.DUST_ROW)).m23(tableRow(k, PallField.HAZE_ROW)).m33(tableRow(k, PallField.SPRAY_ROW));
     }
 
-    /** Середина строки {@code row} таблицы слота k в текстуре таблицы пелены, по высоте 0..1. */
+    /** Center of slot k table row {@code row} in the pall-table texture, height 0..1. */
     static float tableRow(int k, int row) {
         return (PallField.ROWS * k + row + 0.5f) / PallPass.ROWS;
     }
 
     /**
-     * Длина луча к свету сквозь голову: по направлению с подъёмом {@code vy} — до её верха ({@code toTop} над точкой), не
-     * дальше {@code reach}; почти вдоль земли — {@code reach}. Клин низкий и длинный: шаги на всю его длину шли бы над ним.
+     * Ray length toward light through the head: along direction with rise {@code vy}, up to its top ({@code toTop} above point), capped at
+     * {@code reach}; nearly along ground — {@code reach}. Wedge is low and long: steps across its full length would pass above it.
      */
     private static double toLight(double vy, double toTop, double reach) {
         return vy > 0.05 ? Math.min(reach, toTop / vy) : reach;
     }
 
-    /** Толща средней головы стены ({@link BlastWall#sigma}) от точки по направлению (vx, vy, vz) на длину len, n шагов ({@code wallChord}). */
+    /** Mean wall-head optical depth ({@link BlastWall#sigma}) from point along (vx, vy, vz) for length len, n steps ({@code wallChord}). */
     private static double chord(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
         double sum = 0, ds = len / n;
         for (int i = 0; i < n; i++) {
@@ -599,7 +599,7 @@ public final class NukePall {
         return sum * ds;
     }
 
-    /** {@link #chord}, но клетки гуще у точки (границы — по квадрату номера), как {@code wallChordNear}: к свету. */
+    /** {@link #chord}, with cells denser near the point (boundaries quadratic in index), like {@code wallChordNear}: toward light. */
     private static double chordNear(float[] wall, double rx, double rz, double up, double vx, double vy, double vz, double len, int n) {
         double sum = 0, nn = n * n;
         for (int i = 0; i < n; i++) {
@@ -610,31 +610,31 @@ public final class NukePall {
     }
 
     /**
-     * Цвет тонкой пыли кадра на экране в канале c: рассеянный ею свет ({@link PallLight#thin}, альбедо — по линейному
-     * цвету пыли {@code fx_pall}) на единицу ослабления — её функция источника, в значение экрана.
+     * On-screen thin-dust color in channel c for the frame: light it scatters ({@link PallLight#thin}, albedo from linear
+     * dust color in {@code fx_pall}) per unit extinction — its source function, converted to a screen value.
      */
     private static float thinDust(int c, float mu, PallPass.Frame f) {
         return (float) PallLight.display(PallLight.thin(DUST_W[c], f.sunLight.get(c), f.skyLight.get(c), mu, PallLight.LAND));
     }
 
-    /** Альбедо ω' по каналам по цвету толстого слоя на экране ({@link PallLight#albedo}). */
+    /** Per-channel albedo ω' from on-screen thick-layer color ({@link PallLight#albedo}). */
     private static double[] albedo(double[] display) {
         double[] w = new double[3];
         for (int c = 0; c < 3; c++) w[c] = PallLight.albedo(PallLight.linear(display[c]), DUST_G);
         return w;
     }
 
-    /** Свет неба канала: цвет неба Minecraft на экране — в линейный, его доля {@link PallLight#SKY}, не меньше floor. */
+    /** Channel sky light: Minecraft screen sky color converted to linear, fraction {@link PallLight#SKY}, at least floor. */
     static float skyLight(double display, float floor) {
         return Math.max((float) (PallLight.SKY * PallLight.linear(display)), floor);
     }
 
-    /** Свет солнца канала: остальное до белого после неба sky, покраснение red (на экране), сила дня day. */
+    /** Channel sun light: remainder up to white after sky sky, reddening red (on screen), daylight strength day. */
     static float sunLight(double red, float sky, float day) {
         return day * (float) (PallLight.linear(red) * Math.max(1 - sky, 0));
     }
 
-    /** Свет неба на пелене ночью на экране — не меньше этого ({@code night} — доля ночи 0..1): как свет неба на клубах стены. */
+    /** On-screen sky light on pall at night is at least this ({@code night} — night fraction 0..1): like sky light on wall billows. */
     static float nightSky(float ambient, float night) {
         return ambient * night;
     }
@@ -644,24 +644,24 @@ public final class NukePall {
         return t * t * (3 - 2 * t);
     }
 
-    /** Огненный шторм в кадре — да или нет: сценарий клиента меряет пелену с ним и без (в игре он есть всегда). */
+    /** Firestorm in frame on or off: client scenario measures pall with and without it (always on in game). */
     public static void firestorm(boolean on) {
         FireStorms.enabled = on;
     }
 
-    /** Ослабление пелены у камеры, 1/блок (для строки сценария). */
+    /** Pall extinction at camera, 1/block (for the scenario line). */
     public static float sigma() {
         return sigma;
     }
 
-    /** Строка сценария: пелена у камеры и в кадре. */
+    /** Scenario line: pall at camera and in frame. */
     public static String describe() {
         Minecraft mc = Minecraft.getInstance();
         PallPass.Frame f = FRAME;
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
         String under = "-";
         if (!all.isEmpty()) {
-            // вода там, откуда подняло пелену у камеры (точка минус снос), — из чего она у камеры
+            // water where camera pall was lofted (point minus drift) determines its material at the camera
             ClientNuclear.Active a = all.getLast();
             Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
             double[] w = new double[2], from = new double[2];

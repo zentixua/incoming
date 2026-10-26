@@ -35,49 +35,49 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Снаряды вдали — их настоящие модели ({@link WeaponModels}, тот же код и те же анимации, что у сущности вблизи)
- * там, где сущности у клиента нет. Каждая модель кадра рисуется в свою плитку атласа: перспективой из глаза, только
- * она и только её угол зрения, вчетверо подробнее экрана, светом мира, как сущность (свет неба по карте освещения,
- * два направленных света {@code Lighting}); потом атлас уменьшается мип-уровнями, и плитка ложится в кадр квадратом
- * лицом к камере ({@code client.far.FarSprites}): с дымкой воздуха в непрозрачности и в общем порядке с дымом — от
- * дальних к ближним. Так модель в несколько пикселей — сглаженный силуэт без мерцания тонких крыльев, а дальние
- * плитки, как и остальное дальнее, переносятся ближе дальней плоскости с тем же угловым размером. Мельче
- * {@link #COARSE_BELOW} пикселей — упрощённые копии деталей ({@link WeaponModels.Mesh#lod}).
+ * Distant projectiles use their actual models ({@link WeaponModels}, same code and animations as nearby entities)
+ * where the client has no entity. Each model in the frame renders into its own atlas tile: perspective from the
+ * eye, only that model at that viewing angle, four times screen detail, world light as for entities (sky lightmap,
+ * two {@code Lighting} directional lights); then mipmap the atlas and place the tile in the frame as a camera-facing
+ * quad ({@code client.far.FarSprites}), with atmospheric haze in opacity and sorted with smoke, back to front.
+ * A model spanning a few pixels thus has an antialiased silhouette without flickering thin wings; distant tiles,
+ * like other distant objects, move inside the far plane with the same angular size. Below {@link #COARSE_BELOW}
+ * pixels use simplified part copies ({@link WeaponModels.Mesh#lod}).
  * <p>
- * Сетки деталей лежат в видеопамяти ({@link VertexBuffer}, как небо и чанки у ванили): каждая собирается и грузится
- * один раз (при входе в мир — {@link #warmup}, заново — после перезагрузки ресурсов), а кадр на деталь только ставит
- * её положение (матрицы шейдера) и зовёт отрисовку. Вершины на процессоре каждый кадр стоили бы на ноутбуке до 1 мс
- * на полный B-2 и росли бы с числом моделей. Атлас рисуется своим шейдером ({@code shaders/core/far_model}) в
- * {@code AFTER_LEVEL}: Iris заменяет чужие шейдеры только пока рисует мир. Плитки, детали, сетки и атлас живут между
- * кадрами; на кадр — только мелкие короткоживущие объекты анимаций моделей.
+ * Part meshes stay in video memory ({@link VertexBuffer}, like vanilla sky and chunks): built and uploaded once
+ * (world entry, {@link #warmup}; again after resource reload), while each frame only sets part position (shader
+ * matrices) and draws it. CPU vertices each frame would cost up to 1 ms per full B-2 on the laptop and grow with
+ * model count. Atlas uses its own shader ({@code shaders/core/far_model}) in {@code AFTER_LEVEL}: Iris replaces other
+ * shaders only during world rendering. Tiles, parts, meshes and atlas live across frames; per frame, only small,
+ * short-lived model animation objects.
  */
 public final class FarModels {
-    /** Модель в любом повороте и с любыми раскрытыми деталями — в шаре такого радиуса на её размер ({@code FarModelsTest}). */
+    /** Model in any rotation with any parts deployed fits a sphere of this radius per model size ({@code FarModelsTest}). */
     public static final double TILE_RADIUS = 0.6;
     /**
-     * Длина модели на экране, пикселей: короче {@link #DOT_BELOW} — точка ({@code Sight.body}: форму уже не различить,
-     * виден только заслон неба), длиннее {@link #MODEL_FROM} — модель, между ними — переход.
+     * On-screen model length, pixels: below {@link #DOT_BELOW} a point ({@code Sight.body}: shape indistinguishable,
+     * only sky occlusion visible), above {@link #MODEL_FROM} a model, transition between.
      */
     public static final double DOT_BELOW = 2, MODEL_FROM = 3;
     /**
-     * Короче {@link #COARSE_BELOW} пикселей — упрощённые копии (отход их поверхности — 0,5 % размера, меньше четверти
-     * пикселя), длиннее {@link #FULL_ABOVE} — полные сетки; между — какие были (без дрожания на границе).
+     * Below {@link #COARSE_BELOW} pixels, simplified copies (surface deviation 0.5 % of size, less than a quarter
+     * pixel); above {@link #FULL_ABOVE}, full meshes; between, keep previous choice (no boundary jitter).
      */
     public static final double COARSE_BELOW = 40, FULL_ABOVE = 48;
     /**
-     * Сторона атласа, текселей: ~9 МБ видеопамяти с мип-уровнями и глубиной, мип-уровни всего атласа — на каждый кадр
-     * с моделями вдали. Полный атлас — остальные модели кадра точками.
+     * Atlas side, texels: ~9 MB video memory with mipmaps and depth; mipmap the whole atlas each frame with distant
+     * models. Full atlas means remaining models in the frame use points.
      */
     static final int ATLAS = 1024;
     /**
-     * Текселей на пиксель экрана; плитка — от {@link #MIN_TILE} до {@link #MAX_TILE}: самая крупная с каймой — ровно
-     * полстороны атласа, четыре таких входят (плитка шире 126 px экрана — меньше 4 текселей на пиксель: крупной
-     * модели сглаживание почти не нужно).
+     * Texels per screen pixel; tile from {@link #MIN_TILE} to {@link #MAX_TILE}: largest with border is exactly half
+     * the atlas side, fitting four (tile wider than 126 screen px has fewer than 4 texels per pixel: large models
+     * hardly need antialiasing).
      */
     static final int SUPERSAMPLE = 4, MIN_TILE = 8, MAX_TILE = 504;
-    /** Мип-уровней сверх основного (4 текселя на пиксель — уровень 2); пустая кайма вокруг плитки — чтобы они не брали соседа. */
+    /** Mip levels beyond base (4 texels per pixel is level 2); empty tile border keeps mipmaps from sampling neighbours. */
     static final int MIP_LEVELS = 2, PAD = 1 << MIP_LEVELS;
-    /** Что {@link #add} пишет о плитке: вправо и вверх (оси квадрата), полуразмер, u0, v0, u1, v1. */
+    /** {@link #add} tile output: right and up (quad axes), half-size, u0, v0, u1, v1. */
     public static final int RIGHT = 0, UP = 3, HALF = 6, U0 = 7, V0 = 8, U1 = 9, V1 = 10, OUT = 11;
     private static final WeaponModels.Mesh[] MESHES = WeaponModels.Mesh.values();
     private static final Matrix4f IDENTITY = new Matrix4f();
@@ -87,17 +87,17 @@ public final class FarModels {
 
     @Nullable
     private TextureTarget atlas;
-    /** Сетки деталей в видеопамяти: по две на деталь (полная, упрощённая) и сетка, из которой собрана каждая. */
+    /** Part meshes in video memory: two per part (full, simplified), plus the source mesh for each. */
     private final VertexBuffer[] meshes = new VertexBuffer[2 * MESHES.length];
     private final QuadMesh[] uploaded = new QuadMesh[2 * MESHES.length];
     private final List<Tile> tiles = new ArrayList<>();
     private int count;
-    /** Полка, которую заполняем: левый край свободного места, её низ и высота. */
+    /** Shelf being filled: free space's left edge, shelf bottom and height. */
     private int shelfX, shelfY, shelfH;
-    /** Детали моделей кадра. */
+    /** Model parts for this frame. */
     private final List<Part> parts = new ArrayList<>();
     private int partCount;
-    /** Плитка, детали которой сейчас записываются. */
+    /** Tile whose parts are currently being recorded. */
     @Nullable
     private Tile current;
     private final WeaponModels.Parts record = this::record;
@@ -114,21 +114,21 @@ public final class FarModels {
         clear(ATLAS);
     };
 
-    /** Одна модель кадра и её плитка. */
+    /** One frame model and its tile. */
     static final class Tile {
         final ProjectilePose pose = new ProjectilePose();
         @Nullable
         WeaponModels.Look look;
-        /** Модель → оси взгляда на неё: вправо, вверх, к ней (камера в начале координат). */
+        /** Model → viewing axes: right, up, toward model (camera at origin). */
         final Matrix4f view = new Matrix4f();
-        /** Оси взгляда → плитка атласа: перспектива из глаза, углы плитки — ±tan, глубина — шар модели. */
+        /** Viewing axes → atlas tile: eye perspective, tile corners ±tan, depth spans model sphere. */
         final Matrix4f projection = new Matrix4f();
-        /** Середина плитки в атласе, текселей, и её сторона. */
+        /** Atlas tile centre, texels, and side length. */
         int x, y, size;
 
         /**
-         * Плитка с серединой (x, y) и стороной size для шара радиуса h на дальности d (виден под углом с тангенсом tan).
-         * Перспектива: x/z, y/z в тангенсах — в квадрат плитки; глубина от d − h до d + h — на всю глубину атласа.
+         * Tile centred at (x, y), side size, for a sphere of radius h at distance d (view angle tangent tan).
+         * Perspective: x/z, y/z tangents into tile square; depth d − h to d + h spans atlas depth.
          */
         void place(int x, int y, int size, float d, float h, float tan) {
             this.x = x;
@@ -139,7 +139,7 @@ public final class FarModels {
         }
     }
 
-    /** Деталь кадра: какая сетка, в какой плитке, где (в осях взгляда), как повёрнута её нормаль (в осях мира), прозрачность. */
+    /** Frame part: mesh, tile, position (view axes), normal rotation (world axes), opacity. */
     private static final class Part {
         @Nullable
         WeaponModels.Mesh mesh;
@@ -152,7 +152,7 @@ public final class FarModels {
         float alpha;
     }
 
-    /** Шина мода: шейдер атласа (и заново при перезагрузке ресурсов). */
+    /** Mod bus: atlas shader (again on resource reload). */
     public static void registerShaders(RegisterShadersEvent e) {
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("far_model"), DefaultVertexFormat.NEW_ENTITY),
@@ -163,23 +163,23 @@ public final class FarModels {
         }
     }
 
-    /** Начать кадр: атлас пуст. */
+    /** Begin frame: empty atlas. */
     public void begin() {
         count = 0;
         shelfX = shelfY = shelfH = 0;
     }
 
-    /** Сколько моделей в кадре. */
+    /** Models in frame. */
     public int count() {
         return count;
     }
 
     /**
-     * Поставить модель в кадр. Камера — в начале координат, центр модели — (dx, dy, dz), size — её размер
-     * ({@code FarLook.size}), pixel — угол пикселя экрана, camUp — верх экрана. В out ({@link #OUT} чисел) — квадрат,
-     * которым плитка ляжет в кадр: его оси, полуразмер (на дальности центра) и место в атласе.
+     * Add a model to the frame. Camera at origin, model centre (dx, dy, dz), size is its dimension
+     * ({@code FarLook.size}), pixel is screen pixel angle, camUp is screen up. out ({@link #OUT} numbers) receives
+     * the quad placing the tile in frame: axes, half-size (at centre distance), atlas location.
      *
-     * @return false — модели не будет: нет шейдера, она вплотную к камере (шире 60°) или на краю обзора, атлас полон
+     * @return false if no model: no shader, too close (wider than 60°), at view edge, or atlas full
      */
     public boolean add(WeaponModels.Look look, ProjectilePose pose, double dx, double dy, double dz, double size, double pixel,
                        Vector3f camUp, float[] out) {
@@ -187,7 +187,7 @@ public final class FarModels {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), h = TILE_RADIUS * size;
         if (d < 2 * h) return false;
         double fx = dx / d, fy = dy / d, fz = dz / d;
-        // вправо — поперёк луча и верха экрана, вверх — поперёк луча и «вправо»: плитка повёрнута, как экран
+        // Right crosses ray and screen up; up crosses ray and right: tile rotated like the screen.
         double rx = fy * camUp.z() - fz * camUp.y(), ry = fz * camUp.x() - fx * camUp.z(), rz = fx * camUp.y() - fy * camUp.x();
         double rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
         if (rl < 1e-3) return false;
@@ -195,7 +195,7 @@ public final class FarModels {
         ry /= rl;
         rz /= rl;
         double ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
-        // шар радиуса h на дальности d виден под углом asin(h/d): плитка — квадрат тангенсов этого угла
+        // Sphere of radius h at distance d subtends asin(h/d): tile square uses that angle's tangents.
         double tan = h / Math.sqrt(d * d - h * h);
         int side = tileSize(tan, pixel);
         int slot = side + 2 * PAD;
@@ -232,23 +232,23 @@ public final class FarModels {
     }
 
     /**
-     * Сторона плитки, текселей: {@link #SUPERSAMPLE} текселей на пиксель угла плитки (2·tan/pixel пикселей), кратно 4
-     * (мип-уровень 2 не делит тексель между плитками), от {@link #MIN_TILE} до {@link #MAX_TILE}.
+     * Tile side, texels: {@link #SUPERSAMPLE} texels per pixel of tile angle (2·tan/pixel pixels), multiple of 4
+     * (mip level 2 does not split a texel between tiles), from {@link #MIN_TILE} to {@link #MAX_TILE}.
      */
     static int tileSize(double tan, double pixel) {
         int texels = (int) Math.ceil(SUPERSAMPLE * 2 * tan / pixel);
         return Math.clamp((texels + 3) & ~3, MIN_TILE, MAX_TILE);
     }
 
-    /** Текстура атласа (0 — его ещё нет). */
+    /** Atlas texture (0 if not yet created). */
     public int texture() {
         return atlas == null ? 0 : atlas.getColorTextureId();
     }
 
     /**
-     * Всё заранее, при входе в мир и после перезагрузки ресурсов: атлас, сетки всех деталей (обе копии) в видеопамяти
-     * и по одной отрисовке каждой — драйвер собирает программу и массивы вершин здесь, а не в кадре, где снаряд вдали
-     * появился впервые (на ноутбуке такой кадр стоил бы 5 мс процессора).
+     * Prepare at world entry and after resource reload: atlas, all part meshes (both copies) in video memory,
+     * and one draw of each so driver prepares program and vertex arrays here, rather than the first frame showing
+     * a distant projectile (that frame would cost 5 ms CPU on the laptop).
      */
     public void warmup() {
         if (shader == null) return;
@@ -269,8 +269,8 @@ public final class FarModels {
     }
 
     /**
-     * Нарисовать модели кадра в атлас и уменьшить его мип-уровнями. Вызывается после сбора кадра и до отрисовки
-     * квадратов; кадровый буфер и область вывода, которые были до вызова, возвращаются.
+     * Draw frame models into atlas and mipmap it. Called after frame collection and before quad drawing;
+     * restore previous framebuffer and viewport afterward.
      */
     public void render() {
         if (count == 0 || shader == null) return;
@@ -280,7 +280,7 @@ public final class FarModels {
             PoseStack.Pose root = poses.last();
             root.pose().set(t.view);
             root.normal().identity();
-            // нормали — в осях мира: в них светят направленные света Lighting, как у сущностей вблизи
+            // Normals in world axes: Lighting directional lights use these, as for nearby entities.
             poses.pushPose();
             poses.mulPose(t.pose.rotation(rotation));
             t.look.render(t.pose, poses, record);
@@ -291,7 +291,7 @@ public final class FarModels {
         withAtlasBound(clearAndDraw);
     }
 
-    /** Деталь модели плитки {@link #current} в текущем положении pose (сетка — в видеопамять, если её там ещё нет). */
+    /** Model part in tile {@link #current} at current pose (upload mesh to video memory if absent). */
     private void record(WeaponModels.Mesh mesh, PoseStack pose, boolean coarse, float alpha) {
         VertexBuffer buffer = buffer(mesh, coarse);
         if (buffer == null) return;
@@ -306,8 +306,8 @@ public final class FarModels {
     }
 
     /**
-     * Сетка детали в видеопамяти: собирается при первой отрисовке и заново, когда сетка детали собрана заново
-     * (перезагрузка ресурсов); свет — свет неба, ярче — запечённый ({@code glow}). {@code null} — сетка пуста.
+     * Part mesh in video memory: built on first draw and again when part mesh is rebuilt (resource reload);
+     * sky light, or baked light if brighter ({@code glow}). {@code null} for empty mesh.
      */
     @Nullable
     private VertexBuffer buffer(WeaponModels.Mesh mesh, boolean coarse) {
@@ -334,7 +334,7 @@ public final class FarModels {
     private void withAtlasBound(Runnable work) {
         int drawFbo = GlStateManager.getBoundFramebuffer(), readFbo = GlStateManager._getInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-        // маски записи — какими их оставил тот, кто рисовал до нас: очистка атласа включает обе (clear)
+        // Write masks as left by previous renderer: atlas clearing enables both (clear).
         boolean depthWrite = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, colorWrite);
         try {
@@ -364,15 +364,15 @@ public final class FarModels {
         atlas = t;
     }
 
-    /** Строк атласа, занятых плитками кадра. */
+    /** Atlas rows occupied by frame tiles. */
     private int rowsUsed() {
         return Math.max(PAD, Math.min(ATLAS, shelfY + shelfH));
     }
 
     /**
-     * Очистить нижние rows строк атласа (прозрачным; глубина — дальше всего). Очистка слушается масок записи, а Iris
-     * с шейдерпаком оставляет к {@code AFTER_LEVEL} запись глубины выключенной ({@code FinalPassRenderer.renderFinalPass}):
-     * без своей маски глубина атласа копилась бы из кадра в кадр, и модель в движении рвалась бы на куски.
+     * Clear bottom rows atlas rows (transparent; depth farthest). Clear obeys write masks; Iris with a shader pack
+     * leaves depth writes disabled at {@code AFTER_LEVEL} ({@code FinalPassRenderer.renderFinalPass}): without our
+     * own mask, atlas depth would accumulate across frames and tear a moving model into pieces.
      */
     private static void clear(int rows) {
         RenderSystem.colorMask(true, true, true, true);
@@ -384,7 +384,7 @@ public final class FarModels {
         RenderSystem.disableScissor();
     }
 
-    /** Детали кадра — в атлас: сперва непрозрачные с глубиной, потом размытые диски винтов поверх, с умноженной альфой. */
+    /** Frame parts into atlas: opaque with depth first, then blurred propeller discs over them with premultiplied alpha. */
     private void draw() {
         ShaderInstance s = shader;
         if (s == null || partCount == 0) return;
@@ -399,7 +399,7 @@ public final class FarModels {
         RenderSystem.depthFunc(GL11.GL_LEQUAL);
         RenderSystem.disableBlend();
         RenderSystem.depthMask(true);
-        // как ванильные чанки: программа и текстуры — один раз, на деталь — её матрицы и вызов отрисовки
+        // Like vanilla chunks: program and textures once, matrices and draw call per part.
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, IDENTITY, IDENTITY, mc.getWindow());
         s.apply();
         Uniform normal = s.getUniform("NormalMat");

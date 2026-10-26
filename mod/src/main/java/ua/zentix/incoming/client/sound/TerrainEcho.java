@@ -7,98 +7,98 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Эхо далёкого взрыва от рельефа (без Minecraft, проверяется юнит-тестами): какие склоны вернут удар к уху, когда
- * и насколько тише прямого звука. Удар фронта у слушателя — только начало: тот же фронт доходит до холмов, лесов
- * и городов вокруг, и каждый склон, обращённый и к взрыву, и к уху, отражает его — раскат катится секундами,
- * а с гор возвращается отдельным ударом.
+ * Distant blast terrain echoes (without Minecraft, covered by unit tests): which slopes return the impact to
+ * ear, when, and how much quieter than direct sound. Front impact at listener is only the start: same front
+ * reaches surrounding hills, forests and cities, and every slope facing both blast and ear reflects it —
+ * rumble rolls for seconds, mountains return a distinct impact.
  * <p>
- * Лучи из уха по карте высот ({@link Sightline.Heights}: чанки клиента, дальше — плитки рельефа карты) по кругу,
- * {@link #RAYS} штук; шаг растёт с расстоянием ({@link #step}). Отражает то, что ухо видит: точка, которая поднимается
- * над горизонтом луча (угол места выше всего, что ближе), — открытая уху грань; её телесный угол — прибавка угла места
- * на ширину луча. Отражение по Ламберту (рассеяние, а не зеркало: склон в карте высот — не ровная стена):
- * доля энергии прямого звука у уха
+ * Rays from ear over height map ({@link Sightline.Heights}: client chunks, map terrain tiles beyond),
+ * {@link #RAYS} around the circle; step grows with distance ({@link #step}). What ear sees reflects: a point
+ * rising above the ray's horizon (elevation higher than all closer points) is an ear-visible facet; its solid
+ * angle is elevation increment times ray width. Lambertian reflection (scattering, not mirror: height-map
+ * slope is no flat wall): energy fraction relative to direct sound at ear
  * <pre>E = ρ · cos θ₁ · Ω / π · (p(r₁) / p(rₑ))²</pre>
- * где ρ — отражение земли на низах ({@link #ALBEDO}), θ₁ — угол падения фронта на склон (нормаль — по разностям карты
- * высот), Ω — телесный угол грани у уха, p — давление фронта на расстоянии r₁ склона и rₑ уха от взрыва (у эпицентра
- * волна нелинейна и теряет силу быстрее, чем расходится: назад к уху от неё идёт не больше, чем от звука, который
- * расходится сферой, — отношение не больше rₑ/r₁). Ровная земля отражает низы почти зеркально — вперёд, а не назад
- * к уху: рассеивает её доля {@link #FLAT}, склон от {@link #STEEP} — целиком (кроны леса и стены домов — тоже склоны
- * в карте высот). Склон,
- * которого взрыв не видит (за гребнем), получает фронт обходом — {@link #SHADOW} энергии. Удар приходит к склону
- * тогда же, когда к нему приходит фронт игры ({@code Detonation.arrivalTicks}: стена пыли, дальше — скорость звука),
- * а от склона к уху — со скоростью звука; задержка — против прихода прямого удара.
+ * where ρ is low-band ground reflectance ({@link #ALBEDO}), θ₁ is front incidence angle on slope (normal from
+ * height-map differences), Ω is facet solid angle at ear, p is front pressure at slope distance r₁ and ear
+ * distance rₑ from blast (near epicentre wave is nonlinear and weakens faster than spreading: no more returns
+ * to ear than spherically spreading sound would give — ratio at most rₑ/r₁). Flat ground reflects lows nearly
+ * specularly forward, not back to ear: fraction {@link #FLAT} scatters; slopes from {@link #STEEP} scatter fully
+ * (forest crowns and house walls are also height-map slopes). A slope hidden from blast behind a ridge receives
+ * the front around it — {@link #SHADOW} energy. Impact reaches slope with the game front
+ * ({@code Detonation.arrivalTicks}: dust wall, sound speed beyond); slope to ear at sound speed; delay relative
+ * to direct-impact arrival.
  * <p>
- * Диффузная модель недооценивает низы больших склонов (на 50–100 Гц длина волны 3–7 м, склон в сотни метров отражает
- * почти зеркально) и не знает, что прямой звук у земли теряет больше, чем отражённый сверху, — поэтому эхо поднято на
- * {@link #LIFT_DB}, но ни одно отражение не громче {@link #CAP_DB} прямого звука.
+ * Diffuse model underestimates lows from large slopes (50–100 Hz wavelength 3–7 m, hundreds-of-metres slope
+ * reflects nearly specularly) and ignores direct sound losing more near ground than reflection from above;
+ * echoes are therefore boosted by {@link #LIFT_DB}, but no reflection exceeds {@link #CAP_DB} of direct sound.
  */
 public final class TerrainEcho {
-    /** Лучей по кругу (через 5°; бюджет). */
+    /** Rays around circle (every 5°; budget). */
     public static final int RAYS = 72;
-    /** До скольких блоков от уха ищутся склоны (бюджет; не дальность слышимости). */
+    /** Slope search distance from ear, blocks (budget; not audible range). */
     public static final double RANGE = 4096;
-    /** Ближе — не отражатель: ближние отражения уже в записи прямого удара ({@link #MIN_DELAY}). */
+    /** Closer is not a reflector: near reflections already in direct-impact recording ({@link #MIN_DELAY}). */
     static final double NEAR = 24;
-    /** Шаг луча: доля расстояния, не мельче и не крупнее, блоков (бюджет). */
+    /** Ray step: fraction of distance, with minimum and maximum, blocks (budget). */
     static final double STEP_SHARE = 0.03, STEP_MIN = 8, STEP_MAX = 96;
-    /** Отражение земли на низах (63–250 Гц): трава, лес, скалы — 0,7–0,9 (⚠ оценка). */
+    /** Low-band ground reflectance (63–250 Hz): grass, forest, rocks — 0.7–0.9 (est.). */
     static final double ALBEDO = 0.8;
-    /** Доля рассеяния у ровной земли; склон круче {@link #STEEP} (sin² уклона) рассеивает весь (⚠ оценка). */
+    /** Flat-ground scattering fraction; slopes steeper than {@link #STEEP} (sin² slope) scatter fully (est.). */
     static final double FLAT = 0.1, STEEP = 0.25;
-    /** Склон за гребнем от взрыва получает фронт обходом — эта доля энергии (⚠ оценка). */
+    /** A slope behind a ridge receives this front-energy fraction around it (est.). */
     static final double SHADOW = 0.25;
-    /** Подъём эха над диффузной моделью и наибольшее отражение против прямого звука, дБ (подача). */
+    /** Echo boost over diffuse model and maximum reflection relative to direct sound, dB (presentation). */
     static final double LIFT_DB = 12, CAP_DB = -3;
-    /** Тише этого (против прямого, дБ) — отражения нет (бюджет). */
+    /** Below this (relative to direct, dB), omit reflection (budget). */
     static final double FLOOR_DB = -45;
     /**
-     * Грань, чьё эхо приходит раньше стольких тиков после прямого удара, не берётся (разброс по принятой грани может
-     * начаться и раньше). Подача: прямой удар — запись, ранние отражения места записи в ней остаются (у ближнего
-     * ракурса первые 0,35 с хвост не убавлен, у среднего и дальнего — не убавлен вовсе, {@code tools/build_sounds.py}),
-     * и раннюю окраску даёт она; свёртка наложила бы на неё второй набор ранних отражений. Соответствие записи
-     * игровому месту не проверено. Не «неслышно»: отдельным эхо слышно и через 5–20 мс (щелчки и шумовые всплески,
-     * Litovsky et al., JASA 106, 1999, табл. I).
+     * Facet whose echo arrives earlier than this many ticks after direct impact is omitted (spread across an
+     * accepted facet may begin earlier). presentation: direct impact is a recording, retaining its location's
+     * early reflections (near perspective tail unattenuated for first 0.35 s; mid and far never attenuated,
+     * {@code tools/build_sounds.py}); it supplies early coloration, convolution would add a second early set.
+     * Match between recording and game site is unverified. Not “inaudible”: separate echoes are audible even
+     * after 5–20 ms (clicks and noise bursts, Litovsky et al., JASA 106, 1999, table I).
      */
     static final double MIN_DELAY = 2;
 
     private TerrainEcho() {}
 
-    /** Взрыв: когда фронт приходит на расстояние от точки подрыва и какое там давление. */
+    /** Blast: when front reaches a distance from detonation and its pressure there. */
     public interface Blast {
-        /** Через сколько тиков после подрыва фронт дойдёт до расстояния {@code blocks}. */
+        /** Ticks after detonation until front reaches {@code blocks}. */
         double arrivalTicks(double blocks);
 
-        /** Давление фронта на этом расстоянии (единицы любые: важно отношение). */
+        /** Front pressure at this distance (any units: ratio matters). */
         double pressure(double blocks);
     }
 
     /**
-     * Одно отражение.
+     * One reflection.
      *
-     * @param x,y,z     где склон
-     * @param azimuth   направление от уха, рад ({@code atan2(dz, dx)})
-     * @param delay     через сколько тиков после прямого удара приходит
-     * @param energy    энергия против прямого удара (с подъёмом {@link #LIFT_DB}, не больше {@link #CAP_DB})
-     * @param extraPath на сколько блоков путь через склон длиннее прямого — воздух съедает верха
-     * @param distance  от уха до склона, блоков
-     * @param early     самый ранний приход через грань, тиков после прямого удара
-     * @param spread    разброс прихода по грани, тиков: склон отражает всей площадью, и путь через её ближний и дальний
-     *                  край, левый и правый разный — эхо от грани идёт от {@code early} столько ({@link EchoMix})
+     * @param x,y,z     slope position
+     * @param azimuth   direction from ear, rad ({@code atan2(dz, dx)})
+     * @param delay     arrival ticks after direct impact
+     * @param energy    energy relative to direct impact (with {@link #LIFT_DB} boost, at most {@link #CAP_DB})
+     * @param extraPath how many blocks longer path via slope is than direct — air absorbs highs
+     * @param distance  ear-to-slope distance, blocks
+     * @param early     earliest facet arrival, ticks after direct impact
+     * @param spread    arrival spread across facet, ticks: whole slope area reflects, with different paths via
+     *                  near/far and left/right edges — facet echo lasts this long from {@code early} ({@link EchoMix})
      */
     public record Reflection(double x, double y, double z, double azimuth, double delay, double energy, double extraPath, double distance,
                              double early, double spread) {
-        /** Громкость (амплитуда) против прямого удара. */
+        /** Gain (amplitude) relative to direct impact. */
         public double gain() {
             return Math.sqrt(energy);
         }
     }
 
-    /** Шаг луча на расстоянии r: дальше — крупнее (дальний склон и так виден под малым углом). */
+    /** Ray step at distance r: farther means larger (distant slope already subtends a small angle). */
     static double step(double r) {
         return Math.max(STEP_MIN, Math.min(STEP_MAX, r * STEP_SHARE));
     }
 
-    /** Все лучи разом (для проверок; клиент считает лучи по частям — {@link #ray}). */
+    /** All rays at once (checks; client computes in batches, {@link #ray}). */
     public static List<Reflection> trace(Sightline.Heights h, double ex, double ey, double ez, double bx, double by, double bz, Blast blast) {
         List<Reflection> out = new ArrayList<>();
         for (int i = 0; i < RAYS; i++) ray(h, i, RAYS, RANGE, ex, ey, ez, bx, by, bz, blast, out);
@@ -106,9 +106,9 @@ public final class TerrainEcho {
     }
 
     /**
-     * Один луч из уха: открытые уху грани, которые поднимаются над горизонтом луча, — в {@code out}.
+     * One ray from ear: ear-visible facets rising above ray horizon enter {@code out}.
      *
-     * @param index номер луча из {@code rays} по кругу
+     * @param index ray number among {@code rays} around circle
      */
     public static void ray(Sightline.Heights h, int index, int rays, double range, double ex, double ey, double ez, double bx, double by, double bz,
                            Blast blast, List<Reflection> out) {
@@ -126,7 +126,7 @@ public final class TerrainEcho {
             double prevTop = lastTop, prevR = lastR;
             lastTop = top;
             lastR = r;
-            // первая известная точка — горизонт: всё, что ниже его, ухо не видит
+            // first known point sets horizon: ear cannot see below it
             if (Double.isNaN(horizon)) {
                 horizon = t;
                 continue;
@@ -134,18 +134,18 @@ public final class TerrainEcho {
             if (t <= horizon) continue;
             double rise = Math.atan(t) - Math.atan(horizon);
             horizon = t;
-            // телесный угол грани у уха: прибавка угла места × ширина луча × cos угла места
+            // facet solid angle at ear: elevation increment × ray width × cos elevation
             double omega = rise * width * Math.cos(Math.atan(t));
             double[] n = normal(h, x, z, step(r), cx, cz, top, prevTop, r - prevR);
             double px = x - bx, py = top - by, pz = z - bz;
             double r1 = Math.sqrt(px * px + py * py + pz * pz);
             if (r1 < 1) continue;
-            // фронт падает на склон: нормаль навстречу направлению от взрыва
+            // front incident on slope: normal faces direction from blast
             double cos1 = -(px * n[0] + py * n[1] + pz * n[2]) / r1;
             if (cos1 <= 0) continue;
             double ux = ex - x, uy = ey - top, uz = ez - z;
             double r2 = Math.sqrt(ux * ux + uy * uy + uz * uz);
-            // к уху склон тоже должен быть обращён лицом (видна верхушка, а не обратный скат)
+            // slope must face ear too (visible top, not reverse slope)
             if (ux * n[0] + uy * n[1] + uz * n[2] <= 0) continue;
             double ratio = Math.min(blast.pressure(r1) / pe, re / r1);
             double tilt = 1 - n[1] * n[1];
@@ -156,7 +156,7 @@ public final class TerrainEcho {
             if (Sightline.trace(h, bx, by, bz, x, top + 1, z).pathDifference() > 0) e *= SHADOW;
             double db = Math.min(CAP_DB, 10 * Math.log10(e) + LIFT_DB);
             if (db < FLOOR_DB) continue;
-            // грань — от прошлой точки луча до этой, поперёк — ширина луча: приход через её углы
+            // facet from previous ray point to this one, ray width across: arrival via its corners
             double lo = delay, hi = delay, half = width / 2;
             for (int c = 0; c < 4; c++) {
                 double rc = c < 2 ? prevR : r, yc = c < 2 ? prevTop : top, ac = phi + (c % 2 == 0 ? -half : half);
@@ -168,7 +168,7 @@ public final class TerrainEcho {
         }
     }
 
-    /** Через сколько тиков после подрыва удар, отражённый точкой склона, дойдёт до уха: фронт до склона, звук от него. */
+    /** Ticks after detonation until impact reflected at slope point reaches ear: front to slope, sound from it. */
     static double arrival(Blast blast, double x, double y, double z, double ex, double ey, double ez, double bx, double by, double bz) {
         double r1 = Math.sqrt((x - bx) * (x - bx) + (y - by) * (y - by) + (z - bz) * (z - bz));
         double r2 = Math.sqrt((x - ex) * (x - ex) + (y - ey) * (y - ey) + (z - ez) * (z - ez));
@@ -176,8 +176,8 @@ public final class TerrainEcho {
     }
 
     /**
-     * Нормаль склона в точке: по разностям карты высот с четырёх сторон; где их нет (край известной карты) — по подъёму
-     * вдоль луча от прошлой точки.
+     * Slope normal at point: height-map differences on four sides; where unavailable (known map edge), use rise
+     * along ray from previous point.
      */
     static double[] normal(Sightline.Heights h, double x, double z, double step, double cx, double cz, double top, double prevTop, double along) {
         double g = Math.max(2, step / 2);

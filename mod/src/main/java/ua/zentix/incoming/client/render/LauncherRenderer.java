@@ -12,7 +12,7 @@ import org.joml.Quaternionf;
 import ua.zentix.incoming.entity.Launcher;
 import ua.zentix.incoming.entity.LauncherEntity;
 
-/** Мобильная пусковая: прицеп по курсу и пакет, поднимающийся на угол возвышения вокруг своей оси. */
+/** Mobile launcher: trailer along heading, rack elevating around its own axis. */
 public class LauncherRenderer extends EntityRenderer<LauncherEntity> {
     public LauncherRenderer(EntityRendererProvider.Context ctx) {
         super(ctx);
@@ -30,8 +30,8 @@ public class LauncherRenderer extends EntityRenderer<LauncherEntity> {
     }
 
     /**
-     * Пакет пусковой {@code l} на его опоре, поднятый на нынешний угол: поза — место пусковой, уже повёрнутое по её
-     * курсу (прицеп и стационарная пусковая рисуют пакет одинаково).
+     * Launcher {@code l}'s rack on its mount at current elevation: pose at launcher position, already rotated to its
+     * heading (trailer and fixed launcher draw the rack identically).
      */
     public static void renderRack(Launcher l, long gameTime, float partialTick, PoseStack pose, MultiBufferSource buffers, int packedLight) {
         pose.pushPose();

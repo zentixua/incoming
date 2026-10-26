@@ -41,43 +41,43 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Рельеф из LOD Server Support (LSS, MIT) через его публичное клиентское API
- * ({@code LSSApi.registerColumnConsumer}): сервер с LSS шлёт клиенту чанки по всему своему радиусу LOD (по умолчанию
- * 512 чанков), и мод получает каждый — тот же поток, которым LSS кормит Voxy и карты Xaero и JourneyMap. Подписчик
- * есть — клиент LSS качает и без Voxy. Верх колонок считается сразу в потоке LSS ({@link LssColumns#summarize}, десятки
- * микросекунд на чанк, без блокировок и ожиданий: его поток не стоит) и лежит в памяти — читается мгновенно из любого
- * потока ({@link #peek}): лучам и звуку не нужно ждать плиток карты.
+ * Terrain from LOD Server Support (LSS, MIT) through its public client API
+ * ({@code LSSApi.registerColumnConsumer}): a server with LSS sends chunks throughout its LOD radius (512 chunks by
+ * default), and the mod receives each one through the same stream LSS feeds to Voxy, Xaero and JourneyMap. A subscriber
+ * makes LSS download even without Voxy. Column tops are computed immediately on the LSS thread
+ * ({@link LssColumns#summarize}, tens of microseconds per chunk, no locks or waits: its thread never stalls), retained
+ * in memory and read instantly from any thread ({@link #peek}): rays and sound need not wait for map tiles.
  * <p>
- * Клиент LSS помнит, какие чанки уже получил (свой кэш меток на диске), и при новом входе просит у сервера только
- * изменённые: его подписчики хранят присланное у себя (Voxy — в базе). Поэтому и колонки хранятся на диске —
- * {@code incoming/lss-terrain/<сервер>/<измерение>.bin} в папке игры, раз в {@link #SAVE_TICKS} тиков, если что-то
- * пришло, и при выходе из мира. Файла нет (LSS стоял раньше мода или файл потерян) — вдали пусто, пока сервер не
- * пришлёт чанки снова: {@code /lss clearcache} просит всё заново.
+ * LSS client remembers received chunks (its own disk timestamp cache), requesting only changes on next login:
+ * subscribers store received data themselves (Voxy in its database). Columns are therefore stored on disk too,
+ * {@code incoming/lss-terrain/<server>/<dimension>.bin} in the game folder, every {@link #SAVE_TICKS} ticks if anything
+ * arrived, and on world exit. No file (LSS installed before the mod or file lost) leaves distant terrain empty until
+ * the server sends chunks again: {@code /lss clearcache} requests everything anew.
  * <p>
- * LSS на встроенном сервере одиночной игры не включается (его клиент проверяет это сам), кроме мира, открытого по
- * сети: там рельеф вдали — Distant Horizons, если стоит. Класс загружается, только если LSS стоит (см. {@link TerrainTiles}).
+ * LSS does not enable on the singleplayer integrated server (its client checks), except a world opened to LAN:
+ * distant terrain there comes from Distant Horizons if installed. Class loads only with LSS installed (see {@link TerrainTiles}).
  */
 final class LssTerrain implements TerrainSource {
-    /** Подробных чанков (1 КБ) в памяти не больше этого (~64 МБ, круг ~2,3 км), дальние от игрока — грубыми (64 байта). */
+    /** At most this many detailed chunks (1 KB) in memory (~64 MB, ~2.3 km circle); distant ones coarse (64 bytes). */
     static final int FULL_LIMIT = 65_536;
-    /** Понижать — до этой доли предела, чтобы не делать это каждые несколько секунд. */
+    /** Coarsen down to this fraction of the limit, avoiding work every few seconds. */
     private static final int FULL_KEEP = FULL_LIMIT * 9 / 10;
     /**
-     * Чанков всего не больше этого (~80 МБ грубыми; круг радиусом LOD сервера по умолчанию, 512 чанков, — ~820 тыс.):
-     * сверх — самые дальние от игрока уходят. LSS о них не знает и сам их не пришлёт (дыра далеко от игры, до
-     * изменения чанка или {@code /lss clearcache}); его собственный кэш меток так же ограничен 2 млн.
+     * At most this many total chunks (~80 MB coarse; default server LOD radius, 512 chunks, is ~820 thousand):
+     * discard the farthest from the player above that. LSS does not know and will not resend them itself (a hole far
+     * from play until a chunk change or {@code /lss clearcache}); its own timestamp cache is likewise limited to 2 million.
      */
     static final int TOTAL_LIMIT = 1 << 20;
     private static final int TOTAL_KEEP = TOTAL_LIMIT * 9 / 10;
     private static final int SAVE_TICKS = 2400;
     private static final int COARSEN_TICKS = 200;
-    /** Полная плитка без событий перечитывается раз в 5 минут (изменения приходят событием, {@link #changes}). */
+    /** Complete tile reread every 5 minutes without events (changes arrive by event, {@link #changes}). */
     private static final long REFRESH_NS = 300_000_000_000L;
     private static final Pattern UNSAFE = Pattern.compile("[^A-Za-z0-9._-]");
 
     /**
-     * Колонки мира одного сервера (адрес и хэш сида мира — как ключ кэша меток самого LSS: другой мир на том же адресе
-     * LSS шлёт заново, и чужой рельеф не должен остаться) и измерения; что пришло с прошлого тика; прочитан ли файл.
+     * Columns for one server (address and world seed hash, as in LSS's timestamp cache key: LSS resends a different
+     * world at the same address, and old terrain must not remain) and dimension; received since last tick; file read flag.
      */
     static final class World {
         final ServerCacheKey server;
@@ -85,10 +85,10 @@ final class LssTerrain implements TerrainSource {
         final ResourceKey<Level> dimension;
         final LssColumns.Store store = new LssColumns.Store();
         final Set<Long> changed = ConcurrentHashMap.newKeySet();
-        /** Что-то пришло после записи файла; файл прочитан; прочитанное ещё не отдано плиткам ({@link #invalidated}). */
+        /** Something arrived since file write; file read; read data not yet given to tiles ({@link #invalidated}). */
         final AtomicBoolean dirty = new AtomicBoolean(), loaded = new AtomicBoolean(), fresh = new AtomicBoolean();
         volatile String file = "";
-        /** Выбранная папка сервера, только в потоке файлов; прежнюю используем и для дальнейших записей. */
+        /** Selected server folder, file thread only; old folder also used for subsequent writes. */
         @Nullable
         Path directory;
 
@@ -99,22 +99,22 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Миры текущего сервера; сервер сменился — прежние сохраняются и уходят. Пишут поток LSS и поток игры. */
+    /** Current server's worlds; on server change, save and release previous ones. Written by LSS and game threads. */
     private static final Map<String, World> worlds = new HashMap<>();
     @Nullable
     private static String server;
-    /** Для лога: чанки, колонки с верхом, время в потоке LSS, отказы. */
+    /** For logs: chunks, columns with surface, time on LSS thread, failures. */
     private static final AtomicLong received = new AtomicLong(), withTop = new AtomicLong(), nanos = new AtomicLong(), maxNanos = new AtomicLong(),
             failures = new AtomicLong();
     @Nullable
     private static volatile String firstFailure;
-    /** Чтение и запись файлов, понижение до грубого — одним фоновым потоком. */
+    /** File reads and writes, coarsening, all on one background thread. */
     private static final ExecutorService io = Executors.newSingleThreadExecutor(
             new ThreadFactoryBuilder().setNameFormat("Incoming LSS terrain").setDaemon(true).setPriority(Thread.MIN_PRIORITY).build());
 
     static {
-        // закрыли игру в мире: присланное после последней записи — на диск до выхода JVM (поток записи — демон, и без
-        // этого запись обрывалась бы, а метки LSS остались бы — дыры до /lss clearcache)
+        // Game closed while in a world: save data received since the last write before JVM exit (writer is a daemon;
+        // otherwise the write would stop while LSS timestamps remained, leaving holes until /lss clearcache).
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             flush();
             io.shutdown();
@@ -127,7 +127,7 @@ final class LssTerrain implements TerrainSource {
     }
     private static int ticks;
     private static volatile boolean coarsening;
-    /** Подписчик, пока API LSS то, под которое собран мод; null — выключен ({@link #disable}). */
+    /** Subscriber while LSS API matches the build; null if disabled ({@link #disable}). */
     @Nullable
     private static volatile VoxelColumnConsumer consumer;
 
@@ -138,8 +138,8 @@ final class LssTerrain implements TerrainSource {
     }
 
     /**
-     * Один раз при запуске клиента: подписка на колонки LSS. Другое API (LSS изменил классы) — {@link LinkageError}
-     * тут же: слой LSS выключается одной строкой в лог (см. {@link TerrainTiles#init}).
+     * Once at client startup: subscribe to LSS columns. Different API (LSS classes changed) throws {@link LinkageError}
+     * here immediately: disable the LSS layer with one log line (see {@link TerrainTiles#init}).
      */
     static void subscribe() {
         VoxelColumnConsumer c = new VoxelColumnConsumer() {
@@ -157,8 +157,8 @@ final class LssTerrain implements TerrainSource {
     }
 
     /**
-     * API LSS не то, под которое собран мод (класс или метод изменился, {@link LinkageError} при вызове): слой LSS
-     * выключается до перезапуска одной строкой в лог, подписчик снимается — LSS не шлёт ему больше ничего.
+     * LSS API differs from the build (class or method changed, {@link LinkageError} on call): disable LSS layer until
+     * restart with one log line; unsubscribe so LSS sends it nothing further.
      */
     private static void disable(LinkageError e) {
         VoxelColumnConsumer c = consumer;
@@ -168,13 +168,13 @@ final class LssTerrain implements TerrainSource {
         try {
             LSSApi.removeColumnConsumer(c);
         } catch (LinkageError ignored) {
-            // и снять нечем: колонки дальше не читаются (consumer == null)
+            // Cannot unsubscribe either: no further column reads (consumer == null).
         }
     }
 
     /**
-     * Чанк от сервера, в потоке LSS ({@code LSS-ColumnProcessor}). Исключение не выпускается: LSS счёл бы чанк
-     * не принятым и прислал заново всем подписчикам (и Voxy) — отказ только в счётчик.
+     * Chunk from server on the LSS thread ({@code LSS-ColumnProcessor}). Catch exceptions: LSS would treat the chunk
+     * as unaccepted and resend to all subscribers (including Voxy); only count the failure.
      */
     private static void receive(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData data) {
         if (consumer == null) return;
@@ -229,8 +229,8 @@ final class LssTerrain implements TerrainSource {
     }
 
     /**
-     * Мир измерения у текущего сервера; новый — с чтением файла в фоне. {@code level} — мир клиента, для которого
-     * чанк (у LSS — снимок на миг отправки): хэш сида — из пакета входа или возрождения ({@code BiomeManager}).
+     * Dimension world on the current server; a new one reads its file in the background. {@code level} is the chunk's
+     * client world (LSS snapshot at send time): seed hash comes from the login or respawn packet ({@code BiomeManager}).
      */
     private static World world(ClientLevel level, ResourceKey<Level> dimension) {
         ServerCacheKey now = ServerCacheKey.current();
@@ -284,7 +284,7 @@ final class LssTerrain implements TerrainSource {
         if (!w.dirty.getAndSet(false)) return;
         Path f = null;
         try {
-            // Поиск папки при чтении не удался: после восстановления доступа сначала дочитать старый рельеф.
+            // Folder lookup failed during read: finish reading old terrain first after access is restored.
             if (w.directory == null) load(w);
             f = file(w);
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
@@ -308,18 +308,18 @@ final class LssTerrain implements TerrainSource {
     }
 
     /**
-     * Задача в поток файлов. JVM уже выходит (крюк остановки закрыл поток, а тик или поток LSS ещё идут) — задача не
-     * нужна: всё, что было, крюк уже записал.
+     * Submit work to the file thread. JVM exiting (shutdown hook closed the thread while tick or LSS thread still runs)
+     * means no task needed: the hook already wrote everything present.
      */
     private static void submit(Runnable task) {
         try {
             io.execute(task);
         } catch (RejectedExecutionException e) {
-            // выход из игры
+            // Game exit.
         }
     }
 
-    /** Под замком {@link #worlds}: все миры — на диск (в фоне) и из памяти. После выхода JVM запись уже не принимается. */
+    /** Under the {@link #worlds} lock: all worlds to disk (background) and out of memory. No writes accepted after JVM exit. */
     private static void flushLocked() {
         for (World w : worlds.values()) {
             submit(() -> save(w));
@@ -327,7 +327,7 @@ final class LssTerrain implements TerrainSource {
         worlds.clear();
     }
 
-    /** Выход из мира: присланное — на диск, память свободна. */
+    /** World exit: received data to disk, memory released. */
     static void flush() {
         synchronized (worlds) {
             flushLocked();
@@ -336,8 +336,8 @@ final class LssTerrain implements TerrainSource {
     }
 
     /**
-     * Раз в тик, в потоке игры: сохранение по часам; подробных чанков сверх предела — грубыми, всех сверх предела —
-     * дальние долой (в фоне).
+     * Once per tick on the game thread: timed saves; detailed chunks above the limit become coarse, and farthest
+     * total chunks above the limit are discarded (background).
      */
     static void tick(double playerX, double playerZ) {
         ticks++;
@@ -363,7 +363,7 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Мир этого источника: источник живёт, пока клиент в одном мире ({@link TerrainTiles} заводит новый на смену). */
+    /** This source's world: source lives while the client stays in one world ({@link TerrainTiles} replaces it on change). */
     @Nullable
     private World mine;
 
@@ -372,7 +372,7 @@ final class LssTerrain implements TerrainSource {
         return w != null ? w : (mine = world(level, level.dimension()));
     }
 
-    /** Сервер с LSS раздаёт LOD этому клиенту (рукопожатие прошло); иначе слой не нужен. */
+    /** Server with LSS distributes LODs to this client (handshake complete); otherwise no layer needed. */
     @Override
     public boolean active() {
         if (consumer == null) return false;
@@ -384,7 +384,7 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Колонок этого мира ещё нет ни с сервера, ни с диска. */
+    /** No columns for this world yet, from server or disk. */
     @Override
     public boolean waiting() {
         World w = mine();
@@ -401,7 +401,7 @@ final class LssTerrain implements TerrainSource {
         return true;
     }
 
-    /** Чтение — из памяти: потоки плиток ничего не ждут. */
+    /** Read from memory: tile threads never wait. */
     @Override
     public int parallelism() {
         return 4;
@@ -445,7 +445,7 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    /** Файл прочитан (один раз за мир): плитки, построенные до него, — без того, что в нём было. */
+    /** File read (once per world): tiles built before it lack its contents. */
     @Override
     public boolean invalidated(ClientLevel level) {
         return mine().fresh.getAndSet(false);

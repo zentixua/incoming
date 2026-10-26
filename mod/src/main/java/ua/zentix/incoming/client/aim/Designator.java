@@ -42,12 +42,12 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Бинокль-целеуказатель: пока держишь ПКМ с пультом — зум, прицельная марка, дальность и что под прицелом
- * (блок, моб, игрок, аппарат Create — в рамке), ЛКМ — пуск, колесо — оружие. Что видишь, туда и летит:
- * клиент отправляет свою цель, сервер находит её у себя и проверяет.
+ * Binocular designator: hold RMB with the remote for zoom, reticle, range and what's under the crosshair (block,
+ * mob, player, Create craft, framed); LMB launches, wheel selects weapon. It flies where you look:
+ * the client sends its target, the server finds and validates it on its side.
  */
 public final class Designator {
-    /** Дальность прицела на клиенте; сервер всё равно ограничит своей (aim_range). */
+    /** Client sight range; the server still applies its own limit (aim_range). */
     public static final double RANGE = 400;
 
     @Nullable
@@ -75,7 +75,7 @@ public final class Designator {
             return;
         }
         pick = TargetPicker.pick(mc.level, p, p.getEyePosition(), p.getLookAngle(), RANGE);
-        // захват цели: короткий сигнал, когда под прицелом появилась сущность или аппарат
+        // Target acquisition: short cue when an entity or craft appears under the crosshair.
         Object locked = pick == null ? null : pick.entity() != null ? pick.entity() : pick.kind() == TargetPicker.Kind.AIRCRAFT ? pick.label().getString() : null;
         if (locked != null && !locked.equals(lastLocked)) {
             mc.getSoundManager().play(SimpleSoundInstance.forUI(ModSounds.DESIGNATOR_LOCK.get(), 1.0f, 0.6f));
@@ -83,7 +83,7 @@ public final class Designator {
         lastLocked = locked;
     }
 
-    /** Забыть цель: держит сущность текущего мира, после выхода из него её держать нельзя. */
+    /** Forget target: holds an entity of the current world and must not retain it after leaving. */
     public static void reset() {
         pick = null;
         lastLocked = null;
@@ -95,7 +95,7 @@ public final class Designator {
         return hand == null || p == null ? Loadout.DEFAULT : DesignatorItem.loadout(p.getItemInHand(hand));
     }
 
-    /** ЛКМ в бинокле: пуск по тому, что под прицелом (маршрут и место пуска с карты — только у пуска с карты и пульта). */
+    /** LMB in binoculars: launch at the crosshair (map route and launch site apply only to map and remote launches). */
     public static void fire() {
         TargetPicker.Pick pk = pick;
         if (pk == null || !isScoping()) return;
@@ -116,7 +116,7 @@ public final class Designator {
         }
     }
 
-    /** Колесо в бинокле: следующее/предыдущее оружие (сохраняется в пульте). */
+    /** Wheel in binoculars: next/previous weapon (saved in the remote). */
     public static void scroll(double delta) {
         InteractionHand hand = scopingHand();
         LocalPlayer p = Minecraft.getInstance().player;
@@ -129,13 +129,13 @@ public final class Designator {
         p.displayClientMessage(Component.translatable("incoming.weapon.selected", next.weapon().displayName()).withStyle(ChatFormatting.GOLD), true);
     }
 
-    // ---------------------------------------------------------------- зум и чувствительность
+    // ---------------------------------------------------------------- zoom and sensitivity
 
     public static void fov(ComputeFovModifierEvent e) {
         if (isScoping()) e.setNewFovModifier((float) (1.0 / IncomingConfig.CLIENT.zoom.get()));
     }
 
-    /** С зумом мышь медленнее во столько же раз, как у подзорной трубы. */
+    /** Zoom slows the mouse by the same factor, as with a spyglass. */
     public static void turn(CalculatePlayerTurnEvent e) {
         if (!isScoping()) return;
         double s = e.getMouseSensitivity() * 0.6 + 0.2;
@@ -143,12 +143,12 @@ public final class Designator {
         e.setMouseSensitivity(Math.max(0, (scaled - 0.2) / 0.6));
     }
 
-    /** В бинокль руку с пультом не видно. */
+    /** Hide the hand holding the remote while using binoculars. */
     public static void hideHand(RenderHandEvent e) {
         if (isScoping()) e.setCanceled(true);
     }
 
-    // ---------------------------------------------------------------- рамка вокруг цели в мире
+    // ---------------------------------------------------------------- target frame in the world
 
     public static void renderWorld(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || pick == null || !isScoping()) return;
@@ -171,7 +171,7 @@ public final class Designator {
         pose.popPose();
     }
 
-    // ---------------------------------------------------------------- прицельная марка
+    // ---------------------------------------------------------------- reticle
 
     public static void renderHud(GuiGraphics g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
@@ -180,14 +180,14 @@ public final class Designator {
         Font font = mc.font;
         int r = Math.min(w, h) / 2 - 10;
 
-        // затемнение по краям — «окуляр»
+        // Darkened edges: eyepiece.
         g.fill(0, 0, w, cy - r, 0xB0000000);
         g.fill(0, cy + r, w, h, 0xB0000000);
         g.fill(0, cy - r, cx - r, cy + r, 0xB0000000);
         g.fill(cx + r, cy - r, w, cy + r, 0xB0000000);
 
         int red = pick != null && (pick.entity() != null || pick.kind() == TargetPicker.Kind.AIRCRAFT) ? 0xFFFF4030 : 0xFFE8E8E8;
-        // перекрестие с разрывом и засечки дальномера
+        // Gapped crosshair and rangefinder ticks.
         g.fill(cx - 30, cy, cx - 4, cy + 1, red);
         g.fill(cx + 4, cy, cx + 30, cy + 1, red);
         g.fill(cx, cy - 30, cx + 1, cy - 4, red);
@@ -208,7 +208,7 @@ public final class Designator {
         InteractionHand hand = scopingHand();
         int linked = hand == null || p == null ? 0 : LauncherLinks.of(p.getItemInHand(hand)).size();
         if (linked > 0) {
-            // ЛКМ ставит задачу привязанным пусковым, а не пускает сам
+            // LMB assigns missions to linked launchers rather than launching directly.
             Component assign = Component.translatable("incoming.hud.assign", linked).withStyle(ChatFormatting.YELLOW);
             g.drawString(font, assign, cx - font.width(assign) / 2, cy + 64, 0xFFFFFFFF);
         }

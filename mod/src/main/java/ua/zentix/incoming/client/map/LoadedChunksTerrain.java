@@ -14,25 +14,25 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Рельеф из чанков, которые есть у клиента (дальность прорисовки): как ванильная карта — верхний блок по карте
- * высот {@code MOTION_BLOCKING} (другие клиенту не приходят) и глубина воды. Мир клиента читается только в потоке игры.
+ * Terrain from chunks present on the client (render distance): like a vanilla map, the top block from
+ * {@code MOTION_BLOCKING} heightmap (no others arrive on the client) and water depth. Read client world only on the game thread.
  */
 final class LoadedChunksTerrain implements TerrainSource {
-    /** Глубже этого вода на карте одинаково тёмная. */
+    /** Water deeper than this has the same map darkness. */
     private static final int MAX_WATER_DEPTH = 16;
-    /** Сколько блоков вниз искать блок с цветом под прозрачными (стекло, свет). */
+    /** Blocks to search downward for a coloured block below transparent ones (glass, light). */
     private static final int MAX_COLORLESS = 8;
 
     /**
-     * Чанки ({@link ChunkPos#asLong}), пришедшие клиенту с прошлого тика, и мир, в который они пришли: плитка, построенная
-     * заранее, пока их не было, — с дырами, и её надо перечитать, а не ждать часов неполной плитки (после входа в мир
-     * чанки приходят секундами). Пишет и читает поток игры.
+     * Chunks ({@link ChunkPos#asLong}) received since last tick and their world: a tile built beforehand has holes
+     * and must be reread, without waiting for the incomplete-tile timer (chunks arrive over seconds after login).
+     * Written and read by the game thread.
      */
     private static final Set<Long> arrived = new HashSet<>();
     @Nullable
     private static ClientLevel arrivedIn;
 
-    /** Чанк пришёл клиенту (событие NeoForge из {@code ClientChunkCache.replaceWithPacketData}). */
+    /** Chunk received by client (NeoForge event from {@code ClientChunkCache.replaceWithPacketData}). */
     static void onChunkLoad(ChunkEvent.Load e) {
         if (!(e.getLevel() instanceof ClientLevel level)) return;
         if (level != arrivedIn) {
@@ -42,7 +42,7 @@ final class LoadedChunksTerrain implements TerrainSource {
         arrived.add(e.getChunk().getPos().toLong());
     }
 
-    /** Выход из мира: не держать его. */
+    /** World exit: do not retain it. */
     static void clearArrivals() {
         arrived.clear();
         arrivedIn = null;
@@ -53,7 +53,7 @@ final class LoadedChunksTerrain implements TerrainSource {
         return false;
     }
 
-    /** Чанки клиента меняются на глазах (взрывы): видимая плитка перечитывается раз в 30 с. */
+    /** Client chunks change visibly (explosions): reread a visible tile every 30 s. */
     @Override
     public long refreshNanos() {
         return 30_000_000_000L;

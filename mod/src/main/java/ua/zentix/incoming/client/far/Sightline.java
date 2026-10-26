@@ -1,30 +1,30 @@
 package ua.zentix.incoming.client.far;
 
 /**
- * Один луч от источника к глазу по карте высот: закрывает ли рельеф (холм, дома) источник и насколько — для картинки
- * (видно ли место взрыва или только поднявшийся над холмом дым) и для звука (дифракция через кромку, ISO 9613-2).
- * Не больше {@link #MAX_SAMPLES} точек с шагом не мельче {@link #STEP} блоков; высоты отдаёт вызывающий
- * ({@link Heights}): чанки клиента, дальше — плитки рельефа карты; неизвестная колонка преградой не считается.
+ * One source-to-eye ray over height map: whether terrain (hill, houses) occludes source, and by how much, for
+ * visuals (blast site visible or only smoke above hill) and sound (edge diffraction, ISO 9613-2). At most
+ * {@link #MAX_SAMPLES} points with spacing at least {@link #STEP} blocks; caller supplies heights
+ * ({@link Heights}): client chunks, map terrain tiles beyond; unknown column is not a barrier.
  */
 public final class Sightline {
-    /** Точек на луч, не больше. */
+    /** Maximum points per ray. */
     public static final int MAX_SAMPLES = 64;
-    /** Шаг по горизонтали, блоков, не мельче. */
+    /** Minimum horizontal step, blocks. */
     public static final double STEP = 16;
-    /** Карта высот — с точностью до блока: ниже этого над лучом — не преграда. */
+    /** Height map is block-accurate: less than this above ray is not a barrier. */
     private static final double TOLERANCE = 0.5;
 
     private Sightline() {}
 
-    /** Верх земли (с постройками и кронами) в колонке; {@link Double#NaN} — неизвестно. */
+    /** Ground top (including buildings and canopies) in column; {@link Double#NaN} — unknown. */
     @FunctionalInterface
     public interface Heights {
         double at(int x, int z);
     }
 
     /**
-     * @param pathDifference разность хода через самую значимую кромку (a + b − d), блоков; 0 — прямая видимость
-     * @param hidden         на сколько блоков выше источника начинается видимое с глаза (0 — источник виден)
+     * @param pathDifference path difference over most significant edge (a + b − d), blocks; 0 — line of sight
+     * @param hidden         blocks above source where eye-visible region starts (0 — source visible)
      */
     public record Result(double pathDifference, double hidden) {
         public static final Result OPEN = new Result(0, 0);
@@ -46,7 +46,7 @@ public final class Sightline {
                 double b = Math.sqrt((1 - f) * flat * (1 - f) * flat + (ey - top) * (ey - top));
                 z = Math.max(z, a + b - direct);
             }
-            // прямая из глаза через вершину: над источником она на (top − ey)/u + ey − sy, u — доля пути от глаза
+            // line from eye through top: height above source is (top − ey)/u + ey − sy, u — path fraction from eye
             hidden = Math.max(hidden, (top - ey) / (1 - f) + ey - sy);
         }
         return new Result(z, hidden);

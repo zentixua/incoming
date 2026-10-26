@@ -23,15 +23,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Крупная пыль с сорванного дёрна: фронт поднимает её один раз, затем она сносится и выпадает из перемешанного слоя.
- * Это детали срыва FrontLitter, а не второй физический слой GroundDust (его масса и оседание не меняются).
- * Место и момент срыва — тот же DustModel и ChemicalFront; контраст, размер клубов и подчёркнутый подъём — подача.
- * В отличие от задержки частиц в целых тиках, источник проверяет приход с долей тика: кольцо не возникает целиком.
+ * Coarse dust from torn turf: the front lifts it once, then it drifts and settles out of the mixed layer.
+ * These are FrontLitter detachment details, rather than a second physical GroundDust layer (its mass and settling stay unchanged).
+ * Detachment position and time use the same DustModel and ChemicalFront; contrast, billow size and accentuated lift are presentation.
+ * Unlike integer-tick particle delays, the source checks fractional-tick arrival: the ring does not appear all at once.
  */
 final class FrontDust implements SmokeGrid.Source {
     /**
-     * Площадка срыва: место, расстояние до взрыва, приход фронта и положительная фаза, σ выросшего клуба по горизонтали,
-     * площадь, контраст срыва, ветер и устойчивость; {@code until} — с какого возраста взрыва её клуб уже не виден.
+     * Detachment patch: position, blast distance, front arrival and positive phase, grown billow horizontal σ,
+     * area, detachment contrast, wind and stability; {@code until} — blast age after which its billow is invisible.
      */
     record Patch(double x, double y, double z, double slant, double arrival, double phase, double sigma,
                  double area, double contrast, double windX, double windZ, double stability, double until) {
@@ -43,40 +43,40 @@ final class FrontDust implements SmokeGrid.Source {
     }
 
     /**
-     * Подача: сетка площадок — дискретизация кольца, не число частиц грунта. Шаг один вдоль и поперёк кольца,
-     * {@link #STEP} м, у большого заряда шире — площадок не больше {@link #PATCHES} (у залпа — {@link #share}); клуб
-     * выросшей площадки — σ = {@link #SPREAD} шага: соседи перекрываются, слой без бус. Цена: клубы источника
-     * {@code SmokePuffs} каждый кадр сливает попарно; прежняя сетка 24 × 64 (у шахеда 864 клуба, шаг поперёк кольца
-     * 2,2 м против 5,6 вдоль) стоила ~1 мс кадра на взрыв, залп — кратно.
+     * presentation: patch grid discretizes the ring, rather than counting soil particles. Same step along and across the ring,
+     * {@link #STEP} m, wider for a large charge — at most {@link #PATCHES} patches (for a salvo — {@link #share}); a
+     * grown patch billow has σ = {@link #SPREAD} steps: neighbours overlap, no beads in the layer. Cost: {@code SmokePuffs}
+     * merges source billows pairwise every frame; the previous 24 × 64 grid (864 billows for Shahed, cross-ring step
+     * 2.2 m versus 5.6 along) cost ~1 ms of frame time per blast, multiplied for a salvo.
      */
     static final double STEP = 5.6, SPREAD = 0.6;
     static final int PATCHES = 400;
     /**
-     * Подача: видимых площадок у всех взрывов сразу не больше {@link #ALL_PATCHES} ({@link #share}): сверх него
-     * прореживаются взрывы (сначала те, чья доля больше равной, из них старшие, затем дальние) — площадки группы сливаются
-     * в одну с той же массой и шире, кольцо остаётся покрытым ({@link #thin}). Без общего предела залп из восьми
-     * шахедов в одном месте рисовал восемь наложенных слоёв по ~360 клубов — слой эффектов +12 мс на кадр против main.
+     * presentation: at most {@link #ALL_PATCHES} visible patches across all blasts ({@link #share}): beyond that,
+     * blasts are thinned (first those above an equal share, oldest among them, then farthest) — a group's patches merge
+     * into one wider patch with the same mass, keeping the ring covered ({@link #thin}). Without a shared cap, eight
+     * Shaheds at one site drew eight overlapping layers of ~360 billows — effects layer +12 ms per frame versus main.
      */
     static final int ALL_PATCHES = 800;
-    /** Взрывы, чьи площадки ещё видны (для общего предела). */
+    /** Blasts with patches still visible (for the shared cap). */
     private static final List<FrontDust> LIVE = new ArrayList<>();
-    /** Уровней прореживания не больше: каждый вдвое реже по дуге или по кольцам. */
+    /** Maximum thinning levels: each halves the count along arcs or across rings. */
     static final int LEVELS = 24;
-    /** Клуб прозрачнее этого {@code SmokePuffs} не рисует (непрозрачность середины 0,004): площадка дальше не нужна. */
+    /** {@code SmokePuffs} does not draw a billow below this opacity (centre opacity 0.004): its patch is no longer needed. */
     static final double FAINTEST = 0.004;
     /**
-     * Подача: высота перемешанного слоя, толща поднятого по вертикали (запас на площадь источника) и наибольшая толща
-     * одного клуба. Не новая масса в GroundDust. Толща 0,5 — кольцо видно с 20–100 м и не стоит стеной у камеры
-     * (0,08 — кольца не было видно вовсе, 2,8 на клуб в R2 — бурая стена во весь кадр). У бегущего края клуб ещё
-     * сжат фронтом (его 4σ — за фронтом): весь запас площадки в нём был бы непрозрачной точкой, поэтому толща клуба
-     * не больше толщи выросшего и {@code EDGE_TAU}; остальное площадка отдаёт, когда клуб вырос.
+     * presentation: mixed-layer height, vertical optical depth of lifted matter (stock per source area), and maximum optical depth
+     * per billow. No new GroundDust mass. Depth 0.5 keeps the ring visible from 20–100 m without forming a wall near the camera
+     * (0.08 made the ring invisible; 2.8 per billow in R2 was a full-screen brown wall). At the advancing edge the billow is still
+     * compressed by the front (its 4σ is behind it): the full patch stock would be an opaque dot, so billow depth is
+     * capped by grown depth and {@code EDGE_TAU}; the patch releases the rest as the billow grows.
      */
     static final double HEIGHT = 1.3, COLUMN_TAU = 0.5, EDGE_TAU = 0.8;
     /**
-     * Цвет толстого слоя крошки на экране — сухая светлая пыль почвы: ω' ≈ 0,9 в красном (у минеральной пыли в видимом
-     * 0,85–0,95, ⚠ оценка для крошки дёрна) — и альбедо по нему ({@link SmokeGrid#dustAlbedo}). Клуб берёт альбедо, а не
-     * цвет экрана: цвет экрана вместо альбедо давал серый толстый слой, а у тёмной пыли (ω' ≈ 0,8) клуб в 0,8 толщи
-     * при солнце сверху темнел серединой против светлой просвечивающей каймы («бублики»).
+     * Screen colour of a thick grit layer — dry light soil dust: ω' ≈ 0.9 in red (mineral dust in visible light
+     * 0.85–0.95, (est.) for turf grit), and albedo derived from it ({@link SmokeGrid#dustAlbedo}). A billow takes albedo, rather than
+     * screen colour: screen colour used as albedo produced a grey thick layer, while dark dust (ω' ≈ 0.8) in a billow of 0.8 depth
+     * under overhead sun darkened at the centre against its bright translucent rim (“doughnuts”).
      */
     static final float SHOWN_R = 0.72f, SHOWN_G = 0.65f, SHOWN_B = 0.54f;
     static final float ALBEDO_R = SmokeGrid.dustAlbedo(SHOWN_R), ALBEDO_G = SmokeGrid.dustAlbedo(SHOWN_G),
@@ -85,18 +85,18 @@ final class FrontDust implements SmokeGrid.Source {
     private final ClientLevel level;
     private final long born;
     private final ChemicalFront front;
-    /** Место взрыва. */
+    /** Blast position. */
     private final double cx, cy, cz;
-    /** Площадки по кольцам изнутри наружу; у каждой — её кольцо; у колец — радиус и число мест. */
+    /** Patches by ring from inside outward; each has its ring; rings have radius and site count. */
     private final Patch[] patches;
     private final int[] ring, spokes;
     private final double[] radius;
     private final double dr;
-    /** Уровень прореживания и его площадки по номеру исходной: у первой в группе — слитая, у остальных — null. */
+    /** Thinning level and its patches indexed by the original: first in a group — merged, others — null. */
     private int thinned;
     private Patch[] shown;
     private double end;
-    /** Групп на уровне (−1 — ещё не считали). */
+    /** Groups at each level (−1 — not computed yet). */
     private final int[] groupCount = new int[LEVELS + 2];
 
     private FrontDust(@Nullable ClientLevel level, ChemicalFront front, Vec3 pos, long born, List<Patch> patches, List<Integer> rings,
@@ -116,10 +116,10 @@ final class FrontDust implements SmokeGrid.Source {
         show(this.patches);
     }
 
-    /** Покров места: высота верха и листва ли. */
+    /** Site cover: top height and whether it is foliage. */
     record Cover(int top, boolean leaves) {}
 
-    /** Сорванный покров в столбе (bx, bz); null — срывать нечего (голый грунт, вода, камень, песок) или чанка нет. */
+    /** Torn cover in column (bx, bz); null — nothing to tear (bare soil, water, stone, sand) or no chunk. */
     interface Ground {
         @Nullable
         Cover at(int bx, int bz);
@@ -127,13 +127,13 @@ final class FrontDust implements SmokeGrid.Source {
 
     static void spawn(ClientLevel level, Vec3 pos, ChemicalFront front, double inner, double outer, double hob) {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
-        // За секунды жизни крошки — воздух в миг срыва (оценка постоянного ветра).
+        // over the grit lifetime of seconds — air at detachment (constant-wind estimate)
         FrontDust dust = layout(level, pos, front, inner, outer, hob, ClientAir.now(), (bx, bz) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
             if (chunk == null) return null;
             int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15);
             var cover = chunk.getBlockState(m.set(bx, top, bz));
-            // Только сорванный покров; голый грунт, вода, камень и песок остаются у GroundDust.
+            // only torn cover; bare soil, water, stone and sand remain with GroundDust
             boolean leaves = cover.is(BlockTags.LEAVES);
             return leaves || cover.is(Blocks.GRASS_BLOCK) ? new Cover(top, leaves) : null;
         }, BlastTime.ticks());
@@ -144,7 +144,7 @@ final class FrontDust implements SmokeGrid.Source {
         SmokeGrid.add(dust);
     }
 
-    /** Площадки срыва вокруг {@code pos} в кольце от {@code inner} до {@code outer} м; null — нигде не сорвано. */
+    /** Detachment patches around {@code pos} in a ring from {@code inner} to {@code outer} m; null — no detachment anywhere. */
     @Nullable
     static FrontDust layout(@Nullable ClientLevel level, Vec3 pos, ChemicalFront front, double inner, double outer, double hob, Air air,
                             Ground ground, long born) {
@@ -179,24 +179,24 @@ final class FrontDust implements SmokeGrid.Source {
     }
 
     /**
-     * Подъём за импульс напора, затем выпадение крупной корзины: dm/dt = −v_settle m / h, как в DustModel.
-     * Перемешанный слой постоянной высоты — приближение на секунды. Яркость уходит только вместе со взвесью;
-     * конец положительной фазы прекращает подачу, но не удаляет поднятую пыль.
+     * Lift over the dynamic-pressure impulse, then settling of the coarse bin: dm/dt = −v_settle m / h, as in DustModel.
+     * Constant mixed-layer height is an approximation over seconds. Brightness disappears only with the suspension;
+     * the end of the positive phase stops emission but does not remove lifted dust.
      */
     static double envelope(double age, double phase) {
         if (age <= 0 || phase <= 0) return 0;
         return DustModel.lifted(age / phase) * Math.exp(-BlastLitter.COVER_DUST_SETTLE * Math.max(0, age - phase) / HEIGHT);
     }
 
-    /** Колец площадок в кольце срыва от {@code inner} до {@code outer} м: шаг поперёк — {@link #STEP}, у большого кольца шире. */
+    /** Patch rings within the detachment ring from {@code inner} to {@code outer} m: cross-ring step {@link #STEP}, wider for a large ring. */
     static int rings(double inner, double outer) {
         double step = Math.max(STEP, Math.sqrt(Math.PI * (outer * outer - inner * inner) / PATCHES));
         return Math.max(1, (int) Math.ceil((outer - inner) / step));
     }
 
     /**
-     * Шаг площадок вдоль кольца, м: {@link #STEP}, а у большого кольца — такой, чтобы с округлением по кольцам площадок было не
-     * больше {@link #PATCHES}: Σ⌈2πr/шаг⌉ ≤ π(R² − r²)/(dr·шаг) + колец (середины колец: Σ r·dr = (R² − r²)/2).
+     * Patch step along a ring, m: {@link #STEP}, or for a large ring wide enough that after rounding per ring patch count is at
+     * most {@link #PATCHES}: Σ⌈2πr/step⌉ ≤ π(R² − r²)/(dr·step) + rings (ring midpoints: Σ r·dr = (R² − r²)/2).
      */
     static double arc(double inner, double outer) {
         int rings = rings(inner, outer);
@@ -205,10 +205,10 @@ final class FrontDust implements SmokeGrid.Source {
     }
 
     /**
-     * Общий предел ({@link #ALL_PATCHES}): {@code fresh} входит в {@code live}; пока видимых площадок у всех в миг
-     * {@code now} (тики) больше предела — прореживается взрыв, чья доля больше равной (нет таких — любой, кого ещё можно),
-     * из них старший, при равных — дальний от глаза. Прореживать некого — новый пыли не рисует: прежние уже в пределе
-     * (видимых со временем только меньше).
+     * Shared cap ({@link #ALL_PATCHES}): {@code fresh} joins {@code live}; while visible patches across all blasts at
+     * {@code now} (ticks) exceed the cap, thin a blast above an equal share (if none, any still eligible),
+     * oldest first, ties resolved by distance from the eye. None eligible — the new blast draws no dust: previous ones already fit
+     * (visible count only decreases over time).
      */
     static void share(List<FrontDust> live, FrontDust fresh, long now, Vec3 eye) {
         live.add(fresh);
@@ -236,7 +236,7 @@ final class FrontDust implements SmokeGrid.Source {
         }
     }
 
-    /** Видимых площадок в миг {@code now} (тики). */
+    /** Visible patches at {@code now} (ticks). */
     int visible(long now) {
         double elapsed = BlastTime.seconds(now, born, 0);
         int n = 0;
@@ -244,7 +244,7 @@ final class FrontDust implements SmokeGrid.Source {
         return n;
     }
 
-    /** Площадки, что рисуются сейчас (у первой в группе — слитая; остальные — null). */
+    /** Patches drawn now (first in each group — merged; others — null). */
     Patch[] shown() {
         return shown;
     }
@@ -253,12 +253,12 @@ final class FrontDust implements SmokeGrid.Source {
         return (cx - eye.x) * (cx - eye.x) + (cy - eye.y) * (cy - eye.y) + (cz - eye.z) * (cz - eye.z);
     }
 
-    /** Следующий уровень даёт меньше групп. */
+    /** Next level has fewer groups. */
     boolean canThin() {
         return thinned < LEVELS && groups(thinned + 1) < groups(thinned);
     }
 
-    /** Вдвое реже: следующий уровень прореживания. */
+    /** Halve density: next thinning level. */
     void thin() {
         thinned++;
         show(aggregate(thinned));
@@ -271,7 +271,7 @@ final class FrontDust implements SmokeGrid.Source {
         end = last;
     }
 
-    /** Шаг уровня {@code thinned} по дуге (a) и по кольцам (b): попеременно вдвое. */
+    /** Level {@code thinned} step along the arc (a) and across rings (b): alternate doubling. */
     private static int arcStride(int thinned) {
         return 1 << ((thinned + 1) / 2);
     }
@@ -280,14 +280,14 @@ final class FrontDust implements SmokeGrid.Source {
         return 1 << (thinned / 2);
     }
 
-    /** Наибольший шаг по дуге кольца из {@code spokes} площадок: на кольце остаётся хотя бы три. */
+    /** Largest arc step for a ring of {@code spokes} patches: at least three remain on a ring. */
     private static int arcMost(int spokes) {
         return Integer.highestOneBit(Math.max(1, spokes / 3));
     }
 
     /**
-     * Группа площадки {@code i} на уровне {@code thinned}: кольца — блоками по b от внутреннего, по дуге — номер места
-     * первого кольца блока под этим углом, делённый на шаг по дуге (на кольце не меньше трёх групп).
+     * Group of patch {@code i} at level {@code thinned}: rings in blocks of b from the inner ring; along the arc — site index on
+     * the block's first ring at this angle divided by the arc step (at least three groups per ring).
      */
     private long group(int i, int thinned) {
         int b = ringStride(thinned), j0 = ring[i] / b * b, s0 = spokes[j0], a = Math.min(arcStride(thinned), arcMost(s0));
@@ -306,9 +306,9 @@ final class FrontDust implements SmokeGrid.Source {
     }
 
     /**
-     * Площадки уровня {@code thinned}: группа — одна площадка у первой по номеру, с той же массой (сумма площади ×
-     * контраст), в середине масс группы, σ — шаг группы × {@link #SPREAD}; приход и фаза — у её места. Зерно клуба у
-     * первой в группе прежнее: при прореживании клубы не перерождаются, а сливаются.
+     * Patches at level {@code thinned}: one patch per group at the first index, with the same mass (sum of area ×
+     * contrast), at the group's centre of mass, σ — group step × {@link #SPREAD}; arrival and phase from its position. The first
+     * billow in the group retains its seed: thinning merges billows rather than respawning them.
      */
     private Patch[] aggregate(int thinned) {
         Patch[] out = new Patch[patches.length];
@@ -338,24 +338,24 @@ final class FrontDust implements SmokeGrid.Source {
         return out;
     }
 
-    /** Выход из мира. */
+    /** World exit. */
     static void reset() {
         LIVE.clear();
     }
 
-    /** Площадок на кольце радиуса {@code r} при шаге {@code arc}. */
+    /** Patches on a ring of radius {@code r} with arc step {@code arc}. */
     static int spokes(double r, double arc) {
         return Math.max(6, (int) Math.ceil(2 * Math.PI * r / arc));
     }
 
-    /** Толща выросшего клуба площадки поперёк середины (до оседания). */
+    /** Grown patch billow optical depth across its centre (before settling). */
     static double fullTau(double area, double contrast, double sigma) {
         return COLUMN_TAU * area * contrast / (2 * Math.PI * sigma * Math.min(HEIGHT / 2, sigma));
     }
 
     /**
-     * С какого возраста взрыва клуб площадки, выпадая, прозрачнее {@link #FAINTEST}: его толща — не больше
-     * max({@code tau}, {@link #EDGE_TAU}) и дальше гаснет как оседание (расплывание только разбавляет).
+     * Blast age at which settling makes the patch billow fainter than {@link #FAINTEST}: its optical depth is at most
+     * max({@code tau}, {@link #EDGE_TAU}), then fades by settling (spreading only dilutes it).
      */
     static double seenUntil(double arrival, double phase, double tau) {
         double most = Math.max(tau, EDGE_TAU);
@@ -363,9 +363,9 @@ final class FrontDust implements SmokeGrid.Source {
     }
 
     /**
-     * Один конечный запас на площадь источника: расширение клуба не создаёт новую оптическую массу, у края — не толще
-     * выросшего клуба и не меньше {@link #EDGE_TAU}. Невидимая площадка ({@link Patch#until}) отдаёт пустой клуб: её
-     * место в источнике (зерно клуба) остаётся, а слияние и кадр её не считают.
+     * One finite stock per source area: billow expansion creates no new optical mass; at the edge — no thicker than the
+     * grown billow and no less than {@link #EDGE_TAU}. An invisible patch ({@link Patch#until}) returns an empty billow: its
+     * source slot (billow seed) remains, but merging and drawing skip it.
      */
     static void emitPatch(Patch p, double elapsed, double radius, SmokeGrid.Sink out) {
         if (elapsed >= p.until) {
@@ -376,9 +376,9 @@ final class FrontDust implements SmokeGrid.Source {
         double path = Math.max(1, Math.hypot(p.windX, p.windZ)) * Math.max(0, age);
         double spread = Stability.sigmaY(p.stability, path);
         double dx = p.windX * Math.max(0, age), dz = p.windZ * Math.max(0, age);
-        // Клуб стоит на земле и растёт вверх вместе с собой: середина на высоте своего σ по вертикали (сорванное
-        // начинает у земли), а не висит на полслоя, пока сам ещё в сантиметры. Весь клуб (середина, подъём и 4σ) — за
-        // фронтом.
+        // billow stands on the ground and grows upward with itself: centre at its vertical σ (torn material
+        // starts at ground level), rather than hovering halfway up the layer while still centimetres wide. Entire billow (centre, lift and 4σ) stays behind
+        // the front.
         double room = Math.max(0, radius - p.slant - Math.hypot(dx, dz));
         double s = Math.min(Math.hypot(p.sigma, spread), room / 5);
         double v = Math.min(HEIGHT / 2, s), lift = v;
@@ -394,7 +394,7 @@ final class FrontDust implements SmokeGrid.Source {
         if (ended() || elapsed >= end) return false;
         double radius = front.radiusAt(elapsed);
         for (Patch p : shown) {
-            // не рисуемая в прореженной группе — пустой клуб: номера клубов источника (их зерно) прежние
+            // undrawn member of a thinned group — empty billow: source billow indices (seeds) stay unchanged
             if (p == null) out.blob(cx, cy, cz, 0, 0, 0, 0, 0, ALBEDO_R, ALBEDO_G, ALBEDO_B, CloudModel.T_AIR_K, 0);
             else emitPatch(p, elapsed, radius, out);
         }

@@ -3,16 +3,16 @@ package ua.zentix.incoming.client.hud;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.GuiGraphics;
 
-/** Простые фигуры HUD из закрашенных пикселей (у {@link GuiGraphics} есть только прямоугольники). */
+/** Simple HUD shapes from filled pixels ({@link GuiGraphics} provides only rectangles). */
 public final class HudDraw {
-    /** Обводка знаков карты: тёмная кайма, по которой линия читается на любом рельефе (город, снег, вода). */
+    /** Map symbol outline: dark edge that keeps lines readable over any terrain (city, snow, water). */
     public static final int HALO = 0xB0000000;
-    /** Штрих и промежуток штриховой линии, пикселей. */
+    /** Dash and gap of a dashed line, pixels. */
     private static final float DASH = 8, GAP = 5;
 
     private HudDraw() {}
 
-    /** Отрезок толщиной {@code width} — прямоугольник, повёрнутый вдоль отрезка. */
+    /** Segment of thickness {@code width}: rectangle rotated along the segment. */
     public static void line(GuiGraphics g, float x0, float y0, float x1, float y1, int width, int color) {
         float dx = x1 - x0, dy = y1 - y0;
         float len = (float) Math.sqrt(dx * dx + dy * dy);
@@ -25,13 +25,13 @@ public final class HudDraw {
         g.pose().popPose();
     }
 
-    /** Отрезок с обводкой {@link #HALO}. */
+    /** Segment with {@link #HALO} outline. */
     public static void haloLine(GuiGraphics g, float x0, float y0, float x1, float y1, int width, int color) {
         line(g, x0, y0, x1, y1, width + 2, HALO);
         line(g, x0, y0, x1, y1, width, color);
     }
 
-    /** Штриховая линия с обводкой: путь, который ещё предстоит (снаряд → цель). Не больше 200 штрихов. */
+    /** Outlined dashed line: remaining track (projectile → target). At most 200 dashes. */
     public static void dashed(GuiGraphics g, float x0, float y0, float x1, float y1, int width, int color) {
         float dx = x1 - x0, dy = y1 - y0;
         float len = (float) Math.sqrt(dx * dx + dy * dy);
@@ -47,7 +47,7 @@ public final class HudDraw {
         }
     }
 
-    /** Окружность толщиной {@code width} с обводкой: граница района (разброс залпа, дальность видео). */
+    /** Outlined circle of thickness {@code width}: area boundary (salvo spread, video range). */
     public static void ring(GuiGraphics g, float cx, float cy, float r, int width, int color) {
         if (r < 1) return;
         int steps = (int) Math.max(24, Math.min(360, 2 * Math.PI * r / 6));
@@ -62,7 +62,7 @@ public final class HudDraw {
         }
     }
 
-    /** Круг, залитый {@code color} (полупрозрачным — район под ним виден), по строкам в пределах экрана. */
+    /** Circle filled with {@code color} (translucency reveals the area below), by rows within the screen. */
     public static void disc(GuiGraphics g, float cx, float cy, float r, int color) {
         int y0 = Math.max(Math.round(cy - r), 0), y1 = Math.min(Math.round(cy + r), g.guiHeight());
         for (int y = y0; y < y1; y++) {
@@ -72,7 +72,7 @@ public final class HudDraw {
         }
     }
 
-    /** Пунктир: точка через 6 пикселей. */
+    /** Dotted line: one dot every 6 pixels. */
     public static void dotted(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
         double dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
         int steps = (int) Math.min(400, len / 6);
@@ -82,7 +82,7 @@ public final class HudDraw {
         }
     }
 
-    /** Пунктирная окружность: точка через ~6 пикселей дуги. */
+    /** Dotted circle: one dot per ~6 pixels of arc. */
     public static void dottedCircle(GuiGraphics g, double cx, double cy, double r, int color) {
         int steps = (int) Math.max(24, Math.min(720, 2 * Math.PI * r / 6));
         for (int i = 0; i < steps; i++) {
@@ -92,7 +92,7 @@ public final class HudDraw {
         }
     }
 
-    /** Квадратная рамка цели со стороной {@code 2r + 1}. */
+    /** Square target frame with side {@code 2r + 1}. */
     public static void box(GuiGraphics g, int x, int y, int r, int color) {
         g.fill(x - r, y - r, x + r + 1, y - r + 1, color);
         g.fill(x - r, y + r, x + r + 1, y + r + 1, color);
@@ -101,13 +101,13 @@ public final class HudDraw {
     }
 
     /**
-     * Значок летящего по карте «север вверх»: стрелка-самолётик по курсу Minecraft {@code yaw} (0° — на юг, +Z),
-     * с обводкой {@link #HALO}.
+     * Flying object icon on a north-up map: aircraft arrow along Minecraft {@code yaw} (0° south, +Z),
+     * with {@link #HALO} outline.
      */
     public static void heading(GuiGraphics g, int x, int y, float yaw, int color) {
         g.pose().pushPose();
         g.pose().translate(x, y, 0);
-        // курс Minecraft: 0° — на +Z (вниз по карте), по часовой — к −X; на экране поворот по часовой — положительный
+        // Minecraft heading: 0° toward +Z (down the map), clockwise toward −X; clockwise screen rotation is positive.
         g.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180));
         g.fill(-2, -8, 2, 7, HALO);
         g.fill(-7, -2, 7, 2, HALO);
@@ -118,7 +118,7 @@ public final class HudDraw {
         g.pose().popPose();
     }
 
-    /** Уголки рамки (x0, y0)–(x1, y1): по четверти короткой стороны, не меньше 2 пикселей. */
+    /** Frame corners (x0, y0)–(x1, y1): a quarter of the shorter side, at least 2 pixels. */
     public static void corners(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
         int len = Math.max(2, Math.min(x1 - x0, y1 - y0) / 4);
         g.fill(x0, y0, x0 + len, y0 + 1, color);

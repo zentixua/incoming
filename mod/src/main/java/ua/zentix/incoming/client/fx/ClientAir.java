@@ -6,9 +6,9 @@ import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.LocalWind;
 
 /**
- * Воздух мира у клиента сейчас ({@link Air#of(net.minecraft.world.level.Level)} — тот же, что у сервера): ветер мира по
- * времени игры, класс устойчивости по солнцу, ветру и дождю, влажность. Один на тик: дым частиц, ленты шлейфов и клубы
- * объёма берут его отсюда.
+ * Current client world air ({@link Air#of(net.minecraft.world.level.Level)} — the same as on the server): world wind by
+ * game time, stability class by sun, wind and rain, humidity. Once per tick: particle smoke, trail ribbons and volume
+ * billows all take it from here.
  */
 public final class ClientAir {
     private static long tick = Long.MIN_VALUE;
@@ -16,7 +16,7 @@ public final class ClientAir {
 
     private ClientAir() {}
 
-    /** Воздух сейчас; мира нет (и клиента — в юнит-тестах очагов) — штиль. */
+    /** Current air; no world (or client, in fire-source unit tests) — calm. */
     public static Air now() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc == null ? null : mc.level;
@@ -29,9 +29,9 @@ public final class ClientAir {
         return now;
     }
 
-    /** Мест с ветром у земли ({@link #site}) в памяти. */
+    /** Ground-wind sites ({@link #site}) retained in memory. */
     private static final int SITES = 256;
-    /** Ячейка места, блоков, и шаг направления ветра, рад: ближе — то же место. */
+    /** Site cell, blocks, and wind-direction step, rad: closer values are the same site. */
     private static final int CELL = 4;
     private static final double TURN = Math.PI / 16;
     private static final java.util.Map<Long, LocalWind> CACHE = new java.util.LinkedHashMap<>(64, 0.75f, true) {
@@ -40,13 +40,13 @@ public final class ClientAir {
             return size() > SITES;
         }
     };
-    /** Мир, чьи места в кэше: слабая ссылка — после выхода в меню кэш мир не держит. */
+    /** World owning cached sites: weak reference avoids retaining it after returning to the menu. */
     private static java.lang.ref.WeakReference<ClientLevel> cached = new java.lang.ref.WeakReference<>(null);
 
     /**
-     * Ветер у земли в (x, z) ({@link LocalWind}) по чанкам клиента и плиткам рельефа карты при нынешнем ветре мира; одно на
-     * ячейку {@value #CELL} блоков и направление с шагом π/16 (залп «Града» не считает место заново). Мира нет — поле.
-     * {@link LocalWind#base} — ячейки, не точки: источнику — {@link #site(double, double, double)}.
+     * Ground wind at (x, z) ({@link LocalWind}) from client chunks and map terrain tiles under current world wind; once per
+     * {@value #CELL}-block cell and direction in π/16 steps (a Grad salvo does not recompute the site). No world — open field.
+     * {@link LocalWind#base} belongs to the cell rather than the point: sources use {@link #site(double, double, double)}.
      */
     public static LocalWind site(double x, double z) {
         Minecraft mc = Minecraft.getInstance();
@@ -69,12 +69,12 @@ public final class ClientAir {
         return site;
     }
 
-    /** Ветер у земли места (x, z), мерить от поверхности на высоте y мира (под взрывом). */
+    /** Ground wind at site (x, z), measured from the surface at world height y (below the blast). */
     public static LocalWind site(double x, double y, double z) {
         return site(x, z).from(y);
     }
 
-    /** Скорость ветра у земли места (x, z) на высоте y мира, м/с: ветер мира на высоте над землёй места и его поправка. */
+    /** Ground-wind speed at site (x, z) and world height y, m/s: world wind at height above the site ground, with its correction. */
     public static double speed(double x, double y, double z) {
         Air a = now();
         LocalWind site = site(x, z);
@@ -82,13 +82,13 @@ public final class ClientAir {
         return a.wind().at(h, ua.zentix.incoming.util.Stability.alpha(a.stability())) * site.overGround(h);
     }
 
-    /** Ветер на высоте y мира вдоль x, блоков за тик. */
+    /** Wind along x at world height y, blocks per tick. */
     public static double windX(double y) {
         Air a = now();
         return a.speed(y) * a.wind().x() / 20;
     }
 
-    /** Ветер на высоте y мира вдоль z, блоков за тик. */
+    /** Wind along z at world height y, blocks per tick. */
     public static double windZ(double y) {
         Air a = now();
         return a.speed(y) * a.wind().z() / 20;

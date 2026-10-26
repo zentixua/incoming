@@ -8,21 +8,21 @@ import org.lwjgl.opengl.GL33;
 import java.util.Arrays;
 
 /**
- * Время прохода на видеокарте: метки времени (glQueryCounter) до и после, по кольцу из {@link #RING} пар — читаются через
- * кадры, когда готовы, без ожидания (как у пелены, {@code PallPass}: запрос GL_TIME_ELAPSED у OpenGL один на всех, а
- * Minecraft держит его на весь кадр, пока на экране F3 с загрузкой видеокарты). Сводка — за секунду ({@link #second}).
- * Меряет, только пока идёт проба слоя ({@link LayerTimes#on}): без неё меток нет.
+ * GPU pass time: timestamps (glQueryCounter) before and after, in a ring of {@link #RING} pairs — read after
+ * a few frames once ready, without waiting (as for the pall, {@code PallPass}: OpenGL has one shared GL_TIME_ELAPSED query, and
+ * Minecraft holds it over the entire frame while F3 GPU load is displayed). One-second summary ({@link #second}).
+ * Measures only while the layer probe is active ({@link LayerTimes#on}): no timestamps otherwise.
  */
 final class GpuTimer {
     private static final int RING = 4;
     private final int[] queries = new int[2 * RING];
     private final boolean[] issued = new boolean[RING];
     private int ring;
-    /** Метки времени: 0 — не проверяли, 1 — есть, −1 — нет. */
+    /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported. */
     private int timer;
     private double sum, max;
     private int frames;
-    /** Сводка прошлой секунды: среднее и наибольшее, мс; кадров с меткой. */
+    /** Previous-second summary: mean and maximum, ms; timestamped frame count. */
     double lastMean, lastMax;
     int lastFrames;
 
@@ -37,7 +37,7 @@ final class GpuTimer {
         return timer > 0;
     }
 
-    /** Метка до прохода; −1 — кадр не меряется (проба не идёт, {@link LayerTimes}; меток нет или все пары ещё в полёте). */
+    /** Timestamp before the pass; −1 — unmeasured frame (probe inactive, {@link LayerTimes}; unsupported timestamps or all pairs still pending). */
     int begin() {
         if (!LayerTimes.on() || !available()) return -1;
         poll();
@@ -46,7 +46,7 @@ final class GpuTimer {
         return ring;
     }
 
-    /** Метка после прохода. */
+    /** Timestamp after the pass. */
     void end(int pair) {
         if (pair < 0) return;
         GL33.glQueryCounter(queries[2 * pair + 1], GL33.GL_TIMESTAMP);
@@ -54,7 +54,7 @@ final class GpuTimer {
         ring = (pair + 1) % RING;
     }
 
-    /** Готовые пары — в сводку. */
+    /** Add ready pairs to the summary. */
     private void poll() {
         for (int i = 0; i < RING; i++) {
             if (!issued[i] || GL15.glGetQueryObjecti(queries[2 * i + 1], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
@@ -67,7 +67,7 @@ final class GpuTimer {
         }
     }
 
-    /** Раз в секунду: сводка. */
+    /** Once per second: summary. */
     void second() {
         lastMean = frames > 0 ? sum / frames : 0;
         lastMax = max;

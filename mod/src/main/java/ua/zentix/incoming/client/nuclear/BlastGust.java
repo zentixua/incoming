@@ -7,32 +7,32 @@ import ua.zentix.incoming.nuclear.Detonation;
 import java.util.function.DoubleSupplier;
 
 /**
- * Ветер за фронтом ударной волны в одном месте — тот же закон, что несёт пыль головы стены ({@link BlastWall#carried}):
- * вдоль земли от эпицентра, сразу за фронтом {@link Detonation#blastWind} (Ренкин–Гюгонио × √доли напора вдоль земли),
- * дальше по Фридлендеру u(t) = U(1 − t/t₊)e^(−t/t₊) (Glasstone и Dolan 1977, §3.57), t₊ — положительная фаза на месте
- * ({@link Detonation#positivePhaseTicks}); в фазе разрежения — обратный и слабее (наибольший — e^(−2) от U на 2t₊).
- * Путь воздуха с прихода — ∫u dt = U·t₊·x·e^(−x), x = t/t₊: к концу фазы U·t₊/e ({@link BlastWall#CARRY}), потом обратно.
- * Им летят куски снесённого ({@link Fragments}) и пыль проломов ({@link BlastDust}) у камеры. Ветер берётся в месте, откуда
- * их сорвало: куски и пыль уходят на десятки блоков, а давление на таком пути почти не меняется (⚠ приближение).
+ * Wind behind the shock front at one location — the same law that carries wall-head dust ({@link BlastWall#carried}):
+ * along the ground away from ground zero, immediately behind the front {@link Detonation#blastWind} (Rankine–Hugoniot × √along-ground dynamic-pressure share),
+ * then Friedlander u(t) = U(1 − t/t₊)e^(−t/t₊) (Glasstone and Dolan 1977, §3.57), where t₊ is the local positive phase
+ * ({@link Detonation#positivePhaseTicks}); reversed and weaker in the negative phase (maximum e^(−2) of U at 2t₊).
+ * Air displacement since arrival — ∫u dt = U·t₊·x·e^(−x), x = t/t₊: U·t₊/e at phase end ({@link BlastWall#CARRY}), then back.
+ * It carries demolished pieces ({@link Fragments}) and breach dust ({@link BlastDust}) near the camera. Wind is sampled where
+ * they were torn away: pieces and dust travel tens of blocks, over which pressure barely changes (⚠ approximation).
  * <p>
- * Перед фронтом ветра нет: воздух за скачком всегда медленнее самого скачка, но фронт в игре вдали идёт со скоростью
- * {@code nuclear.wave_speed} (по умолчанию 0,2 звука, {@link Detonation#wave}), а ветер и фаза — настоящие, и у сильной
- * волны воздух обогнал бы фронт. Поэтому ветер не быстрее фронта в игре, путь не уходит дальше фронта, и тому, что уже
- * впереди него, ветер не дует (⚠ не по физике — следствие игровой скорости волны; при волне как в жизни ничего не меняет).
+ * No wind ahead of the front: air behind the shock is always slower than the shock itself, but the distant game front travels at
+ * {@code nuclear.wave_speed} (default 0.2 of sound speed, {@link Detonation#wave}), while wind and phase are real, so air in a strong
+ * wave would overtake the front. Thus wind is capped at game front speed, displacement cannot pass the front, and wind does not act on anything already
+ * ahead of it (⚠ not physical — consequence of game wave speed; changes nothing for a wave at real speed).
  * <p>
- * Блоки и тики игры: путь — блоки, скорость — блоки за тик (метр модели — {@code scale} блоков, секунда модели —
- * {@code 20·scale} тиков, поэтому скорость в блоках за тик — U/20 при любом масштабе); часы — тики после подрыва.
+ * Game blocks and ticks: displacement in blocks, speed in blocks per tick (one model meter is {@code scale} blocks; one model second is
+ * {@code 20·scale} ticks, so speed in blocks per tick is U/20 at any scale); time is ticks since detonation.
  */
 public final class BlastGust implements Fragments.Wind {
     private final Detonation d;
-    /** Приход фронта в игре — свой у подрыва ({@link Detonation#front}): таблица, а не поиск в кэше на каждый вызов. */
+    /** Game-front arrival belongs to the detonation ({@link Detonation#front}): table, not a cache lookup on each call. */
     private final ua.zentix.incoming.nuclear.model.FrontProfile front;
-    /** Наклонная дальность места от подрыва, блоки. */
+    /** Slant range from detonation to the location, blocks. */
     private final double slant;
-    /** Приход фронта и положительная фаза, тики после подрыва; ветер сразу за фронтом, блоков за тик; направление от эпицентра. */
+    /** Front arrival and positive phase, ticks since detonation; wind immediately behind the front, blocks per tick; direction from ground zero. */
     final double arrival, phase, u0, ax, az;
     private final DoubleSupplier clock;
-    /** Самое дальнее место воздуха ({@link #travel}): миг, тики после подрыва, и путь, блоки; считается при первом спросе. */
+    /** Farthest air position ({@link #travel}): time in ticks since detonation, displacement in blocks; calculated on first request. */
     private double peakTicks = Double.NaN, peakPath;
 
     private BlastGust(Detonation d, Vec3 at, DoubleSupplier clock) {
@@ -49,28 +49,28 @@ public final class BlastGust implements Fragments.Wind {
     }
 
     /**
-     * Ветер волны подрыва {@code a} в месте {@code at} — по часам подрыва у клиента, найденного по номеру: вход в мир,
-     * возрождение и перемотка повтора заменяют его запись ({@code ClientNuclear.sync}), а куски в полёте остаются, и со
-     * старыми часами ветер у них застыл бы на десяток секунд. Подрыва нет — ветра нет.
+     * Wind from detonation {@code a}'s wave at {@code at} — using the client detonation clock found by ID: world entry,
+     * respawn and replay seek replace its record ({@code ClientNuclear.sync}), while flying pieces remain; with the old
+     * clock their wind would freeze for about ten seconds. No detonation means no wind.
      */
     static BlastGust at(ClientNuclear.Active a, Vec3 at) {
         int id = a.d.id();
         return of(a.d, at, () -> ClientNuclear.ticksOf(id));
     }
 
-    /** Ветер волны подрыва {@code d} в месте {@code at}; {@code clock} — тики после подрыва. */
+    /** Wind from detonation {@code d}'s wave at {@code at}; {@code clock} is ticks since detonation. */
     public static BlastGust of(Detonation d, Vec3 at, DoubleSupplier clock) {
         return new BlastGust(d, at, clock);
     }
 
-    /** Доля положительной фазы с прихода фронта в миг {@code ticks} (до прихода — 0). */
+    /** Fraction of the positive phase since front arrival at {@code ticks} (0 before arrival). */
     double x(double ticks) {
         return Math.max(0, ticks - arrival) / phase;
     }
 
     /**
-     * Скорость воздуха от эпицентра вдоль земли, блоков за тик (в фазе разрежения — меньше нуля; до фронта — 0), не быстрее
-     * фронта в игре.
+     * Air speed along the ground away from ground zero, blocks per tick (negative in the negative phase; 0 before the front), capped at
+     * game front speed.
      */
     double speed(double ticks) {
         double x = x(ticks);
@@ -80,8 +80,8 @@ public final class BlastGust implements Fragments.Wind {
     }
 
     /**
-     * Путь воздуха от эпицентра с прихода фронта, блоки: U·t₊·x·e^(−x) (в фазе разрежения идёт назад), не дальше фронта
-     * в игре.
+     * Air displacement away from ground zero since front arrival, blocks: U·t₊·x·e^(−x) (returns during the negative phase), capped at the game
+     * front.
      */
     double path(double ticks) {
         double x = x(ticks);
@@ -90,16 +90,16 @@ public final class BlastGust implements Fragments.Wind {
     }
 
     /**
-     * Пройденное воздухом расстояние туда и обратно, блоки (не убывает): до самого дальнего места — путь, потом ещё и весь
-     * обратный ход. Путь один раз растёт и один раз убывает (ветер Фридлендера меняет знак один раз, фронт только уходит),
-     * поэтому самое дальнее место — одно ({@link #peak}).
+     * Total air distance traveled outward and back, blocks (nondecreasing): displacement up to the farthest position, then the entire
+     * return trip too. Displacement rises once and falls once (Friedlander wind changes sign once; the front only recedes),
+     * so there is one farthest position ({@link #peak}).
      */
     double travel(double ticks) {
         if (Double.isNaN(peakTicks)) peak();
         return ticks <= peakTicks ? path(ticks) : 2 * peakPath - path(ticks);
     }
 
-    /** Миг и путь самого дальнего места воздуха: делением отрезка на три (путь одногорбый) от прихода до трёх фаз. */
+    /** Time and displacement of the farthest air position: ternary search (unimodal displacement) from arrival to three phases. */
     private void peak() {
         double lo = arrival, hi = arrival + 3 * phase;
         for (int i = 0; i < 60; i++) {
@@ -114,7 +114,7 @@ public final class BlastGust implements Fragments.Wind {
     @Override
     public void at(double x, double y, double z, double[] into) {
         double now = clock.getAsDouble(), u = Double.isNaN(now) ? 0 : speed(now);
-        // впереди фронта воздух стоит
+        // air ahead of the front is still
         double bx = x - d.burst().x, by = y - d.burst().y, bz = z - d.burst().z, r = u == 0 ? 0 : front.radiusAt(now);
         if (bx * bx + by * by + bz * bz > r * r) u = 0;
         into[0] = ax * u;

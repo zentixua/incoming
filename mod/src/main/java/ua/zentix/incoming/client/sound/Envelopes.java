@@ -26,27 +26,27 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Огибающие ({@link Envelope}) записей взрывов по событию звука — наибольшая по вариантам (какой вариант сыграет, решает
- * зерно взрыва; наибольшая — чтобы смесь не вышла выше потолка ни с одним), и энергия каждого варианта
- * ({@link Envelope#energy}: столько звучит именно эта запись — по ней гул, {@link Rumble}). Читаются из самих файлов при
- * каждой перезагрузке ресурсов (в фоне): ресурс-пак со своими записями взрывов получает свои огибающие.
+ * Blast recording envelopes ({@link Envelope}) by sound event: maximum across variants (blast seed selects the
+ * variant; maximum keeps the mix under the ceiling with any variant) and each variant's energy
+ * ({@link Envelope#energy}: what this exact recording plays — used by rumble, {@link Rumble}). Read from the files
+ * on every resource reload (in background): a resource pack with its own blast recordings gets its own envelopes.
  */
 public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Prepared> {
     public static final Envelopes INSTANCE = new Envelopes();
-    /** События, которые сводит {@link Mix}: ракурсы обычного взрыва, звуки бомбы, осыпь выброса воронки. */
+    /** Events mixed by {@link Mix}: conventional blast perspectives, bomb sounds, crater ejecta fall. */
     static final List<String> EVENTS = List.of("blast.near", "blast.mid", "blast.far", "blast.sub", "bomb.impact", "bomb.deep", "bomb.vent",
             "bomb.cave", "bomb.quake", "debris.fall");
-    /** Огибающей нет (запись не прочиталась): громкость потолка весь срок {@link #FALLBACK_TICKS} — длиннее любой записи взрыва (запас). */
+    /** No envelope (recording unreadable): ceiling loudness for all {@link #FALLBACK_TICKS}, longer than any blast recording (margin). */
     static final int FALLBACK_TICKS = 600;
 
-    /** Огибающие событий и энергия вариантов (по имени записи, как у {@link Sound#getLocation}). */
+    /** Event envelopes and variant energies (by recording name, as in {@link Sound#getLocation}). */
     record Prepared(Map<String, float[]> events, Map<ResourceLocation, float[]> energy) {}
 
     private volatile Prepared prepared = new Prepared(Map.of(), Map.of());
 
     private Envelopes() {}
 
-    /** Огибающая события {@code event} (путь без пространства имён: «blast.near»). */
+    /** Envelope for {@code event} (path without namespace: “blast.near”). */
     static float[] of(ResourceLocation event) {
         float[] e = INSTANCE.prepared.events().get(event.getPath());
         if (e != null) return e;
@@ -56,9 +56,9 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
     }
 
     /**
-     * Энергия того варианта события {@code event}, который выберет зерно {@code seed} (ваниль берёт вариант первым
-     * {@code nextInt} генератора звука — как {@link ClientSounds#blastShot} и эхо, {@link BlastEchoes}); варианта нет —
-     * огибающая события (верхняя оценка).
+     * Energy of the {@code event} variant selected by {@code seed} (vanilla selects a variant with the sound
+     * generator's first {@code nextInt}, as do {@link ClientSounds#blastShot} and echoes, {@link BlastEchoes});
+     * no variant — event envelope (upper bound).
      */
     static float[] energy(SoundEvent event, long seed) {
         WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(event.getLocation());
@@ -66,7 +66,7 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
         return energy(s == null ? null : s.getLocation(), event.getLocation());
     }
 
-    /** Энергия записи {@code variant} (имя, как у {@link Sound#getLocation}); её нет — огибающая события {@code event}. */
+    /** Energy of recording {@code variant} (name as in {@link Sound#getLocation}); absent — {@code event} envelope. */
     static float[] energy(@Nullable ResourceLocation variant, ResourceLocation event) {
         float[] e = variant == null ? null : INSTANCE.prepared.energy().get(variant);
         return e != null ? e : of(event);
@@ -104,7 +104,7 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
         return prepared;
     }
 
-    /** Огибающие и энергии — эти (перезагрузка ресурсов; проверки). */
+    /** Use these envelopes and energies (resource reload; checks). */
     void prepared(Prepared prepared) {
         this.prepared = new Prepared(Map.copyOf(prepared.events()), Map.copyOf(prepared.energy()));
     }
@@ -120,7 +120,7 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
         }
     }
 
-    /** Огибающая ({@link Envelope#of}) и энергия ({@link Envelope#energy}) записи; null — не прочиталась. */
+    /** Recording envelope ({@link Envelope#of}) and energy ({@link Envelope#energy}); null — unreadable. */
     private static float @Nullable [][] read(ResourceManager resources, ResourceLocation sound) {
         ResourceLocation file = ResourceLocation.fromNamespaceAndPath(sound.getNamespace(), "sounds/" + sound.getPath() + ".ogg");
         Optional<Resource> r = resources.getResource(file);
@@ -135,7 +135,7 @@ public final class Envelopes extends SimplePreparableReloadListener<Envelopes.Pr
         }
     }
 
-    /** Наибольшая из двух по тикам (длина — большая). */
+    /** Tickwise maximum of two (longer length). */
     static float[] max(float[] a, float[] b) {
         float[] out = new float[Math.max(a.length, b.length)];
         for (int i = 0; i < out.length; i++) out[i] = Math.max(i < a.length ? a[i] : 0, i < b.length ? b[i] : 0);

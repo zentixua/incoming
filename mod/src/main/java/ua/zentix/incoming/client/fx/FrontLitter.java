@@ -17,32 +17,32 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.ChemicalFront;
 
 /**
- * Фронт обычного взрыва на траве: в миг прихода он срывает травинки, дёрн и листья крон и подбрасывает их — так фронт и
- * виден на земле: кольцо взлетающих клочков бежит со скоростью фронта (жалоба 23.10: «кольца никакого»). Далеко они не
- * летят: воздух за фазой в миллисекунды сдвигается на дециметры, и клок, брошенный и на 30 м/с, за тик тормозит до
- * своей скорости падения и ложится в полуметре (законы — ниже; отрыв клока усилен как подача). Где срывает —
- * закон срыва пыли ({@link BlastLitter#tearsCover}: u* за фронтом выше порога дёрна); с какой скоростью бросает —
- * сопротивление клока листвы под ветром фазы ({@link BlastLitter#kick}); когда — приход фронта на место
- * ({@link ChemicalFront}). Пыль с голой земли, песка и снега — слой пыли волны ({@code GroundDust}), не здесь.
+ * Conventional blast front on grass: on arrival it tears off and lifts grass blades, turf and canopy leaves — making the front
+ * visible on the ground: a ring of rising tufts moves at front speed (complaint 23.10: “no ring at all”). They do not travel
+ * far: air shifts only decimetres over a millisecond phase, and even a tuft launched at 30 m/s slows within one tick to
+ * its terminal fall speed and lands half a metre away (laws below; tuft lift enhanced as presentation). Detachment sites —
+ * dust detachment law ({@link BlastLitter#tearsCover}: u* behind the front above the turf threshold); launch speed —
+ * foliage tuft drag under phase wind ({@link BlastLitter#kick}); timing — front arrival at the site
+ * ({@link ChemicalFront}). Dust from bare soil, sand and snow belongs to the wave dust layer ({@code GroundDust}), not here.
  * <p>
- * Куски — {@link Fragments} (лист с текстурой и цветом блока: трава зелёная, листва — своего дерева), вылетают уже с
- * брошенной скоростью в тихий воздух (фаза — миллисекунды, короче тика) и планируют вниз. Сколько их — выборка для
- * картинки (<b>подача</b>: {@link #PER_M2} на квадратный метр, не больше {@link #MAX} на взрыв, клок крупнее настоящего —
- * {@link #CLUMP_MIN}–{@link #CLUMP_MAX} м), где и когда срываются — по закону; доля скорости вверх усилена как подача. Ветра мира у кусков нет (⚠: сносит их только бросок).
+ * Pieces are {@link Fragments} (leaf with block texture and colour: grass green, foliage from its tree), launching at the
+ * imparted velocity into still air (phase lasts milliseconds, less than a tick), then gliding down. Count is a visual sample
+ * (<b>presentation:</b> {@link #PER_M2} per square metre, at most {@link #MAX} per blast, tufts larger than real ones —
+ * {@link #CLUMP_MIN}–{@link #CLUMP_MAX} m); detachment position and time follow the law; upward velocity fraction enhanced as presentation. Pieces have no world wind (⚠: only the launch carries them).
  */
 public final class FrontLitter {
-    /** Кусков на квадратный метр сорванного (подача: травинок на деле — тысячи; столько видно кольцом). */
+    /** Pieces per square metre of torn cover (presentation: thousands of real grass blades; this count shows a ring). */
     static final double PER_M2 = 0.8;
-    /** Кусков на взрыв не больше (подача; общий предел — {@link Fragments}). */
+    /** Maximum pieces per blast (presentation; shared cap — {@link Fragments}). */
     static final int MAX = 900;
     /**
-     * Клок, м: крупнее клока листвы кроны ({@code Fragments.SPRIG_MAX}) — подача: мельче он с 50 блоков меньше пикселя.
-     * Траектория от размера не зависит: у пластины скорость падения — масса на площадь, не размер.
+     * Tuft, m: larger than canopy foliage ({@code Fragments.SPRIG_MAX}) — presentation: smaller would be subpixel at 50 blocks.
+     * Trajectory is independent of size: plate terminal speed depends on mass per area, rather than size.
      */
     static final float CLUMP_MIN = 0.6f, CLUMP_MAX = 1.0f;
-    /** Дальше стольких блоков от камеры кусков не рождаем: их не видно, а место в пределе кусков нужно ближним. */
+    /** No pieces spawn beyond this camera distance in blocks: invisible there, and nearby pieces need the capped slots. */
     static final double REACH = 128;
-    /** Дальше стольких метров срыв не ищется (у 450 кг он кончается в ~110 м). */
+    /** No detachment search beyond this distance in metres (for 450 kg it ends at ~110 m). */
     static final double TEAR_MAX = 300;
 
     private static final Fragments.Wind CALM = (x, y, z, into) -> {
@@ -53,15 +53,15 @@ public final class FrontLitter {
 
     private FrontLitter() {}
 
-    /** Выход из мира (и сброс песочницы): взрывы, чья пыль была на виду, — из общего предела площадок ({@link FrontDust}). */
+    /** World exit (and sandbox reset): remove blasts with visible dust from the shared patch cap ({@link FrontDust}). */
     public static void reset() {
         FrontDust.reset();
     }
 
     /**
-     * Кольцо срыва травы и листьев по земле {внутренний, внешний радиус}, м: где u* за фронтом выше порога дёрна. Ищется с
-     * {@code from} (край огненного шара: ближе всё сгорает и уходит с грунтом воронки) до {@link #TEAR_MAX}; {@code hob}
-     * — высота разрыва над землёй: под воздушным разрывом ветер идёт вниз, и кольцо начинается дальше. {0, 0} — нигде.
+     * Ground grass/leaf detachment ring {inner, outer radius}, m: where u* behind the front exceeds the turf threshold. Searched from
+     * {@code from} (fireball edge: closer material burns and leaves with crater soil) to {@link #TEAR_MAX}; {@code hob}
+     * is burst height above ground: below an airburst the wind points down, so the ring starts farther out. {0, 0} — nowhere.
      */
     static double[] tearRing(ChemicalFront front, double from, double hob) {
         double r = Math.max(from, 0.5), inner = 0, outer = 0;
@@ -73,7 +73,7 @@ public final class FrontLitter {
         return new double[]{inner, outer};
     }
 
-    /** Внешний радиус кольца срыва, м ({@link #tearRing}). */
+    /** Outer detachment ring radius, m ({@link #tearRing}). */
     static double tearRange(ChemicalFront front, double from, double hob) {
         return tearRing(front, from, hob)[1];
     }
@@ -83,7 +83,7 @@ public final class FrontLitter {
         return BlastLitter.tearsCover(front.kpa(slant), along(ground, slant));
     }
 
-    /** Доля напора вдоль земли: у разрыва над землёй фронт падает наклонно (cos²). */
+    /** Dynamic-pressure fraction along the ground: above-ground bursts have an obliquely incident front (cos²). */
     static double along(double ground, double slant) {
         return slant <= 0 ? 1 : (ground / slant) * (ground / slant);
     }
@@ -95,9 +95,9 @@ public final class FrontLitter {
     }
 
     /**
-     * Сорвать траву и листья вокруг взрыва в {@code pos}: фронт {@code front}, огненный шар радиусом {@code ball} м,
-     * высота разрыва над землёй {@code hob} м. Кусок ждёт прихода фронта на своё место ({@link Fragments#DELAY_MAX} —
-     * предел ожидания, дальше 2 с фронта срыва уже нет).
+     * Tear grass and leaves around the blast at {@code pos}: front {@code front}, fireball radius {@code ball} m,
+     * burst height above ground {@code hob} m. A piece waits for front arrival at its site ({@link Fragments#DELAY_MAX} —
+     * maximum delay; beyond 2 s no detaching front remains).
      */
     static void spawn(ClientLevel level, Vec3 pos, @Nullable ChemicalFront front, double ball, double hob, RandomSource rnd) {
         if (front == null) return;
@@ -123,18 +123,18 @@ public final class FrontLitter {
             boolean grows = !plant.isAir() && plant.canBeReplaced() && plant.getFluidState().isEmpty();
             boolean leaves = cover.is(BlockTags.LEAVES);
             if (!grows && !leaves && !cover.is(BlockTags.DIRT)) continue;
-            // дёрн — травой (частица блока травы — земля: рыжие кубики вместо травинок); цвет — травы этого места
+            // turf as grass (grass-block particles are dirt: orange cubes instead of blades); colour from this site's grass
             BlockState torn = grows ? plant : cover.is(Blocks.GRASS_BLOCK) ? Blocks.SHORT_GRASS.defaultBlockState() : cover;
             m.set(bx, grows ? top + 1 : top, bz);
-            // крона и то, что выше места взрыва, видит волну в воздухе, а не вдоль земли
+            // canopy and material above the blast see the airborne wave, rather than its ground-aligned component
             double y = top + (grows ? 1.2 : 1.05), dy = y - pos.y, slant = Math.sqrt(r * r + dy * dy);
             double share = leaves || y > groundY + 2 ? 1 : along(r, Math.hypot(r, Math.max(0, hob)));
             double kpa = front.kpa(slant);
             if (!BlastLitter.tearsCover(kpa, share)) continue;
             double v = BlastLitter.kick(BlastModel.windSpeed(kpa) * Math.sqrt(share), BlastModel.chemicalPhaseSeconds(slant, front.tntKg, front.surface),
                     terminal) / 20;
-            // Подача: отрыв клока под углом 19–35° к поверхности.
-            // Поворот сохраняет модуль скорости броска из интеграла сопротивления.
+            // presentation: tuft lift at 19–35° to the surface
+            // rotation preserves launch speed magnitude from the drag integral
             double lift = 0.35 + 0.35 * rnd.nextDouble();
             double[] kick = launch(v, lift);
             int delay = (int) Math.ceil(20 * front.arrivalSeconds(slant));

@@ -7,20 +7,21 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Мгновенная громкость записи во времени (ITU-R BS.1770: K-фильтр, окно 400 мс) в каждом тике записи (шаг 50 мс) — самое
- * громкое окно 400 мс, в котором этот тик есть: и то, что с него начинается (удар — до того, как прозвучал), и начатые
- * до него (удар тиком раньше: его окно ещё звучит, и взрыв, пришедший следом, ложится в то же окно). По ней {@link Mix}
- * знает, что звучит у уха сейчас, а не только громкость в начале. Без Minecraft (кроме чтения Vorbis).
+ * Recording momentary loudness over time (ITU-R BS.1770: K-filter, 400 ms window) at each recording tick (50 ms
+ * step): the loudest 400 ms window containing that tick, both the window starting there (impact before it plays)
+ * and ones started earlier (impact one tick earlier: its window still sounds, and a following blast falls in the
+ * same window). This lets {@link Mix} know what sounds at the ear now, not just initial loudness. Without Minecraft
+ * (except Vorbis reading).
  */
 public final class Envelope {
-    /** Окно мгновенной громкости, с (BS.1770). */
+    /** Momentary-loudness window, s (BS.1770). */
     static final double WINDOW = 0.4;
-    /** Шаг — тик, с. */
+    /** Step is one tick, s. */
     static final double STEP = 0.05;
 
     private Envelope() {}
 
-    /** Средний квадрат K-взвешенного сигнала в окне {@link #WINDOW} с начала каждого тика записи {@code x} (моно) частоты {@code rate}. */
+    /** Mean square of K-weighted mono recording {@code x} at {@code rate}, in {@link #WINDOW} from each tick's start. */
     public static float[] of(float[] x, int rate) {
         double[] y = new double[x.length];
         for (int i = 0; i < x.length; i++) y[i] = x[i];
@@ -33,7 +34,7 @@ public final class Envelope {
             int a = k * h, b = Math.min(y.length, a + w);
             ahead[k] = (float) ((c[b] - c[a]) / w);
         }
-        // в тик k звучит всякое окно 400 мс, где он есть: и начатые до него (удар был тиком раньше — его окно ещё идёт)
+        // tick k sounds in every 400 ms window containing it, including earlier starts (impact last tick — its window continues)
         int back = (int) Math.ceil(WINDOW / STEP) - 1;
         float[] out = new float[n];
         for (int k = 0; k < n; k++) {
@@ -45,11 +46,12 @@ public final class Envelope {
     }
 
     /**
-     * Энергия записи во времени: в каждом тике — мгновенная громкость BS.1770 как она есть, средний квадрат K-взвешенного
-     * сигнала за прошедшие {@link #WINDOW} до конца тика (до начала записи — тишина, после конца — ещё окно хвоста). Каждый
-     * отсчёт попадает в окна ровно стольких тиков, сколько их в окне, поэтому сумма по тикам × шаг — энергия всей записи:
-     * без максимума окон и без заглядывания вперёд. Это профиль одной записи для гула ({@link Rumble}), а не {@link #of}:
-     * тот — верхняя оценка для потолка (наибольшее окно, где тик есть, и удар — до того, как прозвучал).
+     * Recording energy over time: each tick has actual BS.1770 momentary loudness, mean square of the K-weighted
+     * signal over the preceding {@link #WINDOW} up to tick end (silence before recording, one tail window after
+     * its end). Each sample enters exactly as many tick windows as there are ticks in a window, so tick sum ×
+     * step is total recording energy: no window maximum or lookahead. This is one recording's profile for rumble
+     * ({@link Rumble}), unlike {@link #of}: that is a ceiling upper bound (largest window containing the tick,
+     * and impact before it plays).
      */
     public static float[] energy(float[] x, int rate) {
         double[] y = new double[x.length];
@@ -67,23 +69,23 @@ public final class Envelope {
         return out;
     }
 
-    /** Громкость окна, LUFS (BS.1770: −0,691 + 10·lg среднего квадрата). */
+    /** Window loudness, LUFS (BS.1770: −0.691 + 10·lg mean square). */
     public static double lufs(double meanSquare) {
         return -0.691 + 10 * Math.log10(meanSquare + 1e-15);
     }
 
-    /** Средний квадрат окна громкостью {@code lufs}. */
+    /** Mean square of a window at {@code lufs}. */
     public static double meanSquare(double lufs) {
         return Math.pow(10, (lufs + 0.691) / 10);
     }
 
-    /** Запись Vorbis — в моно (каналы средним) и частота: {@code out[0]} — отсчёты, частота — возврат. */
+    /** Vorbis recording to mono (channel mean) and rate: {@code out[0]} — samples; return value — rate. */
     public static int read(InputStream in, float[][] out) throws IOException {
         try (JOrbisAudioStream ogg = new JOrbisAudioStream(in)) {
             int rate = (int) ogg.getFormat().getSampleRate(), ch = ogg.getFormat().getChannels();
             FloatArrayList s = new FloatArrayList();
             while (ogg.readChunk(s::add)) {
-                // весь файл
+                // entire file
             }
             float[] all = s.toFloatArray();
             float[] mono = new float[all.length / ch];
@@ -97,7 +99,7 @@ public final class Envelope {
         }
     }
 
-    /** К-взвешивание ITU-R BS.1770 на частоте {@code rate} (те же формулы, что {@code k_weight} в build_sounds.py). */
+    /** ITU-R BS.1770 K-weighting at {@code rate} (same formulas as {@code k_weight} in build_sounds.py). */
     public static void kWeight(double[] x, int rate) {
         double g = 3.99984385397, q = 0.7071752369554193, fc = 1681.9744509555319;
         double k = Math.tan(Math.PI * fc / rate), vh = Math.pow(10, g / 20), vb = Math.pow(vh, 0.499666774155);

@@ -35,48 +35,48 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Рельеф из данных Distant Horizons через его публичный API ({@code DhApi.Delayed.terrainRepo}): всё, что DH уже
- * посчитал для дальней прорисовки, — на километры вокруг, без загрузки чанков. Чтение идёт из базы DH и может
- * занимать миллисекунды, поэтому — не в потоке игры; кэш данных DH ({@code createSoftCache}) — на плитку, иначе
- * каждая колонка заново читала бы и распаковывала свой участок 64×64.
+ * Terrain from Distant Horizons data through its public API ({@code DhApi.Delayed.terrainRepo}): everything DH has
+ * computed for distant rendering, kilometres around, without loading chunks. Reads come from the DH database and
+ * can take milliseconds, so never on the game thread; DH data cache ({@code createSoftCache}) is per tile, otherwise
+ * every column would reread and unpack its 64×64 region.
  * <p>
- * Когда API готово и какие миры DH загрузил, узнаём из событий API ({@code DhApiAfterDhInitEvent},
- * {@code DhApiLevelLoadEvent}/{@code DhApiLevelUnloadEvent}), как велит javadoc {@code DhApi.Delayed}; какие чанки DH
- * обновил в своих данных — из {@code DhApiChunkModifiedEvent} (по javadoc — когда изменение уже в данных, которые
- * читает {@code IDhApiTerrainDataRepo}): готовая плитка перечитывается по нему, а не по часам.
+ * API readiness and DH's loaded worlds come from API events ({@code DhApiAfterDhInitEvent},
+ * {@code DhApiLevelLoadEvent}/{@code DhApiLevelUnloadEvent}), as required by {@code DhApi.Delayed} Javadoc;
+ * changed chunks come from {@code DhApiChunkModifiedEvent} (Javadoc: once the change is in data read by
+ * {@code IDhApiTerrainDataRepo}): ready tiles are reread on the event, rather than on a timer.
  * <p>
- * Класс загружается, только если DH стоит (см. {@link TerrainTiles}): без DH его ссылки на API не разрешаются.
+ * Class loads only with DH installed (see {@link TerrainTiles}): its API references cannot resolve without DH.
  */
 final class DistantHorizonsTerrain implements TerrainSource {
     /**
-     * Мажорная версия API, против которой собран мод (7.2.0, DH 3.3.x). По javadoc {@code getApiMajorVersion} она
-     * меняется только с несовместимыми изменениями, поэтому другая — не наша: рельеф тогда только из чанков.
+     * API major version the mod was built against (7.2.0, DH 3.3.x). {@code getApiMajorVersion} Javadoc says it changes
+     * only for incompatible changes, so another version is not ours: terrain then comes only from chunks.
      */
     private static final int API_MAJOR = 7;
     private static final int MAX_WATER_DEPTH = 16;
     /**
-     * Полная плитка без события об изменении перечитывается раз в 5 минут: DH шлёт событие, только пока включена его
-     * проверка хэшей чанков ({@code disableUnchangedChunkCheck} выключен, как по умолчанию; {@code AbstractDhLevel}).
+     * Complete tile reread every 5 minutes without a change event: DH sends events only while its chunk hash checks
+     * are enabled ({@code disableUnchangedChunkCheck} off, as by default; {@code AbstractDhLevel}).
      */
     private static final long REFRESH_NS = 300_000_000_000L;
 
-    /** Для лога: колонки с верхом, без данных, отказы API и первый отказ; почему не открылся мир. */
+    /** For logs: columns with surface, no data, API failures and first failure; why the world did not open. */
     private final AtomicLong found = new AtomicLong(), empty = new AtomicLong(), failed = new AtomicLong();
-    /** Исключение из API уже в логе со стеком (дальше — только в счётчике отказов). */
+    /** API exception already logged with stack trace (subsequent failures counted only). */
     private final AtomicBoolean threw = new AtomicBoolean();
     private volatile String firstFailure = "", notOpened = "";
 
-    /** {@code DhApi.Delayed} заполнен (после первой инициализации DH). */
+    /** {@code DhApi.Delayed} populated (after first DH initialization). */
     private static volatile boolean initialized;
-    /** Миры, которые DH сейчас держит загруженными. */
+    /** Worlds DH currently keeps loaded. */
     private static final Set<IDhApiLevelWrapper> loaded = ConcurrentHashMap.newKeySet();
     /**
-     * Чанки ({@link ChunkPos#asLong}), которые DH обновил, по мирам: событие приходит из его потоков, разбирает поток
-     * игры каждый тик ({@link #changes}); один чанк DH сохраняет много раз подряд — в наборе он один.
+     * Chunks ({@link ChunkPos#asLong}) updated by DH, per world: event comes from DH threads, game thread processes
+     * it each tick ({@link #changes}); DH saves a chunk repeatedly, but the set holds it once.
      */
     private static final Map<IDhApiLevelWrapper, Set<Long>> changed = new HashMap<>();
 
-    /** Версия API DH — та, против которой мод собран; иначе источника нет (и запись в лог). */
+    /** DH API version matches the build; otherwise no source (and a log entry). */
     static boolean supported() {
         int major = DhApi.getApiMajorVersion();
         if (major == API_MAJOR) return true;
@@ -85,7 +85,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
         return false;
     }
 
-    /** Один раз при запуске клиента: подписка на события API DH. */
+    /** Once at client startup: subscribe to DH API events. */
     static void subscribe() {
         DhApiEventRegister.on(DhApiAfterDhInitEvent.class, new DhApiAfterDhInitEvent() {
             @Override
@@ -117,7 +117,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
                 }
             }
         });
-        // DH мог инициализироваться раньше подписки: тогда событие уже прошло, а поля уже заполнены
+        // DH may have initialized before subscription: event already passed, fields already populated.
         if (DhApi.Delayed.terrainRepo != null) initialized = true;
     }
 
@@ -132,9 +132,9 @@ final class DistantHorizonsTerrain implements TerrainSource {
     }
 
     /**
-     * Потоки DH из его настроек ({@code threadCount}): в стольких работают все его пулы ({@code PriorityTaskPicker} 3.3.3),
-     * и чтение участка для карты ({@code getAsync} в пуле «IO») ждёт свободного из них в общей очереди с загрузкой LOD.
-     * Публичное API отдаёт только участки полной детализации, поэтому вид карты — сотни и тысячи таких чтений.
+     * DH threads from its settings ({@code threadCount}): all its pools use this many ({@code PriorityTaskPicker} 3.3.3),
+     * and map region reads ({@code getAsync} in the IO pool) wait for a free thread in the same queue as LOD loading.
+     * Public API provides only full-detail regions, so a map view needs hundreds or thousands of these reads.
      */
     @Override
     public int parallelism() {
@@ -142,7 +142,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
         return configs == null ? 1 : configs.multiThreading().threadCount().getValue();
     }
 
-    /** Все накопленные изменения разбираются; чужих миров (другое измерение, прошлый мир) — отбрасываются. */
+    /** Process all accumulated changes; discard other worlds (another dimension, previous world). */
     @Override
     public void changes(ClientLevel level, ChunkSink sink) {
         IDhApiLevelWrapper mine = initialized ? dhLevel(level) : null;
@@ -157,7 +157,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
         }
     }
 
-    /** Выход из мира: накопленное — уже ничьё, и не держать обёртки его миров. */
+    /** World exit: accumulated changes no longer belong anywhere; do not retain world wrappers. */
     static void clearChanges() {
         synchronized (changed) {
             changed.clear();
@@ -183,8 +183,8 @@ final class DistantHorizonsTerrain implements TerrainSource {
                 try {
                     r = repo.getColumnDataAtBlockPos(dhLevel, x, z, cache);
                 } catch (RuntimeException e) {
-                    // отказ API исключением, а не через DhApiResult: колонка без данных, как при любом отказе, —
-                    // одна колонка не роняет всю плитку (её перестраивали бы каждые 5 с со стеком в лог)
+                    // API failed by exception rather than DhApiResult: column has no data, as with any failure;
+                    // one column does not fail the entire tile (which would be rebuilt every 5 s with a logged stack trace).
                     if (failed.getAndIncrement() == 0) firstFailure = e.toString();
                     if (!threw.getAndSet(true)) Incoming.LOG.warn("Distant Horizons: reading column ({}, {}) threw an exception", x, z, e);
                     return null;
@@ -213,8 +213,8 @@ final class DistantHorizonsTerrain implements TerrainSource {
     }
 
     /**
-     * Уровень DH для мира клиента. В одиночной игре данные DH — у мира сервера (как {@code getSinglePlayerLevel}), по
-     * сети — у клиентского: его обёртка держит тот же {@code ClientLevel}.
+     * DH level for the client world. Singleplayer DH data belong to the server world (as with
+     * {@code getSinglePlayerLevel}); multiplayer uses the client level: its wrapper holds the same {@code ClientLevel}.
      */
     @Nullable
     private static IDhApiLevelWrapper dhLevel(ClientLevel level) {
@@ -226,7 +226,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
         return null;
     }
 
-    /** Верх колонки DH (данные идут сверху вниз): первый блок с цветом на карте; под водой — глубина до дна. */
+    /** DH column top (data top-down): first block with a map colour; underwater, depth to the bottom. */
     @Nullable
     private static Column top(DhApiTerrainDataPoint[] column) {
         for (int i = 0; i < column.length; i++) {
@@ -254,7 +254,7 @@ final class DistantHorizonsTerrain implements TerrainSource {
         if (p == null) return MapColor.NONE;
         IDhApiBlockStateWrapper block = p.blockStateWrapper;
         if (block == null || block.isAir() || !(block.getWrappedMcObject() instanceof BlockState state)) return MapColor.NONE;
-        // цвет блока без мира вокруг: у ванильных и почти всех модовых блоков он от мира не зависит
+        // Block colour without surrounding world: vanilla and almost all modded blocks do not depend on it.
         return state.getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
     }
 }
