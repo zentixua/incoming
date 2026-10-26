@@ -15,6 +15,7 @@ import java.util.Arrays;
  * Светящееся (шар, искры, вспышки, своё — {@code FULL_BRIGHT}) света шаров не берёт.
  */
 public final class FxLights {
+    /** Источников на частицы не больше (бюджет: четыре столбца матрицы — до четырёх расчётов света на фрагмент). */
     public static final int MAX = 4;
     /** Столбец i: центр шара i от камеры (xyz), радиус (w; 0 — шара нет). */
     final Matrix4f balls = new Matrix4f().zero();

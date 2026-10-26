@@ -11,9 +11,9 @@ import ua.zentix.incoming.IncomingConfig;
  * (доступность) держит её не ярче {@link #CALM} — как и ядерную ({@code NukeFlash}).
  */
 public final class Flash {
-    /** Слабее этого вспышки на экране нет. */
+    /** Слабее этого вспышки на экране нет (подача). */
     public static final float FLOOR = 0.01f;
-    /** Предел силы вспышки на экране при ванильном «без вспышек молний»: у обычной и у ядерной одна. */
+    /** Предел силы вспышки на экране при ванильном «без вспышек молний»: у обычной и у ядерной одна (удобство игрока). */
     public static final float CALM = 0.4f;
     private static float intensity;
     private static float decay = 0.75f;

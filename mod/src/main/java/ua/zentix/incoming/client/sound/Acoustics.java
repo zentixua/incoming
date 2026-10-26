@@ -11,7 +11,7 @@ import ua.zentix.incoming.nuclear.model.BlastModel;
  * и то, что сверхзвуковой снаряд не слышно, пока до уха не дошёл его конус Маха.
  */
 public final class Acoustics {
-    /** Скорость звука: 343 м/с = 17.15 блока за тик. */
+    /** Скорость звука: 343 м/с при 20 °C (по таблице 343,2 — на километре 2 мс) = 17.15 блока за тик. */
     public static final double SPEED = BlastModel.SOUND_SPEED / 20;
 
     private Acoustics() {}

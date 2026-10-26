@@ -67,7 +67,7 @@ public final class BlastSounds {
     static final int PULSE_RESERVE = OwnSources.MAX % EchoMix.SECTORS;
     /** Эхо, которое ещё ищет склоны или сводит дорожки. */
     private static final List<BlastEchoes> ECHOES = new ArrayList<>();
-    /** Тише — слой не запускать. */
+    /** Тише — слой не запускать (подача: −46 дБ против файла, не порог слуха). */
     private static final float AUDIBLE = 0.005f;
     /**
      * Тики клиента: часы взрывов, по которым эхо и удар у уха ждут начала прямого звука. Свои, а не возраст эффекта
@@ -596,10 +596,10 @@ public final class BlastSounds {
     }
 
     /**
-     * Удельное акустическое сопротивление воздуха ρ₀c₀, Па·с/м (1,204 кг/м³ × 343 м/с при 20 °C): плоская поверхность,
-     * что ходит со скоростью v, излучает давление ρ₀c₀·v.
+     * Удельное акустическое сопротивление воздуха ρ₀c₀, Па·с/м (1,204 кг/м³ × 343 м/с при 20 °C, 413 по таблице): плоская
+     * поверхность, что ходит со скоростью v, излучает давление ρ₀c₀·v.
      */
-    static final double AIR_IMPEDANCE = 1.204 * 343;
+    static final double AIR_IMPEDANCE = ua.zentix.incoming.sound.Air.DENSITY * BlastModel.SOUND_SPEED;
 
     /**
      * Гул земли, когда до ног дошла волна грунта с пиковой скоростью {@code ppvMps}, м/с: давление — ρ₀c₀·v у земли под
@@ -645,7 +645,7 @@ public final class BlastSounds {
         voice(blast, List.of(ClientSounds.blastShot(event, at, volume, pitch, seed, blast::factor, life(blast))), at, pitch, false);
     }
 
-    /** Осыпь выброса длится столько, с — длина записи осыпи без хвоста (О: выброс падает за 1–3 с). */
+    /** Окно, за которое падает выброс, с: средняя мощность осыпи — mgh за это время (⚠ оценка: выброс падает за 1–3 с). */
     static final double EJECTA_FALL_S = 2;
 
     /**

@@ -21,7 +21,7 @@ import ua.zentix.incoming.strike.ThrustCurve;
  */
 public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable Body body, double drill, double catapult, double separation) {
     /** Скорость звука, м/с. */
-    public static final double SOUND = 343;
+    public static final double SOUND = ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED;
     /** Мощность нуля дБ, Вт. */
     static final double PW = 1e-12;
     /** Тишина — уровень, которого нет. */

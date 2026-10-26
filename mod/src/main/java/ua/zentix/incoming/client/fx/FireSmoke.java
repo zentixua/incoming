@@ -513,7 +513,7 @@ public final class FireSmoke implements SmokeGrid.Source {
                 POOLS.stream()).iterator();
     }
 
-    /** Огонь очага на экране (доля белого): свет пламени вокруг не ярче его (как у лужи топлива, {@code FarBlasts}). */
+    /** Огонь очага на экране (доля белого; подача): свет пламени вокруг не ярче его (как у лужи топлива, {@code FarBlasts}). */
     static final double FLAME_ON_SCREEN = 0.8;
 
     /**

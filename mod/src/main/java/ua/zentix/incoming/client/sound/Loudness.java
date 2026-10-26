@@ -26,10 +26,10 @@ import ua.zentix.incoming.sound.Propagation;
 final class Loudness {
     /**
      * Мерка громкости, LUFS (наибольшая мгновенная): так звучит звук с уровнем {@link #REF} у уха — то же число, что
-     * {@code ENGINE_LUFS} в {@code tools/build_sounds.py} ({@code LoudnessTest} сверяет).
+     * {@code ENGINE_LUFS} в {@code tools/build_sounds.py} ({@code LoudnessTest} сверяет). Подача: мерка сведения, не SPL.
      */
     static final double ENGINE_LUFS = -19;
-    /** Потолок громкости в игре, LUFS: ближний взрыв с 1 psi ({@code BlastMix.NEAR_LUFS}, {@code LoudnessTest} сверяет). */
+    /** Потолок громкости в игре, LUFS: ближний взрыв с 1 psi ({@code BlastMix.NEAR_LUFS}, {@code LoudnessTest} сверяет; подача). */
     static final double CEILING_LUFS = -13.5;
     /**
      * Громкость файлов петель моторов и разовых звуков старта, LUFS ({@code MOTOR_LUFS} в {@code tools/build_sounds.py},
@@ -37,7 +37,7 @@ final class Loudness {
      */
     static final double MOTOR_LUFS = CEILING_LUFS;
     /**
-     * Громкость файлов схода снаряда РСЗО, LUFS ({@code ROCKET_LAUNCH_LUFS} в сборке): короткий удар на потолок не свести
+     * Громкость файлов схода снаряда РСЗО, LUFS ({@code ROCKET_LAUNCH_LUFS} в сборке; подача): короткий удар на потолок не свести
      * без пережатия — на 2 дБ ниже, упирается в файл с {@code REF + 2·(−15,5 − ENGINE_LUFS)} ≈ 133 дБА у уха. Хлопок
      * отделения ускорителя и катапульта — на {@link #ENGINE_LUFS}: громче {@link #REF} их нет и в метре ({@code LoudnessTest}).
      */

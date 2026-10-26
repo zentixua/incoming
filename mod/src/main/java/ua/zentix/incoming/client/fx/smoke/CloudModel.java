@@ -92,7 +92,7 @@ public final class CloudModel {
     public static final double RADIANT = 0.3;
     /** Чёрное тело шара топлива, K: 275 кВт/м² (середина 200–350 по CCPS) = σT⁴. */
     public static final double FUEL_BALL_K = Math.pow(FuelFireball.SURFACE_POWER / 5.670374e-8, 0.25);
-    /** Шар взрывчатки: в начале и в конце жизни, K (оценка). */
+    /** Шар взрывчатки: в начале и в конце жизни, K (⚠ оценка: замеров видимой температуры по возрасту нет). */
     public static final double HE_BALL_HOT = 3000, HE_BALL_END = 1500;
     /** Сажа: ослабление на массу (до дельта-Эддингтона), м²/кг; альбедо и асимметрия. */
     public static final double SOOT_K = 7.5e3 / (1 - 0.25), SOOT_W = 0.25, SOOT_G = 0.5;

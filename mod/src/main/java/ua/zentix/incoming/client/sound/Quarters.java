@@ -22,6 +22,7 @@ import java.util.Arrays;
  * </ul>
  */
 final class Quarters {
+    /** Четвертей вокруг уха (бюджет: точность направления против каналов; мощность сохраняется). */
     static final int N = 4;
 
     private final double[] power = new double[N], highs = new double[N];
