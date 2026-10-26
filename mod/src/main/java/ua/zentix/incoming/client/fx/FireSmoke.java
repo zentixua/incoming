@@ -18,18 +18,20 @@ import ua.zentix.incoming.grid.SubstationBlock;
 import java.util.Locale;
 
 /**
- * Дым над тем, что горит, — облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}): огонь, который видит клиент ({@link FireWatch}: блоки огня в своих чанках,
- * окно выборок), собран в очаги по чанкам (16 блоков; у ядерного шторма — клетки 32, {@code FireStorm}): у очага — шлейф
+ * Дым над тем, что поджёг удар мода, — облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}):
+ * топливо в воронках ({@link #pool}, {@link #fuel}) и масло выбитых подстанций ({@link #substation}). Огонь Minecraft
+ * на блоках — не здесь: он дымит, как любой огонь игры (ванилью или модом, который ведёт горение), — мод рисует только
+ * своё, а не украшает огонь мира. У очага — шлейф
  * Бриггса ({@link FirePlume}) по ветру мира и устойчивости воздуха ({@link ClientAir}), кусками трубки
- * ({@link SmokeGrid.Sink#tube}, {@link #lay}: рисуются как след снаряда); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Откуда
- * огонь — дело сервера (поджиг и горение не трогаются): дым идёт за тем, что горит. Дым, что уже в воздухе, несёт силу
+ * ({@link SmokeGrid.Sink#tube}, {@link #lay}: рисуются как след снаряда); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Дым, что уже в воздухе, несёт силу
  * очага в миг выхода: место на пути x по ветру — от очага каким он был x/u секунд назад (история очага раз в
  * {@link #PERIOD} тиков; ветер — нынешний на весь шлейф). Так шлейф растёт от очага со скоростью ветра, а когда очаг
  * слабеет или гаснет, у очага дым тоньше, а ушедший — прежний и уходит по ветру.
  * <p>
- * Очаги рядом — один пожар ({@link #merge}): дом на стыке чанков горит одним столбом, а не двумя-четырьмя слабыми
- * (подъём шлейфа — по всему теплу, ∝ F^⅓ у пути и F^⅗ у конечного; половина тепла даёт столб ниже на 20–35 %). Каждый
- * очаг несёт свою сажу, а поднимается шлейфом всего пожара. Пакета нет: огонь клиент видит сам. Пожары горящего ядерного подрыва — не здесь: их дым — огненный шторм ({@code FireStorm}).
+ * Очаги рядом — один пожар ({@link #merge}): воронки залпа и подстанция рядом горят одним столбом, а не несколькими
+ * слабыми (подъём шлейфа — по всему теплу, ∝ F^⅓ у пути и F^⅗ у конечного; половина тепла даёт столб ниже на 20–35 %).
+ * Каждый очаг несёт свою сажу, а поднимается шлейфом всего пожара. Пожары горящего ядерного подрыва — не здесь: их дым —
+ * огненный шторм ({@code FireStorm}).
  */
 public final class FireSmoke implements SmokeGrid.Source {
     /**
@@ -37,18 +39,17 @@ public final class FireSmoke implements SmokeGrid.Source {
      * (прежние 4 дальше 256 м с 12 клубами на кусок клали клубы реже их размера — шлейф вдали шёл бусами).
      */
     static final int SEGMENTS = 10;
-    /** Очаги пересматриваются раз в столько тиков (окно огня меняется не быстрее обхода чанков). */
+    /** Очаги пересматриваются раз в столько тиков. */
     static final int PERIOD = 20;
     /** Шлейф — не дальше по ветру, м (0,75 полустороны последнего каскада сетки: ~0,8 км). */
     public static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
 
-    private static final Long2ObjectOpenHashMap<FireSmoke> FIRES = new Long2ObjectOpenHashMap<>();
     /** Горящее масло выбитых подстанций по месту блока ({@link #substation}). */
     private static final Long2ObjectOpenHashMap<FireSmoke> OIL_FIRES = new Long2ObjectOpenHashMap<>();
     /** Топливо в воронках взрывов ({@link #pool}); с сервера — ещё по номеру воронки (перемены состояния, {@link #fuel}). */
     private static final java.util.List<FireSmoke> POOLS = new java.util.ArrayList<>();
     private static final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<FireSmoke> POOL_IDS = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
-    /** Клетки огня топлива горящих воронок: их огонь — не дерево ({@link FireWatch} его не считает). */
+    /** Клетки огня топлива горящих воронок: их огонь — топливо воронки ({@link FireWatch} его не считает). */
     static final FuelCells FUEL = new FuelCells();
 
     /**
@@ -71,8 +72,6 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
-    /** Огонь Minecraft: блок огня — грань ~1 м² горящей древесины ({@link FirePlume#BLOCK_WATTS}, {@link FirePlume#SOOT_PER_JOULE}). */
-    public static final Fuel WOOD = new Fuel(FirePlume.BLOCK_WATTS, 1, FirePlume.SOOT_PER_JOULE);
     /**
      * Масло трансформатора выбитой подстанции, разлитое и горящее лужей: минеральное масло — выгорание 0,039 кг/(м²·с)
      * (Babrauskas, SFPE Handbook, 5-е изд., табл. «Pool fire burning rates», трансформаторное масло; ⚠ по памяти),
@@ -103,12 +102,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     private FuelBurn burn;
     /**
      * Место очага, сила (блоков огня или очагов топлива), сила всего пожара, куда он входит (в единицах его топлива,
-     * {@link #merge}), начало и конец горения (часы сетки, с; конец — NaN, пока горит); пересмотр.
+     * {@link #merge}), начало и конец горения (часы сетки, с; конец — NaN, пока горит).
      */
     double x, y, z, blocks, fire;
     final double start;
     double end = Double.NaN;
-    int seen;
     /** Мир сменился: источник уходит из сетки. */
     boolean gone;
     /**
@@ -222,7 +220,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         return i;
     }
 
-    /** Раз в тик клиента после {@link FireWatch#tick}: очаги по окну огня (раз в {@link #PERIOD}). */
+    /** Раз в тик клиента: очаги — раз в {@link #PERIOD}. */
     public static void tick(ClientLevel level) {
         if (level != world) {
             reset();
@@ -230,30 +228,6 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
         if (++clock % PERIOD != 0) return;
         double now = SmokeGrid.seconds(0);
-        int pass = clock;
-        FireWatch.forEachGroup((chunk, fx, fy, fz, n) -> {
-            // пожары ядерного подрыва дымят огненным штормом ({@code FireStorm}) — не здесь
-            if (ua.zentix.incoming.client.nuclear.ClientNuclear.stormFire(fx, fz)) return;
-            FireSmoke f = FIRES.get(chunk);
-            if (f == null || !Double.isNaN(f.end)) {
-                f = new FireSmoke(WOOD, fx, fy, fz, n, now);
-                FIRES.put(chunk, f);
-                SmokeGrid.add(f);
-            } else {
-                f.x = fx;
-                f.y = fy;
-                f.z = fz;
-                f.blocks = n;
-            }
-            f.seen = pass;
-        });
-        for (var it = FIRES.values().iterator(); it.hasNext(); ) {
-            FireSmoke f = it.next();
-            if (f.seen == pass) continue;
-            // погас: шлейф отпущен и уходит по ветру
-            if (Double.isNaN(f.end)) f.end = now;
-            it.remove();
-        }
         for (var it = OIL_FIRES.long2ObjectEntrySet().iterator(); it.hasNext(); ) {
             var e = it.next();
             FireSmoke f = e.getValue();
@@ -277,8 +251,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             }
         }
         // очаги рядом — один пожар; потом — запись и шлейф по нему
-        java.util.List<FireSmoke> burning = new java.util.ArrayList<>(FIRES.values());
-        burning.addAll(OIL_FIRES.values());
+        java.util.List<FireSmoke> burning = new java.util.ArrayList<>(OIL_FIRES.values());
         burning.addAll(POOLS);
         merge(burning);
         for (FireSmoke f : burning) {
@@ -366,10 +339,8 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /** Смена мира, перемотка повтора: очагов нет (источники сетки снимает её сброс). */
     public static void reset() {
-        for (FireSmoke f : FIRES.values()) f.gone = true;
         for (FireSmoke f : OIL_FIRES.values()) f.gone = true;
         for (FireSmoke f : POOLS) f.gone = true;
-        FIRES.clear();
         OIL_FIRES.clear();
         POOLS.clear();
         POOL_IDS.clear();
@@ -486,7 +457,7 @@ public final class FireSmoke implements SmokeGrid.Source {
      * × exposure, в w — air.
      */
     public static void lights(Vec3 eye, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
+        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
         FirePlume.flameLight(BB);
         Vector4f column = COLUMN;
         double[] weight = WEIGHT;
@@ -507,10 +478,9 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
-    /** Все очаги: огонь Minecraft, масло подстанций и топливо в воронках. */
+    /** Все очаги: масло подстанций и топливо в воронках. */
     private static Iterable<FireSmoke> all() {
-        return () -> java.util.stream.Stream.concat(java.util.stream.Stream.concat(FIRES.values().stream(), OIL_FIRES.values().stream()),
-                POOLS.stream()).iterator();
+        return () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator();
     }
 
     /** Огонь очага на экране (доля белого; подача): свет пламени вокруг не ярче его (как у лужи топлива, {@code FarBlasts}). */
@@ -522,7 +492,7 @@ public final class FireSmoke implements SmokeGrid.Source {
      * пожаром освещала бы одна луна.
      */
     public static void lights(FarView view, FxLights lights) {
-        if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
+        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
         FirePlume.flameLight(BB);
         double m = Math.max(BB[0], Math.max(BB[1], BB[2]));
         Vec3 cam = view.camera();
@@ -565,32 +535,24 @@ public final class FireSmoke implements SmokeGrid.Source {
 
     /**
      * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
-     * Хескестаду), свет — у масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков (свет
+     * Хескестаду) и свет пламени масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков (свет
      * блока 15 гаснет за ~14 блоков, а пламя топлива в 2–3 МВт ночью освещает округу на десятки метров: без своего света
      * кадр ночью темнее прежнего, проверка FV), — свет пламени топлива из середины его клеток на блоках.
      */
     public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
-        if (FIRES.isEmpty() && OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
+        if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
         FirePlume.flameLight(BB);
         for (FireSmoke fire : all()) {
             if (!Double.isNaN(fire.end) || fire.gone) continue;
             double dx = fire.x - eye.x, dy = fire.y - eye.y, dz = fire.z - eye.z;
             f.plume(dx, dy, dz, fire.own, 1);
-            if (fire.fuel != WOOD) {
-                double r = 0.5 * fire.flame;
-                f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);
-            }
+            double r = 0.5 * fire.flame;
+            f.light(dx, dy + r, dz, r, BB[0], BB[1], BB[2], air, r);
         }
     }
 
-    /** Для строки {@code SCENARIO}: очагов, блоков огня в них, самый большой — подъём и докуда виден шлейф. */
+    /** Для строки {@code SCENARIO}: очаги масла и топлива — сила, пламя, подъём. */
     public static String describe() {
-        double all = 0;
-        FireSmoke big = null;
-        for (FireSmoke f : FIRES.values()) {
-            all += f.blocks;
-            if (big == null || f.blocks > big.blocks) big = f;
-        }
         FireSmoke first = OIL_FIRES.isEmpty() ? null : OIL_FIRES.values().iterator().next();
         String oil = first == null ? "" : String.format(Locale.ROOT, " oil %d (%.1f MW, flame %.1f, rise %.0f)", OIL_FIRES.size(),
                 OIL.watts() / 1e6, first.flame, first.plume.finalRise);
@@ -599,8 +561,6 @@ public final class FireSmoke implements SmokeGrid.Source {
             oil += String.format(Locale.ROOT, " pools %d (%.1f MW, fire %.1f MW, rise %.0f)", POOLS.size(), p.blocks * p.fuel.watts() / 1e6,
                     p.fire * p.fuel.watts() / 1e6, p.plume.finalRise);
         }
-        if (big == null) return "fires 0" + oil;
-        return String.format(Locale.ROOT, "fires %d blocks %.0f biggest %.0f (fire %.1f MW) rise %.0f visible %.0f wind %.1f class %.1f", FIRES.size(), all,
-                big.blocks, big.fire * big.fuel.watts() / 1e6, big.plume.finalRise, big.visible, big.plume.wind, big.plume.stability) + oil;
+        return oil.isEmpty() ? "fires 0" : "fires" + oil;
     }
 }
