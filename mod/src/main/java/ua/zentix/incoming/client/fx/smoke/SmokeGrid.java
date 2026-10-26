@@ -91,6 +91,8 @@ public final class SmokeGrid {
 
         /** Cheap support at absolute time. False leaves legacy/volume sources on their existing path. */
         default boolean bounds(double seconds, SmokeBounds out) { return false; }
+        /** Absolute source age, used only to prioritize rapidly changing young clouds. */
+        default double age(double seconds) { return Double.POSITIVE_INFINITY; }
 
         /** Conventional source also uses the preparation budget when its short-lived support is not bounded. */
         default boolean budgeted() { return false; }

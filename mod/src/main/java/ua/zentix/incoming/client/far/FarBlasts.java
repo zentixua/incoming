@@ -310,12 +310,14 @@ public final class FarBlasts {
         }
 
         @Override
+        public double age(double seconds) { return sourceAge(seconds); }
+
+        @Override
         public boolean bounds(double seconds, ua.zentix.incoming.client.fx.smoke.SmokeBounds out) {
             double t = sourceAge(seconds);
-            // The short-lived spray/curtain/condensation retain their full existing path. Once only the
-            // persistent cloud remains, its analytic support is enough; no terrain is queried here.
-            if (curtain != null && t < curtain.life || t < model.condensationSeconds()) return false;
             model.bounds(t, level.getMinBuildHeight() - y, level.getMaxBuildHeight() - y, out);
+            model.condensationBounds(t, out);
+            if (curtain != null) curtain.bounds(t, out);
             if (water != null) water.bounds(t, out, 0, water.depth, 0);
             out.move(x, y, z);
             return true;

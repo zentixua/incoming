@@ -34,7 +34,7 @@ public final class FarTerrain {
      * The latter goes through TerrainTiles for LSS, Voxy and DH alike, not just the loaded-chunk branch.
      */
     public static Sightline.Heights dust(ClientLevel level) {
-        DustHeightCache cache = new DustHeightCache();
+        DustHeightCache cache = DustHeightCache.forWorld(level);
         Sightline.Heights fallback = of(level);
         return (x, z) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);

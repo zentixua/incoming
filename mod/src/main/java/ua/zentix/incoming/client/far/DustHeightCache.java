@@ -2,6 +2,10 @@ package ua.zentix.incoming.client.far;
 
 /** Bounded block-cell cache, including absent terrain and every LOD backend. No boxed coordinate keys. */
 final class DustHeightCache {
+    // Values must not retain their weak world keys. All strike samplers in a world share these cells.
+    private static final java.util.Map<Object, DustHeightCache> WORLDS = new java.util.WeakHashMap<>();
+
+    static DustHeightCache forWorld(Object world) { return WORLDS.computeIfAbsent(world, ignored -> new DustHeightCache()); }
     private static final int SIZE = 4096;
     private final long[] keys = new long[SIZE], until = new long[SIZE];
     private final double[] heights = new double[SIZE];

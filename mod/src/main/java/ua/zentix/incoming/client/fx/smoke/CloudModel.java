@@ -844,6 +844,9 @@ public final class CloudModel {
         return Math.min(1, (life - t) / (0.1 * life));
     }
 
+    /** Young condensation participates in culling too, without generating its shell cells. */
+    public void condensationBounds(double t, SmokeBounds out) { condensationModel().bounds(t, out); }
+
     /** Conservative support at absolute age, without emitting dust or querying terrain. */
     public void bounds(double t, double floor, double ceiling, SmokeBounds out) {
         if (t < 0 || t >= life) return;

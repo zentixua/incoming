@@ -4,6 +4,15 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DustHeightCacheTest {
+    @Test void allStrikesShareCellsOnlyWithinTheirWorld() {
+        Object world = new Object();
+        var first = DustHeightCache.forWorld(world);
+        var second = DustHeightCache.forWorld(world);
+        assertSame(first, second);
+        assertNotSame(first, DustHeightCache.forWorld(new Object()));
+        assertEquals(42, first.at(1, 2, 10, 20, (x,z) -> 42));
+        assertEquals(42, second.at(1, 2, 10, 20, (x,z) -> { fail("shared LOD cell was queried again"); return 0; }));
+    }
     @Test void terrainCellsCacheLodMissesAndSwitchImmediatelyToLoadedSurface() {
         var cache = new DustHeightCache(); int[] reads = {0};
         Sightline.Heights lod = (x,z) -> { reads[0]++; return Double.NaN; };

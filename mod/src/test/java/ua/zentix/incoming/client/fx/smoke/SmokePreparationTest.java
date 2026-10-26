@@ -35,7 +35,8 @@ class SmokePreparationTest {
             assertEquals(10, shown.calls);
             assertEquals(10, sources.stream().mapToInt(s -> ((Source)s).calls).sum());
             prep.draw(sources, Set.of(), 1800, 0, 0, 0, b -> true, (s,t) -> DISCARD, () -> 0);
-            assertEquals(1800, shown.age, "history is sampled at current time, never replayed in steps");
+            assertTrue(sources.stream().filter(s -> ((Source)s).age == 1800).count() > 0,
+                    "newly visible sources are sampled at current time, never replayed in steps");
         }
     }
 
@@ -60,12 +61,61 @@ class SmokePreparationTest {
         prep.draw(sources, Set.of(), 10, 0, 0, 0, b -> true, draw, () -> 0);
         assertEquals(10, seen[0]); source.pause = true;
         int[] checks = {0};
-        prep.draw(sources, Set.of(), 100, 0, 0, 0, b -> true, draw,
+        prep.draw(sources, Set.of(), 10.1, 0, 0, 0, b -> true, draw,
                 () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
         assertEquals(10, seen[0], "an interrupted source must not show a partial cloud");
+        seen[0] = -1; checks[0] = 0;
+        prep.draw(sources, Set.of(), 100, 0, 0, 0, b -> true, draw,
+                () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
+        assertEquals(-1, seen[0], "expired snapshots must not be replayed on return");
         source.pause = false;
         prep.draw(sources, Set.of(), 101, 0, 0, 0, b -> true, draw, () -> 0);
         assertEquals(101, seen[0]);
+    }
+
+    @Test void onePausedCloudDoesNotAbortOtherUpdates() {
+        long[] nanos = {0};
+        var slow = new Source(0) {
+            @Override public boolean emit(double t, SmokeGrid.Sink out) {
+                nanos[0] += SmokePreparation.SOURCE_NANOS;
+                SmokePreparation.checkpoint();
+                fail("source must yield its slice"); return true;
+            }
+        };
+        var other = new Source(20);
+        var prep = new SmokePreparation();
+        prep.draw(new ArrayList<>(List.of(slow, other)), Set.of(), 0, 0, 0, 0, b -> true,
+                (s,t) -> DISCARD, () -> nanos[0]);
+        assertEquals(1, other.calls, "a paused foreground cloud must not stop the queue");
+    }
+
+    @Test void returnedAndYoungCloudsPrecedeFreshForegroundSnapshots() {
+        var prep = new SmokePreparation();
+        var sources = new ArrayList<SmokeGrid.Source>();
+        for (int i = 0; i < 40; i++) sources.add(new Source(i < 20 ? 0 : 100));
+        for (int f = 0; f < 20; f++) prep.draw(sources, Set.of(), f / 60.0, 0, 0, 0,
+                b -> true, (s,t) -> DISCARD, () -> 0);
+        for (int f = 0; f < 20; f++) prep.draw(sources, Set.of(), 120 + f / 60.0, 0, 0, 0,
+                b -> b.minX < 50, (s,t) -> DISCARD, () -> 0);
+        var young = new Source(200) { @Override public double age(double t) { return 0; } };
+        sources.add(young);
+        prep.draw(sources, Set.of(), 120 + 20 / 60.0, 0, 0, 0, b -> true, (s,t) -> DISCARD, () -> 0);
+        assertEquals(1, young.calls);
+        assertEquals(SmokePreparation.UPDATES - 1, sources.subList(20, 40).stream()
+                .filter(s -> ((Source)s).age == 120 + 20 / 60.0).count());
+    }
+
+    @Test void capacityBoundaryDoesNotFlickerWithSmallCameraMotion() {
+        var prep = new SmokePreparation();
+        var sources = new ArrayList<SmokeGrid.Source>();
+        for (int i = 0; i < SmokePreparation.SOURCES; i++) sources.add(new Source(-100));
+        var excluded = new Source(100); sources.add(excluded);
+        for (int f = 0; f < 100; f++) prep.draw(sources, Set.of(), f / 60.0, f % 2 == 0 ? -0.1 : 0.1, 0, 0,
+                b -> true, (s,t) -> DISCARD, () -> 0);
+        assertEquals(0, excluded.calls);
+        // A meaningful move still replaces less important sources.
+        prep.draw(sources, Set.of(), 2, 99, 0, 0, b -> true, (s,t) -> DISCARD, () -> 0);
+        assertEquals(1, excluded.calls);
     }
 
     @Test void broadDistantMarginsDoNotDisplaceNearbyClouds() {
