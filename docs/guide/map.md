@@ -58,3 +58,6 @@ whole save once. Zoomed out, and for sight lines far away, Incoming reads Voxy's
 right to within 8 blocks, and water shallower than a cell may show as its bed. If you installed LOD Server Support before this version of Incoming, run
 `/lss clearcache` once on that server: LOD Server Support only sends terrain it has not sent before. The map does not
 work in the Nether.
+
+The LOD Server Support terrain cache is shared when you enter the same server with or without `:25565`, or change
+the host name's letter case. Other ports keep separate caches.
