@@ -87,6 +87,19 @@ public final class DhUpdates {
     private Sink sink = DhUpdates::deliver;
     private boolean test;
     private boolean listening;
+    /** Non-owning callback fast path; queues and world references remain in level attachments. */
+    private static volatile int waitingLevels;
+
+    private void setListening(boolean value) {
+        if (listening == value) return;
+        listening = value;
+        waitingLevels += value ? 1 : -1;
+    }
+
+    /** Server lifecycle boundary: the previous server's level attachments no longer receive acknowledgements. */
+    static void resetWaiting() {
+        waitingLevels = 0;
+    }
 
     /** Приёмник чанков. */
     public interface Sink {
@@ -124,7 +137,7 @@ public final class DhUpdates {
             u.offered.clear();
             u.offeredCount.clear();
             u.held.clear();
-            u.listening = false;
+            u.setListening(false);
             u.acks.clear();
         }
     }
@@ -212,7 +225,7 @@ public final class DhUpdates {
         // подтверждения записи — только от DH: без него темп держит место в очередях Voxy (heldRoom)
         boolean paced = u.paced();
         if (paced && u.held.waiting() == 0) {
-            u.listening = true;
+            u.setListening(true);
             DhChunks.listen();
         }
         if (u.test) {
@@ -232,7 +245,7 @@ public final class DhUpdates {
      * держанной копии ({@link #sendHeld}). Мир — тот, что DH обёртывает ({@code getWrappedMcObject}).
      */
     public static void saved(Object level, int x, int z) {
-        if (!(level instanceof ServerLevel world)) return;
+        if (waitingLevels == 0 || !(level instanceof ServerLevel world)) return;
         var server = world.getServer();
         if (!server.isRunning()) return;
         long at = System.nanoTime();
@@ -261,7 +274,7 @@ public final class DhUpdates {
         if (held.waiting() > 0) {
             for (long[] a; (a = acks.poll()) != null; ) held.ack(a[0], a[1]);
             held.expire(System.nanoTime());
-            if (held.waiting() == 0) listening = false;
+            if (held.waiting() == 0) setListening(false);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
         // игроки с Voxy (и с DH): темп — и место в их очередях, иначе лишнее они бы не получили

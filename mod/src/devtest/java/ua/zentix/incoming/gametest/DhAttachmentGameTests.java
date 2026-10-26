@@ -38,6 +38,7 @@ public final class DhAttachmentGameTests {
             h.assertTrue(first[5] == 0, "first world still waiting");
             h.assertTrue(DhUpdates.takeHeldStats(other)[5] == 1, "acknowledgement reached another world");
             // The listener is discarded with the attachment; old callbacks must not create a replacement.
+            DhUpdates.testSink(level, null);
             level.removeData(ModAttachments.DH_UPDATES);
             DhUpdates.saved(level, chunk.getPos().x, chunk.getPos().z);
             h.assertFalse(level.hasData(ModAttachments.DH_UPDATES), "late callback recreated world state");

@@ -225,7 +225,6 @@ final class VoxyTerrain implements TerrainSource {
             disable(t);
             return;
         }
-        if (t instanceof Error err) throw err;
         if (t instanceof IllegalStateException && in != null && !live(in)) {
             if (engine == in) engine = null;
             return;
