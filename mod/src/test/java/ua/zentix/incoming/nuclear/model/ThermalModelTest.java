@@ -8,11 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ThermalModelTest {
     private static final double V = ThermalModel.VISIBILITY_CLEAR;
 
-    /** 8 кал/см² у 15 кт в воздухе — около 2 км (NUKEMAP по тем же кривым Glasstone: ожоги 3-й степени до 1,9 км). */
+    /** 8 cal/cm² at 15 kt in the air - about 2 km (NUKEMAP according to the same curves Glasstone: burns 3 degree up to 1,9 km). */
     @Test
     void thirdDegreeBurns15kt() {
         double r = ThermalModel.rangeForFluence(ThermalModel.BURN_3, 15, false, V);
-        assertTrue(r >= 1900 && r <= 2100, "8 кал/см² на " + r);
+        assertTrue(r >= 1900 && r <= 2100, "8 cal/cm² per " + r);
         assertEquals(ThermalModel.BURN_3, ThermalModel.fluenceCalPerCm2(r, 15, false, V), 1e-6);
     }
 
@@ -23,7 +23,7 @@ class ThermalModelTest {
         assertEquals(18800, ThermalModel.rangeForFluence(ThermalModel.BURN_1, 1000, false, V), 18800 * 0.05);
     }
 
-    /** Пропускание по кривым Glasstone 1964, рис. 7.104: видимость 10 миль — 0,765 на 1,6 км и 0,56 на 6,4 км; 50 миль — 0,82 на 3,2 км. */
+    /** Transmission along curves Glasstone 1964, fig. 7.104: visibility 10 miles - 0,765 at 1,6 km and 0,56 at 6,4 km; 50 miles - 0,82 at 3,2 km. */
     @Test
     void transmittanceMatchesGlasstoneCurves() {
         assertEquals(0.765, ThermalModel.transmittance(1600, 16_000), 0.03);

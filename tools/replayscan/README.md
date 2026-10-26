@@ -1,225 +1,235 @@
-# replayscan — разбор повтора Flashback в таблицы
+# replayscan - parsing replay Flashback into tables
 
-Клиентский мод NeoForge и `replaydb.py`: повтор Flashback разбирается самой игрой, без картинки, в таблицы событий,
-путей и видимости, а запросы к ним находят планы для роликов (пуски, пролёты, удары по земле, хаос, дальние удары).
-Числа берутся из данных повтора, а не с экрана.
+Client mod NeoForge and `replaydb.py`: replay Flashback is parsed by the game itself, without a picture, into tables of events,
+paths and visibility, and queries to them find plans for videos (launch, flyovers, ground strikes, chaos, long-range strikes).
+Numbers are taken from replay data, not from screen.
 
-Клиент открывает повтор, Flashback проигрывает его на своём сервере повтора, и в конце каждого тика мод:
-- разбирает действия записи этого тика теми же кодеками, что клиент при игре: пакеты игры — протоколом игры, пакеты
-  модов из действий Flashback NeoForge Fixed — кодеком, который мод зарегистрировал у NeoForge (поэтому нужен jar
-  Incoming той версии, с которой шла запись);
-- читает мир повтора: блоки для лучей и замеров земли, сущности для путей.
+The client opens a replay, Flashback plays it on its replay server, and at the end of each tick the mod:
+ - parses the recording actions of this tick with the same codecs that the client uses when playing: game packages - with the game protocol, packages of
+  mods from the actions of Flashback NeoForge Fixed - with the codec that the mod was registered with NeoForge (therefore, you need jar
+  Incoming of the version with which the recording was made);
+ - reads the replay world: blocks for rays and ground measurements, entities for paths.
 
-Мод не зависит от Incoming: всё, что про Incoming, — в данных (типы сущностей, id пакетов) и в запросах `replaydb.py`.
+The mod does not depend on Incoming: everything about Incoming is in the data (entity types, id packages) and in the queries of `replaydb.py`.
 
-## Что нужно
-- Flashback 0.39 и Flashback NeoForge Fixed; Flashback — мод Fabric, поэтому ещё Sinytra Connector и Forgified Fabric
-  API (всё это есть в сборке «Open Skies»).
-- Моды записи: те же, что стояли при записи (иначе реестры повтора не сойдутся), и jar Incoming её версии
-  (`meta.json` → `replay_meta` и `mods`; версия Incoming в день записи — по заметкам релизов).
-- Повтор — только копия: мод читает zip сам, Flashback открывает его на время разбора.
+## What you need
+- Flashback 0.39 and Flashback NeoForge Fixed; Flashback is a mod Fabric, so also Sinytra Connector and Forgified Fabric
+  API (all this is in the assembly “Open” Skies").
+- Recording modes: the same as those used during recording (otherwise the replay registers will not match), and jar Incoming its version
+  (`meta.json` → `replay_meta` and `mods`; version Incoming on the day of recording - according to release notes).
+- Replay - only a copy: the mod reads zip itself, Flashback opens it during parsing.
 
-## Запуск
-Сборка и юнит-тесты (из корня репозитория):
+## Running
+Build and unit tests (from repository root):
 ```sh
-mod/gradlew -p tools/replayscan build        # jar — tools/replayscan/build/libs/replayscan-<версия>.jar
+mod/gradlew -p tools/replayscan build        # jar: tools/replayscan/build/libs/replayscan-<version>.jar
 ```
 
-**Облако, Gradle** (клиент без окна, `xvfb-run`): моды запуска — каталог `-PmodsDir` (все jar оттуда кладутся в
-`run/mods`). Connector в запуске из Gradle ищет «чистый» jar клиента, как в раскладке лаунчера: его даёт установщик
-NeoForge (`java -jar neoforge-21.1.264-installer.jar --installClient <каталог>`, в каталоге нужен
-`launcher_profiles.json` с `{"profiles": {}}`).
+**Cloud, Gradle** (windowless client, `xvfb-run`): runtime mods are the `-PmodsDir` directory (all jars there are
+copied to `run/mods`). In Gradle launches, Connector looks for a "clean" client jar as in the launcher layout;
+the NeoForge installer provides it (`java -jar neoforge-21.1.264-installer.jar --installClient <directory>`;
+the directory needs `launcher_profiles.json` containing `{"profiles": {}}`).
 ```sh
 cd tools/replayscan
-CONNECTOR_CLEAN=<каталог>/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar \
+CONNECTOR_CLEAN=<directory>/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar \
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ../../mod/gradlew -p . runClient \
-  -PmodsDir=<моды> -Preplay=<копия повтора>.zip [-Pout=<каталог>] [-Pask=cameras.json] [-Pfrom=… -Pto=…] \
-  [-PrunDir=<каталог игры>] [-Pxmx=8g]
+  -PmodsDir=<mods> -Preplay=<replay copy>.zip [-Pout=<directory>] [-Pask=cameras.json] [-Pfrom=… -Pto=…] \
+  [-PrunDir=<game directory>] [-Pxmx=8g]
 ```
-Каждый разбор — в своём `runDir` (туда же кладутся моды и `config/`); два запуска Gradle в одном каталоге проекта
-не идут одновременно — для разборов рядом нужны копии `tools/replayscan`.
+Each analysis has its own `runDir` (mods and `config/` go there too); two Gradle launches in one project directory
+cannot run concurrently, so concurrent analyses need copies of `tools/replayscan`.
 
-**Полная сборка** (как у игрока, `tools/prod_client.py`: копия инстанса, без Prism): сначала копия, в её `mods` —
-jar разбора, потом запуск без сценария — клиент идёт в меню, и разбор начинается сам:
+**Full modpack** (as for a player, `tools/prod_client.py`: instance copy, without Prism): first copy, place the
+analysis jar in its `mods`, then launch without a scenario; client reaches the menu and analysis starts automatically:
 ```sh
 tools/prod_client.py --copy-only --dir mod/run/replayscan
 cp tools/replayscan/build/libs/replayscan-*.jar mod/run/replayscan/mods/
-tools/prod_client.py --no-copy --dir mod/run/replayscan --incoming-jar <incoming-<версия записи>.jar> \
-  --prop replayscan.replay=<копия повтора>.zip --prop replayscan.out=<каталог>
+tools/prod_client.py --no-copy --dir mod/run/replayscan --incoming-jar <incoming-<recording version>.jar> \
+  --prop replayscan.replay=<replay copy>.zip --prop replayscan.out=<directory>
 ```
-Клиент выходит сам, когда повтор кончился; таблицы — в `out` (по умолчанию `replayscan/<имя повтора>` в каталоге
-игры).
+Client exits automatically when the replay ends; tables go to `out` (default `replayscan/<replay name>` in the
+game directory).
 
-## Настройки
-Свойства JVM `replayscan.<имя>`; в запуске из Gradle — `-P<имя>`.
+## Settings
+JVM properties `replayscan.<name>`; in Gradle launches, `-P<name>`.
 
-| имя        | по умолчанию                         | что это                                                         |
+| name       | default                              | meaning                                                         |
 |------------|--------------------------------------|-----------------------------------------------------------------|
-| `replay`   | —                                    | повтор (zip); без него мод ничего не делает                     |
-| `out`      | `replayscan/<имя повтора>`           | каталог таблиц                                                  |
-| `speed`    | 200                                  | тиков повтора в секунду (20 — как в игре)                       |
-| `viewers`  | `recorder`                           | чьими глазами видимость: `recorder` — записавший, `players` — все игроки |
-| `every`    | 2                                    | видимость сущностей — раз в столько тиков (событий и дальних снарядов — на каждый их пакет) |
-| `range`    | 1500                                 | дальше этого (блоков) видимость не считается                    |
-| `subjects` | `(incoming\|airstrike):(?!debris$).*` | типы сущностей, чьи пути и данные пишутся (игроки — всегда)     |
-| `ask`      | —                                    | файл камер: видимость ещё и из этих точек                       |
-| `from`, `to` | 0, 0                               | отрезок тиков (до `from` — перемотка без таблиц; `to` 0 — до конца) |
+| `replay`   | —                                    | replay (zip); mod does nothing without it                        |
+| `out`      | `replayscan/<replay name>`            | table directory                                                 |
+| `speed`    | 200                                  | replay ticks per second (20 is game speed)                       |
+| `viewers`  | `recorder`                           | visibility through whose eyes: `recorder` is recorder, `players` is all players |
+| `every`    | 2                                    | entity visibility every this many ticks (events and distant projectiles on each packet) |
+| `range`    | 1500                                 | visibility not computed beyond this distance (blocks)            |
+| `subjects` | `(incoming\|airstrike):(?!debris$).*` | entity types whose paths and data are logged (players always)    |
+| `ask`      | —                                    | camera file: visibility also from these points                   |
+| `from`, `to` | 0, 0                               | tick segment (before `from`, seek without tables; `to` 0 means end) |
 
-Файл камер — точки, откуда снимать (свободная камера в Flashback):
+Camera file - points from where to shoot (free camera in Flashback):
 ```json
 {"cameras": [
   {"id": "street", "dim": "minecraft:overworld", "eye": [120.5, 72, -340.5], "look": [180, 10], "from": 36000, "to": 38400},
   {"id": "roof", "eye": [80, 95, -300], "from": 36000, "to": 38400}
 ]}
 ```
-`look` — `[yaw, pitch]` как у игрока (yaw 0 — юг, pitch вниз — плюс); без него точки нет на кадре (`cx`, `cy` пусты),
-только расстояние и луч. Чанки вокруг камеры мод держит с 200 тиков до `from`.
+`look` — `[yaw, pitch]` as a player (yaw 0 - south, pitch down - plus); without it, there is no point on the frame (`cx`, `cy` are empty),
+ only distance and ray. The mod holds chunks around the camera from 200 tick to `from`.
 
-## Таблицы
-CSV в gzip; `t` — тик повтора (1/20 с от начала), место — блоки мира.
+## Tables
+CSV to gzip; `t` — replay tick (1/20 s the beginning), location — world blocks.
 
-- `events` — события тика: пакеты игры (взрыв, звук, появление сущности, урон, события сущностей и мира, чат…) и пакеты
-  модов (`kind` — `packet` или `payload`, `src` — класс пакета или id пакета мода, `data` — его поля JSON). Место —
-  из пакета; у пакета мода — поле `pos`/`position`/`burst`/`center`/`origin` (и во вложенной записи) или первый вектор.
-  У взрывов игры и пакетов модов с местом — замеры земли по миру **до** тика события (`pre` = 1; 0 — после: первый
-  тик разбора или после перемотки): `clear` — блоков вниз до блока с формой столкновения (0 — точка в блоке, −1 —
-  неизвестный чанк, 65 — нет в 64 блоках), `solid` — расстояние до центра ближайшего такого блока в кубе ±6 (−1 —
-  неизвестно, 7 — нет).
-- `blocks` — изменения блоков от сервера (`state` — как в `/setblock`).
-- `far` — снаряды из списков в пакетах модов (запись с UUID и `pos`): у Incoming — `far_flights` (снаряды дальше
-  отслеживания сущностей) и `flights` (полёты оператора); остальные поля — в `data`.
-- `entities` — сущности мира повтора: время жизни (`first`, `last`), начало и конец пути. Снаряд, который ушёл из
-  дальности клиента и вернулся, — новая строка с тем же `uuid`.
-- `tracks` — пути сущностей из `subjects` и игроков: место, поворот, скорость (строка — когда что-то изменилось).
-- `states` — данные сущностей из `subjects` (`SynchedEntityData`, по номерам полей), когда изменились.
-- `viewers` — глаз зрителя по тикам (записавший, игроки, камеры `ask:<id>`).
-- `sight` — видимость: зритель, цель (`kind`: `e` — сущность, номер `eid`; `p` — событие, номер `e`; `f` — дальний
-  снаряд, UUID), `dist`, `ahead` (глубина по оси взгляда; у камеры без `look` пусто), `cx`, `cy` — место в плоскости
-  кадра на единицу глубины
-  (вправо и вверх; кадр с вертикальным углом φ — `|cy| ≤ tan(φ/2)`), луч до цели: `hard` — до первого непрозрачного
-  блока (−1 — нет), `soft` — сколько прозрачного с формой на пути (листва, стекло, вода), `unknown` — где начался
-  неизвестный чанк (−1 — нет). Луч к сущности и дальнему снаряду — без последнего блока перед целью, к событию — до
-  точки на 3 блока выше места и без последних 3 блоков: взрыв виден огненным шаром над точкой удара, а сама точка
-  бывает в грунте, и пологий луч к ней шёл бы по земле. Цели дальше 75° от оси взгляда не пишутся, своё тело
-  зрителя — тоже.
-- `time` — время игры и суток.
-- `meta.json` — дошёл ли разбор до конца (`complete`), тики, настройки, сколько чего разобрано, ошибки кодеков, моды.
-  Таблицы и `meta.json` дописываются и при падении игры (на выходе JVM).
+- `events` - tick events: game packages (explosion, sound, entity appearance, damage, entity and world events, chat...) and packages of
+   mods (`kind` - `packet` or `payload`, `src` - package class or id package mode, `data` - its fields JSON). Place -
+   from the package; for a mod package - field `pos`/`position`/`burst`/`center`/`origin` (and in the attached entry) or the first vector. (`pre` = 1; 0 - after: first
+   tick of parsing or after rewind): `clear` - blocks down to the block with the collision shape (0 - point in the block, −1 -
+   unknown chunk, 65 - not in 64 blocks), `solid` - distance to the center of the nearest such block in the cube ±6 (−1 -
+  unknown, 7 - not).
+- `blocks` - changes to blocks from the server (`state` - as in `/setblock`).
+- `far` - shells from the lists in mod packages (entry with UUID and `pos`): for Incoming - `far_flights` (projectiles further
+   entity tracking) and `flights` (operator flights); the remaining fields are in `data`.
+- `entities` - entities of the replay world: lifetime (`first`, `last`), beginning and end of the path. A projectile that left the client's
+   range and returned - a new line with the same `uuid`.
+- `tracks` - paths of entities from `subjects` and players: location, turn, speed (line - when something changed).
+- `states` - entity data from `subjects` (`SynchedEntityData`, by field numbers) when changed.
+- `viewers` - viewer's eye by tick (recorder, players, cameras `ask:<id>`).
+- `sight` - visibility: viewer, target (`kind`: `e` - entity, number `eid`; `p` - event, number `e`; `f` - long-range
+   projectile, UUID), `dist`, `ahead` (depth along the axis of view; the camera without `look` is empty), `cx`, `cy` - location in the plane
+   of the frame per depth unit
+   (to the right and up; frame with a vertical angle φ - `|cy| ≤ tan(φ/2)`), beam to goals: `hard` - up to the first opaque
+   block (−1 - no), `soft` - how much is transparent with a shape on the way (foliage, glass, water), `unknown` - where the unknown chunk began
+   (−1 - no). The beam to the entity and the long-range projectile - without the last block before the target, to the event - to the
+   point on the 3 block above the place and without the last 3 blocks: the explosion is visible as a fireball above the point of impact, and the point
+   itself is in the ground, and a gentle beam to it would go along the ground. Targets further than 75° from the axis of view are not written, neither is the viewer’s body
+  .
+- `time` - time of the game and day.
+- `meta.json` - whether the analysis has reached the end (`complete`), tick, settings, how much of what disassembled, codec errors, mods.
+  Tables and `meta.json` are added when the game crashes (at the output JVM).
 
-Чего в данных нет:
-- Мир повтора — то, что получил записавший клиент: дальше его прорисовки блоков нет (неизвестный чанк, не воздух).
-  Сервер повтора Flashback чанков не забывает (пакета «забыть чанк» в записи нет): за запуск в верхнем мире копится всё,
-  что запись уже прислала, и перемотка снимком этого не снимает. Мир другого измерения он закрывает, когда записавший
-  уходит оттуда: там — только чанки с последнего входа.
-- Сущности — только в дальности отслеживания клиента; дальние снаряды Incoming — строками `far`.
-- Камера снаряда, бинокль и свободная камера при игре не записываются: `recorder` — глаз тела игрока.
-- Участки Sable (корабли, летательные аппараты) мод в мир повтора не ставит: лучи их не видят.
+What is not in the data:
+- The replay world is what the recording client received: there are no blocks beyond its drawing (an unknown chunk, not air).
+   The replay server Flashback does not forget chunks (there is no “forget chunk” package in the recording): for the launch in the upper world everything is accumulated,
+   that the recording has already sent, and rewinding the photo does not remove this. It closes the world of another dimension when the one who recorded
+   leaves from there: there are only chunks from the last entry.
+ - Entities - only within the client’s tracking range; long-range projectiles Incoming - lines `far`.
+- The projectile camera, binoculars and free camera are not recorded during the game: `recorder` - the eye of the player's body.
+- Areas Sable (ships, flying craft) the mod does not put a replay in the world: the rays do not see them.
 
-## База и запросы
+## Database and queries
 ```sh
-uv run tools/replayscan/replaydb.py build <каталог разбора>            # replay.duckdb рядом
-uv run tools/replayscan/replaydb.py --aspect 0.5625 report <db>         # кандидаты планов → report/*.csv
+uv run tools/replayscan/replaydb.py build <parsing directory> # replay.duckdb nearby
+uv run tools/replayscan/replaydb.py --aspect 0.5625 report <db> # plan candidates → report/*.csv
 uv run tools/replayscan/replaydb.py sql <db> "SELECT … FROM impact_views"
 ```
-Кадр — `--fov` (по вертикали, 70) и `--aspect` (16/9; 9:16 — 0.5625), «середина кадра» — `--center` (0.7). Луч
-чист — ни непрозрачного блока, ни неизвестного чанка и прозрачного с формой не больше `--soft` блоков (2).
+Frame - `--fov` (vertical, 70) and `--aspect` (16/9; 9:16 - 0.5625), “middle of frame” - `--center` (0.7). Ray
+ is pure - no opaque block, no unknown chunk and transparent with a shape no larger than `--soft` blocks (2).
 
-Виды:
-- `impacts` — удары: взрывы одного удара одной строкой, место — по пакету мода. В удар идут взрывы в 6 блоках от его места
-  и 3 тиках от прошлого взрыва (у пакетов модов — одного снаряда) и взрывы игры в 20 тиках и 12 блоках после пакета
-  мода — его вторичные подрывы (у крылатой ракеты — до 10,6 блока; пакет игры уходит, когда ступень снята, на занятом
-  сервере — позже девятого тика). `material` — грунт в точке по серверу из
-  пакета взрыва Incoming (8 — гравий: им же сервер отвечает за воздух и неготовый чанк). `impact_kinds.place` —
-  `intercept` (перехват), `ground` (у поверхности: блок ближе 2.5, до низа 2 блока, воронка — блоки, ставшие воздухом
-  в 6 блоках за 20 тиков, или грунт по серверу не гравий — вода тоже), `air`, `unknown` (места нет в мире записи — дальше
-  прорисовки записавшего, — а грунта по серверу нет или он — гравий).
-- `impact_views` — удар глазами каждого зрителя: расстояние, место в кадре, чист ли луч, когда дошёл звук
-  (17.15 блока за тик, как у Incoming).
-- `launches` — пуски: первое появление снаряда по UUID почти без скорости или у пусковой; видимость первых 3 с
-  (`samples` — тики замеров, пока снаряд есть, `seen` — из них в середине кадра и не закрыт; тик, когда снаряд вне
-  кадра, — не виден).
-- `flybys` — сколько тиков снаряд в 10–60 блоках, в кадре и не закрыт.
-- `far_views` — дальние снаряды глазами зрителей.
+Views:
+- `impacts`: strikes, one row for all explosions of one strike, position from the mod packet. Group
+  explosions within 6 blocks of strike position and 3 ticks of previous explosion (mod packets must
+  name the same projectile); game explosions within 20 ticks/12 blocks after a mod packet are its
+  secondary detonations (cruise missile up to 10,6 blocks; game packet is sent when a stage is removed,
+  later than tick nine on a busy server). `material`: server material from Incoming explosion packet
+  (8 is gravel, also returned for air/unready chunks). `impact_kinds.place`: `intercept`, `ground`
+  (surface within 2.5 blocks, bottom within 2 blocks; crater is blocks becoming air within 6 blocks/
+  20 ticks, or server material other than gravel, including water), `air`, `unknown` (position absent
+  from recorded world, beyond recorder render distance, and no server material or gravel).
+- `impact_views`: strike from each viewer, distance, screen position, clear ray, sound arrival
+  (17.15 blocks/tick, like Incoming).
+- `launches`: first projectile appearance by UUID, nearly stationary or at launcher; visibility for
+  first 3 s (`samples`: measured ticks while present; `seen`: centred/in view and unobscured; out-of-frame
+  ticks are not visible).
+- `flybys`: ticks within 10–60 blocks, in frame and unobscured.
+- `far_views`: distant projectiles from each viewer.
 
-Отчёт `report`: `launches` (30–200 блоков, в середине кадра и не закрыт ≥ 80 % первых 3 с), `flybys` (≥ 1.5 с),
-`ground_impacts` (удар у поверхности в 40–300 блоках, в кадре, луч чист), `chaos` (окна по 10 с: ударов по земле в кадре,
-громких событий в кадре и за кадром), `far_quiet` (удары в 300–1500 блоках в кадре и сколько других взрывов слышно
-рядом по времени).
+Report `report`: `launches` (30–200 blocks, in the middle of the frame and not closed ≥ 80 % of the first 3 s), `flybys` (≥ 1.5 s),
+`ground_impacts` (impact near the surface in 40–300 blocks, in the frame, the beam is clear), `chaos` (windows along 10 s: impacts on the ground in the frame,
+ loud events in the frame and behind the scenes), `far_quiet` (impacts in 300–1500 blocks in the frame and how many other explosions are heard
+ nearby in time).
 
-## Съёмка
-`-Dreplayscan.film=<план>` (из Gradle — `-Pfilm=…`) — вместо разбора клиент снимает планы повтора видео Flashback
-(MKV, H264, AAC) и проверяет каждый кадр по данным игры. План пишет `tools/clips/plan.py`; отрисовка — как у клиента,
-который снимает (Sodium, шейдеры, Distant Horizons — что в нём стоит), моды — те же, что для разбора этого повтора.
-С Distant Horizons окно клиента — другого размера, чем кадр плана: вывод Flashback пересоздаёт кадр игры в размер
-вывода, и в том же размере Iris оставляет LOD глубину мира — они ложатся поверх ближнего мира полосами. Окно размером
-с кадр съёмка не снимает (ошибка `Film: the window is …`).
-Клиент разбирает пакеты в своём сетевом потоке по приходу, а мир создаёт, когда поток клиента дойдёт до пакета входа;
-сервер повтора — в том же процессе и шлёт зрителю сразу за входом. Пакет мода, чей разбор читает мир клиента (Point
-Blank — оружие в руке других игроков), падал, и клиент выходил из повтора. Поэтому всё, что сервер повтора шлёт зрителю
-после пакета входа, ждёт в канале этого соединения на сервере (в том же порядке), пока клиент не прошёл вход по нему же
-(его игрок и мир; `ViewerHold`, строка `Film: replay viewer got … packets held after login …`). `ignoredCustomPayloads`
-Flashback для этого не годится — он выбросил бы пакеты и из самого повтора.
+## Filming
+`-Dreplayscan.film=<plan>` (Gradle: `-Pfilm=…`) makes the client film shots of a Flashback replay (MKV, H264, AAC)
+and check every frame against game data instead of analyzing. `tools/clips/plan.py` writes the plan; rendering
+matches the filming client (Sodium, shaders, Distant Horizons, whatever is installed), with the same mods as for
+analysis of this replay. With Distant Horizons, client window size must differ from plan frame size: Flashback
+export recreates the game framebuffer at export size, and Iris leaves world LOD depth at that same size, causing
+stripes over the near world. Filming refuses a window matching frame size (error `Film: the window is …`).
+Client parses packets on arrival in its network thread, but creates the world when the client thread reaches the
+login packet; replay server is in the same process and sends to the viewer immediately after login. A mod packet
+whose parser reads the client world (Point Blank: weapon in other players' hands) crashed and the client left the
+replay. Therefore everything the replay server sends to the viewer after the login packet waits in that server
+connection's channel (in the same order) until the client completes login through it (its player and world;
+`ViewerHold`, line `Film: replay viewer got … packets held after login …`). Flashback `ignoredCustomPayloads`
+cannot do this: it would discard packets from the replay itself too.
 
-План (`plan.json`): `replay`, `out`, `width`, `height`, `fps`, `bitrate`, `tries` (сколько камер пробовать на план),
-`ready` (доля кадров с построенным миром, 0 — не проверять), `clouds` (низ облаков шейдерпака), `distance` (прорисовка),
-`loud` и `engine` (id громких звуков и звуков полёта, регулярные выражения; звуки полёта по умолчанию — моторы, пике,
-свист, падение бомбы, подлёт «Града») и `shots`: `name`, `a`, `b` (тики), `dim`, `warm`
-(тиков живого повтора до начала — дым прежних ударов в кадре; удар до `a − warm` включительно вывод проходит перемоткой, и Incoming
-его не рисует — ни частиц, ни столба: пилот и оценка камер берут дым ударов с `a − warm`, этот тик — с запасом), `hold` (стоять у камеры после постройки мира — DH),
-`far` (объект дальше прорисовки), `subject` (`uuid`, `size`, `path` `[[t, x, y, z]…]`, `keys` `[{t, pos, size}]` —
-удары, `area` `{pos, size}`), `smoke` (удары `[t, x, y, z, поперечник огненного шара, вид]`; вид взрыва у Incoming: 1 — РСЗО, 2 — дрон, 3 — ракета,
-4 — бомба с прорывом наружу, 5 — бомба глубже 10 блоков (столб без шара; у бомбы место — верх над зарядом), 0 — без дыма; без вида — по поперечнику, без поперечника — 16 блоков), `need` (пороги; `loud` меньше 0 — громкое
-за кадром не проверяется; `smother` — доля кадров в дыму у самой камеры, по умолчанию не проверяется) и `cameras` по порядку:
-- `pov` — глазами игрока (`player`: `recorder`, ник или UUID; `gui` — с панелью предметов; `fov`): зритель повтора
-  смотрит его глазами и на сервере повтора, как после кнопки «Spectate» Flashback, — звуки повтора сервер рассылает
-  по месту зрителя (выстрелы и шаги игрока слышны в 16 блоках). Игрок ищется на сервере повтора: после перемотки
-  зритель стоит у прошлого плана, и игрока дальше слежения его клиент получает, только когда сервер перенесёт зрителя к нему;
-  частиц его эффектов (спирали зелий) клиент не рождает: у глаза они закрывали бы пол-кадра;
-- `fixed` — неподвижная в `eye`, смотрит в `aim` (точка) или ведёт объект (`"aim": "subject"`), угол `fov`; `rise` —
-  кандидаты на столько блоков над землёй под глазом (0 — сам глаз; глаз у стены сдвигается в воздух, вверх и к цели);
-- `tripod` — штатив по кругу у `around`: расстояния `dist`, углы над местом `elev`, шаг `az_step`; объектив — так, чтобы
-  событие поперечником `size` было `share` ширины кадра; `follow` — ведёт объект, иначе смотрит на место;
-- `path` — летит по ключам `keys` `[{t, eye, aim}]` (тик, глаз, точка взгляда; между ключами — по прямой, до первого и
-  после последнего — в них), угол `fov`, `rise` — запасные копии того же пути на столько блоков выше (по порядку плана, не
-  по оценке): путь задан человеком,
-  поэтому идёт и там, где у клиента нет чанков (рельеф там рисует только DH), а «камера в блоках» — только где чанк есть;
-- `pilot` — пролёт FPV-дрона мимо удара (`subject.keys`, тот, что ближе к концу пути снаряда), угол `fov`: путь
-  прокладывает пилот (`Pilot`) по миру повтора, как пролетел бы человек, который видит всё наперёд, — ручки дрона
-  (скорость, поворот, набор высоты) в узлах раз в 24 тика, поиск перекрёстной энтропией; цена — запас от земли, домов
-  и крон, низко (5–14 блоков), чанки повтора под кадром, дым ударов во времени по коду картинки Incoming (`Plume`:
-  облако шара, вал пыли, дымок воронки и столб, который стоит минуты и уходит по ветру) — дрон вне его, кадр не в дыму
-  (та же сетка лучей до 40 блоков, что у проверки кадра `smother`), удар за ним не скрыт, удар на расстоянии, где он читается, снаряд в кадре до удара, пределы дрона (скорость до
-  1,5 блока за тик, ускорение, крен по виражу, взгляд не боком к курсу и не быстрее 2,2° за тик). Три лучших пути —
-  кандидаты, поверх каждого руки оператора и толчки взрывов (`Hands`, как стиль FPV трейлера); тряску самого Incoming
-  выключают до съёмки в его настройке клиента (`camera_shake = 0`; съёмка её не трогает). Перед оценкой пилот ждёт, пока число чанков в 16
-  вокруг удара 40 тиков не меняется: рельеф ему нужен весь. Дыма горящих обломков (хвосты дугами на десятки блоков от
-  удара, клубы живут 4,5–7 с) пилот не знает: обломки — сущности повтора, а разбор их путей не пишет (`subjects`). В clips9
-  проход у «Градов» 03:57 через 3 с после удара был в дыму, которого модель не видит (105 кадров из 540, с 7,25 с), — среди
-  него хвосты обломков.
+Plan (`plan.json`): `replay`, `out`, `width`, `height`, `fps`, `bitrate`, `tries` (cameras to try per shot),
+`ready` (fraction of frames with a built world, 0 disables checking), `clouds` (shaderpack cloud base), `distance`
+(render distance), `loud` and `engine` (loud-sound and flight-sound IDs, regular expressions; default flight sounds
+are engines, dive, whistle, bomb release, Grad approach), and `shots`: `name`, `a`, `b` (tick), `dim`, `warm`
+(ticks of live playback before the start, for previous impact smoke in frame; impacts up to and including
+`a − warm` are reached by seeking in export, and Incoming does not render them: no particles or column. Pilot
+and camera evaluation include impact smoke from `a − warm`, with a margin on this tick), `hold` (wait at camera
+after world build, for DH), `far` (subject beyond render distance), `subject` (`uuid`, `size`, `path`
+`[[t, x, y, z]…]`, `keys` `[{t, pos, size}]` — impacts, `area` `{pos, size}`), `smoke` (impacts
+`[t, x, y, z, fireball diameter, kind]`; Incoming explosion kind: 1 is MLRS, 2 drone, 3 rocket, 4 bomb with breakout,
+5 bomb deeper than 10 blocks (column without ball; bomb position is above the charge), 0 no smoke; without kind,
+use diameter; without diameter, 16 blocks), `need` (thresholds; `loud` below 0 disables loud off-screen checking;
+`smother` is the fraction of frames with smoke near the camera itself, unchecked by default), and `cameras` in order:
+- `pov` — through the player's eyes (`player`: `recorder`, name or UUID; `gui` includes hotbar; `fov`): replay viewer
+  spectates that player on the replay server too, as after Flashback's "Spectate" button; server sends replay sounds
+  at the viewer position (player shots and footsteps audible within 16 blocks). Player is found on the replay
+  server: after seeking, viewer remains at the previous shot, and a player beyond tracking reaches the client
+  only after the server moves the viewer there; client does not spawn that player's effect particles (potion
+  spirals would obscure half the frame near the eye);
+- `fixed` — stationary at `eye`, looking at `aim` (point) or tracking the subject (`"aim": "subject"`), angle `fov`;
+  `rise` gives candidates this many blocks above ground under the eye (0 means eye itself; eye in a wall moves
+  into air, upward and toward the target);
+- `tripod` — tripod on a circle around `around`: distances `dist`, elevation angles `elev`, azimuth step `az_step`;
+  lens makes an event of diameter `size` occupy `share` of frame width; `follow` tracks subject, otherwise looks
+  at the site;
+- `path` — flies along `keys` `[{t, eye, aim}]` (tick, eye, look-at point; linearly between keys, at the first/last
+  key before/after them), angle `fov`; `rise` gives backup copies of the same path this many blocks higher (plan
+  order, not score): a person set the path, so it also goes where the client has no chunks (only DH renders
+  terrain there), and "camera in blocks" is checked only where a chunk exists;
+- `pilot` — FPV drone pass by an impact (`subject.keys`, the one nearest the end of the projectile path), angle
+  `fov`: pilot (`Pilot`) lays out a path through the replay world as a person seeing everything ahead would fly;
+  drone controls (speed, turn, climb) at nodes every 24 ticks, cross-entropy search. Cost considers clearance from
+  ground, houses and treetops, low flight (5–14 blocks), replay chunks beneath the frame, impact smoke over time
+  from Incoming rendering code (`Plume`: fireball cloud, dust ring, crater wisps and column lasting minutes and
+  drifting with wind); drone stays outside it, frame is not full of smoke (same ray grid to 40 blocks as `smother`
+  frame check), impact not hidden behind it, impact at a readable distance, projectile in frame before impact,
+  drone limits (speed up to 1.5 blocks per tick, acceleration, bank with turns, look not sideways to heading and
+  no faster than 2.2° per tick). Three best paths are candidates; operator hands and explosion jolts overlay
+  each (`Hands`, like trailer FPV style); Incoming's own shake is disabled before filming in its client setting
+  (`camera_shake = 0`; filming does not change it). Before evaluation, pilot waits until chunk count within 16
+  of impact is unchanged for 40 ticks: all terrain is needed. Pilot does not know burning-debris smoke (tails
+  arcing tens of blocks from impact, billows live 4.5–7 s): debris are replay entities, and analysis does not log
+  their paths (`subjects`). In clips9, the Grad pass at 03:57, 3 s after impact, was in smoke the model misses
+  (105 of 540 frames, from 7.25 s), including debris tails.
 
-Планы снимаются по времени, и до каждого повтор идёт вперёд с начала шагами по 1200 тиков (такой шаг Flashback
-проигрывает пакетами, без снимка куска; строка `Film: <план>: replay played from the start to tick …`): у свободной
-камеры в мире — всё, что запись показала до плана, как у зрителя, смотревшего повтор с начала. Прыжок сразу к плану
-давал только чанки вокруг записавшего в начале куска, и пролёт в стороне от него шёл над пустотой. Чанки, которые
-запись прислала позже, после перемотки назад остаются в позднем виде, поэтому планы — по времени.
-Перед оценкой зритель стоит у глаза камеры `fixed` (у `path` — в начале пути; дальний план — за чанками повтора, его
-камера — в них), без неё — у места плана, пока там мир. Камеры оцениваются до вывода по миру повтора
-теми же лучами и кадром, что у проверки кадров (объект в кадре и не за блоками, облаками и туманом, каждое событие видно
-в первые 12 тиков, камера не в блоках, дым ударов — по той же модели, что у пилота, — не на линии взгляда); сперва пробуются те, что по
-оценке пройдут пороги плана (из них камеры плана `pov`, `fixed` — первыми), потом остальные; штатив выше облаков не
-ставится. С Distant Horizons вывод ждёт, пока текстуры DH не в размере кадра (после прошлого вывода — пока
-DH не нарисует LOD в окне; строка `Film: Distant Horizons textures …` на каждое их пересоздание). Каждый кадр вывода
-(`qa.jsonl`): где объект в кадре и его доля ширины, лучи к нему, дым слоя эффектов Incoming (поля его частиц и столбов дыма `FarBlasts` отражением;
-нет Incoming — не проверяется) на линии взгляда и у самой камеры (`smother`: доля лучей сетки кадра, закрытых дымом
-ближе 40 блоков; кадр от 0,6 — в дыму), облака, туман у края прорисовки, нарисован ли он (секция сущности построена; снаряд,
-которого у клиента нет, Incoming рисует по пути от сервера) и построен ли весь мир, слышен ли звук его
-полёта (источник звука мода отстаёт от снаряда на путь, пройденный, пока звук шёл к камере), видно ли каждое событие
-плана в первые 12 тиков, камера ли это игрок, не в блоке ли свободная камера (`inside`; хоть в одном кадре — план не
-прошёл: путь `path` идёт и там, где при оценке чанков ещё не было), не на земле ли вне чанков повтора низ её кадра
-(`low_out`: ближе 128 блоков на луче у нижнего края — чанк, которого у клиента нет, а луч к 128 блокам уже у земли; там
-только рельеф DH — у моря дно и пещеры без воды — или пусто; больше 2 % кадров — план не прошёл), с какой глубиной DH рисует LOD (`dh`: 1 — своя, −1 — мира, 0 — LOD нет или глубина ни та ни другая;
-кадр с глубиной мира — план не прошёл). Звуки (`sounds.jsonl`): громкие в кадре и за
-кадром. Итог (`verdict.json`) — по порогам `need`; не прошёл — следующая камера. Вывод: `<out>/<план>/<камера>/`,
-`<out>/report.jsonl` (каждая выведенная камера), `<out>/best.json` (план → лучшая, с тиками плана); при новом запуске
-не переснимаются планы, которые прошли проверку с теми же тиками. Камера не дождалась игрока, повтор встал, не дойдя до начала,
-вывод не начался — следующая камера; план не читается — клиент выходит сразу.
+Shots run chronologically; before each, play the replay forward from its start in 1200-tick steps
+(Flashback plays packets for this step without a chunk snapshot; log `Film: <shot>: replay played from
+the start to tick …`). Free camera then has everything shown before the shot, like a viewer watching
+from the start. Jumping directly restored only recorder chunks at the chunk start; flights away from
+it crossed void. Chunks delivered later retain their late state after backward seek, so shots run in
+time order. Before scoring, viewer stands at `fixed` camera eye (`path`: path start; distant subject
+may be outside replay chunks, camera stays inside); without one, at shot site while world exists there.
+Score cameras before export against replay world using the frame-check rays/view: subject visible,
+not behind blocks/clouds/fog, each event visible in first 12 ticks, camera outside blocks, impact smoke
+from the pilot model clear of sightline. Try predicted passes first (plan `pov`/`fixed` first among them),
+then others; never place tripods above clouds. With Distant Horizons, wait until DH textures differ
+from export frame size (after prior export, until DH renders LOD in the window; `Film: Distant Horizons
+textures …` on each recreation). Every export frame (`qa.jsonl`) records subject screen position/width,
+rays, Incoming effects-layer smoke (particle and `FarBlasts` smoke-column fields by reflection; skipped
+without Incoming) on sightline/at camera (`smother`: frame-grid ray fraction blocked by smoke within
+40 blocks; ≥0,6 is smoke-filled), clouds, render-edge fog, actual rendering (entity section built;
+Incoming draws absent client projectiles by server track), full-world readiness, audible engine
+(mod sound source trails projectile by travel during propagation), each event visibility in first
+12 ticks, whether camera is the player, free-camera block collision (`inside`: any frame fails; `path`
+can enter chunks absent during scoring), lower frame terrain outside replay chunks (`low_out`: lower
+ray within 128 blocks crosses an absent client chunk and reaches ground by 128; only DH terrain there,
+seabed/caves without water, or void; >2 % of frames fails), DH LOD depth (`dh`: 1 own, −1 world, 0 no
+LOD/neither; world-depth frame fails). `sounds.jsonl` records loud sounds inside/outside frame.
+`verdict.json` applies `need` thresholds; failure tries next camera. Output `<out>/<shot>/<camera>/`,
+`<out>/report.jsonl` (each exported camera), `<out>/best.json` (shot → best with shot ticks). Restart
+skips passed shots with identical ticks. Camera missing player, replay stalled before start, or export
+not starting tries next camera; unreadable plan exits the client immediately.

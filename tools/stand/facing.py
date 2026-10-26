@@ -1,5 +1,5 @@
-"""Видит ли игрок правку PR: пути кода клиента и звука, ресурсов и скриптов, которые эти ресурсы собирают. Такому PR
-нужен стенд (stand.py pr); остальным статус «Стенд сцен» ставится сразу — «не нужен». Список один — здесь."""
+"""Whether a player can see/hear a PR change: client/sound code paths, resources and scripts generating them.
+Such PRs need the scene bench (stand.py pr); others immediately get "Стенд сцен": "not needed". This is the single list."""
 import re
 
 PLAYER_FACING = (
@@ -18,7 +18,7 @@ PLAYER_FACING = (
 
 
 def _glob(pattern: str) -> re.Pattern:
-    """Глоб путей git в регулярку: `**/` — любые папки (и ни одной), `**` — что угодно, `*` — внутри одной папки."""
+    """Convert a git path glob to regex: `**/` means any directories or none, `**` any text, `*` within one directory."""
     out, i = [], 0
     while i < len(pattern):
         if pattern.startswith("**/", i):
@@ -40,5 +40,5 @@ _PATTERNS = [_glob(p) for p in PLAYER_FACING]
 
 
 def player_facing(paths) -> list:
-    """Пути из `paths`, которые меняют то, что игрок видит или слышит, в исходном порядке."""
+    """Paths from `paths` affecting what players see/hear, in original order."""
     return [p for p in paths if any(r.match(p) for r in _PATTERNS)]

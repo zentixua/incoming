@@ -4,19 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Разбор сценария commands (свойство {@code incoming.commands}, шаги через «;») в шаги по тикам клиента — без
- * Minecraft, чтобы проверять юнит-тестом ({@code CommandPlanTest}). Что значат шаги — {@code ClientScenario.planCommands}.
+ * Parse the commands scenario ({@code incoming.commands}, steps separated by ";") into client-tick steps
+ * without Minecraft, for unit testing ({@code CommandPlanTest}). Step semantics: {@code ClientScenario.planCommands}.
  *
- * @param steps    шаги по порядку
- * @param nukeGate   тик {@code wait:nuke} (с него шаги ждут пакета подрыва), −1 — нет
- * @param blastGates тики {@code wait:blast} по порядку (с каждого шаги ждут следующего взрыва на сервере)
- * @param end        тик «SCENARIO done»
- * @param warnings   пропущенные шаги — в лог
+ * @param steps steps in order
+ * @param nukeGate tick of {@code wait:nuke} (subsequent steps wait for a detonation packet), −1 if absent
+ * @param blastGates ticks of {@code wait:blast} in order (each gates steps on the next server explosion)
+ * @param end tick of "SCENARIO done"
+ * @param warnings skipped steps to log
  */
 record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int end, List<String> warnings) {
-    /** Самое долгое {@code wait:N} — час игры, тиков. */
+    /** The longest {@code wait:N} is an hour of play, tick. */
     static final int MAX_WAIT = 72_000;
-    /** С какого тика начинаются шаги и сколько после последнего ждать до «SCENARIO done». */
+    /** At what tick do the steps begin and how long after the last one to wait until “SCENARIO done”. */
     static final int START = 100, TAIL = 100;
 
     enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON }
@@ -27,16 +27,16 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
         return parse(spec, 40);
     }
 
-    /** {@code gap} — тиков после команды ({@code incoming.commands.gap}). */
+    /** {@code gap} — tick after the command ({@code incoming.commands.gap}). */
     static CommandPlan parse(String spec, int gap) {
         List<Step> steps = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<Integer> blasts = new ArrayList<>();
         int t = START, gate = -1;
         for (String c : ScenarioCommands.split(spec)) {
-            // «wait:nuke» — раньше общего «wait:N»: иначе он разбирался бы как число и пропускался
+            // "wait:nuke" - before the generic "wait:N": otherwise it would be parsed as a number and skipped
             if (c.equals("wait:nuke")) {
-                if (gate >= 0) warnings.add("второй «wait:nuke» пропущен — ждать подрыва можно один раз");
+                if (gate >= 0) warnings.add("the second “wait:nuke” is skipped - you can wait for the detonation once");
                 else gate = t;
             } else if (c.equals("wait:blast")) {
                 blasts.add(t);
@@ -47,7 +47,7 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
                 } catch (NumberFormatException e) {
                     ticks = -1;
                 }
-                if (ticks < 0 || ticks > MAX_WAIT) warnings.add("«" + c + "» пропущено — нужно целое число тиков от 0 до " + MAX_WAIT + " или nuke");
+                if (ticks < 0 || ticks > MAX_WAIT) warnings.add("«" + c + "» missing - you need an integer tick from 0 to " + MAX_WAIT + " or nuke");
                 else t += ticks;
             } else if (c.startsWith("shot:")) {
                 steps.add(new Step(t, Kind.SHOT, c.substring("shot:".length()).strip()));

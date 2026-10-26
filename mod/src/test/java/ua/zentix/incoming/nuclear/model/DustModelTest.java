@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Пыль ударной волны — законы обзора «Blast-lofted dust» (§8) и числа, по которым её проверяют: высота у фронта и слоя
- * (GRABLE, MET, Rosenblatt), вынос над рыхлым песком (Gaj &amp; Small), темнота в Хиросиме (Hersey, свидетельства).
- * Хиросима здесь — 15 кт на 592 м (DS02: 16 кт на 600 м), город — {@link DustModel.Surface#REFERENCE}.
+ * Shock wave dust - review laws “Blast-lofted dust” (§8) and the numbers by which it is checked: height at the front and layer
+ *  (GRABLE, MET, Rosenblatt), offset above loose sand (Gaj &amp; Small), darkness in Hiroshima (Hersey, evidence).
+ * Hiroshima here - 15 kt on 592 m (DS02: 16 kt on 600 m), city - {@link DustModel.Surface#REFERENCE}.
  */
 class DustModelTest {
     private static final double YIELD = 15, HOB = 592, CLEAR = ThermalModel.VISIBILITY_CLEAR;
@@ -18,13 +18,13 @@ class DustModelTest {
     }
 
     /**
-     * Толща над землёй, при которой днём под слоем — ночь (свет на земле меньше тысячной открытого дня), сумерки (меньше
-     * трёх сотых): два потока Эддингтона в слое пыли с альбедо цвета стены, солнце на 40° ({@code PallLight}; клиентский
-     * тест пелены сверяет сам свет).
+     * The thickness above the ground, during which during the day there is night under the layer (the light on the ground is less than a thousandth of an open day), twilight (less than
+     *  three hundredths): two Eddington streams in a layer of dust with an albedo of the color of the wall, the sun at 40° ({@code PallLight}; client
+     *  pall test verifies the light itself).
      */
     private static final double DARK = 11, DUSK = 6;
 
-    /** Ослабление смеси корзин — k = 3Q/(2ρD) по долям: ~0,11 м²/г (у распределения MET в обзоре — 0,13). */
+    /** Weakening of the mixture of baskets - k = 3Q/(2ρD) by shares: ~0,11 m²/g (for the distribution MET in the review - 0,13). */
     @Test
     void mixExtinctionIsGeometric() {
         assertEquals(108, DustModel.K_MIX, 1);
@@ -32,31 +32,31 @@ class DustModelTest {
     }
 
     /**
-     * Над рыхлым сухим песком при 43 м/с вынос — около килограмма на м² в секунду, в пределах двух раз (обзор §8, по Gaj
-     * &amp; Small, ур. 8); воздух — за фронтом, ветер которого 43 м/с (2,8 psi).
+     * Over loose dry sand at 43 m/s, the removal is about a kilogram per m² per second, within two times (review §8, according to Gaj
+     * &amp; Small, eq. 8); the air is behind the front, the wind of which is 43 m/s (2,8 psi).
      */
     @Test
     void fluxOverLooseSand() {
         double rho = DustModel.shockedAir(Solve.decreasingRoot(kpa -> -BlastModel.windSpeed(kpa), -43, 0.01, 1000));
         for (double behind : new double[]{10, 30, 100}) {
             double f = DustModel.flux(rho, 43, behind, 0.28);
-            assertTrue(f > 0.5 && f < 2, behind + " м за фронтом: " + f);
+            assertTrue(f > 0.5 && f < 2, behind + " m behind the front: " + f);
         }
-        // ниже порога срыва — ничего; вынос непрерывен там, где сальтация переходит во взвесь
+        // below the breakdown threshold - nothing; removal is continuous where saltation turns into suspension
         assertEquals(0, DustModel.flux(rho, 3, 10, 0.34));
         double b = DustModel.plate(20), edge = 10 * 0.34 * Math.sqrt(2) * Math.pow(b, 1.25);
         assertEquals(DustModel.flux(rho, edge * 1.0001, 20, 0.34), DustModel.flux(rho, edge * 0.9999, 20, 0.34), 1e-3 * DustModel.flux(rho, edge, 20, 0.34));
         double prev = 0;
         for (double u = 1; u < 150; u += 0.5) {
             double f = DustModel.flux(rho, u, 20, 0.34);
-            assertTrue(f >= prev, u + " м/с: вынос убывает");
+            assertTrue(f >= prev, u + " m/s: offset decreases");
             prev = f;
         }
     }
 
     /**
-     * Поднятое за фазу ({@link DustModel#soil}: закон выноса с тем, что от шага не зависит, вне цикла, и без шагов после
-     * того, как ветер упал ниже порога) — та же сумма {@link DustModel#flux} по серединам шагов, что по самому закону.
+     * Raised per phase ({@link DustModel#soil}: the law of removal with the fact that it does not depend on the step, outside the cycle, and without steps after
+     *  when the wind fell below the threshold) - the same amount {@link DustModel#flux} in the middle of the steps as according to the law itself.
      */
     @Test
     void soilIsTheFluxIntegral() {
@@ -75,101 +75,101 @@ class DustModelTest {
                 }
             }
         }
-        assertTrue(checked > 50, "с выносом — " + checked);
+        assertTrue(checked > 50, "with takeaway - " + checked);
     }
 
     /**
-     * Трава и посевы (u*ₜₕ от 3 м/с, Gaj &amp; Small §2.2): в 1,4 км (6 psi) ветер волны их почти не трогает — меньше 2 %
-     * того, что отдаёт рыхлый песок (сотни грамм).
+     * Grass and crops (u*ₜₕ from 3 m/s, Gaj &amp; Small §2.2): in 1,4 km (6 psi) the wind of the wave almost does not touch them - less than 2 %
+     *  that loose sand gives off (hundreds of grams).
      */
     @Test
     void grassHoldsTheSoil() {
         DustModel.Surface grass = new DustModel.Surface(3, 15, 0), sand = new DustModel.Surface(0.28, 15, 0);
         DustModel.Column g = DustModel.column(1400, HOB, YIELD, false, CLEAR, grass), s = DustModel.column(1400, HOB, YIELD, false, CLEAR, sand);
-        assertTrue(g.soil() < 0.02 * s.soil(), "трава отдала " + g.soil() + " кг/м² при песке " + s.soil());
-        assertTrue(s.soil() > 0.1, "рыхлый песок отдал " + s.soil() + " кг/м²");
+        assertTrue(g.soil() < 0.02 * s.soil(), "the grass gave away " + g.soil() + " kg/m² with sand " + s.soil());
+        assertTrue(s.soil() > 0.1, "loose sand gave away " + s.soil() + " kg/m²");
         assertTrue(hiroshima(1400).soil() > 0.1 && hiroshima(1400).soil() < s.soil());
     }
 
     /**
-     * Голова — слой у фронта: в первые десятые секунды — десятки метров (GRABLE: 6–25 м в 0,3–0,66 с), к концу положительной
-     * фазы — ~45 м; у переднего края — ноль, назад толще (Kuhl: ξ^(5/6)).
+     * Head - layer at the front: in the first tenths of seconds - tens of meters (GRABLE: 6–25 m in 0,3–0,66 s), by the end of the positive
+     *  phase - ~45 m; at the leading edge - zero, at the back it is thicker (Kuhl: ξ^(5/6)).
      */
     @Test
     void headIsTensOfMetres() {
         for (double r : new double[]{600, 1000, 1400, 2000}) {
             DustModel.Column c = hiroshima(r);
             double quarter = c.height(0.25), end = c.height(c.positive());
-            assertTrue(quarter > 6 && quarter < 30, r + " м: в 0,25 с верх " + quarter);
-            assertTrue(end > 30 && end < 70, r + " м: к концу фазы верх " + end);
+            assertTrue(quarter > 6 && quarter < 30, r + " m: in 0,25 s top " + quarter);
+            assertTrue(end > 30 && end < 70, r + " m: by the end of the phase, top " + end);
             assertEquals(0, c.height(0));
             assertTrue(c.height(0.05) < quarter);
         }
     }
 
     /**
-     * Через секунды слой — «несколько сотен футов» (Rosenblatt: 60–150 м у NTS к 4–5 с; здесь 58 м в 1,4 км, где фаза
-     * волны — 0,83 с, и 105 м в 600 м), над нагретой землёй растёт за минуту (обзор §5: 120–350 м в 1 км, 80–230 м
-     * в 1,4 км) и не опускается.
+     * After seconds the layer is “several hundred feet” (Rosenblatt: 60–150 m y NTS to 4–5 s; here 58 m to 1,4 km, where phase
+     * wave - 0,83 s, and 105 m in 600 m), above the heated earth grows in a minute (review §5: 120–350 m in 1 km, 80–230 m
+     *  in 1,4 km) and does not fall.
      */
     @Test
     void layerRisesOverHeatedGround() {
         for (double r : new double[]{600, 1000, 1400}) {
             double h = hiroshima(r).height(5);
-            assertTrue(h > 50 && h < 150, r + " м: через 5 с верх " + h);
+            assertTrue(h > 50 && h < 150, r + " m: through 5 s top " + h);
         }
         double h1 = hiroshima(1000).ceiling(), h14 = hiroshima(1400).ceiling();
-        assertTrue(h1 > 120 && h1 < 350, "1 км: верх " + h1);
-        assertTrue(h14 > 80 && h14 < 230, "1,4 км: верх " + h14);
+        assertTrue(h1 > 120 && h1 < 350, "1 km: top " + h1);
+        assertTrue(h14 > 80 && h14 < 230, "1,4 km: top " + h14);
         DustModel.Column c = hiroshima(1400);
         double prev = 0;
         for (double t = 0.01; t < 3600; t += 0.5) {
-            assertTrue(c.height(t) >= prev - 1e-9, t + " с: верх опустился");
+            assertTrue(c.height(t) >= prev - 1e-9, t + " s: top down");
             prev = c.height(t);
         }
     }
 
     /**
-     * Хиросима, Фудзии в 1,42 км: «около двадцати минут в потемневшем утре» — ночь под слоем с секунд до 20-й минуты, к
-     * 30-й светлее (Hersey 1946).
+     * Hiroshima, Fuji in 1,42 km: “about twenty minutes in the darkened morning” - night under the layer from seconds to 20-th minute, to
+     * 30-th lighter (Hersey 1946).
      */
     @Test
     void darkForTwentyMinutesAtFujii() {
         DustModel.Column c = hiroshima(1420);
-        for (double t = 3; t <= 20 * 60; t += 10) assertTrue(c.depth(t) > DARK, t + " с: в 1,42 км уже не ночь, толща " + c.depth(t));
-        assertTrue(c.depth(30 * 60) < DARK, "к 30-й минуте не светлее: " + c.depth(30 * 60));
-        assertTrue(c.depth(60 * 60) < 3, "через час всё ещё темно: " + c.depth(60 * 60));
+        for (double t = 3; t <= 20 * 60; t += 10) assertTrue(c.depth(t) > DARK, t + " s: in 1,42 km it’s no longer night, thick " + c.depth(t));
+        assertTrue(c.depth(30 * 60) < DARK, "by 30 minute no lighter: " + c.depth(30 * 60));
+        assertTrue(c.depth(60 * 60) < 3, "an hour later it's still dark: " + c.depth(60 * 60));
     }
 
-    /** Танимото в 3,2 км: «сумерки», день темнел — не ночь и не ясно первые минуты. */
+    /** Tanimoto in 3,2 km: “twilight”, the day was getting dark - not night and the first minutes were not clear. */
     @Test
     void twilightAtTanimoto() {
         DustModel.Column c = hiroshima(3200);
         for (double t = 5; t <= 180; t += 5) {
             double tau = c.depth(t);
-            assertTrue(tau > 4 && tau < DARK, t + " с: в 3,2 км толща " + tau);
+            assertTrue(tau > 4 && tau < DARK, t + " s: in 3,2 km thickness " + tau);
         }
     }
 
-    /** Такакура в 300 м: темно, но «небо стало светлеть» через минуты — пыль у эпицентра уходит в ножку. */
+    /** Takakura in 300 m: it is dark, but “the sky began to brighten” in minutes - the dust at the epicenter goes into the stem. */
     @Test
     void lighterWithinMinutesAtTakakura() {
         DustModel.Column c = hiroshima(300);
-        assertTrue(c.depth(30) > DARK, "в 300 м сразу не темно");
-        assertTrue(c.depth(10 * 60) < DUSK, "в 300 м через 10 минут всё ещё темно: " + c.depth(600));
+        assertTrue(c.depth(30) > DARK, "in 300 m it’s not dark at once");
+        assertTrue(c.depth(10 * 60) < DUSK, "at 300 m after 10 minutes it is still dark: " + c.depth(600));
     }
 
-    /** Крупное (400 мкм) выпадает за 1–3 минуты — тёмная голова оседает (обзор §8.4); мелкое (3 мкм) висит часы. */
+    /** Large (400 µm) falls out in 1–3 minutes - the dark head settles (review §8.4); small (3 microns) hanging clock. */
     @Test
     void coarseFallsOutInMinutes() {
         DustModel.Column c = hiroshima(1400);
-        assertTrue(c.airborne(4, 180) < 0.05, "400 мкм через 3 минуты: " + c.airborne(4, 180));
-        assertTrue(c.airborne(0, 3600) > 0.9, "3 мкм через час: " + c.airborne(0, 3600));
-        // оседает то, что выпадает: поток на землю — первые минуты больше, чем через полчаса
+        assertTrue(c.airborne(4, 180) < 0.05, "400 µm after 3 minutes: " + c.airborne(4, 180));
+        assertTrue(c.airborne(0, 3600) > 0.9, "3 µm in an hour: " + c.airborne(0, 3600));
+        // what falls settles: the flow to the ground - the first minutes after more than half an hour
         assertTrue(c.fallout(60) > 3 * c.fallout(1800));
     }
 
-    /** Ничего не поднято до фронта; за фазу волны — всё; вся пыль — грунт и обломки, обломков нет там, где дома стоят. */
+    /** Nothing is raised to the front; per wave phase - that's all; all the dust is soil and debris; there are no debris where the houses stand. */
     @Test
     void liftFollowsThePositivePhase() {
         assertEquals(0, DustModel.lifted(0), 1e-12);
@@ -180,26 +180,26 @@ class DustModelTest {
             assertTrue(DustModel.lifted(s) > prev);
             prev = DustModel.lifted(s);
         }
-        assertEquals(4.62, DustModel.lifted(1e-4) / 1e-4, 0.01, "у фронта растёт как импульс напора");
+        assertEquals(4.62, DustModel.lifted(1e-4) / 1e-4, 0.01, "at the front it grows like a pressure impulse");
         DustModel.Column c = hiroshima(1400);
         assertEquals(0, c.depth(0));
         assertEquals(c.lifted(), c.depth(c.positive()), 1e-9 * c.lifted());
         assertEquals(0, DustModel.destroyed(0.5));
         assertEquals(1, DustModel.destroyed(6), 1e-12);
-        // обломков нет, где давление на земле ниже 0,6 psi (у 15 кт на 592 м — дальше 6,3 км)
+        // there are no debris where the pressure on the ground is below 0,6 psi (for 15 kt at 592 m - further than 6,3 km)
         assertEquals(0, hiroshima(HobBlast.rangeFor(DustModel.DEBRIS_FROM_PSI, HOB, YIELD) + 1).debris(), 1e-12);
     }
 
-    /** Больше мощность — шире и выше слой: та же форма по приведённой дальности, верх — как ∛Y. */
+    /** More power means a wider and higher layer: the same shape in terms of reduced range, the top is like ∛Y. */
     @Test
     void largerYieldWiderDust() {
         double ys = Math.cbrt(1000 / YIELD);
         DustModel.Column small = hiroshima(1400), big = DustModel.column(1400 * ys, HOB * ys, 1000, false, CLEAR, DustModel.Surface.REFERENCE);
         assertTrue(big.mass() > 0.5 * small.mass() && big.mass() < 3 * small.mass(), small.mass() + " → " + big.mass());
-        assertTrue(big.first() > 1.5 * small.first(), "верх в фазе волны " + small.first() + " → " + big.first());
+        assertTrue(big.first() > 1.5 * small.first(), "top in wave phase " + small.first() + " → " + big.first());
         double r15 = DustModel.reach(HOB, YIELD, false, CLEAR, DustModel.Surface.REFERENCE, 0.05);
         double r1 = DustModel.reach(HOB * Math.cbrt(1 / YIELD), 1, false, CLEAR, DustModel.Surface.REFERENCE, 0.05);
-        assertTrue(r15 > 4000 && r15 < 8000, "пыль 15 кт до " + r15 + " м");
+        assertTrue(r15 > 4000 && r15 < 8000, "dust 15 kt to " + r15 + " m");
         assertTrue(r1 < 0.6 * r15);
         assertTrue(hiroshima(r15 * 0.99).lifted() >= 0.05 && hiroshima(r15 * 1.01).lifted() <= 0.05);
     }

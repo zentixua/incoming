@@ -1,6 +1,6 @@
 package me.cortex.voxy.common.world;
 
-/** Подделка класса Voxy 0.2.16 для юнит-тестов: только то, что читает мод (имена и сигнатуры). */
+/** Fake class Voxy 0.2.16 for unit tests: only what the mod reads (names and signatures). */
 public final class WorldSection {
     private final WorldEngine engine;
     private final long[] data;

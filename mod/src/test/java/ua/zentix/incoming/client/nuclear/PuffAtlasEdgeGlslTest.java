@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Выборка кадра запечённого клуба и огненного шара ({@code sixFrames}, {@code fireFrames} в {@code fx.fsh}) не берёт
- * соседний кадр листа ни на одной копии: отступ от края — полтекселя самой грубой копии, что читает OpenGL при этом шаге
- * выборки. С отступом в полтекселя листа копии 3–4 (клуб вдали, плоский клуб пыли с ребра) брали край соседнего кадра —
- * тонкие черты поперёк кадра (WV).
+ * Fetching a frame of baked billows and a fireball ({@code sixFrames}, {@code fireFrames} in {@code fx.fsh}) does not take the
+ *  adjacent sheet frame on any copy: the offset from the edge is half a texel of the coarsest copy, which OpenGL reads at the same time step
+ * sampling. With an indent of half a texel of the sheet, copies 3–4 (billows in the distance, flat billows of dust from the edge) took the edge of the adjacent frame—
+ * thin features across the frame (WV).
  */
 class PuffAtlasEdgeGlslTest {
     @Test
@@ -27,20 +27,20 @@ class PuffAtlasEdgeGlslTest {
             assertNotNull(in);
             String source = new String(in.readAllBytes(), StandardCharsets.UTF_8).replaceAll("//[^\n]*", "");
             Matcher levels = Pattern.compile("const float FRAME_LEVELS = ([\\d.]+);").matcher(source);
-            assertTrue(levels.find(), "нет FRAME_LEVELS");
-            assertEquals(FxAtlas.MIPS, Double.parseDouble(levels.group(1)), "копий у листа — столько же, сколько знает шейдер");
+            assertTrue(levels.find(), "no FRAME_LEVELS");
+            assertEquals(FxAtlas.MIPS, Double.parseDouble(levels.group(1)), "the sheet has as many copies as the shader knows");
             GlslFunction inset = GlslFunction.parse(source, "frameInset");
             for (double span = 0.1; span < 256; span *= 1.07) {
-                // OpenGL читает копию уровня λ = log2(шаг) и следующую за ней: самая грубая — ⌈λ⌉, не дальше последней
+                // OpenGL reads a copy of the level λ = log2(step) and the next one after it: the roughest one is ⌈λ⌉, no further than the last one
                 int level = (int) Math.min(FxAtlas.MIPS, Math.max(0, Math.ceil(Math.log(span) / Math.log(2) - 1e-9)));
                 double got = inset.call(Map.of("span", span));
-                assertTrue(got >= 0.5 * (1 << level) - 1e-9, "шаг " + span + ": отступ " + got + " меньше полтекселя копии " + level);
-                assertTrue(got <= 0.5 * (1 << FxAtlas.MIPS) + 1e-9, "шаг " + span + ": отступ " + got + " шире полтекселя последней копии");
+                assertTrue(got >= 0.5 * (1 << level) - 1e-9, "step " + span + ": indent " + got + " less than half a texel of copy " + level);
+                assertTrue(got <= 0.5 * (1 << FxAtlas.MIPS) + 1e-9, "step " + span + ": indent " + got + " wider than half a texel of the last copy");
             }
-            assertEquals(0.5, inset.call(Map.of("span", 1.0)), 1e-12, "вблизи — полтекселя листа, как прежде");
-            // каждая выборка кадра листа с отступом от края (клуб, огонь) — по копии, а не полтекселя листа
-            assertFalse(source.contains("0.5 / vec2(textureSize(Sampler0"), "отступ в полтекселя листа остался");
-            assertEquals(2, source.split("frameInset\\(sqrt").length - 1, "sixFrames и fireFrames берут frameInset");
+            assertEquals(0.5, inset.call(Map.of("span", 1.0)), 1e-12, "close up - half a texel of a sheet, as before");
+            // each sample of a sheet frame with an indent from the edge (billows, fire) is a copy, not half a texel of the sheet
+            assertFalse(source.contains("0.5 / vec2(textureSize(Sampler0"), "the indentation of half a texel of the sheet remains");
+            assertEquals(2, source.split("frameInset\\(sqrt").length - 1, "sixFrames and fireFrames take frameInset");
         }
     }
 }

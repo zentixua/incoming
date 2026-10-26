@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MissionTest {
-    /** Тиков до конца запаса на постоянной скорости: запас проверяется в начале тика, расход — в конце. */
+    /** tick until the end of the stock at a constant speed: the stock is checked at the beginning of the tick, the flow rate at the end. */
     private static int ticksToExhaust(Mission m, double speed) {
         int t = 0;
         while (!m.exhausted()) {
@@ -21,8 +21,8 @@ class MissionTest {
     }
 
     /**
-     * План: путь × 1.5 и резерв 600 тиков на маршевой — на маршевой скорости полёт кончается через
-     * путь / маршевая × 1.5 + 600 тиков.
+     * Plan: path × 1.5 and reserve 600 tick at cruising speed - at cruising speed the flight ends through
+     * path / cruising × 1.5 + 600 tick.
      */
     @Test
     void planOnCruiseMatchesOldLifetime() {
@@ -30,30 +30,29 @@ class MissionTest {
             for (double path : new double[]{0, 100, 1234.5, 6000}) {
                 Mission m = Mission.plan(path, cruise);
                 assertEquals(path * 1.5 + 600 * cruise, m.range(), 1e-9);
-                // срок в тиках: (int) (путь / маршевая × 1.5) + 600 (старта здесь нет)
+                // time limit in tick: (int) (path / march × 1.5) + 600 (no start here)
                 int old = (int) (path / cruise * 1.5) + 600;
-                assertEquals(old, ticksToExhaust(m, cruise), 1, "маршевая " + cruise + ", путь " + path);
+                assertEquals(old, ticksToExhaust(m, cruise), 1, "marching " + cruise + ", path " + path);
             }
         }
     }
 
     /**
-     * Стоянка на пусковой и ожидание района цели не тратят запас: снаряд, который ждёт (скорость 0), так и не
-     * самоликвидируется — у ожидания свой предел. Медленный участок (разгон на ускорителе, набор ракеты)
-     * тратит ровно пройденный путь: запаса хватает на путь по плану, как бы медленно он ни шёл.
+     * Parking on the launcher and waiting for the target area does not waste the reserve: the projectile that is waiting (speed 0) will not self-destruct - waiting has its limit. The slow section (accelerator acceleration, rocket launch)
+     *  spends exactly the distance traveled: the reserve is enough for the path according to plan, no matter how slowly it goes.
      */
     @Test
     void waitsAndSlowLegsSpendOnlyTheirPath() {
         Mission m = Mission.plan(1000, 4);
         for (int t = 0; t < 100_000; t++) m.spend(0);
         assertEquals(1000 * 1.5 + 600 * 4, m.range(), 1e-9);
-        // ракета: 40 тиков ускорителя до 3.4 блока/тик, дальше турбина + 0.09 до маршевой 4, путь 1000 блоков по плану
+        // rocket: 40 tick accelerator to 3.4 block/tick, then turbine + 0.09 to sustainer 4, path 1000 blocks according to plan
         Mission slow = Mission.plan(1000, 4);
         double flown = 0, speed = 0;
         int t = 0;
         while (flown < 1000) {
             speed = t < 40 ? Math.min(3.4, speed + 0.09) : Math.min(4, speed + 0.09);
-            assertFalse(slow.exhausted(), "запас кончился на " + flown + " блоках из 1000");
+            assertFalse(slow.exhausted(), "stock ran out at " + flown + " blocks from 1000");
             slow.spend(speed);
             flown += speed;
             t++;
@@ -62,8 +61,8 @@ class MissionTest {
     }
 
     /**
-     * РСЗО вне мира: пока район цели не готов, время траектории растягивается (темп < 1) — снаряд проходит ту же дугу
-     * за большее число тиков мира и тратит ровно её длину: запас «дуга + резерв» не кончается до точки падения.
+     * MLRS outside the world: while the target area is not ready, the trajectory time is extended (tempo < 1) - the projectile passes the same arc
+     *  for a larger number of world ticks and spends exactly its length: the “arc + reserve” reserve does not end until the point of impact.
      */
     @Test
     void stretchedBallisticsSpendsTheArc() {
@@ -79,21 +78,21 @@ class MissionTest {
             double t = 0;
             int worldTicks = 0;
             while (t < n) {
-                // темп плавает между почти остановкой и 1, как у растяжения RocketEntity.stretch
+                // the pace floats between almost stopping and 1, like the RocketEntity.stretch stretch
                 double rate = Math.max(0.02, Math.min(1, 0.5 + 0.5 * Math.sin(worldTicks * 0.05)));
                 double step = Math.min(rate, n - t);
-                assertFalse(m.exhausted(), "запас кончился на дуге, t = " + t + " из " + n);
+                assertFalse(m.exhausted(), "stock has run out on the arc, t = " + t + " from " + n);
                 m.spend(Ballistics.at(from, v0, t + step).subtract(Ballistics.at(from, v0, t)).length());
                 t += step;
                 worldTicks++;
             }
-            assertTrue(worldTicks > n, "траектория не растягивалась");
-            // дробные шаги по дуге — хорды, их сумма не длиннее самой дуги (с точностью до разницы хорд целых тиков и дуги)
-            assertEquals(200 * 4, m.range(), 1, "растянутый полёт потратил не длину дуги");
+            assertTrue(worldTicks > n, "the trajectory did not stretch");
+            // fractional steps along an arc - chords, their sum is not longer than the arc itself (up to the difference between the chords of the whole tick and the arc)
+            assertEquals(200 * 4, m.range(), 1, "the extended flight did not waste the length of the arc");
         }
     }
 
-    /** Погоня: сдвиг цели × 1.5 — без дробей и округлений. Сдвиг 0 или отрицательный ничего не меняет. */
+    /** Pursuit: target shift × 1.5 - no fractions or rounding. Shift 0 or negative does not change anything. */
     @Test
     void chaseAddsMovedPath() {
         Mission m = Mission.plan(100, 2.1);
@@ -106,8 +105,8 @@ class MissionTest {
     }
 
     /**
-     * Потеря цели: запас — на путь до последней точки × 1.5 и 200 тиков на маршевой, один раз;
-     * погоня после этого запас не растит сверх урезанного. Запас меньше этого не растёт. Перенацеливание снимает флаг.
+     * Loss of goal: reserve - on the way to the last point × 1.5 and 200 tick on the march, once;
+     * pursuit after that the reserve does not increase beyond the cut. The stock does not grow below this. Retargeting removes the flag.
      */
     @Test
     void loseCapsOnce() {
@@ -116,9 +115,9 @@ class MissionTest {
         assertTrue(m.lose(100, 2.1));
         double capped = 100 * 1.5 + 200 * 2.1;
         assertEquals(capped, m.range(), 1e-9);
-        // на маршевой — ceil(время до удара × 1.5) + 200 тиков
+        // on the main line - ceil(time before impact × 1.5) + 200 tick
         assertEquals((int) Math.ceil(100 / 2.1 * 1.5) + 200, ticksToExhaust(Mission.load(m.save()), 2.1), 1);
-        assertFalse(m.lose(10, 2.1), "урезан второй раз");
+        assertFalse(m.lose(10, 2.1), "cut for the second time");
         assertEquals(capped, m.range(), 1e-9);
 
         Mission low = Mission.of(50);
@@ -127,7 +126,7 @@ class MissionTest {
 
         m.retarget(40);
         assertEquals(capped + 60, m.range(), 1e-9);
-        assertTrue(m.lose(10, 2.1), "после перенацеливания новая цель ещё не потеряна");
+        assertTrue(m.lose(10, 2.1), "after retargeting, the new target is not yet lost");
     }
 
     @Test
@@ -137,21 +136,21 @@ class MissionTest {
         m.lose(10_000, 4);
         Mission back = Mission.load(m.save());
         assertEquals(m.range(), back.range());
-        assertFalse(back.lose(1, 4), "флаг «урезан» не сохранился");
+        assertFalse(back.lose(1, 4), "the “cut down” flag was not preserved");
     }
 
     /**
-     * Сохранение со сроком жизни (без запаса хода): остаток срока (ожидание района в нём не считается) и дробные тики
-     * погони — на маршевой скорости сохранения; у ракеты на 11.5 блока/тик остаток пути — 11.5 блока на тик.
+     * Saving with a lifespan (without a power reserve): the remainder of the period (waiting for an area in it does not count) and fractional ticks
+     * pursuits - at the marching speed of saving; the rocket has 11.5 block/tick the rest of the way - 11.5 block/tick.
      */
     @Test
     void migratesLifetime() {
-        // срок 400, возраст 100, из них 20 — ожидание района: 320 тиков и полтика погони
+        // term 400, age 100, of which 20 - waiting for the area: 320 tick and half a chase
         Mission m = Mission.fromLifetime(400 - (100 - 20), 0.5, false, 4);
         assertEquals(320.5 * 4, m.range(), 1e-9);
         assertEquals(320.5 * 11.5, Mission.fromLifetime(320, 0.5, false, 11.5).range(), 1e-9);
         Mission capped = Mission.fromLifetime(320, 0, true, 4);
-        assertFalse(capped.lose(1, 4), "флаг «урезан» не перенесён");
-        assertTrue(Mission.fromLifetime(-3, 0, false, 4).exhausted(), "просроченный снаряд получил запас");
+        assertFalse(capped.lose(1, 4), "the “truncated” flag is not moved");
+        assertTrue(Mission.fromLifetime(-3, 0, false, 4).exhausted(), "expired shell received stock");
     }
 }

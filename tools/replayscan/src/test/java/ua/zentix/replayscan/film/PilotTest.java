@@ -12,20 +12,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Пилот FPV на рельефе без мира: ровное поле, гряда, дым прежнего удара на пути прямого прохода, край чанков повтора.
- * Полёт должен облететь всё это, как пилот, который видит, и при этом снять удар.
+ * FPV pilot over terrain without a world: a flat field, a ridge, smoke from a previous impact in the direct-pass path,
+ * and the replay chunk boundary. The flight must avoid all of these like a pilot who can see, while filming the impact.
  */
 class PilotTest {
     private static final double ASPECT = 1080.0 / 1920, FOV = 80;
     private static final int A = 110, B = 290, HIT = 200;
     private static final Vec3 HIT_POS = new Vec3(0.5, 64, 0.5);
 
-    /** Шахед с запада: 2,1 блока за тик, пикирует последние 40 тиков. */
+    /** Shahed from the west: 2.1 blocks per tick, diving for the last 40 ticks. */
     private static Subject shahed() {
         return shahed(-1, 0);
     }
 
-    /** Шахед, который прилетает со стороны {@code (fx, fz)} (единичный вектор от удара). */
+    /** Shahed arriving from {@code (fx, fz)} (unit vector from the impact). */
     private static Subject shahed(double fx, double fz) {
         List<double[]> path = new ArrayList<>();
         for (int t = 40; t <= HIT; t += 2) {
@@ -47,7 +47,7 @@ class PilotTest {
         return new Pilot(A, B, FOV, ASPECT, s, main, plumes, new Pilot.Grid(terrain, 0, 0, 400), 42);
     }
 
-    /** Полёт по правилам дрона и проход снял удар; возвращает путь по тикам. */
+    /** Flight follows the drone rules and the pass filmed the impact; returns the path by tick. */
     private static Pilot.Track check(Pilot p, Pilot.Flight f) {
         Pilot.Track tr = p.fly(f.controls());
         for (int t = A; t <= B; t++) {
@@ -88,13 +88,13 @@ class PilotTest {
             for (int t = A; t <= B; t += 2, n++) sum += tr.pos()[t - tr.from()].y - 64;
             assertTrue(sum / n <= Pilot.HIGH + 4, f.name() + ": " + sum / n + " blocks above the field on average — not low");
         }
-        // разные: другой стороной или курсом
+        // different: from another side or heading
         assertFalse(flights.get(0).name().equals(flights.get(1).name()) && flights.get(1).name().equals(flights.get(2).name()));
     }
 
     @Test
     void climbsOverARidgeInsteadOfThroughIt() {
-        // гряда высотой 40 блоков поперёк, в 40–48 блоках к северу от удара, и высотки к югу
+        // a 40-block-high ridge across the path, 40–48 blocks north of the impact, and high-rises to the south
         Pilot.Terrain t = (x, z) -> z >= -48 && z <= -40 ? 104 : z >= 35 && z <= 45 && Math.abs(x) < 60 ? 94 : 64;
         Pilot p = pilot(t, List.of());
         for (Pilot.Flight f : p.plan(2)) check(p, f);
@@ -102,8 +102,8 @@ class PilotTest {
 
     @Test
     void keepsOutOfEarlierSmoke() {
-        // дым «Градов» 3–6 с назад в 45–55 блоках вокруг места (облако шара, вал пыли на 20 блоков, столб): прямой
-        // проход прошёл бы сквозь них
+        // Grad smoke from 3–6 s ago within 45–55 blocks of the site (fireball cloud, 20-block dust ring, column): a direct
+        // pass would go through it
         List<Plume> smoke = List.of(new Plume(HIT - 120, new Vec3(45.5, 64, 0.5), 8, Plume.Look.ROCKET),
                 new Plume(HIT - 60, new Vec3(0.5, 64, 50.5), 8, Plume.Look.ROCKET), new Plume(HIT - 90, new Vec3(-38.5, 64, -38.5), 8, Plume.Look.ROCKET));
         Pilot p = pilot((x, z) -> 64, smoke);
@@ -122,9 +122,9 @@ class PilotTest {
 
     @Test
     void staysOutOfTheSalvoSmokeAfterTheHit() {
-        // проход 03:53 (13.10): «Грады» за секунду до удара и через секунду после — в 8–10 блоках от него; пилот прежней
-        // модели пролетал в 13–18 блоках, и последние 2 с кадр был весь в дыму (check: камера не в дыму, перед объективом
-        // дыма нет)
+        // pass 03:53 (13.10): Grads one second before and one second after the impact, 8–10 blocks from it; the previous
+        // pilot model flew 13–18 blocks away, and the frame was full of smoke for the last 2 s (check: camera outside smoke,
+        // no smoke in front of the lens)
         List<Plume> salvo = List.of(new Plume(HIT - 25, new Vec3(-0.5, 64, -7.5), 8, Plume.Look.ROCKET),
                 new Plume(HIT + 24, new Vec3(-9.5, 64, -0.5), 8, Plume.Look.ROCKET));
         Pilot p = pilot((x, z) -> 64, salvo);
@@ -133,8 +133,8 @@ class PilotTest {
 
     @Test
     void smokePast24BlocksFillsTheFrame() {
-        // облако ракеты через 2 с после удара в 55 блоках перед камерой: середина кадра на 24 блока до него не достаёт,
-        // сетка вывода (до 40 блоков, по всему кадру) — закрыта; отвернулась — чисто
+        // rocket cloud 2 s after impact, 55 blocks in front of the camera: the frame center falls 24 blocks short of it,
+        // but the render grid (up to 40 blocks, across the whole frame) is obscured; turn away and it is clear
         Pilot p = pilot((x, z) -> 64, List.of(new Plume(A, new Vec3(55.5, 64, 0.5), 18, Plume.Look.MISSILE)));
         int k = 20;
         Vec3 eye = new Vec3(0.5, 74, 0.5);
@@ -147,22 +147,23 @@ class PilotTest {
 
     @Test
     void staysInsideTheReplayChunks() {
-        // к востоку от x = 90 и к югу от z = 70 у клиента чанков нет
+        // the client has no chunks east of x = 90 or south of z = 70
         Pilot.Terrain t = (x, z) -> x >= 90 || z >= 70 ? Double.NaN : 64;
         Pilot p = pilot(t, List.of());
         for (Pilot.Flight f : p.plan(2)) {
             Pilot.Track tr = check(p, f);
             int out = 0, n = 0;
             for (int s = A; s <= B; s += 2, n++) if (p.grid.lowOut(p.view(tr, s - tr.from())) > 0) out++;
-            // вывод не пропускает план, где так больше 2 % кадров
+            // rendering rejects a shot where this happens in more than 2% of frames
             assertTrue(out <= n / 50, f.name() + ": frame bottom off chunks in " + out + " of " + n + " samples");
         }
     }
 
     @Test
     void passesAlongTheEdgeOfTheReplayChunks() {
-        // удар в 40 блоках от края: за z = 40 у клиента чанков нет (порт у моря, куда записавший не ходил); шахед летит
-        // вдоль края, потом — с той стороны, где чанков нет, и край ближе (32 блока: запас moments.py к прорисовке)
+        // impact 40 blocks from the boundary: the client has no chunks beyond z = 40 (a seaport the recorder never visited);
+        // the Shahed flies along the boundary, then from the side without chunks, with a closer boundary (32 blocks:
+        // moments.py margin for render distance)
         edge(40, shahed());
         edge(32, shahed(0, 1));
     }
@@ -189,15 +190,15 @@ class PilotTest {
     void controlsFlyStraightAndInCircles() {
         Pilot p = pilot((x, z) -> 64, List.of());
         Vec3 at = new Vec3(10, 80, -5);
-        // на запад (курс 90°) блок за тик
+        // westward (heading 90°), one block per tick
         Pilot.Track line = p.fly(p.controls.steady(at, 90, 1, 0, 0));
         for (int t : new int[]{p.t0, p.tp - 37, p.tp, p.tp + 50, p.t1}) {
             Vec3 want = at.add(-(t - p.tp), 0, 0);
             assertTrue(line.pos()[t - p.t0].distanceTo(want) < 1e-6, "place at " + t + ": " + line.pos()[t - p.t0]);
             assertTrue(line.vel()[t - p.t0].distanceTo(new Vec3(-1, 0, 0)) < 1e-6);
         }
-        // вираж вправо 2° за тик: круг радиуса 1 / 0.0349 = 28.6 блока, за 45 тиков — четверть (с запада на север);
-        // крен вправо — минус
+        // right turn of 2° per tick: a circle of radius 1 / 0.0349 = 28.6 blocks; a quarter turn in 45 ticks (west to north);
+        // right bank is negative
         Pilot.Track turn = p.fly(p.controls.steady(at, 90, 1, 2, 0));
         double r = 1 / Math.toRadians(2);
         assertTrue(turn.pos()[p.tp + 45 - p.t0].distanceTo(at.add(-r, 0, -r)) < 0.3, "quarter circle: " + turn.pos()[p.tp + 45 - p.t0]);
@@ -219,7 +220,7 @@ class PilotTest {
         Cameras.Path h = Hands.humanize(still, 1, List.of(new Hands.Blast(100, new Vec3(0, 64, 60), 18)), 0, 200);
         double before = 0, after = 0;
         for (int t = 80; t < 100; t++) before = Math.max(before, Math.abs(h.at(t).pitch() - 10));
-        // волна до камеры (62 блока) — 3,6 тика
+        // wave reaches the camera (62 blocks) in 3.6 ticks
         for (int t = 104; t < 124; t++) after = Math.max(after, Math.abs(h.at(t).pitch() - 10));
         assertTrue(before < 1.2, "hand tremor only before the blast: " + before);
         assertTrue(after > before + 0.5, "kick after the blast: " + after + " vs " + before);

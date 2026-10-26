@@ -11,24 +11,24 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Раскат вдали: тот же фронт, что у ближнего звука, и свой срок, а не место в списке картинки. */
+/** Rumble in the distance: the same front as the near sound, and its own duration, and not its place in the list of pictures. */
 class FarBlastSoundTest {
     /**
-     * Ближний звук, дальний и эхо ждут один фронт ({@link FarBlasts#arrivalTicks}): вблизи он быстрее звука, поэтому на
-     * краю ближней модели раскат приходил бы на 18–130 мс позже того же фронта по ту сторону границы (C06).
+     * Near sound, far sound and echo are waiting for one front ({@link FarBlasts#arrivalTicks}): near it is faster than sound, therefore, on the
+     *  edge of the near model, the rumble would arrive 18–130 ms later than the same front on the other side of the border (C06).
      */
     @Test
     void oneFrontOnBothSidesOfTheNearEdge() {
         for (double kg : new double[]{3, 50, 2423}) {
             ChemicalFront front = ChemicalFront.cached(kg, true);
             double edge = FarBlasts.arrivalTicks(front, FarBlasts.NEAR);
-            assertTrue(edge < FarBlasts.NEAR / Acoustics.SPEED, kg + " кг: фронт на краю обгоняет звук");
+            assertTrue(edge < FarBlasts.NEAR / Acoustics.SPEED, kg + " kg: the front at the edge overtakes the sound");
             assertEquals(20 * front.arrivalSeconds(FarBlasts.NEAR + 1), FarBlasts.arrivalTicks(front, FarBlasts.NEAR + 1), 1e-12);
         }
-        assertEquals(1000 / Acoustics.SPEED, FarBlasts.arrivalTicks(null, 1000), 1e-12, "без своей волны — со скоростью звука");
+        assertEquals(1000 / Acoustics.SPEED, FarBlasts.arrivalTicks(null, 1000), 1e-12, "without its own wave - at the speed of sound");
     }
 
-    /** Сверх предела событий уходит самое старое — в {@code gone}, где его раскат ждёт свой срок. */
+    /** Beyond the limit of events, the oldest goes into {@code gone}, where its rumble awaits its time. */
     @Test
     void overflowHandsTheOldestOverInsteadOfDroppingIt() {
         ArrayDeque<String> events = new ArrayDeque<>();

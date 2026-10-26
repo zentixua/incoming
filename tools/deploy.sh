@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Сборка мода и установка в инстанс Prism.
+# Assembling the mod and installing it in the Prism instance.
 #
-#   tools/deploy.sh          сборка и юнит-тесты → jar в mods/ инстанса и в dist/
-#   tools/deploy.sh --test   ещё и GameTest (сервер без окна с Create, Sable и Aeronautics)
-#   tools/deploy.sh --dry    только сборка и проверки, игру не трогать
-#   tools/deploy.sh --jar F  без сборки: поставить готовый jar F (сборку CI или релиза — те же байты, что у друзей)
+#   tools/deploy.sh assembly and unit tests → jar in mods/ instance and in dist/
+#   tools/deploy.sh --test also GameTest (server without window with Create, Sable and Aeronautics)
+#   tools/deploy.sh --dry assembly and testing only, do not touch the game
+#   tools/deploy.sh --jar F without assembly: install ready-made jar F (assembly CI or release - the same bytes as friends)
 #
-# Ничего не удаляется: старые jar мода (incoming-*.jar и airstrike-*.jar), копии датапака (saves/*/datapacks/airstrike|shahed) и пакета звуков
-# (resourcepacks/"Airstrike Sounds"|"Shahed Sounds") переносятся в incoming-backup/<время>/ рядом с mods/.
-# Мод заменяет их полностью; настройки датапака он переносит в свой конфиг сам при первом запуске мира.
-# После установки — перезапустить игру. Друзьям нужен тот же jar (dist/incoming-*.jar) в их mods/.
-# Инстанс с автообновлением сборки (zentixua/open-skies) deploy.sh не трогает: jar мода там — из сборки на её main.
+# Nothing is deleted: old jar mod (incoming-*.jar and airstrike-*.jar), copies of datapack (saves/*/datapacks/airstrike|shahed) and sound pack
+# (resourcepacks/"Airstrike Sounds"|"Shahed Sounds") are transferred to incoming-backup/< time>/ next to mods/.
+# The mod replaces them completely; It transfers the datapack settings to its config itself when the world is first launched.
+# After installation, restart the game. Friends need the same jar (dist/incoming-*.jar) in their mods/.
+# The instance with auto-updating of the assembly (zentixua/open-skies) deploy.sh does not touch: jar the mod there is from the assembly on its main.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 path() { python3 "$ROOT/tools/paths.py" "$1"; }
@@ -25,39 +25,39 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --test) TEST=1 ;;
     --dry) DRY=1 ;;
-    --jar) [ $# -ge 2 ] || { echo "--jar: нужен путь к jar" >&2; exit 2; }; JAR="$(realpath "$2")"; shift ;;
-    *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
+    --jar) [ $# -ge 2 ] || { echo "--jar: path to jar required" >&2; exit 2; }; JAR="$(realpath "$2")"; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
 
 mkdir -p "$DIST"
 if [ -n "$JAR" ]; then
-  [[ "$(basename "$JAR")" == incoming-*.jar && -f "$JAR" ]] || { echo "--jar: нужен файл incoming-<версия>.jar" >&2; exit 2; }
+  [[ "$(basename "$JAR")" == incoming-*.jar && -f "$JAR" ]] || { echo "--jar: file needed incoming-<version>.jar" >&2; exit 2; }
   [ "$(dirname "$JAR")" = "$(realpath "$DIST")" ] || cp "$JAR" "$DIST/"
-  echo "готовый: $JAR ($(sha256sum "$JAR" | cut -c1-64)) → dist/"
+  echo "ready: $JAR ($(sha256sum "$JAR" | cut -c1-64)) → dist/"
 else
   cd "$ROOT/mod"
   ./gradlew build --console=plain -q
   if [ "$TEST" = 1 ]; then ./gradlew runGameTestServer --console=plain -q; fi
   JAR="$(realpath "$(ls -t build/libs/incoming-*.jar | grep -v -- '-sources' | head -n1)")"
   cp "$JAR" "$DIST/"
-  echo "собран: $JAR → dist/"
+  echo "assembled: $JAR → dist/"
 fi
-if [ "$DRY" = 1 ]; then echo "--dry: игра не тронута"; exit 0; fi
-# Перед запуском такого инстанса packwiz-installer ставит сборку: убранный jar сборки он вернёт, и Incoming станет два.
+if [ "$DRY" = 1 ]; then echo "--dry: game untouched"; exit 0; fi
+# Before launching such an instance, packwiz-installer installs an assembly: it will return the removed jar assembly, and Incoming will become two.
 if grep -qs '^PreLaunchCommand=.*packwiz-installer' "$(dirname "$MC")/instance.cfg"; then
-  echo "инстанс обновляется сам из сборки open-skies (packwiz-installer): мод приходит в игру выпуском и PR сборки;" \
-    "игра не тронута" >&2
+  echo "the instance is updated itself from the assembly open-skies (packwiz-installer): the mod comes to the game with the release of the PR assembly;" \
+    "the game is untouched" >&2
   exit 1
 fi
 
-[ -d "$MODS" ] || { echo "нет папки $MODS — проверь tools/paths.py или задай MC_DIR" >&2; exit 1; }
-aside() { # перенести в сторону с сохранением пути относительно .minecraft
+[ -d "$MODS" ] || { echo "there is no folder $MODS - check tools/paths.py or set MC_DIR" >&2; exit 1; }
+aside() { # move to the side while maintaining the path relative to .minecraft
   local src="$1" rel="${1#"$MC"/}"
   mkdir -p "$BACKUP/$(dirname "$rel")"
   mv "$src" "$BACKUP/$rel"
-  echo "в сторону: $rel"
+  echo "to the side: $rel"
 }
 for old in "$MODS"/incoming-*.jar "$MODS"/airstrike-*.jar; do
   if [ -e "$old" ]; then aside "$old"; fi
@@ -72,4 +72,4 @@ for rp in "${rps[@]}"; do
   if [ -e "$MC/resourcepacks/$rp" ]; then aside "$MC/resourcepacks/$rp"; fi
 done
 cp "$JAR" "$MODS/"
-echo "установлен: mods/$(basename "$JAR") — перезапусти игру"
+echo "installed: mods/$(basename "$JAR") - restart the game"

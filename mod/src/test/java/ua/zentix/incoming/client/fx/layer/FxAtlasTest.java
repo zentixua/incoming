@@ -22,12 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Кадры запекания ({@code tools/bake_fx/pack.py}: {@code fireball.json}, {@code puff6.json} и картинки) — на месте, того
- * размера и числа, что ждёт лист слоя ({@link FxAtlas}), и всё вместе не тяжелее предела в jar.
+ * Baking frames ({@code tools/bake_fx/pack.py}: {@code fireball.json}, {@code puff6.json} and pictures) are in place, the
+ *  size and number that awaits the layer sheet ({@link FxAtlas}), and all together are not heavier than the limit in jar.
  */
 class FxAtlasTest {
     private static final String DIR = "/assets/incoming/textures/fx/particle/";
-    /** Кадры эффектов в jar — не больше, байт (задание V: всё запечённое вместе — до 8 МБ). */
+    /** Effect frames in jar - no more than a byte (task V: everything baked together - up to 8 MB). */
     static final long JAR_BUDGET = 8L << 20;
 
     private static Reader open(String name) {
@@ -52,8 +52,8 @@ class FxAtlasTest {
     }
 
     /**
-     * Огненный шар: 48 кадров по 256 (32 — горение) и их векторы движения по 128, время горения растёт, остывая — холоднее,
-     * огонь на экране гаснет к саже; кадр не уже прежнего (1,3 радиуса шара).
+     * fireball: 48 frames according to 256 (32 - combustion) and their motion vectors according to 128, the burning time increases, as it cools down it gets colder,
+     *  the fire on the screen goes out to soot; the frame is not narrower than before (1,3 ball radius).
      */
     @Test
     void fireballFramesMatchTheBake() throws IOException {
@@ -61,8 +61,8 @@ class FxAtlasTest {
         int tile = o.get("tile").getAsInt();
         assertEquals(FxAtlas.FIREBALL_FRAMES, o.get("frames").getAsInt());
         assertEquals(FxAtlas.FIREBALL_BURN, o.get("burn_frames").getAsInt());
-        assertEquals(FxAtlas.FIREBALL_SIZE, tile, "место кадра шара на листе — 256");
-        assertEquals(FxAtlas.FIREBALL_FLOW, o.get("flow").getAsFloat(), 1e-6, "предел векторов движения — тот, что ждёт шейдер");
+        assertEquals(FxAtlas.FIREBALL_SIZE, tile, "place of the ball frame on the sheet - 256");
+        assertEquals(FxAtlas.FIREBALL_FLOW, o.get("flow").getAsFloat(), 1e-6, "the limit of motion vectors is what the shader expects");
         assertEquals(FxAtlas.FIREBALL_FLOW_SIZE, o.get("flow_tile").getAsInt());
         for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) {
             image(String.format(Locale.ROOT, "fireball_%02d.png", i), tile);
@@ -72,43 +72,43 @@ class FxAtlasTest {
         try (Reader r = open("fireball.json")) {
             f = FxAtlas.parseFire(r);
         }
-        // шар топлива светится весь с первого мига (CCPS): первый кадр — почти самый яркий; кадры — после экспозиции по огню
-        // (pack.py film_exposure, подача), в мере экрана: ярче середины тонов, но не плоский белый диск (с ним складок и
-        // сажи не видно — шар 3.6)
+        // the entire ball of fuel glows from the first moment (CCPS): the first frame is almost the brightest; frames - after exposure to fire
+        //  (pack.py film_exposure, presentation), in the screen measure: brighter than the mid-tones, but not a flat white disk (with it folds and
+        //  soot are not visible - ball 3.6)
         int peak = 0;
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) if (f.fire()[i] > f.fire()[peak]) peak = i;
-        assertTrue(f.fire()[0] >= 0.85 * f.fire()[peak], "вспышка — почти самый яркий кадр");
-        // (кадры из рендера 512 по веществу — пик 0,345, круг 2 — 0,37, 3.6 — 0,87: ровный диск)
-        assertTrue(f.fire()[peak] >= 0.33 && f.fire()[peak] <= 0.75, "огонь на экране — ярко, но со складками: " + f.fire()[peak]);
-        assertTrue(peak < FxAtlas.FIREBALL_FRAMES / 4, "ярче всего — в начале горения: кадр " + peak);
+        assertTrue(f.fire()[0] >= 0.85 * f.fire()[peak], "flash is almost the brightest frame");
+        // (frames from the render 512 on the substance - peak 0,345, circle 2 - 0,37, 3.6 - 0,87: flat disk)
+        assertTrue(f.fire()[peak] >= 0.33 && f.fire()[peak] <= 0.75, "the fire on the screen is bright, but with folds: " + f.fire()[peak]);
+        assertTrue(peak < FxAtlas.FIREBALL_FRAMES / 4, "brightest at the beginning of combustion: frame " + peak);
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) {
-            assertTrue(f.burn()[i] > f.burn()[i - 1], "время кадров растёт: " + i);
-            if (i > peak) assertTrue(f.fire()[i] <= f.fire()[i - 1] + 0.02, "огонь гаснет: кадр " + i);
-            if (f.burn()[i - 1] >= 1) assertTrue(f.kelvin()[i] <= f.kelvin()[i - 1], "остывая — холоднее: кадр " + i);
+            assertTrue(f.burn()[i] > f.burn()[i - 1], "frame time increases: " + i);
+            if (i > peak) assertTrue(f.fire()[i] <= f.fire()[i - 1] + 0.02, "fire goes out: frame " + i);
+            if (f.burn()[i - 1] >= 1) assertTrue(f.kelvin()[i] <= f.kelvin()[i - 1], "cooling down - colder: frame " + i);
         }
-        assertTrue(f.fire()[FxAtlas.FIREBALL_FRAMES - 1] < 0.01, "последний кадр — сажа");
-        assertTrue(f.burn()[FxAtlas.FIREBALL_BURN - 1] >= 1 && f.burn()[FxAtlas.FIREBALL_BURN - 2] < 1, "горение — 32 кадра");
-        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) assertTrue(f.half()[i] >= 1.3 - 1e-3, "кадр не уже 1,3 радиуса шара: " + i);
-        // кадр по состоянию шара: горит — по времени, остывает — по температуре, к точке Дрейпера — последние
+        assertTrue(f.fire()[FxAtlas.FIREBALL_FRAMES - 1] < 0.01, "last frame - soot");
+        assertTrue(f.burn()[FxAtlas.FIREBALL_BURN - 1] >= 1 && f.burn()[FxAtlas.FIREBALL_BURN - 2] < 1, "burning - 32 frame");
+        for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) assertTrue(f.half()[i] >= 1.3 - 1e-3, "frame is not narrower than 1,3 of the radius of the ball: " + i);
+        // frame according to the state of the ball: burning - according to time, cooling - according to temperature, to the Draper point - the last
         assertEquals(0, FxAtlas.fireballFrameOf(f, 0, 1484, 1484), 1e-9);
-        assertTrue(FxAtlas.fireballFrameOf(f, 0.5, 1484, 1484) > 2, "середина горения — не вспышка");
-        assertTrue(FxAtlas.fireballFrameOf(f, 2, 800, 1484) >= FxAtlas.FIREBALL_FRAMES - 3, "остывший — у сажи");
-        // остывание идёт с конца горения сразу, без стоп-кадра: шар топлива (1484 K) и взрывчатки (1500 K) — по доле
-        // остывания до точки Дрейпера, а не ждут, пока остынут до пламени симуляции в её конец
+        assertTrue(FxAtlas.fireballFrameOf(f, 0.5, 1484, 1484) > 2, "mid-burn - no flash");
+        assertTrue(FxAtlas.fireballFrameOf(f, 2, 800, 1484) >= FxAtlas.FIREBALL_FRAMES - 3, "cooled down - near the soot");
+        // cooling occurs immediately from the end of combustion, without a freeze frame: a ball of fuel (1484 K) and explosives (1500 K) - according to the share of
+        //  cooling to the Draper point, and do not wait until they cool down to the simulation flame at its end
         for (double endK : new double[]{1484, 1500}) {
             double end = FxAtlas.fireballFrameOf(f, 1, endK, endK);
-            assertEquals(FxAtlas.FIREBALL_BURN - 1, end, 0.05, "конец горения — последний кадр горения");
+            assertEquals(FxAtlas.FIREBALL_BURN - 1, end, 0.05, "end of combustion - last frame of combustion");
             double last = end;
             for (double k = endK - 20; k > 820 && last < FxAtlas.FIREBALL_FRAMES - 1; k -= 20) {
                 double frame = FxAtlas.fireballFrameOf(f, 1.5, k, endK);
-                assertTrue(frame > last, "остывая на 20 K, кадр идёт дальше: " + k + " K, кадр " + frame);
-                assertTrue(frame - last < 2.5, "и без скачка через кадры: " + k + " K");
+                assertTrue(frame > last, "cooling down at 20 K, the frame goes on: " + k + " K, frame " + frame);
+                assertTrue(frame - last < 2.5, "and without jumping through frames: " + k + " K");
                 last = frame;
             }
         }
     }
 
-    /** Средняя яркость не ловит ровный диск: складки должны различаться в непрозрачном ядре; кайму отдельно проверяет fireballRimIsWarmAndNotGhostly. */
+    /** The average brightness does not catch a smooth disk: the folds should be different in the opaque core; The border is checked separately by fireballRimIsWarmAndNotGhostly. */
     @Test
     void burningFireballKeepsItsInteriorContrast() throws IOException {
         for (int i = 0; i < 10; i++) {
@@ -125,16 +125,16 @@ class FxAtlasTest {
                         light[count++] = (0.2126 * (rgba >> 16 & 255) + 0.7152 * (rgba >> 8 & 255) + 0.0722 * (rgba & 255)) / 255;
                     }
                 }
-                assertTrue(count > 100, "внутри шара есть непрозрачный огонь: кадр " + i);
+                assertTrue(count > 100, "there is an opaque fire inside the ball: frame " + i);
                 Arrays.sort(light, 0, count);
-                // Разница в 15 % белого экрана: заметные складки, а не шум у почти срезанного белого (3.6: 4–11 %).
+                // Difference in 15% white screen: noticeable creases, not noise in almost cut off white (3.6: 4–11%).
                 double contrast = light[9 * count / 10] - light[count / 10];
-                assertTrue(contrast > 0.15, "складки внутри огня видны: кадр " + i + ", контраст " + contrast);
+                assertTrue(contrast > 0.15, "folds inside the fire are visible: frame " + i + ", contrast " + contrast);
             }
         }
     }
 
-    /** Даже тонкое пламя остаётся тёплым: не жёлтая прозрачная плёнка, смешивающаяся с фоном в хаки. */
+    /** Even the thin flame remains warm: not a yellow transparent film blending into the khaki background. */
     @Test
     void fireballRimIsWarmAndNotGhostly() throws IOException {
         for (int i = 0; i < 10; i++) {
@@ -149,8 +149,8 @@ class FxAtlasTest {
                                 g = (rgba >> 8 & 255) / 255.0, b = (rgba & 255) / 255.0;
                         if (a < 0.05) continue;
                         double light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                        assertTrue(a + 2.0 / 255 >= light, "яркий огонь не прозрачная плёнка: кадр " + i);
-                        if (a < 0.6 && r > 0.3) assertTrue(g < 0.7 * r, "тонкое пламя краснеет: кадр " + i);
+                        assertTrue(a + 2.0 / 255 >= light, "bright fire not transparent film: frame " + i);
+                        if (a < 0.6 && r > 0.3) assertTrue(g < 0.7 * r, "thin flame turns red: frame " + i);
                         if (a > 0.6 && r > 0.5) {
                             hot++;
                             if (g < 0.75 * r) orange++;
@@ -158,15 +158,15 @@ class FxAtlasTest {
                         }
                     }
                 }
-                assertTrue(orange > hot / 2, "тело оранжевое, а не лимонное: кадр " + i);
-                if (i < 4) assertTrue(white > 0, "в горячих кадрах есть светлое ядро: кадр " + i);
+                assertTrue(orange > hot / 2, "the body is orange, not lemon: frame " + i);
+                if (i < 4) assertTrue(white > 0, "hot frames have a light core: frame " + i);
             }
         }
     }
 
     /**
-     * Кадр вмещает всё вещество: у края кадра шара пусто (ревью #426: остывающая сажа обрезалась кругом по радиусу кадра,
-     * и в игре висела «сфера-призрак» с ровным краем).
+     * The frame contains all the substance: the edge of the ball frame is empty (review #426: the cooling soot was cut off in a circle along the radius of the frame,
+     *  and a “ghost sphere” with a smooth edge hung in the game).
      */
     @Test
     void fireballFramesHoldAllTheirMatter() throws IOException {
@@ -176,24 +176,24 @@ class FxAtlasTest {
             for (int k = 0; k < w; k++) {
                 for (int m : new int[]{0, 1, h - 2, h - 1}) edge = Math.max(edge, Math.max(img.getRGB(k, m) >>> 24, img.getRGB(m, k) >>> 24));
             }
-            assertTrue(edge <= 4, "у края кадра " + i + " вещества нет: альфа " + edge);
+            assertTrue(edge <= 4, "at the edge of the frame " + i + " no substance: alpha " + edge);
         }
     }
 
     /**
-     * Сажа остывания без зерна рендера (ревью #426: кадры остывания крапчатые). Причина — выборки: шумодав Cycles чистит
-     * свет, но не непрозрачность прозрачной сажи, и при 32 выборках на пиксель и адаптивной выборке шум оставался в сажe;
-     * увеличение кадра 1,3 радиуса шара из рендера 256 растягивало его в пятна. Рендер — не меньше 256 выборок без
-     * адаптивной и вдвое крупнее кадра (кадр шара в горении — без увеличения, кадр остывания шире — пиксель его — среднее
-     * нескольких пикселей рендера): так пишет {@code tools/bake_fx/pack.py} из {@code meta.json} запекания. Мера по
-     * пикселям кадра зерно круга 2 не ловила: растянутый шум — пятна в 2–3 пикселя, а не разброс соседей.
+     * Soot cooling without seed rendering (review #426: cooling frames are speckled). The reason is sampling: noise reduction Cycles cleans
+     *  light, but not the opacity of transparent soot, and with 32 samples per pixel and adaptive sampling, the noise remained in soote;
+     * increasing the frame 1,3 of the radius of the ball from the render 256 stretched it into spots. Render - no less than 256 samples without
+     *  adaptive and twice as large as the frame (the frame of the ball in combustion - without enlargement, the cooling frame is wider - its pixel is the average of
+     *  of several render pixels): this is what {@code tools/bake_fx/pack.py} writes from {@code meta.json} baking. The measure on
+     *  pixels of the frame of the seed circle 2 did not catch: stretched noise - spots in 2–3 pixels, and not the spread of neighbors.
      */
     @Test
     void coolingSootIsRenderedWithoutGrain() throws IOException {
         JsonObject o = json("fireball.json");
-        assertTrue(o.has("samples") && o.get("samples").getAsInt() >= 256, "выборок на пиксель — не меньше 256");
-        assertTrue(o.has("adaptive_sampling") && !o.get("adaptive_sampling").getAsBoolean(), "без адаптивной выборки");
-        assertTrue(o.has("render") && o.get("render").getAsInt() >= 2 * o.get("tile").getAsInt(), "рендер вдвое крупнее кадра");
+        assertTrue(o.has("samples") && o.get("samples").getAsInt() >= 256, "samples per pixel - no less than 256");
+        assertTrue(o.has("adaptive_sampling") && !o.get("adaptive_sampling").getAsBoolean(), "without adaptive sampling");
+        assertTrue(o.has("render") && o.get("render").getAsInt() >= 2 * o.get("tile").getAsInt(), "render twice the size of the frame");
     }
 
     private static BufferedImage read(String name) throws IOException {
@@ -203,7 +203,7 @@ class FxAtlasTest {
         }
     }
 
-    /** Отражение не переворачивает верх; клетки 256² не пересекают карты дыма и друг друга. */
+    /** The reflection does not flip the top; 256² cells do not intersect smoke maps and each other. */
     @Test
     void fireballSlotsKeepTheTopAndTheirOwnSpace() {
         for (int i = 0; i < FxAtlas.FIREBALL_FRAMES; i++) {
@@ -217,7 +217,7 @@ class FxAtlasTest {
             assertEquals(FxAtlas.FIREBALL_V, a.v1() - a.v0(), 1e-6);
             assertTrue(a.v0() >= FxAtlas.FIREBALL_TOP && a.v1() <= 1);
             assertTrue(FxAtlas.spray6(15, false).v1() + 2 * FxAtlas.PUFF6_STEP <= a.v0() + 1e-6);
-            // векторы движения кадров — под кадрами, в своих клетках
+            // frame movement vectors - under the frames, in their cells
             float fu = i % FxAtlas.FIREBALL_FLOW_COLUMNS * FxAtlas.FIREBALL_FLOW_U,
                     fv = FxAtlas.FIREBALL_FLOW_TOP + i / FxAtlas.FIREBALL_FLOW_COLUMNS * FxAtlas.FIREBALL_FLOW_V;
             assertTrue(fv >= FxAtlas.fireballAt(FxAtlas.FIREBALL_FRAMES - 1, false).v1() - 1e-6 && fv + FxAtlas.FIREBALL_FLOW_V <= 1 + 1e-6);
@@ -229,7 +229,7 @@ class FxAtlasTest {
         }
     }
 
-    /** На границе кадров вес смеси доходит до следующего, без сброса яркости или непрозрачности. */
+    /** At the border of the frames, the weight of the mixture reaches the next one, without resetting the brightness or opacity. */
     @Test
     void fireballFrameBlendIsContinuous() {
         for (int i = 1; i < FxAtlas.FIREBALL_FRAMES; i++) {
@@ -243,7 +243,7 @@ class FxAtlasTest {
         assertEquals(0, FxAtlas.fireballMix(-1));
     }
 
-    /** Клуб: 16 кадров по три карты 128, рост края — с 1 и растёт, предел векторов движения — тот, что ждёт шейдер. */
+    /** billows: 16 frames of three cards 128, edge growth is from 1 and growing, the limit of motion vectors is what the shader expects. */
     @Test
     void puffFramesMatchTheBake() throws IOException {
         JsonObject o = json("puff6.json");
@@ -251,7 +251,7 @@ class FxAtlasTest {
         assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt());
         assertEquals("abv", o.get("maps").getAsString());
         assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6);
-        assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "место кадра на листе — размер кадра запекания");
+        assertEquals((float) tile / 1024, FxAtlas.PUFF6_U, 1e-6, "frame location on the sheet - baking frame size");
         assertEquals((float) tile / FxAtlas.HEIGHT, FxAtlas.PUFF6_V, 1e-6);
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "puff6%c_%02d.png", m, i), tile);
@@ -261,17 +261,17 @@ class FxAtlasTest {
             growth = FxAtlas.parseGrowth(r);
         }
         assertEquals(1, growth[0], 1e-6);
-        for (int i = 1; i < growth.length; i++) assertTrue(growth[i] >= growth[i - 1], "клуб растёт: кадр " + i);
+        for (int i = 1; i < growth.length; i++) assertTrue(growth[i] >= growth[i - 1], "billows is growing: frame " + i);
         try (Reader r = open("puff6.json")) {
             float[] light = FxAtlas.parseLight(r);
-            assertTrue(light[1] > 0 && light[2] > 0, "свет густого места спереди и средний — есть");
+            assertTrue(light[1] > 0 && light[2] > 0, "dense light in front and medium - yes");
         }
     }
 
     /**
-     * Облако берёт только клубящиеся кадры ({@link FxAtlas#turbulentLast}): у запечённого клуба к концу симуляции мелкая
-     * структура уходит (рассеивается конечный клуб), и облака на 150–300 м были ровными размытыми шарами (шлагбаум RV2).
-     * Последний кадр — с мелкой структурой не меньше 2/3 наибольшей; ровные кадры конца не берутся.
+     * The cloud takes only swirling frames ({@link FxAtlas#turbulentLast}): in the baked billows, by the end of the simulation the fine
+     *  structure goes away (the final billows dissipates), and the clouds at 150–300 m were smooth blurry balls (look gate RV2).
+     * The last frame - with a fine structure not less than 2/3 largest; Even shots of the end are not taken.
      */
     @Test
     void cloudsKeepTheirClumps() throws IOException {
@@ -280,27 +280,27 @@ class FxAtlasTest {
             try (Reader r = open(name)) {
                 detail = FxAtlas.parseDetail(r);
             }
-            assertNotNull(detail, name + ": мелкая структура кадров есть (tools/bake_fx/pack.py --detail)");
+            assertNotNull(detail, name + ": fine frame structure exists (tools/bake_fx/pack.py --detail)");
             int last = FxAtlas.turbulentLast(detail);
             float top = 0;
             for (float v : detail) top = Math.max(top, v);
-            for (int i = 0; i <= last; i++) assertTrue(detail[i] >= FxAtlas.TURBULENT * top || i < 2, name + ": кадр " + i + " клубится");
+            for (int i = 0; i <= last; i++) assertTrue(detail[i] >= FxAtlas.TURBULENT * top || i < 2, name + ": frame " + i + " swirls");
             assertTrue(last < FxAtlas.PUFF6_FRAMES - 1 || detail[FxAtlas.PUFF6_FRAMES - 1] >= FxAtlas.TURBULENT * top, name);
         }
         float[] smoke;
         try (Reader r = open("puff6.json")) {
             smoke = FxAtlas.parseDetail(r);
         }
-        // клуб дыма — шапка облака взрыва EmberGen (tools/bake_fx, puff-vdb): её кадры клубятся до конца, и облако берёт все
-        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(smoke), "у шапки облака клубятся все кадры");
-        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(null), "нет данных — все кадры");
+        // billows of smoke - cap of the cloud of explosion EmberGen (tools/bake_fx, puff-vdb): her footage swirls to the end, and the cloud takes everything
+        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(smoke), "at the cap the clouds are swirling all the frames");
+        assertEquals(FxAtlas.PUFF6_FRAMES - 1, FxAtlas.turbulentLast(null), "no data - all frames");
     }
 
     /**
-     * Клуб дыма — клубы, а не «вата»: в непрозрачном ядре каждого кадра (непрозрачность больше 0,6) свет сверху (карта A,
-     * зелёный) отходит от своего сглаживания по 9×9 пикселей в среднем на 12 % и больше. Прежний клуб своей Mantaflow —
-     * пушистый шар с ровными картами (0,01–0,08 в кадрах, что брали облака): облака в игре были ровными тёмными шарами
-     * без светлых верхов клубов; шапка облака EmberGen сверху — 0,13–0,19.
+     * billows of smoke - billows, not “cotton wool”: in the opaque core of each frame (opacity greater than 0,6) the light from above (map A,
+     * green) departs from its smoothing over 9×9 pixels on average by 12 % or more. The former billows of his Mantaflow —
+     *  fluffy ball with smooth cards (0,01–0,08 in the frames that the clouds took): the clouds in the game were smooth dark balls
+     *  without the light tops of the billows; cloud cap EmberGen from above - 0,13–0,19.
      */
     @Test
     void puffFramesHaveBillowsInTheirLight() throws IOException {
@@ -333,23 +333,23 @@ class FxAtlasTest {
                         count++;
                     }
                 }
-                assertTrue(count > 0.1 * n * n, name + ": у клуба есть непрозрачное ядро");
+                assertTrue(count > 0.1 * n * n, name + ": billows has an opaque core");
                 double fine = dev / sum;
-                assertTrue(fine >= 0.12, name + ": клубы в свете сверху " + fine);
+                assertTrue(fine >= 0.12, name + ": billows in the light from above " + fine);
             }
         }
     }
 
     /**
-     * У кадров клубов облаков (дым и брызги) нет прямого края альфы: клуб кладётся в любом повороте — стоя, отражённым и
-     * лёжа на земле (пыль у земли), и прямой край любого кадра где-нибудь встаёт стенкой (ревью #443: срез шапки облака
-     * плоскостью при запекании дал прямой низ у кадров, и пыль налёта на 55 с легла отвесной стенкой). Мера — по настоящей
-     * двумерной альфе ({@link #straightEdge}): силуэт по лучам из середины, и самый длинный его кусок, что лежит на прямой
-     * (в пределах {@link #STRAIGHT_TOL} поперечника), — не больше {@link #STRAIGHT} поперечника. У клубящегося края — 0,11–0,29
-     * (прежний клуб, брызги, шапка сверху), у срезанного плоскостью низа прежних кадров — до 0,46, у кадра с обрезанной
-     * стороной — от 0,66.
-     * Среднее по кольцам (как у профилей непрозрачности) направленную границу теряет. Огненный шар сюда не входит: низ
-     * его кадра срезан у земли нарочно ({@code pack.py}: DOWN), шар стоит на ней и не ложится.
+     * Frames of billows clouds (smoke and splashes) do not have a straight edge of the alpha: billows are placed in any rotation - standing, reflected and
+     *  lying on the ground (dust near the ground), and the straight edge of any frame stands up as a wall somewhere (review #443: cutting the cap of a cloud
+     *  with a plane when baking gave a straight bottom at frames, and dust deposited on 55 s a sheer wall). The measure is according to a real
+     *  two-dimensional alpha ({@link #straightEdge}): a silhouette along the rays from the middle, and the longest piece of it that lies on the straight line
+     *  (within the {@link #STRAIGHT_TOL} diameter) is no more than {@link #STRAIGHT} diameter. At the swirling edge - 0,11–0,29
+     *  (former billows, splashes, cap on top), at the bottom of the previous frames cut off by a plane - up to 0,46, at the frame with the cropped side
+     *  - from 0,66.
+     * The average over the rings (as with opacity profiles) loses its directional boundary. fireball is not included here: the bottom of the
+     *  frame is cut off near the ground on purpose ({@code pack.py}: DOWN), the ball stands on it and does not lie down.
      */
     @Test
     void cloudFramesHaveNoStraightEdge() throws IOException {
@@ -357,26 +357,26 @@ class FxAtlasTest {
             for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
                 String name = String.format(Locale.ROOT, "%s_%02d.png", prefix, f);
                 double edge = straightEdge(alpha(name));
-                assertTrue(edge <= STRAIGHT, name + ": прямой кусок силуэта на " + edge + " поперечника");
+                assertTrue(edge <= STRAIGHT, name + ": straight piece of silhouette on " + edge + " diameter");
             }
         }
-        // кадр с обрезанной стороной (треть справа — пусто) и со срезанным углом тест ловит
+        // a frame with a cropped side (a third on the right is empty) and with a cut corner, the test catches
         double[][] side = alpha("puff6a_05.png"), corner = alpha("puff6a_09.png");
         int n = side.length;
         for (double[] row : side) Arrays.fill(row, n - n * 35 / 100, n, 0);
         for (int y = 0; y < n; y++) {
             for (int x = 0; x < n; x++) if (x + y > 5 * n / 4) corner[y][x] = 0;
         }
-        assertTrue(straightEdge(side) > STRAIGHT, "срезанная сторона: " + straightEdge(side));
-        assertTrue(straightEdge(corner) > STRAIGHT, "срезанный угол: " + straightEdge(corner));
+        assertTrue(straightEdge(side) > STRAIGHT, "cut side: " + straightEdge(side));
+        assertTrue(straightEdge(corner) > STRAIGHT, "cut corner: " + straightEdge(corner));
     }
 
     /**
-     * Кадр клуба дыма — округлый: клуб — гаусс модели с осями квадрата (σh поперёк, σv вверх), и форму облака задаёт квадрат,
-     * а не картинка. Шапка облака взрыва сверху вытянута (оси инерции альфы 1,4–1,7 : 1), и кадр, отражённый и лёжа на
-     * земле, клал гаусс косой полосой с длинными ровными боками — у крупного клуба пыли у глаза налёт вставал стенкой
-     * (ревью #443). Отношение осей инерции альфы каждого кадра — не больше {@link #PUFF_AXES} (прежний клуб — 1,0–1,2,
-     * шапка сверху, сжатая при запекании вдоль большой оси, — 1,05–1,15).
+     * The smoke billows frame is round: billows is a Gaussian model with square axes (σh across, σv up), and the shape of the cloud is determined by the square,
+     * , and not the picture. The cap of the explosion cloud from above is elongated (the alpha inertia axis 1,4–1,7: 1), and the frame, reflected and lying on the
+     *  ground, laid the Gauss in an oblique stripe with long straight sides - a large billow of dust had a coating around the eye wall
+     *  (review #443). The ratio of the alpha inertia axes of each frame is no more than {@link #PUFF_AXES} (the previous billows were 1,0–1,2,
+     * , the cap on top, compressed during baking along the major axis, was 1,05–1,15).
      */
     @Test
     void puffFramesAreRound() throws IOException {
@@ -403,18 +403,18 @@ class FxAtlasTest {
             }
             double mid = (xx + yy) / 2, diff = Math.sqrt((xx - yy) * (xx - yy) / 4 + xy * xy);
             double axes = Math.sqrt((mid + diff) / (mid - diff));
-            assertTrue(axes <= PUFF_AXES, name + ": оси альфы " + axes);
+            assertTrue(axes <= PUFF_AXES, name + ": alpha axis " + axes);
         }
     }
 
-    /** Наборы клубов, что кладутся гауссом модели: дым и клубы других готовых симуляций (выброс, дробление, воздух). */
+    /** Sets of billows that are placed by Gaussian models: smoke and billows of other ready-made simulations (emission, crushing, air). */
     static final String[] CLUB_SETS = {"puff", "eject", "crush", "air"};
 
     /**
-     * Кадр клуба любого вида на листе — пиксель в пиксель: место кадра (и отражённого) по u и v — ровно размер картинки
-     * запекания ({@code <имя>6.json} «tile») в пикселях листа {@link FxAtlas#WIDTH}×{@link FxAtlas#HEIGHT}, начало — на целом
-     * пикселе. По этому масштабу берут уровень копий клуба по пикселям на тексель (FxQuads, тред FPS, #455): кадр другого
-     * масштаба взял бы не тот уровень.
+     * An atlas frame of any billow kind matches pixel for pixel: frame extent (including mirrored) in u and v is exactly
+     * the baked image size ({@code <name>6.json} "tile") in atlas pixels {@link FxAtlas#WIDTH}×{@link FxAtlas#HEIGHT},
+     * starting at an integer pixel. This scale determines the billow mip level by pixels per texel (FxQuads, FPS thread,
+     * #455): a frame at another scale would choose the wrong level.
      */
     @Test
     void clubFramesMapOneTexelToOneSheetPixel() throws IOException {
@@ -429,23 +429,23 @@ class FxAtlasTest {
             for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
                 for (boolean mirror : new boolean[]{false, true}) {
                     FxAtlas.Sprite f = FxAtlas.club(look, i, mirror);
-                    String what = look + " " + i + (mirror ? " отражён" : "");
-                    assertEquals(tile, Math.abs(f.u1() - f.u0()) * FxAtlas.WIDTH, 1e-3, what + ": по u");
-                    assertEquals(tile, Math.abs(f.v1() - f.v0()) * FxAtlas.HEIGHT, 1e-3, what + ": по v");
+                    String what = look + " " + i + (mirror ? " reflected" : "");
+                    assertEquals(tile, Math.abs(f.u1() - f.u0()) * FxAtlas.WIDTH, 1e-3, what + ": by u");
+                    assertEquals(tile, Math.abs(f.v1() - f.v0()) * FxAtlas.HEIGHT, 1e-3, what + ": by v");
                     double x = Math.min(f.u0(), f.u1()) * FxAtlas.WIDTH, y = Math.min(f.v0(), f.v1()) * FxAtlas.HEIGHT;
-                    assertEquals(Math.rint(x), x, 1e-3, what + ": начало по u — не на пикселе");
-                    assertEquals(Math.rint(y), y, 1e-3, what + ": начало по v — не на пикселе");
-                    assertEquals(mirror, f.u1() < f.u0(), what + ": отражение — обратным u");
+                    assertEquals(Math.rint(x), x, 1e-3, what + ": start at u - not on the pixel");
+                    assertEquals(Math.rint(y), y, 1e-3, what + ": start at v - not on the pixel");
+                    assertEquals(mirror, f.u1() < f.u0(), what + ": reflection - reverse u");
                 }
             }
         }
     }
 
     /**
-     * Клубы других готовых симуляций ({@code bake.py clubs-vdb}): те же 16 кадров по три карты 128, что у дыма, в мере дыма
-     * (одна нормировка карт на все клубы слоя); рост с 1 не убывает; доля жизни — от 0 до 1 не убывает (кадр явления —
-     * {@link FxAtlas#lifeFrame}); мелкая структура есть; места на листе — в шаге кадров шейдера от начала кадров дыма и не
-     * налезают на соседей.
+     * billows of other ready-made simulations ({@code bake.py clubs-vdb}): the same 16 frames of three cards 128, that of smoke, in the amount of smoke
+     *  (one normalization of cards for all billows of the layer); growth from 1 does not decrease; the share of life - from 0 to 1 does not decrease (phenomenon frame -
+     * {@link FxAtlas#lifeFrame}); there is a fine structure; places on the sheet - one shader frame step from the beginning of the smoke frames and not
+     *  overlap with neighbors.
      */
     @Test
     void clubSetsMatchTheBake() throws IOException {
@@ -455,8 +455,8 @@ class FxAtlasTest {
             int tile = o.get("tile").getAsInt();
             assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt(), c.prefix);
             assertEquals("abv", o.get("maps").getAsString());
-            assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6, c.prefix + ": предел векторов движения — тот, что ждёт шейдер");
-            assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, c.prefix + ": карты — в мере дыма");
+            assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6, c.prefix + ": the limit of motion vectors is what the shader expects");
+            assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, c.prefix + ": cards - to the extent of smoke");
             for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
                 for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "%s6%c_%02d.png", c.prefix, m, i), tile);
             }
@@ -474,34 +474,34 @@ class FxAtlasTest {
             assertEquals(0, life[0], 1e-6);
             assertEquals(1, life[FxAtlas.PUFF6_FRAMES - 1], 1e-6);
             for (int i = 1; i < FxAtlas.PUFF6_FRAMES; i++) {
-                assertTrue(growth[i] >= growth[i - 1], c.prefix + ": рост, кадр " + i);
-                assertTrue(life[i] > life[i - 1], c.prefix + ": доля жизни, кадр " + i);
+                assertTrue(growth[i] >= growth[i - 1], c.prefix + ": height, frame " + i);
+                assertTrue(life[i] > life[i - 1], c.prefix + ": life share, frame " + i);
             }
             assertNotNull(detail, c.prefix);
-            // место кадров: в шаге кадров шейдера (FxSix: начало кадров дыма + целое число кадров) и после прежних наборов
+            // frame location: in shader frame step (FxSix: start of smoke frames + integer number of frames) and after previous sets
             float rows = (c.frames[0].v0() - FxAtlas.PUFF6_TOP) / FxAtlas.PUFF6_V;
-            assertEquals(Math.round(rows), rows, 1e-3, c.prefix + ": кадр — в шаге кадров шейдера");
-            assertTrue(c.row >= 96 && c.row + 12 <= FxAtlas.HEIGHT / 64, c.prefix + ": ниже прежних мест, внутри листа");
+            assertEquals(Math.round(rows), rows, 1e-3, c.prefix + ": frame - in shader frame step");
+            assertTrue(c.row >= 96 && c.row + 12 <= FxAtlas.HEIGHT / 64, c.prefix + ": below the previous places, inside the sheet");
         }
         assertEquals(12, FxAtlas.CRUSH.row - FxAtlas.EJECT.row);
         assertEquals(12, FxAtlas.AIR.row - FxAtlas.CRUSH.row);
-        // кадр явления по доле жизни — от первого кадра до последнего, без возврата
+        // frame of the phenomenon according to the share of life - from the first frame to the last, without return
         double prev = -1;
         for (double f = 0; f <= 1.0001; f += 0.05) {
             double k = FxAtlas.lifeFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look.EJECTA, f);
-            assertTrue(k >= prev, "кадр по доле жизни не идёт назад");
+            assertTrue(k >= prev, "the frame does not go backwards according to the share of life");
             prev = k;
         }
     }
 
-    /** Отношение осей инерции альфы кадра клуба — не больше ({@link #puffFramesAreRound}). */
+    /** The ratio of the alpha axes of inertia of the billows frame is no more than ({@link #puffFramesAreRound}). */
     static final double PUFF_AXES = 1.25;
 
-    /** Самый длинный прямой кусок силуэта — не больше этой доли поперечника ({@link #straightEdge}). */
+    /** The longest straight piece of the silhouette is no more than this fraction of the diameter ({@link #straightEdge}). */
     static final double STRAIGHT = 0.32;
-    /** Прямой — в пределах этой доли поперечника от хорды. */
+    /** Straight - within this fraction of the diameter from the chord. */
     static final double STRAIGHT_TOL = 0.012;
-    /** Силуэт — тексели с непрозрачностью не меньше (у густого дыма видно и бледное). */
+    /** The silhouette is texels with no less opacity (thick smoke can also be seen as pale). */
     static final double SILHOUETTE = 0.2;
 
     private static double[][] alpha(String name) throws IOException {
@@ -517,9 +517,10 @@ class FxAtlasTest {
     }
 
     /**
-     * Самый длинный прямой кусок силуэта альфы, в долях его поперечника: 360 лучей из середины (центр масс альфы), на каждом —
-     * дальний тексель не прозрачнее {@link #SILHOUETTE} (шаг — полтекселя); кусок — подряд идущие точки лучей, что все в
-     * пределах {@link #STRAIGHT_TOL} поперечника от хорды между его концами; поперечник — два средних радиуса силуэта.
+     * Longest straight section of the alpha silhouette as a fraction of its diameter: 360 rays from the
+     * middle (alpha centroid), each takes the farthest texel no more transparent than {@link #SILHOUETTE}
+     * (half-texel step). A section is consecutive ray points all within {@link #STRAIGHT_TOL} diameters of the
+     * chord between its ends; diameter is twice the mean silhouette radius.
      */
     static double straightEdge(double[][] a) {
         int n = a.length, rays = 360;
@@ -564,25 +565,25 @@ class FxAtlasTest {
         return best;
     }
 
-    /** Клуб брызг: те же 16 кадров по три карты, что у дыма, в мере дыма (одна нормировка карт на все клубы слоя). */
+    /** billows of splashes: the same 16 frames of three cards as for smoke, in the amount of smoke (one normalization of cards for all billows of the layer). */
     @Test
     void sprayFramesMatchTheBake() throws IOException {
         JsonObject o = json("spray6.json"), smoke = json("puff6.json");
         int tile = o.get("tile").getAsInt();
         assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt());
         assertEquals("abv", o.get("maps").getAsString());
-        assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, "карты брызг — в мере дыма");
+        assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, "splash maps - to the extent of smoke");
         for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
             for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "spray6%c_%02d.png", m, i), tile);
         }
         try (Reader r = open("spray6.json")) {
             float[] growth = FxAtlas.parseGrowth(r);
             assertEquals(1, growth[0], 1e-6);
-            for (int i = 1; i < growth.length; i++) assertTrue(growth[i] >= growth[i - 1], "клуб растёт: кадр " + i);
+            for (int i = 1; i < growth.length; i++) assertTrue(growth[i] >= growth[i - 1], "billows is growing: frame " + i);
         }
     }
 
-    /** Всё запечённое и нарисованное кодом для слоя эффектов в jar — не тяжелее {@link #JAR_BUDGET}. */
+    /** Everything baked and drawn with the code for the effects layer in jar is no heavier than {@link #JAR_BUDGET}. */
     @Test
     void framesFitTheJarBudget() throws IOException {
         Path dir = Path.of("src/main/resources" + DIR);
@@ -590,6 +591,6 @@ class FxAtlasTest {
         try (Stream<Path> files = Files.list(dir)) {
             bytes = files.mapToLong(p -> p.toFile().length()).sum();
         }
-        assertTrue(bytes <= JAR_BUDGET, "кадры эффектов " + bytes / 1024 + " КБ");
+        assertTrue(bytes <= JAR_BUDGET, "effects shots " + bytes / 1024 + " KB");
     }
 }

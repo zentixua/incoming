@@ -21,25 +21,25 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * Повтор Flashback (0.39) как файл: zip с {@code metadata.json}, кусками записи {@code cN.flashback} и кэшем чанков
- * {@code level_chunk_caches/N}. Без Minecraft: только байты и тики (юнит-тесты — {@code TimelineTest}).
+ * A Flashback replay (0.39) as a file: a zip with {@code metadata.json}, recording chunks {@code cN.flashback} and
+ * chunk caches {@code level_chunk_caches/N}. No Minecraft: only bytes and ticks (unit tests: {@code TimelineTest}).
  * <p>
- * Кусок: {@code int} {@link #MAGIC}, varint числа имён действий, имена (строки varint-длины), {@code int} длина снимка,
- * снимок (действия), затем действия до конца. Действие — varint номер имени, {@code int} длина тела, тело. Куски идут
- * в порядке {@code chunks} метаданных, начало куска — сумма длительностей прежних (так считает {@code ReplayServer}).
+ * Chunk: {@code int} {@link #MAGIC}, varint action-name count, names (varint-length strings), {@code int} snapshot length,
+ * snapshot (actions), then actions to the end. An action is a varint name index, {@code int} body length, and body. Chunks
+ * follow the metadata {@code chunks} order; a chunk starts at the sum of previous durations (as {@code ReplayServer} counts it).
  */
 public final class ReplayFile implements Closeable {
     public static final int MAGIC = 0xD780E884;
-    /** Записей в одном файле кэша чанков ({@code ReplayChunkCache.CHUNK_CACHE_SIZE}). */
+    /** Entries in one chunk-cache file ({@code ReplayChunkCache.CHUNK_CACHE_SIZE}). */
     public static final int CHUNK_CACHE_SIZE = 10000;
 
-    /** Кусок записи: имя файла в zip, первый тик, длительность в тиках, ставится ли его снимок при входе в кусок. */
+    /** Recording chunk: zip filename, first tick, duration in ticks, whether its snapshot is applied on entering the chunk. */
     public record Segment(String file, int start, int duration, boolean forceSnapshot) {}
 
     private final ZipFile zip;
     private final JsonObject meta;
     private final List<Segment> segments;
-    /** Номер файла кэша → места чанков в нём (x, z — {@link #pack}). */
+    /** Cache file number → chunk positions in it (x, z: {@link #pack}). */
     private final Map<Integer, long[]> chunkCaches = new HashMap<>();
 
     private ReplayFile(ZipFile zip, JsonObject meta, List<Segment> segments) {
@@ -78,7 +78,7 @@ public final class ReplayFile implements Closeable {
         return segments;
     }
 
-    /** Тиков в записи: {@code total_ticks} метаданных, без него — сумма кусков. */
+    /** Ticks in the recording: metadata {@code total_ticks}, or the sum of chunks if absent. */
     public int totalTicks() {
         if (meta.has("total_ticks")) return meta.get("total_ticks").getAsInt();
         Segment last = segments.isEmpty() ? null : segments.getLast();
@@ -92,8 +92,8 @@ public final class ReplayFile implements Closeable {
     }
 
     /**
-     * Место чанка {@code index} кэша чанков ({@link #pack}) или {@link Long#MIN_VALUE}, если его нет. Запись кэша —
-     * {@code int} длина и пакет {@code ClientboundLevelChunkWithLightPacket}: varint id пакета, {@code int x}, {@code int z}.
+     * Position of chunk-cache entry {@code index} ({@link #pack}), or {@link Long#MIN_VALUE} if missing. A cache entry is
+     * an {@code int} length and a {@code ClientboundLevelChunkWithLightPacket}: varint packet id, {@code int x}, {@code int z}.
      */
     public long cachedChunk(int index) throws IOException {
         int file = index / CHUNK_CACHE_SIZE;
@@ -110,7 +110,7 @@ public final class ReplayFile implements Closeable {
         return i < places.length ? places[i] : Long.MIN_VALUE;
     }
 
-    /** Места чанков файла кэша потоком: из записи нужны только x и z, сами пакеты (сотни МБ на файл) не читаются. */
+    /** Stream chunk positions from a cache file: only x and z are needed; the packets themselves (hundreds of MB per file) are not read. */
     static long[] chunkPlaces(InputStream raw) throws IOException {
         DataInputStream in = new DataInputStream(new BufferedInputStream(raw, 1 << 16));
         List<Long> out = new ArrayList<>();
@@ -118,7 +118,7 @@ public final class ReplayFile implements Closeable {
             while (true) {
                 int size = in.readInt();
                 if (size < 0) break;
-                // varint id пакета, потом int x, int z
+                // varint packet id, then int x, int z
                 int read = 0;
                 boolean more = true;
                 while (more && read < size && read < 5) {
@@ -134,14 +134,14 @@ public final class ReplayFile implements Closeable {
                 out.add(place);
             }
         } catch (EOFException end) {
-            // конец файла (или обрезанная последняя запись — без места)
+            // end of file (or a truncated last entry without a position)
         }
         long[] places = new long[out.size()];
         for (int i = 0; i < places.length; i++) places[i] = out.get(i);
         return places;
     }
 
-    /** x и z чанка в одном {@code long}, как {@code ChunkPos.asLong}. */
+    /** Chunk x and z in one {@code long}, like {@code ChunkPos.asLong}. */
     public static long pack(int x, int z) {
         return (x & 0xFFFFFFFFL) | (long) z << 32;
     }
@@ -159,7 +159,7 @@ public final class ReplayFile implements Closeable {
         }
     }
 
-    /** Кусок в памяти: имена действий, снимок и действия — отрезками массива. */
+    /** Chunk in memory: action names, snapshot and actions as array slices. */
     public static final class SegmentData {
         public final Segment segment;
         public final byte[] data;
@@ -182,7 +182,7 @@ public final class ReplayFile implements Closeable {
         }
     }
 
-    /** Чтение big-endian и varint, как {@code FriendlyByteBuf}. */
+    /** Big-endian and varint reading, like {@code FriendlyByteBuf}. */
     public static final class Bytes {
         public final byte[] data;
         public int pos;

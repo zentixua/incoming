@@ -14,55 +14,55 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Мгла у глаза после прилёта: оптическая толща луча глаза (1,6 м над улицей) по ветру от удара — всего облака, пыли волны и
- * юбки пыли разрушенного. Эталон — записи камер после ударов шахедов по улицам Харькова: на 5–10 с улица в серо-белой
- * дымке, машины и дома в 30–60 м видны (τ луча в 40 м — около 1–2: дымка видна, сквозь неё видно), к минуте — чисто.
- * ⚠ Сам эталон — оценка τ по кадрам камеры, не замер.
+ * haze at the eye after arrival: optical depth of the eye ray (1,6 m above the street) downwind from the impact - the entire cloud, dust wave and
+ *  skirt of destroyed dust. The standard is camera recordings after Shahed strikes on the streets of Kharkov: on 5–10 s the street in a gray-white
+ *  haze, cars and houses in 30–60 m are visible (τ beam in 40 m - approx. 1–2: the haze is visible, you can see through it), by the minute it’s clear.
+ * ⚠ The standard itself is an estimate of τ from camera frames, not frozen.
  */
 class HazeAtTheEyeTest {
     private static final CloudModel.Air CALM = new CloudModel.Air(CloudModel.N_STANDARD, 3, 0, 0.1, (int) Stability.C, 0.5);
 
-    /** Шахед в улицу: на 6 и 10 с в 40 м — дымка (видна, но не стена), к минуте — чисто. */
+    /** Shahed into the street: on 6 and 10 s in 40 m - haze (visible, but not a wall), by a minute - clear. */
     @Test
     void streetHitLeavesASeeThroughHaze() {
         CloudModel m = scene(WeaponType.DRONE, false, CALM);
         for (double t : new double[]{6, 10}) {
             double tau = tau(m, 0, t, 40);
-            assertTrue(tau > 0.5 && tau < 3, t + " с: τ в 40 м " + tau);
+            assertTrue(tau > 0.5 && tau < 3, t + " s: τ in 40 m " + tau);
         }
-        assertTrue(tau(m, 0, 60, 40) < 0.2, "минута: τ в 40 м " + tau(m, 0, 60, 40));
+        assertTrue(tau(m, 0, 60, 40) < 0.2, "minute: τ in 40 m " + tau(m, 0, 60, 40));
     }
 
     /**
-     * Шахед в бетонную крышу в метр над комнатой: со стороны удара выходит только пыль воронки
-     * ({@link BlastTarget#SLAB_FRONT}) — на 10 с с улицы в 40 м гуще, чем у удара в улицу, но не стена (без этого — τ ≈ 10).
+     * Shahed into a concrete roof a meter above the room: from the side of the impact only the dust of the crater
+     *  ({@link BlastTarget#SLAB_FRONT}) comes out - on 10 s the street in 40 m thicker than that of an impact on the street, but not the wall (without this - τ ≈ 10).
      */
     @Test
     void roofBreachIsThickerButNotAWall() {
         CloudModel roof = scene(WeaponType.DRONE, true, CALM), street = scene(WeaponType.DRONE, false, CALM);
         double r = tau(roof, 8, 10, 40);
-        assertTrue(r > tau(street, 0, 10, 40) && r < 6, "τ в 40 м на 10 с " + r);
+        assertTrue(r > tau(street, 0, 10, 40) && r < 6, "τ in 40 m to 10 s " + r);
     }
 
     /**
-     * Шахед в мостовую у газона (жалоба: у удара рядом с травой в 40 м на 6 с стояла бурая стена — дёрн отдавал сантиметр
-     * грунта, как голая земля): вокруг воронки трава. На 6 и 10 с в 40 м — та же дымка, что в улице, к минуте — чисто.
+     * Shahed into the pavement near the lawn (complaint: at the blow next to the grass in 40 m on 6 there was a brown wall - the turf gave off a centimeter of
+     *  soil, like bare earth): there is grass around the crater. On 6 and 10 s in 40 there is the same haze as on the street, by the minute it’s clear.
      */
     @Test
     void streetHitByALawnIsNotABrownWall() {
         CloudModel m = scene(WeaponType.DRONE, false, CALM, GroundDust.Ground.filled(1), GroundDust.Ground.filled(0));
         for (double t : new double[]{6, 10}) {
             double tau = tau(m, 0, t, 40);
-            assertTrue(tau < 3, t + " с: τ в 40 м " + tau + " " + java.util.Arrays.toString(parts(m, 0, t, 40)));
+            assertTrue(tau < 3, t + " s: τ in 40 m " + tau + " " + java.util.Arrays.toString(parts(m, 0, t, 40)));
         }
-        assertTrue(tau(m, 0, 60, 40) < 0.2, "минута: τ в 40 м " + tau(m, 0, 60, 40));
+        assertTrue(tau(m, 0, 60, 40) < 0.2, "minute: τ in 40 m " + tau(m, 0, 60, 40));
     }
 
     /**
-     * Шахед на перекрёстке квартала (дома 10×10×12 м, улицы по 6 м; ветер у земли места — {@link LocalWind}): в улице ветер
-     * в разы слабее поля, и мгла держится дольше — на 30 с в 40 м по улице ещё видна (в поле к этому времени чисто), к
-     * 5 минутам уходит. ⚠ Эталон — оценка: в улице-каньоне воздух сменяется через верх за минуты (Oke 1988), камеры
-     * Харькова — мгла на 11–13 с.
+     * Shahed at the intersection of the block (houses 10×10×12 m, streets along 6 m; the wind near the ground is {@link LocalWind}): in the street the wind is
+     *  many times weaker than the field, and haze lasts longer - by 30 s 40 m along the street is still visible (the field is clear by this time), by
+     * 5 minutes it goes away. ⚠ Standard - assessment: in a canyon street the air changes through the top in minutes (Oke 1988), cameras
+     *  Kharkov - haze on 11–13 p.
      */
     @Test
     void streetCanyonHoldsTheHazeLonger() {
@@ -71,13 +71,13 @@ class HazeAtTheEyeTest {
         CloudModel.Air air = new CloudModel.Air(CALM.n(), CALM.windX(), CALM.windZ(), CALM.shear(), CALM.spread(), CALM.humidity(), site);
         CloudModel street = scene(WeaponType.DRONE, town, air), field = scene(WeaponType.DRONE, town, CALM);
         double held = tau(street, 0, 30, 40);
-        assertTrue(held > 0.4 && held > 3 * tau(field, 0, 30, 40), "30 с: τ в 40 м " + held + ", в поле " + tau(field, 0, 30, 40));
-        assertTrue(tau(street, 0, 300, 40) < 0.2, "5 минут: τ в 40 м " + tau(street, 0, 300, 40));
+        assertTrue(held > 0.4 && held > 3 * tau(field, 0, 30, 40), "30 s: τ in 40 m " + held + ", in the field " + tau(field, 0, 30, 40));
+        assertTrue(tau(street, 0, 300, 40) < 0.2, "5 minutes: τ in 40 m " + tau(street, 0, 300, 40));
     }
 
     /**
-     * Разрыв в 100 м над перекрёстком (ревью R468): термик меряет высоту от точки разрыва, и его ветер — ветер его высоты,
-     * как над полем, а не затишье улицы; у удара в мостовую тот же термик в начале — в затишье, его сносит меньше.
+     * Gap at 100 m above the intersection (review R468): the thermal measures the height from the break point, and its wind is the wind of its height,
+     *  as over a field, not the calm of the street; the impact on the pavement has the same thermal at the beginning - in a lull, it is carried away less.
      */
     @Test
     void airBurstOverTheStreetIsNotInTheStreetCalm() {
@@ -90,8 +90,8 @@ class HazeAtTheEyeTest {
         CloudModel high = new CloudModel(drone, air, false, 100, flat), highField = new CloudModel(drone, CALM, false, 100, flat);
         CloudModel low = new CloudModel(drone, air, false, 0, flat), lowField = new CloudModel(drone, CALM, false, 0, flat);
         for (double t : new double[]{1, 3}) {
-            assertEquals(highField.thermal.driftX(t), high.thermal.driftX(t), 0.05 * highField.thermal.driftX(t), t + " с: в 100 м");
-            assertTrue(low.thermal.driftX(t) < 0.8 * lowField.thermal.driftX(t), t + " с: у земли " + low.thermal.driftX(t) + " против " + lowField.thermal.driftX(t));
+            assertEquals(highField.thermal.driftX(t), high.thermal.driftX(t), 0.05 * highField.thermal.driftX(t), t + " s: in 100 m");
+            assertTrue(low.thermal.driftX(t) < 0.8 * lowField.thermal.driftX(t), t + " from: near the ground " + low.thermal.driftX(t) + " against " + lowField.thermal.driftX(t));
         }
     }
 
@@ -104,7 +104,7 @@ class HazeAtTheEyeTest {
         return scene(weapon, roof, air, GroundDust.Ground.filled(0), GroundDust.Ground.filled(1));
     }
 
-    /** Шахед в мостовую среди рельефа {@code relief} (м от точки удара). */
+    /** Shahed into the pavement among the relief {@code relief} (m from the point of impact). */
     static CloudModel scene(WeaponType weapon, GroundDust.Relief relief, CloudModel.Air air) {
         BlastSource source = BlastSource.of(weapon, false);
         BlastTarget target = BlastTarget.of(GroundMaterial.STONE, false, 0,
@@ -118,7 +118,7 @@ class HazeAtTheEyeTest {
         return new CloudModel(source, air, target, 0, ground);
     }
 
-    /** Сцена с поверхностями вокруг: доля дёрна {@code covered} и твёрдого {@code hard} по секторам и полосам. */
+    /** Scene with surfaces around: the share of turf {@code covered} and hard {@code hard} by sectors and stripes. */
     static CloudModel scene(WeaponType weapon, boolean roof, CloudModel.Air air, double[][] covered, double[][] hard) {
         BlastSource source = BlastSource.of(weapon, false);
         double w = source.chargeKg(), h = roof ? 8 : 0;

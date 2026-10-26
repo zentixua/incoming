@@ -42,38 +42,36 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 /**
- * Съёмка по плану ({@code -Dreplayscan.film=<план>}, README.md): клиент открывает повтор, и для каждого плана ставит
- * камеры-кандидаты (глаза игрока, неподвижная, штатив по кругу), оценивает их по миру повтора ({@link Cameras#score}),
- * выводит лучшие по очереди видео Flashback с проверкой каждого кадра ({@link FrameLog}); первый, прошедший проверку, —
- * план; не прошёл ни один — в итоге лучший из выведенных с причинами. Оценке нужен мир у камер: зритель сперва стоит у
- * глаза неподвижной камеры плана (дальний план — за чанками повтора, его камера — в них), без неё — у главного места.
- * Перед выводом зритель проходит путь камеры (секции мира строятся там, куда камера посмотрит), стоит у начала, пока мир
- * не построен, и повтор идёт по тику {@code warm} тиков до начала — дым и огонь прежних ударов в кадре, как в игре;
- * с Distant Horizons вывод ждёт ещё, пока текстуры DH не в размере кадра ({@link DhDepth}).
- * <p>
- * Мир повтора — чанки, которые сервер повтора уже прочёл в записи за этот запуск: перемотка их не забывает (пакета
- * «забыть чанк» в записи нет), а снимок куска ставит только чанки записавшего в начале куска. Поэтому повтор до плана
- * идёт с начала, вперёд шагами не длиннее {@link #PRIME_STEP} (такой шаг Flashback проигрывает пакетами, без снимка), а
- * планы — по времени: у свободной камеры в мире всё, что запись показала до плана, как у зрителя, который смотрел повтор
- * с начала; прыжок сразу к плану оставлял бы только чанки вокруг записавшего в ту минуту.
- * <p>
- * Вывод: {@code <out>/<план>/<камера>/} — {@code video.mkv}, {@code state.json} (состояние редактора), {@code qa.jsonl},
- * {@code sounds.jsonl}, {@code verdict.json}; {@code <out>/report.jsonl} — каждый выведенный кандидат,
- * {@code <out>/best.json} — план → лучший (с тиками плана). Планы, которые в {@code best.json} прошли проверку с теми же
- * тиками, не переснимаются: запуск после падения идёт дальше, а не прошедшие и изменённые планы снимаются снова. Строки
- * лога — {@code Film: …}, в конце клиент выходит; план не читается — выходит сразу.
+ * Plan-based filming ({@code -Dreplayscan.film=<plan>}, README.md): open replay, build camera candidates
+ * (player POV, fixed, circular tripods) per shot, score against replay world ({@link Cameras#score}),
+ * export best candidates in order through Flashback with per-frame checks ({@link FrameLog}). First pass
+ * completes the shot; if none passes, retain best exported candidate with reasons. Scoring needs world at
+ * cameras: viewer first stands at fixed-camera eye (distant subject outside replay chunks, camera inside),
+ * otherwise at main site. Before export, traverse camera path to build sections it will see, stand at
+ * start until world is built, then play {@code warm} ticks live up to start, so earlier impact smoke/fire
+ * appear as in game; with Distant Horizons also wait for DH textures to differ from frame size ({@link DhDepth}).
+ * <p>Replay world contains chunks already read during this client run: seeking does not forget them
+ * (no "forget chunk" packet recorded); a chunk snapshot only restores recorder chunks at its start.
+ * Prime from beginning in steps no longer than {@link #PRIME_STEP} (Flashback plays packets without
+ * snapshot), shots chronologically. Free camera then has everything shown before the shot, like watching
+ * from start; direct jump would leave only chunks around recorder at that minute.
+ * <p>Output {@code <out>/<shot>/<camera>/}: {@code video.mkv}, {@code state.json} editor state,
+ * {@code qa.jsonl}, {@code sounds.jsonl}, {@code verdict.json}; {@code <out>/report.jsonl} per exported
+ * candidate, {@code <out>/best.json} shot → best with ticks. Already passed identical-tick shots in
+ * {@code best.json} are skipped on restart after crash; failed/changed shots recapture. Log {@code Film: …};
+ * client exits at end, immediately if plan unreadable.
  */
 public final class Film {
     static final Logger LOG = LogUtils.getLogger();
     /**
-     * Тиков: открытие повтора, после открытия, после перемотки, мир у места, стоять в точке пути, найти игрока, начало
-     * задания вывода, повтор не идёт до начала плана.
+     * tick: opening replay, after opening, after rewinding, the world is in place, stand at a waypoint, find a player, start of the
+     *  output task, the replay does not go until the start of the plan.
      */
     private static final int OPEN_WAIT = 4800, SETTLE = 60, SEEK_SETTLE = 30, WORLD_WAIT = 600, POSE_MIN = 6, POSE_MAX = 300, PLAYER_WAIT = 400,
             EXPORT_WAIT = 1200, STALL = 600;
     /**
-     * Шаг повтора вперёд до плана, тиков: Flashback прыгает к снимку куска, только когда цель дальше конца куска и не
-     * ближе 1200 тиков ({@code ReplayServer.handleActions}); ближе — проигрывает все действия между.
+     * Replay step forward to plan, tick: Flashback jumps to the piece snapshot only when the target is further than the end of the piece and not
+     *  closer to 1200 tick ({@code ReplayServer.handleActions}); closer - loses all actions between.
      */
     private static final int PRIME_STEP = 1200;
 
@@ -88,7 +86,7 @@ public final class Film {
     private State state = State.TITLE;
     private int ticks, stateAt;
 
-    // план в работе
+    // plan in progress
     private Plan.Shot shot;
     private final ArrayDeque<Scored> candidates = new ArrayDeque<>();
     private Scored current;
@@ -103,17 +101,17 @@ public final class Film {
     private Cameras.Pose standing;
     @Nullable
     private UUID povId;
-    /** Поиск игрока плана на сервере повтора ({@link #lookup}); null — не идёт. */
+    /** Search for a plan player on the replay server ({@link #lookup}); null - does not work. */
     @Nullable
     private CompletableFuture<UUID> povLookup;
     private int poseAt, stepped, reachedAt, seenAt, progressAt;
-    /** До какого тика повтор шёл с начала без снимка (все чанки записи до него — в мире повтора); цель и шаг. */
+    /** Until what tick did the replay go from the beginning without a snapshot (all recording chunks before it are in the replay world); goal and step. */
     private int primed, primeGoal, primeTo, primeStart;
-    /** Шаг уже посылался снова после остановки повтора. */
+    /** The step was already sent again after the replay was stopped. */
     private boolean primeRetried;
-    /** Чанков у места плана у клиента (для пилота) и с какого тика их столько. */
+    /** Chunks at the client’s plan location (for the pilot) and from what tick there are so many of them. */
     private int nearChunks = -1, nearSince;
-    /** Мир клиента до открытия повтора: открытие идёт задачей клиента, а тики могут идти ещё в прежнем мире. */
+    /** The client's world before the replay is opened: the opening is the client's task, and the tick can still go in the previous world. */
     private WeakReference<ClientLevel> levelBefore = new WeakReference<>(null);
 
     private record Scored(Cameras.Candidate c, Cameras.Score score) {}
@@ -122,7 +120,7 @@ public final class Film {
         this.plan = plan;
         aspect = (double) plan.width() / plan.height();
         best = readBest(plan.out().resolve("best.json"));
-        // по времени: повтор до каждого плана идёт вперёд с начала ({@link #prime})
+        // by time: replay to each plan goes forward from the beginning ({@link #prime})
         for (Plan.Shot s : plan.shots().stream().sorted(Comparator.comparingInt(Plan.Shot::a)).toList()) {
             if (filmed(s)) continue;
             queue.add(s);
@@ -133,14 +131,14 @@ public final class Film {
             DhDepth.subscribe();
             LOG.info("Film: depth of Distant Horizons LODs checked in every frame");
         }
-        // пакеты зрителю повтора после входа — когда у клиента есть мир (до onTick: отпуск и OPENING — в одном тике)
+        // packets to the replay viewer after entering - when the client has peace (up to onTick: leave and OPENING - in one tick)
         ViewerHold.register(modBus);
         NeoForge.EVENT_BUS.addListener(this::onTick);
         NeoForge.EVENT_BUS.addListener(this::quietCamera);
         NeoForge.EVENT_BUS.addListener(this::onStage);
     }
 
-    /** Частицы эффектов сущности — список, который шлёт сервер ({@code LivingEntity.DATA_EFFECT_PARTICLES}); null — поля нет. */
+    /** Entity effect particles - a list sent by the server ({@code LivingEntity.DATA_EFFECT_PARTICLES}); null - no field. */
     @Nullable
     private static final EntityDataAccessor<List<ParticleOptions>> EFFECT_PARTICLES = effectParticles();
 
@@ -158,9 +156,9 @@ public final class Film {
     }
 
     /**
-     * Глазами игрока частицы его эффектов (спирали зелий: тик эффектов сыплет их по его рамке, и на высоте глаза)
-     * рождаются у самой камеры и закрывают пол-кадра: в начале тика клиента у сущности камеры список частиц эффектов
-     * пуст, и тик эффектов их не рождает. У остальных сущностей — как было.
+     * Through the eyes of the player, particles of his effects (spirals of potions: tick effects sprinkles them along his frame, and at the height of the eye)
+     *  are born at the camera itself and cover half the frame: at the beginning of the client's tick, the camera entity's list of effect particles
+     *  is empty, and tick effects do not generate them. The rest of the entities are as they were.
      */
     private void quietCamera(ClientTickEvent.Pre e) {
         if (EFFECT_PARTICLES != null && mc.level != null && mc.getCameraEntity() instanceof LivingEntity camera && camera != mc.player
@@ -169,7 +167,7 @@ public final class Film {
         }
     }
 
-    /** Съёмка по плану {@code file}: подписки на тик клиента и кадр; дальше всё идёт само. */
+    /** Shooting according to plan {@code file}: subscriptions to client tick and frame; then everything goes on its own. */
     public static void start(Path file, IEventBus modBus) {
         try {
             Export.check();
@@ -188,14 +186,14 @@ public final class Film {
         }
     }
 
-    /** Клиент без окна сам не выйдет: выход, как только игра загрузилась. */
+    /** A client without a window will not exit on its own: exit as soon as the game has loaded. */
     private static void exitWhenLoaded() {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post t) -> {
             if (Minecraft.getInstance().getOverlay() == null) Minecraft.getInstance().stop();
         });
     }
 
-    /** План уже снят: в {@code best.json} прошёл проверку с теми же тиками и первым событием. */
+    /** The plan has already been removed: in {@code best.json} it passed the test with the same tick and the first event. */
     private boolean filmed(Plan.Shot s) {
         if (!best.has(s.name())) return false;
         JsonObject o = best.getAsJsonObject(s.name());
@@ -250,7 +248,7 @@ public final class Film {
     private void tick() {
         switch (state) {
             case TITLE -> {
-                // загрузка кончилась: заглавие или экран поверх него; повтор их сменит
+                // loading finished: title or screen over it; replay will replace them
                 if (mc.getOverlay() != null || mc.screen == null || mc.level != null) return;
                 if (windowIsFrame()) {
                     finish();
@@ -265,10 +263,10 @@ public final class Film {
                 go(State.OPENING);
             }
             case OPENING -> {
-                // мир повтора (не прежний), и его зритель прошёл вход — пакеты после входа ему
+                // the world of replay (not the same), and his viewer passed the entrance - packages after entering him
                 if (mc.level != null && mc.level != levelBefore.get() && mc.player != null && Export.inReplay()
                         && ViewerHold.releasedFor(mc.getConnection())) {
-                    // редактор Flashback не активен с интерфейсом — только так задание вывода начинается
+                    // Flashback editor must have GUI inactive for an export job to start
                     mc.options.hideGui = true;
                     go(State.SETTLING);
                 } else if (waited() > OPEN_WAIT) {
@@ -286,7 +284,7 @@ public final class Film {
                         Export.seek(primeTo);
                         go(State.PRIMING);
                     } else if (waited() > STALL) {
-                        // дальше — без пройденного: следующий план пойдёт снова от primed
+                        // Do not advance primed past the played section: next shot primes again from primed
                         LOG.warn("Film: {}: replay stopped at tick {} on the way to {}; the replay world has chunks only up to tick {}",
                                 shot.name(), Export.tick(), primeTo, primed);
                         Export.seek(primeGoal);
@@ -313,13 +311,13 @@ public final class Film {
                 }
                 Vec3 k = shot.subject().anchor(shot.a(), shot.b());
                 Cameras.World w = new Cameras.World(Cameras.cloudHeight(plan));
-                // мир — у глаза неподвижной камеры (у летящей — в начале пути), а у ближнего плана и у места: дальнее
-                // место за чанками повтора не появится, а у глаза оно не нужно
+                // World at fixed-camera eye (flying camera path start), plus site for nearby shots: distant subject
+                // outside replay chunks cannot appear and is not needed at the eye
                 Plan.Camera fixed = shot.cameras().stream().filter(c -> (c.kind().equals("fixed") || c.kind().equals("path")) && c.eye() != null)
                         .findFirst().orElse(null);
                 boolean ready = (fixed == null || w.loaded(fixed.eye())) && (k == null || shot.far() && fixed != null || w.loaded(k));
-                // пилот прокладывает путь по рельефу вокруг удара: чанки там приходят от сервера повтора не сразу —
-                // ждать, пока их число не меняется PILOT_SETTLE тиков
+                // Pilot plans around impact terrain: replay-server chunks arrive asynchronously;
+                // wait for stable chunk count over PILOT_SETTLE ticks
                 if (ready && k != null && shot.cameras().stream().anyMatch(c -> c.kind().equals("pilot"))) {
                     int n = loadedAround(w, k, PILOT_CHUNKS);
                     if (n != nearChunks) {
@@ -362,11 +360,11 @@ public final class Film {
                 warm();
             }
             case WARMING -> {
-                // повтор вживую по тику до начала плана, как идёт сам вывод: события модов живые (дым, столбы, огонь);
-                // вывод с того же места не перематывает и частиц не чистит
+                // Play live tick by tick up to shot start like export itself: mod smoke/columns/fire events are live;
+                // export at the same position does not seek or clear particles
                 if (current.c.player() != null) {
                     if (watch() == null) {
-                        // игрок записи ушёл из мира клиента (смерть, другое измерение, дальше прорисовки)
+                        // Recorded player left client world (death, another dimension, beyond render distance)
                         if (ticks - seenAt > PLAYER_WAIT) {
                             report(current, null, "player " + current.c.player() + " lost before the start");
                             nextCandidate();
@@ -399,7 +397,7 @@ public final class Film {
             case EXPORTING -> {
                 if (current.c.player() != null) watch();
                 if (Export.exporting()) {
-                    // интерфейс игрока в кадре: окно вывода начинает задание только без него, дальше его можно вернуть
+                    // Player GUI in frame: export window starts only without it; restore afterward
                     if (current.c.gui()) mc.options.hideGui = false;
                     return;
                 }
@@ -417,7 +415,7 @@ public final class Film {
         }
     }
 
-    /** Пилот: радиус чанков у удара, которые он ждёт; сколько тиков их число не должно меняться. */
+    /** Pilot chunk radius around impact and required stable-count ticks. */
     private static final int PILOT_CHUNKS = 16, PILOT_SETTLE = 40;
 
     private static int loadedAround(Cameras.World w, Vec3 k, int radius) {
@@ -430,21 +428,21 @@ public final class Film {
         return n;
     }
 
-    /** Живой повтор до начала плана; ожидание мира и текстур DH у начала считается отсюда. */
+    /** Live replay up to shot start; world/DH texture waits at start are measured from here. */
     private void warm() {
         reachedAt = ticks;
         go(State.WARMING);
     }
 
     /**
-     * Текстуры Distant Horizons — в размере кадра плана: вывод в этом размере не пересоздаст их, и Iris оставит LOD глубину
-     * мира ({@link DhDepth}). Они в нём после прошлого вывода, пока DH не нарисует LOD в окне.
+     * Distant Horizons textures already match shot frame size: export will not recreate them, and Iris
+     * will leave LOD in world depth ({@link DhDepth}). They retain prior export size until DH renders LOD in window.
      */
     private boolean dhAtFrame() {
         return FrameLog.DH && DhDepth.textureIs(plan.width(), plan.height());
     }
 
-    // ================================================================ планы и кандидаты
+    // ================================================================ shots and candidates
 
     private void nextShot() {
         shot = queue.poll();
@@ -464,10 +462,9 @@ public final class Film {
     }
 
     /**
-     * Повтор — на тик {@code goal}, пройдя с начала всё, что ещё не пройдено: от того, докуда он уже шёл ({@link #primed};
-     * прыжок туда снимком ничего не теряет — прочитанные чанки остаются), вперёд шагами {@link #PRIME_STEP}. Плана раньше
-     * пройденного это не касается: перемотка назад — снимком, а чанки, которые запись прислала позже, остаются в позднем
-     * виде (планы поэтому идут по времени).
+     * Reach {@code goal}, playing all not-yet-played replay from start: jump to {@link #primed} (snapshot
+     * loses no already-read chunks), then advance in {@link #PRIME_STEP} steps. Earlier shots seek backward
+     * by snapshot; later-delivered chunks retain late state, so shots run chronologically.
      */
     private void prime(int goal) {
         primeGoal = goal;
@@ -479,16 +476,16 @@ public final class Film {
             go(State.SEEKING);
             return;
         }
-        // повтор не там, докуда прошёл (ушёл назад к плану или вперёд прыжком после остановки) — сперва туда: прыжок снимком
-        // к пройденному ничего не теряет, а шаги дальше идут только от него
+        // Replay differs from primed position (back to shot, forward jump after stall): return first; snapshot
+        // jump to primed loses nothing, and forward steps must begin there
         primeTo = Export.tick() == primed ? Math.min(goal, primed + PRIME_STEP) : primed;
         Export.seek(primeTo);
         go(State.PRIMING);
     }
 
     /**
-     * Кандидаты всех камер плана и их оценка; сперва те, что по оценке пройдут проверку, в них — камеры плана (глаза
-     * игрока, неподвижная), потом штативы, по итогу оценки; потом так же не прошедшие.
+     * All plan cameras and scores: predicted passes first, plan POV/fixed cameras before tripods within
+     * them, score order; then failed candidates in the same grouping.
      */
     private void solve(Cameras.World w) {
         List<Scored> designed = new ArrayList<>(), rest = new ArrayList<>();
@@ -498,7 +495,7 @@ public final class Film {
                 (c.designed() ? designed : rest).add(s);
             }
         }
-        // пути плана (и их копии выше) — в порядке плана: выше — только запасной, если путь не годится
+        // Plan paths and elevated copies retain plan order; elevated is fallback only when original path fails
         Comparator<Scored> order = Comparator.<Scored, Boolean>comparing(s -> !s.score.pass()).thenComparingDouble(s -> s.c.roam() ? 0 : -s.score.total());
         designed.sort(order);
         rest.sort(order);
@@ -510,7 +507,7 @@ public final class Film {
         }
         LOG.info("Film: {}: {} designed and {} scored cameras, best:{}", shot.name(), designed.size(), rest.size(), sb);
         candidates.clear();
-        // неподвижная камера плана, которая по оценке не пройдёт, не занимает места штатива, который пройдёт
+        // A fixed plan camera predicted to fail does not displace a passing tripod
         Stream.concat(designed.stream(), rest.stream())
                 .sorted(Comparator.<Scored, Boolean>comparing(s -> !s.score.pass()).thenComparing(s -> !s.c.designed())
                         .thenComparingDouble(s -> s.c.roam() ? 0 : -s.score.total()))
@@ -522,7 +519,7 @@ public final class Film {
         nextCandidate();
     }
 
-    /** План не снят совсем (нет камеры, другое измерение): в итог с причиной. */
+    /** Shot not exported at all (no camera, wrong dimension): report reason. */
     private void fail(String why) {
         LOG.warn("Film: {}: {}", shot.name(), why);
         JsonObject o = entry(false);
@@ -532,15 +529,15 @@ public final class Film {
         nextShot();
     }
 
-    /** Следующий кандидат: перемотка до начала с запасом на живой повтор, путь камеры (секции мира строятся), вывод. */
+    /** Next candidate: seek before start with live warm-up, traverse camera path/build sections, export. */
     private void nextCandidate() {
-        // после чужого игрока или оборванного вывода: камера — снова зритель, интерфейс скрыт
+        // After another player or interrupted export: camera returns to viewer, GUI hidden
         if (mc.player != null && mc.getCameraEntity() != mc.player) mc.setCameraEntity(mc.player);
         spectate(null);
         mc.options.hideGui = true;
         current = candidates.poll();
         if (current == null) {
-            // ни один не прошёл: в итог — лучший из выведенных с причинами
+            // No passes: report best exported candidate with reasons
             JsonObject o = entry(false);
             if (bestTry != null) {
                 o.addProperty("dir", dirOf(bestTry).toString());
@@ -563,7 +560,7 @@ public final class Film {
         seenAt = ticks;
         poseAt = ticks + SEEK_SETTLE;
         if (current.c.path() != null) {
-            // места пути камеры, где мир должен быть построен; у неподвижной камеры это одно место
+            // Camera path sites requiring built world; fixed camera has one site
             Cameras.Path path = current.c.path();
             Cameras.Pose prev = path.at(shot.a());
             for (int i = 1; i <= 6; i++) {
@@ -584,14 +581,14 @@ public final class Film {
         return plan.out().resolve(shot.name()).resolve(s.c.name());
     }
 
-    // ================================================================ камера
+    // ================================================================ camera
 
-    /** Мир у камеры построен (все секции в прорисовке); без проверки мира ({@code ready} 0) не ждём его. */
+    /** World built at camera (all sections in render distance); {@code ready} 0 disables wait/check. */
     private boolean built() {
         return plan.ready() <= 0 || mc.levelRenderer.hasRenderedAllSections();
     }
 
-    /** Высота глаза зрителя повтора: место ключевого кадра Flashback — его ноги. */
+    /** Replay viewer eye height: Flashback keyframe position is feet. */
     private double eyeHeight() {
         return mc.player == null ? 1.62 : mc.player.getEyeHeight();
     }
@@ -602,10 +599,10 @@ public final class Film {
     }
 
     /**
-     * План глазами игрока: зритель повтора на сервере повтора смотрит его глазами ({@link #spectate}), и камера клиента —
-     * этот игрок. Игрок ищется на сервере: после перемотки зритель стоит там, где был прошлый план, и игрока дальше
-     * слежения его клиент не получит, пока сервер не перенесёт зрителя к нему. Сущность после перемотки появляется не сразу
-     * и бывает новой — ищется каждый тик. null — игрока нет (ещё).
+     * Player-POV shot: server replay viewer spectates player ({@link #spectate}), client camera is that
+     * player. Resolve on server: after seek, viewer remains at prior shot; beyond tracking range, client
+     * cannot receive the player until server moves viewer there. Entity appears later after seek and may
+     * be replaced, resolve every tick. null means player absent for now.
      */
     @Nullable
     private Entity watch() {
@@ -630,13 +627,13 @@ public final class Film {
     }
 
     /**
-     * Зритель повтора на сервере повтора смотрит глазами сущности {@code id} (null — своими), как после кнопки «Spectate»
-     * Flashback (команда {@code spectate}): {@code ServerPlayer.setCamera}. Иначе сервер держит зрителя там, где клиент
-     * последний раз прислал его место, — клиент не шлёт его, пока камера не он сам ({@code LocalPlayer.isControlledCamera}), —
-     * а звуки повтора Flashback рассылает по месту зрителя на сервере: выстрелы и шаги игрока до кадра не доходили.
-     * Сервер переносит зрителя к камере ({@code ServerPlayer.setCamera}: тогда клиент и получает игрока, если тот был
-     * дальше слежения) и сам ведёт его за ней каждый тик ({@code ServerPlayer.tick}), а Flashback после перемотки снова
-     * садит его в ту же сущность (по её UUID) и шлёт ему её инвентарь.
+     * Replay-server viewer spectates entity {@code id} (null means self), like Flashback Spectate button
+     * ({@code spectate}, {@code ServerPlayer.setCamera}). Otherwise server keeps viewer at last client-sent
+     * position; client sends none while camera is another entity ({@code LocalPlayer.isControlledCamera}),
+     * but Flashback distributes replay sounds by server viewer position: player shots/steps never reached
+     * the frame. Server moves viewer to camera ({@code ServerPlayer.setCamera}, also sending a player beyond
+     * tracking range), follows it each tick ({@code ServerPlayer.tick}); after seek Flashback reattaches the
+     * same UUID and sends that entity inventory.
      */
     private void spectate(@Nullable UUID id) {
         MinecraftServer server = Export.server();
@@ -645,7 +642,7 @@ public final class Film {
         server.execute(() -> {
             ServerPlayer me = server.getPlayerList().getPlayer(viewer);
             if (me == null) return;
-            // сущность после перемотки появляется на сервере не сразу — следующий тик
+            // Entity appears on server after seek asynchronously; retry next tick
             Entity target = id == null ? me : me.serverLevel().getEntity(id);
             if (target == null || me.getCamera() == target) return;
             double away = me.position().distanceTo(target.position());
@@ -656,15 +653,15 @@ public final class Film {
     }
 
     /**
-     * UUID игрока плана — на сервере повтора, где есть все игроки мира повтора: {@code recorder} — записавший (его id
-     * сущности в повторе), иначе UUID или ник. null в будущем — игрока там (ещё) нет.
+     * Plan player UUID on replay server, which has every replay-world player: {@code recorder} is recorded
+     * player (replay entity ID), otherwise UUID/name. Future null means player not present yet.
      */
     private CompletableFuture<UUID> lookup(String who) {
         String name = who.startsWith("player:") ? who.substring(7) : who;
         try {
             return CompletableFuture.completedFuture(UUID.fromString(name));
         } catch (IllegalArgumentException notUuid) {
-            // записавший или ник
+            // Recorder or player name
         }
         MinecraftServer server = Export.server();
         if (server == null) return CompletableFuture.completedFuture(null);
@@ -683,11 +680,12 @@ public final class Film {
         }, server);
     }
 
-    // ================================================================ вывод
+    // ================================================================ export
 
     /**
-     * Окно игры — размер кадра плана, а Distant Horizons стоит: вывод Flashback пересоздаёт кадр игры в размер вывода, в том
-     * же размере Iris оставляет LOD глубину мира, и они ложатся поверх ближнего мира ({@link DhDepth}). Тогда не снимаем.
+     * Game window already equals shot frame size with Distant Horizons present: Flashback resizes game
+     * frame to export size; at identical size Iris leaves LOD in world depth, covering nearby world
+     * ({@link DhDepth}). Do not capture.
      */
     private boolean windowIsFrame() {
         var main = mc.getMainRenderTarget();
@@ -697,7 +695,7 @@ public final class Film {
         return true;
     }
 
-    /** Задание вывода: состояние редактора, видео, проверка каждого кадра. */
+    /** Export job: editor state, video, per-frame checks. */
     private void export() {
         if (windowIsFrame()) {
             finish();
@@ -722,7 +720,7 @@ public final class Film {
         }
     }
 
-    /** Вывод кончился: итог проверки; прошёл — план снят, нет — следующий кандидат. */
+    /** Export finished: check result; pass completes shot, fail tries next candidate. */
     private void done() {
         Export.flawless(false);
         mc.options.hideGui = true;
@@ -730,7 +728,7 @@ public final class Film {
             mc.setCameraEntity(mc.player);
             spectate(null);
         }
-        // вывод шёл подряд от живого повтора до начала (не дальше пройденного) до конца плана: чанки до него — в мире повтора
+        // Export played continuously from live warm-up start (not beyond primed) through shot end; earlier chunks remain in replay world
         if (shot.a() - shot.warm() <= primed) primed = Math.max(primed, Math.min(shot.b(), Export.tick()));
         FrameLog l = log;
         log = null;
@@ -782,7 +780,7 @@ public final class Film {
         }
     }
 
-    /** Запись итога плана: прошёл ли он и его тики (по ним запуск заново узнаёт тот же план). */
+    /** Record shot result, pass and ticks (restart identifies identical shot by ticks). */
     private JsonObject entry(boolean pass) {
         JsonObject o = new JsonObject();
         o.addProperty("pass", pass);
@@ -792,7 +790,7 @@ public final class Film {
         return o;
     }
 
-    /** {@code best.json} — через временный файл: падение посреди записи не оставляет обрезанный файл. */
+    /** Write {@code best.json} through a temporary file: crash mid-write cannot leave it truncated. */
     private void writeBest() {
         try {
             Path file = plan.out().resolve("best.json"), tmp = plan.out().resolve("best.json.tmp");

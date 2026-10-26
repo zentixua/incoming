@@ -1,15 +1,16 @@
 # /// script
 # dependencies = ["Pillow"]
 # ///
-"""Отчёт стенда: таблицы по сценам и камерам, листы кадров «строки — версии, столбцы — сцены», график накопления,
-пометки вида для ревьюера, вердикт шлагбаума.
+"""Scene bench report: tables by scene/camera, contact sheets (version rows, scene columns), accumulation
+plot, visual flags for the reviewer, look gate verdict.
 
-  uv run tools/stand/report.py <имя> [--ref <прогон>[=подпись] …]
+  uv run tools/stand/report.py <name> [--ref <run>[=label] …]
 
-<имя> — прогон out/<имя> стенда: пара (stand.py play … --against, stand.py pr) — кандидат B рядом с принятым A1 и A2 той
-пары, что решила пак, и вердикт тем же путём, что stand.py gate (stand.judge_pair: заново из сырых данных); или один
-прогон — без вердикта. --ref — ещё прогоны в таблицы и листы (например 3.4.1). Итог — в каталоге прогона: report.md,
-comment.md (таблица для комментария в PR), verdict.json (у пары), sheet-<пак>.png, acc-<пак>.png, look.json.
+<name> is a bench out/<name> run: a pair (stand.py play … --against, stand.py pr) shows candidate B beside
+accepted A1/A2 from the pair deciding each pack, with the same verdict path as stand.py gate
+(stand.judge_pair, reparse raw data); a single run has no verdict. --ref adds runs to tables/sheets
+(e.g. 3.4.1). Outputs in the run directory: report.md, comment.md (PR comment table), verdict.json (pair),
+sheet-<pack>.png, acc-<pack>.png, look.json.
 """
 import argparse
 import json
@@ -28,7 +29,7 @@ COLORS = [(230, 90, 60), (70, 140, 230), (120, 190, 80), (220, 180, 50), (170, 1
 
 
 class Run:
-    """Прогон: числа (из сырых данных), подпись, где кадры."""
+    """Run: metrics from raw data, label, frame location."""
 
     def __init__(self, d, res, label=None):
         self.dir = Path(d)
@@ -55,7 +56,7 @@ def font(size):
 
 
 def look_stats(png):
-    """Доля «дымных» пикселей (почти без цвета, не чёрные и не белые) и средняя яркость кадра (0–1)."""
+    """Smoky-pixel share (nearly colourless, neither black nor white) and mean frame brightness (0–1)."""
     im = Image.open(png).convert("RGB").resize((256, 160), Image.BILINEAR)
     smoke = luma = 0
     px = list(im.get_flattened_data() if hasattr(im, "get_flattened_data") else im.getdata())
@@ -69,7 +70,7 @@ def look_stats(png):
 
 
 def shot_order(scenes, only):
-    """Кадры плана по порядку: шаги «кадр» и кадры окон от попадания (имена — как пишет обвязка)."""
+    """Plan frames in order: "shot" steps and hit-relative window frames (names match harness output)."""
     names = []
     for st in plan.build(scenes, only)["steps"]:
         if st["do"] == "shot":
@@ -154,7 +155,7 @@ def cell(w):
 
 
 def columns(d, verdict, refs):
-    """Столбцы отчёта по пакам: {пак: [Run]} — у пары кандидат B и принятый A1, A2 той пары, что решила пак; дальше refs."""
+    """Report columns by pack: {pack: [Run]}; pair shows B and accepted A1/A2 from its deciding pair, then refs."""
     if verdict is None:
         cand = Run(d, stand.analyze(d, write=False))
         return {p: [cand] + refs for p in cand.res["packs"]}, cand
@@ -182,19 +183,19 @@ def main():
     refs = [Run.of(*r.split("=", 1)) for r in a.ref]
     cols, cand = columns(d, verdict, refs)
     if cand is None:
-        raise SystemExit(f"{d}: нет ни одной целой пары")
+        raise SystemExit(f"{d}: no complete pair")
     scenes = plan.load()
     only = cand.res["context"]["scenes"]
     only = None if only == "all" else only
     wins = plan.windows(scenes, only)
     names = shot_order(scenes, only)
 
-    # вид: доля дымных пикселей и яркость по кадрам, по столбцам каждого пака
+    # Visuals: smoky-pixel share and brightness by frame, per pack column
     looks = {p: [{n: look_stats(r.shot(p, n)) for n in names if r.shot(p, n)} for r in runs] for p, runs in cols.items()}
     (d / "look.json").write_text(json.dumps({p: [{"label": r.label, "dir": str(r.dir), "look": lk} for r, lk in zip(cols[p], looks[p])]
                                              for p in cols}, indent=1))
     if verdict:
-        # вид кандидата против ближайшего из A1 и A2 той же пары
+        # Candidate visuals against the nearest A1/A2 from the same pair
         verdict["look"] = gate.look_flags({p: looks[p][0] for p in cols}, [{p: looks[p][i] for p in cols if len(looks[p]) > i} for i in (1, 2)])
         (d / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False))
 
@@ -243,7 +244,7 @@ def main():
             md.append("| accumulation, last minute / first | " + " | ".join(
                 "—" if not g or g["ratio"] is None else f"×{g['ratio']:.2f} ({g['first_ms']:.1f} → {g['last_ms']:.1f})" for g in growth) + " |")
         c, b = runs[0], runs[1] if len(runs) > 1 else None
-        # где время кадра видеокарты в окнах «100»: стадии кандидата против первого принятого
+        # GPU frame time in "100" windows: candidate stages against the first accepted run
         for wname in [w for w in wins if w.startswith(gate.GATED)]:
             cw = (c.res["packs"].get(pack) or {}).get("windows", {}).get(wname)
             bw = ((b.res["packs"].get(pack) or {}).get("windows") or {}).get(wname) if b else None

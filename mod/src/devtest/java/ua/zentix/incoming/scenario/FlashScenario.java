@@ -34,34 +34,34 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Сценарий {@code flash} (DESIGN-nuke §3.7): вспышка вблизи. На ровной равнине — площадь из каменных кирпичей и стена
- * из очищенной берёзы (светлое дерево — гарь и тени видны лучше всего) в 40 блоках от эпицентра, у стены — стойки для
- * брони, житель и корова, вдоль площади — фонари на столбах и подстанция. 15 кт в воздухе в масштабе 0.03
- * (у стены ~3 psi и ~19 кал/см²: стена стоит, дерево обугливается, камень темнеет), пожары на время ближнего подрыва
- * выключены — огонь закрыл бы стену. Кадры: до, первые тики, стена с силуэтами издали, вблизи и вдоль. Потом —
- * подрыв в настоящем масштабе в 1,3 км от зрителя на другой равнине: дуги ЭМИ у фонарей вблизи в первые тики, потом
- * дымки с травы и листвы издали до прихода волны (в малом масштабе волна приходит за тики и закрывает их пылью).
- * Строки {@code SCENARIO flash …} — сколько следов у сервера и у клиента, дуг ЭМИ и дымков.
+ * Scenario {@code flash} (DESIGN-nuke §3.7): flash close. On a flat plain there is an area made of stone bricks and a wall
+ *  made of peeled birch (light wood - smoke and shadows are best visible) in 40 blocks from the epicenter, near the wall there are racks for
+ *  armor, a resident and a cow, along the square there are lamps on poles and a substation. 15 kt in the air on a scale 0.03
+ *  (near the wall ~3 psi and ~19 cal/cm²: the wall is standing, the wood is charred, the stone is darkening), fires are turned off during a close detonation
+ *  — the fire would have covered the wall. Shots: before, first tick, wall with silhouettes from a distance, close up and along. Then -
+ * detonation on a real scale at 1,3 km from the viewer on another plain: EMP arcs from the lanterns close in the first tick, then
+ * hazes from the grass and foliage from a distance before the wave arrives (on a small scale the wave comes after the tick and covers them with dust).
+ * Lines {@code SCENARIO flash …} - how many traces at the server and at the client, EMP arcs and smoke.
  */
 final class FlashScenario {
-    /** Шаг: через {@code at} тиков от начала своей части (начало мира, готовая площадка, найденное место дымков). */
+    /** Step: after {@code at} tick from the beginning of your part (the beginning of the world, the finished site, the found place of the smoke). */
     private record Step(int part, int at, Runnable action) {}
 
     private static final int WORLD = 0, STAGE = 1, FAR = 2;
 
-    /** Масштаб ближнего подрыва; стена — в {@link #WALL_R} блоках от эпицентра. */
+    /** The scale of close-range detonation; the wall is {@link #WALL_R} blocks from the epicenter. */
     private static final float SCALE = 0.03f;
     private static final int WALL_R = 40;
-    /** Площадка относительно середины основания стены: x от −64 до +24, z ±20. */
+    /** The area relative to the middle of the base of the wall: x from −64 to +24, z ±20. */
     private static final int WEST = 74, EAST = 14, HALF_Z = 20;
 
     private final List<Step> steps = new ArrayList<>();
     private int tick;
-    /** Тик клиента, когда началась часть (−1 — ещё нет): площадка и место дымков строятся в потоке сервера секунды. */
+    /** client tick when the part started (−1 - not yet): the site and the place of the smoke are built in the server thread seconds. */
     private final int[] started = {0, -1, -1};
-    /** Середина основания стены (пол), ставит сервер. */
+    /** The middle of the base of the wall (floor), places the server. */
     private volatile BlockPos origin;
-    /** Место зрителя дальнего подрыва (земля). */
+    /** Spectator's position for distant detonation (ground). */
     private volatile BlockPos far;
 
     FlashScenario() {
@@ -99,14 +99,14 @@ final class FlashScenario {
         return Minecraft.getInstance().getSingleplayerServer();
     }
 
-    /** Зритель — в точку, взгляд — на точку. */
+    /** The viewer is on point, the gaze is on point. */
     private static void look(double x, double y, double z, double tx, double ty, double tz) {
         double dx = tx - x, dy = ty - y, dz = tz - z;
         float yaw = (float) Math.toDegrees(-Math.atan2(dx, dz)), pitch = (float) Math.toDegrees(-Math.atan2(dy, Math.hypot(dx, dz)));
         cmd(String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", x, y, z, yaw, pitch));
     }
 
-    /** То же от середины основания стены; площадки нет — ничего. */
+    /** The same from the middle of the base of the wall; there is no platform - nothing. */
     private void view(double x, double y, double z, double tx, double ty, double tz) {
         BlockPos o = origin;
         if (o != null) look(o.getX() + x, o.getY() + y, o.getZ() + z, o.getX() + tx, o.getY() + ty, o.getZ() + tz);
@@ -153,7 +153,7 @@ final class FlashScenario {
         });
         for (int dt : new int[]{2, 4, 6, 9, 14}) shot(STAGE, 270 + dt, "flash_now");
         at(STAGE, 330, this::stats);
-        // стена издали, вблизи (силуэты), вдоль, всё сбоку
+        // wall from a distance, close up (silhouettes), along, all from the side
         at(STAGE, 560, () -> view(-8, 5, -15, 0, 3, 0));
         shot(STAGE, 640, "flash_wall");
         at(STAGE, 650, () -> view(-5.5, 1.9, -5.5, 0, 1.4, -5.5));
@@ -165,7 +165,7 @@ final class FlashScenario {
         at(STAGE, 920, () -> view(-24, 10, 10, 0, 2, -2));
         shot(STAGE, 1000, "flash_wide");
         at(STAGE, 1010, this::stats);
-        // дымки до волны — подрыв в настоящем масштабе в 1,3 км к северу от зрителя на другой равнине
+        // haze to wave - detonation on a real scale at 1,3 km north of the viewer on another plain
         at(STAGE, 1020, () -> {
             BlockPos o = origin;
             MinecraftServer server = server();
@@ -183,7 +183,7 @@ final class FlashScenario {
             BlockPos f = far;
             cmd(String.format(Locale.ROOT, "tp @s %d %d %d", f.getX(), f.getY() + 30, f.getZ()));
         });
-        // фонари на столбах и подстанция перед зрителем — для ЭМИ: в настоящем масштабе волна идёт секунды
+        // lights on poles and a substation in front of the viewer are for EMP: on a real scale the wave lasts for seconds
         at(FAR, 150, () -> {
             BlockPos f = far;
             MinecraftServer server = server();
@@ -192,13 +192,13 @@ final class FlashScenario {
         at(FAR, 160, () -> {
             BlockPos f = far;
             cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", f.getX() - 1, f.getY() + 9, f.getZ() - 1, f.getX() + 1, f.getY() + 9, f.getZ() + 1));
-            // на запад, шар — справа за кадром: в кадре земля и листва, освещённые сбоку
+            // to the west, the ball is on the right behind the frame: in the frame there is earth and foliage, lit from the side
             look(f.getX() + 0.5, f.getY() + 11, f.getZ() + 0.5, f.getX() - 60, f.getY() - 2, f.getZ() - 12);
         });
         shot(FAR, 230, "smoke_before");
-        // дуги — вблизи, с теневой стороны (шар — сзади слева): фонари в 3–17 блоках и подстанция в 12; игра — в 4 тика
-        // в секунду: после подрыва клиент без видеокарты рисует 3 кадра в секунду, и на 20 тиках кадр за тик не успевал
-        // (одинаковые снимки подряд, двухтиковая вспышка дуги — между ними)
+        // arcs - close, from the shadow side (ball - back left): lights in 3–17 blocks and substation in 12; the game is in 4 tick
+        //  per second: after the explosion, the client without a video card draws 3 frames per second, and on 20 tick frame for tick did not keep up with
+        //  (identical pictures in a row, two-tick arc flash between them)
         at(FAR, 232, () -> {
             BlockPos f = far;
             Minecraft.getInstance().player.getAbilities().flying = true;
@@ -226,7 +226,7 @@ final class FlashScenario {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
-        // площадки так и не нашлось — выход
+        // no site was found - a way out
         at(WORLD, 6000, () -> {
             if (far != null) return;
             Incoming.LOG.warn("SCENARIO flash: no stage after 5 minutes");
@@ -234,7 +234,7 @@ final class FlashScenario {
         });
     }
 
-    /** Следы у сервера в чанках стены и у клиента. */
+    /** Traces on the server in wall chunks and on the client. */
     private void stats() {
         BlockPos o = origin;
         MinecraftServer server = server();
@@ -259,9 +259,9 @@ final class FlashScenario {
     }
 
     /**
-     * Ровная равнина (поток сервера) по высотам генератора, без загрузки чанков: кольца вокруг {@code from} от
-     * {@code min} до {@code max} блоков, суша выше моря, перепад над площадкой не больше {@code range}; ровнее не
-     * нашлось — самое ровное. Высота места — верх земли по генератору.
+     * Flat plain (server flow) according to the heights of the generator, without loading chunks: rings around {@code from} from
+     * {@code min} to {@code max} blocks, land above the sea, the difference above the site is no more than {@code range}; No
+     *  was found - the smoothest. The height of the place is the top of the ground according to the generator.
      */
     private static @Nullable BlockPos flat(ServerLevel level, BlockPos from, int min, int max, int range) {
         ChunkGenerator gen = level.getChunkSource().getGenerator();
@@ -296,7 +296,7 @@ final class FlashScenario {
         return b.is(Biomes.PLAINS) || b.is(Biomes.SUNFLOWER_PLAINS) || b.is(Biomes.MEADOW) || b.is(Biomes.SAVANNA);
     }
 
-    /** Фонари на столбах (поток сервера) в 14–44 блоках к западу от зрителя и подстанция: дуги ЭМИ в кадре дымков. */
+    /** Lanterns on poles (server stream) in 14–44 blocks west of the viewer and a substation: EMP arcs in a frame of haze. */
     private static void lamps(ServerLevel level, BlockPos f) {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         for (int k = 0; k < 8; k++) {
@@ -311,9 +311,9 @@ final class FlashScenario {
     }
 
     /**
-     * Площадка (поток сервера) у места {@code site} (x, z и верх земли): трава, площадь из каменных кирпичей перед стеной из очищенной
-     * берёзы лицом на запад, тела перед ней, фонари и подстанция между стеной и эпицентром. Возвращает середину
-     * основания стены.
+     * Site (server stream) at location {@code site} (x, z and the top of the ground): grass, an area of stone bricks in front of a wall of peeled
+     *  birch facing west, bodies in front of it, lanterns and a substation between the wall and the epicenter. Returns the midpoint of
+     *  of the base of the wall.
      */
     private static BlockPos build(ServerLevel level, BlockPos site) {
         int x = site.getX(), z = site.getZ(), g = site.getY();
@@ -339,7 +339,7 @@ final class FlashScenario {
                 level.setBlock(m.set(wx + 1, y, bz), Blocks.STONE_BRICKS.defaultBlockState(), 2);
             }
         }
-        // фонари на столбах вдоль площади и подстанция
+        // lamps on poles along the square and a substation
         for (int bx = x - 40; bx <= x - 4; bx += 6) {
             for (int s : new int[]{-13, 13}) {
                 level.setBlock(m.set(bx, g + 1, z + s), Blocks.OAK_FENCE.defaultBlockState(), 2);
@@ -348,7 +348,7 @@ final class FlashScenario {
             }
         }
         level.setBlock(m.set(x - 9, g + 1, z + 16), ModBlocks.SUBSTATION.get().defaultBlockState(), 3);
-        // тела у стены: тень ложится почти в рост, чуть ниже тела (шар выше на ~25°)
+        // body against the wall: the shadow lies almost full-length, just below the body (the ball is ~25° higher)
         double bx = wx - 0.7;
         var src = level.getServer().createCommandSourceStack().withSuppressedOutput().withPermission(4);
         String at = String.format(Locale.ROOT, "%.2f %d", bx, g + 1);

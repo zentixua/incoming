@@ -24,7 +24,7 @@ class TimelineTest {
     @TempDir
     Path dir;
 
-    /** Тик действия — как у сервера повтора: после (t−1)-го next_tick — тик t; снимок первого куска — тик 0. */
+    /** Action tick matches the replay server: after the (t−1)-th next_tick is tick t; first chunk snapshot is tick 0. */
     @Test
     void ticksFollowReplayServer() throws IOException {
         Path zip = replay(false);
@@ -39,7 +39,7 @@ class TimelineTest {
             assertTrue(t.warnings().isEmpty(), t.warnings().toString());
             assertEquals(5, t.ticks());
         }
-        // второй кусок без forcePlaySnapshot: его снимок не читается
+        // second chunk without forcePlaySnapshot: its snapshot is not read
         assertEquals(List.of("0s:snap0", "1:a", "1:b", "2:c", "4:d", "5:e"), seen);
     }
 
@@ -75,7 +75,7 @@ class TimelineTest {
         assertEquals(ReplayFile.pack(-100000, 42), places[1]);
     }
 
-    /** Два куска по 3 и 2 тика (next_tick — в конце тика): c0 — снимок и a b | c | |, c1 — снимок и d | e |. */
+    /** Two chunks of 3 and 2 ticks (next_tick at tick end): c0 is snapshot and a b | c | |, c1 is snapshot and d | e |. */
     private Path replay(boolean forceSecond) throws IOException {
         Path zip = dir.resolve("r.zip");
         try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(zip))) {
@@ -103,7 +103,7 @@ class TimelineTest {
         }
         ByteArrayOutputStream snap = new ByteArrayOutputStream();
         for (String s : snapshot) action(snap, s);
-        // действие, которое неизвестно и необязательно, в снимке тоже бывает
+        // an unknown optional action can also occur in a snapshot
         action(snap, null);
         byte[] size = new byte[4];
         putInt(size, 0, snap.size());
@@ -113,7 +113,7 @@ class TimelineTest {
         z.write(out.toByteArray());
     }
 
-    /** {@code "|"} — next_tick, {@code null} — необязательное неизвестное, иначе game_packet с телом-строкой. */
+    /** {@code "|"} means next_tick, {@code null} means unknown optional; otherwise game_packet with a string body. */
     private static void action(ByteArrayOutputStream out, String a) {
         byte[] body = a == null || a.equals("|") ? new byte[0] : a.getBytes(StandardCharsets.UTF_8);
         varInt(out, a == null ? 2 : a.equals("|") ? 0 : 1);

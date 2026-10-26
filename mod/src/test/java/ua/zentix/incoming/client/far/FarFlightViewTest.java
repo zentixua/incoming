@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Снаряд вдали: тень корпуса и след при любой дальности, факел днём и ночью, точки шлейфа по фазам и пакетам. */
+/** Projectile in the distance: shadow of the body and trail at any range, torch day and night, trail points by phases and packets. */
 class FarFlightViewTest {
     private static final double PIXEL = Math.toRadians(70) / 1080;
     private static final UUID ID = UUID.randomUUID();
@@ -44,22 +44,22 @@ class FarFlightViewTest {
             double r = Math.sqrt(look.area() / Math.PI);
             for (double d : new double[]{50, 300, 1000, 4000, 8000}) {
                 FarFlightView.body(look.area(), d, PIXEL, out);
-                assertEquals(Math.max(r, 0.5 * Sight.MIN_PIXELS * PIXEL * d), out[0], 1e-9, w + " на " + d + ": настоящий размер или пятно");
-                assertEquals(r * r, out[1] * out[0] * out[0], 1e-9, w + " на " + d + ": закрыто то же небо");
+                assertEquals(Math.max(r, 0.5 * Sight.MIN_PIXELS * PIXEL * d), out[0], 1e-9, w + " on " + d + ": true size or spot");
+                assertEquals(r * r, out[1] * out[0] * out[0], 1e-9, w + " on " + d + ": the same sky is closed");
             }
         }
     }
 
     @Test
     void droneFadesWithDistanceLikeACamera() {
-        // силуэт шахеда (размах 2,5 м) — круг 1,07 м: за 1,5 км — 1,3 px, пятно в 1,5 px чуть бледнее; за 4 км — бледная точка
+        // silhouette of Shahed (span 2,5 m) - circle 1,07 m: beyond 1,5 km - 1,3 px, spot in 1,5 px a little paler; beyond 4 km - pale dot
         double[] out = new double[2];
         FarFlightView.body(far(WeaponType.DRONE).area(), 1500, PIXEL, out);
         assertEquals(0.5 * Sight.MIN_PIXELS * PIXEL * 1500, out[0], 1e-9);
-        assertTrue(out[1] > 0.6 && out[1] < 0.8, "за 1,5 км: " + out[1]);
+        assertTrue(out[1] > 0.6 && out[1] < 0.8, "for 1,5 km: " + out[1]);
         FarFlightView.body(far(WeaponType.DRONE).area(), 4000, PIXEL, out);
-        assertTrue(out[1] > 0.05 && out[1] < 0.15, "за 4 км: " + out[1]);
-        // B-2 (размах 52 м) за 8 км — больше пятна: настоящего размера и сплошной
+        assertTrue(out[1] > 0.05 && out[1] < 0.15, "for 4 km: " + out[1]);
+        // B-2 (range 52 m) for 8 km - more spot: real size and continuous
         FarFlightView.body(far(WeaponType.BUNKER).area(), 8000, PIXEL, out);
         assertEquals(1, out[1], 1e-12);
     }
@@ -68,12 +68,12 @@ class FarFlightViewTest {
     void thinTrailKeepsItsCoverage() {
         double[] out = new double[2];
         FarFlightView.ribbon(4, 100, PIXEL, out);
-        assertEquals(2 * FarSprites.RIBBON, out[0], 1e-9, "вблизи — своей ширины");
+        assertEquals(2 * FarSprites.RIBBON, out[0], 1e-9, "close - its width");
         assertEquals(1, out[1], 1e-12);
         FarFlightView.ribbon(1, 5000, PIXEL, out);
         double drawn = out[0] / FarSprites.RIBBON;
-        assertEquals(0.75 * PIXEL * 5000, drawn, 1e-9, "уже пикселя — полтора пикселя");
-        assertEquals(1, 2 * drawn * out[1], 1e-9, "и бледнее во столько же раз");
+        assertEquals(0.75 * PIXEL * 5000, drawn, 1e-9, "already a pixel - one and a half pixels");
+        assertEquals(1, 2 * drawn * out[1], 1e-9, "and paler by the same amount");
     }
 
     @Test
@@ -84,19 +84,19 @@ class FarFlightViewTest {
         double[] day = new double[5], night = new double[5];
         Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 1) * t, d, PIXEL, day);
         Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 0.17) * t, d, PIXEL, night);
-        assertTrue(day[2] < 1 && day[4] == 0, "днём — искра без вуали: " + day[2]);
-        assertTrue(night[2] > 1 && night[4] / d > 0.01, "ночью — блик и вуаль: " + night[2] + ", " + Math.toDegrees(night[4] / d) + "°");
-        // ночью видно и за 8 км
+        assertTrue(day[2] < 1 && day[4] == 0, "during the day - a spark without a veil: " + day[2]);
+        assertTrue(night[2] > 1 && night[4] / d > 0.01, "at night - glare and veil: " + night[2] + ", " + Math.toDegrees(night[4] / d) + "°");
+        // at night visible even for 8 km
         double far = 8000;
         Sight.light(flame.lightRadius(), Sight.adapted(flame.brightness(), 0.17) * Sight.transmittance(far, Sight.CLEAR), far, PIXEL, night);
-        assertTrue(night[2] > 1, "за 8 км ночью: " + night[2]);
+        assertTrue(night[2] > 1, "for 8 km at night: " + night[2]);
     }
 
     /**
-     * Ночной старт сзади (сцена шлагбаума launch-night-behind): камера в 8,4 м от середины факела ускорителя ракеты. Глаз
-     * привыкает и к огню у себя ({@code HeatPass} собирает его в кадре, {@link Sight#exposure} — одно привыкание на кадр):
-     * факел ярче белого в единицы раз, и блик — бледный ореол. С одним ночным ×1200 (жалоба 22.10: «кадр заливает
-     * оранжевым») блик был во весь экран в полную силу. Вдали факел глаз не переучивает: блик и вуаль за 2 км — как были.
+     * Night launch from behind (scene look gate launch-night-behind): camera at 8,4 m from the middle of the rocket accelerator torch. The eye
+     *  also gets used to the fire in itself ({@code HeatPass} collects it in the frame, {@link Sight#exposure} - one habituation per frame):
+     *  the torch is brighter than white by a few times, and the glare is a pale halo. With one night ×1200 (complaint 22.10: “the frame fills
+     *  with orange”) the glare was in full force across the entire screen. In the distance, the torch does not retrain the eye: the glare and veil are 2 km away - as they were.
      */
     @Test
     void nearFlameAtNightAdaptsTheEye() {
@@ -104,27 +104,27 @@ class FarFlightViewTest {
         assertNotNull(flame);
         double night = 0.17, d = 8.4, r = flame.lightRadius();
         double[] out = new double[5];
-        // по-старому: только свет неба
+        // in the old way: only the light of the sky
         double old = flame.brightness() * Sight.adapted(1, night);
         Sight.light(r, old, d, PIXEL, out);
-        assertEquals(Sight.HALO, Math.min(Sight.HALO, Sight.SCATTER * old), 1e-12, "ночной ×1200: блик в полную силу");
-        assertTrue(out[3] / d > Math.toRadians(70), "и шире экрана: " + Math.toDegrees(out[3] / d) + "°");
+        assertEquals(Sight.HALO, Math.min(Sight.HALO, Sight.SCATTER * old), 1e-12, "night ×1200: glare in full force");
+        assertTrue(out[3] / d > Math.toRadians(70), "and wider than the screen: " + Math.toDegrees(out[3] / d) + "°");
         double exposure = exposureNear(flame, d, night);
         double seen = flame.brightness() * exposure;
         Sight.light(r, seen, d, PIXEL, out);
-        assertTrue(Math.min(Sight.HALO, Sight.SCATTER * seen) < 0.1, "блик факела у глаза — бледный: " + Sight.SCATTER * seen);
-        assertTrue(seen > 1, "сам факел ярче белого: " + seen);
-        // освещённость белой стены у глаза: по-старому — в сотни раз ярче белого (экран её не покажет)
+        assertTrue(Math.min(Sight.HALO, Sight.SCATTER * seen) < 0.1, "the glare of the torch near the eye is pale: " + Sight.SCATTER * seen);
+        assertTrue(seen > 1, "the torch itself is brighter than white: " + seen);
+        // illumination of the white wall near the eye: in the old way - hundreds of times brighter than white (the screen will not show it)
         double wall = HeatPassAtEye.at(flame, d);
-        assertTrue(wall * Sight.adapted(1, night) > 500, "по-старому — в сотни раз ярче белого: " + wall * Sight.adapted(1, night));
-        // за 2 км огонь у глаза глаз почти не трогает
-        assertTrue(exposureNear(flame, 2000, night) > 0.95 * Sight.adapted(1, night), "вдали — ночное привыкание");
+        assertTrue(wall * Sight.adapted(1, night) > 500, "in the old way - hundreds of times brighter than white: " + wall * Sight.adapted(1, night));
+        // for 2 km the fire in the eye hardly touches the eye
+        assertTrue(exposureNear(flame, 2000, night) > 0.95 * Sight.adapted(1, night), "far away - night addiction");
     }
 
     /**
-     * Привыкание глаза кадра с одним факелом в d блоках — тем путём, что в игре: факел кадра ({@link FarFlightView#lit}) —
-     * в свет на мир этого кадра ({@link FarFlightView#heat}) и в свет у глаза следующего ({@link FarFlightView#flamesAtEye},
-     * {@code HeatPass.Frame.eye}), привыкание — {@link Sight#exposure}.
+     * Accustoming the eye of a frame with one torch in d blocks - in the same way as in the game: the torch of the frame ({@link FarFlightView#lit}) -
+     *  into the light of the world of this frame ({@link FarFlightView#heat}) and into the light of the eye of the next ({@link FarFlightView#flamesAtEye},
+     * {@code HeatPass.Frame.eye}), addiction - {@link Sight#exposure}.
      */
     private static double exposureNear(Flame flame, double d, double ambient) {
         try {
@@ -138,7 +138,7 @@ class FarFlightViewTest {
         }
     }
 
-    /** Освещённость белой стены у глаза от факела в d блоках (линейная, полдень — 1): яркость × (r/d)². */
+    /** Illumination of the white wall near the eye from the torch in d blocks (linear, noon - 1): brightness × (r/d)². */
     private static final class HeatPassAtEye {
         static double at(Flame flame, double d) {
             double r = flame.lightRadius();
@@ -147,73 +147,73 @@ class FarFlightViewTest {
     }
 
     /**
-     * След ЗРК вблизи (жалоба 22.10: «плоская лента с прямыми краями, у камеры — плоскость через кадр»): трубка, крупная на
-     * экране, рисуется клубами, как облака, а лента остаётся там, где трубка — линия в несколько пикселей. Ширина — у
-     * ближней к глазу точки отрезка: отрезок, что проходит у самой камеры, — только клубы.
+     * SAM trace close up (complaint 22.10: “a flat tape with straight edges, the camera has a plane across the frame”): the tube, large on the
+     *  screen, is drawn by billows like clouds, and the tape remains where the tube is - a line of several pixels. The width is at the
+     *  point of the segment closest to the eye: the segment that passes near the camera itself is only billows.
      */
     @Test
     void wideTubeOnScreenIsPuffsNotARibbon() {
         double width = 5;
-        assertEquals(1, FarFlightView.puffShare(width, 30, PIXEL), 1e-12, "5 м в 30 блоках — клубы");
-        assertEquals(1, FarFlightView.puffShare(width, 0.5, PIXEL), 1e-12, "глаз у трубки — клубы и вуаль, не плоскость");
-        assertEquals(0, FarFlightView.puffShare(width, 2000, PIXEL), 1e-12, "за 2 км — линия: лента");
-        // залп «Града» за 1,7 км (кадры VXC4, 22.10): след в 10 с — 11 м (5,7 px) — клубы, а не полоса из лент; в 1 с — 3 м
-        // (1,6 px, сечение уже пикселя) — лента
-        assertEquals(1, FarFlightView.puffShare(11, 1700, PIXEL), 1e-12, "след «Града» в 10 с за 1,7 км — клубы");
-        assertEquals(0, FarFlightView.puffShare(3, 1700, PIXEL), 1e-12, "след в 1 с за 1,7 км — лента");
+        assertEquals(1, FarFlightView.puffShare(width, 30, PIXEL), 1e-12, "5 m in 30 blocks – billows");
+        assertEquals(1, FarFlightView.puffShare(width, 0.5, PIXEL), 1e-12, "eye at the tube - billows and veil, not a plane");
+        assertEquals(0, FarFlightView.puffShare(width, 2000, PIXEL), 1e-12, "for 2 km - line: tape");
+        // salvo "Grad" for 1,7 km (frames VXC4, 22.10): trail in 10 s - 11 m (5,7 px) - billows, not a strip of tapes; in 1 s - 3 m
+        //  (1,6 px, cross-section narrower than a pixel) - tape
+        assertEquals(1, FarFlightView.puffShare(11, 1700, PIXEL), 1e-12, "trail \"Grad\" in 10 s for 1,7 km - billows");
+        assertEquals(0, FarFlightView.puffShare(3, 1700, PIXEL), 1e-12, "trail in 1 s for 1,7 km - tape");
         double prev = 1;
         for (double gap = 10; gap < 3000; gap *= 1.05) {
             double s = FarFlightView.puffShare(width, gap, PIXEL);
-            assertTrue(s <= prev + 1e-12, "дальше — меньше клубов, без скачков");
-            assertTrue(prev - s < 0.2, "переход плавный: " + gap);
+            assertTrue(s <= prev + 1e-12, "further - less billows, no jumps");
+            assertTrue(prev - s < 0.2, "smooth transition: " + gap);
             prev = s;
         }
     }
 
     /**
-     * Дым следа — с конца яркого пламени ({@link ua.zentix.incoming.client.fx.plume.TrailModel#emerged}, {@link Flame#flame}):
-     * у сопла вещество — само пламя, за концом догорания проявляется дым, к полуторной длине — весь; без пламени — дым
-     * сразу. Остывающий хвост до точки Дрейпера ({@link Flame#length}) на экране не светит: дым там уже есть, иначе
-     * между огнём и дымом был бы разрыв в десятки метров (жалоба ревью кадров 22.10). Путь — тот, что снаряд пролетел
-     * с рождения точки: у ракеты ЗРК (сход на 16 м/с, ~180 м/с²) точка, рождённая на сходе, через 0,5 с уже в ~30 м.
+     * The trail smoke is from the end of the bright flame ({@link ua.zentix.incoming.client.fx.plume.TrailModel#emerged}, {@link Flame#flame}):
+     *  the substance at the nozzle is the flame itself, after the end of the burnout the smoke appears, towards one and a half lengths - all of it; without flame - smoke
+     *  immediately. The cooling tail to the Draper point ({@link Flame#length}) does not shine on the screen: there is already smoke there, otherwise
+     *  there would be a gap of tens of meters between the fire and the smoke (complaint from the review of frames 22.10). The path is the one that the projectile flew
+     *  from the birth point: the SAM rocket (launch at 16 m/s, ~180 m/s²) has a point born at the launch, through 0,5 s already at ~30 m.
      */
     @Test
     void trailSmokeStartsWhereTheFlameEnds() {
         Flame f = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).flame(Air.SEA);
         assertNotNull(f);
         double flame = f.flame();
-        assertTrue(f.tailLuminance() < 0.01 * f.flameLuminance(), "хвост за пламенем не светит: " + f.tailLuminance());
-        assertEquals(0, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, flame), 1e-12, "у сопла — пламя");
+        assertTrue(f.tailLuminance() < 0.01 * f.flameLuminance(), "the tail behind the flame does not shine: " + f.tailLuminance());
+        assertEquals(0, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, flame), 1e-12, "the nozzle has a flame");
         assertEquals(0, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(flame, flame), 1e-12);
-        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(1.5 * flame, flame), 1e-12, "за пламенем — дым");
-        assertTrue(1.5 * flame < 0.5 * f.length(), "дым — задолго до точки Дрейпера: " + flame + " против " + f.length());
-        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, 0), 1e-12, "без пламени — дым сразу");
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(1.5 * flame, flame), 1e-12, "behind the flame is smoke");
+        assertTrue(1.5 * flame < 0.5 * f.length(), "smoke - long before the Draper point: " + flame + " against " + f.length());
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(0, 0), 1e-12, "without flame - smoke immediately");
         double prev = 0;
         for (double x = 0; x <= 3 * flame; x += 0.05) {
             double e = ua.zentix.incoming.client.fx.plume.TrailModel.emerged(x, flame);
-            assertTrue(e >= prev && e - prev < 0.05, "плавно: " + x);
+            assertTrue(e >= prev && e - prev < 0.05, "smoothly: " + x);
             prev = e;
         }
-        // путь разгоняющейся ракеты ЗРК за 0,5 с: v₀·t + a·t²/2
+        // path of the accelerating SAM rocket for 0,5 s: v₀·t + a·t²/2
         Flame sam = ua.zentix.incoming.client.fx.plume.FlameModel.at(ClientWeaponSpec.SAM_BOOST, 0);
         double path = 16 * 0.5 + 0.5 * 180 * 0.25;
-        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(path, sam.flame()), 1e-12, "через 0,5 с после схода — дым");
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(path, sam.flame()), 1e-12, "via 0,5 s after launch - smoke");
     }
 
     @Test
     void cruiseMissileEngineDoesNotGlow() {
-        // выхлоп ТРДД — ~700 K без частиц: ни днём, ни ночью
+        // turbofan exhaust — ~700 K without particles: neither day nor night
         assertNull(far(WeaponType.MISSILE).stage(FlightPhase.CRUISE).flame(Air.SEA));
     }
 
-    // ---------------------------------------------------------------- точки шлейфа по пути
+    // ---------------------------------------------------------------- trail points along the way
 
     private static S2C.FarFlight packet(WeaponType weapon, long tick, FlightPhase phase) {
         return new S2C.FarFlight(ID, weapon.id(), false, false, true, new Vec3(tick * 3.0, 80 + tick, 0), new Vec3(3, 1, 0), 0, 0, 0,
                 phase.ordinal(), 0, new Vec3(9000, 80, 0));
     }
 
-    /** Путь по пакетам раз в 2 тика: фаза — по тикам. */
+    /** Path by packets times per 2 tick: phase - by tick. */
     private static FlightTrack track(WeaponType weapon, long from, long to, java.util.function.LongFunction<FlightPhase> phase) {
         FlightTrack t = new FlightTrack(ID, weapon, false);
         for (long tick = from; tick <= to; tick += 2) t.record(tick, packet(weapon, tick, phase.apply(tick)));
@@ -232,9 +232,8 @@ class FarFlightViewTest {
     }
 
     /**
-     * След «Града» — одна лента по пути от схода до настоящего пути выгорания ({@link Trail#reach}): игровой двигатель
-     * гаснет в тике 50 (фаза следующего пакета — с тика 51), а лента идёт дальше, пока путь не дойдёт до участка, и сходит
-     * на нет в той точке.
+     * The "Grad" trail is one tape along the path from the launch rail exit to the actual burnout path ({@link Trail#reach}): the game engine
+     *  goes out at tick 50 (the phase of the next packet is with tick 51), and the tape goes further until the path reaches the section, and fades out at that point.
      */
     @Test
     void rocketTrailRunsAlongTheRealBurnPath() {
@@ -244,25 +243,25 @@ class FarFlightViewTest {
         TrailPoints p = new TrailPoints();
         FarFlightView.sample(new FarFlightView.Far(t, 1), 400, p);
         List<Point> pts = points(p);
-        // путь — √10 блока за тик: участок выгорания пройден в тике 10 + ⌈reach / √10⌉
+        // path — √10 block per tick: burnout section passed in tick 10 + ⌈reach / √10⌉
         double step = Math.sqrt(10);
         long end = 10 + (long) Math.ceil(trail.reach() / step);
         Point last = pts.getLast();
-        assertEquals(end, last.tick, "лента кончается там, где пройден участок выгорания");
-        assertTrue(last.last, "и сходит там на нет");
-        assertTrue(pts.stream().anyMatch(pt -> pt.tick > 60), "после факела дым ещё ложится");
+        assertEquals(end, last.tick, "the tape ends where the burnout section is passed");
+        assertTrue(last.last, "and fades out there");
+        assertTrue(pts.stream().anyMatch(pt -> pt.tick > 60), "after the torch there is still smoke");
         for (int i = 0; i < pts.size(); i++) {
             Point pt = pts.get(i);
             assertSame(trail, pt.style);
-            assertEquals(pt.tick * 3.0, pt.x, 1e-9, "место — по пути");
-            assertEquals(i == 0 ? TrailPoints.NONE : pts.get(i - 1).serial, pt.prev, "одна лента");
-            assertEquals(i == pts.size() - 1, pt.last, "лента сходит на нет только в конце участка");
+            assertEquals(pt.tick * 3.0, pt.x, 1e-9, "place - on the way");
+            assertEquals(i == 0 ? TrailPoints.NONE : pts.get(i - 1).serial, pt.prev, "one tape");
+            assertEquals(i == pts.size() - 1, pt.last, "ribbon fades out only at the segment end");
         }
     }
 
     @Test
     void boosterTrailEndsWhereThePistonLeavesNone() {
-        // дым ускорителя — лентой до его выгорания; выхлоп поршня на этой скорости не виден — после него точек нет
+        // accelerator smoke - tape until it burns out; the piston exhaust is not visible at this speed - there are no dots after it
         FarLook look = far(WeaponType.DRONE);
         FlightTrack t = track(WeaponType.DRONE, 0, 40, tick -> tick <= 20 ? FlightPhase.BOOST : FlightPhase.CRUISE);
         TrailPoints p = new TrailPoints();
@@ -271,13 +270,13 @@ class FarFlightViewTest {
         Trail booster = look.stage(FlightPhase.BOOST).trail();
         assertFalse(pts.isEmpty());
         for (Point pt : pts) assertSame(booster, pt.style);
-        assertTrue(pts.getLast().last, "лента ускорителя сходит на нет");
+        assertTrue(pts.getLast().last, "booster ribbon fades out");
         assertTrue(pts.getLast().tick <= 22);
     }
 
     @Test
     void ribbonToneMatchesSmokeTextures() throws java.io.IOException {
-        // клубы объёма лежат на ленте: с тем же средним тоном они её неровности, а не тёмные бусины
+        // volume billows lie on the tape: with the same average tone they are its irregularities, not dark beads
         double light = 0, cover = 0;
         for (int k = 0; k < 16; k++) {
             String path = String.format(java.util.Locale.ROOT, "/assets/incoming/textures/fx/particle/smoke_%02d.png", k);
@@ -311,7 +310,7 @@ class FarFlightViewTest {
 
     @Test
     void rocketTrailStartsAtTheMuzzleNotInTheTube() {
-        // поджиг — в трубе: огонь без следа (лента шире трубы торчала бы из неё), след — с первого тика разгона
+        // ignition - in a pipe: fire without a trace (a ribbon wider than the pipe would stick out from it), a trace - from the first tick of acceleration
         FlightTrack t = track(WeaponType.ROCKET, 0, 20, tick -> tick < 6 ? FlightPhase.IGNITION : FlightPhase.BOOST);
         TrailPoints p = new TrailPoints();
         FarFlightView.sample(new FarFlightView.Far(t, 1), 20, p);
@@ -322,7 +321,7 @@ class FarFlightViewTest {
         assertEquals(TrailPoints.NONE, pts.getFirst().prev);
     }
 
-    /** Путь B-2 на высоте y мира. */
+    /** Path B-2 at the height of y of the world. */
     private static FlightTrack bomber(double y) {
         FlightTrack t = new FlightTrack(ID, WeaponType.BUNKER, true);
         for (long tick = 0; tick <= 40; tick += 2) {
@@ -334,7 +333,7 @@ class FarFlightViewTest {
 
     @Test
     void bomberLeavesNoContrailWhereAirIsWarm() {
-        // сегодняшние 300 блоков — +14 °C: по Шмидту–Эпплману инверсии нет
+        // today's 300 blocks are +14 °C: according to Schmidt-Appleman there is no inversion
         TrailPoints p = new TrailPoints();
         FarFlightView.sample(new FarFlightView.Far(bomber(300), 1), 40, p);
         assertTrue(p.isEmpty());
@@ -342,7 +341,7 @@ class FarFlightViewTest {
 
     @Test
     void bomberLeavesAContrailFromEachEngine() {
-        // на 11 км во влажном воздухе инверсия встаёт у каждого из четырёх двигателей
+        // at 11 km in humid air, inversion occurs for each of the four engines
         Air before = FarFlightView.air;
         FarFlightView.air = new Air(new Wind(0, 10), Stability.D, 1);
         TrailPoints p = new TrailPoints();
@@ -353,12 +352,12 @@ class FarFlightViewTest {
         }
         List<ClientWeaponSpec.At> engines = ClientWeaponSpec.of(WeaponType.BUNKER).airframe(false).engines();
         List<Point> pts = points(p);
-        assertEquals(engines.size() * 11, pts.size(), "у каждого сопла точка раз в 4 тика");
+        assertEquals(engines.size() * 11, pts.size(), "each nozzle has a dot once per 4 tick");
         for (int i = 0; i < pts.size(); i++) {
             Point pt = pts.get(i);
-            // нос по +Z (рысканье 0): влево — по +X
-            assertEquals(engines.get(i % engines.size()).x(), pt.x, 1e-4, "лента от своего сопла");
-            assertEquals(i < engines.size() ? TrailPoints.NONE : pts.get(i - engines.size()).serial, pt.prev, "и своя");
+            // nose along +Z (yaw 0): left - along +X
+            assertEquals(engines.get(i % engines.size()).x(), pt.x, 1e-4, "tape from your nozzle");
+            assertEquals(i < engines.size() ? TrailPoints.NONE : pts.get(i - engines.size()).serial, pt.prev, "and yours");
         }
     }
 
@@ -383,72 +382,72 @@ class FarFlightViewTest {
         double prev = 0;
         for (double px = FarModels.DOT_BELOW; px <= FarModels.MODEL_FROM; px += 0.01) {
             double k = FarFlightView.modelShare(px);
-            assertTrue(k >= prev, "переход без скачков назад: " + px);
+            assertTrue(k >= prev, "transition without jumps back: " + px);
             prev = k;
         }
-        // упрощённые копии — с запасом против дрожания на границе
+        // simplified copies - with a margin against jitter at the border
         assertTrue(FarModels.COARSE_BELOW < FarModels.FULL_ABOVE);
         assertTrue(FarModels.MODEL_FROM < FarModels.COARSE_BELOW);
     }
 
     @Test
     void modelOutsideTheScreenIsNotDrawn() {
-        // экран — конус в 30° от середины до угла, взгляд на север (−Z)
+        // screen - cone in 30° from the middle to the corner, looking north (−Z)
         FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
                 Math.toRadians(30), 1, 1, new Vector3f(1, 1, 1), 20000, 192, 192, 0, Sight.Air.at(0, 20000));
         assertTrue(FarFlightView.inFrame(view, 0, 0, -500, 500, 2));
         assertTrue(FarFlightView.inFrame(view, at(29)[0], 0, at(29)[1], 500, 2));
-        assertFalse(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 2), "в 35° мелкая модель за краем");
-        assertTrue(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 60), "крыло B-2 в 60 блоков заходит в кадр краем");
-        assertFalse(FarFlightView.inFrame(view, 0, 0, 500, 500, 2), "за спиной");
+        assertFalse(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 2), "in 35° small model behind the edge");
+        assertTrue(FarFlightView.inFrame(view, at(35)[0], 0, at(35)[1], 500, 60), "the wing B-2 in 60 blocks enters the frame at the edge");
+        assertFalse(FarFlightView.inFrame(view, 0, 0, 500, 500, 2), "behind my back");
     }
 
     @Test
     void flameIsOneAcrossTheRenderDistanceEdge() {
-        // сущность появляется на краю прорисовки: ядро света факела там уже всё, ближе его сменяет струя той же долей,
-        // путь по пакетам — всегда весь свет; блик и вуаль — у обоих (FarFlightView.collect)
+        // the entity appears at the edge of the drawing: the core of the torch light is already all there, closer it is replaced by a jet of the same fraction,
+        //  the path through the packets is always the whole light; highlight and veil - both (FarFlightView.collect)
         double world = 192;
         FarView view = new FarView(Vec3.ZERO, new Vector3f(0, 0, -1), new Vector3f(-1, 0, 0), new Vector3f(0, 1, 0), 0, 1000, PIXEL,
                 Math.toRadians(30), 1, 1, new Vector3f(1, 1, 1), 20000, world, 192, 0, Sight.Air.at(0, 20000));
         for (double d = 0; d <= 2 * world; d += 4) {
             double jet = 1 - FarView.farShare(d, world), core = FarFlightView.flameCore(true, view, d);
-            assertEquals(1, jet + core, 1e-12, "на " + d + ": струя и ядро вместе — один факел");
-            assertEquals(1, FarFlightView.flameCore(false, view, d), 1e-12, "по пакетам — весь свет");
-            if (d <= 0.8 * world) assertEquals(0, core, 1e-12, "вблизи ядро — струя");
-            if (d >= world) assertEquals(1, core, 1e-12, "на краю — как по пакетам");
+            assertEquals(1, jet + core, 1e-12, "on " + d + ": jet and core together - one torch");
+            assertEquals(1, FarFlightView.flameCore(false, view, d), 1e-12, "in packages - the whole world");
+            if (d <= 0.8 * world) assertEquals(0, core, 1e-12, "near the core - jet");
+            if (d >= world) assertEquals(1, core, 1e-12, "on the edge - like in packages");
         }
     }
 
-    /** Точка в 500 блоках под углом deg от взгляда на север: x и z. */
+    /** A point in 500 blocks at an angle deg from looking north: x and z. */
     private static double[] at(double deg) {
         return new double[]{500 * Math.sin(Math.toRadians(deg)), -500 * Math.cos(Math.toRadians(deg))};
     }
 
     /**
-     * След «Града» — настоящий участок выгорания при любой скорости полёта (решение F6): на игровой скорости (~80 м/с)
-     * двигатель горит 2 с, ~160 м, а след 9М22У — ~650 м (683 м/с к выгоранию за 1,9 с, паспорт); он ложится и после
-     * факела (не по физике) и кончается на том же пути. Вещество на метр — настоящий расход на настоящий путь: всего
-     * дыма столько, сколько его даёт топливо.
+     * Grad trail covers the real burn segment at any flight speed (F6 decision): at game speed (~80 m/s), the motor burns
+     * for 2 s, ~160 m, while the 9M22U trail is ~650 m (683 m/s at burnout after 1.9 s, spec); it is laid down even after
+     * the plume (not physical) and ends at the same distance. Material per meter is real consumption over real distance:
+     * total smoke is what the fuel produces.
      */
     @Test
     void gradTrailCoversTheRealBurnPath() {
         Trail trail = far(WeaponType.ROCKET).stage(FlightPhase.BOOST).trail();
         assertNotNull(trail);
-        assertEquals(683 * 1.9 / 2, trail.reach(), 1, "участок выгорания по паспорту");
+        assertEquals(683 * 1.9 / 2, trail.reach(), 1, "burnout area according to spec");
         assertEquals(1.9, trail.burn(), 1e-9);
-        // пока горит фаза и после неё — тот же след, до конца участка
+        // while the phase is burning and after it - the same trace, until the end of the section
         assertEquals(trail, FarFlightView.laying(trail, null, 10));
-        assertEquals(trail, FarFlightView.laying(null, trail, 160), "игровой двигатель догорел на 160 м — дым ещё ложится");
+        assertEquals(trail, FarFlightView.laying(null, trail, 160), "the game engine burned out at 160 m - the smoke is still rising");
         assertEquals(trail, FarFlightView.laying(null, trail, 600));
-        assertNull(FarFlightView.laying(null, trail, trail.reach() + 1), "за участком выгорания следа нет");
-        assertNull(FarFlightView.laying(trail, null, 1300), "на настоящей скорости фаза идёт дальше участка — след кончается там же");
-        // у снаряда без пути выгорания след — по фазе
+        assertNull(FarFlightView.laying(null, trail, trail.reach() + 1), "there is no trace of the burnt area");
+        assertNull(FarFlightView.laying(trail, null, 1300), "at real speed the phase goes further than the section - the trail ends there");
+        // for a projectile without a burnout path, the trail is in phase
         Trail booster = far(WeaponType.MISSILE).stage(FlightPhase.BOOST).trail();
         assertEquals(0, booster.reach());
-        assertNull(FarFlightView.laying(null, booster, 10), "ускоритель ракеты: след кончается с фазой");
-        // вещество: на метр — по настоящему пути, не по скорости снаряда; за весь участок — весь дым топлива
+        assertNull(FarFlightView.laying(null, booster, 10), "rocket booster: trail ends with phase");
+        // substance: per meter - along the real path, not according to the speed of the projectile; for the entire area - all the fuel smoke
         double perMetre = trail.motor().smokeFlow() * trail.inverseSpeed(80, 3);
-        assertEquals(trail.motor().smokeFlow() * 1.9, perMetre * trail.reach(), 1e-9, "дым всего топлива — на весь участок");
-        assertEquals(trail.inverseSpeed(80, 3), trail.inverseSpeed(683, 3), 1e-12, "и при любой скорости полёта");
+        assertEquals(trail.motor().smokeFlow() * 1.9, perMetre * trail.reach(), 1e-9, "smoke from all fuel - throughout the entire area");
+        assertEquals(trail.inverseSpeed(80, 3), trail.inverseSpeed(683, 3), 1e-12, "and at any flight speed");
     }
 }

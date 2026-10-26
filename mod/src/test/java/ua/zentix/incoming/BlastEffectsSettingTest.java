@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Свои эффекты взрыва ({@code blast_effects}) по умолчанию включены: без другого мода, который показывает взрывы, игрок
- * видит и слышит удар как прежде; выключает их только он сам.
+ * Its explosion effects ({@code blast_effects}) are enabled by default: without another mod that shows explosions, the player
+ *  sees and hears the impact as before; Only he himself turns them off.
  */
 class BlastEffectsSettingTest {
     @Test

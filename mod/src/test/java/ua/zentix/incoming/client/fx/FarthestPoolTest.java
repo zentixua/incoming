@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Пул кусков {@link Fragments}: правило вытеснения — прежний перебор всех на каждый новый (новый ближе к глазу вытесняет
- * самого дальнего, и того, кого добавили в этом же тике), только через кучу.
+ * Pool of pieces {@link Fragments}: the rule of displacement is the same search of all for each new one (the new one closer to the eye displaces the farthest
+ * , and the one who was added in the same tick), only through the heap.
  */
 class FarthestPoolTest {
-    /** Кусок модели: квадрат расстояния до глаза (меняется между тиками), жив ли. */
+    /** A piece of the model: the square of the distance to the eye (changes between ticks), whether it is alive. */
     private static final class Piece {
         final int id;
         double d;
@@ -31,7 +31,7 @@ class FarthestPoolTest {
         return new FarthestPool<>(p -> p.alive, p -> p.alive = false);
     }
 
-    /** Прежний перебор (Fragments до кучи): самый дальний из всего списка, строго дальше нового, уходит из списка. */
+    /** The previous search (Fragments to the heap): the furthest one from the entire list, strictly further than the new one, leaves the list. */
     private static boolean reference(List<Piece> live, double d, int cap) {
         if (live.size() < cap) return true;
         int far = -1;
@@ -49,7 +49,7 @@ class FarthestPoolTest {
         return true;
     }
 
-    /** Ревью #425: пул полон (1199 кусков на 80 м, один на 120 м); новые на 100, 90, 85 м по очереди вытесняют дальнего. */
+    /** Review #425: the pool is full (1199 pieces on 80 m, one on 120 m); new ones on 100, 90, 85 m in turn displace the distant one. */
     @Test
     void newPiecesOfTheSameTickAreEvictedFarthestFirst() {
         FarthestPool<Piece> pool = pool();
@@ -65,20 +65,20 @@ class FarthestPoolTest {
         Piece far = all.getLast();
         for (double m : new double[]{100, 90, 85}) {
             Piece p = new Piece(id++, m * m);
-            assertTrue(pool.admit(p.d, 1200, tick, q -> q.d), m + " м: место есть — дальний уходит");
-            assertFalse(far.alive, m + " м: ушёл самый дальний (" + Math.sqrt(far.d) + " м)");
+            assertTrue(pool.admit(p.d, 1200, tick, q -> q.d), m + " m: there is a place - the distant one leaves");
+            assertFalse(far.alive, m + " m: the farthest one left (" + Math.sqrt(far.d) + " m)");
             pool.add(p, p.d, tick);
             far = p;
             assertEquals(1200, pool.size());
         }
-        // ближе всех нет — дальние на 80 м не дальше нового на 80 м: места нет
-        assertTrue(pool.admit(70 * 70, 1200, tick, q -> q.d), "70 м вытесняет 85-метровый");
+        // there are no closer ones - the farthest ones are at 80 m no further than the new one at 80 m: there is no space
+        assertTrue(pool.admit(70 * 70, 1200, tick, q -> q.d), "70 m displaces 85-meter");
         assertFalse(far.alive);
         pool.add(new Piece(id++, 70 * 70), 70 * 70, tick);
-        assertFalse(pool.admit(80 * 80, 1200, tick, q -> q.d), "80 м: дальше никого нет");
+        assertFalse(pool.admit(80 * 80, 1200, tick, q -> q.d), "80 m: there is no one further");
     }
 
-    /** Случайные тики: рождения на разных расстояниях, смерти, сдвиг кусков между тиками — решения те же, что у перебора. */
+    /** Random tick: births at different distances, deaths, shift of pieces between ticks - the solutions are the same as for brute force. */
     @Test
     void sameDecisionsAsTheScanOverRandomTicks() {
         Random rnd = new Random(425);
@@ -92,7 +92,7 @@ class FarthestPoolTest {
                 for (int k = 0; k < born; k++) {
                     double d = 1e4 * rnd.nextDouble();
                     boolean a = reference(ref, d, cap), b = pool.admit(d, cap, tick, q -> q.d);
-                    assertEquals(a, b, "тик " + tick + ": решение о новом на " + d);
+                    assertEquals(a, b, "tick " + tick + ": decision on a new one " + d);
                     if (a) {
                         Piece r = new Piece(id, d), m = new Piece(id, d);
                         ref.add(r);
@@ -101,8 +101,8 @@ class FarthestPoolTest {
                     }
                     id++;
                 }
-                assertEquals(alive(ref), alive(mine), "тик " + tick + ": живые те же");
-                // между тиками куски летят и уходят сами (движок), список чистится
+                assertEquals(alive(ref), alive(mine), "tick " + tick + ": the living ones are the same");
+                // between ticks the pieces fly and go away on their own (engine), the list is cleared
                 for (int i = 0; i < ref.size(); i++) {
                     double step = 50 * rnd.nextGaussian();
                     boolean dies = rnd.nextDouble() < 0.05;
@@ -125,6 +125,6 @@ class FarthestPoolTest {
 
     private static Piece byId(List<Piece> pieces, int id) {
         for (Piece p : pieces) if (p.id == id) return p;
-        throw new AssertionError("нет куска " + id);
+        throw new AssertionError("no piece " + id);
     }
 }

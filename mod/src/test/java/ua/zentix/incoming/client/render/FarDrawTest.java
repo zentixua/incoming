@@ -9,23 +9,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Глаз кадра ({@link FarDraw#eye}) — центр проекции и при покачивании вида: точка, перенесённая к нему по лучу (блик
- * в 0,25 блока перед глазом, дальнее у дальней плоскости), остаётся на экране там же, где источник. От позиции камеры
- * блик огня при ходьбе гулял бы по дуге шага, а мир за ним стоял бы.
+ * The eye of the frame ({@link FarDraw#eye}) is the center of the projection and when the view is swayed: the point transferred to it along the ray (the highlight
+ *  in the 0,25 block in front of the eye, the far one at the far plane) remains on the screen in the same place as the source. From the camera position
+ * , the glare of fire when walking would follow the arc of a step, and the world would stand behind it.
  */
 class FarDrawTest {
     private static final Matrix4f PROJECTION = new Matrix4f().perspective((float) Math.toRadians(70), 16f / 10f, 0.05f, 1024f);
-    /** Взгляд камеры: повёрнута по курсу и немного вниз (вид — обратный поворот, как у Minecraft). */
+    /** Camera view: turned along the course and slightly downward (view - reverse rotation, like the Minecraft). */
     private static final Matrix4f ROTATION = new Matrix4f().rotationXYZ(0.35f, -2.2f, 0f);
-    /** Точки мира от камеры, в кадре: впереди чуть ниже взгляда, сбоку и внизу, далеко (заданы в осях взгляда). */
+    /** Points of the world from the camera, in the frame: in front, just below the gaze, on the side and below, far away (set in the gaze axes). */
     private static final Vector3f[] POINTS = {ahead(0, -12, -100), ahead(30, -40, -90), ahead(-60, 5, -400)};
 
-    /** Точка от камеры по осям взгляда (x вправо, y вверх, −z вперёд) — в осях мира. */
+    /** The point from the camera along the axes of view (x to the right, y up, −z forward) - in the axes of the world. */
     private static Vector3f ahead(float x, float y, float z) {
         return new Matrix4f(ROTATION).invert().transformDirection(new Vector3f(x, y, z));
     }
 
-    /** Покачивание вида при ходьбе, как {@code GameRenderer.bobView}: фаза шага и сила (у идущего по земле 0,1). */
+    /** Swaying appearance when walking, like {@code GameRenderer.bobView}: step phase and strength (for someone walking on the ground 0,1). */
     private static Matrix4f bobbing(float phase, float bob) {
         float s = (float) Math.sin(phase * Math.PI), c = (float) Math.cos(phase * Math.PI);
         return new Matrix4f().translate(s * bob * 0.5f, -Math.abs(c * bob), 0)
@@ -33,14 +33,14 @@ class FarDrawTest {
                 .rotateX((float) Math.toRadians(Math.abs((float) Math.cos(phase * Math.PI - 0.2f) * bob) * 5));
     }
 
-    /** Точка на экране (NDC); она перед глазом. */
+    /** Dot on screen (NDC); it's in front of your eyes. */
     private static Vector3f screen(Matrix4f projection, Matrix4f view, Vector3f p) {
         Vector4f v = new Matrix4f(projection).mul(view).transform(new Vector4f(p, 1));
-        assertTrue(v.w > 0, "точка за глазом");
+        assertTrue(v.w > 0, "point behind the eye");
         return new Vector3f(v.x / v.w, v.y / v.w, v.z / v.w);
     }
 
-    /** Точка p, перенесённая к eye по лучу так, чтобы до глаза осталось at блоков. */
+    /** Point p, transferred to eye along the ray so that at blocks remain before the eye. */
     private static Vector3f toward(Vector3f eye, Vector3f p, float at) {
         Vector3f ray = new Vector3f(p).sub(eye);
         return ray.mul(at / ray.length()).add(eye);
@@ -50,19 +50,19 @@ class FarDrawTest {
     void foldedPointStaysOnScreenWhileWalking() {
         for (int i = 0; i < 8; i++) {
             Matrix4f bob = bobbing(i / 8f, 0.1f);
-            // ваниль: покачивание в проекции; Iris с шейдерпаком: в матрице вида
+            // vanilla: swaying in projection; Iris with shaderpack: in the view matrix
             Matrix4f[][] layouts = {{new Matrix4f(PROJECTION).mul(bob), ROTATION}, {PROJECTION, new Matrix4f(bob).mul(ROTATION)}};
             for (Matrix4f[] m : layouts) {
                 Vector3f eye = FarDraw.eyeOffset(m[0], m[1], new Vector3f());
                 for (Vector3f p : POINTS) {
                     Vector3f source = screen(m[0], m[1], p);
-                    assertTrue(Math.abs(source.x) <= 1 && Math.abs(source.y) <= 1, "источник в кадре");
+                    assertTrue(Math.abs(source.x) <= 1 && Math.abs(source.y) <= 1, "source in frame");
                     Vector3f glare = screen(m[0], m[1], toward(eye, p, 0.25f));
-                    assertEquals(source.x, glare.x, 1e-4, "блик у глаза по горизонтали, фаза " + i);
-                    assertEquals(source.y, glare.y, 1e-4, "блик у глаза по вертикали, фаза " + i);
-                    // перенос к позиции камеры: блик уходит от огня на доли экрана
+                    assertEquals(source.x, glare.x, 1e-4, "horizontal flare of the eye, phase " + i);
+                    assertEquals(source.y, glare.y, 1e-4, "glare near the eye vertically, phase " + i);
+                    // transfer to the camera position: the glare moves away from the fire to a fraction of the screen
                     Vector3f old = screen(m[0], m[1], toward(new Vector3f(), p, 0.25f));
-                    assertTrue(Math.hypot(old.x - source.x, old.y - source.y) > 0.05, "перенос к камере, фаза " + i);
+                    assertTrue(Math.hypot(old.x - source.x, old.y - source.y) > 0.05, "transfer to camera, phase " + i);
                 }
             }
         }

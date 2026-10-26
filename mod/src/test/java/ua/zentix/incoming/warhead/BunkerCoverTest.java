@@ -7,12 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BunkerCoverTest {
-    /** Заряд GBU-57, кг ТНТ. */
+    /** Charge GBU-57, kg TNT. */
     private static final double MOP = 2423;
 
     /**
-     * Бомба пробила крышу в 1 блок (верх 75, карта высот 76) и рвётся в комнате под ней: свой ход рядом с зарядом
-     * (ниже крыши до дна комнаты) и край стены выше верх не сдвигают — заряд неглубоко, взрыв прорывается наружу.
+     * The bomb has broken through the roof of the 1 block (top 75, height map 76) and explodes in the room below it: its move next to the charge
+     *  (below the roof to the bottom of the room) and the edge of the wall above the top is not moved - the charge is shallow, the explosion breaks out.
      */
     @Test
     void shaftUnderThinRoofBreaches() {
@@ -23,7 +23,7 @@ class BunkerCoverTest {
         assertTrue(new BuriedBlast(MOP, BunkerCover.depth(top, 70)).breaches());
     }
 
-    /** Ход в открытом грунте на 24 блока: верх — грунт вокруг, не дно хода; взрыв под землёй, прорыва нет. */
+    /** Movement in open ground on the 24 block: top - ground around, not the bottom of the movement; explosion underground, no breakthrough. */
     @Test
     void shaftInOpenSoilStaysUnderground() {
         int[] ring = {64, 64, 65, 64, 63, 64, 64, 64};
@@ -33,7 +33,7 @@ class BunkerCoverTest {
         assertFalse(new BuriedBlast(MOP, BunkerCover.depth(top, 40)).breaches());
     }
 
-    /** Граница прорыва — приведённая глубина 1 м/кг^⅓: у 2,4 т — 13,4 м; на метр мельче — прорыв, на метр глубже — нет. */
+    /** The breakthrough boundary is the reduced depth 1 m/kg^⅓: for 2,4 t - 13,4 m; a meter shallower - a breakthrough, a meter deeper - no. */
     @Test
     void breachBoundaryIsScaledDepthOne() {
         double edge = Math.cbrt(MOP);
@@ -41,7 +41,7 @@ class BunkerCoverTest {
         assertFalse(new BuriedBlast(MOP, edge + 1).breaches());
     }
 
-    /** Кольцо не меняется (сортируется копия). */
+    /** The ring does not change (the copy is sorted). */
     @Test
     void ringIsNotModified() {
         int[] ring = {80, 60, 70, 64, 64, 64, 64, 64};

@@ -40,47 +40,47 @@ class CraterFireTest {
         assertEquals(0, CraterFire.heat(ua.zentix.incoming.client.fx.FuelBurn.at(m.pool, net.minecraft.core.BlockPos.ZERO), m.poolSeconds + 2, distance));
     }
 
-    /** Громкость пожара {@code watts} Вт в {@code d} м открытым путём ночью — как в {@link CraterFire#tick} (без преграды). */
+    /** Fire volume {@code watts} W in {@code d} m on an open path at night - as in {@link CraterFire#tick} (without an obstacle). */
     private static float volume(double watts, double d, Sources.Source source) {
         return Sources.volume(source.power(Sources.flame(watts, source.spectrum())), new Vec3(d, 64, 0), new Vec3(0, 65.62, 0), Propagation.Weather.NIGHT);
     }
 
     /**
-     * Сумма пожаров в четверти звучит так, как её посчитали, до самого потолка игры, — и не упирается раньше в громкость
-     * файла (громче файла Minecraft не играет): петли пожара собраны на потолке (ревью #456, круг 5 — собранные по пику
-     * −1 дБFS, −21,6 LUFS, они обрезали 300 пожаров по 2 МВт в 30 м на 5,1 дБ). Выше потолка — потолок у суммы всех
-     * четвертей, а не у каждой. На оси четверти и посередине между двумя.
+     * The sum of fires in a quarter sounds as it was calculated, right up to the very ceiling of the game - and does not previously rest on the volume of the
+     *  file (it does not play louder than the Minecraft file): fire loops are collected on the ceiling (review #456, circle 5 - collected by peak
+     * −1 dBFS, −21,6 LUFS, they cut 300 fires by 2 MW in 30 m by 5,1 dB). Above the ceiling - the ceiling is for the sum of all
+     *  quarters, and not for each. On the axis of the quarter and in the middle between the two.
      */
     @Test
     void summedFiresPlayAsComputedUpToTheCeiling() throws java.io.IOException {
         double file = SoundAssetsTest.loopMean("blast.fire");
-        assertEquals(Loudness.CEILING_LUFS, file, 0.3, "петли пожара — на потолке");
+        assertEquals(Loudness.CEILING_LUFS, file, 0.3, "fire loops - on the ceiling");
         float v = volume(2e6, 30, Sources.BLAST_FIRE);
         boolean crossed = false;
         for (int n : new int[]{1, 10, 100, 300, 1000, 3000, 10000}) {
-            // как посчитано: громкость в игре одного пожара (по закону) и сумма n по мощности
+            // as calculated: the volume in the game of one fire (according to the law) and the amount of n in power
             double wanted = Loudness.ENGINE_LUFS + 20 * Math.log10(v / Loudness.fileGain(Spectra.BLAST_FIRE_LUFS)) + 10 * Math.log10(n);
             for (double azimuth : new double[]{0, Math.PI / 4}) {
                 Quarters q = new Quarters();
                 for (int i = 0; i < n; i++) q.add(azimuth, v, 1, 1);
                 double power = 0;
                 for (int k = 0; k < Quarters.N; k++) power += q.volume(k) * q.volume(k);
-                // как звучит: файлы с их настоящей средней громкостью на громкостях петель
+                // what it sounds like: files with their real average volume at loop volumes
                 double played = file + 10 * Math.log10(power);
-                if (wanted <= Loudness.CEILING_LUFS) assertEquals(wanted, played, 0.3, n + " пожаров, азимут " + azimuth + ": сумма ниже потолка — как посчитана");
-                else assertEquals(Loudness.CEILING_LUFS, played, 0.3, n + " пожаров, азимут " + azimuth + ": выше потолка — потолок у суммы");
+                if (wanted <= Loudness.CEILING_LUFS) assertEquals(wanted, played, 0.3, n + " fires, azimuth " + azimuth + ": amount below ceiling - as calculated");
+                else assertEquals(Loudness.CEILING_LUFS, played, 0.3, n + " fires, azimuth " + azimuth + ": above the ceiling - the amount has a ceiling");
                 crossed |= wanted > Loudness.CEILING_LUFS;
             }
-            if (n == 300) assertTrue(wanted < Loudness.CEILING_LUFS, "сцена ревью — ниже потолка: " + wanted);
+            if (n == 300) assertTrue(wanted < Loudness.CEILING_LUFS, "review scene - below the ceiling: " + wanted);
         }
-        assertTrue(crossed, "проверка доходит до потолка");
+        assertTrue(crossed, "check reaches the ceiling");
     }
 
     /**
-     * Одиночный пожар звучит так же, как в 6763a1c8 (средняя громкость петли по закону пламени): файлы стали громче
-     * (на потолке), а громкость в игре — та же, на любом расстоянии. Звучит — настоящая средняя громкость файлов на
-     * громкости, что даёт клиент; у 6763a1c8 — его паспорт (спектр, −21,6 LUFS) и средняя его файлов по замеру
-     * (−21,726, −21,704, −21,718, −21,712 — ревью круга 5; по мощности −21,715).
+     * A single fire sounds the same as in 6763a1c8 (average loop volume according to the law of flame): the files are louder
+     *  (on the ceiling), and the volume in the game is the same, at any distance. It sounds like the real average volume of files at the
+     *  volume that the client gives; for 6763a1c8 - its spec (spectrum, −21,6 LUFS) and the average of its files according to the measurement
+     *  (−21,726, −21,704, −21,718, −21,712 - circle review 5; for power −21,715).
      */
     @Test
     void aSingleFireSoundsAsIn6763a1c8() throws java.io.IOException {
@@ -91,16 +91,16 @@ class CraterFireTest {
             for (double d : new double[]{5, 15, 40, 100, 300}) {
                 double now = file + 20 * Math.log10(volume(watts, d, Sources.BLAST_FIRE));
                 double was = fileThen + 20 * Math.log10(volume(watts, d, then));
-                assertEquals(was, now, 0.2, watts + " Вт в " + d + " м: средняя громкость в игре, LUFS");
+                assertEquals(was, now, 0.2, watts + " W in " + d + " m: average volume in game, LUFS");
             }
         }
     }
 
     /**
-     * Слышно ли пожар — решает звук у уха, а не громкость файла (ревью R11): настоящее решение о запуске
-     * ({@link CraterFire#volume}, потом {@link Quarters#plays}) у 0,2, 2 и 20 МВт на 5 м – 12 км ночью одно и то же у файла
-     * на потолке и у того же файла, собранного на 8,1 дБ тише; нигде пожар, который звучал в 6763a1c8 (громкость файла
-     * −21,6 LUFS не тише {@code AUDIBLE}), теперь не молчит; граница — где пожар тонет в фоне во всех октавах.
+     * Whether a fire can be heard is determined by the sound at the ear, not the volume of the file (review R11): the real decision to launch
+     *  ({@link CraterFire#volume}, then {@link Quarters#plays}) for 0,2, 2 and 20 MW 5 m – 12 km at night the same file
+     *  on the ceiling and the same file collected on 8,1 dB quieter; nowhere is the fire that sounded in 6763a1c8 (the volume of the file
+     * −21,6 LUFS is not quieter than {@code AUDIBLE}) is now silent; the border is where the fire drowns in the background in all octaves.
      */
     @Test
     void audibilityIsAtTheEarNotInTheFile() {
@@ -112,20 +112,20 @@ class CraterFireTest {
             for (int d = 5; d <= 12000; d += 5) {
                 Vec3 at = new Vec3(d, 64, 0);
                 boolean now = plays(CraterFire.volume(Sources.BLAST_FIRE, watts, at, ear, Propagation.Weather.NIGHT));
-                assertEquals(now, plays(CraterFire.volume(quiet, watts, at, ear, Propagation.Weather.NIGHT)), watts + " Вт в " + d + " м: файл тише — решение то же");
+                assertEquals(now, plays(CraterFire.volume(quiet, watts, at, ear, Propagation.Weather.NIGHT)), watts + " W in " + d + " m: the file is quieter - the solution is the same");
                 boolean wasPlaying = volume(watts, d, then) >= VoiceBudget.AUDIBLE;
-                assertTrue(!wasPlaying || now, watts + " Вт в " + d + " м: в 6763a1c8 звучал — звучит и теперь");
+                assertTrue(!wasPlaying || now, watts + " W in " + d + " m: in 6763a1c8 it sounded - it still sounds");
                 double gain = Sources.gain(Sources.BLAST_FIRE.power(Sources.flame(watts, Spectra.BLAST_FIRE)), at, ear, Propagation.Weather.NIGHT);
-                assertEquals(gain > 0, now, watts + " Вт в " + d + " м: звучит, пока не тонет в фоне");
+                assertEquals(gain > 0, now, watts + " W in " + d + " m: sounds until it drowns in the background");
                 if (now) last = d;
                 if (wasPlaying) lastThen = d;
             }
             System.out.printf(java.util.Locale.ROOT, "fire %.0f W heard to %.0f m (6763a1c8: %.0f m)%n", watts, last, lastThen);
-            assertTrue(last > 300 && last >= lastThen, watts + " Вт: слышно дальше 300 м и не ближе, чем в 6763a1c8");
+            assertTrue(last > 300 && last >= lastThen, watts + " Tue: heard further than 300 m and no closer than 6763a1c8");
         }
     }
 
-    /** Решение о запуске петли одного пожара громкостью {@code volume}: как в {@link BlastSounds#fireLoops}. */
+    /** The decision to start a loop of one fire with a volume of {@code volume}: as in {@link BlastSounds#fireLoops}. */
     private static boolean plays(float volume) {
         Quarters q = new Quarters();
         q.add(0, volume, 1, 1);

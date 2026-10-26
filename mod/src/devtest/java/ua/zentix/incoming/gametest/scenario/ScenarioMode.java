@@ -7,13 +7,12 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Pattern;
 
 /**
- * Режим прогона сценариев (системные свойства задач Gradle).
+ * Script running mode (system properties of tasks Gradle).
  * <ul>
- *     <li>{@code incoming.scenario.only} ({@code -PscenarioOnly=…}) — только сценарии, имя которых подходит под
- *     регулярное выражение (без обратной косой черты: файл аргументов MDG её удваивает): так повторяют одно падение;</li>
- *     <li>{@code incoming.scenario.realChunks} ({@code -PscenarioRealChunks}) — настоящая загрузка чанков: без
- *     {@link InstantChunks}, сервер в темпе игры (20 тиков/с), свойства те же, эталон не сверяется (полёт зависит
- *     от того, как быстро машина генерирует).</li>
+ *     <li>{@code incoming.scenario.only} ({@code -PscenarioOnly=…}) - only scripts whose name matches
+ *      regular expression (without backslash: argument file MDG doubles it): this is how one fall is repeated; </li>
+ *     <li>{@code incoming.scenario.realChunks} ({@code -PscenarioRealChunks}) - real loading of chunks: without
+ *     {@link InstantChunks}, server at the pace of the game (20 tick/s), the properties are the same, the standard is not checked (the flight depends on how fast the machine generates).</li>
  * </ul>
  */
 final class ScenarioMode {
@@ -33,22 +32,22 @@ final class ScenarioMode {
         return ONLY == null || ONLY.matcher(s.id()).find();
     }
 
-    /** Как повторить сценарий одним прогоном — к каждому сообщению о падении. */
+    /** How to repeat the scenario in one run - for each crash message. */
     static String reproduce(Scenario s) {
-        // точки не экранировать: файл аргументов MDG удваивает обратную косую черту, а точка и так совпадает с точкой
-        return "повторить: ./gradlew runScenarioSweep -PscenarioOnly='^" + s.id() + "$' -PscenarioSeeds="
+        // do not escape dots: argument file MDG doubles backslash, and dot already matches dot
+        return "repeat: ./gradlew runScenarioSweep -PscenarioOnly='^" + s.id() + "$' -PscenarioSeeds="
                 + (s.seed() + 1) + (REAL_CHUNKS ? " -PscenarioRealChunks" : "");
     }
 
     /**
-     * Темп игры для всего сервера сразу, а не на тест: сценарии партии идут одновременно, и пауза в тике каждого
-     * сложилась бы. Сервер GameTest иначе тикает без пауз, и фоновая генерация за полётом не успевает никогда.
+     * The pace of the game is for the entire server at once, and not for a test: batch scenarios run simultaneously, and a pause in the tick of each
+     *  would add up. The GameTest server otherwise ticks without pauses, and the background generation never keeps up with the flight.
      */
     static synchronized void paceServer() {
         if (paced) return;
         paced = true;
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post e) -> {
-            // parkNanos просыпается раньше (задачи чанков будят поток сервера): ждать до срока в цикле
+            // parkNanos wakes up earlier (chunk tasks wake up the server thread): wait until the deadline in a loop
             long deadline = lastTick + 50_000_000L, left;
             while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
             lastTick = System.nanoTime();

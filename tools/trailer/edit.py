@@ -8,24 +8,24 @@
 #     "soundfile>=0.12",
 # ]
 # ///
-"""Монтаж трейлера из записи tools/trailer/record.sh: планы (кадры 60 fps по времени игры) режутся и склеиваются
-по монтажному листу EDIT под такт музыки, цвет и кинокаше, титры; звук собирается заново из журнала звуков игры
-(те же файлы мода, громкость по расстоянию до камеры, панорама, Доплер из журнала) и кладётся под музыку.
+"""Edit a trailer from tools/trailer/record.sh recordings: shots (60 fps frames in game time) are cut and joined
+according to the EDIT list on the music beat, with color grading, letterboxing and titles; audio is rebuilt from
+the game sound log (the same mod files, volume by camera distance, panning and Doppler from the log) under the music.
 
-    uv run tools/trailer/edit.py [--lang en|ru] [--draft] [--rec ПАПКА …] [--out ФАЙЛ]
-    --lang   — слова на экране: en (по умолчанию, Modrinth и YouTube) или ru
-    --draft  — быстрый черновик 960×540 (проверить монтаж)
-    --rec    — папка записи; несколько — планы из следующих (пересъёмка) заменяют одноимённые; план с текстом
-               игры в кадре берётся из записи на языке ролика (en_us или ru_ru, record.sh: INCOMING_LANG)
-    --jobs   — процессов отрисовки (по умолчанию min(ядер, 6))
-    результат: dist/incoming-trailer.mp4 (H.264, 60 fps, AAC), …-lite.mp4 (до 4 Мбит/с, для мессенджеров)
-    и …-credits.txt — строки об авторах музыки и звуков для описания ролика
+    uv run tools/trailer/edit.py [--lang en|ru] [--draft] [--rec FOLDER …] [--out FILE]
+    --lang   — on-screen words: en (default, Modrinth and YouTube) or ru
+    --draft  — quick 960×540 draft (check the edit)
+    --rec    — recording folder; with several, shots from later recordings (retakes) replace matching names; a shot
+               with game text in frame comes from a recording in the video language (en_us or ru_ru, record.sh: INCOMING_LANG)
+    --jobs   — render processes (default min(cores, 6))
+    output: dist/incoming-trailer.mp4 (H.264, 60 fps, AAC), …-lite.mp4 (up to 4 Mbit/s, for messengers)
+    and …-credits.txt — music and sound attribution lines for the video description
 
-Музыка и шрифты скачиваются один раз в tools/.trailer-cache (проверка sha256). Пакеты Python — в блоке script
-выше (PEP 723, uv run ставит их сам); ffmpeg — системный или из пакета imageio-ffmpeg.
+Music and fonts are downloaded once to tools/.trailer-cache (sha256 verification). Python packages are in the script
+block above (PEP 723, uv run installs them); ffmpeg is the system version or from the imageio-ffmpeg package.
 
-Память на 1080p (замер): процесс отрисовки ~0.3 ГБ и главный ~0.3 ГБ — ровно весь монтаж (в очереди не больше
-2×jobs кадров), кодер x264 slow 2.5 ГБ на 4 ядрах и больше с числом потоков; при --jobs 6 пик ~5–6 ГБ.
+1080p memory (measured): render process ~0.3 GB and main process ~0.3 GB throughout the edit (no more than
+2×jobs frames queued); x264 slow encoder 2.5 GB on 4 cores, increasing with thread count; --jobs 6 peaks at ~5–6 GB.
 """
 import argparse
 import bisect
@@ -56,13 +56,13 @@ FPS = 60
 SR = 48000
 TPS = 20
 
-# ---------------------------------------------------------------- музыка и шрифты (лицензии — в титрах и CREDITS)
+# ---------------------------------------------------------------- music and fonts (licenses in the titles and CREDITS)
 
 MUSIC = {
     "url": "https://archive.org/download/Kevin-MacLeod_Impact_2014_FullAlbum/Impact%2FKevin%20MacLeod%20-%2006%20-%20Prelude.mp3",
     "sha256": "fe69ca096bbf6b2c3fe7db94049dbf786f3d9c2bdfd3a3d62ed85c1463baacef",
     "file": "impact-prelude.mp3",
-    # сильная доля громкой части: 96.02 с, такт — 3 с (80 уд/мин, 4 доли по 0.75 с)
+    # downbeat of the loud section: 96.02 s; bar length 3 s (80 bpm, 4 beats of 0.75 s)
     "drop": 96.02,
     "bar": 3.0,
     "credit": "\u201cImpact Prelude\u201d by Kevin MacLeod (incompetech.com), CC BY 4.0",
@@ -79,14 +79,14 @@ def fetch(url, sha256, name):
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, name)
     if not os.path.exists(path):
-        print(f"скачиваю {name}")
+        print(f"downloading {name}")
         req = urllib.request.Request(url, headers={"User-Agent": "zentixua/incoming trailer"})
         with urllib.request.urlopen(req, timeout=120) as r, open(path + ".part", "wb") as f:
             shutil.copyfileobj(r, f)
         os.replace(path + ".part", path)
     digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
     if digest != sha256:
-        raise SystemExit(f"{name}: sha256 {digest} не совпадает — удалите файл из {CACHE}")
+        raise SystemExit(f"{name}: sha256 {digest} does not match — remove the file from {CACHE}")
     return path
 
 
@@ -98,31 +98,31 @@ def ffmpeg():
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
     except ImportError:
-        raise SystemExit("нужен ffmpeg (apt install ffmpeg или pip install imageio-ffmpeg)")
+        raise SystemExit("ffmpeg is required (apt install ffmpeg or pip install imageio-ffmpeg)")
 
 
-# ---------------------------------------------------------------- запись
+# ---------------------------------------------------------------- recording
 
 @dataclass
 class Shot:
     name: str
     speed: float
-    frames: dict = field(default_factory=dict)      # k → путь к PNG
+    frames: dict = field(default_factory=dict)      # k → PNG path
     cams: dict = field(default_factory=dict)        # k → (x, y, z, yaw, pitch)
     sounds: list = field(default_factory=list)
     updates: dict = field(default_factory=dict)     # id → [(t, x, y, z, volume, pitch)]
     stops: dict = field(default_factory=dict)       # id → t
-    marks: list = field(default_factory=list)       # (t, что)
+    marks: list = field(default_factory=list)       # (t, what)
     count: int = 0
-    hud: bool = False       # в кадре текст интерфейса игры
-    lang: str = "ru_ru"     # язык игры при съёмке (записи до этого поля — только ru_ru)
+    hud: bool = False       # game interface text in frame
+    lang: str = "ru_ru"     # game language when recorded (recordings before this field are ru_ru only)
 
     def sec(self, ticks):
-        """Время плана в секундах видео по тикам игры."""
+        """Shot time in video seconds based on game ticks."""
         return ticks / (TPS * self.speed)
 
     def frame(self, k):
-        """Кадр k или ближайший снятый до него (если клиент пропустил)."""
+        """Frame k or the nearest earlier captured frame (if the client skipped it)."""
         keys = self.keys
         i = bisect.bisect_right(keys, k) - 1
         return self.frames[keys[max(i, 0)]]
@@ -143,7 +143,7 @@ def load_recording(rec=REC):
         for line in f:
             try:
                 e = json.loads(line)
-            except json.JSONDecodeError:  # запись оборвалась на строке
+            except json.JSONDecodeError:  # recording cut off mid-line
                 continue
             kind, name = e["type"], e["shot"]
             if kind == "shot":
@@ -163,7 +163,7 @@ def load_recording(rec=REC):
             elif kind == "stop":
                 s.stops[e["id"]] = e["t"]
             elif kind == "mark":
-                # «gone» в самом начале — в записях до исправления снаряды, пропавшие между планами
+                # "gone" at the very start: in recordings before the fix, projectiles that disappeared between shots
                 if not (e["what"].startswith("gone:") and e["t"] <= 0):
                     s.marks.append((e["t"], e["what"]))
     for s in shots.values():
@@ -172,8 +172,8 @@ def load_recording(rec=REC):
 
 
 def pick_takes(recordings, lang):
-    """Дубль каждого плана из записей (--rec по порядку): последний; план с текстом игры в кадре — последний
-    на языке ролика (en_us/ru_ru), а если такого нет — последний какой есть, с предупреждением."""
+    """Take of each shot from recordings (--rec order): the last one; with game text in frame, the last one
+in the video language (en_us/ru_ru), or the last available take with a warning if none matches."""
     takes = {}
     for rec in recordings:
         for name, s in rec.items():
@@ -183,7 +183,7 @@ def pick_takes(recordings, lang):
         own = [s for s in cands if s.lang == lang]
         if any(s.hud for s in cands):
             if not own:
-                print(f"  ! {name}: нет дубля на {lang}, текст в кадре — {cands[-1].lang}")
+                print(f"  ! {name}: no take in {lang}, text in frame is {cands[-1].lang}")
             shots[name] = (own or cands)[-1]
         else:
             shots[name] = cands[-1]
@@ -191,8 +191,8 @@ def pick_takes(recordings, lang):
 
 
 def anchor(shot, spec):
-    """Момент плана в секундах: число, «end», «mark:что» или «sound:часть имени» (#n — n-е совпадение, #-1 —
-    последнее) с ±сдвигом."""
+    """Shot moment in seconds: a number, "end", "mark:what" or "sound:name fragment" (#n is the n-th match, #-1 is
+the last), with a ±offset."""
     if isinstance(spec, (int, float)):
         return float(spec)
     off = 0.0
@@ -209,7 +209,7 @@ def anchor(shot, spec):
         return shot.duration + off
     kind, what = spec.split(":", 1)
     nth = 1
-    if "#" in what:  # «sound:blast#3» — третье совпадение
+    if "#" in what:  # "sound:blast#3" is the third match
         what, n = what.rsplit("#", 1)
         nth = int(n)
     hits = []
@@ -219,25 +219,25 @@ def anchor(shot, spec):
         hits = [e["t"] for e in shot.sounds if what in e["event"]]
     if len(hits) >= abs(nth):
         return shot.sec(hits[nth - 1 if nth > 0 else nth]) + off
-    print(f"  ! {shot.name}: нет «{spec}», беру начало плана")
+    print(f"  ! {shot.name}: no \"{spec}\", using the shot start")
     return off
 
 
-# ---------------------------------------------------------------- монтажный лист
+# ---------------------------------------------------------------- edit list
 
 @dataclass
 class Clip:
     shot: str
-    at: object          # откуда в плане (секунды или якорь, см. anchor)
-    dur: float          # длительность в трейлере, с
-    rate: float = 1.0   # скорость воспроизведения (2 — вдвое быстрее)
-    xfade: float = 0.0  # наплыв из прошлого плана, с
-    flash: bool = False  # белая вспышка на склейке
-    zoom: tuple = (1.0, 1.0)  # наезд: масштаб в начале и в конце
-    sfx: float = 1.0    # громкость звука игры
-    frame_y: float = 0.5  # какая полоса плана видна в окне 2:1: 0 — верхняя (список ударов справа вверху), 0.5 — середина
-    start: float = 0.0  # заполняется: начало в трейлере
-    src: float = 0.0    # заполняется: начало в плане, с
+    at: object          # starting point in the shot (seconds or an anchor, see anchor)
+    dur: float          # duration in the trailer, s
+    rate: float = 1.0   # playback speed (2 means twice as fast)
+    xfade: float = 0.0  # dissolve from the previous shot, s
+    flash: bool = False  # white flash at the cut
+    zoom: tuple = (1.0, 1.0)  # zoom: scale at the start and end
+    sfx: float = 1.0    # game sound volume
+    frame_y: float = 0.5  # shot strip visible in the 2:1 window: 0 is the top (impact list at upper right), 0.5 is the middle
+    start: float = 0.0  # populated: start in the trailer
+    src: float = 0.0    # populated: start in the shot, s
 
 
 @dataclass
@@ -248,16 +248,16 @@ class Black:
 
 @dataclass
 class Text:
-    at: float           # от начала трейлера, с
+    at: float           # from the start of the trailer, s
     dur: float
     lines: tuple
-    style: str = "card"  # card — по центру крупно; caption — подпись слева внизу; title — логотип
+    style: str = "card"  # card: large, centered; caption: lower-left text; title: logo
     fade: float = 0.35
 
 
 @dataclass
 class Hit:
-    """Звук трейлера поверх: удар (boom), нарастание (riser), свист склейки (whoosh), тишина музыки (mute)."""
+    """Trailer audio overlay: impact (boom), build-up (riser), cut swish (whoosh), music silence (mute)."""
     at: float
     kind: str
     dur: float = 1.0
@@ -266,7 +266,7 @@ class Hit:
 
 BAR = MUSIC["bar"]
 
-# для описания ролика (Modrinth, YouTube): музыка CC BY требует указать автора, название, источник и лицензию
+# for the video description (Modrinth, YouTube): CC BY music requires the author, title, source and license
 CREDITS = """Music: "Impact Prelude" by Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
@@ -278,8 +278,8 @@ http://creativecommons.org/licenses/by/4.0/
 Звуки: авторы Freesound (CC0 / CC BY 4.0), список: https://github.com/zentixua/incoming/blob/main/SOUND-CREDITS.md
 """
 
-# слова на экране: английские — для Modrinth и YouTube, русские — для своих (--lang ru)
-GAME_LANG = {"en": "en_us", "ru": "ru_ru"}  # язык игры для планов с текстом интерфейса в кадре (record.sh: INCOMING_LANG)
+# on-screen words: English for Modrinth and YouTube, Russian for our audience (--lang ru)
+GAME_LANG = {"en": "en_us", "ru": "ru_ru"}  # game language for shots with interface text in frame (record.sh: INCOMING_LANG)
 WORDS = {
     "en": {"presents": "presents", "aim": "AIM", "launch": "LAUNCH", "shahed": "SHAHED-136", "missile": "CRUISE MISSILE",
            "lancet": "LANCET", "grad": "GRAD MLRS", "last": "LAST RESORT", "icbm": "ICBM",
@@ -294,12 +294,12 @@ WORDS = {
 
 def build_edit(lang="en"):
     """
-    Трейлер ~2:36 под «Impact Prelude». Тихая часть — рассвет, наводчик, пусковая; сильная доля музыки (drop) —
-    поджиг первого шахеда; дальше склейки по тактам (3 с) и полутактам, нарастание к МБР. Ядерная вспышка —
-    на последний удар музыки (192 с трека), дальше музыки нет: гул взрыва, гриб, чёрный дождь, логотип.
+    Trailer ~2:36 set to "Impact Prelude". Quiet section: dawn, gunner, launcher; the music downbeat (drop) is
+the first Shahed ignition; then cuts on bars (3 s) and half-bars, building up to the ICBM. The nuclear flash
+lands on the last music hit (192 s into the track); no music afterward: blast rumble, mushroom, black rain, logo.
     """
-    D = 30.0                                   # drop в трейлере
-    FLASH = D + (192.0 - MUSIC["drop"]) + 0.02  # вспышка = последний удар трека (32 такта после drop)
+    D = 30.0                                   # drop in the trailer
+    FLASH = D + (192.0 - MUSIC["drop"]) + 0.02  # flash = last hit of the track (32 bars after the drop)
     edit = [
         Black(4.0),
         Clip("dawn", 1.2, 8.5, xfade=0.8),
@@ -307,36 +307,36 @@ def build_edit(lang="en"):
         Clip("operator", 0.3, 5.5, xfade=0.3),
         Clip("scope", 0.0, 4.0, xfade=0.2),
         Clip("launch_drone", "sound:launch.booster-5.0", 5.0),
-        # drop: поджиг и сход шахеда
+        # drop: Shahed ignition and launch
         Clip("launch_drone", "sound:launch.booster-0.15", 3.0, flash=True),
         Clip("boost", 0.0, 4.5),
         Clip("cruise", 1.0, 3.0),
-        # глазами наводчика: шахеды проходят над головой к целям, метки целей с номерами и пунктиры
+        # through the gunner eyes: Shaheds pass overhead toward targets, numbered target markers and dotted lines
         Clip("targets", 0.0, 3.0, frame_y=0.0),
         Clip("impact_drone", "mark:gone#-1-5.0", 6.0),
         Clip("launch_missile", "sound:launch.booster-0.4", 4.5, flash=True),
-        # камера V: карта оператора, пока ракета дальше прорисовки, сама переходит на видео с борта — горка, пике
-        Clip("missile_camera", "mark:video-1.5", 1.5, frame_y=0.0),  # карта: окно 2:1 по верху, строки целиком
-        # видео с борта — последние 150 блоков до взрыва: дальше атмосферный туман шейдерпака заливает кадр белым
+        # V camera: operator map while the missile is beyond render distance, automatically switches to onboard video — climb, dive
+        Clip("missile_camera", "mark:video-1.5", 1.5, frame_y=0.0),  # map: 2:1 window aligned to the top, full rows
+        # onboard video: last 150 blocks before the explosion; farther away, shaderpack atmospheric fog washes the frame white
         Clip("missile_camera", "mark:close", 3.0),
         Clip("impact_missile", "mark:gone-1.5", 6.0),
-        # «Ланцет»: рывок с катапульты, круг над целью, пике
+        # Lancet: catapult surge, circle over the target, dive
         Clip("loiter_launch", "sound:loiter.launch-0.5", 3.0, flash=True),
         Clip("loiter_strike", "mark:gone-3.0", 4.5),
         Clip("rocket_launch", "sound:rocket.launch-1.5", 4.5, flash=True),
         Clip("rocket_impact", "sound:blast-1.0", 4.5),
-        # B-2: под брюхом — створки, бомба уходит, вираж; с земли — подземный взрыв
+        # B-2: doors under the belly, bomb drops, turn; from the ground: underground explosion
         Clip("bomb_bay", "mark:release-2.5", 4.5, flash=True),
         Clip("bomber", "mark:gone-0.2", 4.5),
         Clip("salvo", "mark:gone-2.5", 6.0, flash=True),
         Clip("salvo_missiles", "mark:gone-1.5", 6.0),
-        # нарезка разрывов по полутактам
+        # explosion montage on half-bars
         Clip("impact_drone", "mark:gone#-2+0.3", 1.5, rate=0.8),
         Clip("rocket_impact", "sound:blast#6-0.2", 1.5),
         Clip("salvo", "mark:gone#4-0.3", 1.5),
         Black(4.5),
         Clip("icbm", 0.0, 5.0, flash=True),
-        # из-за плеча наводчика: отсчёт, тревога, вспышка, шар, фронт доходит до вышки
+        # over the gunner shoulder: countdown, alarm, flash, fireball, front reaches the tower
         Clip("nuke", "mark:detonation-10.0", 16.0, frame_y=0.0),
         Clip("mushroom", 0.0, 9.0, rate=1.5, xfade=0.6),
         Clip("fallout", 0.5, 6.0, xfade=1.0),
@@ -348,18 +348,18 @@ def build_edit(lang="en"):
         t += c.dur
     total = t
     nuke = next(c for c in edit if isinstance(c, Clip) and c.shot == "nuke")
-    assert abs(nuke.start + 10.0 - FLASH) < 0.05, "вспышка в плане nuke должна прийтись на последний удар музыки"
+    assert abs(nuke.start + 10.0 - FLASH) < 0.05, "the flash in the nuke shot must land on the last music hit"
     def start(shot, n=1):
-        """Начало n-го плана с этим именем в трейлере (подписи — к своим планам, а не к числам)."""
+        """Start of the n-th shot with this name in the trailer (captions belong to their shots, not to numbers)."""
         return [c.start for c in edit if getattr(c, "shot", None) == shot][n - 1]
 
-    card = next(c for c in edit if isinstance(c, Black) and c.start > D)  # чёрный кадр перед МБР
+    card = next(c for c in edit if isinstance(c, Black) and c.start > D)  # black frame before the ICBM
     L = WORDS[lang]
     texts = [
         Text(0.6, 3.0, ("ZENTIX UA", L["presents"]), "card"),
         Text(start("scope") + 0.5, 2.2, (L["aim"],), "word"),
         Text(D - 2.4, 1.9, (L["launch"],), "word"),
-        # оружие — одним словом, картинка скажет остальное
+        # weapon in one word; the picture says the rest
         Text(start("boost") + 0.3, 2.6, (L["shahed"],), "caption"),
         Text(start("launch_missile") + 0.5, 2.6, (L["missile"],), "caption"),
         Text(start("loiter_launch") + 0.3, 2.6, (L["lancet"],), "caption"),
@@ -372,7 +372,7 @@ def build_edit(lang="en"):
         Text(total - 3.0, 3.0, (L["music"] + MUSIC["credit"], L["sounds"]), "credits"),
     ]
     hits = [
-        # удар на каждой склейке со вспышкой, свист — на склейках нарезки
+        # impact at each flash cut, swish at the montage cuts
         *[Hit(c.start, "boom", 2.0, 0.45) for c in edit if isinstance(c, Clip) and c.flash and c.start > D + 1],
         *[Hit(c.start - 0.25, "whoosh", 0.5, 0.5) for c in edit if isinstance(c, Clip) and c.dur <= 1.5],
         Hit(D - 4.0, "riser", 4.0, 0.8),
@@ -384,15 +384,15 @@ def build_edit(lang="en"):
     return edit, texts, hits, total, D, FLASH
 
 
-# ---------------------------------------------------------------- картинка
+# ---------------------------------------------------------------- picture
 
 class Look:
-    """Цвет: мягкая «киношная» кривая, тёплые света и холодные тени, виньетка, кинокаше 2:1."""
+    """Color: soft cinematic curve, warm highlights and cool shadows, vignette, 2:1 letterbox."""
 
     def __init__(self, w, h):
         self.w, self.h = w, h
         x = np.linspace(0, 1, 256)
-        curve = x + 0.18 * np.sin(2 * np.pi * (x - 0.5)) * x * (1 - x) * 2  # S-кривая
+        curve = x + 0.18 * np.sin(2 * np.pi * (x - 0.5)) * x * (1 - x) * 2  # S-curve
         curve = np.clip(curve * 1.02, 0, 1)
         lut = np.stack([np.clip(curve * 1.04 + 0.01 * (1 - x), 0, 1),
                         np.clip(curve * 1.0, 0, 1),
@@ -432,7 +432,7 @@ class Titles:
         return f
 
     def render(self, text):
-        """RGBA-картинка титра во весь кадр (кэш)."""
+        """Full-frame RGBA title image (cached)."""
         key = (text.lines, text.style)
         if key in self.cache:
             return self.cache[key]
@@ -480,7 +480,7 @@ class Titles:
         ImageDraw.Draw(layer).text(xy, line, font=font, fill=(255, 244, 228, 255) if warm else (255, 255, 255, 255))
 
 
-# состояние рабочих процессов отрисовки
+# render worker state
 _W = {}
 
 
@@ -496,7 +496,7 @@ def _clip_at(t):
 
 
 def _source(c, t):
-    """Кадр плана под время трейлера t (с наездом), float32 HxWx3."""
+    """Shot frame at trailer time t (with zoom), float32 HxWx3."""
     w, h = _W["size"]
     if isinstance(c, Black):
         return np.zeros((h, w, 3), np.float32)
@@ -512,7 +512,7 @@ def _source(c, t):
         img = img.resize((w, h), Image.BICUBIC, box=((w - cw) / 2, (h - ch) / 2, (w + cw) / 2, (h + ch) / 2))
     bar = _W["look"].bar
     if bar > 0 and c.frame_y != 0.5:
-        # окно 2:1 сдвигается по плану, чтобы кинокаше не срезало интерфейс у края
+        # 2:1 window shifts within the shot so letterboxing does not crop the interface near the edge
         top = int(round(2 * bar * c.frame_y))
         window = img.crop((0, top, w, top + h - 2 * bar))
         img = Image.new("RGB", (w, h))
@@ -541,8 +541,8 @@ def _render(i):
 
 
 def render_frames(n, jobs, init):
-    """Кадры трейлера по порядку. В работе и в очереди — не больше 2×jobs кадров: Pool.imap не ждёт потребителя
-    и копит готовые кадры (6 МБ на 1080p), пока кодер x264 медленнее отрисовки, — 16 процессов съели бы больше 8 ГБ."""
+    """Trailer frames in order. No more than 2×jobs frames running or queued: Pool.imap does not wait for the consumer
+and accumulates finished frames (6 MB at 1080p) while the x264 encoder is slower than rendering; 16 processes would use over 8 GB."""
     with multiprocessing.Pool(jobs, _init_worker, init) as pool:
         pending = collections.deque()
         for i in range(n):
@@ -553,7 +553,7 @@ def render_frames(n, jobs, init):
             yield pending.popleft().get()
 
 
-# ---------------------------------------------------------------- звук
+# ---------------------------------------------------------------- sound
 
 class SoundBank:
     def __init__(self):
@@ -565,7 +565,7 @@ class SoundBank:
         self.cache = {}
 
     def load(self, loc):
-        """Звук по пути файла из журнала («namespace:sounds/….ogg») → моно float32 при SR."""
+        """Sound at the file path from the log ("namespace:sounds/….ogg") → mono float32 at SR."""
         if loc in self.cache:
             return self.cache[loc]
         ns, path = loc.split(":", 1)
@@ -585,8 +585,8 @@ class SoundBank:
 
 
 def _gain_pan(cam, pos, volume, rng, relative, linear):
-    """Громкость и панорама как у движка: линейное затухание до range; без затухания (моторы мода, удар волны) —
-    громкость как есть, но направление честное."""
+    """Volume and panning as in the engine: linear attenuation up to range; without attenuation (mod motors, wave impact),
+volume is used as is, but direction is accurate."""
     x, y, z, yaw, _ = cam
     if relative:
         return min(volume, 1.0), 0.0, 0.0
@@ -599,12 +599,12 @@ def _gain_pan(cam, pos, volume, rng, relative, linear):
     return g, pan, dist
 
 
-# фон мира, который в трейлере только мешает (пещерный гул, спавнер испытаний под землёй)
+# world ambience that only gets in the way in the trailer (cave rumble, underground trial spawner)
 SKIP_SOUNDS = ("minecraft:ambient.", "minecraft:block.trial_spawner", "minecraft:music")
 
 
 def render_sfx(edit, shots, total, bank):
-    """Звук игры по монтажу: каждый звук плана, попавший в склейку, — с громкостью и панорамой по камере."""
+    """Game audio following the edit: every shot sound included in a cut, with camera-based volume and panning."""
     out = np.zeros((int(total * SR) + SR, 2), np.float32)
     for c in edit:
         if not isinstance(c, Clip) or c.sfx <= 0:
@@ -612,7 +612,7 @@ def render_sfx(edit, shots, total, bank):
         s = shots[c.shot]
         lo, hi = c.src, c.src + c.dur * c.rate
         slow = s.speed if s.speed < 1 else 1.0
-        stretch = slow ** -0.35  # замедленный план — звук ниже и длиннее, как в кино
+        stretch = slow ** -0.35  # slowed shot: lower-pitched, longer sound, as in film
         for e in s.sounds:
             if e["event"].startswith(SKIP_SOUNDS):
                 continue
@@ -632,8 +632,8 @@ def render_sfx(edit, shots, total, bank):
             n = int((seg_end - seg_start) / c.rate * SR)
             if n <= 0:
                 continue
-            ts = seg_start + np.arange(n) / SR * c.rate          # время плана для каждого сэмпла
-            # громкость, тон, место — по кадрам (движок пишет их для меняющихся звуков)
+            ts = seg_start + np.arange(n) / SR * c.rate          # shot time for each sample
+            # volume, pitch, position by frame (the engine logs them for changing sounds)
             ups = s.updates.get(e["id"], [])
             ut = np.array([s.sec(u[0]) for u in ups]) if ups else None
             kf = np.arange(int(seg_start * FPS), int(seg_end * FPS) + 2)
@@ -657,7 +657,7 @@ def render_sfx(edit, shots, total, bank):
             g = np.interp(ts, ft, gains)
             pan = np.interp(ts, ft, pans) * 0.75
             pr = np.interp(ts, ft, pitches)
-            # позиция в файле: тон — скорость чтения; звук идёт в своём темпе, даже если план ускорен
+            # position in the file: pitch is read speed; sound runs at its own pace even if the shot is sped up
             pos_samples = (seg_start - t0) * SR * base_pitch + np.cumsum(pr) - pr[0]
             if e["loop"]:
                 pos_samples = np.mod(pos_samples, len(data) - 1)
@@ -665,13 +665,13 @@ def render_sfx(edit, shots, total, bank):
             y = np.interp(np.where(valid, pos_samples, 0), np.arange(len(data)), data) * valid
             dist = float(np.median(dists)) if dists else 0.0
             hf = float(np.median(highs)) if highs else 1.0
-            if hf < 0.98:  # фильтр мода (воздух, холм или дом между): доля верхов → срез
+            if hf < 0.98:  # mod filter (air, hill or house in between): treble fraction → cutoff
                 y = sosfilt(butter(2, max(500.0, 20000.0 * hf ** 1.6), "low", fs=SR, output="sos"), y)
-            elif dist > 40 and not e["event"].startswith("incoming:"):  # ванильные звуки издалека — воздух глушит верха
+            elif dist > 40 and not e["event"].startswith("incoming:"):  # distant vanilla sounds: air attenuates treble
                 cutoff = max(900.0, 16000.0 / (1 + dist / 120))
                 y = sosfilt(butter(2, cutoff, "low", fs=SR, output="sos"), y)
             y = y * g * c.sfx
-            # склейка: короткие подъём и спад, чтобы не щёлкало
+            # cut: short fade-in and fade-out to avoid clicks
             ramp = min(n, int(0.012 * SR))
             if ramp > 1:
                 y[:ramp] *= np.linspace(0, 1, ramp)
@@ -685,7 +685,7 @@ def render_sfx(edit, shots, total, bank):
 
 
 def synth_hit(kind, dur, rng):
-    """Звуки монтажа: низкий удар (boom), нарастающий шум (riser), свист (whoosh)."""
+    """Edit sounds: low impact (boom), rising noise (riser), swish (whoosh)."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     if kind == "boom":
@@ -713,13 +713,13 @@ def synth_hit(kind, dur, rng):
 
 
 def music_track(total, drop_at):
-    """Музыка: сильная доля трека совпадает с drop_at; в начале — наплыв, в конце — спад."""
+    """Music: track downbeat matches drop_at; fade in at the start, fade out at the end."""
     path = fetch(MUSIC["url"], MUSIC["sha256"], MUSIC["file"])
     wav = os.path.join(CACHE, "impact-prelude.wav")
     if not os.path.exists(wav):
         subprocess.run([ffmpeg(), "-loglevel", "error", "-y", "-i", path, "-ar", str(SR), "-ac", "2", wav], check=True)
     x, _ = sf.read(wav, dtype="float32", always_2d=True)
-    offset = MUSIC["drop"] - drop_at            # время трека в начале трейлера
+    offset = MUSIC["drop"] - drop_at            # track time at the start of the trailer
     out = np.zeros((int(total * SR) + SR, 2), np.float32)
     a = int(max(0, offset) * SR)
     b = int(-min(0, offset) * SR)
@@ -741,45 +741,45 @@ def mix(edit, texts, hits, shots, total, drop_at, flash):
         if h.kind == "mute":
             continue
         y = synth_hit(h.kind, h.dur, rng) * h.gain
-        if h.kind == "riser":  # нарастание кончается в момент удара
+        if h.kind == "riser":  # build-up ends at the impact
             i = max(0, i - len(y))
         extra[i:i + len(y)] += y[: len(extra) - i]
-    # тишина музыки после ядерной вспышки (последний удар трека уже отзвучал): только гул и ветер игры
+    # music silence after the nuclear flash (the last track hit has finished): only game rumble and wind
     i = int(flash * SR)
     k = int(0.25 * SR)
     music[i:i + k] *= np.linspace(1, 0, k)[:, None]
     music[i + k:] = 0
     out = music * 0.55 + sfx * 0.9 + extra * 0.6
-    # мягкий ограничитель
+    # soft limiter
     peak = np.max(np.abs(out)) + 1e-9
     out = np.tanh(out * (1.4 / max(1.0, peak * 0.7))) * 0.95
     return out
 
 
-# ---------------------------------------------------------------- сборка
+# ---------------------------------------------------------------- assembly
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--draft", action="store_true")
-    ap.add_argument("--lang", choices=sorted(WORDS), default="en", help="слова на экране: en — Modrinth и YouTube, ru — для своих")
-    ap.add_argument("--out", help="файл (по умолчанию dist/incoming-trailer.mp4, для ru — …-ru.mp4)")
-    ap.add_argument("--rec", action="append", help="папка записи (по умолчанию mod/run/scenario/trailer); можно несколько — "
-                    "планы из следующих (пересъёмка) заменяют одноимённые")
-    ap.add_argument("--preset", default="slow", help="предустановка x264 для чистового (slow — лучше, medium — быстрее)")
+    ap.add_argument("--lang", choices=sorted(WORDS), default="en", help="on-screen words: en for Modrinth and YouTube, ru for our audience")
+    ap.add_argument("--out", help="file (default dist/incoming-trailer.mp4; …-ru.mp4 for ru)")
+    ap.add_argument("--rec", action="append", help="recording folder (default mod/run/scenario/trailer); multiple allowed — "
+                    "shots from later recordings (retakes) replace matching names")
+    ap.add_argument("--preset", default="slow", help="x264 preset for the final version (slow for quality, medium for speed)")
     ap.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 6),
-                    help="процессов отрисовки (по умолчанию не больше 6: каждый ~0.3 ГБ на 1080p)")
+                    help="render processes (default no more than 6: each ~0.3 GB at 1080p)")
     args = ap.parse_args()
     if args.out is None:
         args.out = os.path.join(DIST, "incoming-trailer.mp4" if args.lang == "en" else f"incoming-trailer-{args.lang}.mp4")
     shots = pick_takes([load_recording(rec) for rec in args.rec or [REC]], GAME_LANG[args.lang])
-    for v in FONTS.values():  # скачать до рабочих процессов
+    for v in FONTS.values():  # download before starting workers
         fetch(*v)
-    print("планы:", ", ".join(f"{s.name} {s.duration:.1f}с" for s in shots.values()))
+    print("shots:", ", ".join(f"{s.name} {s.duration:.1f}s" for s in shots.values()))
     edit, texts, hits, total, drop_at, flash = build_edit(args.lang)
     missing = {c.shot for c in edit if isinstance(c, Clip) and c.shot not in shots}
     if missing:
-        # нет плана — его время отдаётся прошлому плану (он идёт медленнее), без чёрных дыр
-        print("  ! нет планов:", ", ".join(sorted(missing)), "— их время у соседних планов")
+        # missing shot: give its time to the previous shot (slower playback), without black gaps
+        print("  ! missing shots:", ", ".join(sorted(missing)), "— their time goes to neighboring shots")
         kept = []
         for c in edit:
             if isinstance(c, Clip) and c.shot in missing and kept and isinstance(kept[-1], Clip):
@@ -790,12 +790,12 @@ def main():
     for c in edit:
         if isinstance(c, Clip):
             c.src = max(0.0, anchor(shots[c.shot], c.at))
-            # камера снаряда вернулась к игроку («exit») — склейка кончается раньше
+            # projectile camera returned to the player ("exit"): the cut ends earlier
             exits = [shots[c.shot].sec(t) for t, m in shots[c.shot].marks if m == "exit"]
             if exits and exits[0] > c.src and c.src + c.dur * c.rate > exits[0] - 0.1:
                 c.src = max(0.0, exits[0] - 0.1 - c.dur * c.rate)
             left = shots[c.shot].duration - c.src
-            if c.dur * c.rate > left > 0:  # не хватает кадров — медленнее, но до конца плана
+            if c.dur * c.rate > left > 0:  # not enough frames: slower, but through to the end of the shot
                 c.rate = left / c.dur
     t = 0.0
     for c in edit:
@@ -804,13 +804,13 @@ def main():
     first = next(iter(shots.values()))
     w0, h0 = Image.open(first.frame(0)).size
     if w0 * 9 != h0 * 16:
-        raise SystemExit(f"кадры {w0}×{h0}, а нужно 16:9 (1920×1080) — переснять: окно клиента было не того размера")
+        raise SystemExit(f"frames {w0}×{h0}, but 16:9 (1920×1080) is required — record again: the client window had the wrong size")
     size = (960, 540) if args.draft else (w0, h0)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     audio = os.path.join(CACHE, "trailer-audio.wav")
-    print("звук…")
+    print("audio…")
     sf.write(audio, mix(edit, texts, hits, shots, total, drop_at, flash), SR, subtype="PCM_16")
-    print(f"картинка: {int(total * FPS)} кадров {size[0]}×{size[1]}…")
+    print(f"picture: {int(total * FPS)} frames {size[0]}×{size[1]}…")
     cmd = [ffmpeg(), "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size[0]}x{size[1]}", "-r", str(FPS),
            "-i", "-", "-i", audio, "-c:v", "libx264", "-preset", "veryfast" if args.draft else args.preset, "-crf", "23" if args.draft else "15",
            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-c:a", "aac", "-b:a", "256k", "-shortest", args.out]
@@ -819,22 +819,22 @@ def main():
     for i, buf in enumerate(render_frames(n, args.jobs, (edit, texts, shots, size))):
         enc.stdin.write(buf)
         if i % 600 == 0:
-            print(f"  {i / FPS:.0f} с")
+            print(f"  {i / FPS:.0f} s")
     enc.stdin.close()
     if enc.wait() != 0:
-        raise SystemExit("ffmpeg: кодирование не удалось")
-    print("готово:", args.out)
+        raise SystemExit("ffmpeg: encoding failed")
+    print("done:", args.out)
     if not args.draft:
-        # лёгкая версия для мессенджеров: тот же монтаж, поток не выше 4 Мбит/с (~80 МБ на 2.5 мин)
+        # light version for messengers: same edit, stream no higher than 4 Mbit/s (~80 MB for 2.5 min)
         lite = os.path.splitext(args.out)[0] + "-lite.mp4"
         subprocess.run([ffmpeg(), "-loglevel", "error", "-y", "-i", args.out, "-c:v", "libx264", "-preset", "medium", "-crf", "23",
                         "-maxrate", "4M", "-bufsize", "8M", "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "192k",
                         "-movflags", "+faststart", lite], check=True)
-        print("лёгкая версия:", lite)
+        print("light version:", lite)
         credits = os.path.splitext(args.out)[0] + "-credits.txt"
         with open(credits, "w", encoding="utf-8") as f:
             f.write(CREDITS)
-        print("строки для описания (Modrinth, YouTube):", credits)
+        print("description lines (Modrinth, YouTube):", credits)
 
 
 if __name__ == "__main__":

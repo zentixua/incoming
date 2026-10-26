@@ -59,41 +59,41 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Один сценарий полёта от площадки до проверки свойств. Снаряд пускается напрямую ({@code launch},
- * {@code placeOnLauncher}, {@code setRoute}) с геометрией боевого пуска ({@code StrikeService}), но всё случайное —
- * из зерна сценария: у пуска из пульта сторону обхода, разброс РСЗО и точку бомбы выбирает {@code level.random}.
+ * One flight scenario from site to property check. The projectile is launched directly ({@code launch},
+ * {@code placeOnLauncher}, {@code setRoute}) with the geometry of a combat launch ({@code StrikeService}), but everything is random -
+ *  from the seed script: for launch from the remote control, the bypass side, the MLRS spread and the bomb point are selected {@code level.random}.
  * <p>
- * Свойства, которые сценарий проверяет у любого полёта:
+ * Properties that the script checks for any flight:
  * <ul>
- *     <li>полёт кончается в пределах плана × 1,5 с запасом на погоню ({@link #checkDuration});</li>
- *     <li>нет кружения: вне круга барража управляемый снаряд в радиусе своего разворота от точки цели поворачивает
- *         в сумме не больше чем на {@link #MAX_TURN}° ({@link Track#turn});</li>
- *     <li>неподвижная цель поражена в пределах дальности взрывателя ({@link #checkHit});</li>
- *     <li>по маршруту оператора снаряд проходит его точки по порядку ({@link #checkWaypoints});</li>
- *     <li>после конца полёта ни тикетов с UUID снаряда, ни записи в {@link VirtualFlights};</li>
- *     <li>мод не читал неготовых чанков ({@link SyncLoadWatch});</li>
- *     <li>бюджет работы за тик (корень 1): полоса попаданий не больше общего срока и единицы, с блэкаутом — единицы
- *         на полосу; очередь попаданий пустеет; всё, что выбрали взрывы снаряда, снесено ({@link #checkWork}). Часы
- *         общие на сервер: превышение засчитывается всем сценариям, чей полёт шёл в том тике;</li>
- *     <li>полёт совпадает с эталоном ({@link Baseline}), если сценарий в нём.</li>
+ *     <li>flight ends within the plan × 1,5 with a margin to chase ({@link #checkDuration});</li>
+ *     <li>no circling: outside the barrage circle, the guided projectile within its turning radius from the target point turns
+ *         in total no more than {@link #MAX_TURN}° ({@link Track#turn});</li>
+ *     <li>a stationary target is hit within the fuse range ({@link #checkHit});</li>
+ *     <li> along the operator’s route the projectile passes its points in order ({@link #checkWaypoints});</li>
+ *     <li>after the end of the flight, neither the ticket with the UUID projectile, nor the entries in {@link VirtualFlights};</li>
+ *     <li> the mod did not read unready chunks ({@link SyncLoadWatch});</li>
+ *     <li>work budget per tick (root 1): the hit streak is not more than the total period and one, with blackout - units
+ *          per strip; the hit queue empties; everything chosen by the shell explosions is demolished ({@link #checkWork}). Clock
+ *         general for the server: the excess is counted to all scenarios whose flight was on that tick;</li>
+ *     <li>flight coincides with the standard ({@link Baseline}), if the scenario it.</li>
  * </ul>
  */
 final class ScenarioRun {
-    /** Больше этого за полёт в радиусе разворота от цели — кружение (два полных круга). */
+    /** More than this for a flight within a turning radius from the target - circling (two full circles). */
     static final double MAX_TURN = 720;
-    /** Запас к сроку, тиков: после плана × 1,5 снаряд у мода живёт ещё 600 тиков — кружащий их выберет. */
+    /** Stock by the deadline, tick: after the plan × 1,5, the mod’s projectile still lives 600 tick - the one circling will select them. */
     private static final int DURATION_SLACK = 200;
-    /** Сколько ждать сборки аппарата Sable. */
+    /** How long to wait to build craft Sable. */
     private static final int CRAFT_WAIT = 100;
-    /** Сколько ждать после конца полёта, пока отпустятся районы (очередь районов тикает в конце тика мира). */
+    /** How long to wait after the end of the flight until the areas are released (the queue of areas ticks at the end of the tick world). */
     private static final int SETTLE_TICKS = 5;
-    /** Сколько после конца полёта ждать, пока работа попаданий снесёт всё, что выбрали взрывы снаряда, тиков. */
+    /** How long after the end of the flight should we wait until the work of hits demolishes everything selected by the projectile explosions, tick. */
     private static final int IMPACT_LIMIT = 600;
-    /** Амплитуда хода моба по рельсу, блоков. */
+    /** The amplitude of the mob's movement along the rail, blocks. */
     private static final double RAIL_HALF = 20;
     /**
-     * Перенацеливание вбок ({@code BESIDE}): когда до цели столько блоков, новая точка — на столько сбоку и впереди
-     * снаряда. Внутри круга разворота ракеты (≈ 400 блоков), дальше её порога отмены атаки (64 блока).
+     * Retargeting to the side ({@code BESIDE}): when there are so many blocks to the target, the new point is so much to the side and in front of the
+     *  projectile. Inside the missile's turning circle (≈ 400 blocks), beyond its attack cancellation threshold (64 blocks).
      */
     private static final double BESIDE_RANGE = 120, BESIDE_ACROSS = 80, BESIDE_AHEAD = 20;
 
@@ -105,27 +105,27 @@ final class ScenarioRun {
     private final UUID owner;
     private final UUID projectileId;
 
-    // цель
+    // goal
     @Nullable
     private Entity targetEntity;
     private Vec3 targetBase;
     @Nullable
     private Target target;
     private Vec3 lastTargetPoint;
-    /** Точка, в которую целит снаряд при пуске. */
+    /** The point at which the projectile is aimed at launch. */
     private Vec3 aim;
     private double targetTravel;
-    /** Точка неподвижной цели, куда снаряд должен попасть (null — цель движется или пропала). */
+    /** The point of a stationary target where the projectile should hit (null - the target is moving or has disappeared). */
     @Nullable
     private Vec3 stationaryAim;
-    /** Дальность стрельбы РСЗО, блоков: допуск попадания — с её рассеиванием ({@link WeaponSpec.Ballistic#sigma}). */
+    /** Firing range MLRS, blocks: hit tolerance - with its dispersion ({@link WeaponSpec.Ballistic#sigma}). */
     private double rocketRange;
     private double retargetShift;
-    /** Маршрут оператора ({@code WAYPOINTS}) и сколько его точек снаряд уже прошёл. */
+    /** The operator’s route ({@code WAYPOINTS}) and how many of its points the projectile has already passed. */
     private Waypoints via = Waypoints.NONE;
     private int viaPassed;
 
-    // ход сценария
+    // scenario progress
     private int tick;
     private int craftSince = -1;
     private int launchTick = -1;
@@ -136,7 +136,7 @@ final class ScenarioRun {
     private int endTick = -1;
     private boolean checked;
 
-    // наблюдение
+    // observation
     private final Map<UUID, Track> tracks = new LinkedHashMap<>();
     private final FlightTrace trace = new FlightTrace();
     @Nullable
@@ -144,39 +144,39 @@ final class ScenarioRun {
     private final Consumer<ExplosionEvent.Start> onBlast = this::onBlast;
     private final Consumer<ExplosionEvent.Detonate> onDetonate = this::onDetonate;
     /**
-     * Что выбрали взрывы снаряда (блоки мира рядом): место → блок в момент {@code Detonate}. Снесённое уходит отсюда по
-     * обновлению соседей ({@code NeighborNotifyEvent} с воздухом или огнём на месте): воронку потом засыпают обломки
-     * и осыпание, и конечное состояние места ничего не говорит о том, снёс ли его взрыв.
+     * What the projectile explosions chose (world blocks nearby): location → block at the moment {@code Detonate}. What was demolished leaves here by
+     *  update of neighbors ({@code NeighborNotifyEvent} with air or fire in place): the crater is then filled with debris
+     *  and collapse, and the final state of the place says nothing about whether the explosion demolished it.
      */
     private final Map<BlockPos, Block> blasted = new HashMap<>();
-    /** Сколько блоков выбрали взрывы (для строки итога). */
+    /** How many blocks did the explosions select (for the total row). */
     private int blastedTotal;
     private final Consumer<BlockEvent.NeighborNotifyEvent> onBlockUpdate = this::onBlockUpdate;
     /**
-     * Взорвался ли снаряд сценария ({@code ExplosionEvent.Start} с его UUID). У бомбы B-2 — только сам заряд: взрыв входа
-     * в грунт ({@code Warheads.bunkerEntry}, сила {@link Warheads#BUNKER_ENTRY_POWER}) подрывом не считается.
+     * Whether the script shell ({@code ExplosionEvent.Start} with its UUID) exploded. The bomb B-2 has only the charge itself: the explosion of the entry
+     *  into the ground ({@code Warheads.bunkerEntry}, force {@link Warheads#BUNKER_ENTRY_POWER}) is not considered an explosion.
      */
     private boolean detonated;
-    /** Тик сервера при пуске и в конце полёта (граница бюджета, очередь попаданий). */
+    /** server tick at launch and at the end of the flight (budget limit, hit queue). */
     private int launchServerTick, endServerTick;
 
-    /** Итог полёта: чем кончился, на каком тике от пуска и где. */
+    /** Result flight: how it ended, at what tick from launch and where. */
     private record Outcome(String end, int tick, Vec3 at, WeaponType weapon) {}
 
-    /** Снаряд сценария (или бомба B-2), замеченный в полёте. */
+    /** Script projectile (or bomb B-2) spotted in flight. */
     private static final class Track {
         final int order;
         final WeaponType weapon;
-        /** Паспорт аппарата: пределы поворота. */
+        /** spec craft: rotation limits. */
         final WeaponSpec.Airframe airframe;
-        /** Бетонобойная бомба B-2 (а не сам B-2). */
+        /** Concrete bomb B-2 (not B-2 itself). */
         final boolean bomb;
         Vec3 last;
         double lastStep;
         double heading = Double.NaN;
         @Nullable
         Vec3 aim;
-        /** Поворот курса в радиусе разворота от неподвижной точки цели вне круга барража, °. */
+        /** Course rotation within the turning radius from a fixed target point outside the barrage circle, °. */
         double turn;
 
         Track(int order, StrikeProjectile p) {
@@ -210,10 +210,10 @@ final class ScenarioRun {
         if (!Baseline.recording() && !ScenarioMode.REAL_CHUNKS) ChunkChurn.acquire();
         StrikeGameTests.afterTest(h, this::cleanup);
         h.onEachTick(this::tick);
-        h.succeedWhen(() -> h.assertTrue(checked, "полёт ещё идёт: " + status() + " — " + ScenarioMode.reproduce(s)));
+        h.succeedWhen(() -> h.assertTrue(checked, "the flight is still underway: " + status() + " — " + ScenarioMode.reproduce(s)));
     }
 
-    // ---------------------------------------------------------------- ход
+    // ---------------------------------------------------------------- progress
 
     private void tick() {
         tick++;
@@ -254,7 +254,7 @@ final class ScenarioRun {
 
     private Entity spawn(EntityType<?> type, Vec3 at) {
         Entity e = type.create(level);
-        if (e == null) throw new GameTestAssertException("не создалась цель " + type);
+        if (e == null) throw new GameTestAssertException("the goal was not created " + type);
         e.moveTo(at.x, at.y, at.z, 0, 0);
         e.setNoGravity(true);
         if (e instanceof Mob m) m.setNoAi(true);
@@ -262,7 +262,7 @@ final class ScenarioRun {
         return e;
     }
 
-    /** Настил 3×3 из досок на земле у цели — аппарат Sable после сборки. */
+    /** Flooring 3×3 from boards on the ground at the target - craft Sable after assembly. */
     private void assembleCraft(Vec3 o) {
         BlockPos c = BlockPos.containing(o);
         BlockPos a = c.offset(-1, 0, -1), b = c.offset(1, 0, 1);
@@ -273,13 +273,13 @@ final class ScenarioRun {
         craftSince = tick;
     }
 
-    /** Районы тикают, аппарат (если он цель) собран: можно пускать. */
+    /** The areas are ticking, the craft (if it is the target) is collected: you can start. */
     private boolean ready() {
         if (s.target() == Scenario.TargetKind.CRAFT && target == null) {
             Vec3 centre = site.origin.add(0, 0.5, 0);
             List<SubLevelAccess> near = SubLevels.near(level, centre, 8);
             if (near.isEmpty()) {
-                if (tick - craftSince > CRAFT_WAIT) throw new GameTestAssertException("аппарат не собрался за " + CRAFT_WAIT + " тиков");
+                if (tick - craftSince > CRAFT_WAIT) throw new GameTestAssertException("craft didn't get together " + CRAFT_WAIT + " tick");
                 return false;
             }
             target = new Target.OfSubLevel(SubLevels.toPlot(near.getFirst(), centre));
@@ -287,19 +287,19 @@ final class ScenarioRun {
         return site.ticking();
     }
 
-    // ---------------------------------------------------------------- пуск
+    // ---------------------------------------------------------------- launch
 
     private Vec3 targetPoint() {
         return target.resolve(level).orElse(site.origin);
     }
 
-    /** Место пусковой: против захода на дальности пуска, на рельефе (холм у пусковой — её место на нём). */
+    /** Launcher's place: opposite approach at the launch range, on the terrain (the hill near the launcher is its place on it). */
     private Vec3 launchSite() {
         Vec3 at = site.origin.subtract(p.approach().scale(p.standoff()));
         return site.ground(at.x, at.z, false);
     }
 
-    /** Куда уводит цель перенацеливание или телепорт. */
+    /** Where retargeting or teleporting takes the target. */
     private Vec3 shifted() {
         Vec3 at = targetBase.add(p.shiftDir().scale(p.shift()));
         return site.ground(at.x, at.z, false);
@@ -321,7 +321,7 @@ final class ScenarioRun {
             case ICBM -> icbm(point);
         };
         eta0 = proj.etaTicks();
-        // куда снаряд целит сам: у РСЗО — точка с рассеиванием, у B-2 — поверхность (синхронная точка цели — float)
+        // where the projectile aims itself: for MLRS - a point with dispersion, for B-2 - a surface (synchronous target point - float)
         if (s.target() == Scenario.TargetKind.POINT && s.launch() != Scenario.Launch.ICBM) stationaryAim = aim;
         launchTick = tick;
         launchGameTime = level.getGameTime();
@@ -329,10 +329,10 @@ final class ScenarioRun {
         disturbAt = tick + (int) Math.round(p.when() * eta0);
     }
 
-    /** Снаряд до пуска: своё зерно и UUID из сценария. */
+    /** Projectile before launch: your seed and UUID from the script. */
     private <T extends StrikeProjectile> T create(EntityType<T> type) {
         T e = type.create(level);
-        if (e == null) throw new GameTestAssertException("не создался снаряд " + type);
+        if (e == null) throw new GameTestAssertException("the projectile was not created " + type);
         e.setUUID(projectileId);
         e.seed(p.random());
         return e;
@@ -347,8 +347,8 @@ final class ScenarioRun {
     }
 
     /**
-     * Как {@code StrikeService.fromAfar}: начало на прямой захода, на длину полёта от цели, вне мира; по маршруту
-     * оператора — перед его первой точкой на продолжении первого участка.
+     * Like {@code StrikeService.fromAfar}: start on the approach line, at the flight length from the target, out of the world; along the operator’s route
+     *  - before his first point on the continuation of the first section.
      */
     private StrikeProjectile fromAfar(Vec3 point) {
         StrikeProjectile e = guided();
@@ -369,8 +369,8 @@ final class ScenarioRun {
     }
 
     /**
-     * Как {@code StrikeService.fromLauncher}: пакет смотрит на первую точку маршрута; по маршруту оператора — ворота
-     * взведения на курсе к его первой точке, потом его точки.
+     * Like {@code StrikeService.fromLauncher}: the packet looks at the first waypoint; along the operator's route - gate
+     *  cocking on the course to his first point, then his point.
      */
     private StrikeProjectile guidedFromRail(Vec3 point) {
         StrikeProjectile e = guided();
@@ -413,9 +413,9 @@ final class ScenarioRun {
     }
 
     /**
-     * Точка падения РСЗО — сама точка, как у {@code StrikeService}: рассеивание — данные стрельбы снаряда
-     * ({@link RocketEntity#fireData}: разброс схода из зерна сценария {@code p.scatter()} и ветер, который расчёт знает
-     * только у земли); дальность — для допуска попадания ({@link #checkHit}).
+     * The MLRS impact point is the point itself, like {@code StrikeService}: dispersion - projectile firing data
+     *  ({@link RocketEntity#fireData}: launch rail exit dispersion from the seed script {@code p.scatter()} and the wind, which the calculation knows
+     *  only near the ground); range - for hit tolerance ({@link #checkHit}).
      */
     private Vec3 scatter(RocketEntity r, Vec3 from, Vec3 point) {
         r.fireData(new Vec3(p.scatter().x, p.scatter().z, 0), true);
@@ -441,7 +441,7 @@ final class ScenarioRun {
         return r;
     }
 
-    /** Как {@code StrikeService.launchBomber}: точка на поверхности (карта высот готового чанка), без разброса. */
+    /** Like {@code StrikeService.launchBomber}: a point on the surface (height map of the finished chunk), without scatter. */
     private StrikeProjectile bomber(Vec3 point) {
         BomberEntity e = create(ModEntities.BOMBER.get());
         Vec3 surface = new Vec3(point.x, point.y - 0.5, point.z);
@@ -453,7 +453,7 @@ final class ScenarioRun {
         return e;
     }
 
-    /** Старт МБР со стола у пусковой (удар по цели ведёт уже не она). */
+    /** ICBM starts from the table at the launcher (it is no longer she who strikes the target). */
     private StrikeProjectile icbm(Vec3 point) {
         IcbmEntity e = create(ModEntities.ICBM.get());
         e.prepare(launchSite(), point, owner);
@@ -461,18 +461,18 @@ final class ScenarioRun {
         return e;
     }
 
-    /** Точка схода с направляющей: над землёй места пусковой. */
+    /** Launch rail exit point with guide: above the ground of the launcher location. */
     private Vec3 rail() {
         return launchSite().add(0, 2, 0);
     }
 
     private void add(StrikeProjectile e) {
-        if (!level.addFreshEntity(e)) throw new GameTestAssertException("снаряд не добавился в мир у " + e.blockPosition());
+        if (!level.addFreshEntity(e)) throw new GameTestAssertException("the projectile was not added to the world " + e.blockPosition());
     }
 
-    // ---------------------------------------------------------------- цель и возмущения
+    // ---------------------------------------------------------------- purpose and disturbances
 
-    /** Точка «игрока» на круге через {@code t} тиков. */
+    /** The “player” point on the circle through {@code t} tick. */
     private Vec3 playerAt(int t) {
         double a = t * p.mobSpeed() / p.orbit();
         return targetBase.add(Math.cos(a) * p.orbit(), p.altitude(), Math.sin(a) * p.orbit());
@@ -483,7 +483,7 @@ final class ScenarioRun {
             int t = tick - launchTick;
             Vec3 at = switch (s.target()) {
                 case MOB -> {
-                    // туда-обратно поперёк захода
+                    // back and forth across approach
                     double x = (t * p.mobSpeed()) % (RAIL_HALF * 4);
                     double off = x < RAIL_HALF * 2 ? x - RAIL_HALF : RAIL_HALF * 3 - x;
                     Vec3 across = new Vec3(-p.approach().z, 0, p.approach().x);
@@ -542,14 +542,14 @@ final class ScenarioRun {
         }
     }
 
-    /** Снаряд на подлёте: до цели по горизонтали не больше {@link #BESIDE_RANGE} (и не в круге барража). */
+    /** Projectile on approach: horizontally to the target no more than {@link #BESIDE_RANGE} (and not in the barrage circle). */
     private boolean onApproach() {
         StrikeProjectile live = main();
         return live != null && live.flightPhase() != FlightPhase.LOITER
                 && live.position().subtract(site.origin).horizontalDistance() <= BESIDE_RANGE;
     }
 
-    /** Снаряд, пущенный сценарием (в мире или вне его), или null. */
+    /** A projectile fired by a script (in-world or out-of-world), or null. */
     @Nullable
     private StrikeProjectile main() {
         if (level.getEntity(projectileId) instanceof StrikeProjectile e && !e.isRemoved()) return e;
@@ -557,7 +557,7 @@ final class ScenarioRun {
         return null;
     }
 
-    // ---------------------------------------------------------------- наблюдение
+    // ---------------------------------------------------------------- observation
 
     private List<StrikeProjectile> live() {
         List<StrikeProjectile> out = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class),
@@ -569,7 +569,7 @@ final class ScenarioRun {
     private void observe() {
         int t = tick - launchTick;
         List<StrikeProjectile> now = live();
-        // новые — в порядке первого появления (UUID бомбы случайный, по нему не сортировать)
+        // new ones - in order of first appearance (UUID bombs are random, do not sort by it)
         now.stream().filter(e -> !tracks.containsKey(e.getUUID()))
                 .sorted(Comparator.comparing((StrikeProjectile e) -> e.getClass().getName()))
                 .forEach(e -> tracks.put(e.getUUID(), new Track(tracks.size(), e)));
@@ -591,8 +591,8 @@ final class ScenarioRun {
             endTick = tick;
             endServerTick = level.getServer().getTickCount();
             if (outcome == null) {
-                // пока «пропал»: взрыв попадания начинается в работе попаданий (WorkScheduler), в конце тика сервера
-                // или позже, когда до него дойдёт очередь, — тогда итог станет взрывом с этим же тиком
+                // while “disappeared”: the hit explosion begins in the hit job (WorkScheduler), at the end of the server tick
+                // , or later, when it comes to his turn - then the result will be an explosion with the same tick
                 Track last = tracks.values().stream().reduce((a, b) -> b).orElseThrow();
                 outcome = new Outcome("gone", t, last.last, last.weapon);
             }
@@ -600,9 +600,9 @@ final class ScenarioRun {
     }
 
     /**
-     * Точка маршрута оператора пройдена, когда снаряд подошёл к ней по горизонтали не дальше двух захватов паспорта
-     * и шага: столько оставляет {@code Route.update} снаряду, который проскочил точку с большим кругом разворота.
-     * Считаются только по порядку: подойти ко второй раньше первой — не пройти её.
+     * The operator's route point has been passed when the projectile has approached it horizontally no further than two spec grabs
+     *  and a step: this is what {@code Route.update} leaves for the projectile that has passed the point with a large turning circle.
+     *  Count only in order: approaching the second before the first means not passing it.
      */
     private void passWaypoints(StrikeProjectile e, Track tr, Vec3 pos) {
         if (viaPassed >= via.size()) return;
@@ -612,8 +612,8 @@ final class ScenarioRun {
     }
 
     /**
-     * Поворот курса по шагу — только управляемым, вне круга барража, в радиусе разворота от точки цели и пока она стоит
-     * на месте: погоня за целью, которая сама ходит по кругу, — тоже круги, но не кружение у точки (его ловит срок).
+     * Turning the course in steps - only in a controlled manner, outside the barrage circle, within the turning radius from the target point and while it is standing
+     *  in place: chasing a target that itself is walking in a circle - also circles, but not circling at the point (the deadline catches it).
      */
     private void accumulateTurn(Track tr, StrikeProjectile e, Vec3 step) {
         if (tr.airframe.turnRate() <= 0) return;
@@ -626,44 +626,44 @@ final class ScenarioRun {
         double prev = tr.heading;
         tr.heading = heading;
         if (Double.isNaN(prev) || aimMoved || e.flightPhase() == FlightPhase.LOITER) return;
-        // на наборе высоты поворот медленнее — круг шире (как у самого снаряда, StrikeProjectile.insideTurn)
+        // when climbing, the turn is slower - the circle is wider (like the projectile itself, StrikeProjectile.insideTurn)
         double rate = e.flightPhase() == FlightPhase.CLIMB ? tr.airframe.climbTurnRate() : tr.airframe.turnRate();
         double radius = horizontal / Math.toRadians(rate) * 2;
         if (e.position().subtract(aim).horizontalDistance() > radius) return;
         tr.turn += Math.abs(Mth.wrapDegrees(heading - prev));
     }
 
-    /** Что выбрал взрыв снаряда сценария (любой: подрыв, огненный шар, вторичные) — блоки мира рядом, не аппарата. */
+    /** What the scenario projectile explosion chose (any: explosion, fireball, secondary) - world blocks nearby, not craft. */
     private void onDetonate(ExplosionEvent.Detonate e) {
         if (e.getLevel() != level) return;
         UUID by = StressDirector.blastBy(e.getExplosion());
-        // столкновение до взведения (crash) — взрыв без разрушения блоков: список Detonate у него есть, но ваниль его не сносит
+        // collision before arming (crash) - explosion without destroying blocks: it has the list Detonate, but vanilla does not demolish it
         if (by == null || !tracks.containsKey(by) || !e.getExplosion().interactsWithBlocks()) return;
         Vec3 c = e.getExplosion().center();
         double reach = e.getExplosion().radius() * 2 + 2;
         for (BlockPos q : e.getAffectedBlocks()) {
-            // блоки аппарата Sable живут в плоте, далеко от места взрыва: их судьба — дело Sable
+            // craft blocks Sable live in the plot, far from the explosion site: their fate is the business of Sable
             BlockState state = level.getBlockState(q);
             if (!state.isAir() && Vec3.atCenterOf(q).distanceTo(c) <= reach && blasted.putIfAbsent(q.immutable(), state.getBlock()) == null) blastedTotal++;
         }
     }
 
-    /** Выбранное взрывом место снесено (воздух или огонь): вычеркнуть. */
+    /** The location chosen by the explosion was demolished (air or fire): cross out. */
     private void onBlockUpdate(BlockEvent.NeighborNotifyEvent e) {
         if (e.getLevel() == level && !blasted.isEmpty() && gone(e.getState())) blasted.remove(e.getPos());
     }
 
     /**
-     * Выбранное и не снесённое место, на котором стоит тот же блок, что в момент выбора. Сменившийся блок (обломки
-     * или осыпание легли раньше, чем до места дошла порция взрыва) {@code StagedExplosion} не трогает — это не промах.
+     * A selected and not demolished place on which the same block stands as at the time of selection. {@code StagedExplosion} does not touch the replaced block (the debris of
+     *  or the crumbling lay down before the portion of the explosion reached the site) - this is not a mistake.
      */
     private boolean untouched(Map.Entry<BlockPos, Block> q) {
         return level.getBlockState(q.getKey()).is(q.getValue());
     }
 
-    /** Работа попаданий дошла: всё выбранное взрывами снесено или сменилось, и очередь попаданий с конца полёта пустела. */
+    /** The work of hits had arrived: everything selected by explosions was demolished or replaced, and the line of hits from the end of the flight was empty. */
     private boolean impactsDone() {
-        // B-2: итог — вход бомбы, подрыв идёт позже; ждать его (или срока, тогда checkHit упадёт)
+        // B-2: result - bomb entry, detonation occurs later; wait for it (or the deadline, then checkHit will fall)
         return (detonated || s.launch().weapon != WeaponType.BUNKER) && WorkBudgetWatch.emptiedSince(endServerTick)
                 && blasted.entrySet().stream().noneMatch(this::untouched);
     }
@@ -672,23 +672,23 @@ final class ScenarioRun {
         return state.isAir() || state.getBlock() instanceof BaseFireBlock;
     }
 
-    /** Первый взрыв снаряда сценария — по источнику урона (соседние сценарии далеко, но чужой взрыв не засчитать). */
+    /** The first explosion of a scenario shell is based on the source of damage (neighboring scenarios are far away, but someone else’s explosion will not be counted). */
     private void onBlast(ExplosionEvent.Start e) {
         if (e.getLevel() != level || launchTick < 0) return;
         UUID by = StressDirector.blastBy(e.getExplosion());
         Track tr = by == null ? null : tracks.get(by);
-        // у бомбы взрыва при входе в грунт нет: любой её взрыв — подрыв
+        // a bomb does not have an explosion when entering the ground: any explosion is an explosion
         if (tr != null) detonated = true;
         if (outcome != null && !outcome.end.equals("gone")) return;
-        // тик итога — тик попадания (снаряд пропал), а не очереди работы: он зависит от чужих взрывов в том же тике
+        // tick total - hit tick (the projectile is gone), not the work queue: it depends on other people’s explosions in the same tick
         if (tr != null) outcome = new Outcome("blast", outcome != null ? outcome.tick : tick - launchTick, e.getExplosion().center(), tr.weapon);
     }
 
-    // ---------------------------------------------------------------- проверки
+    // ---------------------------------------------------------------- checks
 
     private void check() {
         double turn = tracks.values().stream().mapToDouble(tr -> tr.turn).max().orElse(0);
-        Incoming.LOG.info("SCENARIO flight {}: {} на тике {} (план {}), у {}, поворот у цели до {}°, промах {}, взрывы выбрали {} блоков", s.id(),
+        Incoming.LOG.info("SCENARIO flight {}: {} on tick {} (plan {}), at {}, turn at the target to {}°, miss {}, explosions selected {} blocks", s.id(),
                 outcome.end, outcome.tick, eta0, rel(outcome.at), Math.round(turn),
                 stationaryAim == null ? "—" : String.format(Locale.ROOT, "%.1f", outcome.at.distanceTo(stationaryAim)), blastedTotal);
         try {
@@ -699,15 +699,15 @@ final class ScenarioRun {
             checkReleased();
             checkWork();
             List<SyncLoadWatch.Violation> reads = SyncLoadWatch.since(launchGameTime);
-            h.assertTrue(reads.isEmpty(), "синхронная загрузка чанков по вине мода: " + reads);
-            // с настоящей загрузкой полёт зависит от скорости генерации на машине: эталон не про него
+            h.assertTrue(reads.isEmpty(), "synchronous loading of chunks due to the fault of the mod: " + reads);
+            // with a real load, the flight depends on the generation speed on the machine: the standard is not about it
             if (s.baselined() && !ScenarioMode.REAL_CHUNKS) checkBaseline();
         } catch (GameTestAssertException e) {
             throw new GameTestAssertException(e.getMessage() + " — " + ScenarioMode.reproduce(s));
         }
     }
 
-    /** Свойство, которое известный изъян мода нарушает ({@link Scenario#knownIssues}): нарушение — в лог, тест дальше. */
+    /** A property that is violated by a known flaw in the mod ({@link Scenario#knownIssues}): violation - in the log, test further. */
     private void known(Scenario.Property property, Runnable check) {
         if (!s.knownIssues().contains(property)) {
             check.run();
@@ -716,81 +716,81 @@ final class ScenarioRun {
         try {
             check.run();
         } catch (GameTestAssertException e) {
-            Incoming.LOG.warn("SCENARIO flight {}: известный изъян ({}): {}", s.id(), property, e.getMessage());
+            Incoming.LOG.warn("SCENARIO flight {}: known flaw ({}): {}", s.id(), property, e.getMessage());
         }
     }
 
-    /** Срок: план × 1,5 плюс погоня за целью (как продлевает срок жизни сам снаряд) и круг барража. */
+    /** Deadline: plan × 1,5 plus pursuit of the target (as the projectile itself extends the lifespan) and barrage circle. */
     private void checkDuration() {
         double cruise = cruiseSpeed();
         double chase = Math.min(TargetTracker.CHASE_BUDGET, targetTravel + retargetShift);
         double loiter = s.launch().weapon == WeaponType.LOITER ? IncomingConfig.SERVER.loiterTime.get() * 20 * 1.2 + 25 : 0;
         double bound = 1.5 * (eta0 + chase / cruise + loiter) + DURATION_SLACK;
-        h.assertTrue(outcome.tick <= bound, String.format(Locale.ROOT, "полёт кончился (%s) на тике %d, срок %.0f (план %d, погоня %.0f блоков)",
+        h.assertTrue(outcome.tick <= bound, String.format(Locale.ROOT, "flight ended (%s) on tick %d, time limit %.0f (plan %d, pursuit of %.0f blocks)",
                 outcome.end, outcome.tick, bound, eta0, chase));
     }
 
-    /** Маршевая скорость оружия сценария (паспорт). */
+    /** Scenario weapon marching speed (spec). */
     private double cruiseSpeed() {
         return s.launch().weapon.spec().airframe().cruiseSpeed();
     }
 
     private void checkTurns() {
         for (Track tr : tracks.values()) {
-            h.assertTrue(tr.turn <= MAX_TURN, String.format(Locale.ROOT, "кружение: %s повернул на %.0f° в радиусе разворота от цели",
+            h.assertTrue(tr.turn <= MAX_TURN, String.format(Locale.ROOT, "circling: %s turned to %.0f° within the turning radius of the target",
                     tr.weapon, tr.turn));
         }
     }
 
-    /** Неподвижная цель: взрыв (бомба — вход в грунт) не дальше шага и запаса взрывателя от точки. */
+    /** Stationary target: explosion (bomb - entry into the ground) no further than a step and fuse margin from the point. */
     private void checkHit() {
         if (stationaryAim == null) return;
         if (s.launch().weapon == WeaponType.BUNKER) {
-            h.assertTrue(outcome.end.equals("entry") || outcome.end.equals("blast"), "бомба не дошла до грунта: " + outcome.end);
-            // эталон и итог кончаются входом: подрыв после него проверяется здесь (и его блоки — в checkWork)
-            h.assertTrue(detonated, "бомба вошла в грунт и не взорвалась за " + IMPACT_LIMIT + " тиков");
+            h.assertTrue(outcome.end.equals("entry") || outcome.end.equals("blast"), "the bomb did not reach the ground: " + outcome.end);
+            // the standard and the result end with the input: the explosion after it is checked here (and its blocks - in checkWork)
+            h.assertTrue(detonated, "the bomb entered the ground and did not explode for " + IMPACT_LIMIT + " tick");
             double miss = outcome.at.subtract(stationaryAim).horizontalDistance();
-            h.assertTrue(miss <= BombDrop.REACH_PAD + 3, String.format(Locale.ROOT, "бомба вошла в грунт в %.1f блоках от точки", miss));
+            h.assertTrue(miss <= BombDrop.REACH_PAD + 3, String.format(Locale.ROOT, "the bomb entered the ground %.1f blocks from the point", miss));
             return;
         }
-        h.assertTrue(outcome.end.equals("blast"), "неподвижная цель не поражена: " + outcome.end + " у " + rel(outcome.at));
+        h.assertTrue(outcome.end.equals("blast"), "a stationary target is not hit: " + outcome.end + " at " + rel(outcome.at));
         double step = tracks.values().stream().mapToDouble(tr -> tr.lastStep).max().orElse(0);
-        // запас взрывателя сверх шага, как в advance (паспорт)
+        // fuse margin over pitch, as in advance (spec)
         double reach = step + s.launch().weapon.spec().airframe().reachPad() + 1;
-        // неуправляемый: ещё три СКО рассеивания по каждой оси
+        // uncontrolled: three more standard deviations of dispersion along each axis
         WeaponSpec.Ballistic b = s.launch().weapon.spec().airframe().ballistic();
         if (b != null) reach += 3 * Math.sqrt(2) * b.sigma(rocketRange);
         double miss = outcome.at.distanceTo(stationaryAim);
-        h.assertTrue(miss <= reach, String.format(Locale.ROOT, "взрыв в %.1f блоках от неподвижной цели (дальность %.1f) у %s",
+        h.assertTrue(miss <= reach, String.format(Locale.ROOT, "explosion in %.1f blocks from a stationary target (range %.1f) at %s",
                 miss, reach, rel(outcome.at)));
     }
 
     private void checkWaypoints() {
-        h.assertTrue(viaPassed == via.size(), "маршрут оператора: пройдено точек " + viaPassed + " из " + via.size() + ", следующая "
+        h.assertTrue(viaPassed == via.size(), "operator route: points passed " + viaPassed + " from " + via.size() + ", next "
                 + (viaPassed < via.size() ? rel(via.points().get(viaPassed)) : "—"));
     }
 
     private void checkReleased() {
         for (UUID id : tracks.keySet()) {
             List<String> tickets = TicketProbe.types(level, id);
-            h.assertTrue(tickets.isEmpty(), "после полёта у снаряда " + id + " тикеты: " + tickets);
+            h.assertTrue(tickets.isEmpty(), "after the flight of the projectile " + id + " ticket: " + tickets);
             h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(e -> e.getUUID().equals(id)),
-                    "после полёта снаряд " + id + " всё ещё в полёте вне мира");
+                    "after the flight the projectile " + id + " still in flight out of the world");
         }
     }
 
     /**
-     * Бюджет работы (корень 1) на считающих часах ({@link WorkBudgetWatch}): от пуска до проверки ни в одном тике полоса
-     * попаданий не взяла больше общего срока и единицы (с блэкаутом — единицы на полосу); очередь попаданий после
-     * полёта пустела; каждый блок, который выбрали взрывы снаряда, снесён (или горит).
+     * Work budget (root 1) on the counting clock ({@link WorkBudgetWatch}): from launch to check, not a single tick did the stripe of
+     *  hits take more than the total period and one (with blackout - one per stripe); The hit queue was empty after
+     *  flight; every block that was targeted by the projectile explosions is demolished (or burns).
      */
     private void checkWork() {
         List<WorkBudgetWatch.Violation> over = WorkBudgetWatch.since(launchServerTick);
-        h.assertTrue(over.isEmpty(), "бюджет работы за тик превышен: " + over);
-        h.assertTrue(WorkBudgetWatch.emptiedSince(endServerTick), "очередь попаданий не опустела за " + IMPACT_LIMIT + " тиков после полёта");
+        h.assertTrue(over.isEmpty(), "work budget per tick exceeded: " + over);
+        h.assertTrue(WorkBudgetWatch.emptiedSince(endServerTick), "the hit queue was not empty in " + IMPACT_LIMIT + " tick after flight");
         List<String> left = blasted.entrySet().stream().filter(this::untouched).limit(5)
                 .map(q -> q.getKey().toShortString() + " " + level.getBlockState(q.getKey())).toList();
-        h.assertTrue(left.isEmpty(), "взрывы выбрали, но не снесли (" + blastedTotal + " выбрано): " + left);
+        h.assertTrue(left.isEmpty(), "explosions were chosen, but not demolished (" + blastedTotal + " selected): " + left);
     }
 
     private void checkBaseline() {
@@ -801,8 +801,8 @@ final class ScenarioRun {
             return;
         }
         Baseline.Entry expected = Baseline.expected(s.id());
-        h.assertTrue(expected != null, "trajectoriesMatchBaseline: сценария нет в эталоне — записать ./gradlew runScenarioRecord и объяснить в PR");
-        h.assertTrue(expected.equals(got), "trajectoriesMatchBaseline: полёт разошёлся с эталоном: было " + expected + ", стало " + got);
+        h.assertTrue(expected != null, "trajectoriesMatchBaseline: the scenario is not in the standard - write ./gradlew runScenarioRecord and explain in PR");
+        h.assertTrue(expected.equals(got), "trajectoriesMatchBaseline: the flight diverged from the standard: it was " + expected + ", it became " + got);
     }
 
     private static double round(double v) {
@@ -811,14 +811,14 @@ final class ScenarioRun {
 
     private String rel(Vec3 at) {
         Vec3 r = at.subtract(site.origin);
-        return String.format(Locale.ROOT, "(%.1f, %.1f, %.1f) от цели", r.x, r.y, r.z);
+        return String.format(Locale.ROOT, "(%.1f, %.1f, %.1f) from target", r.x, r.y, r.z);
     }
 
     private String status() {
-        if (launchTick < 0) return "ждёт площадку (тик " + tick + ")";
+        if (launchTick < 0) return "waiting for the platform (tick " + tick + ")";
         StrikeProjectile m = main();
-        String where = m == null ? "снаряда нет" : m.flightPhase() + (m.isVirtual() ? " вне мира " : " ") + rel(m.position());
-        return "тик " + (tick - launchTick) + " от пуска, план " + eta0 + ", " + where + (outcome == null ? "" : ", итог " + outcome.end);
+        String where = m == null ? "no shell" : m.flightPhase() + (m.isVirtual() ? " out of the world " : " ") + rel(m.position());
+        return "tick " + (tick - launchTick) + " from launch, plan " + eta0 + ", " + where + (outcome == null ? "" : ", total " + outcome.end);
     }
 
     private void cleanup() {

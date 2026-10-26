@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Цель по пакету взрыва ({@link FarBlasts#target}): плита над пустотой — только по опоре, которую шлёт пробой сервера
- * ({@code BreachGameTests}: опора пакета совпадает с тем, что лучи сносят), а не по своему правилу клиента; опоры нет —
- * по веществу материала.
+ * Target for the explosion package ({@link FarBlasts#target}): a slab above the void - only according to the support sent by the server breakdown
+ *  ({@code BreachGameTests}: the support of the package coincides with what the rays demolish), and not according to the client’s own rule; there is no support -
+ *  according to the substance of the material.
  */
 class BlastTargetSupportTest {
     private static final double SHAHED = 50;
@@ -40,14 +40,14 @@ class BlastTargetSupportTest {
 
     @Test
     void unbreachedSupportFollowsWhatWasHit() {
-        // доски на земле (опора, не пробита) — твёрдое; грунт — рыхлое, хоть материал пакета и не грунт
+        // boards on the ground (support, not broken) - solid; soil - loose, although the material of the bag is not soil
         assertEquals(BlastTarget.Family.HARD, FarBlasts.target(blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 0, 0))),
                 GroundMaterial.WOOD, SHAHED, 0).family());
         assertEquals(BlastTarget.Family.SOIL, FarBlasts.target(blast(GroundMaterial.DIRT, Optional.of(new S2C.Blast.Support(true, 0, 0))),
                 GroundMaterial.DIRT, SHAHED, 0).family());
     }
 
-    /** Без опоры в пакете (повтор до этого поля, взрыв без сервера) — как раньше: по веществу материала, опора сплошная. */
+    /** Without support in the package (repeat up to this field, explosion without server) - as before: according to the substance of the material, the support is solid. */
     @Test
     void noSupportFallsBackToTheMaterial() {
         assertEquals(BlastTarget.of(GroundMaterial.STONE, SHAHED, 0), FarBlasts.target(blast(GroundMaterial.STONE, Optional.empty()),
@@ -56,9 +56,9 @@ class BlastTargetSupportTest {
     }
 
     /**
-     * Опора пакета — контакт, найденный сервером: семейство, масса и пыль цели не зависят от высоты над рельефом, которую
-     * клиент знает вдали грубо (ревью 2 фронта F: шахед по метру досок, плитка {@code FarTerrain} без дома — земля на 5 м
-     * ниже, и пролом становился разрывом в воздухе: 0 кг вместо 3,6 т и 72 кг пыли). Настоящий разрыв без опоры — в воздухе.
+     * The support of the package is the contact found by the server: the family, mass and dust of the target do not depend on the height above the relief, which the
+     *  client knows roughly in the distance (review of the 2 front F: Shahed by a meter of boards, tile {@code FarTerrain} without a house - land on 5 m
+     *  lower, and the gap became a gap in the air: 0 kg instead of 3,6 t and 72 kg of dust). The real gap without support is in the air.
      */
     @Test
     void serverContactOutranksCoarseHeight() {
@@ -66,20 +66,20 @@ class BlastTargetSupportTest {
         S2C.Blast roof = blast(GroundMaterial.WOOD, Optional.of(new S2C.Blast.Support(false, 1, (float) r, S2C.Blast.DOWN, 0)));
         BlastTarget exact = FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 0);
         assertEquals(BlastTarget.Family.SLAB, exact.family());
-        assertTrue(exact.mass(SHAHED) > 3000, "пролом метра досок у шахеда — тонны: " + exact.mass(SHAHED));
+        assertTrue(exact.mass(SHAHED) > 3000, "break of a meter of boards at Shahed - tons: " + exact.mass(SHAHED));
         BlastSource src = BlastSource.of(WeaponType.DRONE, false);
         double hot = new CloudModel(src, CloudModel.Air.STANDARD, exact, 0, GroundDust.Ground.BARE).dust;
         for (double hob : new double[]{5, 30, Double.NaN}) {
             BlastTarget far = FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob);
-            assertEquals(exact, far, "высота " + hob + " м: та же цель");
+            assertEquals(exact, far, "height " + hob + " m: same goal");
             if (!Double.isNaN(hob)) assertEquals(hot, new CloudModel(src, CloudModel.Air.STANDARD, far, hob, GroundDust.Ground.BARE).dust,
-                    1e-9, "высота " + hob + " м: горячая пыль пролома та же (холодную снял бы контакт по высоте)");
+                    1e-9, "height " + hob + " m: the hot dust of the break is the same (the cold dust would have been removed by contact in height)");
         }
         assertEquals(BlastTarget.Family.AIR, FarBlasts.target(blast(GroundMaterial.WOOD, Optional.empty()), GroundMaterial.WOOD, SHAHED, 30).family(),
-                "без опоры высоко — разрыв в воздухе");
+                "without support high - gap in the air");
     }
 
-    /** Средняя высота клубов слоя в возрасте t (по массе пыли), м от точки взрыва; масса — во втором элементе. */
+    /** Average height of the billows layer at age t (by dust mass), m from the point of explosion; mass is in the second element. */
     private static double[] meanHeight(GroundDust d, double t) {
         double[] sum = new double[2];
         d.blobs(t, 1, (x, y, z, sh, sv, dust) -> {
@@ -90,8 +90,8 @@ class BlastTargetSupportTest {
     }
 
     /**
-     * Юбка пыли пролома рождается у грани, которую нашёл сервер, — у точки взрыва, а не на грубой высоте земли вдали
-     * (ревью 3 фронта F: при высоте 30 м её клубы через секунду были на 30 м ниже крыши); пыль волны держит рельеф как есть.
+     * The dust skirt of the breach is born at the edge that the server found - at the point of the explosion, and not at the rough height of the ground in the distance
+     *  (review of 3 front F: at a height of 30 m, its billows in a second were 30 m below the roof); the dust of the wave keeps the relief as it is.
      */
     @Test
     void crushedDustStartsAtTheFace() {
@@ -102,29 +102,29 @@ class BlastTargetSupportTest {
                 GroundDust.Ground.BARE);
         for (double t : new double[]{0.3, 1}) {
             double[] at0 = meanHeight(exact.crushed, t);
-            assertTrue(at0[1] > 0, t + " с: холодной пыли пролома нет");
+            assertTrue(at0[1] > 0, t + " c: cold dust no break");
             for (double hob : new double[]{5, 30}) {
                 CloudModel far = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob), hob,
                         GroundDust.Ground.BARE);
                 double[] at = meanHeight(far.crushed, t);
-                assertEquals(at0[0], at[0], 0.5, "высота " + hob + " м, " + t + " с: пыль пролома — у крыши");
+                assertEquals(at0[0], at[0], 0.5, "height " + hob + " m, " + t + " c: dust from the breach - near the roof");
             }
         }
-        // пыль волны — с поверхности вокруг: при земле на 5 м ниже она там, а не у крыши
+        // dust waves - from the surface around: when the ground is 5 m below, it is there, and not at the roof
         double[] wave0 = meanHeight(exact.ground, 1);
         double[] wave5 = meanHeight(new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, 5), 5,
                 GroundDust.Ground.BARE).ground, 1);
-        assertTrue(wave0[1] > 0 && wave5[1] > 0, "пыль волны есть");
-        assertTrue(wave5[0] < wave0[0] - 3, "пыль волны держит рельеф: " + wave0[0] + " и " + wave5[0] + " м");
+        assertTrue(wave0[1] > 0 && wave5[1] > 0, "dust waves are there");
+        assertTrue(wave5[0] < wave0[0] - 3, "the dust of the waves holds the relief: " + wave0[0] + " and " + wave5[0] + " m");
     }
 
     @Test
     void spallLeavesThroughTheServerHole() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
         Object[][] cases = {
-                // стена в метр, удар сбоку в середину блока: грань — x = 0, заряд на ней, нормаль +x
+                // wall a meter high, side impact in the middle of the block: edge - x = 0, charge on it, normal +x
                 {new Vec3(0.5, 66.5, 0.5), new Vec3(1, -0.5, 0.2), new Vec3(1, 0, 0), 0.5f},
-                // крыша, удар под 37° от вертикали носом о верх: нормаль вниз
+                // roof, impact under 37° from vertical with nose on top: normal down
                 {new Vec3(0.5, 70, 0.5), new Vec3(0.6, -0.8, 0), new Vec3(0, -1, 0), 0f},
         };
         java.util.Random random = new java.util.Random(7);
@@ -135,17 +135,17 @@ class BlastTargetSupportTest {
             BlastTarget t = FarBlasts.target(p, GroundMaterial.WOOD, SHAHED, 0);
             assertEquals(BlastTarget.Family.SLAB, t.family());
             Vec3 face = t.face();
-            assertEquals(0, pos.subtract(normal.scale((float) c[3])).distanceTo(face), 1e-6, "заряд — на грани");
+            assertEquals(0, pos.subtract(normal.scale((float) c[3])).distanceTo(face), 1e-6, "charge is on the verge");
             double cone = Math.cos(Math.toRadians(BlastTarget.SPALL_CONE_DEG)) - 1e-9;
             t.spall(SHAHED, 200, random::nextDouble, (at, v) -> {
                 Vec3 off = at.subtract(face);
                 double along = off.dot(normal);
-                assertTrue(along >= t.slab() - 1e-9, "кусок не за плитой: " + along + " при толщине " + t.slab());
-                assertTrue(off.subtract(normal.scale(along)).length() <= t.hole() + 1e-9, "кусок вне дыры");
-                assertTrue(v.normalize().dot(normal) >= cone, "кусок вне конуса откола: " + v);
+                assertTrue(along >= t.slab() - 1e-9, "the piece is not behind the stove: " + along + " with thickness " + t.slab());
+                assertTrue(off.subtract(normal.scale(along)).length() <= t.hole() + 1e-9, "piece outside the hole");
+                assertTrue(v.normalize().dot(normal) >= cone, "piece outside the spall cone: " + v);
             });
             new ua.zentix.incoming.client.fx.smoke.Ejecta(t.hole(), 0, 0).pieces(face, normal.scale(-1), 200, random::nextDouble,
-                    (at, v) -> assertTrue(v.dot(normal) < 0 && at.subtract(face).dot(normal) < 0, "лицевая крошка — наружу с грани"));
+                    (at, v) -> assertTrue(v.dot(normal) < 0 && at.subtract(face).dot(normal) < 0, "face crumb - outward from the edge"));
         }
     }
 }

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Модели и состояния блоков сети (блэкаут) — из ванильных, чтобы лампа без питания выглядела той же лампой.
+"""Grid (blackout) block models and states derived from vanilla so an unpowered lamp looks like the same lamp.
 
   python3 tools/gen_grid_assets.py [client.jar]
       → mod/src/main/resources/assets/incoming/blockstates/unlit_*.json, substation.json,
         models/block/unlit_*.json, substation*.json, models/item/substation.json
 
-Двойник лампы (incoming:unlit_*) берёт ванильное состояние блока-лампы:
-- у ламп с «выключенной» моделью (лампа редстоуна, медные лампы) горящие варианты смотрят на выключенную модель;
-- у остальных (светокамень, морской фонарь, грибосвет, жабосветы, фонари, стержень края) — копия ванильной модели
-  с tintindex на всех гранях: клиент притушивает её цветом (IncomingClient.blockColors); фонарям и стержню края —
-  слой «вырезка» (render_type), который ваниль задаёт им в коде;
-- невидимый блок света — как есть.
-Нужен клиентский jar Minecraft 1.21.1 (по умолчанию — из кэша NeoForm Gradle). Только стандартная библиотека.
+A lamp counterpart (incoming:unlit_*) uses the vanilla lamp block state:
+- for lamps with an "off" model (redstone lamp, copper bulbs), lit variants point to the off model;
+- for the others (glowstone, sea lantern, shroomlight, froglights, lanterns, end rod), a copy of the vanilla model
+  with tintindex on all faces: the client dims it with color (IncomingClient.blockColors); lanterns and end rods
+  receive the cutout layer (render_type) that vanilla assigns in code;
+- invisible light block unchanged.
+Requires the Minecraft 1.21.1 client jar (default: NeoForm Gradle cache). Standard library only.
 """
 import json
 import os
@@ -22,19 +22,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "mod", "src", "main", "resources", "assets", "incoming")
 JAR = os.path.expanduser("~/.gradle/caches/neoformruntime/artifacts/minecraft_1.21.1_client.jar")
 
-# двойник → лампа (как в ModBlocks.UNLIT)
+# double → lamp (as in ModBlocks.UNLIT)
 LAMPS = ["glowstone", "sea_lantern", "shroomlight", "ochre_froglight", "verdant_froglight", "pearlescent_froglight",
          "lantern", "soul_lantern", "end_rod", "redstone_lamp"] + [
     f"{w}{o}copper_bulb" for w in ("", "waxed_") for o in ("", "exposed_", "weathered_", "oxidized_")] + ["light"]
 TINTED = {"glowstone", "sea_lantern", "shroomlight", "ochre_froglight", "verdant_froglight", "pearlescent_froglight",
           "lantern", "soul_lantern", "end_rod"}
-# у ванили слой «вырезка» им задан в коде (ItemBlockRenderTypes), не в модели: двойнику — в модели, иначе прозрачные
-# пиксели ручки и краёв рисуются сплошными
+# in vanilla, the “cut” layer is specified in the code (ItemBlockRenderTypes), not in the model: for the double - in the model, otherwise the transparent
+#  pixels of the handle and edges are drawn solid
 CUTOUT = {"lantern", "soul_lantern", "end_rod"}
 
 
 def off_model(model):
-    """Выключенная модель лампы: redstone_lamp_on → redstone_lamp, copper_bulb_lit_powered → copper_bulb_powered."""
+    """Switched off lamp model: redstone_lamp_on → redstone_lamp, copper_bulb_lit_powered → copper_bulb_powered."""
     return model.replace("_lit", "").replace("redstone_lamp_on", "redstone_lamp")
 
 
@@ -53,7 +53,7 @@ def main():
         return json.loads(jar.read(f"assets/minecraft/{kind}/{name}.json"))
 
     def elements(model):
-        """Грани модели с учётом родителей: первый в цепочке, у кого они есть."""
+        """Model edges taking into account parents: the first in the chain who has them."""
         name = model.removeprefix("minecraft:")
         while True:
             m = vanilla("models", name)
@@ -79,7 +79,7 @@ def main():
                     v["model"] = off_model(model)
         write(f"blockstates/unlit_{lamp}.json", state)
 
-    # подстанция: фасад (табличка) — на север, повороты по FACING; выбитая — обгоревшие текстуры
+    # substation: facade (sign) - north, turns along FACING; embossed - burnt textures
     rot = {"north": 0, "east": 90, "south": 180, "west": 270}
     write("blockstates/substation.json", {"variants": {
         f"facing={f},powered={p}": ({"model": "incoming:block/substation" + ("" if p == "true" else "_burnt")} | ({"y": y} if y else {}))
@@ -93,13 +93,13 @@ def main():
 
 
 def box(frm, to, faces, uv=None):
-    """Коробка: грани {"north": "#tex", …}; uv — по координатам, как у ванильных моделей без явных uv."""
+    """Box: edges {"north": "#tex", …}; uv - according to coordinates, like vanilla models without explicit uv."""
     return {"from": frm, "to": to, "faces": {d: {"texture": t} | ({"cullface": d} if d == "down" and frm[1] == 0 else {})
                                              for d, t in faces.items()}}
 
 
 def substation(_):
-    """Бетонная плита, бак трансформатора с табличкой спереди, радиаторы по бокам, три ввода с изоляторами сверху."""
+    """Concrete slab, transformer tank with a sign on the front, radiators on the sides, three inputs with insulators on top."""
     six = ("north", "south", "east", "west", "up", "down")
     els = [
         box([0, 0, 0], [16, 2, 16], {d: "#base" for d in six}),

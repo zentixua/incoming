@@ -17,47 +17,44 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * План съёмки (README.md, «Съёмка»): повтор, куда выводить, размер кадра и планы. Пишет его {@code tools/clips/plan.py}
- * из данных разбора; съёмка ничего не решает наугад — что снимать, когда и откуда, задано здесь, а камеру на месте
- * выбирает оценка по миру повтора.
+ * Filming plan (README.md, "Filming"): replay, output, frame size and shots. {@code tools/clips/plan.py}
+ * writes it from scan data; filming makes no random choices: what, when and where are fixed here,
+ * camera selected on site by replay-world scoring.
  *
- * @param replay  повтор (zip, копия)
- * @param out     каталог вывода: {@code <план>/<камера>/video.mkv}, проверка кадров, отчёт
- * @param ready   доля кадров с построенным миром, ниже которой план не годится (0 — мир не проверяется: облако без
- *                видеокарты строит секции медленнее кадров)
- * @param clouds  низ облаков (шейдерпак ставит свой слой); NaN — ванильные облака измерения
- * @param distance прорисовка, чанков
- * @param loud    id громких звуков (взрывы): какие из них за кадром — считается
- * @param engine  id звуков моторов: слышен ли мотор объекта
+ * @param replay replay (zip copy)
+ * @param out output directory: {@code <shot>/<camera>/video.mkv}, frame checks, report
+ * @param ready minimum built-world frame share (0 disables check: GPU-less cloud builds sections slower than frames)
+ * @param clouds cloud base (shader pack custom layer); NaN for dimension vanilla clouds
+ * @param distance render distance, chunks
+ * @param loud loud sound IDs (explosions), count out-of-frame instances
+ * @param engine engine sound IDs, whether subject engine is audible
  */
 record Plan(Path replay, Path out, int width, int height, double fps, int bitrate, int tries, double ready, double clouds, int distance,
             Pattern loud, Pattern engine, List<Shot> shots) {
     /**
-     * Звуки полёта снаряда по умолчанию (id Incoming 2.x и 3.x): моторы, пике, свист ракеты, падение бомбы, подлёт
-     * «Града»; взрывы сюда не входят.
+     * Default projectile flight sounds (Incoming 2.x/3.x IDs): engines, dive, missile whistle, bomb fall,
+     * Grad approach; excludes explosions.
      */
     static final String ENGINE = "(?i)engine|dive|whistle|bomb\\.fall|rocket\\.incoming";
 
     /**
-     * План ролика: отрезок тиков повтора, объект, камеры по порядку (первые — заданные, дальше — лучшие по оценке) и
-     * пороги проверки.
+     * Shot: replay tick interval, subject, ordered cameras (specified first, then score-best), check thresholds.
      *
-     * @param warm тиков живого повтора перед началом (дым и огонь прежних ударов — в кадре, как в игре)
-     * @param hold тиков стоять у камеры после постройки мира (Distant Horizons строит дальний рельеф после перемотки)
-     * @param far  объект дальше прорисовки: туман у её края и секции объекта не проверяются, луч — по готовым чанкам
-     * @param smoke удары {@code [t, x, y, z, поперечник шара?, вид?]} — дым ({@link Plume}) для оценки камер и пилота; в кадре из
-     *              них — {@link Shot#live}
-     * @param time  время суток в выводе (тики дня, как у {@code /time set}: 18000 — полночь), меньше 0 — как в записи
+     * @param warm live replay ticks before start (prior impact smoke/fire in frame, as in game)
+     * @param hold ticks at camera after world builds (Distant Horizons builds distant terrain after seek)
+     * @param far subject beyond render distance: skip edge fog/entity-section checks, ray uses ready chunks
+     * @param smoke strikes {@code [t, x, y, z, ball diameter?, kind?]}, smoke ({@link Plume}) for camera/pilot scoring;
+     *              frame-visible subset is {@link Shot#live}
+     * @param time export day ticks, as {@code /time set} (18000 midnight), negative keeps recorded time
      */
     record Shot(String name, int a, int b, String dim, int warm, int hold, boolean far, List<Camera> cameras, Subject subject,
                 List<double[]> smoke, Need need, long time) {
         /**
-         * Удары, чей дым может быть в кадре: вывод перематывает повтор к {@code a − warm} и идёт оттуда вживую, а взрыв из
-         * перемотки Incoming считает прошлым и не рисует ({@code Replay.event}: ни частиц, ни столба). Дым ударов раньше
-         * есть только в игре: по нему пилот и оценка камер обходили бы то, чего в кадре нет. Сам тик {@code a − warm} тоже
-         * проходит перемоткой, но берётся: лишний дым в плане безопаснее пропущенного. На кадрах clips9 (14.10)
-         * модель по всем ударам закрывала снаряд дымом до 170 кадров подлёта из 240 там, где настоящий дым был чист; по
-         * ударам с {@code a − warm} — ни одного.
+         * Smoke potentially in frame: export seeks to {@code a − warm}, then plays live; Incoming treats seek
+         * explosions as past, drawing no particles/column ({@code Replay.event}). Earlier smoke exists only in
+         * game; pilot/scoring would otherwise avoid absent smoke. Include tick {@code a − warm}, though sought:
+         * extra planned smoke is safer than missing it. clips9 frames (14.10): all-impact model obscured projectile
+         * for up to 170 of 240 approach frames where actual smoke was clear; impacts from {@code a − warm} obscured none.
          */
         List<double[]> live() {
             return smoke.stream().filter(r -> r[0] >= a - warm).toList();
@@ -65,27 +62,26 @@ record Plan(Path replay, Path out, int width, int height, double fps, int bitrat
     }
 
     /**
-     * Камера: {@code pov} — глазами игрока ({@code player}: {@code recorder}, ник или UUID); {@code fixed} — неподвижная
-     * в {@code eye}, смотрит в точку {@code aim} или ведёт объект ({@code follow}), {@code rise} — кандидаты на столько блоков
-     * над землёй под глазом (0 — сам глаз); {@code tripod} — штатив по кругу
-     * у {@code around}: расстояния {@code dist}, углы над точкой {@code elev}, шаг по кругу {@code azStep}, объектив —
-     * так, чтобы событие поперечником {@code size} было {@code share} ширины кадра; {@code path} — летит по ключам
-     * {@code keys} (глаз и точка взгляда по прямой между ключами; {@code eye} и {@code aim} — первого ключа), {@code rise}
-     * — кандидаты того же пути на столько блоков выше.
+     * Camera: {@code pov} through player ({@code player}: {@code recorder}, name or UUID); {@code fixed} at
+     * {@code eye}, aim at {@code aim} or track subject ({@code follow}), {@code rise} heights above ground
+     * below eye (0 uses eye). {@code tripod} around {@code around}: distances {@code dist}, elevations
+     * {@code elev}, azimuth step {@code azStep}, lens puts {@code size}-wide event at {@code share} of frame
+     * width. {@code path} interpolates {@code keys} (eye/look linearly; {@code eye}/{@code aim} from first key);
+     * {@code rise} also tries the same path this many blocks higher.
      */
     record Camera(String kind, @Nullable String player, boolean gui, double fov, @Nullable Vec3 eye, @Nullable Vec3 aim, boolean follow,
                   @Nullable Vec3 around, @Nullable Vec3 heading, double[] dist, double[] elev, double azStep, double share, double size,
                   double[] rise, List<PathKey> keys) {}
 
-    /** Ключ камеры {@code path}: тик повтора, глаз, точка, куда она смотрит, и крен (градусы, плюс — влево, как у Flashback). */
+    /** {@code path} camera key: replay tick, eye, look point, roll (degrees, positive left like Flashback). */
     record PathKey(double t, Vec3 eye, Vec3 aim, double roll) {}
 
     /**
-     * Пороги проверки по кадрам: доля кадров до первого события, где объект снят ({@code subject}), то же за последнюю
-     * секунду до него ({@code near}), доля событий, снятых в первые 12 тиков ({@code keys}), наименьшая доля ширины кадра
-     * ({@code share}), доля кадров со слышным мотором ({@code engine}), громкого за кадром не больше {@code loud} громкого
-     * в кадре (меньше 0 — не проверяется), кадров в дыму у самой камеры ({@link Smoke#smothered}) — не больше доли
-     * {@code smother} (меньше 0 — не проверяется).
+     * Frame thresholds: subject captured share before first event ({@code subject}), same for final second
+     * ({@code near}), events visible in first 12 ticks ({@code keys}), minimum frame-width share ({@code share}),
+     * frames with audible engine ({@code engine}), off-screen loud sounds at most {@code loud} times on-screen
+     * (negative disables), frames smoke-filled at camera ({@link Smoke#smothered}) at most {@code smother}
+     * (negative disables).
      */
     record Need(double subject, double near, double keys, double share, double engine, double loud, double smother) {}
 

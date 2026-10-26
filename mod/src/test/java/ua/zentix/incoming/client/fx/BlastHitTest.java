@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Фронт у тела ({@link BlastHit}): контузия и сор у камеры — часть картинки ударов. */
+/** Front near the body ({@link BlastHit}): concussion and debris near the camera are part of the picture of the blows. */
 class BlastHitTest {
     @AfterEach
     void clear() {
@@ -16,22 +16,22 @@ class BlastHitTest {
     }
 
     /**
-     * Своих эффектов взрыва нет ({@code blast_effects} = false) — нет ни контузии, ни сора, и у разрыва ПВО, который идёт
-     * сюда же при любой настройке; с ними фронт, что оглушает (шахед в 30 м), даёт и то и другое.
+     * There are no explosion effects of their own ({@code blast_effects} = false) - there is no concussion, no debris, and the air defense gap, which goes
+     *  here at any setting; with them the front, which is stunning (Shahed in 30 m), gives both.
      */
     @Test
     void blastEffectsOffMeansNoConcussionAndNoLitter() {
         ShockAtBody shock = ShockAtBody.chemical(50, true, 30);
         boolean[] litter = {false};
         assertEquals(0, BlastHit.feel(false, shock, 30, null, 0, () -> litter[0] = true));
-        assertFalse(litter[0], "сор при выключенных эффектах");
-        assertEquals(0, Concussion.level(5), "контузия при выключенных эффектах");
+        assertFalse(litter[0], "litter with effects turned off");
+        assertEquals(0, Concussion.level(5), "concussion with effects turned off");
         double dose = BlastHit.feel(true, shock, 30, null, 0, () -> litter[0] = true);
-        assertTrue(dose > 0 && litter[0], "доза " + dose);
+        assertTrue(dose > 0 && litter[0], "dose " + dose);
         assertTrue(Concussion.level(5) > 0);
     }
 
-    /** Фронт ниже порога модели (ракета в 100 м) экрана не трогает. */
+    /** The front below the model threshold (rocket at 100 m) does not touch the screen. */
     @Test
     void weakFrontLeavesTheScreen() {
         assertEquals(0, BlastHit.feel(true, ShockAtBody.chemical(150, true, 100), 3, null, 0, () -> {}));

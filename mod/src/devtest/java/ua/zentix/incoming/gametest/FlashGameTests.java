@@ -36,27 +36,27 @@ import ua.zentix.incoming.registry.ModAttachments;
 import java.util.Locale;
 
 /**
- * Следы вспышки (DESIGN-nuke §3.5): гарь на гранях к шару — с руинами чанка, силуэт тела на стене за ним, отметка чанка
- * переживает сохранение, уходит с блоком и уходит игроку, которому чанк отдают. Стены — из брёвен (без листвы это не
- * дерево: волна их не валит) и обсидиана (не ломается). Каждая проверка — своей партией (подрыв задевает соседей).
+ * Traces of the flash (DESIGN-nuke §3.5): burning on the edges of the ball - with the ruins of the chunk, the silhouette of a body on the wall behind it, the mark of the chunk
+ *  survives the save, leaves with the block and goes to the player to whom the chunk is given. The walls are made of logs (without leaves this is not a
+ *  tree: a wave does not knock them down) and obsidian (does not break). Each check has its own batch (the explosion affects neighbors).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class FlashGameTests {
     private static final BlockPos CENTER = NuclearGameTests.CENTER;
-    /** Стена — в чанке, чьи соседи тоже на площадке (x и z от 16 до 47): к сроку готовы и они. */
+    /** The wall is in a chunk whose neighbors are also on the site (x and z from 16 to 47): they too are ready on time. */
     private static final int WALL_DX = 12;
 
     private FlashGameTests() {}
 
-    /** Бревенчатая стена 5×4 лицом к взрыву (на запад): брёвна без листвы — не дерево, волна их не валит. */
+    /** Log wall 5×4 facing the explosion (to the west): logs without leaves are not a tree, the wave does not knock them down. */
     private static void wall(GameTestHelper h) {
         for (int dz = -2; dz <= 2; dz++) {
             for (int y = 0; y < 4; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
         }
     }
 
-    /** 15 кт в воздухе над серединой, 8 psi на стене: свет там — десятки кал/см². */
+    /** 15 kt in the air above the middle, 8 psi on the wall: the light there is tens of cal/cm². */
     private static Detonation burst(GameTestHelper h) {
         return NuclearGameTests.atPsi(h, CENTER, true, CENTER.east(WALL_DX).above(1), 8);
     }
@@ -71,25 +71,24 @@ public final class FlashGameTests {
     }
 
     /**
-     * Гарь с руинами: грани досок к шару потемнели, спины — нет; грань, закрытая камнем вплотную, и грань в тени
-     * высокой стены — чистые. Отметка переживает запись чанка (как на диск), снятый блок уходит из следов, а игрок,
-     * которому чанк отдают, получает следы пакетом, который разбирается обратно в то же.
+     * Burnt with ruins: the edges of the boards to the ball were darkened, the backs were not; the edge covered closely by the stone and the edge in the shadow of the high wall are clean. The mark survives the recording of the chunk (as if on a disk), the removed block leaves the traces, and the player
+     *  to whom the chunk is given receives the traces in a package, which is parsed back into the same thing.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_flash_chars", skyAccess = true)
     public static void charredFacesTowardFireball(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         wall(h);
-        // закрытая грань: обсидиан вплотную к западу
+        // closed face: obsidian close to west
         BlockPos covered = CENTER.east(WALL_DX).south(6);
         h.setBlock(covered, Blocks.OAK_LOG);
         h.setBlock(covered.west(), Blocks.OBSIDIAN);
-        // грань в тени: бревно за высокой стеной из обсидиана
+        // edge in shadow: log behind high obsidian wall
         BlockPos shaded = CENTER.east(WALL_DX).north(6);
         h.setBlock(shaded, Blocks.OAK_LOG);
         for (int dz = -2; dz <= 2; dz++) for (int y = 0; y < 20; y++) h.setBlock(shaded.west(2).south(dz).above(y), Blocks.OBSIDIAN);
         Detonation d = burst(h);
         double q = d.fluence(Vec3.atCenterOf(h.absolutePos(CENTER.east(WALL_DX).above(1))));
-        h.assertTrue(q > 15, String.format(Locale.ROOT, "свет на стене %.1f кал/см² — слабо для проверки", q));
+        h.assertTrue(q > 15, String.format(Locale.ROOT, "light on the wall %.1f cal/cm² - weak for testing", q));
         NuclearGameTests.scarAll(h, d, new ColumnScar.Budget(true));
         int lit = 0, faces = 0;
         for (int dz = -2; dz <= 2; dz++) {
@@ -100,42 +99,42 @@ public final class FlashGameTests {
                 FlashMarks m = FlashSync.of(level.getChunkAt(abs));
                 faces++;
                 if (marked(m, d.id(), abs, Direction.WEST, false) > 0) lit++;
-                if (marked(m, d.id(), abs, Direction.EAST, false) > 0) h.fail("обуглена спина стены " + at.toShortString());
+                if (marked(m, d.id(), abs, Direction.EAST, false) > 0) h.fail("the back of the wall is charred " + at.toShortString());
             }
         }
-        h.assertTrue(lit >= faces * 3 / 4, "обуглено граней к шару " + lit + " из " + faces + String.format(Locale.ROOT, " (%.1f кал/см²)", q));
+        h.assertTrue(lit >= faces * 3 / 4, "charred edges to the ball " + lit + " from " + faces + String.format(Locale.ROOT, " (%.1f cal/cm²)", q));
         BlockPos coveredAbs = h.absolutePos(covered), shadedAbs = h.absolutePos(shaded);
-        if (marked(FlashSync.of(level.getChunkAt(coveredAbs)), d.id(), coveredAbs, Direction.WEST, false) > 0) h.fail("обуглена грань под камнем");
-        if (marked(FlashSync.of(level.getChunkAt(shadedAbs)), d.id(), shadedAbs, Direction.WEST, false) > 0) h.fail("обуглена грань в тени стены");
+        if (marked(FlashSync.of(level.getChunkAt(coveredAbs)), d.id(), coveredAbs, Direction.WEST, false) > 0) h.fail("charred edge under the stone");
+        if (marked(FlashSync.of(level.getChunkAt(shadedAbs)), d.id(), shadedAbs, Direction.WEST, false) > 0) h.fail("charred edge in the shadow of the wall");
 
-        // запись чанка: отметка — в данных чанка и читается обратно той же
+        // chunk entry: mark - in chunk data and read back the same
         BlockPos probe = CENTER.east(WALL_DX).above(1);
         LevelChunk chunk = level.getChunkAt(h.absolutePos(probe));
         FlashMarks before = FlashSync.of(chunk);
         CompoundTag saved = ChunkSerializer.write(level, chunk);
         Tag attachment = saved.getCompound(net.neoforged.neoforge.attachment.AttachmentHolder.ATTACHMENTS_NBT_KEY).get(Incoming.MOD_ID + ":flash_marks");
-        h.assertTrue(attachment != null, "следов нет в записи чанка: " + saved.getCompound(net.neoforged.neoforge.attachment.AttachmentHolder.ATTACHMENTS_NBT_KEY).getAllKeys());
+        h.assertTrue(attachment != null, "there are no traces in the chunk record: " + saved.getCompound(net.neoforged.neoforge.attachment.AttachmentHolder.ATTACHMENTS_NBT_KEY).getAllKeys());
         FlashMarks read = FlashMarks.CODEC.parse(NbtOps.INSTANCE, attachment).getOrThrow();
-        h.assertTrue(same(before, read), "следы после записи не те");
+        h.assertTrue(same(before, read), "the traces after the recording are not the same");
 
-        // пакет игроку, которому отдают чанк, — те же следы
+        // package to the player to whom the chunk is given - the same traces
         S2C.NukeFlashMarks packet = FlashSync.packet(chunk);
-        h.assertTrue(packet != null, "пакета следов нет");
+        h.assertTrue(packet != null, "no trace of the package");
         io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
         S2C.NukeFlashMarks.CODEC.encode(buf, packet);
         S2C.NukeFlashMarks back = S2C.NukeFlashMarks.CODEC.decode(buf);
-        h.assertTrue(back.chunk() == chunk.getPos().toLong() && same(back.marks(), before), "пакет следов разобрался не тем");
+        h.assertTrue(back.chunk() == chunk.getPos().toLong() && same(back.marks(), before), "the package of traces was sorted out in the wrong way");
 
-        // снятый блок уходит из следов
+        // the removed block leaves the traces
         BlockPos gone = h.absolutePos(probe);
-        h.assertTrue(marked(before, d.id(), gone, Direction.WEST, false) > 0, "у снимаемой доски нет следа");
+        h.assertTrue(marked(before, d.id(), gone, Direction.WEST, false) > 0, "the board being removed has no trace");
         level.setBlock(gone, Blocks.AIR.defaultBlockState(), 2);
         S2C.NukeFlashMarks after = FlashSync.packet(chunk);
         FlashMarks left = after == null ? FlashMarks.EMPTY : after.marks();
-        h.assertTrue(marked(left, d.id(), gone, Direction.WEST, false) == 0, "след снятого блока остался");
-        h.assertTrue(marked(FlashSync.of(chunk), d.id(), gone, Direction.WEST, false) == 0, "след снятого блока остался в отметке");
+        h.assertTrue(marked(left, d.id(), gone, Direction.WEST, false) == 0, "a trace of the removed block remains");
+        h.assertTrue(marked(FlashSync.of(chunk), d.id(), gone, Direction.WEST, false) == 0, "the trace of the removed block remains in the mark");
 
-        // оповещение соседей без смены блока (рычаг на стене, провод) след не трогает
+        // notifying neighbors without changing the unit (lever on the wall, wire) does not touch the trace
         BlockPos kept = null;
         for (int dz = -2; dz <= 2 && kept == null; dz++) {
             for (int y = 0; y < 4 && kept == null; y++) {
@@ -143,21 +142,21 @@ public final class FlashGameTests {
                 if (!at.equals(gone) && level.getChunkAt(at) == chunk && marked(FlashSync.of(chunk), d.id(), at, Direction.WEST, false) > 0) kept = at;
             }
         }
-        h.assertTrue(kept != null, "в чанке стены нет второго бревна со следом");
+        h.assertTrue(kept != null, "there is no second log with a trace in the wall chunk");
         level.updateNeighborsAt(kept, Blocks.OAK_LOG);
-        h.assertTrue(marked(FlashSync.of(chunk), d.id(), kept, Direction.WEST, false) > 0, "след ушёл от оповещения соседей без смены блока");
-        // сломали и сразу поставили такое же бревно (как игрок: с оповещением соседей) — новое бревно чистое
+        h.assertTrue(marked(FlashSync.of(chunk), d.id(), kept, Direction.WEST, false) > 0, "the trace went away from notifying neighbors without changing the block");
+        // broke and immediately put up the same log (as a player: with the notification of neighbors) - the new log is clean
         level.destroyBlock(kept, false);
         level.setBlock(kept, Blocks.OAK_LOG.defaultBlockState(), Block.UPDATE_ALL);
-        h.assertTrue(marked(FlashSync.of(chunk), d.id(), kept, Direction.WEST, false) == 0, "след вернулся на поставленное заново бревно");
+        h.assertTrue(marked(FlashSync.of(chunk), d.id(), kept, Direction.WEST, false) == 0, "the trail returned to the newly placed log");
         S2C.NukeFlashMarks resent = FlashSync.packet(chunk);
-        h.assertTrue(resent == null || marked(resent.marks(), d.id(), kept, Direction.WEST, false) == 0, "след поставленного заново бревна ушёл игроку");
+        h.assertTrue(resent == null || marked(resent.marks(), d.id(), kept, Direction.WEST, false) == 0, "the trace of the newly placed log has gone to the player");
         h.succeed();
     }
 
     /**
-     * Силуэт: стойка для брони (рамка человека) в полутора блоках перед бревенчатой стеной к шару — на стене за ней грани
-     * с тенью, клетки в полной тени есть и лежат на продолжении луча от шара через тело; грани стены в стороне — без тени.
+     * Silhouette: an armor rack (a human frame) one and a half blocks in front of the log wall towards the ball - on the wall behind it there are edges
+     *  with shadow, there are cells in full shadow and they lie on the continuation of the ray from the ball through the body; the edges of the wall to the side - without shadow.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_flash_shadow", skyAccess = true)
     public static void silhouetteBehindBody(GameTestHelper h) {
@@ -169,19 +168,19 @@ public final class FlashGameTests {
         BlockPos standAt = CENTER.east(WALL_DX - 2);
         Vec3 feet = Vec3.atBottomCenterOf(h.absolutePos(standAt)).add(0.5, 0, 0);
         ArmorStand stand = EntityType.ARMOR_STAND.create(level);
-        h.assertTrue(stand != null, "нет стойки");
+        h.assertTrue(stand != null, "no stand");
         stand.moveTo(feet.x, feet.y, feet.z, 90, 0);
         stand.setYBodyRot(90);
         level.addFreshEntity(stand);
         FlashShadows job = FlashShadows.of(level, d);
-        h.assertTrue(job != null, "тел перед стеной не нашлось");
+        h.assertTrue(job != null, "no bodies were found in front of the wall");
         stand.discard();
         WorkClock clock = WorkClock.counting(1_000_000L);
         int ticks = 0;
         do {
             clock.start(30_000_000L);
         } while (!job.work(level, clock) && ++ticks < 100);
-        // где луч от шара через середину тела упирается в стену
+        // where the beam from the ball through the middle of the body hits the wall
         Vec3 c = feet.add(0, stand.getBbHeight() / 2, 0), dir = c.subtract(d.burst()).normalize();
         double wallX = h.absolutePos(CENTER.east(WALL_DX)).getX();
         Vec3 hit = c.add(dir.scale((wallX - c.x) / dir.x));
@@ -198,34 +197,34 @@ public final class FlashGameTests {
                         if ((s & FlashChar.KEY_MASK) != FlashChar.key(abs.getX() & 15, abs.getY(), abs.getZ() & 15, Direction.WEST)) continue;
                         shadowFaces++;
                         if (Math.abs(abs.getZ() - hitBlock.getZ()) > 2 || Math.abs(abs.getY() - hitBlock.getY()) > 3) {
-                            h.fail("тень далеко от тела: " + abs.toShortString() + ", луч упирается в " + hitBlock.toShortString());
+                            h.fail("shadow far from the body: " + abs.toShortString() + ", the beam rests on " + hitBlock.toShortString());
                         }
                         for (int u = 0; u < FlashMarks.CELLS; u++) for (int v = 0; v < FlashMarks.CELLS; v++) if (l.shade(k, u, v) == 3) full++;
                     }
                 }
             }
         }
-        h.assertTrue(shadowFaces > 0, "силуэта на стене нет (луч от шара через тело — в " + hitBlock.toShortString() + ")");
-        h.assertTrue(full >= 20, "клеток в полной тени " + full + " — силуэт пустой");
+        h.assertTrue(shadowFaces > 0, "there is no silhouette on the wall (the ray from the ball through the body is in " + hitBlock.toShortString() + ")");
+        h.assertTrue(full >= 20, "cells in full shade " + full + " - empty silhouette");
         h.succeed();
     }
 
     /**
-     * Удар по расписанию (МБР), руины которого готовились заранее: гарь и силуэт — в одном слое с номером и временем
-     * подрыва. Руины заранее строятся по месту подрыва без номера и времени ({@code NuclearWarhead.geometry}), а гарь
-     * встаёт слоем подрыва, который ставит руины: со слоем места (−1, время 0) силуэт не ложился бы на гарь своего
-     * подрыва, повтор показывал бы гарь до вспышки, а второй такой удар заменил бы гарь первого. Стена и стойка — как в
-     * {@link #silhouetteBehindBody}, масштаб — 8 psi на стене у подрыва над серединой.
+     * A scheduled strike (ICBM), the ruins of which were prepared in advance: smoke and silhouette - in one layer with the number and time of the explosion
+     * . The ruins are built in advance at the place of the explosion without number and time ({@code NuclearWarhead.geometry}), and the burnt-out
+     *  appears as a layer of explosion, which puts the ruins: with a layer of place (−1, time 0), the silhouette would not lie on the burnt-out of its
+     *  explosion, the repeat would show the burnt-out before the flash, and the second one would be like that the blow would have replaced the burning of the first. Wall and stand - as in
+     * {@link #silhouetteBehindBody}, scale - 8 psi on the wall near the blast above the middle.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "nuke_flash_prep", skyAccess = true)
     public static void preparedStrikeMarksOneLayer(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        NuclearGameTests.detonation(h, CENTER, 0, 15, 0.05f); // только засыпка слоя под площадкой: подрыв — по расписанию
+        NuclearGameTests.detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
         for (int dz = -4; dz <= 4; dz++) {
             for (int y = 0; y < 5; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
         }
         ArmorStand stand = EntityType.ARMOR_STAND.create(level);
-        h.assertTrue(stand != null, "нет стойки");
+        h.assertTrue(stand != null, "no stand");
         Vec3 feet = Vec3.atBottomCenterOf(h.absolutePos(CENTER.east(WALL_DX - 2))).add(0.5, 0, 0);
         stand.moveTo(feet.x, feet.y, feet.z, 90, 0);
         stand.setYBodyRot(90);
@@ -263,7 +262,7 @@ public final class FlashGameTests {
             Detonation d = events.detonations().stream().filter(e -> e.burst().distanceTo(target) < 400).findFirst().orElse(null);
             String failure = null;
             if (d == null) {
-                if (level.getGameTime() > now + 1150) failure = "подрыва не было";
+                if (level.getGameTime() > now + 1150) failure = "there was no explosion";
             } else if (!checked[0]) {
                 RuinBackgroundGameTests.gamePace(tickAt);
                 LevelChunk wall = level.getChunkSource().getChunkNow(wallPos.getX() >> 4, wallPos.getZ() >> 4);
@@ -272,7 +271,7 @@ public final class FlashGameTests {
                 boolean shadows = m.layers().stream().anyMatch(l -> l.detonation() == d.id() && l.shadows().length > 0);
                 if (!scarred || !shadows) {
                     if (level.getGameTime() < d.gameTime() + 2400) return;
-                    failure = "за 2400 тиков после подрыва: руины стены " + scarred + ", силуэты " + shadows;
+                    failure = "for 2400 tick after the explosion: wall ruins " + scarred + ", silhouettes " + shadows;
                 } else {
                     checked[0] = true;
                     StringBuilder layers = new StringBuilder();
@@ -281,16 +280,16 @@ public final class FlashGameTests {
                                 .append(l.shadows().length).append(" silhouettes;");
                     }
                     FlashMarks.Layer layer = m.layers().stream().filter(l -> l.detonation() == d.id()).findFirst().orElseThrow();
-                    if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "руины не готовились заранее: подрыв не взял подготовку";
+                    if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
                     else if (m.layers().stream().anyMatch(l -> l.detonation() < 0) || layer.time() != d.gameTime() || layer.chars().length == 0) {
-                        failure = "гарь и силуэты стены — не один слой подрыва #" + d.id() + " (время " + d.gameTime() + "):" + layers;
+                        failure = "smoke and silhouettes of the wall - more than one layer of explosion #" + d.id() + " (time " + d.gameTime() + "):" + layers;
                     }
                 }
             } else if (w.plannedChunks() > 0 || w.prepTiles() > 0) {
-                // подготовка отпускает квадраты по чтениям и фоновым планам — по настенным часам
+                // preparation releases squares according to readings and background plans - according to the wall clock
                 RuinBackgroundGameTests.gamePace(tickAt);
                 if (level.getGameTime() < d.gameTime() + 2400) return;
-                failure = "подготовка не отпустила квадраты: осталось " + w.plannedChunks() + ", квадратов " + w.prepTiles();
+                failure = "preparation did not release the squares: left " + w.plannedChunks() + ", squares " + w.prepTiles();
             } else {
                 restore.run();
                 h.succeed();
@@ -303,7 +302,7 @@ public final class FlashGameTests {
         });
     }
 
-    /** Те же следы (слои, метки, маски). */
+    /** The same traces (layers, marks, masks). */
     private static boolean same(FlashMarks a, FlashMarks b) {
         if (a.layers().size() != b.layers().size()) return false;
         for (int i = 0; i < a.layers().size(); i++) {

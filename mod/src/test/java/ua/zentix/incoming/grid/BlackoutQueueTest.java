@@ -12,12 +12,12 @@ import java.lang.reflect.Field;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Очереди чанков блэкаута: чанки общей очереди, к которым подошёл игрок, переходят в очередь у игроков. */
+/** Chunk queues blackout: chunks of the general queue that a player has approached are transferred to the players’ queue. */
 class BlackoutQueueTest {
     @Test
     void promoteNearMovesOnlyChunksNearPlayers() throws ReflectiveOperationException {
         BlackoutWorld world = new BlackoutWorld();
-        // без игроков всё идёт в общую очередь
+        // without players everything goes to the general queue
         LongArrayList order = new LongArrayList();
         for (int x = -20; x <= 20; x += 2) {
             for (int z = -3; z <= 3; z += 3) order.add(ChunkPos.asLong(x, z));
@@ -28,7 +28,7 @@ class BlackoutQueueTest {
         assertEquals(0, near.size());
         assertEquals(order.size(), ready.size());
 
-        // уже в очереди ближней: место в её начале остаётся
+        // already in the next queue: a place at the beginning remains
         near.enqueue(ChunkPos.asLong(1, 1));
         LongOpenHashSet queued = field(world, "queued");
         queued.add(ChunkPos.asLong(1, 1));
@@ -51,14 +51,14 @@ class BlackoutQueueTest {
                     || Math.max(Math.abs(x - 100), Math.abs(z - 92)) <= BlackoutWorld.NEAR_CHUNKS;
             (close ? expectNear : expectReady).add(c);
         }
-        // проверка не пустая: есть и ближние, и дальние, и игрок, до которого ровно NEAR_CHUNKS
+        // the check is not empty: there are both close and far, and a player who is exactly NEAR_CHUNKS
         assertTrue(expectNear.size() > 2 && expectReady.size() > 2 && expectNear.contains(ChunkPos.asLong(100, 100)));
         assertEquals(expectNear, drain(near));
         assertEquals(expectReady, drain(ready));
         assertEquals(queuedBefore, queued);
         assertEquals(resumeBefore, resume);
 
-        // второй раз — ничего не движется и не повторяется
+        // the second time - nothing moves and does not repeat
         for (long c : expectNear) near.enqueue(c);
         for (long c : expectReady) ready.enqueue(c);
         world.promoteNear();

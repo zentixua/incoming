@@ -34,7 +34,7 @@ import ua.zentix.incoming.registry.ModEffects;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Ожоги светом шара по телу ({@link FlashBurns}): степень, одежда, броня, шок. */
+/** Burns from the ball's light on the body ({@link FlashBurns}): degree, clothing, armor, shock. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BurnGameTests {
@@ -43,15 +43,14 @@ public final class BurnGameTests {
     private static final double YIELD = 15;
 
     /**
-     * 15 кт, импульс, при котором ожог 3-й степени у любого: корова (кожа на половине тела стороной к шару) — шок,
-     * здоровья 5 % (предел здоровья — не меньше единицы, как у ванили); житель в рубашке — 3-я степень на лице и руках
-     * (9,9 % тела): отнято 40 % здоровья, предел — 60 % (вверх до десятой доли), одежда не загорелась; та же вспышка
-     * второй раз ничего не отнимает. При 20 кал/см² у жителя загорается одежда. Разбойник в железе не обожжён и не
-     * горит, в коже — горит (плотная ткань загорается), но кожа под ней цела. Ниже самого низкого порога — ничего,
-     * треска под водой, ещё не тикавшая, — тоже. Игрока, которого правила не дают ранить, вспышка подрыва игрока не
-     * трогает, а другого — жжёт и поджигает рубашку. Второй подрыв не трогает идущий шок; рана поверх прежних ожогов —
-     * от здоровья без них. Новый ожог слабее прежнего заживает своим сроком: прежний кончился — предел нового. Шок в
-     * конце срока убивает и под огнестойкостью с сопротивлением V.
+     * 15 kt, an impulse that causes a 3 degree burn in anyone: a cow (skin on half the body with the side facing the ball) - shock,
+     * health 5% (health limit - no less than one, like vanilla); resident in a shirt - 3-th degree on the face and hands
+     *  (9,9 % of the body): 40 % of health taken away, limit - 60 % (up to a tenth), clothes did not catch fire; the same flash
+     *  the second time does not take away anything. At 20 cal/cm² the resident's clothing catches fire. The robber in the iron is not burned and does not
+     *  burn, in the skin he burns (thick fabric catches fire), but the skin underneath is intact. Below the lowest threshold - nothing,
+     *  cod under water, not yet ticking - too. A player whom the rules do not allow to be wounded is not affected by the explosion of the player, but the other player is burned and sets his shirt on fire. The second detonation does not touch the incoming shock; wound on top of previous burns -
+     *  from health without them. A new burn, weaker than the previous one, heals on its own time: the old one is over - the limit of the new one. Shock in the
+     *  end of life kills and under fire resistance with the resistance of V.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_burns", skyAccess = true)
     public static void burnsByDegreeClothesAndShock(GameTestHelper h) {
@@ -67,14 +66,14 @@ public final class BurnGameTests {
         Cow resisting = still(h, EntityType.COW, 20, 28);
         Cow twice = still(h, EntityType.COW, 24, 28);
         Mob healing = still(h, EntityType.VILLAGER, 28, 28);
-        // треска в лунке воды за стеклом: признак «под водой» у неё встанет только в её первом тике
+        // cod in a hole of water behind glass: the sign “under water” will appear only in its first tick
         BlockPos pond = new BlockPos(48, 12, 20);
         h.setBlock(pond, Blocks.WATER);
         for (BlockPos side : new BlockPos[]{pond.east(), pond.west(), pond.north(), pond.south()}) h.setBlock(side, Blocks.GLASS);
         Cod cod = h.spawn(EntityType.COD, pond);
         cod.setNoAi(true);
         FlashBurns.burn(h.getLevel(), d, cod, 30, null);
-        h.assertTrue(level(cod) < 0 && !cod.isOnFire(), "треска под водой обожжена: " + about(cod));
+        h.assertTrue(level(cod) < 0 && !cod.isOnFire(), "cod underwater seared: " + about(cod));
 
         FlashBurns.burn(h.getLevel(), d, cow, third, null);
         FlashBurns.burn(h.getLevel(), d, villager, third, null);
@@ -83,22 +82,22 @@ public final class BurnGameTests {
         FlashBurns.burn(h.getLevel(), d, leather, 20, null);
         FlashBurns.burn(h.getLevel(), d, faint, BurnInjury.lowest(YIELD) * 0.99, null);
 
-        h.assertTrue(level(cow) == BurnsEffect.SHOCK && cow.getMaxHealth() <= Math.max(1, 10 * BurnInjury.SHOCK_LEFT) + 1e-3 && cow.getHealth() <= 10 * BurnInjury.SHOCK_LEFT + 1e-3, "корова при " + fmt(third) + " кал/см² без шока: " + about(cow));
-        h.assertFalse(cow.isOnFire(), "корова загорелась: горит только одежда");
+        h.assertTrue(level(cow) == BurnsEffect.SHOCK && cow.getMaxHealth() <= Math.max(1, 10 * BurnInjury.SHOCK_LEFT) + 1e-3 && cow.getHealth() <= 10 * BurnInjury.SHOCK_LEFT + 1e-3, "cow at " + fmt(third) + " cal/cm² without shock: " + about(cow));
+        h.assertFalse(cow.isOnFire(), "the cow caught fire: only the clothes burn");
         h.assertTrue(level(villager) == 4 && Math.abs(villager.getMaxHealth() - 12) < 1e-3 && villager.getHealth() > 11.9f,
-                "житель в рубашке при " + fmt(third) + " кал/см²: " + about(villager));
-        h.assertFalse(villager.isOnFire(), "рубашка жителя загорелась при " + fmt(third) + " кал/см²");
+                "resident in shirt " + fmt(third) + " cal/cm²: " + about(villager));
+        h.assertFalse(villager.isOnFire(), "a resident's shirt caught fire when " + fmt(third) + " cal/cm²");
         FlashBurns.burn(h.getLevel(), d, villager, third, null);
-        h.assertTrue(level(villager) == 4 && villager.getHealth() > 11.9f, "та же вспышка второй раз ранила жителя: " + about(villager));
-        h.assertTrue(burning.isOnFire() && level(burning) == 4, "житель при 20 кал/см²: " + about(burning) + (burning.isOnFire() ? "" : ", одежда не горит"));
-        h.assertTrue(level(iron) < 0 && !iron.isOnFire(), "разбойник в железе обожжён: " + about(iron));
-        h.assertTrue(level(leather) < 0 && leather.isOnFire(), "разбойник в коже при 20 кал/см²: " + about(leather) + (leather.isOnFire() ? "" : ", кожа не горит"));
-        h.assertTrue(level(faint) < 0 && faint.getHealth() == faint.getMaxHealth(), "корова ниже порога обожжена: " + about(faint));
+        h.assertTrue(level(villager) == 4 && villager.getHealth() > 11.9f, "the same flash injured a resident a second time: " + about(villager));
+        h.assertTrue(burning.isOnFire() && level(burning) == 4, "resident at 20 cal/cm²: " + about(burning) + (burning.isOnFire() ? "" : ", clothes don't burn"));
+        h.assertTrue(level(iron) < 0 && !iron.isOnFire(), "the robber is burned in iron: " + about(iron));
+        h.assertTrue(level(leather) < 0 && leather.isOnFire(), "robber in leather at 20 cal/cm²: " + about(leather) + (leather.isOnFire() ? "" : ", the skin doesn't burn"));
+        h.assertTrue(level(faint) < 0 && faint.getHealth() == faint.getMaxHealth(), "the cow is burned below the threshold: " + about(faint));
 
         twice.addEffect(new MobEffectInstance(ModEffects.BURNS, 40, BurnsEffect.SHOCK));
         FlashBurns.burn(h.getLevel(), d, twice, third, null);
         MobEffectInstance left = twice.getEffect(ModEffects.BURNS);
-        h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() == 40, "второй подрыв сдвинул шок: " + left);
+        h.assertTrue(left != null && left.getAmplifier() == BurnsEffect.SHOCK && left.getDuration() == 40, "the second explosion moved the shock: " + left);
 
         ServerLevel level = h.getLevel();
         FakePlayer launcher = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "burns_launcher"));
@@ -106,42 +105,42 @@ public final class BurnGameTests {
         Player enemy = player(h, "burns_enemy", true, 36.5, 36.5);
         FlashBurns.burn(level, d, ally, 30, launcher);
         FlashBurns.burn(level, d, enemy, 30, launcher);
-        h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "игрока, которого правила не дают ранить, обожгло: " + about(ally) + (ally.isOnFire() ? ", горит" : ""));
-        h.assertTrue(level(enemy) >= 0 && enemy.isOnFire(), "игрока, которого правила дают ранить, не обожгло: " + about(enemy) + (enemy.isOnFire() ? "" : ", не горит"));
+        h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "a player, whom the rules do not allow to be injured, was burned: " + about(ally) + (ally.isOnFire() ? ", lit" : ""));
+        h.assertTrue(level(enemy) >= 0 && enemy.isOnFire(), "the player whom the rules allow to be wounded is not burned: " + about(enemy) + (enemy.isOnFire() ? "" : ", does not light"));
 
-        // поверх прежних ожогов рана — от здоровья без них: у коровы с пределом 60 % шок оставляет 5 % от 10, а у курицы
-        // с 0,9 (предел здоровья ваниль не опускает ниже единицы) шок отнимает 5 % от 4 — меньше полуединицы, без раны
+        // on top of previous burns the wound is from health without them: in a cow with a limit of 60 %, the shock leaves 5 % of 10, and in a chicken
+        //  with 0,9 (the vanilla health limit does not fall below one) the shock takes away 5 % of 4 - less than half a unit, without a wound
         Cow burned = still(h, EntityType.COW, 36, 28);
         burned.addEffect(new MobEffectInstance(ModEffects.BURNS, 24_000, 4));
         burned.setHealth(6);
         FlashBurns.burn(level, d, burned, third, null);
         h.assertTrue(level(burned) == BurnsEffect.SHOCK && Math.abs(burned.getHealth() - 10 * BurnInjury.SHOCK_LEFT) < 1e-3,
-                "корова с ожогами 40 % после шока: " + about(burned));
+                "cow with burns 40% after shock: " + about(burned));
         Chicken chicken = still(h, EntityType.CHICKEN, 32, 28);
         chicken.addEffect(new MobEffectInstance(ModEffects.BURNS, 24_000, 9));
         chicken.setHealth(0.4f);
         FlashBurns.burn(level, d, chicken, third, null);
         h.assertTrue(chicken.isAlive() && level(chicken) == BurnsEffect.SHOCK && chicken.getHealth() > 0.39f,
-                "курица с ожогами 90 % после шока: " + about(chicken) + (chicken.isAlive() ? "" : ", умерла"));
+                "chicken with burns 90% after shock: " + about(chicken) + (chicken.isAlive() ? "" : ", died"));
 
         healing.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, 6));
         FlashBurns.burn(level, d, healing, third, null);
-        h.assertTrue(level(healing) == 6, "ожог слабее прежнего сменил прежний сразу: " + about(healing));
+        h.assertTrue(level(healing) == 6, "the burn, weaker than the previous one, replaced the previous one immediately: " + about(healing));
 
         shocked.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
         resisting.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 200));
         resisting.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, 4));
         resisting.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
         h.succeedWhen(() -> {
-            h.assertFalse(shocked.isAlive(), "шок не убил");
-            h.assertFalse(resisting.isAlive(), "шок не убил под огнестойкостью и сопротивлением V");
+            h.assertFalse(shocked.isAlive(), "the shock didn't kill");
+            h.assertFalse(resisting.isAlive(), "the shock did not kill under the fire resistance and resistance of V");
             MobEffectInstance healed = healing.getEffect(ModEffects.BURNS);
             h.assertTrue(healed != null && healed.getAmplifier() == 4 && healed.getDuration() > 24_000,
-                    "прежний ожог кончился, а предел не новый: " + healed);
+                    "the old burn has ended, but the limit is not new: " + healed);
         });
     }
 
-    /** Игрок, которого правила игры (PvP, команды) дают или не дают ранить другим игрокам. */
+    /** A player whom the rules of the game (PvP, commands) allow or prevent other players from being injured. */
     private static Player player(GameTestHelper h, String name, boolean harmable, double x, double z) {
         Player p = new FakePlayer(h.getLevel(), new GameProfile(UUID.randomUUID(), name)) {
             @Override
@@ -173,7 +172,7 @@ public final class BurnGameTests {
     }
 
     private static String about(LivingEntity e) {
-        return String.format(Locale.ROOT, "уровень ожогов %d, здоровье %.2f из %.2f", level(e), e.getHealth(), e.getMaxHealth());
+        return String.format(Locale.ROOT, "burn level %d, health %.2f from %.2f", level(e), e.getHealth(), e.getMaxHealth());
     }
 
     private static String fmt(double v) {

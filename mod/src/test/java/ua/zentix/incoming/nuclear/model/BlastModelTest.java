@@ -33,7 +33,7 @@ class BlastModelTest {
 
     @Test
     void dynamicPressure() {
-        // q при 5 psi ≈ 0.6 psi (Glasstone, табл. 3.07)
+        // q at 5 psi ≈ 0.6 psi (Glasstone, table 3.07)
         double q = BlastModel.psi(BlastModel.dynamicPressureKpa(BlastModel.kpa(5)));
         assertEquals(0.58, q, 0.1);
         assertEquals(0, BlastModel.dynamicPressureKpa(0), 0);
@@ -41,21 +41,21 @@ class BlastModelTest {
 
     @Test
     void windBehindFront() {
-        // наибольший ветер за фронтом (Glasstone, табл. 3.07): 2 psi — 70 миль/ч, 5 psi — 163, 10 psi — 294
+        // highest wind behind the front (Glasstone, table 3.07): 2 psi - 70 mph, 5 psi - 163, 10 psi — 294
         assertEquals(31.3, BlastModel.windSpeed(BlastModel.kpa(2)), 1.5);
         assertEquals(72.9, BlastModel.windSpeed(BlastModel.kpa(5)), 2);
         assertEquals(131.4, BlastModel.windSpeed(BlastModel.kpa(10)), 3);
         assertEquals(0, BlastModel.windSpeed(0), 0);
-        // воздух за фронтом всегда медленнее самого фронта
+        // the air behind the front is always slower than the front itself
         for (double psi = 0.1; psi < 200; psi *= 1.5) {
             assertTrue(BlastModel.windSpeed(BlastModel.kpa(psi)) < BlastModel.frontSpeed(BlastModel.kpa(psi)));
         }
     }
 
     /**
-     * KG85 NE у слушателя: в свободном воздухе (W = Y / 1,8 — отражение от земли формула добавляет сама) — значения
-     * таблицы 8.1 у Garcés (2 кт на 8 км — 0,67 с; 2 Мт на 80 км — 6,7 с) и таблицы 8.6 (1 т на 1 км — 0,0568 с); ANSI
-     * S2.20 для 1 кт (на 1, 10, 100 км — 0,34, 0,52, 0,93 с) — в пределах 25 %.
+     * KG85 NE at the listener: in free air (W = Y / 1,8 - the formula adds reflection from the ground itself) - values
+     *  tables 8.1 at Garcés (2 kt on 8 km - 0,67 s; 2 Mt on 80 km - 6,7 s) and tables 8.6 (1 t on 1 km - 0,0568 s); ANSI
+     * S2.20 for 1 kt (for 1, 10, 100 km - 0,34, 0,52, 0,93 s) - within 25 %.
      */
     @ParameterizedTest
     @CsvSource({"2, 8000, 0.67, 0.01", "2000, 80000, 6.7, 0.1", "0.001, 1000, 0.0568, 0.0005",
@@ -65,15 +65,15 @@ class BlastModelTest {
     }
 
     /**
-     * Фаза растёт с дальностью и выходит на постоянную: у 15 кт на 3 км ~1,2 с, на 30 км ~1,7 с, дальше — не больше 2,3.
-     * С 200 м (Z ≈ 65 м/кт^⅓): ближе подгонка KG85 проседает на 7 % — это внутри огненного шара, там звука нет.
+     * Phase duration grows with range and levels off: for 15 kt at 3 km ~1.2 s, at 30 km ~1.7 s, farther no more than 2.3.
+     * From 200 m (Z ≈ 65 m/kt^⅓): closer in, the KG85 fit dips by 7%; this is inside the fireball, with no sound there.
      */
     @Test
     void positivePhaseLengthensAndLevels() {
         double prev = 0;
         for (double r = 200; r < 1e6; r *= 1.5) {
             double t = BlastModel.positivePhaseSeconds(r, 15), at = r;
-            assertTrue(t >= prev * 0.999, () -> at + " м");
+            assertTrue(t >= prev * 0.999, () -> at + " m");
             prev = t;
         }
         assertEquals(1.17, BlastModel.positivePhaseSeconds(3000, 15), 0.05);
@@ -87,7 +87,7 @@ class BlastModelTest {
         assertEquals(0, BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(1), 0), 0);
     }
 
-    /** Стекло (0,8 psi) у наземного взрыва шахеда (50 кг) вылетает до ~73 м, ракеты (~150 кг ТНТ) — до ~105 м. */
+    /** Glass (0,8 psi) from a ground explosion Shahed (50 kg) flies up to ~73 m, rockets (~150 kg TNT) - up to ~105 m. */
     @Test
     void surfaceRangeForGlass() {
         double kpa = BlastModel.kpa(0.8);

@@ -5,21 +5,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Пробы видимости источников: у каждого источника кадра свой номер, с 1 (квадрат блика пишет минус номер в поле мягкости,
- * 0 там — «пробы нет»), и номеров не больше, чем вмещает это 16-битное поле.
+ * Source visibility tests: each frame source has its own number, with 1 (the highlight square writes minus the number in the softness field,
+ * 0 there - “no sample”), and there are no more numbers than this 16-bit field contains.
  */
 class SourceProbesTest {
     @Test
     void numbersFitTheVertexField() {
         SourceProbes probes = new SourceProbes();
         probes.begin();
-        assertEquals(1, probes.add(0, 0, -100, 5), "первый источник — проба 1");
+        assertEquals(1, probes.add(0, 0, -100, 5), "first source - sample 1");
         assertEquals(2, probes.add(10, 0, -100, 5));
-        // память источников растёт сама
+        // memory of sources grows itself
         for (int i = 3; i <= 1000; i++) assertEquals(i, probes.add(i, 0, -100, 1));
         probes.begin();
-        assertEquals(1, probes.add(0, 0, -100, 5), "новый кадр — с начала");
+        assertEquals(1, probes.add(0, 0, -100, 5), "new frame - from the beginning");
         for (int i = 2; i <= SourceProbes.MAX; i++) probes.add(0, 0, -100, 1);
-        assertEquals(0, probes.add(0, 0, -100, 1), "сверх поля вершины — без пробы");
+        assertEquals(0, probes.add(0, 0, -100, 1), "above the top field - without testing");
     }
 }

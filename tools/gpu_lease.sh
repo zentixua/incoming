@@ -1,81 +1,81 @@
 #!/usr/bin/env bash
-# Аренда видеокарты ноутбука: с картинкой работает один владелец за раз, и это держит файл, а не память.
+# Laptop GPU lease: one owner works on visuals at a time; a file enforces it, not memory.
 #
-#   tools/gpu_lease.sh status               кто держит, с какого времени, из какого дерева, когда работал последний раз,
-#                                           и кто ждёт (очередь по порядку)
-#   tools/gpu_lease.sh take [--wait]        взять (своя — продлить); чужая — отказ 75 со строкой «видеокарта у …»,
-#                                           с --wait — встать в очередь и ждать, пока её отпустят или она истечёт
-#   tools/gpu_lease.sh release              отпустить свою (закончил с картинкой; пока свой клиент идёт — отказ: сначала
+#   tools/gpu_lease.sh status               holder, since when, worktree, last work time,
+#                                           and waiters (in queue order)
+#   tools/gpu_lease.sh take [--wait]        acquire (renew own); foreign lease refuses with 75 and "GPU held by …";
+#                                           --wait queues until release or expiry
+#   tools/gpu_lease.sh release              release own (finished visuals; refuses while own client runs: first
 #                                           tools/sandbox.sh stop)
-#   source tools/gpu_lease.sh               функции lease_owner, lease_take, lease_renew, lease_release, lease_status
+#   source tools/gpu_lease.sh               functions lease_owner, lease_take, lease_renew, lease_release, lease_status
 #
-# Владелец — сессия: INCOMING_GPU_OWNER или имя дерева (mod/run/wt-<S>[-что угодно] → <S>, иначе имя папки), так что
-# деревья одной сессии (wt-N3 и wt-N3-main) — один владелец. Берёт её каждый клиент на видеокарте сам —
-# `tools/nested_kwin.sh` (через него идут все: песочница, сценарии, prod_client, шлагбаум, трейлер), — и задачи
-# `tools/laptop_job.sh --gpu` (Blender); песочница и задачи --gpu спрашивают её ещё до сборки, чтобы отказ пришёл сразу.
-# Пока клиент или задача идёт, аренда продлевается раз в 30 с; без работы на видеокарте истекает через
-# INCOMING_GPU_LEASE_IDLE секунд (600): правка кода между кадрами её не теряет, а брошенная сессия не держит видеокарту
-# вечно. Клиент на видеокарте — один и внутри сессии (замок `$LEASE.client`, держит nested_kwin.sh и все его потомки):
-# свой шлагбаум рядом со своей песочницей получает отказ «на видеокарте идёт клиент …», а не делит кадры. Своя сессия
-# перезапускает свою песочницу без ожидания; тяжёлые задачи без видеокарты (GameTest, сборка) аренды не берут и
-# песочницу не гасят. Игра Артёма гасит всё, что идёт, при любой аренде.
+# Owner is the session: INCOMING_GPU_OWNER or worktree name (mod/run/wt-<S>[-anything] → <S>, otherwise directory name), so
+# worktrees of one session (wt-N3 and wt-N3-main) share an owner. Each GPU client acquires it itself:
+# `tools/nested_kwin.sh` (all clients use it: sandbox, scenarios, prod_client, look gate, trailer), as do
+# `tools/laptop_job.sh --gpu` jobs (Blender); sandbox and --gpu jobs also check before building for immediate refusal.
+# While a client or job runs, the lease renews every 30 s; without GPU work it expires after
+# INCOMING_GPU_LEASE_IDLE seconds (600): edits between frames retain it, but an abandoned session cannot hold the GPU
+# forever. Only one GPU client even within a session (`$LEASE.client` lock, held by nested_kwin.sh and all descendants):
+# own look gate beside own sandbox gets "GPU client is running …" instead of sharing frames. A session
+# restarts its own sandbox without waiting; heavy CPU-only jobs (GameTest, build) take no lease and
+# do not stop the sandbox. Artem's game stops everything running regardless of lease.
 #
-# Клиент без замка тоже виден: всякий живой вложенный KWin (`kwin_wayland --virtual` — через него идут все клиенты, и
-# скриптов тех версий, что о замке не знают) не своей работы — «на видеокарте идёт клиент без аренды». 23.10 песочница,
-# поднятая скриптом до аренды, шла без замка, аренда отвечала «свободна», и клиент другой сессии её выбил. Игра Артёма —
-# java, что идёт в папке его инстанса Prism или в группе Prism (artem_playing), а не строка в командной строке: моды
-# песочницы с MC_DIR на инстанс тоже лежат по пути инстанса.
+# Unlocked clients are visible too: any live nested KWin (`kwin_wayland --virtual`, used by all clients, including
+# scripts predating the lock) outside our job means "GPU client is running without a lease". On 23.10 a sandbox
+# started by a pre-lease script ran unlocked, lease reported "free", and another session's client displaced it. Artem's game is
+# java running in his Prism instance directory or Prism group (artem_playing), not command-line text: sandbox
+# mods with MC_DIR pointing at the instance also have instance paths.
 #
-# Почему файл и flock(1), а не правило на память или очередь задач: правило держалось текстом, и 23.10 видеокарту
-# брали три работы разом — одна песочница перезапускалась пять раз. Семафоры вроде `sem` (GNU parallel) и очереди
-# (`ts`, `nq`) держат процесс, а не сессию: между кадрами, пока сессия правит код, процесса нет, и соседняя задача
-# заняла бы видеокарту.
+# Why file and flock(1), rather than a remembered rule or job queue: the rule was just text, and on 23.10 three jobs
+# took the GPU together; one sandbox restarted five times. Semaphores such as `sem` (GNU parallel) and queues
+# (`ts`, `nq`) hold a process, not a session: between frames while editing there is no process, and a neighboring job
+# would take the GPU.
 #
-# Ждущие (--wait) — честная очередь (FIFO, `$LEASE.queue`): освободилась — берёт первый в ней, а не тот, кто первым
-# проверил; без --wait свободную при очереди не взять (отказ «её ждут: …»). Держащую аренду очередь не трогает: своя
-# сессия продлевает и перезапускает своё как прежде, аренда уходит, только когда её отпустят или она истечёт. В
-# очереди — процесс, который ждёт (номер и время старта): кончился или прерван (Ctrl+C) — его место снимается само.
-# 23.10 без очереди `start --wait` ждал ~35 мин, пока видеокарту по очереди брали три сессии, проверявшие раньше него.
-# Файлы живут в XDG_RUNTIME_DIR
-# (tmpfs): перезагрузка его снимает. Проверка — tools/test_gpu_lease.sh (CI).
+# Waiters (--wait) use a fair queue (FIFO, `$LEASE.queue`): when free, the first waiter acquires, not whoever
+# checks first; without --wait a free GPU with a queue is unavailable ("queued: …"). Queue never displaces the holder:
+# own session renews and restarts its work as before; lease ends only on release or expiry. The queue holds
+# the waiting process (PID and start time): exit or interruption (Ctrl+C) removes its position automatically.
+# On 23.10, without a queue, `start --wait` waited ~35 min while three sessions checking earlier took turns on the GPU.
+# Files live in XDG_RUNTIME_DIR
+# (tmpfs): reboot clears it. Test: tools/test_gpu_lease.sh (CI).
 LEASE=${INCOMING_GPU_LEASE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/incoming-gpu.lease}
 LEASE_IDLE=${INCOMING_GPU_LEASE_IDLE:-600}
-# клиент на видеокарте: замок и кто его держит (владелец, дерево, с какого времени, что за клиент)
+# GPU client: lock and holder (owner, worktree, since when, client description)
 GPU_CLIENT=$LEASE.client
-# очередь ждущих: строка «владелец, дерево, с (эпоха), процесс (номер время-старта)», по порядку прихода; под $LEASE.lock
+# wait queue: "owner, worktree, since (epoch), process (PID start-time)" rows in arrival order; under $LEASE.lock
 QUEUE=$LEASE.queue
-# как часто ждущий проверяет, секунд
+# waiter polling interval, seconds
 LEASE_POLL=${INCOMING_GPU_POLL:-3}
 
-# владелец по дереву $1 (по умолчанию — дерево этого скрипта)
+# owner for worktree $1 (default: this script's worktree)
 lease_owner() {
   [ -n "${INCOMING_GPU_OWNER:-}" ] && { echo "$INCOMING_GPU_OWNER"; return; }
-  # настоящий путь: главное дерево видно и через симлинк (airstrike → incoming), а владелец у него один
+  # real path: main worktree also visible through a symlink (airstrike → incoming), with one owner
   local name; name=$(basename "$(readlink -m "${1:-$(dirname "${BASH_SOURCE[0]}")/..}")")
   if [[ $name =~ ^wt-([^-]+) ]]; then echo "${BASH_REMATCH[1]}"; else echo "$name"; fi
 }
 
-# строка аренды: владелец, дерево, с (эпоха), последняя работа (эпоха); под замком $LEASE.lock
+# lease row: owner, worktree, since (epoch), last work (epoch); under $LEASE.lock
 _lease_read() { [ -s "$LEASE" ] && IFS=$'\t' read -r L_OWNER L_TREE L_SINCE L_SEEN < "$LEASE" || { L_OWNER=; L_TREE=; L_SINCE=0; L_SEEN=0; }; }
 _lease_write() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" > "$LEASE.tmp" && mv "$LEASE.tmp" "$LEASE"; }
 _lease_free() { [ -z "$L_OWNER" ] || [ $(( $(date +%s) - L_SEEN )) -gt "$LEASE_IDLE" ]; }
 _lease_hm() { date -d "@$1" +%H:%M; }
 
-# занятая чужим — строка «видеокарта у …»; свободная, но с очередью — тоже занята (её ждут); строка очереди — следом
+# foreign holder gives "GPU held by …"; free with queue is also busy (waiters); queue description follows
 lease_status() {
   local who q
   _lease_read
   q=$(_queue_line)
   if _lease_free; then
-    who=$(gpu_client_busy) && { echo "аренды нет, но $who${q:+; $q}"; return 0; }
-    [ -n "$q" ] && { echo "видеокарта свободна, но $q"; return 0; }
-    echo "видеокарта свободна"; return 1
+    who=$(gpu_client_busy) && { echo "no lease, but $who${q:+; $q}"; return 0; }
+    [ -n "$q" ] && { echo "GPU is free, but $q"; return 0; }
+    echo "GPU is free"; return 1
   fi
-  echo "видеокарта у $L_OWNER ($L_TREE), с $(_lease_hm "$L_SINCE"), последняя работа $(( ($(date +%s) - L_SEEN) / 60 )) мин назад" \
-    "(свободна — tools/gpu_lease.sh release в её дереве или через $(( (LEASE_IDLE - $(date +%s) + L_SEEN) / 60 + 1 )) мин без работы)${q:+; $q}"
+  echo "GPU held by $L_OWNER ($L_TREE), since $(_lease_hm "$L_SINCE"), last work $(( ($(date +%s) - L_SEEN) / 60 )) min ago" \
+    "(free — tools/gpu_lease.sh release in its tree or after $(( (LEASE_IDLE - $(date +%s) + L_SEEN) / 60 + 1 )) min without work)${q:+; $q}"
 }
 
-# очередь без кончившихся ждущих (под замком $LEASE.lock): строки живых процессов, по порядку
+# queue without exited waiters (under $LEASE.lock): live process rows in order
 _queue_live() {
   local o t since pid
   [ -s "$QUEUE" ] || return 0
@@ -84,57 +84,57 @@ _queue_live() {
   done < "$QUEUE"
 }
 
-# переписать очередь живыми, без строк владельца $1 (если задан)
+# rewrite queue with live waiters, omitting owner $1 if specified
 _queue_keep() {
   _queue_live | awk -F'\t' -v o="${1:-}" 'o == "" || $1 != o' > "$QUEUE.tmp"; mv "$QUEUE.tmp" "$QUEUE"
 }
 
-# первый живой ждущий (владелец) или ничего
+# first live waiter (owner), or nothing
 _queue_head() { _queue_live | head -n 1 | cut -f1; }
 
-# «её ждут: A (дерево) с 21:10, B (…) с 21:12» — по порядку, владелец один раз; пусто — никто
+# "queued: A (worktree) since 21:10, B (…) since 21:12" in order, each owner once; empty means none
 _queue_line() {
   local o t since seen=" " parts=()
   while IFS=$'\t' read -r o t since _; do
     [[ $seen == *" $o "* ]] && continue
-    seen+="$o "; parts+=("$o ($t) с $(_lease_hm "$since")")
+    seen+="$o "; parts+=("$o ($t) since $(_lease_hm "$since")")
   done < <(_queue_live)
   [ ${#parts[@]} -gt 0 ] || return 0
-  local IFS=,; echo "её ждут: ${parts[*]}" | sed 's/,/, /g'
+  local IFS=,; echo "queued: ${parts[*]}" | sed 's/,/, /g'
 }
 
-# lease_take <владелец> <дерево> [--wait] — 0: аренда своя; 75: чужая, или свободна, а очередь впереди (строка — в
-# stderr). С --wait — в очередь: свободную берёт первый ждущий; своя, пока не истекла, — без очереди
+# lease_take <owner> <worktree> [--wait] — 0: own lease; 75: foreign lease, or free with others ahead in queue (line to
+# stderr). --wait queues: first waiter takes free GPU; own unexpired lease bypasses queue
 lease_take() {
   local owner=$1 tree wait=${3:-} fd said= now who why queued= me
   tree=$(readlink -m "$2")
-  # номер — этого процесса: $BASHPID внутри $(…) — уже номер подоболочки
+  # PID of this process: $BASHPID inside $(…) is already the subshell PID
   local pid=$BASHPID; me="$pid $(_proc_start "$pid")"
   while true; do
     exec {fd}>"$LEASE.lock"; flock "$fd"
     _lease_read; now=$(date +%s)
     why=
     if [ "$L_OWNER" = "$owner" ] && ! _lease_free; then
-      # своя, ещё не истекла: продлить — держащего очередь не выбивает
+      # own, unexpired: renew; queue cannot displace holder
       :
     elif ! _lease_free; then
       why=$(lease_status)
     elif [ -n "$(_queue_head)" ] && [ "$(_queue_head)" != "$owner" ]; then
-      why="видеокарта свободна, но $(_queue_line)"
+      why="GPU is free, but $(_queue_line)"
     elif who=$(gpu_client_busy); then
-      # свободна, а клиент без замка идёт (скрипт до аренды, чужой запуск мимо неё) — занята им
+      # free lease but unlocked client running (pre-lease script, outside launch): held by that client
       why=$who
     fi
     if [ -z "$why" ]; then
       [ "$L_OWNER" = "$owner" ] && ! _lease_free || L_SINCE=$now
       _lease_write "$owner" "$tree" "$L_SINCE" "$now"
-      # взял — место в очереди (и других процессов своей сессии) больше не нужно
+      # acquired: queue positions of this and other processes of our session are no longer needed
       _queue_keep "$owner"
       exec {fd}>&-
       return 0
     fi
     if [ "$wait" != --wait ]; then exec {fd}>&-; echo "$why" >&2; return 75; fi
-    # в очередь — при первом отказе (и снова, если место сняли: его снимает взявший процесс той же сессии)
+    # queue on first refusal (and again if removed: acquiring process of the same session removes it)
     local pos key; pos=$(_queue_live | awk -F'\t' -v m="$me" '$4 == m { print NR; exit }')
     if [ -z "$pos" ]; then
       _queue_keep
@@ -142,16 +142,16 @@ lease_take() {
       queued=${queued:-$now}
       pos=$(_queue_live | wc -l)
     fi
-    # строка — при входе и когда сменились место в очереди или тот, кто держит
+    # print on entry and when queue position or holder changes
     key="$pos|$L_OWNER|$(_lease_free && echo free)"
     exec {fd}>&-
-    [ "$said" != "$key" ] && { echo "$(date +%T) $why — жду (в очереди ${pos:-?}-й)" >&2; said=$key; }
+    [ "$said" != "$key" ] && { echo "$(date +%T) $why — waiting (queue position ${pos:-?})" >&2; said=$key; }
     sleep "$LEASE_POLL"
   done
 }
 
-# продлить свою (идёт работа на видеокарте); свободную (отпустили или истекла, а работа идёт) — взять снова; чужая —
-# не трогать, код 1
+# renew own (GPU work running); reacquire free lease (released or expired while work runs); foreign lease:
+# leave alone, return 1
 lease_renew() {
   local owner=$1 tree=${2:-} fd rc=1 now
   exec {fd}>"$LEASE.lock"; flock "$fd"
@@ -162,20 +162,20 @@ lease_renew() {
   return $rc
 }
 
-# время старта процесса (поле 22 /proc/<pid>/stat; после имени, где бывают пробелы и скобки, — 20-е)
+# process start time (/proc/<pid>/stat field 22; field 20 after the name, which can contain spaces and parentheses)
 _proc_start() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }
 
-# этот процесс — часть работы, что держит замок клиента: унаследовал его (fd 199) или держатель — его предок (Python
-# с close_fds=True потомкам fd не отдаёт: prod_client.py → nested_kwin.sh внутри задачи --gpu)
+# this process belongs to the job holding the client lock: inherited it (fd 199), or holder is an ancestor (Python
+# with close_fds=True does not pass fd to descendants: prod_client.py → nested_kwin.sh inside a --gpu job)
 gpu_client_inherited() {
   [ "$(readlink "/proc/$BASHPID/fd/199" 2>/dev/null)" = "$(readlink -f "$GPU_CLIENT")" ] && return 0
-  # держатель — номер и время старта процесса: номер, занятый заново другим процессом, не в счёт
+  # holder is PID plus process start time: a PID reused by another process does not count
   local holder; holder=$(cat "$GPU_CLIENT.pid" 2>/dev/null) || return 1
   [ -n "$holder" ] && ! flock -n -s "$GPU_CLIENT" true 2>/dev/null || return 1
   _descends "$BASHPID" "$holder"
 }
 
-# процесс $1 — потомок процесса «номер время-старта» $2 (или он сам)
+# process $1 is a descendant of "PID start-time" process $2 (or itself)
 _descends() {
   local p=$1
   while [ "${p:-1}" -gt 1 ]; do
@@ -185,9 +185,9 @@ _descends() {
   return 1
 }
 
-# живые вложенные KWin (клиенты на видеокарте) не своей работы, по строке «номер команда» — с замком и без: через
-# nested_kwin.sh идут все клиенты, и скриптов до аренды. $1 — держатель замка «номер время-старта», если мы часть его
-# работы: её клиенты свои. INCOMING_GPU_KWIN — какую программу считать KWin (проверка подставляет свою)
+# live nested KWin (GPU clients) outside our job, as "PID command" lines, locked or unlocked: all clients use
+# nested_kwin.sh, including pre-lease scripts. $1 is lock holder "PID start-time" if we belong to its
+# job: its clients are ours. INCOMING_GPU_KWIN selects which program counts as KWin (tests substitute a stub)
 gpu_clients_running() {
   local kwin=${INCOMING_GPU_KWIN:-kwin_wayland} p a virt hit
   for p in $(pgrep -f -- --virtual); do
@@ -202,8 +202,8 @@ gpu_clients_running() {
   done
 }
 
-# игра Артёма: java, что идёт в папке инстанса его Prism (рабочий каталог игры — папка инстанса) или в группе Prism
-# (flatpak); не текст командной строки — песочница с MC_DIR на инстанс несёт тот же путь в путях модов
+# Artem's game: java in his Prism instance directory (game working directory is instance directory) or Prism group
+# (flatpak); not command-line text: sandbox with instance MC_DIR carries the same path in mod paths
 PRISM=${PRISM_DIR:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher}
 artem_playing() {
   local p
@@ -214,42 +214,42 @@ artem_playing() {
   return 1
 }
 
-# клиент на видеокарте сейчас (не своей работы): строка «кто» (код 0) или ничего (код 1)
+# current GPU client outside our job: "who" line (code 0), or nothing (code 1)
 gpu_client_busy() {
   local holder= c
-  # пробы — разделяемым замком: друг другу не мешают, с держателем (эксклюзивный) не сходятся
+  # probes use a shared lock: compatible with each other, incompatible with exclusive holder
   if ! flock -n -s "$GPU_CLIENT" true 2>/dev/null; then
-    gpu_client_inherited || { echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)"; return 0; }
+    gpu_client_inherited || { echo "GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)"; return 0; }
     holder=$(cat "$GPU_CLIENT.pid" 2>/dev/null)
   fi
   c=$(gpu_clients_running "$holder" | head -n 1)
-  [ -n "$c" ] && { echo "на видеокарте идёт клиент без аренды (скрипт до неё?): $c"; return 0; }
+  [ -n "$c" ] && { echo "GPU client is running without a lease (pre-lease script?): $c"; return 0; }
   return 1
 }
 
-# gpu_client_hold <владелец> <дерево> <что> — взять замок клиента на fd 199 (его наследуют exec и потомки: держится,
-# пока жив клиент или работа) и продлевать аренду, пока он держится; занят — отказ 75. Часть работы, что уже держит
-# замок (стенд, мультиплеер, клиент задачи --gpu), его не берёт
+# gpu_client_hold <owner> <worktree> <description> — acquire client lock on fd 199 (inherited by exec and descendants:
+# held while client or job lives), renew lease while held; busy refuses with 75. A job component whose job already holds
+# the lock (bench, multiplayer, --gpu job client) does not acquire it
 gpu_client_hold() {
   gpu_client_inherited && return 0
   exec 199>"$GPU_CLIENT"
-  # ждать до 2 с: проба `flock -n` соседа (status, продлеватель) держит замок на миг
-  if ! flock -w 2 199; then echo "на видеокарте идёт клиент $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
-  printf '%s (%s), с %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
+  # wait up to 2 s: a neighboring `flock -n` probe (status, renewal) holds the lock briefly
+  if ! flock -w 2 199; then echo "GPU client is running: $(cat "$GPU_CLIENT.who" 2>/dev/null)" >&2; exec 199>&-; return 75; fi
+  printf '%s (%s), since %s: %s\n' "$1" "$(readlink -m "$2")" "$(date +%H:%M)" "$3" > "$GPU_CLIENT.who"
   local me=$BASHPID
   echo "$me $(_proc_start "$me")" > "$GPU_CLIENT.pid"
-  # продление — пока замок держат; продлевателю не нужны ни замок (держал бы его сам), ни чужие fd (канал вызывающего,
-  # tee, ssh ждали бы его конца)
+  # renew while lock held; renewal needs neither lock (would hold it itself) nor foreign fds (caller pipe,
+  # tee, ssh would wait for it to finish)
   (
     set +e
     for f in /proc/$BASHPID/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done
     exec </dev/null >/dev/null 2>&1
-    # продлевать, только пока замок занят (код 1); свободен или файла нет (код 0, ошибка открытия) — конец
+    # renew only while lock busy (code 1); free or file missing (code 0, open error) ends renewal
     while sleep "${INCOMING_GPU_RENEW:-30}"; do flock -n -s "$GPU_CLIENT" true 2>/dev/null; [ $? = 1 ] || exit 0; lease_renew "$1" "$2" || true; done
   ) &
 }
 
-# отпустить свою
+# release own
 lease_release() {
   local owner=$1 fd rc=1
   exec {fd}>"$LEASE.lock"; flock "$fd"
@@ -263,11 +263,11 @@ lease_release() {
 set -uo pipefail
 me=$(lease_owner)
 case "${1:-}" in
-  status) out=$(lease_status); echo "$out"; [[ $out == "аренды нет"* ]] || gpu_client_busy; exit 0 ;;
-  take) lease_take "$me" "$(cd "$(dirname "$0")/.." && pwd)" "${2:-}" && echo "видеокарта у $me" ;;
+  status) out=$(lease_status); echo "$out"; [[ $out == "no lease"* ]] || gpu_client_busy; exit 0 ;;
+  take) lease_take "$me" "$(cd "$(dirname "$0")/.." && pwd)" "${2:-}" && echo "GPU held by $me" ;;
   release)
-    # свой клиент — только если замок держат (файл «кто» остаётся после конца клиента)
-    ! flock -n -s "$GPU_CLIENT" true 2>/dev/null && who=$(gpu_client_busy) && [[ $(cat "$GPU_CLIENT.who" 2>/dev/null) == "$me "* ]] && { echo "$who — сначала остановить его (tools/sandbox.sh stop)" >&2; exit 75; }
-    if lease_release "$me"; then echo "видеокарта отпущена"; else echo "аренда не у $me: $(lease_status)"; fi ;;
+    # own client only if lock held ("who" file remains after client exit)
+    ! flock -n -s "$GPU_CLIENT" true 2>/dev/null && who=$(gpu_client_busy) && [[ $(cat "$GPU_CLIENT.who" 2>/dev/null) == "$me "* ]] && { echo "$who — stop it first (tools/sandbox.sh stop)" >&2; exit 75; }
+    if lease_release "$me"; then echo "GPU released"; else echo "lease is not held by $me: $(lease_status)"; fi ;;
   *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 2 ;;
 esac

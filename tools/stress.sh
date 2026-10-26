@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# Стенд нагрузки: выделенный сервер с режиссёром (StressDirector) и три игрока-клиента без окна (StressClient):
-# Host пускает с пульта, Friend1 выходит посреди удара и возвращается, Friend2 — обычный друг.
-# Режиссёр по расписанию гоняет залпы по 30, удары по игрокам, точкам и аппаратам в 300–1000 блоках,
-# перенацеливание, гибель целей, уход за край загрузки, Незер, ядерку, save-all и «Отбой», в конце — сводка.
+# Stress bench: dedicated server with a director (StressDirector) and three windowless player clients (StressClient):
+# Host launches from the console, Friend1 leaves during an impact and returns, Friend2 is an ordinary friend.
+# The director schedules salvos of 30, strikes on players, points and craft at 300–1000 blocks,
+# retargeting, target deaths, leaving loaded terrain, the Nether, a nuke, save-all and Recall; ends with a summary.
 #
-#   tools/stress.sh                 # весь сценарий
-#   INCOMING_STRESS_RESTART=1 tools/stress.sh   # + остановка сервера посреди полёта и продолжение после запуска
-#                                                (пробы пути до поверхности в этом режиме не идут)
-#   INCOMING_JFR=1 tools/stress.sh   # + профиль JFR сервера (settings=profile) → mod/run/stress/server/stress.jfr
-#   INCOMING_STRESS_PROBES=false tools/stress.sh   # без залпов-проб РСЗО по свежим районам (замер A/B остановок сервера)
-#   INCOMING_RIG_JVM=artem tools/stress.sh   # сервер с JVM, как в игре у Артёма: 8 ГБ, поколенческий ZGC (только VPS:
-#                                             облаку на 15 ГБ не хватит памяти); сборщик — строка «сервер запущен»
+#   tools/stress.sh                 # full scenario
+#   INCOMING_STRESS_RESTART=1 tools/stress.sh   # + stop the server mid-flight and continue after restart
+#                                                (surface-path probes do not run in this mode)
+#   INCOMING_JFR=1 tools/stress.sh   # + server JFR profile (settings=profile) → mod/run/stress/server/stress.jfr
+#   INCOMING_STRESS_PROBES=false tools/stress.sh   # no MLRS probe salvos in fresh areas (A/B measurement of server stalls)
+#   INCOMING_RIG_JVM=artem tools/stress.sh   # server JVM as in Artem's game: 8 GB, generational ZGC (VPS only:
+#                                             a 15 GB cloud host lacks memory); collector in the "server started" line
 #
-# Моды: MC_DIR (инстанс) или -PmcModsDir; в облаке — python3 tools/fetch_runtime_mods.py и MODS=run/ci-mods.
-# На рабочем столе KDE каждый клиент идёт в своём вложенном KWin (tools/nested_kwin.sh: без окна и без звука) на видеокарте;
-# в облаке (без KWin) — под xvfb-run программно (llvmpipe): медленно, но честно — те же пакеты, та же камера, тот же HUD.
-# На 4 ядрах облака клиенты съедают процессор, генерация чанков стоит в очереди, и любая синхронная загрузка чанка
-# (Sable) держит тик десятки секунд — клиенты отваливаются по тайм-ауту; тик дольше 0,5 с пишется со стеком и строкой
-# «остановка:» (какой чанк грузится синхронно, уровни тикетов вокруг, тикеты мода рядом). Телепорты стенда ждут района
-# в фоне: квадрат дистанции симуляции + 2 чанка (тикет загрузки без тика), иначе ваниль сама стоит у свежего места игрока.
-# Итог: mod/run/stress/server/logs/latest.log (строки STRESS) и mod/run/stress/<игрок>/logs/latest.log (STRESSC).
-# Логи прошлого прогона (и прерванного) следующий прогон переносит в mod/run/stress/logs/<коммит>-<время>/, а не стирает.
-# Gradle только собирает и готовит запуски (rigLaunch → mod/build/rig/stress-*.sh) и выходит до старта: у живого Gradle
-# UDP-сокет блокировок на 0.0.0.0, а в стенде в сеть не смотрит ничего — сервер и клиенты идут прямо из файлов MDG.
+# Mods: MC_DIR (instance) or -PmcModsDir; in the cloud, python3 tools/fetch_runtime_mods.py and MODS=run/ci-mods.
+# On a KDE desktop, each client runs in its own nested KWin (tools/nested_kwin.sh: windowless and silent) on the GPU;
+# in the cloud (no KWin), under xvfb-run with software rendering (llvmpipe): slow but accurate — same packets, camera and HUD.
+# On four cloud cores the clients consume CPU, chunk generation queues up, and any synchronous chunk load
+# (Sable) holds the tick for tens of seconds, causing client timeouts; ticks longer than 0.5 s are logged with a stack and
+# a "stall:" line (chunk loaded synchronously, nearby ticket levels, nearby mod tickets). Bench teleports wait for the area
+# in the background: simulation-distance square + 2 chunks (load ticket without ticking), otherwise vanilla itself stalls at the new player position.
+# Result: mod/run/stress/server/logs/latest.log (STRESS lines) and mod/run/stress/<player>/logs/latest.log (STRESSC).
+# The next run moves previous run logs (including interrupted runs) to mod/run/stress/logs/<commit>-<time>/ instead of erasing them.
+# Gradle only builds and prepares launches (rigLaunch → mod/build/rig/stress-*.sh), exiting before startup: a live Gradle
+# has a locking UDP socket on 0.0.0.0; nothing in the bench looks at the network — server and clients run directly from MDG files.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="$ROOT/mod/run/stress"
@@ -30,13 +30,13 @@ MODS_ARG=()
 [ -n "${MODS:-}" ] && MODS_ARG=("-PmcModsDir=$MODS")
 cd "$ROOT/mod"
 
-# сервер слушает только петлю и свободный порт: на 0.0.0.0 с online-mode=false его находят сканеры из интернета
-# (сторож LoopbackGuard роняет сервер, если сокет не на петле); клиенты берут порт из INCOMING_STRESS_PORT
+# server listens only on loopback and a free port: on 0.0.0.0 with online-mode=false, internet scanners find it
+# (LoopbackGuard watchdog crashes the server if the socket is not on loopback); clients take the port from INCOMING_STRESS_PORT
 export INCOMING_STRESS_PORT="${INCOMING_STRESS_PORT:-$(python3 "$ROOT/tools/free_port.py")}"
 CLIENTS=("Host host" "Friend1 leaver" "Friend2 friend")
 
-# настройки запусков (имя и роль клиента, порт, режим режиссёра) Gradle читает из окружения при подготовке;
-# --no-daemon: без живого Gradle после подготовки, даже если ~/.gradle/gradle.properties или GRADLE_OPTS включают демона
+# Gradle reads launch settings (client name and role, port, director mode) from the environment during preparation;
+# --no-daemon: no live Gradle after preparation, even if ~/.gradle/gradle.properties or GRADLE_OPTS enables the daemon
 INCOMING_STRESS="${INCOMING_STRESS:-run}" ./gradlew --no-daemon --console=plain -q rigLaunch -PrigRun=runStressServer -PrigOut=stress-server "${MODS_ARG[@]}"
 for c in "${CLIENTS[@]}"; do
   read -r name role <<< "$c"
@@ -44,11 +44,11 @@ for c in "${CLIENTS[@]}"; do
     ./gradlew --no-daemon --console=plain -q rigLaunch -PrigRun=runStressClient -PrigOut="stress-$name" "${MODS_ARG[@]}"
 done
 RIG="$ROOT/mod/build/rig"
-# логи прошлого прогона — в сторону, под его меткой (коммит и время старта)
+# move previous run logs aside under its label (commit and start time)
 if [ -f "$RUN/run-id" ]; then
   keep="$RUN/logs/$(cat "$RUN/run-id")"
   mkdir -p "$keep"
-  # всё, что пишет прогон: логи, вывод JVM (*.out), паузы GC, отчёты о падениях, профиль JFR
+  # everything the run writes: logs, JVM output (*.out), GC pauses, crash reports, JFR profile
   [ -d "$RUN/server/logs" ] && mv "$RUN/server/logs" "$keep/server"
   for f in "$RUN"/*.out "$RUN"/server/gc.log* "$RUN/server/stress.jfr"; do
     [ -e "$f" ] && mv "$f" "$keep/"
@@ -59,7 +59,7 @@ if [ -f "$RUN/run-id" ]; then
     [ -d "$RUN/$name/logs" ] && mv "$RUN/$name/logs" "$keep/$name"
     [ -d "$RUN/$name/crash-reports" ] && mv "$RUN/$name/crash-reports" "$keep/$name-crash-reports"
   done
-  echo "логи прошлого прогона: $keep"
+  echo "previous run logs: $keep"
 fi
 rm -rf "$RUN/server/world" "$RUN/server/logs"
 mkdir -p "$RUN/server"
@@ -83,12 +83,12 @@ max-tick-time=-1
 sync-chunk-writes=false
 PROPS
 ln -sfn ../mods "$RUN/server/mods"
-# NeoForge объявляет выделенный сервер в LAN (UDP-сокет на 0.0.0.0, рассылка MOTD и порта) — у проверок выключено
+# NeoForge advertises a dedicated server on LAN (UDP socket on 0.0.0.0, MOTD and port broadcast); disabled for tests
 python3 "$ROOT/tools/rig_config.py" "$RUN/server"
 
-# сервер и клиенты — каждый в своей сессии; выход скрипта (и Ctrl+C) гасит их целиком, с JVM под обёртками
-# на рабочем столе клиенты идут на видеокарте (nested_kwin.sh): аренда и замок клиента — один раз на всю работу, её
-# клиенты наследуют замок (tools/gpu_lease.sh); до rig_procs.sh — продлевателю не достаётся его fd сообщений
+# server and clients each have their own session; script exit (including Ctrl+C) stops them entirely, including JVMs under wrappers
+# desktop clients use the GPU (nested_kwin.sh): acquire the lease and client lock once for the entire job; its
+# clients inherit the lock (tools/gpu_lease.sh); before rig_procs.sh so the renewal process does not inherit its message fd
 if command -v kwin_wayland >/dev/null; then
   source "$ROOT/tools/gpu_lease.sh"
   who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
@@ -102,7 +102,7 @@ rig_trap
 rig_spawn "$RIG/stress-server.sh" > "$RUN/server.out" 2>&1
 server=$RIG_LAST
 until grep -q 'Done (' "$RUN/server.out" 2>/dev/null; do
-  kill -0 "$server" 2>/dev/null || { echo "сервер не запустился: $RUN/server.out"; exit 1; }
+  kill -0 "$server" 2>/dev/null || { echo "server failed to start: $RUN/server.out"; exit 1; }
   sleep 2
 done
 
@@ -124,10 +124,10 @@ joinedFirstServer:true
 skipMultiplayerWarning:true
 OPT
   if command -v kwin_wayland >/dev/null; then
-    # рабочий стол KDE: свой вложенный KWin на клиента (без окна, без звука, своя шина и сокет), на видеокарте
+    # KDE desktop: a separate nested KWin for each client (windowless, silent, own bus and socket), on the GPU
     rig_spawn "$ROOT/tools/nested_kwin.sh" "wayland-incoming-stress-$name" 854 480 "$RIG/stress-$name.sh" > "$RUN/$name.out" 2>&1
   else
-    # облако: xvfb-run и программная отрисовка; звуковой сервер клиенту закрыт, как в nested_kwin.sh
+    # cloud: xvfb-run and software rendering; sound server blocked for the client, as in nested_kwin.sh
     LIBGL_ALWAYS_SOFTWARE=1 PIPEWIRE_REMOTE="$RUN/no-audio-server" PULSE_SERVER="unix:$RUN/no-audio-server" \
       rig_spawn xvfb-run -a -s "-screen 0 854x480x24" "$RIG/stress-$name.sh" > "$RUN/$name.out" 2>&1
   fi
@@ -139,4 +139,4 @@ done
 
 wait "$server" || true
 sleep 30
-grep -h 'STRESS summary\|STRESS problem\|STRESS lost\|STRESS проба' "$RUN/server/logs/latest.log" || true
+grep -h 'STRESS summary\|STRESS problem\|STRESS lost\|STRESS probe' "$RUN/server/logs/latest.log" || true

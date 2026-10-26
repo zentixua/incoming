@@ -17,33 +17,33 @@ import java.util.List;
 import java.util.function.ToDoubleBiFunction;
 
 /**
- * Площадка сценария в мире GameTest (плоский мир): своё место на сетке вдали от площадок тестов и от других сценариев,
- * районы, которые тикают с первого тика полёта, и рельеф (холм, котлован).
+ * Scenario site in the world GameTest (flat world): its place on the grid away from test sites and from other scenarios,
+ *  areas that tick from the first tick of flight, and terrain (hill, pit).
  * <p>
- * Детерминизм. Место — одно и то же в любом прогоне (его задаёт ячейка сценария, а не порядок тестов): у полёта те же
- * числа с плавающей точкой и та же сетка чанков. Районы держит свой тикет региона, их чанки генерируются сразу
- * ({@code level.getChunk}), и полёт начинается, только когда все они тикают: где снаряд вернётся в мир и где уйдёт
- * из него, не зависит от скорости фоновой генерации. Районы снаряда (цель — {@code FlightTickets}, свои чанки —
- * {@code ChunkTickets}) лежат внутри районов площадки и ничего нового не грузят.
+ * Determinism. The location is the same in any run (it is set by the script cell, not the order of the tests): the flight has the same
+ *  floating point numbers and the same chunk grid. Districts hold their own region ticket, their chunks are generated immediately
+ * ({@code level.getChunk}), and the flight begins only when they all tick: where the projectile will return to the world and where
+ *  will leave it does not depend on the background generation rate. The projectile areas (target - {@code FlightTickets}, own chunks -
+ * {@code ChunkTickets}) lie inside the site areas and do not load anything new.
  */
 final class ScenarioSite {
     private static final TicketType<ChunkPos> ZONE = TicketType.create("incoming_test_scenario", Comparator.comparingLong(ChunkPos::toLong));
-    /** Шаг сетки площадок: дальше самого длинного пути снаряда (B-2 — до 9,7 тыс. блоков) плюс телепорт цели. */
+    /** The pitch of the grid of sites: further than the longest projectile path (B-2 - up to 9,7 thousand blocks) plus target teleport. */
     private static final int SPACING = 24576;
     private static final int PER_ROW = 64;
-    /** Начало сетки: далеко от точки появления мира и в пределах, где у координат ещё много знаков. */
+    /** Start of the grid: far from the world spawn point and within the limits where the coordinates still have many signs. */
     private static final int ORIGIN = 2_000_000;
-    /** Район цели: сущности тикают в 11×11 чанках (±88 блоков), загружено 15×15 — шире районов снаряда у цели. */
+    /** Target area: entities tick in 11×11 chunks (±88 blocks), loaded 15×15 - wider than the projectile areas at the target. */
     static final int TARGET_ZONE = 7;
-    /** Район пусковой: тикает 5×5 чанков. */
+    /** Launcher area: ticking 5×5 chunks. */
     static final int LAUNCH_ZONE = 4;
-    /** Коридор над холмом: полоса тикающих чанков в 3 шириной, загружено 9. */
+    /** Corridor over the hill: a strip of ticking chunks 3 wide, loaded with 9. */
     static final int CORRIDOR_ZONE = 4;
 
     private record Zone(ChunkPos centre, int distance) {}
 
     private final ServerLevel level;
-    /** Середина площадки на земле: точка цели. */
+    /** The middle of the area on the ground: the target point. */
     final Vec3 origin;
     private final List<Zone> zones = new ArrayList<>();
 
@@ -54,7 +54,7 @@ final class ScenarioSite {
         this.origin = ground(c.getMiddleBlockX() + 0.5, c.getMiddleBlockZ() + 0.5, true);
     }
 
-    /** Точка на земле плоского мира (без готового чанка — по генератору: высота та же). */
+    /** A point on the ground of a flat world (without a ready-made chunk - according to the generator: the height is the same). */
     Vec3 ground(double x, double z, boolean generator) {
         int bx = Mth.floor(x), bz = Mth.floor(z);
         int y = !generator && Terrain.ready(level, bx >> 4, bz >> 4) ? Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, bx, bz)
@@ -62,27 +62,27 @@ final class ScenarioSite {
         return new Vec3(x, y, z);
     }
 
-    /** Район с центром в чанке точки: тикет региона уровня {@code 33 − distance}. */
+    /** The region with the center in the point chunk: ticket of the region of level {@code 33 − distance}. */
     void zone(Vec3 at, int distance) {
         zones.add(new Zone(new ChunkPos(BlockPos.containing(at)), distance));
     }
 
-    /** Район, взятый посреди полёта: тикет сразу (чанки — {@link InstantChunks} в конце тика или фоновая генерация). */
+    /** An area taken in the middle of a flight: ticket immediately (chunks - {@link InstantChunks} at the end of the tick or background generation). */
     void zoneNow(Vec3 at, int distance) {
         Zone z = new Zone(new ChunkPos(BlockPos.containing(at)), distance);
         zones.add(z);
         level.getChunkSource().addRegionTicket(ZONE, z.centre, z.distance, z.centre);
-        // в уровни чанков сразу, как тикеты мода (AreaLoader.apply): иначе посреди полёта их применял бы кто придётся
+        // into the chunk levels immediately, like ticket mod (AreaLoader.apply): otherwise, in the middle of the flight, someone would have to use them
         level.getChunkSource().runDistanceManagerUpdates();
     }
 
-    /** Коридор района с шагом в два чанка от {@code from} до {@code to}. */
+    /** District corridor in increments of two chunks from {@code from} to {@code to}. */
     void corridor(Vec3 from, Vec3 to) {
         double length = from.subtract(to).horizontalDistance();
         for (double d = 0; d <= length; d += 32) zone(from.lerp(to, d / length), CORRIDOR_ZONE);
     }
 
-    /** Взять районы и сгенерировать их чанки сразу. */
+    /** Take areas and generate their chunks at once. */
     void load() {
         for (Zone z : zones) level.getChunkSource().addRegionTicket(ZONE, z.centre, z.distance, z.centre);
         for (Zone z : zones) {
@@ -91,7 +91,7 @@ final class ScenarioSite {
         }
     }
 
-    /** Все районы тикают (сущности), и чанки вокруг них готовы: полёт можно начинать. */
+    /** All areas are ticking (entities), and the chunks around them are ready: the flight can begin. */
     boolean ticking() {
         for (Zone z : zones) {
             int r = z.distance - 2;
@@ -109,8 +109,8 @@ final class ScenarioSite {
     }
 
     /**
-     * Холм поперёк курса: гребень в {@code place} блоках от цели против направления захода, высотой {@code height},
-     * склоны 1 : 1,5; шириной по гребню 20 блоков. Только в пределах коридора (±48 блоков от курса).
+     * Hill across the course: ridge in {@code place} blocks from the target opposite the approach direction, height {@code height},
+     * slopes 1: 1,5; width along the ridge 20 blocks. Only within the corridor (±48 blocks from the course).
      */
     void hill(Vec3 approach, double place, double height) {
         Vec3 crest = origin.subtract(approach.scale(place));
@@ -118,7 +118,7 @@ final class ScenarioSite {
         relief(crest, run + 1, 48, (u, v) -> height - Math.max(Math.abs(u), Math.max(0, Math.abs(v) - 10)) / 1.5, approach);
     }
 
-    /** Котлован: ровное дно радиусом {@code bottom} вокруг цели, склоны 1 : 2 до глубины {@code depth}, край 3 блока. */
+    /** Pit: flat bottom with a radius of {@code bottom} around the target, slopes 1: 2 to the depth of {@code depth}, edge of the block 3. */
     void quarry(double bottom, double depth) {
         double rim = bottom + depth * 2, outer = rim + 3;
         relief(origin, outer, outer, (u, v) -> {
@@ -128,9 +128,9 @@ final class ScenarioSite {
     }
 
     /**
-     * Рельеф высотой {@code h(u, v)} над землёй вокруг {@code centre} ({@code u} — вдоль {@code along}, {@code v} —
-     * поперёк). Блоки только снаружи: столб от верха до уровня самого низкого соседа — стенки без щелей, внутри пусто
-     * (карте высот, столкновениям и полёту над рельефом нужен только верх). Без обновления соседей.
+     * Relief height {@code h(u, v)} above the ground around {@code centre} ({@code u} - along {@code along}, {@code v} -
+     *  across). Blocks only on the outside: a pillar from the top to the level of the lowest neighbor - walls without cracks, empty inside
+     *  (the height map, collisions and flight over the terrain only need the top). No neighbor updates.
      */
     private void relief(Vec3 centre, double halfU, double halfV, ToDoubleBiFunction<Double, Double> h, Vec3 along) {
         int span = (int) Math.ceil(Math.max(halfU, halfV) * Math.sqrt(2)) + 1;

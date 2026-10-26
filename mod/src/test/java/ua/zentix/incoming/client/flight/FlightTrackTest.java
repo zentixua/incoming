@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Путь снаряда по пакетам сервера: между пакетами — по прямой, разрыв — заново, без данных — молчать. */
+/** Path of the projectile through the server packets: between packets - in a straight line, gap - again, without data - silent. */
 class FlightTrackTest {
     private static final UUID ID = UUID.randomUUID();
 
@@ -40,14 +40,14 @@ class FlightTrackTest {
         t.record(14, at(46, 104));
         assertEquals(11.5, x(t, 11), 1e-9);
         assertEquals(34.5, x(t, 13), 1e-9);
-        assertEquals(11.5, t.velocity(12.5).x, 1e-9, "скорость ровная — Доплер без ступенек");
+        assertEquals(11.5, t.velocity(12.5).x, 1e-9, "smooth speed - Doppler without steps");
         assertEquals(103, t.phaseAge(13), 1e-9);
         assertEquals(10, t.start(), 1e-9);
     }
 
     @Test
     void velocityIsWhatServerReportedNotUnevenArrival() {
-        // пакет тика сервера 11 опоздал на тик клиента: положение стоит, потом прыгает на два шага — скорость ровная
+        // server tick packet 11 was late for the client tick: the position stands, then jumps two steps - the speed is even
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(11, at(0, 100));
@@ -62,12 +62,12 @@ class FlightTrackTest {
         t.record(12, at(9, 5, 102));
         assertEquals(4.5, t.velocity(11).x, 1e-9);
         assertEquals(4.75, t.velocity(11.5).x, 1e-9);
-        assertEquals(5, t.velocity(20).x, 1e-9, "за краем истории — последняя известная");
+        assertEquals(5, t.velocity(20).x, 1e-9, "beyond the edge of history - the last known");
     }
 
     @Test
     void laterPacketOfTheSameTickWins() {
-        // сеть прислала два пакета в один тик: верен последний
+        // the network sent two packets in one tick: the last one is correct
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
@@ -78,7 +78,7 @@ class FlightTrackTest {
 
     @Test
     void longGapStartsHistoryOver() {
-        // снаряд ушёл из слуха и вернулся: между этими точками он не летел по прямой
+        // the projectile left hearing and returned: between these points it did not fly in a straight line
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(40, at(300, 130));
@@ -88,7 +88,7 @@ class FlightTrackTest {
 
     @Test
     void silentWhenNothingIsKnownForThatMoment() {
-        // по пакетам — ждём следующего (период и тик на неровную доставку), дальше слушать нечего
+        // by package - we wait for the next one (period and tick for uneven delivery), there is nothing further to listen to
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
@@ -98,7 +98,7 @@ class FlightTrackTest {
 
     @Test
     void emissionTimeFollowsPacketPath() {
-        // ракета 11.5 блока/тик по пакетам на слушателя в начале координат: |p(te)| = c·(now − te)
+        // rocket 11.5 block/tick by packets per listener at the origin: |p(te)| = c·(now − te)
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         for (int k = 0; k <= 40; k += S2C.FarFlights.PERIOD) t.record(k, at(600 - 11.5 * k, k));
         double now = 40;
@@ -108,7 +108,7 @@ class FlightTrackTest {
 
     @Test
     void predictionRunsAheadByLastVelocityButNotPastTheAim() {
-        // следующий пакет ещё в пути: снаряд вдали идёт дальше по скорости, но сквозь цель (x = 500) не летит
+        // the next packet is still on the way: the projectile in the distance travels further in speed, but does not fly through the target (x = 500)
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
@@ -118,35 +118,35 @@ class FlightTrackTest {
         t.record(14, at(490, 104));
         assertTrue(t.predict(16, p));
         assertEquals(500, p[0], 1e-9);
-        assertFalse(t.predict(14 + S2C.FarFlights.PERIOD + 3, p), "дальше срока пакета данных нет");
+        assertFalse(t.predict(14 + S2C.FarFlights.PERIOD + 3, p), "there is no data package beyond the expiration date");
     }
 
     @Test
     void blastEndsTheFlightWhenItHappened() {
-        // последний пакет о дальней ракете дошёл за 6 тиков до пакета взрыва (дольше ожидания следующего пакета): звук
-        // тянется до самого взрыва по скорости, а не стихает раньше — иначе перед взрывом пауза тишины
+        // the last packet about a long-range missile reached 6 tick before the explosion packet (longer waiting for the next packet): the sound
+        //  lasts until the explosion itself in speed, and does not subside earlier - otherwise there is a pause of silence before the explosion
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
         t.record(14, at(46, 104));
-        assertFalse(t.covers(19), "без пакета взрыва — данных нет");
+        assertFalse(t.covers(19), "without explosion package - no data");
         t.impact(20);
         assertTrue(t.covers(19.5));
         assertTrue(t.covers(20));
-        assertFalse(t.covers(20.5), "после взрыва мотора нет");
-        assertEquals(46 + 11.5 * 6, x(t, 20), 1e-9, "до взрыва — по скорости последней записи");
+        assertFalse(t.covers(20.5), "after the explosion there is no engine");
+        assertEquals(46 + 11.5 * 6, x(t, 20), 1e-9, "before the explosion - according to the speed of the last recording");
     }
 
     @Test
     void lateBlastDoesNotStretchAnOldPath() {
-        // пакетов давно нет (ушёл из слуха, сервер встал): взрыв не тянет звук дальше разрыва, после которого путь — заново
+        // there are no packets for a long time (left hearing, the server stopped): the explosion does not carry the sound beyond the break, after which the path is restarted
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
         t.impact(60);
         assertTrue(t.covers(20));
         assertFalse(t.covers(20.5));
-        // конец полёта по тишине (взрыва не было) — сразу после последней записи
+        // end of the flight in silence (there was no explosion) - immediately after the last recording
         FlightTrack s = new FlightTrack(ID, WeaponType.MISSILE, false);
         s.record(10, at(0, 100));
         s.die(60);
@@ -156,7 +156,7 @@ class FlightTrackTest {
 
     @Test
     void trailIsDrawnOnlyOverServerSamples() {
-        // точки по пакетам — для шлейфа вдали; сущность у клиента рисует свой шлейф частицами
+        // points by packages - for trail in the distance; The client's entity draws its trail with particles
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, at(0, 100));
         t.record(12, at(23, 102));
@@ -173,7 +173,7 @@ class FlightTrackTest {
 
     @Test
     void anglesTurnTheShortWayBetweenTicks() {
-        // модель вдали поворачивается и кренится между пакетами, а не прыгает; через ±180° — коротким путём
+        // the model in the distance turns and rolls between the packages, rather than jumping; via ±180° - short way
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
         t.record(10, turned(170, -4, 20));
         t.record(11, turned(-170, 4, -20));
@@ -183,9 +183,9 @@ class FlightTrackTest {
         assertEquals(0, a[1], 1e-4);
         assertEquals(0, a[2], 1e-4);
         t.angles(15, a);
-        assertEquals(-170, a[0], 1e-4, "за последним пакетом — последние углы");
+        assertEquals(-170, a[0], 1e-4, "behind the last package are the last corners");
         assertEquals(-20, a[2], 1e-4);
-        // пропущенный тик между пакетами — середина поворота и крена
+        // missed tick between packets - mid-turn and roll
         t.record(13, turned(-150, 4, 20));
         t.angles(12, a);
         assertEquals(-160, a[0], 1e-4);
@@ -201,11 +201,11 @@ class FlightTrackTest {
         assertEquals(0, t.age(5), 1e-9);
     }
 
-    /** Земля места пуска из пакетов остаётся у пути и после старта: пакет маршевого её не стирает. */
+    /** The ground of the launch site from the packages remains on the path even after the launch: the marching package does not erase it. */
     @Test
     void launchGroundKeptFromPackets() {
         FlightTrack t = new FlightTrack(ID, WeaponType.MISSILE, false);
-        assertTrue(Double.isNaN(t.launchGround()), "без пакетов земли нет");
+        assertTrue(Double.isNaN(t.launchGround()), "without packages there is no land");
         t.record(10, new S2C.FarFlight(ID, WeaponType.MISSILE.id(), false, false, true, new Vec3(0, 75, 0), Vec3.ZERO, 0, -30, 0,
                 FlightPhase.IGNITION.ordinal(), 3, new Vec3(500, 80, 0), 72));
         t.record(12, at(10, 2));

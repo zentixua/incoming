@@ -37,57 +37,59 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Облёт для проверки звука без ушей: зритель стоит на земле, снаряды проходят мимо него так, как задумано каждым
- * случаем звука, а в лог идёт всё, что слышно, — по каждому слою мотора (без порога громкости), запуск и остановка
- * каждой петли, разовые звуки мода, отметки пуска и удара по серверу, в конце случая — итоги {@code SCENARIO check}.
+ * Flybys to check sound without listening: the viewer stands on the ground and projectiles pass as each
+ * sound case specifies. Log everything audible: each engine layer (without a volume threshold), each loop
+ * start and stop, mod one-shots, server launch and impact marks, then {@code SCENARIO check} results per case.
  * <p>
- * Случаи (по порядку, каждый ждёт, пока его снаряды отзвучат):
+ * Cases in order (each waits for its projectiles to finish sounding):
  * <ul>
- *   <li>{@code approach} — крылатая ракета заходит из 1,8 км прямо на зрителя (он в 30 блоках сбоку от цели): вой
- *       вентилятора (его уносит вперёд) слышно с дальнего края (звук, изданный за ~1,5 км), мотор нарастает до удара;</li>
- *   <li>{@code dogleg} — ракета на обходе маршрута (пуск в 2 км до цели, точка обхода в 580 блоках сбоку): зритель
- *       в 40 блоках от середины первого плеча, ракета идёт мимо него курсом в сторону от цели — мотор слышно;</li>
- *   <li>{@code pass} — ракета идёт на цель в 700 блоках за зрителем и проходит в 60 блоках сбоку: вой на подлёте,
- *       после пролёта стихает плавно; мотор на подлёте только громче, вслед только тише и звучит, пока до уха не дойдёт
- *       взрыв;</li>
- *   <li>{@code grad} — ночью залп РСЗО из 32 снарядов, пусковая в 300 блоках позади, цели в 300 ± 150 впереди: вой
- *       снарядов, прошедших рядом, не дальше выведенной дальности, каналов не больше {@code VoiceBudget.CAP};</li>
- *   <li>{@code far} — ракета и шахед издалека на зрителя: сперва вне мира (путь по пакетам сервера, {@code s}), потом
- *       сущностью ({@code e}) — звук переходит без перезапуска и скачка громкости.</li>
+ * <li>{@code approach}: cruise missile comes straight at the viewer from 1,8 km (viewer 30 blocks to the side
+ * of the target): fan whine (carried forward) is audible from the far edge (emitted at ~1,5 km), engine grows
+ * until impact;</li>
+ * <li>{@code dogleg}: missile on a route detour (launch 2 km before the target, detour point 580 blocks to
+ * the side): viewer 40 blocks from the middle of the first leg, missile passes heading away from the target;
+ * engine is audible;</li>
+ * <li>{@code pass}: missile flies at a target 700 blocks behind the viewer, passing 60 blocks to the side:
+ * whine on approach, smooth fade after passing; engine only grows on approach, only fades after passing,
+ * and sounds until the explosion reaches the ear;</li>
+ * <li>{@code grad}: night MLRS salvo of 32 rockets, launcher 300 blocks behind, targets 300 ± 150 ahead:
+ * whine of nearby passing rockets within the derived audible range, channels no more than {@code VoiceBudget.CAP};</li>
+ * <li>{@code far}: missile and Shahed approach the viewer from afar: first off-world (server packet track,
+ * {@code s}), then as an entity ({@code e}); sound transfers without restarting or a volume jump.</li>
  * </ul>
- * Строки лога (время: {@code t} — тики случая, {@code ms} — часы системы для сверки с audio.wav; в начале случая —
- * короткий звук «pling» интерфейса, по нему WAV совмещается с {@code SCENARIO mark … sync}):
+ * Log lines (time: {@code t} is case ticks, {@code ms} is system time for alignment with audio.wav; each case
+ * starts with a short UI "pling" to align the WAV with {@code SCENARIO mark … sync}):
  * <pre>
- * SCENARIO mark &lt;случай&gt; sync|fire|launch|enter-world|leave-world|stall|move|gone|end …
- * SCENARIO loop start|stop &lt;случай&gt; &lt;оружие&gt;#&lt;id&gt; &lt;слой&gt; src=e|s d=… vol=… (stop: lived=… peak=…)
- * SCENARIO gain &lt;случай&gt; t=… ms=… live=N | &lt;оружие&gt;#&lt;id&gt;(e|s d=…) &lt;слой&gt; громкость×тон …
- * SCENARIO play &lt;случай&gt; &lt;звук&gt; d=… t=… ms=…
- * SCENARIO check &lt;случай&gt; &lt;что&gt; PASS|FAIL|WARN …
+ * SCENARIO mark &lt;case&gt; sync|fire|launch|enter-world|leave-world|stall|move|gone|end …
+ * SCENARIO loop start|stop &lt;case&gt; &lt;weapon&gt;#&lt;id&gt; &lt;layer&gt; src=e|s d=… vol=… (stop: lived=… peak=…)
+ * SCENARIO gain &lt;case&gt; t=… ms=… live=N | &lt;weapon&gt;#&lt;id&gt;(e|s d=…) &lt;layer&gt; volume×pitch …
+ * SCENARIO play &lt;case&gt; &lt;sound&gt; d=… t=… ms=…
+ * SCENARIO check &lt;case&gt; &lt;what&gt; PASS|FAIL|WARN …
  * </pre>
- * {@code d} у слоя — расстояние до точки, чей звук слышен сейчас (запаздывающий момент), а не до снаряда.
- * Запуск: {@code tools/client_scenario.sh flyby-all} (или один случай: {@code flyby-grad}),
- * в полной сборке — {@code tools/prod_client.py flyby-all}.
+ * Layer {@code d} is distance to the point whose sound is audible now (retarded emission time), not to the projectile.
+ * Run: {@code tools/client_scenario.sh flyby-all} (or one case: {@code flyby-grad});
+ * in the full modpack: {@code tools/prod_client.py flyby-all}.
  */
 final class FlybySound {
     private static final List<String> ALL = List.of("approach", "dogleg", "pass", "grad", "far");
-    /** Сколько тиков звук ещё может идти к уху после удара (самый дальний — ~1500 блоков, 90 тиков). */
+    /** How many tick the sound can still travel to the ear after impact (the farthest is ~1500 blocks, 90 tick). */
     private static final int RINGOUT = 140;
-    /** Дольше этого случай не ждёт своих снарядов (сервер в облаке отстаёт). */
+    /** Longer than this, the case does not wait for its shells (the server in the cloud lags behind). */
     private static final int TIMEOUT = 4000;
     /**
-     * Громкость слоя, с которой его считаем слышным в проверках: с неё слой берёт канал ({@code VoiceBudget.AUDIBLE}) —
-     * громкость звука на уровне фона тихой ночи ({@code Loudness}).
+     * The volume of the layer at which it is considered audible in tests: the layer takes the channel from it ({@code VoiceBudget.AUDIBLE}) -
+     *  the volume of the sound at the background level of a quiet night ({@code Loudness}).
      */
     private static final double HEARD = 0.005;
-    /** Снарядов в залпе РСЗО. */
+    /** Shells in a MLRS salvo. */
     private static final int GRAD = 32;
 
     private enum Stage { WAIT, LOAD, CASE_SETTLE, RUN, RINGOUT, DONE }
 
-    /** Слой мотора в этот тик: снаряд, какой слой, откуда путь, громкость, тон, расстояние до слышимой точки. */
+    /** Layer of the motor in this tick: projectile, which layer, where the path is from, volume, tone, distance to the audible point. */
     private record Sample(int t, UUID id, String weapon, String layer, boolean server, double vol, double pitch, double d) {}
 
-    /** Что сервер знает о снаряде: для отметок пуска, входа в мир и удара. */
+    /** What the server knows about the projectile: for launch, world entry, and impact marks. */
     private record Seen(String weapon, boolean virtual, Vec3 pos) {}
 
     private final List<String> cases;
@@ -97,30 +99,30 @@ final class FlybySound {
     private Vec3 ear = Vec3.ZERO;
     private String current = "-";
 
-    // --- сервер (поток сервера) ---
+    // --- server (server thread) ---
     private final Map<UUID, Seen> seen = new HashMap<>();
-    /** Снаряды, впервые увиденные во время случая: UUID → случай. */
+    /** Projectiles first seen during the event: UUID → case. */
     private final Map<UUID, String> caseOf = new ConcurrentHashMap<>();
-    /** Живые снаряды по случаям; удары — тик случая, когда снаряд пропал. */
+    /** Live projectiles on occasion; hits - tick of the case when the projectile is missing. */
     private final Map<UUID, Boolean> alive = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> goneAt = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> enteredAt = new ConcurrentHashMap<>();
-    /** Игровой тик, когда снаряд последний раз сдвинулся; стоящие дольше {@link #STALL} тиков (только сервер). */
+    /** Game tick when the projectile last moved; lasting longer than {@link #STALL} tick (server only). */
     private final Map<UUID, Long> movedAt = new HashMap<>();
     private final Set<UUID> stalled = new HashSet<>();
     private static final int STALL = 10;
     private volatile String serverCase = "-";
     private volatile int serverCaseTick;
 
-    // --- клиент ---
+    // --- client ---
     private Map<SoundInstance, Loop> loops = new IdentityHashMap<>();
     private final List<Sample> samples = new ArrayList<>();
     private final List<String> events = new ArrayList<>();
-    /** Тики случая, когда движку велели играть взрыв. */
+    /** tick when the engine was told to play an explosion. */
     private final List<Integer> blasts = new ArrayList<>();
     private int maxLive;
 
-    /** Петля мотора, пока звучит. */
+    /** The motor loop is still sounding. */
     private static final class Loop {
         final UUID id;
         final String weapon, layer;
@@ -138,7 +140,7 @@ final class FlybySound {
     FlybySound(String which) {
         cases = "all".equals(which) ? ALL : List.of(which.split(","));
         for (String c : cases) {
-            if (!ALL.contains(c)) throw new IllegalArgumentException("SCENARIO flyby: нет случая " + c + " (есть " + ALL + ")");
+            if (!ALL.contains(c)) throw new IllegalArgumentException("SCENARIO flyby: no case " + c + " (there is " + ALL + ")");
         }
         NeoForge.EVENT_BUS.addListener(this::onTick);
         NeoForge.EVENT_BUS.addListener(this::onPlay);
@@ -160,16 +162,16 @@ final class FlybySound {
                 server("gamerule doWeatherCycle false");
                 server("gamerule doMobSpawning false");
                 IncomingConfig.SERVER.launchNearPlayer.set(false);
-                IncomingConfig.SERVER.maxSalvo.set(GRAD); // по умолчанию залп — до 30
+                IncomingConfig.SERVER.maxSalvo.set(GRAD); // by default the salvo is up to 30
                 server(String.format(Locale.ROOT, "tp %s 0.5 200 0.5", name()));
                 next(Stage.LOAD);
             }
             case LOAD -> {
-                // зритель — на земле: высота по карте высот клиента, когда его чанк пришёл
+                // viewer - on the ground: height according to the client’s height map when his chunk arrived
                 int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, 0, 0);
                 if (stageTick < 100 || y <= mc.level.getMinBuildHeight() && stageTick < 1200) return;
                 ear = new Vec3(0.5, y, 0.5);
-                Incoming.LOG.info("SCENARIO flyby зритель на {}", xyz(ear));
+                Incoming.LOG.info("SCENARIO flyby viewer on {}", xyz(ear));
                 nextCase();
             }
             case CASE_SETTLE -> {
@@ -187,7 +189,7 @@ final class FlybySound {
                 boolean flying = caseOf.entrySet().stream().anyMatch(en -> en.getValue().equals(current) && alive.containsKey(en.getKey()));
                 if (stageTick > 40 && launched && !flying) next(Stage.RINGOUT);
                 else if (stageTick > TIMEOUT) {
-                    check("timeout", "FAIL", "снаряды случая не отзвучали за " + TIMEOUT + " тиков");
+                    check("timeout", "FAIL", "the shells of chance did not ring out for " + TIMEOUT + " tick");
                     next(Stage.RINGOUT);
                 }
             }
@@ -199,7 +201,7 @@ final class FlybySound {
                 nextCase();
             }
             case DONE -> {
-                // клиент закрывается не в тот же тик: итоги уже в логе
+                // the client closes on the wrong tick: the results are already in the log
             }
         }
         if (tick % 100 == 0) Incoming.LOG.info("SCENARIO fps {}", mc.getFps());
@@ -231,26 +233,26 @@ final class FlybySound {
         next(Stage.CASE_SETTLE);
     }
 
-    // ---------------------------------------------------------------- случаи
+    // ---------------------------------------------------------------- cases
 
     /**
-     * Где цель и откуда смотреть. {@code yaw} — курс захода (у каждого случая свой, чтобы воронки не ложились в одно
-     * место); {@code target} — только x и z, высоту знает сервер.
+     * Where is the goal and where to look from. {@code yaw} — approach course (each case has its own, so that the crater does not fall in one
+     *  place); {@code target} - only x and z, the server knows the altitude.
      */
     private record Geometry(float yaw, Vec3 target, Vec3 listenerFacing) {}
 
     private Geometry geometry() {
         return switch (current) {
             case "approach" -> {
-                // цель в 20 блоках впереди и 30 сбоку: ракета идёт на зрителя и проходит рядом
+                // target in 20 blocks in front and 30 on the side: the missile comes towards the viewer and passes nearby
                 float yaw = 0;
                 Vec3 dir = Local.horizontal(yaw), side = perp(dir);
                 yield new Geometry(yaw, ear.add(dir.scale(20)).add(side.scale(30)), ear.subtract(dir.scale(1000)));
             }
             case "dogleg" -> {
-                // маршрут с обходом (как у пуска с пусковой, но без разворота на месте): пуск в 2000 блоках до цели на
-                // прямой захода, точка входа в 500, путь 2400 — точка обхода в ~580 блоках сбоку, плечи под ~40° к прямой;
-                // зритель в 40 блоках от середины первого плеча (оно идёт в сторону от цели)
+                // route with a bypass (like a launch with a launcher, but without a turn on the spot): launch in 2000 blocks to the target on
+                //  direct approach, entry point at 500, path 2400 - bypass point in ~580 blocks on the side, shoulders at ~40° to straight;
+                // spectator in 40 blocks from the middle of the first shoulder (it goes away from the target)
                 float yaw = 90;
                 Vec3 dir = Local.horizontal(yaw);
                 Vec3 start = Vec3.ZERO.subtract(dir.scale(DOGLEG_START));
@@ -261,19 +263,19 @@ final class FlybySound {
                 yield new Geometry(yaw, target, target.add(start));
             }
             case "pass" -> {
-                // цель в 700 блоках впереди и 60 сбоку: ракета проходит мимо зрителя, не на него
+                // target at 700 blocks in front and 60 to the side: the missile passes by the viewer, not at him
                 float yaw = 180;
                 Vec3 dir = Local.horizontal(yaw), side = perp(dir);
                 yield new Geometry(yaw, ear.add(dir.scale(700)).add(side.scale(-60)), ear.subtract(dir.scale(1000)));
             }
             case "grad" -> {
-                // пусковая без стреляющего рядом стоит в 600 блоках до цели: зритель посередине дуги, в 20 блоках сбоку
+                // launcher without a shooter nearby stands 600 blocks to the target: the viewer is in the middle of the arc, 20 blocks on the side
                 float yaw = 270;
                 Vec3 dir = Local.horizontal(yaw), side = perp(dir);
                 yield new Geometry(yaw, ear.add(dir.scale(300)).add(side.scale(20)), ear.subtract(dir.scale(300)));
             }
             case "far" -> {
-                // ракета и шахед из-за дальности сущностей прямо на зрителя, цель в 150 блоках за ним
+                // rocket and Shahed due to the range of the entities directly at the viewer, the target is 150 blocks behind him
                 float yaw = 45;
                 Vec3 dir = Local.horizontal(yaw), side = perp(dir);
                 yield new Geometry(yaw, ear.add(dir.scale(150)).add(side.scale(10)), ear.subtract(dir.scale(1000)));
@@ -283,10 +285,10 @@ final class FlybySound {
     }
 
     private static final double DOGLEG_START = 2000;
-    /** Ракета случаев approach, pass и far пущена издалека за столько блоков до цели. */
+    /** The missile of cases approach, pass and far was launched from afar so many blocks from the target. */
     private static final double MISSILE_FROM = 1840;
 
-    /** Время полёта ракеты (настройка, секунд), при котором она стартует за {@link #MISSILE_FROM} блоков до цели. */
+    /** Rocket flight time (setting, seconds), at which it launches {@link #MISSILE_FROM} blocks from the target. */
     private static int missileSeconds() {
         return (int) Math.ceil(MISSILE_FROM / (WeaponSpec.MISSILE.airframe().cruiseSpeed() * 20));
     }
@@ -299,7 +301,7 @@ final class FlybySound {
         return new Vec3(-dir.z, 0, dir.x);
     }
 
-    /** Пуск снарядов случая — на потоке сервера, от консоли сервера (курс захода — поворот команды). */
+    /** launch of case shells - on the server stream, from the server console (approach course - command rotation). */
     private void fire(MinecraftServer server) {
         Geometry g = geometry();
         String name = current;
@@ -315,7 +317,7 @@ final class FlybySound {
                     run(server, rotated + "missile " + at);
                 }
                 case "dogleg" -> {
-                    // маршрут с обходом бывает только у пуска с пусковой рядом со стреляющим; здесь он задан прямо
+                    // a route with a detour occurs only for launch with a launcher next to the shooter; here it is specified directly
                     StrikeProjectile p = ModEntities.CRUISE_MISSILE.get().create(level);
                     if (p == null) return;
                     Vec3 dir = Local.horizontal(g.yaw());
@@ -324,20 +326,20 @@ final class FlybySound {
                     p.launch(start, target, target.pos(), null);
                     Route route = doglegRoute(start, target.pos(), dir);
                     p.setRoute(route);
-                    // с пусковой ракета уходит сразу к первой точке маршрута, а не на цель
+                    // with a launcher, the missile goes straight to the first point of the route, and not to the target
                     float yaw = ua.zentix.incoming.guidance.FlightController.anglesTo(start, route.points().getFirst().add(0, start.y, 0))[0];
                     try {
                         ((ua.zentix.incoming.guidance.FlightController) FLIGHT.get(p)).set(yaw, 0);
                     } catch (ReflectiveOperationException ex) {
-                        throw new IllegalStateException("SCENARIO flyby: курс ракеты не задать", ex);
+                        throw new IllegalStateException("SCENARIO flyby: rocket course cannot be set", ex);
                     }
                     p.moveTo(start.x, start.y, start.z, yaw, 0);
                     VirtualFlights.launch(level, p);
-                    Incoming.LOG.info("SCENARIO flyby dogleg маршрут {} → {}", xyz(start), p.getUUID());
+                    Incoming.LOG.info("SCENARIO flyby dogleg route {} → {}", xyz(start), p.getUUID());
                 }
                 case "grad" -> {
-                    // ночью: днём вой снаряда на нынешней скорости (~80 м/с) тонет в фоне уже за ~270 блоков, а пусковая
-                    // в 300 блоках (Hearing по паспорту звука)
+                    // at night: during the day, the howl of a projectile at the current speed (~80 m/s) drowns in the background already behind ~270 blocks, and the launcher
+                    //  in 300 blocks (Hearing according to the sound spec)
                     run(server, "time set 18000");
                     run(server, rotated + "salvo rocket " + GRAD + " 150 " + at);
                 }
@@ -359,9 +361,9 @@ final class FlybySound {
         Incoming.LOG.info("SCENARIO /{}", command);
     }
 
-    // ---------------------------------------------------------------- сервер: пуски и удары
+    // ---------------------------------------------------------------- server: launch and hits
 
-    /** Снаряды на сервере (в мире и вне его): отметки пуска, входа в мир и выхода, удара. */
+    /** Projectiles on the server (in the world and outside of it): marks for launch, entry into the world and exit, impact. */
     private void scan(ServerLevel level) {
         Map<UUID, Seen> now = new LinkedHashMap<>();
         for (Entity e : level.getAllEntities()) {
@@ -380,7 +382,7 @@ final class FlybySound {
             } else if (!was.virtual() && is.virtual()) {
                 serverMark(level, c, "leave-world", en.getKey(), is);
             }
-            // снаряд стоит на месте (снаряд в полёте не стоит): звук по пакетам тогда затихает, это видно в gain
+            // the projectile stands still (the projectile does not stand still in flight): the sound in the packets then fades out, this can be seen in gain
             long game = level.getGameTime();
             if (was == null || was.pos().distanceToSqr(is.pos()) > 1e-4) {
                 if (stalled.remove(en.getKey())) serverMark(level, c, "move", en.getKey(), is);
@@ -407,9 +409,9 @@ final class FlybySound {
                 String.format(Locale.ROOT, "%.0f", s.pos().distanceTo(ear)), level.getGameTime(), System.currentTimeMillis());
     }
 
-    // ---------------------------------------------------------------- клиент: что слышно
+    // ---------------------------------------------------------------- client: what do you hear?
 
-    /** Все звучащие слои моторов (без порога): петли, их запуск и остановка, строка громкости раз в 5 тиков. */
+    /** All sounding layers of motors (without threshold): loops, their start and stop, volume line once per 5 tick. */
     private void probe(Minecraft mc) {
         serverCaseTick = caseTick;
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
@@ -425,9 +427,9 @@ final class FlybySound {
                         LAYER.get(s).toString().toLowerCase(Locale.ROOT), caseTick);
                 fromServer = track.fromServer();
             } catch (ReflectiveOperationException ex) {
-                throw new IllegalStateException("SCENARIO flyby: поля звука мода изменились", ex);
+                throw new IllegalStateException("SCENARIO flyby: mod sound fields have changed", ex);
             }
-            // громкость против мерки (Loudness.gain): с ней сравнивает порог HEARD, громкость файла здесь ни при чём
+            // volume against the standard (Loudness.gain): the threshold HEARD compares with it, the file volume has nothing to do with it
             double vol = s.getSound() != null ? ((ua.zentix.incoming.client.sound.EngineSound) s).loudness() : 0, pitch = s.getPitch();
             double d = Math.sqrt((s.getX() - cam.x) * (s.getX() - cam.x) + (s.getY() - cam.y) * (s.getY() - cam.y) + (s.getZ() - cam.z) * (s.getZ() - cam.z));
             if (!loops.containsKey(s)) {
@@ -454,7 +456,7 @@ final class FlybySound {
         }
     }
 
-    /** Разовые звуки мода (пуск, отделение, взрывы): когда движку велели их играть. */
+    /** One-time mod sounds (launch, separation, explosions): when the engine was told to play them. */
     private void onPlay(PlaySoundEvent e) {
         SoundInstance s = e.getSound();
         if (s == null || stage != Stage.RUN && stage != Stage.RINGOUT || s.isLooping() || !Incoming.MOD_ID.equals(s.getLocation().getNamespace())) return;
@@ -465,13 +467,13 @@ final class FlybySound {
                 caseTick, System.currentTimeMillis());
     }
 
-    // ---------------------------------------------------------------- итоги случая
+    // ---------------------------------------------------------------- outcome of the case
 
     private void finish() {
         mark("end", String.format(Locale.ROOT, "max_live=%d loops_started=%d", maxLive, events.stream().filter(s -> s.startsWith("start")).count()));
-        check("max_live", maxLive <= 48 ? "PASS" : "FAIL", "max_live=" + maxLive + " (предел 48)");
+        check("max_live", maxLive <= 48 ? "PASS" : "FAIL", "max_live=" + maxLive + " (limit 48)");
         int restarts = restarts();
-        check("restarts", restarts == 0 ? "PASS" : "WARN", "петля того же слоя того же снаряда снова запущена ≤40 тиков после остановки: " + restarts);
+        check("restarts", restarts == 0 ? "PASS" : "WARN", "loop of the same layer of the same projectile is started again ≤40 tick after stopping: " + restarts);
         switch (current) {
             case "approach" -> checkApproach();
             case "dogleg" -> checkDogleg();
@@ -486,21 +488,21 @@ final class FlybySound {
         List<Sample> w = layer("missile_whistle");
         Sample first = w.stream().filter(s -> s.vol >= HEARD).findFirst().orElse(null);
         if (first == null) {
-            check("whistle_heard", "FAIL", "воя вентилятора на подлёте не было");
+            check("whistle_heard", "FAIL", "there was no whine of the fan on approach");
             return;
         }
         Integer impact = impactOf("missile");
         int warning = impact == null ? -1 : impact - first.t;
-        // звук обгоняет ракету на d·(1/v − 1/c): с 1500 блоков — ~290 тиков
+        // sound overtakes the rocket by d·(1/v − 1/c): from 1500 blocks — ~290 tick
         int expected = (int) (first.d * (1 / WeaponSpec.MISSILE.airframe().cruiseSpeed() - 1 / ua.zentix.incoming.client.sound.Acoustics.SPEED));
-        check("whistle_from", first.d >= 1000 ? "PASS" : "FAIL", "вой слышно с " + f0(first.d) + " блоков (слышимая точка), громкость " + f3(first.vol));
-        check("whistle_warning", warning >= expected * 0.8 ? "PASS" : "FAIL", "вой за " + warning + " тиков до удара (ожидание ~" + expected + ")");
-        // мотор целиком (вблизи вой вентилятора — уже ближняя запись спереди) ближе громче
+        check("whistle_from", first.d >= 1000 ? "PASS" : "FAIL", "howl can be heard from " + f0(first.d) + " blocks (audible point), volume " + f3(first.vol));
+        check("whistle_warning", warning >= expected * 0.8 ? "PASS" : "FAIL", "howl for " + warning + " tick until hit (waiting ~" + expected + ")");
+        // the entire motor (near the howl of the fan - already the closest recording in front) closer is louder
         double far = enginePower(800, 1300), near = enginePower(60, 400);
-        check("engine_rises", near > far ? "PASS" : "FAIL", "мотор вдали (800–1300) " + f3(far) + ", вблизи (60–400) " + f3(near));
+        check("engine_rises", near > far ? "PASS" : "FAIL", "motor away (800–1300) " + f3(far) + ", near (60–400) " + f3(near));
     }
 
-    /** Наибольшая громкость мотора ракеты (все слои по мощности) в тик, когда слышимая точка — между a и b блоков. */
+    /** The highest volume of the rocket motor (all layers by power) is in tick, when the audible point is between a and b blocks. */
     private double enginePower(double a, double b) {
         Map<Integer, double[]> byTick = new java.util.TreeMap<>();
         for (Sample s : samples) {
@@ -512,24 +514,24 @@ final class FlybySound {
     }
 
     private void checkDogleg() {
-        // ракета на обходе идёт мимо зрителя курсом в сторону от цели: мотор слышно, и только по расстоянию и ракурсу —
-        // вой вентилятора вперёд по курсу от того, куда она летит, не зависит
+        // the rocket on its way around goes past the viewer on a course away from the target: the engine is audible, and only by distance and angle -
+        //  the blow of the fan forward along the course does not depend on where it is flying
         double engine = samples.stream().filter(s -> s.layer.startsWith("missile_")).mapToDouble(Sample::vol).max().orElse(0);
-        check("engine_heard", engine >= HEARD ? "PASS" : "FAIL", "мотор на обходе: " + f3(engine));
+        check("engine_heard", engine >= HEARD ? "PASS" : "FAIL", "motor on bypass: " + f3(engine));
     }
 
     private void checkPass() {
         List<Sample> w = layer("missile_whistle");
         Sample peak = w.stream().max((a, b) -> Double.compare(a.vol, b.vol)).orElse(null);
         if (peak == null || peak.vol < HEARD) {
-            check("whistle_heard", "FAIL", "вой на подлёте " + (peak == null ? 0 : f3(peak.vol)));
+            check("whistle_heard", "FAIL", "howl on approach " + (peak == null ? 0 : f3(peak.vol)));
             return;
         }
         int fade = w.stream().filter(s -> s.t > peak.t && s.vol < 0.1 * peak.vol).mapToInt(Sample::t).findFirst().orElse(Integer.MAX_VALUE) - peak.t;
-        check("whistle_fades", fade >= 6 ? "PASS" : "FAIL", "после пика " + f3(peak.vol) + " до 10% за " + (fade == Integer.MAX_VALUE - peak.t ? "∞" : fade) + " тиков");
-        // мотор: сумма мощностей слоёв на подлёте не падает, вслед не растёт (запас 1 дБ на сглаживание громкости);
-        // слои делят одну мощность по расстоянию и ракурсу (EngineSound.share), поэтому её ход — функция расстояния
-        // и ближе: проверка до 30 блоков (ещё ближе слышимая точка меняется быстрее сглаживания громкости)
+        check("whistle_fades", fade >= 6 ? "PASS" : "FAIL", "after the peak " + f3(peak.vol) + " up to 10% for " + (fade == Integer.MAX_VALUE - peak.t ? "∞" : fade) + " tick");
+        // motor: the sum of the powers of the layers does not fall on approach, and does not increase afterwards (a margin of 1 dB for volume smoothing);
+        //  layers share the same power by distance and angle (EngineSound.share), so its course is a function of distance
+        //  and closer: checking up to 30 blocks (even closer the audible point changes faster than the volume smoothing)
         final double nearZone = 30;
         Map<Integer, double[]> byTick = new java.util.TreeMap<>();
         for (Sample s : samples) {
@@ -544,7 +546,7 @@ final class FlybySound {
         for (double[] a : byTick.values()) {
             if (prevP > 1e-6 && a[0] > 1e-6 && Math.min(prevD, a[1]) >= nearZone) {
                 double db = 10 * Math.log10(a[0] / prevP);
-                // расстояние стоит (путь ещё не начался, звук первой точки нарастает) — сравнивать не с чем
+                // the distance is standing (the path has not yet begun, the sound of the first point is growing) - there is nothing to compare with
                 if (Math.abs(a[1] - prevD) < 0.5) {
                     prevP = a[0];
                     continue;
@@ -552,33 +554,33 @@ final class FlybySound {
                 boolean closer = a[1] < prevD;
                 if (closer && db < -1 || !closer && db > 1) {
                     bad++;
-                    worst = String.format(Locale.ROOT, "%.1f дБ при %.0f→%.0f блоков", db, prevD, a[1]);
+                    worst = String.format(Locale.ROOT, "%.1f dB at %.0f→%.0f blocks", db, prevD, a[1]);
                 }
             }
             prevP = a[0];
             prevD = a[1];
         }
-        check("engine_even", bad == 0 ? "PASS" : "FAIL", "скачков мощности мотора против расстояния: " + bad + (bad > 0 ? ", последний " + worst : ""));
-        // мотор дальней ракеты (путь по пакетам сервера) звучит, пока до уха не дойдёт взрыв: без паузы тишины перед ним
+        check("engine_even", bad == 0 ? "PASS" : "FAIL", "motor power surges versus distance: " + bad + (bad > 0 ? ", last " + worst : ""));
+        // the motor of a long-range rocket (path through server packets) sounds until the explosion reaches your ear: without a pause of silence in front of it
         int blast = blasts.stream().mapToInt(Integer::intValue).min().orElse(-1);
         int stop = events.stream().filter(ev -> ev.startsWith("stop ")).mapToInt(ev -> Integer.parseInt(ev.substring(ev.lastIndexOf(' ') + 1))).max().orElse(-1);
-        check("engine_until_blast", blast >= 0 && stop >= blast ? "PASS" : "FAIL", "мотор смолк на тике " + stop + ", взрыв — на тике " + blast);
+        check("engine_until_blast", blast >= 0 && stop >= blast ? "PASS" : "FAIL", "motor stopped at tick " + stop + ", explosion - on tick " + blast);
     }
 
     private void checkGrad() {
-        // вой снаряда по инерции — шум обтекания, ∝ U⁶ (Noise.Body): на нынешней скорости (40–80 м/с, вдесятеро ниже
-        // настоящей) его слышно лишь в сотне-другой блоков, и слышат только снаряды, прошедшие рядом; с настоящей
-        // скоростью он громче на десятки децибел — тогда и треск конуса Маха
+        // the howl of a projectile due to inertia - the noise of the flow, ∝ U⁶ (Noise.Body): at the current speed (40–80 m/s, ten times lower than the current
+        // ) it can be heard only in a hundred or two blocks, and only shells can hear it, passing nearby; at a real
+        //  speed it is louder by tens of decibels - then the Mach cone cracks.
         List<UUID> rockets = caseOf.entrySet().stream().filter(en -> en.getValue().equals(current)).map(Map.Entry::getKey).toList();
         long heard = rockets.stream().filter(id -> samples.stream().anyMatch(s -> s.id.equals(id) && s.layer.equals("rocket_air") && s.vol >= HEARD)).count();
-        check("rockets_howl", heard > 0 ? "PASS" : "FAIL", "выли после выгорания " + heard + " из " + rockets.size() + " (заказано " + GRAD + ")");
-        // дальше выведенной дальности (по паспорту звука, ночью, снаряд до 200 блоков над ухом, скорость — до полуторной
-        // маршевой) вой не слышен
+        check("rockets_howl", heard > 0 ? "PASS" : "FAIL", "howl after burnout " + heard + " from " + rockets.size() + " (ordered " + GRAD + ")");
+        // beyond the indicated range (according to the sound spec, at night, a projectile up to 200 blocks above the ear, speed - up to one and a half
+        //  marching) the howl is not heard
         ua.zentix.incoming.sound.Noise noise = WeaponSpec.ROCKET.airframe().noise();
         double range = ua.zentix.incoming.strike.Hearing.range(noise, ua.zentix.incoming.entity.FlightPhase.CRUISE, 100,
                 WeaponSpec.ROCKET.airframe().cruiseSpeed() * 1.5, false, 200, ua.zentix.incoming.sound.Propagation.Weather.NIGHT);
         double farthest = samples.stream().filter(s -> s.layer.equals("rocket_air") && s.vol >= HEARD).mapToDouble(Sample::d).max().orElse(0);
-        check("howl_within_range", farthest <= range ? "PASS" : "FAIL", "вой слышно с " + f0(farthest) + " блоков, слышимость — до " + f0(range));
+        check("howl_within_range", farthest <= range ? "PASS" : "FAIL", "howl can be heard from " + f0(farthest) + " blocks, audibility - up to " + f0(range));
     }
 
     private void checkFar() {
@@ -589,22 +591,22 @@ final class FlybySound {
             int handover = mine.stream().filter(s -> !s.server).mapToInt(Sample::t).min().orElse(-1);
             boolean fromServer = mine.stream().anyMatch(s -> s.server);
             if (!fromServer || handover < 0) {
-                check("handover_" + weapon, "WARN", weapon + "#" + shortId(id) + ": переход с пакетов на сущность не увиден (s=" + fromServer + ", e=" + (handover >= 0) + ")");
+                check("handover_" + weapon, "WARN", weapon + "#" + shortId(id) + ": transition from packages to entity is not visible (s=" + fromServer + ", e=" + (handover >= 0) + ")");
                 continue;
             }
-            // снаряд идёт на зрителя: на переходе мощность слоёв не должна проседать (новые слои вблизи — не перезапуск)
+            // the projectile goes towards the viewer: during the transition the power of the layers should not subside (new layers nearby - no restart)
             long restartsNear = restarts(id, handover - 20, handover + 20);
             double before = power(mine, handover - 3, handover - 1), dip = Double.MAX_VALUE;
             for (int t = handover; t <= handover + 5; t++) dip = Math.min(dip, power(mine, t, t));
             double db = before > 0 && dip > 0 ? 10 * Math.log10(dip / before) : 0;
             boolean ok = restartsNear == 0 && db >= -1.5;
             check("handover_" + weapon, ok ? "PASS" : "FAIL", String.format(Locale.ROOT,
-                    "%s#%s: сущность с t=%d (сервер: в мире с t=%s), перезапусков слоёв рядом %d, провал мощности за 5 тиков %.1f дБ",
+                    "%s#%s: entity with t=%d (server: in the world with t=%s), restarts layers nearby %d, power failure for 5 tick %.1f dB",
                     weapon, shortId(id), handover, enteredAt.get(id), restartsNear, db));
         }
     }
 
-    /** Средняя мощность всех слоёв снаряда за тики [a, b]. */
+    /** Average power of all projectile layers per tick [a, b]. */
     private static double power(List<Sample> mine, int a, int b) {
         return mine.stream().filter(s -> s.t >= a && s.t <= b).mapToDouble(s -> s.vol * s.vol).sum() / (b - a + 1);
     }
@@ -613,7 +615,7 @@ final class FlybySound {
         return restarts(null, Integer.MIN_VALUE, Integer.MAX_VALUE);
     }
 
-    /** Слой снаряда снова запущен не позже 40 тиков после остановки (у {@code id}, если задан, в тики [a, b]). */
+    /** The projectile layer is started again no later than 40 tick after stopping (at {@code id}, if set, at tick [a, b]). */
     private int restarts(UUID id, int a, int b) {
         Map<String, Integer> stopped = new HashMap<>();
         int n = 0;
@@ -650,7 +652,7 @@ final class FlybySound {
         Incoming.LOG.info("SCENARIO mark {} {} t={} ms={} {}", current, what, caseTick, System.currentTimeMillis(), detail);
     }
 
-    // ---------------------------------------------------------------- мелочи
+    // ---------------------------------------------------------------- little things
 
     private static String name() {
         return Minecraft.getInstance().player.getGameProfile().getName();
@@ -677,7 +679,7 @@ final class FlybySound {
         return String.format(Locale.ROOT, "%.3f", v);
     }
 
-    // слой и путь петли закрыты в звуке мода (пакет client.sound) — через отражение
+    // layer and loop path are closed in the sound mod (package client.sound) - via reflection
     private static final Class<?> ENGINE;
     private static final Field TRACK, LAYER, FLIGHT;
 

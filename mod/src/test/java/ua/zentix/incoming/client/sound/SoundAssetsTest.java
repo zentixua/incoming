@@ -25,15 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Звуки, собранные tools/build_sounds.py, сходятся с кодом: каждое событие ModSounds есть в sounds.json, каждый
- * файл есть и он моно (Minecraft размещает в пространстве только моно — стерео звучал бы «в голове»), авторы записей
- * лежат рядом со звуками.
+ * Sounds built by tools/build_sounds.py match the code: each ModSounds event is in sounds.json; every file exists
+ * and is mono (Minecraft spatializes only mono; stereo would play "inside the head"); recording credits live
+ * beside the sounds.
  */
 class SoundAssetsTest {
     private static final String ASSETS = "/assets/incoming/";
-    /** Ракурсы одного взрыва: вариант выбирает одно зерно, поэтому вариантов поровну. */
+    /** Angles of one explosion: the option selects one seed, so there are equal numbers of options. */
     private static final List<String> PERSPECTIVES = List.of("blast.near", "blast.mid", "blast.far");
-    /** Взрывы играются в тик прихода фронта: файлы разобраны заранее, без задержки на первом звуке. */
+    /** Explosions are played at the tick of the arrival of the front: the files are parsed in advance, without delay on the first sound. */
     private static final List<String> PRELOAD = List.of("blast.near", "blast.mid", "blast.far", "blast.sub");
 
     @Test
@@ -56,41 +56,41 @@ class SoundAssetsTest {
     }
 
     /**
-     * Петли гула пожаров ({@link Quarters}) складываются в ухе по мощности, только если их звуки некогерентны при любой
-     * разнице стартов: у каждой четверти свой вариант {@code blast.fire} — свой кусок записи 483323, а не сдвиг одной записи
-     * (сдвиги когерентны, когда разница стартов петель совпадёт со сдвигом). Одна запись в двух петлях, начатых в один тик,
-     * складывалась по амплитуде: пожар между ними был на 2 дБ громче суммы мощностей (ревью R8, OpenAL loopback). Проверка
-     * — на звуке самих файлов, на всех сдвигах по кругу в полной частоте: наибольший |ρ| ≤ 0,05 (у двух независимых шумов с
-     * этим спектром на 12 с — около 0,02), при одновременном старте ≤ 0,02; пожар посередине между двумя четвертями — пара
-     * петель с громкостями {@link Quarters} против той же мощности в одной петле. Средняя громкость у петель одна и равна
-     * той, по которой клиент приводит их к закону ({@code Spectra.BLAST_FIRE_LUFS}): мощности четвертей равны.
+     * Loops of the roar of fires ({@link Quarters}) add up in power in the ear only if their sounds are incoherent for any
+     *  difference in starts: each quarter has its own version of {@code blast.fire} - its own piece of the recording 483323, and not a shift of one record
+     *  (the shifts are coherent when the difference in the starts of the loops coincides with a shift). One recording in two loops started in one tick,
+     *  added up in amplitude: the fire between them was 2 dB louder than the sum of the powers (review R8, OpenAL loopback). Check
+     *  - on the sound of the files themselves, on all shifts in a circle in full frequency: the largest |ρ| ≤ 0,05 (for two independent noises with
+     *  this spectrum on 12 s - about 0,02), with simultaneous start ≤ 0,02; fire in the middle between two quarters - a pair of
+     *  loops with volumes {@link Quarters} against the same power in one loop. The average volume of the loops is the same and is equal to
+     * , according to which the client leads them to the law ({@code Spectra.BLAST_FIRE_LUFS}): the powers of the quarters are equal.
      */
     @Test
     void craterFireLoopsAreIncoherent() throws IOException {
         List<String> files = files("blast.fire");
-        assertEquals(Quarters.N, files.size(), "по варианту на четверть");
+        assertEquals(Quarters.N, files.size(), "according to the quarter option");
         for (String event : List.of("blast.fire", "blast.rumble")) {
             int n = files(event).size();
             Set<Integer> picked = new HashSet<>();
             for (int q = 0; q < Quarters.N; q++) {
                 int got = net.minecraft.util.RandomSource.create(Quarters.seed(n, q)).nextInt(n);
-                assertEquals(q % n, got, event + ": четверть " + q + " берёт свой вариант");
+                assertEquals(q % n, got, event + ": quarter " + q + " takes his option");
                 picked.add(got);
             }
-            assertEquals(Quarters.N, picked.size(), event + ": у четвертей разные варианты");
+            assertEquals(Quarters.N, picked.size(), event + ": quarters have different options");
         }
         float[][] loops = new float[files.size()][];
         for (int i = 0; i < loops.length; i++) {
             float[][] pcm = new float[1][];
             int rate = Envelope.read(open(files.get(i)), pcm);
             loops[i] = pcm[0];
-            assertEquals(ua.zentix.incoming.sound.Spectra.BLAST_FIRE_LUFS, loopLoudness(loops[i], rate), 0.3, files.get(i) + ": средняя громкость петли, LUFS");
+            assertEquals(ua.zentix.incoming.sound.Spectra.BLAST_FIRE_LUFS, loopLoudness(loops[i], rate), 0.3, files.get(i) + ": medium loop volume, LUFS");
         }
         int n = loops[0].length, size = Integer.highestOneBit(2 * n - 1) << 1;
         double[][] re = new double[loops.length][], im = new double[loops.length][];
         double[] energy = new double[loops.length];
         for (int i = 0; i < loops.length; i++) {
-            assertEquals(n, loops[i].length, "петли одной длины");
+            assertEquals(n, loops[i].length, "loops of the same length");
             re[i] = new double[size];
             im[i] = new double[size];
             for (int t = 0; t < n; t++) {
@@ -111,21 +111,21 @@ class SoundAssetsTest {
                 }
                 EchoMix.fft(cr, ci, true);
                 double norm = Math.sqrt(energy[i] * energy[j]), start = cr[0] / norm, worst = 0;
-                // сдвиг τ по кругу: линейные сдвиги τ и τ − n
+                // shift τ in a circle: linear shifts τ and τ − n
                 for (int tau = 0; tau < n; tau++) worst = Math.max(worst, Math.abs(cr[tau] + (tau == 0 ? 0 : cr[size + tau - n])) / norm);
-                // пожар между четвертями: петли i и j с громкостями ga и gb против той же мощности в одной петле
+                // fire between quarters: loops i and j with volumes ga and gb against the same power in one loop
                 double one = (ga * ga + gb * gb) * (energy[i] + energy[j]) / 2, together = ga * ga * energy[i] + gb * gb * energy[j];
                 double pair = 10 * Math.log10((together + 2 * ga * gb * worst * norm) / one);
                 System.out.printf(java.util.Locale.ROOT, "blast.fire %d+%d: rho %+.4f at one start, max %.4f over all start offsets; pair vs one loop up to %+.3f dB%n",
                         i + 1, j + 1, start, worst, pair);
-                assertTrue(Math.abs(start) <= 0.02, files.get(i) + " + " + files.get(j) + ": при одновременном старте |ρ| " + start);
-                assertTrue(worst <= 0.05, files.get(i) + " + " + files.get(j) + ": на худшем сдвиге старта |ρ| " + worst);
-                assertEquals(0, pair, 0.25, files.get(i) + " + " + files.get(j) + ": пара против одной петли, дБ");
+                assertTrue(Math.abs(start) <= 0.02, files.get(i) + " + " + files.get(j) + ": with simultaneous start |ρ| " + start);
+                assertTrue(worst <= 0.05, files.get(i) + " + " + files.get(j) + ": at the worst start shift |ρ| " + worst);
+                assertEquals(0, pair, 0.25, files.get(i) + " + " + files.get(j) + ": pair versus single loop, dB");
             }
         }
     }
 
-    /** Средняя громкость вариантов события {@code event} (средняя по мощности их средних громкостей), LUFS. */
+    /** Average volume of event options {@code event} (average of the power of their average volumes), LUFS. */
     static double loopMean(String event) throws IOException {
         double sum = 0;
         List<String> files = files(event);
@@ -137,7 +137,7 @@ class SoundAssetsTest {
         return 10 * Math.log10(sum / files.size());
     }
 
-    /** Средняя громкость петли целиком (BS.1770: К-фильтр, разогнанный хвостом петли), LUFS. */
+    /** Average volume of the entire loop (BS.1770: K-filter accelerated by the tail of the loop), LUFS. */
     private static double loopLoudness(float[] x, int rate) {
         double[] y = new double[x.length + rate];
         for (int i = 0; i < rate; i++) y[i] = x[x.length - rate + i];
@@ -148,7 +148,7 @@ class SoundAssetsTest {
         return -0.691 + 10 * Math.log10(ms / x.length);
     }
 
-    /** Файлы вариантов события {@code event} в sounds.json. */
+    /** Event variant files {@code event} to sounds.json. */
     private static List<String> files(String event) throws IOException {
         JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
         List<String> out = new java.util.ArrayList<>();
@@ -169,7 +169,7 @@ class SoundAssetsTest {
                 String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
                 String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
                 try (InputStream in = open(file)) {
-                    assertEquals(1, vorbisChannels(in.readNBytes(4096)), file + ": каналы");
+                    assertEquals(1, vorbisChannels(in.readNBytes(4096)), file + ": channels");
                 }
             }
         }
@@ -178,11 +178,11 @@ class SoundAssetsTest {
                 .matcher(Files.readString(Path.of("src/main/java/ua/zentix/incoming/registry/ModSounds.java")));
         while (m.find()) registered.add(m.group(1));
         assertTrue(registered.size() > 30);
-        assertEquals(registered, json.keySet(), "события ModSounds и sounds.json");
+        assertEquals(registered, json.keySet(), "events ModSounds and sounds.json");
         for (String p : PERSPECTIVES) {
-            assertEquals(variants(json, PERSPECTIVES.get(0)), variants(json, p), "вариантов у ракурсов поровну: " + p);
+            assertEquals(variants(json, PERSPECTIVES.get(0)), variants(json, p), "the options for angles are equal: " + p);
             for (JsonElement s : json.getAsJsonObject(p).getAsJsonArray("sounds")) {
-                assertTrue(!s.isJsonObject() || !s.getAsJsonObject().has("weight"), p + ": веса равные — иначе зерно выберет разные записи");
+                assertTrue(!s.isJsonObject() || !s.getAsJsonObject().has("weight"), p + ": weights are equal - otherwise the seed will select different records");
             }
         }
         for (String p : PRELOAD) {
@@ -196,9 +196,9 @@ class SoundAssetsTest {
     }
 
     /**
-     * Петля шахеда — мотор на номинальных оборотах в своей скорости: самый сильный тон — вал MD-550 ({@code
-     * WeaponSpec.DRONE_PISTON}: 7500 об/мин — 125 Гц, винт прямо на валу). У 3.5.0 запись ускорили втрое до 250 Гц —
-     * вместе с тоном ушли вверх резонансы корпуса и выхлопа («мухи», проба P 21.10.2026).
+     * Shahed loop - motor at rated speed at its speed: the strongest tone - shaft MD-550 ({@code
+     * WeaponSpec.DRONE_PISTON}: 7500 rpm - 125 Hz, screw directly on the shaft). For 3.5.0, the recording was accelerated three times to 250 Hz -
+     * , together with the tone, the resonances of the body and exhaust (“flies”, sample P 21.10.2026) went up.
      */
     @Test
     void shahedLoopSoundsAtTheShaftOrder() throws IOException {
@@ -208,11 +208,11 @@ class SoundAssetsTest {
             rate = (int) ogg.getFormat().getSampleRate();
             FloatArrayList samples = new FloatArrayList();
             while (ogg.readChunk(samples::add)) {
-                // вся петля
+                // the whole loop
             }
             x = samples.toFloatArray();
         }
-        // средний спектр окон по 2¹⁵ отсчётов (~0,74 с): 1,35 Гц на полосу
+        // average spectrum of windows according to 2¹⁵ sample (~0,74 s): 1,35 Hz per band
         int n = 1 << 15;
         double[] power = new double[n / 2];
         for (int s = 0; s + n <= x.length; s += n / 2) {
@@ -224,21 +224,21 @@ class SoundAssetsTest {
         int lo = (int) (40.0 * n / rate), best = lo;
         for (int i = lo; i < (int) (1200.0 * n / rate); i++) if (power[i] > power[best]) best = i;
         double shaft = WeaponSpec.DRONE_PISTON.rpm() / 60;
-        assertEquals(shaft, best * (double) rate / n, shaft * 0.03, "самый сильный тон петли — вал");
+        assertEquals(shaft, best * (double) rate / n, shaft * 0.03, "the strongest tone of the loop is the shaft");
     }
 
     /**
-     * Файлы моторов и стартов — той громкости, на которую клиент их рассчитывает ({@link Loudness#MOTOR_LUFS} у событий
-     * {@code MOTOR} сборки, {@link Loudness#ROCKET_LAUNCH_LUFS} у схода снаряда РСЗО, {@link Loudness#ENGINE_LUFS} у
-     * хлопка отделения и катапульты): файл тише расчёта — громкость упирается в него раньше потолка, и всё громче звучит
-     * одинаково (3.5.0: удар поджига ракеты и ЗРК ближе ~45 м к пусковой). Мера — наибольшая мгновенная
-     * громкость EBU R128, у петель — по кругу, как в сборке.
+     * Files of motors and launches - the volume at which the client expects them ({@link Loudness#MOTOR_LUFS} for events
+     * {@code MOTOR} assembly, {@link Loudness#ROCKET_LAUNCH_LUFS} for launch rail exit of an MLRS projectile, {@link Loudness#ENGINE_LUFS} for
+     *  clap of a compartment and catapult): the file is quieter than the calculation - the volume rests on it earlier ceiling, and
+     *  sounds the same louder (3.5.0: the impact of igniting the rocket and SAM is closer ~45 m to the launcher). The measure is the highest instantaneous
+     *  volume EBU R128, at the hinges - in a circle, as in an assembly.
      */
     @Test
     void motorFilesAtTheirLoudness() throws IOException {
         JsonObject json = JsonParser.parseReader(new InputStreamReader(open(ASSETS + "sounds.json"), StandardCharsets.UTF_8)).getAsJsonObject();
         Matcher m = Pattern.compile("(?ms)^MOTOR = \\{(.*?)}").matcher(Files.readString(Path.of("../tools/build_sounds.py")));
-        assertTrue(m.find(), "MOTOR в build_sounds.py");
+        assertTrue(m.find(), "MOTOR to build_sounds.py");
         Set<String> motor = new HashSet<>();
         Matcher q = Pattern.compile("\"([a-z.]+)\"").matcher(m.group(1));
         while (q.find()) motor.add(q.group(1));
@@ -252,14 +252,14 @@ class SoundAssetsTest {
                 String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
                 String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
                 double got = momentaryMax(file, !oneShots.contains(ev));
-                assertEquals(want, got, 0.5, file + ": громкость, LUFS");
+                assertEquals(want, got, 0.5, file + ": volume, LUFS");
             }
         }
     }
 
     /**
-     * Петли гула взрывов ({@link Rumble}): по варианту на четверть вокруг уха, каждая — на громкости, по которой клиент
-     * ведёт гул ({@link BlastSounds#RUMBLE_LUFS}); ровность (СКО мгновенной громкости ≤ 1 дБ) проверяет сборка.
+     * Explosion hum loops ({@link Rumble}): optionally a quarter around the ear, each at the volume at which the client
+     *  drives the hum ({@link BlastSounds#RUMBLE_LUFS}); evenness (RMS of instantaneous loudness ≤ 1 dB) is checked by the assembly.
      */
     @Test
     void rumbleLoopsAtTheirLoudness() throws IOException {
@@ -268,32 +268,32 @@ class SoundAssetsTest {
         for (JsonElement s : json.getAsJsonObject("blast.rumble").getAsJsonArray("sounds")) {
             String name = s.isJsonObject() ? s.getAsJsonObject().get("name").getAsString() : s.getAsString();
             String file = ASSETS + "sounds/" + name.substring("incoming:".length()) + ".ogg";
-            assertEquals(BlastSounds.RUMBLE_LUFS, momentaryMax(file, true), 0.5, file + ": громкость, LUFS");
+            assertEquals(BlastSounds.RUMBLE_LUFS, momentaryMax(file, true), 0.5, file + ": volume, LUFS");
         }
     }
 
     /**
-     * Звук мода в мире — только по закону источника и пути ({@code Loudness}, {@code BlastMix}, {@code Sources}): ни одного
-     * ванильного проигрывания с громкостью на глаз (громкость больше 1 у Minecraft — дальность 16 блоков на единицу). Так
-     * 3.4.1 играл гул огня в воронке громкостью 5 до 90 блоков: хвост взрыва в 50 м — 135 дБА-эквивалента, громче
-     * реактивного двигателя, хотя у пожара ~2 МВт там ~80 дБ. UI-звуки без места ({@code forUI}) — не в счёт.
-     * Событие в переменной или своя обёртка этим поиском не ловятся; обёртки с ручной громкостью у клиента нет
-     * ({@code ClientSounds.at} убран).
+     * The sound of the mod in the world is only according to the law of source and path ({@code Loudness}, {@code BlastMix}, {@code Sources}): not a single
+     *  vanilla playback with volume by eye (the volume is greater than 1 for Minecraft - the range of 16 blocks per unit). So
+     * 3.4.1 played the roar of fire in the crater with a volume of 5 to 90 blocks: the tail of the explosion in 50 m - 135 dBA-equivalent, louder than a
+     *  jet engine, although the fire ~2 MW there ~80 dB. UI-sounds without a place ({@code forUI}) do not count.
+     * An event in a variable or its own wrapper is not caught by this search; The client does not have a wrapper with manual volume
+     *  ({@code ClientSounds.at} has been removed).
      */
     @Test
     void worldSoundsHaveNoHandVolume() throws IOException {
         Pattern hand = Pattern.compile("(playSound|playLocalSound|playSeededSound|new SimpleSoundInstance|SimpleSoundInstance\\.forAmbientAddition)\\(");
         try (var files = Files.walk(Path.of("src/main/java"))) {
             for (Path f : (Iterable<Path>) files.filter(x -> x.toString().endsWith(".java"))::iterator) {
-                // по операторам, а не по строкам: вызов, разбитый на строки, — тоже
+                // by operators, not by lines: a call divided into lines is also
                 for (String st : Files.readString(f).split(";")) {
-                    assertTrue(!(st.contains("ModSounds.") && hand.matcher(st).find()), f + ": звук мода громкостью на глаз — " + st.strip());
+                    assertTrue(!(st.contains("ModSounds.") && hand.matcher(st).find()), f + ": sound mod volume by eye - " + st.strip());
                 }
             }
         }
     }
 
-    /** Наибольшая мгновенная громкость файла (BS.1770: K-фильтр, окно 400 мс через 100 мс), LUFS; петля — по кругу. */
+    /** The highest instantaneous volume of the file (BS.1770: K filter, window 400 ms through 100 ms), LUFS; loop - in a circle. */
     static double momentaryMax(String file, boolean loop) throws IOException {
         float[] x;
         int rate;
@@ -301,12 +301,12 @@ class SoundAssetsTest {
             rate = (int) ogg.getFormat().getSampleRate();
             FloatArrayList samples = new FloatArrayList();
             while (ogg.readChunk(samples::add)) {
-                // весь файл
+                // whole file
             }
             x = samples.toFloatArray();
         }
         int n = x.length, w = (int) (0.4 * rate), h = rate / 10;
-        // петля: фильтр разогнан хвостом петли, окна идут через шов
+        // loop: the filter is dispersed by the tail of the loop, the windows go through the seam
         int pre = loop ? Math.min(n, rate) : 0;
         double[] y = new double[pre + n + (loop ? w : 0)];
         for (int i = 0; i < y.length; i++) {
@@ -332,7 +332,7 @@ class SoundAssetsTest {
         return in;
     }
 
-    /** Число каналов из заголовка Vorbis: «\1vorbis», версия (4 байта), каналы (1 байт). */
+    /** Number of channels from the Vorbis header: “\1vorbis”, version (4 bytes), channels (1 bytes). */
     private static int vorbisChannels(byte[] head) {
         byte[] magic = "\u0001vorbis".getBytes(StandardCharsets.ISO_8859_1);
         outer:

@@ -9,29 +9,30 @@ import java.util.Arrays;
 import java.util.Collection;
 
 /**
- * Дым и огонь слоя эффектов Incoming на линии взгляда: сколько света проходит от глаза до точки (1 — чисто, 0 —
- * закрыто). Слой эффектов — частицы Incoming вне частиц игры и столбы дыма взрывов, луч по блокам их не видит, поэтому —
- * их поля отражением (мод от Incoming не зависит; поля одни и те же с 2.10: частицы — {@code FxPool.INSTANCE},
- * {@code parts}, {@code count}, у частицы {@code x}, {@code y}, {@code z}, {@code quadSize} (полуразмер квадрата),
- * {@code aCol}, {@code kind.additive}; столбы — {@code FarBlasts.EVENTS} и {@code clock}, у взрыва {@code x}, {@code y},
- * {@code z}, {@code born}, {@code look} и клубы {@code f}, {@code ox}, {@code oz}, {@code size}). Пакет — по версии:
- * {@code ua.zentix.incoming} с 3.0, {@code ua.zentix.airstrike} до неё. Нет Incoming или полей — проверки дыма нет
- * ({@link #available()}), это пишется в отчёт; нет полей столбов — только частицы ({@link #columns()}).
+ * Incoming effects-layer smoke/fire on a sightline: eye-to-point transmission (1 clear, 0 blocked).
+ * Layer includes mod particles outside game particle system and explosion smoke columns; block rays
+ * cannot see them, so reflect their fields (no Incoming dependency; stable since 2.10): particles
+ * {@code FxPool.INSTANCE}, {@code parts}, {@code count}; particle {@code x}, {@code y}, {@code z},
+ * {@code quadSize} (quad half-size), {@code aCol}, {@code kind.additive}; columns {@code FarBlasts.EVENTS}
+ * and {@code clock}; explosion {@code x}, {@code y}, {@code z}, {@code born}, {@code look}; billows
+ * {@code f}, {@code ox}, {@code oz}, {@code size}. Package by version: {@code ua.zentix.incoming} since
+ * 3.0, earlier {@code ua.zentix.airstrike}. Missing Incoming/fields disables smoke checks
+ * ({@link #available()}), reported; missing column fields leaves particles only ({@link #columns()}).
  */
 final class Smoke {
-    /** Плотная середина клуба — доля его полуразмера, как у отрисовки ({@code FxParticle.DENSE}). */
+    /** Dense billow core fraction of half-size, as rendered ({@code FxParticle.DENSE}). */
     private static final double DENSE = 0.7;
-    /** Столб: непрозрачность клуба, разброс клубов от оси (радиусов), снос ветром ({@code FarBlasts}). */
+    /** Column: billow opacity, axis spread in radii, wind drift ({@code FarBlasts}). */
     private static final double OPACITY = 0.85, SPREAD = 0.4;
-    /** Кадр в дыму: лучи сеткой по кадру до этой дальности, закрыт луч — света меньше этой доли. */
+    /** Smoke-filled frame: grid rays to this range, blocked if transmission below this share. */
     static final double SMOTHER_REACH = 40, SMOTHER_LIGHT = 0.4;
-    /** Сетка лучей кадра: доли половины ширины и высоты кадра (3 × 5; ту же сетку прокладывает пилот, {@link Pilot#smother}). */
+    /** Frame ray grid: fractions of frame half-width/height (3 × 5, same as pilot {@link Pilot#smother}). */
     static final double[] GRID_X = {-0.6, 0, 0.6}, GRID_Y = {-0.7, -0.35, 0, 0.35, 0.7};
 
     @Nullable
     private final Object pool;
     private Field parts, count, x, y, z, quad, alpha, kind, additive;
-    /** Столбы: очередь взрывов, часы, поля взрыва и вида. */
+    /** Columns: explosion queue, clock, explosion/appearance fields. */
     @Nullable
     private Collection<?> events;
     private Field clock, evX, evY, evZ, born, look, pf, pox, poz, psize;
@@ -64,7 +65,7 @@ final class Smoke {
         pool = found;
     }
 
-    /** Поля столбов {@code FarBlasts}; нет — столбы не в счёт. */
+    /** {@code FarBlasts} column fields; absent means ignore columns. */
     private void columns(String pkg) {
         try {
             Class<?> far = Class.forName(pkg + ".client.far.FarBlasts");
@@ -106,23 +107,23 @@ final class Smoke {
         return pool != null;
     }
 
-    /** Столбы дыма взрывов в счёт. */
+    /** Include explosion smoke columns. */
     boolean columns() {
         return events != null;
     }
 
     /**
-     * Доля света от глаза до точки сквозь клубы: клуб на отрезке закрывает его на свою непрозрачность там, где отрезок
-     * проходит сквозь плотную часть, к краю квадрата — на нет; светящиеся частицы и клубы ближе {@code spare} к точке не
-     * в счёт (свой шлейф снаряда, его же огненный шар). Без слоя эффектов — 1.
+     * Eye-to-point transmission through billows: a segment billow attenuates by opacity in its dense core,
+     * fading to none at quad edge. Exclude additive particles and billows within {@code spare} of target
+     * (projectile own trail/fireball). No effects layer means 1.
      */
     double transmittance(double ex, double ey, double ez, double tx, double ty, double tz, double spare) {
         return puffs(ex, ey, ez) ? light(ex, ey, ez, tx, ty, tz, spare) : 1;
     }
 
     /**
-     * Доля лучей кадра (сетка 3 × 5), которые дым закрывает ближе {@link #SMOTHER_REACH} блоков: кадр почти весь — дым
-     * у самой камеры (так выглядели проходы, влетевшие в дым).
+     * Share of frame rays (3 × 5 grid) smoke-blocked within {@link #SMOTHER_REACH} blocks: most of frame
+     * filled by smoke at camera, as flybys entering smoke looked.
      */
     double smothered(Cameras.View v) {
         Vec3 e = v.eye();
@@ -138,11 +139,11 @@ final class Smoke {
         return (double) closed / n;
     }
 
-    /** Клубы дыма кадра подряд — x, y, z, полуразмер, непрозрачность; один буфер на все вызовы (поток отрисовки). */
+    /** Frame smoke billows packed as x, y, z, half-size, opacity; shared render-thread buffer for all calls. */
     private double[] buf = new double[5 * 1024];
     private int held;
 
-    /** Клубы дыма сейчас в {@link #buf} (у столба — для глаза в {@code e…}); без слоя эффектов — false. */
+    /** Current billows in {@link #buf} (column evaluated for eye {@code e…}); false without effects layer. */
     private boolean puffs(double ex, double ey, double ez) {
         if (pool == null) return false;
         held = 0;
@@ -164,7 +165,7 @@ final class Smoke {
             try {
                 columns(ex, ey, ez);
             } catch (ReflectiveOperationException | RuntimeException e) {
-                // столбы не читаются — дальше только частицы (в итоге — smoke_columns false)
+                // Cannot read columns: particles only, report smoke_columns false
                 events = null;
                 held = particles;
             }
@@ -182,7 +183,7 @@ final class Smoke {
         buf[i + 4] = a;
     }
 
-    /** Свет по отрезку от глаза до точки сквозь клубы {@link #buf}. */
+    /** Eye-to-point segment transmission through {@link #buf} billows. */
     private double light(double ex, double ey, double ez, double tx, double ty, double tz, double spare) {
         double dx = tx - ex, dy = ty - ey, dz = tz - ez, len2 = dx * dx + dy * dy + dz * dz;
         double light = 1;
@@ -193,8 +194,8 @@ final class Smoke {
     }
 
     /**
-     * Клубы столбов {@code FarBlasts.column} — по тем же числам, что у отрисовки (подъём, расплывание, снос, таяние
-     * снизу, проступает, пока тает шар); глаз внутри клуба — клуб тает, как там.
+     * {@code FarBlasts.column} billows follow render numbers (rise, spreading, drift, bottom-up fade,
+     * appear as ball fades); billows containing the eye fade as in rendering.
      */
     private void columns(double ex, double ey, double ez) throws ReflectiveOperationException {
         double now = clock.getLong(null);
@@ -225,9 +226,9 @@ final class Smoke {
     }
 
     /**
-     * Доля, на которую клуб полуразмера {@code half} в {@code p} закрывает отрезок от глаза (0 — мимо, 1 — сквозь
-     * середину). Клуб — квадрат лицом к камере через свою середину ({@code FxQuads.billboard}): середина за глазом —
-     * квадрат за камерой, его не видно.
+     * How much a billow at {@code p} with half-size {@code half} covers eye segment (0 misses, 1 through
+     * centre). Camera-facing quad through its centre ({@code FxQuads.billboard}): centre behind eye means
+     * quad behind camera, invisible.
      */
     static double cover(double ex, double ey, double ez, double dx, double dy, double dz, double len2,
                                 double px, double py, double pz, double half, double tx, double ty, double tz, double spare) {

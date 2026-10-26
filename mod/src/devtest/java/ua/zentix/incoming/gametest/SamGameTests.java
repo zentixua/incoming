@@ -64,33 +64,33 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * ЗРК ({@link SamBlockEntity}): сбивает чужие снаряды мода в дальности огня — по ракете на цель, с перезарядкой
- * направляющей; своих, команду, дальних, МБР и «Град» не трогает; без ракет не стреляет; цель вне загрузки бьёт, не
- * загрузив ни чанка; цель за холмом радар не видит. Блок заряжается воронкой (вынуть ею нельзя), ломается и
- * взрывается с содержимым, рецепт — по тому, стоит ли Create. У каждой проверки своя партия: ЗРК видит все снаряды
- * мира, и соседняя проверка сбивала бы его счёт ракет. Дальности — паспорта ЗРК; направляющие и перезарядка — на время
- * проверки ({@link #air}), всё возвращается после неё. Стены площадки (барьеры по её высоте) закрывают радару низкие
- * цели за ними: дальние цели — выше.
+ * SAM ({@link SamBlockEntity}): shoots down other people's projectiles from the mod within the firing range - one rocket at the target, with a reloading
+ *  guide; does not touch his own, team, distant ones, ICBM and “Grad”; does not fire without rockets; the target outside of loading hits without
+ *  loading a single chunk; The radar does not see the target behind the hill. The block is charged with a crater (it cannot be removed), breaks and
+ *  explodes with its contents, the recipe depends on whether Create is worth it. Each check has its own batch: SAM sees all the
+ *  shells in the world, and the next check would throw off its missile count. Ranges - spec SAM; guides and reloading - during the
+ *  check ({@link #air}), everything returns after it. The walls of the site (barriers along its height) block the radar from low
+ *  targets behind them: distant targets are higher.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SamGameTests {
-    /** ЗРК на полосе «runway»: земля полосы — y 3, шахеды летят над ней на +Z к её концу (z 200). */
+    /** SAM on the runway "runway": the ground of the runway is y 3, Shahed fly over it at +Z to its end (z 200). */
     private static final BlockPos SAM = new BlockPos(16, 4, 100);
-    /** Высота шахедов над началом площадки. */
+    /** The height of Shahed above the beginning of the site. */
     private static final int DRONE_Y = 50;
-    /** Середина площадки «range» и её земля (первый воздух — y 11). */
+    /** The middle of the site “range” and its ground (first air - y 11). */
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
 
     private SamGameTests() {}
 
-    // ---------------------------------------------------------------- сбивает чужих
+    // ---------------------------------------------------------------- knocks down strangers
 
     /**
-     * Два чужих шахеда (без владельца) летят над ЗРК: по каждому — одна ракета, оба сбиты в воздухе (обломки, строка
-     * лога «сбиты зенитной ракетой»), цели в конце полосы целы. Направляющая одна, перезарядка — секунда: первая ракета
-     * — не раньше чем через секунду после установки, вторая — через секунду после первой; из трёх ракет осталась одна.
-     * Ракету видно (её вид в мире). Тревога — расчёту (хозяину ЗРК), чужому рядом — нет; цели — на карте стороны расчёта.
+     * Two alien Shaheds (without an owner) are flying over SAM: each has one missile, both are shot down in the air (debris, log line
+     *  “shot down by an anti-aircraft missile”), the targets at the end of the runway are intact. There is one guide, reload time is a second: the first rocket
+     *  - no earlier than a second after installation, the second - a second after the first; of the three missiles, one remains.
+     * The missile is visible (its appearance in the world). Anxiety - to the crew (the owner of SAM), to someone else nearby - no; targets - on the map of the calculation side.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_kill", skyAccess = true)
     public static void shootsDownHostileDrones(GameTestHelper h) {
@@ -110,30 +110,30 @@ public final class SamGameTests {
             if (!debris[0]) debris[0] = !level.getEntitiesOfClass(DebrisEntity.class, runway).isEmpty();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(a.isRemoved() && b.isRemoved(), "шахеды ещё летят: " + h.relativeVec(a.position()) + ", " + h.relativeVec(b.position()));
-            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 2, "сбито " + (log.total(FlightLog.Event.INTERCEPTED) - intercepted) + " из 2");
-            h.assertTrue(!BlastLog.near(h, new BlockPos(10, 3, 200), 8) && !BlastLog.near(h, new BlockPos(22, 3, 200), 8), "шахед долетел до цели");
+            h.assertTrue(a.isRemoved() && b.isRemoved(), "shahed are still flying: " + h.relativeVec(a.position()) + ", " + h.relativeVec(b.position()));
+            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 2, "shot down " + (log.total(FlightLog.Event.INTERCEPTED) - intercepted) + " from 2");
+            h.assertTrue(!BlastLog.near(h, new BlockPos(10, 3, 200), 8) && !BlastLog.near(h, new BlockPos(22, 3, 200), 8), "shahed reached the target");
             h.assertTrue(launches.targets().equals(Set.of(a.getUUID(), b.getUUID())) && launches.count() == 2,
-                    "ракет " + launches.count() + " по " + launches.targets());
+                    "missiles " + launches.count() + " by " + launches.targets());
             List<Long> at = launches.ticks();
-            h.assertTrue(at.get(0) - placed >= 20, "первая ракета через " + (at.get(0) - placed) + " тиков после установки — без перезарядки");
-            h.assertTrue(at.get(1) - at.get(0) >= 20, "вторая ракета через " + (at.get(1) - at.get(0)) + " тиков после первой — без перезарядки");
-            h.assertTrue(sam.ready() + sam.stockCount() == 1, "осталось ракет " + (sam.ready() + sam.stockCount()) + " из 1");
-            h.assertTrue(launches.viewed, "ракету не было видно в мире");
-            h.assertTrue(debris[0], "сбитые шахеды не развалились на обломки");
-            h.assertTrue(crew.alerts() >= 1, "тревоги расчёту не было");
-            h.assertTrue(stranger.alerts() == 0, "тревога чужому");
+            h.assertTrue(at.get(0) - placed >= 20, "first rocket through " + (at.get(0) - placed) + " tick after installation - no recharging");
+            h.assertTrue(at.get(1) - at.get(0) >= 20, "second rocket through " + (at.get(1) - at.get(0)) + " tick after the first - no reload");
+            h.assertTrue(sam.ready() + sam.stockCount() == 1, "missiles left " + (sam.ready() + sam.stockCount()) + " from 1");
+            h.assertTrue(launches.viewed, "the rocket was not visible in the world");
+            h.assertTrue(debris[0], "the downed Shahed did not fall to pieces");
+            h.assertTrue(crew.alerts() >= 1, "there was no alarm");
+            h.assertTrue(stranger.alerts() == 0, "stranger anxiety");
             String side = Sides.side(crew);
             h.assertTrue(Sightings.contact(level, side, a.getUUID()) != null && Sightings.contact(level, side, b.getUUID()) != null,
-                    "цели радара не на карте стороны");
+                    "radar targets are not on the side map");
         });
     }
 
-    // ---------------------------------------------------------------- не трогает своих
+    // ---------------------------------------------------------------- does not touch his own
 
     /**
-     * Шахед хозяина ЗРК и шахед его товарища по команде ({@code /team}) пролетают над ЗРК — пусков нет, ракеты целы,
-     * тревоги нет, оба долетают до цели. Тот же радар чужого видит их чужими и бил бы (проверка, что их вообще видно).
+     * Shahed of the SAM owner and Shahed of his teammate ({@code /team}) are flying over the SAM - there is no launch, the missiles are intact,
+     *  there is no alarm, both reach the target. The same alien radar sees them as aliens and would hit them (checking that they are visible at all).
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_friend", skyAccess = true)
     public static void ignoresOwnAndTeam(GameTestHelper h) {
@@ -145,7 +145,7 @@ public final class SamGameTests {
         Listener owner = listener(h, "sam_owner", SAM.east(3)), mate = listener(h, "sam_mate", SAM.west(3));
         board.addPlayerToTeam(owner.getScoreboardName(), blue);
         board.addPlayerToTeam(mate.getScoreboardName(), blue);
-        h.assertTrue(Sides.friendly(level.getServer(), owner.getUUID(), mate.getUUID()), "команда не своя");
+        h.assertTrue(Sides.friendly(level.getServer(), owner.getUUID(), mate.getUUID()), "the team is not our own");
         SamBlockEntity sam = sam(h, SAM, owner.getUUID(), 4);
         DroneEntity own = drone(h, 10, owner.getUUID()), team = drone(h, 22, mate.getUUID());
         Launches launches = new Launches(level, owner.getUUID());
@@ -155,29 +155,29 @@ public final class SamGameTests {
         h.onEachTick(() -> {
             launches.watch();
             for (Radar.Track t : scan(level, antenna, owner.getUUID())) {
-                h.assertFalse(t.hostile() || t.engageable(), "свой шахед " + t.id() + " чужой радару хозяина");
+                h.assertFalse(t.hostile() || t.engageable(), "your Shahed " + t.id() + " alien to the owner's radar");
                 seenFriendly.add(t.id());
             }
             for (Radar.Track t : scan(level, antenna, stranger)) if (t.engageable()) seenHostileByStranger.add(t.id());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(own.isRemoved() && team.isRemoved(), "шахеды ещё летят");
-            h.assertTrue(launches.count() == 0, "пущено ракет по своим: " + launches.count());
-            h.assertTrue(sam.ready() + sam.stockCount() == 4, "ракет " + (sam.ready() + sam.stockCount()) + " из 4");
-            h.assertTrue(seenFriendly.containsAll(Set.of(own.getUUID(), team.getUUID())), "радар хозяина своих не видел");
-            h.assertTrue(seenHostileByStranger.containsAll(Set.of(own.getUUID(), team.getUUID())), "чужой радар не бил бы их — проверка пуста");
-            h.assertTrue(owner.alerts() == 0 && mate.alerts() == 0, "тревога о своих");
-            // подрывы у обеих целей (на камне воронки нет — по закону заряда)
-            h.assertTrue(BlastLog.near(h, new BlockPos(10, 3, 200), 8) && BlastLog.near(h, new BlockPos(22, 3, 200), 8), "свой шахед не долетел");
+            h.assertTrue(own.isRemoved() && team.isRemoved(), "shahed are still flying");
+            h.assertTrue(launches.count() == 0, "launched missiles at friendly forces: " + launches.count());
+            h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles " + (sam.ready() + sam.stockCount()) + " from 4");
+            h.assertTrue(seenFriendly.containsAll(Set.of(own.getUUID(), team.getUUID())), "the owner’s radar did not see his own");
+            h.assertTrue(seenHostileByStranger.containsAll(Set.of(own.getUUID(), team.getUUID())), "someone else's radar would not hit them - the check is empty");
+            h.assertTrue(owner.alerts() == 0 && mate.alerts() == 0, "worry about your own");
+            // explosions at both targets (there is no crater on the stone - according to the law of charge)
+            h.assertTrue(BlastLog.near(h, new BlockPos(10, 3, 200), 8) && BlastLog.near(h, new BlockPos(22, 3, 200), 8), "your Shahed did not reach");
         });
     }
 
-    // ---------------------------------------------------------------- дальние, МБР и «Град»
+    // ---------------------------------------------------------------- long-range, ICBM and "Grad"
 
     /**
-     * Чужой шахед вне мира между дальностью огня и дальностью радара (паспорт ЗРК) идёт мимо: радар его видит — он на
-     * карте стороны, — но пуска нет. Он к +Z, за дальней стеной площадки (к −Z и −X стоят прежние партии со своими
-     * постройками), и выше, чем она закрывает.
+     * Alien Shahed out of the world between the fire range and the radar range (spec SAM) walks by: the radar sees it - it is on the
+     *  side map - but there is no launch. It is to +Z, behind the far wall of the site (to −Z and −X there are the former batch with their
+     *  buildings), and higher than it covers.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "sam_range", skyAccess = true)
     public static void ignoresOutOfRange(GameTestHelper h) {
@@ -194,23 +194,23 @@ public final class SamGameTests {
             launches.watch();
             for (Radar.Track t : scan(level, antenna, owner)) {
                 if (!t.id().equals(far.getUUID())) continue;
-                h.assertTrue(t.hostile() && !t.engageable(), "дальний шахед: чужой " + t.hostile() + ", бить " + t.engageable());
+                h.assertTrue(t.hostile() && !t.engageable(), "distant Shahed: alien " + t.hostile() + ", beat " + t.engageable());
                 seen[0] = true;
             }
         });
         h.runAtTickTime(80, () -> {
-            h.assertTrue(seen[0], "радар не видел шахед в " + (int) between + " блоках");
-            h.assertTrue(Sightings.contact(level, Sides.side(level.getServer(), owner), far.getUUID()) != null, "дальний шахед не на карте стороны");
-            h.assertTrue(launches.count() == 0, "пуск по цели дальше дальности огня");
-            h.assertTrue(sam.ready() + sam.stockCount() == 4, "ракеты потрачены");
+            h.assertTrue(seen[0], "radar didn't see Shahed " + (int) between + " blocks");
+            h.assertTrue(Sightings.contact(level, Sides.side(level.getServer(), owner), far.getUUID()) != null, "distant Shahed is not on the side map");
+            h.assertTrue(launches.count() == 0, "launch at a target beyond the firing range");
+            h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles spent");
             h.succeed();
         });
     }
 
     /**
-     * Холм закрывает цель: стена камня в 12 блоках от радара, 20 блоков высотой. Шахед на бреющем за ней радар не видит,
-     * шахед высоко над ней — видит; тот, что за стеной, виден радару на её вершине (закрывает стена, а не дальность).
-     * Стена убирается после проверки.
+     * The hill covers the target: a wall of stone 12 blocks from the radar, 20 blocks high. Shahed low above her does not see the radar,
+     *  Shahed high above her does; the one behind the wall is visible to the radar on top of it (it's the wall that obscures it, not the range).
+     * The wall is removed after checking.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "sam_terrain", skyAccess = true)
     public static void hillHidesLowTarget(GameTestHelper h) {
@@ -228,14 +228,14 @@ public final class SamGameTests {
             Set<UUID> seen = new HashSet<>(), fromTop = new HashSet<>();
             for (Radar.Track t : scan(level, antenna, owner)) seen.add(t.id());
             for (Radar.Track t : scan(level, hilltop, owner)) fromTop.add(t.id());
-            h.assertFalse(seen.contains(low.getUUID()), "шахед за холмом виден: " + h.relativeVec(low.position()));
-            h.assertTrue(seen.contains(high.getUUID()), "шахед над холмом не виден: " + h.relativeVec(high.position()));
-            h.assertTrue(fromTop.contains(low.getUUID()), "с вершины холма шахед за ним не виден: " + h.relativeVec(low.position()));
+            h.assertFalse(seen.contains(low.getUUID()), "shahed is visible behind the hill: " + h.relativeVec(low.position()));
+            h.assertTrue(seen.contains(high.getUUID()), "shahed is not visible above the hill: " + h.relativeVec(high.position()));
+            h.assertTrue(fromTop.contains(low.getUUID()), "from the top of the Shahed hill is not visible behind it: " + h.relativeVec(low.position()));
             h.succeed();
         });
     }
 
-    /** Шахед в {@code at}, летит на +X к краю площадки; убирается после проверки. */
+    /** Shahed at {@code at}, flies at +X to the edge of the area; removed after inspection. */
     private static DroneEntity hovering(GameTestHelper h, BlockPos at) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
@@ -250,8 +250,8 @@ public final class SamGameTests {
     }
 
     /**
-     * МБР взлетает в 30 блоках от ЗРК, «Град» падает рядом: радар видит обоих чужими, но не бьёт — МБР не его цель,
-     * «Град» не стоит ракеты (паспорт: {@code Signature.intercept}).
+     * ICBM takes off in 30 blocks from SAM, "Grad" falls nearby: the radar sees both as strangers, but does not hit - ICBM is not its target,
+     *  "Grad" is not worth a missile (spec: {@code Signature.intercept}).
      */
     @GameTest(template = "range", timeoutTicks = 800, batch = "sam_skip", skyAccess = true)
     public static void skipsIcbmAndGrad(GameTestHelper h) {
@@ -263,7 +263,7 @@ public final class SamGameTests {
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(at)).add(0, 1, 0);
         Vec3 pad = Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER));
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
-        // цель — на площадке: район цели МБР берёт с 7500 блоков, дальняя цель генерировала бы мир
+        // target - on the site: the target area ICBM takes from 7500 blocks, the distant target would generate the world
         icbm.prepare(pad, pad.add(20, 0, 0), null);
         level.addFreshEntity(icbm);
         Vec3 point = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(52, 11, 52)));
@@ -281,23 +281,23 @@ public final class SamGameTests {
             launches.watch();
             for (Radar.Track t : scan(level, antenna, owner)) {
                 if (!t.id().equals(icbm.getUUID()) && !t.id().equals(gradId)) continue;
-                h.assertTrue(t.hostile() && !t.engageable(), t.projectile().weapon() + ": чужой " + t.hostile() + ", бить " + t.engageable());
+                h.assertTrue(t.hostile() && !t.engageable(), t.projectile().weapon() + ": stranger " + t.hostile() + ", beat " + t.engageable());
                 seen.add(t.id());
             }
-            h.assertTrue(launches.count() == 0, "пуск по " + launches.targets());
+            h.assertTrue(launches.count() == 0, "launch by " + launches.targets());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(seen.contains(icbm.getUUID()), "МБР радар не видел");
-            h.assertTrue(seen.contains(gradId), "«Град» радар не видел");
+            h.assertTrue(seen.contains(icbm.getUUID()), "ICBM radar did not see");
+            h.assertTrue(seen.contains(gradId), "\"Grad\" was not seen by radar");
             h.assertTrue(level.getEntity(gradId) == null && VirtualFlights.get(level).flights().stream().noneMatch(p -> p.getUUID().equals(gradId)),
-                    "«Град» ещё летит");
-            h.assertTrue(sam.ready() + sam.stockCount() == 4, "ракеты потрачены");
+                    "\"Grad\" is still flying");
+            h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles spent");
         });
     }
 
-    // ---------------------------------------------------------------- без ракет
+    // ---------------------------------------------------------------- without missiles
 
-    /** ЗРК без ракет: чужой шахед проходит над ним и бьёт в цель, пусков нет. */
+    /** SAM without missiles: alien Shahed passes over it and hits the target, no launch. */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "sam_empty", skyAccess = true)
     public static void emptyDoesNotFire(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -313,21 +313,21 @@ public final class SamGameTests {
             for (Radar.Track t : scan(level, antenna, owner)) if (t.id().equals(d.getUUID()) && t.engageable()) engageable[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(d.isRemoved(), "шахед ещё летит");
-            h.assertTrue(engageable[0], "шахед не был в дальности огня — проверка пуста");
-            h.assertTrue(launches.count() == 0 && sam.ready() == 0, "пуск без ракет");
-            // подрыв у цели (на камне воронки нет — по закону заряда; ломать там нечего)
-            h.assertTrue(BlastLog.near(h, new BlockPos(16, 3, 200), 8), "шахед не долетел до цели");
+            h.assertTrue(d.isRemoved(), "shahed is still flying");
+            h.assertTrue(engageable[0], "shahed was not in firing range - check is empty");
+            h.assertTrue(launches.count() == 0 && sam.ready() == 0, "launch without rockets");
+            // detonation at the target (there is no crater on the stone - according to the law of charge; there is nothing to break there)
+            h.assertTrue(BlastLog.near(h, new BlockPos(16, 3, 200), 8), "shahed missed the target");
         });
     }
 
-    // ---------------------------------------------------------------- чанков не грузит
+    // ---------------------------------------------------------------- Doesn't load chunks
 
     /**
-     * Чужой шахед вне мира — в 600 блоках к +X (там площадок нет), уходит дальше: ЗРК бьёт его, ракета летит вне
-     * загрузки и сбивает его там; её вид — только над тикающими чанками у ЗРК. Ни один чанк полосы от ЗРК до шахеда за весь полёт не стал загруженным — ни радар,
-     * ни полёт ракеты, ни разрыв чанков не грузили и тикетов не ставили. Полоса начинается в 96 блоках от ЗРК: тикеты
-     * площадки (уровень 31) дают держателей чанкам до ~13 чанков вокруг, но загружены из них только ближние два.
+     * Alien Shahed is outside the world - in 600 blocks to +X (there are no sites there), goes further: SAM hits him, the missile flies outside the
+     *  loading and knocks him down there; its appearance is only above the ticking chunks of SAM. Not a single chunk of the strip from SAM to Shahed became loaded during the entire flight - neither the radar,
+     * , nor the rocket flight, nor the gap in the chunks was loaded or a ticket was issued. The streak starts in 96 blocks from SAM: tickets
+     *  sites (level 31) give holders to chunks up to ~13 chunks around, but only the closest two are loaded.
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "sam_far", skyAccess = true)
     public static void loadsNoChunks(GameTestHelper h) {
@@ -336,18 +336,18 @@ public final class SamGameTests {
         UUID owner = UUID.randomUUID();
         SamBlockEntity sam = sam(h, SAM, owner, 1);
         Vec3 antenna = Vec3.atCenterOf(h.absolutePos(SAM)).add(0, 1, 0);
-        // выше стены площадки в 16 блоках к +X (её верх — на 3,5 блока выше антенны): ниже радар её за стеной не видит
+        // above the site wall in 16 blocks to +X (its top is 3,5 blocks above the antenna): below the radar does not see it behind the wall
         DroneEntity far = virtualDrone(h, antenna.add(600, 200, 0), antenna.add(8000, 200, 0), null);
         FlightLog log = StrikeWorld.get(level).flightLog();
         int intercepted = log.total(FlightLog.Event.INTERCEPTED);
-        // полоса чанков от 96 блоков за ЗРК до шахеда в конце проверки и за ним, в три ряда
+        // strip of chunks from 96 blocks behind SAM to Shahed at the end of the check and behind it, in three rows
         int cz = Math.floorDiv((int) Math.floor(antenna.z), 16);
         List<ChunkPos> strip = new ArrayList<>();
         for (int cx = Math.floorDiv((int) antenna.x + 96, 16); cx <= Math.floorDiv((int) antenna.x + 600 + 400, 16); cx++) {
             for (int dz = -1; dz <= 1; dz++) strip.add(new ChunkPos(cx, cz + dz));
         }
         List<String> loaded = loaded(level, strip);
-        h.assertTrue(loaded.isEmpty(), "чанки полосы загружены до проверки: " + loaded);
+        h.assertTrue(loaded.isEmpty(), "chunks of the strip are loaded before checking: " + loaded);
         Launches launches = new Launches(level, owner);
         boolean[] distantSustain = {false};
         h.onEachTick(() -> {
@@ -355,31 +355,31 @@ public final class SamGameTests {
             var missileFlights = DefenseWorld.get(level).flights();
             var packets = ua.zentix.incoming.strike.FarFlights.sampleInterceptors(level, missileFlights, antenna, null, true);
             for (var packet : packets) {
-                h.assertTrue(packet.interceptor(), "маршевый путь помечен как ЗРК");
+                h.assertTrue(packet.interceptor(), "the marching path is marked SAM");
                 var f = missileFlights.stream().filter(x -> x.id().equals(packet.id())).findFirst().orElseThrow();
-                if (f.view() != null) h.assertTrue(f.view().getUUID().equals(packet.id()), "один UUID у сущности и дальнего пути");
+                if (f.view() != null) h.assertTrue(f.view().getUUID().equals(packet.id()), "one UUID for the entity and the distant path");
                 if (f.view() == null && f.age() > InterceptorSpec.SAM.boostTicks()) distantSustain[0] = true;
             }
             List<String> now = loaded(level, strip);
-            h.assertTrue(now.isEmpty(), "ЗРК загрузил чанки: " + now);
+            h.assertTrue(now.isEmpty(), "SAM loaded chunks: " + now);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> p.getUUID().equals(far.getUUID())), "шахед ещё летит: "
+            h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> p.getUUID().equals(far.getUUID())), "shahed is still flying: "
                     + far.position().subtract(antenna));
-            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 1, "шахед вне мира не сбит");
-            h.assertTrue(launches.count() == 1 && sam.ready() + sam.stockCount() == 0, "ракет " + launches.count());
-            h.assertFalse(launches.viewedUnloaded, "вид ракеты вне загрузки");
-            h.assertTrue(distantSustain[0], "маршевый путь за тикающими чанками не дошёл до пакетов дыма");
+            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 1, "shahed out of the world is not shot down");
+            h.assertTrue(launches.count() == 1 && sam.ready() + sam.stockCount() == 0, "missiles " + launches.count());
+            h.assertFalse(launches.viewedUnloaded, "view of the rocket outside of loading");
+            h.assertTrue(distantSustain[0], "the marching path behind the ticking chunks did not reach the smoke packets");
         });
     }
 
-    // ---------------------------------------------------------------- блок
+    // ---------------------------------------------------------------- block
 
     /**
-     * Блок ЗРК: воронка над ним кладёт в запас зенитные ракеты, способность принимает только их (16 в ячейку, две
-     * ячейки), вынуть ею нельзя — и воронка под ним не вытаскивает; компаратор видит запас. Сломанный — выпадает сам
-     * и всё, что в нём (с направляющих тоже); взорванный — роняет ракеты. Кирка, каменная и лучше. Рецепт — с точным
-     * механизмом Create, если Create стоит, иначе — ванильный.
+     * SAM block: the crater above it puts anti-aircraft missiles in stock, the ability accepts only them (16 per cell, two
+     *  cells), it cannot be removed with it - and the crater under it does not pull out; the comparator sees the margin. Broken - the
+     *  itself and everything in it falls out (from the guides too); exploded - drops rockets. Pickaxe, stone or better. The recipe is with the exact
+     *  mechanism Create, if Create is worth it, otherwise - vanilla.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "sam_block", skyAccess = true)
     public static void blockLoadsBreaksAndCrafts(GameTestHelper h) {
@@ -388,70 +388,70 @@ public final class SamGameTests {
         BlockPos at = new BlockPos(20, 11, 20);
         SamBlockEntity sam = sam(h, at, null, 0);
         h.assertTrue(level.getBlockState(h.absolutePos(at)).is(BlockTags.MINEABLE_WITH_PICKAXE)
-                && level.getBlockState(h.absolutePos(at)).is(BlockTags.NEEDS_STONE_TOOL), "ЗРК не для каменной кирки");
+                && level.getBlockState(h.absolutePos(at)).is(BlockTags.NEEDS_STONE_TOOL), "SAM is not for stone pickaxe");
         IItemHandler cap = level.getCapability(Capabilities.ItemHandler.BLOCK, h.absolutePos(at), Direction.UP);
-        h.assertTrue(cap != null, "у ЗРК нет способности предметов");
-        h.assertTrue(cap.getSlots() == SamBlockEntity.SLOTS, "ячеек " + cap.getSlots());
+        h.assertTrue(cap != null, "sAM doesn't have item ability");
+        h.assertTrue(cap.getSlots() == SamBlockEntity.SLOTS, "cells " + cap.getSlots());
         ItemStack dirt = new ItemStack(Items.DIRT, 5);
-        h.assertTrue(insert(cap, dirt.copy()).getCount() == 5, "ЗРК взял землю");
-        h.assertTrue(insert(cap, new ItemStack(ModItems.INTERCEPTOR.get(), 40)).getCount() == 40 - 2 * 16, "в запас вошло не 32");
-        for (int i = 0; i < cap.getSlots(); i++) h.assertTrue(cap.extractItem(i, 64, false).isEmpty(), "ракету вынули способностью");
+        h.assertTrue(insert(cap, dirt.copy()).getCount() == 5, "SAM took the land");
+        h.assertTrue(insert(cap, new ItemStack(ModItems.INTERCEPTOR.get(), 40)).getCount() == 40 - 2 * 16, "not included in stock 32");
+        for (int i = 0; i < cap.getSlots(); i++) h.assertTrue(cap.extractItem(i, 64, false).isEmpty(), "the rocket was taken out by the ability");
         int comparator = level.getBlockState(h.absolutePos(at)).getAnalogOutputSignal(level, h.absolutePos(at));
-        h.assertTrue(comparator > 0, "компаратор не видит запас");
-        // воронка под ЗРК тянет вверх — не вытащит; воронка сверху кладёт
+        h.assertTrue(comparator > 0, "the comparator does not see the reserve");
+        // the crater under the SAM pulls up but won’t pull it out; crater puts on top
         BlockPos below = at.below(), above = at.above();
         h.setBlock(below, Blocks.HOPPER);
         h.setBlock(above, Blocks.HOPPER);
         int before = sam.stockCount() + sam.ready();
         h.startSequence()
                 .thenExecute(() -> {
-                    // освободить место: ЗРК ставит ракеты на направляющие (2), запас — 30
-                    h.assertTrue(sam.ready() <= 2, "направляющих больше двух");
+                    // make room: SAM places missiles on guides (2), stock - 30
+                    h.assertTrue(sam.ready() <= 2, "more than two guides");
                     HopperBlockEntity top = h.getBlockEntity(above);
                     top.setItem(0, new ItemStack(ModItems.INTERCEPTOR.get(), 2));
                 })
                 .thenWaitUntil(() -> {
                     HopperBlockEntity top = h.getBlockEntity(above);
-                    h.assertTrue(top.getItem(0).isEmpty(), "воронка сверху не отдала ракеты");
+                    h.assertTrue(top.getItem(0).isEmpty(), "crater from above did not release the missiles");
                 })
                 .thenIdle(20)
                 .thenExecute(() -> {
                     HopperBlockEntity bottom = h.getBlockEntity(below);
-                    h.assertTrue(bottom.isEmpty(), "воронка под ЗРК вытащила ракеты");
-                    h.assertTrue(sam.stockCount() + sam.ready() == before + 2, "ракет " + (sam.stockCount() + sam.ready()) + " вместо " + (before + 2));
-                    h.assertTrue(sam.ready() == 2, "на направляющих " + sam.ready());
+                    h.assertTrue(bottom.isEmpty(), "crater under SAM pulled out missiles");
+                    h.assertTrue(sam.stockCount() + sam.ready() == before + 2, "missiles " + (sam.stockCount() + sam.ready()) + " instead of " + (before + 2));
+                    h.assertTrue(sam.ready() == 2, "on guides " + sam.ready());
                     level.setBlock(h.absolutePos(above), Blocks.AIR.defaultBlockState(), 3);
                     level.setBlock(h.absolutePos(below), Blocks.STONE.defaultBlockState(), 3);
                     AABB box = new AABB(h.absolutePos(at)).inflate(3);
                     level.getEntitiesOfClass(ItemEntity.class, box).forEach(ItemEntity::discard);
                     int loaded = sam.stockCount() + sam.ready();
                     level.destroyBlock(h.absolutePos(at), true);
-                    h.assertTrue(level.getBlockState(h.absolutePos(at)).isAir(), "ЗРК не сломался");
-                    h.assertTrue(dropped(level, box, ModItems.SAM.get().getDefaultInstance()) == 1, "сломанный ЗРК не выпал");
-                    h.assertTrue(dropped(level, box, ModItems.INTERCEPTOR.get().getDefaultInstance()) == loaded, "выпало ракет "
-                            + dropped(level, box, ModItems.INTERCEPTOR.get().getDefaultInstance()) + " из " + loaded);
+                    h.assertTrue(level.getBlockState(h.absolutePos(at)).isAir(), "SAM is not broken");
+                    h.assertTrue(dropped(level, box, ModItems.SAM.get().getDefaultInstance()) == 1, "broken SAM did not fall out");
+                    h.assertTrue(dropped(level, box, ModItems.INTERCEPTOR.get().getDefaultInstance()) == loaded, "rockets fell "
+                            + dropped(level, box, ModItems.INTERCEPTOR.get().getDefaultInstance()) + " from " + loaded);
                     level.getEntitiesOfClass(ItemEntity.class, box).forEach(ItemEntity::discard);
-                    // взрыв рядом: ЗРК ломается, ракеты выпадают
+                    // explosion nearby: SAM breaks, missiles fall out
                     SamBlockEntity again = sam(h, at, null, 5);
                     Vec3 c = Vec3.atCenterOf(h.absolutePos(at));
                     level.explode(null, c.x + 1, c.y, c.z, 4f, Level.ExplosionInteraction.BLOCK);
-                    h.assertTrue(level.getBlockState(h.absolutePos(at)).isAir(), "ЗРК пережил взрыв рядом");
-                    h.assertTrue(again.isRemoved(), "блок-сущность ЗРК осталась");
-                    h.assertTrue(dropped(level, box.inflate(3), ModItems.INTERCEPTOR.get().getDefaultInstance()) == 5, "взорванный ЗРК не уронил ракеты");
-                    // рецепт: с Create — точный механизм, без него — ванильный; оба — ЗРК и зенитная ракета
+                    h.assertTrue(level.getBlockState(h.absolutePos(at)).isAir(), "SAM survived an explosion nearby");
+                    h.assertTrue(again.isRemoved(), "the SAM block entity remains");
+                    h.assertTrue(dropped(level, box.inflate(3), ModItems.INTERCEPTOR.get().getDefaultInstance()) == 5, "exploded SAM did not drop missiles");
+                    // recipe: with Create - precise mechanism, without it - vanilla; both SAM and anti-aircraft missile
                     var recipes = level.getServer().getRecipeManager();
                     boolean create = ModList.get().isLoaded("create");
                     for (String name : new String[]{"sam", "interceptor"}) {
-                        h.assertTrue(recipes.byKey(Incoming.id(name)).isPresent() == create, "рецепт " + name + " с Create: " + create);
-                        h.assertTrue(recipes.byKey(Incoming.id(name + "_vanilla")).isPresent() == !create, "рецепт " + name + "_vanilla без Create: " + !create);
+                        h.assertTrue(recipes.byKey(Incoming.id(name)).isPresent() == create, "recipe " + name + " with Create: " + create);
+                        h.assertTrue(recipes.byKey(Incoming.id(name + "_vanilla")).isPresent() == !create, "recipe " + name + "_vanilla without Create: " + !create);
                     }
                 })
                 .thenSucceed();
     }
 
-    // ---------------------------------------------------------------- помощники
+    // ---------------------------------------------------------------- assistants
 
-    /** Правила ПВО на время проверки: направляющие и перезарядка в секундах; возвращаются после неё. */
+    /** Air defense rules for the duration of the test: guides and reload in seconds; return after it. */
     private static void air(GameTestHelper h, int rails, int reloadSeconds) {
         IncomingConfig.Server c = IncomingConfig.SERVER;
         int rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();
@@ -464,30 +464,30 @@ public final class SamGameTests {
         });
     }
 
-    /** Что видит радар ЗРК в {@code antenna}: дальности — паспорта ЗРК. */
+    /** What the SAM radar sees in {@code antenna}: ranges - spec SAM. */
     private static List<Radar.Track> scan(ServerLevel level, Vec3 antenna, @Nullable UUID owner) {
         return Radar.scan(level, antenna, InterceptorSpec.SAM.radarRange(), InterceptorSpec.SAM.engageRange(), owner);
     }
 
     /**
-     * Поставить ЗРК (хозяин — как будто его поставил этот игрок) и положить в запас ракеты. После проверки ЗРК убирается
-     * без выпадения: площадки старых проверок стоят, и заряженный ЗРК у соседней площадки сбивал бы снаряды чужих проверок.
+     * Place SAM (the owner - as if this player had placed it) and put missiles in the reserve. After the check, the SAM is removed
+     *  without falling out: the sites of the old checks are still there, and a charged SAM at the adjacent site would shoot down the shells of other people’s checks.
      */
     private static SamBlockEntity sam(GameTestHelper h, BlockPos at, @Nullable UUID owner, int missiles) {
         h.setBlock(at, ModBlocks.SAM.get());
         SamBlockEntity be = h.getBlockEntity(at);
         BlockPos abs = h.absolutePos(at);
         StrikeGameTests.afterTest(h, () -> {
-            // без блок-сущности onRemove нечего ронять
+            // without the block entity onRemove there is nothing to drop
             h.getLevel().removeBlockEntity(abs);
             h.getLevel().setBlock(abs, Blocks.AIR.defaultBlockState(), 3);
         });
         be.setOwner(owner);
-        if (missiles > 0) h.assertTrue(be.load(new ItemStack(ModItems.INTERCEPTOR.get(), missiles)).isEmpty(), "ракеты не вошли в запас");
+        if (missiles > 0) h.assertTrue(be.load(new ItemStack(ModItems.INTERCEPTOR.get(), missiles)).isEmpty(), "missiles were not included in reserve");
         return be;
     }
 
-    /** Шахед над началом полосы, на линии {@code x}, — на её конец. */
+    /** Shahed above the beginning of the strip, on the line {@code x}, - to its end. */
     private static DroneEntity drone(GameTestHelper h, int x, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
@@ -501,7 +501,7 @@ public final class SamGameTests {
         return d;
     }
 
-    /** Шахед, летящий вне мира из {@code from} в {@code to}; убирается после проверки. */
+    /** Shahed, flying out of world from {@code from} to {@code to}; removed after inspection. */
     private static DroneEntity virtualDrone(GameTestHelper h, Vec3 from, Vec3 to, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
         DroneEntity d = ModEntities.DRONE.get().create(level);
@@ -511,7 +511,7 @@ public final class SamGameTests {
         return d;
     }
 
-    /** Земля у {@code at} цела: ни одного пустого блока в слое земли 5×5 (воронки нет). */
+    /** The ground of {@code at} is intact: not a single empty block in the ground layer 5×5 (there is no crater). */
     private static ItemStack insert(IItemHandler cap, ItemStack stack) {
         for (int i = 0; i < cap.getSlots() && !stack.isEmpty(); i++) stack = cap.insertItem(i, stack, false);
         return stack;
@@ -524,8 +524,8 @@ public final class SamGameTests {
     }
 
     /**
-     * Чанки из списка, которые загружены или грузятся: готовый чанк или держатель с уровнем тикета загрузки (≤ 33,
-     * {@link FullChunkStatus#FULL}); выше — только держатель распространения тикетов соседей, без загрузки.
+     * Chunks from the list that are loaded or being loaded: ready chunk or holder with ticket loading level (≤ 33,
+     * {@link FullChunkStatus#FULL}); above - only the neighbors ticket distribution holder, without loading.
      */
     private static List<String> loaded(ServerLevel level, List<ChunkPos> chunks) {
         int full = ChunkLevel.byStatus(FullChunkStatus.FULL);
@@ -533,21 +533,21 @@ public final class SamGameTests {
         for (ChunkPos c : chunks) {
             ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(c.toLong());
             boolean ready = level.getChunkSource().getChunkNow(c.x, c.z) != null;
-            if (ready || holder != null && holder.getTicketLevel() <= full) out.add(c + (holder != null ? " уровень " + holder.getTicketLevel() : ""));
+            if (ready || holder != null && holder.getTicketLevel() <= full) out.add(c + (holder != null ? " level " + holder.getTicketLevel() : ""));
         }
         return out;
     }
 
-    /** Зенитные ракеты хозяина {@code owner}, которые были в полёте за проверку, с тиком, когда их увидели. */
+    /** The owner's anti-aircraft missiles {@code owner}, which were in flight for inspection, ticked when they were seen. */
     private static final class Launches {
         private final ServerLevel level;
         @Nullable
         private final UUID owner;
         private final Map<Interceptor, Long> seen = new IdentityHashMap<>();
         private final List<Interceptor> order = new ArrayList<>();
-        /** Хоть раз у ракеты был вид в мире. */
+        /** For once the rocket had a view in the world. */
         boolean viewed;
-        /** Вид был, когда ракета летела не над тикающим чанком. */
+        /** The view was when the rocket was not flying over a ticking chunk. */
         boolean viewedUnloaded;
 
         Launches(ServerLevel level, @Nullable UUID owner) {
@@ -575,7 +575,7 @@ public final class SamGameTests {
             return out;
         }
 
-        /** Тики пусков по порядку. */
+        /** tick launch in order. */
         List<Long> ticks() {
             List<Long> out = new ArrayList<>();
             for (Interceptor f : order) out.add(seen.get(f));
@@ -584,9 +584,9 @@ public final class SamGameTests {
     }
 
     /**
-     * Игрок «в сети» для проверки: в списке игроков мира (тревога, экран радара) и в карте игроков сервера по UUID
-     * (по ней {@link Sides} узнаёт команду хозяина ЗРК; кэша профилей у сервера GameTest нет). Без тикетов и пакетов;
-     * строки чата, которые ему пришли, — в {@link #heard}. Убирается после проверки.
+     * The player is “online” for checking: in the list of world players (alarm, radar screen) and in the server player map by UUID
+     *  (using it, {@link Sides} recognizes the team of the SAM owner; the server GameTest does not have a profile cache). Without tickets and packages;
+     *  the chat lines that he received are in {@link #heard}. Removed after inspection.
      */
     private static Listener listener(GameTestHelper h, String name, BlockPos at) {
         ServerLevel level = h.getLevel();
@@ -602,7 +602,7 @@ public final class SamGameTests {
         return p;
     }
 
-    /** Карта игроков сервера по UUID (по ней {@link Sides} узнаёт команду игрока «в сети»). */
+    /** Map of server players by UUID (using it {@link Sides} recognizes the player’s team “online”). */
     @SuppressWarnings("unchecked")
     static Map<UUID, ServerPlayer> playersByUuid(PlayerList list) {
         try {
@@ -626,7 +626,7 @@ public final class SamGameTests {
             heard.add(component);
         }
 
-        /** Строк «Воздушная тревога». */
+        /** Lines "Air raid warning". */
         int alerts() {
             int n = 0;
             for (Component c : heard) if (c.getContents() instanceof TranslatableContents t && t.getKey().startsWith("incoming.sam.alert")) n++;

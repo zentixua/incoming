@@ -23,8 +23,8 @@ import ua.zentix.incoming.warhead.Warheads;
 import java.util.Locale;
 
 /**
- * Бетонобойная бомба по физике: путь в грунте по Янгу по материалу блоков (карта данных {@code incoming:penetration}),
- * датчик пустоты, подземный взрыв по приведённой глубине — глубоко без воронки, мелко с воронкой выброса.
+ * Concrete-piercing bomb according to physics: path in the ground according to Young based on the block material (data card {@code incoming:penetration}),
+ *  void sensor, underground explosion at a given depth - deep without a crater, shallow with an ejection crater.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -33,14 +33,14 @@ public final class BombGameTests {
 
     private BombGameTests() {}
 
-    /** Столб {@code state} 3×3 под {@code top} (в координатах площадки) высотой {@code height}. */
+    /** Pillar {@code state} 3×3 under {@code top} (in site coordinates) with height {@code height}. */
     private static void column(GameTestHelper h, BlockPos top, int height, BlockState state) {
         for (BlockPos p : BlockPos.betweenClosed(top.offset(-1, -height + 1, -1), top.offset(1, 0, 1))) {
             h.getLevel().setBlock(h.absolutePos(p), state, Block.UPDATE_CLIENTS);
         }
     }
 
-    /** Путь бомбы отвесно вниз со скоростью {@code v} м/с с верха блока {@code top}. */
+    /** The bomb's path is vertical downward at a speed of {@code v} m/s from the top of the block {@code top}. */
     private static BunkerBusterEntity.Path down(GameTestHelper h, BlockPos top, double v) {
         Vec3 face = Vec3.atBottomCenterOf(h.absolutePos(top)).add(0, 1, 0);
         return BunkerBusterEntity.plan(h.getLevel(), face, DOWN, v, 0);
@@ -51,31 +51,31 @@ public final class BombGameTests {
     }
 
     /**
-     * Путь по материалу: камень и бетон (S 0,84), глубинный сланец (0,67), земля (12) — ровно путь Янга для своей среды
-     * (карта данных читается по блокам), бомба встала; бетонная плита над землёй — земля за ней с S/2 (тот же ход
-     * {@link Penetration.Run}, что сверяют юнит-тесты).
+     * Path according to the material: stone and concrete (S 0,84), deep shale (0,67), earth (12) - exactly Yang's path for his environment
+     *  (data map is read block by block), the bomb is up; concrete slab above the ground - the ground behind it with S/2 (the same move
+     * {@link Penetration.Run} that unit tests compare).
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_penetration", skyAccess = true)
     public static void penetrationByMaterial(GameTestHelper h) {
         Penetration.Body mop = BunkerBusterEntity.body();
         record Case(String name, BlockState state, double s, double v, BlockPos top) {}
         Case[] cases = {
-                new Case("камень", Blocks.STONE.defaultBlockState(), 0.84, 250, new BlockPos(16, 30, 16)),
-                new Case("бетон", Blocks.GRAY_CONCRETE.defaultBlockState(), 0.84, 250, new BlockPos(24, 30, 16)),
-                new Case("сланец", Blocks.DEEPSLATE.defaultBlockState(), 0.67, 250, new BlockPos(32, 30, 16)),
-                new Case("земля", Blocks.DIRT.defaultBlockState(), 12, 100, new BlockPos(40, 30, 16))};
+                new Case("stone", Blocks.STONE.defaultBlockState(), 0.84, 250, new BlockPos(16, 30, 16)),
+                new Case("concrete", Blocks.GRAY_CONCRETE.defaultBlockState(), 0.84, 250, new BlockPos(24, 30, 16)),
+                new Case("slate", Blocks.DEEPSLATE.defaultBlockState(), 0.67, 250, new BlockPos(32, 30, 16)),
+                new Case("earth", Blocks.DIRT.defaultBlockState(), 12, 100, new BlockPos(40, 30, 16))};
         for (Case c : cases) column(h, c.top, 29, c.state);
         for (Case c : cases) {
             BunkerBusterEntity.Path path = down(h, c.top, c.v);
             double expect = Penetration.depth(mop, c.s, c.v);
-            h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": бомба не встала — " + path.end());
-            h.assertTrue(Math.abs(path.length() - expect) < 1e-6, c.name + ": путь " + m(path.length()) + ", по Янгу " + m(expect));
+            h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": the bomb didn’t go off - " + path.end());
+            h.assertTrue(Math.abs(path.length() - expect) < 1e-6, c.name + ": path " + m(path.length()) + ", according to Young " + m(expect));
         }
-        // в камне на 235 м/с — ~3,9 м: удар после игрового падения (сброс с B-2 на 12 блоках/тик с 170 блоков), вдвое
-        // медленнее настоящего
+        // in stone at 235 m/s - ~3,9 m: hit after a game fall (reset from B-2 on 12 blocks/tick from 170 blocks), twice
+        //  slower than the real one
         double stone = down(h, cases[0].top, 235).length();
-        h.assertTrue(stone > 3.4 && stone < 4.5, "камень на 235 м/с: " + m(stone));
-        // бетонная плита в блок над землёй
+        h.assertTrue(stone > 3.4 && stone < 4.5, "stone on 235 m/s: " + m(stone));
+        // concrete slab in a block above the ground
         BlockPos slab = new BlockPos(48, 30, 16);
         column(h, slab.below(), 28, Blocks.DIRT.defaultBlockState());
         column(h, slab, 1, Blocks.GRAY_CONCRETE.defaultBlockState());
@@ -83,9 +83,9 @@ public final class BombGameTests {
         double expect = run.through(Penetration.Kind.CONCRETE, 0.84, 1);
         for (int i = 0; i < 28 && !run.stopped(); i++) expect += run.through(Penetration.Kind.SOIL, 12, 1);
         double under = down(h, slab, 100).length();
-        h.assertTrue(Math.abs(under - expect) < 1e-6, "плита и земля: путь " + m(under) + ", ждали " + m(expect));
-        h.assertTrue(under < Penetration.depth(mop, 12, 100), "за плитой земля не твёрже");
-        // ковёр на земле — 1/16 блока прочего твёрдого (S 1), а не метр кирпича; и не бетонная плита: земля за ним обычная
+        h.assertTrue(Math.abs(under - expect) < 1e-6, "slab and earth: path " + m(under) + ", waited " + m(expect));
+        h.assertTrue(under < Penetration.depth(mop, 12, 100), "behind the slab the earth is not harder");
+        // carpet on the ground - 1/16 of a block of other hard materials (S 1), and not a meter of brick; and not a concrete slab: the ground behind it is ordinary
         BlockPos rug = new BlockPos(56, 30, 16);
         column(h, rug.below(), 28, Blocks.DIRT.defaultBlockState());
         column(h, rug, 1, Blocks.WHITE_CARPET.defaultBlockState());
@@ -93,15 +93,15 @@ public final class BombGameTests {
         double rugExpect = soft.through(Penetration.Kind.ROCK, 1, 1 / 16.0);
         for (int i = 0; i < 28 && !soft.stopped(); i++) rugExpect += soft.through(Penetration.Kind.SOIL, 12, 1);
         double onRug = BunkerBusterEntity.plan(h.getLevel(), Vec3.atBottomCenterOf(h.absolutePos(rug)).add(0, 1 / 16.0, 0), DOWN, 100, 0).length();
-        h.assertTrue(Math.abs(onRug - rugExpect) < 1e-6, "ковёр и земля: путь " + m(onRug) + ", ждали " + m(rugExpect));
+        h.assertTrue(Math.abs(onRug - rugExpect) < 1e-6, "carpet and ground: path " + m(onRug) + ", waited " + m(rugExpect));
         h.succeed();
     }
 
     /**
-     * Путь в однородной земле под углом — тот же путь Янга, что отвесно: ось, пересекая грани блоков, не начинает слой
-     * заново. Найдено сквозным {@code surface_bomb} (ET 23.10): бомба B-2 входит под 89°, и путь в земле был на 18–29 %
-     * длиннее закона (под 80° — на 40 %; отвесно — точно): хвост оси вне формы блока длиной в погрешность float считался
-     * пустотой. Скорость — 160 м/с, путь ~35 м: в высоту площадки.
+     * The path in homogeneous earth at an angle is the same as Yang's path that is vertical: the axis, crossing the faces of the blocks, does not begin the layer
+     *  anew. Found through {@code surface_bomb} (ET 23.10): the bomb B-2 enters under 89°, and the path in the ground was 18–29 %
+     *  longer than the law (under 80° - by 40%; plumb - exactly): the tail of the axis outside the shape of the block with a length of error float was considered
+     *  void. Speed ​​- 160 m/s, path ~35 m: height of the platform.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_oblique", skyAccess = true)
     public static void obliquePathIsYoung(GameTestHelper h) {
@@ -111,24 +111,24 @@ public final class BombGameTests {
             h.getLevel().setBlock(h.absolutePos(p), (p.getY() == 38 ? Blocks.PODZOL : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         double v = 160, expect = Penetration.depth(mop, 12, v);
-        h.assertTrue(expect > 25 && expect < 36, "путь по Янгу " + m(expect) + " не помещается в куб земли");
+        h.assertTrue(expect > 25 && expect < 36, "path along Yang " + m(expect) + " does not fit into the earth cube");
         Vec3 face = Vec3.atBottomCenterOf(h.absolutePos(top)).add(0.13, 1, 0.29);
         for (double pitch : new double[]{90, 89, 80, 70}) {
             for (double yaw : new double[]{0, 30, 45}) {
                 double p = Math.toRadians(pitch), y = Math.toRadians(yaw);
                 Vec3 dir = new Vec3(Math.cos(p) * Math.sin(y), -Math.sin(p), Math.cos(p) * Math.cos(y));
                 BunkerBusterEntity.Path path = BunkerBusterEntity.plan(h.getLevel(), face, dir, v, 0);
-                h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, pitch + "°/" + yaw + "°: бомба не встала — " + path.end());
+                h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, pitch + "°/" + yaw + "°: the bomb didn’t go off - " + path.end());
                 h.assertTrue(Math.abs(path.length() - expect) < 1e-3 * expect,
-                        pitch + "°/" + yaw + "°: путь " + m(path.length()) + ", по Янгу " + m(expect));
+                        pitch + "°/" + yaw + "°: path " + m(path.length()) + ", according to Young " + m(expect));
             }
         }
         h.succeed();
     }
 
     /**
-     * Датчик пустоты: после 5 м камня пещера в 10 блоков — подрыв, когда бомба вошла в неё целиком (своя длина); за
-     * перекрытием тоньше {@value BunkerBusterEntity#SENSOR_SOLID} м — не срабатывает, бомба идёт дальше.
+     * Void sensor: after 5 m of stone, a cave in 10 blocks - detonation when the bomb entered it entirely (its own length); for
+     *  with an overlap thinner than {@value BunkerBusterEntity#SENSOR_SOLID} m - it doesn’t work, the bomb goes on.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_void", skyAccess = true)
     public static void voidSensor(GameTestHelper h) {
@@ -136,25 +136,25 @@ public final class BombGameTests {
         column(h, top, 5, Blocks.STONE.defaultBlockState());
         column(h, top.below(15), 10, Blocks.STONE.defaultBlockState());
         BunkerBusterEntity.Path path = down(h, top, 400);
-        h.assertTrue(path.end() == BunkerBusterEntity.Path.End.VOID, "датчик не сработал: " + path.end());
-        h.assertTrue(Math.abs(path.length() - (5 + BunkerBusterEntity.voidDepth())) < 1e-6, "подрыв в " + m(path.length()) + " от входа");
+        h.assertTrue(path.end() == BunkerBusterEntity.Path.End.VOID, "the sensor did not work: " + path.end());
+        h.assertTrue(Math.abs(path.length() - (5 + BunkerBusterEntity.voidDepth())) < 1e-6, "explosion in " + m(path.length()) + " from the entrance");
         BlockPos thin = new BlockPos(40, 30, 20);
         column(h, thin, 2, Blocks.STONE.defaultBlockState());
         column(h, thin.below(12), 15, Blocks.STONE.defaultBlockState());
         BunkerBusterEntity.Path through = down(h, thin, 400);
         h.assertTrue(through.end() == BunkerBusterEntity.Path.End.REST && through.length() > 12,
-                "крыша в 2 блока: датчик сработал или бомба встала раньше пола — " + through.end() + " на " + m(through.length()));
-        // крона в 6 блоков листвы над поляной: листва замедляет едва-едва — датчик не взводится, бомба идёт в землю
+                "roof in block 2: the sensor was triggered or the bomb landed before the floor - " + through.end() + " on " + m(through.length()));
+        // crown in 6 blocks of foliage above the clearing: the foliage slows down barely - the sensor does not arm, the bomb goes into the ground
         BlockPos crown = new BlockPos(30, 30, 40);
         column(h, crown, 6, Blocks.OAK_LEAVES.defaultBlockState().setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT, true));
         column(h, crown.below(16), 15, Blocks.DIRT.defaultBlockState());
         BunkerBusterEntity.Path forest = down(h, crown, 250);
         h.assertTrue(forest.end() == BunkerBusterEntity.Path.End.REST && forest.length() > 16,
-                "крона взвела датчик пустоты: " + forest.end() + " на " + m(forest.length()));
+                "the crown cocked the void sensor: " + forest.end() + " on " + m(forest.length()));
         h.succeed();
     }
 
-    /** Грунт площадки: камень {@code lo}…{@code hi} (в координатах площадки). */
+    /** Site soil: stone {@code lo}…{@code hi} (in site coordinates). */
     private static void rock(GameTestHelper h, BlockPos lo, BlockPos hi) {
         for (BlockPos p : BlockPos.betweenClosed(lo, hi)) h.getLevel().setBlock(h.absolutePos(p), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
     }
@@ -164,7 +164,7 @@ public final class BombGameTests {
         for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) level.getChunk(c.x + dx, c.z + dz);
     }
 
-    /** /fx real bunker не должен молча пропускать заряд бомбы через обычную боевую часть с нулевым зарядом. */
+    /** /fx real bunker should not silently pass a bomb charge through a conventional zero charge warhead. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "sandbox_bunker", skyAccess = true)
     public static void sandboxBombActuallyDetonates(GameTestHelper h) {
         BlockPos point = new BlockPos(32, 2, 32);
@@ -172,43 +172,43 @@ public final class BombGameTests {
         generateNow(h.getLevel(), at, 4);
         SandboxStrikes.detonate(h.getLevel(), WeaponType.BUNKER, at);
         h.succeedWhen(() -> {
-            h.assertTrue(BlastLog.near(h, point, 3), "нет настоящего подрыва бомбы");
-            h.assertTrue(StrikeWorld.get(h.getLevel()).impacts().isEmpty(), "работа подрыва идёт");
+            h.assertTrue(BlastLog.near(h, point, 3), "no real bomb detonation");
+            h.assertTrue(StrikeWorld.get(h.getLevel()).impacts().isEmpty(), "demolition work is underway");
         });
     }
 
     /**
-     * Заряд на глубине ~20 м в камне (приведённая глубина 1,5): воронки нет — верх над зарядом цел; на месте заряда —
-     * полость, рядом — дроблёная порода (булыжник), свод хода в зоне трещин обрушился щебнем.
+     * Charge at a depth of ~20 m in the stone (reduced depth 1,5): no crater - the top above the charge is intact; at the place of the charge there is a
+     *  cavity, nearby there is crushed rock (cobblestone), the arch of the passage in the crack zone has collapsed with rubble.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "bomb_deep", skyAccess = true)
     public static void deepChargeLeavesNoCrater(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         rock(h, new BlockPos(16, 1, 16), new BlockPos(47, 28, 47));
-        // ход 1×2 вдоль z в 12–17 блоках от заряда: за зоной дробления (10 м), в зоне трещин (27 м)
+        // movement of 1×2 along z in 12–17 blocks from the charge: behind the crushing zone (10 m), in the crack zone (27 m)
         for (int z = 22; z <= 42; z++) {
             for (int y = 8; y <= 9; y++) level.setBlock(h.absolutePos(new BlockPos(44, y, z)), Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 8, 32)));
         generateNow(level, charge, 3);
         BuriedBlast law = new BuriedBlast(2423, 29 - charge.y + h.absolutePos(BlockPos.ZERO).getY());
-        h.assertTrue(!law.breaches(), "заряд мелко: приведённая глубина " + m(law.scaledDepth()));
+        h.assertTrue(!law.breaches(), "charge shallow: reduced depth " + m(law.scaledDepth()));
         Warheads.bunker(level, charge, charge.add(0, 20, 0), null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа подрыва идёт");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 28, 32)).is(Blocks.STONE), "верх над зарядом снесён — воронка на глубине 20");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 32)).isAir(), "полости нет");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 38)).is(Blocks.COBBLESTONE), "дробления нет в 6 блоках");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "demolition work is underway");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 28, 32)).is(Blocks.STONE), "the top above the charge has been demolished - crater at depth 20");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 32)).isAir(), "no cavity");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 38)).is(Blocks.COBBLESTONE), "there is no crushing in 6 blocks");
             int fallen = 0;
             for (int z = 22; z <= 42; z++) {
                 BlockState roof = h.getBlockState(new BlockPos(44, 10, z)), floor = h.getBlockState(new BlockPos(44, 8, z));
                 if (!roof.is(Blocks.STONE) || floor.is(Blocks.GRAVEL)) fallen++;
             }
-            h.assertTrue(fallen > 0, "свод хода в зоне трещин цел");
+            h.assertTrue(fallen > 0, "the roof of the passage in the crack zone is intact");
         });
     }
 
-    /** Взрыв, отменённый приватом (ExplosionEvent.Start), не роет: ни полости, ни дробления. */
+    /** Explosion canceled by private (ExplosionEvent.Start), does not dig: no cavity, no crushing. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "bomb_cancelled", skyAccess = true)
     public static void cancelledBlastDigsNothing(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -222,13 +222,13 @@ public final class BombGameTests {
         StrikeGameTests.afterTest(h, () -> net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deny));
         Warheads.bunker(level, charge, charge.add(0, 20, 0), null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа подрыва идёт");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 32)).is(Blocks.STONE), "отменённый взрыв выгрыз полость");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 38)).is(Blocks.STONE), "отменённый взрыв раздробил породу");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "demolition work is underway");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 32)).is(Blocks.STONE), "canceled explosion gnawed out a cavity");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 8, 38)).is(Blocks.STONE), "a canceled explosion crushed the rock");
         });
     }
 
-    /** Заряд на глубине 3 м (приведённая глубина 0,22): воронка выброса — верх над зарядом и вокруг снесён. */
+    /** Charge at a depth of 3 m (reduced depth 0,22): ejection crater - the top above the charge and around it has been demolished. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "bomb_shallow", skyAccess = true)
     public static void shallowChargeBlowsACrater(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -237,17 +237,17 @@ public final class BombGameTests {
         generateNow(level, charge, 4);
         Warheads.bunker(level, charge, charge.add(0, 3, 0), null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "работа подрыва идёт");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "demolition work is underway");
             int gone = 0;
             for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) if (h.getBlockState(new BlockPos(32 + dx, 22, 32 + dz)).isAir()) gone++;
-            // чаша воронки в камне (BuriedBlast.craterRadius): верх снят там, где она глубже блока, — круг радиусом r,
-            // где h·(1 − (r/R)²) ≥ 1
+            // bowl crater in stone (BuriedBlast.craterRadius): the top is removed where it is deeper than the block - a circle with radius r,
+            // where h·(1 − (r/R)²) ≥ 1
             BuriedBlast law = new BuriedBlast(2423, 3);
             var rock = ua.zentix.incoming.nuclear.model.CraterModel.Soil.ROCK;
             double r = law.craterRadius(rock) * Math.sqrt(Math.max(0, 1 - 1 / law.craterDepth(rock)));
             int expect = (int) Math.floor(0.8 * Math.PI * r * r);
-            h.assertTrue(gone >= expect, "воронки нет: снесено " + gone + " из 81 блока верха вокруг заряда, ждали не меньше " + expect);
-            h.assertTrue(h.getBlockState(new BlockPos(32, 20, 32)).isAir(), "воронка не дошла до полости");
+            h.assertTrue(gone >= expect, "crater no: demolished " + gone + " from the 81 block of the top around the charge, we waited no less " + expect);
+            h.assertTrue(h.getBlockState(new BlockPos(32, 20, 32)).isAir(), "crater did not reach the cavity");
         });
     }
 }

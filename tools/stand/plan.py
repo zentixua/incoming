@@ -1,20 +1,22 @@
-"""План прогона стенда: сцены scenes.json → шаги обвязки (stand-plan.json, их исполняет мод tools/stand).
+"""Scene bench run plan: scenes.json → harness steps (stand-plan.json, executed by tools/stand mod).
 
-Вся геометрия здесь: где цель, откуда пуск, где камера и куда она смотрит, сколько ударов досыпать до числа, куда
-падает каждый удар и когда он пущен. Точки ударов — не разброс залпа Incoming: тот берёт общий генератор мира
-(`SalvoData.fire`: `level.random`, зерна у команды и правил мира нет в 3.4.1 и после), и удары каждого прогона ложились
-бы иначе — камера «на краю» то в стене пыли, то у её края, время кадра двух прогонов одной версии расходилось на
-30 %. Поэтому каждая точка — своя команда с разбросом 0 (`salvo drone 1 0 at P from L via P`), точки — подсолнух
-Фогеля в круге разброса (равномерно по площади, свой поворот у каждого залпа и волны), одни у всех версий. Остаётся
-промах самого шахеда (σ 3 м по паспорту, `Route.error`). Пуск — по кругу точек на `launch.dist`: удар i — с точки
-i mod пусковых, раз в `launch.gap_s` с одной точки (одна пусковая выпускает шахед раз в 1–2 с). Шахед летит через саму
-цель (`via`): без точки маршрута он делает петлю и заходит из-за спины стреляющего. Пуск вблизи (сцена с `launch`):
-камера в 30 м сбоку от места пуска на высоте глаз, цель далеко в сторону (прилёты вне кадра), окна — от команды, конца
-залпа сцена не ждёт (такие сцены — последние в плане: их прилёты не попадают в чужие окна). Обвязка только исполняет числа —
-поэтому план можно проверить тестом без игры (test_gate.py).
+All geometry is here: target, launch point, camera position and look point, strikes needed to reach the
+count, each impact point and launch time. Impact points do not use Incoming salvo spread, which uses the
+shared world RNG (`SalvoData.fire`: `level.random`; no command/world-rule seed in 3.4.1 or later). Otherwise
+runs land differently: the edge camera alternates between inside and beside the dust wall, and frame time
+of two same-version runs differs by 30 %. Each point therefore uses its own zero-spread command
+(`salvo drone 1 0 at P from L via P`); points follow a Vogel sunflower in the spread disk (uniform area,
+each salvo/wave has its own rotation), identical for every version. Shahed miss remains (σ 3 m from the
+spec, `Route.error`). Launch points form a circle at `launch.dist`: strike i uses point i mod launchers,
+once per `launch.gap_s` from each point (one launcher sends a Shahed every 1–2 s). Shahed flies through
+the target itself (`via`); without a waypoint it loops and approaches from behind the shooter. Nearby
+launch scene (`launch`): camera 30 m beside the launch site at eye height, target far to the side (impacts
+out of frame), windows from command time, without waiting for salvo completion (these scenes are last,
+so their impacts do not enter other windows). Harness only executes numbers, so test the plan without
+the game (test_gate.py).
 
-Оси Minecraft: +X — восток, +Z — юг. Направление камеры `toward` — единичный вектор (dx, dz) от места; пуск — по
-пеленгу от юга к востоку (0 — с юга, 90 — с востока).
+Minecraft axes: +X east, +Z south. Camera `toward`: unit (dx, dz) from the site; launch bearing from south
+toward east (0 from south, 90 from east).
 """
 import json
 import math
@@ -33,7 +35,7 @@ def _site(scenes, name):
 
 
 def camera(scenes, spec, site, spread):
-    """Глаз и точка взгляда камеры {toward, dist (число или "spread"), height, look_height, [look_toward, look_dist]}."""
+    """Camera eye and look point from {toward, dist (number or "spread"), height, look_height, [look_toward, look_dist]}."""
     if isinstance(spec, str):
         spec = scenes["cameras"][spec]
     g = scenes["ground"]
@@ -49,7 +51,7 @@ def camera(scenes, spec, site, spread):
 
 
 def launch_point(scenes, site, k):
-    """k-я точка пуска у места: по кругу пеленгов на дальности `launch.dist`."""
+    """Launch point k at a site: bearings around a circle at `launch.dist`."""
     bearings = scenes["launch"]["bearings"]
     b = math.radians(bearings[k % len(bearings)])
     d = scenes["launch"]["dist"]
@@ -60,8 +62,8 @@ GOLDEN = math.pi * (3 - math.sqrt(5))
 
 
 def aim_points(site, radius, n, turn):
-    """n точек ударов в круге radius у места: подсолнух Фогеля (точка j — на радиусе radius·√((j + ½)/n), угол j·золотой
-    угол + turn) — равномерно по площади, без случайности."""
+    """n impact points in radius around a site: Vogel sunflower (point j at radius·√((j + ½)/n), angle j·golden
+angle + turn), uniform area without randomness."""
     if radius <= 0:
         return [site] * n
     out = []
@@ -72,8 +74,8 @@ def aim_points(site, radius, n, turn):
 
 
 def strike_commands(scenes, site, points, first_point, launchers, start_s=0.0):
-    """Команда на удар: «salvo <оружие> 1 0 at P from L via P»; удар i — с точки пуска first_point + i mod launchers,
-    через start_s + (i // launchers) · gap_s. Назад — команды, сдвиги и следующая точка пуска."""
+    """Strike command: "salvo <weapon> 1 0 at P from L via P"; strike i launches at first_point + i mod launchers
+after start_s + (i // launchers) · gap_s. Return commands, offsets and next launch point."""
     gap = scenes["launch"]["gap_s"]
     cmds, delays = [], []
     for i, (px, pz) in enumerate(points):
@@ -84,8 +86,8 @@ def strike_commands(scenes, site, points, first_point, launchers, start_s=0.0):
 
 
 def launch_steps(scenes, s, tp):
-    """Пуск вблизи: камера у места пуска, команды пуска, окна от команды (`launch_view.windows`: начало `at_s`, длина `s`).
-    Залп без ожидания конца: прилёты далеко и после окон."""
+    """Nearby launch: camera at launch site, launch commands, command-relative windows (`launch_view.windows`: start `at_s`, duration `s`).
+No wait for salvo completion: impacts far away after the windows."""
     lv, ln = scenes["launch_view"], s["launch"]
     site = _site(scenes, s["site"])
     tx, tz = site[0] + lv["target"][0], site[1] + lv["target"][1]
@@ -94,7 +96,7 @@ def launch_steps(scenes, s, tp):
     if ln.get("one_command"):
         cmds, delays = [f"incoming salvo {ln['weapon']} {ln['count']} 0 {at}"], [0.0]
     else:
-        # одна пусковая: подряд, раз в gap_s
+        # One launcher: sequential launches every gap_s
         gap = scenes["launch"]["gap_s"]
         cmds = [f"incoming salvo {ln['weapon']} 1 0 {at}"] * ln["count"]
         delays = [round(i * gap, 3) for i in range(ln["count"])]
@@ -105,7 +107,7 @@ def launch_steps(scenes, s, tp):
         if w["at_s"] > t:
             out.append({"do": "wait", "s": w["at_s"] - t})
         out.append({"do": "window", "name": f"{s['id']}/{w['name']}", "s": w["s"]})
-        # кадр в конце окна (после него: снимок стоит кадра и в окно не идёт)
+        # Frame at window end (after it: screenshot costs a frame and is excluded)
         out.append({"do": "shot", "name": f"{s['id']}_{w['at_s'] + w['s']:g}s"})
         out.append({"do": "wait", "s": scenes["after_shot_s"]})
         t = w["at_s"] + w["s"] + scenes["after_shot_s"]
@@ -113,23 +115,23 @@ def launch_steps(scenes, s, tp):
 
 
 def launch_ids(scenes):
-    """Сцены пуска вблизи: их залпы конца не ждут."""
+    """Nearby launch scenes: do not wait for their salvos to finish."""
     return {s["id"] for s in scenes["scenes"] if "launch" in s}
 
 
 def build(scenes, only=None):
-    """План из сцен (only — ид сцен выборки, порядок — как в scenes.json)."""
+    """Plan from scenes (only: subset scene IDs, in scenes.json order)."""
     chosen = [s for s in scenes["scenes"] if only is None or s["id"] in only]
     unknown = set(only or ()) - {s["id"] for s in scenes["scenes"]}
     if unknown:
-        raise ValueError(f"нет сцен: {', '.join(sorted(unknown))}")
+        raise ValueError(f"no scenes: {', '.join(sorted(unknown))}")
     margin = scenes["impact_margin"]
-    struck = {}     # удары у места до этой сцены
-    point = {}      # следующая точка пуска у места
+    struck = {}     # Strikes at the site before this scene
+    point = {}      # Next launch point at the site
     steps = []
     ids = {s["id"] for s in chosen}
     launched = set()
-    where = [None]  # глаз камеры перед шагом: далёкий перенос ждёт чанки и их сетки дольше
+    where = [None]  # Camera eye before the step: long-distance moves wait longer for chunks and meshes
 
     def tp(eye, look):
         far = where[0] is None or math.dist(where[0], eye) > scenes["far_m"]
@@ -143,13 +145,13 @@ def build(scenes, only=None):
         site_name = s["site"]
         site = _site(scenes, site_name)
         spread = s.get("spread", 0)
-        # поворот узора — по месту сцены в scenes.json (и номеру волны), а не по выборке: у выборки те же точки
+        # Pattern rotation follows scene position in scenes.json (and wave number), not the subset: subsets retain the same points
         turn = order[s["id"]] * 16 * GOLDEN
         if "waves" in s:
             w = s["waves"]
             cmds, delays = [], []
             for i in range(w["count"]):
-                # волна — с нескольких пусковых сразу: её удары ложатся за несколько секунд, последняя — целиком в окне
+                # A wave launches from multiple launchers together: hits span several seconds, last wave fully inside the window
                 c, d, point[site_name] = strike_commands(scenes, site, aim_points(site, spread, w["strikes"], turn + i * GOLDEN),
                                                          point.get(site_name, 0), w.get("launchers", n_bearings), i * w["every_s"])
                 cmds += c
@@ -158,7 +160,7 @@ def build(scenes, only=None):
         else:
             count = s["strikes"] if "strikes" in s else s["total"] - struck.get(site_name, 0)
             if count <= 0:
-                raise ValueError(f"сцена {s['id']}: у места {site_name} уже {struck.get(site_name, 0)} ударов")
+                raise ValueError(f"scene {s['id']}: site {site_name} already has {struck.get(site_name, 0)} strikes")
             delay = s.get("launch_delay_s", 0) if s.get("launch_with") in ids else 0
             cmds, delays, point[site_name] = strike_commands(scenes, site, aim_points(site, spread, count, turn), point.get(site_name, 0),
                                                              min(count, s.get("launchers", n_bearings)), delay)
@@ -178,42 +180,42 @@ def build(scenes, only=None):
             steps.append(tp(eye, look))
             if s["id"] not in launched:
                 steps.append(salvo_step(s))
-            # сцены, что пускаются вместе с этой (со сдвигом), — сразу за её залпом
+            # Scenes launched alongside this one (with an offset) follow its salvo immediately
             for t in chosen:
                 if t.get("launch_with") == s["id"] and t["id"] not in launched:
                     steps.append(salvo_step(t))
             steps.append({"do": "impact_window", "name": s["id"], "salvo": s["id"], "n": 1, "s": s["window_s"],
                           "shots": s.get("shots", []), "prefix": s["id"], "timeout_s": scenes["await_timeout_s"]})
-            # конец залпа — событием: годность прогона проверяет, что долетели все (у волн накопления — все волны)
+            # Salvo completion is an event: run validity checks that all arrived (all waves for accumulation)
             steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["tail_timeout_s"], "quiet_s": scenes["quiet_s"]})
             continue
         cams = s["cameras"]
         hit = s.get("hit")
         eye, look = camera(scenes, hit["camera"] if hit else cams[0], site, spread)
-        # камера с готовой землёй — до залпа: перенос вместе с залпом грузил чанки камеры наперегонки со 100 снарядами
-        # вне мира, и встроенный сервер вставал на 50 мс/тик — земля у камеры не дорисовывалась за 30 с (#471, 25.10)
+        # Camera over ready ground before salvo: moving with the salvo raced camera chunks against 100 off-world
+        # projectiles; integrated server stalled at 50 ms/tick, camera ground stayed unrendered for 30 s (#471, 25.10)
         steps.append(tp(eye, look))
         steps.append(salvo_step(s))
         if hit:
-            # миг прилёта: окно от n-го попадания (шар, вспышка, волна, обломки в полёте), пока залп ещё ложится; не от
-            # первого: шахед, пришедший раньше залпа на 6 с, сдвигал окно, и в него падала половина ударов (smb, 25.10)
+            # Impact moment: window starts at the nth hit (ball, flash, wave, flying debris) while the salvo still lands,
+            # not the first: a Shahed arriving 6 s early shifted the window to include half the strikes (smb, 25.10)
             steps.append({"do": "impact_window", "name": f"{s['id']}-hit", "salvo": s["id"], "n": hit["nth"], "s": hit["window_s"],
                           "shots": hit.get("shots", []), "prefix": f"{s['id']}-hit", "timeout_s": scenes["await_timeout_s"]})
         steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["await_timeout_s"], "quiet_s": scenes["quiet_s"]})
         for k, cam in enumerate(cams):
             eye, look = camera(scenes, cam, site, spread)
             steps.append(tp(eye, look))
-            # кадр и окно — в один и тот же миг от последнего взрыва залпа у каждого прогона: конец залпа («all» сразу,
-            # «quiet» — через quiet_s) и перенос камеры плавают, а дым за десятки секунд меняется (#466: кадр с края
-            # то через 3 с, то через 35 с после последнего взрыва)
+            # Frame/window at the same time after the last salvo explosion in every run: salvo end ("all" immediately,
+            # "quiet" after quiet_s) and camera move vary, while smoke changes over tens of seconds (#466: edge frame
+            # alternated between 3 s and 35 s after the last explosion)
             steps.append({"do": "since", "salvo": s["id"],
                           "s": scenes["since_last_s"] + k * (scenes["after_shot_s"] + s["window_s"] + scenes["tp_gap_s"])})
             steps.append({"do": "shot", "name": f"{s['id']}_{cam}"})
             steps.append({"do": "wait", "s": scenes["after_shot_s"]})
             steps.append({"do": "window", "name": f"{s['id']}/{cam}", "s": s["window_s"]})
-    # после последнего окна клиент ещё рисует: цикл видеокарты (client.PmonCycles), в котором кончилось окно, закрывается
-    # строкой следующего (~1 с) и доходит из nvidia-smi кусками (~1 с) — выйди клиент сразу, хвост окна остался бы без
-    # замера видеокарты
+    # Client keeps rendering after the last window: its GPU cycle (client.PmonCycles) closes with the next
+    # cycle line (~1 s), reaching the bench from nvidia-smi in chunks (~1 s); immediate client exit would leave
+    # the window tail without GPU measurement
     steps.append({"do": "wait", "s": scenes["end_tail_s"]})
     w = scenes["world"]
     return {"seed": w["seed"], "day_time": w["day_time"], "settle_s": w["settle_s"], "limit_s": w["limit_s"],
@@ -222,7 +224,7 @@ def build(scenes, only=None):
 
 
 def windows(scenes, only=None):
-    """Имена окон замера плана — в порядке сцен (для отчёта и шлагбаума)."""
+    """Plan measurement-window names in scene order (report and look gate)."""
     out = []
     for s in scenes["scenes"]:
         if only is not None and s["id"] not in only:

@@ -35,31 +35,30 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Утечка памяти мира (сценарий {@code leak}: {@code tools/prod_client.py leak --world …}, задание ноутбуку
- * {@code tools/laptop-jobs/leak-heap.md}). Утечка видна так: после выхода из мира в меню живого больше, чем
- * в меню без мира, второй мир в том же запуске начинается выше, рост идёт и от одних телепортов; кто
- * держит — не видно. Мир после выхода должен уходить из памяти целиком, поэтому замер — в меню: держатель виден
- * за один прогон.
- *
- * <p>Заходы ({@code incoming.leak.rounds}, по умолчанию 2): открыть мир → через {@link #START} тиков после входа
- * команды раунда ({@code incoming.leak.commands}, через «;», как у сценария {@code commands}; от имени игрока
- * с правами оператора — в копии мира бывают выключены читы) через {@code incoming.leak.gap} тиков (200) и столько же
- * после последней → выйти в главное меню, как кнопка «Сохранить и выйти» ({@code PauseScreen.onDisconnect}) → в меню
- * подождать {@code incoming.leak.settle} секунд (20), две сборки мусора через {@link #GC_PAUSE_S} с и замер.
- * Замер 0 — меню до первого захода (база того же запуска). Мир — копия мира игрока ({@code incoming.world}) или мир
- * сценария: первый заход создаёт его заново, следующие открывают тот же.
- *
- * <p>Замер в меню: строка {@code SCENARIO leak menu N: куча живых …}; гистограмма классов живых объектов
- * (MBean {@code DiagnosticCommand}, операция {@code gcClassHistogram} — то же, что {@code jcmd GC.class_histogram})
- * в {@code <каталог игры>/leak/histo-N.txt}, в лог — ключевые классы мира ({@link #KEYS}: точное имя и с подклассами)
- * и первые {@link #TOP} по байтам; сброс выборки старых объектов JFR ({@code jdk.OldObjectSample}) с путями до корней
- * GC в {@code leak/old-N.jfr} и выжимка сэмплов, чей путь проходит через мир ({@link #WORLD_MARKS}), в
- * {@code leak/old-N.txt}. После последнего замера, если {@code incoming.leak.heapdump=true}, — снимок кучи живых
- * объектов {@code leak/heap.hprof}. Перед каждым выходом — {@code SCENARIO leak world N: куча живых …} (мир ещё
- * в памяти). Ошибка замера — WARN, сценарий идёт дальше до {@code SCENARIO done}.
+ * World memory leak (scenario {@code leak}: {@code tools/prod_client.py leak --world …}, laptop job
+ * {@code tools/laptop-jobs/leak-heap.md}). Symptoms: after leaving the world, the menu has more live objects
+ * than the menu before a world; a second world in the same run starts higher; teleports alone also cause
+ * growth, but the holder is unknown. A world should leave memory completely after exit, so measure in the
+ * menu: the holder is visible in one run.
+ * <p>Rounds ({@code incoming.leak.rounds}, default 2): open the world, then {@link #START} ticks after entry
+ * run round commands ({@code incoming.leak.commands}, separated by ";" as in {@code commands}; as the player
+ * with operator permissions, since the world copy may have cheats disabled), spaced by {@code incoming.leak.gap}
+ * ticks (200), and the same delay after the last command; exit to the main menu as with "Save and Quit"
+ * ({@code PauseScreen.onDisconnect}); wait {@code incoming.leak.settle} seconds (20) in the menu, perform two
+ * collections {@link #GC_PAUSE_S} s apart, then measure. Measurement 0 is the menu before first entry (same-run
+ * baseline). World: a copy of the player world ({@code incoming.world}) or the scenario world; first entry
+ * creates it anew, subsequent rounds open the same world.
+ * <p>Menu measurement: {@code SCENARIO leak menu N: live heap …}; live-class histogram (MBean
+ * {@code DiagnosticCommand}, operation {@code gcClassHistogram}, same as {@code jcmd GC.class_histogram})
+ * in {@code <game directory>/leak/histo-N.txt}; log key world classes ({@link #KEYS}: exact and with subclasses)
+ * and the first {@link #TOP} by bytes. Dump JFR old-object samples ({@code jdk.OldObjectSample}) with paths to
+ * GC roots in {@code leak/old-N.jfr}, and samples whose path crosses a world ({@link #WORLD_MARKS}) in
+ * {@code leak/old-N.txt}. After the last measurement, if {@code incoming.leak.heapdump=true}, dump live heap
+ * objects to {@code leak/heap.hprof}. Before each exit: {@code SCENARIO leak world N: live heap …} (world still
+ * in memory). A measurement error is WARN; the scenario continues to {@code SCENARIO done}.
  */
 final class LeakCheck {
-    /** Ключевые классы мира: после выхода в меню их экземпляров быть не должно. */
+    /** Key classes of the world: after exiting to the menu, their instances should not exist. */
     private static final List<String> KEYS = List.of(
             "net.minecraft.server.level.ServerLevel",
             "net.minecraft.client.multiplayer.ClientLevel",
@@ -69,22 +68,22 @@ final class LeakCheck {
             "net.minecraft.world.level.chunk.LevelChunkSection",
             "net.minecraft.server.level.ChunkHolder",
             "net.minecraft.world.entity.Entity");
-    /** Сэмпл выборки JFR «через мир»: тип объекта, звено пути до корня или корень содержат одно из этих имён. */
+    /** sample samples JFR "through the world": object type, path link to root, or root contains one of these names. */
     static final List<String> WORLD_MARKS = List.of("LevelChunk", "ServerLevel", "ClientLevel", "ChunkHolder", "LevelChunkSection",
             "PalettedContainer", "IntegratedServer");
     private static final int TOP = 15;
-    /** Тиков в мире до первой команды. */
+    /** tick in the world to the first command. */
     private static final int START = 100;
-    /** Пауза между двумя сборками в меню и самое долгое открытие мира, с. */
+    /** A pause between two builds in the menu and the longest opening of the world, p. */
     private static final long GC_PAUSE_S = 5, OPEN_LIMIT_S = 900;
     /**
-     * Пути до корней GC ищет поток VM обходом в глубину (JDK 21): на его стеке по умолчанию (1 МБ) глубокая цепочка
-     * ссылок переполняет стек, и JVM падает по SIGSEGV без hs_err (игра — на первом же сбросе; список в 2 млн
-     * звеньев: с 1 МБ падает, с 1,5 МБ и больше — нет). Со стеком меньше этого (КБ)
-     * пути не ищутся.
+     * GC searches for paths to the roots of thread VM by depth-first traversal (JDK 21): on its default stack (1 MB) a deep chain of
+     *  links overflows the stack, and JVM crashes SIGSEGV without hs_err (the game is on the first reset; a list of 2 million
+     *  links: with 1 MB drops, with 1,5 MB and more - no). With a stack less than this (KB)
+     * paths are not searched.
      */
     private static final long PATH_STACK_KB = 4096;
-    /** Сколько разбирать имена гистограммы в классы (подклассы ключевых), не дольше, мс. */
+    /** How long to parse histogram names into classes (key subclasses), no longer, ms. */
     private static final long RESOLVE_LIMIT_MS = 10_000;
     private static final long NANOS = 1_000_000_000L;
     private static final Pattern ROW = Pattern.compile("^\\s*\\d+:\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)");
@@ -97,13 +96,13 @@ final class LeakCheck {
     private final long settleNanos = Math.max(0, Integer.getInteger("incoming.leak.settle", 20)) * NANOS;
     private final boolean heapDump = Boolean.getBoolean("incoming.leak.heapdump");
     private final List<String> commands = ScenarioCommands.split(System.getProperty("incoming.leak.commands", ""));
-    /** Копия мира игрока; без неё — мир сценария. */
+    /** A copy of the player's world; without her - the world of the script. */
     private final String world = System.getProperty("incoming.world");
 
     private Phase phase = Phase.TITLE;
-    /** Номер захода: 0 — меню до первого захода, N — меню после выхода из захода N. */
+    /** Entry number: 0 - menu before the first entry, N - menu after exiting entry N. */
     private int round;
-    /** Начало ожидания в меню, открытия мира или выхода ({@link System#nanoTime()}). */
+    /** Start waiting in the menu, opening the world or exiting ({@link System#nanoTime()}). */
     private long since;
     private boolean firstGc;
     private int worldTicks;
@@ -118,7 +117,7 @@ final class LeakCheck {
         Minecraft mc = Minecraft.getInstance();
         switch (phase) {
             case TITLE -> {
-                // главное меню после загрузки ресурсов: выборка JFR — с этого места, загрузка игры в неё не попадает
+                // main menu after loading resources: selection JFR - from this point, loading the game does not go into it
                 if (mc.screen instanceof TitleScreen && mc.getOverlay() == null) begin(mc);
             }
             case MENU -> menuTick(mc);
@@ -135,43 +134,43 @@ final class LeakCheck {
         try {
             Files.createDirectories(dir);
         } catch (IOException | RuntimeException ex) {
-            Incoming.LOG.warn("SCENARIO leak: папка {} не создана — файлов замеров не будет", dir, ex);
+            Incoming.LOG.warn("SCENARIO leak: folder {} was not created - there will be no measurement files", dir, ex);
         }
         long stack = vmThreadStackKb();
         boolean paths = stack >= PATH_STACK_KB;
         if (!paths) {
-            Incoming.LOG.warn("SCENARIO leak: стек потока VM {} КБ — пути до корней GC выключены (поиск на стеке по умолчанию роняет JVM по SIGSEGV), "
-                    + "нужно -XX:VMThreadStackSize={} или больше", stack, PATH_STACK_KB);
+            Incoming.LOG.warn("SCENARIO leak: thread stack VM {} KB - paths to the roots of GC are disabled (search on the stack by default drops JVM to SIGSEGV), "
+                    + "need -XX:VMThreadStackSize={} or more", stack, PATH_STACK_KB);
         }
         try {
             jfr = new OldObjects(paths);
         } catch (Exception | LinkageError ex) {
-            Incoming.LOG.warn("SCENARIO leak: запись JFR не началась — выборки старых объектов не будет", ex);
+            Incoming.LOG.warn("SCENARIO leak: recording JFR has not started - there will be no sampling of old objects", ex);
         }
-        Incoming.LOG.info("SCENARIO leak start: заходов {}, мир {}, команд {} через {} тиков, в меню {} с, снимок кучи {}; Java {}, сборщик {}, куча до {} МБ, JFR {}",
-                rounds, world == null ? ClientScenario.WORLD + " (мир сценария)" : world, commands.size(), gap, settleNanos / NANOS, heapDump,
+        Incoming.LOG.info("SCENARIO leak start: visits {}, world {}, commands {} via {} tick, in menu {} s, snapshot of heap {}; Java {}, collector {}, heap up to {} MB, JFR {}",
+                rounds, world == null ? ClientScenario.WORLD + " (script world)" : world, commands.size(), gap, settleNanos / NANOS, heapDump,
                 Runtime.version(), ManagementFactory.getGarbageCollectorMXBeans().stream().map(GarbageCollectorMXBean::getName).collect(Collectors.joining(", ")),
-                Runtime.getRuntime().maxMemory() >> 20, jfr == null ? "нет" : paths ? "пишет, с путями до корней" : "пишет, без путей до корней");
+                Runtime.getRuntime().maxMemory() >> 20, jfr == null ? "no" : paths ? "writes, with paths to the roots" : "writes, without paths to the roots");
     }
 
-    /** {@code -XX:VMThreadStackSize} в КБ (по умолчанию на Linux x64 — 1024), −1 — не узнать. */
+    /** {@code -XX:VMThreadStackSize} in KB (by default on Linux x64 - 1024), −1 - not recognized. */
     private static long vmThreadStackKb() {
         try {
             CompositeData d = (CompositeData) ManagementFactory.getPlatformMBeanServer().invoke(new ObjectName("com.sun.management:type=HotSpotDiagnostic"),
                     "getVMOption", new Object[] {"VMThreadStackSize"}, new String[] {String.class.getName()});
             return Long.parseLong(String.valueOf(d.get("value")));
         } catch (Exception | LinkageError ex) {
-            Incoming.LOG.warn("SCENARIO leak: VMThreadStackSize не узнать ({})", ex.toString());
+            Incoming.LOG.warn("SCENARIO leak: VMThreadStackSize is unrecognizable ({})", ex.toString());
             return -1;
         }
     }
 
-    // --- меню ---
+    // --- menu ---
 
     private void menuTick(Minecraft mc) {
         long now = System.nanoTime();
         if (mc.level != null || mc.getSingleplayerServer() != null) {
-            since = now; // выход ещё не кончился
+            since = now; // the exit is not over yet
             return;
         }
         if (!firstGc) {
@@ -195,36 +194,36 @@ final class LeakCheck {
 
     private void measure() {
         int r = round;
-        Incoming.LOG.info("SCENARIO leak menu {}: куча живых {} МБ{}", r, heapUsedMb(), pools());
+        Incoming.LOG.info("SCENARIO leak menu {}: a bunch of live {} MB{}", r, heapUsedMb(), pools());
         try {
             histogram(r);
         } catch (Exception | LinkageError ex) {
-            Incoming.LOG.warn("SCENARIO leak menu {}: гистограммы нет", r, ex);
+            Incoming.LOG.warn("SCENARIO leak menu {}: no histogram", r, ex);
         }
         if (jfr != null) {
             try {
                 jfr.dump(r, dir);
             } catch (Exception | LinkageError ex) {
-                Incoming.LOG.warn("SCENARIO leak menu {}: выборка JFR не сброшена", r, ex);
+                Incoming.LOG.warn("SCENARIO leak menu {}: sample JFR not reset", r, ex);
             }
         }
     }
 
-    // --- заход в мир ---
+    // --- entering the world ---
 
     private void open(Minecraft mc, int r) {
         phase = Phase.OPENING;
         since = System.nanoTime();
         String name = world != null ? world : ClientScenario.WORLD;
-        Incoming.LOG.info("SCENARIO leak round {}: открываю мир {}{}", r, name, world == null && r == 1 ? " (создаю заново)" : "");
-        // вне тика: загрузка мира крутит свой цикл кадров, как кнопка в меню
+        Incoming.LOG.info("SCENARIO leak round {}: opening the world {}{}", r, name, world == null && r == 1 ? " (I’m creating again)" : "");
+        // outside tick: world loading spins its frame loop like a menu button
         mc.tell(() -> {
             try {
                 if (world == null && r == 1) ClientScenario.createWorld(mc.screen != null ? mc.screen : new TitleScreen());
-                else mc.createWorldOpenFlows().openWorld(name, () -> fail("мир " + name + " не открылся (захода " + r + ")"));
+                else mc.createWorldOpenFlows().openWorld(name, () -> fail("peace " + name + " did not open (entrance " + r + ")"));
             } catch (RuntimeException ex) {
-                Incoming.LOG.error("SCENARIO leak round {}: мир не открылся", r, ex);
-                fail("мир не открылся");
+                Incoming.LOG.error("SCENARIO leak round {}: the world has not opened", r, ex);
+                fail("the world has not opened");
             }
         });
     }
@@ -237,13 +236,13 @@ final class LeakCheck {
             Incoming.LOG.info("SCENARIO leak round {} entered after {} s: {} at {}", round, (now - since) / NANOS,
                     mc.level.dimension().location(), mc.player.blockPosition().toShortString());
         } else if (now - since > OPEN_LIMIT_S * NANOS) {
-            fail("мир не открылся за " + OPEN_LIMIT_S + " с, экран " + (mc.screen == null ? "-" : mc.screen.getClass().getName()));
+            fail("the world has not opened for " + OPEN_LIMIT_S + " s, screen " + (mc.screen == null ? "-" : mc.screen.getClass().getName()));
         }
     }
 
     private void worldTick(Minecraft mc) {
         if (mc.level == null || mc.player == null) {
-            fail("мир закрылся сам посреди захода " + round + ", экран " + (mc.screen == null ? "-" : mc.screen.getClass().getName()));
+            fail("the world closed itself in the middle of sunset " + round + ", screen " + (mc.screen == null ? "-" : mc.screen.getClass().getName()));
             return;
         }
         worldTicks++;
@@ -253,9 +252,9 @@ final class LeakCheck {
         if (worldTicks < START + Math.max(1, commands.size()) * gap) return;
         phase = Phase.LEAVING;
         gc();
-        Incoming.LOG.info("SCENARIO leak world {}: куча живых {} МБ{}, чанков у клиента {}", round, heapUsedMb(), pools(),
+        Incoming.LOG.info("SCENARIO leak world {}: a bunch of live {} MB{}, chunks from the client {}", round, heapUsedMb(), pools(),
                 mc.level.getChunkSource().getLoadedChunksCount());
-        // вне тика: выход посреди события тика оставил бы остальным обработчикам мир null
+        // outside tick: exiting in the middle of a tick event would leave the rest of the handlers in the world null
         mc.tell(() -> {
             leave(mc);
             since = System.nanoTime();
@@ -263,7 +262,7 @@ final class LeakCheck {
         });
     }
 
-    /** Команда раунда на сервере от имени игрока с правами оператора ({@code @s}, {@code ~} — игрок). */
+    /** Round command on the server on behalf of a player with operator rights ({@code @s}, {@code ~} - player). */
     private void run(Minecraft mc, String c) {
         IntegratedServer server = mc.getSingleplayerServer();
         UUID id = mc.player.getUUID();
@@ -272,21 +271,21 @@ final class LeakCheck {
         server.execute(() -> {
             ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p == null) {
-                Incoming.LOG.warn("SCENARIO leak round {}: игрока нет на сервере — «{}» пропущена", r, c);
+                Incoming.LOG.warn("SCENARIO leak round {}: the player is not on the server - “{}” is skipped", r, c);
                 return;
             }
             server.getCommands().performPrefixedCommand(p.createCommandSourceStack().withPermission(4), c);
         });
     }
 
-    /** Как {@code PauseScreen.onDisconnect} у одиночной игры: {@code disconnect} ждёт, пока встроенный сервер остановится. */
+    /** Like {@code PauseScreen.onDisconnect} in single player: {@code disconnect} waits for the built-in server to stop. */
     private void leave(Minecraft mc) {
         if (mc.level == null) return;
         long t = System.nanoTime();
         mc.level.disconnect();
         mc.disconnect(new GenericMessageScreen(Component.translatable("menu.savingLevel")));
         mc.setScreen(new TitleScreen());
-        Incoming.LOG.info("SCENARIO leak round {} left world: выход {} мс", round, (System.nanoTime() - t) / 1_000_000);
+        Incoming.LOG.info("SCENARIO leak round {} left world: output {} ms", round, (System.nanoTime() - t) / 1_000_000);
     }
 
     private void fail(String why) {
@@ -301,20 +300,20 @@ final class LeakCheck {
             try {
                 jfr.close();
             } catch (Exception | LinkageError ex) {
-                Incoming.LOG.warn("SCENARIO leak: запись JFR не закрылась", ex);
+                Incoming.LOG.warn("SCENARIO leak: record JFR did not close", ex);
             }
         }
         Incoming.LOG.info("SCENARIO done");
         Minecraft.getInstance().stop();
     }
 
-    // --- память ---
+    // --- memory ---
 
     private static void gc() {
         try {
             System.gc();
         } catch (RuntimeException ex) {
-            Incoming.LOG.warn("SCENARIO leak: System.gc() не прошёл", ex);
+            Incoming.LOG.warn("SCENARIO leak: System.gc() failed", ex);
         }
     }
 
@@ -322,28 +321,28 @@ final class LeakCheck {
         try {
             return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed() >> 20;
         } catch (RuntimeException ex) {
-            Incoming.LOG.warn("SCENARIO leak: MemoryMXBean не ответил", ex);
+            Incoming.LOG.warn("SCENARIO leak: MemoryMXBean did not respond", ex);
             return -1;
         }
     }
 
-    /** Пулы кучи после последней сборки каждого (у поколенческого ZGC — старое и молодое поколение). */
+    /** Heap pools after the last build of each (for the generational ZGC there is an old and a young generation). */
     private static String pools() {
         try {
             List<String> out = new ArrayList<>();
             for (MemoryPoolMXBean p : ManagementFactory.getMemoryPoolMXBeans()) {
                 MemoryUsage u = p.getType() == MemoryType.HEAP ? p.getCollectionUsage() : null;
-                if (u != null) out.add(p.getName() + " " + (u.getUsed() >> 20) + " МБ");
+                if (u != null) out.add(p.getName() + " " + (u.getUsed() >> 20) + " MB");
             }
-            return out.isEmpty() ? "" : " (после сборки по пулам: " + String.join(", ", out) + ")";
+            return out.isEmpty() ? "" : " (after assembling by pools: " + String.join(", ", out) + ")";
         } catch (RuntimeException ex) {
-            return " (пулы: " + ex + ")";
+            return " (pools: " + ex + ")";
         }
     }
 
     private record Row(String name, long count, long bytes) {}
 
-    /** Гистограмма живых объектов (сама делает полную сборку): файл целиком, в лог — ключевые классы, первые по байтам и итог. */
+    /** Histogram of living objects (it does a complete assembly itself): the entire file, the key classes in the log, the first bytes and the total. */
     private void histogram(int r) throws Exception {
         long t = System.nanoTime();
         String text = (String) ManagementFactory.getPlatformMBeanServer().invoke(new ObjectName("com.sun.management:type=DiagnosticCommand"),
@@ -353,7 +352,7 @@ final class LeakCheck {
         try {
             Files.writeString(file, text);
         } catch (IOException ex) {
-            Incoming.LOG.warn("SCENARIO leak menu {}: {} не записан", r, file, ex);
+            Incoming.LOG.warn("SCENARIO leak menu {}: {} not recorded", r, file, ex);
         }
         List<Row> rows = new ArrayList<>();
         long total = -1, totalBytes = -1;
@@ -369,7 +368,7 @@ final class LeakCheck {
                 totalBytes = Long.parseLong(m.group(2));
             }
         }
-        Incoming.LOG.info("SCENARIO leak menu {} histogram: всего {} шт., {} МБ, строк {} за {} мс → {}", r, total, totalBytes >> 20, rows.size(), took,
+        Incoming.LOG.info("SCENARIO leak menu {} histogram: total {} pcs., {} MB, rows {} for {} ms → {}", r, total, totalBytes >> 20, rows.size(), took,
                 dir.getParent().relativize(file));
         Map<String, long[]> exact = new LinkedHashMap<>();
         for (String k : KEYS) exact.put(k, new long[2]);
@@ -383,7 +382,7 @@ final class LeakCheck {
         Map<String, Map<String, long[]>> sub = subclasses(r, rows);
         for (String k : KEYS) {
             long[] a = exact.get(k);
-            StringBuilder line = new StringBuilder(String.format(Locale.ROOT, "%d шт., %d Б", a[0], a[1]));
+            StringBuilder line = new StringBuilder(String.format(Locale.ROOT, "%d pcs., %d B", a[0], a[1]));
             Map<String, long[]> s = sub.get(k);
             if (s != null && !s.isEmpty()) {
                 long n = a[0], b = a[1];
@@ -391,25 +390,25 @@ final class LeakCheck {
                     n += v[0];
                     b += v[1];
                 }
-                line.append(String.format(Locale.ROOT, "; с подклассами %d шт., %d Б: ", n, b));
+                line.append(String.format(Locale.ROOT, "; with subclasses %d pcs., %d B: ", n, b));
                 line.append(s.entrySet().stream().sorted(Comparator.comparingLong((Map.Entry<String, long[]> en) -> en.getValue()[1]).reversed()).limit(6)
                         .map(en -> en.getKey() + " " + en.getValue()[0]).collect(Collectors.joining(", ")));
-                if (s.size() > 6) line.append(", … ещё ").append(s.size() - 6);
+                if (s.size() > 6) line.append(", ... more ").append(s.size() - 6);
             }
             Incoming.LOG.info("SCENARIO leak menu {} class {}: {}", r, k, line);
         }
         for (int i = 0; i < Math.min(TOP, rows.size()); i++) {
             Row row = rows.get(i);
-            Incoming.LOG.info("SCENARIO leak menu {} top {}: {} {} шт., {} Б ({} МБ)", r, i + 1, row.name, row.count, row.bytes,
+            Incoming.LOG.info("SCENARIO leak menu {} top {}: {} {} pcs., {} B ({} MB)", r, i + 1, row.name, row.count, row.bytes,
                     String.format(Locale.ROOT, "%.1f", row.bytes / 1048576.0));
         }
     }
 
     /**
-     * Подклассы ключевых классов среди строк гистограммы: у {@code Entity} (абстрактный) своих экземпляров нет, у
-     * {@code LevelChunk} и {@code ProtoChunk} есть подклассы ({@code EmptyLevelChunk}, {@code ImposterProtoChunk}),
-     * у {@code IntegratedServer} — сервер повтора Flashback. Имя — в класс загрузчиком игры без инициализации (у строк
-     * гистограммы классы уже загружены); классы JDK, массивы и скрытые классы не разбираются.
+     * Subclasses of key classes among the histogram lines: {@code Entity} (abstract) does not have its own instances,
+     * {@code LevelChunk} and {@code ProtoChunk} have subclasses ({@code EmptyLevelChunk}, {@code ImposterProtoChunk}),
+     * , {@code IntegratedServer} - server replay Flashback. Name - to the class by the game loader without initialization (for the lines
+     *  of the histogram, the classes are already loaded); classes JDK, arrays and hidden classes are not parsed.
      */
     private static Map<String, Map<String, long[]>> subclasses(int r, List<Row> rows) {
         Map<String, Map<String, long[]>> out = new HashMap<>();
@@ -419,7 +418,7 @@ final class LeakCheck {
             try {
                 keys.put(k, Class.forName(k, false, loader));
             } catch (ClassNotFoundException | LinkageError ex) {
-                Incoming.LOG.warn("SCENARIO leak menu {}: класса {} нет ({})", r, k, ex.toString());
+                Incoming.LOG.warn("SCENARIO leak menu {}: no class {} ({})", r, k, ex.toString());
             }
         }
         long deadline = System.nanoTime() + RESOLVE_LIMIT_MS * 1_000_000;
@@ -438,7 +437,7 @@ final class LeakCheck {
             } catch (VirtualMachineError ex) {
                 throw ex;
             } catch (Throwable ex) {
-                continue; // не видно загрузчику игры (свой загрузчик у библиотеки) — не подкласс классов игры
+                continue; // not visible to the game loader (the library has its own loader) - not a subclass of game classes
             }
             resolved++;
             for (Map.Entry<String, Class<?>> k : keys.entrySet()) {
@@ -449,7 +448,7 @@ final class LeakCheck {
                 }
             }
         }
-        if (skipped > 0) Incoming.LOG.warn("SCENARIO leak menu {}: подклассы — разобрано {} имён, {} не успели за {} мс", r, resolved, skipped, RESOLVE_LIMIT_MS);
+        if (skipped > 0) Incoming.LOG.warn("SCENARIO leak menu {}: subclasses - {} names sorted, {} did not have time in {} ms", r, resolved, skipped, RESOLVE_LIMIT_MS);
         return out;
     }
 
@@ -460,27 +459,27 @@ final class LeakCheck {
         try {
             ManagementFactory.getPlatformMBeanServer().invoke(new ObjectName("com.sun.management:type=HotSpotDiagnostic"), "dumpHeap",
                     new Object[] {file.toString(), true}, new String[] {String.class.getName(), boolean.class.getName()});
-            Incoming.LOG.info("SCENARIO leak heap dump: {} МБ за {} с → {}", Files.size(file) >> 20, (System.nanoTime() - t) / NANOS, dir.getParent().relativize(file));
+            Incoming.LOG.info("SCENARIO leak heap dump: {} MB for {} with → {}", Files.size(file) >> 20, (System.nanoTime() - t) / NANOS, dir.getParent().relativize(file));
         } catch (Exception | LinkageError ex) {
-            Incoming.LOG.warn("SCENARIO leak heap dump: снимок кучи не снят ({})", file, ex);
+            Incoming.LOG.warn("SCENARIO leak heap dump: Heap snapshot not taken ({})", file, ex);
         }
     }
 
     /**
-     * Выборка старых объектов JFR: запись в этом же процессе с {@code jdk.OldObjectSample} (стек выделения и
-     * {@code cutoff} «infinity»). Сэмплы — выделения с начала записи, которые ещё живы; пути до корней GC считаются,
-     * когда событие пишется — при остановке записи и при каждом {@link jdk.jfr.Recording#dump сбросе} (копия записи
-     * берёт её настройки), как у {@code jcmd JFR.dump path-to-gc-roots=true}; с {@code cutoff} по умолчанию («0 ns»)
-     * у сэмплов только тип и стек (проверено на JDK 21 с поколенческим ZGC: с «infinity» — цепочка полей и корень).
-     * Ищет их поток VM на своём стеке — нужен {@code -XX:VMThreadStackSize} (см. {@link #PATH_STACK_KB}).
-     * Сброс пишет в общий поток записи, поэтому файл следующего сброса содержит и события прошлых: выжимка берёт
-     * события последнего (у всех событий одного сброса одно время начала).
+     * JFR old-object sampling: recording in this process with {@code jdk.OldObjectSample} (allocation stack and
+     * {@code cutoff} "infinity"). Samples are allocations since recording start that remain alive; GC-root paths are
+     * computed when the event is written, at recording stop and each {@link jdk.jfr.Recording#dump dump} (recording copy
+     * inherits its settings), as with {@code jcmd JFR.dump path-to-gc-roots=true}; default {@code cutoff} ("0 ns") gives
+     * only type and stack (checked on JDK 21 with generational ZGC: "infinity" gives the field chain and root).
+     * VM thread searches for them on its own stack, requiring {@code -XX:VMThreadStackSize} (see {@link #PATH_STACK_KB}).
+     * A dump writes to the shared recording stream, so the next dump file includes earlier events; the extract takes
+     * events from the latest dump (all events of one dump share a start time).
      */
     private static final class OldObjects {
         private static final int DETAILS = 40, PER_HOLDER = 2, HOLDERS = 25, LOG_HOLDERS = 5, HOLDER_LINKS = 4, STACK = 8, CHAIN_HEAD = 8, CHAIN_TAIL = 14;
         private final jdk.jfr.Recording recording = new jdk.jfr.Recording();
 
-        /** {@code paths} — искать пути до корней при сбросе (нужен стек потока VM не меньше {@link #PATH_STACK_KB}). */
+        /** {@code paths} - search for paths to the roots during reset (you need a thread stack VM not less than {@link #PATH_STACK_KB}). */
         OldObjects(boolean paths) {
             recording.setName("incoming-leak");
             recording.enable("jdk.OldObjectSample").withStackTrace().with("cutoff", paths ? "infinity" : "0 ns");
@@ -502,25 +501,25 @@ final class LeakCheck {
             }
 
             /**
-             * Кто держит: ближайшее к объекту статическое поле (звено «… : java.lang.Class Class Name: X» — поле класса X;
-             * дальше к корню у него всегда загрузчик классов) и тип, на который оно ссылается; без статического поля —
-             * последние звенья пути у корня и корень.
+             * Who holds: the static field closest to the object (link “... : java.lang.Class Class Name: X” - class field X;
+             *  further to the root it always has a class loader) and the type to which it refers; without a static field -
+             * the last links of the path at the root and the root.
              */
             String holder() {
                 for (int i = 1; i < chain.size(); i++) {
-                    if (chain.get(i).contains("java.lang.Class Class Name: ")) return typeOf(chain.get(i - 1)) + " ← " + chain.get(i) + " (статическое поле)";
+                    if (chain.get(i).contains("java.lang.Class Class Name: ")) return typeOf(chain.get(i - 1)) + " ← " + chain.get(i) + " (static field)";
                 }
                 List<String> tail = new ArrayList<>();
                 for (String l : chain.subList(Math.max(0, chain.size() - HOLDER_LINKS), chain.size())) tail.add(plain(l));
-                return String.join(" ← ", tail) + " | корень " + root.replaceAll("\\d+", "#");
+                return String.join(" ← ", tail) + " | root " + root.replaceAll("\\d+", "#");
             }
 
-            /** Номера в массивах и размеры — без чисел, иначе у каждого сэмпла свой держатель. */
+            /** Numbers in arrays and sizes - without numbers, otherwise each sample has its own holder. */
             private static String plain(String link) {
                 return link.replaceAll("\\[\\d+]", "[]").replaceAll("\\(\\d+\\)", "()").replaceAll("Size: \\d+", "Size: N");
             }
 
-            /** Тип объекта в звене «поле : тип описание». */
+            /** The object type in the “field: type description” link. */
             private static String typeOf(String link) {
                 int k = link.indexOf(" : ");
                 String t = k < 0 ? link : link.substring(k + 3);
@@ -561,40 +560,40 @@ final class LeakCheck {
             for (Sample s : samples) roots.merge(s.root, 1, Integer::sum);
 
             List<String> out = new ArrayList<>();
-            out.add(String.format(Locale.ROOT, "Выборка старых объектов JFR, замер %d: сэмплов %d (сброс %d мс), с путём до корня %d, через мир %d (%s)%s",
-                    r, samples.size(), took, rooted, world.size(), String.join(", ", WORLD_MARKS), broken > 0 ? ", не разобрано " + broken : ""));
+            out.add(String.format(Locale.ROOT, "Sampling of old objects JFR, measurement %d: sample %d (reset %d ms), with a path to the root %d, through the world %d (%s)%s",
+                    r, samples.size(), took, rooted, world.size(), String.join(", ", WORLD_MARKS), broken > 0 ? ", not disassembled " + broken : ""));
             out.add("");
-            out.add("Корни, все сэмплы:");
+            out.add("Roots, all sample:");
             roots.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                     .forEach(en -> out.add(String.format(Locale.ROOT, "  %4d × %s", en.getValue(), en.getKey())));
             out.add("");
-            out.add("Держатели сэмплов через мир (ближайшее статическое поле и тип, на который оно ссылается, иначе последние " + HOLDER_LINKS
-                    + " звена пути и корень), по числу сэмплов, всего " + byCount.size() + ":");
+            out.add("Holders sample through the world (nearest static field and the type it refers to, otherwise the latest " + HOLDER_LINKS
+                    + " path links and root), by sample number, total " + byCount.size() + ":");
             for (int i = 0; i < Math.min(HOLDERS, byCount.size()); i++) {
                 out.add(String.format(Locale.ROOT, "  %4d × %s", byCount.get(i).getValue().size(), byCount.get(i).getKey()));
             }
             out.add("");
-            out.add("Сэмплы через мир — по " + PER_HOLDER + " на держателя, до " + DETAILS + " (путь — от объекта к корню, как у jfr print):");
+            out.add("sample through the world - by " + PER_HOLDER + " per holder, up to " + DETAILS + " (the path is from the object to the root, like jfr print):");
             int shown = 0;
             for (Map.Entry<String, List<Sample>> en : byCount) {
                 for (Sample s : en.getValue().subList(0, Math.min(PER_HOLDER, en.getValue().size()))) {
                     if (shown == DETAILS) break;
-                    out.add(String.format(Locale.ROOT, "#%d %s, %d Б, возраст %d с, корень %s", ++shown, s.object, s.size, s.ageS, s.root));
+                    out.add(String.format(Locale.ROOT, "#%d %s, %d B, age %d s, root %s", ++shown, s.object, s.size, s.ageS, s.root));
                     List<String> chain = s.chain;
                     if (chain.size() > CHAIN_HEAD + CHAIN_TAIL) {
                         List<String> cut = new ArrayList<>(chain.subList(0, CHAIN_HEAD));
-                        cut.add("… ещё " + (chain.size() - CHAIN_HEAD - CHAIN_TAIL) + " звеньев");
+                        cut.add("... more " + (chain.size() - CHAIN_HEAD - CHAIN_TAIL) + " links");
                         cut.addAll(chain.subList(chain.size() - CHAIN_TAIL, chain.size()));
                         chain = cut;
                     }
                     for (String l : chain) out.add("    " + l);
-                    if (!s.stack.isEmpty()) out.add("    стек выделения: " + String.join(" ← ", s.stack));
+                    if (!s.stack.isEmpty()) out.add("    allocation stack: " + String.join(" ← ", s.stack));
                 }
             }
-            if (shown < world.size()) out.add("… показано " + shown + " из " + world.size());
+            if (shown < world.size()) out.add("... shown " + shown + " from " + world.size());
             Path txt = dir.resolve("old-" + r + ".txt");
             Files.write(txt, out);
-            Incoming.LOG.info("SCENARIO leak menu {} jfr: сэмплов {}, с путём до корня {}, через мир {}, держателей {} (сброс {} мс) → {}, {}", r, samples.size(),
+            Incoming.LOG.info("SCENARIO leak menu {} jfr: sample {}, with a path to the root {}, through the world {}, holders {} (reset {} ms) → {}, {}", r, samples.size(),
                     rooted, world.size(), byCount.size(), took, dir.getParent().relativize(file), dir.getParent().relativize(txt));
             for (int i = 0; i < Math.min(LOG_HOLDERS, byCount.size()); i++) {
                 Incoming.LOG.info("SCENARIO leak menu {} holder {} × {}", r, byCount.get(i).getValue().size(), byCount.get(i).getKey());
@@ -610,7 +609,7 @@ final class LeakCheck {
             jdk.jfr.consumer.RecordedObject ref = object == null ? null : object.getValue("referrer");
             while (ref != null) {
                 Number skip = ref.getValue("skip");
-                if (skip != null && skip.longValue() > 0) chain.add("… (" + skip + " звеньев пропущено)");
+                if (skip != null && skip.longValue() > 0) chain.add("… (" + skip + " links missing)");
                 String via = "?";
                 long size = -1;
                 jdk.jfr.consumer.RecordedObject array = ref.getValue("array");
@@ -643,7 +642,7 @@ final class LeakCheck {
             return new Sample(type, e.hasField("objectSize") ? e.getLong("objectSize") : -1, e.getDuration("objectAge").toSeconds(), rootText, chain, stack);
         }
 
-        /** Тип объекта пути и описание (у класса — имя класса: держит статическое поле; у потока — имя потока). */
+        /** Path object type and description (for a class - the class name: holds a static field; for a thread - the name of the thread). */
         private static String name(jdk.jfr.consumer.RecordedObject o, long arraySize) {
             jdk.jfr.consumer.RecordedClass c = o.getClass("type");
             String n = c == null ? "?" : c.getName();

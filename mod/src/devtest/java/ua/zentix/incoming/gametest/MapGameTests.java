@@ -23,23 +23,23 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** Карта пульта на сервере: кого она показывает. */
+/** Remote control map on the server: who does it show. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class MapGameTests {
     private MapGameTests() {}
 
     /**
-     * Игроки на карте без разведки ({@link ServerActions#mapPlayers}; {@code FakePlayer} NeoForge — он пакетов не шлёт
-     * и в список игроков не входит, поэтому список передаётся сам): только в измерении спросившего и не дальше {@code map_range};
-     * не он сам, не наблюдатель, не невидимый; без прав на пульт и чаще раза в 4 тика — без ответа; выключено
-     * в настройках мира — пустой список.
+     * Players on the map without reconnaissance ({@link ServerActions#mapPlayers}; {@code FakePlayer} NeoForge - he does not send packets
+     *  and is not included in the list of players, so the list is transmitted itself): only in the dimension of the one who asked and no further {@code map_range};
+     *  not himself, not the observer, not invisible; without rights to the remote control and more than once in 4 tick - no response; disabled
+     * in world settings - empty list.
      */
     @GameTest(template = "pad", batch = "map_players")
     public static void mapPlayersShowsOnlyWhomItShould(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ServerLevel nether = level.getServer().getLevel(Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
+        h.assertTrue(nether != null, "no Nether");
         int range = IncomingConfig.SERVER.mapRange.get();
         boolean everyone = IncomingConfig.SERVER.designatorForEveryone.get(), shown = IncomingConfig.SERVER.mapPlayers.get();
         boolean rules = IncomingConfig.SERVER.sightRules.get();
@@ -49,7 +49,7 @@ public final class MapGameTests {
             IncomingConfig.SERVER.mapPlayers.set(shown);
             IncomingConfig.SERVER.sightRules.set(rules);
         });
-        // без разведки — все игроки там, где они сейчас (с разведкой — SpottingGameTests)
+        // without reconnaissance - all players are where they are now (with reconnaissance - SpottingGameTests)
         IncomingConfig.SERVER.sightRules.set(false);
         IncomingConfig.SERVER.mapRange.set(256);
         IncomingConfig.SERVER.designatorForEveryone.set(true);
@@ -66,28 +66,28 @@ public final class MapGameTests {
         FakePlayer elsewhere = player(nether, "map_nether", at);
         List<ServerPlayer> all = List.of(viewer, near, far, spectator, invisible, elsewhere);
 
-        h.assertValueEqual(names(ServerActions.mapPlayers(viewer, all)), Set.of("map_near"), "на карте");
+        h.assertValueEqual(names(ServerActions.mapPlayers(viewer, all)), Set.of("map_near"), "on the map");
         S2C.MapPlayer mark = ServerActions.mapPlayers(fresh(viewer), all).players().getFirst();
-        h.assertTrue(mark.id().equals(near.getUUID()) && mark.x() == near.getX() && mark.z() == near.getZ(), "метка не там: " + mark);
+        h.assertTrue(mark.id().equals(near.getUUID()) && mark.x() == near.getX() && mark.z() == near.getZ(), "the label is not there: " + mark);
 
         viewer.setData(ModAttachments.LAST_MAP_PLAYERS.get(), level.getGameTime());
-        h.assertTrue(ServerActions.mapPlayers(viewer, all) == null, "ответ чаще раза в 4 тика");
+        h.assertTrue(ServerActions.mapPlayers(viewer, all) == null, "answer more often than once in 4 tick");
         viewer.setData(ModAttachments.LAST_MAP_PLAYERS.get(), level.getGameTime() - 4);
-        h.assertTrue(ServerActions.mapPlayers(viewer, all) != null, "через 4 тика ответа нет");
+        h.assertTrue(ServerActions.mapPlayers(viewer, all) != null, "no answer via 4 tick");
 
         IncomingConfig.SERVER.mapRange.set(300);
-        h.assertValueEqual(names(ServerActions.mapPlayers(fresh(viewer), all)), Set.of("map_near", "map_far"), "дальность карты 300");
+        h.assertValueEqual(names(ServerActions.mapPlayers(fresh(viewer), all)), Set.of("map_near", "map_far"), "map range 300");
 
-        // выключено в настройках мира: карта не рисует, а пульт по-прежнему выбирает из них цель
+        // disabled in world settings: the map does not draw, but the remote control still selects a target from them
         IncomingConfig.SERVER.mapPlayers.set(false);
         S2C.MapPlayers off = ServerActions.mapPlayers(fresh(viewer), all);
-        h.assertTrue(off != null && !off.shown(), "выключено в настройках мира, а карта рисует");
-        h.assertValueEqual(names(off), Set.of("map_near", "map_far"), "цели пульта при выключенной карте");
+        h.assertTrue(off != null && !off.shown(), "turned off in the world settings, but the map draws");
+        h.assertValueEqual(names(off), Set.of("map_near", "map_far"), "remote control targets when the card is turned off");
         IncomingConfig.SERVER.mapPlayers.set(true);
 
-        // не оператор (FakePlayer без прав), пульт — только операторам
+        // not an operator (FakePlayer without rights), remote control - only for operators
         IncomingConfig.SERVER.designatorForEveryone.set(false);
-        h.assertTrue(ServerActions.mapPlayers(fresh(viewer), all) == null, "без прав на пульт — ответ");
+        h.assertTrue(ServerActions.mapPlayers(fresh(viewer), all) == null, "without rights to the remote control - answer");
         h.succeed();
     }
 
@@ -97,14 +97,14 @@ public final class MapGameTests {
         return p;
     }
 
-    /** Снять паузу между запросами: следующий спрашивает, как через секунду. */
+    /** Remove the pause between requests: the next one asks how in a second. */
     private static ServerPlayer fresh(ServerPlayer p) {
         p.removeData(ModAttachments.LAST_MAP_PLAYERS.get());
         return p;
     }
 
     private static Set<String> names(@Nullable S2C.MapPlayers marks) {
-        if (marks == null) throw new AssertionError("ответа нет");
+        if (marks == null) throw new AssertionError("no answer");
         return marks.players().stream().map(S2C.MapPlayer::name).collect(Collectors.toSet());
     }
 }

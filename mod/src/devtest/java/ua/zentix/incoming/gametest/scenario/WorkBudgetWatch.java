@@ -16,24 +16,24 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Бюджет тяжёлой работы за тик ({@link WorkScheduler}, корень 1) во время сценариев. Часы полос — считающие
- * ({@link WorkClock#counting}, единица работы = 1 мс): решения очереди не зависят от скорости машины, и граница
- * проверяется точно. В конце каждого тика (после планировщика): полоса попаданий — не больше общего срока и одной
- * единицы, попадания с блэкаутом — не больше общего срока и одной единицы на полосу; и в каком тике очередь попаданий
- * была пуста. Часы — одни на сервер, поэтому подменяются, пока идёт хоть один сценарий (партии сценариев — только
- * из сценариев), и возвращаются игровые после последнего.
+ * Hard work budget per tick ({@link WorkScheduler}, root 1) during scenarios. Band clock - counting
+ * ({@link WorkClock#counting}, unit of work = 1 ms): Queue decisions are independent of machine speed, and the
+ *  bound is checked exactly. At the end of each tick (after the scheduler): the streak of hits is no more than the total duration and one
+ *  unit, hits with blackout are no more than the total duration and one unit per streak; and at which tick the hit queue
+ *  was empty. There is only one clock per server, so it is changed while at least one scenario is running (batch of scenarios - only
+ *  of the scenarios), and the game clock is returned after the last one.
  */
 final class WorkBudgetWatch {
-    /** Цена единицы работы у считающих часов. */
+    /** Price per unit of work for a counting clock. */
     static final long UNIT = 1_000_000L;
 
-    /** Тик сервера, в котором граница нарушена, и чем. */
+    /** tick of the server in which the boundary was violated, and by what. */
     record Violation(int tick, String what) {}
 
     private static int users;
     private static boolean registered;
     private static final List<Violation> violations = new ArrayList<>();
-    /** Последний тик сервера, в конце которого очереди попаданий всех миров были пусты. */
+    /** The last tick of the server, at the end of which the hit queues of all worlds were empty. */
     private static int lastEmpty = -1;
 
     private WorkBudgetWatch() {}
@@ -63,11 +63,11 @@ final class WorkBudgetWatch {
         long total = WorkScheduler.totalNanos();
         int tick = server.getTickCount();
         if (impact.usedThisTickNanos() > total + UNIT) {
-            violations.add(new Violation(tick, String.format(Locale.ROOT, "попадания %d мс при сроке %d", impact.usedThisTickNanos() / UNIT, total / UNIT)));
+            violations.add(new Violation(tick, String.format(Locale.ROOT, "hits %d ms with deadline %d", impact.usedThisTickNanos() / UNIT, total / UNIT)));
         }
         long both = impact.usedThisTickNanos() + grid.usedThisTickNanos();
         if (both > total + 2 * UNIT) {
-            violations.add(new Violation(tick, String.format(Locale.ROOT, "попадания и блэкаут %d мс при сроке %d", both / UNIT, total / UNIT)));
+            violations.add(new Violation(tick, String.format(Locale.ROOT, "hits and blackout %d ms at time limit %d", both / UNIT, total / UNIT)));
         }
         boolean empty = true;
         for (ServerLevel level : server.getAllLevels()) {
@@ -76,12 +76,12 @@ final class WorkBudgetWatch {
         if (empty) lastEmpty = tick;
     }
 
-    /** Нарушения границы в тиках сервера с {@code fromTick} (включительно). */
+    /** Boundary violations in the server tick from {@code fromTick} (inclusive). */
     static synchronized List<Violation> since(int fromTick) {
         return violations.stream().filter(v -> v.tick() >= fromTick).toList();
     }
 
-    /** Была ли очередь попаданий пуста в конце какого-нибудь тика сервера с {@code fromTick}. */
+    /** Was the hit queue empty at the end of some server tick with {@code fromTick}. */
     static boolean emptiedSince(int fromTick) {
         return lastEmpty >= fromTick;
     }

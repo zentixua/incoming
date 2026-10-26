@@ -63,9 +63,9 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 /**
- * Жизненный цикл снарядов и чанков — то, что стенд нагрузки ({@code tools/stress.sh}) проверяет в игре с друзьями:
- * луч прицела не грузит чанки на сервере, тикеты отпускаются при любом уходе снаряда из мира (и при выгрузке
- * вместе с чанком), при остановке сервера снаряды уходят в полёт вне мира, а не замирают в файлах чанков.
+ * The life cycle of projectiles and chunks is what the load stand ({@code tools/stress.sh}) checks in a game with friends:
+ *  the sight beam does not load chunks on the server, tickets are released whenever a projectile leaves the world (and when unloading
+ *  together with a chunk), when the server is stopped, projectiles go flying outside the world, and not freeze in chunk files.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -75,8 +75,8 @@ public final class LifecycleGameTests {
     private LifecycleGameTests() {}
 
     /**
-     * Мир с записями под именем {@code airstrike}: каждая запись мода находится и по этому имени, а блок из
-     * палитры чанка с ним читается блоком Incoming, а не воздухом.
+     * A world with entries under the name {@code airstrike}: each mod entry is also under this name, and the block from the
+     *  palette of the chunk with it is read by the Incoming block, and not by air.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "old_namespace")
     public static void oldNamespaceResolves(GameTestHelper helper) {
@@ -100,7 +100,7 @@ public final class LifecycleGameTests {
         state.putString("Name", OldNamespace.ID + ":" + BuiltInRegistries.BLOCK.getKey(block).getPath());
         BlockState read = NbtUtils.readBlockState(helper.getLevel().holderLookup(Registries.BLOCK), state);
         helper.assertTrue(read.is(block), "old block name read as " + read);
-        // данные мира переименовываются там, где их держит игра: Незер — DIM-1, Энд — DIM1
+        // world data is renamed where the game keeps it: Nether - DIM-1, End - DIM1
         Path root = helper.getLevel().getServer().getWorldPath(LevelResource.ROOT);
         List<Path> folders = OldNamespace.dataFolders(helper.getLevel().getServer());
         for (String dim : List.of("DIM-1", "DIM1")) {
@@ -111,52 +111,52 @@ public final class LifecycleGameTests {
     }
 
     /**
-     * «Куда смотрю» с экрана пульта и из команд прицеливается на сервере: луч на 400 блоков не должен грузить
-     * чанки на пути (ванильный clip грузит и генерирует их прямо в тике — сервер встаёт на секунды).
+     * “Where I’m looking” from the remote control screen and from commands is aimed on the server: the beam on 400 blocks should not load
+     *  chunks on the way (vanilla clip loads and generates them right on tick - the server stops for seconds).
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "picker_chunks")
     public static void serverPickDoesNotLoadChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // выше барьерной стены вокруг площадки: над плоским миром теста луч идёт по воздуху все 400 блоков
+        // above the barrier wall around the site: above the flat test world, the beam travels through the air all 400 blocks
         Vec3 eye = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 100, 0);
         Vec3 look = new Vec3(1, 0, 0);
-        // первый незагруженный чанк по лучу
+        // the first unloaded chunk along the beam
         ChunkPos unready = null;
         for (int d = 16; d <= 400 && unready == null; d += 4) {
             BlockPos p = BlockPos.containing(eye.add(look.scale(d)));
             if (!Terrain.ready(level, p)) unready = new ChunkPos(p);
         }
-        h.assertTrue(unready != null, "по лучу нет незагруженного чанка — проверять нечего");
+        h.assertTrue(unready != null, "there is no unloaded chunk on the beam - there is nothing to check");
         ArmorStand viewer = new ArmorStand(level, eye.x, eye.y - 1.6, eye.z);
         TargetPicker.pick(level, viewer, eye, look, 400);
-        h.assertTrue(level.getChunkSource().getChunkNow(unready.x, unready.z) == null, "луч прицела загрузил чанк " + unready);
+        h.assertTrue(level.getChunkSource().getChunkNow(unready.x, unready.z) == null, "sight beam loaded chunk " + unready);
         h.succeed();
     }
 
     /**
-     * Снаряд в мире держит тикеты своего чанка и чанка впереди; выгрузка вместе с чанком ({@code setRemoved},
-     * без {@code remove}) должна их отпустить — иначе чанки висели бы загруженными до перезапуска.
+     * The projectile in the world holds the ticket of its chunk and the chunk in front; unloading together with the chunk ({@code setRemoved},
+     *  without {@code remove}) should release them - otherwise the chunks would hang loaded until the restart.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "tickets_unload", skyAccess = true)
     public static void ticketsReleasedWhenUnloadedWithChunk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 1, 0);
-        // на направляющей (стоит до поджига): держит тикет своего чанка и никуда не улетает
+        // on the guide (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.placeOnLauncher(start, 0, 40, 1000, 0, new Target.Point(start.add(0, 0, 3000)), start.add(0, 0, 3000), null);
         m.setRoute(Route.direct());
         level.addFreshEntity(m);
         UUID id = m.getUUID();
         h.runAfterDelay(3, () -> {
-            h.assertTrue(chunkTickets(level, id) > 0, "снаряд не взял тикет своего чанка: " + state(level, m));
+            h.assertTrue(chunkTickets(level, id) > 0, "the projectile did not take the ticket of its chunk: " + state(level, m));
             m.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-            h.assertTrue(chunkTickets(level, id) == 0, "тикет чанка остался после выгрузки снаряда");
+            h.assertTrue(chunkTickets(level, id) == 0, "ticket chunk remained after unloading the projectile");
             h.succeed();
         });
     }
 
     /**
-     * Район цели (тикет региона или прогрев по чанкам) держит и барражирующий в мире; выгрузка с чанком отпускает и его.
+     * The target area (ticket of the region or warming up by chunks) keeps and loitering in the world; unloading with a chunk releases it too.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "tickets_area", skyAccess = true)
     public static void targetAreaReleasedWhenUnloadedWithChunk(GameTestHelper h) {
@@ -168,33 +168,33 @@ public final class LifecycleGameTests {
         level.addFreshEntity(l);
         UUID id = l.getUUID();
         h.runAfterDelay(3, () -> {
-            h.assertTrue(flightTickets(level, id) > 0, "барражирующий не взял район цели: " + state(level, l));
+            h.assertTrue(flightTickets(level, id) > 0, "loitering did not take the target area: " + state(level, l));
             l.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-            h.assertTrue(flightTickets(level, id) == 0, "район цели остался после выгрузки снаряда");
+            h.assertTrue(flightTickets(level, id) == 0, "the target area remained after the projectile was unloaded");
             h.succeed();
         });
     }
 
     /**
-     * Остановка сервера: снаряд из мира переходит в полёт вне мира с тем же UUID (его сохранит {@link VirtualFlights})
-     * и отпускает тикеты.
+     * Server stop: a projectile from the world goes into flight outside the world with the same UUID (it will be saved by {@link VirtualFlights})
+     *  and releases the ticket.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "shutdown_park", skyAccess = true)
     public static void projectileParksOnShutdown(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 1, 0);
-        // на направляющей (стоит до поджига): держит тикет своего чанка и никуда не улетает
+        // on the guide (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.placeOnLauncher(start, 0, 40, 1000, 0, new Target.Point(start.add(0, 0, 3000)), start.add(0, 0, 3000), null);
         m.setRoute(Route.direct());
         level.addFreshEntity(m);
         UUID id = m.getUUID();
         h.runAfterDelay(3, () -> {
-            h.assertTrue(chunkTickets(level, id) > 0, "снаряд не взял тикет своего чанка: " + state(level, m));
+            h.assertTrue(chunkTickets(level, id) > 0, "the projectile did not take the ticket of its chunk: " + state(level, m));
             m.parkForShutdown(level);
-            h.assertTrue(m.isRemoved() && level.getEntity(id) == null, "снаряд остался в мире");
-            h.assertTrue(VirtualFlights.get(level).flights().stream().anyMatch(p -> p.getUUID().equals(id)), "снаряд не ушёл в полёт вне мира");
-            h.assertTrue(chunkTickets(level, id) == 0, "тикет чанка остался");
+            h.assertTrue(m.isRemoved() && level.getEntity(id) == null, "the projectile remained in the world");
+            h.assertTrue(VirtualFlights.get(level).flights().stream().anyMatch(p -> p.getUUID().equals(id)), "the projectile did not go off-world");
+            h.assertTrue(chunkTickets(level, id) == 0, "ticket chunk left");
             VirtualFlights.get(level).flights().removeIf(p -> {
                 if (!p.getUUID().equals(id)) return false;
                 p.discard();
@@ -205,8 +205,8 @@ public final class LifecycleGameTests {
     }
 
     /**
-     * Остановка сервера, пока снаряд стоит на пусковой в закрытой ячейке: после запуска он возвращается в мир на ту же
-     * направляющую (а не над рельефом, как снаряд в полёте) и по-прежнему скрыт, пока пакет поднимается.
+     * Stopping the server while the projectile is on the launcher in a closed cell: after launch, it returns to the world on the same
+     *  guide (and not above the terrain, like a projectile in flight) and is still hidden while the package is rising.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "shutdown_rail", skyAccess = true)
     public static void parkedLauncherRoundReturnsToRail(GameTestHelper h) {
@@ -219,18 +219,18 @@ public final class LifecycleGameTests {
         UUID id = m.getUUID();
         h.runAfterDelay(3, () -> m.parkForShutdown(level));
         h.runAfterDelay(8, () -> {
-            h.assertTrue(level.getEntity(id) instanceof StrikeProjectile, "снаряд не вернулся в мир: " + state(level, m));
+            h.assertTrue(level.getEntity(id) instanceof StrikeProjectile, "the projectile did not return to the world: " + state(level, m));
             StrikeProjectile back = (StrikeProjectile) level.getEntity(id);
-            h.assertTrue(back != m && back.position().distanceTo(rail) < 1e-6, "снаряд вернулся не на направляющую: " + back.position() + " вместо " + rail);
-            h.assertTrue(back.flightPhase() == FlightPhase.READY && !back.isActive(), "снаряд в закрытой ячейке виден: " + state(level, back));
+            h.assertTrue(back != m && back.position().distanceTo(rail) < 1e-6, "the projectile did not return to the guide: " + back.position() + " instead of " + rail);
+            h.assertTrue(back.flightPhase() == FlightPhase.READY && !back.isActive(), "the projectile in the closed cell is visible: " + state(level, back));
             back.discard();
             h.succeed();
         });
     }
 
     /**
-     * Снаряд вне мира, у которого кончился запас хода, убирается — и не берёт район цели заново в том же тике
-     * (иначе региональные тикеты остаются после ракет, не дождавшихся района цели).
+     * A projectile outside the world that has run out of power reserve is removed - and does not take the target area again in the same tick
+     *  (otherwise regional tickets remain after missiles that did not wait for the target area).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "virtual_expiry", skyAccess = true)
     public static void expiredVirtualFlightLeavesNoTargetArea(GameTestHelper h) {
@@ -240,7 +240,7 @@ public final class LifecycleGameTests {
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.launch(start, new Target.Point(target), target, null);
         m.setRoute(Route.direct());
-        // запас хода — на два тика: сохранить и прочитать обратно с другим запасом
+        // power reserve - two ticks: save and read back with another reserve
         net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
         m.saveWithoutId(tag);
         tag.getCompound("mission").putDouble("range", 2 * m.cruiseSpeed());
@@ -248,16 +248,15 @@ public final class LifecycleGameTests {
         VirtualFlights.launch(level, m);
         UUID id = m.getUUID();
         h.runAfterDelay(6, () -> {
-            h.assertTrue(m.isRemoved(), "снаряд не убран по сроку жизни: " + state(level, m));
-            h.assertTrue(flightTickets(level, id) == 0, "район цели остался за убранным снарядом");
+            h.assertTrue(m.isRemoved(), "the projectile is not removed due to its lifespan: " + state(level, m));
+            h.assertTrue(flightTickets(level, id) == 0, "the target area remained behind the removed projectile");
             h.succeed();
         });
     }
 
     /**
-     * Неподвижная цель не теряется, как бы далеко ни был снаряд (ракета, стартовавшая дальше 3000 блоков, не
-     * показывает весь полёт «цель потеряна»); движущаяся теряется, когда пропала или ушла дальше
-     * запаса на погоню, и точка остаётся последней известной.
+     * A stationary target is not lost, no matter how far the projectile is (a missile launched further than 3000 blocks does not indicate the entire flight “target lost”); the moving one is lost when it disappears or goes beyond
+     *  reserve for the pursuit, and the point remains the last known.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "tracker_loss")
     public static void onlyRunawayTargetIsLost(GameTestHelper h) {
@@ -265,7 +264,7 @@ public final class LifecycleGameTests {
         Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(8, 11, 8))).add(0, 0, 5000);
         TargetTracker point = new TargetTracker(new Target.Point(far), far);
         for (int i = 0; i < 3; i++) point.tick(level, q -> false);
-        h.assertFalse(point.isLost(), "неподвижная цель потеряна");
+        h.assertFalse(point.isLost(), "fixed target lost");
 
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(8, 11, 8)));
         ArmorStand stand = new ArmorStand(level, at.x, at.y, at.z);
@@ -273,54 +272,54 @@ public final class LifecycleGameTests {
         TargetTracker moving = new TargetTracker(new Target.OfEntity(stand.getUUID(), Vec3.ZERO), at);
         Vec3 near = at.add(20, 0, 0);
         stand.teleportTo(near.x, near.y, near.z);
-        h.assertTrue(Math.abs(moving.tick(level, q -> false) - 20) < 1e-6, "сдвиг цели не догоняется");
-        h.assertFalse(moving.isLost(), "цель потеряна в пределах запаса на погоню");
+        h.assertTrue(Math.abs(moving.tick(level, q -> false) - 20) < 1e-6, "the target shift does not catch up");
+        h.assertFalse(moving.isLost(), "the target is lost within the pursuit reserve");
         Vec3 runaway = near.add(0, 0, TargetTracker.CHASE_BUDGET);
         stand.teleportTo(runaway.x, runaway.y, runaway.z);
-        h.assertTrue(moving.tick(level, q -> false) == 0 && moving.isLost(), "цель ушла дальше запаса на погоню и не потеряна");
-        h.assertTrue(moving.point().distanceTo(near) < 1e-6, "потерянная цель сдвинула точку удара");
+        h.assertTrue(moving.tick(level, q -> false) == 0 && moving.isLost(), "the target has gone beyond the pursuit reserve and is not lost");
+        h.assertTrue(moving.point().distanceTo(near) < 1e-6, "lost target moved point of impact");
 
         TargetTracker gone = new TargetTracker(new Target.OfEntity(stand.getUUID(), Vec3.ZERO), runaway);
         stand.discard();
         gone.tick(level, q -> false);
-        h.assertTrue(gone.isLost(), "пропавшая цель не потеряна");
+        h.assertTrue(gone.isLost(), "a missing target is not lost");
         h.succeed();
     }
 
     /**
-     * Цель ушла далеко (игрок улетел за тысячи блоков, перенацеливание): запас хода растёт на пролёт этого сдвига.
-     * Без этого он остаётся по плану до старой точки, и снаряд пропадает в пути без подрыва (например,
-     * 5 «Ланцетов» и ракета за игроком, улетевшим на 3000 блоков и вышедшим там из игры). Запас на погоню
-     * конечен: снаряд, который его уже выбрал, убирается по запасу хода и район цели не держит.
+     * The target has gone far away (the player has flown thousands of blocks away, retargeting): the power reserve increases for the duration of this shift.
+     *  Without this, it remains according to plan to the old point, and the projectile disappears along the way without detonation (for example,
+     * 5 “Lancet” and the rocket behind the player who flew away 3000 blocks and who left the game there). The reserve for the chase
+     *  is finite: the projectile that has already selected it is removed according to the power reserve and does not hold the target area.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "moved_target", skyAccess = true)
     public static void rangeFollowsMovedTarget(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // старт над дальним углом площадки: до цели ~70 блоков, за время теста шахед до неё не долетит
+        // start above the far corner of the site: ~70 blocks to the target; Shahed will not reach it during the test
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(56, 11, 56))).add(0, 60, 0);
         Vec3 near = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(8, 11, 8)));
         ArmorStand stand = new ArmorStand(level, near.x, near.y, near.z);
         level.addFreshEntity(stand);
         StrikeProjectile followed = virtualWithTwoTicks(level, start, new Target.OfEntity(stand.getUUID(), Vec3.ZERO), near);
         StrikeProjectile retargeted = virtualWithTwoTicks(level, start, new Target.Point(near), near);
-        // без запаса подорвётся в воздухе по запасу хода — в другом углу, чтобы взрыв не задел остальных
+        // without a reserve, it will explode in the air according to its power reserve - in another corner, so that the explosion does not affect the others
         Vec3 aside = Vec3.atCenterOf(h.absolutePos(new BlockPos(8, 11, 56))).add(0, 60, 0);
         StrikeProjectile exhausted = virtualWithTwoTicks(level, aside, new Target.Point(near), near);
         net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
         exhausted.saveWithoutId(tag);
         tag.getCompound("tracker").putDouble("chased", TargetTracker.CHASE_BUDGET);
         exhausted.load(tag);
-        // цель переходит в другой угол площадки (шахеду это ~30 тиков полёта), новая цель — за 1500 блоков
+        // the target moves to another corner of the site (Shahed is ~30 flight tick), the new target is 1500 blocks away
         Vec3 moved = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(56, 11, 8)));
         stand.teleportTo(moved.x, moved.y, moved.z);
         Vec3 far = near.add(0, 0, 1500);
-        h.assertTrue(retargeted.retarget(new Target.Point(far), far), "шахед не принял новую цель");
-        h.assertTrue(exhausted.retarget(new Target.Point(far), far), "шахед без запаса не принял новую цель");
+        h.assertTrue(retargeted.retarget(new Target.Point(far), far), "shahed did not accept the new goal");
+        h.assertTrue(exhausted.retarget(new Target.Point(far), far), "shahed did not accept the new goal without reserve");
         h.runAfterDelay(6, () -> {
-            h.assertFalse(followed.isRemoved(), "шахед за ушедшей целью убрал старый запас хода: " + state(level, followed));
-            h.assertFalse(retargeted.isRemoved(), "перенацеленный шахед убрал старый запас хода: " + state(level, retargeted));
-            h.assertTrue(exhausted.isRemoved(), "шахед без запаса на погоню не убран по запасу хода: " + state(level, exhausted));
-            h.assertTrue(flightTickets(level, exhausted.getUUID()) == 0, "район цели остался за шахедом без запаса");
+            h.assertFalse(followed.isRemoved(), "shahed removed the old move reserve for the departed target: " + state(level, followed));
+            h.assertFalse(retargeted.isRemoved(), "retargeted Shahed removed the old power reserve: " + state(level, retargeted));
+            h.assertTrue(exhausted.isRemoved(), "shahed without a reserve for the pursuit is not removed in terms of power reserve: " + state(level, exhausted));
+            h.assertTrue(flightTickets(level, exhausted.getUUID()) == 0, "the target area remained behind Shahed without reserves");
             for (StrikeProjectile m : List.of(followed, retargeted)) {
                 VirtualFlights.get(level).flights().remove(m);
                 m.discard();
@@ -330,7 +329,7 @@ public final class LifecycleGameTests {
         });
     }
 
-    /** Шахед в полёте вне мира, у которого запас хода — на два тика. */
+    /** Shahed in flight outside the world, which has a power reserve of two ticks. */
     private static StrikeProjectile virtualWithTwoTicks(ServerLevel level, Vec3 start, Target target, Vec3 point) {
         StrikeProjectile m = ModEntities.DRONE.get().create(level);
         m.launch(start, target, point, null);
@@ -344,14 +343,14 @@ public final class LifecycleGameTests {
     }
 
     /**
-     * Снаряд в мире улетает за край загруженного: до выхода он держит тикеты, а уйдя в полёт вне мира, не держит
-     * ни одного и в мире не остаётся (иначе он шагает в чанк без тика и может застрять там с тикетами).
+     * The projectile in the world flies off the edge of the loaded one: before exiting it holds a ticket, and having gone into flight outside the world, it does not hold any
+     *  and does not remain in the world (otherwise it steps into the chunk without a tick and can get stuck there with a ticket).
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "leave_loaded", skyAccess = true)
     public static void projectileLeavingLoadedWorldHoldsNoTickets(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // снаряд РСЗО: баллистика уводит его вверх, над барьерной стеной площадки (крылатая ракета прижалась бы
-        // к рельефу и разбилась о стену)
+        // mLRS projectile: ballistics takes it up, above the barrier wall of the site (the cruise missile would have pressed
+        //  against the terrain and crashed against the wall)
         Vec3 start = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 10, 0);
         Vec3 target = start.add(600, -10, 0);
         RocketEntity m = ModEntities.ROCKET.get().create(level);
@@ -364,33 +363,33 @@ public final class LifecycleGameTests {
             if (away[0] != null) return;
             if (level.getEntity(id) instanceof StrikeProjectile p && !p.isVirtual()) {
                 if (chunkTickets(level, id) > 0) held[0] = true;
-                h.assertTrue(level.isPositionEntityTicking(p.blockPosition()), "снаряд в мире стоит в чанке без тика: " + state(level, p));
+                h.assertTrue(level.isPositionEntityTicking(p.blockPosition()), "the projectile in the world is in a chunk without a tick: " + state(level, p));
             }
             for (StrikeProjectile p : List.copyOf(VirtualFlights.get(level).flights())) {
                 if (!p.getUUID().equals(id)) continue;
-                // ушёл: снимок того, что осталось за ним, и копия убирается (дальше тесту она не нужна)
-                away[0] = "в мире " + (level.getEntity(id) != null) + ", тикетов " + chunkTickets(level, id);
+                // left: a snapshot of what was left behind, and the copy is removed (the test no longer needs it)
+                away[0] = "in-world " + (level.getEntity(id) != null) + ", tickets " + chunkTickets(level, id);
                 VirtualFlights.get(level).flights().remove(p);
                 p.discard();
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(away[0] != null, "снаряд не ушёл в полёт вне мира: " + state(level, m));
-            h.assertTrue(held[0], "в мире снаряд не держал тикетов — проверять нечего");
-            h.assertTrue(away[0].equals("в мире false, тикетов 0"), "после ухода из мира: " + away[0]);
+            h.assertTrue(away[0] != null, "the projectile did not go off-world: " + state(level, m));
+            h.assertTrue(held[0], "in the world the projectile did not hold a ticket - there is nothing to check");
+            h.assertTrue(away[0].equals("in-world false, tickets 0"), "after leaving the world: " + away[0]);
         });
     }
 
     /**
-     * Снаряд из полёта вне мира не вошёл в мир — обработчик входа упал или отменил вход (моды защиты территорий): он
-     * убирается и отпускает тикеты своих чанков, взятые до входа, и района цели. Ошибка не уходит из тика мира (там она
-     * роняла бы сервер): следующий полёт того же тика тоже пробует войти.
+     * A projectile from a flight outside the world did not enter the world - the input handler fell or canceled the input (territory defense mods): it
+     *  retracts and releases the ticket of its chunks taken before the entrance and the target area. The error does not leave the tick world (there it would
+     *  crash the server): the next flight of the same tick also tries to enter.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "virtual_return_refused", skyAccess = true)
     public static void refusedReturnFromVirtualFlightLeavesNoTickets(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // на площадке, в полосе x, z 16–47, и путь на 16 блоков вперёд — тоже; сущности в чанке тикают, когда готовы и
-        // соседи в два чанка: в тесте — сразу, без ожидания фоновой генерации
+        // on the site, in the lane x, z 16–47, and the path 16 blocks ahead too; entities in a chunk tick when they are ready and
+        //  neighbors in two chunks: in the test - immediately, without waiting for background generation
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(20, 11, 30))).add(0, 20, 0);
         ChunkPos from = new ChunkPos(BlockPos.containing(start)), to = new ChunkPos(BlockPos.containing(start.add(40, 0, 4)));
         for (int x = Math.min(from.x, to.x) - 2; x <= Math.max(from.x, to.x) + 2; x++) {
@@ -411,7 +410,7 @@ public final class LifecycleGameTests {
             if (id.equals(crashing.getUUID()) || id.equals(vetoed.getUUID())) {
                 tried.put(id, h.getTick());
                 heldOnEntry.put(id, chunkTickets(level, id) > 0 && flightTickets(level, id) > 0);
-                if (id.equals(crashing.getUUID())) throw new IllegalStateException("проверка: вход в мир падает с ошибкой");
+                if (id.equals(crashing.getUUID())) throw new IllegalStateException("check: entering the world crashes with an error");
                 e.setCanceled(true);
             }
         };
@@ -422,41 +421,41 @@ public final class LifecycleGameTests {
         });
         boolean[] launched = {false};
         h.onEachTick(() -> {
-            // в полёт вне мира — когда он сразу может вернуться: упавший вход первым в списке, отменённый за ним
+            // on a flight outside the world - when he can immediately return: the fallen entry is first in the list, canceled after it
             if (launched[0] || !crashing.canMaterialize(level) || !vetoed.canMaterialize(level)) return;
             VirtualFlights.launch(level, crashing);
             VirtualFlights.launch(level, vetoed);
             launched[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(tried.size() == 2, "в мир пробовали войти не оба: " + tried.size() + ", " + state(level, crashing) + "; " + state(level, vetoed));
-            h.assertValueEqual(tried.get(vetoed.getUUID()), tried.get(crashing.getUUID()), "тик входа отменённого после упавшего");
-            h.assertTrue(heldOnEntry.values().stream().allMatch(b -> b), "при входе в мир снаряд не держал тикетов чанков и района цели — проверять нечего");
+            h.assertTrue(tried.size() == 2, "not both tried to enter the world: " + tried.size() + ", " + state(level, crashing) + "; " + state(level, vetoed));
+            h.assertValueEqual(tried.get(vetoed.getUUID()), tried.get(crashing.getUUID()), "tick of an input canceled after a failed one");
+            h.assertTrue(heldOnEntry.values().stream().allMatch(b -> b), "upon entering the world, the projectile did not hold ticket chunks and the target area - there is nothing to check");
             for (StrikeProjectile p : List.of(crashing, vetoed)) {
                 UUID id = p.getUUID();
                 h.assertTrue(p.isRemoved() && level.getEntity(id) == null && VirtualFlights.get(level).flights().stream().noneMatch(v -> v == p),
-                        "снаряд, не вошедший в мир, остался: " + state(level, p));
-                h.assertValueEqual(chunkTickets(level, id), 0, "тикеты чанков не вошедшего в мир снаряда");
-                h.assertValueEqual(flightTickets(level, id), 0, "тикеты района цели не вошедшего в мир снаряда");
+                        "the projectile that did not enter the world remained: " + state(level, p));
+                h.assertValueEqual(chunkTickets(level, id), 0, "ticket chunks of a projectile not included in the world");
+                h.assertValueEqual(flightTickets(level, id), 0, "ticket for the target area of a projectile that did not enter the world");
             }
         });
     }
 
     /**
-     * Мир без игроков (Незер, куда никто не заходил) через 300 тиков перестаёт тикать сущности, а тикеты снаряда
-     * принудительной загрузкой не считаются: пока в мире идёт удар, мир не засыпает. Снаряд на направляющей стоит
-     * до поджига и тикает на месте — его возраст растёт, только пока мир тикает сущности.
+     * A world without players (Nether, where no one has entered) after 300 tick entities stop ticking, and the ticket of the
+     *  projectile is not considered forced loading: while the world is being hit, the world does not fall asleep. The projectile on the guide stands
+     *  before being ignited and ticks in place - its age grows only while the world ticks.
      */
     @GameTest(template = "pad", timeoutTicks = 1200, batch = "empty_dimension")
     public static void strikeKeepsEmptyDimensionAwake(GameTestHelper h) {
         ServerLevel nether = h.getLevel().getServer().getLevel(Level.NETHER);
-        h.assertTrue(nether != null && nether.players().isEmpty(), "нет Незера без игроков");
-        // над крышей из бедрока, в колонке площадки теста (свои, дальние координаты у каждого запуска)
+        h.assertTrue(nether != null && nether.players().isEmpty(), "no Nether without players");
+        // above the bedrock roof, in the column of the test site (each launch has its own, distant coordinates)
         BlockPos at = new BlockPos(h.absolutePos(BlockPos.ZERO).getX(), 140, h.absolutePos(BlockPos.ZERO).getZ());
         ChunkPos chunk = new ChunkPos(at);
         UUID holder = UUID.randomUUID();
         ChunkTickets.hold(nether, holder, chunk.toLong(), true);
-        // сущности в чанке тикают, когда готовы и соседи в два чанка: в тесте — сразу, без ожидания фоновой генерации
+        // entities in a chunk tick when they are ready and neighbors in two chunks: in the test - immediately, without waiting for background generation
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) nether.getChunk(chunk.x + dx, chunk.z + dz);
         }
@@ -472,9 +471,9 @@ public final class LifecycleGameTests {
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(placed[0] >= 0 && h.getTick() - placed[0] >= 400, "ждём 400 тиков после пуска: " + state(nether, m));
-            // без удара мир уснул бы не позже чем через 300 тиков, и возраст снаряда остановился бы
-            h.assertTrue(m.age() >= 390, "мир без игроков уснул посреди удара: " + state(nether, m));
+            h.assertTrue(placed[0] >= 0 && h.getTick() - placed[0] >= 400, "wait for 400 tick after launch: " + state(nether, m));
+            // without the impact, the world would fall asleep no later than 300 tick, and the age of the projectile would stop
+            h.assertTrue(m.age() >= 390, "the world without players fell asleep in the middle of the blow: " + state(nether, m));
             m.discard();
             ChunkTickets.hold(nether, holder, chunk.toLong(), false);
         });
@@ -486,27 +485,27 @@ public final class LifecycleGameTests {
     }
 
     /**
-     * Тикеты района цели этого снаряда (ключ — его UUID): тикет региона {@code FlightTickets} и, пока район
-     * не готов целиком, тикет загрузки {@code AreaLoader}.
+     * ticket for the target area of this projectile (the key is its UUID): region ticket {@code FlightTickets} and, until the area
+     *  is completely ready, loading ticket {@code AreaLoader}.
      */
     private static int flightTickets(ServerLevel level, UUID id) {
         return TicketProbe.count(level, "incoming_flight", id) + TicketProbe.count(level, "incoming_area_load", id);
     }
 
-    /** Тикет района без {@code AreaLoader} — ванильный тикет региона сразу на весь район (контроль проверки). */
+    /** district ticket without {@code AreaLoader} - vanilla region ticket for the entire district at once (verification control). */
     private static final TicketType<UUID> PLAIN_AREA = TicketType.create("incoming_test_plain_area", Comparator.<UUID>naturalOrder());
 
     /**
-     * Районы целей в свежем мире ({@code AreaLoader}): в любой тик блоки района тикают только там, где готовы все
-     * соседние чанки (иначе улей у края района, выпуская пчелу, грузит соседа синхронно, и сервер стоит
-     * 2–18 с); у района один тикет региона, и его квадрат готов; тикет загрузки стоит, пока район не взят целиком;
-     * сущности в центре тикают; отпущенный район не оставляет тикетов. Контроль — ванильный тикет региона на свежий
-     * район без {@code AreaLoader}: проверка должна поймать у него тикающие блоки рядом с неготовым чанком.
+     * Target areas in the fresh world ({@code AreaLoader}): at any tick, the blocks of the area tick only where all
+     *  neighboring chunks are ready (otherwise the hive at the edge of the area, releasing a bee, loads its neighbor synchronously, and the server costs
+     * 2–18 s); the district has one region ticket, and its square is ready; the loading ticket costs until the entire area is taken;
+     * entities in the center are ticking; the released area does not leave a ticket. Control - a vanilla region ticket for a fresh
+     * region without {@code AreaLoader}: the check should catch ticking blocks next to an unready chunk.
      */
     @GameTest(template = "range", timeoutTicks = 6000, batch = "tickets_background", skyAccess = true)
     public static void targetAreasTickOnlyNextToReadyChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // районы грузятся в фоне: срок — игровой (сервер GameTest тикает без пауз, на CI он прошёл бы раньше генерации)
+        // areas are loaded in the background: the deadline is in-game (the GameTest server ticks without pauses, on CI it would have passed before generation)
         StrikeGameTests.gameSpeed(h);
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         ChunkPos[] centre = {new ChunkPos(base.x + 40, base.z), new ChunkPos(base.x + 70, base.z + 30), new ChunkPos(base.x - 50, base.z - 40)};
@@ -515,29 +514,29 @@ public final class LifecycleGameTests {
         ChunkPos plain = new ChunkPos(base.x - 40, base.z + 60);
         UUID plainId = UUID.randomUUID();
         for (int i = 0; i < 3; i++) {
-            h.assertFalse(Terrain.ready(level, centre[i].x, centre[i].z), "район " + i + " не свежий");
+            h.assertFalse(Terrain.ready(level, centre[i].x, centre[i].z), "district " + i + " not fresh");
             FlightTickets.hold(level, centre[i], distance[i], id[i], true);
         }
-        h.assertFalse(Terrain.ready(level, plain.x, plain.z), "контрольный район не свежий");
+        h.assertFalse(Terrain.ready(level, plain.x, plain.z), "control area is not fresh");
         level.getChunkSource().addRegionTicket(PLAIN_AREA, plain, FlightTickets.DISTANCE, plainId);
         int[] tick = {0}, plainTicking = {-1}, plainViolations = {0};
         int[] ticking = {-1, -1, -1};
         h.onEachTick(() -> {
             tick[0]++;
             for (int i = 0; i < 3; i++) {
-                String where = "район " + i + ", тик " + tick[0] + ": ";
+                String where = "district " + i + ", tick " + tick[0] + ": ";
                 String bad = tickingNextToUnready(level, centre[i], distance[i] + 1);
-                if (bad != null) throw new GameTestAssertException(where + "блоки тикают в " + bad);
+                if (bad != null) throw new GameTestAssertException(where + "blocks ticking in " + bad);
                 List<Integer> radii = regionRadii(level, "incoming_flight", id[i]);
-                if (radii.size() > 1) throw new GameTestAssertException(where + "тикеты региона " + radii);
+                if (radii.size() > 1) throw new GameTestAssertException(where + "ticket region " + radii);
                 int r = radii.isEmpty() ? -1 : radii.get(0);
                 for (int dx = -r; dx <= r; dx++) {
                     for (int dz = -r; dz <= r; dz++) {
-                        if (!Terrain.ready(level, centre[i].x + dx, centre[i].z + dz)) throw new GameTestAssertException(where + "тикет региона радиуса " + r + " на неготовый чанк " + dx + " " + dz);
+                        if (!Terrain.ready(level, centre[i].x + dx, centre[i].z + dz)) throw new GameTestAssertException(where + "ticket region radius " + r + " to an unready chunk " + dx + " " + dz);
                     }
                 }
                 int load = TicketProbe.count(level, "incoming_area_load", id[i]);
-                if (load != (r == distance[i] ? 0 : 1)) throw new GameTestAssertException(where + "тикетов загрузки " + load + " при радиусе " + r);
+                if (load != (r == distance[i] ? 0 : 1)) throw new GameTestAssertException(where + "ticket loading " + load + " at radius " + r);
                 if (ticking[i] < 0 && level.isPositionEntityTicking(centre[i].getMiddleBlockPosition(64))) ticking[i] = tick[0];
             }
             if (tickingNextToUnready(level, plain, FlightTickets.DISTANCE + 1) != null) plainViolations[0]++;
@@ -547,10 +546,10 @@ public final class LifecycleGameTests {
             if (!done) return;
             for (int i = 0; i < 3; i++) FlightTickets.hold(level, centre[i], distance[i], id[i], false);
             level.getChunkSource().removeRegionTicket(PLAIN_AREA, plain, FlightTickets.DISTANCE, plainId);
-            for (int i = 0; i < 3; i++) h.assertTrue(flightTickets(level, id[i]) == 0, "тикеты района " + i + " остались после отпуска");
-            Incoming.LOG.info("Районы целей в фоне: сущности в центре тикают на тиках {}, район взят целиком на {}; ванильный тикет — на {}, тикающих блоков рядом с неготовым чанком у него {} тиков",
+            for (int i = 0; i < 3; i++) h.assertTrue(flightTickets(level, id[i]) == 0, "area ticket " + i + " stayed after vacation");
+            Incoming.LOG.info("Target areas in the background: entities in the center are ticking at tick {}, the entire area is taken at {}; vanilla ticket - for {}, ticking blocks next to the unready chunk it has {} tick",
                     java.util.Arrays.toString(ticking), tick[0], plainTicking[0], plainViolations[0]);
-            h.assertTrue(plainViolations[0] > 0, "проверка не поймала ванильный тикет региона на свежем районе");
+            h.assertTrue(plainViolations[0] > 0, "the check did not catch a vanilla region ticket in a fresh area");
             h.succeed();
         });
     }
@@ -559,10 +558,10 @@ public final class LifecycleGameTests {
     private static final TicketType<UUID> SHARED_B = TicketType.create("incoming_test_shared_b", Comparator.<UUID>naturalOrder());
 
     /**
-     * Два района с одним центром, радиусом и ключом, но разными типами (как воронка и очередь разрушений ядерного
-     * удара на одном чанке): отпуск одного, пока оба ещё грузятся, не снимает загрузку другого, и тот догружается
-     * и берётся целиком. Ванильный тикет один на (тип, уровень, значение) — с общим тикетом загрузки второй район
-     * оставался без тикета навсегда.
+     * Two areas with the same center, radius and key, but different types (like a crater and a queue of destruction of a nuclear
+     *  strike on the same chunk): releasing one while both are still loading does not remove the loading of the other, and that one is loaded
+     *  and is taken entirely. Vanilla ticket one per (type, level, value) - with a general loading ticket, the second district
+     *  remained without a ticket forever.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "tickets_shared", skyAccess = true)
     public static void releasingOneAreaKeepsTwinLoading(GameTestHelper h) {
@@ -573,17 +572,17 @@ public final class LifecycleGameTests {
         UUID key = UUID.randomUUID();
         AreaLoader areas = StrikeWorld.get(level).areas();
         AreaLoader.Area a = new AreaLoader.Area(SHARED_A, centre, 2, key), b = new AreaLoader.Area(SHARED_B, centre, 2, key);
-        h.assertFalse(Terrain.ready(level, centre.x, centre.z), "район не свежий");
+        h.assertFalse(Terrain.ready(level, centre.x, centre.z), "the area is not fresh");
         areas.hold(level, a);
         areas.hold(level, b);
-        h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) == 2, "у двух районов не два тикета загрузки");
+        h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) == 2, "two districts do not have two ticket loadings");
         areas.release(level, a);
-        h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) == 1, "отпуск одного района снял загрузку другого");
+        h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) == 1, "the vacation of one area took off the load of another");
         h.onEachTick(() -> {
             if (!regionRadii(level, "incoming_test_shared_b", key).equals(List.of(2))) return;
-            h.assertTrue(regionRadii(level, "incoming_test_shared_a", key).isEmpty(), "отпущенный район снова взят");
+            h.assertTrue(regionRadii(level, "incoming_test_shared_a", key).isEmpty(), "the released area is retaken");
             areas.release(level, b);
-            h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) + TicketProbe.count(level, "incoming_test_shared_b", key) == 0, "тикеты района остались после отпуска");
+            h.assertTrue(TicketProbe.count(level, "incoming_area_load", key) + TicketProbe.count(level, "incoming_test_shared_b", key) == 0, "area tickets left after vacation");
             h.succeed();
         });
     }
@@ -591,13 +590,13 @@ public final class LifecycleGameTests {
     private static final TicketType<UUID> RELEASED = TicketType.create("incoming_test_released", Comparator.<UUID>naturalOrder());
 
     /**
-     * Отпуск многих районов разом (Отбой залпа; разом — тик в 5–7 с на сохранении ~9 тыс. чанков):
-     * районы отпускаются по очереди, и в конце тика у ванили на выгрузке ({@link AreaLoader#unloading}) не больше её
-     * порога (2000 держателей; что сверх, {@code ChunkMap.processUnloads} сохраняет в следующем тике разом), её темпа без
-     * свободного времени (200) и одного района. Без очереди там 3645 при пределе 2729. Отпущенный район сразу не
-     * тикает, очередь доходит до конца, тикет отпуска есть у каждого района в очереди и ни у кого больше. Район, взятый
-     * снова, пока ждал очереди, тикает сразу. Район, который ещё грузился, отпускается без очереди (его генерация больше
-     * не нужна).
+     * Release of many districts at once (Valley release; at once - tick in 5–7 s saving ~9 thousand chunks):
+     *  districts are released in turn, and at the end tick at vanilla on unloading ({@link AreaLoader#unloading}) no more than its
+     *  threshold (2000 holders; what's more, {@code ChunkMap.processUnloads} saves in the next tick at once), its pace without
+     *  free time (200) and one area. Without a queue there is 3645 with a limit of 2729. The released area does not immediately
+     *  tick, the queue reaches the end, each area in the queue has a release ticket and no one else has it. The area taken by
+     *  again while waiting in line ticks right away. The area that was still loading is released without a queue (its generation more than
+     *  is not needed).
      */
     @GameTest(template = "range", timeoutTicks = 4000, batch = "tickets_release", skyAccess = true)
     public static void releasedAreasUnloadInTurn(GameTestHelper h) {
@@ -606,12 +605,12 @@ public final class LifecycleGameTests {
         AreaLoader areas = StrikeWorld.get(level).areas();
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         int distance = 2;
-        // держатели района — квадрат до уровня 44 (сторона 27): районы через 30 чанков не делят ни одного
+        // district holders - square up to level 44 (side 27): districts through 30 chunks do not share any
         int side = 2 * (distance + ChunkLevel.RADIUS_AROUND_FULL_CHUNK) + 1;
         List<AreaLoader.Area> list = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             AreaLoader.Area a = new AreaLoader.Area(RELEASED, new ChunkPos(base.x + 40 + 30 * i, base.z + 40), distance, UUID.randomUUID());
-            h.assertFalse(Terrain.ready(level, a.centre().x, a.centre().z), "район " + i + " не свежий");
+            h.assertFalse(Terrain.ready(level, a.centre().x, a.centre().z), "district " + i + " not fresh");
             areas.hold(level, a);
             list.add(a);
         }
@@ -619,34 +618,33 @@ public final class LifecycleGameTests {
         AreaLoader.Area loading = new AreaLoader.Area(RELEASED, new ChunkPos(base.x + 40, base.z + 80), distance, UUID.randomUUID());
         areas.hold(level, loading);
         areas.release(level, loading);
-        h.assertTrue(areas.releasing() == 0 && TicketProbe.count(level, "incoming_area_load", loading.key()) == 0, "район, который ещё грузился, ждёт очереди");
+        h.assertTrue(areas.releasing() == 0 && TicketProbe.count(level, "incoming_area_load", loading.key()) == 0, "the area that was still loading is waiting in line");
         int limit = 2000 + 200 + side * side;
         int[] tick = {0}, releasedAt = {-1}, keptReleasedAt = {-1}, waiting = {-1}, maxUnloading = {0};
         long[] last = {System.nanoTime()};
         h.onEachTick(() -> {
             tick[0]++;
             if (releasedAt[0] < 0) {
-                // районы грузятся в фоне в темпе игры (на CI сервер GameTest без пауз прошёл бы срок раньше генерации);
-                // выгрузка потом — без пауз: ваниль разбирает её во время, свободное в тике
+                // areas are loaded in the background at the pace of the game (on the CI server GameTest without pauses the deadline would have passed before generation);
                 long deadline = last[0] + 50_000_000L, left;
                 while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
                 last[0] = System.nanoTime();
                 for (AreaLoader.Area a : list) if (!regionRadii(level, "incoming_test_released", a.key()).equals(List.of(distance))) return;
                 for (AreaLoader.Area a : list) areas.release(level, a);
                 areas.hold(level, kept);
-                h.assertTrue(regionRadii(level, "incoming_test_released", kept.key()).equals(List.of(distance)), "район, взятый снова, не взят целиком");
+                h.assertTrue(regionRadii(level, "incoming_test_released", kept.key()).equals(List.of(distance)), "the area taken again is not taken entirely");
                 releasedAt[0] = tick[0];
                 return;
             }
-            String where = "тик " + (tick[0] - releasedAt[0]) + " после отпуска: ";
+            String where = "tick " + (tick[0] - releasedAt[0]) + " after vacation: ";
             int unloading = AreaLoader.unloading(map);
             maxUnloading[0] = Math.max(maxUnloading[0], unloading);
-            if (unloading > limit) throw new GameTestAssertException(where + "на выгрузке " + unloading + " держателей, предел " + limit);
+            if (unloading > limit) throw new GameTestAssertException(where + "on unloading " + unloading + " holders, limit " + limit);
             int tickets = TicketProbe.count(level, "incoming_area_release");
-            if (tickets != areas.releasing()) throw new GameTestAssertException(where + "тикетов отпуска " + tickets + " у районов в очереди " + areas.releasing());
+            if (tickets != areas.releasing()) throw new GameTestAssertException(where + "vacation ticket " + tickets + " districts have a queue " + areas.releasing());
             for (AreaLoader.Area a : list) {
                 boolean ticks = level.shouldTickBlocksAt(a.centre().toLong()) || level.isPositionEntityTicking(a.centre().getMiddleBlockPosition(64));
-                if (ticks != (a == kept && keptReleasedAt[0] < 0)) throw new GameTestAssertException(where + "район " + list.indexOf(a) + (ticks ? " тикает" : " не тикает"));
+                if (ticks != (a == kept && keptReleasedAt[0] < 0)) throw new GameTestAssertException(where + "district " + list.indexOf(a) + (ticks ? " ticking" : " not ticking"));
             }
             if (waiting[0] < 0) waiting[0] = areas.releasing();
             if (areas.releasing() > 0) return;
@@ -655,22 +653,22 @@ public final class LifecycleGameTests {
                 keptReleasedAt[0] = tick[0];
                 return;
             }
-            h.assertTrue(waiting[0] > 0, "районы отпущены разом, без очереди");
-            Incoming.LOG.info("Отпуск районов по очереди: после первого тика ждали {} из {}, очередь прошла за {} тиков, на выгрузке самое большее {} держателей (предел {})",
+            h.assertTrue(waiting[0] > 0, "districts were released at once, without queue");
+            Incoming.LOG.info("Release of districts in turn: after the first tick they waited for {} from {}, the queue passed for {} tick, at most {} holders were unloaded (limit {})",
                     waiting[0], list.size() - 1, keptReleasedAt[0] - releasedAt[0], maxUnloading[0], limit);
             h.succeed();
         });
     }
 
     /**
-     * Отпуск районов на сервере без свободного времени в тике (у GameTest — {@code /tick sprint}: ваниль тикает с
-     * {@code hasTimeLeft = () -> false}). Ваниль тогда держит на выгрузке до 2000 держателей и разбирает только то, что
-     * сверх, и очередь, которая ждала бы места на выгрузке, отпускала бы район раз в 100 тиков: после ~60 залпов —
-     * 12,5 тыс. тикетов отпуска и ~25 тыс. загруженных чанков. Поэтому очередь идёт темпом ванили (она переводит в
-     * выгрузку 200 держателей за тик и без свободного времени): 8 районов без общих держателей уходят за тики на их
-     * квадраты в этом темпе и по два тика на район, на выгрузке ({@link AreaLoader#unloading}) в конце тика не больше
-     * 2000, этого темпа и одного района (за тик ваниль сохраняет сверх своих 2000 не больше своего темпа и одного района —
-     * и в первом тике, когда вернётся свободное время), тикет отпуска — ровно у районов в очереди, отпущенные не тикают.
+     * Vacation of areas on the server without free time in tick (for GameTest - {@code /tick sprint}: vanilla ticks with
+     * {@code hasTimeLeft = () -> false}). Vanilla then holds up to 2000 holders at the unloading and dismantles only what is
+     *  above, and the queue that would be waiting for a place at the unloading would release the area once every 100 tick: after ~60 volleys -
+     * 12,5 thousand ticket release and ~25 thousand downloaded chunks. Therefore, the queue goes at a vanilla pace (it translates into
+     *  unloading 200 holders per tick and without free time): 8 districts without common holders go per tick to their
+     *  squares at this pace and two ticks per area, at unloading ({@link AreaLoader#unloading}) at the end of the tick not more
+     * 2000, this tempo and one area (for a tick vanilla retains in addition to its 2000 no more than its tempo and one area -
+     *  and in the first tick, when free time returns), the vacation ticket is exactly for the areas in the queue, the released ones do not tick.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "tickets_release_busy", skyAccess = true)
     public static void releasedAreasUnloadWithoutFreeTime(GameTestHelper h) {
@@ -690,8 +688,8 @@ public final class LifecycleGameTests {
             level.getServer().tickRateManager().stopSprinting();
             for (AreaLoader.Area a : list) areas.release(level, a);
         });
-        // срок — квадраты всех районов в темпе ванили и по два тика на район (очередь, ждущая места на выгрузке, — по
-        // 100 тиков на район)
+        // deadline - squares of all districts at the vanilla pace and two ticks per district (the queue waiting for a place at the unloading - by
+        // 100 tick per district)
         int limit = list.size() * side * side / 200 + 2 * list.size();
         int bound = 2000 + 200 + side * side;
         int[] tick = {0}, releasedAt = {-1}, maxQueued = {0}, maxUnloading = {0};
@@ -699,7 +697,7 @@ public final class LifecycleGameTests {
         h.onEachTick(() -> {
             tick[0]++;
             if (releasedAt[0] < 0) {
-                // районы грузятся в фоне в темпе игры, отпуск потом — без пауз и без свободного времени
+                // areas are loaded in the background at the pace of the game, vacation then - without pauses and without free time
                 long deadline = last[0] + 50_000_000L, left;
                 while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
                 last[0] = System.nanoTime();
@@ -710,38 +708,38 @@ public final class LifecycleGameTests {
                 return;
             }
             int ticks = tick[0] - releasedAt[0];
-            String where = "тик " + ticks + " после отпуска: ";
+            String where = "tick " + ticks + " after vacation: ";
             int queued = AreaLoader.unloading(map);
             maxQueued[0] = Math.max(maxQueued[0], queued);
             maxUnloading[0] = Math.max(maxUnloading[0], map.toDrop.size() + map.pendingUnloads.size());
-            if (queued > bound) throw new GameTestAssertException(where + "на выгрузке " + queued + " держателей, предел " + bound);
+            if (queued > bound) throw new GameTestAssertException(where + "on unloading " + queued + " holders, limit " + bound);
             int tickets = TicketProbe.count(level, "incoming_area_release");
-            if (tickets != areas.releasing()) throw new GameTestAssertException(where + "тикетов отпуска " + tickets + " у районов в очереди " + areas.releasing());
+            if (tickets != areas.releasing()) throw new GameTestAssertException(where + "vacation ticket " + tickets + " districts have a queue " + areas.releasing());
             for (AreaLoader.Area a : list) {
                 if (level.shouldTickBlocksAt(a.centre().toLong()) || level.isPositionEntityTicking(a.centre().getMiddleBlockPosition(64))) {
-                    throw new GameTestAssertException(where + "отпущенный район " + list.indexOf(a) + " тикает");
+                    throw new GameTestAssertException(where + "released area " + list.indexOf(a) + " ticking");
                 }
             }
             if (areas.releasing() > 0) {
-                if (ticks > limit) throw new GameTestAssertException(where + "в очереди ещё " + areas.releasing() + " из " + list.size() + " районов, срок " + limit);
+                if (ticks > limit) throw new GameTestAssertException(where + "still in line " + areas.releasing() + " from " + list.size() + " districts, term " + limit);
                 return;
             }
             level.getServer().tickRateManager().stopSprinting();
-            Incoming.LOG.info("Отпуск районов без свободного времени: очередь из {} прошла за {} тиков (срок {}), на выгрузке самое большее {} (предел {}), с держателями генерации {}",
+            Incoming.LOG.info("Vacation of areas without free time: the queue from {} passed for {} tick (term {}), at unloading at most {} (limit {}), with generation holders {}",
                     list.size(), ticks, limit, maxQueued[0], bound, maxUnloading[0]);
-            // ваниль без свободного времени держала выгрузку полной: иначе проверялся бы не занятый сервер
-            h.assertTrue(maxUnloading[0] > 2000, "на выгрузке не больше 2000 — сервер разбирал её во время, свободное в тике");
+            // vanilla without free time kept the upload full: otherwise the idle server would have been checked
+            h.assertTrue(maxUnloading[0] > 2000, "on unloading there is no more than 2000 - the server parsed it during the time free in tick");
             h.succeed();
         });
     }
 
     /**
-     * Залп на занятом сервере (без свободного времени в тике, {@code /tick sprint}): 4 ракеты РСЗО по свежим районам
-     * через 300 блоков. Когда снаряды отгремели и мод отпустил все районы (цели, свои чанки снарядов, взрывы), очередь
-     * отпуска пуста не позже чем через {@link #SALVO_DRAIN} тиков и в мире не остаётся ни одного тикета мода.
-     * Очередь, ждущая места на выгрузке, отпускала бы район раз в 100 тиков: здесь через 100 тиков в ней ждали бы
-     * 17 районов залпа, а на выгрузке стояли бы 2000 держателей, которых ваниль без свободного времени не разбирает.
-     * Не дождался — перед сроком падает с тем, чего ждал (районы, снаряды), а не молча по сроку.
+     * A salvo on a busy server (no spare tick time, {@code /tick sprint}): 4 MLRS rockets into fresh areas
+     * 300 blocks apart. After the projectiles finish and the mod releases every area (targets, projectile chunks,
+     * explosions), the release queue empties within {@link #SALVO_DRAIN} ticks and no mod tickets remain in the world.
+     * A queue waiting for room in unloading would release an area once every 100 ticks: after 100 ticks, 17 salvo
+     * areas would still wait here, with 2000 holders awaiting unloading that vanilla does not process without spare time.
+     * If the wait fails, fail before the deadline with what was still pending (areas, projectiles), rather than a silent timeout.
      */
     @GameTest(template = "range", timeoutTicks = SALVO_TIMEOUT, batch = "salvo_busy_tickets", skyAccess = true)
     public static void salvoLeavesNoTicketsOnBusyServer(GameTestHelper h) {
@@ -759,13 +757,13 @@ public final class LifecycleGameTests {
                         ? "in the world at " + p.blockPosition().toShortString()
                         : VirtualFlights.get(level).flights().stream().filter(v -> v.getUUID().equals(id)).findFirst()
                         .map(v -> "out of the world at " + v.blockPosition().toShortString()).orElse("gone")).toList();
-                throw new GameTestAssertException("залп не дождался: пуск на тике " + firedAt[0] + ", снаряды отгремели " + goneAt[0]
-                        + ", районы отпущены " + releasedAt[0] + "; ракеты " + rockets + "; районы " + areas.describe()
-                        + "; ударов в очереди " + StrikeWorld.get(level).impacts().size());
+                throw new GameTestAssertException("the salvo did not wait: launch on tick " + firedAt[0] + ", the shells died down " + goneAt[0]
+                        + ", areas released " + releasedAt[0] + "; rockets " + rockets + "; districts " + areas.describe()
+                        + "; hits in line " + StrikeWorld.get(level).impacts().size());
             }
             if (firedAt[0] >= 0) queued[0] = Math.max(queued[0], areas.releasing());
             if (firedAt[0] < 0) {
-                // очередь прежних партий пуста: дальше всё в ней — от этого залпа
+                // the queue of the previous batch is empty: everything else in it comes from this salvo
                 if (areas.releasing() > 0) return;
                 level.getServer().tickRateManager().requestGameToSprint(2400);
                 for (int i = 1; i <= 4; i++) {
@@ -784,7 +782,7 @@ public final class LifecycleGameTests {
                 if (!flying) goneAt[0] = tick[0];
                 return;
             }
-            // районы взрывов живут, пока не кончатся их взрывы и осыпание
+            // areas of explosions live until their explosions and crumbling end
             if (releasedAt[0] < 0) {
                 if (areas.size() > 0) return;
                 releasedAt[0] = tick[0];
@@ -792,8 +790,8 @@ public final class LifecycleGameTests {
             int ticks = tick[0] - releasedAt[0];
             if (areas.releasing() > 0) {
                 if (ticks > SALVO_DRAIN) {
-                    throw new GameTestAssertException("через " + ticks + " тиков после отпуска всех районов в очереди ещё " + areas.releasing()
-                            + ", тикетов отпуска " + TicketProbe.count(level, "incoming_area_release") + "; toDrop " + level.getChunkSource().chunkMap.toDrop.size()
+                    throw new GameTestAssertException("through " + ticks + " tick after the release of all areas in the queue " + areas.releasing()
+                            + ", vacation ticket " + TicketProbe.count(level, "incoming_area_release") + "; toDrop " + level.getChunkSource().chunkMap.toDrop.size()
                             + ", pendingUnloads " + level.getChunkSource().chunkMap.pendingUnloads.size());
                 }
                 return;
@@ -804,31 +802,31 @@ public final class LifecycleGameTests {
                 int n = TicketProbe.count(level, type);
                 if (n > 0) left.add(type + " " + n);
             }
-            h.assertTrue(left.isEmpty(), "после залпа остались тикеты: " + left);
-            // районы взрывов по заряду «Града» малы (~8 блоков), и очередь отпуска часто разбирает их в том же тике; саму
-            // очередь на занятом сервере проверяют releasedAreasUnloadWithoutFreeTime и releasedAreasUnloadInTurn
-            Incoming.LOG.info("Залп на занятом сервере: снаряды отгремели на тике {} после пуска, районы отпущены на {}, очередь пуста через {} тиков, в очереди самое большее {}",
+            h.assertTrue(left.isEmpty(), "after the volley there were tickets left: " + left);
+            // the areas of explosions for the "Grad" charge are small (~8 blocks), and the release queue often disassembles them in the same tick; The
+            //  queue itself on a busy server is checked by releasedAreasUnloadWithoutFreeTime and releasedAreasUnloadInTurn
+            Incoming.LOG.info("Salvo on a busy server: shells died down at tick {} after launch, areas released at {}, queue empty after {} tick, queue at most {}",
                     goneAt[0] - firedAt[0], releasedAt[0] - firedAt[0], ticks, queued[0]);
             h.succeed();
         });
     }
 
-    /** Срок очереди отпуска после залпа на занятом сервере, тиков (ждущая места на выгрузке — район в 100 тиков). */
+    /** Duration of the release queue after a salvo on a busy server, tick (waiting for a place to unload - area in 100 tick). */
     private static final int SALVO_DRAIN = 100;
-    /** Срок проверки залпа на занятом сервере, тиков. */
+    /** Deadline for checking a salvo on a busy server, tick. */
     private static final int SALVO_TIMEOUT = 2400;
 
-    /** Поток сервера стоит в тике дольше 2 с ({@code StallWatch}): когда он пошёл дальше, строка остановки уходит в лог. */
+    /** The server thread stands at tick longer than 2 s ({@code StallWatch}): when it moves on, the stop line goes to the log. */
     @GameTest(template = "range", timeoutTicks = 2000, batch = "stall_watch", skyAccess = true)
     public static void longStallIsReported(GameTestHelper h) {
-        // ответ наблюдателя — через полсекунды после остановки: срок — игровой
+        // observer's response - half a second after stopping: time limit - game
         StrikeGameTests.gameSpeed(h);
         int before = StallWatch.reported();
         boolean[] stalled = {false};
         h.onEachTick(() -> {
             if (!stalled[0]) {
                 stalled[0] = true;
-                // parkNanos просыпается раньше (задачи чанков будят поток сервера): ждать до срока в цикле
+                // parkNanos wakes up earlier (chunk tasks wake up the server thread): wait until the deadline in a loop
                 long deadline = System.nanoTime() + 3_000_000_000L, left;
                 while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
                 return;
@@ -837,7 +835,7 @@ public final class LifecycleGameTests {
         });
     }
 
-    /** Чанк в квадрате {@code radius} вокруг {@code c}, где тикают блоки, а сосед не готов, — или {@code null}. */
+    /** Chunk in square {@code radius} around {@code c}, where blocks are ticking and the neighbor is not ready - or {@code null}. */
     private static String tickingNextToUnready(ServerLevel level, ChunkPos c, int radius) {
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
@@ -845,7 +843,7 @@ public final class LifecycleGameTests {
                 if (!level.shouldTickBlocksAt(ChunkPos.asLong(x, z))) continue;
                 for (int nx = -1; nx <= 1; nx++) {
                     for (int nz = -1; nz <= 1; nz++) {
-                        if (!Terrain.ready(level, x + nx, z + nz)) return "чанке " + dx + " " + dz + " (сосед " + nx + " " + nz + " не готов)";
+                        if (!Terrain.ready(level, x + nx, z + nz)) return "chunke " + dx + " " + dz + " (neighbor " + nx + " " + nz + " not ready)";
                     }
                 }
             }
@@ -853,7 +851,7 @@ public final class LifecycleGameTests {
         return null;
     }
 
-    /** Радиусы тикетов региона {@code type} с ключом {@code id} (уровень тикета — 33 − радиус). */
+    /** Ticket radii of the region {@code type} with the key {@code id} (ticket level - 33 - radius). */
     static List<Integer> regionRadii(ServerLevel level, String type, UUID id) {
         try {
             Field f = DistanceManager.class.getDeclaredField("tickets");
@@ -872,7 +870,7 @@ public final class LifecycleGameTests {
         }
     }
 
-    /** Тикеты своего чанка и чанка впереди ({@code ChunkTickets}, ключ — UUID снаряда). */
+    /** ticket of your chunk and the chunk in front ({@code ChunkTickets}, key - UUID projectile). */
     private static int chunkTickets(ServerLevel level, UUID id) {
         return TicketProbe.count(level, "incoming_projectile", id);
     }

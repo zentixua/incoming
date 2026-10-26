@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BurnInjuryTest {
-    /** Пороги — рис. 12.64 Glasstone &amp; Dolan в опорных точках, между ними растут с мощностью. */
+    /** Thresholds - fig. 12.64 Glasstone &amp; Dolan at the reference points, between them grow with power. */
     @Test
     void thresholdsFollowFigure1264() {
         assertEquals(2.38, BurnInjury.median(1, 10), 1e-9);
@@ -18,14 +18,14 @@ class BurnInjuryTest {
             double prev = 0;
             for (double y = 1; y <= 10_000; y *= 1.5) {
                 double m = BurnInjury.median(k, y);
-                assertTrue(m > prev, "степень " + k + " при " + y + " кт");
+                assertTrue(m > prev, "degree " + k + " at " + y + " kt");
                 prev = m;
                 if (k > 1) assertTrue(m > BurnInjury.median(k - 1, y));
             }
         }
     }
 
-    /** §12.65: у 1 Мт среди людей при 4,5–6 кал/см² ожог 2-й степени у 18 %. */
+    /** §12.65: in 1 Mt among people with 4,5–6 cal/cm² burn of 2 degree in 18%. */
     @Test
     void spreadMatchesExample1265() {
         int n = 1000;
@@ -37,7 +37,7 @@ class BurnInjuryTest {
         assertEquals(0.18, sum / n, 0.02);
     }
 
-    /** Степень по случайности кожи: медиана — ровно порог, чувствительная кожа обжигается сильнее. */
+    /** The degree of randomness of the skin: the median is exactly the threshold, sensitive skin burns more. */
     @Test
     void degreeBySkin() {
         double y = 15;
@@ -47,12 +47,12 @@ class BurnInjuryTest {
         assertEquals(3, BurnInjury.degree(BurnInjury.median(3, y), y, 0));
         assertEquals(3, BurnInjury.degree(BurnInjury.median(3, y) * 0.85, y, 1));
         assertEquals(1, BurnInjury.degree(BurnInjury.median(2, y), y, -2));
-        // ниже самого низкого порога — ни у кого
+        // below the lowest threshold - no one
         assertEquals(0, BurnInjury.degree(BurnInjury.lowest(y) * 0.99, y, 10));
         assertEquals(1, BurnInjury.degree(BurnInjury.lowest(y), y, 10));
     }
 
-    /** Табл. 7.35: хлопковая рубашка (3 унции) и плотный хлопок (8 унций) загораются по мощности. */
+    /** Table 7.35: Cotton Shirt (3 oz.) and Thick Cotton (8 oz.) light up in power. */
     @Test
     void clothingIgnitesByTable735() {
         assertFalse(BurnInjury.ignites(Cover.THIN, 13.9, 35));
@@ -62,11 +62,11 @@ class BurnInjuryTest {
         assertTrue(BurnInjury.ignites(Cover.HEAVY, 39, 20_000));
         assertFalse(BurnInjury.ignites(Cover.SKIN, 1000, 15));
         assertFalse(BurnInjury.ignites(Cover.SOLID, 1000, 15));
-        // у 15 кт импульс короче, ткань загорается раньше, чем у 35
+        // 15 CT pulse is shorter, the tissue lights up earlier than 35
         assertTrue(BurnInjury.ignites(Cover.THIN, 13, 15));
     }
 
-    /** §12.62: шок от 3-й степени на 25 % тела или 2-й на 30 %; наступает через 0,5–12 часов. */
+    /** §12.62: shock from 3 degree at 25 % of the body or 2 degree at 30 %; occurs in 0,5–12 hours. */
     @Test
     void shockBySection1262() {
         assertEquals(1, BurnInjury.shock(0, 25), 1e-9);
@@ -78,7 +78,7 @@ class BurnInjuryTest {
         assertEquals(Math.sqrt(0.5 * 12), BurnInjury.shockHours(0.5), 1e-9);
     }
 
-    /** Ступени потери здоровья: десятые доли вверх, от 0,9 до шока — 0,9. */
+    /** Levels of health loss: tenths upward, from 0,9 to shock - 0,9. */
     @Test
     void levelRoundsUpToTenthsAndHoldsNinetyUntilShock() {
         assertEquals(0, BurnInjury.level(0));
@@ -88,15 +88,15 @@ class BurnInjuryTest {
         assertEquals(BurnInjury.SHOCK_LEVEL, BurnInjury.level(1));
     }
 
-    /** Рана — только прибавка ступени к прежним ожогам. */
+    /** The wound is just an addition to the previous burns. */
     @Test
     void woundIsOnlyTheRiseOfTheLevel() {
-        assertEquals(0.4, BurnInjury.wound(-1, 4), 1e-12, "первые ожоги");
-        assertEquals(0.9, BurnInjury.wound(-1, BurnInjury.level(0.95)), 1e-12, "от 0,9 до шока — 0,9");
-        assertEquals(0.2, BurnInjury.wound(4, 6), 1e-12, "тяжелее прежних — прибавка");
-        assertEquals(0.05, BurnInjury.wound(9, BurnInjury.SHOCK_LEVEL), 1e-12, "шок после 0,9 — до 5 %");
-        assertEquals(1 - BurnInjury.SHOCK_LEFT, BurnInjury.wound(-1, BurnInjury.SHOCK_LEVEL), 1e-12, "шок сразу");
-        assertEquals(0, BurnInjury.wound(6, 4), "слабее прежних");
-        assertEquals(0, BurnInjury.wound(4, 4), "те же");
+        assertEquals(0.4, BurnInjury.wound(-1, 4), 1e-12, "first burns");
+        assertEquals(0.9, BurnInjury.wound(-1, BurnInjury.level(0.95)), 1e-12, "from 0,9 to shock - 0,9");
+        assertEquals(0.2, BurnInjury.wound(4, 6), 1e-12, "heavier than before - increase");
+        assertEquals(0.05, BurnInjury.wound(9, BurnInjury.SHOCK_LEVEL), 1e-12, "shock after 0,9 - before 5 %");
+        assertEquals(1 - BurnInjury.SHOCK_LEFT, BurnInjury.wound(-1, BurnInjury.SHOCK_LEVEL), 1e-12, "shock immediately");
+        assertEquals(0, BurnInjury.wound(6, 4), "weaker than before");
+        assertEquals(0, BurnInjury.wound(4, 4), "the same");
     }
 }

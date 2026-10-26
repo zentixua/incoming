@@ -12,30 +12,30 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Сценарии полёта (корень 5 плана фундамента): вместо одного примера на свойство — оружие × цель × возмущение × зерно,
- * и у каждого полёта одни и те же свойства ({@link ScenarioRun}). Полёт с одним зерном повторяется точно, поэтому
- * сценарии зерна 0 сверяются с эталоном траекторий ({@code trajectoriesMatchBaseline}, {@link Baseline}).
+ * Flight scenarios (root 5 of the foundation plan): instead of one example per property - weapon × target × disturbance × seed,
+ *  and each flight has the same properties ({@link ScenarioRun}). The flight with one seed is repeated exactly, so the
+ *  seed scripts 0 are checked against the standard trajectories ({@code trajectoriesMatchBaseline}, {@link Baseline}).
  * <p>
- * В обычном прогоне GameTest (CI) — зерно 0 всех сочетаний. Больше зёрен — {@code ./gradlew runScenarioSweep}
- * ({@code -PscenarioSeeds=N}, до {@link Scenario#MAX_SEEDS}): отдельное пространство имён шаблона, идут одни сценарии;
- * там же выбор сценариев и настоящая загрузка чанков ({@link ScenarioMode}).
+ * In a normal run GameTest (CI) — seed 0 of all combinations. More grains - {@code ./gradlew runScenarioSweep}
+ *  ({@code -PscenarioSeeds=N}, up to {@link Scenario#MAX_SEEDS}): a separate template namespace, there are only scripts;
+ *  there is also a selection of scripts and actual loading of chunks ({@link ScenarioMode}).
  */
 @GameTestHolder(Incoming.MOD_ID)
 public final class FlightScenarioTests {
-    /** Сколько зёрен на сочетание (обычный прогон — одно). */
+    /** How many grains per combination (usual run - one). */
     private static final int SEEDS = Math.min(Scenario.MAX_SEEDS, Integer.getInteger("incoming.scenario.seeds", 1));
-    /** Прогон одних сценариев ({@code runScenarioSweep}): шаблон в пространстве имён, которое включено только там. */
+    /** Running scripts alone ({@code runScenarioSweep}): a template in a namespace that is only enabled there. */
     private static final boolean SWEEP = Boolean.getBoolean("incoming.scenario.sweep");
     /**
-     * Сценариев в партии: идут одновременно, каждый на своей площадке. Память партии — чанки площадок: вокруг каждого
-     * района полной загрузки ваниль держит кольцо недогенерированных чанков (зависимости генерации),
-     * и сценарий держит ~2000 чанков, из них ~80 % — это кольцо. 40 сценариев — до 83 тыс. чанков и 2,3 ГБ
-     * живой кучи (у CI куча 4 ГБ — ¼ памяти раннера, GameTest падает OutOfMemoryError), 20 — до 48 тыс. и 1,4 ГБ;
-     * по времени 20 не дольше (меньше сборки мусора). Ещё куча — NBT выгруженных чанков в очереди записи, пока она
-     * не допишет: {@link InstantChunks} ждёт её раз в 100 тиков.
+     * Scenarios in a batch: run simultaneously, each on its own site. Batch memory - site chunks: around each
+     *  area of ​​full load, vanilla keeps a ring of under-generated chunks (generation dependencies),
+     *  and the script keeps ~2000 chunks, of which ~80% is a ring. 40 scenarios - up to 83 thousand chunks and 2,3 GB
+     *  living heap (CI has a heap of 4 GB - ¼ of the runner's memory, GameTest drops OutOfMemoryError), 20 - up to 48 thousand and 1,4 GB;
+     *  in time 20 no longer (less than garbage collection). There are still a bunch of NBT unloaded chunks in the recording queue until she
+     *  adds: {@link InstantChunks} waits for her once every 100 tick.
      */
     private static final int BATCH = 20;
-    /** Предел теста, тиков: самый долгий полёт (шахед 50 с × 1,5 с погоней, B-2 с уходом) с запасом. */
+    /** Test limit, tick: longest flight (Shahed 50 s × 1,5 with chase, B-2 with escape) with a margin. */
     private static final int TIMEOUT = 8000;
 
     private FlightScenarioTests() {}
@@ -46,7 +46,7 @@ public final class FlightScenarioTests {
         String template = (SWEEP ? "incoming_sweep" : Incoming.MOD_ID) + ":pad";
         List<TestFunction> out = new ArrayList<>();
         all.removeIf(s -> !ScenarioMode.selected(s));
-        if (all.isEmpty()) Incoming.LOG.error("SCENARIO: выбор сценариев (-PscenarioOnly) не подошёл ни к одному — GameTest не запустится");
+        if (all.isEmpty()) Incoming.LOG.error("SCENARIO: the selection of scenarios (-PscenarioOnly) did not match any - GameTest will not start");
         for (int i = 0; i < all.size(); i++) {
             Scenario s = all.get(i);
             out.add(new TestFunction("flight_scenarios_" + i / BATCH, "flightscenario." + s.id(), template, Rotation.NONE, TIMEOUT, 0,

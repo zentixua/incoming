@@ -24,17 +24,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Верх колонок из чанков LSS — как у слоя чанков клиента ({@link LoadedChunksTerrain}), и их хранилище. */
+/** The top of the columns from LSS chunks is like the layer of client chunks ({@link LoadedChunksTerrain}), and their storage. */
 class LssColumnsTest {
     @BeforeAll
     static void boot() {
-        // как S2CGoldenTest: FML в юнит-тесте нет — загрузке флагов NeoForge пустой список модов
+        // like S2CGoldenTest: FML is not in the unit test - loading flags NeoForge empty list of mods
         SharedConstants.tryDetectVersion();
         if (LoadingModList.get() == null) LoadingModList.of(List.of(), List.of(), List.of(), List.of(), Map.of());
         Bootstrap.bootStrap();
     }
 
-    /** Секции чанка с одной колонкой (x, z), заданной снизу вверх с {@code fromY}; остальные колонки — воздух. */
+    /** Chunk sections with one column (x, z) defined from bottom to top with {@code fromY}; the remaining columns are air. */
     private static LssColumns.Section[] column(int minSection, int sections, int x, int z, int fromY, BlockState... blocks) {
         BlockState[][] states = new BlockState[sections][4096];
         for (int i = 0; i < blocks.length; i++) {
@@ -68,7 +68,7 @@ class LssColumnsTest {
         return LssColumns.column(LssColumns.summarize(minSection, sections)[z * 16 + x]);
     }
 
-    /** Земля: высота — первый воздух над верхним блоком (как карта высот), цвет — его цвет на карте. */
+    /** Earth: height - the first air above the top block (like a height map), color - its color on the map. */
     @Test
     void groundTopAndColour() {
         var s = column(-4, 12, 3, 5, 60, Blocks.STONE.defaultBlockState(), Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState());
@@ -76,20 +76,20 @@ class LssColumnsTest {
         assertEquals(63, c.height());
         assertEquals(MapColor.GRASS, c.color());
         assertEquals(0, c.waterDepth());
-        assertNull(top(s, -4, 4, 5), "колонка без блоков — неизвестно");
+        assertNull(top(s, -4, 4, 5), "column without blocks - unknown");
     }
 
-    /** Трава и цветы не держат карту высот MOTION_BLOCKING (её же берёт слой чанков): верх — блок под ними; листва держит. */
+    /** Grass and flowers do not hold the MOTION_BLOCKING height map (the layer of chunks takes it): the top is the block below them; holds foliage. */
     @Test
     void plantsDoNotCountLeavesDo() {
         var grass = column(0, 8, 0, 0, 64, Blocks.DIRT.defaultBlockState(), Blocks.SHORT_GRASS.defaultBlockState());
         assertEquals(65, top(grass, 0, 0, 0).height());
         assertEquals(MapColor.DIRT, top(grass, 0, 0, 0).color());
         var tree = column(0, 8, 0, 0, 64, Blocks.DIRT.defaultBlockState(), Blocks.OAK_LOG.defaultBlockState(), Blocks.OAK_LEAVES.defaultBlockState());
-        assertEquals(67, top(tree, 0, 0, 0).height(), "крона — преграда для лучей");
+        assertEquals(67, top(tree, 0, 0, 0).height(), "crown - a barrier to rays");
     }
 
-    /** Стекло держит карту высот, но цвета на карте у него нет: цвет и высота — первого блока с цветом под ним. */
+    /** The glass holds a height map, but it has no color on the map: the color and height of the first block with the color below it. */
     @Test
     void colourlessTopLooksBelow() {
         var s = column(0, 8, 0, 0, 70, Blocks.STONE.defaultBlockState(), Blocks.GLASS.defaultBlockState());
@@ -98,7 +98,7 @@ class LssColumnsTest {
         assertEquals(MapColor.STONE, c.color());
     }
 
-    /** Вода: глубина до дна, не больше 16; через пустую секцию (LSS её не шлёт) верх находится. */
+    /** Water: depth to the bottom, no more than 16; through the empty section (LSS does not send it) the top is located. */
     @Test
     void waterDepthAndGaps() {
         var pond = column(0, 8, 2, 2, 60, Blocks.SAND.defaultBlockState(), Blocks.WATER.defaultBlockState(), Blocks.WATER.defaultBlockState(),
@@ -111,14 +111,14 @@ class LssColumnsTest {
         java.util.Arrays.fill(sea, Blocks.WATER.defaultBlockState());
         sea[0] = Blocks.SAND.defaultBlockState();
         assertEquals(LssColumns.MAX_WATER_DEPTH, top(column(0, 8, 0, 0, 30, sea), 0, 0, 0).waterDepth());
-        // камень в секции 0, секция 1 пустая (null), листва в секции 2
+        // stone in section 0, section 1 empty (null), foliage in section 2
         var gap = column(0, 4, 1, 1, 5, Blocks.STONE.defaultBlockState());
         var leaves = column(0, 4, 1, 1, 40, Blocks.OAK_LEAVES.defaultBlockState());
         gap[2] = leaves[2];
         assertEquals(41, top(gap, 0, 1, 1).height());
     }
 
-    /** Ниже нуля и высоко — упаковка без потерь; ничего — 0. */
+    /** Below zero and high - loss-free packaging; nothing - 0. */
     @Test
     void packing() {
         int p = LssColumns.pack(-63, MapColor.DEEPSLATE.id, 0);
@@ -138,7 +138,7 @@ class LssColumnsTest {
         return c;
     }
 
-    /** Грубый чанк — середины клеток 4×4 (колонки плитки уровня 2): любая колонка клетки отвечает её серединой. */
+    /** Rough chunk - the middle of the cells 4×4 (columns of the tile level 2): any column of the cell corresponds to its middle. */
     @Test
     void coarseKeepsCellCentres() {
         int[] full = chunk(0), small = LssColumns.coarse(full);
@@ -151,13 +151,13 @@ class LssColumnsTest {
         }
     }
 
-    /** Хранилище: пришедшее заменяет прежнее, с диска — не затирает пришедшее; отрицательные координаты на месте. */
+    /** Storage: the new one replaces the old one, from the disk - does not overwrite the new one; negative coordinates in place. */
     @Test
     void storeReplacesAndFindsChunks() {
         LssColumns.Store s = new LssColumns.Store();
         s.put(-1, -33, chunk(10));
         assertEquals(LssColumns.at(chunk(10), -1, -513), s.get(-1, -513));
-        assertEquals(0, s.get(16, 0), "чанка нет — неизвестно");
+        assertEquals(0, s.get(16, 0), "no chunk - unknown");
         s.put(-1, -33, chunk(20));
         assertFalse(s.putIfAbsent(-1, -33, chunk(30)));
         assertEquals(LssColumns.at(chunk(20), -16, -528), s.get(-16, -528));
@@ -165,39 +165,39 @@ class LssColumnsTest {
         assertEquals(1, s.fullChunks());
     }
 
-    /** Подробных сверх предела — грубыми самые дальние от игрока; ближние остаются подробными. */
+    /** Detailed beyond the limit - coarse are those farthest from the player; the near ones remain detailed. */
     @Test
     void coarsensFarthestFirst() {
         LssColumns.Store s = new LssColumns.Store();
         for (int cx = 0; cx < 10; cx++) s.put(cx, 0, chunk(cx));
-        assertEquals(0, s.coarsen(0, 0, 10, 5), "в пределе — ничего");
+        assertEquals(0, s.coarsen(0, 0, 10, 5), "in the limit - nothing");
         assertEquals(5, s.coarsen(0, 0, 8, 5));
         assertEquals(5, s.fullChunks());
         assertEquals(10, s.chunks());
-        for (int cx = 0; cx < 5; cx++) assertEquals(LssColumns.FULL, s.chunk(cx, 0).length, "ближний подробный");
-        for (int cx = 5; cx < 10; cx++) assertEquals(LssColumns.COARSE, s.chunk(cx, 0).length, "дальний грубый");
+        for (int cx = 0; cx < 5; cx++) assertEquals(LssColumns.FULL, s.chunk(cx, 0).length, "near detailed");
+        for (int cx = 5; cx < 10; cx++) assertEquals(LssColumns.COARSE, s.chunk(cx, 0).length, "distant rough");
         s.put(9, 0, chunk(9));
-        assertEquals(6, s.fullChunks(), "пришёл снова — подробный");
+        assertEquals(6, s.fullChunks(), "came again - detailed");
     }
 
-    /** Чанков всего сверх предела — уходят самые дальние от игрока, подробные и грубые одинаково. */
+    /** Chunks of everything are beyond the limit - the ones that are farthest from the player go, detailed and rough alike. */
     @Test
     void trimsFarthestChunks() {
         LssColumns.Store s = new LssColumns.Store();
         for (int cx = -5; cx < 5; cx++) s.put(cx, 0, chunk(cx));
         s.coarsen(0, 0, 4, 4);
-        assertEquals(0, s.trim(0, 0, 10, 6), "в пределе — ничего");
+        assertEquals(0, s.trim(0, 0, 10, 6), "in the limit - nothing");
         assertEquals(4, s.trim(0, 0, 8, 6));
         assertEquals(6, s.chunks());
-        for (int cx = -3; cx < 3; cx++) assertTrue(s.chunk(cx, 0) != null, "ближний остался");
+        for (int cx = -3; cx < 3; cx++) assertTrue(s.chunk(cx, 0) != null, "the neighbor remained");
         assertNull(s.chunk(-5, 0));
         assertNull(s.chunk(4, 0));
-        assertEquals(4, s.fullChunks(), "подробные (ближние) не тронуты");
+        assertEquals(4, s.fullChunks(), "detailed (close) are not touched");
         s.put(4, 0, chunk(4));
-        assertEquals(7, s.chunks(), "пришёл снова — на месте");
+        assertEquals(7, s.chunks(), "came again - right there");
     }
 
-    /** Файл: всё, что было (и грубое), читается тем же; чужой файл — ошибка, а не мусор в карте. */
+    /** File: everything that was (and rough) reads the same; someone else's file is an error, not garbage in the card. */
     @Test
     void fileRoundTrip() throws IOException {
         LssColumns.Store s = new LssColumns.Store();

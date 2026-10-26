@@ -26,79 +26,81 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Проба картинки и звука после 3.5.0 (handoff P): одни и те же сцены в любой версии мода — только ваниль, команды
- * {@code /incoming} и {@link StrikeProjectile}, которые есть и в 3.4.1, и в 3.5.0. Класс один и тот же во всех деревьях
- * пробы, поэтому места, время суток и зерно у вариантов совпадают.
+ * Visual and audio probe after 3.5.0 (handoff P): the same scenes in any mod version, using only vanilla,
+ * {@code /incoming} and {@link StrikeProjectile}, present in both 3.4.1 and 3.5.0. The class is identical in
+ * all probe trees, so positions, time of day and seed match between variants.
  * <p>
- * Сцены ({@code incoming.probe.cases}, через запятую; без свойства — все): {@code drone-day-50}, {@code drone-day-300},
- * {@code drone-night-50}, {@code drone-night-300} — шахед в землю, зритель в 50 и 300 блоках, кадры через 0,1–30 с;
- * {@code grad-day}, {@code grad-night} — залп «Града» 40 снарядов с разбросом 15 в 30 блоках, кадры до минуты;
- * {@code launch-behind}, {@code launch-side}, {@code launch-night-behind} — старт ракеты с пусковой, камера за ракетой
- * над струёй ускорителя ({@link #ABOVE_JET}) и сбоку; {@code flyby} — шахед проходит над зрителем (звук);
- * {@code water-day-50} — шахед в пруд 41×41×4 (взрыв на воде), {@code debris-night-50} — шахед в крышу деревянного
- * дома 9×5×9 (горящие обломки, свет огня на мир, дрожание воздуха), {@code substation-night-50} — шахед в подстанцию
- * (дуга, горящее масло, гул и треск); {@code bomb-day-50}, {@code bomb-night-50} — бомба B-2 в грунт равнины, зритель в 50
- * блоках ({@code bomb-day-150}, {@code bomb-night-150}, {@code bomb-day-300} — в 150 и 300: у прорыва ~1 т в воздухе слой пыли
- * у земли — десятки метров, и в 50 блоках зритель внутри него), кадры от первого взрыва бомбы (у 3.4.1 — взрыв входа в
- * грунт, дальше — подрыв); {@code sam-side}, {@code sam-behind}, {@code sam-night-side} — ЗРК пускает ракету по шахеду,
- * зритель сбоку от ЗРК и за ним (дым схода, след, звук мотора); {@code sam-burst}, {@code sam-night-burst} — ЗРК
- * заряжается, когда шахед в ~180 блоках, разрыв — в ~70 блоках сбоку от зрителя. У каждой сцены своё место на равнине.
+ * Scenes ({@code incoming.probe.cases}, comma-separated; absent means all): {@code drone-day-50},
+ * {@code drone-day-300}, {@code drone-night-50}, {@code drone-night-300}: Shahed into ground, viewer 50 and
+ * 300 blocks away, frames after 0,1–30 s; {@code grad-day}, {@code grad-night}: 40 Grad rockets, spread 15,
+ * 30 blocks away, frames up to one minute; {@code launch-behind}, {@code launch-side},
+ * {@code launch-night-behind}: missile launch, camera behind the missile above the booster jet
+ * ({@link #ABOVE_JET}) and beside it; {@code flyby}: Shahed over the viewer (sound); {@code water-day-50}:
+ * Shahed into a 41×41×4 pond (water blast); {@code debris-night-50}: Shahed into the roof of a 9×5×9 wooden
+ * house (burning debris, fire light on the world, heat shimmer); {@code substation-night-50}: Shahed into a
+ * substation (arc, burning oil, hum and crackle); {@code bomb-day-50}, {@code bomb-night-50}: B-2 bomb into
+ * plain soil, viewer 50 blocks away ({@code bomb-day-150}, {@code bomb-night-150}, {@code bomb-day-300}: 150
+ * and 300 away; a breach with ~1 t in air makes a ground dust layer tens of metres wide, so at 50 the viewer
+ * is inside it); frames start at the first bomb explosion (3.4.1: ground-entry explosion, then detonation);
+ * {@code sam-side}, {@code sam-behind}, {@code sam-night-side}: SAM launches at a Shahed, viewer beside and
+ * behind the SAM (launch smoke, trail, engine sound); {@code sam-burst}, {@code sam-night-burst}: SAM loads
+ * when the Shahed is ~180 blocks away, burst ~70 blocks beside the viewer. Each scene has its own plain site.
  * <p>
- * В лог — строки {@code SCENARIO probe …}: взрыв или старт (тик клиента, игровое время, байт в audio.wav — по нему
- * режется звук), снимки. Время каждого кадра — logs/probe-frames.txt: «сцена игровое_время мс».
+ * Log: {@code SCENARIO probe …} for explosion or launch (client tick, game time, byte in audio.wav for slicing
+ * audio), and shots. Frame time in logs/probe-frames.txt: "scene game_time ms".
  */
 final class ProbeScenario {
     private record Step(int at, Runnable action) {}
 
     private static final List<String> ALL = List.of("drone-day-50", "drone-day-300", "drone-night-50", "drone-night-300",
             "grad-day", "grad-night", "launch-behind", "launch-side", "launch-night-behind", "flyby",
-            // S8 — в конце: места прежних сцен — по их номеру в этом списке
+            // S8 - at the end: places of previous scenes - by their number in this list
             "water-day-50", "debris-night-50", "substation-night-50",
             // S5
             "bomb-day-50", "bomb-night-50", "bomb-day-150", "bomb-night-150", "bomb-day-300",
             // S6
             "sam-side", "sam-behind", "sam-night-side", "sam-burst", "sam-night-burst");
-    /** Кадры сцен с пожаром и подстанцией: дольше — дым горящего масла и пожара встаёт десятками секунд. */
+    /** Footage of scenes with a fire and a substation: longer - the smoke of burning oil and fire rises for tens of seconds. */
     private static final double[] FIRE_SHOTS = {0.1, 0.5, 1, 3, 10, 30, 60};
-    /** Кадры ЗРК: секунды после схода ракеты и после разрыва. */
+    /** SAM footage: seconds after the launch of the rocket and after the explosion. */
     private static final double[] SAM_SHOTS = {0.25, 0.5, 1, 1.5, 2, 3, 5, 8, 15};
     private static final double[] BURST_SHOTS = {0.1, 0.25, 0.5, 1, 2, 3, 6, 12};
-    /** Дольше полёта ракеты ЗРК с запасом разрыва не ждать, тиков. */
+    /** Don’t wait longer than the flight of the SAM rocket with a gap margin, tick. */
     private static final int SPEC_FLIGHT = 400;
-    /** Кадры шахеда, секунды после взрыва. */
+    /** Shahed footage, seconds after the explosion. */
     private static final double[] DRONE_SHOTS = {0.1, 0.5, 1, 3, 10, 30};
     private static final double[] GRAD_SHOTS = {0.1, 0.5, 1, 3, 6, 12, 20, 30, 45, 60};
     private static final double[] LAUNCH_SHOTS = {0.5, 1, 1.5, 2, 3, 4};
     /**
-     * Камера сзади — на столько блоков за ракетой по её оси и на столько над осью. Прямо на оси она стояла бы в струе
-     * ускорителя: струя идёт от сопла по оси назад, в 24 м её полуширина по скорости ~2,3 м (0,094 длины, Pope, «Turbulent
-     * Flows», табл. 5.1; по примеси — чуть шире), а толща её окиси алюминия по оси до сопла — сотни (кадр сплошь серый, как
-     * в тумане; 3.4.1 рисовал след плоской лентой и видел сквозь него). Настоящий вид старта сзади — снаружи струи: над
-     * осью на ~2,5 её полуширины, ~14° от оси; что ракета и струя оттуда видны, показывают кадры шлагбаума.
+     * The camera is behind - so many blocks behind the rocket along its axis and so many above the axis. It would stand directly on the axis in the jet of the
+     *  accelerator: the jet goes from the nozzle along the axis backward, in 24 m its half-width in speed is ~2,3 m (0,094 length, Pope, “Turbulent
+     * Flows”, table 5.1 is slightly wider), and the thickness of its aluminum oxide along the axis to the nozzle is hundreds (the frame is completely gray, like
+     *  in the fog; 3.4.1 drew a trace with a flat tape and saw through him). The present view of the launch from behind is from outside the jet: above the
+     *  axis at ~2,5 its half-width, ~14° from the axis; that the rocket and the jet are visible from there, the look gate footage shows.
      */
     private static final double BEHIND = 24, ABOVE_JET = 6;
     /**
-     * Площадка старта: верх её каменного пола — y этого числа (пол — блоки на y − 1). Камера, поставленная ногами ниже
-     * верха пола, — в блоке: сервер считает это новым столкновением (`ServerGamePacketListenerImpl.handleMovePlayer`,
-     * `isPlayerCollidingWithAnythingNew`) и возвращает игрока на прежнее место с новым поворотом. Так камера сзади
-     * стояла до 23.10: глаз на 201,6 при росте глаза 1,62 — ноги на 199,98, и до ~1 с (пока ракета не поднимет камеру выше)
-     * кадр снимался с места игрока до старта, а смотрел туда, где ракета, — без пусковой и облака в кадре (при уходе
-     * ракеты к −X сдвиг ~25 блоков, к +X — ~3, и было незаметно).
+     * Starting area: the top of its stone floor is y of this number (the floor is blocks at y − 1). A camera placed with its feet below the
+     *  top of the floor is in a block: the server considers this a new collision (`ServerGamePacketListenerImpl.handleMovePlayer`,
+     * `isPlayerCollidingWithAnythingNew`) and returns the player to the same place with a new rotation. So the camera behind
+     *  stood until 23.10: the eye on 201,6 with the growth of the eye 1,62 - the legs on 199,98, and until ~1 s (until the rocket raises the camera higher)
+     *  the frame was filmed from the player’s place before the start, and watched to where the rocket is - without the launcher and clouds in the frame (when the
+     *  rocket left for −X, the shift was ~25 of blocks, to +X - ~3, and it was imperceptible).
      */
     private static final int LAUNCH_FLOOR = 200;
-    /** Камера, сдвинутая от места, куда её поставила сцена, на столько блоков к кадру, — кадр не с той точки. */
+    /** A camera moved so many blocks away from where the scene placed it in the frame is a frame from the wrong point. */
     static final double CAMERA_SLIP = 1;
     /**
-     * Время игры, с которого сцена начинается, — как в эталонном прогоне всех сцен подряд (сравнение 22.10, compare-final:
-     * начало сцены в v3.4.1 и main — в пределах 200 тиков). Ветер мира и его класс устойчивости зависят только от времени
-     * игры ({@code util.Wind}, {@code util.Air}): ночью у границы классов D и E ветер у земли — 1 или 5 м/с, и шлейф пожара
-     * то встаёт столбом, то стелется. Выборка сцен без этого шла бы в другом воздухе, чем эталон; сцена, до которой игра
-     * не дошла, догоняет своё время ускоренными тиками ({@code /tick sprint}). Назад время не идёт, поэтому сцены выборки
-     * идут в порядке эталона ({@link #ALL}); сцена, начавшаяся позже (прошлая сцена шла дольше: сцены старта ждут схода
-     * ракеты), годна, пока её воздух тот же, что в эталонное время ({@link #air}: ветер меняется за игровые сутки, а не за
-     * сотни тиков, но у границы классов хватает и малого), иначе — строка {@code SCENARIO probe FAIL} и выход (её же ловит
-     * {@code tools/look_gate/check.py}). У пролёта время — по прогону main 22.10 (Cmain: между стартом ночью и взрывом на
-     * воде, как у 3.4.1).
+     * The game time from which the scene begins is as in the reference run of all scenes in a row (comparison 22.10, compare-final:
+     * beginning of the scene in v3.4.1 and main - within 200 tick). The wind of the world and its stability class depend only on time
+     * games ({@code util.Wind}, {@code util.Air}): at night, near the boundary of the classes D and E, the wind near the ground is 1 or 5 m/s, and the trail of the fire is
+     * to stands up like a pillar, then spreads out. Sampling scenes without this would be in a different air than the standard; the scene that the game has not reached
+     *  catches up with its time with accelerated ticks ({@code /tick sprint}). Time does not go backwards, so the sample scenes
+     *  go in reference order ({@link #ALL}); a scene that started later (the previous scene took longer: the launch scenes are waiting for the
+     *  rocket to descend), is valid as long as its air is the same as at the reference time ({@link #air}: the wind changes over the game day, and not over
+     * hundreds of ticks, but there is enough at the class boundary), otherwise - the line {@code SCENARIO probe FAIL} and the exit (its catches
+     * {@code tools/look_gate/check.py}). The flight time is according to the run main 22.10 (Cmain: between the launch at night and the explosion on
+     *  water, like 3.4.1).
      */
     private static final java.util.Map<String, Integer> START = java.util.Map.ofEntries(
             java.util.Map.entry("drone-day-50", 902), java.util.Map.entry("drone-day-300", 2093), java.util.Map.entry("drone-night-50", 3353),
@@ -110,16 +112,16 @@ final class ProbeScenario {
             java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
             java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
     /**
-     * Тот же воздух: ветер у земли — не дальше этого, м/с, его направление — градусов, класс устойчивости (непрерывный,
-     * {@code util.Stability}) — долей класса (⚠ оценка: снос дыма на минуту — в пределах метров и градусов).
+     * The same air: wind near the ground - no further than this, m/s, its direction - Grad, stability class (continuous,
+     * {@code util.Stability}) - a fraction of the class (⚠ assessment: smoke drift per minute - within meters and Grad).
      */
     static final double SAME_WIND = 0.3, SAME_DIR = 3, SAME_CLASS = 0.1;
-    /** Время игры, в которое нынешняя сцена началась; −1 — ещё ни одна. */
+    /** The game time at which the current scene began; −1 - not a single one yet. */
     private long startedAt = -1;
-    /** Сцена уже догнала своё время игры; ускорение до него уже заказано. */
+    /** The scene has already caught up with its playing time; acceleration to it has already been ordered. */
     private boolean onTime, sprinting;
 
-    /** Сколько ждать взрыва после команды, тиков. */
+    /** How long to wait for the explosion after the command, tick. */
     private static final int BLAST_LIMIT = 2400;
 
     private final List<Step> steps = new ArrayList<>();
@@ -129,35 +131,35 @@ final class ProbeScenario {
     private int caseIndex = -1;
     private String current = "-";
     private Vec3 target = Vec3.ZERO;
-    /** Места сцен на равнине (x, z), ищет сервер в начале. */
+    /** Scene locations on the plain (x, z), searched by the server at the beginning. */
     private volatile List<int[]> sites;
     private volatile boolean armed;
     private final AtomicInteger blasts = new AtomicInteger();
     private int seenBlasts, firedAt = -1, blastTick = -1;
     private boolean hover;
-    /** Старт ракеты: снаряд у клиента, тик старта, где он был, сбоку или сзади. */
+    /** Rocket launch: the projectile is at the client, launch tick where it was, from the side or behind. */
     private StrikeProjectile missile;
     private int launchTick = -1;
     private Vec3 launchFrom = Vec3.ZERO, lastPos = Vec3.ZERO, axis = new Vec3(0, 0, 1);
     private boolean behind;
     /**
-     * Куда сцена поставила глаз последним; null — камера сцены не двигает. {@link #drawnAt} — то же на миг последнего
-     * нарисованного кадра (его берёт снимок): после долгого кадра клиент гонит несколько тиков без отрисовки, и
-     * {@code placed} к снимку уже ушёл вперёд с ракетой на блоки (ревью LNB: LFX11, кадр 323 мс — 7 тиков подряд).
+     * Where the stage put the eye last; null - the scene camera does not move. {@link #drawnAt} - the same for the moment of the last
+     *  drawn frame (it is taken by the snapshot): after a long frame, the client drives a few ticks without drawing, and
+     * {@code placed} has already gone ahead to the snapshot with a rocket on the blocks (review LNB: LFX11, frame 323 ms - 7 tick in a row).
      */
     private Vec3 placed, drawnAt;
-    /** ЗРК: где стоит, ракета у клиента, тик схода, заряжен ли (сцена разрыва), тик разрыва. */
+    /** SAM: where it is, the client has the rocket, tick launch, is it charged (burst scene), tick of the rupture. */
     private BlockPos sam;
     private net.minecraft.world.entity.Entity interceptor;
     private int samLaunch = -1, samBurst = -1;
     private boolean samLoaded;
-    /** Пролёт: ближе всего к зрителю. */
+    /** Flyover: closest to the viewer. */
     private StrikeProjectile drone;
     private double closest = Double.MAX_VALUE;
 
     ProbeScenario() {
         String prop = System.getProperty("incoming.probe.cases");
-        // выборка — в порядке эталона: время игры догоняется только вперёд
+        // sample - in the order of the standard: the game time is caught up only forward
         cases = prop == null || prop.isBlank() ? ALL : ordered(prop.split(","));
         Writer w = null;
         try {
@@ -175,8 +177,8 @@ final class ProbeScenario {
             if (e.getExplosion().center().distanceTo(target) < 80) blasts.incrementAndGet();
         });
         at(40, () -> {
-            // сравнение звука — без оглушения: сцены идут подряд одним игроком, и глухота от взрыва в 50 м перешла бы в
-            // следующие сцены (прогоны F2b7, F2b8 22.10 шли со слухом, и хвосты взрывов в них заглушены)
+            // sound comparison - without deafening: the scenes are played in a row by one player, and the deafness from the explosion in 50 m would go into
+            //  the following scenes (runs F2b7, F2b8 22.10 came with hearing, and the tails of the explosions in them were muffled)
             boolean hearing = IncomingConfig.CLIENT.nukeTinnitus.get();
             Incoming.LOG.info("SCENARIO probe hearing damage {}", hearing ? "on" : "off");
             if (hearing) {
@@ -188,12 +190,12 @@ final class ProbeScenario {
             cmd("gamerule doFireTick true");
             Minecraft.getInstance().options.hideGui = true;
             var server = Minecraft.getInstance().getSingleplayerServer();
-            // поиск мест — в своём потоке: высоты генератора считаются шумом, на потоке сервера это минуты без тиков
+            // search for places - in your stream: the heights of the generator are considered noise, on the server stream these are minutes without a tick
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 var level = server.overworld();
                 List<int[]> found = new ArrayList<>();
                 for (int k = 0; k < cases.size(); k++) {
-                    // место — по сцене, а не по её номеру в выборке: у сцены всегда одна и та же площадка
+                    // place - by stage, and not by its number in the selection: the stage always has the same area
                     int i = Math.max(0, ALL.indexOf(cases.get(k)));
                     var near = level.findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.PLAINS),
                             new BlockPos(i * 900, 64, 0), 3200, 32, 64);
@@ -208,9 +210,9 @@ final class ProbeScenario {
     }
 
     /**
-     * Тот же ли воздух мира в тик {@code now}, что в тик {@code reference}, при солнце сцены (день — в зените, ночь — под
-     * горизонтом), без дождя: «same», «differs: …» или «none» — у этой версии мода воздуха мира нет (3.4.1: дым и звук от
-     * времени игры не зависят). Отражением: класс один в деревьях всех версий.
+     * Is the air of the world in tick {@code now} the same as in tick {@code reference}, with the sun of the scene (day - at the zenith, night - under the
+     *  horizon), without rain: “same”, “differs: …” or “none” - this version of the mod does not have air of the world (3.4.1: smoke and sound are not affected by
+     *  game time). Reflection: the class is the same in the trees of all versions.
      */
     static String sameAir(long now, long reference, boolean night) {
         double[] a, b;
@@ -218,7 +220,7 @@ final class ProbeScenario {
             a = air(now, night);
             b = air(reference, night);
         } catch (ReflectiveOperationException | RuntimeException e) {
-            // воздух в этой версии есть, а прочитать его нельзя (класс переделан): прогон не годится, а не проходит молча
+            // there is air in this version, but it cannot be read (the class has been redone): running is not good, but does not pass silently
             return "differs: air unreadable (" + e + ")";
         }
         if (a == null || b == null) return "none";
@@ -229,8 +231,8 @@ final class ProbeScenario {
     }
 
     /**
-     * Ветер в 10 м над уровнем моря, м/с, его направление, рад, и класс устойчивости в тик {@code gameTime}; null —
-     * класса воздуха в этой версии нет. Имена — те же, что проверяет {@code AirTest.probeReadsTheAirByTheseNames}.
+     * Wind in 10 m above sea level, m/s, its direction, rad, and stability class in tick {@code gameTime}; null —
+     *  there is no air class in this version. The names are the same as those checked by {@code AirTest.probeReadsTheAirByTheseNames}.
      */
     private static double @org.jetbrains.annotations.Nullable [] air(long gameTime, boolean night) throws ReflectiveOperationException {
         Class<?> c;
@@ -246,7 +248,7 @@ final class ProbeScenario {
         return new double[]{speed, direction, (double) c.getMethod("stability").invoke(air)};
     }
 
-    /** Сцены выборки в порядке эталона; незнакомая сцена — ошибка (место и время у неё неизвестны). */
+    /** The sample scenes are in reference order; an unfamiliar scene is an error (its place and time are unknown). */
     static List<String> ordered(String[] names) {
         List<String> out = new ArrayList<>();
         for (String n : names) {
@@ -260,8 +262,8 @@ final class ProbeScenario {
     }
 
     /**
-     * Прогон не годится для сравнения: строка {@code SCENARIO probe FAIL} и выход — сразу, а не после часа съёмки
-     * ({@code tools/look_gate/check.py} ловит её и сам).
+     * The run is not suitable for comparison: the line {@code SCENARIO probe FAIL} and the output - immediately, and not after an hour of shooting
+     *  ({@code tools/look_gate/check.py} catches it himself).
      */
     private void fail(String why) {
         Incoming.LOG.error("SCENARIO probe FAIL {}", why);
@@ -273,8 +275,8 @@ final class ProbeScenario {
             at(tick + 20, this::nextCase);
             return;
         }
-        // сцена кончилась: и в конце воздух тот же, что у эталона на том же месте его сцены (сцены идут до минуты, а
-        // начатая позже могла к концу перейти границу класса)
+        // the scene ended: and at the end the air is the same as that of the standard at the same place in its stage (the scenes go up to a minute, and the
+        //  started later could cross the class boundary by the end)
         Integer ref = caseIndex >= 0 ? START.get(current) : null;
         if (ref != null && startedAt >= 0) {
             long now = Minecraft.getInstance().level.getGameTime();
@@ -300,7 +302,7 @@ final class ProbeScenario {
         begin();
     }
 
-    /** Начало сцены {@link #current}: сперва — её время игры ({@link #START}), потом — место и план. */
+    /** The beginning of the scene {@link #current}: first - its playing time ({@link #START}), then - the place and plan. */
     private void begin() {
         long now = Minecraft.getInstance().level.getGameTime();
         Integer start = START.get(current);
@@ -330,7 +332,7 @@ final class ProbeScenario {
         launchTick = -1;
         blastTick = -1;
         closest = Double.MAX_VALUE;
-        // ЗРК прошлой сцены — прочь: заряженный, в загруженных чанках, он бил бы шахед следующей сцены в 1,5 км
+        // SAM of the previous scene - away: charged, in loaded chunks, it would beat the Shahed of the next scene in 1,5 km
         if (sam != null) {
             cmd(String.format(Locale.ROOT, "setblock %d %d %d minecraft:air", sam.getX(), sam.getY(), sam.getZ()));
             cmd(String.format(Locale.ROOT, "forceload remove %d %d %d %d", sam.getX() - 32, sam.getZ() - 48, sam.getX() + 32, sam.getZ() + 48));
@@ -343,7 +345,7 @@ final class ProbeScenario {
         Incoming.LOG.info("SCENARIO probe case {} site {} {}", current, site[0], site[1]);
         boolean night = current.contains("night");
         cmd(night ? "time set 18000" : "time set 6000");
-        // зритель взрывов — наблюдатель: волна залпа отбрасывает игрока в творческом режиме (кадры из-под воды)
+        // explosion viewer - observer: the wave of the volley throws the player back in creative mode (shots from under water)
         cmd(current.startsWith("launch") || current.equals("flyby") ? "gamemode creative" : "gamemode spectator");
         if (current.startsWith("sam")) {
             planSam(tick, site, current.endsWith("burst"));
@@ -351,7 +353,7 @@ final class ProbeScenario {
         }
         hover = true;
         Minecraft.getInstance().player.getAbilities().flying = true;
-        // сначала над целью: чанки и высота цели у сервера и у клиента
+        // first above the target: chunks and target height for the server and client
         cmd(String.format(Locale.ROOT, "tp @s %d.5 %d %d.5 0 60", site[0], 230, site[1]));
         int s = tick;
         if (current.startsWith("launch")) planLaunch(s, site, current.contains("behind"));
@@ -360,8 +362,8 @@ final class ProbeScenario {
     }
 
     /**
-     * Ровная суша у (x, z) по высотам генератора: квадрат ±40 блоков без воды и с перепадом не больше 4, и путь зрителя
-     * на 300 блоков к −Z не выше цели на 12; ищется кольцами до 1,5 км, не нашлось — сама точка.
+     * Flat land at (x, z) according to the heights of the generator: square ±40 blocks without water and with a difference of no more than 4, and the path of the viewer
+     *  on 300 blocks to −Z not higher than the target on 12; searched with rings up to 1,5 km, was not found - the point itself.
      */
     private int[] flat(int x, int z) {
         for (int r = 0; r <= 1024; r += 128) {
@@ -403,28 +405,28 @@ final class ProbeScenario {
         return gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState());
     }
 
-    /** Шахед или залп «Града» в землю: зритель висит перед целью, кадры от первого взрыва у цели. */
+    /** Shahed or “Grad” salvo into the ground: the viewer hangs in front of the target, footage from the first explosion at the target. */
     private void planBlast(int s, int[] site) {
         boolean grad = current.startsWith("grad"), bomb = current.startsWith("bomb");
         int dist = grad ? 30 : current.endsWith("-300") ? 300 : current.endsWith("-150") ? 150 : 50;
         at(s + 120, () -> {
             Minecraft mc = Minecraft.getInstance();
             int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, site[0], site[1]);
-            // чанк цели мог ещё не прийти клиенту (высота −27 в прогоне B): расходится с генератором — генератор
+            // the target chunk might not yet have arrived to the client (height −27 in run B): diverges from the generator - generator
             int gen = groundAt(site[0], site[1]);
             if (Math.abs(y - gen) > 12) y = gen;
             target = new Vec3(site[0] + 0.5, y, site[1] + 0.5);
-            // зритель — выше рельефа на всём пути к цели (по генератору), не ниже заданной высоты над целью
+            // viewer - above the terrain all the way to the target (according to the generator), not lower than the specified height above the target
             int above = grad ? 10 : dist == 50 ? 18 : dist == 150 ? 30 : 40;
             double eyeY = target.y + above;
-            // деревья генератор не знает: над рельефом пути — с запасом на крону
+            // the generator does not know the trees: over the topography of the path - with a margin for the crown
             for (int d = 0; d <= dist; d += 8) eyeY = Math.max(eyeY, groundAt(site[0], site[1] - d) + 14);
             Vec3 eye = new Vec3(target.x, eyeY, target.z - dist);
             double lookUp = grad ? 6 : dist == 50 ? 8 : dist == 150 ? 20 : 15;
             cmd(String.format(Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z, target.x, target.y + lookUp, target.z));
             Incoming.LOG.info("SCENARIO probe {} target {} eye {}", current, xyz(target), xyz(eye));
         });
-        // постройки сцен S8 — до пуска, на земле цели (ванильные команды: те же в любой версии мода)
+        // building scenes S8 - before launch, on target ground (vanilla commands: the same in any version of the mod)
         at(s + 200, () -> {
             int x = (int) Math.floor(target.x), y = (int) Math.floor(target.y), z = (int) Math.floor(target.z);
             if (current.startsWith("water")) {
@@ -452,7 +454,7 @@ final class ProbeScenario {
         });
     }
 
-    /** Взрыв пришёл: кадры по списку сцены, потом следующая сцена. */
+    /** The explosion came: frames according to the scene list, then the next scene. */
     private void onBlast() {
         blastTick = tick;
         Minecraft mc = Minecraft.getInstance();
@@ -469,7 +471,7 @@ final class ProbeScenario {
         at(tick + last + 40, this::nextCase);
     }
 
-    /** Старт ракеты с пусковой у зрителя; камера — за ракетой по её оси или сбоку. */
+    /** Rocket launch from a spectator's launcher; the camera is behind the rocket along its axis or on the side. */
     private void planLaunch(int s, int[] site, boolean fromBehind) {
         behind = fromBehind;
         int y = LAUNCH_FLOOR;
@@ -518,8 +520,8 @@ final class ProbeScenario {
             return;
         }
         if (launchTick < 0 && missile.isRemoved()) {
-            // клиент снял ракету до схода (сервер встал на загрузке чанков, сущность пришла заново): та же ракета —
-            // новый объект, старый не двигается, и старт не засекался никогда (прогон F2c 22.10)
+            // the client removed the rocket before launch (the server stopped loading chunks, the entity came again): the same rocket -
+            //  new object, the old one does not move, and the launch was never detected (run F2c 22.10)
             missile = null;
             return;
         }
@@ -545,7 +547,7 @@ final class ProbeScenario {
             });
         }
         if (!missile.isAlive()) return;
-        // камера: сзади, над струёй, или сбоку поперёк оси на высоте ракеты
+        // camera: from behind, above the jet, or from the side across the axis at the height of the rocket
         Vec3 cam;
         if (behind) {
             Vec3 up = new Vec3(0, 1, 0).subtract(axis.scale(axis.y));
@@ -556,7 +558,7 @@ final class ProbeScenario {
             if (side.lengthSqr() < 1e-4) side = new Vec3(1, 0, 0);
             cam = pos.add(side.normalize().scale(30));
         }
-        // ногами не ниже верха пола площадки (LAUNCH_FLOOR): иначе сервер вернёт игрока назад
+        // feet not lower than the top of the court floor (LAUNCH_FLOOR): otherwise the server will return the player back
         double feet = Math.max(cam.y - p.getEyeHeight(), LAUNCH_FLOOR);
         cam = new Vec3(cam.x, feet + p.getEyeHeight(), cam.z);
         hover = true;
@@ -575,7 +577,7 @@ final class ProbeScenario {
         }
     }
 
-    /** Шахед проходит над зрителем к цели в 200 блоках впереди (последний прямой участок — из-за спины). */
+    /** Shahed passes over the viewer to the target 200 blocks ahead (the last straight section is from behind). */
     private void planFlyby(int s, int[] site) {
         at(s + 120, () -> {
             int y = groundAt(site[0], site[1]);
@@ -609,22 +611,22 @@ final class ProbeScenario {
                 closest = d;
                 if (tick % 2 == 0) Incoming.LOG.info("SCENARIO probe flyby d={} tick {} audio {}", Math.round(d), tick, audioBytes());
             }
-            // слои мотора у уха — громкость против мерки и тон ({@code ClientSounds.describe}): сверка записи с моделью
+            // layers of the motor at the ear - volume against the measure and tone ({@code ClientSounds.describe}): checking the recording with the model
             if (tick % 10 == 0) Incoming.LOG.info("SCENARIO probe flyby at {} d={} v={} engines:{}", xyz(drone.position()), Math.round(d),
                     String.format(Locale.ROOT, "%.2f", drone.speed()), ua.zentix.incoming.client.sound.ClientSounds.describe());
         }
     }
 
     /**
-     * ЗРК на площадке в 25 блоках над землёй (вокруг расчищено небо), шахед идёт на него из-за 1400 блоков (разрыв — из-за 700) к точке
-     * за ним. Старт: ЗРК заряжен сразу, зритель сбоку в 45 блоках или за ним в 30 на линии пуска. Разрыв: ЗРК пуст, заряжается,
-     * когда шахед у клиента ближе 180 блоков по линии, зритель — в 70 блоках сбоку от места встречи.
+     * SAM is on the site in 25 blocks above the ground (the sky is clear around), Shahed comes at him from behind 1400 blocks (the gap is because of 700) to point
+     *  behind him. Start: SAM is charged immediately, the spectator is on the side in 45 blocks or behind him in 30 on the launch line. Gap: SAM is empty, charging,
+     *  when Shahed is closer to the client 180 blocks along the line, the viewer is 70 blocks to the side of the meeting place.
      */
     private void planSam(int s, int[] site, boolean burst) {
         at(s + 2, () -> cmd(String.format(Locale.ROOT, "forceload add %d %d %d %d", site[0] - 32, site[1] - 48, site[0] + 32, site[1] + 48)));
         at(s + 120, () -> {
-            // площадка — над лесом и холмами вокруг: у сцены с рельефом, закрывающим шахед, пуск и встреча — в другом месте
-            // у каждой версии (в 3.4.1 рельеф радар не закрывает), и сравнивать нечего
+            // platform - above the forest and hills around: near the stage with relief covering Shahed, launch and meeting - in a different place
+            //  for each version (in 3.4.1 the radar does not cover the terrain), and there is nothing to compare
             int y = groundAt(site[0], site[1]) + 26;
             sam = new BlockPos(site[0], y, site[1]);
             cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:smooth_stone", site[0] - 20, y - 1, site[1] - 20, site[0] + 20, y - 1, site[1] + 20));
@@ -714,7 +716,7 @@ final class ProbeScenario {
             if (s.at == tick) s.action.run();
         }
         if (hover) p.getAbilities().flying = true;
-        // цена слоя эффектов раз в секунду после взрыва (бюджет: залп «Града» — не больше 2 мс видеокарты)
+        // price of effects layer once per second after the explosion (budget: “Grad” salvo - no more than 2 ms video card)
         int from = blastTick >= 0 ? blastTick : launchTick;
         if (from >= 0 && (tick - from) % 20 == 0) {
             Incoming.LOG.info("SCENARIO probe {} layer {} s: {}", current, (tick - from) / 20,
@@ -757,7 +759,7 @@ final class ProbeScenario {
                 frames.write(current + " " + tick + " " + (now - last) / 1000 / 1000.0 + "\n");
                 if (tick % 200 == 0) frames.flush();
             } catch (IOException ignored) {
-                // замер, не игра
+                // frozen, no game
             }
         }
         last = now;
@@ -773,12 +775,12 @@ final class ProbeScenario {
             Minecraft mc = Minecraft.getInstance();
             Screenshot.grab(mc.gameDirectory, "probe_" + name + ".png", mc.getMainRenderTarget(), c -> {});
             Incoming.LOG.info("SCENARIO probe shot {} tick {} fps {}", name, tick, mc.getFps());
-            // взрыв у кадра, а не в миг события сервера: пакет взрыва приходит позже счётчика взрывов
+            // explosion at the frame, and not at the moment of the server event: the explosion packet arrives later than the explosion counter
             Incoming.LOG.info("SCENARIO probe shot {} blast {}", name, ua.zentix.incoming.client.far.FarBlasts.describeLast());
-            // пожары у кадра: блоков огня, подъём шлейфа и ветер (дом, подстанция, огонь от шара топлива)
+            // fires near the frame: fire blocks, trail rise and wind (house, substation, fire from a fuel ball)
             Incoming.LOG.info("SCENARIO probe shot {} smoke {}", name, ua.zentix.incoming.client.fx.FireSmoke.describe());
-            // кадр — с той точки, куда сцена поставила глаз к его отрисовке (сервер мог вернуть игрока назад): иначе
-            // check.py бракует прогон
+            // frame - from the point where the scene placed the eye to draw it (the server could return the player back): otherwise
+            // check.py rejects the run
             if (drawnAt != null) {
                 Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
                 double off = eye.distanceTo(drawnAt);
@@ -792,7 +794,7 @@ final class ProbeScenario {
         steps.add(new Step(t, r));
     }
 
-    /** Байт в audio.wav (драйвер «wave» OpenAL Soft пишет в реальном времени): место события в звуке. */
+    /** Byte in audio.wav (driver “wave” OpenAL Soft writes in real time): the location of the event in the sound. */
     private static long audioBytes() {
         try {
             return Files.size(FMLPaths.GAMEDIR.get().resolve("audio.wav"));

@@ -11,12 +11,12 @@ import java.util.Set;
 import java.util.SplittableRandom;
 
 /**
- * Сценарий полёта: как пущен снаряд × какая цель × что с ней случилось в полёте × зерно. Всё, что сценарий выбирает
- * случайно (направление захода, дальность, длина маршрута, миг и величина возмущения, холм), — из зерна
- * ({@link #params}), поэтому один и тот же сценарий в любом прогоне летит одинаково: на этом стоит эталон траекторий.
+ * Flight scenario: how the projectile was launched × what the target was × what happened to it in flight × seed. Everything that the script selects
+ *  randomly (approach direction, range, route length, instant and magnitude of disturbance, hill) is from the grain
+ * ({@link #params}), so the same script flies the same way in any run: this is the standard of trajectories.
  */
 public record Scenario(Launch launch, TargetKind target, Disturbance disturbance, int seed) {
-    /** Как пущен снаряд. {@code rail} — с пусковой в мире (у стреляющего), иначе заход издалека, вне мира. */
+    /** How the projectile was launched. {@code rail} - with a launcher in the world (at the shooter), otherwise approach from afar, outside the world. */
     public enum Launch {
         DRONE_FAR(WeaponType.DRONE, false),
         DRONE_RAIL(WeaponType.DRONE, true),
@@ -37,24 +37,24 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
             this.rail = rail;
         }
 
-        /** Управляемый: держит цель, следит за ней и принимает перенацеливание. */
+        /** Guided: Holds the target, tracks it, and accepts retargeting. */
         boolean guided() {
             return weapon == WeaponType.DRONE || weapon == WeaponType.MISSILE || weapon == WeaponType.LOITER;
         }
     }
 
-    /** Цель. */
+    /** Goal. */
     public enum TargetKind {
-        /** Точка на земле. */
+        /** A point on the ground. */
         POINT,
-        /** Моб без ИИ, которого сценарий водит по рельсу туда-обратно шагом. */
+        /** A mob without AI, which the script guides along a rail back and forth in steps. */
         MOB,
         /**
-         * Игрок в полёте: заглушка с UUID и позицией (стойка), которую сценарий водит по кругу, как игрока на элитрах.
-         * Настоящего игрока GameTest не даёт: мок-игрок ломается о пакеты Create (CLAUDE.md).
+         * Player in flight: a stub with UUID and a position (stance), which the script moves in a circle, like a player on elytra.
+         *  Does not give a real player GameTest: the mock player breaks on the packages Create (CLAUDE.md).
          */
         PLAYER,
-        /** Аппарат Sable: собран из досок над целью (только когда Sable в сборке). */
+        /** craft Sable: assembled from planks above the target (only when Sable is in the assembly). */
         CRAFT;
 
         boolean entity() {
@@ -62,85 +62,84 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
         }
     }
 
-    /** Что случилось с целью в полёте (или что стоит на пути). */
+    /** What happened to the target in flight (or what is standing in the way). */
     public enum Disturbance {
         NONE,
-        /** Цель пропала (умерла, вышла из игры). */
+        /** The target disappeared (died, left the game). */
         TARGET_GONE,
-        /** Цель телепортировалась на 300 блоков. */
+        /** The target teleported 300 blocks. */
         TELEPORT_NEAR,
-        /** Цель телепортировалась на 3000 блоков. */
+        /** The target teleported 3000 blocks. */
         TELEPORT_FAR,
-        /** Оператор перенацелил снаряд из камеры на точку в сотнях блоков. */
+        /** The operator redirected the projectile from the camera to a point hundreds of blocks away. */
         RETARGET,
-        /** Холм на курсе последних сотен блоков (в мире, где снаряд следует рельефу). */
+        /** The hill is on course for the last hundred blocks (in a world where the projectile follows the terrain). */
         HILL,
-        /** Цель на дне котлована: рельеф вокруг выше неё. */
+        /** The target is at the bottom of the pit: the terrain around it is higher than it. */
         QUARRY,
         /**
-         * Оператор на подлёте перенацелил снаряд на точку сбоку от него, внутри круга разворота: прямо её не достать,
-         * снаряд должен уйти и зайти снова, а не кружить вокруг неё.
+         * The approaching operator redirected the projectile to a point to the side of him, inside the turning circle: he couldn’t reach it directly,
+         *  the projectile had to leave and come in again, and not circle around it.
          */
         BESIDE,
         /**
-         * Оператор проложил маршрут на карте ({@link Waypoints}): снаряд проходит его точки по порядку, а не петлю
-         * в обход, и поражает цель.
+         * The operator plotted a route on the map ({@link Waypoints}): the projectile passes through its points in order, rather than bypassing the
+         *  loop, and hits the target.
          */
         WAYPOINTS;
 
-        /** Возмущение в полёте (а не рельеф, построенный заранее). */
+        /** Disturbance in flight (and not the relief constructed in advance). */
         boolean inFlight() {
             return this == TARGET_GONE || this == TELEPORT_NEAR || this == TELEPORT_FAR || this == RETARGET || this == BESIDE;
         }
     }
 
-    /** Имя теста: «оружие.цель.возмущение.зерно». */
+    /** Test name: "weapon.target.perturbation.seed". */
     public String id() {
         return (launch + "." + target + "." + disturbance + "." + seed).toLowerCase(Locale.ROOT);
     }
 
     /**
-     * Сценарий в эталоне траекторий: зерно 0 (набор обычного прогона) и не аппарат — физику Sable мод не ведёт,
-     * а она решает, где аппарат окажется к подлёту.
+     * Scenario in the trajectories standard: seed 0 (set of a normal run) and not craft - the Sable mod does not control the physics,
+     *  and it decides where the craft will be for approach.
      */
     boolean baselined() {
         return seed == 0 && target != TargetKind.CRAFT && knownIssues().isEmpty();
     }
 
-    /** Свойство полёта, которое известный изъян мода может нарушать ({@link #knownIssues}). */
+    /** A flight property that a known flaw in the mod can disrupt ({@link #knownIssues}). */
     enum Property {
-        /** Нет кружения у неподвижной цели. */
+        /** There is no spinning around a stationary target. */
         TURN,
-        /** Неподвижная цель поражена. */
+        /** A stationary target is hit. */
         HIT
     }
 
     /**
-     * Известные изъяны мода, которые чинит открытый PR: нарушенное свойство сценария пишется в лог, а не валит тест.
-     * Прощается только оно — срок полёта, тикеты, синхронная загрузка остаются обязательными; такой сценарий не в эталоне
-     * (его полёт изменится с исправлением). Сюда — со ссылкой на PR, который чинит; после его слияния — убрать и записать
-     * эталон заново. Сейчас таких нет.
+     * Known flaws of the mod that open PR fixes: the broken script property is written to the log, and does not fail the test.
+     *  Only this is forgiven - the flight period, ticket, synchronous loading remain mandatory; this scenario is not in the standard
+     *  (its flight will change with the correction). Here - with a link to PR, which is repairing; after merging it, remove it and write the
+     *  standard again. Now there are none.
      */
     Set<Property> knownIssues() {
         return Set.of();
     }
 
     /**
-     * Место сценария в полном пространстве: своя площадка в мире ({@link ScenarioSite}) и зерно параметров не зависят
-     * от набора прогона. Возмущение — старший разряд: новое (в конец перечисления) не сдвигает прежние сценарии, и эталон
-     * остаётся верным; новое оружие или вид цели сдвигают — эталон записать заново.
+     * Place of the scenario in full space: its own site in the world ({@link ScenarioSite}) and seed parameters do not depend on the run set. Disturbance is the most significant digit: the new one (to the end of the enumeration) does not shift the previous scenarios, and the standard
+     *  remains true; a new weapon or type of target is shifted - the standard is recorded again.
      */
     int cell() {
         int combo = (disturbance.ordinal() * Launch.values().length + launch.ordinal()) * TargetKind.values().length + target.ordinal();
         return combo * MAX_SEEDS + seed;
     }
 
-    /** Больше зёрен на сочетание не бывает: площадки сценариев считаются от этого числа. */
+    /** There are no more grains per combination: scenario sites are counted from this number. */
     static final int MAX_SEEDS = 16;
 
     /**
-     * Сочетание имеет смысл. Неуправляемые (РСЗО, B-2) бьют по точке и за целью не следят; МБР — только старт
-     * (подрывает запланированный удар, не она); аппарат — только когда Sable в сборке.
+     * The combination makes sense. Unguided (MLRS, B-2) hit the point and do not track the target; ICBM - start only
+     *  (undermines the planned strike, not her); craft - only when Sable is in the assembly.
      */
     static boolean valid(Launch launch, TargetKind target, Disturbance d, boolean sable) {
         if (target == TargetKind.CRAFT && !sable) return false;
@@ -160,7 +159,7 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
         };
     }
 
-    /** Все сценарии с зёрнами {@code 0..seeds-1}. */
+    /** All scenarios with seed {@code 0..seeds-1}. */
     static List<Scenario> all(int seeds, boolean sable) {
         List<Scenario> out = new ArrayList<>();
         for (Launch l : Launch.values())
@@ -171,34 +170,35 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
     }
 
     /**
-     * Параметры из зерна. Длины — как у боевого пуска ({@code StrikeService}): время полёта в пределах настроек,
-     * последний прямой участок, дальность пусковой от цели.
+     * Parameters from the seed. Lengths match a live launch ({@code StrikeService}): flight time within the
+     * settings, final straight leg, launcher distance from the target.
      *
-     * @param approach   направление последнего участка (куда летит снаряд у цели), единичный горизонтальный
-     * @param flightTime время полёта по плану, с (шахед, ракета, B-2)
-     * @param entry      длина последнего прямого участка, блоков
-     * @param side       обход слева (+1) или справа (−1)
-     * @param standoff   дальность места пуска от цели, блоков
-     * @param readyTicks сколько снаряд стоит на пусковой до поджига
-     * @param when       доля плана полёта, на которой случается возмущение
-     * @param shift      на сколько блоков уводит цель перенацеливание или телепорт
-     * @param shiftDir   куда (единичный горизонтальный)
-     * @param size       высота холма или глубина котлована, блоков
-     * @param place      холм: сколько блоков от цели до гребня; котлован: радиус дна
-     * @param mobSpeed   шаг моба, блоков/тик; игрока — скорость полёта
-     * @param orbit      радиус круга, по которому летает «игрок»
-     * @param altitude   высота «игрока» над землёй
-     * @param scatter    рассеивание РСЗО (единичное нормальное: × 1% дальности)
-     * @param random     зерно своей случайности снаряда ({@link ua.zentix.incoming.entity.StrikeProjectile#seed})
-     * @param waypoints  маршрут оператора ({@code WAYPOINTS}): точки от цели по горизонтали, по порядку пролёта — от 1
-     *                   до 3, каждая ближе к цели, чем прежняя, сбоку от прямой захода; у последней до цели 250–450 блоков
+     * @param approach direction of the final leg (where the projectile flies at the target), horizontal unit vector
+     * @param flightTime planned flight time, s (Shahed, missile, B-2)
+     * @param entry length of the final straight leg, blocks
+     * @param side detour to the left (+1) or right (−1)
+     * @param standoff launch-site distance from the target, blocks
+     * @param readyTicks ticks on the launcher before ignition
+     * @param when fraction of the flight plan when the disturbance occurs
+     * @param shift blocks the target moves on retarget or teleport
+     * @param shiftDir direction (horizontal unit vector)
+     * @param size hill height or pit depth, blocks
+     * @param place hill: blocks from target to crest; pit: bottom radius
+     * @param mobSpeed mob step, blocks/tick; for a player, flight speed
+     * @param orbit radius of the circle flown by the "player"
+     * @param altitude "player" height above ground
+     * @param scatter MLRS dispersion (unit normal: × 1% of range)
+     * @param random projectile random seed ({@link ua.zentix.incoming.entity.StrikeProjectile#seed})
+     * @param waypoints operator route ({@code WAYPOINTS}): horizontal offsets from the target in flight order,
+     *                  1 to 3, each closer to the target than the previous one, beside the approach line;
+     *                  the last is 250–450 blocks from the target
      */
     record Params(Vec3 approach, double flightTime, double entry, double side, double standoff, int readyTicks,
                   double when, double shift, Vec3 shiftDir, double size, double place, double mobSpeed, double orbit,
                   double altitude, Vec3 scatter, long random, List<Vec3> waypoints) {}
 
     Params params() {
-        // своё зерно у каждой ячейки: соседние сценарии не повторяют друг друга со сдвигом
+        // each cell has its own seed: neighboring scenarios do not repeat each other with a shift
         SplittableRandom r = new SplittableRandom(0x5CE7A410L * 31 + cell());
         double a = r.nextDouble() * Math.PI * 2, s = r.nextDouble() * Math.PI * 2;
         Vec3 approach = new Vec3(Math.cos(a), 0, Math.sin(a));
@@ -229,7 +229,7 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
         double altitude = 5 + r.nextDouble() * 35;
         Vec3 scatter = new Vec3(r.nextGaussian(), 0, r.nextGaussian());
         long random = r.nextLong();
-        // маршрут — из чисел после прежних: у прежних сценариев ряд тот же
+        // the route is from the numbers after the previous ones: the previous scenarios have the same row
         List<Vec3> waypoints = new ArrayList<>();
         if (disturbance == Disturbance.WAYPOINTS) {
             Vec3 across = new Vec3(-approach.z, 0, approach.x);

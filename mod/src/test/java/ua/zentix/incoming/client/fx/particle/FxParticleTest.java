@@ -7,19 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FxParticleTest {
     /**
-     * Клуб из цепочки виден по тому, перекрывает ли он соседей на экране: вдоль следа — всегда, сбоку молодой клуб
-     * мельче шага (цепочка точек на ленте) — нет, разросшийся до двух шагов — целиком; между ними — не убывая.
+     * billows from the chain is visible by whether it overlaps its neighbors on the screen: along the trail - always, on the side there is a young club
+     *  smaller than a step (a chain of dots on the tape) - no, grown to two steps - entirely; between them - without decreasing.
      */
     @Test
     void chainPuffShowsOnlyWhereItOverlapsNeighboursOnScreen() {
-        // клуб РСЗО у сопла: квадрат 2 × 0,7, плотная часть 0,7 его; шаг — путь ракеты за тик на разгоне
+        // billows MLRS at the nozzle: square 2 × 0,7, dense part 0,7 it; step - the rocket's path per tick during acceleration
         float young = 2 * FxParticle.DENSE * 0.7f, gap = 3;
-        assertEquals(1, FxParticle.chainShare(young, gap, 0), "вдоль следа");
-        assertEquals(1, FxParticle.chainShare(young, gap, 0.1f), "почти вдоль следа");
-        assertEquals(0, FxParticle.chainShare(young, gap, 1), "сбоку молодой клуб — точка на ленте");
-        assertEquals(0, FxParticle.chainShare(gap, gap, 1), "ширина в шаг — между клубами просвет");
-        assertEquals(1, FxParticle.chainShare(2 * gap, gap, 1), "ширина в два шага — сплошь");
-        assertEquals(1, FxParticle.chainShare(young, 0, 1), "без шага — не цепочка");
+        assertEquals(1, FxParticle.chainShare(young, gap, 0), "along the trail");
+        assertEquals(1, FxParticle.chainShare(young, gap, 0.1f), "almost along the trail");
+        assertEquals(0, FxParticle.chainShare(young, gap, 1), "side view of young billows - dot on tape");
+        assertEquals(0, FxParticle.chainShare(gap, gap, 1), "width per step - clearance between billows");
+        assertEquals(1, FxParticle.chainShare(2 * gap, gap, 1), "two steps wide - completely");
+        assertEquals(1, FxParticle.chainShare(young, 0, 1), "without a step - not a chain");
         float last = 0;
         for (float w = 0; w <= 3 * gap; w += 0.05f) {
             float share = FxParticle.chainShare(w, gap, 1);

@@ -16,30 +16,30 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Свойства полёта шахеда и крылатой ракеты — те же, что проверяют сценарии полёта в мире (GameTest
- * {@code gametest.scenario}), но на модели без Minecraft: автопилот ({@link DroneAutopilot}, {@link MissileAutopilot}),
- * маршрут ({@link Route}) и запас хода ({@link Mission}) — настоящие, мир — модель рельефа, шаг полёта — как у снаряда
- * в мире ({@code StrikeProjectile.advance}: попадание на последнем участке ближе шага и запаса взрывателя, иначе
- * столкновение с рельефом). Десять тысяч случайных сценариев на всех ядрах:
+ * Shahed and cruise-missile flight properties, the same as the in-world flight scenarios (GameTest
+ * {@code gametest.scenario}), but on a model without Minecraft: real autopilots ({@link DroneAutopilot},
+ * {@link MissileAutopilot}), route ({@link Route}) and range ({@link Mission}); the world is a terrain model,
+ * flight step matches the in-world projectile ({@code StrikeProjectile.advance}: final-leg hit within one
+ * step and fuze margin, otherwise terrain collision). Ten thousand random scenarios on all cores:
  * <ul>
- *   <li>полёт кончается попаданием — по неподвижной цели в пределах шага и запаса взрывателя, по идущей и по
- *   перенацеленной в круг разворота тоже; до конца запаса хода и без столкновения с рельефом;</li>
- *   <li>нет кружения: у неподвижной точки цели снаряд поворачивает в радиусе разворота от неё не больше чем на 720°;</li>
- *   <li>на крейсере снаряд не ниже рельефа;</li>
- *   <li>рельеф, закрывший прямую до цели на заходе (цель на дне карьера, за холмом после перенацеливания, идёт вверх
- *   по склону чаши), — тоже попадание ({@link Autopilot.Sightline}).</li>
+ * <li>flight ends in a hit, within one step and fuze margin of a stationary target, also of moving targets
+ * and targets retargeted into the turn circle, before range runs out and without terrain collision;</li>
+ * <li>no circling: within a turn radius of a stationary target point, projectile turn totals no more than 720°;</li>
+ * <li>the projectile stays above terrain in cruise;</li>
+ * <li>terrain blocking the final sightline (target at a quarry bottom, behind a hill after retarget, moving
+ * up the slope of a bowl) still leads to a hit ({@link Autopilot.Sightline}).</li>
  * </ul>
  */
 class AutopilotPropertiesTest {
     private static final int SCENARIOS = 10_000;
-    /** Кружение: столько градусов поворота в радиусе разворота от неподвижной точки цели — уже круги. */
+    /** Circling: so many Grad turns in the turning radius from the fixed point of the target - already circles. */
     private static final double MAX_TURN = 720;
 
     enum Weapon {
         DRONE(WeaponSpec.DRONE, 40), MISSILE(WeaponSpec.MISSILE, 120);
 
         final WeaponSpec spec;
-        /** Радиус захвата точки маршрута (как у сущности: {@code navPoint}). */
+        /** The radius of capturing the waypoint (same as the entity: {@code navPoint}). */
         final double capture;
 
         Weapon(WeaponSpec spec, double capture) {
@@ -52,12 +52,12 @@ class AutopilotPropertiesTest {
 
     enum Aim { STILL, WALKING, RETARGET_IN_TURN }
 
-    /** Рельеф: высота поверхности в точке. */
+    /** Relief: the height of a surface at a point. */
     interface Ground {
         double at(double x, double z);
     }
 
-    /** Модель снаряда: то, что сущность отдаёт автопилоту ({@code StrikeProjectile.craft}). */
+    /** Projectile model: what the entity gives to the autopilot ({@code StrikeProjectile.craft}). */
     static final class Model implements Craft {
         final FlightController flight = new FlightController(0, 0);
         final AltitudeHold altitude = new AltitudeHold();
@@ -116,13 +116,13 @@ class AutopilotPropertiesTest {
             }
         }
 
-        /** Как {@code StrikeProjectile.relief}: верх рельефа в колонке блоков — наибольший по её четырём углам. */
+        /** Like {@code StrikeProjectile.relief}: the top of the relief in a column of blocks is the largest at its four corners. */
         @Override
         public double relief(int x, int z) {
             return Math.max(Math.max(ground.at(x, z), ground.at(x + 1, z)), Math.max(ground.at(x, z + 1), ground.at(x + 1, z + 1)));
         }
 
-        /** Как {@code StrikeProjectile.clearAlong}: до первой точки прямой ниже рельефа, кроме последних {@code margin} блоков. */
+        /** As {@code StrikeProjectile.clearAlong}: to the first point of the straight line below the relief, except for the last {@code margin} blocks. */
         @Override
         public double clearAlong(Vec3 to, double margin) {
             return blockedAt(ground, pos, to, margin);
@@ -132,17 +132,17 @@ class AutopilotPropertiesTest {
     record Scenario(long seed, Weapon weapon, Relief relief, Aim aim, boolean routed) {
         @Override
         public String toString() {
-            return String.format(Locale.ROOT, "%s %s %s %s зерно %d", weapon, relief, aim, routed ? "маршрут" : "напрямую", seed);
+            return String.format(Locale.ROOT, "%s %s %s %s seed %d", weapon, relief, aim, routed ? "route" : "directly", seed);
         }
     }
 
     /**
-     * @param occluded на заходе (горка, пике) рельеф вставал между снарядом и целью: такие полёты должны попадать
-     *                 так же, как остальные; их число — в сообщении теста
+     * @param occluded on approach (hill, peak) the terrain stood between the projectile and the target: such flights should hit
+     *                  just like the others; their number is in the test message
      */
     record Outcome(String end, int ticks, double miss, double turn, double clearance, Vec3 at, boolean occluded) {}
 
-    /** Сколько сценариев хотя бы должны закрыть рельефом прямую до цели на заходе: иначе правило захода не проверено. */
+    /** How many scenarios must at least cover the straight line to the target with relief on approach: otherwise the approach rule is not checked. */
     private static final int MIN_OCCLUDED = 300;
 
     @Test
@@ -150,8 +150,8 @@ class AutopilotPropertiesTest {
         List<String> failures = new ArrayList<>();
         int[] ends = new int[3];
         int occluded = 0;
-        // сценарии независимы (у каждого своё зерно, автопилот и рельеф): полёты — на всех ядрах, разбор — по порядку,
-        // итог тот же, что подряд; подряд тест шёл ~2 мин и был ~85 % времени всех юнит-тестов
+        // the scenarios are independent (each has its own seed, autopilot and terrain): flights - on all cores, analysis - in order,
+        //  the result is the same as in a row; the test ran ~2 min in a row and was ~85 % of the time of all unit tests
         List<Scenario> scenarios = IntStream.range(0, SCENARIOS).mapToObj(i -> {
             SplittableRandom r = new SplittableRandom(i);
             return new Scenario(i, Weapon.values()[r.nextInt(2)], Relief.values()[r.nextInt(3)], Aim.values()[r.nextInt(3)], r.nextBoolean());
@@ -164,23 +164,23 @@ class AutopilotPropertiesTest {
             if (o.occluded) occluded++;
             if (o.end.equals("forever") || o.end.equals("exhausted")) why = o.end;
             else if (!o.end.equals("hit")) why = o.end;
-            else if (o.turn > MAX_TURN) why = String.format(Locale.ROOT, "кружение %.0f°", o.turn);
-            else if (o.clearance < 0) why = String.format(Locale.ROOT, "на крейсере ниже рельефа на %.1f", -o.clearance);
+            else if (o.turn > MAX_TURN) why = String.format(Locale.ROOT, "circling %.0f°", o.turn);
+            else if (o.clearance < 0) why = String.format(Locale.ROOT, "on a cruise below the terrain at %.1f", -o.clearance);
             ends[o.end.equals("hit") ? 0 : o.end.equals("exhausted") ? 1 : 2]++;
-            if (why != null) failures.add(String.format(Locale.ROOT, "%s: %s на тике %d у %s, промах %.1f", s, why, o.ticks, o.at, o.miss));
+            if (why != null) failures.add(String.format(Locale.ROOT, "%s: %s on tick %d at %s, miss %.1f", s, why, o.ticks, o.at, o.miss));
         }
-        String summary = "попаданий " + ends[0] + ", без запаса " + ends[1] + ", о рельеф " + ends[2] + ", рельеф закрывал цель на заходе — " + occluded;
-        System.out.println("AutopilotPropertiesTest: " + SCENARIOS + " сценариев, " + summary);
-        assertTrue(failures.isEmpty(), failures.size() + " из " + SCENARIOS + " (" + summary + "):\n"
+        String summary = "hits " + ends[0] + ", no stock " + ends[1] + ", about the relief " + ends[2] + ", the terrain covered the target on approach - " + occluded;
+        System.out.println("AutopilotPropertiesTest: " + SCENARIOS + " scripts, " + summary);
+        assertTrue(failures.isEmpty(), failures.size() + " from " + SCENARIOS + " (" + summary + "):\n"
                 + String.join("\n", failures.subList(0, Math.min(15, failures.size()))));
-        assertTrue(occluded >= MIN_OCCLUDED, "рельеф закрывал цель на заходе только в " + occluded + " сценариях (" + summary + ")");
+        assertTrue(occluded >= MIN_OCCLUDED, "the terrain covered the target on approach only at " + occluded + " scenarios (" + summary + ")");
     }
 
     /**
-     * Тонкая мачта (колонка 1×1, на 40 выше земли) на пути ракеты в 600 блоках: датчик из трёх точек по курсу
-     * колонку между точками не видит, а фильтр высоты сглаживает короткий пик, и с ними ракета на бреющем бьётся в неё.
-     * Полоса рельефа видит её за {@link WeaponSpec.Airframe#reliefLookahead} блоков, и ракета успевает набрать высоту —
-     * и с бреющего, и на наборе после ускорителя.
+     * A thin mast (column 1×1, at 40 above the ground) in the path of the rocket in 600 blocks: a sensor from three points along the course of
+     *  does not see the column between the points, and the altitude filter smoothes out the short peak, and with them the rocket at low level hits her.
+     * The strip of relief sees it behind {@link WeaponSpec.Airframe#reliefLookahead} blocks, and the rocket manages to gain altitude—
+     * , both from low level and while climbing after the accelerator.
      */
     @Test
     void missileClearsMast() {
@@ -198,7 +198,7 @@ class AutopilotPropertiesTest {
                     Vec3 start = phase == FlightPhase.CLIMB ? new Vec3(x, ground + 2, 0) : new Vec3(x, missile.airborneAltitude(aim, ground), 0);
                     String end = straightFlight(g, start, phase, phase == FlightPhase.CLIMB ? 1.5 : air.cruiseSpeed(), air, aim, mz + 10,
                             c -> missile.fly(c, aim, aim, true));
-                    if (!end.equals("passed")) failures.add(String.format(Locale.ROOT, "x %.1f, мачта в %.0f, старт %s: %s", x, mastAt, phase, end));
+                    if (!end.equals("passed")) failures.add(String.format(Locale.ROOT, "x %.1f, mast in %.0f, start %s: %s", x, mastAt, phase, end));
                 }
             }
         }
@@ -206,9 +206,9 @@ class AutopilotPropertiesTest {
     }
 
     /**
-     * Высокий дом (20×20 до y 135) на пути шахеда в 600 блоках, цель на 70 за ним: крейсер — цель+30, дом выше него
-     * на ~35, набор не круче 15° — нужно ~150 блоков пути, а датчик из трёх точек видит дом за 45. Полоса с наклоном
-     * набора видит его заранее, шахед проходит над ним и попадает.
+     * High house (20×20 to y 135) on the Shahed path in 600 blocks, target on 70 behind it: cruise - target +30, house above it
+     *  on ~35, the set is no cooler than 15° - you need ~150 blocks of path, and the three-point sensor sees the house behind 45. The slant strip
+     *  of the set sees him in advance, Shahed passes over him and hits.
      */
     @Test
     void droneClearsTallHouse() {
@@ -229,8 +229,8 @@ class AutopilotPropertiesTest {
     }
 
     /**
-     * Полёт снаряда курсом +Z из {@code start} в фазе {@code phase} на {@code aim}: «passed» — прошёл {@code passZ},
-     * «hit» — долетел до цели, иначе где врезался.
+     * The flight of the projectile on the course +Z from {@code start} in the phase {@code phase} to {@code aim}: “passed” - passed {@code passZ},
+     *  "hit" - reached the target, otherwise where it crashed.
      */
     static String straightFlight(Ground ground, Vec3 start, FlightPhase phase, double speed, WeaponSpec.Airframe air, Vec3 aim,
                                  double passZ, Consumer<Model> fly) {
@@ -246,20 +246,20 @@ class AutopilotPropertiesTest {
                 Vec3 p = c.pos.add(dir.scale(d));
                 if (p.y < ground.at(p.x, p.z)) {
                     if (p.distanceTo(aim) <= c.speed + air.reachPad()) return "hit";
-                    return String.format(Locale.ROOT, "врезался в (%.1f %.1f %.1f) на тике %d, фаза %s", p.x, p.y, p.z, c.tick, c.phase);
+                    return String.format(Locale.ROOT, "crashed into (%.1f %.1f %.1f) on tick %d, phase %s", p.x, p.y, p.z, c.tick, c.phase);
                 }
             }
             c.pos = c.pos.add(dir.scale(c.speed));
             if (c.pos.z > passZ) return "passed";
         }
-        return String.format(Locale.ROOT, "не долетел: (%.1f %.1f %.1f)", c.pos.x, c.pos.y, c.pos.z);
+        return String.format(Locale.ROOT, "did not reach: (%.1f %.1f %.1f)", c.pos.x, c.pos.y, c.pos.z);
     }
 
     static Outcome fly(Scenario s) {
         SplittableRandom r = new SplittableRandom(s.seed * 31 + 7);
         WeaponSpec.Airframe air = s.weapon.spec.airframe();
         Ground ground = ground(s.relief, r);
-        // цель — у начала координат, на поверхности; снаряд — в 250–1500 блоках в любую сторону
+        // the target is at the origin, on the surface; projectile - in 250–1500 blocks in any direction
         Vec3 aim = new Vec3(r.nextDouble(-8, 8), 0, r.nextDouble(-8, 8));
         aim = new Vec3(aim.x, ground.at(aim.x, aim.z) + 0.5, aim.z);
         double bearing = r.nextDouble(Math.PI * 2), distance = r.nextDouble(250, 1500);
@@ -276,7 +276,7 @@ class AutopilotPropertiesTest {
 
         Route route = null;
         if (s.routed) {
-            // заход из-за спины: направление захода отклонено от прямого до 60°, путь длиннее прямого до полутора раз
+            // approach from behind: the direction of approach is deviated from straight to 60°, the path is up to one and a half times longer than straight
             Vec3 direct = aim.subtract(start);
             double turn = r.nextDouble(-Math.PI / 3, Math.PI / 3);
             Vec3 approach = new Vec3(direct.x * Math.cos(turn) - direct.z * Math.sin(turn), 0, direct.x * Math.sin(turn) + direct.z * Math.cos(turn));
@@ -296,7 +296,7 @@ class AutopilotPropertiesTest {
         double heading = Double.NaN;
         Vec3 lastAim = aim;
         for (c.tick = 0; c.tick < 20_000; c.tick++) {
-            // слежение за целью: идёт — запас растёт на её сдвиг
+            // tracking the target: goes - the reserve grows by its shift
             if (walk != Vec3.ZERO) {
                 Vec3 to = aim.add(walk);
                 to = new Vec3(to.x, ground.at(to.x, to.z) + 0.5, to.z);
@@ -305,7 +305,7 @@ class AutopilotPropertiesTest {
             }
             boolean finalLeg = route == null || route.finished();
             if (s.aim == Aim.RETARGET_IN_TURN && !retargeted && finalLeg && Bearing.of(c.pos, aim).horizontal() < 200) {
-                // новая цель сбоку, внутри круга разворота — как перенацеливание из камеры или промах в пике
+                // new target to the side, inside the turning circle - like retargeting from the camera or missing in a dive
                 retargeted = true;
                 double radius = WeaponSpec.turnRadius(c.speed, air.turnRate()) * WeaponSpec.TURN_MARGIN;
                 Vec3 f = c.flight.forward();
@@ -329,7 +329,7 @@ class AutopilotPropertiesTest {
 
             if (c.phase == FlightPhase.TERMINAL || c.phase == FlightPhase.POP_UP) occluded |= blocked(ground, c.pos, aim, 3);
 
-            // шаг полёта, как у снаряда в мире
+            // flight pitch, like a projectile in the world
             if (finalLeg && c.pos.distanceTo(aim) <= c.speed + air.reachPad()) {
                 return new Outcome("hit", c.tick, c.pos.distanceTo(aim), turn, clearance, c.pos, occluded);
             }
@@ -339,7 +339,7 @@ class AutopilotPropertiesTest {
             for (double d = 0; d <= c.speed + 1e-9; d += 0.5) {
                 Vec3 p = c.pos.add(dir.scale(Math.min(d, c.speed)));
                 if (p.y < ground.at(p.x, p.z)) {
-                    // удар о рельеф у цели — то же попадание (взрыв накрывает её), вдали — столкновение
+                    // hitting the terrain at the target - the same hit (the explosion covers it), in the distance - collision
                     boolean near = p.distanceTo(aim) <= c.speed + air.reachPad();
                     return new Outcome(near ? "hit" : "crash", c.tick, p.distanceTo(aim), turn, clearance, p, occluded);
                 }
@@ -349,7 +349,7 @@ class AutopilotPropertiesTest {
             mission.spend(step.length());
             if (c.phase == FlightPhase.CRUISE) clearance = Math.min(clearance, c.pos.y - ground.at(c.pos.x, c.pos.z));
 
-            // поворот у неподвижной точки цели, как считают сценарии полёта (ScenarioRun.accumulateTurn)
+            // turn at a fixed target point, according to flight scenarios (ScenarioRun.accumulateTurn)
             boolean aimMoved = aim.distanceToSqr(lastAim) > 0.01;
             lastAim = aim;
             double horizontal = step.horizontalDistance();
@@ -366,12 +366,12 @@ class AutopilotPropertiesTest {
         return new Outcome("forever", c.tick, c.pos.distanceTo(aim), turn, clearance, c.pos, occluded);
     }
 
-    /** Рельеф выше линии визирования {@code from → to} (кроме последних {@code margin} блоков у самой цели). */
+    /** The terrain is above the line of sight {@code from → to} (except for the last {@code margin} blocks near the target). */
     static boolean blocked(Ground ground, Vec3 from, Vec3 to, double margin) {
         return blockedAt(ground, from, to, margin) != Double.POSITIVE_INFINITY;
     }
 
-    /** Где прямая {@code from → to} впервые уходит под рельеф (кроме последних {@code margin} блоков); нигде — бесконечность. */
+    /** Where the straight line {@code from → to} goes under the relief for the first time (except for the last {@code margin} blocks); nowhere - infinity. */
     static double blockedAt(Ground ground, Vec3 from, Vec3 to, double margin) {
         double length = from.distanceTo(to);
         for (double d = 0; d < length - margin; d += 1) {
@@ -381,7 +381,7 @@ class AutopilotPropertiesTest {
         return Double.POSITIVE_INFINITY;
     }
 
-    /** Рельеф: равнина, пологие холмы (уклон не круче ~15°) или цель на дне карьера-чаши. */
+    /** Relief: plain, gentle hills (slope no steeper than ~15°) or target at the bottom of a quarry bowl. */
     private static Ground ground(Relief relief, SplittableRandom r) {
         double base = 64;
         return switch (relief) {

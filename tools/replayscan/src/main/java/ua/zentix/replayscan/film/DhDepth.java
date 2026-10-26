@@ -14,19 +14,19 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
 /**
- * С какой глубиной DH рисует непрозрачный LOD в кадре (класс грузится, только если DH стоит: {@link FrameLog#DH}): перед
- * проходом — текстура глубины кадра, в который DH рисует ({@code GL_DRAW_FRAMEBUFFER}). Своя
- * ({@code getDhDepthTextureGlId}) — верно; глубина мира (основной кадр Minecraft) — LOD своей проекцией пишет глубину в
- * буфер мира и ложится поверх ближнего мира полосами. Так бывает под Iris, когда вывод Flashback пересоздаёт кадр игры, а
- * текстуры DH уже в его размере: Iris цепляет новую глубину мира ко всем своим кадрам, и к кадру LOD тоже, а глубину DH
- * цепляет обратно, только когда DH пересоздал её, — DH же пересоздаёт её в проходе LOD, если размер кадра игры не тот,
- * что у неё. Поэтому вывод начинается, только когда текстуры DH не в размере кадра плана ({@link #textureIs}): окно
- * другого размера, и после прошлого вывода DH уже рисовал в окне (после перемотки назад повтор входит в мир заново, и LOD
- * какое-то время не рисуются). Проход теней рисует в свой кадр — ни то ни другое.
+ * With what depth does DH draw the opaque LOD in the frame (the class is loaded only if DH is set to: {@link FrameLog#DH}): before the
+ *  pass - the depth texture of the frame into which DH draws ({@code GL_DRAW_FRAMEBUFFER}). Own
+ * ({@code getDhDepthTextureGlId}) - correct; depth of the world (main frame Minecraft) - LOD writes the depth into the
+ *  world buffer with its projection and lies on top of the near world in stripes. This happens under Iris, when the output of Flashback recreates the game frame, and the
+ *  textures of DH are already in its size: Iris attaches a new depth of the world to all its frames, and to the LOD frame too, and the depth DH
+ *  hooks back only when DH has recreated it, - DH recreates it in the LOD pass if the game frame size is not the same as
+ * . Therefore, the output starts only when the textures DH are not in the size of the plan frame ({@link #textureIs}): the window
+ *  is of a different size, and after the last output DH was already drawing in the window (after rewinding the replay enters the world again, and LOD
+ *  is not drawn for a while). The passage of shadows draws into its frame - neither one nor the other.
  */
 final class DhDepth {
     private static boolean own, world;
-    /** Размер текстур цвета и глубины DH: 0 — ещё не созданы. */
+    /** Size of color and depth textures DH: 0 - not yet created. */
     private static int width, height;
 
     private DhDepth() {}
@@ -58,14 +58,14 @@ final class DhDepth {
         });
     }
 
-    /** Текстуры DH сейчас такого размера. */
+    /** The DH textures are now this size. */
     static boolean textureIs(int w, int h) {
         return width == w && height == h;
     }
 
     /**
-     * Итог проходов LOD с прошлого вызова и сброс: 1 — со своей глубиной, −1 — с глубиной мира, 0 — LOD не рисовался или
-     * рисовался с глубиной ни той ни другой.
+     * Result passes LOD from the last call and reset: 1 - with its own depth, −1 - with the depth of the world, 0 - LOD was not drawn or
+     *  was drawn with the depth of neither one nor the other.
      */
     static int take() {
         int r = world ? -1 : own ? 1 : 0;

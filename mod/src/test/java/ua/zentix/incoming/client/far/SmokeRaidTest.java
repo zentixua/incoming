@@ -24,15 +24,15 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Цена дыма налёта из 100 ударов (стенд сцен 25.10, сцена «100»: заливка 41/104/175 экранов снаружи/с края/внутри при
- * бюджете 4, видеокарта 13,5/39,4/55,5 мс против 2,9/5,8/6,4 у 3.4.1): 100 шахедов подсолнухом Фогеля в круге 120 м,
- * через 1,5 с, окна — через 35 с после последнего; топливо в воронке горит 150 с — 70 шлейфов пожаров; ветер 4 м/с,
- * класс D. Облака — модель ({@link CloudModel}: шапка, ножка трубкой, пыль у земли), шлейфы — {@link FireSmoke#lay}; кадр
- * раскладывает тот же приёмник слоя, что в игре ({@link SmokePuffs}), три камеры стенда. Пол кадра (по одному клубу на
- * гаусс и место трубки) — 18/70/153 экрана, до 10 раз выше бюджета (прежде бюджет здесь не действовал вовсе).
+ * Price of smoke raid from 100 impacts (scene bench 25.10, scene “100”: filling 41/104/175 screens outside/from the edge/inside with
+ *  budget 4, video card 13,5/39,4/55,5 ms vs 2,9/5,8/6,4 for 3.4.1): 100 Shahed by Vogel's sunflower in the circle 120 m,
+ *  through 1,5 s, windows - through 35 s after the last one; fuel in the crater burns 150 s - 70 trail fires; wind 4 m/s,
+ * class D. Clouds - model ({@link CloudModel}: cap, stem tube, dust near the ground), trail - {@link FireSmoke#lay}; frame
+ *  lays out the same layer receiver as in the game ({@link SmokePuffs}), three cameras of the stand. Half of the frame (one billows per
+ *  gauss and tube place) - 18/70/153 screen, up to 10 times higher than the budget (before the budget did not apply here at all).
  */
 class SmokeRaidTest {
-    /** Пожар топлива в воронке шахеда (как {@code PlumeContinuityTest.POOL}): горит 150 с с удара. */
+    /** Fuel fire in crater Shahed (as {@code PlumeContinuityTest.POOL}): 150 burns with impact. */
     record Fire(double x, double z, double born, long seed) implements SmokeGrid.Source {
         static final FireSmoke.Fuel POOL = new FireSmoke.Fuel(2.2e6, Math.PI * 4, 0.04 / 43.4e6);
         static final double WIND = 4, BURNS = 150;
@@ -53,10 +53,10 @@ class SmokeRaidTest {
     }
 
     /**
-     * Удар шахеда по цели target — те же клубы, что у события {@code FarBlasts} ({@code Event.emit}): облако модели (шапка,
-     * ножка трубкой, пыль у земли), пыль раздробленной цели своим видом — у рыхлого кадрами выброса, у связного — дробления
-     * (её масса — доля мелочи вещества: у грунта — пыль, что ушла в воздух, у камня — 10 % разрушенного), завеса выброса у
-     * грунта ({@code FarBlasts.curtain}).
+     * The Shahed strike on the target target - the same billows as the event {@code FarBlasts} ({@code Event.emit}): the model cloud (cap,
+     *  leg like a tube, dust near the ground), the dust of a fragmented target in its appearance - in loose ejection frames, in a coherent one - crushing
+     *  (its mass is a fraction small substances: near the soil - dust that went into the air, near the stone - 10% destroyed), a curtain of emission from
+     *  soil ({@code FarBlasts.curtain}).
      */
     static final class Strike implements SmokeGrid.Source {
         final CloudModel model;
@@ -147,8 +147,8 @@ class SmokeRaidTest {
     }
 
     /**
-     * Налёт стенда по грунту: 100 ударов в круге 120 м, последний — за 35 с до кадра; каждый третий — в камень (дроблёная
-     * пыль связного), остальные — в землю (завеса выброса); у кого топливо ещё горит — шлейф.
+     * Stand attack on the ground: 100 impacts in a circle 120 m, the last one - for 35 s to frame; every third - into stone (crushed
+     *  dust of the coherent), the rest - into the ground (veil of ejection); those whose fuel is still burning - trail.
      */
     static List<SmokeGrid.Source> raid(double now) {
         CloudModel.Air air = new CloudModel.Air(Stability.STANDARD_N, Fire.WIND, 0, 0.15, (int) Stability.D, 0.5);
@@ -163,21 +163,21 @@ class SmokeRaidTest {
         return out;
     }
 
-    /** Камеры стенда (tools/stand/scenes.json): снаружи — 200 м, 30 м над землёй; с края — 120 м, 10 м; внутри — в середине, 4 м. */
+    /** Stand cameras (tools/stand/scenes.json): outside - 200 m, 30 m above the ground; from the edge - 120 m, 10 m; inside - in the middle, 4 m. */
     static final Vec3[] EYES = {new Vec3(-200, 30, 0), new Vec3(0, 10, -120), new Vec3(0, 4, 0)};
     static final Vec3[] AIMS = {new Vec3(0, 15, 0), new Vec3(0, 10, 0), new Vec3(100, 20, 0)};
-    static final String[] NAMES = {"снаружи", "с края", "внутри"};
+    static final String[] NAMES = {"outside", "from the edge", "inside"};
 
     static FarView view(int camera) {
         Vec3 e = EYES[camera], a = AIMS[camera];
         return SmokeFillTest.view(e, new Vector3f((float) (a.x - e.x), (float) (a.y - e.y), (float) (a.z - e.z)));
     }
 
-    /** Наибольшее за кадры {@link #frame} число мест трубок и клубов облаков в плане и заливка сверх плана (с первого кадра). */
+    /** For frames {@link #frame} the greatest number of places of tubes and billows of clouds in the plan and filling above the plan (from the first frame). */
     static int maxPlaces, maxBlobs;
     static double worstOverPlan;
 
-    /** Кадр налёта с бюджетом budget: несколько кадров подряд (бюджет клубов трубок и уровень слияния — по прошлым). */
+    /** Raid frame with budget budget: several frames in a row (budget billows tubes and fusion level - according to the past). */
     static SmokeFillTest.Screen frame(List<SmokeGrid.Source> raid, double now, FarView view, double budget) {
         SmokeFillTest.Screen s = new SmokeFillTest.Screen(view);
         double was = SmokePuffs.budget;
@@ -203,9 +203,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Пропускание самого вещества налёта по лучу (u, v) экрана: e^(−Στ) через каждый гаусс облаков ({@link SmokePuffs#sightDepth})
-     * и через трубки ножек и шлейфов — гауссами через σ/2 вдоль оси (их сумма — та же трубка); у тела огня — доля дыма, как
-     * у приёмника слоя. Без квадратов: с ним сверяются оба кадра — полный и в бюджете.
+     * Passing the plaque substance itself along the beam (u, v) of the screen: e^(−Στ) through each gauss of clouds ({@link SmokePuffs#sightDepth})
+     *  and through the tubes of legs and trail - by gauss through σ/2 along the axis (their sum - the same tube); the fire body has a share of smoke, like
+     *  for the layer receiver. Without squares: both frames are checked against it - full and in budget.
      */
     static double[] truth(List<SmokeGrid.Source> raid, double now, FarView view) {
         double[] parts = new double[18];
@@ -232,7 +232,7 @@ class SmokeRaidTest {
         return parts;
     }
 
-    /** Вещество источников гауссами от глаза: середина, σh, σv, ослабление всей массы, доля дыма (у тела огня). */
+    /** The substance of the sources by gauss from the eye: middle, σh, σv, weakening of the entire mass, fraction of smoke (at the body of fire). */
     static final class Matter implements SmokeGrid.Sink {
         final List<double[]> gaussians = new ArrayList<>();
         final FarView view;
@@ -246,7 +246,7 @@ class SmokeRaidTest {
         public void segment(double x, double y, double z, double ax, double ay, double az, double sh, double sv, double soot, double dust,
                             double water, float dustR, float dustG, float dustB, double kelvin, double rise) {
             Vec3 eye = view.camera();
-            // отрезок (струя завесы) — гауссами через σ/2 вдоль него, как трубка
+            // segment (curtain jet) - Gaussians through σ/2 along it, like a tube
             double len = 2 * Math.sqrt(ax * ax + ay * ay + az * az), ext = CloudModel.SOOT_K * soot + SmokeGrid.dustK(dustR, dustG, dustB) * dust;
             int n = (int) Math.max(1, Math.ceil(len / (0.5 * Math.min(sh, sv))));
             for (int j = 0; j < n; j++) {
@@ -256,7 +256,7 @@ class SmokeRaidTest {
             }
         }
 
-        /** Трубка — гауссами через σ/2 вдоль оси: их сумма — та же трубка (сечение √(σh·σv), как у приёмника слоя). */
+        /** Tube - Gaussians through σ/2 along the axis: their sum is the same tube (section √(σh·σv), like that of the layer receiver). */
         @Override
         public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
                          double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
@@ -275,11 +275,11 @@ class SmokeRaidTest {
     }
 
     /**
-     * Налёт из 100 ударов по грунту (с завесой выброса и дроблёной пылью камня) с трёх камер стенда. Без бюджета пол кадра
-     * с края и изнутри выше бюджета (снаружи с шагом мест по бюджету — 14,9 экрана: ложится и так); с бюджетом квадраты заливают не больше плана, план — не больше бюджета (в каждом кадре с первого), пол —
-     * не выше бюджета, гауссов вуали — не больше {@link SmokePuffs#VEIL_MAX}, мест трубок и клубов облаков в плане — не
-     * больше {@link SmokePuffs#PLACES} и {@link SmokePuffs#BLOBS} в каждом кадре с первого. Пропускание по 18 частям кадра против самого вещества модели ({@link #truth}) — не дальше, чем у
-     * полного кадра, больше чем на шум подробности клубов (0,08, {@code SmokeFillTest.clusterDetailNoise}).
+     * A raid of 100 impacts on the ground (with a curtain of ejection and crushed stone dust) from three cameras of the stand. Without a budget, half the frame
+     *  from the edge and from the inside above the budget (from the outside with a step of places according to the budget - 14,9 screen: it fits like that); with a budget, the squares fill no more than the plan, the plan - no more than the budget (in each frame from the first), the floor -
+     * , no more than the budget, the Gaussian veil - no more than {@link SmokePuffs#VEIL_MAX}, the places of tubes and billows of clouds in the plan - no
+     *  more than {@link SmokePuffs#PLACES} and {@link SmokePuffs#BLOBS} in each frame from the first. Passing through the 18 parts of the frame against the very substance of the model ({@link #truth}) is no further than that of the
+     *  full frame, more than the noise details of the billows (0,08, {@code SmokeFillTest.clusterDetailNoise}).
      */
     @Test
     void raidOfAHundredStaysInTheBudgetAtTheSameDensity() throws IOException {
@@ -300,12 +300,12 @@ class SmokeRaidTest {
             double[] real = truth(raid, now, v);
             double worstFree = SmokeFillTest.worstBlock(free, real, prof), worst = SmokeFillTest.worstBlock(budget, real, prof);
             String got = String.format(Locale.ROOT,
-                    "%s: без бюджета %d квадратов, %.1f экранов (пол %.1f); с бюджетом %d, %.1f (пол %.1f, до слияния %.1f, уровень %d, вуаль %d гауссов, кучек %d); худшая часть против вещества: полный %.3f, в бюджете %.3f%n  вещество %s%n  полный   %s%n  бюджет   %s",
+                    "%s: without budget %d squares, %.1f screens (floor %.1f); with budget %d, %.1f (floor %.1f, before merger %.1f, level %d, veil %d of Gaussians, heaps %d); worst part against substance: full %.3f, in budget %.3f%n substance %s%n full %s%n budget %s",
                     NAMES[c], free.quads.size(), free.fill(), freeFloor, budget.quads.size(), budget.fill(), floor, raw, level, veils, clusters, worstFree,
                     worst, row(real), row(SmokeFillTest.blocks(free, prof)), row(SmokeFillTest.blocks(budget, prof)));
             System.out.println("RAID " + got);
             all.append(got).append('\n');
-            String bounds = String.format(Locale.ROOT, "  заливка сверх плана %.4f, план %.2f; мест трубок до %d, клубов облаков до %d", over,
+            String bounds = String.format(Locale.ROOT, "  filling in excess of plan %.4f, plan %.2f; tube places up to %d, billows clouds up to %d", over,
                     SmokePuffs.lastFill(), places, blobs);
             System.out.println("RAID " + bounds);
             all.append(bounds).append('\n');
@@ -319,9 +319,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Работа плана кадра не растёт с налётом: 400 ударов по грунту (облака без пожаров) — клубов облаков в плане не больше
-     * {@link SmokePuffs#BLOBS} (сверх — сливаются до плана и отбираются по вкладу) в каждом кадре с первого, заливка — в
-     * бюджете.
+     * The work of the frame plan does not grow with the raid: 400 impacts on the ground (clouds without fires) - billows of clouds in the plan are no more than
+     * {@link SmokePuffs#BLOBS} (over - merge to the plan and are selected by contribution) in each frame from the first, filling - in
+     *  budget.
      */
     @Test
     void planWorkStaysBoundedAtFourHundredStrikes() {
@@ -335,15 +335,15 @@ class SmokeRaidTest {
                     7000L + i));
         }
         SmokeFillTest.Screen s = frame(raid, now, view(0), SmokePuffs.FILL_BUDGET);
-        String got = String.format(Locale.ROOT, "клубов облаков в плане %d, кучек %d, заливка %.1f (пол %.1f, до слияния %.1f)", SmokePuffs.lastBlobs(),
+        String got = String.format(Locale.ROOT, "billows of clouds in plan %d, heaps %d, fill %.1f (floor %.1f, before merging %.1f)", SmokePuffs.lastBlobs(),
                 SmokePuffs.lastItems(), s.fill(), SmokePuffs.lastFloor(), SmokePuffs.lastRaw());
         System.out.println("RAID 400: " + got);
         SmokePuffs.resetBudget();
         assertTrue(maxBlobs <= SmokePuffs.BLOBS && maxPlaces <= SmokePuffs.PLACES && worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9,
-                got + ", клубов облаков в плане до " + maxBlobs + ", мест до " + maxPlaces);
+                got + ", billows of clouds in terms of up " + maxBlobs + ", places to " + maxPlaces);
     }
 
-    /** Источник одного гаусса (σh, σv) с ослаблением ext в (x, y, z), сажей. */
+    /** Single gauss source (σh, σv) with attenuation ext in (x, y, z), soot. */
     static SmokeGrid.Source blob(double x, double y, double z, double sh, double sv, double ext, long seed) {
         return new SmokeGrid.Source() {
             @Override
@@ -360,9 +360,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #460: план считал дробную кучку, а рисуются ⌈кучки⌉ квадратов с разбросом размера и места — 12 перекрывающихся
-     * гауссов (σ 6,4 м, толща середины 3) в 30 м: план 8, квадраты 11,3 экрана. Теперь квадраты заливают не больше плана,
-     * план — не больше бюджета, при бюджетах 4, 8 и настоящем.
+     * Review #460: the plan considered a fractional heap, and ⌈heaps⌉ of squares with a spread of size and space are drawn - 12 overlapping
+     * gaussians (σ 6,4 m, thickness of the middle 3) in 30 m: plan 8, screen squares 11,3. Now the squares are filled no more than the plan,
+     * plan - no more than the budget, with budgets 4, 8 and the present.
      */
     @Test
     void drawnFillNeverExceedsThePlan() {
@@ -375,7 +375,7 @@ class SmokeRaidTest {
         FarView v = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(1, 0, 0));
         for (double budget : new double[]{4, 8, SmokePuffs.FILL_BUDGET}) {
             SmokeFillTest.Screen s = frame(group, now, v, budget);
-            String got = String.format(Locale.ROOT, "бюджет %.0f: квадраты %.3f, план %.3f, доля кучки %.2f", budget, s.fill(), SmokePuffs.lastFill(),
+            String got = String.format(Locale.ROOT, "budget %.0f: squares %.3f, plan %.3f, share of heap %.2f", budget, s.fill(), SmokePuffs.lastFill(),
                     SmokePuffs.lastShare());
             System.out.println("PLAN " + got);
             assertTrue(worstOverPlan <= 1e-9 && SmokePuffs.lastFill() <= budget + 1e-9, got);
@@ -384,9 +384,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #460: предел клубов облаков сливал ячейками без конца — 2001 гаусс σ 1 м сеткой через 40 м выходил гауссами σ 20 м,
-     * дым в пустых промежутках. Теперь слияние — не дальше двух краёв, остаток — отбором по вкладу: клубов в плане не больше
-     * {@link SmokePuffs#BLOBS}, и ни один квадрат не крупнее края своего гаусса (с ростом до пикселя и разбросом).
+     * Review #460: the limit of billows clouds merged in cells endlessly - 2001 gauss σ 1 m with a grid through 40 m came out as gauss σ 20 m,
+     *  smoke in empty gaps. Now the merger is no further than two edges, the remainder is selected by contribution: billows in terms of no more than
+     * {@link SmokePuffs#BLOBS}, and not a single square is larger than the edge of its Gaussian (with growth to a pixel and spread).
      */
     @Test
     void blobLimitDoesNotSmearOverClearSky() {
@@ -404,9 +404,9 @@ class SmokeRaidTest {
         SmokeFillTest.Screen s = frame(one, 0, v, SmokePuffs.FILL_BUDGET);
         double depthMin = 250, biggest = 0;
         for (double[] q : s.quads) biggest = Math.max(biggest, Math.max(q[2], q[3]));
-        // край густого гаусса — до 4σ, у одиночного клуба — без разброса; квадрат на экране — не больше (край)/(глубина) с полом в пиксель
+        // the edge of a thick Gaussian - up to 4σ, for a single billows - without scatter; square on the screen - no more than (edge)/(depth) with a pixel floor
         double most = Math.max(4 * sigma / depthMin, 2 * SmokeFillTest.PIXEL);
-        String got = String.format(Locale.ROOT, "клубов облаков в плане до %d, квадратов %d, наибольший полуразмер %.4f (край — до %.4f)", maxBlobs,
+        String got = String.format(Locale.ROOT, "billows of clouds in plan up to %d, squares %d, largest half-size %.4f (edge - up to %.4f)", maxBlobs,
                 s.quads.size(), biggest, most);
         System.out.println("THIN " + got);
         SmokePuffs.resetBudget();
@@ -414,12 +414,12 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #460: у границы бюджета слияние то шло, то нет — пол 8,28↔7,80 при движении камеры, уровень 1↔0, кучек 1↔60.
-     * Уровень прошлого кадра держится, пока пол не ляжет под 0,8 бюджета, и только потом сходит.
+     * Review #460: near the merge budget boundary, merging switched on and off: floor 8.28↔7.80 as the camera moved,
+     * level 1↔0, clusters 1↔60. Previous frame level stays until the floor falls below 0.8 of budget, then decreases.
      */
     @Test
     void mergeLevelHoldsAtTheBudgetBorder() {
-        // ряд бледных клубов разных источников поперёк взгляда: друг друга не прячут, а лежат друг на друге — сливаются
+        // a row of pale billows of different sources across the view: they do not hide each other, but lie on top of each other - merge
         double now = 0, sigma = 3, ext = 0.5 * 2 * Math.PI * sigma * sigma;
         List<SmokeGrid.Source> row = new ArrayList<>();
         for (int i = 0; i < 40; i++) row.add(blob(60, 10, 1.5 * (i - 20), sigma, sigma, ext, 300 + i));
@@ -431,7 +431,7 @@ class SmokeRaidTest {
             SmokeFillTest.Screen s = new SmokeFillTest.Screen(v);
             step(row, now, v, s);
             double raw = SmokePuffs.lastRaw();
-            // выше бюджета — слияние; чуть ниже (пол — 0,95 бюджета) — уровень держится; под 0,8 — сходит
+            // above budget: merge; just below (floor at 0.95 of budget), hold level; below 0.8, decrease
             SmokePuffs.budget = raw / 1.3;
             step(row, now, v, s);
             int over = SmokePuffs.lastLevel();
@@ -441,7 +441,7 @@ class SmokeRaidTest {
             SmokePuffs.budget = raw / 0.7;
             step(row, now, v, s);
             int under = SmokePuffs.lastLevel();
-            String got = "пол " + raw + ": уровень над бюджетом " + over + ", у бюджета " + near + ", под 0,8 — " + under;
+            String got = "floor " + raw + ": level above budget " + over + ", on budget " + near + ", under 0,8 - " + under;
             System.out.println("HYST " + got);
             assertTrue(over > 0 && near > 0 && under == 0, got);
         } finally {
@@ -457,9 +457,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #460, круг 2: отрезки сверх мест кадра шли лентой мимо бюджета — 300 стоячих трубок (100 м, σ 1 м) в 30 м
-     * заливали 29,5 экрана при бюджете 16, 1000 — 75. Лента — тоже заливка: в плане и бюджете, не влезла — не рисуется.
-     * В каждом кадре с первого квадраты и ленты заливают не больше плана, план — не больше бюджета.
+     * Review #460, circle 2: sections in excess of the frame locations were tape past the budget - 300 standing tubes (100 m, σ 1 m) in 30 m
+     *  were poured 29,5 screen for the budget 16, 1000 - 75. The tape is also a fill: in the plan and budget, if it doesn’t fit, it’s not drawn.
+     *  In each frame from the first, the squares and tapes are filled in no more than the plan, the plan - no more than the budget.
      */
     @Test
     void ribbonsStayInTheBudget() {
@@ -484,7 +484,7 @@ class SmokeRaidTest {
                 });
             }
             SmokeFillTest.Screen s = frame(tubes, 0, SmokeFillTest.view(new Vec3(0, 20, 0), new Vector3f(1, 0, 0)), SmokePuffs.FILL_BUDGET);
-            String got = String.format(Locale.ROOT, "%d трубок: заливка %.2f (план %.2f), сверх плана до %.4f, мест до %d, полос лент %d", n, s.fill(),
+            String got = String.format(Locale.ROOT, "%d tubes: filling %.2f (plan %.2f), over plan up to %.4f, places up to %d, strips of tape %d", n, s.fill(),
                     SmokePuffs.lastFill(), worstOverPlan, maxPlaces, s.polygons.size());
             System.out.println("RIBBONS " + got);
             assertTrue(worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9 && maxPlaces <= SmokePuffs.PLACES, got);
@@ -493,11 +493,11 @@ class SmokeRaidTest {
     }
 
     /**
-     * Лента — вид трубки уже {@link FarFlightView#PUFFS_FULL} px: полоса с прямыми краями и одним цветом поперёк. В налёте
-     * стенда шлейфы 70 пожаров просили ~8000 мест при 3000, порог ширины (прежний множитель {@code puffScale}) рос к 40-му
-     * кадру в 28–41 раз, и шлейфы шириной до 90–180 px шли лентами: полосы до 212/491/701 px снаружи/с края/внутри — светлые
-     * прямые полосы в кадрах стенда 25.10 (с края — косые). Ни при каком бюджете мест полоса не шире ленты узкой трубки:
-     * бюджет растит шаг клубов, а не порог ширины.
+     * Ribbon - a type of tube narrower {@link FarFlightView#PUFFS_FULL} px: a strip with straight edges and one color across. In the raid
+     *  of the trail stand 70 fires were asked for ~8000 places at 3000, the width threshold (the previous multiplier {@code puffScale}) grew to the 40-th
+     *  frame in 28–41 times, and trail width up to 90–180 px went in ribbons: stripes up to 212/491/701 px outside/from the edge/inside — light
+     *  straight stripes in the frames of the 25.10 stand (oblique at the edges). Under no seat budget is the strip wider than the tape of a narrow tube:
+     *  the budget increases the billows step, not the width threshold.
      */
     @Test
     void ribbonsAreOnlyNarrowTubes() {
@@ -516,7 +516,7 @@ class SmokeRaidTest {
                 strips++;
                 widest = Math.max(widest, Math.max(pixels(v, p, 0), pixels(v, p, 1)));
             }
-            String got = String.format(Locale.ROOT, "%s: полос %d, самая широкая %.1f px (предел %.1f)", NAMES[c], strips, widest, limit);
+            String got = String.format(Locale.ROOT, "%s: bands %d, widest %.1f px (limit %.1f)", NAMES[c], strips, widest, limit);
             System.out.println("RIBBON WIDTH " + got);
             all.append(got).append('\n');
             ok &= widest <= limit;
@@ -525,7 +525,7 @@ class SmokeRaidTest {
         assertTrue(ok, all.toString());
     }
 
-    /** Трубка одного куска от a до b (σ у концов) с толщей поперёк оси tau — источником (сажа на метр — по толще). */
+    /** A tube of one piece from a to b (σ at the ends) with thickness across the axis tau - the source (soot per meter - thicker). */
     private static SmokeGrid.Source piece(Vec3 a, double sa, Vec3 b, double sb, double tau, long seed) {
         double soot = tau * Math.sqrt(2 * Math.PI) / CloudModel.SOOT_K;
         return new SmokeGrid.Source() {
@@ -542,7 +542,7 @@ class SmokeRaidTest {
         };
     }
 
-    /** Кадр трубок с шагом мест, выросшим в stride раз (мест кадра мало — как в налёте стенда). */
+    /** A frame of tubes with a step of places increased by stride times (there are few places in the frame - like in a stand raid). */
     private static SmokeFillTest.Screen strided(List<SmokeGrid.Source> sources, FarView v, double stride) throws ReflectiveOperationException {
         java.lang.reflect.Field field = FarFlightView.class.getDeclaredField("stride");
         field.setAccessible(true);
@@ -561,16 +561,16 @@ class SmokeRaidTest {
         return s;
     }
 
-    /** Ширина трубки толщей tau и σ на экране в d блоках от глаза, пикселей кадра проверок. */
+    /** The width of the tube is thicker than tau and σ on the screen in d blocks from the eye, frame pixels of checks. */
     private static double tubePixels(double tau, double sigma, double d) {
         return ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma) / (d * SmokeFillTest.PIXEL);
     }
 
     /**
-     * Ревью #466: у отрезка с узким и широким концом (и у узких концов с широкой серединой у глаза) лента шла всей своей
-     * геометрией, и через широкую часть ложилась полоса в 163 px — альфа там лишь сходила на нет. Лента — только узкие куски
-     * от концов, до места, где трубка на экране шире {@link FarFlightView#PUFFS_FULL}, и с любым шагом мест: через широкую
-     * середину полосы нет.
+     * Review #466: for a segment with narrow and wide ends (and narrow ends with a wide middle near the eye), the
+     * ribbon used its full geometry and laid a 163 px strip through the wide part; alpha merely faded there. Ribbon
+     * uses only narrow portions from the ends up to where the screen-space tube exceeds {@link FarFlightView#PUFFS_FULL},
+     * with any point spacing: no strip through the wide middle.
      */
     @Test
     void mixedRibbonEndsAreCut() throws ReflectiveOperationException {
@@ -578,9 +578,9 @@ class SmokeRaidTest {
         Vec3 eye = new Vec3(0, 10, 0);
         FarView v = SmokeFillTest.view(eye, new Vector3f(1, 0, 0));
         Object[][] cases = {
-                // узкий дальний конец — широкий ближний
+                // narrow far end - wide near
                 {new Vec3(200, 10, 250), 0.2, new Vec3(60, 10, -10), 1.5, false},
-                // узкие концы под 45°, широкая середина ближе к глазу
+                // narrow ends under 45°, wide middle closer to the eye
                 {new Vec3(100, 10, -100), 0.28, new Vec3(100, 10, 100), 0.28, true}};
         StringBuilder all = new StringBuilder();
         boolean ok = true;
@@ -595,7 +595,7 @@ class SmokeRaidTest {
                 widest = Math.max(widest, Math.max(pixels(v, p, 0), pixels(v, p, 1)));
             }
             double middle = ribbonAt(s, a, b, 0.5);
-            String got = String.format(Locale.ROOT, "%s–%s: полос %d, самая широкая %.1f px (предел %.1f), в середине %.4f", a, b, strips, widest, limit,
+            String got = String.format(Locale.ROOT, "%s–%s: stripes %d, widest %.1f px (limit %.1f), in the middle %.4f", a, b, strips, widest, limit,
                     middle);
             System.out.println("MIXED " + got);
             all.append(got).append('\n');
@@ -605,18 +605,18 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #466, круг 2: у узких концов с широкой серединой одна полоса по концам держала середину до порога ленты и роняла
-     * её за порогом: при ширине середины 4,79999952 → 4,80000048 px её непрозрачность — 0,392 → 0,010, в четверти отрезка —
-     * 0,389 → 0,197; движение у порога мерцало. Ближняя к глазу точка внутри отрезка — вершина ленты со своей долей (по ширине
-     * там): доля ленты в середине — 1 − доля клубов там ({@link FarFlightView#puffShare}, ±0,001), и на всём проходе середины
-     * от 2 до 10 px шагом 0,005 px доли ленты в середине и в четверти и доля вещества у клубов меняются не больше чем на 0,01
-     * за шаг (лента тает по ширине не круче 0,63 на пиксель), у порога ±1e-6 px — меньше 0,001.
+     * Review #466, circle 2: at narrow ends with a wide middle, one strip at the ends held the middle to the threshold of the tape and dropped
+     *  it beyond the threshold: with the width of the middle 4,79999952 → 4,80000048 px it opacity - 0,392 → 0,010, in the quarter segment -
+     * 0,389 → 0,197; movement flickered at the threshold. The point inside the segment closest to the eye is the top of the tape with its share (in width
+     *  there): the share of the tape in the middle is 1 - the share of billows there ({@link FarFlightView#puffShare}, ±0,001), and throughout the entire passage of the middle
+     *  from 2 to 10 px step 0,005 px shares of the tape in the middle and in the quarters and the share of substance in billows change no more than 0,01
+     *  per step (the tape melts in width no steeper than 0,63 per pixel), at the threshold ±1e-6 px - less than 0,001.
      */
     @Test
     void ribbonShareIsContinuous() throws ReflectiveOperationException {
         FarView v = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(1, 0, 0));
         double tau = 1, d = 100;
-        // узкие концы под 45°, середина — ближняя к глазу точка отрезка
+        // narrow ends at 45°, the middle is the point of the segment closest to the eye
         Vec3 a = new Vec3(d, 10, -d), b = new Vec3(d, 10, d);
         double length = a.distanceTo(b), end = Math.sqrt(2) * d;
         double[] half = new double[2];
@@ -630,8 +630,8 @@ class SmokeRaidTest {
         for (int i = 0; i < widths.size(); i++) {
             double w = widths.get(i), sigma = w / tubePixels(tau, 1, d);
             SmokeFillTest.Screen s = strided(List.of(piece(a, sigma, b, sigma, tau, 5)), v, 1);
-            // доли: лента в середине и в четверти — её непрозрачность против трубки (у вершин ленты непрозрачность трубки — по
-            // прямой между концами, как у {@code FarFlightView.cut}), клубы — вещество мест против вещества отрезка
+            // shares: the tape in the middle and in the quarter - its opacity against the tube (at the tops of the tape the opacity of the tube is along
+            //  straight between the ends, like {@code FarFlightView.cut}), billows - the substance of the places against the substance of the segment
             double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
             FarFlightView.ribbon(width, end, v.pixel(), half);
             double alpha = -Math.expm1(-tau) * half[1] * v.air(end, 0);
@@ -647,15 +647,15 @@ class SmokeRaidTest {
             } else if (below == null) below = seen;
             else for (int k = 0; k < 3; k++) atLimit = Math.max(atLimit, Math.abs(seen[k] - below[k]));
         }
-        String got = String.format(Locale.ROOT, "лента в середине / в четверти / клубы:%s наибольший шаг %.4f, у порога ±1e-6 px — %.6f, лента + клубы в середине — 1 ± %.5f",
+        String got = String.format(Locale.ROOT, "tape in the middle / in the quarter / billows:%s largest step %.4f, at the threshold ±1e-6 px - %.6f, tape + billows in the middle - 1 ± %.5f",
                 all, worst, atLimit, sum);
         System.out.println("CONTINUOUS " + got);
         assertTrue(worst <= 0.01 && atLimit <= 0.001 && sum <= 0.001, got);
     }
 
     /**
-     * Непрозрачность лент кадра s в точке u отрезка a–b (мир; глаз — в (0, 10, 0)): полосы, через ось которых она проходит
-     * (у общей вершины двух полос — одна, та, что от неё начинается).
+     * Opacity of frame strips s at point u of segment a–b (world; eye - in (0, 10, 0)): stripes through the axis of which it passes
+     *  (at the common vertex two stripes - one, the one that starts from it).
      */
     private static double ribbonAt(SmokeFillTest.Screen s, Vec3 a, Vec3 b, double u) {
         double px = a.x + (b.x - a.x) * u, py = a.y + (b.y - a.y) * u - 10, pz = a.z + (b.z - a.z) * u, ribbon = 0;
@@ -674,23 +674,23 @@ class SmokeRaidTest {
     }
 
     /**
-     * Бюджет мест растит шаг клубов трубки, и мест на отрезок меньше, а вещество отрезка у них то же: каждое стоит за свой,
-     * более длинный кусок оси. Трубка σ 1 м, τ 1, 40 м в 30 м от глаза (клубы целиком): с шагом ×1–128 вещество мест — то же
-     * (±0,1 %) и равно веществу отрезка, мест — всё меньше, до одного.
+     * The budget of the places increases the pitch of the billows tube, and there are fewer places per segment, but the substance of the segment is the same: each stands for its own,
+     * , longer piece of the axle. Tube σ 1 m, τ 1, 40 m in 30 m from the eye (entire billows): in steps ×1–128 substance of places - then same
+     * (±0,1%) and is equal to the substance of the segment, the places are less and less, down to one.
      */
     @Test
     void strideKeepsTheMatter() throws ReflectiveOperationException {
         FarView v = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(1, 0, 0));
         double tau = 1, sigma = 1, length = 40, truth = tau * Math.sqrt(2 * Math.PI) * sigma * length;
         SmokeGrid.Source tube = piece(new Vec3(30, 10, -length / 2), sigma, new Vec3(30, 10, length / 2), sigma, tau, 3);
-        StringBuilder all = new StringBuilder(String.format(Locale.ROOT, "вещество отрезка %.3f:", truth));
+        StringBuilder all = new StringBuilder(String.format(Locale.ROOT, "%.3f cut material:", truth));
         boolean ok = true;
         int was = Integer.MAX_VALUE;
         for (double stride : new double[]{1, 1.5, 2, 3, 5, 8, 128}) {
             strided(List.of(tube), v, stride);
             double matter = SmokePuffs.lastPlaceMatter();
             int places = SmokePuffs.lastPlaces();
-            all.append(String.format(Locale.ROOT, " ×%.1f — %d мест, %.3f;", stride, places, matter));
+            all.append(String.format(Locale.ROOT, " ×%.1f - %d seats, %.3f;", stride, places, matter));
             ok &= Math.abs(matter / truth - 1) <= 0.001 && places <= was && places >= 1;
             was = places;
         }
@@ -700,10 +700,10 @@ class SmokeRaidTest {
     }
 
     /**
-     * Мест трубок — не больше {@link SmokePuffs#PLACES} в каждом кадре налёта стенда, и в первом (шаг ещё по закону), а со
-     * второго-третьего кадра мест хватает всем отрезкам в кадре: шаг растёт сразу во столько раз, во сколько мест просили
-     * больше (×1,1 за кадр — двенадцать кадров части отрезков без клубов). Доли клубов и ленты при этом те же — лент шире
-     * узкой трубки нет ({@link #ribbonsAreOnlyNarrowTubes}).
+     * Places of tubes - no more than {@link SmokePuffs#PLACES} in each frame of the stand raid, and in the first (the step is still according to the law), and from
+     *  of the second or third frame there are enough places for all segments in the frame: the step increases immediately as many times as the number of places requested
+     * more (×1,1 per frame - twelve frames of part of the segments without bills). The shares of billows and tapes are the same - there are no tapes wider than
+     * , and there is no narrow tube ({@link #ribbonsAreOnlyNarrowTubes}).
      */
     @Test
     void placesHoldFromTheFirstFrame() {
@@ -716,7 +716,7 @@ class SmokeRaidTest {
             SmokeFillTest.Screen s = new SmokeFillTest.Screen(v);
             SmokePuffs.resetBudget();
             FarFlightView.reset();
-            StringBuilder row = new StringBuilder(NAMES[c] + ": мест / отказано —");
+            StringBuilder row = new StringBuilder(NAMES[c] + ": places / denied -");
             int settled = -1;
             for (int frame = 0; frame < 12; frame++) {
                 s.clear();
@@ -729,7 +729,7 @@ class SmokeRaidTest {
                 if (refused == 0 && settled < 0) settled = frame;
                 if (frame >= 3) ok &= refused == 0;
             }
-            row.append("; без отказов с кадра ").append(settled);
+            row.append("; no failures from the frame ").append(settled);
             System.out.println("FIRST " + row);
             all.append(row).append('\n');
         }
@@ -739,10 +739,10 @@ class SmokeRaidTest {
     }
 
     /**
-     * Угловая ширина полосы ленты p (вершины от глаза: 0, 1 — у a, 2, 3 — у b) у её конца end (0 — a, 1 — b), пикселей кадра
-     * проверок: поперечник конца поперёк луча к нему на его дальность — та же мера, что у порога ленты
-     * ({@link FarFlightView#puffShare}: ширина / расстояние). Пиксели плоскости экрана у края кадра крупнее угла (у реза в
-     * 243 м на глубине 163 м — в 1,5 раза), и узкая лента там шире в пикселях — это перспектива кадра, а не лента.
+     * Angular width of the tape strip p (vertices from the eye: 0, 1 - for a, 2, 3 - for b) at its end end (0 - a, 1 - b), frame pixels
+     *  checks: the diameter of the end across the beam to it at its range is the same measure as at the threshold of the tape
+     *  ({@link FarFlightView#puffShare}: width / distance). The pixels of the screen plane at the edge of the frame are larger than the corner (at the cut at
+     * 243 m at a depth of 163 m - 1,5 times), and the narrow tape there is wider in pixels - this is the perspective of the frame, not the tape.
      */
     private static double pixels(FarView v, double[] p, int end) {
         int i = end == 0 ? 0 : 3, j = end == 0 ? 1 : 2;
@@ -753,9 +753,9 @@ class SmokeRaidTest {
     }
 
     /**
-     * Ревью #460, круг 2: площадь лежащей пыли план брал прямоугольником на глубине середины, а у квадрата на горизонтали под
-     * углом ближний край на экране в разы шире — 300 плоских гауссов (σh 20 м, σv 0,2 м, толща 0,01) в 40 м, глаз на 5 м:
-     * план 15,4, квадраты 36,7 экрана. Теперь по четырём вершинам: нарисованное — не больше плана, план — не больше бюджета.
+     * Review #460, circle 2: the plan took the area of the lying dust with a rectangle at the depth of the middle, and for a square on the horizontal at a
+     *  angle, the near edge on the screen is many times wider - 300 flat Gaussians (σh 20 m, σv 0,2 m, thickness 0,01) in 40 m, eye on 5 m:
+     * plan 15,4, squares 36,7 screen. Now for the four peaks: what is drawn is no more than the plan, the plan is no more than the budget.
      */
     @Test
     void lyingDustIsMeasuredByItsCorners() {
@@ -763,14 +763,14 @@ class SmokeRaidTest {
         List<SmokeGrid.Source> layer = new ArrayList<>();
         for (int i = 0; i < 300; i++) layer.add(blob(0, 0, 40, sh, sv, ext, 400 + i));
         SmokeFillTest.Screen s = frame(layer, 0, SmokeFillTest.view(new Vec3(0, 5, 0), new Vector3f(0, 0, 1)), SmokePuffs.FILL_BUDGET);
-        String got = String.format(Locale.ROOT, "заливка %.2f (план %.2f), сверх плана до %.4f, лежащих %d", s.fill(), SmokePuffs.lastFill(), worstOverPlan,
+        String got = String.format(Locale.ROOT, "filling %.2f (plan %.2f), above the plan up to %.4f, lying %d", s.fill(), SmokePuffs.lastFill(), worstOverPlan,
                 s.polygons.size());
         System.out.println("FLAT " + got);
         SmokePuffs.resetBudget();
         assertTrue(worstOverPlan <= 1e-9 && s.fill() <= SmokePuffs.FILL_BUDGET + 1e-9 && !s.polygons.isEmpty(), got);
     }
 
-    /** Части кадра строками сверху вниз. */
+    /** Frame parts in rows from top to bottom. */
     static String row(double[] parts) {
         StringBuilder b = new StringBuilder();
         for (int j = 2; j >= 0; j--) {

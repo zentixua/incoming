@@ -12,7 +12,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-/** Взрыв в пакете: со снарядом, который взорвался (его путь у клиента кончается), и без него. */
+/** Explosion in a package: with a shell that exploded (its path ends with the client), and without it. */
 class BlastCodecTest {
     @Test
     void blastComesBackWithItsProjectile() {
@@ -21,7 +21,7 @@ class BlastCodecTest {
         assertEquals(Optional.empty(), roundTrip(new S2C.Blast(S2C.Blast.BUNKER, new Vec3(-8.5, -12, 4096.75), 0, 80, Long.MAX_VALUE, Optional.empty(), 2)).projectile());
     }
 
-    /** Оружие — в конце пакета: повтор, записанный до него, читается с оружием по виду (шахед и «Ланцет» — видом шахеда). */
+    /** Weapons are at the end of the package: the repeat recorded before it is read with weapons by type (Shahed and “Lancet” by Shahed type). */
     @Test
     void weaponComesBackAndOldReplaysTakeItFromTheKind() {
         for (WeaponType w : WeaponType.values()) {
@@ -38,7 +38,7 @@ class BlastCodecTest {
         try {
             S2C.Blast.CODEC.encode(buf, b);
             S2C.Blast back = S2C.Blast.CODEC.decode(buf);
-            assertFalse(buf.isReadable(), "лишние байты после взрыва");
+            assertFalse(buf.isReadable(), "extra bytes after explosion");
             assertEquals(b, back);
             return back;
         } finally {

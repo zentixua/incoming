@@ -1,148 +1,166 @@
-# Стенд сцен — время кадра и кадры рядом с базой
+# Scene bench — frame time and captures beside the baseline
 
-Стенд снимает одну версию Incoming в одних и тех же сценах настоящих ударов и сравнивает её с базой (у PR — `main`,
-голова с зелёным build; у приёмки и разовых сравнений — выпуск), снятой парой в том же сеансе: время кадра на
-процессоре и на видеокарте (по стадиям отрисовки), тик сервера, кадры для ревьюера. Правка эффекта не вливается, если
-время кадра при 100 ударах хуже `main` (CLAUDE.md, «Картинка и звук»; решение Артёма 24.10). Ниже «принятый» — база
-пары. Песочница (`tools/sandbox.sh`)
-остаётся для кадра во время работы; стенд — для PR и выпуска.
+The bench captures one Incoming version in identical scenes of real strikes, comparing it with a baseline
+(PRs: `main` head with a green build; acceptance and one-off comparisons: a release) captured as a pair in
+the same session: CPU/GPU frame time by render stage, server tick, reviewer frames. An effect change cannot
+merge if frame time at 100 strikes is worse than `main` (CLAUDE.md, "Visuals and sound"; Artem, 24.10).
+Below, "accepted" means the pair baseline. The sandbox (`tools/sandbox.sh`) remains for frames during work;
+the bench is for PRs and releases.
 
-## Почему не песочница
-Песочница и `ProbeScenario` живут в devtest той версии, которую снимают, — в 3.4.1 и 3.5.0 их нет, а пакет взрыва
-песочницы внутренний. Поэтому обвязка — отдельный клиентский мод без зависимости от Incoming (свой Gradle-проект MDG,
-как `tools/replayscan`): всё, что про Incoming, — в данных (`scenes.json`: команды, тип снаряда, имена методов проб).
-Один и тот же стенд снимает любой jar Incoming 3.4.1+; между столбцами меняется только он.
+## Why a separate bench
+Sandbox and `ProbeScenario` live in the captured version devtest; neither exists in 3.4.1/3.5.0, and the
+sandbox explosion packet is internal. The harness is therefore a separate client mod without an Incoming
+dependency (its own MDG Gradle project, like `tools/replayscan`). Incoming-specific data live in `scenes.json`:
+commands, projectile type, probe method names. The identical bench captures any Incoming 3.4.1+ jar;
+only that jar changes between columns.
 
-## Как устроено
-- `scenes.json` — сцены: места (`F`, `C`, `D`, `L1`–`L3`), камеры, залпы, окна замера. `plan.py` разворачивает их в шаги обвязки
-  (`stand-plan.json`: камера, команда, залп, ожидание попаданий, кадр, окно) — вся геометрия здесь, её держит тест.
-- Мод `stand` (`src/main/java/ua/zentix/stand`) на титульном экране создаёт свежий плоский мир (сид, слои и полдень —
-  как песочница Incoming; без смены суток, погоды и мобов; наблюдатель) и исполняет шаги:
-  - `FrameClock` — каждый кадр: интервал между кадрами, процессор — время процессора потока отрисовки от
-    `RenderFrameEvent.Pre` до `Post` (`ThreadMXBean`, как `FxLayer.cpuNanos` мода; без обмена буферов, вытеснения
-    чужими задачами и сна драйвера) и то же настенными часами (в отчёт), видеокарта — метки
-    `glQueryCounter(GL_TIMESTAMP)` в начале и конце кадра и на каждой стадии `RenderLevelStageEvent` до и после её
-    обработчиков (`after_level+` — слой эффектов Incoming); метки читаются через кадры, без ожидания видеокарты;
-  - `ServerWatch` (правило — `Impacts`, тест `ImpactsTest`) — попадание: снаряд (`incoming:drone`) ушёл из мира
-    убитым или убранным в радиусе цели залпа и начался подрыв его боевой части (`ExplosionEvent.Start` с типом урона
-    `incoming:strike` из `scenes.json`; авария до взведения — ванильный взрыв, не попадание; снаряд взрыва —
-    его источник или прямой источник его урона: в 3.4.1–3.7.0 боевая часть даёт снаряд только урону, поле открыто
-    `accesstransformer.cfg`), в любом порядке и без срока (работа попаданий идёт под бюджетом тика). Взрыв другого
-    снаряда рядом, вторичный подрыв того же и взрыв без снаряда не подтверждают ничего. Уход без взрыва — переход в
-    полёт вне мира (`VirtualFlights.park` тоже убирает сущность): возврат в мир тем же UUID снимает его. Раз в секунду —
-    тик сервера, число сущностей и настенное время (по нему разбор сводит события с записью нагрузки машины);
-  - `Probes` — раз в секунду строки `FxLayer.describeTiming` и `FarRenderer.describeSmoke` отражением (нет в версии —
-    «n/a»), один раз — шейдерпак Iris и рисует ли он (`isPackInUseQuick`: имя пака Iris держит и тогда, когда шейдер
-    не собрался и рисует ваниль; прогон с другим паком или без конвейера пака не годится).
-- Удары — настоящие: `/incoming salvo drone 1 0 at x z from x z via x z` (синтаксис тот же с 3.4.1) — своя команда на
-  каждый удар с разбросом 0. Разброс залпа Incoming берёт общий генератор мира (`SalvoData.fire`: `level.random`; зерна
-  у команды и правил мира нет ни в 3.4.1, ни после), и удары каждого прогона ложились бы иначе: камера «на краю» то в
-  стене пыли, то у её края, видеокарта двух прогонов одной версии расходилась на 30 %. Поэтому точки ударов задаёт план:
-  подсолнух Фогеля в круге разброса (равномерно по площади, свой поворот у каждого залпа и волны), одни у всех версий;
-  остаётся промах самого шахеда (σ 3 м по паспорту). Пуск — с 10 точек в 400 м, с одной точки раз в 1,5 с (одна
-  пусковая выпускает шахед раз в 1–2 с); маршрут — через саму точку удара (без точки маршрута шахед делает петлю и
-  заходит из-за спины стреляющего). Правило
-  мира стенда — `drone_flight_time = 5` (`config/incoming-server.toml`; по умолчанию 50 с, полёт не короче прямого пути):
-  после удара от него ничего не зависит, а прогон на пак короче на ~3 мин. Конец залпа — все попадания; иначе снарядов
-  в мире и уходов залпа, ждущих взрыва, нет 30 с после последнего попадания; иначе срок (годен прогон только со всеми
-  попаданиями). Снаряд вне загруженного мира (`VirtualFlights`) сущностью не бывает, поэтому «нет снарядов» само по себе
-  конца не значит.
-- Моды рядом — только Sodium и Iris сборки open-skies; паки — без пака (Iris выключен), Complementary Unbound, Photon;
-  файлы — по sha512 из `pack/*.pw.toml` сборки. Окно 2560×1600, vsync выключен, предел к/с снят, прорисовка 12, частицы
-  «все»; кэш шейдеров драйвера выключен (`__GL_SHADER_DISK_CACHE=0`): первый удар каждого прогона — со сборкой
-  шейдеров, как у свежей игры; `__GL_YIELD` — как у игрока, по умолчанию: внутри Pre → Post драйвер видеокарту не ждёт
-  (A/B 25.10: процессор потока равен настенному Pre → Post в пределах 0,5 % и с `USLEEP`, и без). Звук — в файл (после
-  прогона удаляется).
-- Нагрузка машины (`host.jsonl` пака) — в отчёт: каждые 5 с процессор всей машины и своей cgroup задачи (`client.Host`;
-  в ней клиент, его KWin и JVM), чужое = всё − своё, по службам рядом (кто), профиль питания, load average, температура
-  и частота видеокарты; видеокарта — непрерывно (`client.GpuWatch`: `nvidia-smi pmon -d 1 -o DT`, % SM чужих процессов
-  за цикл; замер — только цикл с числом SM своего клиента). Перед клиентом — ждать тишины (10 с без тяжёлой чужой
-  нагрузки, не дольше 2 мин; в паре — только перед A1 пака: B и A2 идут сразу за ним). Годность прогона нагрузка не решает: опрос раз в секунды тишину каждого мгновения не
-  доказывает (два круга ревью 25.10 — о покрытии циклов), а от ровной чужой нагрузки и нагрева видеокарты шлагбаум
-  защищает пара в одном сеансе («Шлагбаум»); строки нагрузки в окнах вердикта (`results.load_notes`) объясняют в отчёте
-  провал, который не повторился. После последнего окна клиент рисует ещё 3 с (`end_tail_s`).
+## Structure
+- `scenes.json`: sites (`F`, `C`, `D`, `L1`–`L3`), cameras, salvos, measurement windows. `plan.py` expands them
+  into harness steps (`stand-plan.json`: camera, command, salvo, wait for hits, shot, window). All geometry
+  lives here and is covered by a test.
+- Mod `stand` (`src/main/java/ua/zentix/stand`) creates a fresh flat world from the title screen (seed,
+  layers and noon match the Incoming sandbox; no day cycle, weather or mobs; spectator), then executes steps:
+  - `FrameClock`, every frame: interval between frames; render-thread CPU from `RenderFrameEvent.Pre` to
+    `Post` (`ThreadMXBean`, like mod `FxLayer.cpuNanos`; excludes buffer swap, preemption and driver sleep),
+    plus wall-clock duration for reporting; GPU `glQueryCounter(GL_TIMESTAMP)` at frame start/end and
+    each `RenderLevelStageEvent` before/after handlers (`after_level+` is the Incoming effects layer).
+    Read timestamps several frames later without waiting for the GPU.
+  - `ServerWatch` (rule: `Impacts`, test `ImpactsTest`): a hit requires a projectile (`incoming:drone`)
+    removed or killed inside its salvo target radius, and its warhead detonation starting
+    (`ExplosionEvent.Start`, damage type `incoming:strike` from `scenes.json`; a pre-arming crash uses a
+    vanilla explosion, not a hit). Explosion projectile is its source or direct damage source; in
+    3.4.1–3.7.0 the warhead supplies it only to damage, exposed by `accesstransformer.cfg`. Either order,
+    no timeout (impact work runs under the tick budget). A nearby different projectile explosion,
+    secondary detonation of the same projectile, or explosion without one confirms nothing. Removal
+    without explosion means off-world flight (`VirtualFlights.park` also removes the entity); rejoining
+    with the same UUID cancels it. Once a second: server tick, entity count and wall time, used to align
+    events with machine-load recording.
+  - `Probes`: once a second, reflect `FxLayer.describeTiming` and `FarRenderer.describeSmoke` ("n/a" if
+    absent); once, Iris pack and whether it renders (`isPackInUseQuick`: Iris keeps the name even if
+    shader compilation failed and vanilla renders; wrong pack or absent pack pipeline invalidates a run).
+- Real strikes: `/incoming salvo drone 1 0 at x z from x z via x z` (same syntax since 3.4.1), one zero-spread
+  command per strike. Incoming spread uses shared world RNG (`SalvoData.fire`: `level.random`; no command
+  or world-rule seed in 3.4.1 or later), so runs would land differently: the edge camera alternates inside
+  and beside the dust wall, GPU time differs 30 % between same-version runs. Plan-defined impact points
+  follow a Vogel sunflower in a spread disk (uniform area, per-salvo/wave rotation), identical across
+  versions; Shahed miss remains (σ 3 m from spec). Launch from 10 points at 400 m, each once per 1,5 s
+  (one launcher releases a Shahed every 1–2 s); route through the impact point itself (without a waypoint
+  it loops and approaches from behind the shooter). Bench world rule `drone_flight_time = 5`
+  (`config/incoming-server.toml`; default 50 s, never shorter than the straight path): irrelevant after
+  impact, shortens each pack run by ~3 min. Salvo ends when all hits arrive; otherwise when no world
+  projectiles or removals awaiting explosion remain for 30 s after the last hit; otherwise timeout
+  (valid only with all hits). Off-world projectiles (`VirtualFlights`) are not entities, so "no
+  projectiles" alone is insufficient.
+- Alongside mods: only open-skies Sodium and Iris; packs: no pack (Iris disabled), Complementary Unbound,
+  Photon; files by sha512 from modpack `pack/*.pw.toml`. Window 2560×1600, vsync off, unlimited fps,
+  render distance 12, particles all. Driver shader cache disabled (`__GL_SHADER_DISK_CACHE=0`): every
+  first strike includes shader compilation, like a fresh game. `__GL_YIELD` is player default: inside
+  Pre → Post the driver does not wait for GPU (A/B 25.10: thread CPU equals wall-clock Pre → Post within
+  0,5 %, with or without `USLEEP`). Audio goes to a file, removed after the run.
+- Machine load (pack `host.jsonl`), report only: every 5 s, whole-machine CPU and job cgroup CPU
+  (`client.Host`, containing client, KWin and JVM), foreign = all − own; neighbouring services (who),
+  power profile, load average, GPU temperature/frequency. Continuous GPU (`client.GpuWatch`:
+  `nvidia-smi pmon -d 1 -o DT`), foreign % SM per cycle; measured only with our client SM number. Before
+  client: wait for quiet (10 s without heavy foreign load, at most 2 min; pair waits only before A1,
+  B/A2 follow immediately). Load does not determine validity: sampling every few seconds cannot prove
+  quiet at every instant (two review rounds 25.10 on cycle coverage); the same-session pair protects
+  the look gate from steady foreign load and GPU heating ("Look gate"). Verdict-window load lines
+  (`results.load_notes`) explain non-reproduced failures in the report. Client renders another 3 s
+  after the last window (`end_tail_s`).
 
-## Сцены (один прогон на пак, удары копятся)
-1. `first` — первый удар после загрузки: шахед в 60 м перед камерой; худший кадр от попадания до +5 с.
-2. `one` — 1 удар по `C` (пущен вместе с первым, на 20 с позже), камера снаружи; кадры +0,5 / +3 / +15 с.
-3. `16`, `40`, `100` — досыпаем до числа у `C`, разброс 40 / 80 / 120 м; камеры: снаружи (200 м, 30 м над землёй), на
-   краю (у границы разброса, 10 м, внутрь), внутри (в центре, 4 м); у каждой кадр и окно 10 с, у «100» — 20 с, в один и тот же миг от последнего взрыва залпа у всех прогонов: первая камера — через 15 с (`since_last_s`), следующие — через кадр, окно и 10 с на перенос (`tp_gap_s`); конец залпа и перенос плавают, а дым за десятки секунд меняется (окна
-   шлагбаума: дольше — меньше шум от того, что в кадре). Камера встаёт к готовой земле до залпа, а не вместе с ним: иначе её чанки грузились наперегонки со снарядами вне мира, и сервер вставал на 50 мс/тик. У «100» ещё миг прилёта `100-hit`: окно 0–10 с от 10-го
-   попадания (не от первого: шахед, пришедший на 6 с раньше залпа, сдвигал окно), камера снаружи (шар, вспышка, волна, обломки в полёте), кадры +0,2 / +1 / +3 / +10 с; залп ещё ложится,
-   окна «100/*» — после его конца. В шлагбаум не входит.
-4. `acc` — 3 минуты накопления у `D` (3 км от `C`): волны по 10 шахедов (с пяти пусковых в две очереди за 1,5 с)
-   каждые 20 с, камера на краю; время кадра по 10-секундным корзинам от первого попадания; рост — последняя минута
-   против первой. Не 4 минуты, как в спеке: с окнами «100» по 20 с прогон трёх паков вышел бы за 30 мин видеокарты
-   (бюджет — режем сцену, а не пак), а последняя минута и через 3 минуты — после 60 ударов против 30 в первой. Годен, только если нагрузка
-   пришлась на окно: сервер выполнил все команды волн не позже 2 с от расписания, ни одно попадание не после окна, в первую и
-   последнюю минуту — по плану (30 ± волна: окно начинается с первого попадания, полёт шахедов гуляет на ±3 с, и через
-   границу минуты переходит часть волны): иначе минуты несравнимы.
-5. Пуск вблизи — `grad` (залп 12 «Градов» одной командой), `missile` (1 крылатая ракета), `shahed` (5 шахедов с
-   ускорителем подряд, раз в 1,5 с) — каждый у своего места `L1`–`L3` (3, 6, 9 км к югу от `F`): камера в 30 м
-   севернее места пуска на высоте глаз смотрит на пусковую, цель — 2,5 км к востоку (почти поперёк взгляда: прилёты вне
-   кадра). Окна от команды: `start` 0–15 с (струя у земли, облако старта встаёт) и `hang` 30–40 с (облако висит), кадр в конце каждого (`<id>_15s`, `<id>_40s`).
-   Конца залпа сцена не ждёт, поэтому эти сцены — последние в плане, а камеры следующих смотрят на юг, прочь от
-   прилётов прошлых. В шлагбаум не входят; снимаются выборкой (`--scenes 100,grad,missile,shahed`).
+## Scenes (one run per pack, strikes accumulate)
+1. `first`: first strike after loading, Shahed 60 m ahead; worst frame from impact through +5 s.
+2. `one`: 1 strike at `C` (launched with first, 20 s later), outside camera; frames +0,5 / +3 / +15 s.
+3. `16`, `40`, `100`: add up to the count at `C`, spread 40 / 80 / 120 m; cameras outside (200 m, 30 m
+   above ground), edge (spread boundary, 10 m, inward), inside (centre, 4 m). Each has a frame and 10 s
+   window, 20 s for "100", at the same time since last salvo explosion in every run: first camera after
+   15 s (`since_last_s`), others after frame, window and 10 s move (`tp_gap_s`). Salvo end and moves vary,
+   smoke changes over tens of seconds (longer gated windows reduce scene-content noise). Move camera
+   over ready ground before the salvo, not alongside it; otherwise camera chunks race off-world
+   projectiles and server stalls at 50 ms/tick. "100" also has impact window `100-hit`, 0–10 s from hit
+   10 (not first: a Shahed arriving 6 s early shifts it), outside camera (ball, flash, wave, flying
+   debris), frames +0,2 / +1 / +3 / +10 s. Salvo still lands; `100/*` windows follow its end. Not gated.
+4. `acc`: 3 minutes accumulating at `D` (3 km from `C`), waves of 10 Shaheds (five launchers, two rounds
+   1,5 s apart) every 20 s, edge camera. Frame time in 10 s bins from first hit; growth is last minute
+   against first. Not 4 minutes as in the spec: 20 s "100" windows would push three packs beyond 30 GPU
+   minutes (cut scene, not pack), while the last minute after 3 minutes already follows 60 strikes
+   versus 30 in the first. Valid only if load falls within the window: all wave commands executed
+   within 2 s of schedule, no hits after it, first/last minute counts follow plan (30 ± one wave:
+   window begins at first hit, Shahed flight varies ±3 s, part of a wave crosses the minute boundary).
+   Otherwise the minutes are incomparable.
+5. Nearby launch: `grad` (12 Grad rockets in one command), `missile` (1 cruise missile), `shahed`
+   (5 boosted Shaheds, every 1,5 s), each at its own `L1`–`L3` (3, 6, 9 km south of `F`). Camera 30 m
+   north at eye height faces the launcher; target 2,5 km east (nearly across view, impacts off-screen).
+   Command-relative windows: `start` 0–15 s (ground jet, launch cloud forming), `hang` 30–40 s (cloud
+   hangs); frame at each end (`<id>_15s`, `<id>_40s`). No completion wait, so these scenes are last and
+   later cameras face south away from earlier impacts. Not gated; capture subsets
+   (`--scenes 100,grad,missile,shahed`).
 
-## Запуск
+## Run
 ```sh
-tools/stand/run.sh <имя> <jar> [--against <jar принятого>] [--packs none,complementary,photon] [--scenes 100] [--size 2560x1600] [--label …] [--tries 1]
+tools/stand/run.sh <name> <jar> [--against <accepted jar>] [--packs none,complementary,photon] [--scenes 100] [--size 2560x1600] [--label …] [--tries 1]
 ```
-`<jar>` — выпуск (`v3.7.0`), `ci:<ветка|SHA>` (артефакт `incoming-jar` прогона build) или путь к jar. Без видеокарты —
-jar (и jar принятого), моды, паки, скрипт клиента (`stand.py prepare`); клиенты — одной задачей `tools/laptop_job.sh
---gpu --wait` (аренда в очереди, ждёт закрытой игры Артёма), во вложенном KWin без окна; в конце аренда отпускается — при любом выходе, и по сигналу тоже (задача, что пережила обёртку, — как только кончится её клиент).
-Каталоги стенда — `mod/run/stand/` основной копии репозитория, общие у всех её деревьев git (`INCOMING_STAND_ROOT`
-переопределяет). Итог — `mod/run/stand/out/<имя>/`: один прогон — `results.json`, по пакам `frames.csv`, `events.jsonl`,
-`host.jsonl`, `shots/`, `latest.log`; пара — `pair.json`, `verdict.json` и прогоны `A1/`, `B/`, `A2/` (вторая пара —
-`A1-2/`, `B-2/`, `A2-2/`, дальше по `--tries`; прогрев — `warmup/`, в вердикт не идёт).
-Во время работы — выборкой: `--packs none --scenes 100` (~2–3 мин видеокарты; с `--against` — втрое). `--tries 1` — одна
-пара на пак без повторной (приёмка: регрессия, которую стенд должен поймать, повторную пару не заслуживает).
+`<jar>`: release (`v3.7.0`), `ci:<branch|SHA>` (`incoming-jar` artifact of build), or jar path. Prepare
+without GPU: jar (and accepted jar), mods, packs, client script (`stand.py prepare`). Clients run in one
+`tools/laptop_job.sh --gpu --wait` job (queued lease, waits for Artem game to close), in windowless nested
+KWin. Release the lease on every exit, including signals (if a job outlives its wrapper, when its client
+exits). Bench directories: `mod/run/stand/` in main repo copy, shared by git worktrees (override with
+`INCOMING_STAND_ROOT`). Output: `mod/run/stand/out/<name>/`; single run: `results.json`, per-pack
+`frames.csv`, `events.jsonl`, `host.jsonl`, `shots/`, `latest.log`; pair: `pair.json`, `verdict.json`,
+`A1/`, `B/`, `A2/` (second pair: `A1-2/`, `B-2/`, `A2-2/`, further by `--tries`; warm-up `warmup/`
+excluded from verdict). During work, use `--packs none --scenes 100` (~2–3 GPU min; triple with
+`--against`). `--tries 1`: one pair per pack, no repeat (acceptance: a regression the bench must catch
+does not deserve a second pair).
 
 ```sh
-python3 tools/stand/stand.py pr <номер> --post          # PR с картинкой: jar CI его головы парой с main (--against —
-                                                        # другая база), сцена «100», вердикт, статус «Стенд сцен» и
-                                                        # комментарий
-python3 tools/stand/stand.py gate <имя>                 # вердикт пары заново из сырых данных → verdict.json
-uv run tools/stand/report.py <имя> [--ref <имя>=3.4.1]  # отчёт: пара рядом, ещё прогоны в таблицы и листы
+python3 tools/stand/stand.py pr <number> --post          # Visual PR: head CI jar paired with main (--against
+                                                       # overrides baseline), scene "100", verdict,
+                                                       # "Стенд сцен" status and comment
+python3 tools/stand/stand.py gate <name>                 # Rejudge raw pair data → verdict.json
+uv run tools/stand/report.py <name> [--ref <name>=3.4.1]  # Pair report, extra runs in tables/sheets
 ```
-`report.py` пишет в каталог прогона `report.md` (таблицы по сценам и камерам, стадии видеокарты в окнах «100»,
-первый удар, накопление), `comment.md` (таблица для PR), листы кадров `sheet-<пак>.png` (строки — версии, столбцы —
-сцены), график накопления `acc-<пак>.png` и `look.json`.
+`report.py` writes `report.md` (scene/camera tables, GPU stages in "100" windows, first strike,
+accumulation), `comment.md` (PR table), frame sheets `sheet-<pack>.png` (version rows, scene columns),
+accumulation plot `acc-<pack>.png`, and `look.json` in the run directory.
 
-## Шлагбаум (`gate.py`, тест — `test_gate.py`)
-Видеокарта ноутбука в окнах греется до 85–88 °C, её частота от прогона к прогону ходит 1700–2550 МГц (закрепить её без
-root нельзя), и два «тихих» прогона одной версии в разных сеансах расходились на 6–29 % по видеокарте p50; ровная чужая
-нагрузка в 3–6 ядер поднимает процессор потока на 30–45 % (замеры 25.10). Принятый, снятый заранее и лежащий в кэше, с
-этим не сравнить: две калибровки v3.7.0 дали допуск до 80 %. Поэтому принятый снимается в том же сеансе, что и
-кандидат, парой вокруг него: на каждый пак A1 (принятый), B (кандидат), A2 (принятый) подряд под одной арендой, перед
-первым паком — прогон прогрева (холодная видеокарта первого прогона шла бы на большей частоте). Нагрев, частота и ровная
-чужая нагрузка бьют по A и B одинаково; база — худший из A1 и A2: то, что принятый сам дал в этом сеансе. Один и тот же
-jar в одном сеансе расходится в окнах «100» на 10–15 % внутри дыма и до 1,7 раза снаружи (дым то в кадре, то нет; приёмка
-25.10, v3.7.0 против себя), а регрессии, ради которых стенд (3.5.0 и 3.7.0 против 3.4.1), — в 2,6–9,3 раза.
+## Look gate (`gate.py`, test `test_gate.py`)
+Laptop GPU reaches 85–88 °C in windows, clocks vary 1700–2550 MHz between runs (cannot lock without root);
+two quiet same-version runs in separate sessions differed 6–29 % in GPU p50. Steady foreign CPU load of
+3–6 cores raises render-thread CPU by 30–45 % (measurements 25.10). A previously captured cached accepted
+run is incomparable: two v3.7.0 calibrations required up to 80 % tolerance. Capture accepted in the same
+session as candidate, surrounding it: per pack A1 (accepted), B (candidate), A2 (accepted), consecutively
+under one lease; warm-up before first pack (cold first-run GPU clocks higher). Heating, clocks and steady
+foreign load affect A/B equally; baseline is the worse A1/A2, what accepted produced this session. The
+same jar differs in "100" windows by 10–15 % inside smoke, up to 1,7 times outside (smoke alternates
+in/out of frame; acceptance 25.10, v3.7.0 against itself); targeted regressions (3.5.0/3.7.0 against 3.4.1)
+are 2,6–9,3 times.
 
-Провал пака: в окнах `100/*` (любая камера) видеокарта p50 или процессор p95 (время процессора потока отрисовки за кадр)
-кандидата больше худшего из A1 и A2 на 25 % (ровно 25 % — проход) по каждой величине и окну, или окна либо числа
-нет; прогон пары не годен (команда не прошла, залп не долетел — до 10 % ударов, погибших в воздухе над чужими взрывами,
-можно, камера не дошла за 30 с до места с готовой землёй (`Terrain`: пришли все чанки, которые Sodium нарисует, — вид сервера с соседями 3×3; каждая секция, которую Sodium взял в кадр, собрана и загружена; готово держится всю паузу шага подряд; в причине — чего ждала камера), кадр камеры после залпа не в срок (раньше срока от последнего попадания прогона — снаряд долетел после конца залпа «тишиной» — или позже больше чем на 2 с), окна плана нет или в нём мало кадров,
-Iris включил не тот пак или его шейдер не собрался, кадр не того размера) или снят на другой видеокарте. Если сцены сняты — ещё первый удар (худший
-кадр больше чем вдвое против базы и больше 100 мс) и рост накопления сверх роста у принятого. Настенное Pre → Post и
-кадр p95 — в отчёте. v3.7.0 против себя дала не больше +16 % к худшему A (видеокарта, `100/edge`), регрессия в 2,6 раза
-на тех же числах — провал (`test_same_jar_in_one_session_passes`).
-Пак, который с первой пары не прошёл (провал по числам или негодный прогон), сразу снимается второй парой, и решает она:
-провал, который во второй паре не повторился, — проход (ложный провал одной пары не стоит PR влития, а настоящая
-регрессия повторяется). Вид числом не
-судится (кадры шумят на 10–40 % пикселей): сцены, где доля «дымных» пикселей или яркость кадра у кандидата
-заметно другие, чем у ближайшего из A1 и A2, помечаются ревьюеру. Вердикт (`stand.py gate`, `pr`, `report.py` — один путь, `stand.judge_pair`) всегда
-считается заново из сырых данных пары: правка разбора не требует пересъёмки.
+A pack fails when candidate GPU p50 or render-thread CPU p95 in any `100/*` camera window exceeds the
+worse A1/A2 by 25 % (exactly 25 % passes), or a window/number is missing; when a pair run is invalid
+(command failure, incomplete salvo: up to 10 % dying in air over other explosions allowed; camera fails
+within 30 s to reach ready terrain (`Terrain`: all chunks Sodium will render arrived, server view with
+3×3 neighbours; every section Sodium included is built/uploaded; readiness holds throughout the step
+pause; failure states what camera awaited); salvo camera frame mistimed, earlier than due since last
+run hit (projectile arrives after salvo ended by silence) or over 2 s late; missing plan window or too
+few frames; wrong Iris pack, shader compilation failure, wrong frame size); or capture uses another
+GPU. If captured, also gate first strike (worst frame over twice baseline and over 100 ms) and
+accumulation growth beyond accepted growth. Wall-clock Pre → Post and frame p95 are report-only.
+v3.7.0 against itself stayed within +16 % of worse A (GPU, `100/edge`); 2,6-fold regression on the same
+numbers fails (`test_same_jar_in_one_session_passes`). Failed packs (metrics or invalid run) immediately
+get a second pair, which decides: a failure absent on repeat passes (one false failure must not cost a
+PR its merge; true regression repeats). Numbers do not judge visuals (10–40 % pixel noise); noticeably
+different smoky-pixel share or brightness against nearest A1/A2 is flagged for the reviewer. Verdicts
+(`stand.py gate`, `pr`, `report.py`: one path, `stand.judge_pair`) always reparse raw pair data; parser
+changes need no recapture.
 
-У PR шлагбаум — сцена «100» (условие влития — время кадра при 100 ударах; ~2–3 мин на прогон, 9 прогонов и прогрев).
-Первый удар и накопление — сцены полного прогона (`run.sh` без `--scenes`), в отчёт; в шлагбаум они входят, только
-если пара снята с ними. Статус «Стенд сцен» (`stand.py pr --post`) ставится только парой со всеми паками, сценой «100»
-и окном по умолчанию. PR, который не трогает того, что видит или слышит игрок (пути — `facing.py`, по старому и новому
-имени переименованного файла), получает статус сразу: «стенд не нужен». `stand.py pr <номер> --rejudge --post` — вердикт и статус по
-уже снятой паре той же головы, без съёмки (после правки разбора); статус — только если полна сама снятая пара (все паки,
-сцена «100» — другие сцены рядом можно, окно по умолчанию).
+PR look gate uses scene "100" (merge condition: frame time at 100 strikes; ~2–3 min per run, 9 runs plus
+warm-up). First strike and accumulation belong to a full run (`run.sh` without `--scenes`) and its report;
+they gate only if included in the captured pair. "Стенд сцен" status (`stand.py pr --post`) requires all
+packs, scene "100", default window. PRs changing nothing a player sees/hears (`facing.py`, both old/new
+renamed paths) receive status immediately: "bench not needed". `stand.py pr <number> --rejudge --post`
+rejudges/posts an already captured pair for the same head without capture (after parser changes); only
+if that captured pair itself is complete (all packs, scene "100", extra scenes allowed, default window).
 
-## Бюджет
-Цель — не больше 30 мин видеокарты на PR (3 пака). Пара сцены «100»: прогрев и 9 прогонов по ~2–3 мин — ~25–30 мин;
-пак, который снимается второй парой, — ещё ~8 мин. Больше — режем сцены, а не паки.
+## Budget
+Target: at most 30 GPU min per PR (3 packs). A "100" pair: warm-up and 9 runs of ~2–3 min, ~25–30 min;
+each pack needing a second pair adds ~8 min. If longer, cut scenes, not packs.

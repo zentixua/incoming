@@ -13,17 +13,17 @@ class WorkClockTest {
 
     private final long[] now = {0};
 
-    /** Единица, которая не успеет до срока, не начинается. */
+    /** A unit that does not meet the deadline does not begin. */
     @Test
     void doesNotStartWorkThatWouldOverrun() {
         WorkClock c = new WorkClock();
         c.start(10_000_000L);
         assertTrue(c.canStart());
         c.record(20_000_000L);
-        assertFalse(c.canStart(), "единица по 20 мс в бюджет 10 мс не влезает");
+        assertFalse(c.canStart(), "unit for 20 ms does not fit into the budget 10 ms");
     }
 
-    /** Даже после очень долгой единицы в новом тике одна единица делается: очередь не встаёт. */
+    /** Even after a very long unit in the new tick, one unit is done: the queue does not rise. */
     @Test
     void alwaysDoesOneUnitPerTick() {
         WorkClock c = new WorkClock();
@@ -33,7 +33,7 @@ class WorkClockTest {
         assertTrue(c.canStart());
     }
 
-    /** Оценка затухает: после одного тяжёлого столбца за полсотни лёгких снова берём работу впритык. */
+    /** The assessment fades: after one heavy column for fifty light ones, we again take the work back to back. */
     @Test
     void estimateDecays() {
         WorkClock c = new WorkClock();
@@ -42,10 +42,10 @@ class WorkClockTest {
         for (int i = 0; i < 60; i++) c.record(10_000L);
         c.start(1_000_000L);
         c.record(10_000L);
-        assertTrue(c.canStart(), "оценка не затухла");
+        assertTrue(c.canStart(), "the assessment has not faded");
     }
 
-    /** Считающие часы: очередь из 1000 единиц по 1 мс при бюджете 30 мс идёт по 29 за тик и не больше. */
+    /** Counting clock: a queue of 1000 units at 1 ms with a budget 30 ms goes at 29 per tick and no more. */
     @Test
     void countingClockSplitsQueueByBudget() {
         WorkClock c = WorkClock.counting(1_000_000L);
@@ -59,13 +59,13 @@ class WorkClockTest {
                 units++;
             }
             ticks++;
-            assertTrue(units >= 1 && units <= 30, "за тик " + units + " единиц");
+            assertTrue(units >= 1 && units <= 30, "per tick " + units + " units");
         }
         assertEquals(ticks, c.ticksWorked());
         assertEquals(29, c.maxUnitsPerTick());
     }
 
-    /** Тик очереди из ровных единиц по 0.3 мс; первая единица тика — {@code first} нс. Возвращает число единиц. */
+    /** tick queue of even units by 0.3 ms; the first tick unit is {@code first} ns. Returns the number of units. */
     private int tick(WorkClock clock, long first) {
         clock.start(BUDGET);
         int units = 0;
@@ -84,30 +84,30 @@ class WorkClockTest {
         WorkClock clock = WorkClock.decaying(() -> now[0], 0.5);
         tick(clock, UNIT);
         int units = tick(clock, UNIT);
-        // 0.3 мс единица, 4 мс бюджет: 13 единиц, последняя начинается до срока с запасом на оценку
+        // 0.3 ms unit, 4 ms budget: 13 units, the latter starts before the deadline with a margin for evaluation
         assertEquals(13, units);
-        assertTrue(clock.maxTickNanos() <= BUDGET, "тик " + clock.maxTickNanos() + " нс");
+        assertTrue(clock.maxTickNanos() <= BUDGET, "tick " + clock.maxTickNanos() + " ns");
     }
 
-    /** Всплеск в 20 мс (пауза GC посреди единицы): тающая к тику оценка отпускает очередь за несколько тиков. */
+    /** Burst at 20 ms (pause GC in the middle of one): the tick-to-tick estimate releases the queue in a few ticks. */
     @Test
     void spikeReleasesWithinFewTicks() {
         WorkClock decaying = WorkClock.decaying(() -> now[0], 0.5);
         tick(decaying, 20 * MS);
         int ticks = 0;
         while (tick(decaying, UNIT) < 13) ticks++;
-        assertTrue(ticks <= 4, "после всплеска " + ticks + " тиков неполной очереди");
+        assertTrue(ticks <= 4, "after the splash " + ticks + " tick incomplete queue");
         assertEquals(20 * MS, decaying.largestRecentNanos());
     }
 
-    /** Оценка, тающая только по единицам, после того же всплеска держит очередь на одной единице за тик десятки тиков. */
+    /** The score, melting only by units, after the same surge keeps the queue at one unit for tick tens tick. */
     @Test
     void perUnitDecayAloneStaysSlow() {
         WorkClock plain = WorkClock.decaying(() -> now[0], 1);
         tick(plain, 20 * MS);
         int single = 0;
         while (tick(plain, UNIT) == 1) single++;
-        assertTrue(single > 20, "одна единица за тик только " + single + " тиков");
+        assertTrue(single > 20, "one unit per tick only " + single + " tick");
     }
 
     @Test
@@ -120,8 +120,8 @@ class WorkClockTest {
     }
 
     /**
-     * Осмотр того, что ждёт, — не единица: время — в счёт тика, оценка и число единиц не меняются, первая единица тика
-     * по-прежнему пускается; срок ({@link WorkClock#overdue}) — по настоящему времени. Считающие часы осмотр не двигает.
+     * Inspection of what is waiting is not a unit: time is counted as a tick, the evaluation and number of units do not change, the first tick unit
+     *  is still started; term ({@link WorkClock#overdue}) - to date. The inspection does not move the counting clock.
      */
     @Test
     void spentWorkCountsTimeNotUnits() {
@@ -133,21 +133,21 @@ class WorkClockTest {
         assertEquals(3 * MS, clock.usedThisTickNanos());
         assertFalse(clock.workedThisTick());
         assertEquals(0, clock.estimateNanos());
-        assertTrue(clock.canStart(), "после осмотров первая единица тика не пускается");
+        assertTrue(clock.canStart(), "after inspections the first tick unit is not started");
         assertFalse(clock.overdue());
         now[0] += MS;
-        assertTrue(clock.overdue(), "срок вышел, а часы его не видят");
+        assertTrue(clock.overdue(), "the deadline has passed, but the clock does not see it");
 
         WorkClock counting = WorkClock.counting(MS);
         counting.start(BUDGET);
         for (int i = 0; i < 10; i++) counting.spent(counting.begin());
-        assertFalse(counting.overdue(), "осмотры двинули считающие часы");
+        assertFalse(counting.overdue(), "inspections moved the counting clock");
         assertEquals(0, counting.usedThisTickNanos());
     }
 
     /**
-     * Видимая игроку работа ({@link WorkClock#canStartVisible}): на сервере без свободного времени её срок дальше малого
-     * на добавку, но не дальше полного срока; со свободным временем — тот же, что у остальной работы.
+     * Job visible to the player ({@link WorkClock#canStartVisible}): on a server without free time, its duration is longer than a small
+     *  for an addition, but not further than the full term; with free time - the same as for the rest of the work.
      */
     @Test
     void visibleWorkGetsMoreTimeOnlyWithoutSpareTime() {
@@ -157,15 +157,15 @@ class WorkClockTest {
         long began = clock.begin();
         now[0] += 3 * MS;
         clock.end(began);
-        assertFalse(clock.canStart(), "малый срок 2 мс вышел, а работа идёт");
+        assertFalse(clock.canStart(), "short term 2 ms has expired, but work is in progress");
         assertTrue(clock.overdue());
-        assertTrue(clock.canStartVisible(6 * MS), "видимой работе нет добавки на занятом сервере");
+        assertTrue(clock.canStartVisible(6 * MS), "visible work no additive on busy server");
         assertFalse(clock.overdueVisible(6 * MS));
         now[0] += 5 * MS;
-        assertFalse(clock.canStartVisible(6 * MS), "добавка больше 6 мс");
+        assertFalse(clock.canStartVisible(6 * MS), "addition greater than 6 ms");
         assertTrue(clock.overdueVisible(6 * MS));
         now[0] = 31 * MS;
-        assertFalse(clock.canStartVisible(100 * MS), "добавка вывела за полный срок");
+        assertFalse(clock.canStartVisible(100 * MS), "the supplement took out the full term");
 
         spare[0] = true;
         now[0] = 0;
@@ -173,7 +173,7 @@ class WorkClockTest {
         began = clock.begin();
         now[0] += 10 * MS;
         clock.end(began);
-        assertEquals(clock.canStart(), clock.canStartVisible(6 * MS), "со свободным временем видимой работе другой срок");
+        assertEquals(clock.canStart(), clock.canStartVisible(6 * MS), "with free time visible work another deadline");
         assertEquals(clock.overdue(), clock.overdueVisible(6 * MS));
     }
 
@@ -183,7 +183,7 @@ class WorkClockTest {
         assertThrows(IllegalArgumentException.class, () -> WorkClock.decaying(1.5));
     }
 
-    /** Часы внутри единицы: у считающих — свой счётчик по цене единицы, время очереди он не двигает; у настоящих — их время. */
+    /** Clock inside the unit: those who count have their own counter at the price of the unit, it does not change the queue time; the real ones have their time. */
     @Test
     void samplerCountsWithoutMovingQueueTime() {
         WorkClock counting = WorkClock.counting(UNIT);

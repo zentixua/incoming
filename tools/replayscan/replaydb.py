@@ -3,16 +3,17 @@
 # requires-python = ">=3.10"
 # dependencies = ["duckdb>=1.1,<2"]
 # ///
-"""База по разбору повтора (README.md): таблицы мода replayscan — в DuckDB, сверху — виды под выбор планов.
+"""Replay analysis database (README.md): replayscan mod tables in DuckDB, with views for choosing shots on top.
 
-  uv run tools/replayscan/replaydb.py build <каталог разбора> [--db файл]   таблицы и виды (replay.duckdb рядом)
-  uv run tools/replayscan/replaydb.py sql <db> "<запрос>"                  любой запрос, вывод — таблицей
-  uv run tools/replayscan/replaydb.py report <db> [--out каталог]           кандидаты планов: пуски, пролёты, удары,
-                                                                            хаос, дальние удары с тишиной до раската
+  uv run tools/replayscan/replaydb.py build <analysis directory> [--db file]   tables and views (replay.duckdb alongside)
+  uv run tools/replayscan/replaydb.py sql <db> "<query>"                       any query, output as a table
+  uv run tools/replayscan/replaydb.py report <db> [--out directory]            candidate shots: launches, flybys, impacts,
+                                                                            chaos, distant impacts with silence before the rumble
 
-Кадр задаётся углом обзора по вертикали и отношением сторон (--fov 70 --aspect 0.5625 — вертикальное 9:16): точка в
-кадре, если её |cx| ≤ aspect·tan(fov/2) и |cy| ≤ tan(fov/2) (cx, cy — сдвиг в плоскости кадра на единицу глубины,
-sight.csv); «в середине кадра» — то же с долей --center. Тик повтора — 1/20 с; время в отчёте — мм:сс от начала повтора.
+The frame is defined by the vertical field of view and aspect ratio (--fov 70 --aspect 0.5625 is vertical 9:16): a point
+is in frame if its |cx| ≤ aspect·tan(fov/2) and |cy| ≤ tan(fov/2) (cx, cy are offsets in the frame plane per unit depth,
+sight.csv); "in the center of the frame" uses the same test with the --center fraction. A replay tick is 1/20 s;
+report times are mm:ss from the start of the replay.
 """
 import argparse
 import json
@@ -23,7 +24,7 @@ from pathlib import Path
 
 import duckdb
 
-SOUND = 17.15  # блоков за тик: скорость звука у Incoming (BlastSounds)
+SOUND = 17.15  # blocks per tick: speed of sound at Incoming (BlastSounds)
 
 TABLES = {
     "events": "e BIGINT, t INTEGER, dim VARCHAR, kind VARCHAR, src VARCHAR, x DOUBLE, y DOUBLE, z DOUBLE, size DOUBLE, "
@@ -40,18 +41,18 @@ TABLES = {
     "time": "t INTEGER, game_time BIGINT, day_time BIGINT",
 }
 
-# Виды: всё, что нужно планам, — запросами по таблицам; числа кадра — переменные (fov, aspect, center, every)
+# Types: all that plans need is queries on tables; frame numbers - variables (fov, aspect, center, every)
 VIEWS = r"""
 CREATE OR REPLACE MACRO tanv() AS tan(radians(getvariable('fov')) / 2);
 CREATE OR REPLACE MACRO in_frame(cx, cy, k) AS cx IS NOT NULL AND cy IS NOT NULL
     AND abs(cy) <= k * tanv() AND abs(cx) <= k * tanv() * getvariable('aspect');
--- луч до цели чист: ни непрозрачного блока, ни неизвестного чанка, прозрачного с формой (листва, стекло, вода) — не
--- больше --soft блоков
+-- the beam to the target is clear: no opaque block, no unknown chunk, transparent with shape (leaf, glass, water) - not
+-- more --soft blocks
 CREATE OR REPLACE MACRO clear_ray(hard, unknown, soft) AS coalesce(hard, -1) < 0 AND coalesce(unknown, -1) < 0
     AND coalesce(soft, 0) <= getvariable('soft');
 CREATE OR REPLACE MACRO mmss(t) AS printf('%02d:%04.1f', CAST(floor(t / 1200) AS INTEGER), (t % 1200) / 20.0);
 
--- оси камеры зрителя: взгляд f, вправо r, вверх u = r × f (как Scan.axes)
+-- viewer camera axes: look f, right r, up u = r × f (as Scan.axes)
 CREATE OR REPLACE VIEW eyes AS
 WITH a AS (
   SELECT *, -sin(radians(yaw)) * cos(radians(pitch)) AS fx, -sin(radians(pitch)) AS fy, cos(radians(yaw)) * cos(radians(pitch)) AS fz,
@@ -59,13 +60,13 @@ WITH a AS (
   FROM viewers)
 SELECT *, -rz * fy AS ux, rz * fx - rx * fz AS uy, rx * fy AS uz FROM a;
 
--- взрывы, удары и перехваты: пакеты взрыва игры и пакеты модов с «blast», «intercept», «detonation», «impact» в id
+-- explosions, hits and interceptions: game explosion packs and mod packs with "blast", "intercept", "detonation", "impact" in id
 CREATE OR REPLACE VIEW blasts AS
 SELECT * FROM events
 WHERE x IS NOT NULL AND (src = 'ClientboundExplodePacket'
    OR (kind = 'payload' AND regexp_matches(src, ':(blast|intercept|nuke_detonation|bunker_impact)$')));
 
--- снаряды и прочее, за чем следили (не игроки)
+-- shells and other things that were watched (not by players)
 CREATE OR REPLACE VIEW subjects AS SELECT * FROM entities WHERE subject = 1;
 """
 
@@ -81,7 +82,7 @@ def connect(db: Path, a) -> duckdb.DuckDBPyConnection:
 
 def build(a) -> Path:
     scan = Path(a.dir)
-    # без meta.json (разбор оборвался, не дописав её) — таблицы как есть, разбор не полный
+    # without meta.json (the analysis was interrupted without finishing it) - the tables are as is, the analysis is not complete
     meta_file = scan / "meta.json"
     meta = json.loads(meta_file.read_text()) if meta_file.exists() else {"complete": False}
     db = Path(a.db) if a.db else scan / "replay.duckdb"
@@ -101,13 +102,13 @@ def build(a) -> Path:
     return db
 
 
-# вторичные подрывы удара: взрывы игры (без пакета мода) не дальше и не позже этого от пакета мода — его ступени.
-# У крылатой ракеты Incoming они до 10,6 блока от точки удара, на 3–9 тике таймлайна, а пакет игры уходит, когда
-# ступень снята, — под бюджетом тика: на занятом сервере (залп) позже девятого тика
+# secondary impact explosions: game explosions (without a mod package) no further and no later than this from the mod package - its stages.
+#  For the Incoming cruise missile they are up to 10,6 block from the point of impact, at 3–9 tick of the timeline, and the game package goes away, when
+# stage is removed - under the budget tick: on a busy server (volley) after the ninth tick
 STAGE_REACH, STAGE_TICKS = 12, 20
-# грунт в точке по серверу: Incoming кладёт в пакет взрыва «material» — из чего блок в точке удара или под ней
-# (вода — тоже: удар у поверхности); 8 — гравий, им же сервер отвечает за воздух, за блоки без своего грунта и за
-# неготовый чанк (сам гравий у него — камень)
+# soil at a point on the server: Incoming puts “material” in the explosion package - from which the block is at the point of impact or under it
+#  (water - too: impact at the surface); 8 - gravel, the server is also responsible for air, for blocks without their own soil and for
+#  unfinished chunk (the gravel itself is stone)
 MATERIAL_SRC, MATERIAL_UNSURE = r"^(airstrike|incoming):(blast|bunker_impact)$", 8
 
 
@@ -120,20 +121,20 @@ def material(data: str) -> int | None:
 
 
 def impacts(con):
-    """Удары: взрывы одного удара (пакет мода и пакеты взрыва игры, ступени взрыва) — одной строкой, с родом места."""
-    # в тике пакеты модов — раньше взрывов игры: ступени находят свой удар
+    """Impacts: explosions of one impact (mod package and game explosion packages, explosion stages) - in one line, with the type of place."""
+    # in tick mod packs - before game explosions: steps find their blow
     rows = con.execute("SELECT e, t, dim, src, x, y, z, coalesce(size, 0), uuid, clear, solid, pre, data FROM blasts "
                        "ORDER BY t, src = 'ClientboundExplodePacket', e").fetchall()
     groups: list[dict] = []
     for e, t, dim, src, x, y, z, size, uuid, clear, solid, pre, data in rows:
         g = None
         if src == "ClientboundExplodePacket":
-            # ступень удара: ближайший пакет мода в STAGE_REACH блоках и STAGE_TICKS тиках после него
+            # hit stage: the nearest mod package in STAGE_REACH blocks and STAGE_TICKS tick after it
             near = [(d2, g) for g in groups if g["anchor"] and g["dim"] == dim and 0 <= t - g["anchor_t"] <= STAGE_TICKS
                     and (d2 := (x - g["x"]) ** 2 + (y - g["y"]) ** 2 + (z - g["z"]) ** 2) <= STAGE_REACH ** 2]
             g = min(near, key=lambda n: n[0])[1] if near else None
         if g is None:
-            # снаряд взрыва (uuid пакета мода): разные снаряды залпа рядом — разные удары
+            # explosion projectile (uuid mod package): different salvo projectiles nearby - different impacts
             g = next((g for g in reversed(groups) if g["dim"] == dim and t - g["t1"] <= 3
                       and (x - g["x"]) ** 2 + (y - g["y"]) ** 2 + (z - g["z"]) ** 2 <= 36
                       and (uuid is None or g["uuid"] is None or uuid == g["uuid"])), None)
@@ -148,7 +149,7 @@ def impacts(con):
         g["events"].append(e)
         g["srcs"].add(src)
         g["power"] = max(g["power"], size)
-        # место удара — по пакету мода (точка попадания), иначе по первому взрыву
+        # impact location - according to the mod package (point of impact), otherwise according to the first explosion
         if src != "ClientboundExplodePacket" and not g["anchor"]:
             g["x"], g["y"], g["z"], g["anchor"], g["anchor_t"] = x, y, z, True, t
         g["uuid"] = g["uuid"] or uuid
@@ -163,7 +164,7 @@ def impacts(con):
                         [(g["id"], g["t"], g["t1"], g["dim"], g["x"], g["y"], g["z"], g["power"], g["uuid"], g["clear"], g["solid"], g["pre"],
                           g["material"], any(s.endswith(":intercept") for s in g["srcs"]), ",".join(sorted(g["srcs"])), g["events"])
                          for g in groups])
-    # воронка: блоки, ставшие воздухом в 6 блоках от места за 20 тиков после удара
+    # crater: blocks that became air in 6 blocks from the location behind 20 tick after being hit
     con.execute("""
         CREATE TABLE craters AS
         SELECT i.id, count(*) AS broken FROM impacts i JOIN blocks b
@@ -179,7 +180,7 @@ def impacts(con):
                WHEN i.solid IS NOT NULL AND i.clear IS NOT NULL THEN 'air'
                ELSE 'unknown' END AS place
         FROM impacts i LEFT JOIN craters c ON c.id = i.id""".replace("{UNSURE}", str(MATERIAL_UNSURE)))
-    # удар глазами зрителя: геометрия по глазу тика удара, луч — лучший из лучей событий удара
+    # hit with the viewer's eyes: geometry of the eye tick of the hit, ray - the best of the rays of the hit events
     con.execute("""
         CREATE OR REPLACE VIEW impact_views AS
         WITH g AS (
@@ -198,10 +199,10 @@ def impacts(con):
                CASE WHEN g.ahead > 0 THEN g.side / g.ahead END AS cx, CASE WHEN g.ahead > 0 THEN g.upv / g.ahead END AS cy,
                r.clear, r.unknown, r.soft, g.t + g.dist / {SOUND} AS heard
         FROM g LEFT JOIN rays r ON r.id = g.id AND r.viewer = g.viewer""".replace("{SOUND}", str(SOUND)))
-    # пуски: первое появление снаряда (по UUID: вышедший из дальности и вернувшийся — новая сущность того же UUID)
-    # почти без скорости (на пусковой) или рядом с пусковой; расстояние и видимость — глазами каждого зрителя:
-    # samples — тики замеров (раз в every) первых 3 с, пока снаряд есть, seen — из них в середине кадра и не закрыт
-    # (тик без строки видимости — вне кадра или дальше range: не видно)
+    # launch: first appearance of a projectile (according to UUID: leaving the range and returning - a new entity of the same UUID)
+    # almost without speed (on the launcher) or next to the launcher; distance and visibility - through the eyes of each viewer:
+    # samples - tick measurements (once in every) of the first 3 s, while the projectile is there, seen - of them in the middle of the frame and not closed
+    #  (tick without a visibility line - outside the frame or further range: not visible)
     con.execute("""
         CREATE OR REPLACE VIEW launches AS
         WITH firsts AS (
@@ -221,7 +222,7 @@ def impacts(con):
              AND s.t BETWEEN f.first AND f.first + 60 AND in_frame(s.cx, s.cy, getvariable('center')) AND clear_ray(s.hard, s.unknown, s.soft)) AS seen
         FROM f JOIN eyes v ON v.t = f.first AND v.dim = f.dim
         WHERE coalesce(f.v0, 0) < 0.5 OR f.launcher <= 8""")
-    # пролёты: сколько тиков снаряд в 10–60 блоках, в кадре и не закрыт
+    # spans: how many ticks the projectile is in 10–60 blocks, in the frame and not closed
     con.execute("""
         CREATE OR REPLACE VIEW flybys AS
         SELECT s.viewer, e.eid, e.type, e.first, e.last, min(s.dist) AS closest, arg_min(s.t, s.dist) AS t_closest,
@@ -230,7 +231,7 @@ def impacts(con):
         FROM sight s JOIN subjects e ON s.kind = 'e' AND s.ref = CAST(e.eid AS VARCHAR)
         WHERE e.type NOT LIKE '%launcher%' AND e.type NOT LIKE '%booster%'
         GROUP BY s.viewer, e.eid, e.type, e.first, e.last""")
-    # дальние снаряды (пакеты модов): геометрия по глазу того же тика
+    # long-range projectiles (mod packages): geometry according to the eye of the same tick
     con.execute("""
         CREATE OR REPLACE VIEW far_views AS
         WITH g AS (
@@ -321,10 +322,10 @@ def report(a):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--fov", type=float, default=70, help="угол обзора по вертикали, градусы")
-    p.add_argument("--aspect", type=float, default=16 / 9, help="ширина кадра к высоте (9:16 — 0.5625)")
-    p.add_argument("--center", type=float, default=0.7, help="доля кадра для «в середине»")
-    p.add_argument("--soft", type=int, default=2, help="луч чист, если прозрачного с формой на пути не больше стольких блоков")
+    p.add_argument("--fov", type=float, default=70, help="vertical viewing angle, Grad")
+    p.add_argument("--aspect", type=float, default=16 / 9, help="frame width to height (9:16 - 0.5625)")
+    p.add_argument("--center", type=float, default=0.7, help="frame share for \"in the middle\"")
+    p.add_argument("--soft", type=int, default=2, help="the ray is clear if there are no more than that many blocks of transparent shape in the path")
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("dir")

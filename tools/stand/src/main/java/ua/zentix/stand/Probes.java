@@ -6,10 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Строки чужих модов отражением: статический метод без аргументов, «класс#метод» из плана (у Incoming —
- * {@code FxLayer.describeTiming}: время слоя на видеокарте, проход жара, заливка; у Iris — имя шейдерпака). Метода нет
- * в этой версии — строка «n/a» один раз, и дальше он не зовётся. Методы ищутся в первом тике мира, а не при загрузке
- * мода: иначе классы чужого клиента загружались бы раньше, чем их загрузил бы он сам.
+ * Reflect strings from other mods: static no-argument "class#method" from plan (Incoming
+ * {@code FxLayer.describeTiming}: GPU layer time, heat pass, fill; Iris: shader pack name). Absent in this
+ * version: log "n/a" once, stop calling it. Resolve methods in first world tick, not mod loading, to avoid
+ * loading other client classes before their mod would.
  */
 final class Probes {
     private record Probe(String spec, Method method) {}
@@ -24,13 +24,13 @@ final class Probes {
         this.onceSpecs = once;
     }
 
-    /** Раз в секунду. */
+    /** Once a second. */
     void tick(long now) {
         if (each == null) each = resolve(eachSpecs);
         for (Probe p : each) out.event("probe", now, "name", p.spec, "value", call(p));
     }
 
-    /** Один раз после входа в мир. */
+    /** Once after world entry. */
     void once(long now) {
         for (Probe p : resolve(onceSpecs)) out.event("once", now, "name", p.spec, "value", call(p));
     }

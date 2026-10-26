@@ -7,31 +7,31 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Камера FPV «как снимал человек» — слой трейлера ({@code Operator}, стиль FPV, 13.10: замечания Артёма к черновику —
- * камеры слишком ровные, после удара не трясутся) поверх пути пилота ({@link Pilot}). Путь пересчитывается заранее на всё
- * окно, одинаково для оценки и вывода:
+ * Camera FPV “as a person filmed” - trailer layer ({@code Operator}, style FPV, 13.10: Artem’s comments on the draft -
+ *  cameras are too smooth, they don’t shake after an impact) on top of the pilot’s path ({@link Pilot}). The path is recalculated in advance for the entire
+ *  window, the same for evaluation and output:
  * <ul>
- * <li>место и взгляд — сглаживание по Гауссу без запаздывания (окно известно целиком);</li>
- * <li>руки — дрожь дрона: сумма синусов 0,4–4 Гц (своё зерно у кандидата), в градусах — по углу кадра;</li>
- * <li>взрывы — толчок, когда до камеры дошла волна (17,15 блока за тик, как звук мода): размах по расстоянию и
- * огненному шару, 4–6 Гц с затуханием, взгляд вскидывает вверх, место толкает от взрыва. Тряску самого мода (5° с
- * частотой ~10 Гц) перед съёмкой выключают в его настройке клиента ({@code camera_shake = 0}, задание съёмки):
- * replayscan её не трогает.</li>
+ * <li> place and view - Gaussian smoothing without lag (window is known entirely);</li>
+ * <li>hands - drone trembling: sum of sines 0,4–4 Hz (the candidate has his own seed), in Grad - by frame angle;</li>
+ * <li>explosions - a push when a wave reaches the camera (17,15 block per tick, like the sound of a mod): range over distance and
+ *  fireball, 4–6 Hz with attenuation, the gaze throws up, the place is pushed by the explosion. The shaking of the mod itself (5° with
+ *  frequency ~10 Hz) before shooting is turned off in its client settings ({@code camera_shake = 0}, shooting task):
+ * replayscan it is not touches.</li>
  * </ul>
  */
 final class Hands {
     private Hands() {}
 
-    /** Сглаживание места и взгляда, тиков (σ). */
+    /** Smoothing place and view, tick (σ). */
     static final double POS_SIGMA = 1.5, LOOK_SIGMA = 1.5;
-    /** Дрожь при угле кадра 60°: курс, тангаж, крен (°), место (блоков); полоса частот, Гц. */
+    /** Jitter at frame angle 60°: heading, pitch, roll (°), place (blocks); frequency band, Hz. */
     static final double YAW = 0.35, PITCH = 0.35, ROLL = 0.9, POS = 0.05, F_LO = 0.4, F_HI = 4;
-    /** Толчок от взрыва: размах взгляда — {@code K}·огненный шар / (расстояние + 8), не больше {@code MAX}, °; доля у FPV. */
+    /** Impact from the explosion: gaze span - {@code K}·fireball / (distance + 8), no more than {@code MAX}, °; share of FPV. */
     static final double K = 6, MAX = 3.5, SHAKE = 1.1;
-    /** Скорость волны взрыва, блоков за тик (как у звука Incoming). */
+    /** Explosion wave speed, blocks per tick (like the sound Incoming). */
     static final double FRONT = 17.15;
 
-    /** Взрыв: тик, место, поперечник огненного шара. */
+    /** Explosion: tick, location, diameter of the fireball. */
     record Blast(int t, Vec3 pos, double size) {}
 
     static Cameras.Path humanize(Cameras.Path in, long seed, List<Blast> blasts, int from, int to) {
@@ -44,7 +44,7 @@ final class Hands {
             x[i] = p.pos().x;
             y[i] = p.pos().y;
             z[i] = p.pos().z;
-            // курс без скачка через ±180°
+            // course without jump through ±180°
             yaw[i] = i == 0 ? p.yaw() : yaw[i - 1] + Mth.wrapDegrees(p.yaw() - (float) yaw[i - 1]);
             pitch[i] = p.pitch();
             roll[i] = in.roll(from + i);
@@ -58,7 +58,7 @@ final class Hands {
         double[] ny = noise(r, n, YAW, F_LO, F_HI), np = noise(r, n, PITCH, F_LO, F_HI), nr = noise(r, n, ROLL, F_LO, F_HI);
         double[] nx = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5), nyy = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5),
                 nz = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5);
-        // в градусах дрожь мельче у длинного фокуса: на экране — одинаково
+        // in Grad the shaking is smaller at the long focus: on the screen - the same
         double q = Mth.clamp(fov / 60, 0.25, 1.3);
         for (int i = 0; i < n; i++) {
             yaw[i] += ny[i] * q;
@@ -90,8 +90,8 @@ final class Hands {
     }
 
     /**
-     * Толчки от взрывов: волна доходит до камеры через расстояние / {@link #FRONT} тиков после удара; размах — по огненному
-     * шару и расстоянию, затухает за 5–15 тиков; взгляд вскидывает вверх и возвращает, место толкает от взрыва.
+     * Shocks from explosions: the wave reaches the camera through the distance / {@link #FRONT} tick after the impact; scope - according to the fireball
+     *  and distance, fades over 5–15 tick; the gaze looks up and returns, the place is pushed by an explosion.
      */
     static void shake(Random r, List<Blast> blasts, int from, double[] x, double[] y, double[] z, double[] yaw, double[] pitch,
                       double[] roll) {
@@ -118,7 +118,7 @@ final class Hands {
                 double w = 2 * Math.PI / 20;
                 sy[i] += amp * env * (0.7 * Math.sin(w * 5.3 * u + p1) + 0.3 * Math.sin(w * 2.9 * u + p2));
                 sp[i] += amp * env * (0.7 * Math.sin(w * 4.7 * u + p3) + 0.3 * Math.sin(w * 3.3 * u + p4))
-                        // вскинуть взгляд и вернуть (тангаж Minecraft: меньше — выше)
+                        // look up and return (pitch Minecraft: less - higher)
                         - amp * 0.6 * rise * Math.exp(-u / (tau * 1.6));
                 sr[i] += amp * 0.8 * env * Math.sin(w * 4.1 * u + p5);
                 double push = jolt * (1 - Math.exp(-u / 0.8)) * Math.exp(-u / 3);
@@ -134,7 +134,7 @@ final class Hands {
         }
     }
 
-    /** Сглаживание по Гауссу без запаздывания; за краями — крайние значения. σ ≤ 0 — как есть. */
+    /** Gaussian smoothing without lag; beyond the edges are extreme values. σ ≤ 0 - as is. */
     static double[] gauss(double[] v, double sigma) {
         if (sigma <= 0) return v;
         int h = (int) Math.ceil(sigma * 3), n = v.length;
@@ -150,7 +150,7 @@ final class Hands {
         return out;
     }
 
-    /** Гладкий шум: пять синусов в полосе {@code fLo}–{@code fHi} Гц, размах ~1/f, средний квадрат — {@code rms}. */
+    /** Smooth noise: five sines in the band {@code fLo}–{@code fHi} Hz, range ~1/f, mean square – {@code rms}. */
     static double[] noise(Random r, int n, double rms, double fLo, double fHi) {
         double[] out = new double[n];
         if (rms <= 0) return out;

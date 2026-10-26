@@ -19,17 +19,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Слои звука на всём пути снаряда: громкость — от мощности звука и пути, тон — от оборотов и Доплера. */
+/** Layers of sound along the entire path of the projectile: volume - from the sound power and path, tone - from revolutions and Doppler. */
 class EngineSoundTest {
     private static final UUID ID = UUID.randomUUID();
     private static final Vec3 EAR = Vec3.ZERO;
     private static final Propagation.Weather NIGHT = Propagation.Weather.NIGHT;
-    /** Маршевая скорость ракеты, блоков/тик. */
+    /** Marching speed of the rocket, blocks/tick. */
     private static final double V = WeaponSpec.MISSILE.airframe().cruiseSpeed();
     private static final EngineSound.Layer[] MISSILE = {EngineSound.Layer.MISSILE_FRONT, EngineSound.Layer.MISSILE_REAR,
             EngineSound.Layer.MISSILE_DIVE, EngineSound.Layer.MISSILE_FAR, EngineSound.Layer.MISSILE_WHISTLE};
 
-    /** Снаряд оружия {@code w} с {@code from} блоков прямо на слушателя на высоте {@code y}, {@code ticks} тиков, пакеты раз в {@code every}. */
+    /** Projectile weapon {@code w} with {@code from} blocks directly at the listener at a height of {@code y}, {@code ticks} tick, packets once in {@code every}. */
     private static FlightTrack straight(WeaponType w, double from, double y, double v, FlightPhase ph, Vec3 aim, int ticks, int every) {
         FlightTrack t = new FlightTrack(ID, w, false);
         for (int k = 0; k <= ticks; k += every) {
@@ -53,7 +53,7 @@ class EngineSoundTest {
         return e == null ? 0 : layer.tone(t, e).gain();
     }
 
-    /** Громкость мотора ракеты — всех его записей вместе (по мощности). */
+    /** The volume of the rocket motor - all its records together (by power). */
     private static double engine(FlightTrack t, double now, Vec3 ear) {
         double g = 0;
         for (EngineSound.Layer l : MISSILE) g += Math.pow(gain(l, t, now, ear), 2);
@@ -62,8 +62,8 @@ class EngineSoundTest {
 
     @Test
     void missileWhistleWarnsFromWhereItBecomesAudible() {
-        // путь по пакетам (раз в 2 тика), как у ракеты вне мира, с края слышимости ночью на слушателя у цели: свист
-        // слышно до прихода ракеты на d·(1/v − 1/c), и история пути не теряет слышимую точку
+        // path through packets (once per 2 tick), like a rocket outside the world, from the edge of audibility at night to the listener at the target: whistle
+        //  can be heard before the rocket arrives at d (1/v − 1/c), and path history does not lose the audible point
         Noise noise = WeaponSpec.MISSILE.airframe().noise();
         double from = Math.min(Hearing.range(noise, FlightPhase.CRUISE, 200, V, false, 12, NIGHT), 5000);
         int arrival = (int) (from / V);
@@ -77,19 +77,19 @@ class EngineSoundTest {
                 firstDistance = e.distance();
             }
         }
-        assertTrue(first >= 0, "свиста не было");
-        assertTrue(firstDistance > 0.6 * from, "свист слышно с " + Math.round(firstDistance) + " блоков, слышимость — до " + Math.round(from));
+        assertTrue(first >= 0, "there was no whistle");
+        assertTrue(firstDistance > 0.6 * from, "whistle can be heard from " + Math.round(firstDistance) + " blocks, audibility - up to " + Math.round(from));
         double lead = firstDistance * (1 / V - 1 / Acoustics.SPEED);
-        assertTrue(arrival - first >= 0.9 * lead, "свист за " + (arrival - first) + " тиков до прихода ракеты, ожидание ~" + Math.round(lead));
-        // ближе — громче (вблизи вой вентилятора — уже ближняя запись спереди)
+        assertTrue(arrival - first >= 0.9 * lead, "whistle for " + (arrival - first) + " tick until the rocket arrives, waiting ~" + Math.round(lead));
+        // closer - louder (closer to the howl of a fan - the recording is closer to the front)
         assertTrue(engine(t, arrival - 30, EAR) > engine(t, first + 30, EAR));
     }
 
     @Test
     void missileEngineDoesNotDipOnPassOrLayerHandoff() {
-        // ракета проходит в 12 блоках над головой и уходит дальше: мощность мотора (все его слои — разные записи,
-        // складываются по мощности) на подлёте только растёт, вслед только падает — без провала над головой и на смене
-        // ближних записей дальними, спереди задними
+        // the rocket passes in 12 blocks overhead and goes further: the power of the motor (all its layers are different records,
+        //  add up in terms of power) on approach only grows, then only falls - without falling overhead and replacing
+        //  near records with distant ones, in front with rear ones
         FlightTrack t = missile(1200, new Vec3(-3000, 0, 0), 600);
         double prev = -1;
         boolean prevApproaching = true;
@@ -100,27 +100,27 @@ class EngineSoundTest {
             double power = 0;
             for (EngineSound.Layer l : MISSILE) power += Math.pow(l.tone(t, e).gain(), 2);
             if (prev >= 0 && e.approaching() == prevApproaching) {
-                String at = "тик " + now + ", " + Math.round(e.distance()) + " блоков, " + (e.approaching() ? "подлёт" : "вслед");
-                if (e.approaching()) assertTrue(power >= prev * (1 - 1e-9), at + ": тише, чем тиком раньше: " + prev + " → " + power);
-                else assertTrue(power <= prev * (1 + 1e-9), at + ": громче, чем тиком раньше: " + prev + " → " + power);
+                String at = "tick " + now + ", " + Math.round(e.distance()) + " blocks, " + (e.approaching() ? "approach" : "following");
+                if (e.approaching()) assertTrue(power >= prev * (1 - 1e-9), at + ": quieter than tick before: " + prev + " → " + power);
+                else assertTrue(power <= prev * (1 + 1e-9), at + ": louder than tick before: " + prev + " → " + power);
             }
             if (!e.approaching()) passed++;
             prev = power;
             prevApproaching = e.approaching();
         }
-        assertTrue(passed > 40, "ракета ушла за слушателя: отсчётов вслед " + passed);
+        assertTrue(passed > 40, "the rocket went behind the listener: sample following " + passed);
     }
 
     @Test
     void layersOfOneEngineShareItsPower() {
-        // ближняя и дальняя записи шахеда вместе звучат как один мотор: сумма мощностей — громкость по уровню у уха
+        // shahed's near and far recordings together sound like one motor: the sum of the powers equals the volume level at the ear
         FlightTrack t = straight(WeaponType.DRONE, 1500, 45, 2.1, FlightPhase.CRUISE, new Vec3(-2000, 0, 0), 700, 1);
         for (int now = 100; now <= 700; now += 10) {
             Emission e = heard(t, now, EAR);
             if (e == null) continue;
             double near = EngineSound.Layer.DRONE_NEAR.tone(t, e).gain(), far = EngineSound.Layer.DRONE_FAR.tone(t, e).gain();
             Emission.Heard h = e.heard(EngineSound.noise(t), Noise.Part.ENGINE, false);
-            assertEquals(Loudness.gain(h.level(), h.margin()), Math.sqrt(near * near + far * far), 1e-9, "тик " + now);
+            assertEquals(Loudness.gain(h.level(), h.margin()), Math.sqrt(near * near + far * far), 1e-9, "tick " + now);
         }
     }
 
@@ -134,20 +134,20 @@ class EngineSoundTest {
 
     @Test
     void propellerToneFollowsAirspeed() {
-        // винт фиксированного шага: обороты — по скорости (поступь та же), не ниже оборотов на месте и не выше предела
+        // fixed pitch propeller: speed - according to speed (step is the same), not lower than the speed in place and not higher than the limit
         Noise.Propeller p = (Noise.Propeller) WeaponSpec.DRONE.airframe().noise().engine();
         assertEquals(p.idle(), p.revs(FlightPhase.READY, 0, 0), 1e-12);
         double cruise = WeaponSpec.DRONE.airframe().cruiseSpeed();
         assertEquals(cruise * 20 / p.speed(), p.revs(FlightPhase.CRUISE, 0, cruise), 1e-12);
         assertEquals(p.limit(), p.revs(FlightPhase.TERMINAL, 0, 100), 1e-12);
-        // мощность ∝ n³: на 10% больше оборотов — на 1,24 дБ громче
+        // power ∝ n³: 10% more rpm - 1,24 dB louder
         assertEquals(30 * Math.log10(1.1), p.power(FlightPhase.CRUISE, 0, 1.1 * p.speed() / 20) - p.power(FlightPhase.CRUISE, 0, p.speed() / 20), 1e-9);
     }
 
     @Test
     void rocketHowlsWhereverItIsAboveTheBackground() {
-        // снаряд РСЗО на 1200 блоков (вершина дуги ~360 блоков): после выгорания вой слышно везде, где обтекание громче
-        // фона с запасом, а за краем слышимости — тишина
+        // mLRS projectile on 1200 blocks (top of the arc ~360 blocks): after burnout, the howl is heard everywhere where the flow around the background is louder than the
+        //  background with a margin, and beyond the edge of audibility there is silence
         double range = 1200;
         int ticks = Ballistics.ticksFor(Vec3.ZERO, new Vec3(range, 0, 0), 50, 50);
         Vec3 v0 = Ballistics.launchVelocity(Vec3.ZERO, new Vec3(range, 0, 0), ticks);
@@ -165,22 +165,22 @@ class EngineSoundTest {
                 if (e == null || e.time() < 42 || e.time() > ticks) continue;
                 Emission.Heard h = e.heard(EngineSound.noise(t), Noise.Part.BODY, false);
                 double gain = EngineSound.Layer.ROCKET_AIR.tone(t, e).gain();
-                // направленность обтекания — до −5,2 дБ вслед
+                // flow direction - up to −5,2 dB following
                 if (h.margin() > Propagation.FADE + 5.3) {
-                    assertTrue(gain > 0, "слушатель у " + x + ", тик " + now + ": в " + Math.round(e.distance()) + " блоках вой " + gain);
+                    assertTrue(gain > 0, "listener " + x + ", tick " + now + ": in " + Math.round(e.distance()) + " blocks howl " + gain);
                     heard++;
                 } else if (h.margin() <= 0) {
-                    assertEquals(0, gain, 0, "за краем слышимости");
+                    assertEquals(0, gain, 0, "out of earshot");
                     silent++;
                 }
             }
         }
-        assertTrue(heard > 5 && silent > 5, "слышимых отсчётов: " + heard + ", за краем — " + silent);
+        assertTrue(heard > 5 && silent > 5, "audible sample: " + heard + ", beyond the edge - " + silent);
     }
 
     @Test
     void whistleFadesThroughThePassInsteadOfCuttingOff() {
-        // ракета проходит в 60 блоках сбоку: вой вентилятора, который уносит вперёд, стихает за пролёт, а не обрывается
+        // the rocket passes in 60 blocks from the side: the howl of the fan, which carries forward, subsides over the flight, and does not break off
         Vec3 ear = new Vec3(0, 12, 60);
         FlightTrack t = missile(600, new Vec3(-700, 0, 0), 300);
         double prev = -1, peak = 0, worst = 0;
@@ -193,15 +193,15 @@ class EngineSoundTest {
             peak = Math.max(peak, g);
             prev = g;
         }
-        assertTrue(peak > 0.05, "ракета на пролёте " + peak);
-        assertTrue(worst < 0.15 * peak, "скачок громкости за тик " + worst + " при пике " + peak);
+        assertTrue(peak > 0.05, "rocket in flight " + peak);
+        assertTrue(worst < 0.15 * peak, "volume jump per tick " + worst + " at peak " + peak);
     }
 
     @Test
     void supersonicRoundCracksBeforeItIsHeard() {
-        // снаряд на 1,4 М (синтетическая скорость: в нынешнем полёте сверхзвука нет) проходит в 100 блоках над
-        // слушателем: пока конус Маха не дошёл, его не слышно вовсе; в тик, когда дошёл, — N-волна, и только с ним
-        // начинается вой
+        // a projectile at 1,4 M (synthetic speed: there is no supersonic in the current flight) passes in 100 blocks above the
+        //  listener: until the Mach cone reaches, it is not audible at all; at tick, when he reaches it, there is a N wave, and only with it
+        //  the howl begins
         double v = 1.4 * Acoustics.SPEED;
         FlightTrack t = straight(WeaponType.ROCKET, 3000, 100, v, FlightPhase.TERMINAL, new Vec3(-5000, 0, 0), 300, 1);
         double[] roots = new double[1];
@@ -209,21 +209,21 @@ class EngineSoundTest {
         int boomAt = -1;
         for (int now = 0; now <= 300; now++) {
             boolean r = Acoustics.emissions(t, now, 0, 0, 0, roots) > 0;
-            if (!r) assertEquals(0, gain(EngineSound.Layer.ROCKET_AIR, t, now, EAR), 0, "тик " + now + ": вой до прихода конуса");
+            if (!r) assertEquals(0, gain(EngineSound.Layer.ROCKET_AIR, t, now, EAR), 0, "tick " + now + ": howl before the cone arrives");
             if (r && !reached) {
                 Booms.Crack c = Booms.crack(t, roots[0], EAR, NIGHT);
-                assertNotNull(c, "конус дошёл без N-волны");
-                assertTrue(c.wave().pressure() > 50 && c.volume() > 0, "волна " + c.wave() + ", громкость " + c.volume());
+                assertNotNull(c, "the cone arrived without the N wave");
+                assertTrue(c.wave().pressure() > 50 && c.volume() > 0, "wave " + c.wave() + ", volume " + c.volume());
                 boomAt = now;
             }
             reached |= r;
         }
-        // за последней записью путь лишь дотянут по скорости — там хлопка нет
+        // beyond the last entry the path will only reach the speed - there is no cotton there
         assertNull(Booms.crack(t, t.lastTick() + 1, EAR, NIGHT));
-        // конус догоняет ухо, когда снаряд прошёл h·√(M² − 1) за ним
+        // the cone catches up with the ear when the projectile passes h·√(M² − 1) behind it
         double overhead = 3000 / v, expected = overhead + 100 * Math.sqrt(1.4 * 1.4 - 1) / v;
-        assertEquals(expected, boomAt, 1.5, "N-волна на тике");
-        // дозвуковой снаряд не хлопает
+        assertEquals(expected, boomAt, 1.5, "N-wave on tick");
+        // subsonic projectile does not pop
         FlightTrack slow = straight(WeaponType.ROCKET, 600, 100, 4, FlightPhase.TERMINAL, new Vec3(-5000, 0, 0), 300, 1);
         for (int now = 0; now <= 300; now++) {
             if (Acoustics.emissions(slow, now, 0, 0, 0, roots) > 0) {

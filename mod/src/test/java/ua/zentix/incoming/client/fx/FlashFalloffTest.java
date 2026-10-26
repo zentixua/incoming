@@ -8,13 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FlashFalloffTest {
-    /** Вспышки ракеты и шахеда — по модели облака их заряда (шар продуктов детонации). */
+    /** Rocket and Shahed flares - based on the model of their charge cloud (a ball of detonation products). */
     private static final CloudModel MISSILE = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), CloudModel.Air.STANDARD),
             DRONE = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD);
     private static final double MISSILE_NEAR = BlastEffects.flashNear(MISSILE), MISSILE_RANGE = BlastEffects.flashRange(MISSILE);
     private static final double DRONE_NEAR = BlastEffects.flashNear(DRONE), DRONE_RANGE = BlastEffects.flashRange(DRONE);
 
-    /** На краю огненного шара, лицом к взрыву — полная сила (0.85), за преградой — 0.3. */
+    /** At the edge of the fireball, facing the explosion - full force (0.85), behind the barrier - 0.3. */
     @Test
     void closeBlastKeepsItsStrength() {
         assertEquals(0.85f, FlashFalloff.strength(MISSILE_NEAR, MISSILE_NEAR, MISSILE_RANGE, 1, true), 0.01f);
@@ -22,7 +22,7 @@ class FlashFalloffTest {
         assertEquals(0.85f, FlashFalloff.strength(0, DRONE_NEAR, DRONE_RANGE, 1, true), 0.01f);
     }
 
-    /** Вплотную взрыв слепит, куда ни смотри: сбоку и за спиной у шахеда в его огненном шаре — не меньше 0.75. */
+    /** Close up, the explosion is blinding, no matter where you look: from the side and behind Shahed in his fireball - no less than 0.75. */
     @Test
     void blastAtHandBlindsWhateverTheView() {
         double at = 0.15 * DRONE_NEAR;
@@ -36,28 +36,28 @@ class FlashFalloffTest {
         }
     }
 
-    /** Залп в 200 блоках (план barrage трейлера) не белит экран: заливка не больше 0.12 от ракеты и 0.05 от шахеда. */
+    /** A salvo in 200 blocks (trailer plan barrage) does not whiten the screen: the fill is no more than 0.12 from the rocket and 0.05 from Shahed. */
     @Test
     void farSalvoDoesNotWashOut() {
         assertTrue(FlashFalloff.strength(200, MISSILE_NEAR, MISSILE_RANGE, 1, true) <= 0.12f);
         assertTrue(FlashFalloff.strength(200, DRONE_NEAR, DRONE_RANGE, 1, true) <= 0.05f);
     }
 
-    /** Днём шар освещает окрестность на проценты от солнца — экран едва светлеет; в сумерках и ночью — вспышка. */
+    /** During the day, the ball illuminates the surrounding area at a percentage of the sun - the screen barely brightens; at dusk and at night there is a flash. */
     @Test
     void daylightTamesTheScreenFlash() {
-        assertTrue(FlashFalloff.daylight(1) <= 0.1f, "днём " + FlashFalloff.daylight(1));
-        assertEquals(1f, FlashFalloff.daylight(0.5), 1e-6f, "сумерки");
-        assertEquals(1f, FlashFalloff.daylight(0.17), 1e-6f, "ночь");
+        assertTrue(FlashFalloff.daylight(1) <= 0.1f, "during the day " + FlashFalloff.daylight(1));
+        assertEquals(1f, FlashFalloff.daylight(0.5), 1e-6f, "twilight");
+        assertEquals(1f, FlashFalloff.daylight(0.17), 1e-6f, "night");
         float prev = 0;
         for (double a = 1; a >= 0.12; a -= 0.01) {
             float k = FlashFalloff.daylight(a);
-            assertTrue(k >= prev, "свет неба " + a);
+            assertTrue(k >= prev, "sky light " + a);
             prev = k;
         }
     }
 
-    /** Спадает с расстоянием монотонно и доходит до нуля к краю без скачка. */
+    /** Decreases monotonically with distance and reaches zero towards the edge without a jump. */
     @Test
     void monotonicAndContinuousAtRange() {
         for (double cos : new double[] {1, 0, -1}) {
@@ -74,7 +74,7 @@ class FlashFalloffTest {
         assertEquals(0f, FlashFalloff.strength(MISSILE_RANGE, MISSILE_NEAR, MISSILE_RANGE, 1, true));
     }
 
-    /** Слепит взрыв в поле зрения; за спиной — только отсвет, за преградой — ещё слабее. */
+    /** An explosion blinds your field of vision; behind you there is only a reflection, behind the barrier it is even weaker. */
     @Test
     void glareNeedsTheBlastInView() {
         float front = FlashFalloff.strength(60, MISSILE_NEAR, MISSILE_RANGE, 1, true);

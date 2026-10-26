@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Фронт ударной волны в проходе дрожания: законы шейдера ({@code fx_heat.fsh}, {@code front*}) — те же, что в Java
- * ({@link ShockOptics}); скачок на фронте подрыва ({@link NukeHeat#jumps}) растёт с давлением и исчезает за краем стены пыли.
+ * Shock wave front in the jitter pass: shader laws ({@code fx_heat.fsh}, {@code front*}) - the same as in Java
+ * ({@link ShockOptics}); The jump at the explosion front ({@link NukeHeat#jumps}) grows with pressure and disappears behind the edge of the dust wall.
  */
 class ShockOpticsGlslTest {
     private static final String GLSL = read("core/fx_heat.fsh");
@@ -58,9 +58,9 @@ class ShockOpticsGlslTest {
     }
 
     /**
-     * Скачок на сфере фронта: чем дальше фронт, тем меньше (давление падает) — у наземного на всех высотах, у воздушного
-     * — выше земли (падающая волна; у земли с началом области Маха скачок растёт: там встаёт стебель); за краем стены
-     * пыли — нуль.
+     * A jump on the sphere of the front: the further the front is, the less (the pressure drops) - for the ground at all altitudes, for the air
+     *  - above the ground (falling wave; at the ground with the beginning of the Mach region the jump grows: a stem rises there); beyond the edge of the wall
+     *  dust - zero.
      */
     @Test
     void jumpFallsWithTheFrontAndEndsAtTheEdge() {
@@ -72,17 +72,17 @@ class ShockOpticsGlslTest {
                 double low = Math.max(-1, (d.groundY() - d.burst().y) / r);
                 NukeHeat.jumps(d, r, low, dn);
                 for (int k = d.surface() ? 0 : 1; k < 4; k++) {
-                    assertTrue(dn[k] <= was[k] * (1 + 1e-9), "высота " + k + " на " + r + ": " + dn[k] + " > " + was[k]);
+                    assertTrue(dn[k] <= was[k] * (1 + 1e-9), "height " + k + " on " + r + ": " + dn[k] + " > " + was[k]);
                     was[k] = dn[k];
                 }
             }
-            // у воздушного выше земли — падающая волна: слабее, чем у земли в области Маха
+            // the air above the ground has an incident wave: weaker than that of the ground in the Mach region
             if (!d.surface()) {
                 NukeHeat.jumps(d, 3000, (d.groundY() - d.burst().y) / 3000, dn);
-                assertTrue(dn[3] < dn[0], "падающая " + dn[3] + " против стебля " + dn[0]);
+                assertTrue(dn[3] < dn[0], "falling " + dn[3] + " against the stem " + dn[0]);
             }
             double r = reach * 1.001, low = Math.max(-1, (d.groundY() - d.burst().y) / r);
-            assertTrue(!NukeHeat.jumps(d, r, low, dn), "за краем " + reach + ": " + java.util.Arrays.toString(dn));
+            assertTrue(!NukeHeat.jumps(d, r, low, dn), "over the edge " + reach + ": " + java.util.Arrays.toString(dn));
         }
     }
 
@@ -94,7 +94,7 @@ class ShockOpticsGlslTest {
         double was = 0;
         for (double kpa = Detonation.HIT_KPA; kpa < 3 * NukeHeat.FADE_FROM_KPA; kpa += 0.01) {
             double s = NukeHeat.seen(kpa);
-            assertTrue(s >= was && s - was < 0.01, kpa + " кПа");
+            assertTrue(s >= was && s - was < 0.01, kpa + " kPa");
             was = s;
         }
     }

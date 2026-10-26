@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MushroomFieldTest {
     /**
-     * Рамка гриба (верх и радиус) — числа на всю жизнь гриба: у воздушного, пока фронт не дошёл до земли, юбки нет (её
-     * поднимать нечему), и ноль её сечения не делит рамку (NaN выбрасывал гриб из кадра пирамидой видимости).
+     * The frame of the mushroom (top and radius) are numbers for the entire life of the mushroom: the airborne one, until the front reaches the ground, does not have a skirt (there is nothing to lift it
+     * ), and the zero of its cross-section does not divide the frame (NaN threw the mushroom out of the frame as a pyramid of visibility).
      */
     @Test
     void boundsAreFiniteBeforeTheFrontReachesTheGround() {
@@ -24,16 +24,16 @@ class MushroomFieldTest {
                 MushroomModel.Shape s = MushroomModel.shape(t, 15, high, false, front);
                 if (s == null) continue;
                 double top = MushroomField.top(s), reach = MushroomField.reach(s);
-                assertTrue(Double.isFinite(top) && top >= 1, t + " с, фронт " + front + ": верх " + top);
-                assertTrue(Double.isFinite(reach) && reach >= 1, t + " с, фронт " + front + ": радиус " + reach);
-                if (front == 0) assertEquals(0, s.skirtTau(), 0, t + " с: юбка до прихода фронта");
+                assertTrue(Double.isFinite(top) && top >= 1, t + " s, front " + front + ": top " + top);
+                assertTrue(Double.isFinite(reach) && reach >= 1, t + " s, front " + front + ": radius " + reach);
+                if (front == 0) assertEquals(0, s.skirtTau(), 0, t + " with: skirt before the front arrives");
             }
         }
     }
 
     /**
-     * Рамка луча — наклонный цилиндр (mushSpan): каждое место тела (ось сдвинута сносом на долю высоты, mushShare, вокруг
-     * неё — до reach) лежит в ней на любой высоте от 0,05 верха под землёй до верха, и ниже и выше конца подъёма.
+     * The frame of the beam is an inclined cylinder (mushSpan): each place of the body (the axis is shifted by the drift by a fraction of the height, mushShare, around
+     *  it - up to reach) lies in it at any height from 0,05 the top underground to the top, and below and above the end of the rise.
      */
     @Test
     void boundHoldsTheDriftedBody() {
@@ -43,18 +43,18 @@ class MushroomFieldTest {
             double r = MushroomField.boundRadius(reach, drift, top, end);
             for (double h = -0.05 * top; h <= top; h += top / 200) {
                 double axis = drift * Math.clamp(h / end, 0, 1), tilted = k * h;
-                // дальше всего от наклонной оси — место тела на краю reach в сторону расхождения осей
+                // farthest from the inclined axis - the place of the body is on the edge of reach in the direction of the divergence of the axes
                 double worst = Math.abs(axis - tilted) + reach;
-                assertTrue(worst <= r + 1e-9, "верх " + top + ", конец " + end + ", высота " + h + ": " + worst + " > " + r);
+                assertTrue(worst <= r + 1e-9, "top " + top + ", end " + end + ", height " + h + ": " + worst + " > " + r);
             }
         }
     }
 
     /**
-     * Рамка со столбом воды держит его стенку и корону с клубами (до {@link MushroomField#REACH_COLUMN} толщины стенки
-     * за их край) всю жизнь столба, пока гриб у подрыва 15 кт на воде ещё молод и уже его, и не раздувается: и у низкого
-     * столба (первые доли секунды, конец падения) — не шире трёх его радиусов (луч гриба шёл бы по пустому, а толща к
-     * свету — мимо шапки).
+     * A frame with a column of water holds its wall and crown with billows (up to {@link MushroomField#REACH_COLUMN} wall thickness
+     *  beyond their edge) for the entire life of the pillar, while the mushroom at the explosion of 15 kt on the water is still young and narrower than it, and does not swell: and at a low
+     *  pillar (the first fractions of a second, the end of the fall) - no wider than three of its radii (the ray of the mushroom would go through the empty, and the thickness towards the
+     *  light - past the cap).
      */
     @Test
     void boundHoldsTheWaterColumn() {
@@ -64,18 +64,18 @@ class MushroomFieldTest {
             if (c == null) continue;
             double r = MushroomField.REACH_COLUMN * MushroomField.columnUnit(c);
             double reach = MushroomField.reach(s, c), top = MushroomField.top(s, c);
-            assertTrue(reach >= c.mid() + c.half() + r - 1e-9 && reach >= c.crownR() + r - 1e-9, t + " с: радиус " + reach);
-            assertTrue(top >= c.top() + r - 1e-9, t + " с: верх " + top);
-            assertTrue(reach >= MushroomField.reach(s) && top >= MushroomField.top(s), t + " с: рамка гриба");
-            // и не шире нужного: рамка со столбом — не шире трёх его радиусов и не выше его радиуса над ним
-            assertTrue(reach <= Math.max(MushroomField.reach(s), 3 * c.outer()), t + " с: радиус " + reach + " у столба " + c.outer());
-            assertTrue(top <= Math.max(MushroomField.top(s), c.top() + c.outer()), t + " с: верх " + top + " у столба " + c.top());
+            assertTrue(reach >= c.mid() + c.half() + r - 1e-9 && reach >= c.crownR() + r - 1e-9, t + " s: radius " + reach);
+            assertTrue(top >= c.top() + r - 1e-9, t + " from: top " + top);
+            assertTrue(reach >= MushroomField.reach(s) && top >= MushroomField.top(s), t + " with: mushroom frame");
+            // and no wider than necessary: the frame with the pillar is no wider than three of its radii and no higher than its radius above it
+            assertTrue(reach <= Math.max(MushroomField.reach(s), 3 * c.outer()), t + " s: radius " + reach + " at the pillar " + c.outer());
+            assertTrue(top <= Math.max(MushroomField.top(s), c.top() + c.outer()), t + " from: top " + top + " at the pillar " + c.top());
         }
         MushroomModel.Shape s = MushroomModel.shape(5, 15, 0, true, 3_000);
-        assertEquals(MushroomField.reach(s), MushroomField.reach(s, null), 0, "без столба — рамка гриба");
+        assertEquals(MushroomField.reach(s), MushroomField.reach(s, null), 0, "without pillar - mushroom frame");
     }
 
-    /** Направление тени — единичное, не ниже {@link MushroomField#SHADOW_LOW}; оси плоскости поперёк него — ортонормированы. */
+    /** Shadow direction is single, not lower than {@link MushroomField#SHADOW_LOW}; the axes of the plane across it are orthonormal. */
     @Test
     void shadowAxesAreOrthonormal() {
         double[] s = new double[3], a = new double[3], b = new double[3];
@@ -83,7 +83,7 @@ class MushroomFieldTest {
             for (double z : new double[] {0, 0.3, -0.95}) {
                 MushroomField.shadowSun(-Math.sin(angle), Math.cos(angle), z, s);
                 MushroomField.shadowAxes(s, a, b);
-                String at = "угол " + angle + ", z " + z;
+                String at = "angle " + angle + ", z " + z;
                 assertEquals(1, dot(s, s), 1e-9, at);
                 assertTrue(s[1] >= MushroomField.SHADOW_LOW - 1e-12, at);
                 assertEquals(1, dot(a, a), 1e-9, at);
@@ -96,9 +96,9 @@ class MushroomFieldTest {
     }
 
     /**
-     * Плитка карты тени держит проекцию рамки гриба поперёк солнца (наклонный цилиндр mushLine: круги радиуса boundR вокруг
-     * оси, сдвинутой сносом на долю высоты, от −0,05 верха до верха) с запасом {@link MushroomField#SHADOW_PAD} текселей
-     * с каждой стороны: прямые у края плитки проходят мимо гриба, и тень не обрезана краем.
+     * The shadow map tile holds the projection of the mushroom frame across the sun (an inclined cylinder mushLine: circles of radius boundR around the
+     *  axis, shifted by drift by a fraction of the height, from −0,05 top to top) with a supply of {@link MushroomField#SHADOW_PAD} texels
+     *  with each sides: straight lines at the edge of the tile go past the mushroom, and the shadow is not cut off by the edge.
      */
     @Test
     void shadowTileHoldsTheBound() {
@@ -120,7 +120,7 @@ class MushroomFieldTest {
                             max = Math.max(max, u);
                         }
                     }
-                    String at = "угол " + angle + ", рамка " + r + "/" + top + ", ось " + i;
+                    String at = "angle " + angle + ", frame " + r + "/" + top + ", axis " + i;
                     assertTrue(min >= rect[i] + pad - 1e-6, at + ": " + min + " < " + (rect[i] + pad));
                     assertTrue(max <= rect[i] + rect[2 + i] - pad + 1e-6, at + ": " + max + " > " + (rect[i] + rect[2 + i] - pad));
                 }
@@ -129,13 +129,13 @@ class MushroomFieldTest {
     }
 
     /**
-     * Цвет шапки — из капель и NO₂, без часов. Наблюдения: в отражённом свете облако белое, в проходящем — красно-бурое, и
-     * внутри него бурый свет (Taylor и Minge 1963); сперва облако «красное или красно-бурое» (G&D §2.08). Что даёт физика
-     * этого вещества: шапка 15 кт после подъёма отражает почти белым (каналы не ниже 0,6, синий не меньше 0,75 красного), а
-     * пучок сверху выходит под ней и стоит в её середине бурым (синий — меньше трети красного). Только что свернувшееся
-     * кольцо в отражённом свете — охра (оттенок на экране 28–45°; у красно-бурого — меньше 25°), и красно-бурым оно не
-     * становится ни при какой доле NO₂: у сильного поглощения R∞ ∝ ω' ∝ 1/σ по каналу — оттенок 29°. Красно-бурый — свет,
-     * прошедший кольцо насквозь (оттенок меньше 25°). Белеет шапка сама, пока NO₂ редеет в растущем объёме.
+     * The color of the cap is from drops and NO₂, without hours. Observations: in reflected light the cloud is white, in transmitted light it is red-brown, and
+     *  there is brown light inside it (Taylor and Minge 1963); first the cloud is “red or red-brown” (G&D §2.08). What the physics
+     *  of this substance gives: cap 15 CT after rising reflects almost white (channels are not lower than 0,6, blue is not less than 0,75 red), and the
+     *  beam from above comes out under it and stands in its middle brown (blue is less than a third of red). A just-folded
+     *  ring in reflected light is ocher (the shade on the screen is 28–45°; for red-brown it is less than 25°), and it does not become red-brown
+     *  at any fraction of NO₂: for a strong absorption R∞ ∝ ω' ∝ 1/σ along the channel - shade 29°. Red-brown - light that has passed through the ring
+     *  (shade less than 25°). The cap itself turns white while NO₂ thins out in a growing volume.
      */
     @Test
     void capIsWhiteOutsideAndBrownInside() {
@@ -148,12 +148,12 @@ class MushroomFieldTest {
             down[i] = PallLight.diffuse(w[i], w[3], tau, tau, 0, 1, 1, 1, 0, 0, 0, -2.0 / 3) + Math.exp(-tau);
             mid[i] = PallLight.diffuse(w[i], w[3], tau / 2, tau, 0, 1, 1, 1, 0, 0, 0, 0);
         }
-        String at = String.format(Locale.ROOT, "отражение %.2f %.2f %.2f, под шапкой %.3f %.3f %.3f", r[0], r[1], r[2],
+        String at = String.format(Locale.ROOT, "reflection %.2f %.2f %.2f, under cap %.3f %.3f %.3f", r[0], r[1], r[2],
                 down[0], down[1], down[2]);
         assertTrue(r[2] >= 0.6 && r[2] >= 0.75 * r[0], at);
         assertTrue(down[2] < down[0] / 3 && mid[2] < mid[0] / 3, at);
-        assertTrue(tau > 20, "непрозрачна: " + tau);
-        // только что свернувшееся кольцо: в отражённом свете — охра, насквозь — красно-бурое
+        assertTrue(tau > 20, "opaque: " + tau);
+        // just rolled ring: in reflected light - ocher, through - red-brown
         double tr = MushroomModel.rollUpSeconds(15, false);
         MushroomModel.Shape rolled = MushroomModel.shape(tr, 15, hob, false, 1e9);
         double ringTau = MushroomField.capTau(rolled, MushroomField.capMatter(rolled, 0, 0, w));
@@ -161,32 +161,32 @@ class MushroomFieldTest {
         for (int i = 0; i < 3; i++) {
             through[i] = PallLight.diffuse(w[i], w[3], ringTau, ringTau, 0, 1, 1, 1, 0, 0, 0, -2.0 / 3) + Math.exp(-ringTau);
         }
-        String ring = String.format(Locale.ROOT, "кольцо: %.3f %.3f %.3f, оттенок %.0f°, насквозь %.0f°", young[0], young[1], young[2],
+        String ring = String.format(Locale.ROOT, "ring: %.3f %.3f %.3f, shade %.0f°, through %.0f°", young[0], young[1], young[2],
                 hue(young), hue(through));
         assertTrue(young[0] > young[1] && young[1] > young[2] && young[2] > 0, ring);
         assertTrue(hue(young) >= 28 && hue(young) <= 45, ring);
         assertTrue(hue(through) < 25, ring);
-        // больше NO₂ — темнее, но не краснее охры: поглощение по каналам × k
+        // more NO₂ - darker, but not redder than ocher: absorption by channels × k
         double[] dark = new double[3];
         for (double k = 1; k <= 1e4; k *= 3) {
             for (int i = 0; i < 3; i++) dark[i] = MushroomField.wallReflectance(1 / (1 + k * (1 / w[i] - 1)), w[3]);
-            assertTrue(hue(dark) >= 28, String.format(Locale.ROOT, "NO₂ × %.0f: оттенок %.1f°", k, hue(dark)));
+            assertTrue(hue(dark) >= 28, String.format(Locale.ROOT, "NO₂ × %.0f: shade %.1f°", k, hue(dark)));
         }
-        // белеет само, без скачков: синий к красному растёт
+        // turns white on its own, without jumps: blue grows towards red
         double last = 0;
         for (double t = tr; t <= stab; t += 5) {
             MushroomField.capMatter(MushroomModel.shape(t, 15, hob, false, 1e9), 0, 0, w);
             double[] c = reflect(w);
             double ratio = c[2] / c[0];
-            assertTrue(ratio >= last, t + " с: " + ratio);
+            assertTrue(ratio >= last, t + " from: " + ratio);
             last = ratio;
         }
     }
 
     /**
-     * Отражение толстого слоя ({@link MushroomField#wallReflectance}, полусферическое среднее) — от 0 у одного поглощения
-     * до 1 у одного рассеяния и не меньше нуля при любом ω'; у Эддингтона ({@link PallLight#reflectance}) при сильном
-     * поглощении — меньше нуля.
+     * Reflection of a thick layer ({@link MushroomField#wallReflectance}, hemispherical average) - from 0 for one absorption
+     *  to 1 for one scattering and not less than zero for any ω'; for Eddington ({@link PallLight#reflectance}) with strong
+     *  absorption - less than zero.
      */
     @Test
     void wallReflectanceIsNeverNegative() {
@@ -200,12 +200,12 @@ class MushroomFieldTest {
                 last = r;
             }
         }
-        assertTrue(PallLight.reflectance(0, 0.459) < -0.05, "Эддингтон у одного поглощения");
+        assertTrue(PallLight.reflectance(0, 0.459) < -0.05, "Eddington at one takeover");
     }
 
     /**
-     * Шапка с грунтом (наземный подрыв), когда NO₂ в ней почти не осталось, — серая цвета {@link MushroomField#CAP_DUSTY}:
-     * поглощение грунта — сверх NO₂. Шар до капель только поглощает (ω' = 0): его видно своим светом.
+     * cap with soil (ground blasting), when there is almost no NO₂ left in it - gray color {@link MushroomField#CAP_DUSTY}:
+     *  soil absorption - in excess of NO₂. The ball only absorbs drops (ω' = 0): it is visible with its light.
      */
     @Test
     void dustyCapAndBall() {
@@ -216,19 +216,19 @@ class MushroomFieldTest {
         assertEquals(g, w[3], 1e-12);
         for (int i = 0; i < 3; i++) {
             double dusty = PallLight.albedo(PallLight.linear(((MushroomField.CAP_DUSTY >> (16 - 8 * i)) & 0xFF) / 255.0), g);
-            assertTrue(w[i] < dusty && w[i] > dusty - 0.02, i + ": " + w[i] + " против " + dusty);
+            assertTrue(w[i] < dusty && w[i] > dusty - 0.02, i + ": " + w[i] + " against " + dusty);
         }
         MushroomModel.Shape ball = MushroomModel.shape(0.5, 15, 592, false, 1e9);
         double sigma = MushroomField.capMatter(ball, 0, 0, w);
         assertEquals(0, w[0] + w[1] + w[2], 0);
-        assertTrue(MushroomField.capTau(ball, sigma) > 5, "шар непрозрачен");
+        assertTrue(MushroomField.capTau(ball, sigma) > 5, "the ball is opaque");
     }
 
     /**
-     * Пар над водой — смесь веществ по ослаблению: ω' смеси — среднее ω' по долям ослабления. Пока пар только появился
-     * (свежее кольцо 1 и 15 кт, где ω' каналов ниже 1/(4 − 3g') ≈ 0,38), ω' не прыгает: прежнее смешение в цвете слоя
-     * обращало отражение Эддингтона, зажатое в нуль, и в первый же кадр пара поднимало такие каналы до 0,38. Где пара
-     * всё ослабление — ω' пара, между — по прямой от шапки к пару; ослабление и асимметрия — шапки.
+     * Steam over water is a mixture of substances by attenuation: ω' of the mixture is the average ω' by attenuation fractions. While the steam has just appeared
+     *  (fresh ring 1 and 15 kt, where ω' channels below 1/(4 − 3g') ≈ 0,38), ω' not jumps: the previous mixing in the color of the layer
+     *  turned the Eddington reflection, clamped to zero, and in the very first frame the pair raised such channels to 0,38. Where pair
+     * all weakening is ω' pair, between - in a straight line from cap to pair; weakening and asymmetry - cap.
      */
     @Test
     void steamMixesWithoutAJump() {
@@ -239,34 +239,34 @@ class MushroomFieldTest {
             for (double t = 0.25 * tr; t <= tr; t += 0.05 * tr) {
                 MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 1e9);
                 double sigma = MushroomField.capMatter(s, 0, 0, dry);
-                assertEquals(sigma, MushroomField.capMatter(s, 0, 1e-6, wet), 0, kt + " кт, " + t + " с: ослабление");
+                assertEquals(sigma, MushroomField.capMatter(s, 0, 1e-6, wet), 0, kt + " cT, " + t + " s: weakening");
                 for (int i = 0; i < 4; i++) {
-                    assertEquals(dry[i], wet[i], 1e-6, kt + " кт, " + t + " с, канал " + i);
+                    assertEquals(dry[i], wet[i], 1e-6, kt + " cT, " + t + " s, channel " + i);
                     if (i < 3 && dry[i] < 1 / (4 - 3 * dry[3])) dark = true;
                 }
                 double steam = MushroomModel.rollUp(t, kt, false), share = MushroomField.STEAM_SHARE * steam;
                 MushroomField.capMatter(s, 0, steam, wet);
                 for (int i = 0; i < 3; i++) {
                     double mixed = dry[i] + (MushroomField.steamAlbedo(i, dry[3]) - dry[i]) * share;
-                    assertEquals(mixed, wet[i], 1e-12, kt + " кт, " + t + " с, канал " + i + ": смесь");
+                    assertEquals(mixed, wet[i], 1e-12, kt + " cT, " + t + " s, channel " + i + ": mixture");
                 }
             }
         }
-        assertTrue(dark, "у свежего кольца есть каналы с ω' ниже 0,38");
+        assertTrue(dark, "the fresh ring has channels with ω' below 0,38");
         MushroomModel.Shape s = MushroomModel.shape(MushroomModel.rollUpSeconds(15, false), 15, 592, false, 1e9);
         MushroomField.capMatter(s, 0, 1 / MushroomField.STEAM_SHARE, wet);
-        for (int i = 0; i < 3; i++) assertEquals(MushroomField.steamAlbedo(i, wet[3]), wet[i], 1e-12, "один пар, канал " + i);
-        assertTrue(MushroomField.steamAlbedo(1, wet[3]) > 0.98, "пар почти не поглощает");
+        for (int i = 0; i < 3; i++) assertEquals(MushroomField.steamAlbedo(i, wet[3]), wet[i], 1e-12, "one pair, channel " + i);
+        assertTrue(MushroomField.steamAlbedo(1, wet[3]) > 0.98, "absorbs almost no steam");
     }
 
-    /** Отражение толстого слоя по каналам при альбедо и асимметрии {@code w} (ω' r, g, b, g'). */
+    /** Reflection of a thick layer along channels with albedo and asymmetry {@code w} (ω' r, g, b, g'). */
     private static double[] reflect(double[] w) {
         double[] r = new double[3];
         for (int i = 0; i < 3; i++) r[i] = MushroomField.wallReflectance(w[i], w[3]);
         return r;
     }
 
-    /** Оттенок цвета на экране, градусы (как в HSV): линейные r, g, b — в значения экрана, γ 2,2. */
+    /** Color shade on the screen, Grad (as in HSV): linear r, g, b - in screen values, γ 2,2. */
     private static double hue(double[] linear) {
         double r = PallLight.display(linear[0]), g = PallLight.display(linear[1]), b = PallLight.display(linear[2]);
         double max = Math.max(r, Math.max(g, b)), min = Math.min(r, Math.min(g, b)), c = max - min;
@@ -283,8 +283,8 @@ class MushroomFieldTest {
     }
 
     /**
-     * Узор поверхности шара: до минимума яркости — его нет (место −1), к отрыву — первый кадр, потом кадры идут вперёд с
-     * всплытием; доля узора — пока шар шар (1 − доля кольца), без прочитанного файла — 0 (шар как прежде).
+     * Pattern of the surface of the ball: to the minimum brightness - it is not there (place −1), to the break - the first frame, then the frames go forward with
+     *  ascent; share of the pattern - while the ball is a ball (1 - share of the ring), without a read file - 0 (ball as before).
      */
     @Test
     void ballSurfaceFollowsTheBreakawayAndTheRollUp() {
@@ -304,46 +304,46 @@ class MushroomFieldTest {
         double last = -1;
         for (double t = 0.001; t < 40; t *= 1.1) {
             MushroomField.ballSurface(t, 600, y, false, rises, out);
-            assertTrue(out[0] >= last, "кадр не назад: " + t);
+            assertTrue(out[0] >= last, "frame not backward: " + t);
             last = out[0];
             assertEquals(1 - MushroomModel.rollUp(t, y, false), out[1], 1e-12);
             MushroomField.ballSurface(t, 600, y, false, (float[]) null, out);
             assertEquals(0, out[1], 0);
         }
-        // кадр — путь всплытия в радиусах: к концу сворачивания у 15 кт — 4,1 радиуса из 5 файла, дальше последнего не идёт
+        // frame - the path of ascent in radii: by the end of the folding at 15 kt - 4,1 radius from the 5 file, it does not go further than the last
         MushroomField.ballSurface(MushroomModel.rollUpSeconds(y, false), 600, y, false, rises, out);
         assertEquals(NukeBallSurface.frame(rises, FireballModel.surfaceRise(MushroomModel.rollUpSeconds(y, false), 600, y, false)), out[0], 1e-9);
-        assertTrue(out[0] > 0.6 * (rises.length - 1) && out[0] < rises.length - 1, "кадр к концу сворачивания: " + out[0]);
+        assertTrue(out[0] > 0.6 * (rises.length - 1) && out[0] < rises.length - 1, "frame to the end of folding: " + out[0]);
     }
     /**
-     * Ножка и юбка — пыль места подрыва, то же вещество, что слой пыли волны под ними (ковёр пелены): тот же цвет толстого
-     * слоя и та же асимметрия. Ножку питает только пыль из этого слоя ({@code StemDust}); свой цвет «пыль с дымом» делал её
-     * серее ковра, на котором она стоит.
+     * The stem and the skirt are the dust of the explosion site, the same substance as the layer of dust of the wave under them (pall carpet): the same color of the thick
+     *  layer and the same asymmetry. stem feeds only dust from this layer ({@code StemDust}); its color “dust with smoke” made it
+     *  grayer than the carpet on which it stands.
      */
     @Test
     void stemAndSkirtAreTheLayersDust() {
         for (int i = 0; i < 3; i++) {
-            assertEquals(NukePall.DUST[i], ((MushroomField.DUST >> (16 - 8 * i)) & 0xFF) / 255.0, 0.5 / 255, "канал " + i);
+            assertEquals(NukePall.DUST[i], ((MushroomField.DUST >> (16 - 8 * i)) & 0xFF) / 255.0, 0.5 / 255, "channel " + i);
         }
-        assertEquals(PallLight.DUST_G, MushroomField.G, 0, "асимметрия пыли гриба — как у пелены");
+        assertEquals(PallLight.DUST_G, MushroomField.G, 0, "asymmetry of mushroom dust - like pall");
     }
     /**
-     * Земля под грибом — верх слоя пыли, что на ней лежит: без пыли — сама земля, под толстым слоем — цвет толстого слоя
-     * пыли (то же R∞, что у ковра на экране), между — без скачков и монотонно. Ножка в тени шапки видит снизу этот ковёр, а
-     * не голую землю 0,2.
+     * The ground under the mushroom is the top of the layer of dust that lies on it: without dust - the earth itself, under the thick layer - the color of the thick layer of
+     * dust (the same R∞ as the carpet on the screen), between - without jumps and monotonously. stem in the shadow of cap sees this carpet from below, and
+     *  not the bare earth 0,2.
      */
     @Test
     void groundUnderTheMushroomIsTheDustLayerOnIt() {
         double g = PallLight.truncated(MushroomField.G);
         for (int i = 0; i < 3; i++) {
             double r = PallLight.linear(NukePall.DUST[i]);
-            assertEquals(PallLight.LAND, MushroomField.slabOver(r, g, 0, PallLight.LAND), 1e-12, "без пыли — земля");
-            assertEquals(r, MushroomField.slabOver(r, g, 200, PallLight.LAND), 1e-6, "толстый слой — цвет ковра");
+            assertEquals(PallLight.LAND, MushroomField.slabOver(r, g, 0, PallLight.LAND), 1e-12, "without dust - earth");
+            assertEquals(r, MushroomField.slabOver(r, g, 200, PallLight.LAND), 1e-6, "thick layer - carpet color");
             double prev = PallLight.LAND;
             for (double tau = 0.01; tau < 50; tau *= 1.2) {
                 double now = MushroomField.slabOver(r, g, tau, PallLight.LAND);
-                assertTrue(Math.abs(now - prev) < 0.02, "канал " + i + " на τ " + tau);
-                assertTrue((r - now) * (r - PallLight.LAND) >= -1e-12, "между землёй и ковром");
+                assertTrue(Math.abs(now - prev) < 0.02, "channel " + i + " on τ " + tau);
+                assertTrue((r - now) * (r - PallLight.LAND) >= -1e-12, "between the ground and the carpet");
                 prev = now;
             }
         }

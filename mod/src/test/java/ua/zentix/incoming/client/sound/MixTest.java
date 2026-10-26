@@ -15,13 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Смесь взрывов ({@link Mix}): громкость в игре — половина децибел суммарного уровня, потолок — у суммы, доля каждого
- * взрыва — его доля мощности в жизни (Q_b = G·p_b²/Σp²). Залп «Града» в 30 блоках (сцена шлагбаума grad-day/grad-night)
- * из настоящих записей не выше потолка (в 3.5.x — на 4–5 дБ выше и срезы на полной шкале); ближний над сотней дальних
- * звучит как один.
+ * Mixture of explosions ({@link Mix}): the volume in the game is half the decibels of the total level, the ceiling is the sum, the share of each
+ *  explosion is its share of power in life (Q_b = G·p_b²/Σp²). The "Grad" salvo in 30 blocks (look gate scene grad-day/grad-night)
+ *  from real recordings is not higher than the ceiling (in 3.5.x - at 4–5 dB higher and cuts at full scale); near over a hundred distant
+ *  sounds like one.
  */
 class MixTest {
-    /** Огибающая, ровная {@code ticks} тиков, мощностью {@code power} против потолка при громкости 1. */
+    /** Envelope, flat {@code ticks} tick, power {@code power} against the ceiling at volume 1. */
     static float[] flat(double power, int ticks) {
         float[] e = new float[ticks];
         java.util.Arrays.fill(e, (float) (power * Mix.CEILING));
@@ -44,20 +44,20 @@ class MixTest {
 
     @Test
     void layersOfOneBlastAddUpToTheCeiling() {
-        // ракурсы одной записи — по амплитуде: два по половине громкости — одна запись целиком
+        // angles of one recording - by amplitude: two at half volume - one entire recording
         Mix mix = new Mix();
         Mix.Blast b = mix.blast(0);
         b.add(new Mix.Layer(flat(0.5, 40), 1, Math.sqrt(0.5)));
         b.add(new Mix.Layer(flat(0.5, 40), 1, Math.sqrt(0.5)));
         assertEquals(0.5 * (0.5 + 0.5 + 2 * 0.5), mix.heard(3), 1e-6);
-        // удар в грудь — своя запись: с ракурсом — по мощности; взрыв с 1 psi (ракурс на потолке) — на потолке, а не на
-        // 3 дБ ниже, как вышло бы по амплитуде (ревью F4)
+        // blow to the chest - your own record: from an angle - according to power; explosion from 1 psi (angle on the ceiling) - on the ceiling, and not at
+        // 3 dB lower, as would be the case in amplitude (review F4)
         Mix one = new Mix();
         Mix.Blast c = one.blast(0);
         c.add(new Mix.Layer(flat(1, 40), 1, 1));
         c.add(new Mix.Layer(flat(0.8, 40), 1, 1, true));
         assertEquals(1, one.heard(3), 1e-6);
-        assertEquals(1 / 1.8, c.factor() * c.factor(), 1e-6, "по мощности: 1 + 0,8, а не (1 + √0,8)²");
+        assertEquals(1 / 1.8, c.factor() * c.factor(), 1e-6, "by power: 1 + 0,8, not (1 + √0,8)²");
     }
 
     @Test
@@ -71,19 +71,19 @@ class MixTest {
                 b.add(new Mix.Layer(flat(p, 40), 1, 1));
                 all.add(b);
             }
-            // в жизни уровень n равных — +10·lg n, в игре — половина: мощность × √n, не выше потолка
-            assertEquals(Math.min(1, p * Math.sqrt(n)), mix.heard(3), 1e-6, n + " взрывов");
-            // у каждого множитель 1/√n, выше потолка — 1/(n·p)
+            // in life the level of n is equal - +10·lg n, in the game - half: power × √n, not higher than the ceiling
+            assertEquals(Math.min(1, p * Math.sqrt(n)), mix.heard(3), 1e-6, n + " explosions");
+            // each has a multiplier 1/√n, above the ceiling - 1/(n·p)
             double k2 = Math.min(1 / Math.sqrt(n), 1 / (n * p));
-            for (Mix.Blast b : all) assertEquals(k2, b.factor() * b.factor(), 1e-9, n + " взрывов");
+            for (Mix.Blast b : all) assertEquals(k2, b.factor() * b.factor(), 1e-9, n + " explosions");
         }
     }
 
     /**
-     * Ближний взрыв на потолке и сто дальних по 0,01 (мощность в игре): ближний — в 0,5 дБ от себя одного в тишине (−0,04),
-     * каждый дальний на 40 дБ ниже него, все дальние вместе — на 20 дБ (в жизни их сумма — 1 % его мощности); с общим
-     * множителем 3.6 ближний терял 3 дБ, а дальние вместе звучали вровень с ним. Ближний стих — дальние возвращаются к
-     * своему уровню, как сто равных.
+     * A near explosion on the ceiling and a hundred distant ones at 0,01 (power in the game): the near one is 0,5 dB from itself alone in silence (−0,04),
+     *  each distant one is 40 dB below it, all the distant ones together are at 20 dB (in life their sum is 1% of its power); with a common
+     *  multiplier 3.6, the near one lost 3 dB, and the distant ones together sounded on par with it. The near verse - the distant ones return to
+     *  their level, like one hundred equals.
      */
     @Test
     void nearStaysOverAHundredFar() {
@@ -101,18 +101,18 @@ class MixTest {
         for (Mix.Blast b : far) farAll += b.heard();
         System.out.printf("near over 100 far: near %.3f dB vs alone, each far %.1f dB, all far %.1f dB below the near%n", db(nearHeard / alone),
                 db(nearHeard / farOne), db(nearHeard / farAll));
-        assertEquals(0, db(nearHeard / alone), 0.5, "ближний — как один в тишине");
+        assertEquals(0, db(nearHeard / alone), 0.5, "neighbor - as one in silence");
         assertEquals(-0.043, db(nearHeard / alone), 0.01);
-        assertEquals(40, db(nearHeard / farOne), 0.1, "каждый дальний — на жизненную разницу (0,01/1)²");
-        assertEquals(20, db(nearHeard / farAll), 0.1, "все дальние вместе — 1 % мощности ближнего");
-        assertEquals(1, mix.heard(), 1e-6, "сумма — потолок");
-        // ближний стих: сто дальних — как сто равных, каждый с 1/√100
+        assertEquals(40, db(nearHeard / farOne), 0.1, "each distant one - for a life difference (0,01/1)²");
+        assertEquals(20, db(nearHeard / farAll), 0.1, "all distant ones together - 1% of the power of the near one");
+        assertEquals(1, mix.heard(), 1e-6, "amount - ceiling");
+        // near verse: a hundred distant ones are like a hundred equals, each with 1/√100
         mix.at(30);
         assertEquals(0.1, mix.heard(), 1e-6);
         assertEquals(0.1, far.get(0).factor() * far.get(0).factor(), 1e-6);
     }
 
-    /** Сумма долей — G и не выше потолка, отношение долей — квадрат отношения мощностей (жизненная разница). */
+    /** The sum of shares is G and not higher than the ceiling, the ratio of shares is the square of the power ratio (vital difference). */
     @Test
     void shareKeepsLifeRatiosAndTheSumUnderTheCeiling() {
         Random r = new Random(25_10_2026L);
@@ -140,8 +140,8 @@ class MixTest {
     }
 
     /**
-     * Эхо — слои своего взрыва в смеси: когда прямой удар уже стих, эхо звучит своей долей, а не гаснет с ним (с
-     * множителем от одного прямого удара у взрыва рядом оно ушло бы в ноль); один взрыв с эхом в тишине — как есть.
+     * The echo is the layers of its explosion in the mixture: when the direct blow has already subsided, the echo sounds in its own share, and does not go out with it (with the
+     *  multiplier from one direct blow from the explosion next to it, it would go to zero); one explosion with an echo in silence - as it is.
      */
     @Test
     void lateEchoKeepsItsOwnShare() {
@@ -150,21 +150,21 @@ class MixTest {
         a.add(new Mix.Layer(flat(0.5, 20), 1, 1));
         a.add(Mix.Layer.own(flat(0.05, 20), flat(0.05, 20), 1, 30));
         mix.at(40);
-        assertEquals(1, a.factor(), 1e-12, "один: эхо как есть");
+        assertEquals(1, a.factor(), 1e-12, "one: echo as is");
         assertEquals(0.05, mix.heard(), 1e-6);
         Mix.Blast b = mix.blast(0);
         b.add(new Mix.Layer(flat(0.5, 100), 1, 1));
         mix.at(40);
-        // эхо 0,05 против соседа 0,5 — на жизненную разницу (0,1)², 20 дБ
+        // echo 0,05 against neighbor 0,5 - for life difference (0,1)², 20 dB
         assertEquals(20, db(b.heard() / a.heard()), 0.01);
         assertTrue(a.heard() > 0);
-        // задержанный слой продлевает жизнь взрыва
+        // the delayed layer extends the life of the explosion
         assertEquals(51, a.end - a.start, 1e-9);
     }
 
     /**
-     * Дорожки эха, которые взяли свои источники, — слои своего взрыва со своей задержкой и громкостью; не взятые — нет; без
-     * смеси (ядерка) — ничего.
+     * Echo tracks that took their sources - layers of their own explosion with their own delay and volume; not taken - no; without the
+     *  mixture (the nuke) - nothing.
      */
     @Test
     void echoTracksJoinTheirBlastWhenTheirSourcesTakeThem() {
@@ -179,15 +179,15 @@ class MixTest {
         List<Mix.Layer> own = b.layers.stream().filter(l -> l.kind() == Mix.Kind.OWN).toList();
         assertEquals(2, own.size());
         assertEquals(30, own.get(0).delay(), 1e-12);
-        assertEquals(1, own.get(0).volume(), 1e-6, "громкость прямого удара × своя");
+        assertEquals(1, own.get(0).volume(), 1e-6, "direct impact volume × custom");
         assertEquals(55, own.get(1).delay(), 1e-12);
-        assertEquals(16, own.get(1).volume(), 1e-6, "не громче AL_MAX_GAIN своего источника");
+        assertEquals(16, own.get(1).volume(), 1e-6, "no louder than AL_MAX_GAIN its source");
         mix.at(31);
-        assertEquals(0.1 * 1 * 1, b.power(31) - 0, 1e-6, "через 31 тик звучит эхо");
-        assertEquals(3, BlastEchoes.queue(done, env, 2, null, (t, gain) -> true), "без смеси — только голоса");
+        assertEquals(0.1 * 1 * 1, b.power(31) - 0, 1e-6, "echo sounds through 31 tick");
+        assertEquals(3, BlastEchoes.queue(done, env, 2, null, (t, gain) -> true), "no mixture - only voices");
     }
 
-    /** Слой с задержкой — от неё; за тик до начала — уже первый (голос, что ведёт кадр, начинается с долей тика раньше). */
+    /** The delay layer is from it; a tick before the beginning - already the first (the voice that leads the frame starts a fraction of a tick earlier). */
     @Test
     void delayedLayerStartsOnTimeAndBlastFollowsTheRealStart() {
         Mix.Layer echo = Mix.Layer.own(flat(0.2, 10), flat(0.2, 10), 1, 30);
@@ -199,13 +199,13 @@ class MixTest {
         Mix.Blast b = mix.blast(0);
         b.add(new Mix.Layer(flat(0.3, 10), 1, 1));
         b.late(5);
-        // звук на деле начался на 5 тиков позже — смесь от настоящего начала
+        // the sound actually started 5 tick later - a mixture from the real beginning
         assertEquals(0, b.power(3), 1e-12);
         assertEquals(0.3, b.power(14), 1e-6);
         assertEquals(0, b.power(16.5), 1e-12);
     }
 
-    /** Энергия голосов движка (по ней гул) — без своих источников и по профилю звучащей записи. */
+    /** The energy of the engine voices (the hum along it) is without its own sources and according to the profile of the sounding recording. */
     @Test
     void voicedEnergyIsTheEngineVoicesOnly() {
         Mix mix = new Mix();
@@ -214,8 +214,8 @@ class MixTest {
         b.add(new Mix.Layer(flat(0.1, 40), flat(0.1, 40), 1, 1, Mix.Kind.APART, 0));
         b.add(Mix.Layer.own(flat(0.3, 40), flat(0.3, 40), 1, 0));
         assertEquals(0.5 + 0.1 + 0.3, b.power(5), 1e-6);
-        assertEquals(0.2 + 0.1, b.voiced(5), 1e-6, "энергия ракурса и удара в грудь, без удара у уха");
-        assertEquals(0.1, b.voiced(20), 1e-6, "запись ракурса кончилась на 10-м тике — энергии нет, хоть огибающая потолка и дольше");
+        assertEquals(0.2 + 0.1, b.voiced(5), 1e-6, "the energy of the angle and the blow to the chest, without the blow to the ear");
+        assertEquals(0.1, b.voiced(20), 1e-6, "the recording of the angle ended at 10-th tick - there is no energy, although the ceiling envelope is longer");
     }
 
     @Test
@@ -225,13 +225,13 @@ class MixTest {
         a.add(new Mix.Layer(flat(2, 20), 1, 1));
         mix.at(10);
         assertTrue(a.factor() < 1);
-        // запись кончилась: следующий взрыв звучит так, будто первого не было
+        // the recording ended: the next explosion sounds as if the first one did not happen
         Mix.Blast b = mix.blast(30);
         b.add(new Mix.Layer(flat(0.5, 20), 1, 1));
         mix.at(31);
         assertEquals(1, b.factor(), 1e-12);
         assertEquals(1, mix.size());
-        // тон 2 — запись вдвое короче
+        // tone 2 - recording is half as long
         Mix fast = new Mix();
         Mix.Blast c = fast.blast(0);
         c.add(new Mix.Layer(flat(2, 20), 2, 1));
@@ -242,10 +242,10 @@ class MixTest {
     }
 
     /**
-     * Залп сцены шлагбаума: 40 разрывов «Града» (6,4 кг) с разбросом 15 блоков вокруг точки в 30 блоках от зрителя,
-     * приход — за 13 с (как в прогоне RV1). Записи ракурсов — настоящие файлы, тон по Саксу, громкость по давлению
-     * ({@link BlastMix#at}), множитель каждого взрыва — раз в тик, как у движка. Сумма — в K-взвешенной мгновенной громкости
-     * не выше потолка (с допуском на шаг тика), а без смеси была бы выше на дБ.
+     * Scene volley look gate: 40 "Grad" bursts (6,4 kg) with a scatter of 15 blocks around a point in 30 blocks from the viewer,
+     *  arrival - for 13 s (as in the run RV1). Recording angles - real files, tone according to Sachs, volume according to pressure
+     *  ({@link BlastMix#at}), multiplier of each explosion - once per tick, like the engine. The sum is in K-weighted instantaneous loudness
+     *  not higher than the ceiling (with a tick step tolerance), and without a mixture it would be higher by dB.
      */
     @Test
     void gradSalvoStaysUnderTheCeiling() throws IOException {
@@ -262,7 +262,7 @@ class MixTest {
             double a = 2 * Math.PI * r.nextDouble(), rr = 15 * Math.sqrt(r.nextDouble());
             dist[i] = Math.hypot(30 + rr * Math.cos(a), rr * Math.sin(a));
         }
-        // пары разрывов в один тик — бывают в залпе
+        // pairs of bursts in one tick - happen in a salvo
         at[1] = at[0];
         at[3] = at[2] + 0.2;
         java.util.Arrays.sort(at);
@@ -299,11 +299,11 @@ class MixTest {
         double top = momentaryMax(mixed, rate), unmixed = momentaryMax(raw, rate);
         System.out.printf("salvo: mixed %.1f LUFS, unmixed %.1f LUFS, peak %.2f, over full scale %d samples (unmixed %d)%n", top, unmixed, peak(mixed),
                 over(mixed), over(raw));
-        assertTrue(unmixed > Loudness.CEILING_LUFS + 2, "без смеси залп выше потолка: " + unmixed);
-        assertTrue(top <= Loudness.CEILING_LUFS + 1, "залп в смеси — у потолка " + Loudness.CEILING_LUFS + " LUFS: " + top);
-        // и не упирается в полную шкалу суммой (в прогоне RV1 — ~20 срезов за сцену, без смеси здесь — тысячи): пик выше
-        // полной шкалы — только в тик удара (первые 50 мс), где пики ближнего ракурса и удара в грудь одного взрыва совпадают (оба
-        // с удара с первого отсчёта; так срезал и одиночный взрыв в 50 м у 3.4.1) — это ловит ограничитель OpenAL Soft
+        assertTrue(unmixed > Loudness.CEILING_LUFS + 2, "without mixture volley above the ceiling: " + unmixed);
+        assertTrue(top <= Loudness.CEILING_LUFS + 1, "volley in the mixture - at the ceiling " + Loudness.CEILING_LUFS + " LUFS: " + top);
+        // and does not rest on the full scale amount (in the run RV1 - ~20 cuts per scene, without a mixture here - thousands): the peak is above
+        // full scale - only in the tick of the blow (the first 50 ms), where the peaks of the close-up angle and the blow to the chest of one explosion coincide (both
+        //  from the impact from the first sample; so a single explosion in 50 and 3.4.1 was cut off) - this is caught by the limiter OpenAL Soft
         int impact = tickLen, tails = 0;
         for (int i = 0; i < n; i++) {
             if (Math.abs(mixed[i]) < 1) continue;
@@ -311,8 +311,8 @@ class MixTest {
             for (Mix.Blast b : mb) if (b != null && i >= b.start * tickLen && i < b.start * tickLen + impact) onImpact = true;
             if (!onImpact) tails++;
         }
-        assertEquals(0, tails, "отсчётов на полной шкале вне удара, пик " + peak(mixed));
-        assertTrue(over(mixed) * 100 < over(raw), "срезов " + over(mixed) + " против " + over(raw) + " без смеси");
+        assertEquals(0, tails, "sample at full scale outside of shock, peak " + peak(mixed));
+        assertTrue(over(mixed) * 100 < over(raw), "slices " + over(mixed) + " against " + over(raw) + " without mixture");
     }
 
     private static double peak(double[] x) {
@@ -335,7 +335,7 @@ class MixTest {
         return x[i] + (x[i + 1] - x[i]) * f;
     }
 
-    /** Варианты записи {@code name}_1…_count, все на частоте {@code rate}. */
+    /** Recording options {@code name}_1…_count, all at frequency {@code rate}. */
     static float[][] load(String name, int count, int rate) throws IOException {
         float[][] out = new float[count][];
         for (int i = 0; i < count; i++) {
@@ -350,14 +350,14 @@ class MixTest {
         return out;
     }
 
-    /** Огибающая события — наибольшая по вариантам, как у {@link Envelopes}. */
+    /** The event envelope is the largest in the options, like {@link Envelopes}. */
     static float[] envelope(float[][] variants, int rate) {
         float[] max = new float[0];
         for (float[] v : variants) max = Envelopes.max(max, Envelope.of(v, rate));
         return max;
     }
 
-    /** Наибольшая K-взвешенная мгновенная громкость (окно 400 мс через 100 мс), LUFS. */
+    /** Largest K-weighted instantaneous loudness (window 400 ms through 100 ms), LUFS. */
     private static double momentaryMax(double[] x, int rate) {
         double[] y = x.clone();
         Envelope.kWeight(y, rate);

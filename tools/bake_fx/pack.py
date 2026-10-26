@@ -1,54 +1,56 @@
 # /// script
 # dependencies = ["numpy", "Pillow", "opencv-python-headless", "scipy"]
 # ///
-"""Кадры запекания (tools/bake_fx/bake.py) → текстуры слоя эффектов (mod/src/main/resources/assets/incoming/textures/fx/particle).
+"""Baked frames (tools/bake_fx/bake.py) → effects layer textures (mod/src/main/resources/assets/incoming/textures/fx/particle).
 
-  uv run tools/bake_fx/pack.py <папка запекания> [<папка текстур>]
+  uv run tools/bake_fx/pack.py <bake folder> [<texture folder>]
 
-Огненный шар — fireball_00…47 (256×256, прямая альфа: лист слоя умножает сам), их векторы движения fireballv_00…47
-(128×128: R, G = 0,5 + смещение/(2·{FIREBALL_FLOW}) пикселей кадра 256 к следующему кадру; A — 1) и fireball.json:
-- кадры: {BURN_FRAMES} — равно по времени горения симуляции (0…t, последний — сам конец горения), остальные — остывание,
-  равно по времени симуляции до последнего кадра со светящимся пламенем; у кадра — время в долях горения («burn») и
-  цветовая температура пламени («kelvin», у остывания — гладко и строго вниз): мод берёт кадр по состоянию шара своей
-  модели (горит — по времени, остывает — по температуре, FxAtlas.fireballFrame), между кадрами — смесь вдоль векторов;
-- цвет: рендер — излучение по Кирхгофу (яркость против чёрного тела 1490 K, белая стена днём — 1); на лист — подача:
-  экспозиция по огню (film_exposure) и плёночная кривая по каналам (film), степень 1/2,2;
-- кадр — одна мера на всю анимацию: радиус шара (круг площади непрозрачного) у горения — радиус шара модели, у остывания —
-  мера конца горения; рамка вмещает всё вещество кадра (край — по плотности, EDGE_ALPHA), не уже {FIREBALL} радиусов
-  шара и не сужается; столб от земли под шаром — до {DOWN} радиусов вниз; «half» — полуразмер кадра в радиусах шара;
-- «fire» — огонь кадра на экране: средняя яркость по кругу шара (доля белого, FxAtlas.fireLight).
-Температура кадра — из яркости самого яркого пламени кадра: в рендере она — e^(c₂/λ·(1/1490 − 1/T)) (Вин на 555 нм),
-отсюда T. Цвет запекания — его же: проверка, что излучение поверхности в горении — порядка 275 кВт/м² CCPS, — в выводе.
+Fireball: fireball_00…47 (256×256, straight alpha: the layer atlas premultiplies it), their motion vectors fireballv_00…47
+(128×128: R, G = 0.5 + displacement/(2·{FIREBALL_FLOW}) in 256-frame pixels to the next frame; A is 1), and fireball.json:
+- frames: {BURN_FRAMES} evenly spaced in simulation burn time (0…t, last at the very end of burning); the rest are cooling,
+  evenly spaced in simulation time up to the last frame with luminous flame; each frame has time in burn fractions ("burn")
+  and flame color temperature ("kelvin", smoothly and strictly decreasing while cooling). The mod selects a frame by its
+  ball model state (burning by time, cooling by temperature, FxAtlas.fireballFrame); blend along vectors between frames;
+- color: render is Kirchhoff emission (brightness relative to a 1490 K blackbody, white wall by day is 1); atlas presentation:
+  exposure for fire (film_exposure) and per-channel film curve (film), exponent 1/2.2;
+- frame uses one scale for the entire animation: ball radius (circle with the opaque area) during burning is the model ball
+  radius; during cooling, the end-of-burning scale. The frame contains all material (edge by density, EDGE_ALPHA), is at least
+  {FIREBALL} ball radii wide and does not shrink; column from the ground under the ball extends up to {DOWN} radii down;
+  "half" is frame half-size in ball radii;
+- "fire" is on-screen frame fire: mean brightness over the ball circle (fraction of white, FxAtlas.fireLight).
+Frame temperature comes from the brightest flame brightness in that frame: in the render it is e^(c₂/λ·(1/1490 − 1/T))
+(Wien at 555 nm), giving T. Bake color uses the same temperature: output checks surface emission during burning is of the
+order of CCPS 275 kW/m².
 
-Клубы других готовых симуляций (bake.py clubs-vdb --kind <имя>) — <имя>6a/b/v_* и <имя>6.json тем же порядком, что у клуба
-дыма, карты — в его мере; в json ещё «life» — доля жизни симуляции у каждого кадра (мод берёт кадр по доле жизни своего
-явления), исходные кадры и как сняты.
+Billows from other ready-made simulations (bake.py clubs-vdb --kind <name>): <name>6a/b/v_* and <name>6.json in the same
+order as the smoke billow, with maps on its scale; json also has "life", the simulation lifetime fraction for each frame
+(the mod selects a frame by its own phenomenon lifetime fraction), source frames and how they were captured.
 
-Клуб дыма — puff6a_00…15 (R — свет справа, G — сверху, B — сзади, A — непрозрачность), puff6b_00…15 (слева, снизу,
-спереди; A — та же), puff6v_00…15 (векторы движения к следующему кадру: R, G = 0,5 + смещение/(2·{FLOW}) пикселей
-кадра; A — 1) и puff6.json: рост края вещества против первого кадра («growth», мод берёт кадр по росту облака своей
-модели, FxAtlas.puffFrame), предел смещения («flow»), размер кадра и число карт. Карты — в одной мере (ярчайшее из
-всех кадров и сторон — 1, без среза); «front» и «diffuse» в puff6.json — средний по клубу свет спереди и средний по
-шести сторонам (на непрозрачность, весом непрозрачности): к ним шейдер приводит карты (белая стена — 1); на листе — степень
-1/2,2 (шейдер складывает свет в линейном). Кадр — по краю вещества
-(непрозрачность 0,05) с запасом 4 %: квадрат клуба в моде — этот край (SmokePuffs.edge). «detail» — мелкая структура
-кадра (разброс карт света за вычетом их сглаживания по 7×7 пикселям, в непрозрачной части; у самого клубящегося — 1):
-симуляция — конечный клуб, к концу он рассеивается и теряет клубы, а настоящее облако, пока растёт, остаётся
-турбулентным (термик подобен себе: клубы растут вместе с ним, Scorer 1957), и мод берёт кадры только клубящейся части
-(FxAtlas.puffFrame). Пересчитать «detail» по готовым кадрам листа, без запекания:
-  uv run tools/bake_fx/pack.py --detail [<папка текстур>]
+Smoke billow: puff6a_00…15 (R is light from the right, G from above, B from behind, A is opacity), puff6b_00…15 (left, below,
+front; same A), puff6v_00…15 (motion vectors to the next frame: R, G = 0.5 + displacement/(2·{FLOW}) in frame pixels; A is 1)
+and puff6.json: material edge growth relative to the first frame ("growth", mod selects a frame by its cloud model growth,
+FxAtlas.puffFrame), displacement limit ("flow"), frame size and map count. Maps share one scale (brightest across all frames
+and sides is 1, without clipping); "front" and "diffuse" in puff6.json are mean front light and mean six-sided light over the
+billow (divided by opacity, weighted by opacity): shader normalizes maps to these (white wall is 1); atlas uses exponent
+1/2.2 (shader sums light linearly). Frame follows the material edge
+(opacity 0.05) with a 4% margin: the billow quad in the mod is this edge (SmokePuffs.edge). "detail" is fine frame structure
+(light-map variation minus their 7×7-pixel smoothing, in the opaque part; most billowing frame is 1): simulation is a finite
+billow that dissipates and loses billows near its end, whereas a real growing cloud stays turbulent (a thermal is self-similar:
+billows grow with it, Scorer 1957), and the mod selects only billowing-phase frames (FxAtlas.puffFrame). Recompute "detail"
+from finished atlas frames without baking:
+  uv run tools/bake_fx/pack.py --detail [<texture folder>]
 
-Поверхность огненного шара ядерки — nukeball.bin рядом с листом (textures/fx; читает client/nuclear/NukeBallSurface):
-у каждого кадра запекания — карта по направлениям от центра шара (октаэдрическая, {BALL_N}², ось y — вверх), в
-текселе — узор p: во сколько раз перепад температуры поверхности здесь больше среднего. Поверхность — то, что
-видно, глядя на шар по радиусу снаружи: свечение газа шара по Кирхгофу вдоль луча к центру (ослабление ∝ доле газа,
-{BALL_TAU} толщ на радиус чистого газа — ⚠ оценка: горячий воздух непрозрачен, G&D 2.117), яркость по Вину на 555 нм,
-обратно в температуру. Температура газа — смешение: T = T_возд + c·ΔT, ΔT — у мода у 15 кт в этот миг
-(FireballModel.temperature; миг — по пути всплытия кадра, CloudModel у 15 кт). Узор кадра нормирован по
-Стефану–Больцману: среднее p⁴ по сфере — 1, шар светит мощностью модели (яркость и цвет — по-прежнему её чёрное тело;
-воздух против шара не в счёте: T_возд⁴ против T⁴ — до ~1 % к концу сворачивания).
-Формат (little-endian): int32 N, int32 кадров, float32 путь всплытия кадра в радиусах шара × кадров, uint16 p/{BALL_P}·65535
-× кадров × N × N (строка — v, в строке — u).
+Nuclear fireball surface: nukeball.bin next to the atlas (textures/fx; read by client/nuclear/NukeBallSurface):
+each baked frame has a directional map from the ball center (octahedral, {BALL_N}², y axis up); each texel holds pattern p:
+how many times the surface temperature excess here exceeds the mean. The surface is what is seen looking radially at the
+ball from outside: ball gas emission by Kirchhoff's law along the ray toward the center (attenuation ∝ gas fraction,
+{BALL_TAU} optical depths per pure-gas radius — ⚠ estimate: hot air is opaque, G&D 2.117), brightness by Wien at 555 nm,
+converted back to temperature. Gas temperature is a mixture: T = T_air + c·ΔT, with ΔT from the mod at 15 kt at this instant
+(FireballModel.temperature; instant by the frame rise path, CloudModel at 15 kt). Frame pattern is normalized by
+Stefan–Boltzmann: mean p⁴ over the sphere is 1; the ball radiates model power (brightness and color remain its blackbody;
+air relative to the ball is negligible: T_air⁴ relative to T⁴ is up to ~1% by the end of roll-up).
+Format (little-endian): int32 N, int32 frames, float32 frame rise path in ball radii × frames, uint16 p/{BALL_P}·65535
+× frames × N × N (row is v, u within a row).
 """
 import json
 import math
@@ -62,23 +64,23 @@ from PIL import Image
 TILE = 128
 FIREBALL_TILE = 256
 FRAMES = 16
-# огненный шар: кадров всего и горения; карты векторов движения — 128², смещение до {FIREBALL_FLOW} пикселей кадра 256
+# fireball: frames of everything and burning; motion vector maps - 128², offset up to {FIREBALL_FLOW} frame pixels 256
 FIREBALL_FRAMES = 48
 BURN_FRAMES = 32
 FIREBALL_FLOW_TILE = 128
 FIREBALL_FLOW = 16.0
-# низ кадра шара: столб симуляции от земли под шаром — не дальше стольких радиусов шара от его середины (ниже — земля
-# у любого оружия: середина шара модели — 0,45–1,5 радиуса над ней), к краю — плавно на последних {DOWN_SOFT}
+# bottom of the ball frame: the simulation column from the ground under the ball - no further than the radius of the ball from its middle (below - the ground
+#  for any weapon: the middle of the model ball - 0,45–1,5 radius above it), to the edge - smoothly on the last {DOWN_SOFT}
 DOWN, DOWN_SOFT = 1.5, 0.3
-# рамка кадра шара — не меньше стольких радиусов шара (как у прежнего кадра, FarSprites.FIREBALL)
+# frame of the ball frame - no less than so many radii of the ball (as in the previous frame, FarSprites.FIREBALL)
 FIREBALL = 1.3
-# край вещества шара — по плотности: тоньше этой непрозрачности дымка сходит на нет плавно
+# edge of the ball's substance - in density: thinner than this opacity haze fade to nothing smoothly
 EDGE_ALPHA = 0.05
 FLOW = 32.0
 DRAPER = 798.0
 C2, LAMBDA, T_REF = 1.4388e-2, 555e-9, 1490.0
 SIGMA = 5.670374e-8
-# экспозиция кадров шара (film_exposure): доля яркости горящего шара и где она встаёт на кривой
+# ball frame exposure (film_exposure): fraction of the brightness of the burning ball and where it falls on the curve
 FILM_KEY, FILM_TOP = 95, 0.60
 DARK_START = 0.02
 
@@ -88,7 +90,7 @@ def load(path):
 
 
 def crop(img, cx, cy, half, tile=TILE):
-    """Квадрат с центром (cx, cy) и полуразмером half пикселей → tile×tile (за краем — пусто), площадью."""
+    """A square with a center (cx, cy) and half-size half pixels → tile×tile (empty beyond the edge), area."""
     h, w = img.shape[:2]
     size = int(round(2 * half))
     x0, y0 = int(round(cx - half)), int(round(cy - half))
@@ -110,31 +112,31 @@ def centre(alpha, level):
 
 
 def save_rgba(rgb, alpha, path):
-    """Прямая альфа, 8 бит: цвет — уже на экране (с гаммой)."""
+    """Direct alpha, 8 bit: color - already on the screen (with gamma)."""
     a = np.clip(alpha, 0, 1)
     arr = np.concatenate([np.clip(rgb, 0, 1), a[..., None]], -1)
     Image.fromarray(np.clip(np.nan_to_num(arr) * 255 + 0.5, 0, 255).astype(np.uint8), "RGBA").save(path, optimize=True)
 
 
 def film(x):
-    """Плёночная кривая по каналам (ACES, приближение Narkowicz 2016, CC0, выбран из CC0/MIT у автора): носок держит сажу тёмной, плечо — ядро без среза
-    в плоский белый; горячее по каналам уходит в жёлтое и белое, как у плёнки и глаза."""
+    """Film curve by channels (ACES, approximation Narkowicz 2016, CC0, selected from CC0/MIT from the author): the toe keeps the soot dark, the shoulder keeps the core without a cut
+     flat white; the hot goes through the channels into yellow and white, like the film and the eye."""
     x = np.maximum(x, 0)
     return np.clip(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
 
 
 def film_exposure(burning):
-    """Экспозиция по шару — подача, не физика: камера в кино ставит её по огню, а не по белой стене. Яркость шара
-    против белой стены — десятки раз (чёрное тело ~1700 K против дневного света), и кадр в мере белой стены срезал весь
-    шар в ровный жёлтый диск — складок, языков и сажи не видно. Здесь {FILM_KEY}-я доля яркости горящего шара (по
-    непрозрачному, во всех кадрах горения) встаёт в плечо кривой, на {FILM_TOP} белого: ярче — белеет, тусклее в
-    10–100 раз (остывшие складки, сажа) — тёмно-красное и чёрное. Одна экспозиция на все кадры: остывание темнеет,
-    как в жизни. Только сверх белого — плавное обесцвечивание ядра (связь каналов), чтобы нулевой синий
-    чёрного тела не оставлял пересвет лимонно-жёлтым. Свет шара в модели — по-прежнему чёрное тело, но свет вокруг (блик, вуаль, зарево, свет на дым) не
-    ярче огня кадра на экране («fire», FxAtlas.fireLightAt) — и он идёт за этой экспозицией: ~0,37 белого, а не ~0,87."""
+    """Exposure to the ball is a presentation, not physics: the camera in the cinema places it on the fire, and not on the white wall. The brightness of the ball
+     against a white wall is dozens of times (black body ~1700 K against daylight), and the frame against the white wall cut the entire
+     ball into an even yellow disk - no folds, tongues or soot are visible. Here the {FILM_KEY}-th share of the brightness of the burning ball (on
+     opaque, in all frames of combustion) stands in the shoulder of the curve, on {FILM_TOP} white: brighter - whitens, dimmer in
+    10–100 times (cooled folds, soot) - dark red and black. One exposure for all frames: as it cools down it gets darker,
+     just like in life. Only over white - smooth discoloration of the core (connection of channels) so that the zero blue
+     of the black body does not leave overexposure lemon-yellow. The light of the ball in the model is still a black body, but the light around it (flare, veil, glow, light on the smoke) is not
+     brighter than the fire of the frame on the screen (“fire”, FxAtlas.fireLightAt) - and it follows this exposure: ~0,37 white, and not ~0,87."""
     lit = np.concatenate([d[2][d[1] > 0.5] for d in burning]) if burning else np.ones(1)
     key = float(np.percentile(lit, FILM_KEY)) if lit.size else 1.0
-    # film(x) = FILM_TOP — решение квадратного уравнения кривой
+    # film(x) = FILM_TOP - solution to the quadratic equation of a curve
     a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
     t = FILM_TOP
     qa, qb, qc = a - t * c, b - t * d, -t * e
@@ -143,14 +145,14 @@ def film_exposure(burning):
 
 
 def kelvin_of(lum):
-    """Температура пламени по яркости против чёрного тела 1490 K (Вин на 555 нм)."""
+    """Flame temperature by brightness against the black body 1490 K (Vin on 555 nm)."""
     lum = max(lum, 1e-12)
     inv = 1 / T_REF - math.log(lum) * LAMBDA / C2
     return 1 / inv if inv > 0 else 1e5
 
 
 def smooth(values, sigma):
-    """Гладко по кадрам (гаусс, края — отражением): размер и середина кадра без дрожи от кадра к кадру."""
+    """Smooth across frames (Gaussian, edges - reflection): the size and middle of the frame without shaking from frame to frame."""
     v = np.asarray(values, np.float64)
     if sigma <= 0 or len(v) < 3:
         return v
@@ -170,16 +172,16 @@ def fireball(src, out):
         rgb[alpha < 1e-4] = 0
         lum = rgb @ np.array([0.2126, 0.7152, 0.0722])
         lit = lum[alpha > 0.5]
-        # самое яркое пламя кадра — верхняя десятая по яркости у непрозрачного
+        # the brightest flame in the frame is the top tenth brightest for the opaque
         top = float(np.percentile(lit, 90)) if lit.size else 0.0
-        # излучение поверхности: σT⁴ пикселя по его яркости (Вин), среднее по непрозрачному
+        # surface radiation: σT⁴ pixel by its brightness (Vin), average by opaque
         sep = float(np.mean(SIGMA * np.vectorize(kelvin_of)(lit) ** 4)) if lit.size else 0.0
         data.append((rgb, alpha, lum, top, sep))
     times = [(int(f[2:5]) - 1) / fps for f in files]
-    # готовая симуляция (bake.py fireball-vdb) начинается с кадров до поджига: пусто, потом облако паров и дыма источника,
-    # под которым разгорается пламя. Шар топлива по CCPS светится весь с первого мига: время — с первого кадра, где
-    # пламя кадра не меньше половины самого яркого и тёмного (тусклее десятой доли белой стены) — не больше {DARK_START}
-    # непрозрачного
+    # the finished simulation (bake.py fireball-vdb) begins with frames before ignition: empty, then a cloud of vapor and smoke from the source,
+    #  under which the flame flares up. The fuel ball according to CCPS glows completely from the first moment: time - from the first frame, where
+    #  the flame of the frame is no less than half the brightest and darkest (dimmer than a tenth of a white wall) - no more than {DARK_START}
+    # opaque
     peak = max(d[3] for d in data)
 
     def dark(d):
@@ -190,34 +192,34 @@ def fireball(src, out):
     data, times, files = data[first:], [t - times[first] for t in times[first:]], files[first:]
     burn_s -= (int(files[0][2:5]) - 1) / fps
     kel = [kelvin_of(d[3]) if d[3] > 0 else 0 for d in data]
-    # горение: {BURN_FRAMES} кадров равно по времени от вспышки до конца горения (последний — сам конец); между ними в
-    # игре — смесь вдоль векторов движения, и кадров должно быть столько, чтобы смесь была движением, а не наплывом
-    # неподвижных картинок (16 кадров на 2–3 с горения — ~0,2 с на кадр: силуэт стоял, ревью #426). Кадры — разные
-    # рендеры, не повторы: иначе в игре снова стоп-кадр
+    # burning: {BURN_FRAMES} frames are equal in time from the flash to the end of burning (the last one is the end itself); between them in the
+    #  game there is a mixture along the motion vectors, and there should be so many frames that the mixture is movement and not an influx of
+    #  still pictures (16 frames on 2–3 s burning - ~0,2 s per frame: the silhouette was standing, review #426). Frames are different
+    #  renders, not repeats: otherwise the game will again have a freeze frame
     burn_idx = [int(np.argmin([abs(t - i * burn_s / (BURN_FRAMES - 1)) for t in times])) for i in range(BURN_FRAMES)]
     if len(set(burn_idx)) < BURN_FRAMES:
-        raise ValueError(f"горению нужно {BURN_FRAMES} разных рендеров (bake.py --frames без пропусков), а не повторы")
+        raise ValueError(f"combustion needs {BURN_FRAMES} different renders (bake.py --frames without gaps), and not repetitions")
     end = burn_idx[-1]
-    # остывание: кадры равно по времени симуляции от конца горения до последнего, где пламя ещё светится, — движение
-    # без рывков (смесь вдоль векторов движения); у кадра — цветовая температура его пламени (не выше прошлого кадра):
-    # мод берёт кадр остывания по температуре шара своей модели
+    # cooling: frames equal in simulation time from the end of combustion to the last, where the flame is still glowing - movement
+    #  without jerks (mixture along the motion vectors); the frame has the color temperature of its flame (not higher than the previous frame):
+    # mod takes a cooling frame based on the temperature of the ball of its model
     last = max((i for i in range(end, len(data)) if kel[i] > 0), default=end)
     n_cool = FIREBALL_FRAMES - BURN_FRAMES
     cool = [int(round(end + (last - end) * j / n_cool)) for j in range(1, n_cool + 1)]
     if len(set(cool)) < n_cool or cool[0] <= end:
-        raise ValueError(f"остыванию нужно {n_cool} разных рендеров после конца горения (bake.py --frames до потухания пламени)")
+        raise ValueError(f"needs cooling {n_cool} different renderings after the end of combustion (bake.py --frames before the flame goes out)")
     picks = burn_idx + cool
-    # температура остывающих кадров — гладко по времени и строго вниз: яркость пламени кадра шумит, а мод идёт по кадрам
-    # по температуре, и площадка в таблице пролистывала бы несколько кадров за миг
+    # the temperature of the cooling frames is smooth in time and straight down: the brightness of the flame of the frame is noisy, and the mod goes by frame
+    #  by temperature, and the site in the table would scroll through several frames in an instant
     cooled = smooth([kel[end]] + [kel[i] for i in cool], 1.0)
     for j, i in enumerate(cool):
         kel[i] = min(float(cooled[j + 1]), kel[picks[BURN_FRAMES + j - 1]] - 1.0)
     exposure = film_exposure([data[i] for i in burn_idx])
-    # Кадрирование — одна мера на всю анимацию, без скачков. Масштаб: у кадров горения радиус шара (круг площади
-    # непрозрачного, гладко по кадрам) — радиус шара модели; остывая, шар симуляции тает в дым и непрозрачного всё
-    # меньше, а мера — та, что в конец горения (сажа растёт в кадре сама, как в симуляции). Середина — середина
-    # непрозрачного в горении, дальше — за серединой всего вещества. Рамка — всё видимое вещество кадра, а не круг шара:
-    # круг обрезал остывающую сажу диском (ревью #426); рамка не меньше {FIREBALL} радиусов шара и не сужается.
+    # Framing is one measure for the entire animation, without jumps. Scale: for combustion frames, the radius of the ball (a circle of area
+    # , opaque, smooth across the frames) is the radius of the model ball; cooling down, the simulation ball melts into smoke and there is less opaque
+    # , and the measure is that at the end of combustion (soot grows in the frame itself, as in the simulation). The middle is the middle of
+    # , which is opaque in combustion, then beyond the middle of the whole substance. The frame is the entire visible substance of the frame, and not the circle of the ball:
+    #  the circle cut off the cooling soot with a disk (review #426); the frame is not less than {FIREBALL} the radius of the ball and does not narrow.
     geo = []
     for k, i in enumerate(picks):
         alpha = data[i][1]
@@ -234,24 +236,23 @@ def fireball(src, out):
     shown = []
     for k, i in enumerate(picks):
         rgb, alpha = data[i][0], data[i][1]
-        # Подача: ниже плеча огонь оранжевый, а не весь жёлтый. Только сверх белого — связь каналов:
-        # камера/глаз теряет насыщенность пересвета, горячие ядра белеют даже при нулевом синем у рендера.
+        # presentation: below the shoulder the fire is orange, not all yellow. Only over white - channel connection:
+        #  camera/eye loses overexposure saturation, hot cores turn white even with zero blue in the render.
         exposed = rgb * exposure
         disp = film(exposed)
         white = 0.35 * (1 - np.exp(-np.maximum(exposed.max(axis=-1) - 1, 0)))
         disp += (1 - disp) * white[..., None]
-        # Под ONE, ONE_MINUS_SRC_ALPHA цвет листа умножается на альфу. Яркое тонкое пламя не должно быть
-        # полупрозрачной жёлтой плёнкой поверх неба/сажи: его альфа не ниже экранной яркости.
+        # Under ONE, ONE_MINUS_SRC_ALPHA the leaf color is multiplied by alpha. A bright thin flame should not be a translucent yellow film on top of the sky/soot: its alpha is not lower than the screen brightness.
         a = np.maximum(alpha, disp ** (1 / 2.2) @ np.array([0.2126, 0.7152, 0.0722]))
-        # край — по плотности: редкая дымка тоньше {EDGE_ALPHA} непрозрачности сходит на нет плавно (там же и остаток шума
-        # рендера), а не круг по радиусу кадра
+        # edge - in density: a rare haze is thinner than {EDGE_ALPHA} opacity fade to no smoothly (there is also the rest of the noise
+        # render), and not a circle along the radius of the frame
         u = np.clip(a / EDGE_ALPHA, 0, 1)
         a = a * u * u * (3 - 2 * u)
         rows = np.arange(a.shape[0])[:, None]
         u = np.clip((cys[k] + DOWN * scale[k] - rows) / (DOWN_SOFT * scale[k]), 0, 1)
         a = a * u * u * (3 - 2 * u)
         shown.append((disp, a))
-    # рамка: всё вещество кадра (непрозрачнее 1/255) вокруг середины, с запасом, не уже прошлой и {FIREBALL} радиусов шара
+    # frame: the entire frame substance (opaque than 1/255) around the middle, with a margin not narrower than the previous and {FIREBALL} ball radii
     halves = []
     for k, (disp, a) in enumerate(shown):
         ys, xs = np.nonzero(a > 1 / 255)
@@ -260,17 +261,17 @@ def fireball(src, out):
         halves.append(w)
     tiles = []
     for k, (disp, a) in enumerate(shown):
-        # кадр — с умноженной альфой: при уменьшении горячий цвет не растекается в почти пустую сажу
+        # frame - with multiplied alpha: when reduced, the hot color does not spread into almost empty soot
         tile = crop(np.concatenate([disp * a[..., None], a[..., None]], -1), cxs[k], cys[k], halves[k], FIREBALL_TILE)
         pa = np.clip(tile[..., 3], 0, 1)
-        # кромка рамки: два пикселя к нулю (вещество до неё не доходит; страховка от выборки соседнего места листа)
+        # frame edge: two pixels to zero (the substance does not reach it; insurance against sampling an adjacent place on the sheet)
         side = np.minimum(np.arange(FIREBALL_TILE), np.arange(FIREBALL_TILE)[::-1])
         pa = pa * np.clip((np.minimum(side[None, :], side[:, None]) + 0.5) / 2, 0, 1)
         col = np.clip(tile[..., :3], 0, None) / np.maximum(tile[..., 3:4], 1e-6)
-        # Кубическая выборка при увеличении даёт малые отрицательные выбросы у резкого края: до гаммы, не после NaN.
+        # Cubic sampling, when enlarged, gives small negative emissions at a sharp edge: before the gamma, not after NaN.
         col = np.clip(col, 0, 1)
         screen = col ** (1 / 2.2)
-        # Кайма тоже часть огня: редея, она краснеет и темнеет, а не желтеет на чёрном/голубом фоне.
+        # The border is also part of the fire: as it thins out, it turns red and darkens, rather than turning yellow against a black/blue background.
         thin = np.clip(pa / 0.85, 0, 1)
         screen[..., 1] *= thin
         screen[..., 2] *= thin * thin
@@ -278,8 +279,8 @@ def fireball(src, out):
         screen *= np.minimum(1, pa / np.maximum(luminance, 1e-9))[..., None]
         tiles.append((screen, pa))
         save_rgba(screen, pa, os.path.join(out, f"fireball_{k:02d}.png"))
-    # векторы движения к следующему кадру (как у клуба дыма): Farneback по кадру на сером фоне — и пламя, и сажа; смесь
-    # кадров в шейдере идёт вдоль них, и огонь течёт, а не проступает двойным. Разная рамка соседних кадров — тоже движение
+    # motion vectors to the next frame (like billows of smoke): Farneback across the frame on a gray background - both flame and soot; the mixture of
+    #  frames in the shader goes along them, and the fire flows instead of appearing double. Different frames of adjacent frames are also movement
     fire, burn, kelv, flows = [], [], [], []
     grey = []
     for screen, pa in tiles:
@@ -301,13 +302,13 @@ def fireball(src, out):
         yy, xx = np.mgrid[0:FIREBALL_TILE, 0:FIREBALL_TILE]
         ball = FIREBALL_TILE / 2 * scale[k] / halves[k]
         disc = (xx - FIREBALL_TILE / 2 + 0.5) ** 2 + (yy - FIREBALL_TILE / 2 + 0.5) ** 2 < ball ** 2
-        # огонь на экране — в мере экрана (степень 1/2,2), как у прежнего шара (gen_particles: ball.json)
+        # fire on the screen - to the extent of the screen (degree 1/2,2), like the previous ball (gen_particles: ball.json)
         lit = screen * pa[..., None]
         fire.append(round(float((lit @ np.array([0.2126, 0.7152, 0.0722]))[disc].mean()), 4))
         burn.append(round(times[i] / burn_s, 4))
         kelv.append(round(kel[i], 1))
     half = [round(float(halves[k] / scale[k]), 4) for k in range(len(picks))]
-    # излучение поверхности в горении по цветовой температуре кадров горения — против CCPS 200–350 кВт/м²
+    # surface radiation during combustion according to the color temperature of combustion frames - against CCPS 200–350 kW/m²
     sep = np.mean([data[i][4] for i in burn_idx]) / 1e3
     with open(os.path.join(out, "fireball.json"), "w", encoding="utf-8") as f:
         json.dump({"tile": FIREBALL_TILE, "frames": FIREBALL_FRAMES, "burn_frames": BURN_FRAMES, "fire": fire, "burn": burn,
@@ -324,7 +325,7 @@ SIDES_B = ("left", "bottom", "front")
 
 
 def detail(tiles):
-    """Мелкая структура кадров клуба: tiles — (непрозрачность, карты света rgb a и b) кадров; у самого клубящегося — 1."""
+    """Fine frame structure billows: tiles - (opacity, light maps rgb a and b) frames; at the most swirling one - 1."""
     out = []
     for a, rgb in tiles:
         inside = a > 0.5
@@ -340,7 +341,7 @@ def detail(tiles):
 
 
 def detail_only(dest):
-    """«detail» в puff6.json и spray6.json — по кадрам листа (карты — степень 1/2,2, обратно в линейные)."""
+    """“detail” in puff6.json and spray6.json - by sheet frames (maps - degree 1/2,2, back to linear)."""
     for prefix in ("puff6", "spray6"):
         path = os.path.join(dest, f"{prefix}.json")
         if not os.path.exists(path):
@@ -361,8 +362,8 @@ def detail_only(dest):
 
 
 def puff(src, out, prefix="puff6", like=None):
-    """Клуб (prefix — имя кадров на листе). like — puff6.json дыма: карты брызг приводятся к его «diffuse» (у слоя одна
-    мера карт на все клубы, FxSixLight), их собственная мера — в «own»."""
+    """billows (prefix is the name of the frames on the sheet). like - puff6.json smoke: splash maps are reduced to its “diffuse” (the layer has one
+     map measure for all billows, FxSixLight), their own measure is in “own”."""
     meta = json.load(open(os.path.join(src, "meta.json")))
     picks = meta["picks"][-FRAMES:]
     maps = []
@@ -371,11 +372,11 @@ def puff(src, out, prefix="puff6", like=None):
         alpha = m["front"][..., 3]
         light = {s: m[s][..., :3].mean(-1) / np.maximum(m[s][..., 3], 1e-4) for s in m}
         maps.append((alpha, light))
-    # карты — в одной мере на все кадры и стороны: ярчайшее (просвет края сзади) — 1, без среза
+    # cards - in the same measure for all frames and sides: the brightest (back edge clearance) - 1, without cutting
     lit = np.concatenate([l[x][a > 0.05].ravel() for a, l in maps for x in SIDES_A + SIDES_B])
     norm = 1 / max(np.percentile(lit, 99.5), 1e-6)
-    # к чему шейдер нормирует карты (белая стена): средний свет клуба на его непрозрачность при свете спереди и средний по
-    # шести сторонам — типичное место клуба в свете неба выходит как толстый слой его вещества (цвет — у мода)
+    # what the shader normalizes the maps to (white wall): the average light of billows on its opacity in the light from the front and the average on
+    #  six sides - a typical place of billows in the light of the sky comes out as a thick layer of its substance (color - from the mod)
     num_f = sum(float(np.sum(l["front"] * a)) for a, l in maps)
     num_d = sum(float(np.sum(np.mean([l[x] for x in SIDES_A + SIDES_B], 0) * a)) for a, l in maps)
     den = sum(float(np.sum(a * a)) for a, l in maps)
@@ -384,7 +385,7 @@ def puff(src, out, prefix="puff6", like=None):
     if like is not None:
         norm *= like["diffuse"] / diffuse
         front, diffuse = front * like["diffuse"] / diffuse, like["diffuse"]
-    # рендер готовой симуляции (bake.py puff-vdb) — своей камерой на кадр: рост — в мере сцены (вокселей на пиксель)
+    # render of the finished simulation (bake.py puff-vdb) - with your camera per frame: height - according to the scene (voxels per pixel)
     scale = meta.get("scale", [1.0] * len(meta["picks"]))[-FRAMES:]
     tiles, growth, r0 = [], [], None
     for (alpha, light), k in zip(maps, scale):
@@ -394,19 +395,19 @@ def puff(src, out, prefix="puff6", like=None):
         growth.append(round(float(half * k / r0), 4))
         a = crop(alpha, cx, cy, half)
         rgb = {name: crop(np.stack([np.clip(light[s] * norm, 0, 1) for s in sides], -1), cx, cy, half) for name, sides in (("a", SIDES_A), ("b", SIDES_B))}
-        # край кадра — к нулю (последние 8 % радиуса): кадр по краю вещества 0,05, и на густом клубе срез у края квадрата
-        # шёл прямой чертой
+        # edge of the frame - to zero (the last 8 % of the radius): the frame is along the edge of the substance 0,05, and on thick billows the cut at the edge of the square
+        #  was a straight line
         yy, xx = np.mgrid[0:TILE, 0:TILE]
         rr = np.hypot(xx - TILE / 2 + 0.5, yy - TILE / 2 + 0.5) / (TILE / 2)
         a = a * np.clip((1 - rr) / 0.08, 0, 1)
         tiles.append((a, rgb))
-    # рост — не убывает: мод берёт кадр по росту своего облака (FxAtlas.puffFrame — обратный поиск по возрастающей таблице),
-    # а край неровной шапки за кадр-другой может отступить на процент
+    # growth - does not decrease: the mod takes a frame according to the growth of its cloud (FxAtlas.puffFrame - reverse search according to an increasing table),
+    #  and the edge of an uneven cap can retreat by a percentage per frame or two
     growth = [round(float(g), 4) for g in np.maximum.accumulate(growth)]
     for k, (a, rgb) in enumerate(tiles):
         for name in ("a", "b"):
             save_rgba(np.clip(rgb[name], 0, 1) ** (1 / 2.2), a, os.path.join(out, f"{prefix}{name}_{k:02d}.png"))
-        # векторы движения к следующему кадру: по непрозрачности (форма), Farneback
+        # motion vectors to the next frame: by opacity (shape), Farneback
         if k + 1 < len(tiles):
             prev = np.clip(a * 255, 0, 255).astype(np.uint8)
             nxt = np.clip(tiles[k + 1][0] * 255, 0, 255).astype(np.uint8)
@@ -419,7 +420,7 @@ def puff(src, out, prefix="puff6", like=None):
     data = {"tile": TILE, "frames": FRAMES, "maps": "abv", "flow": FLOW, "front": round(front, 4), "diffuse": round(diffuse, 4),
             "own": round(own, 4), "growth": [float(g) for g in growth], "detail": detail(tiles)}
     if "view" in meta and prefix not in ("puff6", "spray6"):
-        # клуб из готовой симуляции (bake.py clubs-vdb): кадр — доля жизни симуляции от первого взятого до последнего
+        # billows from the finished simulation (bake.py clubs-vdb): frame - the share of the simulation’s life from the first taken to the last
         span = max(picks[-1] - picks[0], 1)
         data.update({"life": [round((i - picks[0]) / span, 4) for i in picks], "source_frames": picks, "view": meta["view"],
                      "mirror": meta.get("mirror", False), "round": meta.get("round", False)})
@@ -429,8 +430,8 @@ def puff(src, out, prefix="puff6", like=None):
 
 
 def remeasure(dest, prefix, like):
-    """Карты клуба prefix на листе — в меру нового дыма (like — его puff6.json): у слоя одна мера карт на все клубы
-    (FxSixLight), а клуб дыма запечён заново без брызг. Свет — линейный (на листе — степень 1/2,2), альфа та же."""
+    """Billows cards prefix on the sheet - to the extent of new smoke (like - his puff6.json): the layer has one measure of cards for all clubs
+    (FxSixLight), and billows of smoke is baked again without splashes. Light - linear (on the sheet - degree 1/2,2), the alpha is the same."""
     meta = json.load(open(os.path.join(dest, f"{prefix}.json")))
     k = like["diffuse"] / meta["diffuse"]
     if abs(k - 1) < 1e-6:
@@ -449,7 +450,7 @@ def remeasure(dest, prefix, like):
 BALL_N = 128
 BALL_TAU = 10.0
 BALL_P = 2.0
-# 15 кт в воздухе (мод): радиус шара, второй максимум, подъём центра (CloudModel: (9840 − 1,3·R)·(1 − e^(−t/121)) м)
+# 15 kt in the air (mod): ball radius, second maximum, center rise (CloudModel: (9840 − 1,3·R)·(1 − e^(−t/121)) m)
 BALL_R_M = 70.0 * 15 ** 0.4
 BALL_TMAX = 0.032 * 15 ** 0.5
 BALL_RISE_M, BALL_RISE_TAU = 9840 - 1.3 * BALL_R_M, 121.0
@@ -457,7 +458,7 @@ T_AIR, T_PEAK, COOLING = 288.0, 7700.0, 0.35
 
 
 def octa_dirs(n):
-    """Направления текселей октаэдрической карты n×n (середины), ось y — вверх; и телесный угол текселя."""
+    """The texel directions of the octahedral map are n×n (middle), the y axis is up; and texel solid angle."""
     u = (np.arange(n) + 0.5) / n * 2 - 1
     px, pz = np.meshgrid(u, u)
     return octa_decode(px, pz), octa_area(n)
@@ -474,7 +475,7 @@ def octa_decode(px, pz):
 
 
 def octa_area(n):
-    """Телесный угол текселя: площадь сферического четырёхугольника по углам (два треугольника, Ван Остерома)."""
+    """Texel solid angle: area of a spherical quadrilateral at the corners (two triangles, Van Oosterom)."""
     e = np.linspace(-1, 1, n + 1)
     ex, ez = np.meshgrid(e, e)
     c = octa_decode(ex, ez)
@@ -488,7 +489,7 @@ def octa_area(n):
 
 
 def ball_temperature(rise):
-    """Видимая температура шара 15 кт, K, когда его центр поднялся на rise радиусов после второго максимума
+    """The apparent temperature of the ball is 15 kt, K, when its center rose by rise radii after the second maximum
     (FireballModel.surfaceRise, CloudModel)."""
     done = BALL_RISE_M * (1 - math.exp(-BALL_TMAX / BALL_RISE_TAU)) + rise * BALL_R_M
     t = max(-BALL_RISE_TAU * math.log(max(1 - done / BALL_RISE_M, 1e-9)), BALL_TMAX)
@@ -502,18 +503,18 @@ def nukeball(src, dest, preview=None):
     dirs, area = octa_dirs(BALL_N)
     flat = dirs.reshape(-1, 3)
     maps, rises = [], []
-    # доля газа — в долях её средней в середине шара первого кадра: сетка шума Mantaflow (noise) масштабирует плотность
-    # по-своему (у шара — до ×2), а ослабление и температура считаются от доли чистого газа шара
+    # the gas fraction is in fractions of its average in the middle of the ball of the first frame: the noise grid Mantaflow (noise) scales the density
+    #  in its own way (for the ball - up to ×2), and the attenuation and temperature are calculated from the pure gas fraction of the ball
     first = meta["picks"][0]
     c0 = np.load(os.path.join(src, f"c_{first['frame']:04d}.npy")).astype(np.float64)
     near = np.sqrt(((np.indices(c0.shape) - np.array(first["centre"])[:, None, None, None]) ** 2).sum(0)) * first["voxel_m"] < 0.6 * r
     unit = float(c0[near].mean())
     for pick in meta["picks"]:
         c = np.load(os.path.join(src, f"c_{pick['frame']:04d}.npy")).astype(np.float32) / unit
-        # лесенка шара по клеткам сетки дала бы на карте кольца по широте: подробностей мельче клетки у счёта нет
+        # the ball's ladder along the grid cells would give rings along the latitude on the map: the account has no details smaller than the cells
         c = ndimage.gaussian_filter(np.clip(c, 0, None), 1.0)
         vox = pick["voxel_m"]
-        # оси Blender x, y, z (z — вверх) → у мода x, z, y
+        # axes Blender x, y, z (z - up) → mod x, z, y
         centre = np.array(pick["centre"], np.float64)
         dt = ball_temperature(pick["rise_radii"]) - T_AIR
         reach = 3 * r / vox
@@ -537,7 +538,7 @@ def nukeball(src, dest, preview=None):
         maps.append(p)
         rises.append(pick["rise_radii"])
     maps = np.array(maps)
-    assert maps.max() < BALL_P, f"узор выше {BALL_P}: {maps.max()}"
+    assert maps.max() < BALL_P, f"pattern above {BALL_P}: {maps.max()}"
     import struct
     path = os.path.join(dest, "nukeball.bin")
     with open(path, "wb") as f:
@@ -570,7 +571,7 @@ if __name__ == "__main__":
         puff(os.path.join(bake, "puff"), dest)
     if os.path.isdir(os.path.join(bake, "nukeball")):
         nukeball(os.path.join(bake, "nukeball"), os.path.join(dest, ".."), os.environ.get("NUKEBALL_PREVIEW"))
-    # клубы из других готовых симуляций (bake.py clubs-vdb --kind <имя>): кадры <имя>6a/b/v_* и <имя>6.json, карты — в мере дыма
+    # billows from other ready-made simulations (bake.py clubs-vdb --kind <name>): frames <name>6a/b/v_* and <name>6.json, maps - to a limited extent smoke
     for kind in sorted(os.listdir(bake)):
         if kind in ("fireball", "puff", "spray", "nukeball") or not os.path.exists(os.path.join(bake, kind, "meta.json")):
             continue

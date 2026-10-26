@@ -16,11 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Маршрут оператора: длина, дальность оружия, заход издалека, разбор пакета и сохранения. */
+/** Operator's route: length, weapon range, approaching from afar, parsing the package and saving. */
 class WaypointsTest {
     private static final Vec3 FROM = new Vec3(0, 70, 0);
 
-    /** Путь — по горизонтали от пуска через точки к цели; высота точек не хранится (её держит снаряд). */
+    /** The path is horizontal from launch through points to the target; The height of the points is not stored (it is held by the projectile). */
     @Test
     void lengthGoesThroughPoints() {
         Waypoints via = new Waypoints(List.of(new Vec3(300, 90, 400), new Vec3(300, 0, 1400)));
@@ -29,7 +29,7 @@ class WaypointsTest {
         assertEquals(new Vec3(900, 0, 1400).length(), Waypoints.NONE.length(FROM, new Vec3(900, 64, 1400)), 1e-9);
     }
 
-    /** По точкам летают шахед, ракета и «Ланцет» и только в своей дальности; баллистика, РСЗО и МБР — нет. */
+    /** Shahed, rocket and Lancet fly at points and only within their range; ballistics, MLRS and ICBM are not. */
     @Test
     void withinIsWeaponReach() {
         for (WeaponType w : WeaponType.values()) {
@@ -43,8 +43,8 @@ class WaypointsTest {
     }
 
     /**
-     * Издалека снаряд заходит к первой точке по курсу первого участка; первая точка над целью (курса нет) — с севера.
-     * Маршрут от места старта начинается первой точкой оператора, без лишних.
+     * From afar, the projectile approaches the first point along the course of the first section; the first point above the target (no course) is from the north.
+     * The route from the starting point begins with the operator’s first point, without any extra ones.
      */
     @Test
     void afarLiesBeforeFirstPoint() {
@@ -59,7 +59,7 @@ class WaypointsTest {
         assertEquals(320 + 500 + 500 * Math.sqrt(5), route.remaining(new Vec3(1000, 120, -320), new Vec3(0, 64, 0)), 1e-9);
     }
 
-    /** Точек не больше {@link Waypoints#MAX}: лишние отбрасываются, а пакет с лишними — ошибка разбора. */
+    /** There are no more than {@link Waypoints#MAX} points: the extra ones are discarded, and a packet with extra ones is a parsing error. */
     @Test
     void streamCodecLimitsPoints() {
         Waypoints six = new Waypoints(IntStream.range(0, Waypoints.MAX + 1).mapToObj(i -> new Vec3(i * 100.5, 7, -i * 33.25)).toList());
@@ -68,7 +68,7 @@ class WaypointsTest {
         try {
             Waypoints.STREAM_CODEC.encode(buf, six);
             assertEquals(six, Waypoints.STREAM_CODEC.decode(buf));
-            assertFalse(buf.isReadable(), "лишние байты после маршрута");
+            assertFalse(buf.isReadable(), "extra bytes after the route");
             Waypoints.STREAM_CODEC.encode(buf, Waypoints.NONE);
             assertTrue(Waypoints.STREAM_CODEC.decode(buf).isEmpty());
             buf.clear();
@@ -80,7 +80,7 @@ class WaypointsTest {
         }
     }
 
-    /** Сохранение залпа: маршрут читается тем же. */
+    /** Saving the volley: the route reads the same. */
     @Test
     void codecRoundTrip() {
         Waypoints via = new Waypoints(List.of(new Vec3(-12_345.5, 0, 678.25), new Vec3(4, 0, -9)));

@@ -51,14 +51,15 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 /**
- * Трейлер мода, снятый в игре: сценарий по планам (как у оператора) — рассвет над деревней, наводчик с биноклем,
- * пульт, пусковая шахедов за спиной, разгон и отделение ускорителя, погоня за шахедом, удар; крылатая ракета с
- * земли и глазами ракеты, B-2 и бетонобойная бомба, залпы на закате, МБР и ядерный удар, гриб издалека, чёрный дождь.
+ * Mod trailer filmed in the game: shot-based scenario (like the operator camera), dawn over a village,
+ * gunner with binoculars, remote, Shahed launcher behind them, acceleration and booster separation, Shahed
+ * chase, impact; cruise missile from the ground and its own camera, B-2 and bunker buster, sunset salvos,
+ * ICBM and nuclear strike, mushroom from afar, black rain.
  * <p>
- * Каждый план: камера встаёт на место и ждёт, пока прогрузится мир (игра идёт на обычной скорости), потом —
- * ждёт свой момент (снаряд подлетел, подрыв), и тогда пишется: игра замедляется под скорость отрисовки
- * ({@link Recorder}), кадры — по времени игры. Кадры и журнал звуков — в {@code run/scenario/trailer/}, монтаж —
- * {@code tools/trailer/edit.py}. Запуск — {@code tools/trailer/record.sh}.
+ * Each shot positions the camera and waits for world loading (normal game speed), then for its event
+ * (projectile approach, detonation), then records: the game slows to render speed ({@link Recorder}), frames
+ * follow game time. Frames and sound journal: {@code run/scenario/trailer/}; edit:
+ * {@code tools/trailer/edit.py}. Run: {@code tools/trailer/record.sh}.
  */
 public final class Trailer {
     private static final Set<ResourceLocation> ALWAYS_LAYERS = Set.of(Incoming.id("flash"), Incoming.id("nuke_flash"));
@@ -68,50 +69,50 @@ public final class Trailer {
     private Recorder rec;
     private boolean started;
 
-    /** Интерфейс мода в кадре (прицел, камера снаряда, счётчик Гейгера); вспышки видны всегда. */
+    /** Mod interface in the frame (sight, projectile camera, Geiger counter); flashes are always visible. */
     private boolean hud;
-    /** Игрок виден как наводчик; иначе он невидимкой ходит за камерой, чтобы вокруг неё был загружен мир. */
+    /** The player is seen as a gunner; otherwise he follows the camera invisible, so that the world around it is loaded. */
     private boolean actor = true;
     @Nullable
     private Shot recording;
     private float tickRate = 20;
     private long frameClock;
-    /** Этот кадр отрисовки — кадр видео (доля тика поставлена под его момент). */
+    /** This rendering frame is a video frame (the tick share is set to its moment). */
     private boolean frameReady;
-    /** Попыток поставить окно в размер кадра ({@link #exactFrame}). */
+    /** Attempts to set the window to the frame size ({@link #exactFrame}). */
     private int frameTries;
     private int frameCount;
 
-    // места съёмки (ищутся в начале на сервере)
+    // filming locations (searched at the beginning on the server)
     private Vec3 village = Vec3.ZERO;
     private Vec3 post = Vec3.ZERO;
     private Vec3 toPost = new Vec3(0, 0, 1);
     private Vec3 side = new Vec3(1, 0, 0);
     private Vec3 viewpoint = Vec3.ZERO;
-    /** Вторая вышка (подрыв снимается с неё). */
+    /** The second tower (the explosion is removed from it). */
     private Vec3 watch = Vec3.ZERO;
-    /** От деревни к смотровой точке ядерного удара. */
+    /** From the village to the nuclear strike observation point. */
     private Vec3 toView = new Vec3(0, 0, -1);
-    /** Время игры подрыва (-1 — ещё не было): мир замирает на подготовку планов, тики клиента идут и тогда. */
+    /** Game time for detonation (-1 - hasn’t happened yet): the world freezes while plans are being prepared, the client ticks and then. */
     private long detonationTime = -1;
-    /** Время, на котором закончился прошлый план: камера между планами стоит там. */
+    /** The time at which the last shot ended: the camera between shots stands there. */
     private double idleTime;
-    /** Камера снаряда показывала видео с борта на прошлом тике (переход с карты — отметка «video» для монтажа). */
+    /** The projectile camera showed video from the board at the last tick (transition from the map - mark “video” for editing). */
     private boolean wasViewing, cameraWasActive, closeMarked;
-    /** Прорисовка из options.txt (record.sh): план с борта поднимает свою и потом возвращает эту. */
+    /** Drawing from options.txt (record.sh): the plan from the side raises its own and then returns this one. */
     private int renderDistance;
     private static final int ONBOARD_RENDER_DISTANCE = 24;
-    /** С борта ближе этого к цели земля видна и под шейдерами: монтаж берёт видео с отметки «close». */
+    /** From the side closer to the target, the ground is also visible under the shaders: the montage takes the video from the “close” mark. */
     private static final double CLOSE_RANGE = 150;
     private java.util.Map<Integer, String> seen = java.util.Map.of();
     private final java.util.Set<Integer> released = new java.util.HashSet<>();
-    /** Где наводчик стоит под чёрным дождём (выбирается, пока он невидимкой прогружает место). */
+    /** Where the gunner stands under the black rain (selected while he is invisible loading the place). */
     private Vec3 falloutSpot = Vec3.ZERO;
-    /** Тики после подрыва, когда осадки ложатся на {@link #falloutSpot} (не меньше 3000). */
+    /** tick after detonation, when precipitation falls on {@link #falloutSpot} (not less than 3000). */
     private long falloutRain = 3000;
 
     private interface Step {
-        /** @return шаг закончен */
+        /** @return step completed */
         boolean tick();
     }
 
@@ -128,7 +129,7 @@ public final class Trailer {
         script();
     }
 
-    // ================================================================ сценарий
+    // ================================================================================ Scenario
 
     private void script() {
         then(this::exactFrame);
@@ -152,7 +153,7 @@ public final class Trailer {
         run(this::placeActor);
         waitTicks(60);
 
-        // --- рассвет над деревней
+        // --- dawn over the village
         shot("dawn").length(200).camera(() -> {
             Vec3 a = village.add(toPost.scale(-70)).add(side.scale(-30)).add(0, 55, 0);
             Vec3 b = village.add(toPost.scale(40)).add(side.scale(10)).add(0, 38, 0);
@@ -160,13 +161,13 @@ public final class Trailer {
             return CineCamera.glide(a, b, 200, () -> look, 60);
         }).hidden().farView();
 
-        // --- наводчик: пульт, бинокль, пуск
+        // --- gunner: remote control, binoculars, launch
         run(() -> cmd("time set 1000"));
         run(this::placeActor);
         run(() -> cmd("give @s incoming:strike_designator[incoming:loadout={weapon:\"drone\",count:3,spread:6}]"));
-        // мишени в деревне: метки целей в HUD подписывают их именами (стойки — живые игроки в кадре не нужны)
+        // targets in the village: target markers in HUD are signed with their names (stands - no need for live players in the frame)
         run(() -> {
-            // мишени — по краям деревни: метки и пунктиры в кадре наводчика не сливаются с главной целью
+            // targets - along the edges of the village: marks and dotted lines in the gunner’s frame do not merge with the main target
             summonTarget("ENOTzRPG", target(side.scale(26)).add(toPost.scale(4)));
             summonTarget("WallyFillmark", target(side.scale(-24)).add(toPost.scale(-3)));
         });
@@ -190,44 +191,44 @@ public final class Trailer {
             cmd("incoming drone @e[tag=trailer_WallyFillmark,limit=1]");
         });
 
-        // --- пусковая за спиной: подъём пакета, поджиг, сход
+        // --- launcher behind: lifting the package, igniting, launch rail exit
         shot("launch_drone").after(() -> launcher(WeaponType.DRONE) != null, 100).noPrep().length(190).speed(0.5).camera(() -> {
             LauncherEntity l = launcher(WeaponType.DRONE);
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // сбоку и чуть сзади: видно подъём пакета, облако старта и уход шахеда в небо
+            // from the side and slightly behind: you can see the rise of the package, the launch cloud and Shahed’s departure into the sky
             Vec3 a = ground(at.add(right.scale(11)).add(fwd.scale(-6))).add(0, 1.5, 0);
             Vec3 b = ground(at.add(right.scale(9)).add(fwd.scale(-3))).add(0, 1.9, 0);
             return CineCamera.dolly(a, b, 190, () -> at.add(fwd.scale(4)).add(0, 2.6, 0), 64);
         }).endWhen(() -> {
-            // шахед отошёл от пусковой — сразу за ним, пока он в загруженном мире
+            // shahed moved away from the launcher - right behind him while he is in a busy world
             DroneEntity d = newest(DroneEntity.class);
             LauncherEntity l = launcher(WeaponType.DRONE);
             return d != null && l != null && d.distanceTo(l) > 45;
         }, 0);
-        // разгон и отделение ускорителя — замедленно, вплотную, сверху (земля в кадре — видна скорость)
+        // acceleration and separation of the accelerator - slowly, closely, from above (ground in the frame - speed is visible)
         shot("boost").after(() -> newest(DroneEntity.class) != null, 200).noPrep().length(56).speed(0.4).hidden()
                 .camera(() -> chaseOf(newest(DroneEntity.class), 7.5, 1.6, 2.6, 6, 0, 58));
-        // шахед на маршруте
+        // shahed on the route
         shot("cruise").after(() -> newest(DroneEntity.class) != null, 200).noPrep().length(110).hidden()
                 .camera(() -> chaseOf(newest(DroneEntity.class), 8, 3, -3.5, 22, 6, 58));
-        // глазами наводчика: стая заходит из-за спины и уходит к деревне; метки целей с номерами снарядов, пунктиры
+        // through the eyes of a gunner: the flock comes from behind and goes towards the village; target marks with shell numbers, dotted lines
         run(this::placeActor);
         shot("targets").length(110).speed(0.6).hud()
                 .player(t -> new Pose(Vec3.ZERO, yawTo(post, village) + 6 - (float) CineCamera.smooth(t / 110) * 6,
                         pitchTo(post.add(0, 1.62, 0), village.add(0, 10, 0)), 0, 46))
                 .when(() -> nearest(DroneEntity.class, post, 90) != null, 2400);
-        // удар по деревне: с пригорка у крайних домов, замедленно
+        // attack on the village: from a hillock near the outer houses, in slow motion
         shot("impact_drone").length(190).speed(0.5).hidden().camera(() -> {
             Vec3 from = ground(village.add(toPost.scale(30)).add(side.scale(14))).add(0, 7, 0);
-            // пока шахеды далеко — узко, чтобы они не терялись точками в небе; к удару — широко
+            // while Shahed is far away, it’s narrow so that they don’t get lost as dots in the sky; to strike - wide
             return CineCamera.track(from, smoothFocus(() -> nearest(DroneEntity.class, village, 300), village.add(0, 3, 0), 0.2),
                     rangeFov(from, () -> nearest(DroneEntity.class, village, 300), 64, 24, 45));
         }).when(() -> nearest(DroneEntity.class, village, 170) != null, 2400)
                 .endWhen(() -> nearest(DroneEntity.class, village, 600) == null, 70);
 
-        // --- крылатая ракета: пуск, удар с земли; вторая — глазами ракеты
+        // --- cruise missile: launch, ground strike; the second - through the eyes of a rocket
         run(this::placeActor);
         waitTicks(40);
         run(() -> fire("missile", target(side.scale(14))));
@@ -236,7 +237,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // впереди-сбоку: ракета сходит с направляющей и уходит над камерой
+            // front-side: rocket launch rail exit with a guide and goes over the camera
             Vec3 from = ground(at.add(fwd.scale(12)).add(right.scale(-7))).add(0, 2.4, 0);
             return CineCamera.track(from, smoothFocus(() -> nearest(CruiseMissileEntity.class, at, 150), at.add(0, 2.5, 0), 0.35), 68);
         });
@@ -247,24 +248,24 @@ public final class Trailer {
                     rangeFov(from, () -> nearest(CruiseMissileEntity.class, t, 300), 62, 28, 45));
         }).when(() -> nearest(CruiseMissileEntity.class, target(side.scale(14)), 260) != null, 2400)
                 .endWhen(() -> nearest(CruiseMissileEntity.class, target(side.scale(14)), 60) == null, 45);
-        // наводчик у деревни: цель в зоне видео (дальность симуляции), ракета заходит издалека — сначала карта
+        // gunner near the village: the target is in the video zone (simulation range), the missile is coming from afar - map first
         run(() -> placeActor(operatorNearVillage(), village));
         waitTicks(40);
         run(() -> fire("missile", target(side.scale(-4)).add(toPost.scale(-20))));
         shot("missile_camera").after(() -> !ua.zentix.incoming.client.hud.ClientFlights.all().isEmpty(), 400)
                 .prepare(() -> {
-                    // утром лучи света Complementary (объёмный свет) в разы сильнее, чем в полдень, и на пути к солнцу
-                    // заливают весь кадр с борта розовато-белой пеленой — видео снимается в полдень (дальше снова утро)
+                    // in the morning the rays of light Complementary (volumetric light) are many times stronger than at noon, and on the way to the sun
+                    //  flood the entire frame from the side of the pinkish-white pall - the video is shot at noon (then again morning)
                     cmd("time set 6000");
-                    // туман шейдерпака по дальности — от прорисовки: при 24 чанках земля видна раньше
+                    // shader pack fog in range - from rendering: with 24 chunks the ground is visible earlier
                     renderDistance = mc.options.renderDistance().get();
                     mc.options.renderDistance().set(ONBOARD_RENDER_DISTANCE);
                     if (!ProjectileCamera.isActive()) ProjectileCamera.cycle();
                 })
-                // карта оператора, пока ракета дальше прорисовки: запись — за ~2 с до перехода на видео
+                // operator's map while the rocket is still being drawn: recording - ~2 s before switching to video
                 .when(() -> onMap() && missileRange() < 700, 3000)
-                // карта, видео с борта: горка, пикирование, «сигнал потерян» и план попадания (облёт)
-                // замедленно: ракета в мире (а значит, и видео с борта) — лишь последние ~250 блоков, это ~20 тиков
+                // map, on-board video: slide, dive, “signal lost” and hit plan (fly-by)
+                // slow motion: the rocket in the world (and therefore on-board video) - only the last ~250 blocks, this is ~20 tick
                 .length(220).speed(0.2).hud().projectileCamera().readyChunks(ONBOARD_RENDER_DISTANCE - 2)
                 .cueEnd(() -> {
                     ProjectileCamera.exit();
@@ -272,9 +273,9 @@ public final class Trailer {
                     mc.options.renderDistance().set(renderDistance);
                 });
 
-        // --- «Ланцет»: катапульта у поста, круг над деревней, пике
+        // --- "Lancet": catapult at the post, circle over the village, dive
         run(this::placeActor);
-        // пусковые шахедов и ракет убраны: катапульта встанет на их место, и в кадре будет только она
+        // launcher Shahed and the missiles are removed: the catapult will take their place, and only it will be in the frame
         run(() -> cmd("kill @e[type=incoming:launcher]"));
         waitTicks(40);
         run(() -> fire("loiter", target(side.scale(8)).add(toPost.scale(-10))));
@@ -283,7 +284,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // сбоку от катапульты: рывок по направляющей, раскрытие крыльев, уход вверх
+            // on the side of the catapult: jerk along the guide, open the wings, go up
             Vec3 from = ground(at.add(right.scale(8)).add(fwd.scale(2))).add(0, 1.9, 0);
             return CineCamera.track(from, smoothFocus(() -> newest(LoiterEntity.class), at.add(fwd.scale(3)).add(0, 2, 0), 0.35), 62);
         }).endWhen(() -> {
@@ -291,19 +292,19 @@ public final class Trailer {
             LauncherEntity l = launcher(WeaponType.LOITER);
             return e != null && l != null && e.distanceTo(l) > 40;
         }, 0);
-        // игрок ближе к деревне: круг «Ланцета» выходит за дальность симуляции от поста, и снаряд ушёл бы
-        // в виртуальный полёт — пропал бы из кадра до пике
+        // the player is closer to the village: the Lancet circle goes beyond the simulation range from the post, and the projectile would go
+        //  into virtual flight - it would disappear from the frame before the dive
         run(() -> placeActor(operatorNearVillage(), village));
         shot("loiter_strike").noPrep().length(260).speed(0.8)
-                // за «Ланцетом» вплотную: круг над деревней, пике и взрыв прямо перед камерой (с земли пике закрывают дома)
+                // behind the Lancet closely: a circle over the village, a dive and an explosion right in front of the camera (the houses are covered from the ground of the dive)
                 .camera(() -> chaseOf(nearest(LoiterEntity.class, target(side.scale(8)).add(toPost.scale(-10)), 200), 5.5, 1.8, 2.2, 8, 0, 60))
                 .when(() -> nearest(LoiterEntity.class, village, 120) instanceof LoiterEntity e && e.flightPhase() == FlightPhase.LOITER, 1600)
                 .endWhen(() -> nearest(LoiterEntity.class, village, 300) == null, 50);
 
-        // --- B-2: снизу-сзади под брюхом — створки отсека открываются, бомба уходит вниз (замедленно). B-2 заходит
-        // из-за спины стреляющего и до сброса летит вне мира; невидимка стоит на курсе за 150 блоков до цели
-        // (и камера ждёт там же) — тикающие чанки вокруг него накрывают и открытие створок, и сброс. Сброс клиент
-        // видит по фазе EGRESS.
+        // --- B-2: from the bottom-back under the belly - the compartment doors open, the bomb goes down (slowly). B-2 comes
+        //  from behind the shooter and flies out of the world before being released; the invisible man is on course 150 blocks to the target
+        //  (and the camera is waiting there) - the ticking chunks around him cover both the opening of the doors and the reset. The client
+        //  sees the reset in phase EGRESS.
         run(() -> placeHidden(bayWatch(), bayTarget()));
         shot("bomb_bay").onReady(() -> fire("bunker", bayTarget())).length(400).speed(0.25).hidden()
                 .camera(() -> CineCamera.chase(() -> nearest(BomberEntity.class, bayTarget(), 900), bayWatch(), toPost.scale(-1),
@@ -311,15 +312,15 @@ public final class Trailer {
                 .when(() -> nearest(BomberEntity.class, bayTarget(), 900) instanceof BomberEntity b && b.flightPhase() != FlightPhase.EGRESS, 2400)
                 .endWhen(() -> nearest(BomberEntity.class, bayTarget(), 900) instanceof BomberEntity b && b.flightPhase() == FlightPhase.EGRESS, 16);
 
-        // --- B-2 и бетонобойная бомба: с высоты у деревни — пролёт, падение, бурение, подземный взрыв
+        // --- B-2 and a concrete-piercing bomb: from a height near the village - flying, falling, drilling, underground explosion
         shot("bomber").onReady(() -> fire("bunker", target(side.scale(-12)))).length(260).speed(0.75).hidden().camera(() -> {
             Vec3 t = target(side.scale(-12));
             Vec3 from = ground(t.add(side.scale(-32)).add(toPost.scale(20))).add(0, 8, 0);
-            // B-2 на 170 блоках — узко, чтобы был крупным; бомба у земли — широко, весь разрыв в кадре
+            // B-2 on 170 blocks - narrow so that it is large; bomb near the ground - wide, the entire gap is in the frame
             return CineCamera.track(from, smoothFocus(this::bomberFocus, t.add(0, 8, 0), 0.3), rangeFov(from, this::bomberSubject, 66, 16, 55));
         }).when(() -> bomberFocus() != null, 2400);
 
-        // --- РСЗО: пакет из 40 труб у поста, залп очередью; разрывы накрывают деревню
+        // --- MLRS: package of 40 pipes at the post, burst burst; explosions cover the village
         run(this::placeActor);
         waitTicks(40);
         run(() -> fire("salvo rocket 24 34", village.add(side.scale(-6))));
@@ -328,7 +329,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // низко сбоку и впереди пакета: трубы, поджиг, снаряды уходят над камерой дугами
+            // low on the side and in front of the package: pipes, ignition, shells go above the chamber in arcs
             Vec3 a = ground(at.add(right.scale(9)).add(fwd.scale(5))).add(0, 2.2, 0);
             Vec3 b = ground(at.add(right.scale(8)).add(fwd.scale(8))).add(0, 2.0, 0);
             return CineCamera.dolly(a, b, 150, () -> at.add(fwd.scale(3)).add(0, 2.2, 0), 72);
@@ -341,7 +342,7 @@ public final class Trailer {
         }).when(() -> nearest(RocketEntity.class, village, 90) != null, 600)
                 .endWhen(() -> nearest(RocketEntity.class, village, 600) == null, 60);
 
-        // --- залпы на закате
+        // --- volleys at sunset
         run(() -> {
             cmd("time set 12650");
             var c = IncomingConfig.SERVER;
@@ -350,7 +351,7 @@ public final class Trailer {
             c.missileFlightTime.set(6);
         });
         shot("salvo").onReady(() -> fire("salvo drone 8 24", village)).length(280).hidden().camera(() -> {
-            // деревня в кадре неподвижно, камера чуть наезжает: стая заходит в кадр и накрывает дома
+            // the village in the frame is motionless, the camera zooms in slightly: a flock enters the frame and covers the houses
             Vec3 a = ground(village.add(toPost.scale(95)).add(side.scale(-25))).add(0, 22, 0);
             Vec3 b = ground(village.add(toPost.scale(80)).add(side.scale(-18))).add(0, 19, 0);
             return CineCamera.dolly(a, b, 280, () -> village.add(0, 8, 0), 58);
@@ -362,8 +363,8 @@ public final class Trailer {
             return CineCamera.dolly(a, b, 170, () -> village.add(0, 4, 0), 60);
         }).when(() -> nearest(CruiseMissileEntity.class, village, 350) != null, 2400);
 
-        // --- кадр для иконки мода: шахед в разгоне снизу-сбоку, целиком, на фоне дневного неба. До МБР: удар
-        // приходится по деревне, и после него у поста всё горит и дымит
+        // --- frame for the mod icon: Shahed in acceleration from below, from the side, in its entirety, against the background of the daytime sky. Before ICBM:
+        //  hits the village, and after it everything at the post is burning and smoking
         run(() -> {
             cmd("time set 6000");
             cmd("weather clear");
@@ -375,7 +376,7 @@ public final class Trailer {
                 .length(40).speed(0.3).hidden()
                 .camera(() -> chaseOf(newest(DroneEntity.class), 11, -3.5, 4.5, 10, 0, 40));
 
-        // --- МБР: старт за наводчиком в ~2 км от деревни, подрыв из-за его плеча, гриб издалека
+        // --- ICBM: start behind the gunner ~2 km from the village, explosion from behind his shoulder, mushroom from afar
         run(() -> {
             cmd("time set 12500");
             buildTower(viewpoint);
@@ -384,13 +385,13 @@ public final class Trailer {
         shot("icbm").onReady(() -> cmd(String.format(Locale.ROOT, "incoming nuke at %.1f %.1f %.1f 15 ground", village.x, village.y, village.z))).length(260).camera(() -> {
             Vec3 pad = ground(viewpoint.add(toView.scale(30)));
             Vec3 sideV = new Vec3(-toView.z, 0, toView.x);
-            // в 70 блоках сбоку, чтобы облако старта не накрыло камеру; вслед за ракетой — наезд
+            // in 70 blocks on the side so that the launch cloud does not cover the camera; after the rocket - collision
             Vec3 from = ground(pad.add(sideV.scale(70)).add(toView.scale(-20))).add(0, 3, 0);
             Path p = CineCamera.track(from, smoothFocus(() -> newest(IcbmEntity.class), pad.add(0, 8, 0), 0.4), 50);
             return t -> t < 100 ? p.at(t) : CineCamera.zoom(p, 50, 22, 160).at(t - 100);
         });
-        // подрыв из-за плеча наводчика: вспышка, шар, фронт доходит до вышки. Наводчик уже на второй вышке в 150 блоках
-        // вбок — у первой висит облако старта
+        // explosion from behind the gunner's shoulder: flash, ball, the front reaches the tower. The gunner is already on the second tower in 150 blocks
+        //  to the side - the first one has a launch cloud hanging
         run(() -> {
             watch = ground(viewpoint.add(new Vec3(-toView.z, 0, toView.x).scale(150)));
             buildTower(watch);
@@ -401,15 +402,15 @@ public final class Trailer {
             Vec3 back = watch.add(0, 12, 0).add(toView.scale(3.2)).add(sideV.scale(1.3)).add(0, 1.9, 0);
             return CineCamera.track(back, () -> village.add(0, 600, 0), 68);
         }).when(() -> warningTicks() <= 200, 2400);
-        // гриб издалека, ускоренно
+        // mushroom from afar, quickly
         run(() -> {
             placeHidden(mushroomView());
         });
         shot("mushroom").length(1600).speed(4).hidden().camera(() -> {
-            // шапка поднимается выше 5 км: кадр шире и выше, основание ствола — над нижней полосой кинокаше
+            // cap rises above 5 km: the frame is wider and higher, the base of the trunk is above the bottom strip of the film porridge
             return CineCamera.track(mushroomView(), () -> village.add(0, 2800, 0), 75);
         }).when(() -> sinceDetonation() > 420, 3000);
-        // чёрный дождь в следе осадков, счётчик Гейгера в руке
+        // black rain in a trail of precipitation, Geiger counter in hand
         run(() -> placeInFallout(false));
         waitTicks(40);
         run(() -> placeInFallout(true));
@@ -421,17 +422,17 @@ public final class Trailer {
         run(() -> {
             rec.finish();
             Incoming.LOG.info("TRAILER done");
-            // съёмочный мир одноразовый, а его сохранение после дальних перелётов (9 км) идёт минутами — выходим сразу
+            // the filming world is disposable, and saving it after long flights (9 km) takes minutes - we leave immediately
             Runtime.getRuntime().halt(0);
         });
     }
 
-    // ================================================================ места
+    // ============================================================================================================================================================================================================================================================================================================================= Location
 
-    /** Деревня поблизости и пост наводчика в ~150 блоках от неё на ровной сухой земле, лицом к деревне. */
+    /** There is a village nearby and a gunner's post ~150 blocks away on flat, dry ground, facing the village. */
     private void findLocations(ServerLevel level) {
-        // равнинные деревни (открытое место, видно далеко; деревни есть только в мире со строениями — ClientScenario
-        // включает их для трейлера): из нескольких ближайших — та, у которой лучший пост
+        // flat villages (open place, visible far away; villages exist only in the world with buildings - ClientScenario
+        //  includes them for the trailer): of the several closest ones - the one with the best post
         var structures = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
         var plains = net.minecraft.core.HolderSet.direct(structures.getHolderOrThrow(net.minecraft.world.level.levelgen.structure.BuiltinStructures.VILLAGE_PLAINS));
         List<BlockPos> villages = new ArrayList<>();
@@ -460,7 +461,7 @@ public final class Trailer {
         Vec3 d = post.subtract(village);
         toPost = new Vec3(d.x, 0, d.z).normalize();
         side = new Vec3(-toPost.z, 0, toPost.x);
-        // съёмочная площадка: пост без травы и деревьев, прямой вид на деревню
+        // filming location: post without grass and trees, direct view of the village
         clearAround(level, BlockPos.containing(post), 34, true);
         for (double k = 0; k <= 1; k += 2.0 / post.distanceTo(village)) {
             Vec3 p = post.lerp(village, k);
@@ -471,8 +472,8 @@ public final class Trailer {
     }
 
     /**
-     * Чем меньше, тем лучше пост: ровно и сухо (пусковая), мало леса (уберём, но лес вокруг голой поляны странен),
-     * деревню видно поверх рельефа (луч от глаз к деревне не уходит под землю), пост немного выше деревни.
+     * The smaller, the better the post: flat and dry (launcher), little forest (we’ll remove it, but the forest around the bare clearing is strange),
+     *  the village is visible above the relief (the beam from the eyes to the village does not go underground), the post is slightly higher than the village.
      */
     private static double postScore(ServerLevel level, Vec3 village, int x, int z) {
         int y = height(level, x, z);
@@ -486,7 +487,7 @@ public final class Trailer {
         return groundScore(level, x, z) + Math.max(0, blocked) * 30 + Math.max(0, 5 - rise) * 8;
     }
 
-    /** Площадка 48×48 вокруг точки: перепад высот, вода, кроны (чем меньше, тем лучше). */
+    /** Site 48×48 around a point: height difference, water, crowns (the smaller the better). */
     private static double groundScore(ServerLevel level, int x, int z) {
         int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE, canopy = 0;
         boolean dry = true;
@@ -503,8 +504,8 @@ public final class Trailer {
     }
 
     /**
-     * Смотровая точка для ядерного удара в ~2 км от деревни (не в сторону поста — там полигон) и площадка МБР
-     * в 30 блоках за ней ({@code NuclearStrikes.launchFrom}): обе ровные, сухие, без леса.
+     * An observation point for a nuclear strike ~2 km from the village (not towards the post - there is a testing ground) and an ICBM site
+     *  in 30 blocks behind it ({@code NuclearStrikes.launchFrom}): both are flat, dry, without forest.
      */
     private void findViewpoint(ServerLevel level) {
         double best = Double.MAX_VALUE;
@@ -531,8 +532,8 @@ public final class Trailer {
     }
 
     /**
-     * Убрать деревья (и траву с цветами, если {@code plants}) в круге: сценарий снимает, а не играет — лес на
-     * пути взгляда и трава по пояс у камеры только мешают. Блоки ставятся без обновлений соседей и без дропа.
+     * Remove the trees (and grass with flowers, if {@code plants}) in the circle: the script is filming, not acting - the forest in the
+     *  line of sight and waist-deep grass near the camera only get in the way. Blocks are placed without updating neighbors and without dropping.
      */
     private static void clearAround(ServerLevel level, BlockPos c, int r, boolean plants) {
         var air = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
@@ -555,18 +556,18 @@ public final class Trailer {
         }
     }
 
-    /** Высота земли на сервере; чанк грузится (и генерируется) сразу — в сценарии это можно. */
+    /** Height of the ground on the server; the chunk is loaded (and generated) immediately - this is possible in the script. */
     private static int height(ServerLevel level, int x, int z) {
         level.getChunk(x >> 4, z >> 4);
         return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
     }
 
-    /** Точка на земле деревни со сдвигом (земля — по карте высот клиента, если чанк есть). */
+    /** A point on the ground of the village with a shift (the ground is based on the client’s height map, if there is a chunk). */
     private Vec3 target(Vec3 offset) {
         return ground(village.add(offset));
     }
 
-    /** Земля под точкой: по карте высот клиента, а если чанка у клиента нет — спросить сервер (он догрузит). */
+    /** The ground under the point: according to the client’s height map, and if the client doesn’t have a chunk, ask the server (it will load it). */
     private Vec3 ground(Vec3 p) {
         int x = Mth.floor(p.x), z = Mth.floor(p.z);
         if (mc.level != null && mc.level.getChunkSource().hasChunk(x >> 4, z >> 4)) {
@@ -585,43 +586,43 @@ public final class Trailer {
         placeActor(post, village);
     }
 
-    /** Наводчик у края деревни: снаряды над деревней — в дальности симуляции от него (в мире, видео с борта). */
+    /** Gunner at the edge of the village: shells above the village - within the simulation range from him (in the world, on-board video). */
     private Vec3 operatorNearVillage() {
         return ground(village.add(toPost.scale(60)).add(side.scale(30)));
     }
 
-    /** Где невидимка ждёт B-2: на курсе захода, за 150 блоков до цели. */
+    /** Where the invisible man is waiting for B-2: on the approach course, 150 blocks from the target. */
     private Vec3 bayWatch() {
         return bayTarget().add(toPost.scale(150)).add(0, 40, 0);
     }
 
-    /** Куда бьёт B-2 в плане с отсеком (в стороне от цели второго B-2 — воронки не совпадают). */
+    /** Where does B-2 hit in the plan with the compartment (away from the target of the second B-2 - the crater does not coincide). */
     private Vec3 bayTarget() {
         return target(side.scale(14)).add(toPost.scale(-28));
     }
 
-    /** Мишень — стойка с именем (метка цели в HUD подписывает её так же, как игрока). */
+    /** The target is a stance with a name (the target label in HUD labels it in the same way as the player). */
     private static void summonTarget(String name, Vec3 at) {
         cmd(String.format(Locale.ROOT, "summon minecraft:armor_stand %.1f %.1f %.1f {CustomName:'\"%s\"',Tags:[\"trailer_%s\"],NoGravity:1b}",
                 at.x, at.y, at.z, name, name));
     }
 
     /**
-     * Откуда гриб виден целиком: 5 км к югу, взгляд на север — луна и солнце ходят с востока на запад и в кадр
-     * не попадают.
+     * Where the mushroom is visible in its entirety: 5 km to the south, looking north - the moon and sun move from east to west and do not fall into the frame
+     * .
      */
     private Vec3 mushroomView() {
         return new Vec3(village.x, 240, village.z + 5000);
     }
 
-    /** Смотровая площадка 3×3 в 12 блоках над землёй (наводчик стоит на ней, видно поверх леса и холмов). */
+    /** Observation platform 3×3 in 12 blocks above the ground (the gunner stands on it, visible over the forest and hills). */
     private static void buildTower(Vec3 base) {
         BlockPos p = BlockPos.containing(base);
         cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", p.getX() - 1, p.getY() + 11, p.getZ() - 1,
                 p.getX() + 1, p.getY() + 11, p.getZ() + 1));
     }
 
-    /** Наводчик стоит на посту лицом к цели, в творческом режиме, виден в кадре. */
+    /** The gunner stands at his post facing the target, in creative mode, visible in the frame. */
     private void placeActor(Vec3 at, Vec3 face) {
         actor = true;
         float yaw = yawTo(at, face);
@@ -633,7 +634,7 @@ public final class Trailer {
         });
     }
 
-    /** Игрок-невидимка (наблюдатель) там, где будет камера: чтобы сервер прислал этот район. */
+    /** Invisible player (observer) where the camera will be: so that the server sends this area. */
     private void placeHidden(Vec3 at) {
         actor = false;
         withPlayer((level, p) -> {
@@ -642,7 +643,7 @@ public final class Trailer {
         });
     }
 
-    /** То же, но лицом к точке: по взгляду стреляющего выбирается курс захода B-2. */
+    /** The same, but facing the point: according to the shooter’s gaze, the approach course B-2 is selected. */
     private void placeHidden(Vec3 at, Vec3 facing) {
         actor = false;
         withPlayer((level, p) -> {
@@ -652,9 +653,9 @@ public final class Trailer {
     }
 
     /**
-     * В след осадков недалеко по ветру (как в ядерном сценарии; осадки там — не раньше, чем долетят из облака):
-     * сначала невидимкой (прогрузить), потом на землю, на площадку из камня (вдруг там вода). При слабом ветре эта
-     * точка бывает в воронке или в овраге — тогда дальше по ветру, до открытого места.
+     * In the wake of precipitation not far downwind (as in a nuclear scenario; precipitation there - not before it arrives from the cloud):
+     *  first invisible (load), then on the ground, on a platform made of stone (suddenly there is water there). In a weak wind, this
+     *  point is in a crater or in a ravine - then further down the wind, to an open place.
      */
     private void placeInFallout(boolean land) {
         var list = ClientNuclear.detonations();
@@ -670,7 +671,7 @@ public final class Trailer {
             return;
         }
         BlockPos c = BlockPos.containing(falloutSpot);
-        // поляна: чёрный дождь виден на фоне неба, а не в листве
+        // clearing: black rain is visible against the sky, not in the foliage
         int y = server.submit(() -> {
             clearAround(server.overworld(), c, 18, true);
             return server.overworld().getHeight(Heightmap.Types.MOTION_BLOCKING, c.getX(), c.getZ());
@@ -681,7 +682,7 @@ public final class Trailer {
         placeActor(g.add(0, 1, 0), village);
     }
 
-    /** Первая точка по ветру от {@code from} блоков, где земля не ниже окрестностей в 20 блоках (не яма). */
+    /** The first point downwind of {@code from} blocks where the ground is not lower than the surrounding area in 20 blocks (not a hole). */
     private static Vec3 openGround(ServerLevel level, double x0, double z0, double dx, double dz, double from) {
         for (int i = 0; i < 40; i++) {
             double r = from + i * 24;
@@ -696,7 +697,7 @@ public final class Trailer {
         return new Vec3(x0 + dx * from, 0, z0 + dz * from);
     }
 
-    // ================================================================ кто в кадре
+    // ====================================================================== Who's in the frame?
 
     @Nullable
     private LauncherEntity launcher(WeaponType weapon) {
@@ -707,7 +708,7 @@ public final class Trailer {
         return best;
     }
 
-    /** Самый молодой снаряд этого типа (только что сошёл с пусковой). */
+    /** The youngest projectile of this type (just came off the launcher). */
     @Nullable
     private <T extends StrikeProjectile> T newest(Class<T> type) {
         T best = null;
@@ -735,7 +736,7 @@ public final class Trailer {
         return best;
     }
 
-    /** За кем следит зум плана B-2: бомба, пока она есть, иначе сам B-2. */
+    /** Who is being monitored by the zoom plan B-2: the bomb while it lasts, otherwise B-2 itself. */
     @Nullable
     private Entity bomberSubject() {
         Vec3 t = target(side.scale(-12));
@@ -743,7 +744,7 @@ public final class Trailer {
         return bomb != null ? bomb : nearest(BomberEntity.class, t, 450);
     }
 
-    /** B-2 — пока он в 450 блоках; после сброса — бомба. */
+    /** B-2 - while it is in 450 blocks; after the release - a bomb. */
     @Nullable
     private Vec3 bomberFocus() {
         float pt = CineCamera.partial();
@@ -755,24 +756,24 @@ public final class Trailer {
         return b == null ? null : b.getPosition(pt);
     }
 
-    /** Тиков игры после подрыва (-1 — подрыва ещё не было). */
+    /** tick the game after the explosion (-1 - there has been no explosion yet). */
     private long sinceDetonation() {
         return detonationTime < 0 ? -1 : mc.level.getGameTime() - detonationTime;
     }
 
-    /** Камера снаряда включена и показывает карту оператора (снаряд дальше зоны видео). */
+    /** The projectile camera is turned on and shows the operator's map (the projectile is further than the video zone). */
     private static boolean onMap() {
         return ProjectileCamera.isActive() && !ProjectileCamera.isViewing() && !ProjectileCamera.isFilming();
     }
 
-    /** До ближайшего снаряда в полёте от игрока, блоков (по данным сервера — и для снарядов вне мира). */
+    /** To the nearest projectile in flight from the player, blocks (according to the server - and for off-world projectiles). */
     private double missileRange() {
         double best = Double.MAX_VALUE;
         for (var f : ua.zentix.incoming.client.hud.ClientFlights.all()) best = Math.min(best, f.position(1).distanceTo(mc.player.position()));
         return best;
     }
 
-    /** До подрыва по тревоге, тиков (много — если тревоги нет). */
+    /** Before detonation on alarm, tick (a lot - if there is no alarm). */
     private long warningTicks() {
         long now = mc.level.getGameTime();
         long left = Long.MAX_VALUE;
@@ -786,8 +787,8 @@ public final class Trailer {
     }
 
     /**
-     * Куда смотрит камера: на то, что вернул {@code focus} (снаряд, стая), иначе на {@code rest}; переход сглажен
-     * по времени игры ({@code rate} — доля пути за тик), чтобы камера не дёргалась при смене цели.
+     * Where the camera is looking: at what {@code focus} returned (projectile, flock), otherwise at {@code rest}; the transition is smoothed
+     *  according to the game time ({@code rate} is the fraction of the path per tick) so that the camera does not twitch when changing the target.
      */
     private Supplier<Vec3> smoothFocus(Supplier<?> focus, Vec3 rest, double rate) {
         final Vec3[] look = {rest};
@@ -805,9 +806,9 @@ public final class Trailer {
     }
 
     /**
-     * Поле зрения, при котором снаряд {@code focus} виден с {@code from} одного размера: {@code wide} ближе
-     * {@code near} блоков, дальше — уже (не меньше {@code narrow}); без снаряда (взрыв) — снова {@code wide}.
-     * Сглажено по времени игры, как {@link #smoothFocus}.
+     * Field of view in which a {@code focus} projectile is visible from a {@code from} of the same size: {@code wide} is closer than
+     * {@code near} blocks, further away it is narrower (not less than {@code narrow}); without a projectile (explosion) - again {@code wide}.
+     * Smoothed by game time, like {@link #smoothFocus}.
      */
     private DoubleSupplier rangeFov(Vec3 from, Supplier<? extends Entity> focus, double wide, double narrow, double near) {
         final double[] fov = {Double.NaN};
@@ -824,7 +825,7 @@ public final class Trailer {
         };
     }
 
-    // ================================================================ шаги
+    // ================================================================================ Steps
 
     private void then(Step s) {
         steps.add(s);
@@ -842,7 +843,7 @@ public final class Trailer {
         then(() -> --left[0] <= 0);
     }
 
-    /** Работа на сервере (поиск мест, высоты): сценарий ждёт, пока она закончится. */
+    /** Work on the server (search for places, heights): the script waits for it to finish. */
     private void onServer(Consumer<ServerLevel> work) {
         final boolean[] done = {false};
         final boolean[] sent = {false};
@@ -874,7 +875,7 @@ public final class Trailer {
         return s;
     }
 
-    /** План: подготовка (камера на месте, мир прогружен), ожидание момента, запись. */
+    /** Plan: preparation (camera in place, world busy), waiting for the moment, recording. */
     private final class Shot implements Step {
         private record Cue(int at, Runnable action) {}
 
@@ -882,13 +883,13 @@ public final class Trailer {
         private int length = 100;
         private double speed = 1;
         private Supplier<Path> camera;
-        /** Вид глазами игрока: путь задаёт только взгляд. */
+        /** View through the eyes of the player: only the gaze sets the path. */
         private Path playerView;
         private boolean projectileCamera;
         private boolean hudOn;
         private boolean hiddenActor;
         private boolean prep = true;
-        /** Ждать прогрузки почти на всю дальность прорисовки (общий план с высоты), а не только рядом с камерой. */
+        /** Wait for it to load almost the entire drawing distance (wide shot from above), and not just next to the camera. */
         private int readyChunks = 4;
         private BooleanSupplier after, when, end;
         private int afterTimeout, whenTimeout, endDelay;
@@ -941,7 +942,7 @@ public final class Trailer {
             return readyChunks(10);
         }
 
-        /** Перед съёмкой ждать мир на {@code chunks} чанков вокруг камеры (не дальше прорисовки). */
+        /** Before shooting, wait for the world to {@code chunks} chunks around the camera (no further than drawing). */
         Shot readyChunks(int chunks) {
             readyChunks = chunks;
             return this;
@@ -952,21 +953,21 @@ public final class Trailer {
             return this;
         }
 
-        /** Условие до постановки камеры (например, пусковая уже появилась — от неё строится путь). */
+        /** Condition before placing the camera (for example, the launcher has already appeared - a path is built from it). */
         Shot after(BooleanSupplier c, int timeout) {
             after = c;
             afterTimeout = timeout;
             return this;
         }
 
-        /** Момент начала записи (камера уже на месте). */
+        /** The moment recording begins (the camera is already in place). */
         Shot when(BooleanSupplier c, int timeout) {
             when = c;
             whenTimeout = timeout;
             return this;
         }
 
-        /** Конец раньше длины: через {@code delay} тиков после того, как условие стало верным. */
+        /** End before length: {@code delay} tick after the condition becomes true. */
         Shot endWhen(BooleanSupplier c, int delay) {
             end = c;
             endDelay = delay;
@@ -978,13 +979,13 @@ public final class Trailer {
             return this;
         }
 
-        /** Действие, когда камера ставится на место (до ожидания момента). */
+        /** The action when the camera is put in place (before waiting for the moment). */
         Shot prepare(Runnable action) {
             atPrepare = action;
             return this;
         }
 
-        /** Действие, когда камера на месте и мир прогружен (пуск, чей подлёт снимаем, — чтобы не прозевать). */
+        /** Action when the camera is in place and the world is busy (launch, whose approach we are filming, so as not to miss it). */
         Shot onReady(Runnable action) {
             atReady = action;
             return this;
@@ -995,7 +996,7 @@ public final class Trailer {
             return this;
         }
 
-        /** INCOMING_TRAILER_SHOTS=a,b — снимать только эти планы (остальные проигрываются без записи, для отладки). */
+        /** INCOMING_TRAILER_SHOTS=a,b - shoot only these plans (the rest are played without recording, for debugging). */
         boolean selected() {
             String only = System.getenv("INCOMING_TRAILER_SHOTS");
             return only == null || only.isBlank() || java.util.Arrays.asList(only.split(",")).contains(name);
@@ -1005,7 +1006,7 @@ public final class Trailer {
             return playerView != null;
         }
 
-        /** Время плана с долей тика: кадр после тика n показывает мир между тиками n−1 и n. */
+        /** Plan time with fraction tick: the frame after tick n shows the world between tick n−1 and n. */
         double time() {
             if (phase < 4) return 0;
             return recording == this ? rec.frames() * rec.step() : Math.max(0, t - 1 + CineCamera.partial());
@@ -1017,7 +1018,7 @@ public final class Trailer {
                 case 0 -> {
                     if (after != null && !after.getAsBoolean() && waited++ < afterTimeout) return false;
                     if (after != null && waited > afterTimeout) {
-                        Incoming.LOG.warn("TRAILER {}: не дождались условия, план пропущен", name);
+                        Incoming.LOG.warn("TRAILER {}: the conditions were not met, the plan was missed", name);
                         return true;
                     }
                     waited = 0;
@@ -1035,10 +1036,10 @@ public final class Trailer {
                     if (atPrepare != null) atPrepare.run();
                     setTickRate(20);
                     phase = prep ? 1 : 2;
-                    // мир стоит, пока камера ждёт прогрузки: снаряд не долетает до цели раньше, чем начнётся запись
+                    // the world stands still while the camera waits to load: the projectile does not reach the target before recording starts
                     if (prep) setFrozen(true);
                     if (!prep && atReady != null) atReady.run();
-                    Incoming.LOG.info("TRAILER {}: подготовка", name);
+                    Incoming.LOG.info("TRAILER {}: preparation", name);
                 }
                 case 1 -> {
                     followCamera();
@@ -1055,9 +1056,9 @@ public final class Trailer {
                 case 2 -> {
                     followCamera();
                     if (when != null && !when.getAsBoolean()) {
-                        if (++waited % 200 == 0) Incoming.LOG.info("TRAILER {}: ждём момент ({} тиков)", name, waited);
+                        if (++waited % 200 == 0) Incoming.LOG.info("TRAILER {}: waiting for the moment ({} tick)", name, waited);
                         if (waited < whenTimeout) return false;
-                        Incoming.LOG.warn("TRAILER {}: момент не наступил, снимаем как есть", name);
+                        Incoming.LOG.warn("TRAILER {}: the moment hasn’t come, let’s shoot as is", name);
                     }
                     if (selected()) {
                         rec.start(name, speed, hudOn);
@@ -1092,7 +1093,7 @@ public final class Trailer {
             for (Cue c : cues) if (c.at == t) c.action.run();
         }
 
-        /** Камера на кадр: кинокамера — по пути, вид игрока — поворот головы. */
+        /** Camera on frame: movie camera - along the way, player's view - head turn. */
         void applyCamera() {
             double time = time();
             if (path != null) CineCamera.apply(time);
@@ -1109,13 +1110,13 @@ public final class Trailer {
         }
     }
 
-    // ================================================================ события игры
+    // ============================================================================================================================================================================================================================================================================================================= game events
 
     private void onTick(ClientTickEvent.Post e) {
         if (mc.player == null || mc.level == null) return;
         if (!started) {
             started = true;
-            // папка записи: дубль отдельных планов (INCOMING_TRAILER_SHOTS) — в свою папку, монтаж берёт их поверх основной
+            // recording folder: duplicate of individual plans (INCOMING_TRAILER_SHOTS) - in its own folder, editing takes them on top of the main one
             rec = new Recorder(mc.gameDirectory.toPath().resolve(System.getenv().getOrDefault("INCOMING_TRAILER_DIR", "trailer")));
             mc.getSoundManager().addListener(rec);
             mc.options.hideGui = false;
@@ -1135,7 +1136,7 @@ public final class Trailer {
             rec.mark("close");
             closeMarked = true;
         }
-        // камера снаряда вернулась к игроку: дальше в плане — вид от первого лица, монтаж режет до этой отметки
+        // the projectile camera returned to the player: further in the plan there is a first-person view, the montage cuts to this mark
         if (rec.recording() && !camera && cameraWasActive) rec.mark("exit");
         wasViewing = viewing;
         cameraWasActive = camera;
@@ -1146,9 +1147,9 @@ public final class Trailer {
     }
 
     /**
-     * Снаряды, что были в кадре и пропали (взрыв), и сброс бомбы B-2: отметки для монтажа — звук приходит позже
-     * картинки. Список обновляется и между планами, иначе снаряды, пропавшие до записи, отмечались бы в начале
-     * следующего плана.
+     * The shells that were in the frame and disappeared (explosion), and the dropping of a bomb B-2: marks for editing - the sound comes later
+     * pictures. The list is updated between plans, otherwise shells that were missing before the entry would be marked at the beginning of
+     *  of the next plan.
      */
     private void markImpacts(boolean mark) {
         java.util.Map<Integer, String> now = new java.util.HashMap<>();
@@ -1166,8 +1167,8 @@ public final class Trailer {
     }
 
     /**
-     * Перед кадром: при записи — доля тика ровно под момент кадра (кадр после тика n показывает мир между тиками
-     * n−1 и n); если клиент ещё не дотикал до момента (кадр отрисовки не в счёт) — кадр не снимается.
+     * Before the frame: when recording - the tick fraction exactly at the moment of the frame (the frame after tick n shows the world between the ticks
+     * n−1 and n); if the client has not yet reached the moment (the rendering frame does not count) - the frame is not shot.
      */
     private void beforeFrame(RenderFrameEvent.Pre e) {
         if (!started) return;
@@ -1177,19 +1178,19 @@ public final class Trailer {
             if (partial > 1.0001) {
                 FrameClock.advanceNext(partial - 1 + 0.01);
             } else {
-                if (partial < -0.02) Incoming.LOG.warn("TRAILER {}: клиент обогнал кадр на {} тика", recording.name, -partial);
+                if (partial < -0.02) Incoming.LOG.warn("TRAILER {}: client overtook frame by {} tick", recording.name, -partial);
                 FrameClock.setPartial((float) Mth.clamp(partial, 0, 1));
                 frameReady = true;
             }
         }
         if (steps.peek() instanceof Shot shot) shot.applyCamera();
-        else CineCamera.apply(idleTime); // между планами камера стоит, где закончила
+        else CineCamera.apply(idleTime); // between shots the camera stands where it left off
         holdTarget();
     }
 
     /**
-     * Видео с борта: камера на подвесе смотрит туда, куда игрок ведёт мышью; в трейлере мышь не двигается, и подвес
-     * остался бы на курсе входа — в пике в кадре был бы горизонт. Оператор держит цель в центре кадра.
+     * On-board video: a camera on a gimbal looks where the player is moving the mouse; in the trailer, the mouse does not move, and the
+     *  gimbal would remain on the entry course - at the peak there would be a horizon in the frame. The cameraman keeps the target in the center of the frame.
      */
     private void holdTarget() {
         if (!ProjectileCamera.isViewing() || !(mc.getCameraEntity() instanceof StrikeProjectile p)
@@ -1212,14 +1213,14 @@ public final class Trailer {
         adaptTickRate();
     }
 
-    /** Время текущего плана (для сглаживания взгляда). */
+    /** Time of the current shot (to smooth the view). */
     private double shotTime() {
         return steps.peek() instanceof Shot s ? s.time() : 0;
     }
 
     /**
-     * Сервер идёт в том же темпе, что и запись (тиков в секунду = кадров отрисовки в секунду × шаг кадра): тогда
-     * данные о сущностях приходят к клиенту вовремя, а не рывками.
+     * The server moves at the same pace as the recording (tick per second = rendering frames per second × frame step): then
+     *  entity data arrives to the client on time, and not in jerks.
      */
     private void adaptTickRate() {
         long now = System.nanoTime();
@@ -1242,8 +1243,8 @@ public final class Trailer {
     }
 
     /**
-     * Кадр ровно {@code INCOMING_SIZE}: окно без рамки и ровно этого размера. В KWin окно с заголовком ужималось под
-     * экран (кадр 1920×1052); не вышло — съёмка не начинается: кадры другого размера монтажу не годятся.
+     * The frame is exactly {@code INCOMING_SIZE}: a window without a frame and exactly this size. In KWin, the window with the title was compressed under the
+     *  screen (frame 1920×1052); it didn’t work out - filming doesn’t start: frames of a different size are not suitable for editing.
      */
     private boolean exactFrame() {
         String[] want = System.getProperty("incoming.frame", "").split("x");
@@ -1251,17 +1252,17 @@ public final class Trailer {
         int w = Integer.parseInt(want[0]), h = Integer.parseInt(want[1]);
         var target = mc.getMainRenderTarget();
         if (target.width == w && target.height == h) {
-            Incoming.LOG.info("TRAILER кадр {}x{}", w, h);
+            Incoming.LOG.info("TRAILER frame {}x{}", w, h);
             return true;
         }
         long window = mc.getWindow().getWindow();
         if (frameTries == 0) {
-            Incoming.LOG.info("TRAILER окно {}x{}, нужно {}x{}: убираю рамку и ставлю размер", target.width, target.height, w, h);
+            Incoming.LOG.info("TRAILER window {}x{}, you need {}x{}: I remove the frame and set the size", target.width, target.height, w, h);
             org.lwjgl.glfw.GLFW.glfwSetWindowAttrib(window, org.lwjgl.glfw.GLFW.GLFW_DECORATED, org.lwjgl.glfw.GLFW.GLFW_FALSE);
         }
         if (frameTries % 20 == 0) org.lwjgl.glfw.GLFW.glfwSetWindowSize(window, w, h);
         if (++frameTries > 200) {
-            Incoming.LOG.error("TRAILER кадр {}x{} вместо {}x{}: экран меньше окна? Съёмка остановлена", target.width, target.height, w, h);
+            Incoming.LOG.error("TRAILER frame {}x{} instead of {}x{}: is the screen smaller than the window? Filming stopped", target.width, target.height, w, h);
             Runtime.getRuntime().halt(3);
         }
         return false;
@@ -1275,9 +1276,9 @@ public final class Trailer {
     }
 
     /**
-     * Мир на {@code chunks} чанков вокруг камеры получен и собран в секции для отрисовки. Общим планам с высоты — 10:
-     * первый план в свежем мире иначе снимал бы деревню на «острове» над пустотой; видео с борта — вся прорисовка (ракета
-     * смотрит за деревню). Остальным хватает 4: пока ждём дальние, снаряд уже долетает, и план удара снимался бы без удара.
+     * A world of {@code chunks} chunks around the camera is received and assembled into sections for rendering. Long shots from above - 10:
+     *  the first shot in the fresh world would otherwise be filming a village on an “island” above the void; video from on board - the entire rendering (rocket
+     *  looks beyond the village). For the rest, 4 is enough: while we are waiting for the distant ones, the projectile has already reached, and the strike plan would have been removed without the strike.
      */
     private boolean worldReady(int chunks) {
         var cam = mc.gameRenderer.getMainCamera().getPosition();
@@ -1291,7 +1292,7 @@ public final class Trailer {
         return mc.levelRenderer.hasRenderedAllSections();
     }
 
-    /** Невидимый игрок держится рядом с кинокамерой: сервер шлёт мир вокруг игрока, а не вокруг камеры. */
+    /** The invisible player stays close to the movie camera: the server sends the world around the player, not around the camera. */
     private void followCamera() {
         Pose p = CineCamera.pose();
         if (actor || p == null || mc.player == null) return;
@@ -1300,7 +1301,7 @@ public final class Trailer {
         withPlayer((level, sp) -> sp.teleportTo(level, at.x, at.y, at.z, sp.getYRot(), sp.getXRot()));
     }
 
-    /** Интерфейс игры в кадре не нужен; интерфейс мода — только в планах «с интерфейсом», вспышки — всегда. */
+    /** The game interface is not needed in the frame; The interface of the mod is only in plans “with an interface”, flashes are always there. */
     private void layer(RenderGuiLayerEvent.Pre e) {
         if (!started) return;
         ResourceLocation id = e.getName();
@@ -1321,7 +1322,7 @@ public final class Trailer {
         if (CineCamera.active()) e.setCanceled(true);
     }
 
-    // ================================================================ мелочи
+    // ====================================================================== trifles
 
     private void fire(String what, Vec3 at) {
         cmd(String.format(Locale.ROOT, "incoming %s at %.1f %.1f %.1f", what, at.x, at.y, at.z));

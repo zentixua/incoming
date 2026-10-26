@@ -59,35 +59,35 @@ import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
- * Кадры руководства игрока ({@code docs/guide}): {@code tools/client_scenario.sh guide}, потом
- * {@code tools/guide_images.sh} режет их и собирает GIF в {@code docs/guide/img}. Деревня у спавна мира сценария
- * (середина — колокол на площади), зритель на возвышении в 90–130 блоках от неё; по очереди: рецепты в верстаке
- * (картинки), остальное — GIF: бинокль, экран пульта, карта наведения, снаряды на экране, камера ракеты, «Ланцет»,
- * ЗРК, стационарная пусковая. В GIF экрана каждый кадр — шаг, мышь и подпись клавиши нарисованы поверх (настоящую
- * клавишу без окна не нажать); GIF мира идёт с заданным темпом ({@link #startGif}). {@code INCOMING_GUIDE} — только
- * названные разделы ({@link #only}). Кадры — {@code run/scenario/screenshots/guide-*.png}, кадры GIF —
- * {@code guide-gif-<имя>-NNNN.png}. С Distant Horizons ({@code dh}) карта показала бы рельеф вдали, как у игроков сборки,
- * но в облаке он почти ничего не строит: там карта — по загруженным чанкам.
+ * Player guide frames ({@code docs/guide}): {@code tools/client_scenario.sh guide}, then {@code tools/guide_images.sh}
+ * crops them and builds GIFs in {@code docs/guide/img}. Village at scenario-world spawn (center: square bell), viewer
+ * on high ground 90–130 blocks away; in order: crafting-table recipes (images), then GIFs for binoculars, console screen,
+ * targeting map, projectiles on screen, missile camera, Lancet, SAM, fixed launcher. Each screen-GIF frame is a step,
+ * with mouse and key label drawn on top (cannot press the real key without a window); world GIF runs at the specified
+ * pace ({@link #startGif}). {@code INCOMING_GUIDE} selects only named sections ({@link #only}). Frames:
+ * {@code run/scenario/screenshots/guide-*.png}; GIF frames: {@code guide-gif-<name>-NNNN.png}. With Distant Horizons
+ * ({@code dh}), map would show distant terrain as for modpack players, but in the cloud it builds almost nothing:
+ * there the map uses loaded chunks.
  */
 final class GuideShots {
     private static final String[] RECIPES = {"strike_designator", "shahed", "lancet", "cruise_missile", "grad_rockets", "bunker_buster",
             "nuclear_warhead", "icbm", "sam", "interceptor", "substation", "fixed_launcher"};
-    /** Кадров GIF в секунду: шаг сценария идёт по кадрам, поэтому GIF ровный при любом fps клиента без окна. */
+    /** GIF frames per second: the script step is frame by frame, so GIF is smooth for any fps client without a window. */
     private static final int FPS = 12;
-    /** Сколько ждать, пока Distant Horizons (если стоит) посчитает рельеф вокруг (с входа в мир), тиков. */
+    /** How long to wait until Distant Horizons (if worth) calculates the terrain around (from the entrance to the world), tick. */
     private static final int DH_WARMUP = 4800;
-    /** Прорисовка на время карты, чанков: сервер грузит рельеф вокруг шире обычного. */
+    /** Drawing the map and chunks for a while: the server loads the terrain around it wider than usual. */
     private static final int MAP_RENDER_DISTANCE = 20;
-    /** Сколько чанков вокруг ждать перед картой: в облаке за 5 минут их грузится около 14 (генерация медленная). */
+    /** How many chunks to wait around in front of the map: in the cloud in 5 minutes they are loaded about 14 (generation is slow). */
     private static final int MAP_CHUNKS = 13;
-    /** Цель на карте — в стольких блоках от зрителя, внутри круга загруженных чанков; точки маршрута — по ней. */
+    /** The target on the map is so many blocks away from the viewer, inside the circle of loaded chunks; waypoints - along it. */
     private static final int MAP_TARGET = 180;
-    /** Карта отдаляется колесом на столько щелчков (×1,25 каждый). */
+    /** The card is moved away by the wheel by so many clicks (×1,25 each). */
     private static final int ZOOM_OUT = 2;
 
     private final Minecraft mc = Minecraft.getInstance();
 
-    // ---------------------------------------------------------------- шаги по тикам
+    // ---------------------------------------------------------------- steps by tick
 
     private interface Step {
         boolean done(int t);
@@ -95,15 +95,15 @@ final class GuideShots {
 
     private final ArrayDeque<Step> steps = new ArrayDeque<>();
     private int stepTick, tick;
-    /** Нарисованных кадров с запуска. */
+    /** Drawn footage from the launch. */
     private int frames;
 
-    // ---------------------------------------------------------------- место съёмки (ставит поток сервера)
+    // ---------------------------------------------------------------- filming location (sets server stream)
 
     private volatile Vec3 village, view;
-    /** Направление от зрителя на деревню и поперёк него (по горизонтали). */
+    /** Direction from the viewer towards the village and across it (horizontally). */
     private Vec3 along, across;
-    /** Карта: цель за деревней, две точки маршрута сбоку, середина вида. */
+    /** Map: target outside the village, two waypoints on the side, middle of the view. */
     private Vec3 target, w1, w2, mid;
 
     // ---------------------------------------------------------------- GIF
@@ -114,11 +114,11 @@ final class GuideShots {
     private List<Seg> gif;
     private String gifName;
     private int segIndex, segFrame, gifFrame;
-    /** Скорость мира в GIF: 1 — как в жизни, 2 — вдвое быстрее; 0 — GIF экрана, темп мира не трогается. */
+    /** The speed of the world in GIF: 1 - as in life, 2 - twice as fast; 0 - GIF screen, the pace of the world does not change. */
     private double pace;
     private long paceNanos;
     private double tickRate = 20;
-    /** Мышь в координатах GUI, видна ли, подпись у неё и до какого кадра, круг щелчка. */
+    /** The mouse is at coordinates GUI, is it visible, does it have a signature and to what frame, the click circle. */
     private double mx, my;
     private boolean cursor;
     private String hint;
@@ -143,38 +143,38 @@ final class GuideShots {
             cmd("weather clear");
             onServer(this::findPlace);
         });
-        until("места съёмки", 6000, () -> view != null);
+        until("filming locations", 6000, () -> view != null);
         run(() -> {
             along = new Vec3(village.x - view.x, 0, village.z - view.z).normalize();
             across = new Vec3(-along.z, 0, along.x);
-            Incoming.LOG.info("SCENARIO guide: деревня {}, зритель {}", xyz(village), xyz(view));
+            Incoming.LOG.info("SCENARIO guide: village {}, viewer {}", xyz(village), xyz(view));
             stand(view, village);
             give("missile", 6, 20, "map");
         });
         await(200);
-        // сервер догружает место и считает рельеф: верстак и пуски ждут, пока его тик не станет обычным
-        until("тика сервера меньше 60 мс", 2400, () -> {
+        // the server loads the place and calculates the terrain: the workbench and launch wait until its tick becomes normal
+        until("server tick is less than 60 ms", 2400, () -> {
             MinecraftServer server = mc.getSingleplayerServer();
             return server != null && server.getAverageTickTimeNanos() < 60_000_000L;
         });
-        // секции чанков вокруг собраны: на llvmpipe кадр сразу после входа — одно небо
-        until("прорисовки вокруг", 2400, this::worldReady);
+        // sections of chunks around are collected: on llvmpipe the frame immediately after the entrance is one sky
+        until("drawings around", 2400, this::worldReady);
         if (only("recipes")) recipes();
         if (only("scope")) scope();
         if (only("remote")) remote();
         if (only("nuke-remote")) nukeRemote();
         if (only("map")) {
-            // без Distant Horizons карта рисует загруженные чанки: прорисовка шире — рельеф до цели и маршрута
+            // without Distant Horizons the map draws loaded chunks: wider drawing - relief to the goal and route
             run(() -> mc.options.renderDistance().set(MAP_RENDER_DISTANCE));
-            until("чанков вокруг", 6000, () -> mc.level.getChunkSource().getLoadedChunksCount() >= (2 * MAP_CHUNKS + 1) * (2 * MAP_CHUNKS + 1)
+            until("chunks around", 6000, () -> mc.level.getChunkSource().getLoadedChunksCount() >= (2 * MAP_CHUNKS + 1) * (2 * MAP_CHUNKS + 1)
                     && (tick >= DH_WARMUP || !net.neoforged.fml.ModList.get().isLoaded("distanthorizons")));
             mapGif();
             run(() -> mc.options.renderDistance().set(12));
-            until("попаданий шахедов с карты", 2400, () -> ClientFlights.all().isEmpty());
+            until("shahed hits from the map", 2400, () -> ClientFlights.all().isEmpty());
         }
         if (only("hud")) {
             hud();
-            until("попаданий залпа", 2400, () -> ClientFlights.all().isEmpty());
+            until("salvo hits", 2400, () -> ClientFlights.all().isEmpty());
         }
         if (only("camera")) camera();
         if (only("loiter")) loiter();
@@ -186,13 +186,13 @@ final class GuideShots {
         });
     }
 
-    /** Разделы съёмки из {@code incoming.guide} (через запятую: recipes, scope, remote, nuke-remote, map, hud, camera, loiter, sam, launcher); без него — все. */
+    /** Survey sections from {@code incoming.guide} (separated by commas: recipes, scope, remote, nuke-remote, map, hud, camera, loiter, sam, launcher); without him - everything. */
     private static boolean only(String section) {
         String list = System.getProperty("incoming.guide");
         return list == null || List.of(list.split(",")).contains(section);
     }
 
-    // ---------------------------------------------------------------- разделы
+    // ---------------------------------------------------------------- sections
 
     private void recipes() {
         BlockPos[] table = new BlockPos[1];
@@ -209,18 +209,18 @@ final class GuideShots {
             await(8);
             run(() -> mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                     new BlockHitResult(Vec3.atCenterOf(table[0]).add(0, 0.5, 0), Direction.UP, table[0], false)));
-            until("верстака", 400, () -> mc.screen instanceof CraftingScreen && mc.player.containerMenu instanceof CraftingMenu);
+            until("workbench", 400, () -> mc.screen instanceof CraftingScreen && mc.player.containerMenu instanceof CraftingMenu);
             run(() -> mc.level.getRecipeManager().byKey(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, id)).ifPresentOrElse(
                     r -> mc.gameMode.handlePlaceRecipe(mc.player.containerMenu.containerId, r, false),
-                    () -> Incoming.LOG.warn("SCENARIO guide: рецепта {} нет", id)));
-            until("рецепта " + id + " в верстаке", 400, () -> mc.player.containerMenu instanceof CraftingMenu m && m.getSlot(0).hasItem());
+                    () -> Incoming.LOG.warn("SCENARIO guide: no recipe {}", id)));
+            until("recipe " + id + " at the workbench", 400, () -> mc.player.containerMenu instanceof CraftingMenu m && m.getSlot(0).hasItem());
             run(() -> mouse(2, 2));
             settle();
             shot("recipe-" + id);
         }
         run(() -> mc.player.closeContainer());
         await(5);
-        // сетка верстака при закрытии возвращается в инвентарь: закрыть и очистить — одним шагом на сервере
+        // when closed, the workbench grid returns to inventory: close and clear in one step on the server
         run(() -> onServer(server -> {
             ServerPlayer p = player(server);
             if (p != null) {
@@ -234,7 +234,7 @@ final class GuideShots {
         await(10);
     }
 
-    /** Бинокль (GIF): ПКМ — бинокль, колесо — оружие туда и обратно, ЛКМ — пуск ракеты по деревне. */
+    /** Binoculars (GIF): RMB - binoculars, wheel - weapon back and forth, LMB - launch missiles around the village. */
     private void scope() {
         run(() -> {
             give("missile", 1, 0, "look");
@@ -260,7 +260,7 @@ final class GuideShots {
         await(10);
     }
 
-    /** Экран пульта (GIF): шахед, число и разброс, режим цели, огонь — шахеды туда, куда смотрит зритель. */
+    /** Remote control screen (GIF): Shahed, number and spread, target mode, fire - Shahed to where the viewer is looking. */
     private void remote() {
         String count = "incoming.remote.count", spread = "incoming.remote.spread";
         run(() -> {
@@ -292,7 +292,7 @@ final class GuideShots {
         gHold(1.0);
         gMove(() -> widget("incoming.remote.fire"), 0.8);
         gHold(0.4);
-        // огонь закрывает экран: кадр после щелчка — уже мир, guide_images.sh его отрезает
+        // fire covers the screen: the frame after the click is already the world, guide_images.sh cuts it off
         gClick(0);
         startGif("remote", 0);
         run(() -> {
@@ -302,7 +302,7 @@ final class GuideShots {
         await(10);
     }
 
-    /** Пульт с ядеркой: мощность — ползунок 1–15 кт, высота подрыва — кнопка (кадр {@code guide-nuke-remote.png}). */
+    /** Remote control with the nuke: power - slider 1–15 kt, detonation height - button (frame {@code guide-nuke-remote.png}). */
     private void nukeRemote() {
         run(() -> {
             cmd("item replace entity @s weapon.mainhand with incoming:strike_designator[incoming:loadout={weapon:\"nuke\",count:1,spread:0,mode:\"look\",nuke:{yield:8,air_burst:true}}]");
@@ -319,8 +319,8 @@ final class GuideShots {
     }
 
     /**
-     * Карта: с экрана пульта — «Открыть карту наведения…», отдалить, сдвинуть, выбрать место за деревней, две точки
-     * маршрута (Shift+ЛКМ), перетащить вторую, огонь; потом карта ещё раз (клавиша «,») — шахеды на ней.
+     * Map: from the remote control screen - “Open guidance map...”, zoom out, move, select a place outside the village, two points
+     *  of the route (Shift + LMB), drag the second one, fire; then the card again (key ",") - Shahed on it.
      */
     private void mapGif() {
         run(() -> {
@@ -333,7 +333,7 @@ final class GuideShots {
             MapTarget.clearRoute();
         });
         await(10);
-        // рельеф того же вида заранее: карта в GIF не достраивается на глазах
+        // relief of the same type in advance: the map in GIF is not being completed before our eyes
         run(() -> {
             mc.setScreen(new MapScreen(new RemoteScreen()));
             mouse(center()[0], center()[1]);
@@ -343,9 +343,9 @@ final class GuideShots {
             for (int i = 0; i < ZOOM_OUT; i++) mc.screen.mouseScrolled(mx, my, 0, -1);
             pan(mid);
         });
-        until("рельефа карты", 2400, () -> {
+        until("relief map", 2400, () -> {
             TerrainTiles.Progress p = TerrainTiles.progress();
-            if (tick % 100 == 0) Incoming.LOG.info("SCENARIO guide: карта {} из {} ({}), {}", p.ready(), p.visible(), p.layers(), TerrainTiles.stats());
+            if (tick % 100 == 0) Incoming.LOG.info("SCENARIO guide: card {} from {} ({}), {}", p.ready(), p.visible(), p.layers(), TerrainTiles.stats());
             return p.visible() > 0 && p.ready() >= p.visible();
         });
         run(() -> {
@@ -393,7 +393,7 @@ final class GuideShots {
         gMove(() -> widget("incoming.remote.fire"), 1.0);
         gHold(0.3);
         gClick(0);
-        // без окна кадр — около секунды игры: шахеды на пусковой ещё несколько секунд, полёт на карте идёт быстрее жизни
+        // frame without window - about a second of the game: Shahed on the launcher for a few more seconds, the flight on the map is faster than life
         gHold(0.5);
         gDo(() -> {
             mc.setScreen(new MapScreen(new RemoteScreen()));
@@ -413,19 +413,19 @@ final class GuideShots {
     }
 
     /**
-     * Снаряды на экране (GIF, вдвое быстрее жизни): залп шахедов и ракет к деревне. GIF — с подлёта ракет: метки
-     * снарядов идут к деревне, список справа считает время, ракеты бьют; зритель с пустой рукой смотрит на деревню
-     * со стороны, откуда они летят.
+     * Projectiles on screen (GIF, twice as fast as life): Shahed salvo and missiles towards the village. GIF - from the approach of missiles: marks
+     *  shells are heading towards the village, the list on the right is counting the time, missiles are hitting; the spectator with an empty hand looks at the village
+     *  from the direction from which they are flying.
      */
     private void hud() {
         run(() -> {
             give("missile", 1, 0, "look");
             look(village);
-            mc.gameRenderer.setRenderHand(false); // дальше рука только закрывает кадр
+            mc.gameRenderer.setRenderHand(false); // then the hand only covers the frame
             cmd(String.format(Locale.ROOT, "incoming salvo drone 3 8 at %.1f %.1f %.1f", village.x, village.y, village.z));
             cmd(String.format(Locale.ROOT, "incoming salvo missile 2 10 at %.1f %.1f %.1f", village.x, village.y, village.z));
         });
-        until("подлёта ракет", 2400, () -> ClientFlights.all().stream()
+        until("missile approach", 2400, () -> ClientFlights.all().stream()
                 .anyMatch(f -> f.weapon() == WeaponType.MISSILE && f.etaSeconds(0) <= 10));
         run(() -> {
             mc.player.getInventory().selected = 8;
@@ -440,13 +440,13 @@ final class GuideShots {
     }
 
     /**
-     * Камера ракеты (GIF): вдали — карта с её путём, ближе 160 м к игроку — видео с борта, пике и попадание. Путь прямой
-     * (from и via на одной линии с деревней) и заходит с той стороны деревни, где рельеф ниже: атака ракеты не видит
-     * склона между ней и целью, а с холма зрителя она цепляла бы деревья на его вершине. Зритель — на пути у деревни:
-     * видео — весь подлёт.
+     * Rocket camera (GIF): in the distance - a map with its path, closer 160 m to the player - video from the board, dive and hit. The path is straight
+     *  (from and via are on the same line with the village) and comes from the side of the village where the terrain is lower: the missile attack does not see
+     *  the slope between it and the target, and from the viewer’s hill it would cling to the trees on its top. Viewer - on the way near the village:
+     *  video - the entire approach.
      */
     private void camera() {
-        until("пустого неба", 2400, () -> ClientFlights.all().isEmpty());
+        until("empty sky", 2400, () -> ClientFlights.all().isEmpty());
         Vec3[] side = new Vec3[1];
         run(() -> onServer(server -> {
             ServerLevel level = server.overworld();
@@ -466,48 +466,48 @@ final class GuideShots {
             }
             Vec3 e = village.add(pick.scale(40));
             stand(new Vec3(e.x, surface(level, (int) Math.floor(e.x), (int) Math.floor(e.z)), e.z), village);
-            Incoming.LOG.info("SCENARIO guide: заход ракеты с {}, рельеф на подлёте до y {}", xyz(village.add(pick.scale(200))), best);
+            Incoming.LOG.info("SCENARIO guide: rocket approach from {}, terrain on approach to y {}", xyz(village.add(pick.scale(200))), best);
             side[0] = pick;
         }));
-        until("места зрителя", 200, () -> side[0] != null);
+        until("spectator seats", 200, () -> side[0] != null);
         await(40);
-        until("прорисовки у деревни", 1200, this::worldReady);
+        until("sketches near the village", 1200, this::worldReady);
         run(() -> {
             Vec3 from = village.add(side[0].scale(400)), via = village.add(side[0].scale(150));
             cmd(String.format(Locale.ROOT, "incoming salvo missile 1 0 at %.1f %.1f %.1f from %.1f %.1f via %.1f %.1f",
                     village.x, village.y, village.z, from.x, from.z, via.x, via.z));
         });
-        until("пуска", 200, () -> !ClientFlights.all().isEmpty());
+        until("launch", 200, () -> !ClientFlights.all().isEmpty());
         run(ProjectileCamera::cycle);
-        // ~2–3 с карты, видео с ~200 м до деревни, пике и попадание
-        until("подлёта ракеты", 2400, () -> ClientFlights.all().stream().anyMatch(f -> f.etaSeconds(0) <= 5));
+        // ~2–3 s the map, video from ~200 m to the village, dive and hit
+        until("rocket approach", 2400, () -> ClientFlights.all().stream().anyMatch(f -> f.etaSeconds(0) <= 5));
         gHold(6.5);
         startGif("camera", 1);
         run(() -> {
             if (ProjectileCamera.isActive()) ProjectileCamera.exit();
         });
-        until("попадания ракеты", 1200, () -> ClientFlights.all().isEmpty());
+        until("missile hits", 1200, () -> ClientFlights.all().isEmpty());
     }
 
-    /** «Ланцет» (GIF, в полтора раза быстрее жизни): камера на круге, ЛКМ по деревне — новая цель, пике и попадание. */
+    /** “Lancet” (GIF, one and a half times faster than life): camera on a circle, LMB around the village - new target, dive and hit. */
     private void loiter() {
-        // камера показывает видео ближе 160 м от игрока, дальше — карту: зритель у деревни, весь круг «Ланцета» рядом
+        // the camera shows a video closer to 160 m from the player, then a map: the viewer is near the village, the entire Lancet circle is nearby
         run(() -> onServer(server -> {
             ServerLevel level = server.overworld();
             Vec3 e = village.subtract(along.scale(50));
             stand(new Vec3(e.x, surface(level, (int) Math.floor(e.x), (int) Math.floor(e.z)), e.z), village);
         }));
         await(40);
-        until("прорисовки у деревни", 1200, this::worldReady);
-        // пусковая за деревней, с другой стороны от места зрителя: путь к деревне не идёт через его холм
+        until("sketches near the village", 1200, this::worldReady);
+        // launcher is behind the village, on the other side of the viewer's seat: the path to the village does not go through its hill
         run(() -> {
             Vec3 site = village.add(along.scale(250));
             cmd(String.format(Locale.ROOT, "incoming salvo loiter 1 0 at %.1f %.1f %.1f from %.1f %.1f", village.x, village.y, village.z, site.x, site.z));
         });
-        until("пуска", 200, () -> !ClientFlights.all().isEmpty());
+        until("launch", 200, () -> !ClientFlights.all().isEmpty());
         run(ProjectileCamera::cycle);
-        until("круга «Ланцета»", 2400, () -> ClientFlights.all().stream().anyMatch(f -> f.phase() == FlightPhase.LOITER));
-        // камера «Ланцета» смотрит, куда смотрит игрок: прицел держится на деревне
+        until("circle \"Lancet\"", 2400, () -> ClientFlights.all().stream().anyMatch(f -> f.phase() == FlightPhase.LOITER));
+        // the Lancet camera looks where the player is looking: the sight is on the village
         Supplier<Vec3> aim = () -> village.add(across.scale(12));
         gEach(3.0, () -> look(village));
         gEach(0.6, () -> look(aim.get()));
@@ -518,28 +518,28 @@ final class GuideShots {
         run(() -> {
             if (ProjectileCamera.isActive()) ProjectileCamera.exit();
         });
-        until("попадания «Ланцета»", 1200, () -> ClientFlights.all().isEmpty());
+        until("lancet hits", 1200, () -> ClientFlights.all().isEmpty());
     }
 
     /**
-     * ЗРК (GIF): ЗРК на поляне зрителя, ракеты — из воронки сбоку. Шахеды летят с пусковой за деревней («from») к деревне,
-     * ЗРК бьёт их на подлёте. Зритель — в 25 блоках за ЗРК и в стороне от него: ракеты уходят из контейнеров отвесно,
-     * и столб дыма пуска над ЗРК вблизи закрывал бы весь кадр. Шахедов пускают, когда на направляющих все четыре ракеты:
-     * в GIF — залп ЗРК, а не перезарядка.
+     * SAM (GIF): SAM in the spectator's clearing, missiles from the crater on the side. Shahed fly with a launcher behind the village (“from”) towards the village,
+     * ZRK hits them on approach. The viewer is in 25 blocks behind the SAM and away from it: the missiles leave the containers vertically,
+     *  and the column of smoke launching above the SAM close up would cover the entire frame. Shahed is launched when all four missiles are on the guides:
+     *  in GIF is a SAM salvo, not a reload.
      */
     private void sam() {
         BlockPos[] sam = new BlockPos[1];
         int[] ready = {0};
-        // пусковые прежних разделов стоят до «incoming clear»: пусковая раздела hud — у места зрителя, и зритель ЗРК
-        // (в 22 блоках за ЗРК) стоял бы вплотную к ней — она закрывала полкадра
+        // launchers of the previous sections are located before “incoming clear”: the launcher of section hud is at the viewer’s place, and the viewer ZRK
+        //  (in 22 blocks behind SAM) would stand close to it - it covered half the frame
         run(() -> cmd("incoming clear"));
         run(() -> onServer(server -> {
             Vec3 at = view.add(across.scale(10));
             sam[0] = BlockPos.containing(at.x, surface(server.overworld(), (int) Math.floor(at.x), (int) Math.floor(at.z)), at.z);
         }));
-        until("места ЗРК", 100, () -> sam[0] != null);
-        // поляна 41×41 у ЗРК и зрителя: под листвой ЗРК не стреляет (нет открытого неба), а зрителю она закрыла бы вид;
-        // ровная — на высоте ЗРК, вперёд от зрителя склон не закрывает (fill — до 32768 блоков за раз: воздух двумя половинами)
+        until("sAM places", 100, () -> sam[0] != null);
+        // clearing 41×41 near SAM and the viewer: under the foliage SAM does not shoot (there is no open sky), and it would block the view of the viewer;
+        // flat - at the height of SAM, the slope does not block the viewer ahead (fill - up to 32768 blocks at a time: air in two halves)
         run(() -> {
             BlockPos s = sam[0];
             Vec3 m = Vec3.atBottomCenterOf(s).subtract(along.scale(10)).subtract(across.scale(5));
@@ -555,9 +555,9 @@ final class GuideShots {
             Vec3 c = Vec3.atBottomCenterOf(s);
             stand(c.subtract(along.scale(22)).add(across.scale(-12)), c.add(along.scale(80)).add(0, 20, 0));
             mc.player.getInventory().selected = 8;
-            mc.gameRenderer.setRenderHand(false); // рука и пульт в руке закрывали бы полкадра
+            mc.gameRenderer.setRenderHand(false); // hand and remote control in hand would cover half the frame
         });
-        until("ракет ЗРК на направляющих", 1200, () -> {
+        until("sAM missiles on guides", 1200, () -> {
             onServer(server -> {
                 if (server.overworld().getBlockEntity(sam[0]) instanceof SamBlockEntity be) ready[0] = be.ready();
             });
@@ -567,12 +567,12 @@ final class GuideShots {
             Vec3 site = village.add(along.scale(300));
             cmd(String.format(Locale.ROOT, "incoming salvo drone 4 20 at %.1f %.1f %.1f from %.1f %.1f", village.x, village.y, village.z, site.x, site.z));
         });
-        // пусковая шахедов встаёт и пускает; ЗРК бьёт их, как только они в воздухе
+        // launcher Shahed gets up and launches; SAM hits them as soon as they are in the air
         await(40);
         gHold(14.0);
         startGif("sam", 1);
-        until("попаданий", 1200, () -> ClientFlights.all().isEmpty());
-        // ЗРК без хозяина бьёт любые снаряды: ракету стационарной пусковой он сбил бы на пуске
+        until("hits", 1200, () -> ClientFlights.all().isEmpty());
+        // SAM without an owner hits any projectiles: it would shoot down a rocket from a stationary launcher at launch
         run(() -> {
             setblock(sam[0].east(), "minecraft:air");
             setblock(sam[0], "minecraft:air");
@@ -580,9 +580,9 @@ final class GuideShots {
     }
 
     /**
-     * Стационарная пусковая (GIF): площадка, пусковая с задачей «крылатая ракета по деревне» через точку маршрута впереди —
-     * пакет сразу доворачивается на неё, и курс пуска известен без пробного пуска (его дым стоял бы в кадре). Зритель —
-     * сбоку от курса, рядом с пусковой рычаг, пуск — сигналом рычага, как у игрока.
+     * Stationary launcher (GIF): a platform, a launcher with the task of “cruise missile through the village” through the waypoint ahead -
+     * , the package immediately turns towards it, and the launch course is known without a test launch (its smoke would be in the frame). Spectator -
+     * on the side of the course, next to the launcher lever, launch - lever signal, like a player.
      */
     private void launcher() {
         BlockPos[] pad = new BlockPos[1];
@@ -592,8 +592,8 @@ final class GuideShots {
             Vec3 at = view.add(across.scale(-12));
             pad[0] = BlockPos.containing(at.x, surface(server.overworld(), (int) Math.floor(at.x), (int) Math.floor(at.z)), at.z);
         }));
-        until("места пусковой", 100, () -> pad[0] != null);
-        // площадка 33×33 (fill — не больше 32768 блоков за раз)
+        until("launcher places", 100, () -> pad[0] != null);
+        // site 33×33 (fill - no more than 32768 blocks at a time)
         run(() -> {
             BlockPos s = pad[0];
             cmd(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", s.getX() - 16, s.getY(), s.getZ() - 16, s.getX(), s.getY() + 30, s.getZ() + 16));
@@ -605,7 +605,7 @@ final class GuideShots {
                     s.getX(), s.getY(), s.getZ(), village.x, village.y, village.z, via.x, via.z));
             cmd(String.format(Locale.ROOT, "incoming launcher %d %d %d load 4", s.getX(), s.getY(), s.getZ()));
             Vec3 forward = new Vec3(via.x - c.x, 0, via.z - c.z).normalize(), side = new Vec3(-forward.z, 0, forward.x);
-            if (side.dot(across) < 0) side = side.scale(-1); // к поляне зрителя
+            if (side.dot(across) < 0) side = side.scale(-1); // to the spectator's clearing
             Direction d = Direction.getNearest(side.x, 0, side.z);
             lever[0] = s.relative(d);
             wall[0] = "minecraft:lever[face=wall,facing=" + d.getSerializedName();
@@ -614,9 +614,9 @@ final class GuideShots {
             mc.player.getInventory().selected = 8;
             mc.gameRenderer.setRenderHand(false);
         });
-        // пакет поднимается и доворачивает на курс
+        // the package rises and turns on course
         await(200);
-        until("прорисовки у пусковой", 600, this::worldReady);
+        until("launcher rendering", 600, this::worldReady);
         gHold(1.2);
         gDo(() -> setblock(lever[0], wall[0] + ",powered=true]"));
         gHint("Lever: signal", 1.8);
@@ -624,21 +624,21 @@ final class GuideShots {
         startGif("launcher", 1);
     }
 
-    // ---------------------------------------------------------------- место съёмки
+    // ---------------------------------------------------------------- filming location
 
     /**
-     * Поток сервера: деревня у спавна и место зрителя в 90–130 блоках от неё — на земле (не в воде), откуда середину
-     * деревни видно поверх листвы; из таких самое высокое. Если такого нет — самое высокое место, а зритель встаёт
-     * на столб, пока деревню не станет видно.
+     * Server flow: the village at the spawn and the viewer’s place 90–130 blocks from it - on the ground (not in the water), from where the middle of the
+     *  village is visible above the foliage; of these is the highest. If there is no such thing, the highest place is, and the viewer stands
+     *  on the pole until the village becomes visible.
      */
     private void findPlace(MinecraftServer server) {
         ServerLevel level = server.overworld();
         BlockPos v = level.findNearestMapStructure(StructureTags.VILLAGE, level.getSharedSpawnPos(), 64, false);
         if (v == null) {
-            Incoming.LOG.warn("SCENARIO guide: деревни нет — снимаю у спавна");
+            Incoming.LOG.warn("SCENARIO guide: there is no village - I’m filming at the spawn");
             v = level.getSharedSpawnPos();
         }
-        // середина деревни — колокол на площади, а не начало постройки (оно бывает на краю, в лесу)
+        // the middle of the village is the bell in the square, and not the beginning of the building (it happens on the edge, in the forest)
         level.getPoiManager().ensureLoadedAndValid(level, v, 80);
         v = level.getPoiManager().findClosest(t -> t.is(PoiTypes.MEETING), v, 80, PoiManager.Occupancy.ANY).orElse(v);
         Vec3 center = new Vec3(v.getX() + 0.5, surface(level, v.getX(), v.getZ()), v.getZ() + 0.5);
@@ -669,7 +669,7 @@ final class GuideShots {
         view = best;
     }
 
-    /** От глаз зрителя в {@code at} видно середину деревни (листва — преграда). */
+    /** From the viewer's eyes in {@code at} the middle of the village is visible (the foliage is an obstacle). */
     private static boolean sees(ServerLevel level, Vec3 at, Vec3 village) {
         Vec3 eye = at.add(0, 1.62, 0), aim = village.add(0, 3, 0);
         var hit = level.clip(new net.minecraft.world.level.ClipContext(eye, aim, net.minecraft.world.level.ClipContext.Block.OUTLINE,
@@ -677,13 +677,13 @@ final class GuideShots {
         return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS || hit.getLocation().distanceTo(aim) < 12;
     }
 
-    /** Верх земли в колонке; чанк грузится сразу (сценарий: ждать можно). */
+    /** Top of the ground in the column; the chunk is loaded immediately (scenario: you can wait). */
     private static int surface(ServerLevel level, int x, int z) {
         level.getChunk(x >> 4, z >> 4);
         return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
     }
 
-    /** Чанки в 8 вокруг камеры получены и собраны для отрисовки. */
+    /** Chunks in 8 around the camera are received and assembled for rendering. */
     private boolean worldReady() {
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
         int cx = (int) Math.floor(cam.x) >> 4, cz = (int) Math.floor(cam.z) >> 4;
@@ -695,7 +695,7 @@ final class GuideShots {
         return mc.levelRenderer.hasRenderedAllSections();
     }
 
-    /** Игрок стоит в {@code at} (на земле там) и смотрит на {@code toward}. */
+    /** The player stands at {@code at} (on the ground there) and looks at {@code toward}. */
     private void stand(Vec3 at, Vec3 toward) {
         float[] r = angles(at.add(0, 1.62, 0), toward);
         onServer(server -> {
@@ -718,13 +718,13 @@ final class GuideShots {
         return new float[]{(float) Math.toDegrees(Math.atan2(-d.x, d.z)), (float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z)))};
     }
 
-    /** Пульт в руку с настройкой. */
+    /** Remote control in hand with settings. */
     private void give(String weapon, int count, int spread, String mode) {
         cmd(String.format(Locale.ROOT, "item replace entity @s weapon.mainhand with incoming:strike_designator[incoming:loadout={weapon:\"%s\",count:%d,spread:%d,mode:\"%s\"}]",
                 weapon, count, spread, mode));
     }
 
-    /** Поток сервера: инвентарь — ровно ингредиенты рецепта (по одному предмету на клетку), чтобы верстак их разложил. */
+    /** Server flow: inventory - exactly the ingredients of the recipe (one item per cell), so that the workbench lays them out. */
     private void ingredients(MinecraftServer server, String id) {
         ServerPlayer p = player(server);
         var recipe = server.getRecipeManager().byKey(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, id));
@@ -738,27 +738,27 @@ final class GuideShots {
         p.inventoryMenu.broadcastChanges();
     }
 
-    // ---------------------------------------------------------------- карта
+    // ---------------------------------------------------------------- map
 
     private double[] center() {
         Screen s = mc.screen;
         return s == null ? new double[]{mx, my} : new double[]{s.width / 2.0, s instanceof MapScreen ? 22 + (s.height - 22 - 56) / 2.0 : s.height / 2.0};
     }
 
-    /** Середина кнопки экрана по ключу её подписи. */
+    /** The middle of the screen button according to its signature key. */
     private double[] widget(String key) {
         return widgetWith(Component.translatable(key).getString());
     }
 
-    /** Середина кнопки экрана, чья подпись начинается с {@code text}. */
+    /** The middle of a screen button whose signature begins with {@code text}. */
     private double[] widgetWith(String text) {
         AbstractWidget w = findWidget(text);
         return w == null ? new double[]{mx, my} : new double[]{w.getX() + w.getWidth() / 2.0, w.getY() + w.getHeight() / 2.0};
     }
 
     /**
-     * Точка ползунка экрана пульта для значения {@code v} из {@code min…max} (как {@code setValueFromMouse}); ползунок —
-     * по подписи ключа {@code key} до двоеточия (язык известен только в игре, не при планировании шагов).
+     * Remote screen slider point for value {@code v} from {@code min…max} (as {@code setValueFromMouse}); slider -
+     * by key signature {@code key} to the colon (the language is known only in the game, not when planning steps).
      */
     private double[] sliderAt(String key, int v, int min, int max) {
         AbstractWidget w = findWidget(Component.translatable(key, "").getString().split(":")[0]);
@@ -772,11 +772,11 @@ final class GuideShots {
                 if (c instanceof AbstractWidget w && w.getMessage().getString().startsWith(text)) return w;
             }
         }
-        Incoming.LOG.warn("SCENARIO guide: кнопки «{}» нет", text);
+        Incoming.LOG.warn("SCENARIO guide: there is no “{}” button", text);
         return null;
     }
 
-    /** ЛКМ в камере снаряда: новая цель там, куда смотрит прицел (закрытый метод камеры: только для сценария). */
+    /** LMB in the projectile camera: new target where the crosshair is pointing (closed camera method: scenario only). */
     private void retarget() {
         try {
             Method m = ProjectileCamera.class.getDeclaredMethod("retarget");
@@ -787,7 +787,7 @@ final class GuideShots {
         }
     }
 
-    /** Проекция карты (закрытый метод экрана: только для сценария). */
+    /** Map projection (closed screen method: script only). */
     private MapProjection projection() {
         try {
             var m = MapScreen.class.getDeclaredMethod("projection");
@@ -804,7 +804,7 @@ final class GuideShots {
         return new double[]{p.ox() + (world.x - p.cx()) * p.k(), p.oy() + (world.z - p.cz()) * p.k()};
     }
 
-    /** Сдвиг карты так, чтобы {@code world} встал в середину (как перетаскиванием). */
+    /** Shift the map so that {@code world} is in the middle (like dragging). */
     private void pan(Vec3 world) {
         double[] c = center();
         MapProjection p = projection();
@@ -814,13 +814,13 @@ final class GuideShots {
         mc.screen.mouseReleased(c[0] + dx, c[1] + dy, 0);
     }
 
-    /** Точка маршрута под курсором: Shift+ЛКМ (настоящий Shift без окна не нажать — точка ставится тем же вызовом, что у экрана). */
+    /** The route point under the cursor: Shift+LMB (the real Shift cannot be clicked without a window - the point is set by the same call as at the screen). */
     private void addWaypoint(Vec3 world) {
         ring();
         MapTarget.add(mc.level, new MapTarget.Place(world.x, world.z));
     }
 
-    // ---------------------------------------------------------------- GIF: сборка
+    // ---------------------------------------------------------------- GIF: assembly
 
     private static int frames(double seconds) {
         return Math.max(1, (int) Math.round(seconds * FPS));
@@ -843,7 +843,7 @@ final class GuideShots {
         }));
     }
 
-    /** ЛКМ зажата там, где курсор, протянута до {@code to} и отпущена (сдвиг карты или точки маршрута). */
+    /** LMB is held where the cursor is, dragged to {@code to} and released (shifting the map or waypoint). */
     private void gDrag(Supplier<double[]> to, double seconds) {
         int n = frames(seconds);
         double[] from = new double[2], dest = new double[2];
@@ -900,15 +900,15 @@ final class GuideShots {
         building.add(new Seg(frames(seconds), i -> {}));
     }
 
-    /** Каждый кадр {@code seconds} секунд — {@code r} (прицел камеры «Ланцета» за точкой). */
+    /** Each frame of {@code seconds} seconds is {@code r} (Lancet camera sight behind the dot). */
     private void gEach(double seconds, Runnable r) {
         building.add(new Seg(frames(seconds), i -> r.run()));
     }
 
     /**
-     * GIF из шагов {@code building}: каждый нарисованный кадр — кадр GIF. GIF мира ({@code pace} > 0) идёт с темпом
-     * {@code pace} от жизни: без окна клиент рисует несколько кадров в секунду, поэтому мир замедляется ({@code /tick
-     * rate}) так, чтобы на кадр приходилось 20 · pace / FPS тиков, — по fps последних кадров.
+     * GIF from steps {@code building}: each frame drawn is a GIF frame. GIF of the world ({@code pace} > 0) goes with the pace of
+     * {@code pace} from life: without a window, the client draws several frames per second, so the world slows down ({@code /tick
+     * rate}) so that there are 20 per frame pace / FPS tick, - according to fps of the last frames.
      */
     private void startGif(String name, double pace) {
         List<Seg> segs = List.copyOf(building);
@@ -917,19 +917,19 @@ final class GuideShots {
             gif = segs;
             gifName = name;
             segIndex = segFrame = gifFrame = 0;
-            hint = null; // подпись прошлой GIF считала кадры по её счётчику
+            hint = null; // the signature of the previous GIF counted frames according to its counter
             hintUntil = 0;
             ringAt = -100;
             this.pace = pace;
             paceNanos = 0;
-            if (pace > 0) tickRate(20 * pace * 5 / FPS); // без окна — около 5 кадров в секунду, дальше по замеру
-            Incoming.LOG.info("SCENARIO guide: GIF {} — {} кадров", name, segs.stream().mapToInt(Seg::frames).sum());
+            if (pace > 0) tickRate(20 * pace * 5 / FPS); // without a window - about 5 frames per second, further along the measurement
+            Incoming.LOG.info("SCENARIO guide: GIF {} - {} frames", name, segs.stream().mapToInt(Seg::frames).sum());
         });
-        // тики ждут, пока GIF идёт по кадрам
+        // tick wait while GIF goes through the frames
         steps.add(t -> gif == null);
     }
 
-    /** Темп мира, тиков в секунду; команда — только при перемене больше чем на десятую. */
+    /** World tempo, tick per second; command - only when there is a change of more than a tenth. */
     private void tickRate(double rate) {
         double r = Math.max(1, Math.min(60, rate));
         if (Math.abs(r - tickRate) <= tickRate * 0.1) return;
@@ -947,7 +947,7 @@ final class GuideShots {
         ringY = my;
     }
 
-    // ---------------------------------------------------------------- GIF: кадры
+    // ---------------------------------------------------------------- GIF: footage
 
     private void onFramePre(RenderFrameEvent.Pre e) {
         frames++;
@@ -970,19 +970,19 @@ final class GuideShots {
         if (gif == null || mc.player == null) return;
         grab(String.format(Locale.ROOT, "gif-%s-%04d", gifName, gifFrame++));
         if (segIndex >= gif.size()) {
-            Incoming.LOG.info("SCENARIO guide: GIF {} снят, {} кадров", gifName, gifFrame);
+            Incoming.LOG.info("SCENARIO guide: GIF {} removed, {} frames", gifName, gifFrame);
             gif = null;
             if (pace > 0) tickRate(20);
             pace = 0;
         }
     }
 
-    /** Подпись клавиши в GIF мира (без экрана) — внизу слева, крупнее текста игры. */
+    /** The key signature in the GIF world (without screen) is at the bottom left, larger than the game text. */
     private void onGuiRender(RenderGuiEvent.Post e) {
         if (gif == null || mc.screen != null || hint == null || gifFrame >= hintUntil) return;
         GuiGraphics g = e.getGuiGraphics();
-        // слои HUD уходят вверх по z, а прямоугольники и текст GUI рисуются с проверкой глубины (её включает сам тип
-        // отрисовки): подпись под биноклем не видна. Глубину — сбросить, тогда подпись поверх всего
+        // layers HUD go up z, and rectangles and text GUI are drawn with a depth check (the drawing type
+        //  itself includes it): the signature under the binoculars is not visible. Depth - reset, then the signature is on top of everything
         g.flush();
         RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
         g.pose().pushPose();
@@ -995,7 +995,7 @@ final class GuideShots {
         g.flush();
     }
 
-    /** Курсор, подпись клавиши и круг щелчка — поверх экрана. */
+    /** The cursor, key label and click circle are on top of the screen. */
     private void onScreenRender(ScreenEvent.Render.Post e) {
         if (gif == null || !cursor) return;
         GuiGraphics g = e.getGuiGraphics();
@@ -1021,7 +1021,7 @@ final class GuideShots {
         g.pose().popPose();
     }
 
-    /** Стрелка мыши: «X» — контур, «.» — заливка. */
+    /** Mouse arrow: “X” - outline, “.” - filling. */
     private static final String[] ARROW = {
             "X", "XX", "X.X", "X..X", "X...X", "X....X", "X.....X", "X......X", "X.......X", "X........X",
             "X.....XXXXX", "X..X..X", "X.X X..X", "XX  X..X", "X    X..X", "     X..X", "      XX"};
@@ -1037,7 +1037,7 @@ final class GuideShots {
         }
     }
 
-    /** Мышь игры в точку GUI: экран рисует наведение по ней. Без окна событий мыши нет — поле ставится прямо. */
+    /** Game mouse at point GUI: the screen draws the mouse pointing over it. Without a mouse event window, there is no mouse event - the field is placed directly. */
     private void mouse(double guiX, double guiY) {
         mx = guiX;
         my = guiY;
@@ -1053,7 +1053,7 @@ final class GuideShots {
         }
     }
 
-    // ---------------------------------------------------------------- шаги
+    // ---------------------------------------------------------------- steps
 
     private void onTick(ClientTickEvent.Post e) {
         if (mc.player == null || mc.level == null) return;
@@ -1080,14 +1080,14 @@ final class GuideShots {
         steps.add(t -> {
             if (ok.getAsBoolean()) return true;
             if (t < max) return false;
-            Incoming.LOG.warn("SCENARIO guide: не дождался {} за {} тиков", what, max);
+            Incoming.LOG.warn("SCENARIO guide: did not wait for {} for {} tick", what, max);
             return true;
         });
     }
 
     /**
-     * Кадр после перемены: без окна клиент рисует ~5 кадров в секунду, тики идут пачками между кадрами — снимок сразу
-     * после перемены берёт кадр до неё. Ждать, пока выйдут три кадра.
+     * Frame after the change: without a window, the client draws ~5 frames per second, ticks go in batches between frames - the snapshot immediately
+     *  after the change takes the frame before it. Wait until three frames come out.
      */
     private void settle() {
         int[] start = new int[1];
@@ -1100,7 +1100,7 @@ final class GuideShots {
     }
 
     private void grab(String name) {
-        mc.getToasts().clear(); // «новые рецепты», достижения — не в кадр
+        mc.getToasts().clear(); // “new recipes”, achievements – out of frame
         Screenshot.grab(mc.gameDirectory, "guide-" + name + ".png", mc.getMainRenderTarget(), c -> {});
     }
 

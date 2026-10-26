@@ -10,33 +10,32 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Живые события повтора Flashback по меткам сервера повтора. Сервер — модель {@code ReplayServer.tickServer},
- * {@code runUpdates} и {@code handleActions} Flashback 0.39.10: место в записи ({@code targetTick}) и прочитанное
- * ({@code currentTick}); перемотка назад или вперёд дальше длины куска в другой кусок — снимок куска (с последним пакетом
- * каждого вида) и чтение от его начала; до места дальше 20 тиков — чтение разом до места − 20, последние — по тику
- * с {@code fastForwarding}; при выводе видео — одно чтение на шаг. Каждое чтение кончается тиком сервера — меткой:
- * перемотка, если был снимок или досмотр по тику ({@code doClientRendering}), при выводе видео — только досмотр. Клиент
- * разбирает пакеты одного соединения по порядку: события, потом метка; когда — не важно. Каждая проверка — и с Flashback
- * NeoForge Fixed ({@code fork}): с начала снимка он копит пакеты и отдаёт в конце тика сервера повтора, после меток всех
- * чтений ({@code MixinReplayServer.catchUpNewViewers}).
+ * Live replay events Flashback by replay server tags. Server - model {@code ReplayServer.tickServer},
+ * {@code runUpdates} and {@code handleActions} Flashback 0.39.10: place in record ({@code targetTick}) and read
+ * ({@code currentTick}); rewind or forward beyond the length of a piece into another piece - a snapshot of the piece (with the last packet of each type) and reading from its beginning; to the place further 20 tick - reading at once to the place − 20, the last ones - by tick
+ *  with {@code fastForwarding}; when outputting video - one reading per step. Each reading ends with a server tick - the label:
+ *  rewind, if there was a snapshot or inspection by tick ({@code doClientRendering}), when outputting a video - only inspection. Client
+ *  parses packets from one connection in order: events, then label; when is not important. Each check - and with Flashback
+ * NeoForge Fixed ({@code fork}): from the beginning of the snapshot, it accumulates packets and sends them at the end of the replay server tick, after the marks of all
+ * reads ({@code MixinReplayServer.catchUpNewViewers}).
  */
 class ReplayTest {
-    /** Кусок записи — 5 минут (снимки — в начале каждого). */
+    /** A piece of recording is 5 minutes (pictures are at the beginning of each). */
     private static final int CHUNK = 6000;
-    /** Событие снимка: последний пакет вида, а не место записи. */
+    /** Snapshot event: last packet of the view, not the recording location. */
     private static final int SNAPSHOT = -1;
     private static final boolean[] FORKS = {false, true};
 
-    /** Событие, которое клиент принял: место записи, где оно было, и живое ли. */
+    /** The event that the client accepted: where it was recorded, where it was, and whether it was alive. */
     private record Event(int recorded, boolean live) {}
 
     private static final class Rig {
         final Replay.Markers markers = new Replay.Markers();
         final List<Integer> pending = new ArrayList<>();
         final List<Event> events = new ArrayList<>();
-        /** Куски, в начале которых снимок ставится и при чтении подряд (стык склеенных записей). */
+        /** Pieces at the beginning of which a snapshot is placed and when reading in a row (the junction of glued records). */
         final List<Integer> forced = new ArrayList<>();
-        /** Flashback NeoForge Fixed: что он копит до конца тика сервера. */
+        /** Flashback NeoForge Fixed: that it saves until the end of the server tick. */
         final List<Integer> backlog = new ArrayList<>();
         final boolean fork;
         boolean deferring;
@@ -48,7 +47,7 @@ class ReplayTest {
             this.fork = fork;
         }
 
-        /** Тик сервера: шаг повтора, перемотка на {@code jump} или стоим; в конце — накопленное. */
+        /** server tick: repeat step, rewind to {@code jump} or stand; at the end - accumulated. */
         void tick(Integer jump) {
             step(jump);
             pending.addAll(backlog);
@@ -92,7 +91,7 @@ class ReplayTest {
             tick(to);
         }
 
-        /** Чтение до места и тик сервера (метка в его конце). */
+        /** Read to the location and tick the server (the mark at the end of it). */
         private void runUpdates() {
             boolean snapshot = false;
             if (target != current) {
@@ -132,7 +131,7 @@ class ReplayTest {
         }
     }
 
-    /** Повтор открыт, стоит на {@code at}, ещё три тика — и метки устоялись. */
+    /** The replay is open, it stands at {@code at}, three more ticks - and the marks are established. */
     private static Rig at(int at, boolean fork) {
         Rig r = new Rig(fork);
         r.seek(at);
@@ -146,7 +145,7 @@ class ReplayTest {
         return events.stream().filter(Event::live).count();
     }
 
-    /** Повтор идёт: каждое событие — живое, перемоток нет; стоит и снова идёт — тоже. */
+    /** There is a repeat: every event is live, there is no rewinding; stands and walks again - too. */
     @Test
     void playbackIsLive() {
         for (boolean fork : FORKS) {
@@ -166,8 +165,8 @@ class ReplayTest {
     }
 
     /**
-     * Открытие повтора: пакеты снимка до первой метки или сразу после неё (Flashback NeoForge Fixed — в конце тика)
-     * и первые два тика хода — прошлое; дальше повтор живой.
+     * Opening a replay: snapshot packets before the first mark or immediately after it (Flashback NeoForge Fixed - at the end of the tick)
+     *  and the first two ticks of the move - the past; Next is a live replay.
      */
     @Test
     void openingIsPast() {
@@ -190,9 +189,9 @@ class ReplayTest {
     }
 
     /**
-     * Перемотка назад (на тик, в том же куске, в начало куска, в прошлый) и вперёд (на 2–3 тика, на 20, на 21, дальше,
-     * в другой кусок): всё прочитанное и первый тик хода после неё — прошлое, одна перемотка; на паузе и на ходу; со
-     * снимком через Flashback NeoForge Fixed прочитанное приходит после метки последнего чтения. Третий тик хода — живой.
+     * Rewind (on tick, in the same piece, to the beginning of the piece, to the previous one) and forward (on 2–3 tick, on 20, on 21, further,
+     *  to another piece): everything read and the first tick of the move after it is the past, one rewind; on pause and on the go; with
+     *  snapshot via Flashback NeoForge Fixed the read comes after the last read mark. The third tick of the move is live.
      */
     @Test
     void seekEventsArePast() {
@@ -200,7 +199,7 @@ class ReplayTest {
         for (boolean fork : FORKS) {
             for (boolean playing : new boolean[] {false, true}) {
                 for (int to : targets) {
-                    String what = "→ " + to + (playing ? " на ходу" : " на паузе") + (fork ? ", Fixed" : "");
+                    String what = "→ " + to + (playing ? " on the go" : " on pause") + (fork ? ", Fixed" : "");
                     Rig r = at(9000, fork);
                     r.paused = !playing;
                     if (playing) r.tick();
@@ -215,14 +214,14 @@ class ReplayTest {
                     r.tick();
                     List<Event> next = r.take();
                     assertEquals(2, next.size(), what);
-                    assertTrue(next.get(1).live(), what + ": после перемотки повтор снова живой");
+                    assertTrue(next.get(1).live(), what + ": After rewinding, the replay is live again");
                     assertEquals(1, r.rewinds, what);
                 }
             }
         }
     }
 
-    /** На паузе шаг на один тик вперёд — ход повтора: его события живые. */
+    /** During the pause, one tick forward is the progress of the repetition: its events are live. */
     @Test
     void singleStepIsLive() {
         for (boolean fork : FORKS) {
@@ -236,9 +235,9 @@ class ReplayTest {
     }
 
     /**
-     * Вывод видео: сервер стоит между шагами (клиент тикает сам), каждый шаг — одно чтение. Сперва перемотка на 40 тиков
-     * до начала — прошлое, и первые два шага после неё; шаги по тику и с ускорением (до 20 тиков за кадр) — живые;
-     * дальше шаг — прошлое.
+     * Video output: the server stands between steps (the client ticks itself), each step is one read. First, rewind to 40 ticks
+     *  before the beginning - the past, and the first two steps after it; steps by tick and with acceleration (up to 20 tick per frame) are live;
+     *  the next step is past.
      */
     @Test
     void exportStepsAreLive() {
@@ -247,23 +246,23 @@ class ReplayTest {
             r.export = true;
             r.seek(2960);
             r.seek(2961);
-            assertEquals(0, live(r.take()), "перемотка к началу видео");
+            assertEquals(0, live(r.take()), "rewind to the beginning of the video");
             for (int t = 2962; t <= 3000; t++) r.seek(t);
             List<Event> warm = r.take();
             assertEquals(39, warm.size());
-            assertEquals(38, live(warm), "второй шаг после перемотки — ещё прошлое");
-            for (int i = 0; i < 100; i++) r.tick(); // сервер ждёт шага
+            assertEquals(38, live(warm), "the second step after rewinding is still the past");
+            for (int i = 0; i < 100; i++) r.tick(); // the server is waiting for a step
             for (int t = 3001; t <= 3200; t++) r.seek(t);
             assertEquals(200, live(r.take()));
             for (int t = 3220; t <= 3600; t += 20) r.seek(t);
-            assertEquals(400, live(r.take()), "ускорение: по 20 тиков за шаг");
+            assertEquals(400, live(r.take()), "acceleration: 20 tick per step");
             r.seek(3700);
             assertEquals(0, live(r.take()));
             assertEquals(1, r.rewinds);
         }
     }
 
-    /** Повтор ускорен, кадры клиента редки: метки идут по одной на тик сервера, события живые. */
+    /** The replay is accelerated, client frames are rare: tags go one at a time to the server tick, events are live. */
     @Test
     void fastPlaybackIsLive() {
         for (boolean fork : FORKS) {
@@ -274,7 +273,7 @@ class ReplayTest {
         }
     }
 
-    /** Повтор дошёл до конца куска: следующий кусок читается подряд, без снимка, — живой. */
+    /** The repetition reached the end of the piece: the next piece is read in a row, without a snapshot, - live. */
     @Test
     void chunkBoundaryIsLive() {
         for (boolean fork : FORKS) {
@@ -288,8 +287,8 @@ class ReplayTest {
     }
 
     /**
-     * Стык склеенных записей: снимок посреди хода повтора — его тик прошлое (в снимке последние пакеты прошлой записи),
-     * и два следующих, дальше живое.
+     * The junction of glued records: a snapshot in the middle of the replay progress - its tick past (in the snapshot are the last packets of the last record),
+     *  and the next two, then live.
      */
     @Test
     void forcedSnapshotIsPast() {
@@ -302,18 +301,18 @@ class ReplayTest {
             for (int i = 0; i < 3; i++) r.tick();
             List<Event> e = r.take();
             assertTrue(e.stream().anyMatch(ev -> ev.recorded() == SNAPSHOT));
-            assertEquals(0, live(e), "тик со снимком и два следующих");
+            assertEquals(0, live(e), "tick with a photo and the next two");
             r.tick();
             assertEquals(1, live(r.take()));
             assertEquals(1, r.rewinds);
         }
     }
 
-    /** Место назад или вперёд дальше {@link Replay.Markers#STEP} без флага перемотки — тоже прошлое. */
+    /** A place back or forward further than {@link Replay.Markers#STEP} without a rewind flag is also a thing of the past. */
     @Test
     void jumpWithoutFlagIsPast() {
         Replay.Markers m = new Replay.Markers();
-        assertEquals(Replay.Markers.Verdict.PAST, m.next(100, false), "первая метка");
+        assertEquals(Replay.Markers.Verdict.PAST, m.next(100, false), "first mark");
         assertEquals(Replay.Markers.Verdict.SETTLED, m.next(101, false));
         assertFalse(m.steady());
         assertEquals(Replay.Markers.Verdict.PAST, m.next(102, false));
@@ -329,7 +328,7 @@ class ReplayTest {
         assertEquals(Replay.Markers.Verdict.LIVE, m.next(146, false));
         assertEquals(Replay.Markers.Verdict.PAST, m.next(200, true));
         m.reset();
-        assertEquals(Replay.Markers.Verdict.PAST, m.next(200, false), "после выхода из мира — первая метка");
+        assertEquals(Replay.Markers.Verdict.PAST, m.next(200, false), "after leaving the world - the first mark");
         assertFalse(m.steady());
     }
 }

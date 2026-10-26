@@ -5,11 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Гул земли ({@link BlastSounds#quake(double)}): давление — то, что излучает земля, ходящая со скоростью грунта. */
+/** Ground hum ({@link BlastSounds#quake(double)}): pressure is what is emitted by the ground moving at the speed of the ground. */
 class GroundRumbleTest {
     /**
-     * p = ρ₀c₀·v: грунт в 1 мм/с — ~0,41 Па (~86 дБ), 10 мм/с — ~4 Па; без движения грунта гула нет, громче — с
-     * быстрее идущим грунтом, без потолка в законе.
+     * p = ρ₀c₀·v: soil in 1 mm/s - ~0,41 Pa (~86 dB), 10 mm/s - ~4 Pa; without ground movement there is no hum, louder - with
+     *  faster moving ground, without a ceiling in law.
      */
     @Test
     void rumbleIsTheAirImpedanceTimesGroundVelocity() {

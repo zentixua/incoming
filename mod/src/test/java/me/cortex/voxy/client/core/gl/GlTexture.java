@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.core.gl;
 
-/** Подделка класса Voxy 0.2.16 для {@code VoxyDepthTest}. */
+/** Counterfeit class Voxy 0.2.16 for {@code VoxyDepthTest}. */
 public class GlTexture {
     public final int id;
 

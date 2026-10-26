@@ -9,21 +9,21 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Что снимает план: снаряд (UUID и путь по тикам из разбора — {@code tracks} и дальние строки {@code far}), события
- * (удары: тик, место, поперечник огненного шара) и место (хаос — середина ударов и разброс). Куда смотрит кадр в тик
- * {@code t}: в первые {@link #KEY_HOLD} тиков события — на него (шар поднимается), до события — на снаряд, до появления
- * снаряда — на место пуска, без пути — на место.
+ * Shot subject: projectile (UUID/tick path from scan {@code tracks} and distant {@code far} rows),
+ * events (impact tick/position/fireball diameter), site (chaos impact centre/spread). Look target at
+ * {@code t}: event for first {@link #KEY_HOLD} ticks (rising ball), projectile before event, launch site
+ * before projectile appears; site if no path.
  */
 final class Subject {
-    /** Удар: тик повтора, место, поперечник огненного шара (блоков). */
+    /** Impact: replay tick, position, fireball diameter in blocks. */
     record Key(int t, Vec3 pos, double size) {}
 
-    /** Сколько тиков после события кадр смотрит на него. */
+    /** Ticks camera looks at an event after it starts. */
     static final int KEY_HOLD = 60;
 
     @Nullable
     final UUID uuid;
-    /** Поперечник снаряда, блоков. */
+    /** Projectile width, blocks. */
     final double size;
     private final double[][] path;
     final List<Key> keys;
@@ -40,12 +40,12 @@ final class Subject {
         this.areaSize = areaSize;
     }
 
-    /** Тик первого события ({@code −1} — событий нет). */
+    /** First event tick ({@code −1} if no events). */
     int firstKey() {
         return keys.isEmpty() ? -1 : keys.get(0).t();
     }
 
-    /** Событие, на которое кадр смотрит в тик t (последнее начавшееся не раньше {@link #KEY_HOLD} тиков назад). */
+    /** Event viewed at tick t: latest starting within the past {@link #KEY_HOLD} ticks. */
     @Nullable
     Key keyAt(double t) {
         Key at = null;
@@ -55,7 +55,7 @@ final class Subject {
         return at;
     }
 
-    /** Место снаряда в тик t по пути (между точками — по прямой, за краями — край); без пути — null. */
+    /** Projectile position at t from path (linear between points, nearest endpoint beyond edges); null without path. */
     @Nullable
     Vec3 pathAt(double t) {
         if (path.length == 0) return null;
@@ -75,7 +75,7 @@ final class Subject {
         return new Vec3(path[i][1], path[i][2], path[i][3]);
     }
 
-    /** Скорость снаряда по пути в тик t, блоков за тик; без пути — 0. */
+    /** Path projectile speed at t, blocks/tick; 0 without path. */
     double speed(double t) {
         if (path.length < 2) return 0;
         return pathAt(t).distanceTo(pathAt(t - 1));
@@ -89,14 +89,14 @@ final class Subject {
         return path.length == 0 ? Double.NaN : path[path.length - 1][0];
     }
 
-    /** Куда смотрит кадр в тик t; null — смотреть не на что. */
+    /** Look point at t; null if nothing to view. */
     @Nullable
     Vec3 aim(double t) {
         Key k = keyAt(t);
         if (k != null) return k.pos().add(0, Math.min(1, (t - k.t()) / 40.0) * k.size() * 0.4, 0);
         Vec3 p = pathAt(t);
         if (p != null) {
-            // после пути (снаряд ушёл из записи) — его последнее событие
+            // After path (projectile left recording), use its last event
             if (t > pathLast() && !keys.isEmpty() && keys.get(keys.size() - 1).t() <= t) return keys.get(keys.size() - 1).pos();
             return p;
         }
@@ -104,7 +104,7 @@ final class Subject {
         return keys.isEmpty() ? null : keys.get(0).pos();
     }
 
-    /** Поперечник того, на что смотрит кадр в тик t. */
+    /** Width of the viewed subject at t. */
     double aimSize(double t) {
         Key k = keyAt(t);
         if (k != null) return k.size();
@@ -113,7 +113,7 @@ final class Subject {
         return keys.isEmpty() ? size : keys.get(0).size();
     }
 
-    /** Курс подлёта к первому событию по горизонтали (по пути за 40 тиков до него); без пути — на север. */
+    /** Horizontal approach heading for first event from prior 40 ticks of path; north without path. */
     Vec3 heading() {
         if (path.length < 2) return new Vec3(0, 0, -1);
         double t1 = firstKey() >= 0 ? Math.min(firstKey() - 1, pathLast()) : pathLast(), t0 = Math.max(pathFirst(), t1 - 40);
@@ -121,7 +121,7 @@ final class Subject {
         return d.lengthSqr() < 1e-6 ? new Vec3(0, 0, -1) : d.normalize();
     }
 
-    /** Главное место плана: первое событие, иначе середина места, иначе середина пути. */
+    /** Main shot site: first event, otherwise site centre, otherwise path centre. */
     @Nullable
     Vec3 anchor(int a, int b) {
         if (!keys.isEmpty()) return keys.get(0).pos();

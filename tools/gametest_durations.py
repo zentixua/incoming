@@ -1,10 +1,10 @@
-"""Время партий GameTest по логам — таблица, по которой CI делит GameTest между машинами (devtest GameTestShards).
+"""Time batch GameTest according to logs - a table by which CI divides GameTest between machines (devtest GameTestShards).
 
-    python3 tools/gametest_durations.py <лог>...   → mod/src/devtest/resources/gametest-durations.json
+    python3 tools/gametest_durations.py <log>... → mod/src/devtest/resources/gametest-durations.json
 
-Лог — run/gametest/logs/latest.log или лог задачи GameTest из GitHub Actions; у прогона по частям — логи всех частей,
-у партии из нескольких прогонов — среднее. Партия длится от своей строки «Running test batch» до следующей партии или
-до конца тестов. Таблица только равняет части по времени: устаревшая не теряет тестов, части выходят неровнее.
+Log - run/gametest/logs/latest.log or task log GameTest from GitHub Actions; for a run in parts - logs of all parts,
+ for a batch of several runs - the average. batch lasts from its line “Running test batch” until the next batch or
+ until the end of the tests. The table only equalizes the parts in time: the outdated one does not lose tests, the parts come out more unevenly.
 """
 import json
 import os
@@ -15,7 +15,7 @@ from datetime import datetime
 from paths import MOD
 
 OUT = os.path.join(MOD, "src", "devtest", "resources", "gametest-durations.json")
-# время строки: лог GitHub Actions («2026-10-01T16:29:59.2208167Z …») или latest.log («[01Oct2026 16:40:47.028] …»)
+# line time: log GitHub Actions (“2026-10-01T16:29:59.2208167Z ...”) or latest.log (“[01Oct2026 16:40:47.028] ...")
 GITHUB_TIME = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?Z ")
 LOG_TIME = re.compile(r"^\[(\d\d\w{3}\d{4} \d\d:\d\d:\d\d\.\d{3})\] ")
 BATCH = re.compile(r"Running test batch '(.+):\d+' \(\d+ tests\)")
@@ -33,7 +33,7 @@ def time_of(line):
 
 
 def batches(path):
-    """Партия → секунды в одном логе."""
+    """batch → seconds in one log."""
     out, current, start = {}, None, None
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -47,7 +47,7 @@ def batches(path):
             if m:
                 current, start = m.group(1), at
     if current is not None:
-        raise SystemExit(f"{path}: партия {current} не кончилась — лог оборван")
+        raise SystemExit(f"{path}: batch {current} did not end - the log is torn off")
     return out
 
 
@@ -59,12 +59,12 @@ def main():
         for name, seconds in batches(path).items():
             runs.setdefault(name, []).append(seconds)
     if not runs:
-        raise SystemExit("в логах нет строк «Running test batch»")
+        raise SystemExit("there are no lines in the logs “Running test batch”")
     table = {name: round(sum(s) / len(s), 1) for name, s in sorted(runs.items())}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(table, f, ensure_ascii=False, indent=1, sort_keys=True)
         f.write("\n")
-    print(f"партий {len(table)}, всего {sum(table.values()):.0f} с → {OUT}")
+    print(f"batch {len(table)}, total {sum(table.values()):.0f} s → {OUT}")
 
 
 if __name__ == "__main__":

@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Настоящий разовый звук взрыва ({@link ClientSounds.MixedShot}) без звукового движка: стихание уступившего голоса, его
- * остановка и переход голос → гул в том порядке, в каком их ведёт Minecraft — в тике звукового движка
- * ({@code SoundManager.tick}: голос тикает и отдаёт громкость, петля гула считает свою в своём тике), а решения бюджета —
- * в тике клиента после него ({@code ClientTickEvent.Post}).
+ * A real one-time sound of an explosion ({@link ClientSounds.MixedShot}) without a sound engine: the dying down of the voice that has given way, its
+ *  stopping and transitioning voice → hum in the order in which they are played by Minecraft - in the tick of the sound engine
+ * ({@code SoundManager.tick}: the voice is ticking and giving up the volume, the hum loop counts its own in its tick), and the budget decisions count
+ *  in the client's tick after it ({@code ClientTickEvent.Post}).
  */
 class MixedShotTest {
     private static ClientSounds.MixedShot shot(Mix.Blast blast, int life) {
@@ -26,7 +26,7 @@ class MixedShotTest {
                 RandomSource.create(1), Vec3.ZERO, 1, 1, blast::factor, life);
     }
 
-    /** Голос движка без движка: канал держит, пока звук не остановлен, и ещё тик — движок вернёт его в следующем. */
+    /** Voice of the engine without an engine: the channel is held until the sound is stopped, and another tick - the engine will return it in the next one. */
     private static final class Engine implements BlastVoices.Sound {
         final ClientSounds.MixedShot shot;
         final int[] clock;
@@ -37,7 +37,7 @@ class MixedShotTest {
             this.clock = clock;
         }
 
-        /** Тик звукового движка: звук тикает, остановленный — помечается. */
+        /** tick sound engine: the sound is ticking, stopped - marked. */
         void tick() {
             shot.tick();
             if (shot.isStopped() && stoppedAt == Integer.MAX_VALUE) stoppedAt = clock[0];
@@ -70,7 +70,7 @@ class MixedShotTest {
         return b;
     }
 
-    /** Уступивший голос: тик полной громкости, потом к нулю за {@link BlastVoices#FADE} тика — и звук снят. */
+    /** The yielding voice: tick at full volume, then to zero for {@link BlastVoices#FADE} tick - and the sound is removed. */
     @Test
     void yieldedShotHoldsATickThenFadesAndStops() {
         Mix mix = new Mix();
@@ -84,11 +84,11 @@ class MixedShotTest {
         for (double f : want) {
             s.tick();
             assertFalse(s.isStopped());
-            assertEquals(k * f, s.level(), 1e-6, "громкость уступившего голоса");
+            assertEquals(k * f, s.level(), 1e-6, "volume of the yielding voice");
         }
         s.tick();
-        assertTrue(s.isStopped(), "стих — снят");
-        // запись кончилась — снят и без уступки
+        assertTrue(s.isStopped(), "verse - removed");
+        // the recording ended - removed and without assignment
         ClientSounds.MixedShot t = shot(b, 2);
         t.tick();
         assertFalse(t.isStopped());
@@ -106,9 +106,9 @@ class MixedShotTest {
     }
 
     /**
-     * Переход в порядке Minecraft (ревью R4: было 4/9, 6/9, 8/9 мощности): громкий новый приходит в тике клиента после
-     * тика движка, хвост уступает; в каждом следующем тике движка голос тикает и отдаёт громкость, а петля гула считает
-     * свою там же, по тем же часам — мощность голоса и гула вместе — доля хвоста в смеси в каждом тике.
+     * Transition in order Minecraft (review of R4: there were 4/9, 6/9, 8/9 power): loud new one comes to the client tick after
+     * tick engine, the tail is inferior; in each next tick of the engine, the voice ticks and gives off volume, and the hum loop counts its own
+     *  in the same place, according to the same clock - the power of the voice and hum together - the share of the tail in the mixture in each tick.
      */
     @Test
     void minecraftTickOrderKeepsTheHandoverPower() {
@@ -121,25 +121,25 @@ class MixedShotTest {
         BlastVoices.Voice v = voices.admit(tail, List.of(old), 0, 0, 1, 1, 1, Integer.MAX_VALUE);
         assertNotNull(v);
         voices.started(v, 1, 0);
-        // тик клиента 20, после тика движка 20: пришёл громкий, хвост уступает
+        // client tick 20, after the engine tick 20: loud came, tail gives way
         clock[0] = 20;
         mix.at(20);
         Mix.Blast big = flat(mix, 20, 1);
         Engine loud = new Engine(shot(big, 400), clock);
-        assertNotNull(voices.admit(big, List.of(loud), 20, 0, 1, 1, 1, Integer.MAX_VALUE), "громкий — с голосом");
-        assertTrue(v.fading(), "хвост уступил");
+        assertNotNull(voices.admit(big, List.of(loud), 20, 0, 1, 1, 1, Integer.MAX_VALUE), "loud - with a voice");
+        assertTrue(v.fading(), "the tail gave way");
         double want = tail.factor() * tail.factor() * tail.voiced(20);
         for (int e = 21; e <= 20 + BlastVoices.FADE + 3; e++) {
             clock[0] = e;
-            // тик движка: голос тикает и отдаёт громкость, петля считает свою в своём тике
+            // tick engine: the voice ticks and gives volume, the loop counts its own in its tick
             old.tick();
             rumble.tick(e);
             double level = old.shot.isStopped() ? 0 : old.shot.level(), voice = level * level * tail.voiced(20);
-            assertEquals(want, voice + rumble.total(), 1e-9, "тик движка " + e + ": голос " + voice / want + ", гул " + rumble.total() / want);
-            // тик клиента после него: бюджет видит, что держит движок
+            assertEquals(want, voice + rumble.total(), 1e-9, "tick engine " + e + ": voice " + voice / want + ", hum " + rumble.total() / want);
+            // client tick after it: the budget sees what the engine is holding
             voices.prune(e);
         }
         assertTrue(old.shot.isStopped());
-        assertEquals(0, voices.voices().stream().filter(x -> x == v).count(), "хвост вернул канал — голоса нет");
+        assertEquals(0, voices.voices().stream().filter(x -> x == v).count(), "the tail returned the channel - no voice");
     }
 }

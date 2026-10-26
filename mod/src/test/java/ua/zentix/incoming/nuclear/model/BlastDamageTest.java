@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlastDamageTest {
-    /** Импульс Кинни–Грэхема против UFC 3-340-02 (рис. 2-7, свободный воздух): в пределах 20 %. */
+    /** Kinney–Graham impulse against UFC 3-340-02 (Fig. 2-7, free air): within 20%. */
     @ParameterizedTest
     @CsvSource({"1, 134", "10, 18"})
     void impulseMatchesUfc(double z, double scaledPas) {
@@ -17,21 +17,21 @@ class BlastDamageTest {
         assertEquals(scaledPas, i, 0.2 * scaledPas, "Z = " + z);
     }
 
-    /** Импульс растёт как ∛W при той же приведённой дальности. */
+    /** The momentum grows as ∛W at the same reduced range. */
     @Test
     void impulseScalesWithCubeRoot() {
         double w = 125;
         assertEquals(5 * BlastModel.chemicalImpulse(2, 1, false), BlastModel.chemicalImpulse(2 * 5, w, false), 1e-6);
     }
 
-    /** Порог кладки (12 psi) и дерева (5 psi) у большого заряда — уровни A и B Джаррета (3,8 и 5,6), в пределах 5 %. */
+    /** Threshold of masonry (12 psi) and wood (5 psi) at a large charge - Jarrett levels A and B (3,8 and 5,6), within 5 %. */
     @Test
     void thresholdsAreJarrettLevels() {
         assertEquals(BlastDamage.JARRETT_A, BlastDamage.scaledRange(BlastModel.kpa(12)), 0.05 * BlastDamage.JARRETT_A);
         assertEquals(BlastDamage.JARRETT_B, BlastDamage.scaledRange(BlastModel.kpa(5)), 0.05 * BlastDamage.JARRETT_B);
     }
 
-    /** Кривая давление–импульс даёт радиус Джаррета у зарядов оружия (3 кг — 2,4 т) с точностью таблицы. */
+    /** The pressure-impulse curve gives the Jarrett radius of weapon charges (3 kg - 2,4 t) with the accuracy of the table. */
     @ParameterizedTest
     @CsvSource({"12, 3", "12, 50", "12, 150", "12, 2400", "5, 6.4", "5, 50", "5, 150", "2, 50", "0.8, 150"})
     void curveGivesJarrettRadius(double psi, double tnt) {
@@ -43,10 +43,10 @@ class BlastDamageTest {
             else hi = m;
         }
         double jarrett = BlastDamage.breakRange(pc, tnt);
-        assertEquals(jarrett, lo, 0.03 * jarrett, psi + " psi, " + tnt + " кг");
+        assertEquals(jarrett, lo, 0.03 * jarrett, psi + " psi, " + tnt + " kg");
     }
 
-    /** Радиусы паспорта: шахед сносит дерево в ~5 м, кладку в ~3,4 м; «Томагавк» — 11 и 7 м (Джаррет B и A). */
+    /** Spec radii: Shahed demolishes a tree in ~5 m, masonry in ~3,4 m; "Tomahawk" - 11 and 7 m (Jarrett B and A). */
     @Test
     void passportRadii() {
         assertEquals(5.1, BlastDamage.breakRange(BlastModel.kpa(5), 50), 0.6);
@@ -55,7 +55,7 @@ class BlastDamageTest {
         assertEquals(7.0, BlastDamage.breakRange(BlastModel.kpa(12), 150), 0.8);
     }
 
-    /** У ядерной волны импульс на порядки выше кривой: ответ блока по давлению и импульсу тот же, что по одному давлению. */
+    /** The nuclear wave has an impulse that is orders of magnitude higher than the curve: the response of the block in terms of pressure and impulse is the same as in terms of pressure alone. */
     @Test
     void nuclearAnswerUnchanged() {
         double tnt = 0.5 * 15e6;
@@ -65,36 +65,36 @@ class BlastDamageTest {
                 double psi = BlastModel.psi(BlastModel.surfaceOverpressureKpa(range, tnt));
                 double impulse = BlastModel.chemicalImpulse(range, tnt, true);
                 for (int seed = 0; seed < 64; seed++) {
-                    assertEquals(r.breaksAt(psi, seed), r.breaksAt(psi, impulse, seed), threshold + " psi на " + range + " м");
+                    assertEquals(r.breaksAt(psi, seed), r.breaksAt(psi, impulse, seed), threshold + " psi on " + range + " m");
                 }
             }
         }
     }
 
-    /** Газы 10 кг в комнате 3×3×3: 2,25·(10/27)^0,72 МПа ≈ 1,1 МПа; без проёмов держатся, с окном 1 м² — ~0,13 с. */
+    /** Gases 10 kg in the room 3×3×3: 2,25·(10/27)^0,72 MPa ≈ 1,1 MPa; without openings they hold, with a window 1 m² - ~0,13 s. */
     @Test
     void roomGasPressure() {
         assertEquals(1101, BlastDamage.quasiStaticKpa(10, 27), 5);
         assertTrue(Double.isInfinite(BlastDamage.ventSeconds(27, 0)));
         assertEquals(0.132, BlastDamage.ventSeconds(27, 1), 0.002);
-        // газы шахеда в доме 5×8×5 ломают кладку стен целиком (давление выше порога, импульс — у кривой нет предела)
+        // shahed gases in the house 5×8×5 break the entire masonry of the walls (pressure is above the threshold, impulse - the curve has no limit)
         double kpa = BlastDamage.quasiStaticKpa(50, 200);
         assertTrue(BlastDamage.breaks(kpa, kpa * 1000 * BlastDamage.ventSeconds(200, 8), BlastModel.kpa(12 * BlockResponse.JITTER_MAX)));
     }
 
-    /** Сломанный блок у порога гасит волну, глубоко в зоне — почти не мешает. */
+    /** A broken block at the threshold dampens the wave, deep in the zone it hardly interferes. */
     @Test
     void brokenBlockPassesTheRest() {
         double pc = BlastModel.kpa(5);
         double edge = BlastDamage.breakRange(pc, 50);
         double near = BlastDamage.passes(BlastModel.surfaceOverpressureKpa(1, 50), BlastModel.chemicalImpulse(1, 50, true), pc);
         double far = BlastDamage.passes(BlastModel.surfaceOverpressureKpa(edge * 0.98, 50), BlastModel.chemicalImpulse(edge * 0.98, 50, true), pc);
-        assertTrue(near > 0.5, "у заряда " + near);
-        assertTrue(far < 0.1, "у края " + far);
+        assertTrue(near > 0.5, "at the charge " + near);
+        assertTrue(far < 0.1, "at the edge " + far);
         assertEquals(0, BlastDamage.passes(BlastModel.surfaceOverpressureKpa(edge * 1.2, 50), BlastModel.chemicalImpulse(edge * 1.2, 50, true), pc));
     }
 
-    /** Воронка шахеда в сухом грунте — 2,4 м в диаметре, 0,6 м глубиной; шар топлива 30 кг — 18 м, 1,4 с, ~9 кал/см². */
+    /** crater Shahed in dry soil - 2,4 m in diameter, 0,6 m in depth; ball of fuel 30 kg - 18 m, 1,4 s, ~9 cal/cm². */
     @Test
     void craterAndFuelFireball() {
         assertEquals(1.2, CraterModel.chargeRadius(50, CraterModel.Soil.DRY), 0.01);
@@ -103,7 +103,7 @@ class BlastDamageTest {
         assertEquals(18.0, FuelFireball.diameter(30), 0.1);
         assertEquals(1.40, FuelFireball.seconds(30), 0.01);
         assertEquals(9.2, FuelFireball.exposure(30), 0.2);
-        // шаром горят три четверти топлива к удару: у шахеда 22,5 кг из 30
+        // ball burns three quarters of the fuel to impact: Shahed 22,5 kg from 30
         assertEquals(22.5, FuelFireball.ballKg(30), 1e-9);
     }
 }

@@ -19,14 +19,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Серверы проверок (стенд нагрузки, мультиплеер без окон, клиенты сценариев и боевой клиент) слушают только петлю:
- * сервер с {@code online-mode=false} на 0.0.0.0:25565 находят сканеры из интернета. Скрипты пишут
- * {@code server-ip=127.0.0.1}, а этот сторож роняет сервер, если сокет всё же открыт не на петле: выделенный —
- * до загрузки мира ({@link ServerAboutToStartEvent} приходит сразу после bind), открытый позже мир (LAN) — по тику.
- * Сокеты — все каналы {@link ServerConnectionListener}: TCP игры и UDP Sable (его миксин кладёт свой канал в тот же
- * список, на тот же адрес). Выделенный сервер NeoForge ещё и объявляет себя в LAN ({@code advertiseDedicatedServerToLan}:
- * {@code LanServerPinger} с UDP-сокетом на 0.0.0.0, раз в 1,5 с шлёт MOTD и порт на 224.0.2.60:4445) — у серверов
- * проверок это выключено, включённое тоже роняет сервер. В jar мода не входит (devtest).
+ * Check servers (load stand, windowless multiplayer, scenario clients and combat client) listen only to the loop:
+ * server from {@code online-mode=false} to 0.0.0.0:25565 are found by scanners from the Internet. The scripts write
+ * {@code server-ip=127.0.0.1}, and this guard drops the server if the socket is still open not on a loop: the selected one is
+ *  before loading the world ({@link ServerAboutToStartEvent} comes immediately after bind), the world opened later (LAN) - by tick.
+ * Sockets - all {@link ServerConnectionListener} channels: TCP games and UDP Sable (its mixin puts its channel in the same
+ *  list, at the same address). The dedicated server NeoForge also advertises itself in LAN ({@code advertiseDedicatedServerToLan}:
+ * {@code LanServerPinger} with a UDP socket on 0.0.0.0, once in 1,5 s sends MOTD and port on 224.0.2.60:4445) - for servers
+ *  checks this is turned off, turning it on also crashes the server. jar does not include mod (devtest).
  */
 @Mod(Incoming.MOD_ID)
 public final class LoopbackGuard {
@@ -42,13 +42,13 @@ public final class LoopbackGuard {
         MinecraftServer server = e.getServer();
         String bad = publicAddress(server);
         if (bad == null && server.isDedicatedServer() && NeoForgeConfig.SERVER.advertiseDedicatedServerToLan.get()) {
-            // конфиги сервера уже загружены (до события), а объявление в LAN стартует после него
-            bad = "объявление в LAN (advertiseDedicatedServerToLan = true в config/neoforge-server.toml)";
+            // server configs are already loaded (before the event), and the advertisement in LAN starts after it
+            bad = "ad in LAN (advertiseDedicatedServerToLan = true in config/neoforge-server.toml)";
         }
         if (bad == null) return;
-        Incoming.LOG.error("RIG сервер проверки открыт в сеть: {} — сервер остановлен", bad);
+        Incoming.LOG.error("RIG the verification server is open to the network: {} - the server is stopped", bad);
         server.getConnection().stop();
-        throw new IllegalStateException("сервер проверки открыт в сеть: " + bad);
+        throw new IllegalStateException("the verification server is open to the network: " + bad);
     }
 
     private static void onTick(ServerTickEvent.Post e) {
@@ -56,12 +56,12 @@ public final class LoopbackGuard {
         if (server.getTickCount() % PERIOD != 0) return;
         String bad = publicAddress(server);
         if (bad == null) return;
-        Incoming.LOG.error("RIG сервер проверки слушает не петлю: {} — мир открыт в сеть, сервер остановлен", bad);
+        Incoming.LOG.error("RIG the verification server is not listening to the loop: {} - the world is open to the network, the server is stopped", bad);
         server.getConnection().stop();
         server.halt(false);
     }
 
-    /** Первый адрес слушающего сокета сервера (TCP игры, UDP Sable), который не петля, или null. */
+    /** The first address of the server's listening socket (TCP game, UDP Sable) that is not a loopback, or null. */
     @Nullable
     public static String publicAddress(MinecraftServer server) {
         ServerConnectionListener connection = server.getConnection();
@@ -74,7 +74,7 @@ public final class LoopbackGuard {
         return firstPublic(addresses);
     }
 
-    /** Первый адрес, который не петля (0.0.0.0 и :: тоже), или null; канал в памяти (LocalAddress) — не сеть. */
+    /** The first address that is not a loop (0.0.0.0 and :: too), or null; channel in memory (LocalAddress) is not a network. */
     @Nullable
     public static String firstPublic(List<SocketAddress> addresses) {
         for (SocketAddress address : addresses) {
@@ -85,7 +85,7 @@ public final class LoopbackGuard {
         return null;
     }
 
-    /** Живой список каналов сервера (синхронизированный, как у ванили): в него кладёт свой канал и Sable. */
+    /** Live list of server channels (synchronized, like vanilla): puts your channel and Sable in it. */
     @SuppressWarnings("unchecked")
     public static List<ChannelFuture> channels(ServerConnectionListener connection) {
         try {
