@@ -1092,10 +1092,9 @@ final class SmokePuffs {
                 double u = 2.0 * i / OCCLUSION_CELLS - 1, v = 2.0 * j / OCCLUSION_CELLS - 1;
                 double sign = (face & 1) == 0 ? 1 : -1;
                 int axis = face / 2, q = 3 * (face * OCCLUSION_FACE + j * OCCLUSION_SIDE + i);
-                double norm = Math.sqrt(1 + u * u + v * v);
-                rays[q] = (axis == 0 ? sign : u) / norm;
-                rays[q + 1] = (axis == 0 ? u : axis == 1 ? sign : v) / norm;
-                rays[q + 2] = (axis == 2 ? sign : v) / norm;
+                rays[q] = axis == 0 ? sign : u;
+                rays[q + 1] = axis == 0 ? u : axis == 1 ? sign : v;
+                rays[q + 2] = axis == 2 ? sign : v;
             }
             return rays;
         }
@@ -1147,7 +1146,7 @@ final class SmokePuffs {
                 planSeen[e] = Math.exp(-least);
                 double hidden = 0;
                 if (!planNear[e] && planFlat[e] == 0) {
-                    for (int j = 0; j < 8; j++) {
+                    for (int j = 0; j < 8 && least > 2; j++) {
                         double a = ra * RING_X[j], b = rb * RING_Y[j];
                         least = Math.min(least, occlusion(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz));
                     }
@@ -1171,6 +1170,9 @@ final class SmokePuffs {
                     planShown[e] *= keep;
                 }
                 if (!(tau > 0) || !(ra > 0) || !(rb > 0) || planFlat[e] > 0) continue;
+                // Ray length cancels in the plane ratios. Scale the axes once and reject outside nodes before dividing.
+                double sa = d / ra, sb = d / rb;
+                double ax = sa * hx, az = sa * hz, bx = sb * ux, by = sb * uy, bz = sb * uz;
                 double radius = Math.max(ra, rb);
                 // Core-sphere bounds on each face only limit traversal; the actual plane determines the contribution.
                 for (int face = 0; face < 6; face++) {
@@ -1198,9 +1200,10 @@ final class SmokePuffs {
                         double rx = occlusionRays[r], ry = occlusionRays[r + 1], rz = occlusionRays[r + 2];
                         double den = fx * rx + fy * ry + fz * rz;
                         if (!(den > 0)) continue;
-                        double distance = d / den, a = distance * (hx * rx + hz * rz) / ra,
-                                b = distance * (ux * rx + uy * ry + uz * rz) / rb;
-                        double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, a * a + b * b);
+                        double a = ax * rx + az * rz, b = bx * rx + by * ry + bz * rz;
+                        double numerator = a * a + b * b, denominator = den * den;
+                        if (numerator >= denominator) continue;
+                        double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, numerator / denominator);
                         occlusion[q] = Math.min(12, occlusion[q] + tau * weight);
                     }
                 }

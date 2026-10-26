@@ -762,6 +762,11 @@ paths:
   The grid also changed veil priority, so merely fading rejected records would not suffice. The new field has 24×24
   cells per cube face, shared seam nodes and bilinear sampling. Nearby cores add optical depth with a smooth edge;
   nine rays through a distant core take its minimum, fading the clump between depths 2 and 3 (old full cutoff).
+  Deposit uses unnormalized cube rays: ray length cancels in the plane ratios. Scaled puff axes and a squared
+  ellipse rejection leave one division only at contributing nodes. This preserves the field and its resolution.
+  Ring sampling stops once the minimum is at most 2, since further rays cannot enable concealment.
+  `SmokeOcclusionTest` compares the actual
+  deposit with normalized ray/plane intersections at every node, including cube seams, poles and overlapping cores.
   Partial concealment enters the rendering record's visibility (`held`/`places`) and priority before merging.
   A separate partial-hide flag prevented merging, leaving about two extra screens of floor and giving nearly
   invisible places their original budget priority.
