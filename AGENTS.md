@@ -23,7 +23,7 @@ When planning before opening files, read the area rules by their descriptions be
 including shell reads. New area rules/pitfalls go in their area file; only session-wide rules belong here.
 
 ## People and communication
-- Author/host: **Artem**, in-game **ZentixUA**. Friends: **ENOTzRPG**, **WallyFillmark**.
+- Author/host: **Artem**, in-game **ZentixUA**.
 - Chat in Russian, briefly and directly.
 - Public text is English: README.md, guide, mod description, store pages (docs/store), release notes, en_us keys;
   update Russian translations (README.ru.md, docs/guide/ru, ru_ru) in the same PR. Write plainly and precisely, without
@@ -175,6 +175,9 @@ Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
   (`nuclear.md`). Fallout game clock: 1000 ticks = 1 hour.
 
 ## Workflow
+The repository contains only shared contributor resources. Personal agent launchers, session records and
+machine-specific job notes belong outside version control.
+
 Agent workflow: task → branch → code → build/tests → PR → CI → one review round → merge. Extra checks only for
 visuals/sound/FPS, since tests cannot judge beauty or lag. First principles throughout: derive from how the thing
 actually works, fix the real cause.
