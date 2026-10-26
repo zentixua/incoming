@@ -1,0 +1,18 @@
+{
+  "values": {
+    "minecraft:blackstone": [
+      0,
+      4
+    ],
+    "minecraft:basalt": [
+      1
+    ],
+    "minecraft:magma_block": [
+      2,
+      5
+    ],
+    "minecraft:coal_block": [
+      3
+    ]
+  }
+}

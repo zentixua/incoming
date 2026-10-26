@@ -69,10 +69,6 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
             return refA + 10 * Math.log10(power * n * n * n / refPower) - spectrum.aWeighting();
         }
 
-        /** Nominal blade passage frequency, Hz. */
-        public double bladePass() {
-            return blades * rpm / 60;
-        }
     }
 
     /**

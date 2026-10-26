@@ -1874,7 +1874,7 @@ public final class StrikeGameTests {
             var flights = FarFlights.flights(level);
             h.assertTrue(flights.stream().anyMatch(f -> f.getUUID().equals(r.getUUID()) && f.isVirtual()), "снаряда нет среди летящих вне мира");
             Vec3 at = r.position();
-            Propagation.Weather weather = Propagation.Weather.of(level);
+            Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(level);
             double heard = Hearing.range(r, 0, weather);
             h.assertTrue(heard > 50 && heard < 0.5 * FarFlights.range(), "по инерции слышно до " + heard);
             // только свой снаряд: в партии и в части CI летят и снаряды других проверок (порядок партий зависит от деления)

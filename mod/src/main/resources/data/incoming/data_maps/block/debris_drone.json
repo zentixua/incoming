@@ -1,0 +1,24 @@
+{
+  "values": {
+    "minecraft:gray_concrete": [
+      0
+    ],
+    "minecraft:light_gray_concrete": [
+      1,
+      7
+    ],
+    "#incoming:debris/frame": [
+      2,
+      6
+    ],
+    "minecraft:black_concrete": [
+      3
+    ],
+    "minecraft:iron_trapdoor": [
+      4
+    ],
+    "minecraft:chain": [
+      5
+    ]
+  }
+}

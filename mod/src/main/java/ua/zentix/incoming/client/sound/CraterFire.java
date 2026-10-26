@@ -55,7 +55,7 @@ final class CraterFire {
     /** One tick: is it heard now ({@link #hear}); false — the fire is over (or the world changed). */
     boolean tick(Minecraft mc) {
         if (mc.level != world) return false;
-        return hear(mc.gameRenderer.getMainCamera().getPosition(), Propagation.Weather.of(world));
+        return hear(mc.gameRenderer.getMainCamera().getPosition(), ua.zentix.incoming.util.Air.weather(world));
     }
 
     /**
