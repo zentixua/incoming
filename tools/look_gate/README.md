@@ -1,8 +1,9 @@
 # Picture and sound look gate
 
-Only a one-time comparison with 3.4.1 (solution by Artem 23.10, `docs/dev-pipeline.md`): frames and sound from full modpack under Iris
+Only a one-time comparison with 3.4.1: frames and sound from full modpack under Iris
  on a laptop from the same points, in one go, until the scenes reach the level of 3.4.1; then the look gate is removed. It does not serve as a condition for
  to join PR: in PR - frames and WAV dev client “before and after”.
+For ongoing PR requirements, see [visual and audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks).
 
 Scenes - `ProbeScenario` (client scenario `probe`, `mod/src/devtest`): Shahed in 50 and 300 blocks day and night,
  "Grad" salvo day and night, rocket launch from behind (above jet of the

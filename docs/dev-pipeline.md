@@ -2,7 +2,7 @@
 
 Use NeoForge, Gradle and established community tools where they meet the project's needs. Keep custom helpers
 only for capabilities the standard tools do not provide. The workflow and architecture rules are in
-[AGENTS.md](../AGENTS.md); the contributor steps are in [dev-process.md](dev-process.md).
+[AGENTS.md](../AGENTS.md); the contributor steps are in [contributor workflow](dev-process.md#prepare-a-focused-change).
 
 ## 1. Build and runtime dependencies
 

@@ -4323,7 +4323,7 @@ public final class StrikeGameTests {
 
     @GameTest(template = "pad", timeoutTicks = 5)
     public static void dataSurvivesSaving(GameTestHelper h) {
-        Loadout l = new Loadout(WeaponType.BUNKER, 7, 33, TargetMode.PLAYER, "ENOTzRPG", new Loadout.Nuke(100, false, true));
+        Loadout l = new Loadout(WeaponType.BUNKER, 7, 33, TargetMode.PLAYER, "Steve", new Loadout.Nuke(100, false, true));
         h.assertTrue(l.nuclear(), "B-2 с ядерной БЧ");
         Loadout back = Loadout.CODEC.parse(NbtOps.INSTANCE, Loadout.CODEC.encodeStart(NbtOps.INSTANCE, l).getOrThrow()).getOrThrow();
         h.assertTrue(l.equals(back), "пульт не пережил сохранение: " + back);
