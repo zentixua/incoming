@@ -227,8 +227,13 @@ public final class WorkScheduler {
         Blackouts.work(server, levels, grid);
 
         OWN[Math.floorMod(server.getTickCount(), OWN.length)] = impact.usedThisTickNanos() + nuclear.usedThisTickNanos() + grid.usedThisTickNanos();
-        if (timing.active) timing.finish(server, impact.usedThisTickNanos() + nuclear.usedThisTickNanos() + grid.usedThisTickNanos());
         report(server, impact.usedThisTickNanos(), nuclear.usedThisTickNanos(), grid.usedThisTickNanos());
+    }
+
+    /** Include other mods' normal/low-priority Post work in the next tick's mandatory reserve. */
+    public static void onServerTickEnd(ServerTickEvent.Post e) {
+        ImpactTiming timing = timing(e.getServer());
+        if (timing.active) timing.finish(e.getServer(), ownNanos(e.getServer().getTickCount()));
     }
 
     /**

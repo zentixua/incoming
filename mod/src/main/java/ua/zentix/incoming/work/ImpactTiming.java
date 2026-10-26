@@ -96,7 +96,7 @@ public final class ImpactTiming implements ProfilerFiller {
     @Override public void push(Supplier<String> name) { depth++; }
 
     @Override public void pop() {
-        if (depth == optionalDepth) {
+        if (optionalDepth >= 0 && depth == optionalDepth) {
             optionalNanos += time.getAsLong() - optionalStarted;
             optionalDepth = -1;
         }

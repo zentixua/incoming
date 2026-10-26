@@ -38,6 +38,21 @@ class ImpactTimingTest {
         assertEquals(50 * MS, timing.mandatoryNanos(0));
     }
 
+    @Test void lateMandatoryWorkAndAnOuterProfilerPopAreNotOptionalSaving() {
+        long[] now = {0};
+        ImpactTiming timing = new ImpactTiming(() -> now[0]);
+        timing.begin(() -> true);
+        now[0] += 30 * MS;
+        timing.push("chunk_unload");
+        now[0] += 5 * MS;
+        timing.pop();
+        now[0] += 10 * MS; // another mod's Post handler, before the LOWEST measurement endpoint
+        timing.pop(); // an outer profiler section began before this observer was installed
+        timing.pop();
+        assertEquals(5 * MS, timing.optionalNanos());
+        assertEquals(40 * MS, timing.mandatoryNanos(0));
+    }
+
     @Test void unknownCostAndRecentMandatorySpikeDoNotGrantThirtyMilliseconds() {
         TickReserve reserve = new TickReserve();
         assertEquals(0, reserve.earlyNanos(30 * MS, 0, 50 * MS));
