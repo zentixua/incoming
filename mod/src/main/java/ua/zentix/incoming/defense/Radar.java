@@ -17,27 +17,29 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Радар: какие снаряды мода видно из точки и чьи они. Смотрит только список снарядов мира ({@link StrikeWorld#projectiles}:
- * в мире и вне его) — мир не обходит, поэтому одинаково видит и снаряд в загруженных чанках, и летящий вне мира.
- * Игроков, мобов и аппараты Create Aeronautics радар не видит: только снаряды мода.
+ * Radar: which mod projectiles are visible from a point and who owns them. Uses only the world's projectile list
+ * ({@link StrikeWorld#projectiles}: inside and outside the world), without scanning the world, so it sees
+ * loaded-chunk projectiles and virtual flights equally. Radar sees no players, mobs, or Create Aeronautics craft:
+ * only mod projectiles.
  * <p>
- * Своя игровая модель (не по физике): видно снаряд ближе дальности радара (у малозаметного — ближе, по его паспорту
- * {@link WeaponSpec.Signature}), если между антенной и ним прямую не закрывают земля и постройки
- * ({@link LineOfSight}: карты высот только готовых чанков, неготовый чанк прямую не закрывает — чанков радар не
- * грузит). Ракета на бреющем за холмом не видна, пока не выйдет из-за него. Стоит ли снаряд ракеты — тоже паспорт:
- * МБР не догнать, «Град» не стоит ракеты. Свои — тот же игрок или его команда ({@link Sides}); снаряд без владельца
- * (консоль, командный блок) — чужой. Огонь — отдельно ({@link FireControl}): тот же радар возьмёт и переносной ЗРК.
+ * Our own game model (not physical): a projectile is visible within radar range (closer for low signatures, per
+ * {@link WeaponSpec.Signature}) if ground or structures do not block the antenna-to-target line ({@link
+ * LineOfSight}: heightmaps from ready chunks only; unready chunks do not block it, and radar loads no chunks). A
+ * terrain-hugging missile behind a hill is unseen until it emerges. The spec also decides whether a projectile is
+ * worth a missile: an ICBM cannot be caught; a Grad is not worth one. Friendly means the same player or their
+ * team ({@link Sides}); an ownerless projectile (console, command block) is hostile. Fire control is separate
+ * ({@link FireControl}): a portable SAM can reuse the radar.
  */
 public final class Radar {
     private Radar() {}
 
     /**
-     * Цель на экране радара.
+     * Radar screen target.
      *
-     * @param projectile снаряд (в мире или вне его)
-     * @param distance   до него, блоков
-     * @param hostile    чужой
-     * @param engageable чужой, стоит ракеты, без седока и ближе дальности огня
+     * @param projectile projectile (inside or outside the world)
+     * @param distance distance to it, blocks
+     * @param hostile hostile
+     * @param engageable hostile, worth a missile, without a rider, and within engagement range
      */
     public record Track(StrikeProjectile projectile, double distance, boolean hostile, boolean engageable) {
         public UUID id() {
@@ -49,7 +51,10 @@ public final class Radar {
         }
     }
 
-    /** Снаряд в воздухе: не убран, не в ячейке и не на направляющей пусковой (её радар не отличит от земли), не в грунте. */
+    /**
+     * Airborne projectile: not removed, not in a launcher cell or on its rail (radar cannot distinguish that from
+     * ground), not underground.
+     */
     public static boolean airborne(StrikeProjectile p) {
         if (p.isRemoved() || !p.isActive()) return false;
         FlightPhase ph = p.flightPhase();
@@ -57,11 +62,11 @@ public final class Radar {
     }
 
     /**
-     * Что видит радар в точке {@code at}, от ближних к дальним: ближе дальности и не за рельефом.
+     * What radar sees at {@code at}, nearest first: within range and not behind terrain.
      *
-     * @param range       дальность радара, блоков (малозаметные — ближе, по паспорту)
-     * @param engageRange дальность огня, блоков
-     * @param owner       чей радар (null — ничей: чужие ему все)
+     * @param range radar range, blocks (closer for low signatures, per spec)
+     * @param engageRange engagement range, blocks
+     * @param owner radar owner (null means unowned: everyone is hostile)
      */
     public static List<Track> scan(ServerLevel level, Vec3 at, double range, double engageRange, @Nullable UUID owner) {
         MinecraftServer server = level.getServer();
@@ -76,7 +81,7 @@ public final class Radar {
             if (d > range * sig.visibility()) continue;
             if (!LineOfSight.clear(level, at, p.position())) continue;
             boolean hostile = !Sides.friendly(server, owner, p.ownerId());
-            // снаряд с седоком — не цель: ракета ЗРК не идёт за тем, на ком кто-то сидит
+            // A projectile with a rider is not a target: the SAM missile does not pursue anything carrying someone.
             boolean engageable = hostile && sig.intercept() && !p.isVehicle() && d <= engageRange;
             out.add(new Track(p, d, hostile, engageable));
         }

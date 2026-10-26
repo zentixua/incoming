@@ -20,37 +20,36 @@ import ua.zentix.incoming.target.Target;
 import java.util.UUID;
 
 /**
- * Барражирующий боеприпас в духе «Ланцета»: маленький электрический дрон с двумя крестами крыльев. Старт
- * с катапульты (пневматический толчок, без ускорителя), крылья раскрываются в воздухе, дальше — прямо к цели,
- * над ней — круги на высоте крейсера из паспорта выше цели ({@link FlightPhase#LOITER}) в ожидании. Круг
- * следует за движущейся целью (замеченной — пока оператор держит её в кадре камеры, {@code strike.CameraLink}).
- * Время барража — {@code loiter_time} из настроек (у каждого в залпе своё ±20%), потом крутое пикирование с разгоном
- * до 4 блоков/тик. Из камеры снаряда (ЛКМ) оператор выбирает цель сам —
- * пикирование сразу, если цель рядом; иначе боеприпас летит к ней и кружит уже там. По маршруту оператора
- * ({@code Waypoints}) он сначала проходит его точки, а к кругу выходит уже с последнего участка.
+ * Lancet-style loitering munition: small electric drone with two cruciform wing sets. Catapult launch (pneumatic
+ * impulse, no booster), wings unfold in air, then straight to the target and circles above it at spec cruise
+ * height ({@link FlightPhase#LOITER}) while waiting. The orbit follows a moving target (a sighted target only
+ * while held in the operator's camera frame, {@code strike.CameraLink}). Loiter time is {@code loiter_time} from
+ * settings (each salvo member ±20%), then a steep dive accelerating to 4 blocks/tick. From the projectile camera
+ * (left-click), the operator selects a target: dive immediately if nearby, otherwise fly there and orbit there.
+ * With an operator route ({@code Waypoints}), first pass its points, then join the orbit from the final leg.
  */
 public class LoiterEntity extends StrikeProjectile {
-    /** Паспорт: скорости (≈115 км/ч, в пике 4 блока/тик), пределы поворота, высота круга над целью, катапульта. */
+    /** Spec: speeds (≈115 km/h, dive 4 blocks/tick), turn limits, orbit height above target, catapult. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.LOITER.airframe();
     private static final WeaponSpec.Handling HANDLING = AIR.handling();
-    /** Радиус круга над целью. */
+    /** Orbit radius above the target. */
     public static final double LOITER_RADIUS = 40;
-    /** Перенацеленный ближе этого (по горизонтали) пикирует сразу, без круга. */
+    /** Retargeted within this horizontal distance: dive immediately without orbiting. */
     private static final double STRIKE_NOW = 140;
-    /** Сколько тиков в среднем уходит на пикирование с круга (для времени до удара). */
+    /** Average ticks for the dive from orbit (for time to impact). */
     public static final int DIVE_TICKS = 25;
-    /** Пике мимо: дальше ближайшего подхода к цели на столько блоков — снова на круг и новый заход. */
+    /** Missed dive: this many blocks beyond closest approach, return to orbit and approach again. */
     private static final double MISSED_BY = 20;
 
     private double cruiseAlt;
-    /** Сколько кружить над целью, тиков (задаётся при пуске). */
+    /** Ticks to circle above the target (set at launch). */
     private int loiterTicks;
-    /** Направление круга: +1 или −1 (у залпа — вразнобой). */
+    /** Orbit direction: +1 or −1 (mixed within a salvo). */
     private int orbitSide = 1;
     private double orbitRadius = LOITER_RADIUS;
-    /** Оператор выбрал цель из камеры (или пике прошло мимо): пикировать, не дожидаясь конца круга. */
+    /** Operator selected a target from camera (or dive missed): dive without waiting for the orbit to end. */
     private boolean strikeNow;
-    /** Ближайший подход к цели в этом пике, блоков. */
+    /** Closest approach to target in this dive, blocks. */
     private double closest = Double.MAX_VALUE;
 
     public LoiterEntity(EntityType<? extends LoiterEntity> type, Level level) {
@@ -62,14 +61,14 @@ public class LoiterEntity extends StrikeProjectile {
         return WeaponType.LOITER;
     }
 
-    /** Путь кончается у цели только в пике: на подлёте и на круге барража он идёт мимо неё. */
+    /** Path ends at target only during the dive: approach and loiter orbit pass by it. */
     @Override
     @Nullable
     protected Vec3 pathEnd() {
         return flightPhase() == FlightPhase.TERMINAL ? super.pathEnd() : null;
     }
 
-    /** Барраж и круг: у каждого боеприпаса свой (залп расходится по высоте и направлению, пикирует по очереди). */
+    /** Loiter and orbit: each munition has its own (salvo spreads by height and direction, dives in sequence). */
     private void pickOrbit() {
         int seconds = IncomingConfig.SERVER.loiterTime.get();
         loiterTicks = (int) (seconds * 20 * (0.8 + 0.4 * random.nextDouble()));
@@ -77,7 +76,7 @@ public class LoiterEntity extends StrikeProjectile {
         orbitRadius = LOITER_RADIUS * (0.8 + 0.4 * random.nextDouble());
     }
 
-    /** Уже в воздухе (заход издалека, тесты): на высоте круга. */
+    /** Already airborne (approach from afar, tests): at orbit height. */
     @Override
     public void launch(Vec3 pos, Target target, Vec3 targetPoint, @Nullable UUID owner) {
         super.launch(pos, target, targetPoint, owner);
@@ -96,8 +95,8 @@ public class LoiterEntity extends StrikeProjectile {
     }
 
     /**
-     * Пике с круга по плану, тиков: {@link #DIVE_TICKS} с игрового круга; на шкале полёта круг выше (до 700 м) — во
-     * столько раз дольше, во сколько длиннее путь с высоты круга до цели и медленнее (или быстрее) пике.
+     * Planned dive ticks from orbit: {@link #DIVE_TICKS} from game orbit; flight scale raises the orbit (up to
+     * 700 m), increasing time with path length from orbit to target and slower (or faster) dive speed.
      */
     static int diveTicks() {
         double x = FlightScale.x();
@@ -107,28 +106,31 @@ public class LoiterEntity extends StrikeProjectile {
     }
 
     /**
-     * Запас хода — ещё и на круг над целью (на маршевой скорости) и на пике с него (на скорости пике: в тиках плана
-     * {@link #DIVE_TICKS} оно быстрее круга, и на маршевой запаса на пике не хватало бы).
+     * Range also covers the orbit over the target (at cruise speed) and dive from it (at dive speed: over planned
+     * {@link #DIVE_TICKS}, faster than orbit, so cruise-speed range would not cover the dive).
      */
     @Override
     protected double extraRange() {
         return loiterTicks * AIR.cruiseSpeed() + diveTicks() * AIR.diveSpeed();
     }
 
-    /** Катапульта: хлопок и облако пара; ускорителя нет — сбрасывать нечего. */
+    /** Catapult: pop and vapor cloud; no booster to drop. */
     @Override
     protected void separate(ServerLevel level) {}
 
     /**
-     * Круг (до 48 блоков и занос на развороте ~10) должен весь лежать в тикающих чанках, где бы в чанке ни стояла
-     * цель: район цели — 9×9 тикающих чанков (±64 блока от края чанка цели).
+     * The orbit (up to 48 blocks plus ~10 turn drift) must fit entirely in ticking chunks regardless of target
+     * position in its chunk: target area is 9×9 ticking chunks (±64 blocks from target chunk edge).
      */
     @Override
     protected int targetArea() {
         return FlightTickets.LOITER_DISTANCE;
     }
 
-    /** Круг над целью идёт в мире, а время до удара на круге — всё время барража: район тикает, как только взят. */
+    /**
+     * Orbit above target runs in the world; time to impact while circling is the entire loiter time: area ticks
+     * as soon as acquired.
+     */
     @Override
     protected boolean targetAreaTicks() {
         return true;
@@ -158,8 +160,9 @@ public class LoiterEntity extends StrikeProjectile {
     }
 
     /**
-     * Путь по плану до удара, как у времени до удара ({@link #etaTicks}): до круга, остаток круга на маршевой и пике на
-     * скорости пике. Цель, потерянная на круге, не обрывает барраж: «Ланцет» докружит и зайдёт на её последнюю точку.
+     * Planned path to impact, as for time to impact ({@link #etaTicks}): to orbit, remaining orbit at cruise,
+     * then dive at dive speed. Losing a target on orbit does not cut loitering short: the Lancet finishes
+     * circling and approaches its last position.
      */
     @Override
     protected double plannedPathLeft() {
@@ -176,7 +179,7 @@ public class LoiterEntity extends StrikeProjectile {
 
     @Override
     protected void onRetarget() {
-        // рядом — атака сразу; далеко — лететь туда и кружить уже там
+        // Nearby: attack immediately; far away: fly there and orbit there.
         Bearing b = bearingTo(tracker.point());
         strikeNow = b.horizontal() < STRIKE_NOW;
         if (!strikeNow && flightPhase() == FlightPhase.LOITER) setPhase(FlightPhase.CRUISE);
@@ -194,7 +197,7 @@ public class LoiterEntity extends StrikeProjectile {
         double floor = terrain + 15;
 
         if (ph == FlightPhase.CLIMB) {
-            // крылья раскрылись, винт тянет: набор высоты к кругу (по маршруту оператора — к его точке)
+            // Wings unfolded, propeller pulling: climb toward the orbit (or operator route waypoint).
             throttle(AIR.cruiseSpeed());
             holdAltitude(Math.max(cruiseAlt, floor), 0.12, HANDLING.climb());
             flight.steerYaw(bearingTo(navPoint(aim)).yaw(), 0.08, HANDLING.climb().turnRate(), HANDLING.climb().turnAccel());
@@ -204,13 +207,13 @@ public class LoiterEntity extends StrikeProjectile {
             holdAltitude(Math.max(cruiseAlt, floor), 0.12, HANDLING.cruise());
             Vec3 nav = navPoint(aim);
             if (!onFinalLeg()) {
-                // маршрут оператора: точка за точкой, а к кругу — уже с последнего участка
+                // Operator route: point by point, then join the orbit from the final leg.
                 flight.steerYaw(bearingTo(nav).yaw(), 0.15, HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
             } else if (strikeNow) {
                 flight.steerYaw(b.yaw(), 0.15, HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
                 if (b.pitch() >= 30 || b.horizontal() <= orbitRadius + 15) setPhase(FlightPhase.TERMINAL);
             } else {
-                // к кругу — по тому же полю курсов, что и на круге: выход на него по касательной, без перелёта
+                // Approach orbit with the same heading field as on orbit: tangential entry without overshoot.
                 orbit().steer(flight, position(), aim, tracker.velocity(), speed);
                 if (orbit().captured(position(), aim, tracker.velocity(), speed, flight.yaw())) setPhase(FlightPhase.LOITER);
             }
@@ -218,14 +221,14 @@ public class LoiterEntity extends StrikeProjectile {
             throttle(AIR.cruiseSpeed());
             holdAltitude(Math.max(aim.y + AIR.cruiseHeight(), floor), 0.12, HANDLING.cruise());
             orbit().steer(flight, position(), aim, tracker.velocity(), speed);
-            // заход в пике — когда цель под крылом (под углом 40° и круче) и время вышло
+            // Enter dive when target is under the wing (40° or steeper) and time has elapsed.
             boolean due = strikeNow || phaseAge() >= loiterTicks;
             if (due && b.pitch() >= 40) setPhase(FlightPhase.TERMINAL);
         } else if (ph == FlightPhase.TERMINAL) {
             closest = Math.min(closest, b.distance());
             if (b.distance() > closest + MISSED_BY) {
-                // прошёл мимо (цель увернулась, или угла в пике не хватило): не петлять вокруг неё, а, как настоящий
-                // «Ланцет», уйти на круг и зайти снова, как только цель опять под крылом
+                // Passed by (target dodged, or dive angle insufficient): do not weave around it; like a real
+                // Lancet, return to orbit and approach again as soon as the target is under the wing.
                 strikeNow = true;
                 setPhase(FlightPhase.LOITER);
             } else {
@@ -247,7 +250,7 @@ public class LoiterEntity extends StrikeProjectile {
         return new Orbit(orbitRadius, orbitSide);
     }
 
-    /** Радиус круга этого боеприпаса (у каждого в залпе свой), блоков. */
+    /** This munition's orbit radius (each salvo member has its own), blocks. */
     public double orbitRadius() {
         return orbitRadius;
     }

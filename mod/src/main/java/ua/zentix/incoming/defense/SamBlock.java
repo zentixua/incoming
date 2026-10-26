@@ -32,11 +32,11 @@ import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.registry.ModItems;
 
 /**
- * ЗРК ({@link SamBlockEntity}): блок — кабина радара с антеннами на четырёх гранях, над ней клиент рисует пакет из
- * четырёх вертикальных контейнеров с ракетами в настоящую величину ({@code client.render.SamRenderer}, ~5.4 м);
- * пакет — только картинка, блок — один. Помнит, кто поставил: его сторона — свои.
- * Зенитные ракеты кладутся рукой (ПКМ ракетами), воронкой или воронкой Create; пустой рукой — строка состояния.
- * Сломанный или взорванный — выпадает сам (таблица добычи) вместе с запасом и ракетами с направляющих.
+ * SAM ({@link SamBlockEntity}): the block is a radar cabin with antennas on four faces; above it the client draws
+ * four vertical missile canisters at real size ({@code client.render.SamRenderer}, ~5.4 m). The rack is visual
+ * only; there is one block. Remembers who placed it: their side is friendly. Load interceptor missiles by hand
+ * (right-click with missiles), hopper, or Create funnel; an empty hand shows a status line. Broken or exploded,
+ * it drops itself (loot table), stored missiles, and missiles on the rails.
  */
 public class SamBlock extends BaseEntityBlock {
     public static final MapCodec<SamBlock> CODEC = simpleCodec(SamBlock::new);
@@ -57,7 +57,7 @@ public class SamBlock extends BaseEntityBlock {
         b.add(FACING);
     }
 
-    /** Поворот — к ставящему, как у печи; пакет квадратный, и на вид все четыре поворота одинаковы. */
+    /** Faces the placing player, like a furnace; the square rack looks the same in all four orientations. */
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
         return defaultBlockState().setValue(FACING, ctx.getHorizontalDirection().getOpposite());
@@ -73,7 +73,7 @@ public class SamBlock extends BaseEntityBlock {
         return state.setValue(FACING, mirror.mirror(state.getValue(FACING)));
     }
 
-    /** У блока с блок-сущностью ваниль по умолчанию модель не рисует. */
+    /** Vanilla does not render a model for a block with a block entity by default. */
     @Override
     protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.MODEL;

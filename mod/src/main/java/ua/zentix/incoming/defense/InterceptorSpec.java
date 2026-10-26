@@ -7,119 +7,133 @@ import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.util.Air;
 
 /**
- * Паспорт ЗРК: дальности его радара и огня, числа полёта его ракеты и изделие по ТТХ ({@link Passport}, 9М96).
- * ПВО — своя игровая модель (решение Артёма 21.10): дальности, полёт и взрыватель — игровые числа, не по физике,
- * подобраны под масштаб игры (сотни блоков видно, ракета медленнее настоящей, чтобы полёт было видно), а не данные
- * настоящего комплекса. Вероятности поражения нет: сбита цель, если ракета разорвалась у неё в радиусе взрывателя
- * ({@link Interceptor}). Число направляющих и перезарядка — правила мира ({@code air_defense}). Шкала полёта мира
- * ({@link FlightScale}) ведёт наибольшую скорость ракеты от игровой к настоящей ({@link #maxSpeed()}), разгон — за те же
- * тики ({@link #boostAccel()}); предел поворота и дальности — игровые.
+ * SAM spec: radar and engagement ranges, missile flight values, and the real article's specifications ({@link
+ * Passport}, 9M96). Air defense uses our own game model (Artem, 21.10): ranges, flight, and fuze use game values,
+ * not physical, chosen for game scale (hundreds of blocks visible, a slower missile so flight can be seen),
+ * rather than real system data. There is no hit probability: the target is shot down if the missile bursts within
+ * fuze radius ({@link Interceptor}). Rail count and reload are world rules ({@code air_defense}). The world
+ * flight scale ({@link FlightScale}) takes maximum missile speed from game to real values ({@link #maxSpeed()}),
+ * with acceleration over the same ticks ({@link #boostAccel()}); turn limit and ranges remain game values.
  *
- * @param radarRange  дальность радара, блоков (игровая): дальше снарядов не видно, малозаметные — ближе, по их
- *                    паспорту ({@code WeaponSpec.Signature.visibility}); холм или дом между радаром и целью её
- *                    закрывают ({@link Radar})
- * @param engageRange дальность огня, блоков (игровая): по цели ближе неё ЗРК пускает ракету
- * @param railTicks   первые тики после схода нос держит угол направляющей и на цель не доворачивает
- * @param elevation   угол направляющей над горизонтом, градусов: ракета уходит вверх в сторону цели (90 — отвесно)
- * @param launchSpeed скорость схода, блоков/тик
- * @param boostTicks  тики разгона
- * @param gameBoostAccel прирост скорости за тик разгона на игровой скорости, блоков/тик²
- * @param gameMaxSpeed наибольшая скорость, блоков/тик (игровая, не по физике)
- * @param lateralG    наибольшее боковое ускорение, g: предел поворота на любой скорости ({@link #turnLimit}), поэтому
- *                    медленная ракета поворачивает круче
- * @param fuelTicks   столько тиков летит, потом самоликвидация
- * @param fuse        радиус неконтактного взрывателя, блоков (сверх полудлины корпуса цели)
- * @param noseLength  полудлина корпуса, блоков (модель и срез сопла — {@code client.render.InterceptorRenderer})
- * @param passport    изделие по ТТХ
+ * @param radarRange radar range, blocks (game value): projectiles beyond it are unseen; low-signature ones are
+ * seen closer, per their spec ({@code WeaponSpec.Signature.visibility}); a hill or building between radar and
+ * target hides it ({@link Radar})
+ * @param engageRange engagement range, blocks (game value): the SAM launches at targets within it
+ * @param railTicks first ticks after launch rail exit when the nose holds the rail angle without turning toward
+ * the target
+ * @param elevation rail angle above the horizon, degrees: the missile leaves upward toward the target (90 is
+ * vertical)
+ * @param launchSpeed launch rail exit speed, blocks/tick
+ * @param boostTicks acceleration ticks
+ * @param gameBoostAccel speed gain per acceleration tick at game speed, blocks/tick²
+ * @param gameMaxSpeed maximum speed, blocks/tick (game value, not physical)
+ * @param lateralG maximum lateral acceleration, g: turn limit at any speed ({@link #turnLimit}), so a slow
+ * missile turns more sharply
+ * @param fuelTicks flight duration in ticks before self-destruct
+ * @param fuse proximity fuze radius, blocks (beyond half the target body length)
+ * @param noseLength half the body length, blocks (model and nozzle exit: {@code
+ * client.render.InterceptorRenderer})
+ * @param passport real article specifications
  */
 public record InterceptorSpec(double radarRange, double engageRange, int railTicks, double elevation, double launchSpeed, int boostTicks, double gameBoostAccel, double gameMaxSpeed,
                               double lateralG, int fuelTicks, double fuse, double noseLength, Passport passport) {
-    /** Наибольшая скорость на шкале полёта мира, блоков/тик ({@link #maxSpeed(double)}). */
+    /** Maximum speed on the world flight scale, blocks/tick ({@link #maxSpeed(double)}). */
     public double maxSpeed() {
         return maxSpeed(FlightScale.x());
     }
 
-    /** Наибольшая скорость на шкале {@code x}, блоков/тик: от игровой к настоящей ({@link Passport#maxSpeed}). */
+    /** Maximum speed at scale {@code x}, blocks/tick: game to real ({@link Passport#maxSpeed}). */
     public double maxSpeed(double x) {
         return FlightScale.blend(gameMaxSpeed, passport.maxSpeed() / 20, x);
     }
 
-    /** Прирост скорости за тик разгона на шкале полёта мира, блоков/тик² ({@link #boostAccel(double)}). */
+    /** Speed gain per acceleration tick on the world flight scale, blocks/tick² ({@link #boostAccel(double)}). */
     public double boostAccel() {
         return boostAccel(FlightScale.x());
     }
 
-    /** Прирост скорости за тик разгона на шкале {@code x}, блоков/тик²: до наибольшей за те же тики разгона. */
+    /**
+     * Speed gain per acceleration tick at scale {@code x}, blocks/tick²: reach maximum speed in the same
+     * acceleration ticks.
+     */
     public double boostAccel(double x) {
         return x == 0 ? gameBoostAccel : gameBoostAccel * (maxSpeed(x) - launchSpeed) / (gameMaxSpeed - launchSpeed);
     }
 
-    /** Выше стольких блоков над уровнем моря ракета не летит: верхняя граница зоны по высоте ({@link Passport#altitudeMax}). */
+    /**
+     * The missile does not fly above this many blocks over sea level: upper altitude boundary ({@link
+     * Passport#altitudeMax}).
+     */
     public double ceiling() {
         return Air.SEA + passport.altitudeMax();
     }
 
     /**
-     * Зенитная ракета по ТТХ. Единицы — СИ; «О» — оценка, выведенная законом из других чисел, с диапазоном.
+     * Interceptor missile specifications. SI units; “E” means an estimate derived by a law from other values,
+     * with a range.
      *
-     * @param launchMass  стартовая масса, кг
-     * @param length      длина, м
-     * @param diameter    диаметр, м
-     * @param maxSpeed    наибольшая скорость, м/с
-     * @param lateralG    наибольшая перегрузка манёвра, g
-     * @param rangeMin    ближняя граница зоны поражения, м
-     * @param rangeMax    дальняя граница, м
-     * @param altitudeMin нижняя граница по высоте, м
-     * @param altitudeMax верхняя граница, м
-     * @param warhead     боевая часть
-     * @param fuse        радиус срабатывания неконтактного взрывателя, м
-     * @param boost       двигатель (расход и истечение — и для факела клиента)
-     * @param sustain     маршевый режим после игрового разгона до конца игрового полёта — не по физике, см. {@link #M96}
+     * @param launchMass launch mass, kg
+     * @param length length, m
+     * @param diameter diameter, m
+     * @param maxSpeed maximum speed, m/s
+     * @param lateralG maximum maneuver load, g
+     * @param rangeMin inner engagement boundary, m
+     * @param rangeMax outer boundary, m
+     * @param altitudeMin lower altitude boundary, m
+     * @param altitudeMax upper boundary, m
+     * @param warhead warhead
+     * @param fuse proximity fuze activation radius, m
+     * @param boost engine (flow and exhaust also used for the client's plume)
+     * @param sustain sustain mode after game acceleration until the end of game flight: not physical, see {@link
+     * #M96}
      */
     public record Passport(double launchMass, double length, double diameter, double maxSpeed, double lateralG, double rangeMin,
                            double rangeMax, double altitudeMin, double altitudeMax, Article.Charge warhead, double fuse,
                            Article.SolidMotor boost, Article.SolidMotor sustain) {}
 
     /**
-     * 9М96Е2 (С-400; у 9М96Е для С-350 — 333 кг, 4,75 м, 900 м/с, 1–40 км, до 20 км): 420 кг, длина 5,65 м (5,35–5,65 по
-     * разным источникам), Ø 0,24 м, до 1000 м/с, зона 1–120 км по дальности и 5 м–30 км по высоте; холодный вертикальный
-     * старт — газом выбрасывается на ~30 м, потом поджиг и газодинамический доворот (Wikipedia «S-350», «S-400», ru
-     * «Редут (зенитный ракетный комплекс)»). Перегрузка — больше 20 g на высоте до 30 км («около 20 g за 0,025 с»
-     * газодинамикой, ru Wikipedia по paralay.com). БЧ — 24 кг, направленного действия с многоточечным подрывом; масса ВВ
-     * не опубликована — О: ~10 кг ВВ (40 % массы, как у осколочных БЧ ЗУР), ~10 кг ТНТ, корпус и готовые осколки
-     * ~14 кг. Взрыватель: открыто — «около 70 % прямых попаданий в БЧ цели, остальные — в нескольких метрах» — О: 5 м.
-     * Двигатель — однорежимный РДТТ (двухрежимность не подтверждена), работает 10–12 с (legion.wplus.net, низкая
-     * уверенность); тяга не опубликована — О: 15 кг/с при истечении 2350 м/с (смесевое, ~240 с) — 35 кН, 11 с, 165 кг
-     * топлива: Циолковский даёт ~1100 м/с без потерь. Маршевого режима у 9М96 в открытых данных нет: игровой полёт
-     * разгоняется за 1,5 с и дальше горит слабым режимом 3 кг/с — не по физике, до полёта по физике (шаг ПВО).
+     * 9M96E2 (S-400; the S-350's 9M96E is 333 kg, 4.75 m, 900 m/s, 1–40 km, up to 20 km): 420 kg, length 5.65 m
+     * (5.35–5.65 across sources), Ø 0.24 m, up to 1000 m/s, engagement zone 1–120 km in range and 5 m–30 km in
+     * altitude; cold vertical launch ejects it by gas to ~30 m, then ignition and gas-dynamic turning (Wikipedia
+     * “S-350”, “S-400”, Russian “Redut (surface-to-air missile system)”). Load exceeds 20 g at altitudes up to 30
+     * km (“about 20 g in 0.025 s” by gas dynamics, Russian Wikipedia citing paralay.com). Warhead: 24 kg,
+     * directional with multipoint initiation; explosive mass is unpublished. E: ~10 kg explosive (40% of mass, as
+     * in fragmentation SAM warheads), ~10 kg TNT, casing and preformed fragments ~14 kg. Fuze: public claim
+     * “about 70% direct hits on the target warhead, the rest within several meters”; E: 5 m. Engine: single-mode
+     * solid rocket motor (dual mode unconfirmed), burns 10–12 s (legion.wplus.net, low confidence); thrust
+     * unpublished. E: 15 kg/s at exhaust velocity 2350 m/s (composite propellant, ~240 s), giving 35 kN, 11 s,
+     * 165 kg propellant: Tsiolkovsky gives ~1100 m/s without losses. Open data give no sustain mode for the 9M96:
+     * game flight accelerates for 1.5 s then burns in a weak 3 kg/s mode, not physical, pending physical flight
+     * (air-defense step).
      */
     static final Passport M96 = new Passport(420, 5.65, 0.24, 1000, 20, 1000, 120_000, 5, 30_000,
             new Article.Charge(10, 10, 14, 0.24), 5, new Article.SolidMotor(15 * 2350, 2350, 11, 0), new Article.SolidMotor(3 * 2350, 2350, (300 - 30) / 20.0, 0));
 
     /**
-     * Ракета ЗРК 9М96 ({@link #M96}). Игровое, не по физике (медленнее настоящей — полёт видно): вертикальный пуск из
-     * контейнера, как у 9М96 на С-350 и С-400, до 14 блоков/тик (280 м/с) за полторы секунды разгона (в отвесном наборе
-     * — ~12,5, остальное добирает маршевый режим), 15 с полёта — ~4 км;
-     * скорость — тем же законом полёта на моторе, что у снарядов ({@link #speed}: в отвесном наборе разгон медленнее на
-     * обмен высоты на скорость).
-     * Боковое ускорение 40 g — не по физике: у 9М96 открытые источники называют «свыше 20 g» на высотах до 30–35 км
-     * (FAS, «S-400 SA-20 Triumf», https://nuke.fas.org/guide/russia/airdef/s-400.htm), у земли воздух плотнее и манёвр
-     * круче. Число — предел игры: с 30 g ракета не догоняет шахед, который к пуску уже над ЗРК и пикирует за ним в цель
-     * ({@code InterceptorFlightTest.catchesDivingTargetOverhead}). После схода (~2,7 блока/тик) — поворот ~20°/тик, из
-     * отвеса к цели у горизонта — дугой ~0,25 с; на полной скорости — 4°/тик (радиус ~200 блоков). Взрыватель — 6 блоков (игровое):
-     * шахед на 2 блоках/тик она проходит за тик с запасом. Радар — 3000 блоков, огонь — 1500 (игровые, не по физике:
-     * у настоящего комплекса — десятки и сотни километров, в игре столько не видно; бывшие настройки мира
-     * {@code radar_range} и {@code engage_range} с этими значениями по умолчанию): шахед с края дальности огня летит
-     * к ЗРК больше 30 с, ракета навстречу — 5–6 с.
+     * 9M96 SAM missile ({@link #M96}). Game model, not physical (slower than the real one so flight is visible):
+     * vertical canister launch as on the S-350 and S-400's 9M96, up to 14 blocks/tick (280 m/s) in one and a half
+     * seconds of acceleration (~12.5 in vertical climb, the rest gained in sustain mode), 15 s flight, ~4 km;
+     * speed follows the same powered-flight law as projectiles ({@link #speed}: vertical climb reduces
+     * acceleration through altitude/speed exchange). Lateral acceleration 40 g is not physical: open sources give
+     * “over 20 g” for 9M96 at altitudes up to 30–35 km (FAS, “S-400 SA-20 Triumf”,
+     * https://nuke.fas.org/guide/russia/airdef/s-400.htm); denser air near the ground allows sharper maneuvers.
+     * This number is a game limit: at 30 g the missile cannot catch a Shahed already above the SAM at launch and
+     * diving at a target behind it ({@code InterceptorFlightTest.catchesDivingTargetOverhead}). After launch rail
+     * exit (~2.7 blocks/tick), turn is ~20°/tick, arcing from vertical toward a target on the horizon in ~0.25 s;
+     * at full speed, 4°/tick (radius ~200 blocks). Fuze radius is 6 blocks (game value): it passes a Shahed at 2
+     * blocks/tick within one tick with margin. Radar range is 3000 blocks, engagement range 1500 (game values,
+     * not physical: a real system reaches tens and hundreds of kilometers, beyond game visibility; former world
+     * settings {@code radar_range} and {@code engage_range} used these defaults): a Shahed takes over 30 s to
+     * reach the SAM from the engagement boundary, an oncoming missile takes 5–6 s.
      */
     public static final InterceptorSpec SAM = new InterceptorSpec(3000, 1500, 5, 90, 0.8, 30, 0.45, 14, 40, 300, 6, 2.0, M96);
 
     /**
-     * Скорость после тика {@code age} полёта по закону полёта на моторе ({@link WeaponSpec.Handling#speed}: мотор тянет
-     * к наибольшей скорости, набор высоты отнимает скорость, снижение прибавляет), {@code climbSine} — синус угла пути.
-     * Мотор — игровой, не по физике: на разгоне прирост {@link #boostAccel()} за тик, в маршевом режиме — меньше во столько
-     * раз, во сколько тяга маршевого режима паспорта меньше тяги разгона; доводит до наибольшей скорости за тик
-     * (relax 1), если прирост позволяет. До первого тика — скорость схода.
+     * Speed after flight tick {@code age} under the powered-flight law ({@link WeaponSpec.Handling#speed}: engine
+     * pulls toward maximum speed, climbing reduces speed, descending adds it); {@code climbSine} is the sine of
+     * the flight-path angle. Engine is a game model, not physical: during boost the gain is {@link #boostAccel()}
+     * per tick, during sustain it is reduced by the sustain/boost thrust ratio from the spec; reaches maximum
+     * speed in a tick (relax 1) if the gain allows it. Before the first tick, use launch rail exit speed.
      */
     public double speed(double speed, int age, double climbSine) {
         double boost = boostAccel();
@@ -128,10 +142,9 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     }
 
     /**
-     * Предел поворота за тик на скорости {@code speed}, °: боковое ускорение у ракеты одно (a = v·ω, ω = a / v), поэтому
-     * на разгоне она поворачивает круче, чем на наибольшей скорости. С одной угловой скоростью ракета, сошедшая
-     * с направляющей навстречу цели, которая проходит над самым ЗРК, разворачивалась бы уже за ней и шла за пикирующим
-     * шахедом до земли.
+     * Turn limit per tick at {@code speed}, °: the missile has one lateral acceleration (a = v·ω, ω = a / v), so
+     * it turns more sharply during boost than at maximum speed. With one angular speed, a missile leaving the
+     * rail toward a target directly overhead would only turn behind it and follow a diving Shahed to the ground.
      */
     public double turnLimit(double speed) {
         return Math.toDegrees(lateralG * Ballistics.GRAVITY / Math.max(speed, launchSpeed));

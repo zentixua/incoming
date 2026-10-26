@@ -43,42 +43,46 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Бетонобойная бомба GBU-57. Падает ({@link BombDrop}) и входит в грунт с той скоростью и под тем углом, с какими
- * кончилось падение; дальше идёт прямо, по закону Янга ({@link Penetration}): каждый блок пути — среда из карты данных
- * {@code incoming:penetration} ({@link Penetrability}), соседние блоки одной среды — один слой. Взрыватель: пустота после
- * {@value #SENSOR_SOLID} м породы — подрыв, когда бомба вошла в неё целиком ({@link #VOID_DEPTH}, датчик пустоты); иначе —
- * там, где бомба встала. Неготовый чанк впереди или низ мира — подрыв на месте. Канал — блоки по оси пути (калибр 0,8 м —
- * один блок).
+ * GBU-57 bunker-buster bomb. Falls ({@link BombDrop}) and enters ground at the speed and angle at fall end, then
+ * continues straight under Young's law ({@link Penetration}): each path block uses the medium from data map
+ * {@code incoming:penetration} ({@link Penetrability}); neighboring blocks of the same medium form one layer.
+ * Fuze: a void after {@value #SENSOR_SOLID} m of solid material detonates once the bomb is fully inside ({@link
+ * #VOID_DEPTH}, void sensor); otherwise it detonates where it stops. An unready chunk ahead or the world bottom
+ * detonates it in place. The bore is blocks along the path axis (0.8 m caliber means one block).
  */
 public class BunkerBusterEntity extends StrikeProjectile {
     private static final EntityDataAccessor<Vector3f> DATA_ENTRY = SynchedEntityData.defineId(BunkerBusterEntity.class, EntityDataSerializers.VECTOR3);
-    /** Датчик пустоты взводится, когда за бомбой столько метров твёрдой среды (как было: 4 блока). */
+    /** Void sensor arms after this many meters of solid medium behind the bomb (as before: 4 blocks). */
     public static final double SENSOR_SOLID = 4;
-    /** Среда мягче этого (S не меньше) датчик пустоты не взводит ({@link #arms}). */
+    /** A softer medium (S at least this value) does not arm the void sensor ({@link #arms}). */
     static final double SENSOR_SOFT = 20;
-    /** Самый длинный путь в грунте, м: дальше — подрыв (в мягком грунте путь — десятки метров, в воде — сотни). */
+    /** Longest underground path, m: detonate beyond it (tens of meters in soft ground, hundreds in water). */
     static final double MAX_PATH = 400;
     /**
-     * Короче этого остаток оси в блоке вне его формы — погрешность пересечения граней (float), а не пустота, м: форма
-     * блока не мельче 1/16 м. Без этого ось, пересекая под углом грань соседнего блока той же среды, «выходила в
-     * пустоту» на 10⁻¹⁶ м и начинала слой Янга заново — бомба B-2 под 89° уходила в землю на 18–29 % глубже закона.
+     * An axis remainder outside the block shape shorter than this is face-intersection float error, not a void,
+     * m: block shapes are no finer than 1/16 m. Otherwise, crossing an angled face into a neighboring block of
+     * the same medium “exited into a void” for 10⁻¹⁶ m and restarted Young's layer: a B-2 bomb at 89° penetrated
+     * 18–29% deeper than the law.
      */
     static final double GRAZE = 1e-6;
 
-    /** Цель под землёй (пещера, бункер): бомба целит в неё, а не в поверхность над ней. */
+    /** Underground target (cave, bunker): the bomb aims at it rather than the surface above. */
     @Nullable
     private BlockPos goal;
-    /** Путь в грунте от входа ({@link #plan}); пуст — не начат или прочитан из сохранения (тогда — заново отсюда). */
+    /**
+     * Underground path from entry ({@link #plan}); empty if not started or loaded from save (then replan from
+     * here).
+     */
     private Path path = Path.EMPTY;
-    /** Откуда путь {@link #path}. */
+    /** Origin of {@link #path}. */
     private Vec3 origin = Vec3.ZERO;
-    /** Сколько времени бомба уже в грунте, с, и сколько блоков канала уже пройдено. */
+    /** Time already underground, s, and bore blocks already traversed. */
     private double drillSeconds;
     private int carved;
-    /** Сколько твёрдого, что взводит датчик пустоты, бомба уже прошла, м (сохраняется: путь после загрузки — заново). */
+    /** Solid material already traversed that arms the void sensor, m (saved: path replans after loading). */
     private double armed;
 
-    /** Снос ветром за тик, блоков (сохраняется: уходя в полёт вне мира, бомба становится новой сущностью из NBT). */
+    /** Wind drift per tick, blocks (saved: entering virtual flight creates a new bomb entity from NBT). */
     private Vec3 windDrift = Vec3.ZERO;
 
     public BunkerBusterEntity(EntityType<? extends BunkerBusterEntity> type, Level level) {
@@ -90,13 +94,13 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return WeaponType.BUNKER;
     }
 
-    /** Сброшенная бомба падает: отбой её не останавливает — B-2 отзывают до сброса. */
+    /** A released bomb falls: abort does not stop it; recall the B-2 before release. */
     @Override
     public boolean recallable() {
         return false;
     }
 
-    /** Бомба — вторая сущность полёта оружия: её паспорт — {@link WeaponSpec#payload}. */
+    /** The bomb is the weapon's second flight entity: its spec is {@link WeaponSpec#payload}. */
     @Override
     public WeaponSpec.Airframe airframe() {
         return WeaponSpec.BUNKER.payload();
@@ -112,7 +116,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return false;
     }
 
-    /** Точка входа в грунт (для дыма из скважины и выброса газов). */
+    /** Ground entry point (for bore smoke and gas venting). */
     public Vec3 entry() {
         Vector3f v = entityData.get(DATA_ENTRY);
         return new Vec3(v.x, v.y, v.z);
@@ -123,8 +127,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
     }
 
     /**
-     * Сброс с бомбардировщика: бомба сходит со скоростью носителя {@code velocity} (блоков/тик) — величина, курс и тангаж
-     * его ({@link BombDrop}).
+     * Bomber release: the bomb inherits carrier {@code velocity} (blocks/tick), including magnitude, heading, and
+     * pitch ({@link BombDrop}).
      */
     public void drop(Vec3 pos, Vec3 velocity, Vec3 surface, @Nullable BlockPos goal, @Nullable UUID owner) {
         super.launch(pos, new Target.Point(surface), surface, owner);
@@ -133,8 +137,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
         moveTo(pos.x, pos.y, pos.z, angles[0], angles[1]);
         this.goal = goal;
         this.speed = velocity.length();
-        // запас хода — на прямую до точки с запасом плана, не меньше паспортного: с настоящего эшелона (шкала полёта
-        // 1, 12 км) бомба идёт до точки ~16 км, паспортный запас — на падение с игрового
+        // Range covers the straight path to the point with the plan margin, at least the spec's range: from real altitude (flight scale
+        // 1, 12 km) the bomb travels ~16 km to the point; spec range covers a fall from game altitude.
         setMission(Mission.of(Math.max(airframe().range(), pos.distanceTo(surface) * Mission.PATH_MARGIN)));
         setPhase(FlightPhase.TERMINAL);
     }
@@ -146,7 +150,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
             return;
         }
         Vec3 aim = tracker.point();
-        // цель под землёй — бомба со спутниковым наведением целит в неё саму: в грунт она входит на прямой к ней
+        // Underground target: the satellite-guided bomb aims at the target itself, entering ground on the line toward it.
         speed = BombDrop.steer(flight, position(), speed, goal != null ? Vec3.atCenterOf(goal) : aim);
         Air air = air();
         double y = getY();
@@ -154,41 +158,42 @@ public class BunkerBusterEntity extends StrikeProjectile {
         advance(level, aim, airframe().reachPad());
     }
 
-    /** Снос ветром ({@link BombDrop#drift}); в грунте — нет. */
+    /** Wind drift ({@link BombDrop#drift}); none underground. */
     @Override
     protected Vec3 drift() {
         return flightPhase() == FlightPhase.DRILL ? Vec3.ZERO : windDrift;
     }
 
     /**
-     * В грунте путь бомбы кончился: район цели остаётся там, где он был при входе (у цели или у места, где путь вне мира
-     * встретил поверхность), — за целью, которая движется, или назад к цели после попадания на поверхности вне мира он не
-     * идёт: бомба там уже не появится. Свой чанк бомба держит сама ({@link #moveAlong}).
+     * The bomb's underground path ends here: target area stays where it was at entry (at the target or where the
+     * virtual path met the surface); it follows neither a moving target nor the original target after a virtual
+     * surface impact, since the bomb will not appear there again. The bomb holds its own chunk ({@link
+     * #moveAlong}).
      */
     @Override
     protected void holdTargetArea(ServerLevel level) {
         if (flightPhase() != FlightPhase.DRILL) super.holdTargetArea(level);
     }
 
-    // ---------------------------------------------------------------- вход в грунт
+    // ---------------------------------------------------------------- ground entry
 
     @Override
     protected void impact(ServerLevel level, Vec3 point, @Nullable Entity hitEntity) {
         if (flightPhase() == FlightPhase.DRILL) return;
         if (nuclear != null) {
-            // ядерная проникающая БЧ (как B61-11): уходит в грунт на несколько метров — наземный подрыв с воронкой
+            // Nuclear penetrating warhead (like B61-11): enters ground a few meters, a surface detonation with a crater.
             discard();
             NuclearWarhead.detonate(level, point, nuclear.yieldKt(), false, ownerId());
             return;
         }
-        // удар — скоростью сущности в конце падения: вдоль носа и снос ветром
+        // Impact uses entity velocity at fall end: along the nose plus wind drift.
         Vec3 velocity = flight.forward().scale(speed).add(windDrift);
         double v = velocity.length() * 20;
         float[] angles = FlightController.anglesTo(Vec3.ZERO, velocity);
         flight.set(angles[0], angles[1]);
         speed = velocity.length();
         setPhase(FlightPhase.DRILL);
-        // устье хода — на блок выше точки удара: оттуда идут дым и газы
+        // Bore mouth is one block above impact: smoke and gases emerge there.
         entityData.set(DATA_ENTRY, new Vector3f((float) point.x, (float) point.y + 1, (float) point.z));
         moveAlong(level, point, flight.forward());
         path = plan(level, point, flight.forward(), v, 0);
@@ -201,24 +206,24 @@ public class BunkerBusterEntity extends StrikeProjectile {
         Warheads.bunkerEntry(level, point, v, this, ownerId());
     }
 
-    // ---------------------------------------------------------------- путь в грунте
+    // ---------------------------------------------------------------- underground path
 
-    /** Тело бомбы для закона пробития — из паспорта. */
+    /** Bomb body for the penetration law, from the spec. */
     public static Penetration.Body body() {
         return Penetration.body(WeaponSpec.BUNKER.payload().article());
     }
 
-    /** Как бомба внутри: в пустоте датчик срабатывает, когда она вошла туда целиком, м. */
+    /** Bomb fully inside: in a void the sensor triggers once the bomb has entered completely, m. */
     public static double voidDepth() {
         return WeaponSpec.BUNKER.payload().article().length();
     }
 
     /**
-     * Путь в грунте от {@code from} по {@code dir} со скоростью {@code v} м/с: блоки по оси пути, где бомба будет к
-     * какому времени, и где встанет; {@code solid0} — сколько твёрдого уже за ней (путь заново после загрузки). Читаются
-     * только готовые чанки: неготовый — конец пути (подрыв там). В блоке — столько среды, сколько оси пути внутри его
-     * формы столкновений (ковёр, плита, ступени — не целый метр); остальное в нём — пустота или жидкость, что в нём стоит.
-     * Блок с записью в карте данных и без формы (рыхлый снег) — среда весь.
+     * Underground path from {@code from} along {@code dir} at {@code v} m/s: blocks on the path axis, bomb
+     * position over time, and stopping point; {@code solid0} is solid material already behind it (replan after
+     * loading). Reads ready chunks only: unready ends the path (detonate there). Medium length in a block equals
+     * path axis length inside its collision shape (carpet, slab, stairs are not a full meter); the rest is void
+     * or the fluid present. A data-map block without a shape (powder snow) is entirely medium.
      */
     public static Path plan(ServerLevel level, Vec3 from, Vec3 dir, double v, double solid0) {
         Penetration.Run run = new Penetration.Run(body(), v);
@@ -237,15 +242,15 @@ public class BunkerBusterEntity extends StrikeProjectile {
             FluidState fluid = state.getFluidState();
             Penetrability entry = Penetrability.find(state);
             VoxelShape shape = state.getCollisionShape(level, b);
-            // среда блока: запись карты (или прочее твёрдое) по длине оси в форме; жидкость — по остатку
+            // Block medium: map entry (or other solid) over the axis length inside the shape; fluid in the remainder.
             double matter = entry != null && shape.isEmpty() ? len : inside(shape, b, at, dir, len);
             Penetrability medium = matter > 0 ? (entry != null ? entry : Penetrability.OTHER) : null;
-            // жидкость без записи в карте (мода) — жидкость плотности воды, а не прочее твёрдое
+            // Fluid without a map entry (modded) uses water density, not other solid material.
             Penetrability liquid = fluid.isEmpty() ? null : Penetrability.find(fluid.createLegacyBlock());
             if (liquid == null && !fluid.isEmpty()) liquid = Penetrability.WATER;
             double va = run.speed();
             if (va <= 0) {
-                // скорость кончилась (путь заново после загрузки на последнем тике): встала здесь
+                // Speed exhausted (replan after loading on the last tick): stopped here.
                 end = Path.End.REST;
                 break;
             }
@@ -295,26 +300,30 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return new Path(List.copyOf(steps), s, t, end);
     }
 
-    /** Выбивается ли блок среды в канал: твёрдое — да; жидкость (вода, лава) и непробиваемое — нет. */
+    /** Whether to clear the medium block for the bore: solid yes; fluid (water, lava) and impenetrable no. */
     static boolean carves(Penetrability m) {
         return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP;
     }
 
     /**
-     * Взводит ли среда датчик пустоты: твёрдая и не мягче S {@value #SENSOR_SOFT} — в листве, шерсти, рыхлом снеге
-     * замедление в десятки раз слабее, чем в грунте, и датчик (по замедлению) их за преграду не считает (оценка).
+     * Whether the medium arms the void sensor: solid and no softer than S {@value #SENSOR_SOFT}. Deceleration in
+     * leaves, wool, and powder snow is tens of times weaker than in ground, so the deceleration-based sensor does
+     * not treat them as obstacles (estimate).
      */
     static boolean arms(Penetrability m) {
         return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP && m.s() < SENSOR_SOFT;
     }
 
-    /** Сколько оси пути от {@code at} длиной {@code len} по {@code dir} внутри формы {@code shape} блока {@code b}, м. */
+    /**
+     * Path axis length from {@code at}, length {@code len} along {@code dir}, inside block {@code b}'s {@code
+     * shape}, m.
+     */
     private static double inside(VoxelShape shape, BlockPos b, Vec3 at, Vec3 dir, double len) {
         if (shape.isEmpty()) return 0;
         double sum = 0;
         for (AABB box : shape.toAabbs()) {
             AABB w = box.move(b);
-            // отрезок оси внутри коробки: пересечение интервалов по трём осям
+            // Axis segment inside the box: intersection of intervals on three axes.
             double lo = 0, hi = len;
             double[] p = {at.x, at.y, at.z}, d = {dir.x, dir.y, dir.z}, mn = {w.minX, w.minY, w.minZ}, mx = {w.maxX, w.maxY, w.maxZ};
             for (int k = 0; k < 3 && lo < hi; k++) {
@@ -331,7 +340,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return Math.min(len, sum);
     }
 
-    /** Сколько пути от {@code at} по {@code dir} до выхода из блока {@code b}, м. */
+    /** Path length from {@code at} along {@code dir} until exiting block {@code b}, m. */
     private static double exit(Vec3 at, Vec3 dir, BlockPos b) {
         double best = Double.POSITIVE_INFINITY;
         best = Math.min(best, axis(at.x, dir.x, b.getX()));
@@ -346,8 +355,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
     }
 
     /**
-     * Тик в грунте: бомба проходит путь, пройденный за 0,05 с, — канал по оси и удар корпуса по тем, кто на пути; путь
-     * кончился — подрыв. Путь из сохранения не хранится: после загрузки — заново отсюда с той же скоростью.
+     * Underground tick: advance the path traveled in 0.05 s, clearing the axis bore and striking bodies in the
+     * way; detonate at path end. The path is not saved: after loading, replan here at the same speed.
      */
     private void drillTick(ServerLevel level) {
         if (path == Path.EMPTY) {
@@ -371,7 +380,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         if (drillSeconds >= path.seconds()) detonate(level);
     }
 
-    /** Сколько пути пройдено к {@code seconds} в грунте, м (между блоками — по прямой во времени). */
+    /** Path traveled by {@code seconds} underground, m (linear in time between blocks). */
     private double along(double seconds) {
         double s0 = 0, t0 = 0;
         for (Step step : path.steps()) {
@@ -382,7 +391,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         return path.length();
     }
 
-    /** Скорость в грунте к {@code seconds}, м/с (по шагу пути). */
+    /** Underground speed at {@code seconds}, m/s (from the path step). */
     private double speedAt(double seconds) {
         double s0 = 0, t0 = 0;
         for (Step step : path.steps()) {
@@ -394,8 +403,8 @@ public class BunkerBusterEntity extends StrikeProjectile {
     }
 
     /**
-     * Канал: блок на оси пути выбит (калибр 0,8 м — один блок), сыпучее над ним падает в ход. Только где готовы и соседние
-     * чанки: соседей читают обновления и Sable.
+     * Bore: clear the block on the path axis (0.8 m caliber means one block); loose material above falls into it.
+     * Only with ready neighboring chunks too: updates and Sable read neighbors.
      */
     private static void carve(ServerLevel level, BlockPos p) {
         if (!IncomingConfig.SERVER.blockDamage.get() || !Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4)) return;
@@ -404,7 +413,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
         ColumnScar.replace(level, p, s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
     }
 
-    /** Корпус в 13,6 т на сотнях метров в секунду: кто на пути бомбы за этот тик — погибает (удар корпуса). */
+    /** A 13.6 t body at hundreds of meters per second kills whoever is in this tick's bomb path (body impact). */
     private void strike(ServerLevel level, Vec3 from, Vec3 to) {
         double r = body().diameter() / 2;
         AABB box = new AABB(from, to).inflate(r + 0.5);
@@ -423,38 +432,38 @@ public class BunkerBusterEntity extends StrikeProjectile {
     }
 
     /**
-     * Блок пути: где он, сколько пути и времени от входа к его концу, твёрдый ли (выбивается в канал).
+     * Path block: location, path length and time from entry to its end, whether solid (cleared for the bore).
      *
-     * @param s     путь от входа к концу блока, м
-     * @param t     время от входа к концу блока, с
-     * @param solid твёрдая среда (жидкость и пустота каналом не выбиваются)
-     * @param armed сколько твёрдого, что взводит датчик пустоты, пройдено к концу блока, м
+     * @param s path from entry to block end, m
+     * @param t time from entry to block end, s
+     * @param solid solid medium (fluid and void are not cleared for the bore)
+     * @param armed solid material traversed by block end that arms the void sensor, m
      */
     public record Step(BlockPos pos, double s, double t, boolean solid, double armed) {}
 
     /**
-     * Путь в грунте.
+     * Underground path.
      *
-     * @param length  весь путь, м
-     * @param seconds время до подрыва, с
-     * @param end     чем кончился
+     * @param length entire path, m
+     * @param seconds time until detonation, s
+     * @param end how it ended
      */
     public record Path(List<Step> steps, double length, double seconds, End end) {
         static final Path EMPTY = new Path(List.of(), 0, 0, End.LIMIT);
 
         public enum End {
-            /** Встала. */
+            /** Stopped. */
             REST,
-            /** Датчик пустоты. */
+            /** Void sensor. */
             VOID,
-            /** Неготовый чанк или край мира. */
+            /** Unready chunk or world edge. */
             EDGE,
-            /** Самый длинный путь. */
+            /** Longest path. */
             LIMIT
         }
     }
 
-    // ---------------------------------------------------------------- данные
+    // ---------------------------------------------------------------- data
 
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {

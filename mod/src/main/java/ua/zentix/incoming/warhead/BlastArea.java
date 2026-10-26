@@ -22,34 +22,34 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Чанки, до которых достаёт взрыв (или весь таймлайн взрыва): ванильный тикет региона ({@link AreaLoader}: тикать
- * начинают, только когда готовы соседи) держит их загруженными целиком, а неготовые грузит в фоне. Нужен потому, что
- * снаряд, взорвавшись, отпускает свои тикеты и тикет района цели: соседние чанки сразу опускаются ниже «готового»,
- * и вторичный подрыв через несколько тиков читал бы их синхронно, ожидая загрузку прямо в тике. Тикет не сохраняется
- * в мире; ключ — свой у каждого района, соседние взрывы залпа не снимают его друг у друга. Тот же район — и район
- * осыпания воронки ({@link CraterFalls}).
+ * Chunks reached by explosion (or entire explosion timeline): vanilla region ticket ({@link AreaLoader}, ticking
+ * only with ready neighbors) keeps them fully loaded and loads unready ones in background. Needed because
+ * detonating projectile releases its own/target-area tickets: neighbors immediately drop below “ready”, so
+ * secondary detonation a few ticks later would read synchronously, waiting inside tick. Ticket unsaved; each area
+ * has its own key, so neighboring salvo explosions do not release each other's tickets. Also crater-fall area
+ * ({@link CraterFalls}).
  * <p>
- * Держателей может быть несколько: таймлайн взрыва и его единицы работы в очереди попаданий ({@link StagedExplosion}
- * и другие), которые при большом залпе кончаются позже таймлайна. Район отпускается с последним ({@link #retain}).
+ * Multiple holders possible: timeline and its queued impact work units ({@link StagedExplosion}, others), which
+ * large salvos finish later than timeline. Last holder releases area ({@link #retain}).
  * <p>
- * Единицы работы удара пишут сюда свой замер ({@link #record}); с последним держателем — итоговая строка в лог: сколько
- * единиц, взрывов и снятых блоков, за сколько тиков, самая долгая единица и из чего сложились лучи взрывов.
+ * Impact units record measurements here ({@link #record}); last holder logs summary: units, explosions, removed
+ * blocks, elapsed ticks, longest unit, explosion ray breakdown.
  */
 final class BlastArea {
-    /** Долгих блоков в логе за удар. */
+    /** Slow blocks logged per strike. */
     static final int SLOW_BLOCKS_LOGGED = 5;
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_blast", Comparator.<UUID>naturalOrder());
 
     private final Vec3 centre;
     private final double reach;
     private final ChunkPos chunk;
-    /** Уровень тикета 33 − distance: полностью загружен квадрат ±distance чанков вокруг {@link #chunk}. */
+    /** Ticket level 33 − distance: fully loaded square ±distance chunks around {@link #chunk}. */
     private final int distance;
     private final UUID key = UUID.randomUUID();
-    /** Сколько держателей ещё не отпустили район. */
+    /** Holders not yet releasing area. */
     private int holders = 1;
 
-    /** Итог работы удара: единицы, их время, самая долгая, что сделано по видам, шаги лучей взрывов. */
+    /** Strike work summary: units, time, longest, completion by kind, explosion ray steps. */
     private long heldAt;
     private long lastUnitAt;
     private int units;
@@ -60,12 +60,12 @@ final class BlastArea {
     private final long[] rayStages = new long[ExplosionStage.values().length];
     private final StagedExplosion.RayCounts rayCounts = new StagedExplosion.RayCounts();
     /**
-     * Взрывы района, ещё не кончившиеся, с тиком постановки. Взрывы одного тика (подрывы бетонобойной бомбы) выбирают
-     * лучами и бьют сущности по нетронутому, а блоки снимают, когда все они это сделали ({@link #peersPicking}), —
-     * иначе лучи следующего шли то по снятому, то нет, и воронка зависела бы от того, сколько успевает поток сервера.
+     * Unfinished area explosions with queue tick. Same-tick explosions (bunker-buster detonations) select
+     * rays/damage entities against untouched world, removing blocks only once all do so ({@link #peersPicking});
+     * otherwise later rays see removed blocks inconsistently and crater depends on server throughput.
      */
     private final List<Queued> explosions = new ArrayList<>();
-    /** Долгие блоки удара ({@link #slowBlock}): в логе — первые {@link #SLOW_BLOCKS_LOGGED}. */
+    /** Slow strike blocks ({@link #slowBlock}): log first {@link #SLOW_BLOCKS_LOGGED}. */
     private int slowBlocks;
 
     private record Queued(StagedExplosion explosion, long tick) {}
@@ -81,7 +81,7 @@ final class BlastArea {
         this.distance = Math.max(Math.max(west, east), Math.max(north, south));
     }
 
-    /** Взять район: всё в {@code reach} блоков от {@code centre} грузится и остаётся готовым до {@link #release}. */
+    /** Acquire area: everything within {@code reach} of {@code centre} loads/stays ready until {@link #release}. */
     static BlastArea hold(ServerLevel level, Vec3 centre, double reach) {
         BlastArea area = new BlastArea(centre, reach);
         area.heldAt = level.getGameTime();
@@ -90,15 +90,15 @@ final class BlastArea {
         return area;
     }
 
-    /** Взрыв района поставлен в очередь в тике {@code tick}. */
+    /** Area explosion queued at {@code tick}. */
     void queued(StagedExplosion e, long tick) {
         explosions.removeIf(q -> q.explosion().done());
         explosions.add(new Queued(e, tick));
     }
 
     /**
-     * Взрыв того же тика, что и {@code e}, ещё выбирает лучами или бьёт сущности: блоки {@code e} ждут. Взрыв, который
-     * сам ждёт другие целиком (огненный шар и вторичные — главный), не в счёт: он и должен идти по снятому.
+     * Same-tick peer of {@code e} still selecting rays/damaging entities: {@code e}'s blocks wait. Exclude
+     * explosions waiting entirely for others (fireball/secondary wait for main): they should see removed blocks.
      */
     boolean peersPicking(StagedExplosion e) {
         explosions.removeIf(q -> q.explosion().done());
@@ -111,7 +111,7 @@ final class BlastArea {
         return false;
     }
 
-    /** Ещё один держатель (единица работы, которая может кончиться позже взявшего): отпустить — своим {@link #release}. */
+    /** Another holder (unit may outlive acquirer): release with own {@link #release}. */
     BlastArea retain() {
         if (holders <= 0) throw new IllegalStateException("blast area already released");
         holders++;
@@ -119,8 +119,8 @@ final class BlastArea {
     }
 
     /**
-     * Единица работы удара вида {@code kind} заняла {@code took} нс и сделала {@code count} (взрывов, блоков, обломков):
-     * в замер тика мира ({@link ImpactCost}) и в итог удара.
+     * Strike work {@code kind} took {@code took} ns, completed {@code count} (explosions, blocks, debris): add to
+     * world-tick measurement ({@link ImpactCost}) and strike summary.
      */
     void record(ServerLevel level, ImpactCost.Kind kind, long took, int count) {
         record(level, StrikeWorld.get(level).impactCost(), kind, took, count);
@@ -138,15 +138,15 @@ final class BlastArea {
         lastUnitAt = level.getGameTime();
     }
 
-    /** Шаги взрыва за единицу ({@link ExplosionStage}, нс). */
+    /** Explosion stages per unit ({@link ExplosionStage}, ns). */
     void recordStages(ServerLevel level, long[] stages) {
         StrikeWorld.get(level).impactCost().addRayStages(stages);
         for (int i = 0; i < stages.length; i++) rayStages[i] += stages[i];
     }
 
     /**
-     * Блок снимался дольше {@link StagedExplosion#SLOW_BLOCK_NANOS}: строка в лог, первые {@link #SLOW_BLOCKS_LOGGED}
-     * за удар — чей блок держит порцию (у хоста порция из 16 блоков доходит до 65 мс).
+     * Block removal exceeded {@link StagedExplosion#SLOW_BLOCK_NANOS}: log first {@link #SLOW_BLOCKS_LOGGED} per
+     * strike, identifying block holding portion (host 16-block portion reaches 65 ms).
      */
     void slowBlock(ServerLevel level, BlockState state, BlockPos pos, long took) {
         if (slowBlocks++ >= SLOW_BLOCKS_LOGGED) return;
@@ -155,7 +155,7 @@ final class BlastArea {
                 level.dimension().location(), state.hasBlockEntity() ? "yes" : "no"));
     }
 
-    /** Счётчики лучей взрыва — в итог удара. */
+    /** Explosion ray counters for strike summary. */
     void recordCounts(StagedExplosion.RayCounts counts) {
         rayCounts.add(counts);
     }
@@ -168,12 +168,12 @@ final class BlastArea {
         return Terrain.readyAround(level, centre, reach);
     }
 
-    /** Держатель отпускает район; последний — снимает тикет и закрывает осыпание. */
+    /** Holder releases area; last removes ticket/closes falling. */
     void release(ServerLevel level) {
         if (holders <= 0 || --holders > 0) return;
         StrikeWorld.get(level).areas().release(level, area());
         CraterFalls.get(level).close(level, key);
-        // LOD Distant Horizons: воронка — сейчас, осыпание после неё — когда район перестанет осыпаться
+        // Distant Horizons LOD: crater now, later falls when area stops falling.
         long now = level.getGameTime();
         DhUpdates.markArea(level, centre, reach, now + DhUpdates.SETTLE);
         DhUpdates.markArea(level, centre, reach, now + CraterFalls.GRACE);
@@ -183,7 +183,7 @@ final class BlastArea {
         }
     }
 
-    /** Итоговая строка удара (для {@code tools/logscan.py}). */
+    /** Strike summary line (for {@code tools/logscan.py}). */
     String summary(String dimension) {
         StringBuilder rays = new StringBuilder();
         for (ExplosionStage st : ExplosionStage.values()) {

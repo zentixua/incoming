@@ -28,64 +28,63 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /**
- * Топливо, что после огненного шара осталось в воронке ({@link FuelPool}: доля бака, площадь воронки, выгорание тонкого
- * слоя), горит огнём Minecraft на настоящих блоках, пока оно есть. Закон решает, сколько топлива и сколько оно горит;
- * где — сами блоки: топливо — жидкость, оно падает до опоры и стекает вниз ({@link #cells}).
+ * Fuel left in crater after fireball ({@link FuelPool}: tank fraction, crater area, thin-layer burnout) burns as
+ * Minecraft fire on actual blocks while available. Law determines amount/duration; blocks determine location:
+ * liquid fuel falls to support and flows down ({@link #cells}).
  * <ul>
- * <li><b>Где.</b> От точки удара вниз до первого блока с формой (дно воронки, пол под пробитой крышей, земля под мостом);
- * на воду или в пустоту — огня нет (плёнка на воде не держит горение, как у клиента). Дальше — растекание: из клеток, где
- * топливо уже лежит, к соседним по горизонтали, сперва ниже (с края стекает вниз до опоры), потом ближе к месту, куда
- * упало; по поверхности — и на ступень в блок вверх (брызги ложатся на всю чашу воронки, не только на дно), на стену в
- * два блока и сквозь неё — нет. Клеток — по площади закона ({@link FuelPool#cells}: шахед 5, ракета 9). Клетка — только
- * там, где готовы и соседние чанки: огню, чтобы стоять, нужны блоки вокруг ({@link #holds}).</li>
- * <li><b>Огонь.</b> Ванильный: {@link BaseFireBlock#getState} на клетке — на негорючем грунте стоит на верхней грани, как
- * огонь на незерраке, на горючем — жжёт его по правилам игры; распространение — правила игры и модов на огонь.</li>
- * <li><b>Пока горит.</b> Ванильный огонь на камне или земле гаснет сам за секунды (возраст выше 3 без горючего рядом),
- * поэтому огонь клетки держится тем же, чем ваниль меняет возраст огня, — {@code setBlock} с возрастом 0 и
- * {@link Block#UPDATE_INVISIBLE}, без миксина. Погашенный не топливом (дождь, рука, мод на огонь) — снова горит: дождь
- * горящую лужу углеводородов не гасит ({@link #RELIGHT}). Если огонь в клетке гаснет почти сразу после поджига (мод на
- * огонь ставит свой и гасит его — Burnt на грунте под дождём, каждый тик), с миром не борется: следующая попытка — вдвое
- * позже, до {@link #RELIGHT_MAX}; топливо при этом горит по закону — его дым, свет и гул у клиента идут как шли. Чужой огонь в
- * клетке (мод на огонь ставит свой {@code FireBlock}) — тоже огонь: возраст у него сбрасывается, только если он есть.
- * Клетку засыпало блоком или залило водой — топливо там кончилось. Опору под клеткой сожгло или сломало — топливо капает
- * вниз в той же колонке до новой опоры: огня без опоры нет.</li>
- * <li><b>Сколько.</b> Клетки гаснут по закону: горящая площадь — доля {@link FuelPool#share}, первой гаснет самая высокая
- * (край плёнки), дольше всех — самая низкая, куда стекло больше всего ({@link FuelPool#cellSeconds}). Погасшая клетка
- * снимает огонь, если его держало только топливо (рядом нет горючего); у горючего огонь горит дальше сам. Чанк клетки
- * не готов (игрок ушёл) — она ждёт: огонь в незагруженном чанке не тикает, и снимается он, когда чанк снова готов.</li>
+ * <li><b>Where.</b> Down from impact to first shaped block (crater floor, floor under pierced roof, ground under
+ * bridge); no fire on water or void (water film cannot sustain burn, as client). Spread horizontally from
+ * existing fuel cells, lower first (off edges down to support), then closer to landing point; one-block upward
+ * surface step allowed (splashes across whole crater bowl, not only bottom), not two-block walls or through them.
+ * Count by law area ({@link FuelPool#cells}: Shahed 5, missile 9). Only with ready neighboring chunks too: fire
+ * survival reads surroundings ({@link #holds}).</li>
+ * <li><b>Fire.</b> Vanilla {@link BaseFireBlock#getState}: on nonflammable ground, top-face flame like
+ * netherrack; on fuel, burns by game rules; spread follows game/fire-mod rules.</li>
+ * <li><b>While burning.</b> Vanilla fire on stone/ground dies in seconds (age above 3 without nearby fuel), so
+ * keep cells with vanilla age mechanism: {@code setBlock} age 0, {@link Block#UPDATE_INVISIBLE}, no mixin.
+ * Extinguished externally (rain, hand, fire mod) relights: rain cannot extinguish burning hydrocarbon pool
+ * ({@link #RELIGHT}). If cell dies almost immediately (fire mod replaces/extinguishes every tick, Burnt on ground
+ * in rain), do not fight world: double retry interval up to {@link #RELIGHT_MAX}; fuel still burns by law, client
+ * smoke/light/rumble continue. Other mod's {@code FireBlock} counts as fire too; reset age only if present.
+ * Burial/flooding ends cell fuel. Broken/burned support drips fuel down same column to next support: no
+ * unsupported fire.</li>
+ * <li><b>How long.</b> Cells expire by law: burning area fraction {@link FuelPool#share}, highest film edge
+ * first, lowest holding most fuel last ({@link FuelPool#cellSeconds}). Expired cell removes fire if only fuel
+ * sustained it (no nearby combustible); by combustible fire continues naturally. Unready cell chunk (player left)
+ * waits: unloaded fire does not tick; remove when ready again.</li>
  * </ul>
- * Клиентам — {@link S2C.FuelFire}: состояние воронки (клетки, какие погасли раньше срока, оружие, тик удара) при её
- * появлении, при каждой перемене (стекло, засыпало, залило) и тому, кому уходит её чанк; дым, свет и гул пожара клиент
- * ведёт по тому же закону ({@code WeaponSpec.pool(lit)}). Сохраняется с миром ({@link ModAttachments#FUEL_FIRES}): после перезапуска сервера топливо
- * догорает в свой срок.
+ * Clients receive {@link S2C.FuelFire}: crater state (cells, early extinguished, weapon, impact tick) at
+ * creation, each change (flow, burial, flooding), and chunk delivery; client smoke/light/rumble follow same law
+ * ({@code WeaponSpec.pool(lit)}). Saved with world ({@link ModAttachments#FUEL_FIRES}): after restart fuel burns
+ * out on schedule.
  */
 public final class FuelFires {
-    /** Глубже этого топливо, сорвавшееся с края или упавшее в пробитую крышу, опору не ищет, блоков. */
+    /** Maximum downward support search for fuel falling off an edge/through roof, blocks. */
     static final int FALL = 64;
-    /** Клеток, которые смотрит растекание, на клетку топлива не больше (обход вокруг стен и ям). */
+    /** Maximum spread-search cells per fuel cell (around walls/holes). */
     static final int SEARCH = 24;
     /**
-     * Через столько тиков огонь клетки, погашенный не топливом, зажигается снова. Дождь горящую лужу бензина или керосина не
-     * гасит: вода тяжелее и уходит под топливо, а испаряя ливень в 10 мм/ч, огонь тратит ~7 кВт/м² против 20–60 кВт/м²,
-     * что пламя лужи отдаёт её поверхности (⚠ оценка по Babrauskas, SFPE Handbook, «Heat Release Rates»; поэтому для
-     * таких пожаров нужна пена, NFPA 11), — а ванильный дождь гасит огонь в его тик.
+     * Ticks until externally extinguished cell relights. Rain cannot extinguish gasoline/kerosene pool: denser
+     * water sinks below fuel; vaporizing 10 mm/h downpour consumes ~7 kW/m² versus 20–60 kW/m² flame flux back to
+     * surface (⚠ estimate from Babrauskas, SFPE Handbook, “Heat Release Rates”; such fires need foam, NFPA 11);
+     * vanilla rain extinguishes fire on its tick.
      */
     static final int RELIGHT = 5;
     /**
-     * Огонь погас раньше этого после поджига — мир его не держит (мод на огонь гасит свой огонь под дождём каждый тик):
-     * следующая попытка — вдвое позже, тиков. Ванильный дождь и мод на огонь в сухую погоду гасят огонь в его тик, не
-     * раньше чем через ~30 тиков, — их это не задевает.
+     * Fire dying sooner after ignition means world cannot sustain it (fire mod extinguishes every rainy tick):
+     * double retry delay, ticks. Vanilla rain/dry-weather fire mod extinguish on fire tick, no earlier than ~30
+     * ticks, unaffected.
      */
     static final int QUICK = 5;
-    /** Реже этого клетка с огнём, которого мир не держит, не зажигается, тиков (10 с). */
+    /** Maximum retry interval for cell fire world will not sustain, ticks (10 s). */
     static final int RELIGHT_MAX = 200;
 
     final List<Pool> pools;
     private int nextId;
-    /** Сколько раз клетки зажигались снова и сколько времени ушло на учёт с загрузки мира (для проверок и пробы). */
+    /** Relight count and accounting time since world load (tests/probe). */
     private long relights, nanos, ticks;
 
-    /** Для {@link ModAttachments#FUEL_FIRES}: своё у каждого мира. */
+    /** For {@link ModAttachments#FUEL_FIRES}: per-world. */
     public FuelFires() {
         this(0, new ArrayList<>());
     }
@@ -99,7 +98,7 @@ public final class FuelFires {
             Codec.INT.fieldOf("next").forGetter(f -> f.nextId),
             Pool.CODEC.listOf().fieldOf("pools").forGetter(f -> f.pools)).apply(i, FuelFires::new));
 
-    /** Сохранять ли: есть горящее топливо. */
+    /** Whether to save: burning fuel exists. */
     public boolean isEmpty() {
         return pools.isEmpty();
     }
@@ -109,9 +108,8 @@ public final class FuelFires {
     }
 
     /**
-     * Горящее топливо одного удара: клетки в порядке выгорания (0 — горит дольше всех), какие погасли раньше срока
-     * (засыпало, залило, упало в воду) и какие кончились; когда каждая гаснет по закону (игровое время) — из оружия и тика
-     * удара. Попытки зажечь снова — только в памяти.
+     * One strike's burning fuel: cells in burnout order (0 longest), early-ended cells (buried, flooded, fell
+     * into water), completed cells; law expiry game times from weapon/impact tick. Relight retries memory-only.
      */
     static final class Pool {
         static final Codec<Pool> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -129,7 +127,7 @@ public final class FuelFires {
         final BlockPos[] cells;
         final long[] out, relight, relitAt, seen;
         final int[] backoff;
-        /** Клетки (биты по номеру), чьё топливо кончилось раньше срока; клетки, с которыми покончено. */
+        /** Cells (indexed bits) whose fuel ended early; completed cells. */
         long smothered, done;
 
         Pool(int id, int weapon, long blastTick, double reach, List<Long> cells, long smothered, long done) {
@@ -173,14 +171,14 @@ public final class FuelFires {
         }
     }
 
-    /** Закон топлива оружия {@code weapon}, легшего на {@code lit} клеток ({@code WeaponSpec.pool(lit)}). */
+    /** Fuel law for {@code weapon} spread on {@code lit} cells ({@code WeaponSpec.pool(lit)}). */
     static FuelPool law(int weapon, int lit) {
         return WeaponType.byId(weapon).spec().pool(lit);
     }
 
     /**
-     * Топливо оружия {@code weapon}, что осталось в воронке удара в {@code pos} (удар — в тик {@code blastTick}), ложится
-     * на блоки и горит: клетки, огонь, учёт, пакет клиентам до {@code reach} блоков. Сколько клеток зажглось.
+     * {@code weapon} fuel left in crater at {@code pos} (impact {@code blastTick}) settles on blocks/burns:
+     * cells, fire, accounting, client packet within {@code reach}. Returns ignited count.
      */
     static int pour(ServerLevel level, Vec3 pos, WeaponType weapon, long blastTick, double reach) {
         if (!IncomingConfig.SERVER.fire.get()) return 0;
@@ -198,29 +196,29 @@ public final class FuelFires {
         return lit.size();
     }
 
-    /** Для проверок: топливо оружия {@code weapon} после удара в {@code pos} в этот тик, без взрыва и без пакета. */
+    /** Tests: {@code weapon} fuel after impact at {@code pos} this tick, without explosion/packet. */
     public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon) {
         return testPour(level, pos, weapon, 0);
     }
 
-    /** Для проверок: то же, но удар был {@code burned} тиков назад — топливо уже горело столько. */
+    /** Tests: same, impact {@code burned} ticks ago, already burned that long. */
     public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon, long burned) {
         return testPour(level, pos, weapon, burned, 0);
     }
 
-    /** Для проверок доставки: то же, с пакетом игрокам до {@code reach} блоков, как у удара. */
+    /** Delivery tests: same with packet to players within {@code reach}, like impact. */
     public static int testPour(ServerLevel level, Vec3 pos, WeaponType weapon, long burned, double reach) {
         return pour(level, pos, weapon, level.getGameTime() - burned, reach);
     }
 
-    /** Состояние воронки — игрокам, до кого дотягивается её пакет взрыва (место — первая клетка). */
+    /** Crater state to players within blast-packet reach (position first cell). */
     private static void send(ServerLevel level, Pool pool) {
         if (pool.reach <= 0) return;
         BlockPos at = pool.cells[0];
         PacketDistributor.sendToPlayersNear(level, null, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, pool.reach, pool.packet());
     }
 
-    /** Чанк уходит игроку (вошёл, подошёл, вернулся): воронки, чья первая клетка в нём, — ему, в их нынешнем состоянии. */
+    /** Chunk sent to player (joined, approached, returned): send current crater states whose first cell is there. */
     public static void onChunkSent(ChunkWatchEvent.Sent e) {
         FuelFires all = e.getLevel().getExistingDataOrNull(ModAttachments.FUEL_FIRES.get());
         if (all == null || all.pools.isEmpty()) return;
@@ -231,15 +229,15 @@ public final class FuelFires {
     }
 
     /**
-     * Куда ложится {@code n} клеток топлива удара в {@code pos}: вниз до опоры ({@link #land}), потом растекание — сперва
-     * ниже, потом ближе к месту падения, на ступень вверх по поверхности ({@link #step}), по клеткам, где огонь держится
-     * ({@link #holds}); по клеткам без него (плита, тропинка) топливо проходит, но не горит. Первой — самая низкая (горит
-     * дольше всех). Пусто — некуда: вода, пустота, неготовые чанки.
+     * Where {@code n} fuel cells at {@code pos} settle: down to support ({@link #land}), spread lower then closer
+     * to landing, one-block upward surface step ({@link #step}), burning where fire survives ({@link #holds});
+     * fuel crosses nonholding cells (slab, dirt path) without burning. Lowest first (longest burn). Empty means
+     * nowhere: water, void, unready chunks.
      */
     static List<BlockPos> cells(ServerLevel level, Vec3 pos, int n) {
         BlockPos start = BlockPos.containing(pos);
         if (!Terrain.ready(level, start)) return List.of();
-        // точка удара — в блоке (полблока в землю): топливо — над ним
+        // Impact point inside block (half-block into ground): fuel above it.
         if (!open(level, start)) start = start.above();
         if (!open(level, start)) return List.of();
         BlockPos land = land(level, start);
@@ -257,8 +255,8 @@ public final class FuelFires {
             for (Direction d : Direction.Plane.HORIZONTAL) {
                 BlockPos q = p.relative(d);
                 if (!Terrain.ready(level, q)) continue;
-                // с края — вниз до опоры; ступень в блок — по поверхности (брызги ложатся на всю чашу воронки, не только на
-                // дно); выше и сквозь стену — нет
+                // Off edge down to support; one-block surface step (splashes whole crater bowl, not just
+                // floor); no higher or through wall.
                 BlockPos to = open(level, q) ? land(level, q) : step(level, q);
                 if (to != null && seen.add(to.asLong())) front.add(to);
             }
@@ -267,23 +265,22 @@ public final class FuelFires {
         return out;
     }
 
-    /** Клетка над блоком {@code q} с формой (ступень в блок по поверхности), если она свободна; иначе null. */
+    /** Free cell above shaped block {@code q} (one-block surface step), otherwise null. */
     private static BlockPos step(ServerLevel level, BlockPos q) {
         BlockPos up = q.above();
         if (level.getBlockState(q).getCollisionShape(level, q).isEmpty() || !level.isInWorldBounds(up) || !open(level, up)) return null;
         return up;
     }
 
-    /** Квадрат расстояния по горизонтали. */
+    /** Squared horizontal distance. */
     private static int horizontal(BlockPos a, BlockPos b) {
         int dx = a.getX() - b.getX(), dz = a.getZ() - b.getZ();
         return dx * dx + dz * dz;
     }
 
     /**
-     * Свободная клетка {@code p} — топливо проходит её (воздух, огонь, растение без формы; не жидкость): вниз до первой
-     * клетки, под которой блок с формой столкновений, не глубже {@link #FALL}. null — под ней вода или лава, пустота
-     * или неготовый чанк.
+     * Free {@code p} passes fuel (air, fire, shapeless plant, not fluid): descend to first cell over collision
+     * shape, no deeper than {@link #FALL}. null if water/lava below, void, or unready chunk.
      */
     static BlockPos land(ServerLevel level, BlockPos p) {
         BlockPos.MutableBlockPos at = p.mutable();
@@ -298,22 +295,22 @@ public final class FuelFires {
         return null;
     }
 
-    /** Топливо проходит клетку: воздух, огонь, растение без формы, — не жидкость и не блок с формой. */
+    /** Fuel passes air, fire, shapeless plants, not fluid or shaped blocks. */
     static boolean open(ServerLevel level, BlockPos p) {
         BlockState s = level.getBlockState(p);
         return s.isAir() || s.getFluidState().isEmpty() && s.getCollisionShape(level, p).isEmpty();
     }
 
     /**
-     * Огонь Minecraft держится на клетке (на верхней грани опоры или у горючего рядом). Ваниль при этом смотрит все шесть
-     * соседей (горючесть, опора, огонь душ) — у края чанка и соседний: только если готовы чанк клетки и все вокруг, иначе
-     * соседний грузился бы прямо в тике.
+     * Minecraft fire survives in cell (support top or nearby fuel). Vanilla reads all six neighbors
+     * (flammability, support, soul fire), including adjacent chunk at edge; require cell chunk and all neighbors
+     * ready, or it loads synchronously in tick.
      */
     static boolean holds(ServerLevel level, BlockPos p) {
         return Terrain.neighbourhoodReady(level, p.getX() >> 4, p.getZ() >> 4) && BaseFireBlock.getState(level, p).canSurvive(level, p);
     }
 
-    /** Раз в тик мира: огонь клеток держится, пока есть топливо; погасшие — снимают свой огонь; перемены — клиентам. */
+    /** Each world tick: sustain cell fire while fuel remains, remove expired fire, send changes to clients. */
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         FuelFires all = level.getExistingDataOrNull(ModAttachments.FUEL_FIRES.get());
@@ -329,10 +326,10 @@ public final class FuelFires {
         all.ticks++;
     }
 
-    /** Клетка {@code k} воронки в тик {@code now}; сменилось ли то, что знает клиент (место или топливо кончилось раньше). */
+    /** Crater cell {@code k} at {@code now}; whether client-known state changed (position/early fuel end). */
     private boolean hold(ServerLevel level, Pool pool, int k, long now) {
         BlockPos cell = pool.cells[k];
-        // чанк не готов (игрок ушёл): огонь там не тикает и не гаснет; выгорело — снять, когда чанк снова готов
+        // Unready chunk (player left): fire neither ticks nor dies; if burned out, remove once ready.
         if (!Terrain.neighbourhoodReady(level, cell.getX() >> 4, cell.getZ() >> 4)) return false;
         if (now >= pool.out[k]) {
             burnOut(level, cell);
@@ -342,7 +339,7 @@ public final class FuelFires {
         BlockPos below = cell.below();
         boolean moved = false;
         if (level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
-            // опору сожгло или сломало: топливо капает вниз в той же колонке; огонь на прежнем месте — уже не его
+            // Support burned/broken: fuel drips down same column; fire at old site no longer belongs to it.
             BlockPos to = land(level, cell);
             if (to == null) {
                 pool.finish(k, true);
@@ -356,17 +353,17 @@ public final class FuelFires {
         BlockState s = level.getBlockState(cell);
         if (s.getBlock() instanceof BaseFireBlock) {
             pool.seen[k] = now;
-            // как ваниль меняет возраст своего огня: без соседей и без пакета клиентам (возраст не рисуется)
+            // Vanilla fire-age update: no neighbors/client packet (age not rendered).
             if (s.hasProperty(FireBlock.AGE) && s.getValue(FireBlock.AGE) > 0) level.setBlock(cell, s.setValue(FireBlock.AGE, 0), Block.UPDATE_INVISIBLE);
             return moved;
         }
-        // клетку засыпало или залило — топливо там кончилось
+        // Cell buried/flooded: fuel ended.
         if (!open(level, cell)) {
             pool.finish(k, true);
             return true;
         }
         if (now >= pool.relight[k]) {
-            // огонь не прожил и QUICK тиков с прошлого поджига — мир его не держит (мод на огонь под дождём): реже
+            // Fire failed within QUICK ticks of last ignition: world cannot sustain it (rainy fire mod), retry less often.
             long alive = Math.max(0, pool.seen[k] - pool.relitAt[k]);
             pool.backoff[k] = !moved && alive < QUICK ? Math.min(RELIGHT_MAX, 2 * pool.backoff[k]) : RELIGHT;
             pool.relight[k] = now + pool.backoff[k];
@@ -377,8 +374,8 @@ public final class FuelFires {
     }
 
     /**
-     * Топливо клетки выгорело: огонь гаснет, если держался только им — рядом нет горючего и опора не вечный огонь
-     * (незеррак); у горючего огонь горит дальше по правилам игры.
+     * Cell fuel exhausted: extinguish if fuel alone sustained fire, no nearby combustible or eternal-fire support
+     * (netherrack); by combustible, game fire continues.
      */
     private static void burnOut(ServerLevel level, BlockPos cell) {
         BlockState s = level.getBlockState(cell);
@@ -392,25 +389,25 @@ public final class FuelFires {
         level.removeBlock(cell, false);
     }
 
-    /** Клеток топлива, с которыми не покончено, — их нынешние места (для проверок). */
+    /** Unfinished fuel cells' current positions (tests). */
     public List<BlockPos> cells() {
         List<BlockPos> out = new ArrayList<>();
         for (Pool p : pools) for (int k = 0; k < p.cells.length; k++) if (!p.done(k)) out.add(p.cells[k]);
         return out;
     }
 
-    /** Для проверок и пробы: зажиганий клеток снова, тиков учёта и среднее время учёта за тик, мс. */
+    /** Tests/probe: relights, accounting ticks, mean accounting time per tick, ms. */
     public String stats() {
         return String.format(java.util.Locale.ROOT, "pools %d cells %d relights %d ticks %d mean %.4f ms", pools.size(), cells().size(), relights, ticks,
                 ticks == 0 ? 0 : nanos / 1e6 / ticks);
     }
 
-    /** Для проверок: состояние воронок, как его получает клиент. */
+    /** Tests: crater state as received by client. */
     public List<S2C.FuelFire> state() {
         return pools.stream().map(Pool::packet).toList();
     }
 
-    /** Для проверок: зажиганий клеток снова с загрузки мира. */
+    /** Tests: cell relights since world load. */
     public long relights() {
         return relights;
     }

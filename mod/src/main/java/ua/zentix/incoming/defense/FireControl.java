@@ -8,14 +8,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Огонь по целям радара ({@link Radar}): по одной ракете на цель — по цели, за которой уже идёт ракета (своя или
- * соседнего ЗРК), второй не пускают, пока та не разорвётся. Промах — цель снова свободна. Сколько ракет готово и как
- * часто пускать, решает пусковая ({@link SamBlockEntity}); этот выбор и пуск возьмёт и переносной ЗРК.
+ * Engage radar targets ({@link Radar}): one missile per target. A target already pursued by a missile (from this
+ * or a nearby SAM) gets no second missile until the first bursts. A miss frees the target again. The launcher
+ * ({@link SamBlockEntity}) decides how many missiles are ready and how often to launch; a portable SAM can reuse
+ * this selection and launch logic.
  */
 public final class FireControl {
     private FireControl() {}
 
-    /** Ближайшая цель, которую можно бить и по которой ещё никто не стреляет; null — таких нет. */
+    /** Nearest engageable target that nobody is firing at yet; null if there are none. */
     @Nullable
     public static Radar.Track pick(List<Radar.Track> tracks, DefenseWorld world) {
         for (Radar.Track t : tracks) {
@@ -25,10 +26,10 @@ public final class FireControl {
     }
 
     /**
-     * Пустить ракету с направляющей {@code rail} по цели {@code track}.
+     * Launch a missile from {@code rail} at {@code track}.
      *
-     * @param owner    чья ракета (тот, кто поставил ЗРК)
-     * @param launcher откуда (для лога)
+     * @param owner missile owner (who placed the SAM)
+     * @param launcher launch location (for the log)
      */
     public static Interceptor launch(ServerLevel level, Vec3 rail, Radar.Track track, @Nullable UUID owner, String launcher, InterceptorSpec spec) {
         return DefenseWorld.get(level).launch(level, rail, track, owner, launcher, spec);

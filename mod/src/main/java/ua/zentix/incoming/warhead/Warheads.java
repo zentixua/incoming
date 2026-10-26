@@ -66,18 +66,17 @@ import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 /**
- * Боевые части. Разрушения и урон — на сервере по таймлайну: основной взрыв — ванильный {@link Explosion} (его
- * уважают приваты, Sable сам толкает им аппараты), вторичные подрывы, стёкла, обломки, ударная волна на скорости звука.
- * Всё, что видно и слышно, клиент строит сам по пакету {@link S2C.Blast}: частицы, вспышку, звук с задержкой по
- * расстоянию, тряску.
+ * Warheads. Server timeline handles destruction/damage: main vanilla {@link Explosion} (claims respected, Sable
+ * pushes craft itself), secondary detonations, glass, debris, sonic-speed blast wave. Client builds all
+ * visuals/sound from {@link S2C.Blast}: particles, flash, distance-delayed sound, shake.
  */
 public final class Warheads {
-    /** Фронт звука и ударной волны: 343 м/с = 17.15 блока за тик. */
+    /** Sound/blast front: 343 m/s = 17.15 blocks/tick. */
     public static final double FRONT_SPEED = BlastModel.SOUND_SPEED / 20;
 
     private Warheads() {}
 
-    // ---------------------------------------------------------------- вход
+    // ---------------------------------------------------------------- entry
 
     public static void detonate(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity projectile, @Nullable UUID owner) {
         long t0 = System.nanoTime();
@@ -92,8 +91,8 @@ public final class Warheads {
     }
 
     /**
-     * Бетонобойная бомба вошла в грунт со скоростью {@code speed} м/с: взрыва нет (взрыватель замедленный) — удар корпуса
-     * по земле: клиентам — пыль выброса из входа и звук удара, тем, кто рядом, — толчок земли по энергии удара.
+     * Bunker-buster entered ground at {@code speed} m/s: no explosion (delay fuze), body-ground impact. Clients
+     * get entry ejecta dust/impact sound; nearby players get ground impulse from impact energy.
      */
     public static void bunkerEntry(ServerLevel level, Vec3 point, double speed, @Nullable Entity bomb, @Nullable UUID owner) {
         long t0 = System.nanoTime();
@@ -121,7 +120,7 @@ public final class Warheads {
         }
     }
 
-    /** Подрыв бетонобойной бомбы под землёй. */
+    /** Underground bunker-buster detonation. */
     public static void bunker(ServerLevel level, Vec3 pos, Vec3 entry, @Nullable Entity bomb, @Nullable UUID owner) {
         long t0 = System.nanoTime();
         StrikeWorld world = StrikeWorld.get(level);
@@ -129,20 +128,20 @@ public final class Warheads {
         world.impactCost().step(System.nanoTime() - t0);
     }
 
-    // ---------------------------------------------------------------- общие средства
+    // ---------------------------------------------------------------- shared helpers
 
     /**
-     * Докуда читает мир ванильный взрыв силы {@code power}: лучи по блокам гаснут не дальше 1.3·power / 0.225 шагов
-     * по 0.3 блока (≈ 1.73·power), урон ищет сущности в 2·power и пускает к каждой луч видимости.
+     * World read reach of vanilla {@code power} blast: rays attenuate within 1.3·power / 0.225 steps of 0.3
+     * blocks (≈1.73·power); damage searches entities within 2·power, visibility ray to each.
      */
     public static double reach(float power) {
         return power * 2 + 1;
     }
 
     /**
-     * Сделать то, что читает мир в {@code reach} блоков от {@code centre} (ванильный взрыв), когда там всё готово:
-     * сразу, если готово уже сейчас, иначе — когда тикет {@link BlastArea} догрузит район в фоне. Чтение неготового
-     * чанка грузило бы его прямо в тике: вторичный подрыв залпа у края загруженного мира вставал на 1,2 с.
+     * Run world-reading action within {@code reach} of {@code centre} (vanilla blast) once ready: immediately if
+     * ready, otherwise after {@link BlastArea} background load. Unready reads load synchronously in tick;
+     * secondary salvo burst at loaded-world edge stalled 1.2 s.
      */
     public static void whenReady(ServerLevel level, Vec3 centre, double reach, Consumer<ServerLevel> action) {
         if (Terrain.readyAround(level, centre, reach)) {
@@ -153,13 +152,13 @@ public final class Warheads {
     }
 
     /**
-     * Ванильный взрыв без его звука и частиц (звук с задержкой и картинку взрыва даёт клиент): разрушения по правилам TNT,
-     * урон с нашим типом («жертва авиаудара»), приваты и Sable работают как обычно. Делается единицами в очереди
-     * попаданий ({@link StagedExplosion}) под общим бюджетом тика, только по готовым чанкам.
+     * Vanilla blast without sound/particles (client supplies delayed sound/visual): TNT destruction rules, custom
+     * damage type (“airstrike victim”), claims/Sable normal. Impact-queue work units ({@link StagedExplosion})
+     * under shared tick budget, ready chunks only.
      *
-     * @param area  район таймлайна, который накрывает и этот взрыв, или null — взрыв возьмёт свой
-     * @param after взрывы, которые должны кончиться раньше (главный взрыв удара); блоки снимаются, когда взрывы того же
-     *              района и тика выбрали лучами и побили сущности ({@link BlastArea#peersPicking})
+     * @param area timeline area covering this explosion, or null to acquire own
+     * @param after explosions required to finish first (main strike); remove blocks once same-area/same-tick
+     * explosions selected rays/damaged entities ({@link BlastArea#peersPicking})
      */
     static StagedExplosion explode(ServerLevel level, @Nullable BlastArea area, List<StagedExplosion> after, Vec3 at, float power,
                                    boolean fire, @Nullable Entity direct, @Nullable Entity owner, @Nullable ExplosionDamageCalculator calculator) {
@@ -173,8 +172,8 @@ public final class Warheads {
     }
 
     /**
-     * Проверки: взрыв без разрушений (выборку лучей видно в {@code ExplosionEvent.Detonate}) с сидом {@code seed}
-     * у {@code level.random} перед лучами — ванильным {@code explode()} или своим циклом по {@code raysPerUnit} лучей.
+     * Tests: nondestructive blast (ray selection visible in {@code ExplosionEvent.Detonate}), {@code
+     * level.random} seeded {@code seed} before rays, vanilla {@code explode()} or own {@code raysPerUnit} loop.
      */
     public static Probe testRays(ServerLevel level, Vec3 at, float power, @Nullable ExplosionDamageCalculator calculator, long seed,
                                  boolean vanilla, int raysPerUnit) {
@@ -187,8 +186,8 @@ public final class Warheads {
     }
 
     /**
-     * Проверки: взрыв (с разрушениями — {@code blocks}), ванильным {@code explode()} ({@code vanilla}, как у аппарата)
-     * или своим циклом, порции блоков — на часах {@code clock} со сроком {@code portionNanos}.
+     * Tests: blast (destruction {@code blocks}), vanilla {@code explode()} ({@code vanilla}, like craft) or own
+     * loop, block portions on {@code clock} with {@code portionNanos} deadline.
      */
     public static Probe testBlast(ServerLevel level, Vec3 at, float power, boolean blocks, boolean vanilla, LongSupplier clock,
                                   long portionNanos) {
@@ -200,7 +199,7 @@ public final class Warheads {
         return new Probe(job);
     }
 
-    /** Проверки: что сделал взрыв {@link #testBlast} или {@link #testRays}. */
+    /** Tests: result of {@link #testBlast} or {@link #testRays}. */
     public static final class Probe {
         private final StagedExplosion job;
 
@@ -212,58 +211,57 @@ public final class Warheads {
             return job.done();
         }
 
-        /** Взрыв шёл ванильным {@code explode()} (аппарат рядом или так велели). */
+        /** Used vanilla {@code explode()} (craft nearby or requested). */
         public boolean vanilla() {
             return job.vanilla();
         }
 
-        /** Ещё выбирает лучами или бьёт сущности (блоки мира не снимает). */
+        /** Still selecting rays/damaging entities (not removing world blocks). */
         public boolean picking() {
             return job.picking();
         }
 
-        /** Ванильный путь отдал урон моду: сущности из {@code Detonate} били свои единицы, а не цикл {@code explode()}. */
+        /** Vanilla path handed damage to mod: own units hit {@code Detonate} entities, not {@code explode()} loop. */
         public boolean handedDamage() {
             return job.handedDamage();
         }
 
-        /** Порций блоков мира. */
+        /** World block portions. */
         public int portions() {
             return job.portions;
         }
 
-        /** Самая большая порция, блоков. */
+        /** Largest portion, blocks. */
         public int largestPortion() {
             return job.largestPortion;
         }
 
-        /** Блоков дольше {@code SLOW_BLOCK_NANOS} за взрыв. */
+        /** Blocks exceeding {@code SLOW_BLOCK_NANOS} per blast. */
         public int slowBlocks() {
             return job.slowBlocks();
         }
 
-        /** Блоков, снесённых пробоем преграды ({@link SlabBreach}). */
+        /** Obstacle-breach removals ({@link SlabBreach}). */
         public int breached() {
             return job.breached;
         }
     }
 
-    /** {@code ExplosionEvent.Detonate}, приоритет {@code LOWEST}: урон ванильного взрыва у аппарата — в единицы мода. */
+    /** {@code ExplosionEvent.Detonate}, {@code LOWEST}: vanilla craft-blast damage handed to mod units. */
     public static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
         StagedExplosion.onDetonate(event);
     }
 
-    /** Кончились ли все взрывы {@code after}. */
+    /** Whether all {@code after} explosions finished. */
     static boolean pending(List<StagedExplosion> after) {
         for (StagedExplosion e : after) if (!e.done()) return true;
         return false;
     }
 
     /**
-     * Работа попадания одной единицей в очереди попаданий: после взрывов {@code after} (главного взрыва удара), когда
-     * район {@code area} готов.
+     * One impact work unit queued after {@code after} explosions (main strike), when {@code area} ready.
      *
-     * @param work возвращает, сколько сделано (блоков, обломков) — для замера
+     * @param work completed count (blocks/debris) for measurement
      */
     static void unit(ServerLevel level, BlastArea area, List<StagedExplosion> after, ImpactCost.Kind kind, String what,
                      ToIntFunction<ServerLevel> work) {
@@ -308,12 +306,12 @@ public final class Warheads {
     }
 
     /**
-     * Сколько отложенный взрыв ({@link #whenReady}) ждёт своего района: тикет грузит район за секунды; если за 5 минут
-     * не вышло (мир не грузится), взрыв отменяется.
+     * Deferred blast ({@link #whenReady}) area wait: ticket loads in seconds; after 5 minutes (world not
+     * loading), cancel.
      */
     public static final int DEFERRED_GIVE_UP_TICKS = 6000;
 
-    /** Взрыв, который ждёт готовности своего района ({@link #whenReady}). */
+    /** Blast awaiting area readiness ({@link #whenReady}). */
     private static final class Deferred implements Timeline {
         private final BlastArea area;
         private final Consumer<ServerLevel> action;
@@ -344,43 +342,41 @@ public final class Warheads {
     }
 
     /**
-     * Выбить всё из тега {@code tag} в коробке вокруг {@code center} сразу, без очереди ({@link Shatter}: только готовые
-     * чанки, у края загрузки — без обновлений соседей). Проверки.
+     * Break all {@code tag} in box around {@code center} immediately, without queue ({@link Shatter}: ready
+     * chunks only, no neighbor updates at loaded edge). Tests.
      *
-     * @return сколько блоков выбито
+     * @return broken blocks
      */
     public static int shatter(ServerLevel level, Vec3 center, int radius, int below, int above, TagKey<Block> tag) {
         return Shatter.now(level, center, Shatter.Box.around(center, radius, below, above, tag));
     }
 
     /**
-     * Выбить стёкла волной наземного взрыва заряда {@code tntKg} кг ТНТ сразу, без очереди ({@link Shatter.Wave}).
-     * Проверки.
+     * Immediately shatter glass with surface {@code tntKg} kg TNT wave, no queue ({@link Shatter.Wave}). Tests.
      *
-     * @return сколько стёкол выбито
+     * @return shattered glass count
      */
     public static int shatterGlass(ServerLevel level, Vec3 center, double tntKg) {
         return Shatter.now(level, center, Shatter.Wave.of(center, tntKg));
     }
 
-    /** Докуда волна заряда {@code tntKg} кг ТНТ может выбить стекло, блоков. */
+    /** Glass-shattering reach of {@code tntKg} kg TNT wave, blocks. */
     public static double glassReach(double tntKg) {
         return Shatter.Wave.of(Vec3.ZERO, tntKg).radius();
     }
 
     /**
-     * Сколько блоков от изменённого блока должно быть в готовых чанках, когда он меняется без обновлений соседей
-     * ({@link #EDGE_FLAGS}): сам блок и его соседи, которые читает Sable, — с запасом в блок.
+     * Ready-chunk margin around block changed without neighbor updates ({@link #EDGE_FLAGS}): block plus
+     * Sable-read neighbors, one-block margin.
      */
     static final int EDGE = 2;
-    /** Изменение у края загрузки: клиентам, без форм соседей и без их обновлений. */
+    /** Loaded-edge change: clients, no neighbor shapes/updates. */
     static final int EDGE_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
     /**
-     * Поджечь землю: огонь на верхнем блоке столба (как упавшие огненные шары). Только в готовых чанках: кольцо огня
-     * ракеты — в 7 блоках от точки удара, и у края загрузки оно доставало до чанка, который ещё генерируется, — чтение
-     * блока из него ({@code igniteAt}) грузило бы его прямо в тике, а у чанка, который уже грузится, высота и блок
-     * ждали бы загрузки в {@code managedBlock}.
+     * Ignite ground: fire on column top (like fallen fireballs). Ready chunks only: missile fire ring 7 blocks
+     * from impact reached still-generating chunks at loaded edge; {@code igniteAt} block read would load inside
+     * tick, already-loading height/block reads wait in {@code managedBlock}.
      */
     public static void igniteGround(ServerLevel level, double x, double z) {
         if (!IncomingConfig.SERVER.fire.get() || !Terrain.readyAround(level, new Vec3(x, 0, z), EDGE)) return;
@@ -389,9 +385,9 @@ public final class Warheads {
     }
 
     /**
-     * Огонь в блоке, если там воздух и огонь держится. Только когда готовы чанк блока и все его соседи: {@code setBlock}
-     * обновляет соседей (и цепочкой — их соседей: дверь рядом проверяет сигнал редстоуна), а Sable читает соседние
-     * блоки ({@code SableCommonEvents.handleBlockChange}) — у края загрузки это грузило бы чанк синхронно.
+     * Fire at block if air and survives. Require block chunk/all neighbors ready: {@code setBlock} updates
+     * neighbors and chains farther (nearby door redstone check); Sable reads neighboring blocks ({@code
+     * SableCommonEvents.handleBlockChange}), synchronously loading at edge.
      */
     static boolean igniteAt(ServerLevel level, BlockPos pos) {
         if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
@@ -399,8 +395,8 @@ public final class Warheads {
     }
 
     /**
-     * Огонь на месте {@code pos} вместо того, что там (воздух или растение без формы, которое горит на своём месте, как
-     * его сжигает огонь ванили), если огонь держится; те же условия готовности, что у {@link #igniteAt}. Поставлен ли.
+     * Fire replacing {@code pos} contents (air or shapeless plant burned in place like vanilla), if survives;
+     * same readiness as {@link #igniteAt}. Returns placed.
      */
     static boolean igniteIn(ServerLevel level, BlockPos pos) {
         if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
@@ -410,11 +406,11 @@ public final class Warheads {
         return true;
     }
 
-    // ================================================================ шахед, ракета, «Град», «Ланцет»
+    // ================================================================ Shahed, missile, Grad, Lancet
 
     /**
-     * Взрыв заряда {@code tntKg} кг ТНТ по физике ({@link StagedExplosion}: волна Кинни–Грэхема, кривая давление–импульс
-     * блоков, газы в помещении, тела — {@code BlastBody}) единицами в очереди попаданий.
+     * Physical {@code tntKg} kg TNT charge explosion ({@link StagedExplosion}: Kinney–Graham wave, block
+     * pressure–impulse curve, room gases, {@code BlastBody}) in impact-queue work units.
      */
     static StagedExplosion charge(ServerLevel level, BlastArea area, Vec3 at, double tntKg, SlabBreach.Placement placement,
                                   @Nullable Vec3 axis, @Nullable Entity direct, @Nullable Entity owner) {
@@ -425,7 +421,7 @@ public final class Warheads {
         return job;
     }
 
-    /** Проверки: взрыв заряда {@code tntKg} кг ТНТ по физике, со своим районом. */
+    /** Tests: physical {@code tntKg} kg TNT charge explosion with own area. */
     public static Probe testCharge(ServerLevel level, Vec3 at, double tntKg) {
         BlastArea area = BlastArea.hold(level, at, chargeReach(tntKg, 0));
         Probe probe = new Probe(charge(level, area, at, tntKg, SlabBreach.Placement.NONE, null, null, null));
@@ -434,19 +430,19 @@ public final class Warheads {
     }
 
     /**
-     * Проверки: заряд {@code tntKg} кг ТНТ в толще (как у бомбы, вошедшей в грунт) — волна в пустотах и пробой к ним
-     * ({@link SlabBreach}); район — до {@code reach} блоков (как у бомбы, не весь охват волны над землёй).
+     * Tests: buried {@code tntKg} kg TNT (ground-penetrating bomb), wave/breach into voids ({@link SlabBreach});
+     * area {@code reach} blocks (like bomb, not whole surface-wave reach).
      */
     public static Probe testBuriedCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
         return testPlaced(level, at, tntKg, SlabBreach.Placement.BURIED, reach);
     }
 
-    /** Проверки: заряд {@code tntKg} кг ТНТ, приложенный к грани (как боевая часть, ударившая в неё), с районом {@code reach}. */
+    /** Tests: {@code tntKg} kg TNT on face (warhead impact), area {@code reach}. */
     public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach) {
         return testSurfaceCharge(level, at, tntKg, reach, S2C.Blast.DOWN);
     }
 
-    /** Проверки: то же с курсом боевой части {@code axis} у удара (косой удар, удар в стену сбоку). */
+    /** Tests: same with warhead impact {@code axis} (oblique/side wall hit). */
     public static Probe testSurfaceCharge(ServerLevel level, Vec3 at, double tntKg, double reach, Vec3 axis) {
         return testPlaced(level, at, tntKg, SlabBreach.Placement.SURFACE, reach, axis);
     }
@@ -463,9 +459,9 @@ public final class Warheads {
     }
 
     /**
-     * Опора по оси удара заряда {@code tntKg} кг ТНТ, приложенного к грани в {@code at} ({@link SlabBreach#support}): взрыв
-     * для правила пробоя — тот же, что заводит {@link StagedExplosion} у заряда (без калькулятора, сила — охват слома),
-     * только событий не шлёт: он ничего не ломает.
+     * Impact-axis support for {@code tntKg} kg TNT contacting face at {@code at} ({@link SlabBreach#support}):
+     * same breach-rule explosion as charge {@link StagedExplosion} (no calculator, power is break reach), but no
+     * events, since it breaks nothing.
      */
     public static Optional<S2C.Blast.Support> support(ServerLevel level, Vec3 at, double tntKg, @Nullable Vec3 axis, @Nullable Entity direct) {
         Explosion e = new Explosion(level, direct, null, null, at.x, at.y, at.z, (float) StagedExplosion.breakReach(tntKg), false,
@@ -473,19 +469,19 @@ public final class Warheads {
         return SlabBreach.support(level, at, tntKg, axis, e, new ExplosionDamageCalculator());
     }
 
-    /** Проверки: докуда волна заряда ломает блок с порогом {@code psi} в открытом поле (нижний край разброса), блоков. */
+    /** Tests: open-field {@code psi}-threshold break reach of charge (lowest jitter), blocks. */
     public static double breakReach(double psi, double tntKg) {
         return StagedExplosion.reachFor(psi, tntKg);
     }
 
-    /** Заряд взрыва мода по физике, кг ТНТ; 0 — ванильный или чужой взрыв (обработчики {@code ExplosionEvent}). */
+    /** Physical mod blast charge, kg TNT; 0 vanilla/other ({@code ExplosionEvent} handlers). */
     public static double chargeOf(Explosion e) {
         return StagedExplosion.chargeOf(e);
     }
 
     /**
-     * Район удара заряда: лучи волны ({@link StagedExplosion#breakReach}), вал воронки и шар топлива; тела дальше бьются
-     * там, где мир загружен.
+     * Charge strike area: wave rays ({@link StagedExplosion#breakReach}), crater rim, fuel ball; farther bodies
+     * damaged where world loaded.
      */
     static double chargeReach(double tntKg, double fuelKg) {
         double crater = 2 * CraterModel.chargeRadius(tntKg, CraterModel.Soil.WET) + 1;
@@ -493,7 +489,7 @@ public final class Warheads {
     }
 
     /**
-     * Ось боевой части у удара: последний шаг снаряда; стоял (ждал свой район) — куда смотрит нос; снаряда нет — вниз.
+     * Warhead impact axis: last projectile step; stationary (waiting area), nose direction; no projectile, down.
      */
     static Vec3 axis(@Nullable Entity projectile) {
         if (projectile == null) return S2C.Blast.DOWN;
@@ -502,18 +498,18 @@ public final class Warheads {
         return v.lengthSqr() < 1e-8 ? S2C.Blast.DOWN : v.normalize();
     }
 
-    /** Проверки: осколки боевой части оружия {@code weapon} из {@code at} с осью {@code axis}, без взрыва и района. */
+    /** Tests: {@code weapon} warhead fragments from {@code at} with {@code axis}, no explosion/area. */
     public static FragmentStrike testFragments(ServerLevel level, WeaponType weapon, Vec3 at, Vec3 axis, long seed) {
-        FragmentModel model = java.util.Objects.requireNonNull(FragmentModel.of(weapon.spec()), "у оружия нет осколков");
+        FragmentModel model = java.util.Objects.requireNonNull(FragmentModel.of(weapon.spec()), "weapon has no fragments");
         return FragmentStrike.queue(level, null, List.of(), () -> true, model, at, axis, seed, null, null,
                 IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
     }
 
     /**
-     * Наземный взрыв боевой части: заряд из паспорта ({@link WeaponSpec#charge}) — волна, газы, тела (главный взрыв); за
-     * ним — воронка по закону обычного заряда, поджиг шаром топлива из бака ({@link WeaponSpec#fuelAtImpact}), топливо в
-     * воронке — огнём на блоках, пока горит ({@link FuelFires}), обломки, осколки корпуса ({@link FragmentStrike}), стёкла.
-     * Вторичных подрывов и колец огня нет: вторичное — только топливо и горящие обломки.
+     * Warhead ground explosion: spec charge ({@link WeaponSpec#charge}) wave/gases/bodies (main explosion), then
+     * conventional crater, tank-fuel ball ignition ({@link WeaponSpec#fuelAtImpact}), crater fuel as block fire
+     * while burning ({@link FuelFires}), debris, casing fragments ({@link FragmentStrike}), glass. No secondary
+     * detonations/fire rings: only fuel/burning debris secondary effects.
      */
     static final class SurfaceBlast implements Timeline {
         private final WeaponType weapon;
@@ -524,7 +520,7 @@ public final class Warheads {
         private final Entity owner;
         private final GroundMaterial mat;
         private final BlastArea area;
-        /** Главный взрыв: остальная работа удара ждёт, пока он снесёт своё. */
+        /** Main explosion: other strike work waits for its removals. */
         private final List<StagedExplosion> main;
 
         SurfaceBlast(ServerLevel level, WeaponType weapon, Vec3 pos, @Nullable Entity direct, @Nullable UUID ownerId) {
@@ -536,7 +532,7 @@ public final class Warheads {
             this.pos = pos;
             WeaponSpec spec = weapon.spec();
             double held = chargeReach(spec.charge(), spec.fuelAtImpact());
-            // аппарат рядом: взрыв по нему ванильными лучами читает мир дальше ({@code StagedExplosion.crafts})
+            // Craft nearby: vanilla-ray craft explosion reads farther ({@code StagedExplosion.crafts}).
             float craft = StagedExplosion.craftPower(level, pos, spec.charge());
             if (craft > 0) held = Math.max(held, StagedExplosion.craftReach(craft));
             this.area = BlastArea.hold(level, pos, held);
@@ -548,42 +544,42 @@ public final class Warheads {
                 case ROCKET -> S2C.Blast.ROCKET;
                 case DRONE, NONE -> S2C.Blast.DRONE;
             };
-            // видно — до far_range, слышно — докуда звук взрыва его заряда тихой ночью выше фона (HearingModel), но не
-            // дальше, чем сервер шлёт что-либо далёкое
+            // Visible to far_range, audible while charge blast exceeds quiet-night background (HearingModel), capped
+            // at server's far-data range.
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(),
                     Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(spec.charge())));
             this.reach = reach;
             this.born = level.getGameTime();
             this.seed = seed;
             this.axis = axis(direct);
-            // заряд на аппарате: воронку и шар топлива там не ставить — это корпус, а не земля. Снаряд отдаёт точку удара о
-            // аппарат уже в мире (StrikeProjectile: SubLevels.toWorld), поэтому — и аппарат, чей габарит у точки
+            // Charge on craft: no crater/fuel ball, hull rather than ground. Projectile supplies craft impact point
+            // already in world (StrikeProjectile: SubLevels.toWorld); also check craft whose bounds contain point.
             inPlots = SubLevels.inPlotGrid(level, new net.minecraft.world.level.ChunkPos(BlockPos.containing(pos)));
             onCraft = inPlots || !SubLevels.near(level, pos, 1).isEmpty();
-            // во что попал заряд и плита ли это над пустотой — тем же пробоем, что снесёт плиту (картинка цели у клиента)
+            // Struck material and whether slab over void: same breach that will remove slab (client target visual).
             Optional<S2C.Blast.Support> support = onCraft || !(spec.charge() > 0) ? Optional.empty() : support(level, pos, spec.charge(), axis, direct);
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(kind, pos, mat.ordinal(), (float) pos.y, seed, Optional.ofNullable(direct).map(Entity::getUUID), weapon.id(), axis,
                             true, support));
-            // боевая часть рвётся на грани, в которую ударила: плиту над пустотой она пробивает (SlabBreach); корпус
-            // аппарата — не преграда мира
+            // Warhead bursts at impact face: breaches slab over void (SlabBreach); craft
+            // hull is not world obstacle.
             main = spec.charge() > 0 ? List.of(charge(level, area, pos, spec.charge(),
                     onCraft ? SlabBreach.Placement.NONE : SlabBreach.Placement.SURFACE, axis, direct, owner)) : List.of();
         }
 
-        /** Взрыв на аппарате Sable. */
+        /** Explosion on Sable craft. */
         private final boolean onCraft;
-        /** Точка взрыва — в сетке плотов Sable (координаты аппарата, а не мира). */
+        /** Explosion point in Sable plot grid (craft coordinates, not world). */
         private final boolean inPlots;
-        /** Зерно взрыва (оно же в пакете взрыва): по нему осколки у сервера и клиента одни. */
+        /** Blast seed (also in packet): identical server/client fragments. */
         private final long seed;
-        /** Докуда клиентам шлётся пакет взрыва (и огня топлива в воронке), блоков; тик удара. */
+        /** Blast/crater-fuel packet range, blocks; impact tick. */
         private final double reach;
         private final long born;
-        /** Ось боевой части — курс снаряда у удара. */
+        /** Warhead axis, projectile impact heading. */
         private final Vec3 axis;
 
-        /** Главный взрыв был (обработчик-приват его не отменил). */
+        /** Main explosion occurred (claim handler did not cancel). */
         private boolean happened() {
             return !main.isEmpty() && main.getFirst().happened();
         }
@@ -591,20 +587,20 @@ public final class Warheads {
         @Override
         public boolean tick(ServerLevel level) {
             boolean missile = weapon.spec().blast() == WeaponSpec.Blast.MISSILE;
-            // всё после главного взрыва — только если он был: взрыв, отменённый приватом, не роет и не жжёт
+            // Post-main work only if explosion happened: claim-canceled blast neither digs nor ignites.
             if (main.isEmpty()) return false;
             if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
-                // топливо в воронке — после воронки: ложится на её дно и горит огнём на блоках, пока его хватает
+                // Crater fuel after crater: settles on bottom, burns as block fire while available.
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Fuel fire", l -> happened() ? FuelFires.pour(l, pos, weapon, born, reach) : 0);
             }
             unit(level, area, main, ImpactCost.Kind.DEBRIS, "Debris",
                     l -> !happened() ? 0 : missile ? DebrisSpawner.missile(l, pos, mat) : DebrisSpawner.drone(l, pos, mat));
             FragmentModel fragments = FragmentModel.of(weapon.spec());
-            // в сетке плотов Sable лучи шли бы по блокам аппарата: осколки аппараты не ломают
+            // In Sable plot grid, rays would hit craft blocks: fragments do not break craft.
             if (fragments != null && !inPlots) FragmentStrike.queue(level, area, main, this::happened, fragments, pos, axis, seed, direct, owner,
                     IncomingConfig.SERVER.shatterGlass.get(), IncomingConfig.SERVER.blockDamage.get());
             if (IncomingConfig.SERVER.shatterGlass.get()) Shatter.queue(level, area, main, pos, Shatter.Wave.of(pos, weapon.spec().charge()));
@@ -618,19 +614,19 @@ public final class Warheads {
 
     }
 
-    // ================================================================ бетонобойная бомба
+    // ================================================================ bunker-buster bomb
 
     /**
-     * Подземный взрыв заряда бомбы ({@link WeaponSpec#warheadTnt}) по приведённой глубине ({@link BuriedBlast}). Сразу —
-     * волна заряда по физике ({@link #charge}) из точки подрыва: в грунте ей идти некуда (природный грунт — тень), а в
-     * пустоте — бункере, пещере, полости — она бьёт тела и стены, газы держат давление в помещении. За ней единицами:
-     * полость и зона дробления, своды ходов и пещер в зоне трещин, на малой глубине — воронка выброса (и волна над
-     * землёй той доли заряда, что ушла в воздух), иначе — газы и пыль из хода; через ~1 с — труба обрушения свода.
+     * Underground bomb charge ({@link WeaponSpec#warheadTnt}) at scaled depth ({@link BuriedBlast}). Immediately
+     * physical charge wave ({@link #charge}) from detonation: nowhere through ground (natural ground casts
+     * shadow), but in bunker/cave/cavity voids it damages bodies/walls, room gases sustain pressure. Then work
+     * units: cavity/crushing zone, tunnel/cave roofs in fracture zone, shallow ejecta crater (plus surface wave
+     * of air-escaped charge share), otherwise bore gases/dust; after ~1 s roof-collapse chimney.
      */
     static final class BunkerBlast implements Timeline {
-        /** Когда рушится свод полости, тиков (как было: обрушение идёт за взрывом, ~1 с; оценка). */
+        /** Cavity roof collapse tick (as before, collapse follows blast by ~1 s, estimate). */
         static final int CHIMNEY_TICK = 22;
-        /** Слоёв зоны трещин на единицу работы. */
+        /** Fracture-zone layers per work unit. */
         static final int FRACTURE_SLICES = 1;
         private final Vec3 pos;
         private final Vec3 entry;
@@ -643,12 +639,12 @@ public final class Warheads {
         private final S2C.Quake groundShock;
         private boolean groundSent;
         private final BuriedBlast law;
-        /** Верх над зарядом (без своей скважины). */
+        /** Top above charge, excluding own bore. */
         private final int cover;
-        /** Сечение хода бомбы, м². */
+        /** Bomb bore cross-section, m². */
         private final double hole;
         private final BlastArea area;
-        /** Волна заряда (в пустотах под землёй и, при прорыве, над землёй): остальная работа ждёт её. */
+        /** Charge wave (underground voids and above ground on breakout): other work waits. */
         private final List<StagedExplosion> main;
         private int t;
 
@@ -668,23 +664,23 @@ public final class Warheads {
             // The TM depth-coupling factor already includes venting: W and scaled depth both use the full charge.
             this.groundShock = new S2C.Quake(pos, law.tnt(), law.depth(), mat.ordinal(), level.getGameTime());
             Vec3 top = new Vec3(pos.x, cover, pos.z);
-            // район — то, что взрыв делает с грунтом (трещины, труба, воронка); волна над землёй при прорыве ломает дальше
-            // там, где мир загружен (луч кончается в неготовом чанке): охват волны 2,4 т — ~650 блоков, тысячи чанков, и
-            // весь удар ждал бы их загрузки
+            // Area covers ground effects (fractures, chimney, crater); breakout surface wave breaks farther
+            // where loaded (ray ends in unready chunk): 2.4 t wave reaches ~650 blocks, thousands of chunks;
+            // whole strike would wait for their loading.
             double held = Math.max(law.fracture(), Math.max(law.chimney(), 2 * law.craterRadius(CraterModel.Soil.WET) + 1)) + EDGE;
             this.area = BlastArea.hold(level, pos, held);
 
-            // видно — до far_range, слышно — докуда звук той доли заряда, что вышла в воздух (HearingModel)
+            // Visible to far_range, audible to air-escaped charge share's sound range (HearingModel).
             double reach = Math.max(IncomingConfig.SERVER.farRange.get(), Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(air)));
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, reach,
                     new S2C.Blast(S2C.Blast.BUNKER, pos, mat.ordinal(), cover, level.random.nextLong(), Optional.ofNullable(direct).map(Entity::getUUID),
                             WeaponType.BUNKER.id()));
 
-            // заряд один: в пустотах у заряда — то, что не ушло в воздух, над землёй — доля, что ушла (у самой поверхности —
-            // весь заряд волной над землёй)
+            // One charge: in voids around charge, fraction not escaped to air; above ground, escaped share (at surface,
+            // entire charge as surface wave).
             List<StagedExplosion> blasts = new ArrayList<>(2);
             double below = law.breaches() ? law.tnt() - air : law.tnt();
-            // в толще заряд забит: пустоты рядом (бункер, пещера) он пробивает (SlabBreach); доля, вышедшая наружу, — волна
+            // Buried charge tamped: breaches nearby bunker/cave voids (SlabBreach); escaped fraction is wave.
             if (below > 0) blasts.add(charge(level, area, pos, below, SlabBreach.Placement.BURIED, null, direct, owner));
             if (law.breaches() && air > 0) blasts.add(charge(level, area, top.add(0, 0.5, 0), air, SlabBreach.Placement.NONE, null, direct, owner));
             main = List.copyOf(blasts);
@@ -695,13 +691,13 @@ public final class Warheads {
             t++;
             if (t == 1) {
                 boolean blocks = IncomingConfig.SERVER.blockDamage.get();
-                // в зоне дробления давление в породе — сотни МПа: кто там (в ходе, в пустоте за стеной), не выживет
+                // Crushing-zone rock pressure hundreds of MPa: anyone there (bore, void behind wall) cannot survive.
                 unit(level, area, main, ImpactCost.Kind.HITS, "Crush zone", l -> {
                     if (!happened()) return 0;
                     return crushBodies(l);
                 });
                 if (blocks) {
-                    // воронка — по верху, пока полость не выгрызла столбец заряда
+                    // Crater from top before cavity excavates charge column.
                     if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
                     int r = Mth.ceil(law.crush());
                     for (int dy = -r; dy <= r; dy++) {
@@ -715,7 +711,7 @@ public final class Warheads {
                         Shatter.queue(level, area, main, top, Shatter.Wave.of(top, law.airCharge(hole)));
                     }
                 } else {
-                    // газы полости выходят по ходу бомбы
+                    // Cavity gases exit bomb bore.
                     unit(level, area, main, ImpactCost.Kind.DEBRIS, "Vent", l -> {
                         if (!happened()) return 0;
                         double air = law.airCharge(hole);
@@ -727,8 +723,8 @@ public final class Warheads {
                 }
             }
             if (t == 2 && IncomingConfig.SERVER.blockDamage.get()) {
-                // своды в зоне трещин — следующим тиком: полости всех подрывов этого тика встают в очередь раньше (осыпание
-                // у воронок залпа идёт вместе, а не по очереди); по FRACTURE_SLICES слоёв на единицу (~3 тыс. клеток слой; падающий щебень и вода, что затекает в полость, — обновления соседей)
+                // Fracture-zone roofs next tick: cavities of all same-tick detonations queue first (salvo crater falls
+                // happen together, not sequentially); FRACTURE_SLICES layers per unit (~3 thousand cells/layer; falling rubble/water entering cavity cause neighbor updates).
                 int f = Mth.ceil(law.fracture());
                 for (int dy = -f; dy <= f; dy += FRACTURE_SLICES) {
                     int lo = dy, hi = Math.min(f, dy + FRACTURE_SLICES - 1);
@@ -756,14 +752,14 @@ public final class Warheads {
             area.release(level);
         }
 
-        /** Волна заряда была (приват её не отменил): взрыв, отменённый приватом, не роет и не рушит. */
+        /** Charge wave occurred (not claim-canceled): canceled blast neither digs nor collapses. */
         private boolean happened() {
             return !main.isEmpty() && main.getFirst().happened();
         }
 
         /**
-         * Верх над зарядом без его же скважины ({@link BunkerCover}); листва не в счёт (кроны — не укрытие). Только сервер:
-         * карта {@code …_NO_LEAVES} есть лишь на нём.
+         * Top above charge excluding its bore ({@link BunkerCover}); ignore leaves (canopy not cover). Server
+         * only: {@code …_NO_LEAVES} heightmap exists only there.
          */
         private static int surfaceAbove(ServerLevel level, BlockPos c) {
             int[] h = new int[BunkerCover.RING.length];
@@ -773,7 +769,7 @@ public final class Warheads {
             return BunkerCover.surface(h);
         }
 
-        /** Тела в зоне дробления. Сколько задето. */
+        /** Bodies in crushing zone. Returns affected count. */
         private int crushBodies(ServerLevel level) {
             double r = law.crush();
             int n = 0;
@@ -786,8 +782,9 @@ public final class Warheads {
         }
 
         /**
-         * Слой {@code dy} над зарядом: полость (всё, что не держит {@link Penetration.Kind#STOP}, — воздух) и зона
-         * дробления (скала — в булыжник, бетон и кладка — в гравий; грунт уплотняется — без смены). Сколько блоков смотрели.
+         * Layer {@code dy} above charge: cavity (everything not {@link Penetration.Kind#STOP} becomes air),
+         * crushing zone (rock to cobblestone, concrete/masonry to gravel; soil compacts unchanged). Returns
+         * blocks inspected.
          */
         private int cavitySlice(ServerLevel level, int dy) {
             BlockPos c = BlockPos.containing(pos);
@@ -809,7 +806,7 @@ public final class Warheads {
                         ColumnScar.replace(level, p.immutable(), s, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                         continue;
                     }
-                    // дробится порода и кладка, что в карте данных; прочее (сундук, механизм мода) — нет
+                    // Crush mapped rock/masonry, not others (chest, mod mechanism).
                     BlockState rubble = rubble(s, ModDataMaps.Penetrability.find(s));
                     if (rubble != null && !s.is(rubble.getBlock())) ColumnScar.replace(level, p.immutable(), s, rubble, Block.UPDATE_ALL);
                 }
@@ -818,8 +815,8 @@ public final class Warheads {
         }
 
         /**
-         * Во что дробится блок в зоне дробления: камень — в булыжник, глубинный сланец — в свой булыжник, прочая скала, бетон
-         * и кладка — в гравий (щебень); грунт уплотняется — без смены; блок без записи в карте — без смены.
+         * Crushing-zone conversion: stone to cobblestone, deepslate to its cobblestone, other
+         * rock/concrete/masonry to gravel (rubble); soil compacts unchanged; unmapped unchanged.
          */
         @Nullable
         private static BlockState rubble(BlockState s, @Nullable ModDataMaps.Penetrability m) {
@@ -830,9 +827,9 @@ public final class Warheads {
         }
 
         /**
-         * Слой {@code dy} зоны трещин: свод хода или пещеры (воздух под природным грунтом или скалой) рушится щебнем —
-         * гравием, который падает сам, — с вероятностью 1 − r/R трещин (оценка: ближе — почти всегда, у края — редко).
-         * Полость и зона дробления — не здесь. Сколько блоков смотрели.
+         * Fracture-zone {@code dy} layer: tunnel/cave roof (air below natural ground/rock) collapses as
+         * self-falling gravel with probability 1 − r/R of fractures (estimate: near almost always, edge rarely).
+         * Excludes cavity/crushing zone. Returns inspected blocks.
          */
         private int fractureSlice(ServerLevel level, int dy) {
             BlockPos c = BlockPos.containing(pos);
@@ -860,8 +857,8 @@ public final class Warheads {
         }
 
         /**
-         * Свод полости рушится трубой высотой {@link BuriedBlast#chimney} (радиус — полости): порода над полостью — щебень
-         * (гравий), он осыпается в неё; труба дошла до верха — провал на поверхности и пыль над ним. Сколько блоков смотрели.
+         * Cavity roof collapses into chimney {@link BuriedBlast#chimney} high (cavity radius): rock above becomes
+         * gravel, falls inside; reaching top causes surface subsidence/dust. Returns inspected blocks.
          */
         private int chimney(ServerLevel level) {
             BlockPos c = BlockPos.containing(pos);
@@ -885,7 +882,7 @@ public final class Warheads {
             }
             if (law.subsides()) {
                 Vec3 sv = new Vec3(pos.x, cover, pos.z);
-                // пыль провала — доля грунта, что ушёл в провал (объём полости), поднятая падением (как у воронки)
+                // Subsidence dust: fraction of ground lost into hole (cavity volume), raised by falling (like crater).
                 double cavity = 4.0 / 3 * Math.PI * Math.pow(rc, 3);
                 PacketDistributor.sendToPlayersNear(level, null, sv.x, sv.y, sv.z, IncomingConfig.SERVER.farRange.get(),
                         new S2C.Collapse(sv, ventMat.ordinal(), (float) cavity));
@@ -894,8 +891,8 @@ public final class Warheads {
         }
 
         /**
-         * Воронка выброса ({@link BuriedBlast#craterRadius} по грунту у устья) — та же чаша и вал, что у
-         * воронок ({@link Craters#dig}), до центра полости. Сколько столбцов смотрели.
+         * Ejecta crater ({@link BuriedBlast#craterRadius} using bore-mouth ground), same bowl/rim as craters
+         * ({@link Craters#dig}), down to cavity center. Returns columns inspected.
          */
         private int crater(ServerLevel level) {
             CraterModel.Soil soil = ventMat.soil();

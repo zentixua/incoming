@@ -19,38 +19,38 @@ import java.util.Collection;
 import java.util.UUID;
 
 /**
- * Боеприпасы из инвентаря. Приказ игрока по его правилам ({@code rules} у {@link ServerActions#strike}: пульт у всех,
- * команда не оператора) оплачивается сразу и целиком — одиночный пуск и весь залп: по предмету боеприпаса на снаряд
- * (паспорт, {@link WeaponSpec#munition}; пакет «Града» — по снаряду из пакета), ядерная БЧ на носителе — ещё предметом
- * {@link #warhead()}. Не хватает — пуска нет, строка над хотбаром: сколько нужно и сколько есть; приказ не урезается.
- * Неудачный пуск и невыпущенные снаряды отменённого залпа возвращаются владельцу, если он в сети (полный инвентарь —
- * к ногам; погибшему, пока он не возродился, — на место гибели); не в сети — не возвращаются (строка в лог).
- * Творческий режим, команда оператора, консоль и командный блок не платят.
+ * Inventory munitions. A player order under player rules ({@code rules} in {@link ServerActions#strike}:
+ * designator for everyone, non-operator command) pays immediately in full, single launch or entire salvo: one
+ * munition item per projectile (spec, {@link WeaponSpec#munition}; Grad pack pays rounds from pack), plus {@link
+ * #warhead()} item for a carrier nuclear warhead. Shortage means no launch, with above-hotbar required/available
+ * counts; never truncate order. Failed launches and unlaunched canceled-salvo rounds refund online owner (full
+ * inventory: at feet; dead before respawn: death site); offline gets no refund (log line). Creative, operator
+ * command, console, command block do not pay.
  */
 public final class Munitions {
     private Munitions() {}
 
-    /** Ядерная боевая часть на носитель — крылатую ракету или бомбу B-2: один предмет на всех носителей. */
+    /** Carrier nuclear warhead for cruise missile or B-2 bomb: one item type for all carriers. */
     public static Item warhead() {
         return ModItems.NUCLEAR_WARHEAD.get();
     }
 
     /**
-     * Счёт приказа.
+     * Order bill.
      *
-     * @param weapon   чем
-     * @param shots    сколько снарядов (у пакета — снарядов, а не пакетов)
-     * @param warheads сколько ядерных БЧ на носители
+     * @param weapon weapon
+     * @param shots projectile count (rounds, not packs)
+     * @param warheads carrier nuclear warhead count
      */
     public record Bill(WeaponType weapon, int shots, int warheads) {
-        /** Счёт приказа {@code l}: каждый снаряд — боеприпас, ядерная БЧ на носителе — ещё по предмету. */
+        /** Bill for {@code l}: munition per projectile, extra item for each carrier nuclear warhead. */
         public static Bill of(Loadout l) {
             boolean carrier = l.nuclear() && !l.weapon().spec().warhead().always();
             return new Bill(l.weapon(), l.count(), carrier ? l.count() : 0);
         }
     }
 
-    /** Сколько снарядов в одном предмете {@code item}: у пакета — из паспорта, у остального — один. */
+    /** Rounds per {@code item}: spec count for packs, one otherwise. */
     public static int perItem(Item item) {
         for (WeaponType w : WeaponType.values()) {
             WeaponSpec.Munition m = w.spec().munition();
@@ -59,13 +59,16 @@ public final class Munitions {
         return 1;
     }
 
-    /** Сколько снарядов осталось в предмете стопки {@code s}: у начатого пакета — из компонента, у целого — полный. */
+    /** Rounds left in stack {@code s}'s item: component for opened pack, full count otherwise. */
     public static int left(ItemStack s, int perItem) {
         Integer n = s.get(ModDataComponents.ROUNDS.get());
         return n == null ? perItem : Math.clamp(n, 1, perItem);
     }
 
-    /** Начатый пакет с {@code left} снарядами из {@code perItem} (полный — без компонента: складывается с целыми). */
+    /**
+     * Opened pack with {@code left} of {@code perItem} rounds (full pack has no component, stacks with whole
+     * packs).
+     */
     public static ItemStack pack(Item item, int perItem, int left) {
         ItemStack s = new ItemStack(item);
         setLeft(s, perItem, left);
@@ -78,23 +81,23 @@ public final class Munitions {
     }
 
     /**
-     * Запас, из которого платят за приказ и в который возвращают: инвентарь игрока ({@link #of(ServerPlayer)}) или
-     * запас стационарной пусковой.
+     * Store paying for orders and receiving refunds: player inventory ({@link #of(ServerPlayer)}) or fixed
+     * launcher inventory.
      */
     public interface Store {
-        /** Ячейки запаса. */
+        /** Storage slots. */
         IItemHandlerModifiable items();
 
-        /** Положить стопку, которой нет места в ячейках по порядку (остаток вскрытого пакета, возврат). */
+        /** Insert a stack with no room in ordered slots (opened pack remainder, refund). */
         void put(ItemStack s);
 
-        /** Положенное в ячейки останется в запасе (у погибшего игрока без {@code keepInventory} — нет). */
+        /** Items placed in slots survive (not for dead player without {@code keepInventory}). */
         default boolean keeps() {
             return true;
         }
     }
 
-    /** Инвентарь игрока: положить — в инвентарь, полный — к ногам; погибшему — выбросить на месте гибели. */
+    /** Player inventory: insert, or at feet if full; dead player: drop at death site. */
     public static Store of(ServerPlayer player) {
         IItemHandlerModifiable items = new PlayerInvWrapper(player.getInventory());
         return new Store() {
@@ -106,7 +109,7 @@ public final class Munitions {
             @Override
             public void put(ItemStack s) {
                 if (keeps()) player.getInventory().placeItemBackInInventory(s);
-                // вокруг, как добыча при гибели; без ItemTossEvent — это не бросок игрока
+                // Around the site like death loot; no ItemTossEvent, since this is not a player toss.
                 else player.drop(s, true, false);
             }
 
@@ -117,7 +120,7 @@ public final class Munitions {
         };
     }
 
-    /** Сколько снарядов {@code item} в запасе (у пакетов — в сумме по пакетам). */
+    /** Rounds of {@code item} in storage (sum across packs). */
     public static int held(IItemHandler items, Item item, int perItem) {
         long n = 0;
         for (int i = 0; i < items.getSlots(); i++) {
@@ -128,7 +131,7 @@ public final class Munitions {
     }
 
     /**
-     * Чего не хватает в запасе {@code items} на счёт {@code bill}: строка — что нужно и сколько есть; null — хватает.
+     * Shortage in {@code items} for {@code bill}: required/available line; null if sufficient.
      */
     @Nullable
     public static MutableComponent shortage(IItemHandler items, Bill bill) {
@@ -147,9 +150,9 @@ public final class Munitions {
     }
 
     /**
-     * Оплатить счёт из запаса — всё или ничего: не хватает боеприпаса или ядерной БЧ — ничего не снято.
+     * Pay bill from storage, all or nothing: missing munition or nuclear warhead deducts nothing.
      *
-     * @return null, если оплачено; иначе — чего не хватает ({@link #shortage})
+     * @return null if paid; otherwise shortage ({@link #shortage})
      */
     @Nullable
     public static MutableComponent pay(Store store, Bill bill) {
@@ -162,10 +165,9 @@ public final class Munitions {
     }
 
     /**
-     * Оплатить счёт из инвентаря игрока ({@link #pay(Store, Bill)}); не хватает — игроку строка над хотбаром, что
-     * нужно и сколько есть.
+     * Pay from player inventory ({@link #pay(Store, Bill)}); shortage shows required/available above hotbar.
      *
-     * @return true, если оплачено
+     * @return true if paid
      */
     public static boolean pay(ServerPlayer player, Bill bill) {
         MutableComponent missing = pay(of(player), bill);
@@ -174,8 +176,8 @@ public final class Munitions {
     }
 
     /**
-     * Снять {@code rounds} снарядов: сперва из начатых пакетов, потом из одиночных целых, потом из стопок (новых начатых
-     * не плодить: пакет из стопки вскрывается отдельным предметом, которому нужно место).
+     * Take {@code rounds}: opened packs first, then single whole packs, then stacks (avoid extra opened packs:
+     * opening a stacked pack creates a separate item needing space).
      */
     private static void take(Store store, Item item, int perItem, int rounds) {
         IItemHandlerModifiable items = store.items();
@@ -195,7 +197,7 @@ public final class Munitions {
                         setLeft(s, perItem, left - rounds);
                         rounds = 0;
                     } else {
-                        // вскрыть один пакет из стопки целых: остаток — отдельным предметом
+                        // Open one pack from whole-pack stack: remainder becomes separate item.
                         s.shrink(1);
                         opening = pack(item, perItem, left - rounds);
                         rounds = 0;
@@ -208,14 +210,14 @@ public final class Munitions {
         if (rounds > 0) throw new IllegalStateException("took fewer rounds than checked: short by " + rounds);
     }
 
-    /** Вернуть оплаченное в запас {@code store}. */
+    /** Refund payment to {@code store}. */
     public static void refund(Store store, Bill bill) {
         WeaponSpec.Munition m = bill.weapon().spec().munition();
         give(store, m.item().get(), m.rounds(), bill.shots());
         give(store, warhead(), 1, bill.warheads());
     }
 
-    /** Вернуть оплаченное игроку: в инвентарь, полный — к ногам, погибшему — на место гибели; строка ему в чат. */
+    /** Refund player: inventory, at feet if full, death site if dead; chat message to them. */
     private static void refund(ServerPlayer player, Bill bill) {
         WeaponSpec.Munition m = bill.weapon().spec().munition();
         refunded(player, m.item().get(), m.rounds(), bill.shots());
@@ -224,7 +226,7 @@ public final class Munitions {
         if (!keeps(player)) player.sendSystemMessage(Component.translatable("incoming.munitions.refunded.dead").withStyle(ChatFormatting.GRAY));
     }
 
-    /** Строка игроку о возврате {@code rounds} снарядов {@code item}. */
+    /** Player refund line for {@code rounds} rounds of {@code item}. */
     private static void refunded(ServerPlayer player, Item item, int perItem, int rounds) {
         if (rounds <= 0) return;
         player.sendSystemMessage((perItem > 1 ? Component.translatable("incoming.munitions.refunded.rounds", item.getDescription(), rounds)
@@ -232,19 +234,19 @@ public final class Munitions {
     }
 
     /**
-     * Инвентарь игрока переживёт возрождение: жив, или правило {@code keepInventory}. Погибший на экране смерти — в списке
-     * игроков, но его инвентарь при возрождении без {@code keepInventory} не переносится ({@code ServerPlayer.restoreFrom}):
-     * положенное туда пропало бы.
+     * Player inventory survives respawn if alive or {@code keepInventory}. Dead players on death screen remain
+     * listed, but inventory without {@code keepInventory} is not transferred on respawn ({@code
+     * ServerPlayer.restoreFrom}): inserted items would vanish.
      */
     private static boolean keeps(ServerPlayer player) {
         return player.isAlive() || player.serverLevel().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
     }
 
     /**
-     * Вернуть оплаченное владельцу {@code owner}, если он среди {@code online} (игроки сервера; GameTest передаёт своих),
-     * иначе — строка в лог: владельцу не в сети не возвращается.
+     * Refund {@code owner} if among {@code online} (server players; GameTest passes its own), otherwise log:
+     * offline owner gets no refund.
      *
-     * @param why за что возврат — для лога
+     * @param why refund reason for log
      */
     public static void refund(Collection<? extends ServerPlayer> online, @Nullable UUID owner, Bill bill, String why) {
         if (owner == null || bill.shots() <= 0 && bill.warheads() <= 0) return;
@@ -260,7 +262,7 @@ public final class Munitions {
                 bill.shots(), bill.warheads() > 0 ? ", nuclear warheads ×" + bill.warheads() : "", owner);
     }
 
-    /** Отдать {@code rounds} снарядов: сперва дополнить начатые пакеты (отменённый залп возвращает пакет целым), затем предметами. */
+    /** Give {@code rounds}: first refill opened packs (canceled salvo restores whole pack), then give items. */
     private static void give(Store store, Item item, int perItem, int rounds) {
         if (rounds <= 0) return;
         IItemHandlerModifiable items = store.items();

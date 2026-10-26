@@ -35,40 +35,41 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * ЗРК на месте: кто поставил (его сторона — свои, {@link Sides}), запас зенитных ракет (воронка и воронка Create
- * заряжают его через {@link Capabilities.ItemHandler#BLOCK}; вынуть ракеты так нельзя), ракеты на направляющих и
- * перезарядка. Работает, пока тикает его чанк: раз в {@link #SWEEP} тиков радар ({@link Radar}) осматривает небо,
- * тревога ({@link AirAlert}) и разведка стороны ({@link Sightings}) узнают чужие цели, огонь ({@link FireControl})
- * пускает одну ракету по ближайшей свободной цели, своим рядом уходит экран радара ({@link S2C.RadarScope}).
- * Чанков не грузит: радар — список снарядов мира, полёт ракеты — {@link Interceptor}.
+ * Stationary SAM: placer (their side is friendly, {@link Sides}), stored interceptor missiles (hopper and Create
+ * funnel load via {@link Capabilities.ItemHandler#BLOCK}; cannot extract missiles this way), missiles on rails,
+ * and reload. Runs while its chunk ticks: every {@link #SWEEP} ticks radar ({@link Radar}) sweeps the sky, alert
+ * ({@link AirAlert}) and side reconnaissance ({@link Sightings}) learn of hostile targets, fire control ({@link
+ * FireControl}) launches one missile at the nearest free target, and nearby friendlies receive the radar screen
+ * ({@link S2C.RadarScope}). Loads no chunks: radar uses the world projectile list; missile flight is {@link
+ * Interceptor}.
  */
 public class SamBlockEntity extends BlockEntity {
-    /** Радар осматривает небо раз в столько тиков; пуск — не чаще. */
+    /** Radar sweeps the sky once per this many ticks; launches no more often. */
     public static final int SWEEP = 10;
-    /** Ячеек запаса (по 16 ракет). */
+    /** Storage slots (16 missiles each). */
     public static final int SLOTS = 2;
-    /** Экран радара видят свои ближе стольких блоков от ЗРК. */
+    /** Friendlies within this many blocks of the SAM see the radar screen. */
     public static final double SCOPE_RANGE = 48;
     /**
-     * Пакет над блоком — те же числа, что у модели ({@code tools/gen_models.py}, sam): четыре контейнера 2×2, их оси —
-     * в {@code CANISTER_OFFSET} от середины блока по x и z, дно — в {@code PACK_FLOOR} над низом блока (кабина 1 м и
-     * плита), длина — {@code CANISTER_LENGTH}.
+     * Rack above the block uses the model's numbers ({@code tools/gen_models.py}, sam): four canisters in 2×2;
+     * their axes are {@code CANISTER_OFFSET} from the block center in x and z, their bottoms {@code PACK_FLOOR}
+     * above the block bottom (1 m cabin plus plate), their length {@code CANISTER_LENGTH}.
      */
     static final double CANISTER_OFFSET = 0.33, PACK_FLOOR = 1.1, CANISTER_LENGTH = 4.3;
-    /** Полуширина плиты пакета и верх крышек контейнеров над низом блока — рамка отрисовки. */
+    /** Half-width of the rack plate and top of canister caps above the block bottom: render bounds. */
     public static final double PACK_HALF_WIDTH = 0.72, PACK_TOP = PACK_FLOOR + CANISTER_LENGTH + 0.03;
 
     @Nullable
     private UUID owner;
-    /** Запас ракет: снаружи — только загрузка, воронка под ЗРК не вытаскивает ракеты. */
+    /** Stored missiles: insertion only from outside; a hopper under the SAM cannot extract missiles. */
     private final Magazine stock = new Magazine(SLOTS, s -> s.is(ModItems.INTERCEPTOR.get()), this::setChanged);
-    /** Ракет на направляющих, готовых к пуску. */
+    /** Missiles on rails ready to launch. */
     private int ready;
-    /** Тиков идёт установка следующей ракеты на направляющую. */
+    /** Ticks spent placing the next missile on a rail. */
     private int reload;
-    /** Что радар видел при последнем осмотре (для строки состояния): целей всего, чужих. */
+    /** What radar saw on its last sweep (for the status line): total and hostile targets. */
     private int lastTracks, lastHostile;
-    /** Небо над ЗРК закрыто: под крышей он не стреляет. */
+    /** Sky above the SAM is blocked: it does not fire under a roof. */
     private boolean covered;
 
     public SamBlockEntity(BlockPos pos, BlockState state) {
@@ -89,34 +90,34 @@ public class SamBlockEntity extends BlockEntity {
         setChanged();
     }
 
-    /** Ракет на направляющих. */
+    /** Missiles on rails. */
     public int ready() {
         return ready;
     }
 
-    /** Ракет в запасе. */
+    /** Missiles in storage. */
     public int stockCount() {
         return stock.count();
     }
 
-    /** Положить ракеты в запас; возвращает то, что не влезло. */
+    /** Insert missiles into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
     }
 
-    /** Сигнал компаратора — по заполненности запаса. */
+    /** Comparator signal follows storage fullness. */
     public int comparator() {
         return stock.comparator();
     }
 
-    /** Блок сломан или взорван: запас и ракеты с направляющих выпадают. */
+    /** Block broken or exploded: stored missiles and those on rails drop. */
     void dropContents(Level level, BlockPos pos) {
         stock.dropAll(level, pos);
         if (ready > 0) Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(ModItems.INTERCEPTOR.get(), ready));
         ready = 0;
     }
 
-    /** Строка состояния для игрока, который смотрит на ЗРК. */
+    /** Status line for the player looking at the SAM. */
     public Component status() {
         if (covered) return Component.translatable("incoming.sam.covered").withStyle(ChatFormatting.GOLD);
         return Component.translatable("incoming.sam.status", String.valueOf(ready), String.valueOf(IncomingConfig.SERVER.samRails.get()),
@@ -132,7 +133,7 @@ public class SamBlockEntity extends BlockEntity {
         if ((level.getGameTime() + Math.floorMod(pos.hashCode(), SWEEP)) % SWEEP == 0) sweep(level, pos);
     }
 
-    /** Расчёт ставит на свободную направляющую ракету из запаса — по одной за {@code reload_seconds}. */
+    /** The crew places a stored missile on a free rail, one per {@code reload_seconds}. */
     private void reloadTick(ServerLevel level, BlockPos pos) {
         if (ready >= IncomingConfig.SERVER.samRails.get() || stockCount() == 0) {
             reload = 0;
@@ -150,7 +151,10 @@ public class SamBlockEntity extends BlockEntity {
         setChanged();
     }
 
-    /** Осмотр неба: тревога и разведка стороны, пуск по ближайшей свободной цели, экран радара своим рядом. */
+    /**
+     * Sky sweep: side alert and reconnaissance, launch at the nearest free target, radar screen for nearby
+     * friendlies.
+     */
     private void sweep(ServerLevel level, BlockPos pos) {
         Vec3 antenna = Vec3.atCenterOf(pos).add(0, 1, 0);
         InterceptorSpec spec = InterceptorSpec.SAM;
@@ -161,11 +165,11 @@ public class SamBlockEntity extends BlockEntity {
         for (Radar.Track t : tracks) {
             if (!t.hostile()) continue;
             lastHostile++;
-            // карта пульта стороны показывает чужие цели радара; свои снаряды стороне и так видны
+            // The side's controller map shows hostile radar targets; the side already sees its own projectiles.
             if (side != null) Sightings.spot(level, side, t.projectile(), Sightings.Source.RADAR);
         }
         AirAlert.sweep(level, owner, side, tracks);
-        // над ЗРК открытое небо (свой чанк готов — он тикает): ракета уходит вверх и под крышей разорвалась бы о неё
+        // Open sky above the SAM (its chunk is ready because it ticks): a missile launches upward and would burst against a roof.
         covered = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY() + 1;
         if (ready > 0 && !covered) {
             Radar.Track shot = FireControl.pick(tracks, DefenseWorld.get(level));
@@ -178,13 +182,13 @@ public class SamBlockEntity extends BlockEntity {
         scope(level, antenna, tracks);
     }
 
-    /** Середина контейнера направляющей {@code k}: ракета стоит в нём во весь рост и уходит вверх. */
+    /** Center of rail {@code k}'s canister: the missile stands at full length inside and launches upward. */
     static Vec3 rail(BlockPos pos, int k) {
         return Vec3.atBottomCenterOf(pos).add((k & 1) == 0 ? -CANISTER_OFFSET : CANISTER_OFFSET, PACK_FLOOR + CANISTER_LENGTH / 2,
                 (k & 2) == 0 ? -CANISTER_OFFSET : CANISTER_OFFSET);
     }
 
-    /** Экран радара своим рядом с ЗРК (без хозяина — всем рядом). */
+    /** Radar screen for friendlies near the SAM (everyone nearby if unowned). */
     private void scope(ServerLevel level, Vec3 antenna, List<Radar.Track> tracks) {
         MinecraftServer server = level.getServer();
         List<ServerPlayer> crew = new ArrayList<>();

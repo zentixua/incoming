@@ -5,16 +5,17 @@ import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Local;
 
 /**
- * На чём стоит пакет пусковой ({@link Launcher}): где его ось качания относительно места пусковой. Пакет одного оружия
- * один и тот же ({@link LauncherRack}), меняется только опора — от неё считаются ячейки, сектор пуска и картинка.
+ * Launcher rack support ({@link Launcher}): location of its elevation pivot relative to the launcher. A weapon's
+ * rack stays the same ({@link LauncherRack}); only the mount changes, determining cells, launch sector, and
+ * visuals.
  */
 public enum LauncherMount {
-    /** Прицеп мобильной пусковой: ось на 1.6 над землёй и 2.2 позади центра прицепа. */
+    /** Mobile launcher trailer: pivot 1.6 above ground and 2.2 behind trailer center. */
     TRAILER(1.6, 2.2),
-    /** Стационарная пусковая: ось на поворотном круге над блоком, над серединой его верха; место — середина низа блока. */
+    /** Fixed launcher: pivot on the turntable above the block, over its top center; position is bottom center. */
     PAD(1.25, 0);
 
-    /** Ось качания выше места пусковой и позади него по курсу, блоков. */
+    /** Elevation pivot above launcher position and behind it along heading, blocks. */
     public final double up, back;
 
     LauncherMount(double up, double back) {
@@ -22,12 +23,15 @@ public enum LauncherMount {
         this.back = back;
     }
 
-    /** Ось качания пакета у пусковой в {@code pos} с курсом {@code yaw}. */
+    /** Rack elevation pivot at launcher {@code pos} with heading {@code yaw}. */
     public Vec3 pivot(Vec3 pos, float yaw) {
         return Local.at(pos, yaw, 0, 0, up, -back);
     }
 
-    /** Центр снаряда на направляющей {@code slot} пакета {@code weapon} при полном подъёме, у пусковой в {@code pos} с курсом {@code yaw}. */
+    /**
+     * Projectile center on rail {@code slot} of a fully raised {@code weapon} rack at launcher {@code pos} with
+     * heading {@code yaw}.
+     */
     public Vec3 railPoint(Vec3 pos, float yaw, WeaponType weapon, int slot) {
         LauncherRack rack = LauncherRack.of(weapon);
         double[] at = rack.slotOffset(slot);

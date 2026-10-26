@@ -12,23 +12,23 @@ import ua.zentix.incoming.entity.StrikeProjectile;
 
 import java.util.UUID;
 
-/** Взведение и неконтактный взрыватель снаряда. */
+/** Projectile arming and proximity fuze. */
 public final class ProximityFuse {
-    /** Взрыватель взводится на таком удалении от пусковой (или с выходом на маршевый участок). */
+    /** Fuze arms this far from the launcher (or on entering cruise). */
     public static final double ARM_DISTANCE = 96;
 
     private ProximityFuse() {}
 
-    /** Взрыватель взведён: снаряд отошёл от места старта {@code launchPos} (null — неизвестно) или вышел на маршевый участок. */
+    /** Fuze armed: projectile moved away from {@code launchPos} (null means unknown) or entered cruise. */
     public static boolean armed(FlightPhase phase, Vec3 pos, @Nullable Vec3 launchPos) {
         if (phase.ordinal() >= FlightPhase.CRUISE.ordinal()) return true;
         return launchPos == null || pos.distanceToSqr(launchPos) > ARM_DISTANCE * ARM_DISTANCE;
     }
 
     /**
-     * Кого задевает путь носа {@code from → to} на скорости {@code speed}: людей рядом с траекторией,
-     * а ещё саму цель {@code targetId}. На своего ({@code owner}) — нет (если он сам не цель): пролёт над головой
-     * запустившего не должен его убивать. Из задетых — ближайший к началу пути; null — никого.
+     * Who the nose path {@code from → to} hits at {@code speed}: people near the trajectory and the target {@code
+     * targetId} itself. Excludes {@code owner} (unless the target): flying over the launching player's head
+     * should not kill them. Among hits, nearest to path start; null means nobody.
      */
     @Nullable
     public static Entity victim(ServerLevel level, Entity self, Vec3 from, Vec3 to, double speed, @Nullable UUID targetId,
@@ -53,9 +53,9 @@ public final class ProximityFuse {
     }
 
     /**
-     * Цель, выбранная оператором, взводит взрыватель всегда (кроме наблюдателя). Случайный человек у траектории — по
-     * ванильному правилу «кого замечают»: не в творческом режиме и не наблюдатель
-     * ({@link EntitySelector#NO_CREATIVE_OR_SPECTATOR}: так ванильные мобы выбирают, на кого нападать).
+     * Operator-selected target always triggers the fuze (except a spectator). Incidental people near the
+     * trajectory follow vanilla's “who is noticed” rule: neither creative nor spectator ({@link
+     * EntitySelector#NO_CREATIVE_OR_SPECTATOR}, used by vanilla mobs to choose whom to attack).
      */
     private static boolean isTarget(Entity e, @Nullable UUID targetId, @Nullable UUID owner) {
         if (!e.isAlive() || e.isSpectator() || e instanceof StrikeProjectile) return false;
@@ -63,7 +63,7 @@ public final class ProximityFuse {
         return e instanceof Player && !e.getUUID().equals(owner) && EntitySelector.NO_CREATIVE_OR_SPECTATOR.test(e);
     }
 
-    /** Ближайшая к {@code p} точка отрезка {@code a–b}. */
+    /** Point on segment {@code a–b} nearest to {@code p}. */
     public static Vec3 closestOnSegment(Vec3 a, Vec3 b, Vec3 p) {
         Vec3 ab = b.subtract(a);
         double len2 = ab.lengthSqr();

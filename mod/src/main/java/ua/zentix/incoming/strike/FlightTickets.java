@@ -18,45 +18,45 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Район цели снаряда: чанки грузятся (и генерируются) в фоне, пока снаряд на подлёте, — к его прибытию там тикают
- * сущности, и он (в мире или вернувшись в мир из полёта вне его) бьёт как обычно. Грузится район заранее, а тикать
- * (мобы, блок-сущности, спавн) начинает только на последних секундах подлёта ({@code TargetAreaHold}) и по мере
- * готовности ({@link AreaLoader}).
- * У каждого снаряда свой тикет (ключ — его UUID): залп по одной точке не снимает тикет друг у друга. Полосы подлёта
- * ракет — общие ({@link #holdApproach}).
- * Тикеты не сохраняются: после перезапуска снаряд возьмёт свой заново.
+ * Projectile target area: chunks load (and generate) in background during approach, so entities tick by arrival
+ * and the projectile (in-world or materializing from virtual flight) hits normally. Preload area, but start
+ * ticking (mobs, block entities, spawning) only in final approach seconds ({@code TargetAreaHold}) and as ready
+ * ({@link AreaLoader}). Each projectile has its own ticket (UUID key): same-point salvos do not remove each
+ * other's tickets. Missile approach strips are shared ({@link #holdApproach}). Tickets are unsaved: after
+ * restart, projectile reacquires its own.
  */
 public final class FlightTickets {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_flight", Comparator.<UUID>naturalOrder());
     /**
-     * Уровень тикета 33 − 4 = 29: сущности тикают в квадрате 5×5 чанков вокруг цели (±40 блоков), загружено 9×9 —
-     * снаряд появляется в мире до цели, а соседние чанки готовы для взрыва и обломков.
+     * Ticket level 33 − 4 = 29: entities tick in 5×5 chunks around target (±40 blocks), 9×9 loaded; projectile
+     * appears before target, neighbors ready for explosion and debris.
      */
     public static final int DISTANCE = 4;
-    /** Район цели «Ланцета» ({@code LoiterEntity.targetArea}): уровень 27, круг барража весь в тикающих чанках. */
+    /** Lancet target area ({@code LoiterEntity.targetArea}): level 27, entire orbit in ticking chunks. */
     public static final int LOITER_DISTANCE = 6;
     /**
-     * Полоса подлёта ({@link #approach}): районы уровня 33 − 3 = 30 — сущности тикают в квадрате 3×3 чанков вокруг
-     * центра (ваниль пускает их, когда готов квадрат 5×5, загружено 7×7).
+     * Approach strip ({@link #approach}): level 33 − 3 = 30 areas, entities tick in 3×3 chunks around center
+     * (vanilla allows them once 5×5 ready; 7×7 loaded).
      */
     public static final int APPROACH_DISTANCE = 3;
-    /** Шаг центров полосы подлёта, блоков: два чанка — квадраты 3×3 соседних центров перекрываются и на диагонали. */
+    /** Approach-strip center spacing, blocks: two chunks, so adjacent 3×3 squares overlap even diagonally. */
     private static final double APPROACH_STEP = 32;
     /**
-     * Районов полос подлёта в мире не больше: 4 полосы по 256 блоков (8 районов). Соседние районы перекрываются:
-     * ~150 загруженных чанков на полосу, ~600 на все.
+     * Maximum world approach-strip areas: 4 strips of 256 blocks (8 areas). Neighboring areas overlap: ~150
+     * loaded chunks per strip, ~600 total.
      */
     public static final int APPROACH_LIMIT = 32;
-    /** Ключ районов полос: общий у всех снарядов, кто держит — {@link StrikeWorld#approach}. */
+    /** Shared strip-area key for all projectiles; holders tracked in {@link StrikeWorld#approach}. */
     private static final UUID APPROACH_KEY = UUID.nameUUIDFromBytes("incoming:approach".getBytes(StandardCharsets.UTF_8));
 
     private FlightTickets() {}
 
     /**
-     * Полоса подлёта: центры районов {@link #APPROACH_DISTANCE} от цели на {@code length} блоков назад по пути снаряда
-     * ({@code path}: цель, потом точки маршрута от последней к ближайшей, потом сам снаряд) — сплошная полоса шириной
-     * 3 чанка, где тикают сущности. Снаряд вне мира возвращается в мир на её краю, а не у района цели: подлёт видно
-     * игроку у цели и там, где его дистанция симуляции меньше дальности прорисовки. Без самой цели: её держит район цели.
+     * Approach strip: {@link #APPROACH_DISTANCE} area centers along {@code length} blocks backward from target
+     * over projectile path ({@code path}: target, waypoints last to nearest, then projectile), forming a
+     * continuous 3-chunk-wide entity-ticking strip. Virtual projectile materializes at strip edge rather than
+     * target area: approach is visible to a player at the target even with simulation distance below render
+     * distance. Excludes target itself, held by target area.
      */
     public static List<ChunkPos> approach(List<Vec3> path, double length) {
         if (path.size() < 2) return List.of();
@@ -66,7 +66,7 @@ public final class FlightTickets {
         for (int i = 1; i < path.size() && s <= length; i++) {
             Vec3 a = path.get(i - 1), b = path.get(i);
             double dx = b.x - a.x, dz = b.z - a.z, d = Math.sqrt(dx * dx + dz * dz);
-            // центры на этом отрезке пути: по дуге пути от цели через каждые APPROACH_STEP
+            // Centers on this path segment: every APPROACH_STEP along the path arc from target.
             for (; s <= length && s <= walked + d; s += APPROACH_STEP) {
                 double t = (s - walked) / d;
                 ChunkPos c = new ChunkPos(BlockPos.containing(a.x + dx * t, a.y, a.z + dz * t));
@@ -78,8 +78,8 @@ public final class FlightTickets {
     }
 
     /**
-     * Есть ли кому увидеть подлёт к {@code aim}: игрок этого мира ближе дальности прорисовки сервера и {@code leg}
-     * по горизонтали. Нет — полоса не нужна: снаряд войдёт в мир у района цели, как остальные снаряды.
+     * Someone to see approach to {@code aim}: player in this world within server render distance and {@code leg}
+     * horizontally. Otherwise no strip needed: projectile enters at target area like others.
      */
     public static boolean watched(ServerLevel level, Vec3 aim, double leg) {
         double r = level.getServer().getPlayerList().getViewDistance() * 16.0 + leg;
@@ -91,11 +91,11 @@ public final class FlightTickets {
     }
 
     /**
-     * Взять полосу подлёта снаряду {@code flight}. Районы полос общие для мира (один ключ): залп по одной точке с одного
-     * направления держит одну полосу, а не по полосе на снаряд; район отпускается, когда его не держит ни один снаряд.
-     * Районов полос в мире не больше {@link #APPROACH_LIMIT}: полоса, которой не хватает места, не берётся целиком
-     * (false) — снаряд войдёт в мир у района цели. Каждый район полосы — 7×7 загруженных чанков, в несгенерированной
-     * местности это очередь генерации, общая с игроками.
+     * Acquire approach strip for {@code flight}. World strip areas are shared (one key): a salvo at one point
+     * from one direction holds one strip, rather than one per projectile; release an area when no projectile
+     * holds it. At most {@link #APPROACH_LIMIT} world strip areas: reject entire strip if it does not fit
+     * (false); projectile enters at target area instead. Each strip area loads 7×7 chunks; in ungenerated terrain
+     * this shares players' generation queue.
      */
     public static boolean holdApproach(ServerLevel level, List<ChunkPos> centres, UUID flight) {
         StrikeWorld world = StrikeWorld.get(level);
@@ -110,7 +110,7 @@ public final class FlightTickets {
         return true;
     }
 
-    /** Отпустить полосу подлёта снаряда {@code flight}: районы, которые больше никто не держит, отпускаются. */
+    /** Release {@code flight}'s approach strip: release areas nobody else holds. */
     public static void releaseApproach(ServerLevel level, List<ChunkPos> centres, UUID flight) {
         StrikeWorld world = StrikeWorld.get(level);
         Map<ChunkPos, Set<UUID>> refs = world.approach();
@@ -122,7 +122,7 @@ public final class FlightTickets {
         }
     }
 
-    /** Сколько районов полос подлёта взято в мире (проверки). */
+    /** World approach-strip areas acquired (tests). */
     public static int approachAreas(ServerLevel level) {
         return StrikeWorld.get(level).areas().count(TYPE, APPROACH_KEY);
     }
@@ -131,26 +131,26 @@ public final class FlightTickets {
         return new AreaLoader.Area(TYPE, c, APPROACH_DISTANCE, APPROACH_KEY);
     }
 
-    /** Сколько тикающих районов цели держит снаряд {@code flight}, без полосы подлёта (проверки). */
+    /** Ticking target areas held by {@code flight}, excluding approach strip (tests). */
     public static int ticking(ServerLevel level, UUID flight) {
         return StrikeWorld.get(level).areas().count(TYPE, flight, true);
     }
 
-    /** Сколько районов держит снаряд {@code flight}: район цели и районы полосы подлёта, общие с другими (проверки). */
+    /** Areas held by {@code flight}: target area plus approach-strip areas shared with others (tests). */
     public static int held(ServerLevel level, UUID flight) {
         StrikeWorld world = StrikeWorld.get(level);
         int approach = (int) world.approach().values().stream().filter(by -> by.contains(flight)).count();
         return world.areas().count(TYPE, flight) + approach;
     }
 
-    /** {@code distance} — уровень тикета: {@link #DISTANCE} по умолчанию, 6 — сущности тикают в квадрате 9×9 чанков. */
+    /** {@code distance} is ticket level: default {@link #DISTANCE}; 6 entity-ticks a 9×9 square. */
     public static void hold(ServerLevel level, ChunkPos pos, int distance, UUID flight, boolean hold) {
         hold(level, pos, distance, flight, true, hold);
     }
 
     /**
-     * То же; {@code ticks} — false: район только грузится ({@link AreaLoader.Area#ticks}), тикать он начнёт, когда
-     * снаряд возьмёт его тикающим ({@code TargetAreaHold}).
+     * Same; {@code ticks} false means loading only ({@link AreaLoader.Area#ticks}); ticking starts when
+     * projectile acquires it as ticking ({@code TargetAreaHold}).
      */
     public static void hold(ServerLevel level, ChunkPos pos, int distance, UUID flight, boolean ticks, boolean hold) {
         AreaLoader.Area area = new AreaLoader.Area(TYPE, pos, distance, flight, ticks);

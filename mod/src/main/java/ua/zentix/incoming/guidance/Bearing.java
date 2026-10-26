@@ -3,12 +3,12 @@ package ua.zentix.incoming.guidance;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Где точка относительно снаряда.
+ * Point relative to the projectile.
  *
- * @param distance   расстояние, блоков
- * @param horizontal расстояние по горизонтали, блоков
- * @param yaw        курс на точку, °
- * @param pitch      угол точки под горизонтом, ° (> 0 — ниже)
+ * @param distance distance, blocks
+ * @param horizontal horizontal distance, blocks
+ * @param yaw heading toward the point, °
+ * @param pitch point angle below the horizon, ° (> 0 means below)
  */
 public record Bearing(double distance, double horizontal, float yaw, float pitch) {
     public static Bearing of(Vec3 from, Vec3 to) {

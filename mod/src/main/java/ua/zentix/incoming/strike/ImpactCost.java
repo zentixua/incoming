@@ -9,27 +9,28 @@ import java.util.Arrays;
 import java.util.Locale;
 
 /**
- * Сколько потока сервера заняли попадания обычных боевых частей в тике мира: всё (таймлайны, единицы полосы попаданий
- * {@link ua.zentix.incoming.work.WorkScheduler}, отложенные взрывы) и по видам работы. Тик дольше {@link #SLOW_NANOS} — строка в лог (не чаще раза
- * в {@link #LOG_PERIOD} тиков, для {@code tools/logscan.py}): по ней видно, какая часть попадания держит сервер
- * в игре хоста, где профилировщик не запустишь. Не сохраняется, живёт в {@link StrikeWorld}.
+ * Server-thread time used by conventional warhead impacts in a world tick: total (timelines, impact-lane work
+ * units {@link ua.zentix.incoming.work.WorkScheduler}, deferred explosions) and by work kind. Above {@link
+ * #SLOW_NANOS}, log a line (at most once per {@link #LOG_PERIOD} ticks, for {@code tools/logscan.py}): shows
+ * which impact part holds the server in host gameplay, where a profiler cannot run. Unsaved, lives in {@link
+ * StrikeWorld}.
  */
 public final class ImpactCost {
-    /** Вид работы попадания. */
+    /** Impact work kind. */
     public enum Kind {
-        /** Ванильные взрывы: начало ({@code ExplosionEvent.Start}, запрос аппаратов) и лучи. */
+        /** Vanilla explosions: start ({@code ExplosionEvent.Start}, craft query) and rays. */
         RAYS("explosions: rays"),
-        /** Ванильные взрывы: разбор выбранного лучами, снятие блоков порциями, выпадение, огонь. */
+        /** Vanilla explosions: process ray selection, block removal portions, drops, fire. */
         BLOCKS("explosions: blocks"),
-        /** Выбитые ударной волной стёкла и листва. */
+        /** Blast-wave shattered glass and foliage. */
         GLASS("glass"),
-        /** Обломки-сущности. */
+        /** Debris entities. */
         DEBRIS("debris"),
-        /** Прочее: огонь по кольцу, щебень и обрушение свода бомбы. */
+        /** Other: fire ring, rubble, bomb roof collapse. */
         GROUND("fire and ground"),
-        /** Ванильные взрывы: сбор сущностей, {@code ExplosionEvent.Detonate}, урон и отбрасывание. */
+        /** Vanilla explosions: entity collection, {@code ExplosionEvent.Detonate}, damage, knockback. */
         HITS("explosions: Detonate and damage"),
-        /** Осколки корпуса: лучи, урон, стёкла и выбоины ({@code warhead.FragmentStrike}). */
+        /** Casing fragments: rays, damage, glass, chips ({@code warhead.FragmentStrike}). */
         FRAGMENTS("fragments");
 
         private final String label;
@@ -43,23 +44,29 @@ public final class ImpactCost {
         }
     }
 
-    /** Медленный тик попаданий: больше целого тика сервера. */
+    /** Slow impact tick: longer than an entire server tick. */
     static final long SLOW_NANOS = 50_000_000L;
-    /** Строка о медленном тике — не чаще, тиков. */
+    /** Minimum interval between slow-tick lines, ticks. */
     static final int LOG_PERIOD = 100;
-    /** Работа попаданий ждёт в очереди дольше, тиков, — строка в лог (не чаще {@link #LOG_PERIOD}): залп копит разрушения. */
+    /**
+     * Impact work queued longer than this, ticks: log (at most once per {@link #LOG_PERIOD}); salvo accumulates
+     * destruction.
+     */
     static final int LONG_WAIT_TICKS = 20;
 
     private final long[] nanos = new long[Kind.values().length];
     private final int[] counts = new int[Kind.values().length];
-    /** Шаги взрывов за тик ({@link ExplosionStage}). */
+    /** Explosion stages per tick ({@link ExplosionStage}). */
     private final long[] rayStages = new long[ExplosionStage.values().length];
     private long total;
     private long lastLog = Long.MIN_VALUE / 2;
     private int slowSinceLog;
     private long lastWaitLog = Long.MIN_VALUE / 2;
 
-    /** Серия попаданий (залп): от первой единицы до {@link #SERIES_QUIET_TICKS} тиков без работы — одна строка итога. */
+    /**
+     * Impact series (salvo): first work unit through {@link #SERIES_QUIET_TICKS} ticks without work, one summary
+     * line.
+     */
     static final int SERIES_QUIET_TICKS = 100;
     private long seriesStart = -1;
     private long seriesLastWork;
@@ -71,7 +78,7 @@ public final class ImpactCost {
     private int seriesSlowTicks;
     private long tickUnitsNanos;
 
-    /** Работа вида {@code kind} заняла {@code took} нс и сделала {@code count} (взрывов, блоков, обломков). */
+    /** Work of {@code kind} took {@code took} ns and completed {@code count} (explosions, blocks, debris). */
     public void add(Kind kind, long took, int count) {
         nanos[kind.ordinal()] += took;
         counts[kind.ordinal()] += count;
@@ -81,17 +88,17 @@ public final class ImpactCost {
         tickUnitsNanos += took;
     }
 
-    /** Удар (район взрыва) отпущен — в итог серии. */
+    /** Strike (blast area) released: add to series summary. */
     public void strikeDone() {
         seriesStrikes++;
     }
 
-    /** Шаги взрыва за единицу, нс ({@link ExplosionStage}). */
+    /** Explosion stages per work unit, ns ({@link ExplosionStage}). */
     public void addRayStages(long[] stages) {
         for (int i = 0; i < stages.length; i++) rayStages[i] += stages[i];
     }
 
-    /** Шаг попадания (начало взрыва или тик таймлайна) занял {@code took} нс — всё вместе, с видами работы внутри. */
+    /** Impact step (explosion start or timeline tick) took {@code took} ns total, including its work kinds. */
     public void step(long took) {
         total += took;
     }
@@ -113,7 +120,7 @@ public final class ImpactCost {
         seriesNanos = seriesMaxUnit = seriesMaxTick = 0;
     }
 
-    /** Конец тика сервера: медленный — в лог, счёт — заново; очередь попаданий ждёт долго — тоже в лог. */
+    /** Server tick end: log slow tick, reset counters; log long impact queue waits too. */
     void endTick(ServerLevel level, UnitQueue queue) {
         long now = level.getGameTime();
         endSeriesTick(level, now, queue.isEmpty());

@@ -19,24 +19,24 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Воздушная тревога от радара: когда радар стороны видит новую чужую цель, игроки этой стороны в том же мире получают
- * строку «Воздушная тревога» — что летит, откуда (сторона света от самого игрока) и как далеко, — и короткий сигнал.
- * Одна цель — одна тревога на сторону, сколько бы радаров её ни видели; цель, которую радары стороны не видели
- * {@link #FORGET} тиков, забывается — появившись снова, она снова тревога.
+ * Radar air alert: when a side's radar sees a new hostile target, players on that side in the same world receive
+ * an “Air alert” line with what is flying, where from (compass direction from each player), and how far away,
+ * plus a short signal. One target means one alert per side, however many radars see it; a target unseen by that
+ * side's radars for {@link #FORGET} ticks is forgotten and triggers another alert if it reappears.
  */
 public final class AirAlert {
-    /** Цель, которую радары стороны не видят столько тиков, забыта. */
+    /** A target unseen by the side's radars for this many ticks is forgotten. */
     static final int FORGET = 200;
-    /** Сигнал стороне — не чаще раза в столько тиков (строки — на каждую новую цель). */
+    /** Signal the side at most once per this many ticks (one line per new target). */
     static final int SOUND_GAP = 100;
     private static final String[] COMPASS = {"n", "ne", "e", "se", "s", "sw", "w", "nw"};
 
     private AirAlert() {}
 
     /**
-     * Отметить, что радар стороны {@code side} видит {@code tracks}, и объявить тревогу о новых чужих.
+     * Record that side {@code side}'s radar sees {@code tracks}, and announce new hostile targets.
      *
-     * @param owner чей радар: его сторона ({@link Sides}) получает тревогу; null — ничей, тревоги нет
+     * @param owner whose radar: their side ({@link Sides}) receives the alert; null means unowned, with no alert
      */
     public static void sweep(ServerLevel level, @Nullable UUID owner, @Nullable String side, List<Radar.Track> tracks) {
         if (owner == null || side == null) return;
@@ -58,7 +58,7 @@ public final class AirAlert {
         }
     }
 
-    /** Строка тревоги для игрока в {@code listener}: ближайшая к нему из новых целей (и сколько их всего). */
+    /** Alert line for the player at {@code listener}: the nearest new target (and their total count). */
     static Component message(Vec3 listener, List<Radar.Track> fresh) {
         Radar.Track near = fresh.getFirst();
         for (Radar.Track t : fresh) {
@@ -74,7 +74,7 @@ public final class AirAlert {
         return line.withStyle(ChatFormatting.RED);
     }
 
-    /** Сторона света по сдвигу (север — −Z, восток — +X): «n», «ne» … «nw». */
+    /** Compass direction from an offset (north is −Z, east is +X): “n”, “ne” … “nw”. */
     static String compass(double dx, double dz) {
         double deg = Math.toDegrees(Math.atan2(dx, -dz));
         return COMPASS[Math.floorMod((int) Math.round(deg / 45), 8)];
