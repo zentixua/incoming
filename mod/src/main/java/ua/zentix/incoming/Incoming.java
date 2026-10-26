@@ -52,16 +52,16 @@ import ua.zentix.incoming.work.WorkScheduler;
 import java.util.List;
 
 /**
- * Incoming: кинематографичные удары — дрон-камикадзе, крылатая ракета, B-2 с бетонобойной бомбой, залпы, МБР с ядерной БЧ;
- * защита от них — ЗРК с радаром.
- * Здесь только регистрации; игровая логика — в пакетах strike/entity/warhead, клиент — в client.
+ * Incoming: cinematic strikes — kamikaze drone, cruise missile, B-2 with a bunker buster, salvos, nuclear-warhead ICBM;
+ * defense against them — a SAM with radar.
+ * Only registrations here; game logic is in strike/entity/warhead, client logic in client.
  */
 @Mod(Incoming.MOD_ID)
 public final class Incoming {
     public static final String MOD_ID = "incoming";
     /**
-     * Имя клавиши камеры снаряда: подсказки сервера ссылаются на неё через {@code Component.keybind}, и клиент
-     * показывает ту клавишу, что назначена у игрока, а не зашитую букву.
+     * Projectile-camera key name: server hints refer to it through {@code Component.keybind}, and the client
+     * shows the player's assigned key rather than a hardcoded letter.
      */
     public static final String CAMERA_KEY = "key.incoming.camera";
     public static final Logger LOG = LogUtils.getLogger();
@@ -76,7 +76,7 @@ public final class Incoming {
 
         container.registerConfig(ModConfig.Type.SERVER, IncomingConfig.SERVER_SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, IncomingConfig.CLIENT_SPEC);
-        // таблица давления ядерки (~25 мс) — в фоне при загрузке, а не в потоке игры или сервера при первом подрыве
+        // Nuclear pressure table (~25 ms): background load, not on the game/server thread at the first detonation.
         Util.backgroundExecutor().execute(HobBlast::warm);
 
         modBus.addListener(IncomingNetwork::register);
@@ -93,14 +93,14 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onPlace);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onBreak);
         NeoForge.EVENT_BUS.addListener(Sightings::onLevelTick);
-        // после StrikeWorld: снаряды вне мира в этом тике уже сдвинулись — зенитная ракета идёт за их новым местом
+        // After StrikeWorld: outside-world projectiles have moved this tick; the interceptor follows their new positions.
         NeoForge.EVENT_BUS.addListener(DefenseWorld::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onServerStopping);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent e) -> ua.zentix.incoming.nuclear.world.NuclearWorld.onServerStopping(e.getServer()));
-        // после того как мод снял свои тикеты и работу: генерация, начатая до выхода, доходит до конца (иначе цикл выгрузки висит)
+        // After the mod releases its tickets and work: finish generation started before exit (otherwise the unload loop hangs).
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
         NeoForge.EVENT_BUS.addListener(FarFlights::onServerTick);
@@ -131,7 +131,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkSent);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.flash.FlashSync::onChunkSent);
-        // блок уже сменился, даже если оповещение соседей кто-то отменил
+        // The block has changed even if someone canceled neighbor notification.
         NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, true, net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent.class,
                 ua.zentix.incoming.nuclear.flash.FlashSync::onNeighborNotify);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.flash.FlashSync::onLevelTick);
@@ -148,17 +148,17 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(StallWatch::onTickPre);
         NeoForge.EVENT_BUS.addListener(StallWatch::onTickPost);
         if (ua.zentix.incoming.nuclear.world.NukeDiag.ON) {
-            // диагностика прогонов (-Dincoming.nukeDiag=true): стеки долгих тиков; без свойства — ни слушателей, ни потока
+            // Run diagnostics (-Dincoming.nukeDiag=true): long-tick stacks; without the property, no listeners or thread.
             NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.NukeDiag::onTickPre);
             NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.NukeDiag::onTickPost);
         }
         NeoForge.EVENT_BUS.addListener(Blackouts::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(Blackouts::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(Blackouts::onExplosion);
-        // последним: обработчики других модов видят и правят список сущностей взрыва до того, как мод его заберёт
+        // Last: other mods' handlers see and modify the explosion entity list before the mod takes it.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.Warheads::onDetonate);
         NeoForge.EVENT_BUS.addListener(Blackouts::onBlockPlaced);
-        // первым: чужие слушатели сохранения видят тег уже без двойников
+        // First: other save listeners see the tag with twins already removed.
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ChunkSaves::onSave);
         NeoForge.EVENT_BUS.addListener(ChunkSaves::onLoad);
     }

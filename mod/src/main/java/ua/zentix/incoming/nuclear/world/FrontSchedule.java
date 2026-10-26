@@ -7,38 +7,38 @@ import org.jetbrains.annotations.Nullable;
 import java.util.PriorityQueue;
 
 /**
- * Очередь держанных копий LOD к фронту ({@link FrontLods}) — по секциям Distant Horizons: чанки секции уходят вместе, в
- * срок секции, секции — по сроку (без Minecraft — юнит-тесты). DH пишет LOD в базу участками 64×64 блока
- * ({@code FullDataSourceV2.WIDTH}) — 4×4 чанка — не раньше секунды после последней записи в участок: чанк секции,
- * отданный позже остальных, отложил бы весь участок.
+ * Queue of held front LOD copies ({@link FrontLods}) grouped by Distant Horizons section: section chunks sent together at
+ * section deadline, sections ordered by deadline (Minecraft-free unit tests). DH writes LOD database in 64×64-block areas
+ * ({@code FullDataSourceV2.WIDTH}), 4×4 chunks, no earlier than a second after last area write: a section chunk
+ * sent later would delay entire area.
  */
 final class FrontSchedule {
-    /** Чанков в секции DH по оси. */
+    /** Chunks per DH section axis. */
     static final int SECTION_CHUNKS = 4;
 
-    /** Чанки одной секции со сроком отдачи; порядок — для одинаковых сроков. */
+    /** Chunks of one section with send deadline; order breaks deadline ties. */
     private record Batch(long section, long at, long order, LongArrayList chunks) {}
 
     private final PriorityQueue<Batch> queue = new PriorityQueue<>((a, b) -> a.at != b.at ? Long.compare(a.at, b.at) : Long.compare(a.order, b.order));
-    /** Секция → её пачка, ещё не отданная (в неё встают чанки той же секции). */
+    /** Section → unsent batch (additional chunks of same section join it). */
     private final Long2ObjectOpenHashMap<Batch> open = new Long2ObjectOpenHashMap<>();
     private long added;
     private int size;
 
-    /** Секция DH чанка (как {@code ChunkPos.asLong}: x — младшие 32 бита, z — старшие). */
+    /** Chunk's DH section (like {@code ChunkPos.asLong}: x lower 32 bits, z upper). */
     static long section(long chunk) {
         int x = Math.floorDiv((int) chunk, SECTION_CHUNKS), z = Math.floorDiv((int) (chunk >>> 32), SECTION_CHUNKS);
         return (long) x & 0xFFFFFFFFL | ((long) z & 0xFFFFFFFFL) << 32;
     }
 
-    /** Середина секции DH по оси, в блоках (номер секции по оси). */
+    /** DH section midpoint on axis, blocks (section index along axis). */
     static double middle(int section) {
         return (section * SECTION_CHUNKS + SECTION_CHUNKS / 2) * 16.0;
     }
 
     /**
-     * Чанк — к отдаче в тик {@code at}. Чанки одной секции — с одним сроком: чанк встаёт в ещё не отданную пачку своей
-     * секции (с её сроком), а если её нет — в новую пачку (копия, собранная после отдачи секции, уходит сразу).
+     * Queue chunk for tick {@code at}. One deadline per section: chunk joins its section's unsent batch
+     * (using its deadline), otherwise starts new batch (copy built after section sent leaves immediately).
      */
     void add(long chunk, long at) {
         long s = section(chunk);
@@ -52,7 +52,7 @@ final class FrontSchedule {
         size++;
     }
 
-    /** Чанк больше не ждёт отдачи (загружен, вытеснен); false — его не было в очереди. */
+    /** Chunk no longer awaiting send (loaded, evicted); false if absent from queue. */
     boolean remove(long chunk) {
         Batch b = open.get(section(chunk));
         if (b == null || !b.chunks.rem(chunk)) return false;
@@ -60,7 +60,7 @@ final class FrontSchedule {
         return true;
     }
 
-    /** Чанки первой по сроку секции, чей срок настал (пустые пачки пропускаются); null — таких нет. Не снимает. */
+    /** Chunks of earliest section whose deadline arrived (skip empty batches); null if none. Does not remove. */
     @Nullable
     LongArrayList head(long now) {
         for (Batch b; (b = queue.peek()) != null; ) {
@@ -71,7 +71,7 @@ final class FrontSchedule {
         return null;
     }
 
-    /** Снять первую по сроку секцию ({@link #head}): её чанки отданы. */
+    /** Remove earliest section ({@link #head}): its chunks sent. */
     void pop() {
         Batch b = queue.poll();
         if (b == null) return;
@@ -79,7 +79,7 @@ final class FrontSchedule {
         size -= b.chunks.size();
     }
 
-    /** Чанков ждёт отдачи. */
+    /** Chunks awaiting send. */
     int size() {
         return size;
     }

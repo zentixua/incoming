@@ -28,29 +28,29 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * «Хиросимские тени» (DESIGN-nuke §3.5): тело между шаром и стеной заслоняет свет, и на обугленной вокруг грани за ним
- * остаётся светлый силуэт. В тике подрыва — только снимок тел (место, рамка, поворот: свет кончается раньше, чем тело
- * успеет упасть); дальше по телу на единицу работы под бюджетом ядерки: лучи от тела прочь от шара до первых полных
- * блоков ({@link #REACH} блоков, только готовые чанки), их грани к шару и соседние в той же плоскости — кандидаты;
- * клетка грани 16×16 (пиксель текстуры) в тени, если луч от неё к шару проходит через тело. Шар — не точка: три точки
- * на его диске дают полутень (тень 0, ⅓, ⅔, целиком), и чем дальше стена от тела, тем мягче край.
+ * “Hiroshima shadows” (DESIGN-nuke §3.5): body between fireball and wall blocks light, leaving a light silhouette
+ * on the otherwise charred face behind it. Detonation tick only snapshots bodies (position, bounds, rotation: pulse ends before body
+ * can fall); afterward one body per work unit under nuclear budget: rays from body away from fireball to first full
+ * blocks ({@link #REACH} blocks, ready chunks only); their blast-facing faces and coplanar neighbors are candidates;
+ * 16×16 face cell (texture pixel) is shadowed if ray toward fireball crosses body. Fireball is not a point: three points
+ * on its disk give penumbra (shadow 0, ⅓, ⅔, full); farther wall from body means softer edge.
  * <p>
- * Тело — человек (игрок, зомби, житель: высокая узкая рамка) из прямоугольников модели игрока (ноги, туловище, руки,
- * голова) с поворотом туловища, остальные — эллипсоид в рамке, транспорт — рамка. Ступень гари грани — та же
- * {@link FlashChar#level}, что у плана руин; грань, которая не потемнела бы, силуэта не держит. Силуэты пишутся
- * в отметку чанка ({@link FlashSync#shadows}) в конце тика работы — одним пакетом на чанк.
+ * Humanoid body (player, zombie, villager: tall narrow bounds) uses player-model boxes (legs, torso, arms,
+ * head) with body rotation; others use ellipsoid within bounds, vehicles use bounds. Face scorch tier is same
+ * {@link FlashChar#level} as ruin plan; a face that would not darken holds no silhouette. Silhouettes written
+ * to chunk mark ({@link FlashSync#shadows}) at work tick end, one packet per chunk.
  */
 public final class FlashShadows {
-    /** Докуда за телом ищется стена, блоки. */
+    /** Wall search reach behind body, blocks. */
     static final int REACH = 12;
-    /** Тел на подрыв, не больше (ближние к шару первыми). */
+    /** Maximum bodies per detonation (nearest fireball first). */
     static final int MAX_BODIES = 256;
-    /** Доля радиуса шара, на которой лежат три точки полутени. */
+    /** Fireball-radius fraction for the three penumbra points. */
     static final double PENUMBRA = 0.35;
 
     private static final Direction[] DIRECTIONS = Direction.values();
 
-    /** Тело в миг вспышки: низ рамки по центру, ширина и высота рамки, поворот (градусы), вид. */
+    /** Body at flash: centered bounds bottom, bounds width and height, rotation (degrees), type. */
     record Body(double x, double y, double z, double width, double height, float yaw, Shape shape) {
         Vec3 centre() {
             return new Vec3(x, y + height / 2, z);
@@ -69,7 +69,7 @@ public final class FlashShadows {
     private int next;
     private int faces;
     private long nanos;
-    /** Силуэты к записи в конце тика: чанк → грани и маски. */
+    /** Silhouettes to write at tick end: chunk → faces and masks. */
     private final Long2ObjectOpenHashMap<IntArrayList> pendingFaces = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<LongArrayList> pendingMasks = new Long2ObjectOpenHashMap<>();
 
@@ -84,8 +84,8 @@ public final class FlashShadows {
     }
 
     /**
-     * Снимок тел в тике подрыва (поток сервера): сущности, рядом с которыми хоть одна грань ещё может потемнеть.
-     * Null — таких нет.
+     * Snapshot bodies on detonation tick (server thread): entities with at least one nearby face still able to darken.
+     * Null if none.
      */
     @Nullable
     public static FlashShadows of(ServerLevel level, Detonation d) {
@@ -108,7 +108,7 @@ public final class FlashShadows {
         return new FlashShadows(level, d, bodies);
     }
 
-    /** Докуда от эпицентра грань к шару ещё может потемнеть хоть на ступень (по прямой, блоки). */
+    /** Epicenter reach where a blast-facing face can still darken at least one tier (straight-line, blocks). */
     static double reach(Detonation d) {
         double lo = 0, hi = Math.max(1, d.ruinRadius());
         if (!FlashChar.possible(d.fluence(d.burst().add(1, 0, 0)), FlashChar.CHARS)) return 0;
@@ -120,7 +120,7 @@ public final class FlashShadows {
         return lo;
     }
 
-    /** Три точки на диске шара радиуса {@code r} поперёк направления {@code away} от шара к телу. */
+    /** Three points on fireball disk of radius {@code r}, transverse to {@code away} from fireball to body. */
     static Vec3[] sources(Vec3 burst, Vec3 away, double r) {
         Vec3 e1 = away.cross(Math.abs(away.y) > 0.95 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0)).normalize(), e2 = away.cross(e1).normalize();
         Vec3[] out = new Vec3[3];
@@ -131,7 +131,7 @@ public final class FlashShadows {
         return out;
     }
 
-    /** Сколько успеем за бюджет; true — все тела пройдены. */
+    /** As much as budget permits; true when all bodies processed. */
     public boolean work(ServerLevel level, WorkClock clock) {
         while (next < bodies.size() && clock.canStart()) {
             long t0 = clock.begin();
@@ -147,17 +147,17 @@ public final class FlashShadows {
         return true;
     }
 
-    /** Силуэты тела: грани за ним и маски их клеток. */
+    /** Body silhouettes: faces behind it and their cell masks. */
     private void cast(ServerLevel level, Body body) {
         Vec3 c = body.centre();
         double fluence = d.fluence(c);
         if (!FlashChar.possible(fluence, FlashChar.CHARS)) return;
-        // само тело в тени — тени не бросает
+        // body itself in shadow casts none
         if (!ThermalShadow.visible(level, d.burst(), c) && !ThermalShadow.visible(level, d.burst(), c.add(0, body.height / 2, 0))) return;
         Vec3 away = c.subtract(d.burst()).normalize();
         double radius = PENUMBRA * d.fireballRadius();
         Vec3[] sources = sources(d.burst(), away, radius);
-        // кандидаты — грани, куда ложатся лучи из точек тела прочь от шара, и их соседи в той же плоскости
+        // candidates: faces reached by rays from body points away from fireball and their coplanar neighbors
         java.util.Set<FaceAt> candidates = new java.util.LinkedHashSet<>();
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
@@ -195,10 +195,10 @@ public final class FlashShadows {
         }
     }
 
-    /** Грань блока. */
+    /** Block face. */
     record FaceAt(BlockPos pos, Direction face) {}
 
-    /** Ступень гари грани — как у плана руин ({@code FlashFaces}), тень — по картам высот мира до волны. */
+    /** Face scorch tier as for ruin plan ({@code FlashFaces}); shadow by pre-wave world heightmaps. */
     private int level(ServerLevel level, BlockPos pos, Direction face, int material) {
         double cos = FlashChar.incidence(d.burst(), pos.getX(), pos.getY(), pos.getZ(), face);
         if (cos <= 0) return 0;
@@ -210,8 +210,8 @@ public final class FlashShadows {
     }
 
     /**
-     * Маска тени грани: по клетке 16×16 — сколько из трёх точек шара {@code sources} (на диске радиуса {@code radius}
-     * вокруг {@code burst}) закрыто телом; null — тень на грань не падает. Оси клеток — {@link #axes}.
+     * Face shadow mask: per 16×16 cell, how many of three fireball {@code sources} (on disk of {@code radius}
+     * around {@code burst}) are blocked by body; null if no shadow falls on face. Cell axes from {@link #axes}.
      */
     @Nullable
     static long[] mask(Body body, BlockPos pos, Direction face, Vec3 burst, Vec3[] sources, double radius) {
@@ -224,7 +224,7 @@ public final class FlashShadows {
         for (int v = 0; v < FlashMarks.CELLS; v++) {
             for (int u = 0; u < FlashMarks.CELLS; u++) {
                 cell(pos, face, ax, u, v, p);
-                // быстрый отсев: луч от клетки к центру шара проходит дальше от тела, чем тень с полутенью
+                // quick rejection: ray from cell to fireball center passes farther from body than shadow plus penumbra
                 double tx = burst.x - p[0], ty = burst.y - p[1], tz = burst.z - p[2];
                 double len = Math.sqrt(tx * tx + ty * ty + tz * tz);
                 double cx = c.x - p[0], cy = c.y - p[1], cz = c.z - p[2];
@@ -245,8 +245,8 @@ public final class FlashShadows {
     }
 
     /**
-     * Оси клеток грани в мире: {@code [u, v]} — номера осей (0 — x, 1 — y, 2 — z). Грани по x: u — z, v — y; по y:
-     * u — x, v — z; по z: u — x, v — y. Клиент рисует маску по тем же осям.
+     * Face cell axes in world: {@code [u, v]} are axis indices (0 x, 1 y, 2 z). x faces: u z, v y; y faces:
+     * u x, v z; z faces: u x, v y. Client draws mask along same axes.
      */
     public static int[] axes(Direction face) {
         return switch (face.getAxis()) {
@@ -256,7 +256,7 @@ public final class FlashShadows {
         };
     }
 
-    /** Центр клетки {@code (u, v)} грани чуть впереди неё, в мире. */
+    /** World center of face cell {@code (u, v)}, slightly ahead of face. */
     private static void cell(BlockPos pos, Direction face, int[] ax, int u, int v, double[] out) {
         out[0] = pos.getX();
         out[1] = pos.getY();
@@ -267,9 +267,9 @@ public final class FlashShadows {
         out[ax[1]] += (v + 0.5) / FlashMarks.CELLS;
     }
 
-    /** Закрывает ли тело отрезок от точки {@code p} до точки шара {@code s}. */
+    /** Whether body blocks segment from point {@code p} to fireball point {@code s}. */
     static boolean blocks(Body body, double[] p, Vec3 s) {
-        // в своей системе тела: начало — низ рамки, z — куда смотрит тело, x — вбок
+        // in body's local frame: origin at bounds bottom, z facing forward, x sideways
         double yaw = Math.toRadians(body.yaw);
         double fx = -Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = Math.sin(yaw);
         double px = p[0] - body.x, py = p[1] - body.y, pz = p[2] - body.z;
@@ -283,7 +283,7 @@ public final class FlashShadows {
         };
     }
 
-    /** Модель игрока (32 пикселя в высоту рамки): ноги, туловище, руки, голова. */
+    /** Player model (32 pixels over bounds height): legs, torso, arms, head. */
     private static final double[][] HUMAN = {
             {-4, 0, -2, 0, 12, 2}, {0, 0, -2, 4, 12, 2},
             {-4, 12, -2, 4, 24, 2},
@@ -298,7 +298,7 @@ public final class FlashShadows {
         return false;
     }
 
-    /** Пересекает ли отрезок {@code o + t·v}, {@code t ∈ (0, 1)}, прямоугольник. */
+    /** Whether segment {@code o + t·v}, {@code t ∈ (0, 1)}, intersects box. */
     private static boolean box(double x0, double y0, double z0, double x1, double y1, double z1, double ox, double oy, double oz,
                                double vx, double vy, double vz) {
         double lo = 1e-6, hi = 1;
@@ -321,7 +321,7 @@ public final class FlashShadows {
         return true;
     }
 
-    /** Пересекает ли отрезок эллипсоид с полуосями {@code (rh, rv, rh)} в начале координат. */
+    /** Whether segment intersects ellipsoid with semiaxes {@code (rh, rv, rh)} centered at origin. */
     private static boolean ellipsoid(double rh, double rv, double ox, double oy, double oz, double vx, double vy, double vz) {
         ox /= rh;
         oz /= rh;
@@ -336,7 +336,7 @@ public final class FlashShadows {
         return t1 > 1e-6 && t0 < 1;
     }
 
-    /** Первая полная грань по лучу из {@code from} вдоль {@code dir} (шаги по блокам, только готовые чанки); null — нет. */
+    /** First full face along ray from {@code from} in {@code dir} (block traversal, ready chunks only); null if none. */
     @Nullable
     private static FaceAt march(ServerLevel level, Vec3 from, Vec3 dir) {
         int x = Mth.floor(from.x), y = Mth.floor(from.y), z = Mth.floor(from.z);
@@ -346,7 +346,7 @@ public final class FlashShadows {
                 tz = (sz > 0 ? z + 1 - from.z : from.z - z) * tdz;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         Direction entered = null;
-        // первый блок — само тело (воздух вокруг него)
+        // first block is body itself (air around it)
         for (int step = 0; step < REACH * 3; step++) {
             if (entered != null) {
                 if (y < level.getMinBuildHeight() || y >= level.getMaxBuildHeight()) return null;
@@ -382,7 +382,7 @@ public final class FlashShadows {
                 st.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO));
     }
 
-    /** Место перед гранью открыто (не полный блок, чанк готов); null — закрыто или не готов. */
+    /** Position ahead of face open (not full block, chunk ready); null if closed or unready. */
     @Nullable
     private static BlockState open(ServerLevel level, BlockPos front) {
         if (front.getY() < level.getMinBuildHeight() || front.getY() >= level.getMaxBuildHeight()) return net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
@@ -392,7 +392,7 @@ public final class FlashShadows {
         return full(st) ? null : st;
     }
 
-    /** Блок в плоскости грани со сдвигом {@code (a, b)} по её осям. */
+    /** Block in face plane offset by {@code (a, b)} along its axes. */
     private static BlockPos inPlane(BlockPos at, Direction face, int a, int b) {
         int[] ax = axes(face);
         int[] off = new int[3];
@@ -401,7 +401,7 @@ public final class FlashShadows {
         return at.offset(off[0], off[1], off[2]);
     }
 
-    /** Силуэты, набранные за тик, — в отметки чанков (выгруженный за это время чанк их не получает). */
+    /** Silhouettes collected this tick go into chunk marks (chunks unloaded meanwhile receive none). */
     private void flush(ServerLevel level) {
         for (var e : pendingFaces.long2ObjectEntrySet()) {
             long key = e.getLongKey();

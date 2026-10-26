@@ -4,11 +4,11 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import ua.zentix.incoming.strike.Loadout;
 
 /**
- * Настройки. SERVER хранится в мире (serverconfig/incoming-server.toml), CLIENT — у каждого игрока.
- * Экран настроек — штатный NeoForge (Моды → Incoming → Настроить).
+ * Settings. SERVER is stored in the world (serverconfig/incoming-server.toml), CLIENT per player.
+ * Settings screen: standard NeoForge (Mods → Incoming → Configure).
  */
 public final class IncomingConfig {
-    /** Дальше этого, блоков, сервер не шлёт ничего далёкого: полёты и взрывы ({@code visibility.far_range} — до него). */
+    /** Beyond this distance in blocks, the server sends no distant flights or explosions ({@code visibility.far_range} is capped here). */
     public static final int FAR_RANGE_MAX = 32_000;
     public static final Server SERVER;
     public static final ModConfigSpec SERVER_SPEC;
@@ -27,28 +27,28 @@ public final class IncomingConfig {
     private IncomingConfig() {}
 
     /**
-     * Скорость ядерной волны вдали у пресета {@link ScalePreset#GAME}, доля скорости звука: не по физике — у сервера
-     * больше времени на руины, и видно, как стена катится (решение Артёма 18.10, так на его серверах).
+     * Distant nuclear-wave speed in {@link ScalePreset#GAME}, as a fraction of sound speed: not physical — the server
+     * has more time for ruins, and the rolling wall is visible (Artem's decision, 18.10; used on his servers).
      */
     public static final double GAME_WAVE_SPEED = 0.20;
 
     /**
-     * Пресет масштаба (настройка вида «масштаб под игру»): скорость полёта, скорость ядерной волны вдали и радиусы
-     * ядерки разом. Полёт — своя игровая модель при любом (решение Артёма 21.10): шкала меняет только его скорости и
-     * высоты ({@code strike.FlightScale}, решение Артёма 22.10), не манёвр. Всё у цели настоящее при любом.
+     * Scale preset (a map-scale setting): flight speed, distant nuclear-wave speed and nuclear radii
+     * together. Flight uses our own game model with every preset (Artem's decision, 21.10): the scale changes only speeds
+     * and heights ({@code strike.FlightScale}, Artem's decision, 22.10), not maneuvers. Everything at the target stays real.
      */
     public enum ScalePreset {
         /**
-         * Игровой: скорости и высоты полёта игровые (шкала 0), волна {@link #GAME_WAVE_SPEED} — обе не по физике, чтобы
-         * подлёт и волну было видно; радиусы 1 — как в жизни.
+         * Game: game flight speeds and heights (scale 0), wave {@link #GAME_WAVE_SPEED} — both not physical, so players can
+         * see the approach and wave; radii 1 — real life.
          */
         GAME,
-        /** Как в жизни: шкала полёта 1, волна 1, радиусы 1. */
+        /** Real life: flight scale 1, wave 1, radii 1. */
         REAL,
-        /** Числа {@code scale.flight_speed}, {@code nuclear.wave_speed} и {@code nuclear.effects_scale} как есть. */
+        /** Values of {@code scale.flight_speed}, {@code nuclear.wave_speed} and {@code nuclear.effects_scale} as set. */
         CUSTOM;
 
-        /** Шкала полёта: 0 — игровые скорости и высоты, 1 — настоящие; {@code custom} — число настройки. */
+        /** Flight scale: 0 — game speeds and heights, 1 — real; {@code custom} is the setting's value. */
         public double flight(double custom) {
             return switch (this) {
                 case GAME -> 0;
@@ -57,7 +57,7 @@ public final class IncomingConfig {
             };
         }
 
-        /** Скорость волны вдали, доля скорости звука; {@code custom} — число настройки. */
+        /** Distant wave speed, fraction of sound speed; {@code custom} is the setting's value. */
         public double wave(double custom) {
             return switch (this) {
                 case GAME -> GAME_WAVE_SPEED;
@@ -66,7 +66,7 @@ public final class IncomingConfig {
             };
         }
 
-        /** Масштаб радиусов ядерки; {@code custom} — число настройки. */
+        /** Nuclear radius scale; {@code custom} is the setting's value. */
         public double radii(double custom) {
             return this == CUSTOM ? custom : 1;
         }
@@ -133,17 +133,17 @@ public final class IncomingConfig {
         public final ModConfigSpec.IntValue samRails;
         public final ModConfigSpec.IntValue samReloadSeconds;
 
-        /** Шкала полёта по пресету: 0 — игровые скорости и высоты, 1 — настоящие ({@code strike.FlightScale}). */
+        /** Preset flight scale: 0 — game speeds and heights, 1 — real ({@code strike.FlightScale}). */
         public double flightSpeed() {
             return scalePreset.get().flight(flightSpeed.get());
         }
 
-        /** Скорость ядерной волны вдали по пресету, доля скорости звука ({@code nuclear.Detonation#wave}). */
+        /** Preset distant nuclear-wave speed, fraction of sound speed ({@code nuclear.Detonation#wave}). */
         public double waveSpeed() {
             return scalePreset.get().wave(nukeWaveSpeed.get());
         }
 
-        /** Масштаб радиусов ядерки по пресету (1 — как в жизни). */
+        /** Preset nuclear radius scale (1 — real life). */
         public double effectsScale() {
             return scalePreset.get().radii(nukeEffectsScale.get());
         }
@@ -331,14 +331,14 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue blastEffects;
 
         /**
-         * Гриб, стена пыли и пелена пыли и дыма после ядерной волны объёмом (client/fx/layer/PallPass): качество; OFF — без
-         * стены и пелены, гриб на LOW.
+         * Volumetric mushroom cloud, dust wall and post-wave dust/smoke pall (client/fx/layer/PallPass): quality; OFF disables
+         * the wall and pall and sets the mushroom cloud to LOW.
          */
         public enum DustQuality {
             OFF, LOW, MEDIUM, HIGH
         }
 
-        /** Свечение огня, шара, вспышки и факела ({@code client/fx/layer/FxBloom}): нет, дешевле, полное. */
+        /** Fire, fireball, flash and exhaust glow ({@code client/fx/layer/FxBloom}): off, cheaper, full. */
         public enum Bloom {
             OFF, FAST, FULL
         }

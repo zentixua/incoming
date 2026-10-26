@@ -40,83 +40,83 @@ import java.util.UUID;
 import java.util.function.IntPredicate;
 
 /**
- * Фронт ударной волны по сущностям и аппаратам (DESIGN-nuke §4): кольцо между прошлым и текущим радиусом — удар по
- * телу ({@link BlastBody}: лёгкие, бросок с ударом, стёкла), через положительную фазу — лёгкий обратный ветер к центру
- * (только тех, кого достал прямой ветер: в доме без окна к шару и в бункере его нет); тела, которые засыпали руины
- * чанка, — завал (тоже {@link BlastBody}). Руины чанка встают на тик раньше фронта: тела рядом запоминают окно и стену,
- * какими их застанет фронт ({@link #remember}).
+ * Shock front on entities and craft (DESIGN-nuke §4): ring between previous and current radii hits
+ * body ({@link BlastBody}: lungs, throw/impact, glass); after positive phase, slight reverse wind toward center
+ * (only bodies reached by direct wind: absent in house without blast-facing window or bunker); bodies buried by chunk
+ * ruins receive burial injury (also {@link BlastBody}). Chunk ruins appear one tick before front: nearby bodies remember window and wall
+ * as front will find them ({@link #remember}).
  * <p>
- * Где фронт за тик, считается каждый тик (снимок сущностей в круге — доли миллисекунды), а удары по тем, кого он
- * накрыл, — очередь под общим бюджетом ({@link WorkClock}), ближние первыми. Удар — это урон, а урон — смерть,
- * лут и обработчики смерти всех модов сборки: у эпицентра волна за один тик накрывает сотни мобов, и разом это
- * сотня миллисекунд тика (у хоста — 84 мс в тике подрыва). Очередь ждёт, пока по этому подрыву пройдёт световой
- * импульс: свет приходит раньше волны, и кого волна убьёт, тот уже получил свои ожоги и дозу.
+ * Front position computed each tick (entity snapshot in circle takes fractions of a millisecond); hits on those
+ * caught are queued under shared budget ({@link WorkClock}), nearest first. Hit means damage, damage means death,
+ * loot and every pack mod's death handlers: near epicenter wave catches hundreds of mobs in one tick, costing
+ * a hundred milliseconds at once (host: 84 ms on detonation tick). Queue waits until this detonation's light
+ * pulse passes: light precedes wave, so wave-killed bodies already received burns and dose.
  * <p>
- * Аппараты Create Aeronautics (DESIGN §3.6) волна бьёт ванильным взрывом в ближайшей к эпицентру точке аппарата:
- * лучи взрыва Sable проводит и по блокам аппарата — так ломается корпус и толкается тело. Взрыв — тоже в очереди
- * под бюджетом (свет им не нужен — не ждут его), ломает только блоки аппаратов (земля — дело {@link ScarQueue}
- * по давлению), сущностей не трогает (их волна бьёт сама, по давлению) и слушается {@code block_damage}.
+ * Create Aeronautics craft (DESIGN §3.6) receive vanilla explosion at craft point nearest epicenter:
+ * Sable carries explosion rays through craft blocks, breaking hull and pushing body. Explosion also queued
+ * under budget (no light needed, so no wait), breaking only craft blocks (ground handled by {@link ScarQueue}
+ * by pressure), ignoring entities (wave hits them directly by pressure), honoring {@code block_damage}.
  */
 final class BlastFront {
-    /** С какого давления волна бьёт по аппарату. */
+    /** Minimum pressure for wave hit on craft. */
     private static final double AIRCRAFT_PSI = 3;
     /**
-     * Наибольшая сила взрыва по аппарату (DESIGN §3.6). У эпицентра аппарат должен разлетаться: сила 16 ломает
-     * в корпусе 17×3×17 из досок меньше половины того, что 26 (97 блоков против 224). Взрыв ломает только блоки
-     * аппарата, поэтому его цена — лучи по корпусу, и он идёт единицей бюджета, одной на аппарат.
+     * Maximum explosion strength against craft (DESIGN §3.6). Near epicenter craft must break apart: strength 16 breaks
+     * less than half as much of a 17×3×17 plank hull as 26 (97 blocks versus 224). Explosion breaks only craft
+     * blocks, so cost is hull rays; one budget unit per craft.
      */
     private static final float MAX_AIRCRAFT_POWER = 60;
 
     /**
-     * @param owner  кто запустил (урон записывается на него), null — неизвестно
-     * @param buried завал: руины засыпали тело ({@link BlastBody#bury}), иначе удар фронта
-     * @param before окно и стена до руин, со сдвигом тела к приходу фронта; null — не запомнены
+     * @param owner  launcher (credited for damage), null if unknown
+     * @param buried burial: ruins buried body ({@link BlastBody#bury}), otherwise front hit
+     * @param before pre-ruin window and wall, adjusted for body movement by front arrival; null if not remembered
      */
     private record Hit(Detonation d, LivingEntity entity, @Nullable UUID owner, boolean buried, BlastBody.@Nullable Before before) {}
 
-    /** Взрыв по аппарату: в ближайшей к эпицентру точке аппарата, когда его накрыл фронт. */
+    /** Craft explosion: nearest point to epicenter when front catches craft. */
     private record AircraftHit(Detonation d, Vec3 at, float power) {}
 
     /**
-     * Докуда (радиус, блоки) фронт уже прошёлся по сущностям: прямой фронт и обратный ветер. Не сохраняется: после
-     * перезапуска (или новой {@code BlastFront}) посреди волны отсчёт — от фронта прошлого тика, кто уже внутри,
-     * второй раз не бьётся.
+     * Radius already processed for entities, blocks: direct front and reverse wind. Unsaved: restart
+     * (or new {@code BlastFront}) during wave starts from previous tick's front; those already inside
+     * are not hit again.
      */
     private final Map<Integer, double[]> reached = new HashMap<>();
-    /** Кто запустил подрыв (по номеру), пока идёт его фронт. После перезапуска неизвестен: урон без виновника. */
+    /** Launcher by detonation ID while front travels. Unknown after restart: damage without owner. */
     private final Map<Integer, UUID> owners = new HashMap<>();
-    /** Окно и стена у тел (по номеру подрыва, затем сущности), какими их застал фронт: до руин их чанков. */
+    /** Bodies' window and wall (detonation ID then entity ID) as front found them: before chunk ruins. */
     private final Map<Integer, Int2ObjectMap<BlastBody.Before>> before = new HashMap<>();
-    /** Кого фронт этого подрыва застал в ветре (номера сущностей): только их тянет обратный ветер. */
+    /** Entities reached by this detonation's wind (IDs): only these receive reverse wind. */
     private final Map<Integer, IntSet> windy = new HashMap<>();
     /**
-     * Кого фронт этого подрыва уже накрыл (номера сущностей): второй раз не бьёт — брошенное тело может обогнать
-     * медленный фронт и снова оказаться перед ним.
+     * Entities already caught by this detonation's front (IDs): never hit twice; thrown body can overtake
+     * slow front and end up ahead again.
      */
     private final Map<Integer, IntSet> struck = new HashMap<>();
-    /** Удары фронта в очереди: номер подрыва и сущности ({@link #key}). */
+    /** Queued front hits: detonation and entity ID ({@link #key}). */
     private final LongOpenHashSet queued = new LongOpenHashSet();
-    /** Кого фронт накрыл, а удар ещё не нанесён: по тикам прихода, в тике — от ближних к дальним. */
+    /** Entities caught by front awaiting hit: by arrival tick, nearest first within tick. */
     private final ArrayDeque<Hit> hits = new ArrayDeque<>();
-    /** Аппараты, которые фронт накрыл, а взрыва по ним ещё не было: по тикам прихода. */
+    /** Craft caught by front awaiting explosion: by arrival tick. */
     private final ArrayDeque<AircraftHit> aircraft = new ArrayDeque<>();
 
-    /** Удары, которые ждут бюджета. */
+    /** Hits awaiting budget. */
     int pending() {
         return hits.size() + aircraft.size();
     }
 
-    /** Фронт идёт или удары фронта ждут очереди (полоса NUCLEAR общего бюджета). */
+    /** Front traveling or hits queued (common-budget NUCLEAR lane). */
     boolean busy() {
         return !reached.isEmpty() || !hits.isEmpty() || !aircraft.isEmpty();
     }
 
-    /** Подрыв: запомнить, кто его запустил. */
+    /** Detonation: remember launcher. */
     void onDetonation(Detonation d, @Nullable UUID owner) {
         if (owner != null) owners.put(d.id(), owner);
     }
 
-    /** Где фронт этого тика: кого накрыл (сущности и аппараты) — в очередь, обратный ветер — сразу (он дёшев). */
+    /** This tick's front: queue caught entities/craft, apply reverse wind immediately (cheap). */
     void advance(ServerLevel level, List<Detonation> detonations, long now) {
         Set<Integer> active = new HashSet<>();
         for (Detonation d : detonations) {
@@ -139,7 +139,7 @@ final class BlastFront {
         double r = d.frontRadius(since);
         double back = d.phaseEndRadius(since);
         if (r <= done[0] && back <= done[1]) return;
-        // снимок списка: удар может убить моба, и из него выпадет лут — живую карту сущностей трогать нельзя
+        // snapshot list: hit can kill mob and add loot; never mutate live entity map during iteration
         double reach = Math.max(r, back);
         List<LivingEntity> ring = new ArrayList<>();
         IntSet hitBy = struck.computeIfAbsent(d.id(), k -> new IntOpenHashSet());
@@ -153,7 +153,7 @@ final class BlastFront {
         ring.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));
         Int2ObjectMap<BlastBody.Before> seen = before.get(d.id());
         for (LivingEntity e : ring) {
-            // сдвиг тела от места, где запомнило окно и стену, — к приходу фронта, а не к удару: удар ждёт импульса и бюджета
+            // body movement from remembered window/wall position is measured at front arrival, not hit: hit awaits pulse and budget
             BlastBody.Before b = seen == null ? null : seen.remove(e.getId());
             hits.add(new Hit(d, e, owners.get(d.id()), false, b == null ? null : b.drifted(e.position())));
             queued.add(key(d, e));
@@ -164,12 +164,12 @@ final class BlastFront {
     }
 
     /**
-     * Удары из очереди, сколько успеем за бюджет.
+     * Process queued hits while budget permits.
      *
-     * @param lit по подрыву с этим номером световой импульс уже прошёл
+     * @param lit light pulse already passed for this detonation ID
      */
     void work(ServerLevel level, WorkClock clock, IntPredicate lit) {
-        // аппараты — первыми: взрыв там, где аппарат был под фронтом, пока он не улетел
+        // craft first: explosion where craft met front before it flies away
         while (!aircraft.isEmpty() && clock.canStart()) {
             long t0 = clock.begin();
             blast(level, aircraft.removeFirst());
@@ -178,14 +178,14 @@ final class BlastFront {
         while (!hits.isEmpty() && lit.test(hits.peekFirst().d().id()) && clock.canStart()) {
             Hit h = hits.removeFirst();
             if (!h.buried()) queued.remove(key(h.d(), h.entity()));
-            // за время в очереди моб мог умереть, выгрузиться или сесть в лодку — как при снимке
+            // mob may have died, unloaded or boarded a boat while queued, same checks as snapshot
             LivingEntity e = h.entity();
             if (!e.isAlive() || e.isSpectator() || e.isPassenger()) continue;
             long t0 = clock.begin();
             Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
             if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
             else {
-                // руины встали, пока удар ждал в очереди: запомнено уже после прихода фронта
+                // ruins appeared while hit waited: remembered after front arrival
                 Int2ObjectMap<BlastBody.Before> seen = before.get(h.d().id());
                 BlastBody.Before late = h.before() != null || seen == null ? null : seen.remove(e.getId());
                 BlastBody.Before b = h.before() != null ? h.before() : late == null ? null : late.drifted(e.position());
@@ -196,9 +196,9 @@ final class BlastFront {
     }
 
     /**
-     * Руины чанка вот-вот встанут: тела в нём и рядом (окно до {@link BlastBody#GLASS_REACH} — может быть и в этом
-     * чанке), до которых фронт ещё не дошёл или чей удар ещё в очереди, запоминают окно и стену. Запомненное первым —
-     * мир, тронутый меньше всего.
+     * Chunk ruins about to appear: bodies in/near it (window out to {@link BlastBody#GLASS_REACH} may be in this
+     * chunk), not yet reached by front or with queued hit, remember window and wall. First remembered world
+     * is least disturbed.
      */
     void remember(ServerLevel level, Detonation d, LevelChunk chunk) {
         double[] done = reached.get(d.id());
@@ -209,19 +209,19 @@ final class BlastFront {
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class,
                 new AABB(x - r, level.getMinBuildHeight(), z - r, x + 16 + r, level.getMaxBuildHeight(), z + 16 + r))) {
             if (!e.isAlive() || e.isSpectator() || e.isPassenger() || seen.containsKey(e.getId())) continue;
-            // фронт уже прошёл: удар нанесён или ждёт в очереди с прежним миром — тогда запомнить его сейчас и нужно
+            // front already passed: hit applied or queued with old world; remembering it now is needed then
             if (e.position().distanceTo(d.burst()) < done[0] && !queued.contains(key(d, e))) continue;
             if (d.overpressureKpa(e.position()) < Detonation.HIT_KPA) continue;
             seen.put(e.getId(), BlastBody.before(level, d, e));
         }
     }
 
-    /** Руины засыпали тело: удар завалом — в очередь, за ударами фронта этого тика. */
+    /** Ruins buried body: queue burial injury after this tick's front hits. */
     void bury(Detonation d, LivingEntity e) {
         hits.add(new Hit(d, e, owners.get(d.id()), true, null));
     }
 
-    /** Отбой. */
+    /** Cancel. */
     void clear() {
         reached.clear();
         owners.clear();
@@ -231,7 +231,7 @@ final class BlastFront {
         dropHits();
     }
 
-    /** Удары в очереди — сбросить; докуда фронт прошёл, остаётся (иначе он заново ударил бы всех внутри). */
+    /** Clear queued hits; keep front reach (otherwise everyone inside would be hit again). */
     void dropHits() {
         hits.clear();
         queued.clear();
@@ -243,8 +243,8 @@ final class BlastFront {
     }
 
     /**
-     * Обратный ветер: воздух возвращается к эпицентру и тянет за собой тех, кого достал прямой ветер. Удар ещё в
-     * очереди (ждёт импульса и бюджета) — ветер по небу над телом.
+     * Reverse wind: air returns toward epicenter, drawing bodies reached by direct wind. Hit still
+     * queued (awaiting pulse and budget): wind based on sky above body.
      */
     private void suck(ServerLevel level, Detonation d, LivingEntity e) {
         double psi = d.psi(e.position());
@@ -260,7 +260,7 @@ final class BlastFront {
         e.hurtMarked = true;
     }
 
-    /** Аппараты, чья ближайшая к эпицентру точка — в кольце фронта этого тика и под давлением от 3 psi, — в очередь. */
+    /** Queue craft whose nearest epicenter point is inside this tick's front ring and under at least 3 psi. */
     private void sweepAircraft(ServerLevel level, Detonation d, double from, double to) {
         if (to <= from) return;
         for (SubLevelAccess sub : SubLevels.near(level, d.burst(), to)) {
@@ -276,9 +276,9 @@ final class BlastFront {
     }
 
     /**
-     * Взрыв по аппарату. Без {@code block_damage} — без разрушений ({@code NONE}): Sable всё равно толкает аппарат
-     * по лучам взрыва. Лучи ванильного взрыва читают блоки — только по готовым чанкам. Выпадение — с затуханием, как
-     * у взрывов боевых частей ({@code BLOCK}: правило {@code blockExplosionDropDecay}).
+     * Craft explosion. Without {@code block_damage}, no destruction ({@code NONE}): Sable still pushes craft
+     * along explosion rays. Vanilla explosion rays read blocks: ready chunks only. Drops decay as for
+     * warhead explosions ({@code BLOCK}: {@code blockExplosionDropDecay} rule).
      */
     private static void blast(ServerLevel level, AircraftHit a) {
         boolean blocks = IncomingConfig.SERVER.nukeBlockDamage.get();
@@ -290,8 +290,8 @@ final class BlastFront {
     }
 
     /**
-     * Взрыв по аппарату ломает только блоки аппаратов (они лежат в плотах Sable) и не трогает сущности: ни урона,
-     * ни броска — сущности волна уже бьёт по давлению ({@link #hit}).
+     * Craft explosion breaks only craft blocks (in Sable plots) and leaves entities untouched: no damage
+     * or throw; wave already hits entities by pressure ({@link #hit}).
      */
     private static final class AircraftOnly extends ExplosionDamageCalculator {
         private final Level level;

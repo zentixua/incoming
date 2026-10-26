@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Шаблоны для GameTest: плоские площадки с каменным полом (structure .nbt, MC 1.21.1).
-GameTest ставит шаблон на блок выше своей точки отсчёта: слой шаблона y = 0 — это y = 1 в координатах теста.
+"""GameTest templates: flat platforms with stone floors (structure .nbt, MC 1.21.1).
+GameTest places a template one block above its origin: template y = 0 is y = 1 in test coordinates.
 
   python3 scripts/gen_test_structures.py   → src/devtest/resources/data/incoming/structure/*.nbt
-                                             (и data/incoming_sweep/structure/pad.nbt — сценарии полёта)
+                                                                                          (also data/incoming_sweep/structure/pad.nbt — flight scenarios)
 """
 import gzip
 import os
@@ -39,12 +39,12 @@ def _payload(tag, v):
 
 
 def structure(sx, sy, sz, floor_layers):
-    """floor_layers: список имён блоков снизу вверх (y = 0, 1, …); остальное — воздух."""
+    """floor_layers: block names bottom to top (y = 0, 1, …); remaining space is air."""
     palette = ["minecraft:air"] + sorted(set(floor_layers))
     blocks = []
     for y in range(sy):
         if y >= len(floor_layers):
-            break  # воздух не пишем: GameTest сам очищает площадку перед тестом
+            break  # Omit air: GameTest clears the platform before each test.
         state = palette.index(floor_layers[y])
         for x in range(sx):
             for z in range(sz):
@@ -68,13 +68,13 @@ def write(name, data, namespace="incoming"):
     print(path, os.path.getsize(path))
 
 
-# маленькая площадка для быстрых проверок
+# Small platform for quick checks.
 write("pad", structure(8, 6, 8, ["minecraft:stone"]))
-# та же площадка в своём пространстве имён: runScenarioSweep включает только его — идут одни сценарии полёта
+# Same platform in its own namespace: runScenarioSweep enables only it, running flight scenarios alone.
 write("pad", structure(8, 6, 8, ["minecraft:stone"]), "incoming_sweep")
-# полигон: 8 слоёв камня, 2 грунта и дёрн — для воронок, бурения и прицела
+# Range: 8 stone layers, 2 dirt and turf — craters, drilling and aiming.
 write("range", structure(64, 40, 64, ["minecraft:stone"] * 8 + ["minecraft:dirt"] * 2 + ["minecraft:grass_block"]))
-# взлётная полоса 32×256: снаряды заходят на цель с настоящей дистанции (ракета — с горкой). Высота 8: GameTest
-# ставит вокруг площадки стену из барьеров высотой с шаблон, а крылатая ракета возвращается в мир за стеной, на краю
-# полосы подлёта (256 блоков до цели), и идёт в 12 блоках над плоским миром теста — стена ниже неё
+# Runway 32×256: projectiles approach from actual distance (missile with pop-up). Height 8: GameTest
+# surrounds platform with a template-height barrier wall; cruise missile reenters beyond wall at approach-lane edge
+# (256 blocks from target) and flies 12 blocks above test flat world — wall stays below it.
 write("runway", structure(32, 8, 256, ["minecraft:stone", "minecraft:dirt", "minecraft:grass_block"]))

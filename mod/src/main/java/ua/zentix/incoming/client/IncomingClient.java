@@ -87,10 +87,10 @@ import ua.zentix.incoming.registry.ModBlockEntities;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.registry.ModEntities;
 
-/** Клиентская половина мода: модели, звук, эффекты, камера, HUD, пульт. На выделенном сервере не загружается. */
+/** Client half of the mod: models, sound, effects, camera, HUD, remote. Never loaded on a dedicated server. */
 @Mod(value = Incoming.MOD_ID, dist = Dist.CLIENT)
 public final class IncomingClient {
-    /** Притушенный цвет ламп без питания. */
+    /** Dimmed color of unpowered lamps. */
     private static final int UNLIT_TINT = 0x7C7C84;
 
     public IncomingClient(IEventBus modBus, ModContainer container) {
@@ -109,8 +109,8 @@ public final class IncomingClient {
         modBus.addListener(IncomingClient::blockColors);
         TerrainTiles.init(modBus);
         LodDepth.init();
-        // Voxy (через Roxy) и его классы — к настройке клиента; LOD Server Support переписывает в Voxy чанки, которые
-        // прислал мод: заметить и попросить заново
+        // Voxy (via Roxy) and its classes are available at client setup; LOD Server Support overwrites chunks the mod
+        // sent to Voxy: detect this and request them again
         modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent e) -> {
             VoxyIngest.init();
             if (VoxyIngest.available() && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
@@ -158,7 +158,7 @@ public final class IncomingClient {
     }
 
     private static void renderers(EntityRenderersEvent.RegisterRenderers e) {
-        // модель — из клиентского паспорта: её же рисует снаряд вдали (FarModels)
+        // model from the client spec: the same one draws the distant projectile (FarModels)
         e.registerEntityRenderer(ModEntities.DRONE.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.DRONE.airframe().model()));
         e.registerEntityRenderer(ModEntities.CRUISE_MISSILE.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.MISSILE.airframe().model()));
         e.registerEntityRenderer(ModEntities.ROCKET.get(), ctx -> new StrikeProjectileRenderer<>(ctx, ClientWeaponSpec.ROCKET.airframe().model()));
@@ -176,14 +176,14 @@ public final class IncomingClient {
     }
 
     /**
-     * Лампы без питания (двойники блэкаута) — те же текстуры, притушенные: днём видно, что лампа не горит.
-     * Окраска действует только на модели с {@code tintindex} (светокамень, фонари, стержень края…).
+     * Unpowered lamps (blackout twins) use the same textures, dimmed: they look unlit by day.
+     * Tint applies only to models with {@code tintindex} (glowstone, lanterns, end rods…).
      */
     private static void blockColors(RegisterColorHandlersEvent.Block e) {
         e.register((state, level, pos, tint) -> UNLIT_TINT, ModBlocks.UNLIT.stream().map(p -> p.unlit().get()).toArray(Block[]::new));
     }
 
-    /** Лист текстур слоя эффектов и огибающие записей взрывов — заново при каждой перезагрузке ресурсов. */
+    /** Effects-layer atlas and explosion recording envelopes reload on every resource reload. */
     private static void reloadListeners(RegisterClientReloadListenersEvent e) {
         e.registerReloadListener(FxAtlas.INSTANCE);
         e.registerReloadListener(ua.zentix.incoming.client.nuclear.NukeBallSurface.INSTANCE);
@@ -200,7 +200,7 @@ public final class IncomingClient {
     }
 
     private static void layers(RegisterGuiLayersEvent e) {
-        // контузия — под вспышкой: размывает кадр и накладки камеры, а не белый экран вспышки поверх
+        // concussion below the flash: blurs the frame and camera overlays, with the white flash screen above
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("concussion"), Concussion::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("flash"), Flash::render);
         e.registerBelow(VanillaGuiLayers.CROSSHAIR, Incoming.id("nuke_flash"), NukeFlash::render);
@@ -213,7 +213,7 @@ public final class IncomingClient {
         e.registerAbove(VanillaGuiLayers.SCOREBOARD_SIDEBAR, Incoming.id("radar_scope"), RadarScope::render);
     }
 
-    /** Двигатели снарядов (факел, шлейф, облако пуска), горящие обломки и дым ускорителя — после тика сущности в мире клиента. */
+    /** Projectile engines (plume, trail, launch cloud), burning debris and booster smoke: after the entity's client-world tick. */
     private static void entityTick(EntityTickEvent.Post e) {
         Entity entity = e.getEntity();
         if (!entity.level().isClientSide) return;
@@ -237,7 +237,7 @@ public final class IncomingClient {
         while (Keys.CAMERA.consumeClick()) ProjectileCamera.cycle();
         while (Keys.SECOND_KEY.consumeClick()) PacketDistributor.sendToServer(new C2S.NuclearKey());
         Replay.tick();
-        // следы вспышки — и на паузе: повтор перематывают и на паузе
+        // flash traces update while paused too: replay can seek while paused
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
         VoxyIngest.tick();
         if (mc.isPaused()) return;
@@ -250,12 +250,12 @@ public final class IncomingClient {
         FarRenderer.tick();
         FxLayer.tick();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
-        // огонь горящего города ядерки в своих чанках — его гул; дым топлива воронок и масла подстанций
+        // local-chunk fire in the nuke's burning city supplies its roar; smoke from crater fuel and substation oil
         Vec3 fireEye = mc.gameRenderer.getMainCamera().getPosition();
         ua.zentix.incoming.client.fx.FireWatch.tick(mc.level, (int) Math.floor(fireEye.x) >> 4, (int) Math.floor(fireEye.z) >> 4,
                 mc.options.getEffectiveRenderDistance());
         ua.zentix.incoming.client.fx.FireSmoke.tick(mc.level);
-        // частицы — после тика мира, как ванильный движок; в заморозке стоят
+        // particles tick after the world, like the vanilla engine; they stand still while frozen
         if (mc.level.tickRateManager().runsNormally()) {
             FxPool.INSTANCE.tick(mc.level);
             Fragments.tick();
@@ -271,8 +271,8 @@ public final class IncomingClient {
     }
 
     /**
-     * Повтор Flashback перемотан: взрывы, тряска, звуки и пути снарядов, которые шли до перемотки, — с другого места
-     * записи; ядерные подрывы остаются в своём возрасте ({@link ClientNuclear#rewound}).
+     * Flashback replay seek: explosions, shake, sounds and projectile tracks from before seeking belong to another
+     * recording position; nuclear detonations retain their age ({@link ClientNuclear#rewound}).
      */
     private static void rewound() {
         ClientSounds.reset();
@@ -289,7 +289,7 @@ public final class IncomingClient {
         ClientNuclear.rewound();
     }
 
-    /** Колесо мыши в бинокле — выбор оружия, а не слота хотбара. */
+    /** Mouse wheel in binoculars selects a weapon instead of a hotbar slot. */
     private static void scroll(InputEvent.MouseScrollingEvent e) {
         if (Designator.isScoping() && e.getScrollDeltaY() != 0) {
             Designator.scroll(e.getScrollDeltaY());
@@ -297,16 +297,16 @@ public final class IncomingClient {
         }
     }
 
-    /** В бинокле своё перекрестие. */
+    /** Binoculars have their own crosshair. */
     private static void hideCrosshair(RenderGuiLayerEvent.Pre e) {
         if (e.getName().equals(VanillaGuiLayers.CROSSHAIR) && (Designator.isScoping() || ProjectileCamera.isActive())) e.setCanceled(true);
     }
 
     /**
-     * Шум объёма ядерного гриба — в фоне со входа в мир (около секунды одного ядра, раз за запуск игры): огненный шар —
-     * объём гриба с первого мига, и подрыв без предупреждения о пуске ({@code /incoming nuke now}) иначе первую секунду
-     * был бы без тела. Там же, раз за запуск, — прогрев того, что подрыв строит в потоке кадра ({@link ClientNuclear#warm}:
-     * стена пыли и пелена).
+     * Nuclear mushroom volume noise builds in the background from world entry (~one second on one core, once per game launch):
+     * the fireball is the mushroom volume from the first instant; without launch warning ({@code /incoming nuke now}),
+     * it would otherwise have no body for its first second. Also once per launch, warm what detonation builds on the frame
+     * thread ({@link ClientNuclear#warm}: dust wall and pall).
      */
     private static void login(ClientPlayerNetworkEvent.LoggingIn e) {
         PallPass.prepare();
@@ -317,14 +317,14 @@ public final class IncomingClient {
         }
     }
 
-    /** Подрыв прогрет ({@link #login}). */
+    /** Detonation warmed ({@link #login}). */
     private static boolean nukeWarmed;
 
     private static void logout(ClientPlayerNetworkEvent.LoggingOut e) {
         resetSession();
     }
 
-    /** Всё, что клиент держит о мире: звуки, пути, эффекты, ядерка, карта; выход из мира (и песочница эффектов devtest). */
+    /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
@@ -356,15 +356,15 @@ public final class IncomingClient {
     }
 
     /**
-     * Пакеты сервера. Разовое событие (взрыв, тряска, сирена, звук) из перемотки повтора Flashback — прошлое, его нет
-     * ({@link Replay#event}); состояние (свои снаряды, ядерка, радиация) принимается всегда, пути дальних снарядов — только живые.
+     * Server packets. One-shot events (explosion, shake, siren, sound) from Flashback replay seeking are in the past and absent
+     * ({@link Replay#event}); state (own projectiles, the nuke, radiation) is always accepted, distant tracks only when live.
      */
     private static final class Hooks implements ClientHooks {
         /**
-         * Удары показывает и озвучивает сам мод ({@code blast_effects}); выключено — их показывает другой мод взрывов (по
-         * взрыву на сервере, его источник — снаряд), и своих картинки, звука, волны и толчка у ударов нет: ни у взрыва,
-         * ни у топлива в воронке (дым, свет, гул; огонь на блоках — мира), ни у бетонобойной бомбы (удар о землю, толчок,
-         * выброс газа, обрушение). Разрывы ПВО и ядерка — свои всегда.
+         * The mod renders and sounds impacts itself ({@code blast_effects}); when disabled, another explosion mod shows them (from
+         * the server explosion with the projectile as source), without our impact visuals, sound, wave or jolt: neither explosion,
+         * crater fuel (smoke, light, roar; block fire belongs to the world), nor bunker-buster bomb (ground impact, jolt,
+         * gas vent, collapse). Air-defense bursts and the nuke always retain their effects.
          */
         private static boolean ownBlasts() {
             return IncomingConfig.CLIENT.blastEffects.get();
@@ -408,9 +408,9 @@ public final class IncomingClient {
         }
 
         /**
-         * Толчок земли: у источника волны грунта (удар бомбы о землю, взрыв в грунте) приход и сила — у ног этого игрока
-         * ({@link ua.zentix.incoming.client.fx.GroundShake}); прежний пакет без источника (старые записи повтора
-         * Flashback) — тряска и гул сразу.
+         * Ground jolt: for a ground-wave source (bomb ground impact, underground explosion), arrival and strength are at this
+         * player's feet ({@link ua.zentix.incoming.client.fx.GroundShake}); old packets without a source (old Flashback
+         * replay recordings) shake and rumble immediately.
          */
         @Override
         public void quake(S2C.Quake p) {
@@ -440,7 +440,7 @@ public final class IncomingClient {
 
         @Override
         public void openRemote() {
-            // пульт открывал игрок записи, а не зритель повтора
+            // the recorded player opened the remote, not the replay viewer
             if (!Replay.active()) Minecraft.getInstance().setScreen(new RemoteScreen());
         }
 
@@ -455,7 +455,7 @@ public final class IncomingClient {
                 ProjectileCamera.reset();
                 NukeArming.cancel();
             } else {
-                // обычный отбой: ядерные снаряды летят дальше — их звук, камера и двухшаговый пуск МБР остаются
+                // ordinary cancel: nuclear projectiles keep flying; their sound, camera and two-step ICBM launch remain
                 ClientSounds.cancelled(p.projectiles());
                 FlightTracks.cancelled(p.projectiles());
                 ProjectileCamera.cancelled(p.projectiles());
@@ -474,7 +474,7 @@ public final class IncomingClient {
 
         @Override
         public void nukeDebris(S2C.NukeDebris p) {
-            // обломки из перемотки — прошлое: они давно легли
+            // debris from seeking is in the past: it landed long ago
             Replay.event("nuke_debris", live -> {
                 if (live) ClientNuclear.debris(p);
             });
@@ -482,7 +482,7 @@ public final class IncomingClient {
 
         @Override
         public void nukeFlashMarks(S2C.NukeFlashMarks p) {
-            // состояние чанка: принимается всегда, и из перемотки (слой виден, когда часы дошли до вспышки)
+            // chunk state: always accepted, including during seeking (the layer appears when the clock reaches the flash)
             ua.zentix.incoming.client.nuclear.FlashMarksClient.receive(p);
         }
 
@@ -498,7 +498,7 @@ public final class IncomingClient {
 
         @Override
         public void retinaScars(S2C.RetinaScars p) {
-            // состояние глаз, не событие: и из перемотки повтора
+            // eye state, not an event: also accepted during replay seeking
             NukeFlash.scars(p.scars());
         }
 
@@ -509,7 +509,7 @@ public final class IncomingClient {
 
         @Override
         public void farFlights(S2C.FarFlights p) {
-            // пакеты перемотки пришли бы разом, точками пути одного тика
+            // seek packets would arrive all at once as one tick's track points
             Replay.event("far", live -> {
                 if (live) FlightTracks.received(p);
             });
@@ -555,7 +555,7 @@ public final class IncomingClient {
 
         @Override
         public void radarScope(S2C.RadarScope p) {
-            // экран — состояние «сейчас»: из перемотки повтора его нет
+            // the screen is current state: absent during replay seeking
             Replay.event("radar", live -> {
                 if (live) RadarScope.received(p);
             });

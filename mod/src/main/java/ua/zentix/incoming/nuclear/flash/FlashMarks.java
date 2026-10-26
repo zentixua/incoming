@@ -23,37 +23,37 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 /**
- * Следы вспышки на гранях одного чанка (attachment чанка, сохраняется с ним): обугленные грани ({@link FlashChar}) и
- * силуэты — грани, на которых тело заслонило часть света ({@link FlashShadows}): там, где тень, грань осталась светлой.
- * По слою на подрыв: клиент показывает слой, когда его часы дошли до вспышки (повтор Flashback, перемотанный назад, —
- * без гари).
+ * Flash traces on one chunk's faces (chunk attachment, saved with it): charred faces ({@link FlashChar}) and
+ * silhouettes, faces where a body blocked some light ({@link FlashShadows}): shadowed portions stayed light.
+ * One layer per detonation: client shows layer when its clock reaches flash (Flashback replay sought backward has
+ * no scorch).
  * <p>
- * Мало данных: метка грани — одно {@code int} ({@link FlashChar#mark}), силуэт — ещё 16×16 клеток по 2 бита (тень
- * 0, ⅓, ⅔, целиком) — 8 {@code long}. Не больше {@link #MAX_CHARS} обугленных граней и {@link #MAX_SHADOWS} граней
- * с силуэтом на чанк (во всех слоях): сверх — самые слабые уходят. Чанк города — сотни, у стены к шару — до пары
- * тысяч граней: 16 КБ и 6 КБ в худшем случае. Слоёв — не больше {@link #MAX_LAYERS}: каждый удар заново ставит руины
- * чанков в своём радиусе, и без предела чанк под частыми ударами копил бы слои, а клиент не принял бы пакет.
+ * Compact data: face mark is one {@code int} ({@link FlashChar#mark}); silhouette adds 16×16 2-bit cells (shadow
+ * 0, ⅓, ⅔, full), 8 {@code long}. At most {@link #MAX_CHARS} charred faces and {@link #MAX_SHADOWS} silhouette
+ * faces per chunk across all layers; weakest evicted beyond limit. City chunk has hundreds, blast-facing wall up to a couple
+ * thousand faces: worst case 16 KB and 6 KB. At most {@link #MAX_LAYERS} layers: each strike replaces chunk ruins
+ * in its radius; without limit, repeated strikes would accumulate layers and client could not accept packet.
  */
 public record FlashMarks(List<Layer> layers) {
-    /** Обугленных граней на чанк, не больше. */
+    /** Maximum charred faces per chunk. */
     public static final int MAX_CHARS = 4096;
-    /** Граней с силуэтом на чанк, не больше. */
+    /** Maximum silhouette faces per chunk. */
     public static final int MAX_SHADOWS = 96;
-    /** Слоёв (подрывов) на чанк, не больше: сверх — самые старые уходят. Больше пакет не разбирает. */
+    /** Maximum layers (detonations) per chunk: oldest evicted beyond limit. Packet decoder accepts no more. */
     public static final int MAX_LAYERS = 16;
-    /** Клеток силуэта по стороне грани (как пикселей у текстуры блока) и {@code long} на маску (2 бита на клетку). */
+    /** Silhouette cells per face side (like block-texture pixels) and {@code long} per mask (2 bits per cell). */
     public static final int CELLS = 16, MASK_LONGS = CELLS * CELLS * 2 / 64;
 
     public static final FlashMarks EMPTY = new FlashMarks(List.of());
 
     /**
-     * Следы одного подрыва.
+     * Traces of one detonation.
      *
-     * @param detonation номер подрыва
-     * @param time       игровое время вспышки
-     * @param chars      обугленные грани ({@link FlashChar#mark}), по возрастанию ключа
-     * @param shadows    грани с силуэтом (метки со своей ступенью гари)
-     * @param masks      маски силуэтов: по {@link #MASK_LONGS} на грань, клетка {@code (u, v)} — биты {@code 2(v·16 + u)}
+     * @param detonation detonation ID
+     * @param time       flash game time
+     * @param chars      charred faces ({@link FlashChar#mark}), ascending key order
+     * @param shadows    silhouette faces (marks with own scorch tier)
+     * @param masks      silhouette masks: {@link #MASK_LONGS} per face, cell {@code (u, v)} at bits {@code 2(v·16 + u)}
      */
     public record Layer(int detonation, long time, int[] chars, int[] shadows, long[] masks) {
         static final Codec<Layer> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -68,7 +68,7 @@ public record FlashMarks(List<Layer> layers) {
             return chars.length == 0 && shadows.length == 0;
         }
 
-        /** Слой без меток {@code stale}; ничего не убрано — тот же объект. */
+        /** Layer without {@code stale} marks; same object if nothing removed. */
         Layer without(IntPredicate stale) {
             int goneChars = 0, goneShadows = 0;
             for (int c : chars) if (stale.test(c)) goneChars++;
@@ -87,14 +87,14 @@ public record FlashMarks(List<Layer> layers) {
             return new Layer(detonation, time, keptChars, keptShadows, keptMasks);
         }
 
-        /** Тень клетки силуэта {@code k}: 0 — свет, 3 — тень целиком. */
+        /** Shadow of silhouette cell {@code k}: 0 lit, 3 fully shadowed. */
         public int shade(int k, int u, int v) {
             int bit = 2 * (v * CELLS + u);
             return (int) (masks[k * MASK_LONGS + (bit >> 6)] >>> (bit & 63)) & 3;
         }
     }
 
-    /** Запись с чанком: слои по порядку подрывов и в пределах (запись прежней сборки могла их превышать). */
+    /** Saved with chunk: layers in detonation order and within limits (older-version saves could exceed them). */
     public static final Codec<FlashMarks> CODEC = Layer.CODEC.listOf().xmap(FlashMarks::of, FlashMarks::layers);
 
     public static final StreamCodec<ByteBuf, FlashMarks> STREAM_CODEC = new StreamCodec<>() {
@@ -138,14 +138,14 @@ public record FlashMarks(List<Layer> layers) {
         }
     };
 
-    /** Для {@link FriendlyByteBuf} пакетов. */
+    /** For {@link FriendlyByteBuf} packets. */
     public static final StreamCodec<FriendlyByteBuf, FlashMarks> FRIENDLY = STREAM_CODEC.cast();
 
     public boolean isEmpty() {
         return layers.isEmpty();
     }
 
-    /** Сколько граней во всех слоях (гарь и силуэты). */
+    /** Face count across all layers (scorch and silhouettes). */
     public int size() {
         int n = 0;
         for (Layer l : layers) n += l.chars.length + l.shadows.length;
@@ -153,8 +153,8 @@ public record FlashMarks(List<Layer> layers) {
     }
 
     /**
-     * Обугленные грани подрыва {@code detonation} вместо прежних его же (руины чанка поставлены заново), силуэты слоя
-     * остаются.
+     * Charred faces of {@code detonation} replace its previous faces (chunk ruins rebuilt); layer silhouettes
+     * remain.
      */
     public FlashMarks withChars(int detonation, long time, int[] chars) {
         Layer old = layer(detonation);
@@ -162,8 +162,8 @@ public record FlashMarks(List<Layer> layers) {
     }
 
     /**
-     * Силуэты подрыва {@code detonation} добавлены к прежним; одна грань — одна запись (два тела перед гранью, в том
-     * числе в одной пачке {@code shadows}: тень клетки — наибольшая из их теней).
+     * Silhouettes of {@code detonation} added to previous ones; one entry per face (two bodies before face, including
+     * within one {@code shadows} batch: cell shadow is maximum of their shadows).
      */
     public FlashMarks withShadows(int detonation, long time, int[] shadows, long[] masks) {
         Layer old = layer(detonation);
@@ -181,7 +181,7 @@ public record FlashMarks(List<Layer> layers) {
                 for (int w = 0; w < MASK_LONGS; w++) all.add(masks[k * MASK_LONGS + w]);
                 continue;
             }
-            // два тела перед одной гранью: тень — где тень от любого
+            // two bodies before one face: shadow wherever either casts shadow
             for (int w = 0; w < MASK_LONGS; w++) all.set(was * MASK_LONGS + w, maxShade(all.getLong(was * MASK_LONGS + w), masks[k * MASK_LONGS + w]));
         }
         return with(new Layer(detonation, time, old == null ? NO_MARKS : old.chars, keys.toIntArray(), all.toLongArray()));
@@ -190,7 +190,7 @@ public record FlashMarks(List<Layer> layers) {
     private static final int[] NO_MARKS = new int[0];
     private static final long[] NO_MASKS = new long[0];
 
-    /** Поклеточный максимум двух масок по 2 бита. */
+    /** Per-cell maximum of two 2-bit masks. */
     static long maxShade(long a, long b) {
         long out = 0;
         for (int s = 0; s < 64; s += 2) out |= Math.max(a >>> s & 3, b >>> s & 3) << s;
@@ -202,7 +202,7 @@ public record FlashMarks(List<Layer> layers) {
         return null;
     }
 
-    /** Слой подрыва вместо прежнего его же; пределы — по всем слоям ({@link #of}). */
+    /** Detonation layer replaces its previous layer; limits across all layers ({@link #of}). */
     private FlashMarks with(Layer layer) {
         List<Layer> out = new ArrayList<>(layers.size() + 1);
         for (Layer l : layers) if (l.detonation != layer.detonation) out.add(l);
@@ -211,8 +211,8 @@ public record FlashMarks(List<Layer> layers) {
     }
 
     /**
-     * Следы из слоёв: по порядку подрывов (номера растут со временем), не больше {@link #MAX_LAYERS} самых новых слоёв,
-     * граней — в пределах (сверх — самые слабые, раньше — из старых слоёв).
+     * Traces from layers: detonation order (IDs increase over time), at most {@link #MAX_LAYERS} newest layers,
+     * face counts within limits (evict weakest, older layers first).
      */
     static FlashMarks of(List<Layer> layers) {
         List<Layer> out = new ArrayList<>(layers);
@@ -228,7 +228,7 @@ public record FlashMarks(List<Layer> layers) {
             shadows += l.shadows.length;
         }
         if (chars <= MAX_CHARS && shadows <= MAX_SHADOWS) return layers;
-        // сверх предела — сперва из старых слоёв: новый подрыв важнее
+        // above limit, evict old layers first: new detonation matters more
         List<Layer> out = new ArrayList<>(layers);
         for (int i = 0; i < out.size() && (chars > MAX_CHARS || shadows > MAX_SHADOWS); i++) {
             Layer l = out.get(i);
@@ -244,7 +244,7 @@ public record FlashMarks(List<Layer> layers) {
         return out;
     }
 
-    /** Не больше {@code max} самых тёмных граней, по возрастанию ключа (план одинаков в любом порядке). */
+    /** At most {@code max} darkest faces, ascending key order (same plan regardless of order). */
     public static int[] strongest(int[] marks, int max) {
         if (marks.length <= max) return marks;
         Integer[] boxed = new Integer[marks.length];
@@ -258,8 +258,8 @@ public record FlashMarks(List<Layer> layers) {
     }
 
     /**
-     * Без граней, чей блок сменился (руины, игрок): на месте не их блок ({@link FlashChar#holds}). Ничего не убрано —
-     * тот же объект.
+     * Without faces whose blocks changed (ruins, player): no longer their block at position ({@link FlashChar#holds}). Same object
+     * if nothing removed.
      */
     public FlashMarks pruned(LevelChunk chunk) {
         int cx = chunk.getPos().x, cz = chunk.getPos().z;
@@ -268,15 +268,15 @@ public record FlashMarks(List<Layer> layers) {
     }
 
     /**
-     * Без граней блока {@code (lx, y, lz)} чанка, если там теперь не их блок: {@code state} — то, что стоит на месте
-     * сейчас. Ничего не убрано — тот же объект.
+     * Without faces of chunk block {@code (lx, y, lz)} if it is no longer their block: {@code state} is current
+     * state at position. Same object if nothing removed.
      */
     public FlashMarks prunedAt(int lx, int y, int lz, BlockState state) {
         int place = FlashChar.key(lx, y, lz, Direction.DOWN) & FlashChar.PLACE_MASK;
         return without(c -> (c & FlashChar.PLACE_MASK) == place && !FlashChar.holds(state, c));
     }
 
-    /** Без меток {@code stale}; пустые слои уходят. Ничего не убрано — тот же объект. */
+    /** Without {@code stale} marks; empty layers removed. Same object if nothing removed. */
     private FlashMarks without(IntPredicate stale) {
         List<Layer> out = null;
         for (int i = 0; i < layers.size(); i++) {

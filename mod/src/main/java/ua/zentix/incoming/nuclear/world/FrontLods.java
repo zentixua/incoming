@@ -18,57 +18,57 @@ import java.util.ArrayDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * LOD Distant Horizons тяжёлой зоны — вместе с фронтом, как чанки у игрока. Путь {@link FarLods} просит копию чанка не
- * в мире только после прихода волны: чтение с диска, копия, очередь {@link DhUpdates} (20 за тик) и своя задержка DH
- * ({@link DhUpdates#LEAD} и больше) — LOD у края зоны 2 кт менялся через десятки секунд после стены. Поэтому, пока
- * летит МБР, копия каждого чанка зоны не в мире, чей план руин с диска готов ({@link NuclearPrep}), собирается заранее
- * тем же путём (секции с диска и места плана — {@link FarLods#build}; горящие лампы сети — местами,
- * {@link ChunkLights#litLamps}) и держится, а после подрыва уходит в DH ({@link DhUpdates#sendHeld}) за
- * {@link DhUpdates#LEAD} тиков до прихода фронта к середине своей секции DH, не раньше подрыва: чанки секции — вместе
- * ({@link FrontSchedule}), лампы — по сети к приходу фронта. Темп — окно DH ({@link DhUpdates#heldRoom}: целая секция
- * или ждать) и время отдачи за тик ({@link #SEND_NANOS}), а не {@code DhUpdates.PER_TICK}.
+ * Distant Horizons heavy-zone LODs arrive with front, like player chunks. {@link FarLods} requests outside-world chunk copy
+ * only after wave arrival: disk read, copy, {@link DhUpdates} queue (20 per tick), own DH delay
+ * ({@link DhUpdates#LEAD} or more); 2 kt zone-edge LOD changed tens of seconds after wall. Thus during
+ * ICBM flight every outside-world zone chunk with ready disk ruin plan ({@link NuclearPrep}) gets prebuilt
+ * copy by same path (disk sections plus plan positions, {@link FarLods#build}; lit grid lamps as positions,
+ * {@link ChunkLights#litLamps}), held until detonation then sent to DH ({@link DhUpdates#sendHeld})
+ * {@link DhUpdates#LEAD} ticks before front reaches its DH section midpoint, no earlier than detonation: section chunks sent together
+ * ({@link FrontSchedule}), lamps set by grid at front arrival. Rate bounded by DH window ({@link DhUpdates#heldRoom}: whole section
+ * or wait) and per-tick send time ({@link #SEND_NANOS}), not {@code DhUpdates.PER_TICK}.
  * <p>
- * Память — в месте руин заранее ({@code NuclearPrep.PLANS_CAP}) после планов: копии собираются, когда планы с диска всей
- * зоны отданы и готовы (или больше не строятся), из того, что оставили планы, снимки и чтения, ближние к эпицентру
- * первыми; не помещаются — дальние уходят, их LOD — путём {@link FarLods} после волны. Отданная копия занимает место ещё
- * {@link DhUpdates#HOLD_NANOS}: её держит DH. Копия чанка, который тем временем загрузился, уходит: руины и LOD ему
- * ставит мир. Запросы {@link FarLods} руин чанка с копией и света его квартала берёт копия ({@link #claim}); копия,
- * которая взяла запрос и уходит не в DH (место, остановка по куче, конец подготовки), отдаёт его обратно
- * {@link FarLods}: он просит руины чанка один раз. Подрыв без полёта ({@code nuke now}) и чанки за тяжёлой зоной — путём
+ * Memory shares prebuilt-ruin cap ({@code NuclearPrep.PLANS_CAP}) after plans: copies built once entire zone's
+ * disk plans submitted/ready (or halted), using remainder after plans, snapshots, reads, nearest epicenter
+ * first; if full, evict distant copies, whose LODs follow {@link FarLods} after wave. Sent copy occupies memory another
+ * {@link DhUpdates#HOLD_NANOS}, held by DH. Copy removed if chunk loads meanwhile: world supplies its ruins/LODs.
+ * Copy claims {@link FarLods} ruin and district-light requests ({@link #claim}); a copy removed
+ * without sending to DH (capacity, heap stop, preparation end) returns claimed request to
+ * {@link FarLods}, which requests each chunk's ruins once. No-flight detonation ({@code nuke now}) and chunks beyond heavy zone follow
  * {@link FarLods}.
  */
 final class FrontLods {
-    /** Чтений с диска в работе сразу и новых за тик — как у {@link FarLods}: поток ввода-вывода общий с загрузкой мира. */
+    /** Concurrent/new disk reads per tick as in {@link FarLods}: I/O thread shared with world loading. */
     static final int READS = 16, PER_TICK = 8;
-    /** Оценка памяти копии в чтении, байт. */
+    /** Estimated memory of copy being read, bytes. */
     static final long READ_BYTES = 96L << 10;
     /**
-     * Время отдачи за тик, не больше (первая секция — всегда): вызов DH — микросекунды (копия встаёт в его очередь по
-     * ссылке), лампы — по местам; у 2 кт почти вся зона уходит в тике подрыва.
+     * Maximum send time per tick (first section always): DH call costs microseconds (queues copy by
+     * reference), lamps updated by positions; 2 kt sends nearly entire zone on detonation tick.
      */
     static final long SEND_NANOS = 2_000_000;
 
-    /** Ответ {@link #claim}: запрос не про копию; копия его берёт; копию — заново после фронта (запросом руин). */
+    /** {@link #claim} result: request unrelated to copy; claimed; copy requested again after front (ruin request). */
     static final int NONE = 0, OURS = 1, AFTER_FRONT = 2;
 
-    /** Копия читается; держится; ушла в DH; показывать нечего (план ничего не меняет, ламп нет). */
+    /** Copy reading; held; sent to DH; nothing to show (plan changes nothing, no lamps). */
     private static final byte BUILDING = 1, READY = 2, SENT = 3, NOTHING = 4;
     private static final int[] NO_LAMPS = new int[0];
 
     private static final class Copy {
-        /** Место в очереди копий ({@link #candidates}): уходят дальние — с конца. */
+        /** Position in copy queue ({@link #candidates}): evict distant copies from end. */
         final int index;
         byte state = BUILDING;
         @Nullable
         ProtoChunk chunk;
         int[] lamps = NO_LAMPS;
         /**
-         * В копии руины; квартал сменил свет ({@link FarLods}: LOD уходит и без изменений против диска); запрос руин
-         * взят копией; в ней были горящие лампы сети; ушла с погашенными.
+         * Copy has ruins; district light changed ({@link FarLods}: LOD sent even unchanged from disk); ruin request
+         * claimed by copy; copy had lit grid lamps; sent with lamps dark.
          */
         boolean ruined, lights, ruins, lit, dark;
         long bytes;
-        /** Приход фронта к середине чанка ({@link ScarQueue#due}); до подрыва — 0. */
+        /** Front arrival at chunk midpoint ({@link ScarQueue#due}); 0 before detonation. */
         long due;
 
         Copy(int index) {
@@ -76,59 +76,59 @@ final class FrontLods {
         }
     }
 
-    /** Готовая копия из фонового потока: copy — null, если не собралась (нет на диске, план устарел). */
+    /** Ready background copy: copy null if build failed (absent on disk, stale plan). */
     private record Built(long chunk, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes) {}
 
     private final int strike;
-    /** Чанки зоны с готовым планом с диска, по порядку планов (волны); курсор — докуда отданы в чтение. */
+    /** Zone chunks with ready disk plans, in plan (wave) order; cursor tracks read submissions. */
     private final LongArrayList candidates = new LongArrayList();
     private int next;
     private final Long2ObjectOpenHashMap<Copy> copies = new Long2ObjectOpenHashMap<>();
     private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
     private final FrontSchedule schedule = new FrontSchedule();
     private int reading;
-    /** Байт в держанных копиях. */
+    /** Bytes in held copies. */
     private long readyBytes;
-    /** Отданные копии, которые ещё держит DH ({@link DhUpdates#HOLD_NANOS}): когда отданы и байт; их байт всего. */
+    /** Sent copies still held by DH ({@link DhUpdates#HOLD_NANOS}): send times/bytes; total bytes. */
     private final ArrayDeque<long[]> inDh = new ArrayDeque<>();
     private long dhBytes;
     @Nullable
     private DiskShots.Format format;
     @Nullable
     private Detonation d;
-    /** Для строки в лог и проверок: собрано, ушло, из них позже {@code due − LEAD}; отдача минус приход фронта — сумма, меньшая, большая. */
+    /** For log/tests: built, sent, sent after {@code due − LEAD}; send minus front arrival sum/min/max. */
     private long made, sent, late, offsetSum, offsetMin = Long.MAX_VALUE, offsetMax = Long.MIN_VALUE;
-    /** Не ушли: чанк загрузился, не хватило места, фронт пришёл раньше копии, не собралась, показывать нечего. */
+    /** Not sent: chunk loaded, no room, front preceded copy, build failed, nothing to show. */
     private long loaded, evicted, abandoned, failed, unchanged;
-    /** Строка о передаче к фронту написана (копии были); счёт DH ({@link DhUpdates#takeHeldStats}) идёт; итог написан. */
+    /** Front handoff logged (copies existed); DH stats ({@link DhUpdates#takeHeldStats}) active; summary logged. */
     private boolean announced, counting, reported;
 
     FrontLods(int strike) {
         this.strike = strike;
     }
 
-    /** План чанка зоны с диска готов: чанк — в очередь копий (по порядку планов — ближние первыми). Поток сервера. */
+    /** Zone chunk's disk plan ready: enqueue copy (plan order, nearest first). Server thread. */
     void offer(long chunk) {
         candidates.add(chunk);
     }
 
-    /** Байт под копиями: держанные, отданные, которые ещё держит DH, и чтения в работе. */
+    /** Copy bytes: held, sent but still held by DH, in-flight reads. */
     long bytes() {
         return readyBytes + dhBytes + (long) reading * READ_BYTES;
     }
 
     /**
-     * Тик подготовки: готовые копии — держать; сверх места — дальние уходят; новые — в чтение (если {@code build});
-     * после подрыва — отдача к фронту.
+     * Preparation tick: hold ready copies, evict distant ones above cap, read new ones (if {@code build});
+     * after detonation send with front.
      *
-     * @param plans планы подготовки (копии — по ним)
-     * @param room  байт под копии: место руин заранее без планов, снимков и чтений подготовки
-     * @param build планы с диска всей зоны готовы (или больше не строятся): копии берут, что осталось
+     * @param plans preparation plans (copies use these)
+     * @param room  copy capacity, bytes: prebuilt-ruin cap minus preparation plans, snapshots, reads
+     * @param build all zone disk plans ready (or halted): copies use remainder
      */
     void tick(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, boolean build, long now) {
         harvest(level);
         if (!DhUpdates.enabled(level)) {
-            // DH нет (или ушёл): копии некому отдать
+            // no DH (or gone): nobody to receive copies
             clear(level);
             return;
         }
@@ -139,17 +139,17 @@ final class FrontLods {
         if (d != null) release(level, now);
     }
 
-    /** Готовые копии из фоновых потоков: держать до подрыва, после — в очередь отдачи. */
+    /** Ready background copies: hold until detonation, then enqueue for send. */
     private void harvest(ServerLevel level) {
         for (Built b; (b = built.poll()) != null; ) {
             reading--;
             Copy c = copies.get(b.chunk);
-            // снята, пока читалась (загружен, фронт пришёл раньше, отбой)
+            // removed while reading (loaded, front early, cancellation)
             if (c == null || c.state != BUILDING) continue;
             if (b.copy == null) {
                 copies.remove(b.chunk);
                 failed++;
-                // свет квартала, который взяла копия, — снова путём FarLods
+                // district light claimed by copy returns to FarLods
                 if (c.lights) FarLods.request(level, b.chunk, false);
                 continue;
             }
@@ -169,7 +169,7 @@ final class FrontLods {
         }
     }
 
-    /** Копии сверх места: держанные уходят с конца очереди — дальние от эпицентра (чтения в работе доходят). */
+    /** Copies above cap: evict held copies from queue end, farthest epicenter first (in-flight reads finish). */
     private void fit(ServerLevel level, long room) {
         for (int i = candidates.size() - 1; i >= 0 && bytes() > room && readyBytes > 0; i--) {
             long chunk = candidates.getLong(i);
@@ -181,16 +181,16 @@ final class FrontLods {
         }
     }
 
-    /** Новые копии по порядку очереди, пока есть место, чтения и пул фоновых потоков. */
+    /** Read new copies in queue order while capacity, reads and background pool available. */
     private void start(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, long now) {
         boolean fires = IncomingConfig.SERVER.nukeFires.get();
         for (int started = 0; next < candidates.size() && started < PER_TICK && reading < READS && bytes() + READ_BYTES <= room; ) {
-            // после подрыва — не больше половины пула: руины чанков у игроков важнее
+            // after detonation use at most half pool: player-chunk ruins more important
             if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || d != null && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) return;
             int index = next++;
             long chunk = candidates.getLong(index);
             RuinPlan plan = plans.get(chunk);
-            // чанк в мире (руины и LOD ему ставит мир), далеко от игроков (DH им не шлёт), фронт придёт раньше копии
+            // chunk in world (world supplies ruins/LODs), far from players (DH does not send), front precedes copy
             if (plan == null || copies.containsKey(chunk) || FarLods.inWorld(level, chunk) || !FarLods.nearPlayer(level, chunk)
                     || d != null && ScarQueue.due(d, new ChunkPos(chunk)) - now <= DhUpdates.LEAD) continue;
             Copy c = new Copy(index);
@@ -205,7 +205,7 @@ final class FrontLods {
         }
     }
 
-    /** Копия чанка с руинами по плану и местами горящих ламп (фоновый поток). */
+    /** Chunk copy with plan ruins and lit-lamp positions (background thread). */
     private static Built build(DiskShots.Format f, DiskShots.Sections s, RuinPlan plan, boolean fires) {
         FarLods.Built b = FarLods.build(f, s, plan, fires, false, false);
         if (b.copy() == null) return new Built(b.chunk(), null, false, NO_LAMPS, 0);
@@ -214,7 +214,7 @@ final class FrontLods {
         return new Built(b.chunk(), b.copy(), b.ruined(), lamps, bytes(sections) + 4L * lamps.length);
     }
 
-    /** Память копии, байт: палитры секций (оценка как у {@code ChunkShot}) и сам чанк-копия. */
+    /** Copy memory, bytes: section palettes (estimated like {@code ChunkShot}) and chunk-copy object. */
     private static long bytes(LevelChunkSection[] sections) {
         long n = 1024;
         for (LevelChunkSection s : sections) {
@@ -224,8 +224,8 @@ final class FrontLods {
     }
 
     /**
-     * Подрыв, к которому готовились: копиям — срок прихода фронта, держанные — в очередь отдачи (ближние первыми: при
-     * одном сроке у секций, как у 2 кт в тике подрыва, окно и время тика достаются им).
+     * Prepared detonation: give copies front-arrival deadlines, enqueue held copies nearest first (equal
+     * section deadlines, as for 2 kt on detonation tick, allocate DH window/tick time to nearest).
      */
     void handOff(Detonation d) {
         this.d = d;
@@ -248,7 +248,7 @@ final class FrontLods {
                 + "the front reaches their Distant Horizons section", d.id(), ready, readyBytes >> 20, building, candidates.size() - next, DhUpdates.LEAD);
     }
 
-    /** Тик отдачи секции: {@link DhUpdates#LEAD} до прихода фронта к её середине, не раньше подрыва. */
+    /** Section send tick: {@link DhUpdates#LEAD} before front reaches midpoint, no earlier than detonation. */
     private long sendAt(long chunk) {
         long s = FrontSchedule.section(chunk);
         double dx = FrontSchedule.middle((int) s) - d.burst().x, dz = FrontSchedule.middle((int) (s >>> 32)) - d.burst().z, dy = d.burst().y - d.groundY();
@@ -256,7 +256,7 @@ final class FrontLods {
         return Math.max(d.gameTime(), due - DhUpdates.LEAD);
     }
 
-    /** Секции, чей срок настал, — в DH целиком, пока есть окно DH и время тика (первая — всегда, если окно есть). */
+    /** Send due sections whole to DH while DH window/tick time remain (first always if window available). */
     private void release(ServerLevel level, long now) {
         long until = System.nanoTime() + SEND_NANOS;
         boolean first = true;
@@ -276,11 +276,11 @@ final class FrontLods {
             loaded++;
             return;
         }
-        // на диске двойников нет: лампы — к сети на приход фронта (каскад блэкаута ядерки идёт быстрее волны)
+        // no twins on disk: set lamps by grid at front arrival (nuke blackout cascade faster than wave)
         boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), Math.max(now, c.due));
         int lamps = dark ? ChunkLights.darken(c.chunk.getSections(), c.lamps) : 0;
         if (!c.ruined && lamps == 0 && !c.lights) {
-            // LOD и так тот же; лампы в нём горят — свет квартала потом сверяется, как у ушедшей (claim)
+            // LOD already same; lit lamps require later district-light check, like sent copy (claim)
             readyBytes -= c.bytes;
             c.chunk = null;
             c.lit = c.lamps.length > 0;
@@ -290,17 +290,17 @@ final class FrontLods {
             unchanged++;
             return;
         }
-        // счёт DH — с первой копии этого подрыва (подтверждения прошлых подрывов мира — не в счёт)
+        // DH stats start at first copy of this detonation (previous-world detonation acknowledgments excluded)
         if (!counting) {
             DhUpdates.takeHeldStats(level);
             counting = true;
         }
-        // тот же чанк только что ушёл в DH другим путём: DH пропустил бы копию — следующим тиком
+        // same chunk just sent via another DH path: DH would skip copy, retry next tick
         if (!DhUpdates.sendHeld(level, c.chunk)) {
             schedule.add(chunk, now + 1);
             return;
         }
-        // память копии — пока её держит DH
+        // copy memory counted while DH retains it
         readyBytes -= c.bytes;
         dhBytes += c.bytes;
         inDh.add(new long[] {System.nanoTime(), c.bytes});
@@ -324,8 +324,8 @@ final class FrontLods {
     }
 
     /**
-     * Копия, снятая не в DH: запросы руин и света, которые она взяла, — обратно {@link FarLods} (он просит руины чанка
-     * один раз, по приходу волны). Сама копия уже снята — запрос её не найдёт.
+     * Copy removed without DH send: return claimed ruin/light requests to {@link FarLods} (requests ruins once
+     * per chunk at wave arrival). Copy already removed, request will not find it.
      */
     private static void giveBack(ServerLevel level, long chunk, Copy c) {
         if (c.ruins) FarLods.request(level, chunk, true);
@@ -333,11 +333,11 @@ final class FrontLods {
     }
 
     /**
-     * Запрос {@link FarLods} к чанку с копией: руины (волна дошла) — копии, если она уже собрана (ещё читается — копия
-     * уходит, путь {@link FarLods}); свет квартала — копии, пока она держится (лампы ставятся к приходу фронта), а у
-     * ушедшей — если ламп в ней не было или тьма к фронту (или сейчас, если он прошёл) та же, что у неё: иначе до
-     * фронта — копия заново запросом руин ({@link #AFTER_FRONT}: он ждёт плана, то есть фронта), после фронта — путь
-     * {@link FarLods} (каскад блэкаута дошёл до квартала позже волны).
+     * {@link FarLods} request for copied chunk: ruins (wave arrived) claimed if built (still reading means copy
+     * removed, use {@link FarLods}); district light claimed while held (lamps set for front arrival), after
+     * send only if copy had no lamps or darkness at front (or now if passed) unchanged; otherwise before
+     * front request copy again via ruins ({@link #AFTER_FRONT}, awaiting plan, thus front), after front use
+     * {@link FarLods} (blackout cascade reached district after wave).
      */
     int claim(ServerLevel level, long chunk, boolean lights, long now) {
         Copy c = copies.get(chunk);
@@ -345,7 +345,7 @@ final class FrontLods {
         switch (c.state) {
             case BUILDING -> {
                 if (!lights) {
-                    // фронт пришёл раньше копии
+                    // front preceded copy
                     copies.remove(chunk);
                     abandoned++;
                     return NONE;
@@ -370,7 +370,7 @@ final class FrontLods {
         }
     }
 
-    /** Чанк загрузился: руины и LOD ему ставит мир. */
+    /** Chunk loaded: world supplies ruins/LODs. */
     void loaded(long chunk) {
         Copy c = copies.get(chunk);
         if (c == null) return;
@@ -380,12 +380,12 @@ final class FrontLods {
     }
 
     /**
-     * Отбой, подрыв не тот, остановка по куче, конец подготовки: копии не нужны (чтения в работе доходят и выбрасываются).
-     * После подрыва, если копии были, — строка в лог (один раз).
+     * Cancellation, wrong detonation, heap stop, preparation end: copies unnecessary (in-flight reads finish and discarded).
+     * After detonation, log once if copies existed.
      */
     void clear(ServerLevel level) {
         if (d != null && !reported && (announced || next > 0)) report(level);
-        // взятые запросы держанных и читаемых копий — обратно FarLods, когда копий уже нет
+        // claimed held/reading-copy requests return to FarLods after copies removed
         LongArrayList back = new LongArrayList();
         java.util.ArrayList<Copy> backCopies = new java.util.ArrayList<>();
         for (var e : copies.long2ObjectEntrySet()) {
@@ -405,7 +405,7 @@ final class FrontLods {
 
     private void report(ServerLevel level) {
         reported = true;
-        // подтверждения общие для мира: два подрыва в нём за несколько секунд делят счёт между своими итогами
+        // acknowledgments shared across world: two detonations seconds apart split stats between summaries
         long[] dh = counting ? DhUpdates.takeHeldStats(level) : new long[6];
         Incoming.LOG.info("Detonation #{} (strike #{}): heavy zone LODs at the wave front — built {}, sent {} ({} less than {} ticks before the front; "
                         + "send minus front arrival min {} avg {} max {} ticks); not sent: loaded {}, over memory {}, front came first {}, unread or stale plan {}, "
@@ -415,8 +415,8 @@ final class FrontLods {
     }
 
     /**
-     * Для проверок: собрано, ушло, позже {@code due − LEAD}, отдача минус приход фронта (меньшая, большая), загружены,
-     * вытеснены, фронт раньше, не собрались, показывать нечего, ждут отдачи, байт, читаются, ждут чтения.
+     * For tests: built, sent, late {@code due − LEAD}, send minus front arrival (min/max), loaded,
+     * evicted, front early, build failed, nothing to show, awaiting send, bytes, reading, awaiting read.
      */
     long[] stats() {
         return new long[] {made, sent, late, sent == 0 ? 0 : offsetMin, sent == 0 ? 0 : offsetMax, loaded, evicted, abandoned, failed, unchanged,

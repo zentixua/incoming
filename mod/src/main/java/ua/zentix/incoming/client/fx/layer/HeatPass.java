@@ -28,141 +28,141 @@ import ua.zentix.incoming.nuclear.model.ShockOptics;
 import java.util.Arrays;
 
 /**
- * Свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём и шаром — проход во весь кадр после пелены и
- * до квадратов слоя ({@code fx_heat}: законы там), без нового мода: копия кадра, расстояние до мира ({@link SceneDepth}).
- * Свет ядерного шара на мир — свой, в проходе пелены ({@code fx_pall_composite}); этот — у шаров и огня обычного оружия.
- * Огонь на блоках — огонь игры: он светит светом блоков, а свет и дрожание над ним мод не рисует (только у своих очагов).
+ * Conventional-weapon flash/fire light on world and air shimmer above fire/ball: full-frame pass after pall and
+ * before layer quads ({@code fx_heat}: laws there), without a new mod: frame copy, world distance ({@link SceneDepth}).
+ * Nuclear fireball world light is separate in the pall pass ({@code fx_pall_composite}); this pass handles conventional balls/fire.
+ * Block fire belongs to the game: it emits block light; this mod draws no light/shimmer over it (only over own sources).
  * <p>
- * <b>Дрожание.</b> Показатель преломления воздуха n − 1 = {@value #N0} при 288 K (Edlén 1966, 550 нм) и ∝ плотности,
- * т. е. 1/T; пульсации температуры в факеле — {@value #TURBULENCE} от избытка на оси (George, Alpert, Tamanini, Int. J.
- * Heat Mass Transfer 20, 1977: 0,38–0,40), в струе сопла — {@value #JET_TURBULENCE} (⚠ оценка по нагретым струям),
- * δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); вихри — {@value #EDDY} радиуса столба (внешний масштаб, ⚠ оценка), идут с газом.
- * Угол прихода луча (одна ось) за путём L в турбулентности Колмогорова — σ² = 2,91·C_n²·L·D^(−1/3) (Татарский 1961;
- * Andrews, Phillips, «Laser Beam Propagation through Random Media», 2005), D — что глаз различает у газа (зрачок или
- * пятно остроты зрения там), C_n² ≈ 2δn²·ℓ^(−2/3) (структурная функция доходит до 2δn² на внешнем масштабе ℓ, ⚠
- * порядок): σ = δn·√(5,82·L/ℓ)·(ℓ/D)^(1/6), крупнее ℓ пятно усредняет вихри — ×ℓ/D ({@link #hazeAngle}). Вихри,
- * которые газ проносит мимо быстрее, чем глаз копит свет ({@value #EYE_S} с), сливаются: σ·√(τ/{@value #EYE_S})
- * ({@link #hazeSeen}). Прежнее δn·√(L/ℓ) брало только вихри размера ℓ — в 2–5 раз меньше.
+ * <b>Shimmer.</b> Air refractive index n − 1 = {@value #N0} at 288 K (Edlén 1966, 550 nm), proportional to density,
+ * i.e. 1/T; plume temperature fluctuations are {@value #TURBULENCE} of axial excess (George, Alpert, Tamanini, Int. J.
+ * Heat Mass Transfer 20, 1977: 0.38–0.40); nozzle jet uses {@value #JET_TURBULENCE} (⚠ heated-jet (est.)),
+ * δn = (n₀ − 1)·I·(T₀/T)·(1 − T₀/T); eddies are {@value #EDDY} of column radius (outer scale, ⚠ (est.)), carried by gas.
+ * Ray angle of arrival (one axis) after path L in Kolmogorov turbulence: σ² = 2.91·C_n²·L·D^(−1/3) (Tatarskii 1961;
+ * Andrews, Phillips, “Laser Beam Propagation through Random Media”, 2005), D is what eye resolves at gas (pupil or
+ * visual-acuity spot there), C_n² ≈ 2δn²·ℓ^(−2/3) (structure function reaches 2δn² at outer scale ℓ, ⚠
+ * order estimate): σ = δn·√(5.82·L/ℓ)·(ℓ/D)^(1/6); spots larger than ℓ average eddies, ×ℓ/D ({@link #hazeAngle}). Eddies
+ * passing faster than eye integration ({@value #EYE_S} s) average out: σ·√(τ/{@value #EYE_S})
+ * ({@link #hazeSeen}). Old δn·√(L/ℓ) included only ℓ-sized eddies, 2–5 times smaller.
  * <p>
- * <b>Подача.</b> Пиксель экрана при обычном поле зрения — 3–6 угловых минут, глаз различает одну ({@value #ACUITY} рад):
- * дрожание, которое глаз видит у огня, на экране было бы долями пикселя. Сдвиг кадра — в долях того, что различает
- * глаз, а не пиксель ({@link #resolve}): подача, усиление в пиксель/острота раз (3–6 при поле 70°), а в бинокль,
- * где пиксель мельче остроты, — как есть. Размер, место и сила марева — по физике.
+ * <b>presentation:</b> at normal field of view a screen pixel spans 3–6 arcminutes; eye resolves one ({@value #ACUITY} rad):
+ * shimmer visible to eye at fire would occupy fractions of a pixel on screen. Frame shift uses fractions of what eye
+ * resolves rather than a pixel ({@link #resolve}): presentation, gain pixel/acuity (3–6 at 70° FOV); in binoculars,
+ * where a pixel is finer than acuity, unchanged. Haze size, position and strength follow physics.
  * <p>
- * <b>Свет факела</b> двигателя — не шар, а струя от среза сопла до конца света хвоста ({@link Frame#jet}, {@link Flame#tailEnd}): каждая часть
- * {@link Flame} (ядро, пламя догорания, остывающий хвост) — равномерный светящийся отрезок своей яркости и цвета, свет на
- * грань — точный интеграл по отрезку ({@link #segment}), только по части, что над гранью. Вдали он сходится к прежнему
- * шару той же площади сбоку.
+ * <b>Engine plume light</b> is a jet, not a ball, from nozzle exit to tail-light end ({@link Frame#jet}, {@link Flame#tailEnd}): each
+ * {@link Flame} part (core, afterburning flame, cooling tail) is a uniform emissive segment of its brightness/color; face
+ * light is the exact segment integral ({@link #segment}), only over the part above the face. Far away it converges to the old
+ * ball of equal side-view area.
  * <p>
- * <b>Тени.</b> Прямой свет на мир перекрывают блоки: от точки мира к источнику — по клеткам окна заслонов вокруг глаза
- * ({@link Solids}, {@link #blocked}): мир — блоки, заслон на пути известен точно, в кадре он или нет. По глубине кадра
- * этого не решить (за видимой гранью — толща дома или пустота за столбом). За окном ({@value Solids#SIZE_XZ} блоков
- * поперёк) теней нет (⚠ предел окна).
+ * <b>Shadows.</b> Blocks occlude direct world light: from world point to source through eye-local occluder-window cells
+ * ({@link Solids}, {@link #blocked}): world consists of blocks; path occluders are known exactly, in frame or not. Frame depth
+ * cannot decide this (behind visible face may be house thickness or emptiness behind a post). No shadows beyond the window
+ * ({@value Solids#SIZE_XZ} blocks across; ⚠ window limit).
  * <p>
- * <b>Ударная волна ядерки</b> ({@code client/nuclear/NukeHeat}) — тот же сдвиг изображения за сжатым воздухом фронта:
- * сфера фронта, скачок показателя преломления по давлению модели, отклонение — {@link ShockOptics} (копия в шейдере). Видна
- * тонким кольцом по краю фронта на фоне неба и земли, пока перепад заметен.
+ * <b>Nuclear shock wave</b> ({@code client/nuclear/NukeHeat}) uses the same image shift behind compressed front air:
+ * front sphere, refractive-index jump from model pressure, deviation from {@link ShockOptics} (shader copy). Visible
+ * as a thin ring at front edge against sky/ground while contrast remains noticeable.
  * <p>
- * Источников — не больше четырёх каждого вида (фронтов — двух), самые заметные у глаза. Прохода нет, пока нет ни света, ни
- * горячего газа, ни фронта; сдвиг фронта меньше {@link #SHIFT_MIN} не берётся, и пиксель без сдвига пишется как был.
+ * At most four sources of each kind (two fronts), most noticeable at eye. No pass without light,
+ * hot gas or front; front shifts below {@link #SHIFT_MIN} are skipped, unchanged pixels written as before.
  */
 public final class HeatPass {
     /**
-     * Прямой свет обычного ламбертова шара: площадь / расстояние², воздух, косинус к грани. Копия — heatBallGain в
-     * include/heat.glsl. Рассеянный и отражённый свет здесь не моделируется: ядерная тепловая аппроксимация не задаёт
-     * видимый угловой перенос обычной вспышки. Ядерный проход остаётся со своим законом.
+     * Direct light of a conventional Lambertian sphere: area / distance², air, face cosine. Copy: heatBallGain in
+     * include/heat.glsl. Diffuse/reflected light is not modeled here: nuclear thermal approximation does not define
+     * conventional-flash visible angular transfer. Nuclear pass retains its own law.
      */
     public static double ballGain(double d2, double r2, double sd, double nv) {
         return r2 / Math.max(d2, r2) * Math.exp(-sd) * Math.max(nv, 0);
     }
 
-    /** n − 1 воздуха у земли (288 K, 1 атм, 550 нм), Edlén. */
+    /** Air n − 1 at ground (288 K, 1 atm, 550 nm), Edlén. */
     public static final double N0 = 2.77e-4;
-    /** Пульсации температуры в факеле — доля избытка на оси. */
+    /** Plume temperature fluctuations as a fraction of axial excess. */
     public static final double TURBULENCE = 0.4;
     /**
-     * Пульсации температуры на оси нагретой струи — доля избытка там (⚠ оценка: у круглых нагретых струй на оси 0,15–0,25
+     * Heated-jet axial temperature fluctuations as a fraction of excess there (⚠ (est.): round heated jets give 0.15–0.25 on axis
      * — Chevray, Tutu, J. Fluid Mech. 88, 1978).
      */
     public static final double JET_TURBULENCE = 0.2;
-    /** Вихри — эта доля радиуса столба (⚠ оценка). */
+    /** Eddies as this fraction of column radius (⚠ (est.)). */
     public static final double EDDY = 0.2;
-    /** Острота зрения — одна угловая минута, рад (норма 1,0 по Снеллену). */
+    /** Visual acuity, one arcminute in rad (Snellen 1.0). */
     public static final double ACUITY = 2.9e-4;
-    /** Зрачок, м (днём 2–4 мм, ночью до 7: ⚠ среднее; в формуле — в степени 1/6). */
+    /** Pupil, m (day 2–4 mm, night up to 7: ⚠ average; enters formula at power 1/6). */
     public static final double PUPIL = 4e-3;
-    /** Время, за которое глаз копит свет, с (Блох: 0,05–0,1; ⚠ нижняя граница). */
+    /** Eye light-integration time, s (Bloch: 0.05–0.1; ⚠ lower bound). */
     public static final double EYE_S = 0.05;
-    /** Сумма угла прихода по Колмогорову: 2·2,91 (C_n² = 2δn²ℓ^(−2/3), σ² = 2,91·C_n²·L·D^(−1/3)). */
+    /** Kolmogorov angle-of-arrival sum: 2·2.91 (C_n² = 2δn²ℓ^(−2/3), σ² = 2.91·C_n²·L·D^(−1/3)). */
     public static final double KOLMOGOROV = 5.82;
-    /** Пульсации скорости в факеле и струе — доля средней скорости (вихрь живёт ℓ/u'; ⚠ оценка). */
+    /** Plume/jet velocity fluctuations as a fraction of mean speed (eddy lifetime ℓ/u'; ⚠ (est.)). */
     public static final double SWIRL = 0.3;
-    /** Цикл переноса узора вихрей, с: два слоя со сдвигом в полцикла, смена — при нулевом весе (поток по карте). */
+    /** Eddy-pattern advection cycle, s: two layers offset by half-cycle, switch at zero weight (flow map). */
     public static final double HAZE_CYCLE = 2;
     /**
-     * Газ холоднее воздуха + столько, K, — без дрожания (бюджет). δn при +20 K — ещё около четверти пика
-     * (T₀/T·(1 − T₀/T)), не 1 %: ⚠ видно ли там дрожание, не проверено кадром.
+     * Gas cooler than air plus this, K, has no shimmer (budget). At +20 K, δn is still about a quarter of peak
+     * (T₀/T·(1 − T₀/T)), not 1 %: ⚠ visible shimmer there has not been checked in a frame.
      */
     public static final double COOL = 20;
-    /** Дрожание меньше этой доли пикселя — не рисуется. */
+    /** Shimmer below this pixel fraction is not drawn. */
     public static final double SHIFT_MIN = 0.05;
-    /** Свет шара на земле под ним меньше этой доли света открытого неба — шар на мир не светит (как у ядерки). */
+    /** No world light if ball light at ground beneath it is below this share of open-sky light (like the nuke). */
     static final double SEEN = 0.005;
-    /** Клеток луча тени не больше (дальше — свободно): луч через всё окно по диагонали — до 480. */
+    /** Maximum shadow-ray cells (beyond is clear): diagonal through whole window can take 480. */
     static final int SHADOW_CELLS = 160;
     /**
-     * Тень не ищется у источника, чей прямой свет меньше этой доли всей освещённости грани (небо и огонь): порог контраста
-     * глаза ~1–2 % (Blackwell, «Contrast thresholds of the human eye», JOSA 36, 1946; ночью он выше — порог с запасом).
-     * Копия — {@code WEBER} в {@code include/heat.glsl} (там и считается: тень ищет проход видимости {@code fx_heat_shadow}).
+     * Skip shadow search for sources whose direct light is below this share of total face illumination (sky/fire): eye contrast
+     * threshold ~1–2 % (Blackwell, “Contrast thresholds of the human eye”, JOSA 36, 1946; higher at night, so conservative).
+     * Copy: {@code WEBER} in {@code include/heat.glsl} (evaluated there: visibility pass {@code fx_heat_shadow} searches shadows).
      */
     static final double WEBER = 0.02;
 
     @Nullable
     static ShaderInstance shader;
 
-    /** Источники кадра. */
+    /** Frame sources. */
     public static final class Frame {
         final Matrix4f lights = new Matrix4f().zero(), lightColor = new Matrix4f().zero(), hot = new Matrix4f().zero(),
                 shape = new Matrix4f().zero(), front = new Matrix4f().zero();
         /**
-         * Горячий газ, кроме {@link #hot} (низ от глаза и радиус там) и {@link #shape} (длина по оси, вихрь у низа, скорость
-         * газа у низа, (n₀ − 1)·доля пульсаций): ось от низа (xyz) и рост радиуса на метр оси (w); избыток температуры у
-         * низа, K, место по оси, за которым он падает как 1/x, и место, за которым так же падает скорость (у столба — нигде).
+         * Hot gas, beyond {@link #hot} (eye-relative base/radius) and {@link #shape} (axial length, base eddy size, base gas speed,
+         * (n₀ − 1)·fluctuation share): axis from base (xyz), radius growth per axial meter (w); base temperature excess,
+         * K, axial position beyond which it falls as 1/x, position beyond which speed does too (nowhere for a column).
          */
         final Matrix4f axis = new Matrix4f().zero(), gas = new Matrix4f().zero();
-        /** e-кратная толща оболочки и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w). */
+        /** Shell e-folding thickness and sine of angle above ground-level center: front 0 (x, y), 1 (z, w). */
         final Vector4f frontShape = new Vector4f();
         /**
-         * Факелы: столбец i — срез сопла от глаза (xyz) и конец ядра (w; 0 — нет); ось струи от сопла (xyz) и конец пламени;
-         * конец струи, полуширина у среза, её рост на метр, ослабление воздуха; свет ядра, пламени и хвоста на метр струи
-         * (rgb, линейный, белая стена в полдень — 1 в метре сбоку от метра струи, без привыкания: его ставит кадр).
+         * Plumes: column i is eye-relative nozzle exit (xyz), core end (w; 0 absent); jet axis from nozzle (xyz), flame end;
+         * jet end, exit half-width, growth per meter, air extinction; core/flame/tail light per jet meter
+         * (rgb, linear, noon white wall = 1 at one meter sideways from a meter of jet; no adaptation, frame applies it).
          */
         final Matrix4f jets = new Matrix4f().zero(), jetAxis = new Matrix4f().zero(), jetSize = new Matrix4f().zero(),
                 jetCore = new Matrix4f().zero(), jetFlame = new Matrix4f().zero(), jetTail = new Matrix4f().zero();
         private final double[] lightWeight = new double[4], hotWeight = new double[4], frontWeight = new double[2], jetWeight = new double[4];
-        /** Сдвиг столбов горячего газа кадра, пиксели (самое заметное место, как при выборе). */
+        /** Frame hot-gas column shift, pixels (most noticeable position, as in selection). */
         final double[] hotShift = new double[4];
-        /** Фронт в слоте — ядерки (обычный взрыв его не вытесняет: картинка ядерки от обычных не меняется). */
+        /** Slot front is nuclear (conventional explosions cannot evict it: their presence leaves nuclear visuals unchanged). */
         private final boolean[] frontNuke = new boolean[2];
         private final Vector4f column = new Vector4f();
         /**
-         * Привыкание глаза кадра ({@code Sight.exposure}: к свету неба и к свету огня у глаза — одно на весь кадр) и свет
-         * открытого неба (линейный, для порога света); угол пикселя, рад.
+         * Frame eye adaptation ({@code Sight.exposure}: skylight and fire light at eye, one for whole frame), open-sky
+         * light (linear, for light threshold); pixel angle, rad.
          */
         public double exposure = 1, open = 1, pixel = 1e-3;
         /**
-         * Свет огня у глаза в этом кадре (освещённость белой стены у глаза, линейная, белая стена в полдень — 1, без
-         * привыкания): по нему глаз привыкает в следующем ({@link #atEye()}).
+         * Frame fire light at eye (white-wall illuminance at eye, linear, noon white wall = 1, without
+         * adaptation): drives next frame's eye adaptation ({@link #atEye()}).
          */
         double atEye;
 
         /**
-         * Привыкание глаза с огнём: огонь освещает и место глаза, и глаз (экспозиция) привыкает к свету вокруг себя — к
-         * свету неба (днём 1, ночью 1/1200, {@code Sight.adapted}) и свету огня у глаза вместе ({@code Sight.exposure}).
-         * Без этого свет огня шёл бы в кадр с ночным ×1200 и заливал белым всё в сотнях блоков (залп «Града» ночью — секунды
-         * белого кадра), а факел ускорителя в 8 м от камеры — бликом и вуалью весь кадр. Шары, лужи, пожары и обломки — этого
-         * кадра (собраны до сбора квадратов), факелы снарядов — прошлого; привыкание — сразу, у глаза оно идёт за 0,1–1 с
-         * (зрачок, колбочки; ⚠ оценка порядка).
+         * Eye adaptation including fire: fire illuminates eye position, eye/exposure adapts to surrounding skylight
+         * (day 1, night 1/1200, {@code Sight.adapted}) and fire light at eye together ({@code Sight.exposure}).
+         * Otherwise fire light would enter frame with night ×1200 and white out everything within hundreds of blocks (night Grad salvo:
+         * seconds of white frame), while booster plume 8 m from camera fills frame with glare/veil. Balls, pools, fires, debris use this
+         * frame (collected before quads), projectile plumes previous frame; immediate adaptation, while real eye takes 0.1–1 s
+         * (pupil, cones; ⚠ order estimate).
          */
         double adapted() {
             return exposure;
@@ -192,17 +192,17 @@ public final class HeatPass {
             Arrays.fill(jetWeight, 0);
         }
 
-        /** Огонь кадра собран: свет у глаза — привыканию того, что рисуется до слоя в следующем кадре. */
+        /** Frame fire collected: eye light drives adaptation for what draws before layer next frame. */
         public void done() {
             lastAtEye = atEye;
         }
 
-        /** Ещё свет у глаза (линейный, белая стена в полдень — 1) — от источников, которых нет в {@link #light} этого кадра. */
+        /** Additional eye light (linear, noon white wall = 1) from sources absent from this frame's {@link #light}. */
         public void eye(double light) {
             atEye += Math.max(0, light);
         }
 
-        /** Свет огня у глаза в этом кадре (линейный, белая стена в полдень — 1). */
+        /** This frame's fire light at eye (linear, noon white wall = 1). */
         public double atEye() {
             return atEye;
         }
@@ -221,15 +221,15 @@ public final class HeatPass {
         }
 
         /**
-         * Шар света: середина от глаза (x, y, z), радиус r; свет у поверхности — линейный, белая стена в
-         * полдень — 1 (rgb, без привыкания: его ставит кадр); ослабление воздуха air, 1/блок; h — высота середины над
-         * землёй (порог: свет на земле под шаром против неба).
+         * Light sphere: eye-relative center (x, y, z), radius r; surface light linear, noon white
+         * wall = 1 (rgb, no adaptation, frame applies it); air extinction air, 1/block; h is center height above
+         * ground (threshold: ground light below ball versus sky).
          */
         public void light(double x, double y, double z, double r, double cr, double cg, double cb, double air, double h) {
             light(x, y, z, r, cr, cg, cb, air, h, true);
         }
 
-        /** То же; eye — свет идёт и в глаз ({@link #atEye}; нет — его там уже учли). */
+        /** Same; eye means light also reaches eye ({@link #atEye}; false if already counted there). */
         public void light(double x, double y, double z, double r, double cr, double cg, double cb, double air, double h, boolean eye) {
             double lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
             if (r <= 0 || lum <= 0) return;
@@ -245,28 +245,28 @@ public final class HeatPass {
         }
 
         /**
-         * Горячий газ: столб от низа (x, y, z от глаза) высотой h и радиусом r, температура kelvin, скорость подъёма rise
-         * (м/с = блоки/с).
+         * Hot gas: column from base (x, y, z relative to eye), height h, radius r, temperature kelvin, rise speed rise
+         * (m/s = blocks/s).
          */
         public void hot(double x, double y, double z, double h, double r, double kelvin, double rise) {
             hot(x, y, z, h, r, kelvin, rise, EDDY * r);
         }
 
-        /** То же с размером вихря {@code eddy}, блоки: столб — поле отдельных факелов, вихри — их ({@link #plumes}). */
+        /** Same with eddy size {@code eddy}, blocks: column is a field of separate plumes, eddies are theirs ({@link #plumes}). */
         public void hot(double x, double y, double z, double h, double r, double kelvin, double rise, double eddy) {
             if (r <= 0 || h <= 0 || kelvin < CloudModel.T_AIR_K + COOL) return;
             tube(x, y, z, 0, 1, 0, h, r, 0, Math.max(0.05, eddy), rise, kelvin - CloudModel.T_AIR_K, NOWHERE, NOWHERE, TURBULENCE);
         }
 
         /**
-         * Горячий газ струи сопла факела {@code flame}: середина света струи (x, y, z) от глаза, единичная ось от сопла
-         * назад (jx, jy, jz), cut — путь по оси от среза до земли (как у {@link #jet}). Закон струи — тот же, что у света
-         * ({@code FlameModel}): температура пламени до его конца, за ним избыток ∝ 1/x; скорость газа на срезе — до конца
-         * ядра, за ним ∝ 1/x (Pope, «Turbulent Flows», 2000, гл. 5: U₀/Uⱼ = B·d/x); полуширина — {@link Flame#widthAt}.
-         * Струя — до места, где избыток падает до {@link #COOL}, не дальше земли и не дальше, чем газ дошёл с поджига: burn
-         * секунд горения ({@link Flame#gasReach}) плюс путь снаряда flown по прямой с места поджига (газ, оставленный там,
-         * позади сопла). Узор вихрей идёт с соплом, а снаряд, что летит быстро, оставляет горячий газ позади почти
-         * неподвижным; у снаряда в развороте газ лежит по пути, а столб — по нынешней оси (⚠ упрощения).
+         * Hot gas of nozzle jet {@code flame}: eye-relative jet-light center (x, y, z), unit axis from nozzle
+         * backward (jx, jy, jz), cut is axial path from exit to ground (as in {@link #jet}). Jet law matches light
+         * ({@code FlameModel}): flame temperature to flame end, excess beyond ∝ 1/x; exit gas speed to core
+         * end, beyond ∝ 1/x (Pope, “Turbulent Flows”, 2000, ch. 5: U₀/Uⱼ = B·d/x); half-width {@link Flame#widthAt}.
+         * Jet extends until excess falls to {@link #COOL}, no farther than ground or gas travel since ignition: burn
+         * seconds of burning ({@link Flame#gasReach}) plus straight projectile travel flown from ignition (gas left there is
+         * behind nozzle). Eddy pattern moves with nozzle, while a fast projectile leaves hot gas almost
+         * stationary behind; for a turning projectile gas follows path but column follows current axis (⚠ simplifications).
          */
         public void exhaust(double x, double y, double z, double jx, double jy, double jz, Flame flame, double cut, double burn, double flown) {
             double core = flame.core(), fl = Math.max(flame.flame(), core), excess = flame.flameTemperature() - CloudModel.T_AIR_K;
@@ -278,14 +278,14 @@ public final class HeatPass {
         }
 
         /**
-         * Столб горячего газа вдоль оси (ax, ay, az) от низа (x, y, z) от глаза длиной len: радиус r0 у низа и рост grow на
-         * метр оси, вихрь eddy у низа (растёт с радиусом), скорость газа speed, избыток температуры excess у низа; избыток
-         * за местом hotTo по оси и скорость за местом fastTo падают как 1/x; пульсации — доля turbulence от избытка.
-         * Столб, который ни одному пикселю не даст сдвига в {@link #SHIFT_MIN}, не нужен.
+         * Hot-gas column along axis (ax, ay, az) from eye-relative base (x, y, z), length len: base radius r0, growth grow per
+         * axial meter, base eddy size eddy (grows with radius), gas speed speed, base temperature excess excess; excess
+         * beyond axial position hotTo and speed beyond fastTo fall as 1/x; fluctuations are turbulence of excess.
+         * Columns giving no pixel a {@link #SHIFT_MIN} shift are unnecessary.
          */
         private void tube(double x, double y, double z, double ax, double ay, double az, double len, double r0, double grow, double eddy,
                           double speed, double excess, double hotTo, double fastTo, double turbulence) {
-            // самое заметное место столба: δn наибольшее при T = 2T₀ (если газ там вообще такой горячий), иначе — у низа
+            // most noticeable column position: δn peaks at T = 2T₀ (if gas is that hot), otherwise at base
             double at = excess > CloudModel.T_AIR_K && hotTo < len ? Math.min(len, hotTo * excess / CloudModel.T_AIR_K) : 0;
             double hotAt = excess * Math.min(1, hotTo / Math.max(at, 1e-3)), r = r0 + grow * at;
             double dn = dn(CloudModel.T_AIR_K + hotAt, turbulence), e = eddy * r / r0, u = speed * Math.min(1, fastTo / Math.max(at, 1e-3));
@@ -306,18 +306,18 @@ public final class HeatPass {
         }
 
         /**
-         * Горячий газ над очагом пламени шлейфа {@code p} (низ — (x, y, z) от глаза): столб до высоты, где избыток на оси по
-         * Хескестаду ({@link FirePlume#excess}) падает до {@link #COOL}, радиус — очаг или 0,12 высоты (полуширина факела,
-         * Heskestad), температура — избыток на середине, скорость — на оси там ({@link FirePlume#axisSpeed}); доля share.
+         * Hot gas above plume {@code p}'s flame source (eye-relative base (x, y, z)): column up to height where Heskestad axial excess
+         * ({@link FirePlume#excess}) falls to {@link #COOL}, radius is source or 0.12 of height (plume half-width,
+         * Heskestad), temperature is midpoint excess, speed axial there ({@link FirePlume#axisSpeed}); share share.
          */
         public void plume(double x, double y, double z, FirePlume p, double share) {
             plumes(x, y, z, p, share, 0);
         }
 
         /**
-         * Горячий газ над полем очагов, как {@code p}, в круге радиуса {@code across} блоков с серединой (x, y, z) у земли
-         * от глаза (огненный шторм ядерки): столб каждого очага — как у {@link #plume}, столб всего поля — его высоты и
-         * температуры шириной с поле, вихри — каждого очага (поле — не один факел, а много рядом).
+         * Hot gas above a field of sources like {@code p}, in a circle of radius {@code across} blocks, eye-relative ground center
+         * (x, y, z) (nuclear firestorm): each source column as {@link #plume}; whole field column has its height/temperature,
+         * field width, each source's eddies (field is many adjacent plumes, not one).
          */
         public void plumes(double x, double y, double z, FirePlume p, double share, double across) {
             if (share <= 0) return;
@@ -332,19 +332,19 @@ public final class HeatPass {
         }
 
         /**
-         * Фронт ударной волны: сфера с серединой (x, y, z) от глаза радиусом r, e-кратная толща сжатия за фронтом l (всё —
-         * блоки), {@code low} — синус угла над серединой у земли (ниже фронта нет), dn — скачок показателя преломления на
-         * четырёх высотах ровно от low до верха. Фронт, который ни одному пикселю не даст сдвига в {@link #SHIFT_MIN}, не
-         * нужен. Фронт ядерки ({@code NukeHeat}) — всегда раньше фронтов обычных взрывов ({@link #chemicalFront}).
+         * Shock front: sphere centered at eye-relative (x, y, z), radius r, post-front compression e-folding thickness l (all
+         * blocks), {@code low} sine of angle above ground center (no front below); dn refractive-index jump at four
+         * heights evenly from low to top. Fronts giving no pixel a {@link #SHIFT_MIN} shift are unnecessary.
+         * Nuclear front ({@code NukeHeat}) always precedes conventional fronts ({@link #chemicalFront}).
          */
         public void front(double x, double y, double z, double r, double l, double low, double[] dn) {
             front(x, y, z, r, l, low, dn, true);
         }
 
-        /** Фронт обычного взрыва ({@code FarBlasts.front}): как {@link #front}, но слот ядерки не занимает. */
+        /** Conventional explosion front ({@code FarBlasts.front}): like {@link #front}, without occupying a nuclear slot. */
         public void chemicalFront(double x, double y, double z, double r, double l, double low, double[] dn) {
-            // Скачок остаётся физическим. Подача применяется к сдвигу в пикселях в fx_heat, с пределом 3 px:
-            // усиление dn до оптики давало линзу, затягивающую засветку вспышки во весь купол.
+            // Jump remains physical. presentation: applied to pixel shift in fx_heat, capped at 3 px;
+            // boosting dn before optics created a lens pulling flash overexposure into the entire dome.
             front(x, y, z, r, l, low, dn, false);
         }
 
@@ -358,7 +358,7 @@ public final class HeatPass {
             if (r <= 0 || l <= 0 || most <= 0) return;
             double near = Math.abs(Math.sqrt(x * x + y * y + z * z) - r);
             double w = ShockOptics.most(r, most, near, pixel) / pixel;
-            if (!nuke) w *= 24; // Верхняя оценка показа; шейдер ограничивает суммарный обычный сдвиг.
+            if (!nuke) w *= 24; // Upper display estimate; shader limits total conventional shift.
             if (w < SHIFT_MIN) return;
             int slot = rank(1) < rank(0) ? 1 : 0;
             if (w + (nuke ? 1e9 : 0) <= rank(slot)) return;
@@ -371,14 +371,14 @@ public final class HeatPass {
         }
 
         /**
-         * Факел двигателя: середина струи (x, y, z) от глаза, единичная ось струи от сопла назад (jx, jy, jz), факел flame;
-         * ослабление воздуха air, 1/блок; h — высота середины над землёй (порог, как у шара). Часть струи — равномерный
-         * отрезок: ядро — [0, ядро] с площадью сбоку конуса ядра, пламя — [0, пламя] с площадью пламени без ядра (оно
-         * обнимает ядро), хвост — [пламя, {@link Flame#tailEnd}] (та же середина потока, что у хвоста); свет части на метр — яркость × площадь сбоку / длина / π (тело с яркостью
-         * L и площадью сбоку S даёт белой стене лицом к нему в d блоках L·S/(π·d²): у шара S = πr², отсюда L·r²/d²).
-         * Свет в глаз — уже у кадра ({@link #eye}); выбор четырёх и порог — как у шара той же площади ({@link Flame#lightRadius}).
-         * cut — путь по оси от среза до земли: дальше струи нет (она растекается по земле — ⚠ свечения стенной струи
-         * нет), и сквозь землю она не светит; свет на метр у частей — прежний, короче — только их концы.
+         * Engine plume: eye-relative jet center (x, y, z), unit jet axis backward from nozzle (jx, jy, jz), plume flame;
+         * air extinction air, 1/block; h is center height above ground (threshold like sphere). Each jet part is a uniform
+         * segment: core [0, core] with core cone side area; flame [0, flame] with flame area excluding core (surrounds
+         * core); tail [flame, {@link Flame#tailEnd}] (same tail flux center); part light per meter is brightness × side area / length / π (a body of brightness
+         * L, side area S, gives facing white wall at d blocks L·S/(π·d²): sphere S = πr², hence L·r²/d²).
+         * Eye light already belongs to frame ({@link #eye}); four-source selection/threshold as equal-area sphere ({@link Flame#lightRadius}).
+         * cut is axial path from exit to ground: no jet beyond it (spreads over ground; ⚠ no wall-jet glow),
+         * no light through ground; part light per meter unchanged, only endpoints shorten.
          */
         public void jet(double x, double y, double z, double jx, double jy, double jz, Flame flame, double air, double h, double cut) {
             double lr = flame.lightRadius(), lum = flame.brightness();
@@ -410,31 +410,31 @@ public final class HeatPass {
         }
     }
 
-    /** Место по оси, до которого избыток или скорость столба не падают: у столба — всюду (float в шейдере). */
+    /** Axial position until which column excess/speed stays constant: everywhere for column (float in shader). */
     static final double NOWHERE = 1e9;
 
-    /** Пульсация показателя преломления в газе температуры kelvin (СКО), пульсации температуры — доля turbulence от избытка. */
+    /** Gas refractive-index fluctuation at temperature kelvin (SD); temperature fluctuations are turbulence of excess. */
     public static double dn(double kelvin, double turbulence) {
         double t0 = CloudModel.T_AIR_K / kelvin;
         return N0 * turbulence * t0 * (1 - t0);
     }
 
     /**
-     * Что различает глаз на экране, рад (подача: {@link HeatPass}): острота зрения, а где пиксель мельче её (бинокль) —
-     * пиксель. Сдвиг в этих долях и есть сдвиг кадра в пикселях.
+     * What eye resolves on screen, rad (presentation: {@link HeatPass}): visual acuity, or pixel where finer (binoculars).
+     * Shift in these units is frame shift in pixels.
      */
     public static double resolve(double pixel) {
         return Math.min(ACUITY, pixel);
     }
 
-    /** Пятно, которое глаз различает у газа в distance блоках, м: зрачок или угол {@code resolve} × расстояние. */
+    /** Eye-resolved spot at gas distance blocks away, m: pupil or {@code resolve} angle × distance. */
     public static double aperture(double distance, double resolve) {
         return Math.max(PUPIL, resolve * distance);
     }
 
     /**
-     * Угол прихода луча за путём len в газе с пульсацией показателя dn и вихрями eddy (внешний масштаб), СКО по одной оси,
-     * рад, у пятна aperture ({@link #aperture}) — {@code hazeAngle} в {@code fx_heat.fsh}.
+     * Ray angle of arrival after path len in gas with index fluctuation dn and eddies eddy (outer scale), one-axis SD,
+     * rad, for spot aperture ({@link #aperture}); {@code hazeAngle} in {@code fx_heat.fsh}.
      */
     public static double hazeAngle(double dn, double len, double eddy, double aperture) {
         double k = aperture < eddy ? Math.pow(eddy / aperture, 1 / 6.0) : eddy / aperture;
@@ -442,9 +442,9 @@ public final class HeatPass {
     }
 
     /**
-     * Доля дрожания, которую видит глаз, у вихрей eddy в газе скорости speed: газ проносит вихрь мимо луча за ℓ/u (быстрее,
-     * чем он сам сменится, ℓ/(0,3u)), а глаз копит свет {@value #EYE_S} с — вихри быстрее сливаются (СКО среднего из
-     * τ_глаза/τ независимых) — {@code hazeSeen}.
+     * Eye-visible shimmer share for eddies eddy in gas at speed speed: gas carries eddy past ray in ℓ/u (faster than
+     * its own change, ℓ/(0.3u)); eye integrates light for {@value #EYE_S} s, averaging faster eddies (SD of mean of
+     * τ_eye/τ independent samples); {@code hazeSeen}.
      */
     public static double hazeSeen(double eddy, double speed) {
         double tau = eddy / Math.max(speed, 1e-6);
@@ -452,8 +452,8 @@ public final class HeatPass {
     }
 
     /**
-     * Сдвиг кадра за горячим газом, пиксели (СКО по оси): угол прихода у пятна, что глаз различает в distance блоках, в долях
-     * того, что глаз различает на экране ({@link #resolve}; подача), × доля, что видит глаз ({@link #hazeSeen}).
+     * Frame shift behind hot gas, pixels (one-axis SD): arrival angle at eye-resolved spot distance blocks away, in units of
+     * what eye resolves on screen ({@link #resolve}; presentation), × eye-visible share ({@link #hazeSeen}).
      */
     public static double hazeShift(double dn, double len, double eddy, double distance, double pixel, double speed) {
         double res = resolve(pixel);
@@ -461,9 +461,9 @@ public final class HeatPass {
     }
 
     /**
-     * Где луч внутри столба: f(t) = a·t² − 2b·t + c < 0 на [t0, t1] — {@code hazeIn}/{@code hazeOut} в {@code fx_heat.fsh}.
-     * Конус |t·d⊥ − b⊥|² < (R₀ + G·t)²: a = d⊥² − G², b = d⊥·b⊥ + R₀G, c = b⊥² − R₀². Усечённый конус выпуклый, и на
-     * [t0, t1] (между плоскостями низа и конца, где радиус положителен) это один отрезок; пусто — конец не дальше начала.
+     * Ray inside column: f(t) = a·t² − 2b·t + c < 0 on [t0, t1]; {@code hazeIn}/{@code hazeOut} in {@code fx_heat.fsh}.
+     * Cone |t·d⊥ − b⊥|² < (R₀ + G·t)²: a = d⊥² − G², b = d⊥·b⊥ + R₀G, c = b⊥² − R₀². Truncated cone is convex; on
+     * [t0, t1] (between base/end planes with positive radius), one interval; empty if end no farther than start.
      */
     public static double[] coneSpan(double a, double b, double c, double t0, double t1) {
         double disc = b * b - a * c;
@@ -482,10 +482,10 @@ public final class HeatPass {
         return c < 0 ? new double[]{t0, t1} : new double[]{1, 0};
     }
 
-    /** |a| меньше — уравнение конуса линейное (луч почти вдоль образующей). */
+    /** Smaller |a| gives a linear cone equation (ray nearly along generator). */
     public static final double CONE_FLAT = 1e-6;
 
-    /** Линейный rgb цвета color (sRGB, наибольший канал 255) с яркостью (luma) luminance. */
+    /** Linear rgb of color (sRGB, largest channel 255) at brightness (luma) luminance. */
     static double[] rgb(int color, double luminance) {
         double r = FlameModel.linear(color >> 16 & 255), g = FlameModel.linear(color >> 8 & 255), b = FlameModel.linear(color & 255);
         double luma = 0.2126 * r + 0.7152 * g + 0.0722 * b, k = luma > 0 ? luminance / luma : 0;
@@ -493,12 +493,12 @@ public final class HeatPass {
     }
 
     /**
-     * Прямой свет равномерного светящегося отрезка на грань — ∫ cos θ / d² по отрезку, 1/м (свет на метр × это = свет на
-     * белой стене): отрезок от точки a (от точки грани) по единичному u на [t0, t1], нормаль грани n; только часть над
-     * гранью (под ней грань источника не видит). w2 — квадрат полуширины струи: грань в самой струе не видит её сингулярно
-     * ярко. Первообразная (c₀ + c₁τ)/(τ² + h²)^{3/2} по τ = t + a·u — c₀τ/(h²√(τ² + h²)) − c₁/√(τ² + h²), c₀ = n·a − (a·u)(n·u),
-     * c₁ = n·u, h — расстояние до прямой; разности — в виде без вычитания близких чисел (в шейдере float). Тот же расчёт —
-     * {@code heatSegment} в {@code include/heat.glsl}.
+     * Direct uniform emissive-segment light on face: ∫ cos θ / d² along segment, 1/m (light per meter × this = light on
+     * white wall); segment from point a (relative to face point) along unit u over [t0, t1], face normal n; only part above
+     * face (face cannot see source below it). w2 is squared jet half-width: a face inside jet does not see a singularly
+     * bright source. Primitive of (c₀ + c₁τ)/(τ² + h²)^{3/2} for τ = t + a·u: c₀τ/(h²√(τ² + h²)) − c₁/√(τ² + h²), c₀ = n·a − (a·u)(n·u),
+     * c₁ = n·u, h distance to line; differences avoid subtracting near-equal numbers (shader float). Same calculation:
+     * {@code heatSegment} in {@code include/heat.glsl}.
      */
     public static double segment(double ax, double ay, double az, double ux, double uy, double uz, double t0, double t1, double nx, double ny,
                                  double nz, double w2) {
@@ -508,13 +508,13 @@ public final class HeatPass {
         double b = ax * ux + ay * uy + az * uz, h2 = Math.max(ax * ax + ay * ay + az * az - b * b, 0) + w2;
         double c0 = na - b * nu, s0 = t[0] + b, s1 = t[1] + b;
         double q0 = 1 / (s0 * s0 + h2), q1 = 1 / (s1 * s1 + h2), r0 = Math.sqrt(q0), r1 = Math.sqrt(q1);
-        // (s1·r1 − s0·r0)/h² и r1 − r0 без вычитания близких: s²r² = 1 − h²r²
+        // (s1·r1 − s0·r0)/h² and r1 − r0 without near-equal subtraction: s²r² = 1 − h²r²
         double k = s0 * s1 > 0 ? (s1 - s0) * (s1 + s0) * q0 * q1 / (s1 * r1 + s0 * r0) : (s1 * r1 - s0 * r0) / h2;
         double dr = (s0 - s1) * (s0 + s1) * q0 * q1 / (r0 + r1);
         return Math.max(c0 * k - nu * dr, 0);
     }
 
-    /** Часть [t0, t1] отрезка от a по единичному u, что над гранью с нормалью n ({@code heatAbove}); пусто — t1 ≤ t0. */
+    /** Part [t0, t1] of segment from a along unit u above face with normal n ({@code heatAbove}); empty if t1 ≤ t0. */
     public static double[] above(double ax, double ay, double az, double ux, double uy, double uz, double t0, double t1, double nx, double ny,
                                  double nz) {
         double na = nx * ax + ny * ay + nz * az, nu = nx * ux + ny * uy + nz * uz;
@@ -528,16 +528,16 @@ public final class HeatPass {
         return new double[]{t0, t1};
     }
 
-    /** Заслоны мира для {@link #blocked}: клетка (x, y, z) окна — заслон ли, или вне окна (тогда — свободно). */
+    /** World occluders for {@link #blocked}: is window cell (x, y, z) an occluder, or outside window (clear then). */
     public interface Cells {
         boolean solid(int x, int y, int z);
     }
 
     /**
-     * Закрыт ли путь от a до b заслоном (координаты окна заслонов, блоки) — зеркало {@code heatBlocked} в {@code include/heat.glsl}
-     * (там наоборот: 1 — путь свободен): клетки
-     * вдоль отрезка по порядку (Amanatides, Woo, «A fast voxel traversal algorithm», Eurographics 1987), часть за окном
-     * size — свободна, клетка самой точки a — её грань, не заслон; не больше {@link #SHADOW_CELLS} клеток.
+     * Is path a to b occluded (occluder-window coordinates, blocks): mirrors {@code heatBlocked} in {@code include/heat.glsl}
+     * (opposite result there: 1 means clear path); visit cells
+     * along segment in order (Amanatides, Woo, “A fast voxel traversal algorithm”, Eurographics 1987); part outside window
+     * size is clear; cell containing point a is its face, not an occluder; at most {@link #SHADOW_CELLS} cells.
      */
     public static boolean blocked(double ax, double ay, double az, double bx, double by, double bz, int[] size, Cells cells) {
         double[] a = {ax, ay, az}, d = {bx - ax, by - ay, bz - az};
@@ -567,7 +567,7 @@ public final class HeatPass {
             own = false;
             double t = Math.min(next[0], Math.min(next[1], next[2]));
             if (t >= t1) break;
-            // шаг по каждой оси, у которой грань ближе всех (у шейдера — step: при равенстве — по обеим)
+            // step on every axis whose face is nearest (shader uses step: both on a tie)
             boolean out = false;
             for (int k = 0; k < 3; k++) {
                 if (next[k] > t) continue;
@@ -581,12 +581,12 @@ public final class HeatPass {
     }
 
     /**
-     * Видимая доля диска шара с серединой (bx, by, bz) радиуса r из точки (ax, ay, az) окна заслонов — зеркало
-     * {@code heatBallSeen} ({@code include/heat.glsl}): шар радиусом в метры у земли — протяжённый источник, и луч к одной середине у кромки холма
-     * гасил бы весь его свет, хотя верх шара виден. Кромка заслона у земли почти горизонтальная; доля диска над кромкой
-     * на высоте y — ∫ 2√(1 − y²): квадратура Гаусса–Чебышёва второго рода по вертикальному диаметру, узлы 0 и
-     * ±r·cos(π/4), веса ½ и ¼. Кромка снизу: середина видна — виден и верхний узел, смотрим нижний; закрыта — закрыт и
-     * нижний, смотрим верхний (два луча: доли 0, ¼, ¾, 1). Лучи кончаются у края шара со стороны точки.
+     * Visible share of ball disk centered at (bx, by, bz), radius r, from occluder-window point (ax, ay, az); mirrors
+     * {@code heatBallSeen} ({@code include/heat.glsl}): meter-scale ball near ground is extended; one ray to center at hill edge
+     * would remove all light despite visible top. Ground occluder edge is nearly horizontal; disk share above edge
+     * at height y is ∫ 2√(1 − y²): second-kind Gauss–Chebyshev quadrature along vertical diameter, nodes 0 and
+     * ±r·cos(π/4), weights ½ and ¼. Edge from below: center visible implies upper node visible, test lower; hidden implies lower
+     * hidden, test upper (two rays: shares 0, ¼, ¾, 1). Rays end at ball edge facing point.
      */
     public static double ballSeen(double ax, double ay, double az, double bx, double by, double bz, double r, int[] size, Cells cells) {
         double vx = bx - ax, vy = by - ay, vz = bz - az, d = Math.sqrt(vx * vx + vy * vy + vz * vz);
@@ -608,26 +608,26 @@ public final class HeatPass {
     }
 
     private static final Frame FRAME = new Frame();
-    /** Свет огня у глаза в последнем собранном кадре ({@link Frame#atEye}). */
+    /** Fire light at eye in last collected frame ({@link Frame#atEye}). */
     private static double lastAtEye;
 
     /**
-     * Свет огня у глаза в последнем собранном кадре (линейный, белая стена в полдень — 1): к нему привыкает глаз кадра
+     * Fire light at eye in last collected frame (linear, noon white wall = 1): frame eye adapts to it
      * ({@code Sight.exposure}, {@code FarView.exposure}).
      */
     public static double atEye() {
         return lastAtEye;
     }
 
-    /** Выход из мира или смена измерения: огня у глаза нет. */
+    /** World exit/dimension change: no fire at eye. */
     public static void forget() {
         lastAtEye = 0;
         FRAME.atEye = 0;
     }
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f();
     /**
-     * Номер цикла переноса — по модулю этого числа (сдвиг узора у каждого цикла свой; повтор — раз в 97 циклов); у второго
-     * слоя — со сдвигом на полномера: полцикла оба слоя в одном номере, и с одним сдвигом их узоры совпадали бы.
+     * Advection cycle index modulo this (each cycle has its own pattern offset; repeats every 97 cycles); second
+     * layer shifted by half an index: both layers share an index for half-cycle; same offset would align their patterns.
      */
     static final double CYCLE_SEEDS = 97;
     private static final Vector3f FORWARD = new Vector3f();
@@ -639,7 +639,7 @@ public final class HeatPass {
 
     private HeatPass() {}
 
-    /** Кадр источников: свет неба и привыкание глаза — до сбора (по ним — порог света). */
+    /** Source frame: skylight/eye adaptation before collection (define light threshold). */
     public static Frame begin(ClientLevel level, double exposure, double pixel) {
         Frame f = FRAME;
         f.begin();
@@ -658,15 +658,15 @@ public final class HeatPass {
     }
 
     /**
-     * Окно заслонов ({@link Solids}) к этому кадру — вокруг глаза eye (места источников — от него), секции у источников
-     * света перечитываются сейчас. Зовёт слой перед проходом, если в кадре есть свет.
+     * Occluder window ({@link Solids}) for this frame around eye (source positions relative to it); reread sections near
+     * light sources now. Layer calls before pass if frame has light.
      */
     static void solids(Frame f, ClientLevel level, net.minecraft.world.phys.Vec3 eye) {
         if (!f.lit()) return;
         Vector4f c = new Vector4f();
         for (int i = 0; i < 4; i++) {
             if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, c.w);
-            // у струи — от среза сопла на её длину (до земли), не дальше 8 блоков: там она бьёт в землю
+            // jet: from nozzle exit along its length (to ground), no farther than 8 blocks, where it hits ground
             if (f.jets.getColumn(i, c).w > 0) {
                 double reach = Math.min(8, f.jetSize.getColumn(i, new Vector4f()).x);
                 f.jets.getColumn(i, c);
@@ -676,14 +676,14 @@ public final class HeatPass {
         Solids.update(level, eye);
     }
 
-    /** Нужен ли проход в этом кадре. */
+    /** Whether this frame needs the pass. */
     static boolean needed(Frame f) {
         return shader != null && (f.lit() || f.hotAny() || f.frontAny());
     }
 
     /**
-     * Проход: копия кадра, вывод во весь кадр. {@code scene} — расстояние до мира, {@code view} — вид от глаза,
-     * {@code pixel} — угол пикселя, рад; {@code haze} — дымка и туман кадра.
+     * Pass: frame copy, full-frame output. {@code scene} is world distance, {@code view} view from eye,
+     * {@code pixel} pixel angle, rad; {@code haze} frame haze/fog.
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vector4f haze, double pixel) {
         ShaderInstance s = shader;
@@ -694,7 +694,7 @@ public final class HeatPass {
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
         RenderSystem.disableBlend();
-        // видимость прямого света источников — своим проходом в половинном разрешении (лучи тени — основная цена)
+        // source direct-light visibility in own half-resolution pass (shadow rays dominate cost)
         boolean shadows = f.lit() && seen(f, scene, pixel);
         RenderSystem.setShaderTexture(0, copy);
         RenderSystem.setShaderTexture(1, scene);
@@ -706,7 +706,7 @@ public final class HeatPass {
         s.safeGetUniform("HeatShape").set(f.shape);
         s.safeGetUniform("HeatAxis").set(f.axis);
         s.safeGetUniform("HeatGas").set(f.gas);
-        // узор вихрей переносит газ: два слоя со сдвигом в полцикла, доля цикла и номер цикла — в double, а не время в float
+        // gas advects eddy pattern: two layers half-cycle apart; cycle fraction/index in double, not float time
         double cycles = (System.nanoTime() - BORN) / 1e9 / HAZE_CYCLE, half = cycles + 0.5;
         s.safeGetUniform("HeatClock").set((float) (cycles - Math.floor(cycles)), (float) (Math.floor(cycles) % CYCLE_SEEDS),
                 (float) (half - Math.floor(half)), (float) (Math.floor(half) % CYCLE_SEEDS + 0.5));
@@ -719,7 +719,7 @@ public final class HeatPass {
         return drawn;
     }
 
-    /** Общее у прохода видимости и прохода света: мир кадра, источники, окно заслонов. */
+    /** Shared by visibility/light passes: frame world, sources, occluder window. */
     private static void common(ShaderInstance s, Frame f, double pixel) {
         s.safeGetUniform("InvViewProj").set(INVERSE);
         s.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
@@ -738,7 +738,7 @@ public final class HeatPass {
         s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, 0f);
     }
 
-    /** Четырёхугольник во весь привязанный кадр шейдером s; false — не нарисован. */
+    /** Full bound-frame quad with shader s; false if not drawn. */
     private static boolean quad(ShaderInstance s) {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
@@ -765,9 +765,9 @@ public final class HeatPass {
     private static boolean shadowFailed;
 
     /**
-     * Проход видимости ({@code fx_heat_shadow}): в свою текстуру (RGBA16F, половина кадра по каждой оси) коды видимости
-     * шаров и факелов и расстояние до мира у образца; кадр и окно вывода — прежние после него. false — прохода нет
-     * (шейдер не собрался, текстуру не завести): свет без теней.
+     * Visibility pass ({@code fx_heat_shadow}): ball/plume visibility codes and sample world distance into own texture
+     * (RGBA16F, half frame on each axis); restores frame/viewport afterward. false means no pass
+     * (shader failed to build, texture creation failed): unshadowed light.
      */
     private static boolean seen(Frame f, int scene, double pixel) {
         ShaderInstance s = shadowShader;
@@ -807,7 +807,7 @@ public final class HeatPass {
 
     private static final Matrix4f EXPOSED = new Matrix4f();
 
-    /** Свет m (rgb по столбцам) с привыканием глаза k — в общей матрице на один вызов (uniform копирует её сразу). */
+    /** Light m (rgb columns) with eye adaptation k in shared matrix for one call (uniform copies immediately). */
     private static final Vector4f EXPOSED_COLUMN = new Vector4f();
 
     private static Matrix4f exposed(Matrix4f m, double k) {
@@ -820,7 +820,7 @@ public final class HeatPass {
         return EXPOSED;
     }
 
-    /** Копия кадра, в который рисует проход (привязанного сейчас), своей текстурой с линейной выборкой. */
+    /** Copy of frame targeted by pass (currently bound), own texture with linear sampling. */
     private static boolean copyFrame() {
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
@@ -843,7 +843,7 @@ public final class HeatPass {
         return true;
     }
 
-    /** Для строки сценария: источники кадра. */
+    /** For scenario line: frame sources. */
     public static String describe() {
         Frame f = FRAME;
         int l = 0, h = 0, n = 0, j = 0;

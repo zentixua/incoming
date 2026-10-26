@@ -29,58 +29,58 @@ import org.jetbrains.annotations.Nullable;
 import java.util.EnumSet;
 
 /**
- * Паника мобов (DESIGN-nuke §4): кто видел вспышку или кого накрыла волна, бежит прочь от эпицентра, а потом
- * успокаивается. Каждому {@link PathfinderMob} при входе в мир — своя цель {@link Flee} (самая важная, движение):
- * пока срок паники не вышел, она раз в 2–3 секунды ищет место в 8–16 блоках прочь от эпицентра ({@link #place}: рядом
- * с мобом, чанки там готовы) и путь туда. Мобы с мозгом (жители, пиглины, козы) ходят по памяти
- * {@link MemoryModuleType#WALK_TARGET} — цель кладёт туда место, а идёт мозг; своё
- * занятие «паника» у жителя не включается (оно зовёт големов). Скорость у всех похожая — ~0,38 блока за тик,
- * как у коровы в панике; боссы не бегут. Не бегут и свои: прирученные и чьи-то (сидящий волк или кошка убежали бы за
- * сотни блоков и сели там, а «за хозяином» их не вернёт), на поводке, с именем.
+ * Mob panic (DESIGN-nuke §4): mobs seeing flash or caught by wave flee epicenter, then
+ * calm down. Each {@link PathfinderMob} gets its own {@link Flee} goal on world entry (highest priority, movement):
+ * until panic expires, every 2–3 seconds it finds a place 8–16 blocks away from epicenter ({@link #place}: near
+ * mob, chunks ready) and a path there. Brain mobs (villagers, piglins, goats) move through memory
+ * {@link MemoryModuleType#WALK_TARGET}: goal stores position, brain moves; villager's own
+ * panic activity is not activated (it summons golems). Similar speed for all, ~0.38 blocks per tick,
+ * like a panicking cow; bosses do not flee. Neither do owned mobs: tamed and someone's property (sitting wolf or cat would run
+ * hundreds of blocks and sit there; follow-owner would not bring them back), leashed or named.
  * <p>
- * Будят цель вспышка ({@link NuclearWarhead#expose}: кто видит шар) и волна ({@code BlastFront}: от 0,3 psi, не в
- * укрытии), обе — в своих единицах работы под бюджетом тика. Старт и новые пути — вразнобой по номеру сущности. Поиск
- * пути — не чаще раза в {@link #MIN_REPATH} тиков, у запертого (загон, ферма мобов, рыба в пруду: путь кончается там,
- * где он стоит, или места нет) — всё реже: каждый поиск — до {@link #TRIES} мест и полный поиск пути. В воздухе (только
- * что появился, подброшен волной) моб, что ходит по земле, путь не ищет — ждёт земли: путь по земле из воздуха не
- * строится, и это не загон.
+ * Flash ({@link NuclearWarhead#expose}: sees fireball) and wave ({@code BlastFront}: from 0.3 psi, not
+ * sheltered) wake goal, both in their own budgeted work units. Start and repathing stagger by entity ID. Path
+ * search no more than once per {@link #MIN_REPATH} ticks; enclosed mobs (pen, mob farm, pond fish: path ends
+ * where it stands or no place found) search less often: each search checks up to {@link #TRIES} places and a full path. Airborne
+ * ground mobs (just spawned, wave-tossed) wait for ground instead of searching: a ground path from air cannot
+ * be built, which does not mean a pen.
  */
 public final class MobPanic {
-    /** Наибольшая цель: вперёд любой ходьбы. */
+    /** Highest-priority goal: ahead of all walking. */
     static final int PRIORITY = -1;
-    /** Паника после вспышки и после волны, тиков: от и сколько ещё вразнобой. */
+    /** Panic after flash and wave, ticks: minimum and additional random duration. */
     public static final int FLASH = 200, FLASH_SPREAD = 200, WAVE = 400, WAVE_SPREAD = 400;
-    /** Скорость бега, блоков за тик. */
+    /** Run speed, blocks per tick. */
     static final double SPEED = 0.38;
-    /** Как далеко искать место (по горизонтали — от половины до REACH, по вертикали — до Y_REACH). */
+    /** Place search reach (horizontal half REACH to REACH, vertical up to Y_REACH). */
     private static final int REACH = 16, Y_REACH = 7;
-    /** Мест на поиск и их разброс от направления прочь от эпицентра, рад. */
+    /** Places per search and their spread from direction away from epicenter, rad. */
     private static final int TRIES = 8;
     private static final double CONE = Math.PI / 4;
-    /** Новый путь — не раньше стольких тиков после прошлого; обычно — через {@link #REPATH} (+ разброс по номеру). */
+    /** New path no earlier than this many ticks after previous; normally after {@link #REPATH} (+ ID-based spread). */
     static final int MIN_REPATH = 20, REPATH = 40;
-    /** Путь, что уводит меньше чем на столько блоков, — моб заперт: следующий поиск вдвое позже (до ×4). */
+    /** A path moving less than this many blocks means enclosure: next search delay doubles (up to ×4). */
     private static final double STUCK = 2;
 
     private MobPanic() {}
 
-    /** Цель бегства — всем, кто ходит по путям (сервер). */
+    /** Flee goal for every path-navigating mob (server). */
     public static void onJoin(EntityJoinLevelEvent e) {
         if (e.getLevel().isClientSide() || !(e.getEntity() instanceof PathfinderMob mob) || mob.getType().is(Tags.EntityTypes.BOSSES)) return;
         if (flee(mob) == null) mob.goalSelector.addGoal(PRIORITY, new Flee(mob));
     }
 
-    /** Моб видел вспышку. */
+    /** Mob saw flash. */
     static void flash(Detonation d, LivingEntity e, long now) {
         if (e instanceof Mob mob) scare(mob, d.burst(), now, FLASH + spread(mob, FLASH_SPREAD));
     }
 
-    /** Моба накрыла волна. */
+    /** Mob caught by wave. */
     public static void wave(Detonation d, LivingEntity e, long now) {
         if (e instanceof Mob mob) scare(mob, d.burst(), now, WAVE + spread(mob, WAVE_SPREAD));
     }
 
-    /** Паниковать от {@code from} ещё {@code ticks} тиков (продлевает, но не укорачивает). */
+    /** Panic for another {@code ticks} from {@code from} (extends, never shortens). */
     static void scare(Mob mob, Vec3 from, long now, int ticks) {
         Flee f = flee(mob);
         if (f == null || !mob.isAlive()) return;
@@ -89,19 +89,19 @@ public final class MobPanic {
         f.until = Math.max(f.until, now + ticks);
     }
 
-    /** Паникует ли моб сейчас (для проверок). */
+    /** Whether mob is panicking now (for tests). */
     public static boolean panicking(Mob mob) {
         Flee f = flee(mob);
         return f != null && f.from != null && f.until > mob.level().getGameTime();
     }
 
-    /** Бежит ли моб сейчас: цель бегства запущена (для проверок). */
+    /** Whether mob is fleeing now: flee goal active (for tests). */
     public static boolean fleeing(Mob mob) {
         for (WrappedGoal w : mob.goalSelector.getAvailableGoals()) if (w.isRunning() && w.getGoal() instanceof Flee) return true;
         return false;
     }
 
-    /** Сколько раз моб искал место и путь бегства (для проверок: запертый ищет всё реже). */
+    /** Number of flee-place/path searches (for tests: enclosed mobs search less often). */
     public static int searches(Mob mob) {
         Flee f = flee(mob);
         return f == null ? 0 : f.searches;
@@ -117,7 +117,7 @@ public final class MobPanic {
         return null;
     }
 
-    /** Бег прочь от эпицентра. */
+    /** Fleeing epicenter. */
     static final class Flee extends Goal {
         private final PathfinderMob mob;
         @Nullable
@@ -126,7 +126,7 @@ public final class MobPanic {
         private int repath;
         @Nullable
         private WalkTarget walking;
-        /** Тиков с прошлого поиска пути; подряд поисков, что никуда не увели; поисков всего (для проверок). */
+        /** Ticks since last path search; consecutive searches going nowhere; total searches (for tests). */
         private int sincePath, stuck, searches;
 
         Flee(PathfinderMob mob) {
@@ -153,17 +153,17 @@ public final class MobPanic {
         public void start() {
             repath = 0;
             sincePath = MIN_REPATH;
-            // загон прошлой паники — не этой
+            // enclosure from previous panic does not apply to this one
             stuck = 0;
         }
 
         @Override
         public void tick() {
-            // цель тикает через тик: счёт — по два
+            // goal ticks every other tick: count by twos
             repath -= 2;
             sincePath += 2;
             if (sincePath < MIN_REPATH) return;
-            // дошёл — дальше сразу (не раньше MIN_REPATH); запертый ждёт своего срока, что бы ни говорила навигация
+            // arrived: continue immediately (no earlier than MIN_REPATH); enclosed waits its delay regardless of navigation
             if (repath <= 0 || stuck == 0 && !brain() && mob.getNavigation().isDone()) path();
         }
 
@@ -179,7 +179,7 @@ public final class MobPanic {
             from = null;
         }
 
-        /** Ходит ли моб по мозгу (место — в память, идёт мозг). */
+        /** Whether brain drives movement (position in memory, brain moves). */
         private boolean brain() {
             return mob.getBrain().checkMemory(MemoryModuleType.WALK_TARGET, MemoryStatus.REGISTERED);
         }
@@ -199,7 +199,7 @@ public final class MobPanic {
                     mob.getBrain().setMemory(MemoryModuleType.WALK_TARGET, walking);
                     gone = true;
                 } else {
-                    // как PathNavigation.moveTo(x, y, z, speed): дойти до клетки рядом с местом
+                    // like PathNavigation.moveTo(x, y, z, speed): reach cell beside position
                     Path p = mob.getNavigation().createPath(to, 1);
                     gone = p != null && p.getEndNode() != null
                             && p.getEndNode().distanceTo(mob.blockPosition()) >= STUCK && mob.getNavigation().moveTo(p, speed);
@@ -211,11 +211,11 @@ public final class MobPanic {
     }
 
     /**
-     * Место бегства: {@link #TRIES} мест прочь от эпицентра (±{@link #CONE}) в {@link #REACH}/2…{@link #REACH} блоках, у
-     * каждого — ближайшая к высоте моба годная клетка ({@link #stand}); из годных — дальше всех от эпицентра. Не ванильный
-     * {@link DefaultRandomPos#getPosAway}: тот берёт высоту наугад (на ровной земле годна одна из 15, и поиск часто ничего
-     * не находит), разброс — до ±90° (бег вбок) и даёт места под самыми ногами (путь в шаг) — моб, приняв это за загон,
-     * стоял секунды. Годных нет — ванильный {@link LandRandomPos#getPosAway}: он поднимает место из твёрдого блока наверх.
+     * Flee position: {@link #TRIES} places away from epicenter (±{@link #CONE}), {@link #REACH}/2…{@link #REACH} blocks away,
+     * each using valid cell nearest mob height ({@link #stand}); choose farthest valid place from epicenter. Unlike vanilla
+     * {@link DefaultRandomPos#getPosAway}: random height (one of 15 valid on flat ground, often finding
+     * nothing), spread to ±90° (sideways), positions underfoot (one-step path); mistaking this for enclosure left mob
+     * standing for seconds. No valid places: vanilla {@link LandRandomPos#getPosAway}, which raises place out of solid block.
      */
     @Nullable
     static BlockPos place(PathfinderMob mob, Vec3 from) {
@@ -225,7 +225,7 @@ public final class MobPanic {
         return land == null ? null : BlockPos.containing(land);
     }
 
-    /** Своё место бегства {@link #place} без ванильного запасного (и для проверок); годных нет — {@code null}. */
+    /** Custom flee place {@link #place} without vanilla fallback (also for tests); {@code null} if none valid. */
     @Nullable
     public static BlockPos awayPlace(PathfinderMob mob, Vec3 from) {
         RandomSource r = mob.getRandom();
@@ -247,12 +247,12 @@ public final class MobPanic {
     }
 
     /**
-     * Ближайшая к высоте y клетка столбца (0, +1, −1, +2 …, до {@link #Y_REACH}), годная для цели, — те же проверки, что
-     * у ванильного места бегства: в мире, в пределах привязки, устойчива для навигации моба (у ходящих — есть на чём
-     * стоять, у рыбы — не сплошной блок), без штрафа пути. У летуна (попугай, тихоня) «устойчиво» в навигации — сама
-     * твёрдая клетка, на которую садиться, а у неё штраф пути: его место — свободная клетка над такой опорой. Без этого
-     * летуну не годилась ни одна клетка, и он бежал только по ванильному месту — то пустому, то в паре блоков: два
-     * пустых поиска подряд откладывали бегство на 8 с. Дойдёт ли моб, решает поиск пути.
+     * Column cell nearest height y (0, +1, −1, +2 …, up to {@link #Y_REACH}) valid for goal, with same checks
+     * as vanilla flee position: in world, within restriction, stable for mob navigation (ground mobs have support,
+     * fish no full block), no path penalty. For a flyer (parrot, allay), navigation considers the solid
+     * landing cell itself stable, but it has a path penalty: place is the free cell above such support. Without this,
+     * no cell was valid for flyers, so they fled only via vanilla places, sometimes empty, sometimes a couple blocks away: two
+     * empty searches delayed flight for 8 s. Pathfinding decides reachability.
      */
     @Nullable
     private static BlockPos stand(PathfinderMob mob, int x, int y, int z, boolean restricted) {
@@ -267,7 +267,7 @@ public final class MobPanic {
         return null;
     }
 
-    /** Свой моб: прирученный или чей-то (лошадь, лама), на поводке, с именем — не бежит. */
+    /** Owned mob: tamed or someone's property (horse, llama), leashed or named; does not flee. */
     static boolean mine(Mob mob) {
         if (mob.isLeashed() || mob.hasCustomName()) return true;
         if (mob instanceof TamableAnimal t && (t.isTame() || t.isOrderedToSit())) return true;

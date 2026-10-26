@@ -1,77 +1,77 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Огненный шар: размер, двойная вспышка, цвет, всплытие. Время t — секунды после подрыва,
- * мощность Y — килотонны, расстояния — метры.
+ * Fireball: size, double flash, color, rise. Time t is seconds after detonation,
+ * yield Y is kilotons, distances are meters.
  */
 public final class FireballModel {
-    /** Во сколько раз второй максимум тусклее первого импульса (для нормированной яркости). */
+    /** How many times dimmer the second maximum is than the first pulse (for normalized brightness). */
     private static final double SECOND_PEAK = 0.85;
-    /** Показатель спада второго импульса: при 3.75 за 10·t_max излучается ~80% его энергии. */
+    /** Second-pulse decay exponent: 3.75 emits ~80% of its energy by 10·t_max. */
     private static final double PULSE_EXP = 3.75;
-    /** Шар дорастает до этой доли от максимума, дальше растёт медленно, остывая. */
+    /** Fireball grows to this fraction of maximum, then grows slowly while cooling. */
     static final double LATE_GROWTH_CAP = 1.3;
 
-    /** Видимая температура шара во втором максимуме, K (G&D 2.110: ~7 500–8 000 K почти без зависимости от мощности). */
+    /** Apparent fireball temperature at the second maximum, K (G&D 2.110: ~7 500–8 000 K, almost independent of yield). */
     public static final double PEAK_K = 7700;
-    /** Температура воздуха вокруг, K. */
+    /** Ambient air temperature, K. */
     public static final double AMBIENT_K = 288;
-    /** Показатель остывания после второго максимума: ΔT ∝ (t/t_max)^−0,35 (ключи хроники — {@link #temperature}). */
+    /** Cooling exponent after the second maximum: ΔT ∝ (t/t_max)^−0.35 (chronology keys in {@link #temperature}). */
     static final double COOLING = 0.35;
-    /** Горячее шар не показывается (первый импульс короче кадра): край строки света чёрного тела у клиента. */
+    /** Fireball is never shown hotter (first pulse is shorter than a frame): end of the client's black-body light row. */
     static final double HOTTEST_K = 30_000;
 
     private FireballModel() {
     }
 
-    /** Максимальный радиус светящегося шара, м (Glasstone 2.12): 0.07·Y^0.4 км воздушный, 0.088·Y^0.4 км наземный. */
+    /** Maximum luminous fireball radius, m (Glasstone 2.12): 0.07·Y^0.4 km airburst, 0.088·Y^0.4 km surface burst. */
     public static double maxRadius(double yieldKt, boolean surfaceBurst) {
         return (surfaceBurst ? 88 : 70) * Math.pow(yieldKt, 0.4);
     }
 
-    /** Минимум яркости между импульсами, с. */
+    /** Brightness minimum between pulses, s. */
     public static double firstMinimumSeconds(double yieldKt) {
         return 0.0025 * Math.sqrt(yieldKt);
     }
 
     /**
-     * «Отрыв» (breakaway), с: фронт ударной волны, который до сих пор и был поверхностью шара (раскалённый сжатый воздух
-     * непрозрачен, гладкий «стеклянный» шар, G&D 2.117–2.119), остыл до ~3000 °C и стал прозрачным — сквозь него видна
-     * горячая неровная середина (G&D 2.120, 2.124–2.125: у 20 кт минимум яркости через 11 мс, отрыв — через 15 мс, «вскоре
-     * после минимума»). Здесь — минимум × 15/11 при любой мощности (оба — по времени фронта, ⚠ отношение — у 20 кт).
+     * Breakaway, s: the shock front, hitherto the fireball surface (hot compressed air
+     * is opaque, smooth “glassy” sphere, G&D 2.117–2.119), has cooled to ~3000 °C and become transparent, revealing
+     * the hot uneven interior (G&D 2.120, 2.124–2.125: at 20 kt, brightness minimum at 11 ms, breakaway at 15 ms, “shortly
+     * after the minimum”). Here minimum × 15/11 at every yield (both follow front time; ⚠ ratio is for 20 kt).
      */
     public static double breakawaySeconds(double yieldKt) {
         return firstMinimumSeconds(yieldKt) * BREAKAWAY;
     }
 
-    /** Отрыв на минимум яркости ({@link #breakawaySeconds}): 15 мс на 11 мс у 20 кт, G&D 2.120 и 2.125. */
+    /** Breakaway relative to brightness minimum ({@link #breakawaySeconds}): 15 ms to 11 ms for 20 kt, G&D 2.120 and 2.125. */
     static final double BREAKAWAY = 15.0 / 11.0;
 
     /**
-     * Насколько видна неровная середина шара сквозь фронт 0..1: до минимума яркости — нет (поверхность — гладкий фронт),
-     * с минимума до отрыва фронт проясняется (по прямой, ⚠ оценка), дальше — вся.
+     * Visibility of uneven fireball interior through the front, 0..1: none before brightness minimum (surface is the smooth front),
+     * front clears from minimum to breakaway (linear, ⚠ (est.)), then fully visible.
      */
     public static double unmasked(double t, double yieldKt) {
         double from = firstMinimumSeconds(yieldKt), to = breakawaySeconds(yieldKt);
         return Solve.clamp((t - from) / (to - from), 0, 1);
     }
 
-    /** Второй (главный тепловой) максимум, с. */
+    /** Second (main thermal) maximum, s. */
     public static double secondMaximumSeconds(double yieldKt) {
         return 0.032 * Math.sqrt(yieldKt);
     }
 
     /**
-     * Световой импульс, с: 10·t_max — за это время второй импульс излучает ~80 % своей энергии (у 15 кт — 1,24 с), дальше
-     * шар светит слабо. Вспышка у клиента, след света на земле и поджиг у сервера ({@code FlashScorch}) — за это время.
+     * Light pulse, s: 10·t_max emits ~80 % of the second pulse's energy (15 kt: 1.24 s), after which
+     * the fireball is dim. Client flash, ground light trace and server ignition ({@code FlashScorch}) occur during this interval.
      */
     public static double pulseSeconds(double yieldKt) {
         return 10 * secondMaximumSeconds(yieldKt);
     }
 
-    /** Шагов таблицы излучённой доли на τ от 0 до 10. */
+    /** Emitted-fraction table steps over τ from 0 to 10. */
     private static final int THERMAL_STEPS = 2000;
-    /** Излучённая вторым импульсом энергия к τ = 10·i/{@link #THERMAL_STEPS} — доля излученной к концу импульса (τ = 10). */
+    /** Second-pulse energy emitted by τ = 10·i/{@link #THERMAL_STEPS}, as a fraction of energy emitted by pulse end (τ = 10). */
     private static final double[] THERMAL = thermalTable();
 
     private static double[] thermalTable() {
@@ -86,14 +86,14 @@ public final class FireballModel {
         return out;
     }
 
-    /** Второй импульс по τ = t/t_max: (p/2)·τ² / (1 + (p−2)/2·τ^p), как в {@link #brightness}. */
+    /** Second pulse over τ = t/t_max: (p/2)·τ² / (1 + (p−2)/2·τ^p), as in {@link #brightness}. */
     private static double second(double tau) {
         return PULSE_EXP / 2 * tau * tau / (1 + (PULSE_EXP - 2) / 2 * Math.pow(tau, PULSE_EXP));
     }
 
     /**
-     * Доля светового импульса, излученная к τ = t/t_max: энергия второго импульса (мощность — его яркость) к τ от
-     * излученной за весь импульс ({@link #pulseSeconds}, τ = 10). Первый импульс — доли процента энергии, не в счёте.
+     * Fraction of light pulse emitted by τ = t/t_max: second-pulse energy (power is its brightness) by τ relative to
+     * energy emitted over the entire pulse ({@link #pulseSeconds}, τ = 10). First pulse is fractions of a percent, excluded.
      */
     public static double thermalFraction(double tau) {
         if (tau <= 0) return 0;
@@ -103,7 +103,7 @@ public final class FireballModel {
         return THERMAL[i] + (THERMAL[i + 1] - THERMAL[i]) * (x - i);
     }
 
-    /** Обратная {@link #thermalFraction}: τ = t/t_max, к которому излучена доля {@code fraction} импульса (0..10). */
+    /** Inverse of {@link #thermalFraction}: τ = t/t_max by which {@code fraction} of the pulse is emitted (0..10). */
     public static double thermalTau(double fraction) {
         if (fraction <= 0) return 0;
         if (fraction >= 1) return 10;
@@ -118,8 +118,8 @@ public final class FireballModel {
     }
 
     /**
-     * Нормированная яркость 0..1: резкий первый импульс (спад к минимуму за t_min), затем широкий второй
-     * максимум в t_max: f(τ) = (p/2)·τ² / (1 + (p−2)/2·τ^p), τ = t/t_max, дальше медленный спад к нулю.
+     * Normalized brightness, 0..1: sharp first pulse (decay to minimum over t_min), then a broad second
+     * maximum at t_max: f(τ) = (p/2)·τ² / (1 + (p−2)/2·τ^p), τ = t/t_max, then slow decay to zero.
      */
     public static double brightness(double t, double yieldKt) {
         if (t <= 0) return 0;
@@ -131,8 +131,8 @@ public final class FireballModel {
     }
 
     /**
-     * Радиус шара, м: рост ~t^0.4 до максимума ко второму максимуму яркости,
-     * затем медленный рост при остывании (+10% за каждое e-кратное время, не больше ×1.3).
+     * Fireball radius, m: growth ~t^0.4 to maximum at the second brightness maximum,
+     * then slow growth while cooling (+10% per e-fold of time, no more than ×1.3).
      */
     public static double radius(double t, double yieldKt, boolean surfaceBurst) {
         if (t <= 0) return 0;
@@ -143,26 +143,26 @@ public final class FireballModel {
     }
 
     /**
-     * Видимая температура поверхности шара, K, пока он шар. До второго максимума — по Стефану–Больцману из его яркости
-     * и радиуса: свет шара P ∝ T⁴·R², и T = T₂·(P/P₂)^¼·(R₂/R)^½ — первый импульс (маленький горячий шар) голубовато-белый,
-     * в минимуме темнее, ко второму максимуму — T₂ ({@link #PEAK_K}). Дальше шар остывает к воздуху:
-     * T_окр + (T₂ − T_окр)·(t/t_max)^−0,35 — у 15 кт бело-жёлтый ~3 900 K через секунду, ~1 950 K через девять (по
-     * хронике). Это температура ядра: свернувшись в кольцо (у 15 кт — с ~3 с), шар остывает снаружи быстрее, край
-     * смешан с подхваченным воздухом — через девять секунд ~1 250 K ({@link MushroomModel#edgeTemperature}).
+     * Apparent surface temperature, K, while still a sphere. Before the second maximum, Stefan–Boltzmann from brightness
+     * and radius: fireball light P ∝ T⁴·R², T = T₂·(P/P₂)^¼·(R₂/R)^½; first pulse (small hot sphere) is bluish white,
+     * dimmer at minimum, reaching T₂ ({@link #PEAK_K}) at the second maximum. Then the fireball cools toward air:
+     * T_ambient + (T₂ − T_ambient)·(t/t_max)^−0.35: 15 kt is white-yellow ~3 900 K at one second, ~1 950 K at nine (from
+     * footage). This is core temperature: rolling into a ring (15 kt from ~3 s), the fireball cools faster outside; the edge
+     * mixes with entrained air, ~1 250 K at nine seconds ({@link MushroomModel#edgeTemperature}).
      */
     public static double temperature(double t, double yieldKt) {
         if (t <= 0) return AMBIENT_K;
         double tm = secondMaximumSeconds(yieldKt);
         if (t >= tm) return AMBIENT_K + (PEAK_K - AMBIENT_K) * Math.pow(t / tm, -COOLING);
-        // радиус до максимума — max·(t/t_max)^0,4 ({@link #radius}): (R₂/R)^½ = (t_max/t)^0,2
+        // radius before maximum is max·(t/t_max)^0.4 ({@link #radius}): (R₂/R)^½ = (t_max/t)^0.2
         double k = PEAK_K * Math.pow(brightness(t, yieldKt) / brightness(tm, yieldKt), 0.25) * Math.pow(tm / t, 0.2);
         return Solve.clamp(k, AMBIENT_K, HOTTEST_K);
     }
 
     /**
-     * Докуда по земле от эпицентра лежит шар в момент t, м ({@link #radius} на высоте {@link #centreHeight}); 0 — земли он
-     * не касается. Там нет поднятой волной пыли — там шар: стена пыли и пелена ({@code BlastWall}, {@code PallField})
-     * начинаются за ним.
+     * Fireball ground reach from epicenter at time t, m ({@link #radius} at height {@link #centreHeight}); 0 if it does not
+     * touch ground. No wave-lofted dust there, only fireball: dust wall and pall ({@code BlastWall}, {@code PallField})
+     * start beyond it.
      */
     public static double groundRadius(double t, double hobM, double yieldKt, boolean surfaceBurst) {
         if (t <= 0) return 0;
@@ -171,18 +171,18 @@ public final class FireballModel {
     }
 
     /**
-     * Скорость всплытия шара сразу после подрыва, м/с: та же, что у верха облака ({@link CloudModel#riseSpeed}) — 1 кт
-     * ~25, 15 кт ~79, 1 Мт ~139, через 10 с — 130 (Glasstone и Dolan: у шара 1 Мт через 10 с — 76–107, §2.05, у верха —
-     * в среднем ~134 за первую минуту, §2.12).
+     * Fireball rise speed immediately after burst, m/s: same as cloud top ({@link CloudModel#riseSpeed}), 1 kt
+     * ~25, 15 kt ~79, 1 Mt ~139, at 10 s 130 (Glasstone and Dolan: 1 Mt fireball at 10 s is 76–107, §2.05; top
+     * averages ~134 over the first minute, §2.12).
      */
     public static double riseSpeed(double yieldKt, boolean surface) {
         return CloudModel.riseSpeed(0, 0, yieldKt, surface);
     }
 
     /**
-     * Высота центра шара (потом — центра шапки), м: стартует с высоты подрыва и поднимается, как верх облака
-     * ({@link CloudModel#top}: та же экспонента, тот же путь) — один закон подъёма у шара и облака, и верх шара (не выше
-     * {@link #LATE_GROWTH_CAP} радиуса над центром) не обгоняет верх облака.
+     * Fireball center height (later cap center), m: starts at burst height and rises like cloud top
+     * ({@link CloudModel#top}: same exponential, same path); one rise law for fireball and cloud, and fireball top (no more than
+     * {@link #LATE_GROWTH_CAP} radii above center) never overtakes cloud top.
      */
     public static double centreHeight(double t, double hobM, double yieldKt, boolean surface) {
         if (t <= 0) return hobM;
@@ -190,10 +190,10 @@ public final class FireballModel {
     }
 
     /**
-     * На сколько своих радиусов ({@link #maxRadius}) шар всплыл после второго максимума: часы узора его поверхности
-     * (запекание {@code tools/bake_fx}: пузырь горячего газа, кадры — по пути всплытия в радиусах). Течение у всплывающего
-     * пузыря подобно себе — где оно и что сделало с поверхностью, зависит от пройденного пути в радиусах, а не от секунд,
-     * поэтому один узор годен любой мощности. До второго максимума шар растёт, а не всплывает, — 0.
+     * Rise since second maximum in units of its own radius ({@link #maxRadius}): surface-pattern clock
+     * (bake {@code tools/bake_fx}: hot-gas bubble, frames by rise path in radii). Rising bubble flow is
+     * self-similar: its location and effect on the surface depend on path traveled in radii, not seconds,
+     * so one pattern suits any yield. Before second maximum the fireball grows rather than rises: 0.
      */
     public static double surfaceRise(double t, double hobM, double yieldKt, boolean surface) {
         double tm = secondMaximumSeconds(yieldKt);

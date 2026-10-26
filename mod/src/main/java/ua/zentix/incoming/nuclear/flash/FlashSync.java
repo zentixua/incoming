@@ -17,18 +17,18 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.registry.ModAttachments;
 
 /**
- * Следы вспышки в отметке чанка ({@link ModAttachments#FLASH_MARKS}) и у игроков (поток сервера): гарь ставится
- * с руинами чанка ({@code RuinPlan.apply}), силуэты — работой {@link FlashShadows}; игрок, которому чанк уходит
- * (вход, подход, смена измерения), получает его следы сразу за чанком ({@link ChunkWatchEvent.Sent}), а те, кто чанк
- * уже видит, — каждое изменение. Блок со следами сменился — его следы уходят сразу ({@link #onNeighborNotify}: так
- * сломанная и поставленная заново такая же доска приходит чистой), а игрокам — в конце тика мира, одним пакетом на
- * чанк. Смена без оповещения соседей (её делают моды, двигающие блоки) видна только по самому блоку: перед отправкой
- * следы на сменившихся блоках (руины, игрок построил своё) уходят — на месте не их блок ({@link FlashMarks#pruned}).
+ * Flash traces in chunk attachment ({@link ModAttachments#FLASH_MARKS}) and for players (server thread): scorch applied
+ * with chunk ruins ({@code RuinPlan.apply}), silhouettes by {@link FlashShadows}; player receiving chunk
+ * (login, approach, dimension change) gets traces immediately afterward ({@link ChunkWatchEvent.Sent}); players already
+ * viewing chunk get every change. Changed block loses traces immediately ({@link #onNeighborNotify}: broken and replaced
+ * identical plank arrives clean); players receive update at world-tick end, one packet per
+ * chunk. Changes without neighbor notifications (mods moving blocks) visible only through block itself: before sending,
+ * traces on changed blocks (ruins, player construction) removed, as block no longer matches ({@link FlashMarks#pruned}).
  */
 public final class FlashSync {
     private FlashSync() {}
 
-    /** Гарь подрыва {@code d} в чанке с его руинами; следы прежних вспышек на сменившихся блоках уходят. */
+    /** Detonation {@code d} scorch in chunk with its ruins; old flash traces on changed blocks removed. */
     public static void chars(ServerLevel level, LevelChunk chunk, Detonation d, int[] chars) {
         FlashMarks old = chunk.getExistingDataOrNull(ModAttachments.FLASH_MARKS.get());
         if (old == null && chars.length == 0) return;
@@ -37,7 +37,7 @@ public final class FlashSync {
         put(level, chunk, old, now);
     }
 
-    /** Силуэты подрыва {@code d} на гранях чанка (к прежним). */
+    /** Detonation {@code d} silhouettes on chunk faces (added to previous). */
     public static void shadows(ServerLevel level, LevelChunk chunk, Detonation d, int[] faces, long[] masks) {
         if (faces.length == 0) return;
         FlashMarks old = chunk.getExistingDataOrNull(ModAttachments.FLASH_MARKS.get());
@@ -45,7 +45,7 @@ public final class FlashSync {
         put(level, chunk, old, base.withShadows(d.id(), d.gameTime(), faces, masks));
     }
 
-    /** Следы чанка как есть (для проверок). */
+    /** Current chunk traces (for tests). */
     public static FlashMarks of(LevelChunk chunk) {
         FlashMarks m = chunk.getExistingDataOrNull(ModAttachments.FLASH_MARKS.get());
         return m == null ? FlashMarks.EMPTY : m;
@@ -55,7 +55,7 @@ public final class FlashSync {
         if (now == old || now.isEmpty() && old == null) return;
         store(chunk, now);
         send(level, chunk, now);
-        // отложенная отправка того же чанка уже не нужна
+        // deferred send for same chunk no longer needed
         if (level.hasData(ModAttachments.FLASH_PENDING)) level.getData(ModAttachments.FLASH_PENDING).chunks.remove(chunk.getPos().toLong());
     }
 
@@ -65,17 +65,17 @@ public final class FlashSync {
         chunk.setUnsaved(true);
     }
 
-    /** Следы чанка — тем, кто его видит (пустые — клиент их забывает). */
+    /** Chunk traces to its viewers (empty means client forgets them). */
     private static void send(ServerLevel level, LevelChunk chunk, FlashMarks now) {
         S2C.NukeFlashMarks packet = new S2C.NukeFlashMarks(chunk.getPos().toLong(), now);
         for (ServerPlayer p : level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false)) PacketDistributor.sendToPlayer(p, packet);
     }
 
     /**
-     * Блок сменился, и соседи узнают об этом (поток сервера): ломает игрок, взрыв, огонь, поршень, команда, ставят
-     * блок. Следы этого места, если блок уже не их, уходят из отметки сразу — иначе сломанная и тут же поставленная
-     * заново такая же доска снова показала бы гарь (хеш блока тот же). Игрокам — в конце тика мира ({@link #onLevelTick}):
-     * взрыв меняет десятки блоков чанка за тик. Оповещение без смены блока (рычаг на стене, провод) следы не трогает.
+     * Block changed and neighbors notified (server thread): player breaking, explosion, fire, piston, command, block
+     * placement. Traces removed from attachment immediately if block no longer matches; otherwise an identical plank broken
+     * and immediately replaced would show scorch again (same block hash). Sent to players at world-tick end ({@link #onLevelTick}):
+     * explosion changes dozens of chunk blocks per tick. Notification without block change (wall lever, wire) leaves traces alone.
      */
     public static void onNeighborNotify(BlockEvent.NeighborNotifyEvent e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
@@ -90,7 +90,7 @@ public final class FlashSync {
         level.getData(ModAttachments.FLASH_PENDING).chunks.add(chunk.getPos().toLong());
     }
 
-    /** Конец тика мира: чанкам, чьи следы ушли со сменившимися блоками, — новые следы тем, кто их видит. */
+    /** World-tick end: updated traces for changed chunks to their viewers. */
     public static void onLevelTick(LevelTickEvent.Post e) {
         if (!(e.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.FLASH_PENDING)) return;
         LongOpenHashSet chunks = level.getData(ModAttachments.FLASH_PENDING).chunks;
@@ -103,20 +103,20 @@ public final class FlashSync {
         chunks.clear();
     }
 
-    /** Чанки мира, чьи следы сменились в этом тике и ещё не ушли игрокам (несохраняемый attachment мира). */
+    /** World chunks whose traces changed this tick but have not reached players (non-persistent world attachment). */
     public static final class Pending {
         final LongOpenHashSet chunks = new LongOpenHashSet();
     }
 
-    /** Чанк ушёл игроку: его следы — следом. */
+    /** Chunk sent to player: traces follow. */
     public static void onChunkSent(ChunkWatchEvent.Sent e) {
         S2C.NukeFlashMarks packet = packet(e.getChunk());
         if (packet != null) PacketDistributor.sendToPlayer(e.getPlayer(), packet);
     }
 
     /**
-     * Пакет следов чанка для игрока, которому чанк уходит (поток сервера); следы на сменившихся блоках сперва уходят
-     * и из отметки. Null — следов нет.
+     * Chunk trace packet for player receiving chunk (server thread); first remove traces on changed blocks
+     * from attachment too. Null if no traces.
      */
     @Nullable
     public static S2C.NukeFlashMarks packet(LevelChunk chunk) {

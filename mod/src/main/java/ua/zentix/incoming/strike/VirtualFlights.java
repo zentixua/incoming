@@ -19,17 +19,17 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
- * Снаряды, летящие вне загруженного мира: живые объекты сущностей, не добавленные в мир. Каждый тик —
- * {@link StrikeProjectile#virtualTick}; вошёл в тикающие чанки — снова добавляется в мир с тем же UUID
- * (клиенты видят его как новую сущность, камера и HUD узнают по UUID). Хранится в мире: полёт переживает
- * перезапуск сервера.
+ * Projectiles flying outside the loaded world: live entity objects not added to the world. Each tick calls
+ * {@link StrikeProjectile#virtualTick}; on entering ticking chunks, added back with the same UUID
+ * (clients see a new entity; camera and HUD recognize the UUID). Stored in the world: flight survives
+ * server restart.
  */
 public final class VirtualFlights extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_virtual_flights";
     private static final Factory<VirtualFlights> FACTORY = new Factory<>(VirtualFlights::new, VirtualFlights::load, null);
 
     private final List<StrikeProjectile> flights = new ArrayList<>();
-    /** Прочитанные с диска и ещё не созданные (сущность создаётся в первом тике мира). */
+    /** Read from disk but not yet instantiated (entity created on first world tick). */
     private final List<CompoundTag> pending = new ArrayList<>();
 
     public static VirtualFlights get(ServerLevel level) {
@@ -37,10 +37,10 @@ public final class VirtualFlights extends SavedData {
     }
 
     /**
-     * Снаряд уходит из тикающих чанков: копия принимает район цели и полосу той же миссии (UUID), затем старая
-     * сущность удаляется из мира, отпуская только свои чанки. Ошибка копирования заканчивает миссию и снимает всё.
+     * Projectile leaves ticking chunks: copy takes the target area and lane of the same mission (UUID), then the old
+     * entity leaves the world, releasing only its own chunks. Copy failure ends the mission and releases everything.
      *
-     * @return копия, летящая вне мира, или null, если сохранить снаряд не вышло (тогда он просто убран)
+     * @return outside-world flying copy, or null if saving failed (projectile is simply removed)
      */
     public static StrikeProjectile park(ServerLevel level, StrikeProjectile p) {
         StrikeProjectile copy = null;
@@ -64,7 +64,7 @@ public final class VirtualFlights extends SavedData {
         }
     }
 
-    /** Начать полёт сразу вне мира (заход издалека: B-2, пуск без пусковой рядом). */
+    /** Begin flight outside the world immediately (distant approach: B-2, launch without a nearby launcher). */
     public static void launch(ServerLevel level, StrikeProjectile p) {
         get(level).add(p);
     }
@@ -79,15 +79,15 @@ public final class VirtualFlights extends SavedData {
         return flights;
     }
 
-    /** Сколько снарядов летит вне мира (с прочитанными с диска, но ещё не созданными). */
+    /** Number of outside-world flights (including disk records not yet instantiated). */
     public int size() {
         return flights.size() + pending.size();
     }
 
     /**
-     * Отбой: убрать без взрыва снаряды, подходящие под {@code which}.
+     * Cancel: remove projectiles matching {@code which} without exploding.
      *
-     * @return UUID убранных
+     * @return UUIDs of removed projectiles
      */
     public List<UUID> clear(ServerLevel level, Predicate<StrikeProjectile> which) {
         createPending(level);
@@ -103,7 +103,7 @@ public final class VirtualFlights extends SavedData {
         return removed;
     }
 
-    /** Создать сущности прочитанных с диска полётов. */
+    /** Instantiate entities for flights read from disk. */
     private void createPending(ServerLevel level) {
         if (pending.isEmpty()) return;
         for (CompoundTag t : pending) {
@@ -119,7 +119,7 @@ public final class VirtualFlights extends SavedData {
     void tick(ServerLevel level) {
         createPending(level);
         if (flights.isEmpty()) return;
-        // снимок: вернувшийся в мир снаряд может в том же тике снова уйти (и добавиться сюда)
+        // Snapshot: a projectile returning to the world may leave again (and be added here) in the same tick.
         List<StrikeProjectile> now = new ArrayList<>(flights);
         flights.clear();
         for (StrikeProjectile p : now) {
@@ -131,12 +131,12 @@ public final class VirtualFlights extends SavedData {
                     if (level.addFreshEntity(p)) continue;
                     Incoming.LOG.warn("Projectile {} {} could not return to the world at {}", p.getType().getDescriptionId(), p.getUUID(), p.blockPosition());
                 } catch (RuntimeException e) {
-                    // возврат в мир упал (в том числе обработчик входа — мод защиты территорий): снаряд убирается, как не
-                    // вошедший, а остальные полёты этого тика летят дальше — иначе ошибка уходила бы из тика мира и роняла сервер
+                    // World reentry failed (including join handler — protection mod): remove as a failed entrant;
+                    // other flights continue this tick, otherwise the error would escape the world tick and crash the server.
                     Incoming.LOG.error("Projectile {} {} failed to return to the world at {} with an exception and was removed",
                             p.getType().getDescriptionId(), p.getUUID(), p.blockPosition(), e);
                 }
-                p.discard(); // снять тикеты района цели и своих чанков: в мире его нет, сам он их уже не отпустит
+                p.discard(); // Release target-area and own-chunk tickets: absent from world, it will not release them itself.
                 continue;
             }
             flights.add(p);
@@ -145,11 +145,11 @@ public final class VirtualFlights extends SavedData {
     }
 
     /**
-     * Снаряду можно вернуться в мир: живы (готовы, и в них тикают сущности) все колонки чанков на его пути
-     * на {@code max(16, 3 шага)} блоков вперёд по горизонтали, а не только своя и конечная. Первый шаг в мире
-     * ({@code leavesTickingChunks}) проверяет точку, куда он придёт; срезая угол, путь заходит в чанк, которого нет
-     * ни там, ни там, — снаряд возвращался бы в мир и тут же уходил обратно каждый тик, заново рассылая появление
-     * сущности клиентам. Район цели при смене формы полёта остаётся у той же миссии.
+     * Reentry allowed when all chunk columns along the path are live (ready and entity-ticking) for
+     * {@code max(16, 3 steps)} blocks ahead horizontally, not just own and end columns. First world step
+     * ({@code leavesTickingChunks}) checks its destination; cutting a corner can enter a chunk present in
+     * neither — projectile would reenter and immediately leave each tick, resending entity spawn
+     * to clients. Target area stays with the same mission across flight-form changes.
      */
     public static boolean clearAhead(Vec3 pos, Vec3 forward, double speed, Terrain.ChunkReady live) {
         Vec3 ahead = pos.add(forward.multiply(1, 0, 1).scale(Math.max(16, speed * 3)));

@@ -4,17 +4,17 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 /**
- * Отключение района: кварталы, чьи центры ближе {@code radius} к центру, гаснут по очереди от него наружу
- * (каскад со скоростью {@code speed} блоков за тик, у каждого квартала свой разброс ±25 %), а после
- * {@code restoreAt} включаются вразнобой за {@code restoreSpread} тиков. Всё — функции квартала и времени:
- * и сервер, и чанк, загруженный через час, знают, должен ли он быть тёмным.
+ * Area outage: districts centered within {@code radius} of the center darken in order outward from it
+ * (cascade at {@code speed} blocks per tick, each district with its own ±25 % variation), then after
+ * {@code restoreAt} relight in random order over {@code restoreSpread} ticks. All are functions of district and time:
+ * both the server and a chunk loaded an hour later know whether it should be dark.
  *
- * @param node      узел сети, чей выход из строя его вызвал; -1 — не узел (ядерный удар, команда)
- * @param restoreAt когда начать возвращать свет; {@link #NEVER} — пока не вернут командой
+ * @param node      grid node whose failure caused this; -1 — not a node (nuclear strike, command)
+ * @param restoreAt when to start restoring light; {@link #NEVER} — until restored by command
  */
 public record Outage(int id, double x, double z, double radius, long start, double speed, long restoreAt, int restoreSpread, int node) {
     public static final long NEVER = Long.MAX_VALUE;
-    /** Разброс момента, когда гаснет квартал: ±25 % от прихода каскада. */
+    /** District darkening-time variation: ±25 % of cascade arrival. */
     private static final double SPREAD = 0.5;
 
     public static final Codec<Outage> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -29,44 +29,44 @@ public record Outage(int id, double x, double z, double radius, long start, doub
             Codec.INT.optionalFieldOf("node", -1).forGetter(Outage::node)
     ).apply(i, Outage::new));
 
-    /** Квартал внутри района отключения. */
+    /** District is inside the outage area. */
     public boolean covers(long district) {
         return covers(x, z, radius, district);
     }
 
-    /** Квартал внутри района с центром {@code (x, z)} и радиусом {@code radius} (клиент — для дуг ЭМИ у ламп). */
+    /** District is inside area centered at {@code (x, z)} with {@code radius} (client: lamp EMP arcs). */
     public static boolean covers(double x, double z, double radius, long district) {
         double dx = Districts.seedX(district) - x, dz = Districts.seedZ(district) - z;
         return dx * dx + dz * dz <= radius * radius;
     }
 
-    /** Когда гаснет квартал (игровое время). */
+    /** When district goes dark (game time). */
     public long darkAt(long district) {
         double d = Math.hypot(Districts.seedX(district) - x, Districts.seedZ(district) - z);
         return start + Math.round(d / speed * (1 - SPREAD / 2 + SPREAD * Districts.unit(district, 3)));
     }
 
-    /** Когда в квартал возвращается свет; {@link #NEVER} — не возвращается. */
+    /** When light returns to district; {@link #NEVER} — never. */
     public long lightAt(long district) {
         return restoreAt == NEVER ? NEVER : restoreAt + Math.round(restoreSpread * Districts.unit(district, 4));
     }
 
-    /** Квартал тёмен от этого отключения в момент {@code now}. */
+    /** District is dark from this outage at {@code now}. */
     public boolean dark(long district, long now) {
         return covers(district) && darkAt(district) <= now && now < lightAt(district);
     }
 
-    /** Свет вернулся во все кварталы: отключение можно забыть. */
+    /** Light returned to every district: outage can be forgotten. */
     public boolean over(long now) {
         return restoreAt != NEVER && now >= restoreAt + restoreSpread;
     }
 
-    /** То же отключение со светом, который начнут возвращать в {@code at} за {@code spread} тиков. */
+    /** Same outage with light restoration starting at {@code at}, over {@code spread} ticks. */
     public Outage restoring(long at, int spread) {
         return new Outage(id, x, z, radius, start, speed, at, spread, node);
     }
 
-    /** Самое позднее время, когда гаснет квартал этого района (каскад дошёл до края). */
+    /** Latest district darkening time in this area (cascade reached its edge). */
     public long lastDark() {
         return start + Math.round(radius / speed * (1 + SPREAD / 2)) + 1;
     }

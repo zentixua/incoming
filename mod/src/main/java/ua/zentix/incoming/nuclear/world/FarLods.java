@@ -30,100 +30,100 @@ import java.util.ArrayDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Чанки не в мире, которые мод изменил бы при загрузке, — в LOD Distant Horizons сразу ({@link DhUpdates#offer}): руины
- * ядерки за волной ({@link NuclearPrep}: план уже готов, а сам чанк грузится, только когда к нему подойдут), след
- * подрыва на земле дальше тяжёлой зоны ({@link #scorch}) и лампы погасшего или вновь зажжённого квартала
- * ({@code BlackoutWorld}). Чанк читается с диска (поток ввода-вывода чанков, разбор — {@link RuinWorkers}), в копию его
- * секций ({@link DiskShots#readSections}) кладутся руины по готовому плану ({@link RuinPlan#applyToCopy}: план устарел —
- * копия не годится) или след по плану, построенному тут же по той же копии ({@link DiskShots#readScorch}: снимок — в
- * потоке сервера, план {@link RuinPlanner#scorch} — в фоне), и лампы — по сети сейчас ({@link ChunkLights#applyToCopy}),
- * копия уходит в DH как {@link ProtoChunk}. Мир копия не трогает: чанк, который загрузят потом, получит те же руины и
- * лампы своим путём. Копия без изменений против диска в DH не уходит — его LOD по этим же блокам уже есть.
+ * Outside-world chunks mod would change on load go directly to Distant Horizons LODs ({@link DhUpdates#offer}): nuke
+ * ruins behind wave ({@link NuclearPrep}: ready plan, chunk itself loads only on player approach), ground
+ * trace beyond heavy zone ({@link #scorch}), lamps of darkened/relit district
+ * ({@code BlackoutWorld}). Read chunk from disk (chunk I/O thread, parsing {@link RuinWorkers}); section copy
+ * ({@link DiskShots#readSections}) receives ready-plan ruins ({@link RuinPlan#applyToCopy}: stale plan
+ * invalidates copy), or trace planned directly from same copy ({@link DiskShots#readScorch}: snapshot on
+ * server thread, {@link RuinPlanner#scorch} plan in background), and current grid lamps ({@link ChunkLights#applyToCopy});
+ * send copy to DH as {@link ProtoChunk}. Copy leaves world untouched: later-loaded chunk receives same ruins/lamps
+ * through own path. Copy unchanged from disk not sent: DH already has LOD from same blocks.
  * <p>
- * Чанк за волной без готового плана проверяется на диске (поле {@code Status} — чтением заголовка в фоне, то же правило,
- * что у плана с диска, {@link DiskStatus#scan}): блоки окончательные — ждёт плана ({@link #PLAN_WAIT}); недогенерированный
- * или его нет (край исследованного мира: копию не собрать, а LOD там DH строит своим генератором — целым) — в мир
- * квадратом 5×5 ({@link FarZone}): ваниль догенерирует его, руины встанут путём загрузки, LOD уйдёт в DH с их отметкой.
- * Чанк мира 1.17 с догенерацией под нулём ({@link DiskStatus.State#FINAL}), не дождавшийся плана, — тоже в мир квадратом:
- * зона за волной его не грузит (без генерации он не загрузится), и его LOD иначе остался бы целым городом.
+ * Wave-reached chunk without ready plan checked on disk ({@code Status}, background header read, same rule
+ * as disk plan, {@link DiskStatus#scan}): final blocks await plan ({@link #PLAN_WAIT}); partial
+ * or absent (explored-world edge: cannot build copy, DH generator would build intact LOD) enters world
+ * in 5×5 square ({@link FarZone}): vanilla finishes generation, load path applies ruins, mark sends LOD to DH.
+ * 1.17 chunk with below-zero retrogen ({@link DiskStatus.State#FINAL}) that timed out awaiting plan also enters world square:
+ * zone behind wave never loads it (requires generation), otherwise LOD remains intact city.
  * <p>
- * Только при DH или игроках с Voxy ({@link DhUpdates#room}, {@code compat/VoxyLods}) и только чанки не дальше
- * {@link #FAR_CHUNKS} от игрока: дальше DH по умолчанию
- * не рассылает обновления, а чтения с диска делят поток ввода-вывода с загрузкой мира игрокам — их не больше
- * {@link #READS} сразу и {@link #PER_TICK} новых за тик; запросов за тик просматривается не больше {@link #VISITS}
- * (у тяжёлой зоны их десятки тысяч, и почти все ждут планов).
+ * Only with DH or Voxy players ({@link DhUpdates#room}, {@code compat/VoxyLods}), only chunks within
+ * {@link #FAR_CHUNKS} of player: farther DH by default
+ * sends no updates, and disk reads share I/O thread with player world loading; at most
+ * {@link #READS} concurrent and {@link #PER_TICK} new reads per tick; inspect at most {@link #VISITS} requests per tick
+ * (heavy zone tens of thousands, nearly all await plans).
  */
 public final class FarLods {
     /**
-     * Докуда от игрока (чанки, по большей оси): дальность обновлений DH игрокам по умолчанию ({@code
-     * realTimeUpdates.playerDistance}); та же — у LOD Voxy игроков ({@code compat/VoxyLods}).
+     * Player range (chunks, larger axis): default DH player-update range ({@code
+     * realTimeUpdates.playerDistance}); same for Voxy player LODs ({@code compat/VoxyLods}).
      */
     public static final int FAR_CHUNKS = 256;
-    /** Чтений с диска в работе сразу и новых за тик. */
+    /** Concurrent disk reads and new reads per tick. */
     static final int READS = 16, PER_TICK = 8;
-    /** Сколько тиков чанк за волной ждёт готового плана (строится в фоне); дальше — без руин вдали (свет, если просили, и след подрыва уходят). */
+    /** Ticks wave-reached chunk awaits ready background plan; afterward no distant ruins (requested light/trace still sent). */
     static final int PLAN_WAIT = 1200;
     /**
-     * Запросов из очереди за тик, не больше (остальные — в следующих тиках по кругу): у тяжёлой зоны их десятки тысяч
-     * (15278 у Артёма), почти все ждут плана до {@link #PLAN_WAIT}, и каждый — поиск держателя чанка и готового плана.
+     * Maximum queue visits per tick (rest round-robin in later ticks): heavy zone tens of thousands
+     * (15278 for Artem), mostly awaiting plan to {@link #PLAN_WAIT}; each needs chunk-holder/ready-plan lookup.
      */
     public static final int VISITS = 256;
-    /** Чтений заголовков чанков с диска в работе сразу. */
+    /** Concurrent disk chunk-header reads. */
     static final int SCANS = 32;
     /**
-     * Что на диске у чанка за волной без плана ({@link DiskStatus.State}): заголовок читается; целый или с догенерацией
-     * под нулём (план ещё может прийти); недогенерированный или нет.
+     * Disk state of wave-reached chunk without plan ({@link DiskStatus.State}): header reading; whole or below-zero
+     * retrogen (plan may still arrive); partial or absent.
      */
     private static final byte SCANNING = 1, WHOLE = 2, FINAL = 3, PARTIAL = 4;
 
     /**
-     * Почему чанк в очереди: за волной ядерки — ждать его плана руин ({@link #RUINS}); квартал сменил свет — LOD уходит
-     * и без изменений против диска: у DH мог остаться погашенный квартал ({@link #LIGHTS}); след подрыва на земле без
-     * руин — кольцо за тяжёлой зоной ({@link #SCORCH}, {@link #scorch}). Бывает и несколько сразу.
+     * Chunk queue reason: behind nuke wave, await ruin plan ({@link #RUINS}); district light changed, send LOD
+     * even unchanged from disk since DH may retain darkened district ({@link #LIGHTS}); ground trace without
+     * ruins, ring beyond heavy zone ({@link #SCORCH}, {@link #scorch}). Multiple simultaneous reasons possible.
      */
     private static final byte RUINS = 1, LIGHTS = 2, SCORCH = 4;
-    /** Запросов следа в очереди, не больше: кольцо подаёт следующие по мере того, как очередь читает. */
+    /** Maximum queued trace requests: ring feeds more as queue reads. */
     static final int SCORCH_QUEUE = 2 * VISITS;
     /**
-     * Снимков следа в потоке сервера за тик, в чанках с картами высот на диске ({@link DiskShots.Read#cost}): снимок —
-     * десятки микросекунд, досчёт карт высот — до 1,4 мс.
+     * Server-thread trace snapshots per tick, in chunks with disk heightmaps ({@link DiskShots.Read#cost}): snapshot
+     * tens of microseconds, heightmap priming up to 1.4 ms.
      */
     static final int SHOTS_PER_TICK = 2 * PER_TICK;
     /**
-     * Время снимков следа за тик, не больше (первый — всегда): секция детального города — глобальная палитра, и её
-     * снимок ({@code ChunkShot.register}) стоит в разы дороже, чем по числу чанков.
+     * Maximum trace-snapshot time per tick (first always): detailed-city section has global palette,
+     * snapshot ({@code ChunkShot.register}) much costlier than chunk count suggests.
      */
     static final long SHOT_NANOS = 2_000_000;
     /**
-     * Чанков кольца за тик, не больше: и тех, что далеко от игроков (их запрос не ставится): за 30 с волна проходит
-     * сотни тысяч чанков кольца, и обход в одном тике стоил бы десятков мс.
+     * Maximum ring chunks per tick, including ones far from players (not enqueued): in 30 s wave crosses
+     * hundreds of thousands of ring chunks; one-tick traversal would cost tens of ms.
      */
     static final int FEED_PER_TICK = 4 * VISITS;
 
-    /** Запрос в очереди: с какого тика стоит. */
+    /** Queued request: enqueue tick. */
     private record Request(long chunk, long since) {}
 
-    /** Готовая копия (или почему её нет) из фонового потока; {@code scorched} — в ней след подрыва без руин. */
+    /** Ready background copy (or absence reason); {@code scorched} means ground trace without ruins. */
     record Built(long chunk, @Nullable ProtoChunk copy, boolean ruined, boolean lights, @Nullable String skip, boolean scorched) {
         Built(long chunk, @Nullable ProtoChunk copy, boolean ruined, boolean lights, @Nullable String skip) {
             this(chunk, copy, ruined, lights, skip, false);
         }
     }
 
-    /** Прочитанный чанк следа: снимок — в потоке сервера ({@link #shoot}), план и копия — в фоне. */
+    /** Read trace chunk: snapshot on server thread ({@link #shoot}), plan/copy in background. */
     private record Read(long chunk, Ring ring, DiskShots.Scorch scorch, boolean lights) {}
 
     /**
-     * След подрыва на земле вдали ({@link #scorch}): чанки до {@link RuinPlanner#scorchReach} по приходу волны, ближние
-     * первыми; тяжёлая зона, к которой готовились, — не здесь: её LOD — руины по готовым планам ({@link #RUINS}).
+     * Distant ground trace ({@link #scorch}): chunks out to {@link RuinPlanner#scorchReach} on wave arrival, nearest
+     * first; prepared heavy zone excluded: its LODs use ready-plan ruins ({@link #RUINS}).
      */
     private static final class Ring {
         final Detonation d;
-        /** Свой контекст подрыва: шум мира и край руин; снимков, разломов и карт высот он не держит. */
+        /** Own detonation context: world noise and ruin edge; retains no snapshots, fractures or heightmaps. */
         final RuinContext ruins;
-        /** Чанки (ближняя точка по горизонтали, {@link NuclearPrep#horizontal}) в {@code (skip, reach]}. */
+        /** Chunks (nearest horizontal point, {@link NuclearPrep#horizontal}) within {@code (skip, reach]}. */
         final double skip, reach;
-        /** Чанки кольца по расстоянию — считаются в фоне; прошли все — пусто (память). */
+        /** Ring chunks by distance, computed in background; empty once traversed (memory). */
         java.util.concurrent.CompletableFuture<long[]> order;
         int next;
 
@@ -138,7 +138,7 @@ public final class FarLods {
             });
         }
 
-        /** След кольца на чанке: в радиусе, и волна дошла (тяжёлая зона тоже: её чанк, не дождавшийся плана). */
+        /** Ring trace on chunk: within radius and wave arrived (also heavy-zone chunk that timed out awaiting plan). */
         boolean covers(long chunk, long now) {
             ChunkPos pos = new ChunkPos(chunk);
             return NuclearPrep.horizontal(pos, d) <= reach && ScarQueue.due(d, pos) <= now;
@@ -150,7 +150,7 @@ public final class FarLods {
         }
     }
 
-    /** Чанки кольца по расстоянию от эпицентра (любой поток): ключ — расстояние, одна сортировка чисел. */
+    /** Ring chunks ordered by epicenter distance (any thread): distance key, one numeric sort. */
     private static long[] layout(Detonation d, double skip, double reach) {
         int cx = net.minecraft.util.Mth.floor(d.burst().x) >> 4, cz = net.minecraft.util.Mth.floor(d.burst().z) >> 4;
         int r = net.minecraft.util.Mth.ceil(reach / 16) + 1;
@@ -158,7 +158,7 @@ public final class FarLods {
         for (int x = cx - r; x <= cx + r; x++) {
             for (int z = cz - r; z <= cz + r; z++) {
                 double h = NuclearPrep.horizontal(new ChunkPos(x, z), d);
-                // ключ: расстояние (1/16 блока) в старших битах, сдвиг чанка от эпицентра — в младших
+                // key: distance (1/16 block) in high bits, chunk offset from epicenter in low bits
                 if (h > skip && h <= reach) keyed.add((long) (h * 16) << 32 | (long) (x - cx + 0x8000) << 16 | (z - cz + 0x8000));
             }
         }
@@ -169,58 +169,58 @@ public final class FarLods {
     }
 
     /**
-     * Очереди: руины — первыми, свет — остатком просмотров (не меньше четверти, {@link #VISITS}). Блэкаут ставит весь
-     * свой радиус сразу (до 159 тыс. запросов света), и в общей очереди руины за волной стояли бы за ним.
+     * Queues: ruins first, light gets remaining visits (at least quarter, {@link #VISITS}). Blackout enqueues entire
+     * radius at once (up to 159 thousand light requests); shared queue would put wave ruins behind it.
      */
     private final ArrayDeque<Request> ruinQueue = new ArrayDeque<>(), lightQueue = new ArrayDeque<>(), scorchQueue = new ArrayDeque<>();
-    /** Кольца следа подрывов этого мира ({@link #scorch}): и после того, как прошли, — для запросов света в них. */
+    /** This world's trace rings ({@link #scorch}), retained after traversal for light requests within them. */
     private final java.util.List<Ring> rings = new java.util.ArrayList<>();
-    /** Прочитанные чанки следа, ждущие снимка в потоке сервера. */
+    /** Read trace chunks awaiting server-thread snapshot. */
     private final ConcurrentLinkedQueue<Read> shots = new ConcurrentLinkedQueue<>();
     /**
-     * Что просили у чанка в очереди ({@link #RUINS}, {@link #LIGHTS}, {@link #SCORCH}): второй запрос того же чанка
-     * добавляет свой вид, а не теряется: иначе запрос руин чанка, уже стоящего в очереди света, пропал бы, и он прошёл бы
-     * без руин.
+     * Queued chunk reasons ({@link #RUINS}, {@link #LIGHTS}, {@link #SCORCH}): second request for same chunk
+     * adds reason rather than disappearing; otherwise ruin request for chunk already in light queue would be lost,
+     * leaving it without ruins.
      */
     private final Long2ByteOpenHashMap queued = new Long2ByteOpenHashMap();
-    /** Чанки в чтении. */
+    /** Chunks being read. */
     private final LongOpenHashSet reading = new LongOpenHashSet();
     /**
-     * Из них — чанки следа (чтение, снимок, план и копия): кольцо начинает новые, пока их меньше половины
-     * {@link #READS}, остальное — руинам и свету (свет и руины без плана в кольце идут тем же путём и тоже в счёте).
+     * Subset for trace (read, snapshot, plan, copy): ring starts new reads while fewer than half
+     * {@link #READS}; remainder for ruins/light (light and unplanned ruins in ring use same path, also count).
      */
     private final LongOpenHashSet scorchReading = new LongOpenHashSet();
-    /** Чанки, которые за время чтения попросили снова, и что просили: после чтения — в очередь ещё раз. */
+    /** Chunks requested again during read, plus reasons: enqueue again afterward. */
     private final Long2ByteOpenHashMap again = new Long2ByteOpenHashMap();
     /**
-     * Чанки в очереди только ради игроков с Voxy, у кого их копию переписал LOD Server Support ({@link #refresh}): копия
-     * уходит только им, а не в DH и не всем — у DH и у остальных LOD уже верный.
+     * Chunks queued only for Voxy players whose copy LOD Server Support overwrote ({@link #refresh}): copy
+     * sent only to them, not DH/everyone, since DH/others already correct.
      */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<java.util.Set<java.util.UUID>> refreshFor = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
-    /** Чанки за волной без плана: что на диске ({@link #SCANNING}, {@link #WHOLE}, {@link #FINAL}, {@link #PARTIAL}); ответы — из потока ввода-вывода. */
+    /** Wave-reached unplanned chunks: disk state ({@link #SCANNING}, {@link #WHOLE}, {@link #FINAL}, {@link #PARTIAL}); I/O-thread results. */
     private final Long2ByteOpenHashMap disk = new Long2ByteOpenHashMap();
     private final ConcurrentLinkedQueue<long[]> scanned = new ConcurrentLinkedQueue<>();
     private int scanning;
-    /** Чанки, не целые на диске: в мир квадратами. */
+    /** Chunks not whole on disk: load into world as squares. */
     private final FarZone zone = new FarZone();
     @Nullable
     private DiskShots.Format format;
     /**
-     * Для строки в лог и проверок: ушло в DH (с руинами, со следом подрыва без руин), без изменений, план устарел, не
-     * прочитаны, не дождались плана, не целые на диске.
+     * For log/tests: sent to DH (with ruins, trace without ruins), unchanged, stale plan,
+     * unreadable, plan timeout, not whole on disk.
      */
     private long sent, sentRuins, sentScorch, unchanged, stale, unread, noPlan, partial;
-    /** Для проверок: больше всего запросов, просмотренных за один тик. */
+    /** For tests: maximum queue visits in one tick. */
     private int visitsMax;
     private long nextReport;
-    /** Снимок следа уже падал (в лог — первый раз). */
+    /** Trace snapshot failed previously (log first occurrence). */
     private boolean shotFailed;
-    /** Проверки: место, которое считается игроком ({@link #nearPlayer}), — игроков у GameTest нет. */
+    /** Tests: position treated as player ({@link #nearPlayer}), GameTest has no players. */
     @Nullable
     private ChunkPos viewer;
 
-    /** Для {@link ModAttachments#FAR_LODS}: своё у каждого мира, не сохраняется. */
+    /** For {@link ModAttachments#FAR_LODS}: per world, unsaved. */
     public FarLods() {}
 
     public static FarLods get(ServerLevel level) {
@@ -228,19 +228,19 @@ public final class FarLods {
     }
 
     /**
-     * Чанк не в мире, чьи лампы или руины сейчас другие, чем в LOD DH: в LOD, если он рядом с игроком.
+     * Outside-world chunk whose lamps/ruins now differ from DH LOD: update LOD if near player.
      *
-     * @param ruins чанк за волной ядерки — ждать его плана руин ({@link #PLAN_WAIT}); иначе квартал сменил свет
+     * @param ruins chunk behind nuke wave, await ruin plan ({@link #PLAN_WAIT}); otherwise district light changed
      */
     public static void request(ServerLevel level, long chunk, boolean ruins) {
         get(level).request(level, chunk, ruins ? RUINS : LIGHTS);
     }
 
     /**
-     * Чанк, чью копию у игрока с Voxy переписал целым чанком с диска LOD Server Support ({@code compat/VoxyLods.stale}):
-     * копия заново — только этому игроку (у DH и у остальных LOD уже верный) и только если она отличается от диска:
-     * руины по плану, след подрыва вне тяжёлой зоны (там без плана копия — целый город со следом), тьма квартала.
-     * Иначе копия была бы тем же чанком с диска. Загруженный чанк — как он есть в мире, тоже только ему.
+     * Chunk whose Voxy player copy LOD Server Support overwrote with intact disk chunk ({@code compat/VoxyLods.stale}):
+     * rebuild copy only for that player (DH/others already correct), only if different from disk:
+     * ready-plan ruins, ground trace outside heavy zone (without plan, copy there is intact city with trace), district darkness.
+     * Otherwise copy equals disk chunk. Loaded chunk sent as current world state, also only to that player.
      */
     public static void refresh(ServerLevel level, long chunk, java.util.UUID player) {
         if (!DhUpdates.enabled(level)) return;
@@ -256,19 +256,19 @@ public final class FarLods {
             waiting.add(player);
             return;
         }
-        // уже в очереди по своей причине: её копия уйдёт всем, и этому игроку
+        // already queued for own reason: copy will go to everyone including this player
         if (f.queued.containsKey(chunk) || f.reading.contains(chunk)) return;
         byte kind;
         if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) kind = RUINS;
         else if (f.ringOf(chunk, now) != null && !f.inHeavyZone(chunk, now)) kind = SCORCH;
         else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), now)) kind = LIGHTS;
-        // ни плана, ни следа вне тяжёлой зоны, ни тьмы: копия была бы чанком с диска — тем же, что прислал LSS
+        // no plan, trace outside heavy zone or darkness: copy equals disk chunk already sent by LSS
         else return;
         f.refreshFor.computeIfAbsent(chunk, c -> new java.util.HashSet<>()).add(player);
         f.queue(level, chunk, kind);
     }
 
-    /** Чанк в тяжёлой зоне подрыва, чей след на нём лежит: без плана его копия — целый город со следом, не руины. */
+    /** Chunk inside heavy zone with trace: without plan copy is intact city with trace, not ruins. */
     private boolean inHeavyZone(long chunk, long now) {
         Ring ring = ringOf(chunk, now);
         return ring != null && NuclearPrep.horizontal(new ChunkPos(chunk), ring.d) <= Math.max(ring.skip, NuclearPrep.heavyRadius(ring.d) + 16);
@@ -277,14 +277,14 @@ public final class FarLods {
     private void request(ServerLevel level, long chunk, byte kind) {
         if (!DhUpdates.enabled(level) || !nearPlayer(level, chunk)) return;
         refreshFor.remove(chunk);
-        // копия тяжёлой зоны, собранная заранее, уходит к фронту сама: руины её чанка и свет квартала — с ней
+        // prebuilt heavy-zone copy sends itself with front, including chunk ruins and district light
         if (kind != SCORCH && front(level, chunk, kind == LIGHTS)) return;
         queue(level, chunk, kind);
     }
 
     /**
-     * Чанк, чью копию держит фронт ({@link FrontLods#claim}): запрос — её; тьма квартала к фронту иная, чем у ушедшей
-     * копии, — копия заново запросом руин и света (руины ждут плана, то есть фронта).
+     * Chunk with front-held copy ({@link FrontLods#claim}): request belongs to copy; district darkness at front differs from sent
+     * copy, so request fresh copy for ruins/light (ruins await plan, hence front).
      */
     private boolean front(ServerLevel level, long chunk, boolean lights) {
         int claim = NuclearWorld.get(level).prep().frontClaim(level, chunk, lights, level.getGameTime());
@@ -303,8 +303,8 @@ public final class FarLods {
         byte was = queued.get(chunk);
         if ((was & kind) != 0) return;
         queued.put(chunk, (byte) (was | kind));
-        // чанк с руинами проходит очередь руин (свет и след — с ним), со следом — очередь следа (свет — с ним); в
-        // остальных очередях он, если был, пропускается
+        // ruined chunk handled by ruin queue (light/trace with it), traced chunk by trace queue (light with it);
+        // skip any entries in other queues
         long now = level.getGameTime();
         if (kind == RUINS) ruinQueue.add(new Request(chunk, now));
         else if (kind == SCORCH && (was & RUINS) == 0) scorchQueue.add(new Request(chunk, now));
@@ -312,18 +312,18 @@ public final class FarLods {
     }
 
     /**
-     * Подрыв в мире с DH: след на земле без руин ({@link RuinPlanner#scorch}: выгоревший дёрн, гарь, опалённые биомы) —
-     * в LOD чанков не в мире до {@link RuinPlanner#scorchReach} (у 15 кт — около 7,5 км), по мере прихода волны, ближние
-     * первыми. Без него LOD вдали за тяжёлой зоной оставался бы зелёным: план руин заранее строится только для неё.
+     * Detonation in DH world: ground trace without ruins ({@link RuinPlanner#scorch}: burned turf, scorch, scorched biomes)
+     * into outside-world chunk LODs out to {@link RuinPlanner#scorchReach} (~7.5 km for 15 kt), on wave arrival, nearest
+     * first. Without it distant LOD beyond heavy zone stays green: prebuilt ruin plans cover only heavy zone.
      *
-     * @param prepared к подрыву готовились ({@link NuclearPrep}): тяжёлая зона уходит в LOD руинами по готовым планам
+     * @param prepared detonation prepared ({@link NuclearPrep}): heavy-zone LODs use ready-plan ruins
      */
     public static void scorch(ServerLevel level, Detonation d, boolean prepared) {
         if (!DhUpdates.enabled(level)) return;
         get(level).rings.add(new Ring(level, d, prepared ? NuclearPrep.heavyRadius(d) + 16 : -1));
     }
 
-    /** Кольца следа подают чанки, до которых дошла волна, пока в очереди следа есть место. */
+    /** Trace rings feed wave-reached chunks while trace queue has room. */
     private void feedRings(ServerLevel level, long now) {
         for (Ring ring : rings) {
             long[] order = ring.order.getNow(null);
@@ -340,14 +340,14 @@ public final class FarLods {
         }
     }
 
-    /** Последнее кольцо, чей след лежит на чанке (поток сервера); null — нет такого. */
+    /** Latest ring whose trace covers chunk (server thread); null if none. */
     @Nullable
     private Ring ringOf(long chunk, long now) {
         for (int i = rings.size() - 1; i >= 0; i--) if (rings.get(i).covers(chunk, now)) return rings.get(i);
         return null;
     }
 
-    /** Чанк в дальности DH ({@link #FAR_CHUNKS}) от игрока этого мира. */
+    /** Chunk within DH range ({@link #FAR_CHUNKS}) of player in this world. */
     static boolean nearPlayer(ServerLevel level, long chunk) {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
         ChunkPos viewer = get(level).viewer;
@@ -365,12 +365,12 @@ public final class FarLods {
 
     private void tick(ServerLevel level) {
         if (queued.isEmpty()) {
-            // в очередях остались только снятые запросы
+            // queues contain only removed requests
             ruinQueue.clear();
             lightQueue.clear();
             scorchQueue.clear();
         }
-        // запросы ради игроков с Voxy, которые сняли без чтения (загрузили, не дождались плана), — прочь
+        // Voxy-only requests removed without read (loaded, plan timeout) discarded
         if (!refreshFor.isEmpty() && level.getGameTime() % 20 == 0) refreshFor.keySet().removeIf(c -> !queued.containsKey(c) && !reading.contains(c));
         if (queued.isEmpty() && reading.isEmpty() && scanning == 0 && !zone.busy() && !ringsFeeding()) return;
         long now = level.getGameTime();
@@ -378,12 +378,12 @@ public final class FarLods {
         shoot(level);
         for (long[] s; (s = scanned.poll()) != null; ) {
             scanning--;
-            // ответ на чанк, который уже не ждёт (отбой, загружен), не нужен
+            // result for chunk no longer waiting (cancelled, loaded) unnecessary
             if (queued.containsKey(s[0])) disk.put(s[0], (byte) s[1]);
             else disk.remove(s[0]);
         }
         if (!DhUpdates.enabled(level)) {
-            // DH ушёл (мир DH закрыт): просить нечего
+            // DH gone (DH world closed): nothing to request
             clear(level);
             return;
         }
@@ -392,8 +392,8 @@ public final class FarLods {
         NuclearWorld nuclear = NuclearWorld.get(level);
         NuclearEvents events = NuclearEvents.get(level);
         int started = 0, visits = 0;
-        // руины — первыми, за ними след; свету остаток, но не меньше четверти просмотров: запросы руин, ждущие плана,
-        // ходят по кругу
+        // ruins first, then trace; light gets remainder, at least quarter of visits: ruin requests awaiting plans
+        // rotate round-robin
         int ruinVisits = Math.min(ruinQueue.size(), lightQueue.isEmpty() ? VISITS : VISITS - VISITS / 4);
         for (int n = ruinVisits; n > 0 && started < PER_TICK && reading.size() < READS && room > 0; n--) {
             visits++;
@@ -402,8 +402,8 @@ public final class FarLods {
                 room--;
             }
         }
-        // след — не больше половины чтений (их держит и снимок в очереди пула руин), а при свете в очереди — не все новые
-        // за тик: руинам и свету остаётся
+        // trace at most half reads (snapshot in ruin-pool queue also holds slot); with queued light, not all new reads
+        // per tick, leaving room for ruins/light
         int scorchStarts = lightQueue.isEmpty() ? PER_TICK : PER_TICK - PER_TICK / 4;
         for (int n = Math.min(scorchQueue.size(), (lightQueue.isEmpty() ? VISITS : VISITS - VISITS / 4) - visits);
              n > 0 && started < scorchStarts && reading.size() < READS && scorchReading.size() < READS / 2 && room > 0; n--) {
@@ -421,7 +421,7 @@ public final class FarLods {
             }
         }
         visitsMax = Math.max(visitsMax, visits);
-        // настройку выключили посреди зоны: квадраты больше не держатся
+        // setting disabled mid-zone: release squares
         if (IncomingConfig.SERVER.nukeFarZone.get()) zone.tick(level);
         else zone.clear(level);
         if (now >= nextReport && sent + unchanged + stale + unread + noPlan + partial > 0) {
@@ -433,7 +433,7 @@ public final class FarLods {
         }
     }
 
-    /** Кольцо следа ещё подаёт чанки (или его порядок считается). */
+    /** Trace ring still feeding chunks (or order being computed). */
     private boolean ringsFeeding() {
         for (Ring ring : rings) if (!ring.done()) return true;
         return !shots.isEmpty();
@@ -449,9 +449,9 @@ public final class FarLods {
     }
 
     /**
-     * Прочитанные чанки следа — снимком в поток сервера (состояния палитр — в таблицу свойств), не больше
-     * {@link #SHOTS_PER_TICK} и {@link #SHOT_NANOS} за тик и пока пул руин берёт задачи; план следа и копия — в фоне.
-     * Не прочитанные (нет на диске) — сразу, им пул не нужен.
+     * Read trace chunks snapshotted on server thread (palette states into property table), at most
+     * {@link #SHOTS_PER_TICK} and {@link #SHOT_NANOS} per tick while ruin pool admits tasks; trace plan/copy in background.
+     * Unreadable (absent on disk) complete immediately, no pool needed.
      */
     private void shoot(ServerLevel level) {
         if (shots.isEmpty()) return;
@@ -459,7 +459,7 @@ public final class FarLods {
         java.util.List<ChunkShot> made = new java.util.ArrayList<>();
         int cost = 0;
         long until = System.nanoTime() + SHOT_NANOS;
-        // берёт только поток сервера: peek и poll дают один и тот же чанк
+        // server thread only: peek/poll return same chunk
         for (Read r; (r = shots.peek()) != null; ) {
             String skip = r.scorch.read().skip();
             if (skip == null && (cost >= SHOTS_PER_TICK || !taken.isEmpty() && System.nanoTime() >= until
@@ -472,11 +472,11 @@ public final class FarLods {
             DiskShots.Read read = r.scorch.read();
             cost += read.cost();
             try {
-                // след для копии LOD, не руины: чанк со слоем вспышки его уже получил, огонь слоя плану не мешает
+                // LOD-copy trace, not ruins: flash-layer chunk already traced; layer fire does not obstruct plan
                 made.add(ChunkShot.fromDisk(read.primed(Blast.SERVER), null, null, false));
                 taken.add(r);
             } catch (RuntimeException e) {
-                // состояние блока мода, у которого свойства бросают: без копии, а не «Exception ticking world»
+                // mod block state with throwing properties: no copy, not “Exception ticking world”
                 if (!shotFailed) Incoming.LOG.warn("Far Distant Horizons LODs: snapshot of chunk {} failed, it stays without the scorch (further failures are counted as unread)",
                         new ChunkPos(r.chunk), e);
                 shotFailed = true;
@@ -497,16 +497,16 @@ public final class FarLods {
     }
 
     /**
-     * Запрос из очереди {@code from}: снят (чанк в мире, не целый на диске, плана не дождался), отложен по кругу (ждёт
-     * плана руин) или отдан на чтение — тогда true.
+     * Request from {@code from}: removed (in world, not whole on disk, plan timeout), postponed round-robin (awaiting
+     * ruin plan), or submitted for read (true).
      */
     private boolean visit(ServerLevel level, ArrayDeque<Request> from, NuclearWorld nuclear, NuclearEvents events, long now) {
         Request r = from.poll();
         byte kind = queued.get(r.chunk);
-        // снят раньше или попросился и с руинами (со следом) — его проходит очередь руин (следа)
+        // removed earlier or also requested ruins/trace: handled by ruin/trace queue
         if (kind == 0 || from != ruinQueue && (kind & RUINS) != 0 || from == lightQueue && (kind & SCORCH) != 0) return false;
         if (kind == LIGHTS) {
-            // копия чанка к фронту собралась, пока запрос ждал: свет — с ней
+            // front copy built while request waited: light included with it
             int claim = nuclear.prep().frontClaim(level, r.chunk, true, now);
             if (claim == FrontLods.OURS) {
                 done(r.chunk);
@@ -521,7 +521,7 @@ public final class FarLods {
         boolean ruins = (kind & RUINS) != 0;
         ChunkPos pos = new ChunkPos(r.chunk);
         if (inWorld(level, r.chunk)) {
-            // загружен: руины и лампы ему ставит мир, а LOD — их отметка (DhUpdates.mark)
+            // loaded: world supplies ruins/lamps, LOD via their mark (DhUpdates.mark)
             done(r.chunk);
             return false;
         }
@@ -533,7 +533,7 @@ public final class FarLods {
                 state = SCANNING;
             }
             if (state == PARTIAL) {
-                // копию не собрать: чанк — в мир, руины — путём загрузки (настройка far_zone выключена — когда к нему подойдут)
+                // cannot build copy: load into world, ruins via load path (far_zone disabled means wait for player approach)
                 done(r.chunk);
                 if (IncomingConfig.SERVER.nukeFarZone.get()) zone.offer(r.chunk);
                 partial++;
@@ -545,7 +545,7 @@ public final class FarLods {
             }
             noPlan++;
             if (state == FINAL) {
-                // чанк 1.17 без плана: зона за волной его не грузит — в мир квадратом, руины путём загрузки
+                // unplanned 1.17 chunk not loaded by zone behind wave: load as square, ruins via load path
                 done(r.chunk);
                 if (IncomingConfig.SERVER.nukeFarZone.get()) zone.offer(r.chunk);
                 return false;
@@ -554,15 +554,15 @@ public final class FarLods {
                 done(r.chunk);
                 return false;
             }
-            // квартал сменил свет или на чанке след подрыва: копия уходит и без руин
+            // district light changed or ground trace present: send copy even without ruins
         }
         done(r.chunk);
         if (format == null) format = DiskShots.Format.of(level);
         reading.add(r.chunk);
         DiskShots.Format f = format;
-        // запрос только ради игроков с Voxy: копия уходит, только если отличается от диска
+        // Voxy-only request: send copy only if different from disk
         boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
-        // без плана руин на чанке может лежать след подрыва (свет квартала — с ним): снимок, план следа, копия
+        // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
         Ring ring = plan == null ? ringOf(r.chunk, now) : null;
         if (ring != null) {
             scorchReading.add(r.chunk);
@@ -574,13 +574,13 @@ public final class FarLods {
         return true;
     }
 
-    /** Запрос снят с очереди: что у чанка на диске, больше не нужно (ответ на заголовок в работе ещё придёт). */
+    /** Request removed: disk state no longer needed (in-flight header result still arrives). */
     private void done(long chunk) {
         queued.remove(chunk);
         if (disk.get(chunk) != SCANNING) disk.remove(chunk);
     }
 
-    /** Заголовок чанка с диска ({@link DiskStatus#scan}): только заголовок, в потоке ввода-вывода чанков; ответ — в {@link #scanned}. */
+    /** Disk chunk header ({@link DiskStatus#scan}): header only, chunk I/O thread; result into {@link #scanned}. */
     private void scan(ServerLevel level, long chunk) {
         disk.put(chunk, SCANNING);
         scanning++;
@@ -592,7 +592,7 @@ public final class FarLods {
         }}));
     }
 
-    /** Копия чанка с руинами или следом (фоновый поток): секции с диска, места плана. */
+    /** Chunk copy with ruins/trace (background): disk sections, plan positions. */
     static Built build(DiskShots.Format f, DiskShots.Sections s, @Nullable RuinPlan plan, boolean fires, boolean lights, boolean scorch) {
         long chunk = s.pos().toLong();
         if (s.skip() != null) return new Built(chunk, null, false, lights, s.skip());
@@ -604,7 +604,7 @@ public final class FarLods {
         return new Built(chunk, copy, plan != null && plan.changedBlocks() + plan.fireCount() + biomes > 0, lights, null, scorch);
     }
 
-    /** Поток сервера: лампы — к сети сейчас; изменилось против диска (или квартал сменил свет) — в DH. */
+    /** Server thread: lamps by current grid; send to DH if changed from disk (or district light changed). */
     private void harvest(ServerLevel level, Built b) {
         reading.remove(b.chunk);
         scorchReading.remove(b.chunk);
@@ -615,11 +615,11 @@ public final class FarLods {
             else unread++;
             return;
         }
-        // загрузили, пока читали: у мира свой путь
+        // loaded during read: world has own path
         if (inWorld(level, b.chunk)) return;
-        // копия без руин чанка, чью копию с руинами держит фронт: ушла бы поверх неё
+        // unruined copy for chunk with front-held ruined copy would overwrite it
         if (!b.ruined && front(level, b.chunk, true)) return;
-        // на диске двойников нет: погасить, если квартал тёмный
+        // no twins on disk: darken if district dark
         boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), level.getGameTime());
         int lamps = dark ? ChunkLights.applyToCopy(b.copy.getSections(), true) : 0;
         java.util.Set<java.util.UUID> only = refreshFor.remove(b.chunk);
@@ -628,7 +628,7 @@ public final class FarLods {
             return;
         }
         if (only != null) {
-            // переписанный LSS у этих игроков: у DH и остальных LOD уже верный
+            // LSS-overwritten for these players: DH/others already correct
             for (java.util.UUID p : only) ua.zentix.incoming.compat.VoxyLods.sendTo(level, b.copy, p);
             return;
         }
@@ -639,8 +639,8 @@ public final class FarLods {
     }
 
     /**
-     * Проверки: копия загруженного чанка — его данные сохранения (как на диске), разобранные как чанк не в мире, с
-     * руинами плана ({@code fires} — с пожарами) и лампами по сети; null — план к копии не подошёл.
+     * Tests: loaded chunk copy from save data (like disk), parsed as outside-world chunk, with
+     * plan ruins ({@code fires} includes fires) and grid lamps; null if plan does not match copy.
      */
     @Nullable
     public static ProtoChunk testCopy(ServerLevel level, LevelChunk chunk, @Nullable RuinPlan plan, boolean fires) {
@@ -653,9 +653,9 @@ public final class FarLods {
     }
 
     /**
-     * Чанк в памяти, бывший полностью загруженным (и опущенный ниже у края видимости): его руины и лампы ставит мир
-     * ({@link ScarQueue}, блэкаут). Недогенерированный чанк в памяти (кольцо вокруг загруженного мира) — не в мире: его
-     * никто не пройдёт, пока он не загрузится.
+     * In-memory chunk formerly fully loaded (possibly lowered at view edge): world applies ruins/lamps
+     * ({@link ScarQueue}, blackout). In-memory partial chunk (ring around loaded world) counts as outside world:
+     * nobody processes it until loaded.
      */
     static boolean inWorld(ServerLevel level, long chunk) {
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(chunk);
@@ -663,14 +663,14 @@ public final class FarLods {
     }
 
     /**
-     * Отбой, DH ушёл или остановка сервера: очередь не нужна (чтения в работе доходят и выбрасываются), квадраты
-     * {@link FarZone} отпущены — до {@code util/StopDrain}: генерацию, которую они начали, доводит до конца он.
+     * Cancellation, DH gone or server stop: queue unnecessary (in-flight reads finish/discarded), squares
+     * {@link FarZone} released before {@code util/StopDrain}, which finishes their started generation.
      */
     public void clear(ServerLevel level) {
         ruinQueue.clear();
         lightQueue.clear();
         scorchQueue.clear();
-        // прочитанные чанки следа (в shots) доходят до конца, как и чтения в работе
+        // read trace chunks (shots) finish like in-flight reads
         rings.clear();
         queued.clear();
         again.clear();
@@ -679,35 +679,35 @@ public final class FarLods {
         zone.clear(level);
     }
 
-    /** Проверки: чанки у {@code at} — как у игрока (в дальности DH); null — снова только игроки. */
+    /** Tests: chunks near {@code at} treated like player range (DH); null restores actual players only. */
     public static void testViewer(ServerLevel level, @Nullable ChunkPos at) {
         get(level).viewer = at;
     }
 
-    /** Проверки: срок генерации квадрата {@link FarZone} в тиках; меньше нуля — снова {@link FarZone#LOAD_LIMIT}. */
+    /** Tests: {@link FarZone} square-generation deadline, ticks; negative restores {@link FarZone#LOAD_LIMIT}. */
     public static void testZoneLoadLimit(ServerLevel level, int ticks) {
         get(level).zone.loadLimit(ticks >= 0 ? ticks : FarZone.LOAD_LIMIT);
     }
 
-    /** Для проверок: больше всего запросов, просмотренных за один тик ({@link #VISITS}). */
+    /** For tests: maximum queue visits per tick ({@link #VISITS}). */
     public int visitsMax() {
         return visitsMax;
     }
 
     /**
-     * Для проверок: ушло, с руинами, без изменений, план устарел, не прочитаны, не дождались плана, не целые на диске,
-     * в очереди, читаются, со следом.
+     * For tests: sent, ruined, unchanged, stale plan, unreadable, plan timeout, not whole on disk,
+     * queued, reading, traced.
      */
     public long[] stats() {
         return new long[] {sent, sentRuins, unchanged, stale, unread, noPlan, partial, queued.size(), reading.size(), sentScorch};
     }
 
-    /** Для проверок: квадраты в мир ({@link FarZone#stats}): ждут, держатся, взято, отпущено, по сроку, брошено, пик загрузки. */
+    /** For tests: world squares ({@link FarZone#stats}): waiting, held, acquired, released, expired, abandoned, peak loading. */
     public long[] zoneStats() {
         return zone.stats();
     }
 
-    /** Для проверок: дождаться чтений, заголовков и квадратов в работе. */
+    /** For tests: await in-flight reads, headers, squares. */
     public boolean busy() {
         return !queued.isEmpty() || !reading.isEmpty() || scanning > 0 || zone.busy() || ringsFeeding();
     }

@@ -1,4 +1,4 @@
-# icbm: краска и светящиеся детали (срез сопла) — gen_models.py
+# icbm: paint and glowing parts (nozzle exit) — gen_models.py
 newmtl paint
 Kd 1 1 1 1
 map_Kd incoming:block/weapon/icbm

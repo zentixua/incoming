@@ -7,8 +7,8 @@ import ua.zentix.incoming.strike.PickHints;
 import ua.zentix.incoming.strike.ServerActions;
 
 /**
- * Пакеты мода. Мод обязателен у всех, поэтому канал обязательный; версия протокола меняется при любом
- * несовместимом изменении — тогда NeoForge честно скажет «разные версии мода», а не упадёт.
+ * Mod packets. Mod required for everyone, so channel is required; protocol version changes on every
+ * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
     public static final String PROTOCOL = "44";
@@ -54,7 +54,7 @@ public final class IncomingNetwork {
         r.playToServer(C2S.NuclearKey.TYPE, C2S.NuclearKey.CODEC, NuclearKeys::onKey);
         r.playToServer(C2S.LodMods.TYPE, C2S.LodMods.CODEC, ua.zentix.incoming.compat.VoxyLods::lodMods);
         r.playToServer(C2S.VoxyStale.TYPE, C2S.VoxyStale.CODEC, ua.zentix.incoming.compat.VoxyLods::stale);
-        // секции разбираются и кладутся в Voxy в потоке сети: поток игры их не ждёт (Voxy принимает их из любого потока)
+        // Decode sections and ingest into Voxy on network thread: game thread never waits (Voxy accepts any thread).
         event.registrar(PROTOCOL).executesOn(net.neoforged.neoforge.network.registration.HandlerThread.NETWORK)
                 .playToClient(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p));
     }

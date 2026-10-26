@@ -19,80 +19,80 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Ядерные процессы измерения во время игры: фронт ударной волны по сущностям и аппаратам; световой импульс
- * и проникающая радиация по сущностям, очередь повреждений чанков, воронки и осадки у мобов — под общим бюджетом времени
- * (один на тик сервера, для всех измерений: {@link #clock(MinecraftServer)}).
- * В тике подрыва — ничего тяжёлого: и снимки (сущности и чанки в радиусе), и сама работа идут под бюджетом.
- * Сам не сохраняется: всё выводится из {@link NuclearEvents} (подрывы, ход воронок) и отметок на чанках;
- * импульс по сущностям после перезапуска не повторяется (он длится доли секунды), фронт идёт дальше с того места, где был.
+ * Live nuclear processes for a dimension: shock front on entities/craft; light pulse
+ * and prompt radiation on entities, chunk damage queue, craters and mob fallout under shared time budget
+ * (one per server tick across dimensions: {@link #clock(MinecraftServer)}).
+ * No heavy work on detonation tick: snapshots (entities/chunks in range) and actual work all budgeted.
+ * Unsaved: derived from {@link NuclearEvents} (detonations, crater progress) and chunk marks;
+ * entity pulse not repeated after restart (lasts fractions of second), front continues from previous position.
  */
 public final class NuclearWorld {
-    /** Медленный ядерный тик пишется в лог не чаще, тиков. */
+    /** Minimum interval between slow nuclear-tick logs, ticks. */
     private static final int SLOW_LOG_PERIOD = 100;
 
     private final ScarQueue scars = new ScarQueue();
-    /** Руины подрывов по номеру ({@link RuinContext}): пока у подрыва есть работа в очереди. */
+    /** Detonation ruins by ID ({@link RuinContext}) while detonation has queued work. */
     private final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<RuinContext> ruins = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
     /**
-     * Раз в сколько тиков забывать руины подрывов без работы, и сколько тиков руины без работы держатся (работа — план
-     * или подмена по ним; чанки, ждущие соседей, работой не считаются: край мира ждёт игрока часами, а руины подрыва —
-     * десятки МБ). Чанк, дождавшийся соседей потом, строит руины с новыми.
+     * Idle-ruin cleanup interval and retention, ticks (work means plan
+     * or replacement; chunks awaiting neighbors do not count: world edge may await player for hours, detonation ruins take
+     * tens of MB). Chunk whose neighbors arrive later builds ruins with new context.
      */
     private static final int RUINS_SWEEP = 100, RUINS_IDLE = 600;
     private final NuclearPrep prep = new NuclearPrep();
     private final List<PulseJob> pulses = new ArrayList<>();
-    /** Силуэты вспышки по подрывам ({@link FlashShadows}): тела сняты в тике подрыва. */
+    /** Flash silhouettes per detonation ({@link FlashShadows}): bodies snapshotted at detonation tick. */
     private final List<FlashShadows> shadows = new ArrayList<>();
-    /** Свет по земле в миг вспышки ({@link FlashScorch}): слой вспышки чанков в памяти, до волны. */
+    /** Ground light at flash ({@link FlashScorch}): flash layer for in-memory chunks, before wave. */
     private final List<FlashScorch> scorches = new ArrayList<>();
     private final List<CraterJob> craters = new ArrayList<>();
     private final MobFallout mobFallout = new MobFallout();
     private final BlastFront blast = new BlastFront();
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos;
     /**
-     * Чанки с огнём слоя вспышки забытого подрыва (руин не будет), загруженные с тех пор: огню — тики в тике мира
-     * ({@link FlashScorch#burnOut}; при загрузке чанка тики ещё не ставятся).
+     * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
+     * ({@link FlashScorch#burnOut}; no ticks scheduled during chunk load).
      */
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet unburnt = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
-    /** Недорытые воронки из сохранения подхвачены (после загрузки мира). */
+    /** Unfinished saved craters resumed (after world load). */
     private boolean restored;
-    /** Игровое время мира, когда медленный тик в последний раз писался в лог. */
+    /** World game time of last slow-tick log. */
     private long lastSlowLog = Long.MIN_VALUE / 2;
 
-    /** Для {@link ModAttachments#NUCLEAR_WORLD}: своё у каждого мира, живёт, пока мир загружен, не сохраняется. */
+    /** For {@link ModAttachments#NUCLEAR_WORLD}: per world, lives while loaded, unsaved. */
     public NuclearWorld() {}
 
-    /** Очередь руин (проверки). */
+    /** Ruin queue (tests). */
     public ScarQueue scars() {
         return scars;
     }
 
-    /** Руины чанка вот-вот встанут: тела рядом запоминают окно и стену, какими их застанет фронт. */
+    /** Chunk ruins about to appear: nearby bodies remember window/wall as front will find them. */
     void beforeRuins(ServerLevel level, Detonation d, net.minecraft.world.level.chunk.LevelChunk chunk) {
         blast.remember(level, d, chunk);
     }
 
-    /** Руины чанка засыпали тело: завал — в очередь ударов волны. */
+    /** Chunk ruins buried body: queue burial injury with wave hits. */
     void buried(Detonation d, net.minecraft.world.entity.LivingEntity e) {
         blast.bury(d, e);
     }
 
-    /** Место подрыва для руин: готовились к нему — место подготовки ({@link NuclearPrep#planned}), иначе {@code fresh}. */
+    /** Ruin detonation geometry: preparation location if prepared ({@link NuclearPrep#planned}), otherwise {@code fresh}. */
     public Detonation planned(Detonation fresh) {
         return prep.planned(fresh);
     }
 
     /**
-     * Для проверок: копии LOD тяжёлой зоны к фронту удара {@code strike}, пока его подготовка жива — собрано, ушло, позже
-     * срока, отдача минус приход фронта (меньшая, большая), загружены, вытеснены, фронт раньше, не собрались,
-     * показывать нечего, ждут отдачи, байт, читаются, ждут чтения; null — подготовки нет.
+     * For tests: heavy-zone LOD copies for {@code strike} front while preparation alive: built, sent, late,
+     * send minus front arrival (minimum/maximum), loaded, evicted, front early, build failures,
+     * nothing to show, awaiting send, bytes, reading, awaiting read; null without preparation.
      */
     @Nullable
     public long[] frontLodStats(int strike) {
         return prep.frontStats(strike);
     }
 
-    /** Руины заранее: их готовые планы нужны и LOD вдали ({@link FarLods}). */
+    /** Prebuilt ruins: ready plans also needed by distant LODs ({@link FarLods}). */
     NuclearPrep prep() {
         return prep;
     }
@@ -101,7 +101,7 @@ public final class NuclearWorld {
         return level.getData(ModAttachments.NUCLEAR_WORLD);
     }
 
-    /** Руины подрыва по всем чанкам: общие у подготовки заранее (после подрыва), очереди и проверок. */
+    /** Detonation ruins across chunks, shared by preparation (after detonation), queue and tests. */
     RuinContext ruins(ServerLevel level, Detonation d, long now) {
         RuinContext ctx = ruins.get(d.id());
         if (ctx == null) ruins.put(d.id(), ctx = new RuinContext(level, d));
@@ -109,19 +109,19 @@ public final class NuclearWorld {
         return ctx;
     }
 
-    /** Руины подрыва, если они ещё в памяти (не заводит новых). */
+    /** Detonation ruins if still in memory (does not create). */
     @Nullable
     RuinContext ruinsIfKept(int detonation) {
         return ruins.get(detonation);
     }
 
-    /** Для проверок: забыть руины подрыва, как после простоя или перезапуска (слой вспышки остаётся только отметкой чанка). */
+    /** For tests: forget detonation ruins as after idle/restart (flash layer remains only chunk mark). */
     public void forgetRuinsForTest(int detonation) {
         RuinContext ctx = ruins.remove(detonation);
         if (ctx != null) ctx.cancelTasks();
     }
 
-    /** Давно не брали и нет работы, кроме ждущих соседей, — забыть (память разломов и старых блоков руин). */
+    /** Unused for long and no work except waiting neighbors: forget (fracture/old ruin-block memory). */
     private void sweepRuins(long now) {
         if (now % RUINS_SWEEP != 0) return;
         ruins.int2ObjectEntrySet().removeIf(e -> {
@@ -129,7 +129,7 @@ public final class NuclearWorld {
             e.getValue().cancelTasks();
             return true;
         });
-        // ни руин, ни подготовки: буферы обхода (окно высокого города — десятки МБ) не держатся
+        // no ruins/preparation: release traversal buffers (tall city window tens of MB)
         if (ruins.isEmpty() && prep.idle()) releaseBuffers();
     }
 
@@ -139,14 +139,14 @@ public final class NuclearWorld {
     }
 
     /**
-     * Есть ли работа потока сервера у очередей ядерки (полоса NUCLEAR {@code WorkScheduler}: пока есть, попадания
-     * берут не весь общий бюджет).
+     * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
+     * do not take entire shared budget).
      */
     public boolean busy() {
         return !pulses.isEmpty() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
     }
 
-    /** Работ очереди руин, осмотренных в последнем тике (проверки бюджета). */
+    /** Ruin-queue jobs inspected last tick (budget tests). */
     public int scarInspectedLastTick() {
         return scars.inspectedLastTick();
     }
@@ -155,27 +155,27 @@ public final class NuclearWorld {
         return scars.size();
     }
 
-    /** Руины заранее: сколько готово (по всем летящим ударам). */
+    /** Prebuilt ruins: ready count across flying strikes. */
     public int plannedChunks() {
         return prep.plannedChunks();
     }
 
-    /** Квадраты чанков, которые держит подготовка руин. */
+    /** Chunk squares held by ruin preparation. */
     public int prepTiles() {
         return prep.heldTiles();
     }
 
-    /** Для проверок: руины заранее больше не строятся, как при нехватке памяти. */
+    /** For tests: stop prebuilding ruins, as under memory pressure. */
     public void stopPrepForHeap() {
         prep.stopAllForHeap();
     }
 
-    /** По готовому плану, построенных на месте, устаревших планов. */
+    /** Ready-plan, on-site and stale-plan counts. */
     public int[] ruinStats() {
         return scars.ruinStats();
     }
 
-    /** Чанки очереди, держащие тикет с соседями (проверки). */
+    /** Queued chunks holding neighbor ticket (tests). */
     public long[] scarHolds() {
         return scars.heldChunks();
     }
@@ -184,69 +184,69 @@ public final class NuclearWorld {
         return craters.size();
     }
 
-    /** Подрывы, чей световой импульс ещё идёт по сущностям. */
+    /** Detonations whose entity light pulse still runs. */
     public int pulseJobs() {
         return pulses.size();
     }
 
     /**
-     * Сколько заняли в последнем тике фронт по сущностям и аппаратам, свет и радиация (с силуэтами вспышки), слой вспышки
-     * на земле, воронки, очередь руин, руины заранее и осадки у мобов, нс.
+     * Last-tick times for front on entities/craft, light/radiation (including flash silhouettes), ground flash layer,
+     * craters, ruin queue, prebuilt ruins and mob fallout, ns.
      */
     public long[] lastNanos() {
         return new long[]{lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos};
     }
 
-    /** Очередь руин в последнем тике: «inspected N, waited M» (строка медленного ядерного тика). */
+    /** Last-tick ruin queue: “inspected N, waited M” (slow nuclear-tick line). */
     public String scarSummary() {
         return scars.tickSummary();
     }
 
     /**
-     * Часы бюджета ядерной работы — одни на сервер: срок полосы ядерки общего бюджета — на тик сервера, а не на
-     * измерение. Живут в верхнем мире (как общие данные сервера в ванили): он есть, пока жив сервер.
+     * Nuclear work-budget clock shared by server: common-budget nuclear deadline per server tick, not
+     * dimension. Lives in overworld (like vanilla shared server data), present throughout server lifetime.
      */
     public static WorkClock clock(MinecraftServer server) {
         return server.overworld().getData(ModAttachments.NUCLEAR_CLOCK);
     }
 
-    /** Подменить часы бюджета (проверки — считающими, {@link WorkClock#counting}). */
+    /** Replace budget clock (counting clock for tests, {@link WorkClock#counting}). */
     public static void useClock(MinecraftServer server, WorkClock clock) {
         server.overworld().setData(ModAttachments.NUCLEAR_CLOCK, clock);
     }
 
-    /** Медленный тик — в лог не чаще раза в 5 с (tools/logscan.py): true — пора писать, отметка поставлена. */
+    /** Slow tick logged at most every 5 s (tools/logscan.py): true if due, updates mark. */
     public boolean slowLogDue(long now) {
         if (now - lastSlowLog < SLOW_LOG_PERIOD) return false;
         lastSlowLog = now;
         return true;
     }
 
-    // ---------------------------------------------------------------- события
+    // ---------------------------------------------------------------- events
 
     /**
-     * Подрыв: сущности в радиусе света и радиации и загруженные сейчас чанки в радиусе разрушений — к обработке
-     * под бюджетом, даже их снимки (чанки, загруженные позже, — при загрузке). В тике подрыва — ничего тяжёлого.
+     * Detonation: process entities in light/radiation range and currently loaded chunks in destruction range
+     * under budget, including snapshots (later-loaded chunks handled on load). Nothing heavy on detonation tick.
      *
-     * @param owner кто запустил (урон записывается на него)
+     * @param owner launcher (credited for damage)
      */
     public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner) {
         pulses.add(new PulseJob(level, d, owner));
-        // тела перед стенами — снимком сейчас: импульс (PulseJob) и волна их потом обожгут, убьют или сдвинут
+        // snapshot bodies before walls now: pulse (PulseJob) and wave later burn, kill or move them
         FlashShadows flash = FlashShadows.of(level, d);
         if (flash != null) shadows.add(flash);
-        // свет по земле — за время импульса, до волны: выгоревшее, гарь, пожары (чанки — первой единицей работы)
+        // ground light during pulse, before wave: burned ground, scorch, fires (chunks collected by first work unit)
         scorches.add(new FlashScorch(d));
         blast.onDetonation(d, owner);
         NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime());
         if (ready != null) {
-            // руины заранее и на месте — одни: разломы и стоящие руины подготовки переходят подрыву
+            // prebuilt and on-site ruins identical: preparation fractures/applied ruins pass to detonation
             ready.ruins().used = level.getGameTime();
             ruins.put(d.id(), ready.ruins());
             scars.scanLoaded(d, ready.plans(), ready.order());
         }
         else scars.scanLoaded(d);
-        // след на земле вдали — в LOD DH: за тяжёлой зоной (её LOD — руины по готовым планам) или весь, если не готовились
+        // distant ground trace into DH LODs: beyond heavy zone (its LODs use ready-plan ruins), or all if unprepared
         FarLods.scorch(level, d, ready != null);
         if (d.surface() && IncomingConfig.SERVER.nukeCrater.get() && IncomingConfig.SERVER.nukeBlockDamage.get()
                 && CraterModel.formsCrater(d.hobMetres(), d.yieldKt())) {
@@ -256,48 +256,48 @@ public final class NuclearWorld {
     }
 
     public void onChunkLoad(ServerLevel level, LevelChunk chunk) {
-        // копия его LOD к фронту не нужна: руины и LOD ему ставит мир
+        // front LOD copy unnecessary: world supplies chunk ruins/LODs
         prep.loaded(chunk.getPos().toLong());
         NuclearEvents events = NuclearEvents.get(level);
         for (Detonation d : events.past()) scars.offer(chunk, d);
         for (Detonation d : events.detonations()) scars.offer(chunk, d);
-        // огонь слоя вспышки ждёт руин без тиков: подрыв забыт — руин не будет, огню пора гореть
+        // flash-layer fire waits for ruins without ticking: forgotten detonation means no ruins, time for fire to burn
         if (FlashScorch.forgotten(chunk, events)) unburnt.add(chunk.getPos().toLong());
     }
 
     public void onChunkUnload(ServerLevel level, LevelChunk chunk) {
         scars.drop(level, chunk.getPos());
-        // отметка слоя сохранена с чанком: следующая загрузка решит заново
+        // layer mark saved with chunk: reevaluate next load
         unburnt.remove(chunk.getPos().toLong());
-        // фоновые планы выгруженного чанка: снимки не того чанка, которым он загрузится
+        // unloaded chunk's background plans: snapshots differ from chunk that will reload
         for (RuinContext ctx : ruins.values()) ctx.forget(chunk.getPos().toLong());
         prep.forget(chunk.getPos().toLong());
     }
 
-    /** Чанк ушёл игроку (сводка подрыва: ушло игроку до руин). */
+    /** Chunk sent to player (detonation summary: sent before ruins). */
     public void onChunkSent(ServerLevel level, LevelChunk chunk) {
         scars.sent(chunk.getPos().toLong(), level.getGameTime());
     }
 
-    /** Не отдавать чанк игроку, пока в нём не встали руины, до которых уже дошла волна ({@code PlayerChunkSenderMixin}). */
+    /** Withhold player chunk until wave-reached ruins applied ({@code PlayerChunkSenderMixin}). */
     public boolean withholds(ServerLevel level, long chunk) {
         return scars.withholds(chunk, level.getGameTime());
     }
 
-    /** Есть ли что не отдавать игрокам (быстрая проверка). */
+    /** Whether any chunks withheld (fast check). */
     public boolean mayWithhold() {
         return scars.mayWithhold();
     }
 
     /**
-     * Остановка сервера (выход из одиночной игры): вся работа руин — подготовка (чтения с диска, квадраты зоны за
-     * волной), очереди, фоновые планы — бросается, фоновые потоки останавливаются и ждутся ({@link RuinWorkers#shutdown}):
-     * после выхода ничего из руин не должно ни считать, ни держать память. Ничего из этого не сохраняется и так.
-     * Тикеты зоны и подготовки отпускаются здесь же, до ванильного цикла выгрузки (он и сам снимает все тикеты, кроме
-     * {@code UNKNOWN}, но только в своих кругах, а чтения с диска и задачи руин так не останавливаются). Генерацию,
-     * которую тикеты успели начать, после этого доводит до конца {@link ua.zentix.incoming.util.StopDrain}.
+     * Server stop (leaving single-player): abandon all ruin work, preparation (disk reads, squares behind
+     * wave), queues, background plans; stop/await background threads ({@link RuinWorkers#shutdown}):
+     * after exit no ruin computation or retained memory. None of this saved anyway.
+     * Release zone/preparation tickets here before vanilla unload loop (also removes all tickets except
+     * {@code UNKNOWN}, but only within its loops, and does not stop disk reads/ruin tasks). Generation
+     * already started by tickets then completed by {@link ua.zentix.incoming.util.StopDrain}.
      *
-     * @return фоновые потоки остановились за срок
+     * @return background threads stopped within deadline
      */
     public static boolean onServerStopping(net.minecraft.server.MinecraftServer server) {
         for (ServerLevel level : server.getAllLevels()) {
@@ -311,9 +311,9 @@ public final class NuclearWorld {
         return RuinWorkers.shutdown();
     }
 
-    /** Отбой: очереди остановлены (разрушенное не возвращается). */
+    /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
-        // подготовка — раньше FarLods: её копии отдают ему взятые запросы, и они должны уйти вместе с его очередями
+        // preparation before FarLods: copies return claimed requests there, to be removed with its queues
         prep.clear(level, scars);
         FarLods.get(level).clear(level);
         scars.clear(level);
@@ -331,9 +331,9 @@ public final class NuclearWorld {
         releaseBuffers();
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
-    /** Огонь слоя вспышки забытых подрывов — гореть (чанки, ушедшие из полной загрузки, ждут следующего тика). */
+    /** Let forgotten detonations' flash-layer fire burn (chunks no longer fully loaded wait for next tick). */
     private void burnOut(ServerLevel level) {
         for (var it = unburnt.longIterator(); it.hasNext(); ) {
             long key = it.nextLong();
@@ -348,16 +348,16 @@ public final class NuclearWorld {
         }
     }
 
-    /** @param clock бюджет тика сервера, общий для всех измерений (уже запущен) */
+    /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         long now = level.getGameTime();
         NuclearEvents events = NuclearEvents.get(level);
         if (!restored) restore(events);
         sweepRuins(now);
-        // фоновые планы: зависшие — в поток сервера; потоков в работе — по тику сервера
+        // background plans: stuck ones fall back to server thread; active threads follow server tick
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
         RuinWorkers.adapt(level.getServer());
-        // свет — раньше волны: он быстрее, и кого волна убьёт, тот уже получил свой импульс
+        // light before wave: faster; wave-killed bodies already received pulse
         long pulseStart = System.nanoTime();
         while (!pulses.isEmpty()) {
             PulseJob job = pulses.getFirst();
@@ -368,7 +368,7 @@ public final class NuclearWorld {
             }
             pulses.removeFirst();
         }
-        // силуэты вспышки — после импульса (урон важнее картинки), до волны: руины на месте тела не ждут их
+        // flash silhouettes after pulse (damage more important than visuals), before wave: ruins at body position do not await them
         while (!shadows.isEmpty()) {
             FlashShadows job = shadows.getFirst();
             try {
@@ -384,7 +384,7 @@ public final class NuclearWorld {
             blast.advance(level, events.detonations(), now);
             blast.work(level, clock, id -> pulses.stream().noneMatch(p -> p.detonation().id() == id));
         } catch (RuntimeException e) {
-            // докуда фронт уже прошёл, остаётся: иначе он заново ударил бы всех внутри
+            // retain front reach, otherwise everyone inside hit again
             Incoming.LOG.error("Blast wave on entities failed with an exception; queued hits dropped", e);
             blast.dropHits();
         }
@@ -397,11 +397,11 @@ public final class NuclearWorld {
         scars.work(level, now, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
-        // свет по земле — после руин, до которых дошла волна, из того, что они оставили от бюджета: когда фронт проходит
-        // за тик много чанков, слои вспышки вдали, поставленные вперёд, задерживали руины у фронта на тики (25 единиц
-        // тика — слоям, руинам — ни одной). Слой, к которому волна уже пришла, не нужен: чанк получает всё с руинами
-        // (они ставятся по миру до вспышки). Подрывы — каждый своим ходом: слой второго подрыва не ждёт, пока первый
-        // дождётся своих фоновых планов
+        // ground light after wave-reached ruins using their remaining budget: when front crosses
+        // many chunks per tick, distant flash layers prioritized ahead delayed front ruins for ticks (25 tick units
+        // to layers, none to ruins). Wave-reached layer unnecessary: ruins apply everything
+        // (built from pre-flash world). Detonations progress independently: second layer does not await first
+        // detonation's background plans
         for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
             FlashScorch job = it.next();
             try {
@@ -416,7 +416,7 @@ public final class NuclearWorld {
         if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
         lastScorchNanos = prepStart - scorchStart;
-        // руины заранее — из того, что осталось от бюджета: волна уже идущего подрыва важнее
+        // prebuilt ruins use remaining budget: already traveling wave matters more
         try {
             prep.tick(level, events, scars, clock);
         } catch (RuntimeException e) {
@@ -435,8 +435,8 @@ public final class NuclearWorld {
     }
 
     /**
-     * Воронки по очереди, сколько успеем за бюджет. Воронка, упавшая с ошибкой, снимается одна (со своими тикетами);
-     * её ход в сохранении остаётся — после перезапуска она дороется с того же чанка.
+     * Crater jobs in turn while budget permits. A failed crater removed alone (with tickets);
+     * saved progress remains, so restart resumes digging from same chunk.
      */
     private void digCraters(ServerLevel level, NuclearEvents events, WorkClock clock) {
         while (!craters.isEmpty() && clock.canStart()) {
@@ -459,7 +459,7 @@ public final class NuclearWorld {
         }
     }
 
-    /** После загрузки мира: недорытые воронки — дорыть с того чанка, где остановились. */
+    /** After world load: resume unfinished craters from stopped chunk. */
     private void restore(NuclearEvents events) {
         restored = true;
         events.craters().forEach((id, done) -> events.detonations().stream().filter(d -> d.id() == id).findFirst()

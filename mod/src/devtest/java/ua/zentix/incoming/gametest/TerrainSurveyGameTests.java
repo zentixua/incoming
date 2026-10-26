@@ -38,13 +38,13 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 /**
- * Съёмка рельефа без загрузки чанков ({@link TerrainSurvey}, источник {@link Terrain.Source#DISK} и фоновый
- * {@link Terrain.Source#GENERATOR}): высота незагруженного чанка — с его файла, у чанка, которого на диске нет, — от
- * генератора; вопрос в тике не ждёт ни диска, ни генератора и ничего не грузит; крылатая ракета, летящая вне мира,
- * видит холм перед целью, которого нет в мире, перелетает его и пикирует за ним на цель.
+ * Terrain survey without loading chunks ({@link TerrainSurvey}, {@link Terrain.Source#DISK} and background
+ * {@link Terrain.Source#GENERATOR}): an unloaded chunk gets its height from its file; a chunk absent on disk gets
+ * generator terrain. A tick-time query waits for neither disk nor generator and loads nothing. A cruise missile
+ * flying outside the world sees a hill before its target that is absent from the world, clears it and dives behind it.
  * <p>
- * Места — далеко за площадкой (вокруг ничего не загружено), у каждого теста своё и в тысяче блоков и больше от мест
- * {@code StrikeGameTests.FarSite}.
+ * Sites lie far beyond the platform (nothing loaded nearby), are separate for each test and at least a thousand
+ * blocks from {@code StrikeGameTests.FarSite} sites.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -71,7 +71,7 @@ public final class TerrainSurveyGameTests {
         }
     }
 
-    /** Чанка нет в памяти (и в очереди выгрузки): записанное им уже видно чтению с диска. */
+    /** Chunk absent from memory (and the unload queue): its writes are already visible to disk reads. */
     private static boolean unloaded(ServerLevel level, List<ChunkPos> chunks) {
         for (ChunkPos c : chunks) if (Terrain.inMemory(level, c.toLong()) != null
                 || level.getChunkSource().chunkMap.getVisibleChunkIfPresent(c.toLong()) != null
@@ -79,16 +79,17 @@ public final class TerrainSurveyGameTests {
         return true;
     }
 
-    /** Рельеф генератора узла, как его считает съёмка: первый воздух не ниже уровня моря. */
+    /** Generator-node terrain as computed by the survey: first air, no lower than sea level. */
     private static int generatorNode(ServerLevel level, int x, int z) {
         ChunkGenerator g = level.getChunkSource().getGenerator();
         return Math.max(g.getSeaLevel(), g.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState()));
     }
 
     /**
-     * Чанк сгенерирован, на нём столб на 40 блоков, и он выгружен (записан). Уходя из памяти, он оставил съёмке свою
-     * карту: ответ сразу, без пробела. Забыв её, съёмка читает файл: высота колонки столба — с диска, точно, как карта
-     * высот чанка; соседняя колонка — своя поверхность; первый вопрос ответа в тике не даёт. Вопрос чанк не грузит.
+     * A chunk is generated, a 40-block post is built on it, then it is unloaded (saved). On leaving memory it gave
+     * the survey its heightmap: immediate answer without a gap. After forgetting it, the survey reads the file:
+     * post-column height exactly matches the saved chunk heightmap; neighboring column has its own surface;
+     * the first query has no answer within that tick. The query does not load the chunk.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "survey_disk", skyAccess = true)
     public static void diskHeightOfUnloadedChunk(GameTestHelper h) {
@@ -101,37 +102,37 @@ public final class TerrainSurveyGameTests {
         for (int y = surface; y < surface + 40; y++) level.setBlockAndUpdate(new BlockPos(x, y, z), Blocks.STONE.defaultBlockState());
         int top = surface + 40;
         TerrainSurvey survey = TerrainSurvey.get(level);
-        // До выгрузки не спрашиваем карту: MOTION_BLOCKING должна сохраняться и без прежнего полёта/вопроса.
+        // Do not query the map before unload: MOTION_BLOCKING must be retained without any earlier flight/query.
         int[] stage = {0};
         h.onEachTick(() -> {
             if (stage[0] == 0) {
                 if (!unloaded(level, List.of(c))) return;
-                // выгружен; карту, которую он оставил съёмке при выгрузке, забыть — проверяется чтение файла.
-                // Первый вопрос заказывает чтение и ответа сразу не даёт
+                // unloaded; forget the map it gave the survey on unload, so the check tests file reading.
+                // The first query requests a read and gives no immediate answer
                 Terrain.Surface left = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
-                h.assertTrue(left != null && left.source() == Terrain.Source.DISK && left.y() == top, "выгруженный чанк не оставил карту: " + left);
+                h.assertTrue(left != null && left.source() == Terrain.Source.DISK && left.y() == top, "unloaded chunk left no heightmap: " + left);
                 assertReliefBand(h, x, z);
                 survey.forget(c.toLong());
-                h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "съёмка ответила в тике вопроса: она ждала диск");
+                h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "survey answered in the query tick: it waited for disk");
                 stage[0] = 1;
             }
-            h.assertTrue(unloaded(level, List.of(c)), "вопрос загрузил чанк");
+            h.assertTrue(unloaded(level, List.of(c)), "query loaded the chunk");
         });
         h.succeedWhen(() -> {
-            h.assertTrue(stage[0] == 1, "чанк не выгрузился");
+            h.assertTrue(stage[0] == 1, "chunk did not unload");
             Terrain.Surface s = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
-            h.assertTrue(s != null, "нет ответа с диска");
-            h.assertTrue(s.source() == Terrain.Source.DISK && s.y() == top, "столб: " + s + " вместо " + top + " с диска");
+            h.assertTrue(s != null, "no disk answer");
+            h.assertTrue(s.source() == Terrain.Source.DISK && s.y() == top, "post: " + s + " instead of " + top + " from disk");
             Terrain.Surface next = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x + 3, z, Terrain.Allowed.RELIEF);
-            h.assertTrue(next.source() == Terrain.Source.DISK && next.y() == beside, "соседняя колонка: " + next + " вместо " + beside);
+            h.assertTrue(next.source() == Terrain.Source.DISK && next.y() == beside, "neighboring column: " + next + " instead of " + beside);
             assertReliefBand(h, x, z);
-            h.assertTrue(unloaded(level, List.of(c)), "чанк загружен");
+            h.assertTrue(unloaded(level, List.of(c)), "chunk loaded");
         });
     }
 
     /**
-     * Чанка на диске нет (никогда не генерировался): рельеф генератора, посчитанный в фоне, — наибольший из четырёх
-     * узлов клетки {@link TerrainSurvey#GENERATOR_STEP}; чанк при этом не появляется в памяти.
+     * Chunk absent on disk (never generated): background generator terrain is the maximum of the four nodes
+     * of the {@link TerrainSurvey#GENERATOR_STEP} cell; the chunk never enters memory.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "survey_generator", skyAccess = true)
     public static void generatorWhereNothingOnDisk(GameTestHelper h) {
@@ -143,21 +144,21 @@ public final class TerrainSurveyGameTests {
         int expected = Math.max(Math.max(generatorNode(level, x0, z0), generatorNode(level, x0 + step, z0)),
                 Math.max(generatorNode(level, x0, z0 + step), generatorNode(level, x0 + step, z0 + step)));
         TerrainSurvey survey = TerrainSurvey.get(level);
-        h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "съёмка ответила в тике вопроса: генератор считался в тике");
+        h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "survey answered in the query tick: generator ran within the tick");
         h.succeedWhen(() -> {
             Terrain.Surface s = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
-            h.assertTrue(s != null, "нет ответа генератора");
-            h.assertTrue(s.source() == Terrain.Source.GENERATOR && s.y() == expected, "генератор: " + s + " вместо " + expected);
+            h.assertTrue(s != null, "no generator answer");
+            h.assertTrue(s.source() == Terrain.Source.GENERATOR && s.y() == expected, "generator: " + s + " instead of " + expected);
             assertReliefBand(h, x, z);
-            h.assertTrue(unloaded(level, List.of(c)), "чанк появился в памяти");
+            h.assertTrue(unloaded(level, List.of(c)), "chunk appeared in memory");
         });
     }
 
-    /** После разрыва готовых чанков потолок Незера не должен становиться препятствием по карте высот. */
+    /** Beyond a gap in ready chunks, the Nether ceiling must not become a heightmap obstacle. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "survey_nether_gap", skyAccess = true)
     public static void netherCeilingBeyondUnreadyGapDoesNotBlockSightline(GameTestHelper h) {
         ServerLevel nether = h.getLevel().getServer().getLevel(Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
+        h.assertTrue(nether != null, "no Nether");
         ChunkPos near = new ChunkPos(Site.GENERATOR.at(h));
         ChunkPos far = new ChunkPos(near.x + 32, near.z);
         int full = ChunkLevel.byStatus(FullChunkStatus.FULL);
@@ -178,34 +179,34 @@ public final class TerrainSurveyGameTests {
         Vec3 to = from.add(32 * 16, 0, 0);
         missile.setPos(from);
         h.succeedWhen(() -> {
-            h.assertTrue(Terrain.ready(nether, near.x, near.z) && Terrain.ready(nether, far.x, far.z), "концы ещё не готовы");
-            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "разрыв уже готов");
+            h.assertTrue(Terrain.ready(nether, near.x, near.z) && Terrain.ready(nether, far.x, far.z), "ends not ready yet");
+            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "gap already ready");
             // Clear the near ready segment under the natural bedrock roof; touch no unready chunks.
             for (int x = near.getMiddleBlockX(); x <= near.getMaxBlockX(); x++)
                 nether.getChunkSource().getChunkNow(near.x, near.z).setBlockState(new BlockPos(x, 80, near.getMiddleBlockZ()), Blocks.AIR.defaultBlockState(), false);
             Vec3 edge = Terrain.readyUntil(nether, from, to);
-            h.assertTrue(edge != to && edge.x > from.x, "нет готового участка перед разрывом");
+            h.assertTrue(edge != to && edge.x > from.x, "no ready segment before the gap");
             Terrain.Surface roof = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
                     far.getMiddleBlockX(), far.getMiddleBlockZ(), Terrain.Allowed.RELIEF);
-            h.assertTrue(roof.source() == Terrain.Source.CEILING && roof.y() > to.y, "нет потолка за разрывом: " + roof);
+            h.assertTrue(roof.source() == Terrain.Source.CEILING && roof.y() > to.y, "no ceiling beyond the gap: " + roof);
             for (Terrain.Allowed allowed : new Terrain.Allowed[]{Terrain.Allowed.RELIEF, Terrain.Allowed.VIRTUAL_RELIEF}) {
                 double expected = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
                         far.getMiddleBlockX(), far.getMiddleBlockZ(), allowed).y();
                 h.assertTrue(Terrain.relief(nether, allowed).at(far.getMiddleBlockX(), far.getMiddleBlockZ()) == expected,
                         "batched sensor changed Nether ceiling handling");
             }
-            h.assertTrue(Double.isInfinite(missile.sightline(to)), "потолок за разрывом закрыл прямую");
+            h.assertTrue(Double.isInfinite(missile.sightline(to)), "ceiling beyond the gap blocked the straight path");
             // A real block on the near ready segment must still block the in-world sensor.
             BlockPos obstacle = BlockPos.containing(from.add(2, 0, 0));
             var chunk = nether.getChunkSource().getChunkNow(near.x, near.z);
             chunk.setBlockState(obstacle, Blocks.STONE.defaultBlockState(), false);
             try {
                 double hit = missile.sightline(to);
-                h.assertTrue(hit > 0 && hit < edge.distanceTo(from), "не замечен блок до разрыва: " + hit);
+                h.assertTrue(hit > 0 && hit < edge.distanceTo(from), "block before the gap missed: " + hit);
             } finally {
                 chunk.setBlockState(obstacle, Blocks.AIR.defaultBlockState(), false);
             }
-            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "датчик загрузил разрыв");
+            h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "sensor loaded the gap");
         });
     }
 
@@ -238,19 +239,19 @@ public final class TerrainSurveyGameTests {
         }
     }
 
-    /** Чанков в замере {@link #surveyNeverWaitsInTick}: квадрат 16×16. */
+    /** Chunk count in {@link #surveyNeverWaitsInTick}: 16×16 square. */
     private static final int NO_WAIT_SIDE = 16;
     /**
-     * Наибольшее время вопросов о {@code NO_WAIT_SIDE²} незнакомых чанках в тике, мс — с запасом на общий раннер CI:
-     * заказ — несколько записей в карты и задача потоку ввода-вывода. Чтение файла чанка в тике (~0,1–1 мс на чанк) или
-     * генератор (~3 мс на узел, 9 узлов на чанк в обычном мире) стоили бы сотни мс и секунды.
+     * Maximum query time for {@code NO_WAIT_SIDE²} unknown chunks within a tick, ms, with margin for shared CI runners:
+     * a request adds a few map entries and an I/O-thread task. Reading chunk files within the tick (~0.1–1 ms per chunk)
+     * or running the generator (~3 ms per node, 9 nodes per overworld chunk) would cost hundreds of ms or seconds.
      */
     private static final long NO_WAIT_LIMIT_MS = 200;
 
     /**
-     * Вопросы о 256 незнакомых чанках (половина записана на диск, половины на диске нет) в одном тике: ни один ответ не
-     * приходит в тике вопроса (съёмка не ждёт ни диска, ни генератора), время вопросов — малое, ни один чанк не
-     * загружен ни тогда, ни потом, все ответы приходят в следующих тиках.
+     * Queries for 256 unknown chunks (half saved on disk, half absent) in one tick: no answer arrives within the query
+     * tick (the survey waits for neither disk nor generator), queries take little time, no chunk loads then or later,
+     * and all answers arrive in subsequent ticks.
      */
     @GameTest(template = "range", timeoutTicks = 2400, batch = "survey_no_wait", skyAccess = true)
     public static void surveyNeverWaitsInTick(GameTestHelper h) {
@@ -259,7 +260,7 @@ public final class TerrainSurveyGameTests {
         List<ChunkPos> all = new ArrayList<>();
         for (int dx = 0; dx < NO_WAIT_SIDE; dx++)
             for (int dz = 0; dz < NO_WAIT_SIDE; dz++) all.add(new ChunkPos(base.x + dx, base.z + dz));
-        // половина — на диске (сгенерированы и выгружены), половина — нет
+        // half on disk (generated and unloaded), half absent
         List<ChunkPos> saved = all.subList(0, all.size() / 2);
         for (ChunkPos c : saved) level.getChunk(c.x, c.z);
         TerrainSurvey survey = TerrainSurvey.get(level);
@@ -273,54 +274,54 @@ public final class TerrainSurveyGameTests {
                 int answered = 0;
                 for (ChunkPos c : all) if (survey.at(level, Heightmap.Types.MOTION_BLOCKING, c.getMiddleBlockX(), c.getMiddleBlockZ()) != null) answered++;
                 took[0] = System.nanoTime() - t0;
-                Incoming.LOG.info(String.format(Locale.ROOT, "Замер съёмки рельефа: %d вопросов о незнакомых чанках в тике — %.2f мс, ответов в тике %d",
+                Incoming.LOG.info(String.format(Locale.ROOT, "Terrain survey measurement: %d queries for unknown chunks in a tick — %.2f ms, answers in the tick %d",
                         all.size(), took[0] / 1e6, answered));
-                h.assertTrue(answered == 0, "съёмка ответила в тике вопроса " + answered + " раз: ждала диск или генератор");
-                // заказы в пути: при чтении в тике их бы не осталось (половина чанков ждёт ещё и генератора)
-                h.assertTrue(survey.pendingCount() > 0, "заказов в пути нет: съёмка дочитала в тике вопроса");
-                h.assertTrue(took[0] / 1_000_000 < NO_WAIT_LIMIT_MS, String.format(Locale.ROOT, "вопросы в тике заняли %.1f мс", took[0] / 1e6));
+                h.assertTrue(answered == 0, "survey answered within the query tick " + answered + " times: waited for disk or generator");
+                // requests in flight: tick-time reads would leave none (half the chunks also wait for the generator)
+                h.assertTrue(survey.pendingCount() > 0, "no requests in flight: survey finished reading within the query tick");
+                h.assertTrue(took[0] / 1_000_000 < NO_WAIT_LIMIT_MS, String.format(Locale.ROOT, "tick-time queries took %.1f ms", took[0] / 1e6));
                 stage[0] = 1;
             }
-            h.assertTrue(unloaded(level, all), "съёмка загрузила чанк");
+            h.assertTrue(unloaded(level, all), "survey loaded a chunk");
         });
         h.succeedWhen(() -> {
-            h.assertTrue(stage[0] == 1, "чанки не выгрузились");
+            h.assertTrue(stage[0] == 1, "chunks did not unload");
             int disk = 0, generator = 0;
             for (ChunkPos c : all) {
                 Terrain.Surface s = survey.at(level, Heightmap.Types.MOTION_BLOCKING, c.getMiddleBlockX(), c.getMiddleBlockZ());
-                h.assertTrue(s != null, "нет ответа о чанке " + c);
+                h.assertTrue(s != null, "no answer for chunk " + c);
                 if (s.source() == Terrain.Source.DISK) disk++;
                 else if (s.source() == Terrain.Source.GENERATOR) generator++;
             }
             h.assertTrue(disk == saved.size() && generator == all.size() - saved.size(),
-                    "с диска " + disk + " (записано " + saved.size() + "), генератор " + generator);
+                    "from disk " + disk + " (saved " + saved.size() + "), generator " + generator);
         });
     }
 
-    /** Район цели теста — с первого тика, как у {@code StrikeGameTests.returnsUnderOwnTerrain}: возврат в мир всегда у края района. */
+    /** Target area from tick one, as in {@code StrikeGameTests.returnsUnderOwnTerrain}: world reentry always occurs at the area edge. */
     private static final TicketType<ChunkPos> AIM_AREA = TicketType.create("incoming_test_survey_aim", Comparator.comparingLong(ChunkPos::toLong));
-    /** Гребень холма — за столько блоков до цели против курса: за краем района цели (±72 блока загружено). */
+    /** Hill ridge this many blocks before the target against heading: beyond target-area edge (±72 blocks loaded). */
     private static final int HILL_CREST = 140;
-    /** Высота холма над землёй: выше бреющего полёта над целью (+12) и горки (+32). */
+    /** Hill height above ground: above target skimming flight (+12) and pop-up (+32). */
     private static final int HILL_HEIGHT = 45;
-    /** Полуширина холма поперёк курса, блоков. */
+    /** Hill half-width across heading, blocks. */
     private static final int HILL_HALF_WIDTH = 16;
-    /** Пуск — за столько блоков до цели. */
+    /** Launch this many blocks before the target. */
     private static final int MISSILE_START = 600;
-    /** Ближе к цели по горизонтали — взрыв у цели. */
+    /** Closer to the target horizontally means an explosion at the target. */
     private static final double BURST_NEAR_AIM = 5;
 
-    /** Высота холма над землёй в {@code u} блоках от гребня по курсу: склоны 1 : 1, гребень 4 блока. */
+    /** Hill height above ground at {@code u} blocks from the ridge along heading: 1 : 1 slopes, 4-block ridge. */
     private static int hill(int u) {
         return Math.max(0, HILL_HEIGHT - Math.max(0, Math.abs(u) - 2));
     }
 
     /**
-     * Крылатая ракета вне мира (у цели и за ней никого нет, полосы подлёта нет) идёт на цель на ровном поле, а за 140
-     * блоков до неё поперёк пути — холм на 45 блоков, которого нет в мире: его чанки записаны на диск. Без съёмки ракета
-     * вне мира рельефа не знала и шла бы на 12 блоках над целью — сквозь холм. Теперь она видит его с диска,
-     * перелетает с запасом над гребнем и пикирует за ним: взрыв — у цели. Полёт — в темпе игры: ответ диска приходит
-     * между тиками, как на сервере.
+     * Cruise missile outside the world (nobody at or behind the target, no approach lane) heads toward a target on flat
+     * ground; 140 blocks before it, a 45-block hill crosses the path. The hill is absent from the world, its chunks
+     * saved on disk. Without the survey, an outside-world missile would know no terrain and fly 12 blocks above the
+     * target, through the hill. Now it sees disk terrain, clears the ridge with margin and dives behind it: explosion
+     * at the target. Flight runs at game speed: disk answers arrive between ticks, as on a server.
      */
     @GameTest(template = "range", timeoutTicks = 2400, batch = "survey_missile_hill", skyAccess = true)
     public static void missileDivesOverHillFromDisk(GameTestHelper h) {
@@ -330,7 +331,7 @@ public final class TerrainSurveyGameTests {
         int ax = aimChunk.getMiddleBlockX(), az = aimChunk.getMiddleBlockZ();
         int ground = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, ax, az);
         Vec3 aim = new Vec3(ax + 0.5, ground, az + 0.5);
-        // холм поперёк курса (+x): чанки — сразу, блоки — столбами от земли
+        // hill across heading (+x): load chunks immediately, place blocks in columns above ground
         int crest = ax - HILL_CREST;
         List<ChunkPos> hillChunks = new ArrayList<>();
         for (int x = crest - HILL_HEIGHT - 2; x <= crest + HILL_HEIGHT + 2; x++)
@@ -352,17 +353,17 @@ public final class TerrainSurveyGameTests {
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(onBlast));
         UUID[] id = {null};
         Vec3[] last = {null};
-        // наименьший запас над холмом и где; полёт вне мира над холмом
+        // minimum clearance above the hill and where it occurs; outside-world flight over the hill
         double[] worst = {Double.POSITIVE_INFINITY};
         String[] where = {""};
         long[] paced = {0};
         h.onEachTick(() -> {
             if (id[0] == null) {
-                // холм записан на диск и выгружен: район цели (его тикет держит в памяти и чанки на 15 чанков вокруг —
-                // ниже полной загрузки, поэтому он берётся только теперь; холм оттуда — недогруженные копии с диска,
-                // не готовые и не полные) и пуск
+                // hill saved on disk and unloaded: target area (its ticket also retains chunks out to 15 chunks around it in memory,
+                // below full loading, so take it only now; hill chunks from there are partial disk copies,
+                // neither ready nor full) and launch
                 if (!unloaded(level, hillChunks)) return;
-                // карту, которую холм оставил съёмке при выгрузке, забыть: ракета читает его файл
+                // forget the map the hill gave the survey on unload: the missile reads its file
                 TerrainSurvey survey = TerrainSurvey.get(level);
                 for (ChunkPos c : hillChunks) survey.forget(c.toLong());
                 for (int dx = -FlightTickets.DISTANCE; dx <= FlightTickets.DISTANCE; dx++)
@@ -370,7 +371,7 @@ public final class TerrainSurveyGameTests {
                 level.getChunkSource().addRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk);
                 StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(AIM_AREA, aimChunk, FlightTickets.DISTANCE, aimChunk));
                 CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
-                // как пуск издалека (StrikeService.fromAfar): над целью на 12 блоков
+                // as with distant launch (StrikeService.fromAfar): 12 blocks above target
                 m.launch(aim.add(-MISSILE_START, 12, 0), new Target.Point(aim), aim, null);
                 m.setRoute(Route.direct());
                 VirtualFlights.launch(level, m);
@@ -378,11 +379,11 @@ public final class TerrainSurveyGameTests {
                 paced[0] = System.nanoTime();
                 return;
             }
-            // темп игры с пуска: съёмка отвечает между тиками, как на сервере
+            // game speed from launch: survey answers between ticks, as on a server
             long deadline = paced[0] + 50_000_000L, left;
             while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
             paced[0] = System.nanoTime();
-            for (ChunkPos c : hillChunks) h.assertFalse(Terrain.ready(level, c.x, c.z), "чанк холма загружен: " + c);
+            for (ChunkPos c : hillChunks) h.assertFalse(Terrain.ready(level, c.x, c.z), "hill chunk loaded: " + c);
             StrikeProjectile p = flight(level, id[0]);
             if (p == null) return;
             last[0] = p.position();
@@ -391,18 +392,18 @@ public final class TerrainSurveyGameTests {
                 double clear = p.getY() - (ground + hill(u));
                 if (clear < worst[0]) {
                     worst[0] = clear;
-                    where[0] = String.format(Locale.ROOT, "%d блоков от гребня, y %.1f, вне мира %s, фаза %s", u, p.getY(), p.isVirtual(), p.flightPhase());
+                    where[0] = String.format(Locale.ROOT, "%d blocks from ridge, y %.1f, outside world %s, phase %s", u, p.getY(), p.isVirtual(), p.flightPhase());
                 }
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(id[0] != null, "холм не выгрузился");
-            h.assertFalse(flight(level, id[0]) != null, "ракета ещё летит, до цели " + (last[0] == null ? "?" : (int) last[0].distanceTo(aim)));
-            Incoming.LOG.info("Ракета над холмом с диска: наименьший запас {} ({})", String.format(Locale.ROOT, "%.1f", worst[0]), where[0]);
-            h.assertTrue(worst[0] > 0, "ракета прошла сквозь холм: запас " + String.format(Locale.ROOT, "%.1f", worst[0]) + " (" + where[0] + ")");
-            h.assertTrue(burst[0] != null, "ракета убрана без взрыва у цели, последний раз у " + (last[0] == null ? "?" : last[0].subtract(aim)));
+            h.assertTrue(id[0] != null, "hill did not unload");
+            h.assertFalse(flight(level, id[0]) != null, "missile still flying, distance to target " + (last[0] == null ? "?" : (int) last[0].distanceTo(aim)));
+            Incoming.LOG.info("Missile over disk hill: minimum clearance {} ({})", String.format(Locale.ROOT, "%.1f", worst[0]), where[0]);
+            h.assertTrue(worst[0] > 0, "missile flew through the hill: clearance " + String.format(Locale.ROOT, "%.1f", worst[0]) + " (" + where[0] + ")");
+            h.assertTrue(burst[0] != null, "missile removed without an explosion at the target, last seen at " + (last[0] == null ? "?" : last[0].subtract(aim)));
             Vec3 off = burst[0].subtract(aim);
-            h.assertTrue(Math.hypot(off.x, off.z) < BURST_NEAR_AIM, "взрыв не у цели: " + off + " от неё");
+            h.assertTrue(Math.hypot(off.x, off.z) < BURST_NEAR_AIM, "explosion away from target: " + off + " from it");
         });
     }
 

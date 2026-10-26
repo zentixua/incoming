@@ -18,53 +18,53 @@ import ua.zentix.incoming.grid.SubstationBlock;
 import java.util.Locale;
 
 /**
- * Дым над тем, что поджёг удар мода, — облако клиента (его рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}):
- * топливо в воронках ({@link #pool}, {@link #fuel}) и масло выбитых подстанций ({@link #substation}). Огонь Minecraft
- * на блоках — не здесь: он дымит, как любой огонь игры (ванилью или модом, который ведёт горение), — мод рисует только
- * своё, а не украшает огонь мира. У очага — шлейф
- * Бриггса ({@link FirePlume}) по ветру мира и устойчивости воздуха ({@link ClientAir}), кусками трубки
- * ({@link SmokeGrid.Sink#tube}, {@link #lay}: рисуются как след снаряда); свет пламени снизу — шаром в свободные места света сетки ({@link #lights}). Дым, что уже в воздухе, несёт силу
- * очага в миг выхода: место на пути x по ветру — от очага каким он был x/u секунд назад (история очага раз в
- * {@link #PERIOD} тиков; ветер — нынешний на весь шлейф). Так шлейф растёт от очага со скоростью ветра, а когда очаг
- * слабеет или гаснет, у очага дым тоньше, а ушедший — прежний и уходит по ветру.
+ * Smoke from the mod's strike ignitions is a client cloud (baked effects-layer billows render it, {@code far/SmokePuffs}):
+ * crater fuel ({@link #pool}, {@link #fuel}) and oil from failed substations ({@link #substation}). Minecraft block fire
+ * is outside this system: it smokes like any game fire (vanilla or the mod managing combustion); this mod draws only
+ * its own sources, rather than decorating world fire. Each source has a
+ * Briggs plume ({@link FirePlume}) following world wind and air stability ({@link ClientAir}), in tube segments
+ * ({@link SmokeGrid.Sink#tube}, {@link #lay}: drawn like projectile trails); flame lights from below as a sphere in free grid-light slots ({@link #lights}). Airborne smoke retains source
+ * strength at emission: a position x downwind comes from the source as it was x/u seconds ago (source history every
+ * {@link #PERIOD} ticks; current wind applies to the whole plume). Thus the plume grows from the source at wind speed; when
+ * the source weakens or goes out, smoke near it thins, while emitted smoke retains its strength and travels downwind.
  * <p>
- * Очаги рядом — один пожар ({@link #merge}): воронки залпа и подстанция рядом горят одним столбом, а не несколькими
- * слабыми (подъём шлейфа — по всему теплу, ∝ F^⅓ у пути и F^⅗ у конечного; половина тепла даёт столб ниже на 20–35 %).
- * Каждый очаг несёт свою сажу, а поднимается шлейфом всего пожара. Пожары горящего ядерного подрыва — не здесь: их дым —
- * огненный шторм ({@code FireStorm}).
+ * Nearby sources form one fire ({@link #merge}): salvo craters and a nearby substation burn as one column, rather than several
+ * weak ones (plume rise follows total heat, ∝ F^⅓ along the path and F^⅗ at final rise; half the heat gives 20–35 % less rise).
+ * Each source carries its own soot but rises in the whole fire's plume. Nuclear-detonation fires are outside this system:
+ * their smoke belongs to the firestorm ({@code FireStorm}).
  */
 public final class FireSmoke implements SmokeGrid.Source {
     /**
-     * Кусков трубки шлейфа: гуще у очага, где ось круче (места — квадратично по пути); одни на любой дальности от глаза
-     * (прежние 4 дальше 256 м с 12 клубами на кусок клали клубы реже их размера — шлейф вдали шёл бусами).
+     * Plume tube segments: denser near the source where the axis is steeper (quadratic path positions); same at any eye distance
+     * (the old 4 beyond 256 m with 12 billows per segment spaced them farther than their size, making distant plumes bead).
      */
     static final int SEGMENTS = 10;
-    /** Очаги пересматриваются раз в столько тиков. */
+    /** Sources are reassessed every this many ticks. */
     static final int PERIOD = 20;
-    /** Шлейф — не дальше по ветру, м (0,75 полустороны последнего каскада сетки: ~0,8 км). */
+    /** Maximum downwind plume path, m (0.75 of the last grid cascade's half-side: ~0.8 km). */
     public static final double REACH = 0.75 * 0.5 * SmokeGrid.N * SmokeGrid.CELL[SmokeGrid.CASCADES - 1];
 
-    /** Горящее масло выбитых подстанций по месту блока ({@link #substation}). */
+    /** Burning oil of failed substations by block position ({@link #substation}). */
     private static final Long2ObjectOpenHashMap<FireSmoke> OIL_FIRES = new Long2ObjectOpenHashMap<>();
-    /** Топливо в воронках взрывов ({@link #pool}); с сервера — ещё по номеру воронки (перемены состояния, {@link #fuel}). */
+    /** Explosion crater fuel ({@link #pool}); server sources also keyed by crater ID (state changes, {@link #fuel}). */
     private static final java.util.List<FireSmoke> POOLS = new java.util.ArrayList<>();
     private static final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<FireSmoke> POOL_IDS = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
-    /** Клетки огня топлива горящих воронок: их огонь — топливо воронки ({@link FireWatch} его не считает). */
+    /** Burning-crater fuel-fire cells: their fire belongs to crater fuel ({@link FireWatch} does not count it). */
     static final FuelCells FUEL = new FuelCells();
 
     /**
-     * Что горит: тепловыделение и площадь очага на единицу силы очага (у огня Minecraft единица — блок огня), сажи на
-     * джоуль.
+     * Burning material: heat release and source area per unit source strength (one Minecraft-fire unit is one fire block), soot
+     * per joule.
      */
     public record Fuel(double watts, double area, double sootPerJoule) {
-        /** Шлейф очага силы {@code units} в ветре {@code wind} и классе устойчивости. */
+        /** Plume of a source of strength {@code units} in {@code wind} and a stability class. */
         FirePlume plume(double units, double wind, double stability) {
             return plume(units, units, wind, stability);
         }
 
         /**
-         * Шлейф очага силы {@code units} в пожаре силы {@code fire} (в тех же единицах этого топлива, {@link #merge}):
-         * поднимается и расплывается шлейф всего пожара, сажа — только своя.
+         * Plume of a source of strength {@code units} in a fire of strength {@code fire} (same fuel units, {@link #merge}):
+         * the whole fire's plume rises and spreads; soot remains the source's own.
          */
         FirePlume plume(double units, double fire, double wind, double stability) {
             double all = Math.max(fire, units);
@@ -73,51 +73,51 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Масло трансформатора выбитой подстанции, разлитое и горящее лужей: минеральное масло — выгорание 0,039 кг/(м²·с)
-     * (Babrauskas, SFPE Handbook, 5-е изд., табл. «Pool fire burning rates», трансформаторное масло; ⚠ по памяти),
-     * эффективная теплота сгорания ~46 МДж/кг (как у дизельного топлива; ⚠ по памяти), выход сажи ~0,06 кг/кг (О:
-     * между керосином 0,012 и тяжёлыми маслами ~0,1, Tewarson); лужа ~{@value #OIL_AREA} м² (О: масло подстанционного
-     * трансформатора — сотни литров, обвалование вокруг). Тепло — 3,6 МВт, пламя по Хескестаду ~4,5 м; масла — на часы
-     * горения, поэтому очаг горит, пока подстанция выбита.
+     * Transformer oil of a failed substation, spilled and burning as a pool: mineral oil burn rate 0.039 kg/(m²·s)
+     * (Babrauskas, SFPE Handbook, 5th ed., “Pool fire burning rates”, transformer oil; ⚠ from memory),
+     * effective heat of combustion ~46 MJ/kg (like diesel; ⚠ from memory), soot yield ~0.06 kg/kg (est.:
+     * between kerosene 0.012 and heavy oils ~0.1, Tewarson); pool ~{@value #OIL_AREA} m² (est.: a substation
+     * transformer holds hundreds of liters, with containment around it). Heat 3.6 MW, Heskestad flame ~4.5 m; enough oil for hours
+     * of burning, so the source burns while the substation is out.
      */
     public static final double OIL_AREA = 2;
     public static final Fuel OIL = new Fuel(0.039 * OIL_AREA * 46e6, OIL_AREA, 0.06 / 46e6);
-    /** Мир очагов: сменился (портал) — прежние шлейфы уходят сразу. */
+    /** Sources' world: on change (portal), old plumes disappear immediately. */
     private static ClientLevel world;
     private static int clock;
     private static final double[] BB = new double[4];
     private static final Vector4f COLUMN = new Vector4f();
     private static final double[] WEIGHT = new double[4];
 
-    /** История очага: столько записей (раз в секунду) — дольше дым до края сетки не идёт и при ветре 1 м/с. */
+    /** Source history record count (one per second): enough for smoke to reach the grid edge even at 1 m/s wind. */
     static final int HISTORY = 1024;
 
-    /** Что горит. */
+    /** Burning material. */
     final Fuel fuel;
-    /** Доля топлива в воронке, что горит, по возрасту очага (null — не воронка). */
+    /** Crater fuel burning share by source age (null for non-crater sources). */
     @org.jetbrains.annotations.Nullable
     java.util.function.DoubleUnaryOperator burning;
-    /** Топливо воронки (клетки, закон, место); у прочих очагов — null. */
+    /** Crater fuel (cells, law, position); null for other sources. */
     @org.jetbrains.annotations.Nullable
     private FuelBurn burn;
     /**
-     * Место очага, сила (блоков огня или очагов топлива), сила всего пожара, куда он входит (в единицах его топлива,
-     * {@link #merge}), начало и конец горения (часы сетки, с; конец — NaN, пока горит).
+     * Source position, strength (fire blocks or fuel sources), whole fire strength (in its fuel units,
+     * {@link #merge}), burning start/end (grid clock, s; end is NaN while burning).
      */
     double x, y, z, blocks, fire;
     final double start;
     double end = Double.NaN;
-    /** Мир сменился: источник уходит из сетки. */
+    /** World changed: source leaves the grid. */
     boolean gone;
     /**
-     * Шлейф нынешнего очага в нынешнем ветре и воздухе (подъём — по теплу всего пожара, {@link #merge}) и шлейф одного
-     * его тепла (горячий газ и пламя над очагом); направление ветра.
+     * Current source plume in current wind/air (rise follows whole fire heat, {@link #merge}), and plume of its own
+     * heat alone (hot gas and flame above source); wind direction.
      */
     FirePlume plume, own;
     double wx, wz;
-    /** Докуда по ветру виден шлейф самого сильного очага за историю, м; высота пламени самого очага, м. */
+    /** Visible downwind reach of the strongest historical source's plume, m; own source flame height, m. */
     double visible, flame;
-    /** История очага и его пожара; самый сильный пожар за неё. */
+    /** Source/fire history; strongest fire in that history. */
     private final ua.zentix.incoming.client.fx.smoke.History history = new ua.zentix.incoming.client.fx.smoke.History(HISTORY),
             fires = new ua.zentix.incoming.client.fx.smoke.History(HISTORY);
     private double strongest;
@@ -132,53 +132,53 @@ public final class FireSmoke implements SmokeGrid.Source {
         this.start = seconds;
     }
 
-    /** Запись истории: в seconds горело blocks блоков в пожаре силы fire. */
+    /** History record: at seconds, blocks blocks burned in a fire of strength fire. */
     private void record(double seconds, double blocks, double fire) {
         history.record(seconds, blocks);
         fires.record(seconds, Math.max(fire, blocks));
         strongest = Math.max(strongest, Math.max(fire, blocks));
     }
 
-    /** Блоков огня в миг seconds (до начала и после конца — 0). */
+    /** Fire blocks at seconds (0 before start and after end). */
     double blocksAt(double seconds) {
         if (seconds < start || !Double.isNaN(end) && seconds >= end) return 0;
         return history.at(seconds);
     }
 
-    /** Сила пожара очага в миг seconds (в единицах его топлива). */
+    /** Source's fire strength at seconds (in its fuel units). */
     double fireAt(double seconds) {
         return fires.at(seconds);
     }
 
     /**
-     * Ветер у очага, м/с: ветер мира на высоте над землёй места с поправкой застройки и холма ({@link ClientAir#speed}); в
-     * застройке — не ниже крыш: шлейф пожара за секунды поднимается над ними, и гнёт его ветер над крышами, а не в улице
-     * (⚠ подъём Бриггса берёт один ветер на весь путь).
+     * Source wind, m/s: world wind at local height above ground, corrected for buildings and hill ({@link ClientAir#speed});
+     * in buildings, no lower than roofs: a fire plume rises above them in seconds and bends in rooftop wind, not street wind
+     * (⚠ Briggs rise uses one wind for the whole path).
      */
     private double wind() {
         var site = ClientAir.site(x, z);
         return ClientAir.speed(x, Math.max(y, y - site.above(y) + site.canopy()), z);
     }
 
-    /** Шлейф по нынешнему ветру на высоте очага и устойчивости. */
+    /** Plume from current wind at source height and stability. */
     private void air() {
         var world = ClientAir.now().wind();
         double u = wind();
         wx = world.speed() > 1e-6 ? world.x() : 1;
         wz = world.speed() > 1e-6 ? world.z() : 0;
         plume = fuel.plume(blocks, fire, u, ClientAir.now().stability());
-        // пламя и горячий газ над очагом — у каждого очага свои (свет и дрожание от пожара — сумма очагов, а не очаги ×
-        // пламя всего пожара)
+        // each source has its own flame and hot gas (fire light/shimmer sum sources, rather than sources ×
+        // the whole fire's flame)
         own = fuel.plume(blocks, u, ClientAir.now().stability());
         flame = own.flameHeight();
         visible = fuel.plume(strongest, u, ClientAir.now().stability()).visible(REACH);
     }
 
     /**
-     * Очаги, чьи шлейфы сливаются, — один пожар: шлейф, согнутый ветром, — радиусом ~0,6 своего подъёма (вовлечение
-     * β = 0,6, Briggs, «Plume Rise Predictions», 1975), и два шлейфа сходятся, когда сумма радиусов на конечном подъёме
-     * больше расстояния между очагами: d ≤ 0,6·(Δh₁ + Δh₂) (⚠ оценка слияния по касанию). Пожар — связная группа (по
-     * цепочке); сила каждого очага в группе — тепло всей группы в единицах его топлива.
+     * Sources whose plumes merge form one fire: a wind-bent plume has radius ~0.6 of its rise (entrainment
+     * β = 0.6, Briggs, “Plume Rise Predictions”, 1975); two plumes join when their summed radii at final rise
+     * exceed source separation: d ≤ 0.6·(Δh₁ + Δh₂) (⚠ touching-plume merge (est.)). A fire is a connected group (by
+     * chains); each source's strength within it is total group heat in its fuel units.
      */
     static void merge(java.util.List<FireSmoke> all) {
         int n = all.size();
@@ -197,8 +197,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Тепло пожара каждого очага, Вт: очаги на (x, z) с теплом {@code watts} и конечным подъёмом своего шлейфа
-     * {@code rise} сливаются, когда d ≤ 0,6·(Δh₁ + Δh₂) ({@link #merge}), по цепочке.
+     * Fire heat for each source, W: sources at (x, z), heat {@code watts}, final own-plume rise
+     * {@code rise}, merge by chains when d ≤ 0.6·(Δh₁ + Δh₂) ({@link #merge}).
      */
     static double[] fires(double[] x, double[] z, double[] watts, double[] rise) {
         int n = x.length;
@@ -220,7 +220,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         return i;
     }
 
-    /** Раз в тик клиента: очаги — раз в {@link #PERIOD}. */
+    /** Once per client tick: sources every {@link #PERIOD}. */
     public static void tick(ClientLevel level) {
         if (level != world) {
             reset();
@@ -232,7 +232,7 @@ public final class FireSmoke implements SmokeGrid.Source {
             var e = it.next();
             FireSmoke f = e.getValue();
             BlockPos at = BlockPos.of(e.getLongKey());
-            // чанк у клиента — смотрим блок: подстанция снова под током или снесена — масло больше не горит
+            // client has the chunk: inspect block; restored power or removed substation means oil no longer burns
             if (level.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4) != null && !SubstationBlock.out(level.getBlockState(at))) {
                 f.end = now;
                 it.remove();
@@ -250,7 +250,7 @@ public final class FireSmoke implements SmokeGrid.Source {
                 columns();
             }
         }
-        // очаги рядом — один пожар; потом — запись и шлейф по нему
+        // nearby sources form one fire; then record history and build its plume
         java.util.List<FireSmoke> burning = new java.util.ArrayList<>(OIL_FIRES.values());
         burning.addAll(POOLS);
         merge(burning);
@@ -261,8 +261,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Подстанция выбита ({@code GridEffects.failure}; у вошедшего позже — по случайному тику блока рядом): над ней
-     * горит масло трансформатора ({@link #OIL}), пока она не под током.
+     * Substation failed ({@code GridEffects.failure}; late joiners learn from a nearby block random tick): transformer oil
+     * ({@link #OIL}) burns above it while power is out.
      */
     public static void substation(ClientLevel level, BlockPos pos) {
         if (level != world) {
@@ -280,9 +280,9 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Состояние воронки с сервера ({@code S2C.FuelFire}): новая — очаг дыма ({@link #pool}); известная — очаг переходит туда,
-     * где топливо теперь горит, и горит долей клеток, что не погасли раньше срока ({@link FuelBurn#share}). Новое топливо
-     * (для звука) или null, если воронка уже была.
+     * Server crater state ({@code S2C.FuelFire}): new crater creates a smoke source ({@link #pool}); existing source moves to
+     * where fuel now burns, using the share of cells not extinguished early ({@link FuelBurn#share}). Returns new fuel
+     * (for sound), or null if the crater already existed.
      */
     @org.jetbrains.annotations.Nullable
     public static FuelBurn fuel(ClientLevel level, int id, ua.zentix.incoming.nuclear.model.FuelPool law, java.util.List<BlockPos> cells,
@@ -307,10 +307,10 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Топливо в воронке горит огнём Minecraft на клетках (сервер, {@code warhead/FuelFires}) по закону {@code burn} с теплом
-     * закона и сажей топлива, долей {@link FuelBurn#share} по возрасту ({@code age} с уже прошло с удара), — очаг среди
-     * клиента над серединой горящих клеток: пламя светит на дым и мир. Огонь клеток — сами блоки; огонь города ядерки
-     * ({@link FireWatch}) их не считает ({@link FuelCells}).
+     * Crater fuel burns as Minecraft fire on cells (server, {@code warhead/FuelFires}) under {@code burn}, with the law's heat
+     * and fuel soot, age-based {@link FuelBurn#share} ({@code age} s already since impact): a client source
+     * above the burning cells' centroid; flame lights smoke and world. Cell fire is the blocks themselves; nuclear city fire
+     * ({@link FireWatch}) excludes them ({@link FuelCells}).
      */
     static FireSmoke pool(ClientLevel level, FuelBurn burn, double age) {
         if (level != world) {
@@ -332,12 +332,12 @@ public final class FireSmoke implements SmokeGrid.Source {
         return f;
     }
 
-    /** Индекс клеток топлива ({@link #FUEL}) — заново по горящим воронкам. */
+    /** Rebuild fuel-cell index ({@link #FUEL}) from burning craters. */
     private static void columns() {
         FUEL.index(POOLS.stream().filter(f -> f.burn != null).map(f -> f.burn.live()).toList());
     }
 
-    /** Смена мира, перемотка повтора: очагов нет (источники сетки снимает её сброс). */
+    /** World change/replay seek: no sources (grid reset removes its sources). */
     public static void reset() {
         for (FireSmoke f : OIL_FIRES.values()) f.gone = true;
         for (FireSmoke f : POOLS) f.gone = true;
@@ -349,8 +349,8 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Шлейф в момент seconds: от очага до пути, что дым прошёл с начала горения, и не дальше, чем виден шлейф самого
-     * сильного очага ({@link #lay}).
+     * Plume at seconds: from source to the path smoke has traveled since ignition, no farther than the strongest
+     * source's visible plume ({@link #lay}).
      */
     @Override
     public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -364,12 +364,12 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Шлейф очага (x, y, z) топлива fuel по ветру (wx, wz) скорости u до пути far — кусками трубки ({@link SmokeGrid.Sink#tube})
-     * между местами оси на пути xₖ (квадратично: у очага ось круче), одними на любой дальности от глаза: сколько квадратов
-     * на кусок, решает тот, кто рисует, по размеру на экране (вдали — лента). Место оси на пути x — по очагу в миг выхода
-     * этого дыма (x/u секунд назад, blocks и fire — сила очага и его пожара по пути): подъём и σ его шлейфа, сажа на метр —
-     * его; где тогда не горело, сажи нет: кусок кончается там, где дым кончается (граница — по истории очага), пустые куски
-     * тоже отдаются (без сажи). sigma0 — σ у самого очага.
+     * Plume of fuel source (x, y, z), wind (wx, wz) at speed u, to path far, in tube segments ({@link SmokeGrid.Sink#tube})
+     * between axis positions at path xₖ (quadratic: steeper axis near source), same at any eye distance: the renderer chooses quads
+     * per segment by screen size (ribbon far away). Axis position at path x follows the source when this smoke was emitted
+     * (x/u seconds ago, blocks/fire are source/fire strength along path): its plume rise and σ, and its soot per meter;
+     * no burning then means no soot: segment ends where smoke ends (boundary from source history); empty segments
+     * are also submitted (without soot). sigma0 is σ at the source.
      */
     public static void lay(Fuel fuel, double x, double y, double z, double wx, double wz, double u, double stability, double far, double sigma0,
                     java.util.function.DoubleUnaryOperator blocks, java.util.function.DoubleUnaryOperator fire, SmokeGrid.Sink out) {
@@ -382,7 +382,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
         FirePlume[] plume = new FirePlume[n];
         for (int k = 0; k < n; k++) if (b[k] > 0) plume[k] = fuel.plume(b[k], fire.applyAsDouble(path[k]), u, stability);
-        // где не горело — без сажи, с геометрией ближайшего места, что горело (вещество сходит к нулю вдоль куска)
+        // where nothing burned: no soot, geometry from nearest burning position (matter falls to zero along segment)
         for (int k = 0; k < n; k++) {
             if (plume[k] != null) continue;
             for (int j = 1; j < n && plume[k] == null; j++) {
@@ -394,16 +394,16 @@ public final class FireSmoke implements SmokeGrid.Source {
         sigma0 = Math.max(sigma0, 0.25);
         for (int k = 1; k < n; k++) {
             boolean burnA = b[k - 1] > 0, burnB = b[k] > 0;
-            // кусок отдаётся всегда (пустой — без сажи): номер куска — зерно его клубов у приёмника, и выпавший кусок не
-            // сдвигал бы клубы всего шлейфа дальше по ветру
+            // always submit the segment (empty means no soot): segment index seeds its billows at the sink; dropping a segment must not
+            // shift billows throughout the plume farther downwind
             if (!burnA && !burnB) {
                 empty(out, x, y, z, wx, wz, path[k - 1], path[k], plume[k - 1], plume[k], sigma0);
                 continue;
             }
             double xa = path[k - 1], xb = path[k];
             FirePlume pa = plume[k - 1], pb = plume[k];
-            // край дыма (очаг загорелся или погас посреди куска) — граница по истории очага: кусок от неё, вещество до
-            // самого края полное — край идёт по ветру ровно, а не рампой от узла к узлу со щелчком, когда проходит узел
+            // smoke edge (source ignited/extinguished within segment) follows source history: segment starts there, with full matter to
+            // the edge; edge travels steadily downwind instead of ramping node to node and snapping as it crosses a node
             if (burnA != burnB) {
                 double lo = xa, hi = xb;
                 for (int i = 0; i < 24; i++) {
@@ -419,14 +419,14 @@ public final class FireSmoke implements SmokeGrid.Source {
                     pa = pb;
                 }
             }
-            // толща через середину на обоих концах ниже порога видимости — куска не видно
+            // center optical depth at both ends below visibility threshold: segment invisible
             if (Math.max(pa.tau(xa), pb.tau(xb)) < CloudModel.SEEN) {
                 empty(out, x, y, z, wx, wz, xa, xb, pa, pb, sigma0);
                 continue;
             }
             double ha = pa.rise(xa), hb = pb.rise(xb), mid = 0.5 * (xa + xb);
-            // сажа шлейфа — ṁ/u на метр пути по ветру; на метр оси куска — меньше во столько, во сколько ось длиннее пути
-            // (у очага, где шлейф круто поднимается)
+            // plume soot is ṁ/u per downwind path meter; per segment-axis meter, reduced by axis/path length ratio
+            // (near source where plume rises steeply)
             double dx = xb - xa, len = Math.sqrt(dx * dx + (hb - ha) * (hb - ha)), along = len > 0 ? dx / len : 1;
             double kelvin = CloudModel.T_AIR_K + pb.excess(0.5 * (ha + hb));
             out.tube(x + wx * xa, y + ha, z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), pa.sootPerMetre() * along, 0, x + wx * xb, y + hb,
@@ -434,7 +434,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
-    /** Кусок шлейфа без сажи (там не горело или его не видно): только номер куска у приёмника. */
+    /** Soot-free plume segment (nothing burned or invisible): only segment index at the sink. */
     private static void empty(SmokeGrid.Sink out, double x, double y, double z, double wx, double wz, double xa, double xb, FirePlume pa,
                               FirePlume pb, double sigma0) {
         out.tube(x + wx * xa, y + pa.rise(xa), z + wz * xa, pa.sigmaY(xa), pa.sigmaZ(xa), 0, 0, x + wx * xb, y + pb.rise(xb), z + wz * xb,
@@ -452,9 +452,9 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Пламя очагов светит на дым снизу: в свободные места света сетки (занятые — шарами взрывов и ядерки), самые заметные
-     * (яркость × R²/d²) — шар видимого пламени ({@link FirePlume#flameLight}) радиусом в полвысоты пламени над очагом; свет — линейный
-     * × exposure, в w — air.
+     * Flame lights smoke from below in free grid-light slots (explosion/nuclear balls take the others), most noticeable first
+     * (brightness × R²/d²): a visible-flame sphere ({@link FirePlume#flameLight}) of half flame-height radius above source; linear light
+     * × exposure, air in w.
      */
     public static void lights(Vec3 eye, double exposure, double air, Matrix4f centres, Matrix4f light) {
         if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -478,18 +478,18 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
-    /** Все очаги: масло подстанций и топливо в воронках. */
+    /** All sources: substation oil and crater fuel. */
     private static Iterable<FireSmoke> all() {
         return () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator();
     }
 
-    /** Огонь очага на экране (доля белого; подача): свет пламени вокруг не ярче его (как у лужи топлива, {@code FarBlasts}). */
+    /** On-screen source fire (share of white; presentation): surrounding flame light no brighter than it (like fuel pools, {@code FarBlasts}). */
     static final double FLAME_ON_SCREEN = 0.8;
 
     /**
-     * Пламя очагов светит на частицы, клубы и ленты вокруг ({@link FxLights}): шар видимого пламени
-     * ({@link FirePlume#flameLight}) радиусом в полвысоты пламени над очагом, с привыканием глаза кадра. Ночью без него дым над
-     * пожаром освещала бы одна луна.
+     * Source flame lights surrounding particles, billows and ribbons ({@link FxLights}): a visible-flame sphere
+     * ({@link FirePlume#flameLight}) of half flame-height radius above source, with frame eye adaptation. Without it, only the moon
+     * would light smoke above a fire at night.
      */
     public static void lights(FarView view, FxLights lights) {
         if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -505,12 +505,12 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Пламя очагов топлива там, где мир его уже не рисует: у масла подстанций своего огня на блоках нет, а огонь Minecraft
-     * на клетках топлива воронки с 0,8 прорисовки тает в тумане и мельче пикселя — ночью в 300 м от пожара в 2–3 МВт
-     * оставалась бы серая точка. Тело — круг площади пламени сбоку (высота по Хескестаду × диаметр очага), с 0,8
-     * прорисовки (ближе пламя — сами блоки огня); свет и цвет — как у света пламени на дыме
-     * ({@link FirePlume#FLAME_LUMINANCE}, {@link FirePlume#FLAME_COLOR}, с привыканием глаза кадра), блик и вуаль — на
-     * любой дальности, как у огненного шара и факела ({@link FarSprites#light}). Огонь дерева вдали рисует сам мир.
+     * Fuel-source flame where the world no longer draws it: substation oil has no own fire blocks; Minecraft fire
+     * on crater fuel cells fades in fog beyond 0.8 render distance and becomes subpixel, leaving only a gray point 300 m
+     * from a 2–3 MW fire at night. Body is a disk of side-view flame area (Heskestad height × source diameter), beyond 0.8
+     * render distance (nearer, fire blocks themselves supply flame); light/color match flame light on smoke
+     * ({@link FirePlume#FLAME_LUMINANCE}, {@link FirePlume#FLAME_COLOR}, with frame eye adaptation); glare/veil at
+     * any distance, like fireballs/plumes ({@link FarSprites#light}). The world draws distant wood fire itself.
      */
     public static void far(FarView view, FarSprites out) {
         if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -520,13 +520,13 @@ public final class FireSmoke implements SmokeGrid.Source {
         for (FireSmoke f : (Iterable<FireSmoke>) () -> java.util.stream.Stream.concat(OIL_FIRES.values().stream(), POOLS.stream()).iterator()) {
             if (!Double.isNaN(f.end) || f.gone) continue;
             if (f.blocks <= 0 || f.flame <= 0) continue;
-            // пламя сбоку: высота по Хескестаду (по нынешней силе очага: у топлива — доля, что ещё горит) × диаметр очага (у
-            // масла — всех его очагов), круг той же площади — на половине высоты
+            // flame from side: Heskestad height (current source strength: fuel uses remaining burning share) × source diameter (oil:
+            // all its sources), an equal-area disk at half height
             double area = f.burning == null ? f.blocks * f.fuel.area : f.fuel.area;
             double across = 2 * Math.sqrt(area / Math.PI), radius = Math.sqrt(f.flame * across / Math.PI);
             double dx = f.x - cam.x, dy = f.y + 0.5 * f.flame - cam.y, dz = f.z - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz), w = view.farShare(d), t = view.air(d, dy);
-            // ядро — с 0,8 прорисовки; блик и вуаль — на любой дальности, как у факела и шара
+            // core beyond 0.8 render distance; glare/veil at any distance, like plume and ball
             out.light(dx, dy, dz, radius, FirePlume.FLAME_LUMINANCE * view.exposure() * t, t, view.pixel(), r, g, b, w, 1, FAR_LIGHT);
         }
     }
@@ -534,10 +534,10 @@ public final class FireSmoke implements SmokeGrid.Source {
     private static final double[] FAR_LIGHT = new double[5];
 
     /**
-     * Свет и горячий газ очагов на мир кадра ({@code HeatPass}): горячий газ над каждым горящим очагом (столб по
-     * Хескестаду) и свет пламени масла подстанций и топлива в воронках: огонь Minecraft светит на мир сам, светом блоков (свет
-     * блока 15 гаснет за ~14 блоков, а пламя топлива в 2–3 МВт ночью освещает округу на десятки метров: без своего света
-     * кадр ночью темнее прежнего, проверка FV), — свет пламени топлива из середины его клеток на блоках.
+     * Source light/hot gas on the frame world ({@code HeatPass}): hot gas over each burning source (Heskestad
+     * column) and flame light from substation oil/crater fuel: Minecraft fire already lights the world with block light (level
+     * 15 fades over ~14 blocks, while 2–3 MW fuel flame lights tens of meters around it at night: without own light the night
+     * frame is darker than before, FV check); fuel flame light originates at the centroid of its cells on blocks.
      */
     public static void heat(Vec3 eye, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (OIL_FIRES.isEmpty() && POOLS.isEmpty()) return;
@@ -551,7 +551,7 @@ public final class FireSmoke implements SmokeGrid.Source {
         }
     }
 
-    /** Для строки {@code SCENARIO}: очаги масла и топлива — сила, пламя, подъём. */
+    /** For the {@code SCENARIO} line: oil/fuel source strength, flame, rise. */
     public static String describe() {
         FireSmoke first = OIL_FIRES.isEmpty() ? null : OIL_FIRES.values().iterator().next();
         String oil = first == null ? "" : String.format(Locale.ROOT, " oil %d (%.1f MW, flame %.1f, rise %.0f)", OIL_FIRES.size(),

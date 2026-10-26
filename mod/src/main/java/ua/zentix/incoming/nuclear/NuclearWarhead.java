@@ -37,41 +37,41 @@ import ua.zentix.incoming.util.Wind;
 import java.util.UUID;
 
 /**
- * Ядерная боеголовка: подрыв (DESIGN-nuke §0, §4). Сервер записывает событие и шлёт его всем в измерении
- * одним пакетом. Всё остальное идёт по тикам под бюджетом ({@link NuclearWorld}): световой импульс и проникающая
- * радиация по сущностям (ближние первыми), ударная волна, разрушения и воронка.
+ * Nuclear warhead: detonation (DESIGN-nuke §0, §4). Server records event and sends it to everyone in dimension
+ * in one packet. Everything else runs by ticks under the budget ({@link NuclearWorld}): light pulse and prompt
+ * radiation on entities (nearest first), shock wave, destruction and crater.
  */
 public final class NuclearWarhead {
     /**
-     * Сценарий клиента ({@code tools/client_scenario.sh}, сервер — в той же JVM): ветер и сид подрыва — по его номеру, а не
-     * из {@code level.random}, чтобы кадры пелены и гриба сравнивались от прогона к прогону. В игре — как было.
+     * Client scenario ({@code tools/client_scenario.sh}, server in same JVM): wind and detonation seed derive from its number rather than
+     * {@code level.random}, so pall and mushroom frames compare across runs. In game, unchanged.
      */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
-    /** Докуда от глаза (блоки) рельеф между ним и шаром проверяется по карте высот плотно, и с каким шагом. */
+    /** Distance from eye (blocks) where terrain between it and fireball is densely checked by heightmap, and step size. */
     private static final double NEAR_TERRAIN = 512, TERRAIN_STEP = 8;
     private static final long SCENARIO_SEED = 0x5CE7A510L;
 
     private NuclearWarhead() {}
 
     /**
-     * @param target   точка прицеливания (земля под эпицентром берётся по карте высот)
-     * @param airBurst воздушный подрыв на оптимальной высоте; иначе — наземный
+     * @param target   aim point (ground beneath epicenter from heightmap)
+     * @param airBurst airburst at optimal height; otherwise surface burst
      */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner) {
         return detonate(level, target, yieldKt, airBurst, owner, (float) IncomingConfig.SERVER.effectsScale());
     }
 
-    /** @param scale масштаб радиусов (1 — как в жизни); обычно из настройки effects_scale, GameTest задаёт свой */
+    /** @param scale radius scale (1 is real life); usually from effects_scale setting, GameTest supplies its own */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner, float scale) {
         long started = System.nanoTime();
-        // предел мощности — и для ударов из старых сохранений и команд других модов
+        // yield limit also applies to strikes from old saves and other mods' commands
         yieldKt = Math.min(yieldKt, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD);
         NuclearEvents events = NuclearEvents.get(level);
-        // готовились к этому подрыву — его место, земля и видимость те же, что у руин заранее
+        // prepared for this detonation: location, ground and visibility match the prebuilt ruins
         Detonation g = NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale));
         int id = events.nextId();
         RandomSource random = SCENARIO ? RandomSource.create(SCENARIO_SEED + id) : level.random;
-        // ветер — ветра мира (тот же у дыма и шлейфов на клиенте)
+        // wind is world wind (same as client smoke and trails)
         Wind wind = Wind.at(level.getGameTime());
         Detonation d = new Detonation(id, g.burst(), g.groundY(), yieldKt, g.surface(),
                 level.getGameTime(), (float) wind.direction(), (float) wind.speed(),
@@ -89,8 +89,8 @@ public final class NuclearWarhead {
     }
 
     /**
-     * Место подрыва без номера, времени и случайных деталей: точка подрыва, земля под ней, наземный ли, видимость.
-     * По нему же строятся руины заранее ({@link ua.zentix.incoming.nuclear.world.NuclearPrep}) — они совпадут с подрывом.
+     * Detonation geometry without number, time or random detail: burst point, ground beneath, surface status, visibility.
+     * Also used to prebuild ruins ({@link ua.zentix.incoming.nuclear.world.NuclearPrep}) matching the actual detonation.
      */
     public static Detonation geometry(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, float scale) {
         Terrain.Surface under = ground(level, Mth.floor(target.x), Mth.floor(target.z));
@@ -103,22 +103,22 @@ public final class NuclearWarhead {
                 (float) IncomingConfig.SERVER.waveSpeed());
     }
 
-    /** Точка на поверхности над целью (удар «по поверхности»: цель — место на карте). */
+    /** Surface point above target (surface strike: target is a map position). */
     public static Vec3 surfaceAt(ServerLevel level, Vec3 at) {
         BlockPos p = BlockPos.containing(at);
         Terrain.Surface under = ground(level, p.getX(), p.getZ());
         return under == null ? at : new Vec3(at.x, under.y(), at.z);
     }
 
-    /** Земля в колонке по готовому чанку; потолок Незера — не земля; чанк не готов — null (точка остаётся целью). */
+    /** Ground in column from ready chunk; Nether ceiling is not ground; null for unready chunk (point remains target). */
     private static Terrain.@Nullable Surface ground(ServerLevel level, int x, int z) {
         Terrain.Surface s = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z, Terrain.Allowed.CHUNK);
         return s.source() == Terrain.Source.CHUNK ? s : null;
     }
 
     /**
-     * Дальше этого (блоки) ни свет, ни проникающая радиация сущностей не трогают: ожоги 1-й степени у самых
-     * чувствительных или 50 бэр. Ожог сетчатки достаёт дальше — игроков до него {@link PulseJob} добирает сам
+     * Beyond this (blocks), neither light nor prompt radiation affects entities: 1st-degree burns for the most
+     * sensitive or 50 rem. Retinal burns reach farther: {@link PulseJob} collects players out to that range itself
      * ({@link FlashEyes#reach}).
      */
     public static double exposureRange(Detonation d) {
@@ -128,24 +128,24 @@ public final class NuclearWarhead {
     }
 
     /**
-     * Свет и проникающая радиация по одной сущности в пределах {@link #exposureRange} (её отбирает вызывающий).
-     * Идёт не в тике подрыва, а под бюджетом ({@link NuclearWorld}).
+     * Light and prompt radiation on one entity within {@link #exposureRange} (selected by caller).
+     * Runs under budget ({@link NuclearWorld}), not on detonation tick.
      *
-     * @return задело ли (жива и не в творческом режиме)
+     * @return whether affected (alive and not in creative mode)
      */
     public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner) {
         if (!living.isAlive()) return false;
-        // творческий режим и наблюдатели: ни ожогов, ни дозы (как и у урона)
+        // creative and spectator: no burns or dose (as with damage)
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
             if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
             FlashBurns.burn(level, d, living, d.fluence(eye), owner);
-            // видел вспышку — бежит прочь
+            // saw flash: flee
             MobPanic.flash(d, living, level.getGameTime());
         }
         double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
-        // без защиты меньше бэра — лучей защиты не нужно (игроки до дальности ожога сетчатки — за десятки километров)
+        // less than a rem unshielded: no shielding rays needed (players reach retinal-burn range, tens of kilometers)
         if (rem < 1) return true;
         rem *= Shielding.prompt(level, eye, d.burst());
         if (rem < 1) return true;
@@ -153,7 +153,7 @@ public final class NuclearWarhead {
         if (living instanceof ServerPlayer player) {
             if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy);
         } else if (IncomingConfig.SERVER.nukeMobRadiation.get()) {
-            // мобы болеют, как игроки (нежить и стойки брони не болеют)
+            // mobs get sick like players (undead and armor stands do not)
             if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy);
         } else if (rem >= 1000) {
             living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), Float.MAX_VALUE);
@@ -164,18 +164,18 @@ public final class NuclearWarhead {
     }
 
     /**
-     * Видит ли сущность огненный шар: рядом — честный луч по блокам (стены, крыша), дальше — по карте высот
-     * (холмы, дома): до {@link #NEAR_TERRAIN} — плотно, за ним — редкими точками, чтобы не гнать луч на километры.
+     * Whether entity sees fireball: nearby, actual block ray (walls, roof); farther, heightmap
+     * (hills, houses), densely to {@link #NEAR_TERRAIN}, sparse points beyond to avoid kilometer-long rays.
      */
     public static boolean sees(Level level, Detonation d, LivingEntity e) {
         Vec3 eye = e.getEyePosition();
         Vec3 dir = d.burst().subtract(eye);
         double len = dir.length();
         Vec3 near = eye.add(dir.scale(Math.min(1, 48 / Math.max(len, 1e-3))));
-        // луч по блокам — только по загруженным чанкам: сервер не должен грузить мир ради проверки
+        // block ray only through loaded chunks: server must not load world for this check
         if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return false;
-        // редкие точки ThermalShadow у дальнего глаза проходят мимо рельефа рядом (хребет в сотне метров при шаре за
-        // 30 км): от луча до NEAR_TERRAIN — каждые TERRAIN_STEP блоков по карте высот, пока чанки готовы
+        // sparse ThermalShadow points for a distant eye miss nearby terrain (ridge a hundred meters away with fireball
+        // 30 km away): from ray end to NEAR_TERRAIN, heightmap every TERRAIN_STEP blocks while chunks ready
         Vec3 until = Terrain.readyUntil(level, near, eye.add(dir.scale(Math.min(1, NEAR_TERRAIN / Math.max(len, 1e-3)))));
         Vec3 span = until.subtract(near);
         for (double s = TERRAIN_STEP, n = span.length(); s < n; s += TERRAIN_STEP) {
@@ -185,7 +185,7 @@ public final class NuclearWarhead {
         return ThermalShadow.visible(level, d.burst(), near);
     }
 
-    /** Дальность, где доза проникающей радиации падает до {@code rem}, м (бисекция по монотонной модели). */
+    /** Range where prompt-radiation dose falls to {@code rem}, m (bisection of monotonic model). */
     private static double radiusForDose(double yieldKt, double rem) {
         double lo = 1, hi = 100_000;
         for (int i = 0; i < 60; i++) {

@@ -1,41 +1,41 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Кривые поражения: доля мест, где воздействие {@code x} вызвало последствие, — логнормальная, как в таблицах поражения
- * (разброс материала, влажности, толщины): {@code P = Φ(ln(x/m)/β)}, {@code m} — медиана (половина мест), {@code β} —
- * разброс. Случайность места — нормальная величина {@code z}: последствие там, где {@code ln(x/m) + β·z ≥ 0}. При
- * {@code z ~ N(0, 1)} это ровно та же доля, а если {@code z} — гладкое поле мира ({@link WorldNoise}), соседние места
- * решаются вместе: край зоны рваный, пятнами, а не кольцом по порогу.
+ * Damage curves: the fraction of places where exposure {@code x} caused a consequence is lognormal, as in damage tables
+ * (variation in material, moisture, thickness): {@code P = Φ(ln(x/m)/β)}, {@code m} is the median (half the places), {@code β} is
+ * the spread. Local randomness is a normal variable {@code z}: the consequence occurs where {@code ln(x/m) + β·z ≥ 0}. With
+ * {@code z ~ N(0, 1)} this gives exactly the same fraction; if {@code z} is a smooth world field ({@link WorldNoise}), neighboring places
+ * resolve together: a ragged, patchy zone edge rather than a threshold ring.
  */
 public final class Fragility {
     private Fragility() {}
 
-    /** Доля мест с последствием при воздействии {@code x} (0 при {@code x ≤ 0}). */
+    /** Fraction of places with the consequence under exposure {@code x} (0 for {@code x ≤ 0}). */
     public static double probability(double x, double median, double beta) {
         if (x <= 0) return 0;
         return cdf(Math.log(x / median) / beta);
     }
 
     /**
-     * Случайность места усечена до ±{@code TAIL}: дальше 2.5σ кривая — уже не разброс материала, а редкие одиночные
-     * места далеко за зоной (выжженная клетка дёрна за километр от остальных), которых не бывает.
+     * Local randomness is truncated at ±{@code TAIL}: beyond 2.5σ the curve describes rare isolated
+     * places far outside the zone (a scorched turf cell a kilometer from the rest), which do not occur, rather than material variation.
      */
     public static final double TAIL = 2.5;
 
-    /** Последствие в месте со случайностью {@code z}: {@code x·exp(β·z) ≥ m}, {@code z} — не дальше {@link #TAIL}. */
+    /** Consequence at a place with randomness {@code z}: {@code x·exp(β·z) ≥ m}, {@code z} no farther than {@link #TAIL}. */
     public static boolean hit(double x, double median, double beta, double z) {
         return x > 0 && Math.log(x / median) + beta * Math.max(-TAIL, Math.min(TAIL, z)) >= 0;
     }
 
     /**
-     * Может ли последствие случиться хоть в одном месте ({@link #hit} при самой большой случайности {@link #TAIL}): нет —
-     * случайность места и не нужна.
+     * Can the consequence occur anywhere ({@link #hit} at maximum randomness {@link #TAIL})? If not,
+     * local randomness is unnecessary.
      */
     public static boolean possible(double x, double median, double beta) {
         return x > 0 && Math.log(x / median) + beta * TAIL >= 0;
     }
 
-    /** Функция распределения стандартной нормальной величины Φ(z) (Абрамовиц — Стиган 26.2.17, ошибка < 7.5·10⁻⁸). */
+    /** Standard normal cumulative distribution Φ(z) (Abramowitz–Stegun 26.2.17, error < 7.5·10⁻⁸). */
     public static double cdf(double z) {
         if (z < -8) return 0;
         if (z > 8) return 1;
@@ -45,7 +45,7 @@ public final class Fragility {
         return z >= 0 ? 1 - tail : tail;
     }
 
-    /** Обратная к {@link #cdf}: z, для которого Φ(z) = u (приближение Акклама без уточнения: ошибка z до ~10⁻⁵). */
+    /** Inverse of {@link #cdf}: z such that Φ(z) = u (Acklam approximation without refinement: z error up to ~10⁻⁵). */
     public static double inverse(double u) {
         if (u <= 0) return Double.NEGATIVE_INFINITY;
         if (u >= 1) return Double.POSITIVE_INFINITY;

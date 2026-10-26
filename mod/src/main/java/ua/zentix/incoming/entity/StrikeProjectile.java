@@ -61,60 +61,60 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Общая основа снарядов: ориентация и поворот ({@link FlightController}), фаза полёта ({@link FlightPhase}),
- * маршрут ({@link Route}), запас хода ({@link Mission}), слежение за целью, заметание пути на столкновения (блоки,
- * аппараты Sable, люди рядом с траекторией — {@link ProximityFuse}), тикеты чанков по курсу ({@link ChunkHold}) и района
- * цели ({@link TargetAreaHold}), синхронизация, сохранение. Законы полёта управляемых — в {@code guidance}: сущность
- * отдаёт им себя как {@link Craft}.
+ * Shared projectile base: orientation/turning ({@link FlightController}), flight phase ({@link FlightPhase}),
+ * route ({@link Route}), range reserve ({@link Mission}), target tracking, collision path sweep (blocks,
+ * Sable craft, people near trajectory — {@link ProximityFuse}), forward chunk tickets ({@link ChunkHold}) and target
+ * area ({@link TargetAreaHold}), synchronization, persistence. Guided flight laws live in {@code guidance}: entity
+ * exposes itself as {@link Craft}.
  * <p>
- * Полёт вне загруженного мира: снаряд, который уходит из тикающих чанков, не замирает на краю, а продолжает полёт
- * «виртуально» ({@link VirtualFlights}): тот же код наведения без чтения блоков, и снова появляется в мире, как
- * только входит в тикающие чанки. Район цели заранее догружается в фоне ({@link FlightTickets}).
+ * Flight outside loaded world: projectile leaving ticking chunks does not freeze at edge, but continues
+ * “virtually” ({@link VirtualFlights}): same guidance without block reads, reappearing in-world as
+ * soon as it enters ticking chunks. Target area preloads in background ({@link FlightTickets}).
  * <p>
- * Ошибка в тике одного снаряда не роняет сервер: снаряд удаляется, стек пишется в лог.
+ * One projectile's tick error cannot crash server: remove projectile and log stack.
  */
 public abstract class StrikeProjectile extends Entity implements IEntityWithComplexSpawn {
     private static final EntityDataAccessor<Float> DATA_ROLL = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_SPEED = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.FLOAT);
     /**
-     * Сдвиг за последний тик сервера ({@link #velocity()}). Ванильный пакет скорости сущности его не довезёт: он режет
-     * компоненты до 3,9 блока/тик, а B-2 летит 12, МБР — до 25.
+     * Last server-tick displacement ({@link #velocity()}). Vanilla entity velocity packet cannot carry it: components
+     * capped at 3.9 blocks/tick, while B-2 flies at 12 and ICBM up to 25.
      */
     private static final EntityDataAccessor<Vector3f> DATA_VELOCITY = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.VECTOR3);
     private static final EntityDataAccessor<Byte> DATA_PHASE = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Vector3f> DATA_AIM = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.VECTOR3);
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<Boolean> DATA_NUCLEAR = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.BOOLEAN);
-    /** Сколько первых тиков на пусковой снаряд не виден (пакет ещё поднимается — снаряд «в ячейке»). */
+    /** First launcher ticks when projectile is invisible (rack still raising — projectile inside slot). */
     private static final EntityDataAccessor<Integer> DATA_HIDDEN = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.INT);
-    /** Ведёт ли снаряд замеченную цель камерой оператора ({@link Pursuit}) — для картинки его камеры. */
+    /** Whether operator camera tracks a sighted target ({@link Pursuit}), for camera presentation. */
     private static final EntityDataAccessor<Byte> DATA_PURSUIT = SynchedEntityData.defineId(StrikeProjectile.class, EntityDataSerializers.BYTE);
 
     /**
-     * Погоня снаряда с камерой ({@link WeaponSpec.Tracking#CAMERA}) за замеченной целью ({@link Target.Sighted}):
-     * её показывает камера снаряда у оператора.
+     * Camera projectile ({@link WeaponSpec.Tracking#CAMERA}) pursuing sighted target ({@link Target.Sighted}):
+     * shown by operator's projectile camera.
      */
     public enum Pursuit {
-        /** Замеченной цели нет, она потеряна или оружие за ней не идёт. */
+        /** No sighted target, lost, or weapon does not pursue it. */
         NONE,
-        /** Оператор держит цель в кадре: снаряд идёт за ней. */
+        /** Operator holds target in frame: projectile follows it. */
         HELD,
-        /** Цель не в кадре: снаряд летит туда, где её видели в последний раз. */
+        /** Target outside frame: projectile flies toward last seen position. */
         WAITING
     }
 
     /**
-     * Дольше минуты район цели не загрузился — снаряд убирается: сервер не справляется с генерацией (десятки районов
-     * по 9×9 чанков от залпа с разбросом) или цель недостижима.
+     * Target area failed to load within a minute: remove projectile — server cannot handle generation (dozens of
+     * 9×9-chunk areas for a spread salvo) or target unreachable.
      */
     private static final int AREA_WAIT_LIMIT = 1200;
-    /** Вне мира снаряд под поверхностью ещё летит к цели, пока он не ниже её на столько блоков (см. groundCrossing). */
+    /** Outside-world projectile below surface keeps flying toward target until this many blocks below it (see groundCrossing). */
     private static final double BELOW_AIM = 16;
-    /** Район цели догружается, когда до неё осталось столько тиков полёта (и не меньше 400 блоков). */
+    /** Preload target area this many flight ticks away (and at least 400 blocks). */
     private static final int PRELOAD_TICKS = 300;
     /**
-     * Район цели тикает, когда до удара осталось столько тиков ({@link #etaTicks}): снаряду вне мира хватает вернуться
-     * в мир у цели, а ракете РСЗО — не растягивать траекторию ({@code WeaponSpec.RocketFlight.stretchTicks()} до её черты ожидания).
+     * Target area ticks this many ticks before impact ({@link #etaTicks}): outside-world projectile has time to reenter
+     * at target, MLRS rocket avoids trajectory stretching ({@code WeaponSpec.RocketFlight.stretchTicks()} to its waiting line).
      */
     public static final int AREA_TICK_LEAD = 160;
 
@@ -123,18 +123,18 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Nullable
     protected TargetTracker tracker;
     protected int age;
-    /** Сколько урона ещё выдержит; -1 — не задано (берётся {@link #maxHealth()}). */
+    /** Remaining damage capacity; -1 — unset (use {@link #maxHealth()}). */
     protected float health = -1;
     /**
-     * Воздух, закреплённый зерном сценария ({@link #seed}), и его тик игры (сохраняется: уходя в полёт вне мира, снаряд
-     * становится новой сущностью из NBT); null — воздух мира.
+     * Air pinned by scenario seed ({@link #seed}), and its game tick (saved: leaving for outside-world flight creates
+     * a new entity from NBT); null — world air.
      */
     @Nullable
     private Air pinnedAir;
     private long pinnedAirTime;
-    /** Удержание высоты: сглаженная заданная высота. */
+    /** Altitude hold: smoothed altitude setpoint. */
     protected final AltitudeHold altitude = new AltitudeHold();
-    /** Снаряд глазами автопилота ({@code guidance}): датчики и органы управления. */
+    /** Projectile as seen by autopilot ({@code guidance}): sensors and controls. */
     protected final Craft craft = new Craft() {
         @Override
         public Vec3 position() {
@@ -191,44 +191,44 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return StrikeProjectile.this.clearAlong(level(), to, margin);
         }
     };
-    /** Маршрут до точки входа; null — сразу на цель. */
+    /** Route to entry point; null — straight to target. */
     @Nullable
     protected Route route;
-    /** Где стартовал (для взведения взрывателя). */
+    /** Launch origin (fuze arming). */
     @Nullable
     protected Vec3 launchPos;
-    /** Запас хода: план полёта с запасом; null — паспортный ({@link WeaponSpec.Airframe#range}), пока план не задан. */
+    /** Range reserve: flight plan with margin; null — spec ({@link WeaponSpec.Airframe#range}) until plan set. */
     @Nullable
     private Mission mission;
-    /** Ядерная боевая часть вместо обычной (крылатая ракета, бомба). */
+    /** Nuclear warhead replacing conventional one (cruise missile, bomb). */
     @Nullable
     protected Loadout.Nuke nuclear;
 
     private int phaseStart;
-    /** Клиент: фаза, от смены которой отсчитан {@link #phaseStart}. */
+    /** Client: phase whose change established {@link #phaseStart}. */
     private byte clientPhase = -1;
-    /** Сколько стоять на пусковой до поджига. */
+    /** Launcher wait before ignition. */
     private int readyTicks;
-    /** Включить сирену у цели, когда до удара останется столько тиков; -1 — без сирены. */
+    /** Sound target siren this many ticks before impact; -1 — no siren. */
     private int sirenLead = -1;
-    /** Летит вне загруженного мира (см. {@link VirtualFlights}). */
+    /** Flying outside loaded world (see {@link VirtualFlights}). */
     private boolean virtual;
-    /** Сколько тиков снаряд вне мира ждал у цели загрузки её района: предел — {@link #AREA_WAIT_LIMIT}. */
+    /** Outside-world target-area loading wait, ticks; limit: {@link #AREA_WAIT_LIMIT}. */
     private int areaWait;
-    /** Вне мира дошёл до цели, чей район тикает: вернуться в мир здесь же, без запаса впереди (не сохраняется). */
+    /** Outside-world projectile reached target with ticking area: reenter here without forward margin (unsaved). */
     private boolean arrived;
     /**
-     * Вне мира путь снаряда встретил поверхность (столкновений там нет): здесь он ждёт загрузки места, возвращается
-     * в мир и в первом же тике попадает — обычным {@link #impact}. Null — путь поверхности не встречал.
+     * Outside-world path met surface (no collisions there): wait for location loading, reenter world and hit
+     * on first tick via ordinary {@link #impact}. Null — path did not meet surface.
      */
     @Nullable
     private Vec3 grounded;
-    /** Район цели и полоса подлёта миссии: переходят копии с тем же UUID; не сохраняются, как и тикеты. */
+    /** Mission target area and approach lane: transfer to same-UUID copy; unsaved, like tickets. */
     private TargetAreaHold aimArea = new TargetAreaHold();
-    /** Свой чанк и чанк впереди по курсу. */
+    /** Own chunk and chunk ahead. */
     private final ChunkHold chunks = new ChunkHold();
 
-    /** Клиент: места от сервера — по одному на тик ({@link ArrivalQueue}): пакеты тика сервера приходят неровно. */
+    /** Client: server positions, one per tick ({@link ArrivalQueue}); server-tick packets arrive unevenly. */
     private final ArrivalQueue arrivals = new ArrivalQueue();
 
     protected StrikeProjectile(EntityType<? extends StrikeProjectile> type, Level level) {
@@ -237,77 +237,77 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         this.setNoGravity(true);
     }
 
-    // ---------------------------------------------------------------- параметры вида
+    // ---------------------------------------------------------------- type parameters
 
     public abstract WeaponType weapon();
 
-    /** Паспорт летательного аппарата этого снаряда (у бомбы B-2 — {@link WeaponSpec#payload}). */
+    /** This projectile's airframe spec (B-2 bomb uses {@link WeaponSpec#payload}). */
     public WeaponSpec.Airframe airframe() {
         return weapon().spec().airframe();
     }
 
-    /** Полудлина корпуса: от центра до носа, блоков. */
+    /** Body half-length: center to nose, blocks. */
     protected final double noseLength() {
         return airframe().noseLength();
     }
 
-    /** Маршевая скорость, блоков/тик: по ней считается время подлёта. */
+    /** Cruise speed, blocks/tick: used for approach ETA. */
     public final double cruiseSpeed() {
         return airframe().cruiseSpeed();
     }
 
-    /** Запас хода: план полёта, а пока его нет — паспортный. */
+    /** Range reserve: flight plan, or spec before plan exists. */
     private Mission mission() {
         if (mission == null) mission = Mission.of(airframe().range());
         return mission;
     }
 
-    /** Новый запас хода (РСЗО: дуга траектории пересчитана). */
+    /** New range reserve (MLRS: trajectory arc recalculated). */
     protected final void setMission(Mission mission) {
         this.mission = mission;
     }
 
     /**
-     * Запас хода кончился. Ожидание у цели загрузки её района (вне мира) хода не тратит: на медленном сервере
-     * генерация района под залп с разбросом идёт долго, и снаряды пропадали бы без подрыва (стенд нагрузки: 38 из 41
-     * ракеты РСЗО). У ожидания свой предел — {@link #AREA_WAIT_LIMIT}.
+     * Range exhausted. Waiting outside world for target-area loading spends no range: on slow servers,
+     * generation for spread salvos takes time, so projectiles would vanish without detonation (stress rig: 38 of 41
+     * MLRS rockets). Waiting has its own limit — {@link #AREA_WAIT_LIMIT}.
      */
     protected final boolean exhausted() {
         return mission().exhausted();
     }
 
-    /** Сколько блоков ещё можно пролететь (сервер). */
+    /** Remaining flight distance, blocks (server). */
     public double rangeLeft() {
         return mission().range();
     }
 
-    /** Прочность: сколько урона выдержит, прежде чем его собьют. 0 — сбить нельзя. */
+    /** Durability: damage before being shot down. 0 — cannot be shot down. */
     protected final float maxHealth() {
         return airframe().health();
     }
 
-    /** Может ли продолжать полёт вне загруженного мира (иначе на краю исчезает). */
+    /** Can continue flying outside loaded world (otherwise vanishes at edge). */
     protected boolean fliesVirtually() {
         return true;
     }
 
-    /** Наименьший запас высоты над рельефом, с которым снаряд возвращается в мир из виртуального полёта. */
+    /** Minimum terrain clearance for world reentry from virtual flight. */
     protected final double clearance() {
         return airframe().clearance();
     }
 
-    /** Стартовый участок с пусковой; null — снаряд с пусковой не стартует. */
+    /** Launcher start phase; null — no launcher start. */
     @Nullable
     protected final WeaponSpec.LaunchProfile launchProfile() {
         return airframe().launchProfile();
     }
 
-    /** Сколько стоять на пусковой до поджига (задаёт {@link #placeOnLauncher}). */
+    /** Launcher wait before ignition (set by {@link #placeOnLauncher}). */
     protected int readyTicks() {
         return readyTicks;
     }
 
-    /** Сколько тиков ещё до схода с пусковой и выхода на маршевую скорость (для времени подлёта). */
+    /** Ticks until launch rail exit and cruise speed (for approach ETA). */
     protected int launchTicksLeft() {
         WeaponSpec.LaunchProfile lp = launchProfile();
         if (lp == null) return 0;
@@ -319,9 +319,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         };
     }
 
-    // ---------------------------------------------------------------- запуск
+    // ---------------------------------------------------------------- launch
 
-    /** Поставить снаряд в точку, развернуть на цель и привязать к владельцу. */
+    /** Place projectile, face target and assign owner. */
     public void launch(Vec3 pos, Target target, Vec3 targetPoint, @Nullable UUID owner) {
         this.tracker = new TargetTracker(target, targetPoint);
         float[] a = FlightController.anglesTo(pos, targetPoint);
@@ -335,8 +335,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Поставить на направляющую пусковой: нос по курсу {@code yaw} и углу возвышения {@code elevation}, старт через
-     * {@code readyTicks}, первые {@code hiddenTicks} не виден (пакет поднимается). Цель и владелец — как в {@link #launch}.
+     * Place on launcher rail: nose at {@code yaw} heading and {@code elevation}, launch after
+     * {@code readyTicks}; invisible for first {@code hiddenTicks} (rack raising). Target/owner as in {@link #launch}.
      */
     public void placeOnLauncher(Vec3 rail, float yaw, float elevation, int readyTicks, int hiddenTicks, Target target, Vec3 targetPoint,
                                 @Nullable UUID owner) {
@@ -352,86 +352,86 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         setPhase(FlightPhase.READY);
     }
 
-    /** Тревога у цели, когда до удара останется {@code leadTicks} (сирена — по обнаружению на подлёте). */
+    /** Target alert with {@code leadTicks} remaining (siren from approach detection). */
     public void armSiren(int leadTicks) {
         this.sirenLead = leadTicks;
     }
 
-    /** Маршрут (null — прямо на цель). */
+    /** Route (null — straight to target). */
     @Nullable
     public Route route() {
         return route;
     }
 
     /**
-     * Маршрут до точки входа (после неё — на цель) и запас хода по плану полёта: путь по маршруту (он — по горизонтали)
-     * и снижение к цели. Без снижения шахед на настоящем эшелоне (шкала полёта 1: 2 км над целью) кончал запас хода в
-     * пике над целью и самоликвидировался в сотне блоков над ней.
+     * Route to entry point (then target) and range reserve from flight plan: route distance (horizontal)
+     * plus descent to target. Without descent, Shahed at real flight level (flight scale 1: 2 km above target) exhausted range
+     * in the dive overhead and self-destructed a hundred blocks above target.
      */
     public void setRoute(@Nullable Route route) {
         this.route = route;
         this.mission = Mission.plan(pathToAim() + descent(), cruiseSpeed()).extend(extraRange());
     }
 
-    /** Снижение к цели, которого нет в пути по маршруту (он — по горизонтали), блоков; без маршрута — 0. */
+    /** Target descent absent from horizontal route distance, blocks; no route — 0. */
     private double descent() {
         return route != null && !route.finished() && tracker != null ? Math.max(0, getY() - tracker.point().y) : 0;
     }
 
-    /** Запас хода сверх пути до цели: участки, которых в пути нет (круг барража), блоков. */
+    /** Range beyond target path: uncounted segments (loiter circle), blocks. */
     protected double extraRange() {
         return 0;
     }
 
     /**
-     * Сколько пути по плану осталось до удара, блоков: по нему урезается запас хода, когда цель потеряна
-     * ({@link Mission#lose}). По умолчанию — путь до цели ({@link #pathToAim}) и снижение к ней; у «Ланцета» — ещё круг и пике.
+     * Remaining planned distance to impact, blocks: used to reduce range when target lost
+     * ({@link Mission#lose}). Default: target path ({@link #pathToAim}) plus descent; Lancet adds circle/dive.
      */
     protected double plannedPathLeft() {
         return pathToAim() + descent();
     }
 
-    /** Путь до цели: по оставшемуся маршруту, а без него — напрямую, блоков. */
+    /** Target path: remaining route, or direct without route, blocks. */
     protected final double pathToAim() {
         Vec3 aim = tracker == null ? position() : tracker.point();
         return route != null && !route.finished() ? route.remaining(position(), aim) : position().distanceTo(aim);
     }
 
     /**
-     * Зерно своей случайности снаряда (круг барража, сторона ухода B-2) — до {@link #launch}: сценарии полёта
-     * (GameTest) повторяют полёт точно. Оно же закрепляет воздух снаряда ({@link #air}): ветер мира зависит от времени
-     * игры, а партия сценария идёт в разное время (части CI). В игре не зовётся: у каждого снаряда своё случайное зерно
-     * и воздух мира.
+     * Projectile's own random seed (loiter circle, B-2 departure side), before {@link #launch}: flight scenarios
+     * (GameTest) repeat exactly. Also pins projectile air ({@link #air}): world wind depends on game time,
+     * while scenario batch timing varies (CI shards). Not called in game: each projectile has its own random seed
+     * and world air.
      */
     public void seed(long seed) {
         random.setSeed(seed);
         pinAir(Math.floorMod(seed, 30L * 24_000));
     }
 
-    /** Закрепить воздух снаряда на тик игры {@code gameTime}, ясный полдень ({@link #seed}). */
+    /** Pin projectile air to game tick {@code gameTime}, clear noon ({@link #seed}). */
     private void pinAir(long gameTime) {
         pinnedAirTime = gameTime;
         pinnedAir = Air.of(gameTime, 1, 0, 0);
     }
 
-    /** Снаряд, который этот выпускает (бомба B-2), летит в том же воздухе: и закреплённом сценарием. */
+    /** Projectile released by this one (B-2 bomb) flies in same air, including scenario-pinned air. */
     final void shareAir(StrikeProjectile child) {
         child.pinnedAir = pinnedAir;
         child.pinnedAirTime = pinnedAirTime;
     }
 
-    /** Воздух, в котором летит снаряд: воздух мира сейчас, у сценария полёта — закреплённый зерном ({@link #seed}). */
+    /** Projectile air: current world air, or seed-pinned air in flight scenarios ({@link #seed}). */
     protected final Air air() {
         return pinnedAir != null ? pinnedAir : Air.of(level());
     }
 
-    /** Ядерная боевая часть (только для носителей, которые её несут). */
+    /** Nuclear warhead (only on compatible carriers). */
     public void setNuclear(@Nullable Loadout.Nuke nuke) {
         this.nuclear = nuke;
         entityData.set(DATA_NUCLEAR, nuke != null);
     }
 
-    /** Несёт ядерную боевую часть: её отменяет только ядерный отбой. */
+    /** Carries nuclear warhead: canceled only by nuclear recall. */
     public boolean isNuclear() {
         return entityData.get(DATA_NUCLEAR);
     }
@@ -447,12 +447,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return id != null && level() instanceof ServerLevel sl ? sl.getServer().getPlayerList().getPlayer(id) : null;
     }
 
-    /** Ведёт ли снаряд замеченную цель камерой оператора (синхронизировано — для картинки камеры). */
+    /** Operator camera tracks sighted target (synchronized for camera presentation). */
     public Pursuit pursuit() {
         return Pursuit.values()[Mth.clamp(entityData.get(DATA_PURSUIT), 0, Pursuit.values().length - 1)];
     }
 
-    /** Точка, куда снаряд сейчас целится (синхронизирована — для HUD, тревоги и свиста ракеты). */
+    /** Current aim point (synchronized for HUD, alert and rocket whistle). */
     public Vec3 aimPoint() {
         Vector3f v = entityData.get(DATA_AIM);
         return new Vec3(v.x, v.y, v.z);
@@ -469,12 +469,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
     }
 
-    /** Сколько тиков идёт текущая фаза (на клиенте — с момента, как он её узнал). */
+    /** Current phase age, ticks (client: since learning the phase). */
     public int phaseAge() {
         return age - phaseStart;
     }
 
-    /** Горит стартовый ускоритель. */
+    /** Launch booster burning. */
     public boolean boosterLit() {
         return flightPhase().boosterLit();
     }
@@ -484,9 +484,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Сдвиг за последний тик сервера, блоков/тик (на клиенте — синхронизированный). Это правда о движении для звука
-     * (Доплер, обтекание): положение сущности у клиента само по тикам клиента не годится — пакеты тика сервера
-     * приходят то в один тик клиента, то в соседний, и снаряд у клиента то стоит, то прыгает на два шага.
+     * Last server-tick displacement, blocks/tick (synchronized on client). Actual motion for sound
+     * (Doppler, airflow): client-tick entity positions are unsuitable — server-tick packets
+     * arrive in this client tick or the next, making projectile stop then jump two steps.
      */
     public Vec3 velocity() {
         if (!level().isClientSide) return getDeltaMovement();
@@ -494,7 +494,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return new Vec3(v.x, v.y, v.z);
     }
 
-    /** Скорость, блоков/тик (на клиенте — синхронизированная). */
+    /** Speed, blocks/tick (synchronized on client). */
     public double speed() {
         return level().isClientSide ? entityData.get(DATA_SPEED) : speed;
     }
@@ -503,23 +503,23 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return age;
     }
 
-    /** Снаряд виден и слышен (на пусковой, пока пакет поднимается, — нет: он в закрытой ячейке). */
+    /** Visible/audible (not while launcher rack raises: inside closed slot). */
     public boolean isActive() {
         return !(flightPhase() == FlightPhase.READY && phaseAge() < entityData.get(DATA_HIDDEN));
     }
 
-    /** Цель пропала (умерла, ушла в другой мир, аппарат разобран): снаряд идёт в последнюю известную точку. */
+    /** Target vanished (dead, changed dimension, craft disassembled): fly to last known point. */
     public boolean targetLost() {
         return tracker != null && tracker.isLost();
     }
 
-    /** Цель, за которой идёт снаряд (сервер). */
+    /** Tracked target (server). */
     @Nullable
     public Target target() {
         return tracker == null ? null : tracker.target();
     }
 
-    /** Вне мира путь встретил поверхность: снаряд ждёт там загрузки места и попадёт, вернувшись в мир. */
+    /** Outside-world path met surface: wait for location loading, hit after reentry. */
     protected final boolean isGrounded() {
         return grounded != null;
     }
@@ -528,14 +528,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return virtual;
     }
 
-    /** Снаряд передан {@link ua.zentix.incoming.strike.VirtualFlights}: в мир его не добавлять, пока не вернётся сам. */
+    /** Handed to {@link ua.zentix.incoming.strike.VirtualFlights}: do not add to world until self-return. */
     public void markVirtual() {
         virtual = true;
     }
 
     /**
-     * Передать район и полосу новой копии этой миссии до удаления старой сущности ({@link VirtualFlights#park}).
-     * Свои чанки остаются старой сущности: её удаление отпустит их, но уже не удержание миссии.
+     * Transfer area/lane to new copy of this mission before removing old entity ({@link VirtualFlights#park}).
+     * Own chunks remain with old entity: removing it releases them, but no longer the mission hold.
      */
     public final void handOverTargetArea(StrikeProjectile copy) {
         if (copy == this || copy.level() != level() || !copy.getUUID().equals(getUUID()) || !copy.aimArea.isEmpty()) {
@@ -545,7 +545,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         aimArea = new TargetAreaHold();
     }
 
-    /** Время до удара, тиков (сервер): оставшийся путь по маршруту на маршевой скорости и старт. */
+    /** Impact ETA, ticks (server): remaining route at cruise speed plus launch. */
     public int etaTicks() {
         if (tracker == null) return 0;
         double v = Math.max(cruiseSpeed(), speed);
@@ -553,8 +553,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Точка цели уточнилась (та же цель): трекер держит её неподвижной точкой, прицел для HUD, сирены и камеры —
-     * тоже она; район цели идёт за ней ({@link #holdTargetArea}).
+     * Target point refined (same target): tracker holds it as fixed point, also used by HUD, siren and camera;
+     * target area follows it ({@link #holdTargetArea}).
      */
     protected final void settleAim(Vec3 point) {
         tracker.settle(point);
@@ -562,9 +562,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Перенацелить в полёте (из камеры снаряда): новая цель, маршрут брошен — дальше прямо на неё.
+     * Retarget in flight (from projectile camera): new target, abandon route — fly straight to it.
      *
-     * @return снаряд принял цель
+     * @return projectile accepted target
      */
     public boolean retarget(Target target, Vec3 point) {
         if (tracker == null || !acceptsRetarget()) return false;
@@ -577,22 +577,22 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Набирает ли высоту за целью: управляемый снаряд держит высоту над ней и под поднявшимся полом полёта вне мира
-     * ({@link #groundCrossing}) доворачивает вверх — пол его не останавливает. Баллистический (бомба, снаряд РСЗО) вверх
-     * не пойдёт: ниже пола на снижении он уже в земле.
+     * Climbs behind target: guided projectile holds altitude above it and turns upward below a raised outside-world
+     * flight floor ({@link #groundCrossing}) — floor does not stop it. Ballistic projectile (bomb, MLRS) cannot
+     * climb: descending below floor is already underground.
      */
     protected boolean climbs() {
         return true;
     }
 
-    /** Можно ли перенацелить (у бомбы после сброса и у бомбардировщика — нельзя). */
+    /** Retargeting allowed (not after bomb drop, nor for bomber). */
     protected boolean acceptsRetarget() {
         return true;
     }
 
     protected void onRetarget() {}
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
     @Override
     public void tick() {
@@ -605,14 +605,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         try {
             age++;
             if (tracker == null) {
-                // сбой загрузки или спавна без launch(): летать некуда
+                // Load failure or spawn without launch(): nowhere to fly.
                 Incoming.LOG.warn("Projectile {} {} at {} has no target (load failure or spawned without launch), removed", getType().getDescriptionId(), getUUID(), blockPosition());
                 discard();
                 return;
             }
             ServerLevel level = (ServerLevel) level();
             if (grounded != null) {
-                // вернулся в мир там, где путь вне мира встретил поверхность: попадание здесь
+                // Reentered where outside-world path met surface: hit here.
                 Vec3 at = grounded;
                 grounded = null;
                 if (armed()) impact(level, at, null);
@@ -621,7 +621,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             }
             if (chunks.isEmpty()) chunks.update(level, getUUID(), position(), flight.forward(), speed, lookAhead(level));
             serverTick(level);
-            // взорвался или ушёл в полёт вне мира (там летит уже копия): ни сирены, ни новых тикетов
+            // Detonated or left for outside-world flight (copy now flies there): no siren or new tickets.
             if (isRemoved()) return;
             updateVelocity();
             mission().spend(getDeltaMovement().length());
@@ -636,8 +636,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Тик вне загруженного мира ({@link VirtualFlights}): то же наведение, но без столкновений и без чтения
-     * незагруженных чанков.
+     * Outside-loaded-world tick ({@link VirtualFlights}): same guidance, without collisions or reading
+     * unloaded chunks.
      */
     public final void virtualTick(ServerLevel level) {
         virtual = true;
@@ -665,9 +665,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Можно вернуться в мир: снаряд над тикающим и готовым чанком, и весь путь впереди по курсу тоже (без этого
-     * запаса он на границе прыгал бы туда-обратно каждый тик, {@link VirtualFlights#clearAhead}). Дошедшему до цели
-     * запас не нужен: в мире он взорвётся.
+     * May reenter world: projectile above a ticking ready chunk, with entire forward path ready too (otherwise it
+     * would bounce across boundary each tick, {@link VirtualFlights#clearAhead}). No forward margin needed once target
+     * reached: it will explode in-world.
      */
     public boolean canMaterialize(ServerLevel level) {
         if (arrived) {
@@ -677,25 +677,25 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return clearAhead(level, position());
     }
 
-    /** Из этого места снаряд вернётся в мир: тикает и готов весь путь впереди ({@link VirtualFlights#clearAhead}). */
+    /** Projectile can reenter here: entire forward path ready and ticking ({@link VirtualFlights#clearAhead}). */
     private boolean clearAhead(ServerLevel level, Vec3 pos) {
         return VirtualFlights.clearAhead(pos, flight.forward(), speed,
                 (x, z) -> Terrain.ready(level, x, z) && level.isPositionEntityTicking(new BlockPos(x << 4, 0, z << 4)));
     }
 
     /**
-     * Вернуться в мир: не ниже рельефа с запасом — кроме снаряда на пусковой (ушёл вне мира при остановке сервера):
-     * он встаёт обратно на направляющую, место которой проверил {@link ua.zentix.incoming.strike.LaunchSite}.
-     * Вызывает {@link VirtualFlights}.
+     * Reenter world with terrain clearance, except launcher projectile (went outside world on server stop):
+     * it returns to rail at location checked by {@link ua.zentix.incoming.strike.LaunchSite}.
+     * Called by {@link VirtualFlights}.
      */
     public void materialize(ServerLevel level) {
         virtual = false;
-        // дошедший до поверхности попадает в неё — поднимать его над рельефом незачем
+        // Surface arrival means impact: no reason to raise above terrain.
         if (!flightPhase().onLauncher() && grounded == null) {
-            // рельеф под снарядом и впереди на 5 тиков полёта, каждая колонка полосы (только готовые чанки): не возникнуть
-            // перед склоном или стеной, которую не успеть перепрыгнуть. Путь, который кончается у цели, — только до неё:
-            // рельеф за целью поднимал бы ракету РСЗО, вернувшуюся в 10 блоках от цели ниже рельефа, на десятки блоков, и
-            // она рвалась бы в воздухе или на склоне рядом с целью
+            // Terrain beneath and 5 flight ticks ahead, every corridor column (ready chunks only): avoid appearing
+            // before an unclimbable slope/wall. A path ending at target checks only up to it:
+            // terrain beyond would raise an MLRS rocket reentering 10 blocks from target below terrain by dozens of blocks,
+            // causing airburst or slope impact beside target.
             double ahead = Math.min(Math.max(80, speed * 5), pathLeft());
             double floor = reliefStraightAhead(level, ahead) + clearance();
             if (getY() < floor) {
@@ -710,38 +710,38 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         setXRot(flight.pitch());
         yRotO = getYRot();
         xRotO = getXRot();
-        // свои тикеты — до входа в мир: чанк мог тикать лишь по чужому тикету (соседний снаряд), и если тот его
-        // отпустит до первого тика, снаряд застынет в нетикающем чанке — ни полёта, ни ухода вне мира, ни расхода хода
+        // Own tickets before reentry: chunk might tick only from another projectile's ticket; if released
+        // before first tick, projectile freezes in non-ticking chunk — no flight, departure or range spending.
         holdChunks(level);
     }
 
     /**
-     * Взять свои тикеты (свой чанк и чанк впереди, {@link ChunkTickets}) до входа в мир. Снаряд в чанке, где сущности
-     * не тикают, сам их не возьмёт: берёт он их в своём тике. Так бывает у вернувшегося из полёта вне мира и у снаряда
-     * на пусковой места пуска из приказа — оно может быть дальше дистанции симуляции от игроков.
+     * Acquire own tickets (own/forward chunk, {@link ChunkTickets}) before world entry. Projectile in a non-entity-ticking
+     * chunk cannot acquire them itself: acquisition runs in its tick. Happens on return from outside-world flight or on
+     * launcher at ordered launch site beyond players' simulation distance.
      */
     public void holdChunks(ServerLevel level) {
         chunks.update(level, getUUID(), position(), flight.forward(), speed, lookAhead(level));
     }
 
     /**
-     * Держать ли и чанк впереди по курсу ({@link ChunkHold}): на старте — да (место пуска из приказа бывает вдали от
-     * игроков, а сход с пусковой идёт в мире), в полёте — пока есть кому его видеть ({@link FlightTickets#watched}:
-     * игрок ближе дальности прорисовки сервера — дальше сущность клиенту не уходит) и на последних секундах подлёта,
-     * когда район цели уже тикает ({@link TargetAreaHold#ticking}). Иначе полёт в мире ничего не даёт, а чанк впереди
-     * тянул бы за снарядом тикающие чанки через всю карту: дойдя до края своего чанка, он уходит в полёт вне мира, и
-     * игрокам его путь идёт пакетами {@code FarFlights}. У цели снаряд в мире остаётся в мире: без чанка впереди он
-     * уходил бы из мира у края района цели и возвращался в него через тик-другой — смотря когда у свежих чанков района
-     * начнут тикать сущности (это доделывают задачи чанков, а не тикеты), и сценарии полёта расходились бы на тик.
-     * Признаки — расстояние и тикеты, а не то, что сущность уже у клиента: они не зависят от темпа отправки чанков.
+     * Hold forward chunk too ({@link ChunkHold}): at launch, yes (ordered launch site may be far from
+     * players, rail exit occurs in-world); in flight, while someone can see it ({@link FlightTickets#watched}:
+     * player within server render distance — farther away client receives no entity), and in final approach seconds
+     * when target area already ticks ({@link TargetAreaHold#ticking}). Otherwise world flight adds nothing, while forward
+     * chunk would drag ticking chunks across map: at own chunk edge projectile leaves for outside-world flight,
+     * and players receive {@code FarFlights} path packets. At target, in-world projectile stays in-world: without forward chunk it
+     * would leave at target-area edge and return a tick or two later, depending on when fresh area chunks
+     * start entity ticking (completed by chunk tasks, not tickets), making flight scenarios diverge by a tick.
+     * Conditions use distance/tickets rather than entity presence on client: independent of chunk-send rate.
      */
     private boolean lookAhead(ServerLevel level) {
         return flightPhase().launching() || aimArea.ticking() || FlightTickets.watched(level, position(), 0);
     }
 
     /**
-     * Сколько по горизонтали осталось пути вперёд до его конца ({@link #pathEnd}); бесконечность — путь впереди у цели
-     * не кончается (конца нет или он позади: снаряд уходит на новый заход).
+     * Remaining horizontal path to its end ({@link #pathEnd}); infinity — path does not end ahead near target
+     * (no end, or end behind: projectile reapproaching).
      */
     private double pathLeft() {
         Vec3 end = pathEnd();
@@ -754,8 +754,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Где кончается путь снаряда (null — не у точки: бомбардировщик проходит цель, барражирующий кружит над ней):
-     * по умолчанию — цель, когда маршрут пройден.
+     * Projectile path end (null — not ending at point: bomber passes target, loitering weapon circles overhead):
+     * default target once route finished.
      */
     @Nullable
     protected Vec3 pathEnd() {
@@ -763,54 +763,54 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Район цели догружается в фоне, когда до неё осталось меньше {@link #PRELOAD_TICKS} полёта, — и в мире, и вне
-     * его: снаряд в мире тоже летит туда, где никого нет (залп с разбросом в сотни блоков от игрока), и без этого
-     * район брался бы только после ухода из тикающих чанков, у самой цели. Движущаяся цель
-     * (аппарат, игрок) уводит район за собой: иначе снаряд ждал бы у неё загрузки, которой не будет, и пропадал бы
-     * по запасу хода (4 ракеты из 10 за улетающим аппаратом). Полоса подлёта — {@link TargetAreaHold}.
+     * Target area preloads in background within {@link #PRELOAD_TICKS} flight ticks, inside/outside world:
+     * in-world projectile can also fly where no one is present (salvo spread hundreds of blocks from player); without this
+     * area acquisition would wait until leaving ticking chunks, right at target. Moving target
+     * (craft, player) drags area along; otherwise projectile would await loading that never starts and vanish
+     * when range runs out (4 of 10 missiles chasing departing craft). Approach lane: {@link TargetAreaHold}.
      */
     protected void holdTargetArea(ServerLevel level) {
         if (tracker == null || isRemoved()) return;
-        // путь вне мира кончился на поверхности: грузится место попадания, а не цель
+        // Outside-world path ended at surface: load impact location, not target.
         Vec3 aim = grounded != null ? grounded : areaCenter();
         aimArea.hold(level, getUUID(), position(), aim, preloadDistance(), targetArea(), targetAreaTicks(), visibleLeg(), route, age);
     }
 
-    /** Вокруг чего держится район цели: точка цели; у неуправляемого — куда он на самом деле придёт. */
+    /** Target-area center: target point; unguided — actual predicted arrival. */
     protected Vec3 areaCenter() {
         return tracker.point();
     }
 
     /**
-     * Пора ли району цели тикать ({@link TargetAreaHold}): до удара не больше {@link #AREA_TICK_LEAD} тиков или снаряд
-     * уже стоит на поверхности, где кончился его путь вне мира, и ждёт района там. Раньше район только грузится.
+     * Target area should tick ({@link TargetAreaHold}): at most {@link #AREA_TICK_LEAD} ticks to impact, or projectile
+     * already waiting for area at surface where outside-world path ended. Earlier it only loads.
      */
     protected boolean targetAreaTicks() {
         return grounded != null || etaTicks() <= AREA_TICK_LEAD;
     }
 
     /**
-     * Сколько последнего пути до цели снаряд летит в мире, а не вне его ({@link FlightTickets#approach}): столько
-     * его подлёт видно игроку у цели, если это не дальше прорисовки. 0 — только район цели.
+     * Final target-path distance flown in-world rather than outside ({@link FlightTickets#approach}): approach visible
+     * to target-side player within render distance. 0 — target area only.
      */
     protected final double visibleLeg() {
         return airframe().visibleLeg();
     }
 
-    /** С какого расстояния до цели её район грузится заранее: {@link #PRELOAD_TICKS} полёта, не меньше 400 блоков. */
+    /** Target-area preload distance: {@link #PRELOAD_TICKS} flight ticks, at least 400 blocks. */
     protected double preloadDistance() {
         return Math.max(400, Math.max(speed, cruiseSpeed()) * PRELOAD_TICKS);
     }
 
-    /** Район цели загружен и в нём тикают сущности: снаряд, пришедший туда, взорвётся в мире. */
+    /** Target area loaded and entity-ticking: arriving projectile will explode in-world. */
     protected final boolean aimAreaReady(ServerLevel level, Vec3 aim) {
         BlockPos at = BlockPos.containing(aim);
         return Terrain.ready(level, at) && level.isPositionEntityTicking(at);
     }
 
     /**
-     * Ещё тик ожидания загрузки района цели. Ожидание хода не тратит, у него свой предел
-     * {@link #AREA_WAIT_LIMIT}: исчерпан — снаряд убран (false).
+     * Another target-area loading wait tick. Waiting spends no range and has its own limit,
+     * {@link #AREA_WAIT_LIMIT}: exhausted — projectile removed (false).
      */
     protected final boolean waitForAimArea(Vec3 aim) {
         if (++areaWait > AREA_WAIT_LIMIT) {
@@ -822,12 +822,12 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return true;
     }
 
-    /** Отпустить район цели (снаряд убран или перенацелен — новый район возьмётся на подлёте). */
+    /** Release target area (removed/retargeted projectile — new area acquired on approach). */
     private void releaseTargetArea() {
         if (level() instanceof ServerLevel level) aimArea.release(level, getUUID());
     }
 
-    /** Размер района цели, который грузится заранее: уровень тикета {@link FlightTickets} (4 — ±40 блоков). */
+    /** Preloaded target-area size: {@link FlightTickets} ticket level (4 — ±40 blocks). */
     protected int targetArea() {
         return FlightTickets.DISTANCE;
     }
@@ -840,8 +840,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Старт с пусковой: стоит, поджиг, сход с направляющей и разгон на ускорителе, затем сброс ускорителя
-     * ({@link #separate}) и фаза {@link FlightPhase#CLIMB}. Возвращает true, пока снаряд на стартовом участке.
+     * Launcher start: waiting, ignition, rail exit and booster acceleration, then booster separation
+     * ({@link #separate}) and {@link FlightPhase#CLIMB}. Returns true while on start segment.
      */
     protected boolean launchTick(ServerLevel level) {
         WeaponSpec.LaunchProfile lp = launchProfile();
@@ -868,24 +868,24 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return true;
     }
 
-    /** Ускоритель выгорел: корпус ускорителя отделяется и падает. */
+    /** Booster spent: booster body separates and falls. */
     protected void separate(ServerLevel level) {
         SpentBoosterEntity.spawn(level, this, noseLength());
     }
 
     protected abstract void serverTick(ServerLevel level);
 
-    /** Точка удара достигнута или столкновение: по умолчанию — обычная боевая часть своего оружия. */
+    /** Impact point reached or collision: default is weapon's conventional warhead. */
     protected void impact(ServerLevel level, Vec3 point, @Nullable Entity hitEntity) {
         discard();
         Warheads.detonate(level, weapon(), point, this, ownerId());
     }
 
     /**
-     * Свой отбой ({@code ServerActions.recall}) в полёте в мире: самоликвидация — снаряд разбивается в воздухе, боевая
-     * часть не срабатывает ({@link #crash}), блоки не рушатся.
+     * Own recall ({@code ServerActions.recall}) in world flight: self-destruct — projectile breaks up in air, warhead
+     * does not detonate ({@link #crash}), blocks remain intact.
      *
-     * @return снаряд больше не угроза; false — свернуть ему нечем ({@link #recallable}), он летит дальше
+     * @return projectile no longer a threat; false — cannot abort ({@link #recallable}), continues flying
      */
     public boolean recall(ServerLevel level) {
         if (!recallable()) return false;
@@ -895,16 +895,16 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Свой отбой останавливает снаряд ({@link #recall}): у управляемого есть самоликвидатор; неуправляемый (ракета РСЗО,
-     * сброшенная бомба) летит дальше.
+     * Own recall stops projectile ({@link #recall}): guided has self-destruct; unguided (MLRS rocket,
+     * dropped bomb) continues flying.
      */
     public boolean recallable() {
         return true;
     }
 
     /**
-     * Столкновение до взведения взрывателя (на старте): боевая часть не срабатывает — снаряд разбивается,
-     * горит топливо.
+     * Collision before fuze arming (at launch): warhead does not detonate — projectile breaks up,
+     * fuel burns.
      */
     protected void crash(ServerLevel level, Vec3 point) {
         discard();
@@ -913,14 +913,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Столкновение до взведения ({@link #crash}): в лог — строкой на залп ({@link FlightLog}), каждый снаряд — строкой
-     * DEBUG. Иначе такой конец полёта не виден: взрыв ванильный и без строки удара, а залп из 30 шахедов, который весь
-     * разбился о постройку у пусковой, в логе выглядел бы как пропавший.
+     * Collision before arming ({@link #crash}): one log line per salvo ({@link FlightLog}), each projectile at
+     * DEBUG. Otherwise this ending is invisible: vanilla explosion without impact line; a 30-Shahed salvo crashing entirely
+     * into a structure beside launcher would look lost in logs.
      */
     protected final void crashUnarmed(ServerLevel level, Vec3 point) {
         Incoming.LOG.debug("Projectile {} {} crashed before arming at {} (phase {})", getType().getDescriptionId(), getUUID(),
                 BlockPos.containing(point), flightPhase());
-        // курс — по 10°: у залпа с одной пусковой он общий, строка одна
+        // Heading in 10° bins: shared by salvo from one launcher, one line.
         int course = Math.floorMod(Math.round(flight.yaw() / 10f) * 10, 360);
         StrikeWorld.get(level).flightLog().note(getType().getDescriptionId(), FlightLog.Event.CRASHED, BlockPos.containing(point), targetLost(), 0,
                 "heading " + course + "°, phase " + flightPhase().getSerializedName());
@@ -928,8 +928,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Слежение за целью; возвращает текущую точку прицеливания. За замеченной целью ({@link Target.Sighted}) снаряд
-     * идёт, только пока её держит в кадре камера этого снаряда ({@link CameraLink#holds}) и оружие это умеет
+     * Track target; returns current aim point. Sighted target ({@link Target.Sighted}) followed only while held in this
+     * projectile's camera frame ({@link CameraLink#holds}) and weapon supports it
      * ({@link WeaponSpec.Tracking#CAMERA}).
      */
     protected Vec3 updateTarget(ServerLevel level) {
@@ -938,16 +938,16 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Pursuit pursuit = !byCamera || !(tracker.target() instanceof Target.Sighted) || tracker.isLost() ? Pursuit.NONE
                 : tracker.inSight() ? Pursuit.HELD : Pursuit.WAITING;
         entityData.set(DATA_PURSUIT, (byte) pursuit.ordinal());
-        // и у снаряда, сохранённого уже с потерянной целью без флага «урезан»
+        // Also for projectile saved with already-lost target but without “reduced” flag.
         if (tracker.isLost() && mission().lose(plannedPathLeft(), cruiseSpeed())) onTargetLost(level);
         syncAim();
         return tracker.point();
     }
 
     /**
-     * Цель потеряна: снаряд идёт в её последнюю точку, и запас хода — только на полёт туда ({@link Mission#lose}).
-     * Не дошёл — самоликвидация ({@link #advance}). В лог — строкой на залп ({@link FlightLog}): сколько секунд
-     * полёта на маршевой скорости осталось.
+     * Target lost: fly to last point, with range only for that path ({@link Mission#lose}).
+     * Fails to arrive: self-destruct ({@link #advance}). One log line per salvo ({@link FlightLog}): remaining
+     * flight seconds at cruise speed.
      */
     private void onTargetLost(ServerLevel level) {
         BlockPos last = BlockPos.containing(tracker.point());
@@ -958,7 +958,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
                 tracker.outOfReach() ? FlightLog.Event.LOST_OUT_OF_REACH : FlightLog.Event.LOST_GONE, last, true, seconds);
     }
 
-    /** Запас хода кончился: в лог — строкой на залп ({@link FlightLog}), каждый снаряд — строкой DEBUG. */
+    /** Range exhausted: one log line per salvo ({@link FlightLog}), each projectile at DEBUG. */
     private void noteExpired(ServerLevel level, Vec3 aim, FlightLog.Event event) {
         Incoming.LOG.debug("Projectile {} {} did not reach {}, out of endurance ({}) at {}", getType().getDescriptionId(), getUUID(),
                 BlockPos.containing(aim), event, blockPosition());
@@ -966,8 +966,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Куда держать курс: следующая точка маршрута (взята — ближе радиуса захвата из паспорта или позади,
-     * {@link Route#update}) или цель. Взята последняя точка маршрута оператора — {@link #onRouteDone}.
+     * Heading destination: next waypoint (captured within spec radius or behind,
+     * {@link Route#update}) or target. Last operator waypoint captured: {@link #onRouteDone}.
      */
     protected Vec3 navPoint(Vec3 aim) {
         if (route != null && !route.finished()) {
@@ -979,15 +979,15 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return aim;
     }
 
-    /** Маршрут оператора пройден в этот тик, дальше — последний участок на цель {@code aim} (перенацеливание его бросает без этого; маршрут пуска кончается точкой входа, рассчитанной под заход). */
+    /** Operator route completed this tick; final leg to {@code aim} next (retargeting abandons route without this; launch route ends at calculated approach entry). */
     protected void onRouteDone(Vec3 aim) {}
 
-    /** Маршрут пройден (или его не было): последний участок — на цель. */
+    /** Route complete (or absent): final leg to target. */
     protected boolean onFinalLeg() {
         return route == null || route.finished();
     }
 
-    /** Путь до точки {@code aim} по горизонтали: по оставшемуся маршруту, а без него — напрямую, блоков. */
+    /** Horizontal path to {@code aim}: remaining route, or direct if absent, blocks. */
     protected final double horizontalPathTo(Vec3 aim) {
         if (route != null && !route.finished()) return route.remaining(position(), aim);
         double dx = aim.x - getX(), dz = aim.z - getZ();
@@ -1004,8 +1004,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Скорость — сколько снаряд на деле прошёл за этот тик (от места в начале тика): и в полёте, и в ожидании района
-     * цели, и в бурении. Она же уходит клиентам.
+     * Velocity: actual travel this tick (from tick-start position), in flight, target-area waiting
+     * and drilling. Also sent to clients.
      */
     private void updateVelocity() {
         setDeltaMovement(getX() - xo, getY() - yo, getZ() - zo);
@@ -1019,14 +1019,14 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Снос за тик сверх шага по носу, блоков: ветер, который несёт снаряд без мотора (бомба). У снаряда с мотором его нет:
-     * полёт — своя игровая модель, автопилот держит путь сам.
+     * Per-tick drift beyond nose-directed step, blocks: wind carrying unpowered projectile (bomb). Powered projectiles lack it:
+     * our game flight model has autopilot hold the path itself.
      */
     protected Vec3 drift() {
         return Vec3.ZERO;
     }
 
-    /** Точка внутри круга разворота: до неё не довернуть ({@link Autopilot#insideTurn}). */
+    /** Point inside turn circle: cannot turn to it ({@link Autopilot#insideTurn}). */
     protected final boolean insideTurn(Vec3 point, double maxRateDeg) {
         return Autopilot.insideTurn(position(), flight.forward(), speed, point, maxRateDeg);
     }
@@ -1035,36 +1035,36 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return Bearing.of(position(), aim);
     }
 
-    /** Держать высоту ({@link AltitudeHold}) с поворотами участка полёта {@code a} из паспорта. */
+    /** Hold altitude ({@link AltitudeHold}) using spec flight-phase turns {@code a}. */
     protected final void holdAltitude(double desired, double gain, WeaponSpec.Agility a) {
         craft.holdAltitude(desired, gain, airframe().handling(), a);
     }
 
-    /** Скорость за тик по своей модели полёта ({@link Craft#throttle}): мотор тянет к {@code target}. */
+    /** Per-tick speed from our flight model ({@link Craft#throttle}): motor pulls toward {@code target}. */
     protected final void throttle(double target) {
         craft.throttle(airframe(), target);
     }
 
-    /** Взрыватель взведён: снаряд отошёл от пусковой или вышел на маршевый участок ({@link ProximityFuse#armed}). */
+    /** Fuze armed: left launcher or reached cruise segment ({@link ProximityFuse#armed}). */
     protected boolean armed() {
         return ProximityFuse.armed(flightPhase(), position(), launchPos);
     }
 
     /**
-     * Путь носа за шаг полёта из {@code pos} по {@code dir} на {@code speed}: от середины носа до носа после шага — его
-     * заметает {@link #advance}, а проверка сектора пуска ({@code LaunchSite.clearAhead}) — по тикам разгона.
+     * Nose path for flight step from {@code pos} along {@code dir} at {@code speed}: nose midpoint to post-step nose,
+     * swept by {@link #advance}; launch-sector check ({@code LaunchSite.clearAhead}) uses acceleration ticks.
      *
-     * @return {откуда, докуда}
+     * @return {from, to}
      */
     public static Vec3[] noseSweep(Vec3 pos, Vec3 dir, double speed, double noseLength) {
         return new Vec3[]{pos.add(dir.scale(noseLength * 0.5)), pos.add(dir.scale(speed + noseLength))};
     }
 
     /**
-     * Шаг полёта: заметаем путь носа на длину шага. Столкновение (блок, аппарат, человек рядом с траекторией)
-     * или достижение цели — {@link #impact}. Возвращает true, если снаряд ещё летит.
+     * Flight step: sweep nose path over step length. Collision (block, craft, person near trajectory)
+     * or target reached calls {@link #impact}. Returns true while still flying.
      *
-     * @param reachPad запас дальности подрыва сверх длины шага (шахед 4.3, ракета 6.5, бомба 5.3)
+     * @param reachPad detonation reach beyond step length (Shahed 4.3, missile 6.5, bomb 5.3)
      */
     protected boolean advance(ServerLevel level, Vec3 aim, double reachPad) {
         Vec3 dir = flight.forward();
@@ -1078,7 +1078,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             return false;
         }
         if (exhausted()) {
-            // самоликвидация: так и не дошёл до цели. Ядерная БЧ вдали от цели не подрывается — только корпус и топливо
+            // Self-destruct: failed to reach target. Nuclear warhead does not detonate far from target — only body/fuel.
             noteExpired(level, aim, FlightLog.Event.EXPIRED);
             Vec3 nose = pos.add(dir.scale(noseLength()));
             if (nuclear != null) crash(level, nose);
@@ -1089,15 +1089,15 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3[] sweep = noseSweep(pos, dir, speed, noseLength());
         sweep[1] = sweep[1].add(drift());
         Vec3 noseFrom = sweep[0];
-        // нос не заглядывает в неготовый чанк (clip грузил бы его); туда снаряд и не шагнёт — уйдёт в полёт вне мира
+        // Nose never reads an unready chunk (clip would load it); projectile leaves for outside-world flight before stepping there.
         Vec3 noseTo = Terrain.readyUntil(level, noseFrom, sweep[1]);
 
-        // и на разгоне: снаряд, прошедший сквозь дом на ускорителе, выходил бы из разгона внутри постройки и разбивался
-        // о неё в первом же тике набора — тихо и далеко от места, где встретил её
+        // Also during boost: passing through a house on booster would end boost inside it and crash
+        // on first climb tick — silently and far from initial encounter.
         Vec3 blockPoint = null;
         BlockHitResult block = level.clip(new ClipContext(noseFrom, noseTo, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, this));
         if (block.getType() != HitResult.Type.MISS) {
-            // попадание в аппарат Sable приходит в координатах плота
+            // Sable craft hit arrives in plot coordinates.
             blockPoint = SubLevels.toWorld(level, block.getLocation());
         }
         Vec3 sweepEnd = blockPoint != null ? blockPoint : noseTo;
@@ -1129,18 +1129,18 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Вне мира: без столкновений. У цели — только если её район уже загружен (иначе снаряд ждёт на подлёте, пока
-     * он догрузится: подрыв в незагруженном чанке остановил бы сервер).
+     * Outside world: no collisions. Reach target only when area loaded (otherwise wait on approach until
+     * loading completes: detonation in an unloaded chunk would stall server).
      * <p>
-     * Дойдя до цели, снаряд встаёт в неё и возвращается в мир, где и взрывается: вне мира столкновений нет, и снаряд,
-     * которому для возвращения не хватило бы тикающих чанков впереди по курсу (цель в чанке, который тикает один, —
-     * игрок в воздухе у края загрузки), пролетал бы цель и падал до конца запаса хода (ракеты РСЗО в 900 блоках под
-     * миром).
+     * At target, stop there and reenter world to explode: outside-world flight has no collisions; without enough ticking
+     * forward chunks for reentry (target in an isolated ticking chunk —
+     * airborne player at loaded edge), projectile would overshoot and fall until range ran out (MLRS rockets 900 blocks
+     * below world).
      */
     private boolean advanceVirtual(ServerLevel level, Vec3 aim, double reachPad, Vec3 dir) {
         if (grounded != null) {
-            // стоит на поверхности: вернуться в мир, как только место загрузится (ожидание — с тем же пределом),
-            // на настоящую поверхность из карты высот загруженного чанка
+            // Standing on surface: reenter once location loaded (same waiting limit),
+            // at actual surface from loaded-chunk heightmap.
             if (!aimAreaReady(level, grounded)) return waitForAimArea(grounded);
             grounded = new Vec3(grounded.x, groundBound(level, grounded.x, grounded.z), grounded.z);
             moveAlong(level, grounded, dir);
@@ -1155,11 +1155,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3 pos = position();
         boolean near = onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad + 48;
         if (near && !aimAreaReady(level, aim)) {
-            // ждём загрузки района (тикет взят на подлёте)
+            // Await area loading (ticket acquired on approach).
             return waitForAimArea(aim);
         }
         if (onFinalLeg() && pos.distanceTo(aim) <= speed + reachPad) {
-            // район цели тикает (иначе ждали бы выше): вернуться в мир у цели — VirtualFlights сделает это в этом же тике
+            // Target area ticks (otherwise waiting above): reenter at target — VirtualFlights does it this tick.
             moveAlong(level, aim, dir);
             arrived = true;
             return true;
@@ -1167,8 +1167,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3 next = pos.add(dir.scale(speed)).add(drift());
         Vec3 ground = groundCrossing(level, aim, pos, next);
         if (ground != null) {
-            // мимо цели (или цель под землёй): вне мира столкновений нет, и снаряд падал бы без взрыва до конца запаса
-            // хода или до низа мира (бомба на точку позади B-2 — до y=−3022); путь кончается на поверхности
+            // Missed target (or target underground): no outside-world collisions, so projectile would fall without exploding until
+            // range exhaustion or world bottom (bomb aimed behind B-2 down to y=−3022); path ends at surface.
             Incoming.LOG.info("Projectile {} {} reached the surface off-world at {}, target {}", getType().getDescriptionId(), getUUID(),
                     BlockPos.containing(ground), BlockPos.containing(aim));
             grounded = ground;
@@ -1180,20 +1180,20 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Где шаг вне мира уходит под землю (null — не уходит). Поверхность — из карты высот готового чанка; у не готового —
-     * уровень моря генератора ({@code Level.getSeaLevel} в 1.21.1 — всегда 63, у плоского мира море −63): ниже него суша
-     * почти не бывает (над водой поверхность — сама вода), а рельеф генератора ({@code ChunkGenerator.getBaseHeight})
-     * стоит миллисекунды на точку — не для каждого тика. В мире с потолком (Незер) карта высот — потолок: там только море.
+     * Where outside-world step enters ground (null — does not). Surface from ready-chunk heightmap; unready chunk uses
+     * generator sea level ({@code Level.getSeaLevel} always 63 in 1.21.1; flat-world sea −63): land rarely lies
+     * below it (water itself is surface over water); generator terrain ({@code ChunkGenerator.getBaseHeight})
+     * costs milliseconds per point, unsuitable per tick. Ceiling dimension (Nether): heightmap is ceiling, use only sea level.
      * <p>
-     * Рельефа вне мира снаряд не знает и летит на высоте цели (пуск издалека — над ней, РСЗО — с её высоты, бреющий —
-     * над ней же), а цель бывает ниже моря и ниже рельефа (пещера, карьер, овраг): под поверхностью, но не ниже своей
-     * цели на {@link #BELOW_AIM} он ещё летит к ней. Ниже этого пола на снижении баллистический снаряд (бомба, РСЗО) уже
-     * в земле: попадание — на поверхности над ним (и когда пол встал выше: чанк под ним догрузился). Управляемый
-     * ({@link #climbs}) ниже пола оказывается, только когда пол встал выше него — цель, за которой он держит высоту
-     * (ракета +12, шахед +30), поднялась (игрок вышел из оврага, телепорт), — и ещё несколько тиков снижается, пока
-     * доворачивает вверх: его пол не останавливает, иначе он падал бы там, где его застало (в 3000 блоках от цели,
-     * с ядерной БЧ). Ниже низа мира не уходит никто. Снаряд, который после этого шага вернётся в мир, правило не
-     * трогает: в мире столкновения свои.
+     * Outside world, projectile does not know terrain and flies at target altitude (distant launch above it, MLRS from it,
+     * low flight above it), while target can be below sea/terrain (cave, quarry, ravine): beneath surface but no farther than
+     * {@link #BELOW_AIM} below target, it still flies toward it. Descending ballistic projectile (bomb, MLRS) below this floor is
+     * already underground: impact at surface above it (also when floor rises: underlying chunk loaded). Guided projectile
+     * ({@link #climbs}) only goes below floor when it rises above it — target whose altitude it follows
+     * (missile +12, Shahed +30) rose (player left ravine, teleport) — and keeps descending for a few ticks while
+     * turning upward. Floor does not stop it, or it would fall wherever caught (3000 blocks from target,
+     * with nuclear warhead). Nobody goes below world bottom. Rule leaves projectiles reentering world after this step
+     * alone: world has its own collisions.
      */
     @Nullable
     private Vec3 groundCrossing(ServerLevel level, Vec3 aim, Vec3 from, Vec3 to) {
@@ -1201,26 +1201,26 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         boolean buried = !climbs() && to.y < floor && to.y < from.y;
         boolean bottom = to.y < level.getMinBuildHeight();
         if (!(buried || bottom) || clearAhead(level, to)) return null;
-        // шаг пересёк пол — там, где пересёк; уже был под ним (пол встал выше, низ мира) — там, где снаряд сейчас
+        // Step crossed floor: at crossing; already beneath (floor rose, world bottom): current projectile position.
         double t = from.y >= floor && from.y > to.y ? (from.y - floor) / (from.y - to.y) : 0;
         Vec3 at = from.lerp(to, t);
-        // попадание — на поверхности там, где путь её встретил (на склоне конец шага выше или ниже на блоки)
+        // Impact at surface where path met it (on slope, step end can differ by blocks in height).
         return new Vec3(at.x, groundBound(level, at.x, at.z), at.z);
     }
 
     /**
-     * Поверхность для полёта вне мира: карта высот готового чанка, иначе уровень моря; потолок Незера — не земля
-     * ({@link Terrain.Allowed#FLIGHT}, см. {@link #groundCrossing}).
+     * Outside-world flight surface: ready-chunk heightmap, otherwise sea level; Nether ceiling is not ground
+     * ({@link Terrain.Allowed#FLIGHT}, see {@link #groundCrossing}).
      */
     private static int groundBound(ServerLevel level, double x, double z) {
         return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z), Terrain.Allowed.FLIGHT).y();
     }
 
     /**
-     * Следующий шаг уходит из чанков, где тикают сущности: снаряд уходит в полёт вне мира с того места, где стоит
-     * (или исчезает, если так не умеет), и шаг делает уже копия вне мира. Проверка — до шага: шагнув в чанк, где
-     * сущности не тикают, снаряд оставался бы в мире без тика, с тикетами, которые снять уже некому, — такие
-     * снаряды висели бы в мире до конца игры, а их тикеты держали бы чанки (стенд нагрузки: 81 тикет на 2 снаряда).
+     * Next step leaves entity-ticking chunks: leave for outside-world flight at current position
+     * (or vanish if unsupported), and copy performs step outside world. Check before step: stepping into a non-ticking
+     * chunk would leave projectile in-world without ticks, retaining tickets no one could release — such projectiles
+     * would hang until game exit and hold chunks (stress rig: 81 tickets for 2 projectiles).
      */
     protected final boolean leavesTickingChunks(ServerLevel level, Vec3 next) {
         if (virtual || level.isPositionEntityTicking(BlockPos.containing(next))) return false;
@@ -1230,9 +1230,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Перемещение без проверок (бомбардировщик, бурение). Снаряд в мире двигается только так: тикеты его чанков
-     * ({@link ChunkHold}) идут за ним. Сдвинутый мимо ({@code setPos}) в чанк, где сущности не тикают, он стоял бы там без
-     * конца полёта, а его тикеты держали бы и его, и район цели до остановки сервера.
+     * Unchecked movement (bomber, drilling). In-world projectile moves only this way: its chunk tickets
+     * ({@link ChunkHold}) follow. Bypassing via {@code setPos} into a non-entity-ticking chunk would leave it there without
+     * flight ending, tickets retaining both it and target area until server stop.
      */
     protected void moveAlong(ServerLevel level, Vec3 next, Vec3 dir) {
         setPos(next.x, next.y, next.z);
@@ -1244,29 +1244,29 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Высота рельефа (верх препятствий) в точке. На сервере — только из готового чанка (иначе нижняя граница
-     * мира): чтение незагруженного чанка из тика грузит его сразу и останавливает сервер.
+     * Terrain height (obstacle top) at point. Server uses only ready chunk (otherwise world bottom): reading unloaded
+     * chunks during tick loads synchronously and stalls server.
      */
     public static double surfaceY(Level level, double x, double z) {
         return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z), Terrain.Allowed.CHUNK).y();
     }
 
     /**
-     * Датчик {@link Craft#relief}: высота рельефа в колонке на всём пути, в мире и вне его ({@link Terrain.Allowed#RELIEF}):
-     * готовый чанк, иначе съёмка без загрузки — карта высот с диска или из памяти, у чанка, которого на диске нет, —
-     * рельеф генератора ({@link TerrainSurvey}); пока съёмка не ответила — низ мира.
+     * {@link Craft#relief} sensor: column terrain height along entire path, inside/outside world ({@link Terrain.Allowed#RELIEF}):
+     * ready chunk, otherwise survey without loading — disk/memory heightmap, or for chunks absent on disk,
+     * generator terrain ({@link TerrainSurvey}); world bottom until survey answers.
      */
     protected double relief(Level level, int x, int z) {
         return Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x, z, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF).y();
     }
 
-    /** Съёмку рельефа заказывать вперёд на столько блоков пути ({@link #surveyAhead}). */
+    /** Request terrain survey this many path blocks ahead ({@link #surveyAhead}). */
     static final double SURVEY_AHEAD = 1024;
 
     /**
-     * Заказать съёмку рельефа ({@link TerrainSurvey#ahead}) на {@link #SURVEY_AHEAD} блоков пути вперёд: до точки
-     * маршрута, потом от неё к цели. Датчик рельефа сам заказывает то, о чём спросил, но ответ приходит через тики;
-     * к тому, как снаряд дойдёт, он уже будет. Только у снарядов, которые смотрят рельеф ({@code reliefLookahead}).
+     * Request terrain survey ({@link TerrainSurvey#ahead}) for {@link #SURVEY_AHEAD} path blocks ahead: to next
+     * waypoint, then toward target. Terrain sensor requests queried columns itself, but answers take ticks;
+     * preordering makes them ready by arrival. Only projectiles using terrain sensing ({@code reliefLookahead}).
      */
     private void surveyAhead(ServerLevel level) {
         if (airframe().reliefLookahead() <= 0 || age % 20 != 0) return;
@@ -1285,8 +1285,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Наибольшая высота рельефа под полосой ({@link Autopilot#reliefAlong}) прямо по курсу на {@code distance} блоков
-     * по горизонтали, от колонки под снарядом.
+     * Maximum terrain beneath corridor ({@link Autopilot#reliefAlong}) straight ahead for {@code distance} horizontal blocks,
+     * starting at column beneath projectile.
      */
     protected double reliefStraightAhead(Level level, double distance) {
         Vec3 pos = position();
@@ -1296,11 +1296,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Датчик {@link Craft#clearAlong}: клетки блоков на прямой до точки без последних {@code margin} блоков по готовым
-     * чанкам ({@link Terrain#readyUntil}); дальше них и вне мира — верх рельефа съёмки ({@link Terrain#underRelief}). Закрывает клетка с любой формой столкновения
-     * целиком: у тонкого (забор, мачта из заборов — столб 0,25 блока) луч по форме ({@code Level.clip}) обычно проходит
-     * мимо, а шахед своим корпусом его задевает. Цена — обход клеток по прямой ({@code BlockGetter.traverseBlocks}),
-     * до первой закрытой.
+     * {@link Craft#clearAlong} sensor: straight-line block cells to point except last {@code margin} blocks, in ready
+     * chunks ({@link Terrain#readyUntil}); beyond them/outside world, survey terrain top ({@link Terrain#underRelief}). Any collision shape blocks
+     * whole cell: thin shapes (fence, fence mast — 0.25-block post) usually missed by shape ray ({@code Level.clip})
+     * can still hit Shahed body. Cost: straight cell traversal ({@code BlockGetter.traverseBlocks})
+     * to first blocked cell.
      */
     protected double clearAlong(Level level, Vec3 to, double margin) {
         Vec3 from = position();
@@ -1316,20 +1316,20 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             if (ready == end) return Double.POSITIVE_INFINITY;
             start = ready;
         }
-        // За готовыми чанками и вне мира — по верху рельефа съёмки, без потолка Незера:
-        // после разрыва могут снова встретиться готовые чанки, чья карта высот — потолок, а не препятствие.
+        // Beyond ready chunks/outside world use survey terrain top without Nether ceiling:
+        // after gap, ready chunks may reappear with ceiling heightmap rather than an obstacle.
         double t = Terrain.underRelief(level, start, end, Terrain.Allowed.VIRTUAL_RELIEF);
         return t >= 1 ? Double.POSITIVE_INFINITY : from.distanceTo(start.lerp(end, t));
     }
 
-    // ---------------------------------------------------------------- чанки
+    // ---------------------------------------------------------------- chunks
 
     /**
-     * Мир перестал его отслеживать — выгрузка вместе с чанком ({@code setRemoved}, без {@code remove}), остановка
-     * сервера, чанк перестал выдаваться: тикеты отпускаются ({@code ServerLevel.EntityCallbacks.onTrackingEnd}).
-     * Вернувшись из чанка, снаряд возьмёт тикеты заново в первом же тике. Снаряд в полёте так уходить не должен
-     * (свой чанк он держит тикетом, из тикающих чанков уходит в {@link VirtualFlights}): пока он в чанке, которого
-     * мир не отслеживает, его нет ни в мире, ни в полётах вне мира, и HUD с картой камеры его теряют — в лог.
+     * World stopped tracking it — chunk unload ({@code setRemoved}, no {@code remove}), server stop,
+     * chunk no longer delivered: release tickets ({@code ServerLevel.EntityCallbacks.onTrackingEnd}).
+     * Returning from chunk, reacquire tickets on first tick. Flying projectile should not leave this way
+     * (own chunk held by ticket, leaves ticking chunks through {@link VirtualFlights}): while in an untracked chunk,
+     * absent both from world and outside-world flights, so HUD/camera map lose it — log this.
      */
     @Override
     public void onRemovedFromLevel() {
@@ -1344,8 +1344,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Удаление (взрыв, отбой, уход в полёт вне мира) — всегда здесь: у снаряда вне мира (он в мир не добавлен)
-     * и у снаряда в чанке, который мир уже не отслеживает, {@link #onRemovedFromLevel} не приходит.
+     * Removal (explosion, cancel, outside-world departure) always here: outside-world projectiles (not added to world)
+     * and those in chunks no longer tracked never receive {@link #onRemovedFromLevel}.
      */
     @Override
     public void remove(RemovalReason reason) {
@@ -1355,10 +1355,10 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Снаряд убрал не мод (команда {@code /kill}, чистильщик сущностей другого мода): строка WARN на залп ({@link FlightLog},
-     * кем — класс, позвавший удаление), цепочка вызовов — строкой DEBUG.
-     * Свои концы полёта (взрыв, отбой, полёт вне мира) идут из кода мода и видны в стеке; чужое удаление иначе
-     * выглядело бы как пропавший залп — без удара, ошибки и срока жизни.
+     * Projectile removed externally ({@code /kill}, another mod's entity cleaner): WARN per salvo ({@link FlightLog},
+     * remover is class calling removal), call chain at DEBUG.
+     * Our flight endings (explosion, cancel, outside-world flight) originate in mod code and are visible in stack; external
+     * removal would otherwise look like a lost salvo — without impact, error or lifetime expiry.
      */
     private void noteForeignRemoval(RemovalReason reason) {
         List<StackWalker.StackFrame> frames = StackWalker.getInstance().walk(s -> s.skip(2).limit(48).toList());
@@ -1370,7 +1370,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
             if (i > 0) by.append(" ← ");
             by.append(f.getClassName().substring(f.getClassName().lastIndexOf('.') + 1)).append('.').append(f.getMethodName());
         }
-        // кем — первый вызов не из самой сущности (discard, kill)
+        // Remover: first call outside entity itself (discard, kill).
         String who = frames.stream().map(StackWalker.StackFrame::getClassName).filter(c -> !c.startsWith("net.minecraft.world.entity."))
                 .findFirst().orElse("?");
         Incoming.LOG.debug("Projectile {} {} at {} (phase {}) removed externally ({}): {}", getType().getDescriptionId(), getUUID(), blockPosition(),
@@ -1387,15 +1387,15 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Сервер останавливается: снаряд в мире уходит в полёт вне мира ({@link VirtualFlights} сохраняются вместе
-     * с миром), а не замирает в файле чанка, который после запуска никто может не загрузить часами. Тикеты
-     * на чанки после запуска всё равно сняты бы (см. {@link ChunkTickets}).
+     * Server stopping: in-world projectile leaves for outside-world flight ({@link VirtualFlights}, saved with
+     * world), rather than freezing in a chunk file that may stay unloaded for hours after restart. Chunk tickets
+     * would be gone after restart anyway (see {@link ChunkTickets}).
      */
     public void parkForShutdown(ServerLevel level) {
         if (fliesVirtually()) VirtualFlights.park(level, this);
     }
 
-    // ---------------------------------------------------------------- урон: дрон и ракету можно сбить
+    // ---------------------------------------------------------------- damage: drone and missile can be shot down
 
     @Override
     public boolean isPickable() {
@@ -1420,7 +1420,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         return true;
     }
 
-    /** Сбили: подрыв там, где настигло (на старте, пока взрыватель не взведён, — просто разбился). */
+    /** Shot down: detonate where hit (at launch before fuze arming: just crash). */
     protected void shotDown(ServerLevel level, DamageSource source) {
         if (armed()) {
             impact(level, position(), null);
@@ -1434,9 +1434,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Сбит зенитной ракетой ({@code defense.Interceptor}): боевая часть не срабатывает, корпус разваливается и обломки
-     * падают дальше по ходу полёта ({@link DebrisSpawner#wreck}); вне мира снаряд просто убран — обломкам там негде
-     * падать. В лог — строкой на залп ({@link FlightLog.Event#INTERCEPTED}, подробность — какой ЗРК).
+     * Shot down by SAM missile ({@code defense.Interceptor}): warhead does not detonate; body breaks and debris
+     * falls along flight direction ({@link DebrisSpawner#wreck}); outside-world projectile simply removed — no world for debris
+     * to fall in. One log line per salvo ({@link FlightLog.Event#INTERCEPTED}, detail: which SAM).
      */
     public void intercepted(ServerLevel level, String by) {
         if (isRemoved()) return;
@@ -1451,7 +1451,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         if (level.isPositionEntityTicking(BlockPos.containing(at))) DebrisSpawner.wreck(level, at, v, noseLength());
     }
 
-    // ---------------------------------------------------------------- синхронизация и интерполяция
+    // ---------------------------------------------------------------- synchronization and interpolation
 
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
@@ -1479,9 +1479,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Возраст и возраст фазы уходят клиенту вместе с появлением сущности: кто начал видеть снаряд посреди фазы
-     * (подошёл, вернулся в мир), видит анимации фазы (створки, крылья, выход из пусковой) с того же места, что и сервер.
-     * Часы мира для этого не годятся — у клиента они прыгают, когда сервер догоняет отставание.
+     * Age/phase age sent with entity spawn: clients first seeing projectile mid-phase
+     * (approaching, reentry) see animations (doors, wings, launcher exit) at same point as server.
+     * World clocks unsuitable: client clock jumps while server catches up.
      */
     @Override
     public void writeSpawnData(RegistryFriendlyByteBuf buf) {
@@ -1493,8 +1493,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Override
     public void recreateFromPacket(ClientboundAddEntityPacket packet) {
         super.recreateFromPacket(packet);
-        // ваниль ставит место с прежним (нулевым) поворотом в «прошлый» и потом поворот пакета: первые кадры модель
-        // доворачивалась бы с юга
+        // Vanilla sets old position using previous (zero) rotation, then packet rotation: first frames would turn
+        // model from south.
         yRotO = getYRot();
         xRotO = getXRot();
     }
@@ -1511,7 +1511,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         arrivals.add(new ArrivalQueue.Sample(x, y, z, yRot, xRot));
     }
 
-    /** Место на этот тик клиента — из очереди; пуста — прогноз в долг от последнего пришедшего места ({@link ArrivalQueue}). */
+    /** This client tick's position from queue; empty — predict on credit from last received position ({@link ArrivalQueue}). */
     private void clientLerp() {
         ArrivalQueue.Sample s = arrivals.next(getX(), getY(), getZ(), getYRot(), getXRot());
         if (s != null) lerpPositionAndRotationStep(1, s.x(), s.y(), s.z(), s.yRot(), s.xRot());
@@ -1536,18 +1536,18 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Дальше стольких блоков сущность снаряда свою модель не рисует ({@link #shouldRenderAtSqrDistance}): корпус там —
-     * у дальней картинки ({@code client.far.FarView#entityReach}).
+     * Beyond this distance projectile entity stops drawing its model ({@link #shouldRenderAtSqrDistance}): distant
+     * rendering handles body there ({@code client.far.FarView#entityReach}).
      */
     public static final double DRAW_RANGE = 1024;
 
     @Override
     public boolean shouldRenderAtSqrDistance(double distanceSq) {
-        // видно издалека: ограничивает только дальность отслеживания сущности сервером
+        // Visible from afar: bounded only by server entity tracking range.
         return distanceSq < DRAW_RANGE * DRAW_RANGE;
     }
 
-    // ---------------------------------------------------------------- сохранение
+    // ---------------------------------------------------------------- persistence
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
@@ -1601,9 +1601,9 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     }
 
     /**
-     * Запас хода из сохранения. Снаряд, сохранённый со сроком жизни (2.3.0 и раньше, ключа {@code mission} нет): остаток
-     * срока (ожидание района цели в нём не считалось) и дробные тики погони — полёт на маршевой скорости, с которой его
-     * сохранили ({@link #savedCruiseSpeed}); урезанный после потери цели остаётся урезанным.
+     * Saved range reserve. Projectile saved with lifetime (2.3.0 and earlier, no {@code mission} key): remaining
+     * lifetime (excluding target-area wait) and fractional pursuit ticks convert to flight at saved cruise speed
+     * ({@link #savedCruiseSpeed}); range reduced after target loss stays reduced.
      */
     @Nullable
     private Mission readMission(CompoundTag tag) {
@@ -1615,7 +1615,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
                 savedCruiseSpeed(tag));
     }
 
-    /** Маршевая скорость, с которой снаряд сохранён (для переноса старого срока жизни в запас хода). */
+    /** Saved cruise speed (converts old lifetime to range). */
     protected double savedCruiseSpeed(CompoundTag tag) {
         return cruiseSpeed();
     }

@@ -33,64 +33,64 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Съёмка рельефа мира без загрузки чанков — источники {@link Terrain.Source#DISK} и {@link Terrain.Source#GENERATOR}
- * для набора {@link Terrain.Allowed#RELIEF}: полёт видит рельеф на всём пути, а не только на готовых чанках.
+ * World terrain survey without chunk loading — {@link Terrain.Source#DISK} and {@link Terrain.Source#GENERATOR}
+ * for {@link Terrain.Allowed#RELIEF}: flight sees terrain along its entire path, not only ready chunks.
  * <ul>
- *   <li>Чанк в памяти, но не готов (ждёт выгрузки, опущен у края видимости, {@link Terrain#inMemory}) — его карта высот
- *   сразу: это те же данные, что уйдут на диск.</li>
- *   <li>Чанк на диске — поле {@code Heightmaps} его файла: читает поток ввода-вывода чанков ({@code chunkScanner}, тот
- *   же, что у заголовков {@link DiskStatus#scan}), не разбирая и не загружая чанк. Он же отдаёт ещё не записанное
- *   ({@code IOWorker.pendingWrites}), а запись выгруженного чанка встаёт в его очередь раньше любого чтения после неё.
- *   Годится только чанк с окончательными блоками ({@link DiskStatus.State#blocksFinal}) в формате 1.18 и новее.</li>
- *   <li>Чанка на диске нет или он недогенерирован — рельеф генератора ({@code ChunkGenerator.getBaseHeight}, без
- *   деревьев и построек, не ниже уровня моря), в фоновом потоке Minecraft: узлы сетки через {@link #GENERATOR_STEP}
- *   блоков, колонка — наибольший из четырёх узлов своей клетки. Это оценка сверху для гладкого склона и снизу для
- *   леса (крон генератор не знает): приближение, не карта.</li>
+ *   <li>In-memory unready chunk (awaiting unload, downgraded at visibility edge, {@link Terrain#inMemory}): its heightmap
+ *   immediately, the same data that will go to disk.</li>
+ *   <li>Disk chunk: its file's {@code Heightmaps} field, read by chunk I/O thread ({@code chunkScanner}, same
+ *   as {@link DiskStatus#scan} headers), without parsing/loading the chunk. Also supplies not-yet-written data
+ *   ({@code IOWorker.pendingWrites}); unloaded chunk writes enter its queue before subsequent reads.
+ *   Only chunks with final blocks ({@link DiskStatus.State#blocksFinal}) in 1.18+ format qualify.</li>
+ *   <li>Chunk absent/partially generated on disk: generator terrain ({@code ChunkGenerator.getBaseHeight}, no
+ *   trees or structures, at least sea level), on a Minecraft background thread: grid nodes every {@link #GENERATOR_STEP}
+ *   blocks; column uses maximum of its cell's four nodes. Upper estimate for smooth slopes, lower for
+ *   forests (generator knows no crowns): approximation, not a map.</li>
  * </ul>
- * Тик не ждёт ни диска, ни генератора: первый вопрос о чанке заказывает съёмку и получает null («ещё не знаю»), ответ
- * приходит в конце тика ({@link #publish}). Чанк в памяти отвечает сам; уходя из неё ({@code ChunkEvent.Unload}),
- * он оставляет съёмке свою карту высот — ту же, что уходит на диск: ответ о нём не прерывается ни на тик, когда бы
- * ваниль его ни выгрузила (выгрузка идёт по свободному времени тика), и старый ответ с диска её не заменит. Своё у
- * каждого мира, не сохраняется ({@link ModAttachments#TERRAIN_SURVEY}).
+ * Tick waits for neither disk nor generator: first chunk query requests survey, returns null (“unknown yet”); answer
+ * arrives at tick end ({@link #publish}). In-memory chunks answer themselves; on leaving memory ({@code ChunkEvent.Unload}),
+ * leave their heightmap with the survey — same as disk data: no answer gap even for one tick, regardless of
+ * when vanilla unloads them (in spare tick time), and old disk answers cannot replace it. Per-world state,
+ * unsaved ({@link ModAttachments#TERRAIN_SURVEY}).
  */
 public final class TerrainSurvey {
-    /** Шаг узлов рельефа генератора, блоков: ~3 мс на узел, в среднем ~4 новых узла на чанк. */
+    /** Generator terrain-node spacing, blocks: ~3 ms per node, average ~4 new nodes per chunk. */
     public static final int GENERATOR_STEP = 8;
     /**
-     * Сколько чтений мир отдаёт потоку ввода-вывода чанков разом: та же очередь грузит чанки игрокам, и сотни чтений
-     * задержали бы их. Остальные заказы ждут в своей очереди — не отбрасываются: иначе чей заказ принят, решали бы
-     * соседние полёты и скорость диска.
+     * Reads submitted to chunk I/O at once per world: same queue loads player chunks, so hundreds of reads
+     * would delay them. Other requests wait in their own queue, never dropped: otherwise neighboring flights
+     * and disk speed would decide whose request is accepted.
      */
     public static final int MAX_READS = 64;
-    /** Заказов в очереди больше этого не берётся (память; столько не набирает и залп над неисследованной землёй). */
+    /** Maximum queued requests (memory; even a salvo over unexplored land does not reach this many). */
     static final int MAX_QUEUED = 8192;
-    /** Сколько чанков генератора считается разом: один из общих потоков Minecraft, остальные — генерации мира; следующий — сразу по концу. */
+    /** Generator chunks computed at once: one shared Minecraft thread, leaving others for worldgen; next starts immediately on completion. */
     static final int GENERATOR_WORKERS = 1;
-    /** Верхняя граница карт каждого вида (выгрузки идут и без полётов, память должна быть ограничена сразу). */
+    /** Maximum maps of each kind (unloads occur without flights too; memory must be bounded from the start). */
     static final int MAX_KNOWN = 8192;
-    /** После ошибки генератора чанк неизвестен столько тиков; вопросы не продлевают запрет повторной попытки. */
+    /** Ticks of unknown chunk after generator error; queries do not extend retry inhibition. */
     static final int RETRY_TICKS = 200;
-    /** Чанк, о котором не спрашивали столько тиков, забывается. */
+    /** Forget chunks not queried for this many ticks. */
     static final int FORGET_TICKS = 6000;
-    /** Узлов генератора больше этого — память узлов сбрасывается (≈1,5 МБ). */
+    /** Clear node memory when generator node count exceeds this (≈1.5 MB). */
     static final int MAX_POINTS = 65_536;
 
-    /** Известные карты высот: вид карты → чанк → колонки. */
+    /** Known heightmaps: map kind → chunk → columns. */
     private final Map<Heightmap.Types, Map<Long, Heights>> known = new EnumMap<>(Heightmap.Types.class);
-    /** Заказанные: вид карты → чанк → метка заказа (заказ, чья метка снята, отбрасывается). */
+    /** Requested: map kind → chunk → request token (requests whose token was removed are discarded). */
     private final Map<Heightmap.Types, Map<Long, Order>> pending = new EnumMap<>(Heightmap.Types.class);
-    /** Чтения с диска в пути (для {@link #settle}). */
+    /** Disk reads in flight (for {@link #settle}). */
     private final Queue<CompletableFuture<?>> reads = new ConcurrentLinkedQueue<>();
-    /** Чанки без карты на диске — ждут генератора (кладёт поток ввода-вывода, считает фоновый поток, {@link #pump}). */
+    /** Chunks without disk heightmaps awaiting generator (I/O enqueues, background thread computes, {@link #pump}). */
     private final Orders toGenerate = new Orders();
-    /** Счёт генератора в пути (для {@link #settle}). */
+    /** Generator computations in flight (for {@link #settle}). */
     private final Queue<CompletableFuture<?>> generating = new ConcurrentLinkedQueue<>();
     private final AtomicInteger workers = new AtomicInteger();
     private final AtomicInteger reading = new AtomicInteger();
-    /** Заказы, ждущие чтения (поток сервера): вопросы датчика — первыми, заказ вперёд — следом. */
+    /** Requests awaiting read (server thread): sensor queries first, preorders afterward. */
     private final Orders toRead = new Orders();
 
-    /** Заказ чанка с меткой (ждёт чтения или генератора). */
+    /** Tagged chunk request (awaiting read or generator). */
     static final class Order {
         final Heightmap.Types type;
         final long chunk;
@@ -103,7 +103,7 @@ public final class TerrainSurvey {
         }
     }
 
-    /** Две FIFO с продвижением уже ожидающего заказа; потоки IO и генератора тоже обращаются к очереди. */
+    /** Two FIFOs with promotion of already waiting requests; I/O and generator threads also access the queue. */
     static final class Orders {
         private final Map<Order, Order> urgent = new LinkedHashMap<>(), later = new LinkedHashMap<>();
 
@@ -142,10 +142,10 @@ public final class TerrainSurvey {
         }
     }
     private final java.util.Set<Heightmap.Types> asked = java.util.EnumSet.of(Heightmap.Types.MOTION_BLOCKING);
-    /** Узлы рельефа генератора: (x / шаг, z / шаг) → первый воздух. */
+    /** Generator terrain nodes: (x / step, z / step) → first air. */
     private final Map<Long, Integer> points = new ConcurrentHashMap<>();
 
-    /** Для {@link ModAttachments#TERRAIN_SURVEY}. */
+    /** For {@link ModAttachments#TERRAIN_SURVEY}. */
     public TerrainSurvey() {
         for (Heightmap.Types t : Heightmap.Types.values()) {
             known.put(t, new LinkedHashMap<>(16, 0.75f, true));
@@ -158,9 +158,9 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Первый воздух в колонках чанка и откуда он; {@code used} — тик последнего вопроса. {@code y} null — чанк на диске
-     * с окончательными блоками, но без годной карты высот (формат до 1.18 или длина не по высоте мира): рельеф неизвестен,
-     * генератор тут не годится — мир построен не им или с тех пор изменён.
+     * First air in chunk columns and its source; {@code used} is last query tick. Null {@code y}: disk chunk
+     * has final blocks but no usable heightmap (pre-1.18 format or length mismatching world height): unknown terrain,
+     * generator unsuitable — world built by another generator or changed since.
      */
     static final class Heights {
         @Nullable
@@ -182,15 +182,15 @@ public final class TerrainSurvey {
     }
 
 
-    /** Ответ заказа из фонового потока: в известные — в конце тика мира ({@link #publish}). */
+    /** Background-thread request answer: publish to known maps at world-tick end ({@link #publish}). */
     private record Answer(Order order, @Nullable int[] y, Terrain.Source source, boolean retry) {}
 
-    /** Ответы, пришедшие с прошлого конца тика. */
+    /** Answers received since previous tick end. */
     private final Queue<Answer> answers = new ConcurrentLinkedQueue<>();
 
     /**
-     * Поверхность колонки (первый воздух над картой высот {@code type}) по съёмке; null — ещё не известна (съёмка
-     * заказана). Готовый чанк {@link Terrain#estimate} читает сам, до съёмки. Только поток сервера; чанк не грузится.
+     * Survey column surface (first air above {@code type} heightmap); null if still unknown (survey
+     * requested). {@link Terrain#estimate} reads ready chunks itself before survey. Server thread only; no chunk loading.
      */
     @Nullable
     public Terrain.Surface at(ServerLevel level, Heightmap.Types type, int x, int z) {
@@ -216,8 +216,8 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Заказать заранее чанки вдоль отрезка {@code from → to} по горизонтали (и по одному соседнему с каждой стороны:
-     * полоса над путём шире линии): к тому, как снаряд дойдёт, ответ уже будет. Только поток сервера.
+     * Preorder chunks along horizontal segment {@code from → to} (plus one neighbor on each side:
+     * corridor over path is wider than a line), so answers are ready when projectile arrives. Server thread only.
      */
     public void ahead(ServerLevel level, Heightmap.Types type, Vec3 from, Vec3 to) {
         if (level.dimensionType().hasCeiling()) return;
@@ -237,7 +237,7 @@ public final class TerrainSurvey {
         submit(level, MAX_READS);
     }
 
-    /** Один живой заказ на чанк и вид карты; общий предел действует до ответа генератора включительно. */
+    /** One live request per chunk and map kind; total limit includes waiting for generator answer. */
     @Nullable
     Order order(Heightmap.Types type, long chunk, boolean urgent) {
         Map<Long, Order> waiting = pending.get(type);
@@ -249,7 +249,7 @@ public final class TerrainSurvey {
             }
             return existing;
         }
-        // Половина мест оставлена вопросам датчика: предзаказ не вытесняет новую нужную сейчас колонку.
+        // Half the slots reserved for sensor queries: preorders cannot displace a newly needed column.
         if (pendingCount() >= (urgent ? MAX_QUEUED : MAX_QUEUED / 2)) return null;
         Order order = new Order(type, chunk, urgent);
         waiting.put(chunk, order);
@@ -271,7 +271,7 @@ public final class TerrainSurvey {
         return pending.get(o.type).get(o.chunk) == o;
     }
 
-    /** Отдать потоку ввода-вывода заказы из очереди, пока в пути меньше {@code limit} чтений (поток сервера). */
+    /** Submit queued requests to I/O while fewer than {@code limit} reads are in flight (server thread). */
     private void submit(ServerLevel level, int limit) {
         while (reading.get() < limit) {
             Order o = toRead.poll();
@@ -291,7 +291,7 @@ public final class TerrainSurvey {
             if (y != null) {
                 finish(o, y, Terrain.Source.DISK, false);
             } else if (e != null) {
-                // Ошибка чтения — не доказательство отсутствия чанка: генератор мог бы выдумать чужой рельеф.
+                // Read failure does not prove chunk absence: generator could invent terrain for someone else's world.
                 finish(o, null, Terrain.Source.UNKNOWN, true);
                 Incoming.LOG.warn("Terrain survey: reading chunk {} failed", new ChunkPos(o.chunk), e);
             } else if (tag != null && DiskStatus.of(tag).blocksFinal()) {
@@ -304,19 +304,19 @@ public final class TerrainSurvey {
         }));
     }
 
-    /** Поле карт высот в файле чанка ({@code ChunkSerializer.HEIGHTMAPS_TAG}). */
+    /** Heightmap field in chunk file ({@code ChunkSerializer.HEIGHTMAPS_TAG}). */
     private static final String HEIGHTMAPS = "Heightmaps";
 
     /**
-     * Ответ заказа (любой поток) — в очередь: в известные его кладёт конец тика мира ({@link #publish}). Иначе ответ,
-     * пришедший посреди тика, видела бы одна колонка полосы датчика и не видела соседняя того же чанка, а полёт зависел
-     * бы от скорости диска.
+     * Request answer (any thread) goes to queue: world-tick end publishes it to known maps ({@link #publish}). Otherwise
+     * a mid-tick answer would reach one sensor-corridor column but not its same-chunk neighbor, making flight depend
+     * on disk speed.
      */
     void finish(Order o, @Nullable int[] y, Terrain.Source source, boolean retry) {
         answers.add(new Answer(o, y, source, retry));
     }
 
-    /** Ответы становятся видны одновременно, в конце тика; старый заказ не заменяет карту уходящего чанка. */
+    /** Answers become visible together at tick end; old requests cannot replace a departing chunk's map. */
     void publish(long now) {
         for (Answer a; (a = answers.poll()) != null; ) {
             Order o = a.order;
@@ -337,10 +337,10 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Первый воздух в 256 колонках по полям файла чанка ({@link DiskStatus#fields} и карта высот {@code type}); null —
-     * карты нет или ей нельзя верить: блоки не окончательные, формат до 1.18 (высоты в нём от другого низа мира), длина
-     * не по высоте мира. Упаковка — как у {@code Heightmap}: {@code ceil(log2(высота мира + 1))} бит на колонку, значение —
-     * первый воздух минус низ мира, колонка {@code x + 16 z}.
+     * First air in 256 columns from chunk-file fields ({@link DiskStatus#fields} and {@code type} heightmap); null if
+     * map absent/untrustworthy: nonfinal blocks, pre-1.18 format (heights relative to a different world bottom), length
+     * mismatching world height. Packing like {@code Heightmap}: {@code ceil(log2(world height + 1))} bits per column, value:
+     * first air minus world bottom, column {@code x + 16 z}.
      */
     @Nullable
     static int[] decode(CompoundTag tag, Heightmap.Types type, int minY, int worldHeight) {
@@ -359,8 +359,8 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Генератор для чанков без карты на диске: не больше {@link #GENERATOR_WORKERS} разом, следующий — сразу по концу
-     * предыдущего (из любого потока).
+     * Generator for chunks without disk heightmaps: at most {@link #GENERATOR_WORKERS} at once; next starts immediately
+     * after previous completion (from any thread).
      */
     private void pump(ServerLevel level) {
         while (!toGenerate.isEmpty()) {
@@ -377,7 +377,7 @@ public final class TerrainSurvey {
                 continue;
             }
             generating.add(CompletableFuture.supplyAsync(() -> generate(level, job.chunk), Util.backgroundExecutor()).handle((y, e) -> {
-                // Ответ кладётся до освобождения работника: settle не пропустит ещё не опубликованный результат.
+                // Enqueue answer before freeing worker: settle cannot miss an unpublished result.
                 if (current(job)) {
                     if (y != null) finish(job, y, Terrain.Source.GENERATOR, false);
                     else {
@@ -392,7 +392,7 @@ public final class TerrainSurvey {
         }
     }
 
-    /** Конец тика мира: пришедшие ответы — в известные ({@link #publish}), забывание старого. */
+    /** World-tick end: publish incoming answers to known maps ({@link #publish}), forget old data. */
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
         TerrainSurvey s = get(level);
@@ -408,14 +408,14 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Рельеф генератора в колонках чанка: узлы сетки {@link #GENERATOR_STEP} в углах и серединах сторон (общие с
-     * соседними чанками — по памяти узлов), колонка — наибольший узел своей клетки. Фоновый поток.
+     * Generator terrain in chunk columns: {@link #GENERATOR_STEP} grid nodes at corners and side midpoints (shared with
+     * neighboring chunks via node cache); column uses largest node of its cell. Background thread.
      */
     int[] generate(ServerLevel level, long chunk) {
         return cells(ChunkPos.getX(chunk) << 4, ChunkPos.getZ(chunk) << 4, (x, z) -> point(level, x, z));
     }
 
-    /** Колонки чанка с началом {@code x0, z0} по узлам {@code node(x, z)}: наибольший из четырёх узлов клетки. */
+    /** Chunk columns starting at {@code x0, z0}, using {@code node(x, z)}: largest of four cell nodes. */
     static int[] cells(int x0, int z0, java.util.function.IntBinaryOperator nodeAt) {
         int n = 16 / GENERATOR_STEP + 1;
         int[] node = new int[n * n];
@@ -430,7 +430,7 @@ public final class TerrainSurvey {
         return y;
     }
 
-    /** Узел рельефа генератора — первый воздух не ниже уровня моря, как у {@link Terrain.Source#GENERATOR}. */
+    /** Generator terrain node: first air at least at sea level, like {@link Terrain.Source#GENERATOR}. */
     private int point(ServerLevel level, int x, int z) {
         long key = ChunkPos.asLong(Math.floorDiv(x, GENERATOR_STEP), Math.floorDiv(z, GENERATOR_STEP));
         Integer y = points.get(key);
@@ -442,9 +442,9 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Чанк уходит из памяти перед записью: всегда оставляет готовую MOTION_BLOCKING, даже если полётов ещё не было.
-     * Все старые заказы отменяются независимо от полноты чанка и наличия карты; поздний ответ их не воскресит.
-     * Читаются только уже посчитанные карты полного чанка, без изменения уходящего чанка. Память ограничена MAX_KNOWN.
+     * Chunk leaves memory before save: always leaves a ready MOTION_BLOCKING map, even without prior flights.
+     * Cancel all old requests regardless of chunk completeness or map presence; late answers cannot revive them.
+     * Read only already computed maps of full chunks, without modifying departing chunk. Memory capped at MAX_KNOWN.
      */
     public static void onChunkUnload(ChunkEvent.Unload event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
@@ -462,7 +462,7 @@ public final class TerrainSurvey {
         }
     }
 
-    /** Свежий чанк в памяти точнее любых прежних ответов или запросов к файлу. */
+    /** Fresh in-memory chunk is more accurate than all old answers or file requests. */
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel level && level.hasData(ModAttachments.TERRAIN_SURVEY))
             get(level).invalidate(event.getChunk().getPos().toLong());
@@ -480,8 +480,8 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Дождаться всех заказов мира в этом потоке (сценарии полёта GameTest: ответ — в тике заказа, а не когда успеет
-     * диск, иначе полёт расходился бы с эталоном). В игре не зовётся.
+     * Await all world requests on this thread (GameTest flight scenarios: answer in request tick, regardless of disk
+     * timing, otherwise flight would diverge from baseline). Not called in game.
      */
     public static void settle(ServerLevel level) {
         if (!level.hasData(ModAttachments.TERRAIN_SURVEY)) return;
@@ -509,14 +509,14 @@ public final class TerrainSurvey {
     }
 
     /**
-     * Забыть чанк (GameTest: выгруженный чанк оставил съёмке свою карту, а проверка спрашивает файл на диске). В игре не
-     * зовётся.
+     * Forget chunk (GameTest: unloaded chunk left its map with survey, but check queries disk file). Not called
+     * in game.
      */
     public void forget(long chunk) {
         for (Map<Long, Heights> m : known.values()) m.remove(chunk);
     }
 
-    /** Заказов в пути (GameTest). */
+    /** Requests in flight (GameTest). */
     public int pendingCount() {
         int n = 0;
         for (Map<Long, Order> m : pending.values()) n += m.size();
