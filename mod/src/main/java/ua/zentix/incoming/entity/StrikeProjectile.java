@@ -217,8 +217,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     @Nullable
     private Vec3 grounded;
-    /** Район цели и полоса подлёта ({@link #visibleLeg}), которые держит снаряд; не сохраняются, как и тикеты. */
-    private final TargetAreaHold aimArea = new TargetAreaHold();
+    /** Район цели и полоса подлёта миссии: переходят копии с тем же UUID; не сохраняются, как и тикеты. */
+    private TargetAreaHold aimArea = new TargetAreaHold();
     /** Свой чанк и чанк впереди по курсу. */
     private final ChunkHold chunks = new ChunkHold();
 
@@ -525,6 +525,18 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Снаряд передан {@link ua.zentix.incoming.strike.VirtualFlights}: в мир его не добавлять, пока не вернётся сам. */
     public void markVirtual() {
         virtual = true;
+    }
+
+    /**
+     * Передать район и полосу новой копии этой миссии до удаления старой сущности ({@link VirtualFlights#park}).
+     * Свои чанки остаются старой сущности: её удаление отпустит их, но уже не удержание миссии.
+     */
+    public final void handOverTargetArea(StrikeProjectile copy) {
+        if (copy == this || copy.level() != level() || !copy.getUUID().equals(getUUID()) || !copy.aimArea.isEmpty()) {
+            throw new IllegalArgumentException("Target area handover needs a fresh copy of the same mission");
+        }
+        copy.aimArea = aimArea;
+        aimArea = new TargetAreaHold();
     }
 
     /** Время до удара, тиков (сервер): оставшийся путь по маршруту на маршевой скорости и старт. */
