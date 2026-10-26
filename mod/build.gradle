@@ -242,6 +242,7 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // SoundAssetsTest читает sounds.json
     testImplementation 'com.google.code.gson:gson:2.10.1'
@@ -388,6 +389,11 @@ tasks.named('jar', Jar) {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.compilerArgs += ['-Xlint:all,-processing,-serial,-classfile,-this-escape', '-Xmaxerrs', '1000']
+}
+
+// Enforce the enabled lint categories in shipped code; devtest warnings are cleaned up separately.
+tasks.named('compileJava', JavaCompile) {
+    options.compilerArgs += ['-Werror']
 }
 
 // Агент горячей замены песочницы эффектов (src/sandboxAgent, tools/sandbox.sh): -javaagent у клиента песочницы

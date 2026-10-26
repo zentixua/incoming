@@ -187,7 +187,7 @@ public final class CraterJob {
         double damagedDepth = 0;
         if (mode == Mode.DIG) {
             BlockState surface = level.getBlockState(m.setY(ground - 1));
-            if (surface.getBlock().defaultDestroyTime() < 0 || surface.getBlock().getExplosionResistance() >= BLAST_PROOF) return;
+            if (surface.getBlock().defaultDestroyTime() < 0 || surface.getExplosionResistance(level, m, null) >= BLAST_PROOF) return;
             if (relief < 0 && SurfaceBlocks.cohesive(surface)) {
                 // Cohesive material cannot lose a metre of collision shape for a 0.2 m excavation. Remove only full
                 // metres; retain and mark the fractional last block. Loose soil keeps the unbiased grain sampling.
@@ -211,7 +211,7 @@ public final class CraterJob {
             for (int y = mode == Mode.VAPORIZE ? top - 1 : ground - 1; y >= floor; y--) {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // water above the floor itself remains
-                if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getBlock().getExplosionResistance() >= BLAST_PROOF)) break;
+                if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getExplosionResistance(level, m, null) >= BLAST_PROOF)) break;
                 if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));

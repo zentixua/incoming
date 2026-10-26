@@ -53,7 +53,7 @@ public class SpentBoosterEntity extends Entity {
     }
 
     public int age() {
-        return (int) Math.clamp(level().getGameTime() - entityData.get(DATA_BORN_AT), 0, Integer.MAX_VALUE);
+        return Math.clamp(level().getGameTime() - entityData.get(DATA_BORN_AT), 0, Integer.MAX_VALUE);
     }
 
     /** Same clock on both sides: late entity loading does not restart heating or cleanup. */
