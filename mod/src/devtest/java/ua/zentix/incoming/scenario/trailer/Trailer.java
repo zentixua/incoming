@@ -168,8 +168,8 @@ public final class Trailer {
         // targets in the village: target markers in HUD are signed with their names (stands - no need for live players in the frame)
         run(() -> {
             // targets - along the edges of the village: marks and dotted lines in the gunner’s frame do not merge with the main target
-            summonTarget("ENOTzRPG", target(side.scale(26)).add(toPost.scale(4)));
-            summonTarget("WallyFillmark", target(side.scale(-24)).add(toPost.scale(-3)));
+            summonTarget("Steve", target(side.scale(26)).add(toPost.scale(4)));
+            summonTarget("Alex", target(side.scale(-24)).add(toPost.scale(-3)));
         });
         waitTicks(30);
         shot("remote").length(70).player(t -> new Pose(Vec3.ZERO, yawTo(post, village), 8, 0, 70)).hud()
@@ -187,8 +187,8 @@ public final class Trailer {
         }).cue(0, () -> mc.options.keyUse.setDown(true)).cue(76, Designator::fire);
         run(() -> {
             mc.options.keyUse.setDown(false);
-            cmd("incoming salvo drone 2 0 @e[tag=trailer_ENOTzRPG,limit=1]");
-            cmd("incoming drone @e[tag=trailer_WallyFillmark,limit=1]");
+            cmd("incoming salvo drone 2 0 @e[tag=trailer_Steve,limit=1]");
+            cmd("incoming drone @e[tag=trailer_Alex,limit=1]");
         });
 
         // --- launcher behind: lifting the package, igniting, launch rail exit

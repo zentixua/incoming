@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minecraft log-line times: shared parser for laptop-job extracts (tools/laptop-jobs/*.md).
+"""Minecraft log-line times: shared parser for diagnostic log extracts.
 
 A line starts with "[HH:MM:SS]", "[HH:MM:SS.mmm]" or "[01Oct2026 HH:MM:SS.mmm]" (date in production client
 prod_client.py, modpack log4j format). Lines without a timestamp (exception stack, message continuation) have no time.

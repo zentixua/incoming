@@ -35,8 +35,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * World memory leak (scenario {@code leak}: {@code tools/prod_client.py leak --world …}, laptop job
- * {@code tools/laptop-jobs/leak-heap.md}). Symptoms: after leaving the world, the menu has more live objects
+ * World memory leak (scenario {@code leak}: {@code tools/prod_client.py leak --world …}).
+ * Symptoms: after leaving the world, the menu has more live objects
  * than the menu before a world; a second world in the same run starts higher; teleports alone also cause
  * growth, but the holder is unknown. A world should leave memory completely after exit, so measure in the
  * menu: the holder is visible in one run.

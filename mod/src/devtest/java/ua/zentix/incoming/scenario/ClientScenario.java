@@ -2819,7 +2819,7 @@ public final class ClientScenario {
             cmd("fill -30 199 -40 30 199 130 minecraft:smooth_stone");
             cmd("tp @s 0.5 200 0.5 0 5");
             // peaceful mode removes hostile mobs: targets - a stand with a name, a resident and a pig (tags - tags hud)
-            cmd("summon minecraft:armor_stand -11.5 200 105.5 {CustomName:'\"ENOTzRPG\"',Tags:[\"hud_named\"]}");
+            cmd("summon minecraft:armor_stand -11.5 200 105.5 {CustomName:'\"Steve\"',Tags:[\"hud_named\"]}");
             cmd("summon minecraft:villager 12.5 200 112.5 {NoAI:1b,Tags:[\"hud_type\"]}");
             cmd("summon minecraft:pig 0.5 200 122.5 {NoAI:1b,Tags:[\"hud_lost\"]}");
             target = new Vec3(0.5, 200, 122.5);
