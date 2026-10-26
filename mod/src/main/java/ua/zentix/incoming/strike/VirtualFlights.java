@@ -37,19 +37,31 @@ public final class VirtualFlights extends SavedData {
     }
 
     /**
-     * Снаряд уходит из тикающих чанков: сущность удаляется из мира, а её копия продолжает полёт здесь.
+     * Снаряд уходит из тикающих чанков: копия принимает район цели и полосу той же миссии (UUID), затем старая
+     * сущность удаляется из мира, отпуская только свои чанки. Ошибка копирования заканчивает миссию и снимает всё.
      *
      * @return копия, летящая вне мира, или null, если сохранить снаряд не вышло (тогда он просто убран)
      */
     public static StrikeProjectile park(ServerLevel level, StrikeProjectile p) {
-        CompoundTag tag = new CompoundTag();
-        boolean saved = p.save(tag);
-        p.discard();
-        StrikeProjectile copy = saved ? create(level, tag) : null;
-        if (copy != null) get(level).add(copy);
-        else Incoming.LOG.warn("Projectile {} {} at {} could not switch to off-world flight ({}), removed", p.getType().getDescriptionId(), p.getUUID(),
-                p.blockPosition(), saved ? "copy not created" : "save failed");
-        return copy;
+        StrikeProjectile copy = null;
+        try {
+            CompoundTag tag = new CompoundTag();
+            boolean saved = p.save(tag);
+            copy = saved ? create(level, tag) : null;
+            if (copy != null) {
+                p.handOverTargetArea(copy);
+                get(level).add(copy);
+            } else Incoming.LOG.warn("Projectile {} {} at {} could not switch to off-world flight ({}), removed", p.getType().getDescriptionId(), p.getUUID(),
+                    p.blockPosition(), saved ? "copy not created" : "save failed");
+            return copy;
+        } catch (RuntimeException e) {
+            if (copy != null) copy.discard();
+            Incoming.LOG.error("Projectile {} {} failed to switch to off-world flight and was removed",
+                    p.getType().getDescriptionId(), p.getUUID(), e);
+            return null;
+        } finally {
+            p.discard();
+        }
     }
 
     /** Начать полёт сразу вне мира (заход издалека: B-2, пуск без пусковой рядом). */
@@ -136,9 +148,8 @@ public final class VirtualFlights extends SavedData {
      * Снаряду можно вернуться в мир: живы (готовы, и в них тикают сущности) все колонки чанков на его пути
      * на {@code max(16, 3 шага)} блоков вперёд по горизонтали, а не только своя и конечная. Первый шаг в мире
      * ({@code leavesTickingChunks}) проверяет точку, куда он придёт; срезая угол, путь заходит в чанк, которого нет
-     * ни там, ни там, — снаряд возвращался бы в мир и тут же уходил обратно каждый тик. Каждый уход и возврат отпускал
-     * бы и заново брал тикеты района цели, район так и не догрузился бы, и ракета РСЗО стояла бы у цели до конца запаса
-     * хода.
+     * ни там, ни там, — снаряд возвращался бы в мир и тут же уходил обратно каждый тик, заново рассылая появление
+     * сущности клиентам. Район цели при смене формы полёта остаётся у той же миссии.
      */
     public static boolean clearAhead(Vec3 pos, Vec3 forward, double speed, Terrain.ChunkReady live) {
         Vec3 ahead = pos.add(forward.multiply(1, 0, 1).scale(Math.max(16, speed * 3)));
