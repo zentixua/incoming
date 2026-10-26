@@ -120,6 +120,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLogout);
         NeoForge.EVENT_BUS.addListener(NuclearKeys::onLogout);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLevelTick);
         NeoForge.EVENT_BUS.addListener(OldNamespace::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onServerStarted);
         NeoForge.EVENT_BUS.addListener(LegacyMigration::onEntityJoin);

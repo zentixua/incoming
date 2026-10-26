@@ -13,6 +13,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.compat.SubLevels;
@@ -69,9 +70,23 @@ import java.util.UUID;
  * в мире ({@code ServerPlayerMixin} Sable); в сетке плотов тикетов загрузки быть не должно (там держатели чанков Sable) —
  * тикета нет. В хардкоре после возрождения игрок становится наблюдателем без генерации — тикета входа нет.
  * <p>
- * Не закрывает поиск портала ({@code PortalForcer}) и телепорт внутри измерения — они грузят чанки до того, как мод о них
- * узнаёт; при возрождении — место, которое другой мод подменил в {@code PlayerRespawnPositionEvent}, место возрождения на
- * аппарате и точку появления мира, когда кровати уже нет. Игрок, который вышел с экрана смерти и вошёл снова, получает
+ * Телепорт внутри измерения ({@code /tp}, жемчуг, команды и код модов): NeoForge грузит чанк назначения синхронно
+ * ({@code Entity.setPosRaw → Level.getChunk}) тикетом {@code UNKNOWN} уровня 33, который через тик снимается
+ * ({@code purgeStaleTickets}), а тикеты игрока на новом месте ставятся очередью по нескольку за тик. Кольцо чанков, поднятое
+ * синхронной загрузкой (до 11 чанков от места), падает ниже загрузки и снова поднимается тикетами игрока, пока его
+ * соседи ещё генерируются: ванильная задача выгрузки такого держателя ({@code ChunkMap.scheduleUnload}) видит
+ * {@code getGenerationRefCount() > 0} и ставит себя в очередь выгрузки снова, а {@code processUnloads} разбирает её до
+ * конца времени тика — тик ровно 50 мс, задачам чанков времени не остаётся, и генерация, которая держит этот держатель,
+ * сама почти не идёт (стенд: 100 шахедов, камера перенесена вместе с залпом — 50 мс/тик до минуты, снаряды входят в мир на
+ * 52–55 с вместо 3–5). Поэтому прыжок игрока в мире ({@link #onLevelTick}: в конце тика мира чанк игрока ушёл от прошлого
+ * на {@link #JUMP} чанка и дальше, а место не держат тикеты игроков) ставит тот же тикет входа на новый чанк — до
+ * второго снятия устаревших тикетов, после которого тикет {@code UNKNOWN} уходит: тикет входа держит загруженным квадрат
+ * радиуса 18, кольцо синхронной загрузки не падает, а место загружается раньше районов мода. Саму синхронную загрузку
+ * чанка назначения это не убирает.
+ * <p>
+ * Не закрывает поиск портала ({@code PortalForcer}) — он грузит чанки до того, как мод о нём узнаёт; при возрождении —
+ * место, которое другой мод подменил в {@code PlayerRespawnPositionEvent}, место возрождения на аппарате и точку
+ * появления мира, когда кровати уже нет. Игрок, который вышел с экрана смерти и вошёл снова, получает
  * только тикет входа на чанк, где умер (там его объект), а тикета места возрождения — нет: смерти при входе не бывает.
  */
 public final class ArrivalTickets {
@@ -81,6 +96,11 @@ public final class ArrivalTickets {
     public static final int LIFESPAN = 200;
     /** Аренда тикета возрождения: 5 с после последнего тика мёртвого игрока. */
     public static final int LEASE = 100;
+    /**
+     * Прыжок: чанк игрока за тик мира ушёл на столько чанков (по большей из осей) или дальше. Ни ходьба, ни полёт так
+     * не двигаются (2 чанка за тик — 640 блоков в секунду), а телепорт дальше дальности обзора — да.
+     */
+    public static final int JUMP = 2;
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_arrival", Comparator.<UUID>naturalOrder());
 
     private ArrivalTickets() {}
@@ -98,6 +118,10 @@ public final class ArrivalTickets {
         long until;
         /** Тикет стоит на месте возрождения, игрок мёртв: аренда, которую продлевает его тик. */
         boolean respawn;
+        /** Где игрока видел прошлый тик мира ({@link #onLevelTick}): измерение и чанк. */
+        @Nullable
+        ResourceKey<Level> seenIn;
+        long seenAt;
     }
 
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent e) {
@@ -142,6 +166,33 @@ public final class ArrivalTickets {
     public static void onPlayerTick(PlayerTickEvent.Post e) {
         if (!(e.getEntity() instanceof ServerPlayer p) || !p.hasData(ModAttachments.ARRIVAL.get())) return;
         tick(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()), p.server.getPlayerList().getViewDistance(), p.isDeadOrDying());
+    }
+
+    /** Конец тика мира: прыжок игрока в этом мире — тикет входа на новое место ({@link #moved}). */
+    public static void onLevelTick(LevelTickEvent.Post e) {
+        if (!(e.getLevel() instanceof ServerLevel level)) return;
+        int view = level.getServer().getPlayerList().getViewDistance();
+        for (ServerPlayer p : level.players()) {
+            if (!generates(p) || p.isDeadOrDying()) continue;
+            moved(level, p.chunkPosition(), p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()), view);
+        }
+    }
+
+    /**
+     * Игрок {@code who} в этом тике мира стоит в чанке {@code now} (и в тестах, где игрока нет). Прыжок в том же мире
+     * (не меньше {@link #JUMP} чанков от прошлого тика) на место, которое не держат тикеты игроков (квадрат радиуса
+     * {@code DISTANCE − 2}, не дальше обзора {@code viewDistance}), — тикет входа туда, вместо прежнего.
+     *
+     * @return тикет поставлен
+     */
+    public static boolean moved(ServerLevel level, ChunkPos now, UUID who, Slot slot, int viewDistance) {
+        boolean jumped = level.dimension().equals(slot.seenIn) && new ChunkPos(slot.seenAt).getChessboardDistance(now) >= JUMP;
+        slot.seenIn = level.dimension();
+        slot.seenAt = now.toLong();
+        // в сетке плотов Sable тикетов загрузки быть не должно (там держатели чанков Sable), как у места возрождения
+        if (!jumped || slot.respawn || SubLevels.inPlotGrid(level, now) || coveredByPlayers(level, now, Math.min(DISTANCE - 2, viewDistance))) return false;
+        arrive(level, now, who, slot);
+        return true;
     }
 
     /**
