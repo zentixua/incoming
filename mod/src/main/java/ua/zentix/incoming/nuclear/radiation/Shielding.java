@@ -26,7 +26,7 @@ import ua.zentix.incoming.util.Terrain;
 public final class Shielding {
     /** Ray toward burst stops at this many blocks: shielding is near the body (walls, basement, trench), not distant terrain. */
     private static final double PROMPT_RANGE = 64;
-    /** Air-scattered share of first-minute radiation: arrives from sky instead of directly from the ball (estimate). */
+    /** Air-scattered share of first-minute radiation: arrives from sky instead of directly from the ball (est.). */
     private static final double SKY_SHARE = 0.3;
     private static final double SKY_RANGE = 32;
     /** Directions toward surrounding fallout. */

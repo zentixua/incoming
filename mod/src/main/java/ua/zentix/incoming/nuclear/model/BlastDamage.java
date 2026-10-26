@@ -38,7 +38,7 @@ public final class BlastDamage {
     private static final int PER_DECADE = 20, NODES = 7 * PER_DECADE + 1;
     /** “Infinitely large” charge — used to derive threshold K. */
     private static final double HUGE = 1e12;
-    /** Opening discharge coefficient and gas speed through it, m/s (estimate). */
+    /** Opening discharge coefficient and gas speed through it, m/s (est.). */
     private static final double VENT_CD = 0.6, VENT_SPEED = 340;
 
     private static final ConcurrentHashMap<Double, Curve> CURVES = new ConcurrentHashMap<>();

@@ -1354,7 +1354,6 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
 
 // Mushroom step at ray t: extinction (w), scattered light per path unit (rgb); emission in heat (unchanged), glow
 // (ball-exposed), film (luminance × curve share); gap is distance to matter (0 — here)
-// Шаг грибов в месте t луча
 vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, out float film) {
     vec4 sum = vec4(0.0);
     heat = vec3(0.0);

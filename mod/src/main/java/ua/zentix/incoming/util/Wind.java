@@ -9,7 +9,7 @@ package ua.zentix.incoming.util;
  * Wind is above the surface layer at height {@link #REFERENCE}, carrying the nuclear cloud. Below it, weakens by
  * u(z) = U·(z/{@link #REFERENCE})^p ({@link #at(double, double)}); p from stability class ({@link Stability#alpha}:
  * 0.07 by day to 0.55 on clear nights, EPA via Irwin 1979). Profile measured in surface layer, extended here to 1 km
- * reference height, the usual daytime mixing-layer upper bound (estimate): at ground level (10 m), neutral wind is half,
+ * reference height, the usual daytime mixing-layer upper bound (est.): at ground level (10 m), neutral wind is half,
  * clear calm night less than a tenth.
  *
  * @param direction direction, rad: blows toward (cos, sin) in the x–z plane

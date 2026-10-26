@@ -14,7 +14,7 @@ package ua.zentix.incoming.nuclear.model;
  * (like recovery after bleaching), capped by recovery time after complete pigment bleaching: daytime — about a minute
  * (cones; clinical photostress test), nighttime — about 10 minutes (cones reach the dark-adaptation plateau and see
  * moonlit terrain again; rods need up to half an hour for starlight). Full-field bleaching occurs at retinal exposure
- * {@link #FULL_BLEACH_TD_S} from flash-lit ground in front of the eye (estimate). G&amp;D gives “a few seconds to minutes”
+ * {@link #FULL_BLEACH_TD_S} from flash-lit ground in front of the eye (est.). G&amp;D gives “a few seconds to minutes”
  * for blindness (§12.84).
  */
 public final class EyeInjury {

@@ -18,7 +18,7 @@ package ua.zentix.incoming.nuclear.model;
  *       gastrointestinal form (10–50 Gy) — days, cerebral form (from 50 Gy) — none;</li>
  *   <li>death: hematopoietic form (2–10 Gy) — “critical period 4–6 weeks”, gastrointestinal (10–50 Gy) — “5–14 days”,
  *       cerebral — “1–48 hours”: 36 h at 50 Gy (Kelley case, 1958: about 40 Gy, death after 35 h), faster with dose as
- *       D^−1.5 (estimate). Anchors: 6 weeks at 2 Gy, 30 days at 6, 12 at 10, 36 h at 50; form transitions between them
+ *       D^−1.5 (est.). Anchors: 6 weeks at 2 Gy, 30 days at 6, 12 at 10, 36 h at 50; form transitions between them
  *       (18 days at 8 Gy, 5 at 20, 2 at 40);</li>
  *   <li>survivor recovery: manifest illness ends after 5 weeks at 1 Gy, 8 at 2, 10 at 6 Gy and above
  *       (followed by months of weakness, omitted here).</li>
