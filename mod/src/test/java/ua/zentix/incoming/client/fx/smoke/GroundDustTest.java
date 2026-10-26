@@ -471,6 +471,38 @@ class GroundDustTest {
         }
     }
 
+    /**
+     * Удар в яму (воронка прежнего удара, вытянутая 12×6 м, глубиной 2,5 и 4 м) в поле при ветре 3 м/с: край ямы и поле
+     * вокруг — не стены, юбка уходит с ветром, как с ровного поля (стенд PR #472: у налёта из 100 ударов юбки ударов в
+     * старые воронки стояли в них десятки секунд — стена пыли посреди поля на 76 с).
+     */
+    @Test
+    void skirtLeavesAPitLikeAField() {
+        double[] wind = {1.8, 2.4};
+        GroundDust flat = townSkirt((x, z) -> 0, wind);
+        for (double depth : new double[]{2.5, 4}) {
+            GroundDust pit = townSkirt((x, z) -> (x / 6) * (x / 6) + (z / 3) * (z / 3) < 1 ? 0 : depth, wind);
+            for (double t : new double[]{5, 20, 40}) {
+                double[] a = centre(flat, t), b = centre(pit, t);
+                assertEquals(a[0], b[0], 1, depth + " м, " + t + " с");
+                assertEquals(a[1], b[1], 1, depth + " м, " + t + " с");
+                if (t >= 20) assertTrue(b[2] < 0.01, depth + " м, " + t + " с: у ямы " + b[2] + " пыли");
+            }
+        }
+    }
+
+    /** Середина слоя по массе в воздухе (x, z) и доля его в 8 м от удара. */
+    private static double[] centre(GroundDust g, double t) {
+        double[] s = new double[4];
+        for (double[] c : layer(g, t)) {
+            s[0] += c[6];
+            s[1] += c[6] * c[0];
+            s[2] += c[6] * c[2];
+            if (Math.hypot(c[0], c[2]) < 8) s[3] += c[6];
+        }
+        return new double[]{s[1] / s[0], s[2] / s[0], s[3] / s[0]};
+    }
+
     /** Квартал: дома 10×10 м высотой roof, улицы по 6 м, удар в {@code at} от перекрёстка. */
     private static GroundDust.Relief town(double roof, double[] at) {
         return (x, z) -> Math.floorMod((int) Math.floor(x + at[0] + 13), 16) < 10
