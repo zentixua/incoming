@@ -138,6 +138,8 @@ page() {
   fi
 
   # Upload new images once; update retained images before removing obsolete entries.
+  # Empty, null or absent gallery text leaves existing text unchanged; only non-empty text replaces it.
+  # The project JSON fields above use a separate null-clears contract.
   # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
   for ((i = 0; i < n; i++)); do
