@@ -3,6 +3,16 @@
   "values": [
     { "id": "#burnt:on_fire", "required": false },
     { "id": "#burnt:fire", "required": false },
-    { "id": "burnt:smoldering_fern", "required": false }
+    { "id": "burnt:smoldering_fern", "required": false },
+    { "id": "burnt:smoldering_dark_oak_log", "required": false },
+    { "id": "burnt:smoldering_dark_oak_wood", "required": false },
+    { "id": "burnt:smoldering_wall", "required": false },
+    { "id": "burnt:smoldering_vertical_slab", "required": false },
+    { "id": "burnt:fire_barrel_active", "required": false },
+    { "id": "burnt:burnt_grass", "required": false },
+    { "id": "burnt:smoldering_envelope", "required": false },
+    { "id": "burnt:smoldering_sail", "required": false },
+    { "id": "burnt:smoldering_sail_frame", "required": false },
+    { "id": "burnt:smoldering_symmetric_sail", "required": false }
   ]
 }

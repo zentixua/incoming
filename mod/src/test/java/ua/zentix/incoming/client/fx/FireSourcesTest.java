@@ -1,11 +1,16 @@
 package ua.zentix.incoming.client.fx;
 
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.tags.TagFile;
+import net.minecraft.tags.TagLoader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -17,8 +22,11 @@ import net.neoforged.fml.loading.LoadingModList;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -85,6 +93,37 @@ class FireSourcesTest {
             assertEquals(3, FireWatch.phases(j -> j < states.length && FireSources.burning(states[j]), 0, window));
         } finally {
             BuiltInRegistries.BLOCK.bindTags(oldTags);
+        }
+    }
+
+    /** Оба тега Burnt пропускают тёмный дуб: настоящий ресурс Incoming должен добавить его сам. */
+    @Test
+    @SuppressWarnings("deprecation") // Фикстура вместо регистрации Burnt, которого нет в юнит-тесте.
+    void shippedTagIncludesBurntDarkOakWithoutItsUpstreamTags() throws Exception {
+        MappedRegistry<Block> registry = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        registry.unfreeze();
+        Block darkOak = new Smoldering();
+        var holder = Registry.registerForHolder(registry,
+                ResourceLocation.fromNamespaceAndPath("burnt", "smoldering_dark_oak_log"), darkOak);
+        registry.freeze();
+        TagFile tag;
+        try (var reader = new InputStreamReader(Objects.requireNonNull(FireSourcesTest.class.getResourceAsStream(
+                "/data/incoming/tags/block/fire_smoke_sources.json")), StandardCharsets.UTF_8)) {
+            tag = TagFile.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader)).getOrThrow();
+        }
+        TagLoader<Holder<Block>> loader = new TagLoader<>(id -> registry.getHolder(
+                net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id)), "tags/block");
+        var entries = tag.entries().stream().map(e -> new TagLoader.EntryWithSource(e, "Incoming")).toList();
+        var sources = loader.build(Map.of(FireSources.SMOKE.location(), entries)).get(FireSources.SMOKE.location());
+        assertTrue(sources.contains(holder), "дымящий тёмный дуб должен попасть в тег из ресурса, а не из фикстуры");
+        var oldTags = registry.getTags().collect(java.util.stream.Collectors.toMap(
+                com.mojang.datafixers.util.Pair::getFirst, p -> p.getSecond().stream().toList()));
+        try {
+            registry.bindTags(Map.of(FireSources.SMOKE, List.copyOf(sources)));
+            assertTrue(FireSources.burning(darkOak.defaultBlockState().setValue(STAGE, 1).setValue(HOT, false)));
+            assertFalse(FireSources.burning(darkOak.defaultBlockState().setValue(STAGE, 0).setValue(HOT, false)));
+        } finally {
+            registry.bindTags(oldTags);
         }
     }
 }
