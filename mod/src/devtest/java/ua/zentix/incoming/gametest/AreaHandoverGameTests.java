@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Район принадлежит миссии, а не очередному объекту сущности: даже внутри одного тика тикет не меняется. */
+/** The area belongs to the mission, not its current entity: its ticket stays unchanged even within one tick. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class AreaHandoverGameTests {
@@ -85,7 +85,7 @@ public final class AreaHandoverGameTests {
         h.assertTrue(level.addFreshEntity(p), "initial entity refused");
         hold(p, aim, ticks);
         h.assertTrue(FlightTickets.held(level, id) == 1 + approach.size(), "target/approach not held");
-        // Второй снаряд делит полосу: отбой первого не должен снимать её чужую ссылку.
+        // A second projectile shares the approach: cancelling the first must preserve the other reference.
         h.assertTrue(FlightTickets.holdApproach(level, approach, neighbour), "shared approach refused");
         Map<ChunkPos, Set<UUID>> refs = new HashMap<>(approachRefs(level));
         List<Ticket<?>> before = areaTickets(level);
@@ -100,7 +100,7 @@ public final class AreaHandoverGameTests {
             forms.add(p);
             h.assertTrue(old.isRemoved() && p.isVirtual(), "wrong flight forms after park");
             h.assertValueEqual(TicketProbe.count(level, "incoming_projectile", id), 0, "own chunks after park");
-            // Поздний/повторный callback старой формы не владеет районом копии.
+            // Late or repeated removal callbacks from the old form no longer own the copy's area.
             old.onRemovedFromLevel();
             old.discard();
             unchanged(h, before, levels, refs, id, neighbour);
@@ -108,11 +108,11 @@ public final class AreaHandoverGameTests {
             p.materialize(level);
             h.assertTrue(level.addFreshEntity(p), "materialized entity refused");
             unchanged(h, before, levels, refs, id, neighbour);
-            // Обычное повторное удержание той же цели после перехода тоже не пересоздаёт район.
+            // Holding the same target again after handover must not recreate its area either.
             hold(p, aim, ticks);
             unchanged(h, before, levels, refs, id, neighbour);
         }
-        // Перенацеливание снимает старый район и только свою ссылку общей полосы.
+        // Retargeting releases the old area and only this mission's reference to the shared approach.
         Vec3 next = aim.add(320, 0, 0);
         h.assertTrue(p.retarget(new Target.Point(next), next), "retarget refused");
         h.assertValueEqual(FlightTickets.held(level, id), 0, "old target after retarget");
@@ -180,7 +180,7 @@ public final class AreaHandoverGameTests {
         return p;
     }
 
-    // Держим настоящий TargetAreaHold сущности, не тикая наведение: готовность/фаза района фиксированы на переходах.
+    // Use the entity's real TargetAreaHold without ticking guidance: area readiness and phase stay fixed during handovers.
     private static void hold(StrikeProjectile p, Vec3 aim, boolean ticks) {
         TargetAreaHold area = field(p, StrikeProjectile.class, "aimArea", TargetAreaHold.class);
         area.hold((ServerLevel) p.level(), p.getUUID(), p.position(), aim, 2000, 2, ticks, 64, null, 1);
@@ -226,7 +226,7 @@ public final class AreaHandoverGameTests {
         ServerLevel level = h.getLevel();
         List<Ticket<?>> now = areaTickets(level);
         h.assertValueEqual(now.size(), before.size(), "area ticket count");
-        // Ticket.equals недостаточно: remove/add с тем же ключом создаёт равный, но другой объект.
+        // Ticket.equals is insufficient: remove/add with the same key creates an equal but distinct object.
         for (Ticket<?> ticket : before) h.assertTrue(now.stream().anyMatch(t -> t == ticket), "area ticket removed/re-added");
         level.getChunkSource().runDistanceManagerUpdates();
         levels.forEach((holder, value) -> h.assertTrue(holder.getTicketLevel() <= value, "holder level dropped"));

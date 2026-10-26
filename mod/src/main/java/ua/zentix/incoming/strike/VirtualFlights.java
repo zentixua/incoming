@@ -56,8 +56,8 @@ public final class VirtualFlights extends SavedData {
             return copy;
         } catch (RuntimeException e) {
             if (copy != null) copy.discard();
-            Incoming.LOG.error("Projectile {} {} failed to switch to off-world flight and was removed",
-                    p.getType().getDescriptionId(), p.getUUID(), e);
+            Incoming.LOG.error("Projectile {} {} at {} failed to switch to off-world flight and was removed",
+                    p.getType().getDescriptionId(), p.getUUID(), p.blockPosition(), e);
             return null;
         } finally {
             p.discard();
