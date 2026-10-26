@@ -5,7 +5,7 @@ import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.client.fx.plume.TrailModel.Trail;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.entity.LauncherEntity;
-import ua.zentix.incoming.entity.RocketEntity;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.strike.WeaponType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,7 +99,7 @@ class TrailPointsTest {
         Trail trail = ClientWeaponSpec.of(WeaponType.ROCKET).airframe(false).far().stage(FlightPhase.BOOST).trail();
         assertNotNull(trail);
         int pack = LauncherEntity.ROCKET_COLUMNS * LauncherEntity.ROCKET_ROWS;
-        int perRocket = RocketEntity.BURN_TICKS / trail.step() + 2;
+        int perRocket = WeaponSpec.ROCKET.airframe().ballistic().rocket().burnTicks() / trail.step() + 2;
         assertTrue(pack * perRocket <= TrailPoints.CAPACITY / 4, pack * perRocket + " points");
     }
 }

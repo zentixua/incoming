@@ -33,10 +33,6 @@ public class LoiterEntity extends StrikeProjectile {
     private static final WeaponSpec.Airframe AIR = WeaponSpec.LOITER.airframe();
     private static final WeaponSpec.Handling HANDLING = AIR.handling();
     private static final WeaponSpec.Loiter LOITER = HANDLING.loiter();
-    /** Radius above the target; retained for callers of the entity API. */
-    public static final double LOITER_RADIUS = WeaponSpec.Loiter.LOITER_RADIUS;
-    /** Average ticks for the dive from orbit (for time to impact). */
-    public static final int DIVE_TICKS = WeaponSpec.Loiter.DIVE_TICKS;
 
     private double cruiseAlt;
     /** Ticks to circle above the target (set at launch). */
@@ -92,7 +88,7 @@ public class LoiterEntity extends StrikeProjectile {
     }
 
     /**
-     * Planned dive ticks from orbit: {@link #DIVE_TICKS} from game orbit; flight scale raises the orbit (up to
+     * Planned dive ticks from orbit: {@link WeaponSpec.Loiter#diveTicks()} from game orbit; flight scale raises the orbit (up to
      * 700 m), increasing time with path length from orbit to target and slower (or faster) dive speed.
      */
     static int diveTicks() {
@@ -104,7 +100,7 @@ public class LoiterEntity extends StrikeProjectile {
 
     /**
      * Range also covers the orbit over the target (at cruise speed) and dive from it (at dive speed: over planned
-     * {@link #DIVE_TICKS}, faster than orbit, so cruise-speed range would not cover the dive).
+     * {@link WeaponSpec.Loiter#diveTicks()}, faster than orbit, so cruise-speed range would not cover the dive).
      */
     @Override
     protected double extraRange() {

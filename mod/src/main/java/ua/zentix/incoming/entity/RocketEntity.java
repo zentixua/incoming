@@ -28,7 +28,7 @@ import java.util.UUID;
  * only ground wind (stronger wind aloft drifts the salvo downwind), and each rocket uses the launch rail exit
  * dispersion from its spec. Without firing data (tests), the launch rail exit is exact and uses the full wind
  * profile. Thus, a 500-block shot takes ~10 s, rises a hundred blocks, descends more steeply than it rose, and
- * the salvo lands with dispersion and wind drift. The engine burns for the first {@link #BURN_TICKS} (plume and
+ * the salvo lands with dispersion and wind drift. The engine burns for the first {@link WeaponSpec.RocketFlight#burnTicks()} (plume and
  * dense smoke; launch rail exit speed is immediate, not physical: acceleration in the tube and first meters is
  * not calculated), then coasts; descending flight is the attack phase.
  * <p>
@@ -44,11 +44,6 @@ import java.util.UUID;
 public class RocketEntity extends StrikeProjectile {
     private static final WeaponSpec.Ballistic FLIGHT = WeaponSpec.ROCKET.airframe().ballistic();
     private static final WeaponSpec.RocketFlight ROCKET = FLIGHT.rocket();
-    // Retained for callers; weapon-specific values live in the passport.
-    public static final int BURN_TICKS = WeaponSpec.RocketFlight.BURN_TICKS;
-    public static final int IGNITION_TICKS = WeaponSpec.RocketFlight.IGNITION_TICKS;
-    public static final int MIN_FLIGHT = WeaponSpec.RocketFlight.MIN_FLIGHT;
-    public static final double STRETCH_TICKS = WeaponSpec.RocketFlight.STRETCH_TICKS;
 
     /** 9M22U drag on the world flight scale ({@link WeaponSpec.Airframe#drag()}): game at 0, real with f(M) at 1. */
     private static Ballistics.Drag drag() {
@@ -258,8 +253,8 @@ public class RocketEntity extends StrikeProjectile {
     }
 
     /**
-     * Virtual flight rate. If impact area is unready, smoothly slow the last {@link #STRETCH_TICKS} trajectory
-     * ticks until {@link WeaponSpec.RocketFlight#holdOff} blocks from target (rate = time remaining to that boundary / STRETCH_TICKS,
+     * Virtual flight rate. If impact area is unready, smoothly slow the last {@link WeaponSpec.RocketFlight#stretchTicks} trajectory
+     * ticks until {@link WeaponSpec.RocketFlight#holdOff} blocks from target (rate = time remaining to that boundary / stretchTicks,
      * changing by at most {@link WeaponSpec.RocketFlight#rateSlew} per tick): approach that line ever more slowly without freezing;
      * once ready, smoothly return rate to 1. Nobody sees the virtual rocket, only hears its distant path.
      * Stretched time counts as area waiting: the rocket travels more slowly without spending range on it; waiting
@@ -345,7 +340,7 @@ public class RocketEntity extends StrikeProjectile {
 
     /**
      * Launch rail exit from {@code from} toward {@code to}: rack elevation (if too shallow for {@link
-     * #MIN_FLIGHT}, steepen up to 80°); fire solution for speed and heading in ground wind, then spec launch rail
+     * WeaponSpec.RocketFlight#minFlight()}, steepen up to 80°); fire solution for speed and heading in ground wind, then spec launch rail
      * exit dispersion.
      */
     private void solve(Vec3 from, Vec3 to) {

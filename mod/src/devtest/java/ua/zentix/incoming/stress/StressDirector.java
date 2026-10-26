@@ -40,6 +40,7 @@ import ua.zentix.incoming.entity.RocketEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.WeaponType;
+import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.strike.SalvoData;
@@ -181,7 +182,7 @@ public final class StressDirector {
 
     /** The spread of the sample salvo and the radius along which the projectile relates to the sample (at the target point). */
     private static final int PROBE_SPREAD = 20, PROBE_RADIUS = 60;
-    /** Margin to the stretch window ({@link RocketEntity#STRETCH_TICKS} to the line at the target): line - ten ticks before arrival. */
+    /** Margin to the stretch window ({@link WeaponSpec.RocketFlight#stretchTicks()} to the line at the target): line - ten ticks before arrival. */
     private static final int PROBE_SLACK = 30;
     /** The tempo below is a stretch due to the target area, not due to server lag. */
     private static final double DEEP = 0.5;
@@ -1660,7 +1661,7 @@ public final class StressDirector {
             if (ready >= pr.arrival) {
                 expect = "deep stretch: area ready later than arrival";
                 if (pr.deep.isEmpty()) fails.add("the area is ready later than arrival, but there is no deep stretching");
-            } else if (ready <= pr.arrival - RocketEntity.STRETCH_TICKS - PROBE_SLACK) {
+            } else if (ready <= pr.arrival - WeaponSpec.ROCKET.airframe().ballistic().rocket().stretchTicks() - PROBE_SLACK) {
                 expect = "without deep stretching: the area is ready long before arrival";
                 if (!pr.deep.isEmpty()) fails.add("the area is ready long before arrival, and the deep stretch at " + pr.deep.size());
             } else {

@@ -519,11 +519,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     public record Loiter(double radius, double strikeNow, int diveTicks, double missedBy,
                          double variationMin, double variationSpread, double launchClearance, double terrainClearance,
                          double altitudeGain, double climbYawGain, double cruiseYawGain, int climbTicks,
-                         double immediateDivePitch, double immediateDivePad, double divePitch) {
-        // Compile-time defaults also serve legacy entity constants without initializing Minecraft entity classes.
-        public static final double LOITER_RADIUS = 40;
-        public static final int DIVE_TICKS = 25;
-    }
+                         double immediateDivePitch, double immediateDivePad, double divePitch) {}
 
     /**
      * Bomber level changes, release ETA and departure, in blocks, ticks and degrees. Gameplay tuning, not real physics.
@@ -538,10 +534,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Times are ticks, distances are blocks; rateSlew is the maximum time-rate change per tick while awaiting terrain.
      */
     public record RocketFlight(int burnTicks, int ignitionTicks, int minFlight, double stretchTicks, double rateSlew,
-                               double holdOff, int overshootTicks, double belowImpact) {
-        public static final int BURN_TICKS = 40, IGNITION_TICKS = 3, MIN_FLIGHT = 50;
-        public static final double STRETCH_TICKS = 100;
-    }
+                               double holdOff, int overshootTicks, double belowImpact) {}
 
     /**
      * Unpowered flight ({@code guidance.Ballistics}): Grad after burnout, falling bomb. Real gravity, quadratic
@@ -991,7 +984,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /** Lancet: turn 3°/tick, climb 2°/tick; dive sharp banked correction up to 8°/tick, pitch up to 6°/tick. */
     static final Handling LOITER_HANDLING = new Handling(new Agility(2.0, 0.15, 1.4, 0.15), new Agility(3.0, 0.3, 1.2, 0.15),
             new Agility(8.0, 1.0, 6.0, 0.6), 15, 12, 0.1, 0.08,
-            new Loiter(Loiter.LOITER_RADIUS, 140, Loiter.DIVE_TICKS, 20, 0.8, 0.4, 30, 15, 0.12, 0.08, 0.15, 40, 30, 15, 40), null);
+            new Loiter(40, 140, 25, 20, 0.8, 0.4, 30, 15, 0.12, 0.08, 0.15, 40, 30, 15, 40), null);
 
     /**
      * B-2: turn 1°/tick (radius ~690 blocks), pitch up to 0.3°/tick; post-release departure turn up to 1.2°/tick
@@ -1024,8 +1017,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * standard deviation 0.4°, speed 0.5%, at 600 blocks ~1% range, as before (9M22U maximum range: 1/130 range,
      * 1/200 direction, Wikipedia Russian “Grad (MLRS)”).
      */
-    static final Ballistic ROCKET_FLIGHT = new Ballistic(1e-4, 0.4, 0.005, new RocketFlight(RocketFlight.BURN_TICKS, RocketFlight.IGNITION_TICKS, RocketFlight.MIN_FLIGHT,
-            RocketFlight.STRETCH_TICKS, 0.05, 64, 200, 64));
+    static final Ballistic ROCKET_FLIGHT = new Ballistic(1e-4, 0.4, 0.005, new RocketFlight(40, 3, 50, 100, 0.05, 64, 200, 64));
 
     /**
      * Shahed-136 kamikaze drone ({@link #DRONE_ARTICLE}). Game (not physical): ≈150 km/h, cruise 45 blocks above

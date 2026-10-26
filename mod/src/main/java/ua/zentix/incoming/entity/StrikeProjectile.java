@@ -114,7 +114,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     private static final int PRELOAD_TICKS = 300;
     /**
      * Район цели тикает, когда до удара осталось столько тиков ({@link #etaTicks}): снаряду вне мира хватает вернуться
-     * в мир у цели, а ракете РСЗО — не растягивать траекторию ({@code RocketEntity.STRETCH_TICKS} до её черты ожидания).
+     * в мир у цели, а ракете РСЗО — не растягивать траекторию ({@code WeaponSpec.RocketFlight.stretchTicks()} до её черты ожидания).
      */
     public static final int AREA_TICK_LEAD = 160;
 
