@@ -115,7 +115,7 @@ class PallGlslTest {
     void wallHeadSigmaMatchesJava() {
         assertEquals(BlastWall.HANDOFF_FROM, scalar(GLSL, "PALL_WALL_HANDOFF_FROM"), 0);
         assertEquals(BlastWall.HANDOFF_TO, scalar(GLSL, "PALL_WALL_HANDOFF_TO"), 0);
-        String fx = read("core/fx_pall.fsh");
+        String fx = read("include/fx_pall.glsl");
         String at = body(GLSL, "WallAt pallWallAt("), move = body(fx, "WallAt wallMove("), chord = body(fx, "float wallChord("),
                 near = body(fx, "float wallChordNear("), wall = body(fx, "void wall("), spans = body(GLSL, "vec4 pallWallSpans(");
         // где точка: s — за краем пыли от оси кольца, z — над рельефом; сдвинутая — от своего места, вода и рельеф те же
@@ -317,12 +317,12 @@ class PallGlslTest {
     }
 
     /**
-     * Водяная пыль пелены ({@code MIST} в {@code fx_pall.fsh}) — того же белого, что стена брызг над водой
+     * Водяная пыль пелены ({@code MIST} в {@code fx_pall.glsl}) — того же белого, что стена брызг над водой
      * ({@link CloudPuffs#SPRAY}): пелена за фронтом над водой продолжает её цвет, как бурая пыль — стену над сушей.
      */
     @Test
     void mistIsTheSprayWallColour() {
-        double[] mist = vec3(read("core/fx_pall.fsh"), "MIST");
+        double[] mist = vec3(read("include/fx_pall.glsl"), "MIST");
         for (int c = 0; c < 3; c++) assertEquals((CloudPuffs.SPRAY >> (16 - 8 * c) & 0xFF) / 255.0, mist[c], 0.5 / 255, "канал " + c);
     }
 
@@ -340,7 +340,7 @@ class PallGlslTest {
                 "return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);"}) {
             assertTrue(origin.contains(law), "место пыли головы — не как в Java: нет «" + law + "»");
         }
-        String wall = body(read("core/fx_pall.fsh"), "float wallAt(");
+        String wall = body(read("include/fx_pall.glsl"), "float wallAt(");
         assertTrue(wall.contains("wallNoise(pallWallOrigin(h.rel, h.z, u * V[2].x, h.P.y, V[1].x) / max(V[2].w, 1.0)"), "шум головы — не в координатах пыли");
     }
 
@@ -363,7 +363,7 @@ class PallGlslTest {
         String f = body(GLSL, "PallAt pallField(");
         assertTrue(f.contains("float topD = max(dust.g, 1.0) * bumps,"), "бугры — не верх слоя");
         assertTrue(f.contains("a.mixed = dust.a;"), "перемешанность — не из таблицы");
-        String fx = read("core/fx_pall.fsh");
+        String fx = read("include/fx_pall.glsl");
         assertTrue(fx.contains("pallField(Sampler1, ground, S, R, W, p, floorUp, topBumps(S, p));"), "луч пелены — без бугров верха");
         assertTrue(body(fx, "float topBumps(").contains("return 1.0 + PALL_BUMPS * (2.0 * n - 1.0);"), "бугры — не 1 ± PALL_BUMPS");
     }
@@ -418,7 +418,7 @@ class PallGlslTest {
      */
     @Test
     void clipWhereDepthReachesTwelve() {
-        GlslFunction f = GlslFunction.parse(read("core/fx_pall.fsh"), "pallClip");
+        GlslFunction f = GlslFunction.parse(read("include/fx_pall.glsl"), "pallClip");
         assertTrue(f.call(Map.of("sigma", 0.0, "tau", 5.0, "mu", 0.0)) >= 1e6);
         // глаз ниже грубой карты рельефа: толщи под ним нет, пыль у глаза есть — как в ровной пыли
         for (double mu : new double[]{0, 0.3, 1}) assertEquals(12 / 0.06, f.call(Map.of("sigma", 0.06, "tau", 0.0, "mu", mu)), 1e-9);
@@ -442,7 +442,7 @@ class PallGlslTest {
     /** Свет шара на пыли в {@code fx_pall} ({@code pallBallShare}) — закон {@link CloudPuffs#ball}: L·R²/d², у поверхности — L. */
     @Test
     void ballLightMatchesJava() {
-        GlslFunction f = GlslFunction.parse(read("core/fx_pall.fsh"), "pallBallShare");
+        GlslFunction f = GlslFunction.parse(read("include/fx_pall.glsl"), "pallBallShare");
         for (double radius : new double[]{0, 40, 150, 600}) {
             for (double d = 0; d <= 4000; d += 50) {
                 assertEquals(CloudPuffs.ball(1, radius, d), f.call(Map.of("radius", radius, "d", d)), 1e-12,
@@ -523,13 +523,13 @@ class PallGlslTest {
     }
 
     /**
-     * Вещество шейдера ({@code PALL_*_W}, {@code PALL_*_G} в {@code pall.glsl}) — из цветов толстого слоя {@code fx_pall.fsh}
+     * Вещество шейдера ({@code PALL_*_W}, {@code PALL_*_G} в {@code pall.glsl}) — из цветов толстого слоя {@code fx_pall.glsl}
      * в линейном ({@link PallLight#albedo}, асимметрия {@link PallLight#truncated}): толстая пелена на экране того же цвета,
      * что стена пыли и брызг (R∞ альбедо — её цвет). Сажа и пламя смерча в линейном ({@code *_LINEAR}) — те же цвета.
      */
     @Test
     void materialsHaveTheirColours() {
-        String fx = read("core/fx_pall.fsh");
+        String fx = read("include/fx_pall.glsl");
         String[][] materials = {{"DUST", "DUST"}, {"SMOKE", "DUST"}, {"HAZE", "DUST"}, {"MIST", "MIST"}, {"SOOT", "SOOT"}};
         Map<String, Double> full = Map.of("DUST", PallLight.DUST_G, "MIST", PallLight.MIST_G, "SOOT", PallLight.SOOT_G);
         for (String[] m : materials) {
@@ -577,7 +577,7 @@ class PallGlslTest {
                 lift = GlslFunction.parse(GLSL, "pallLift"), display = GlslFunction.parse(GLSL, "pallDisplay"), linear = GlslFunction.parse(GLSL, "pallLinear");
         assertTrue(GLSL.replaceAll("\\s+", " ").contains("vec3 pallFlame(float base, vec3 x, vec3 flame) { return min(pallLift3(base, x), "
                 + "vec3(pallLinear(flame.r), pallLinear(flame.g), pallLinear(flame.b))); }"), "pallFlame — не PallLight.flame");
-        String fx = read("core/fx_pall.fsh");
+        String fx = read("include/fx_pall.glsl");
         GlslFunction ball = GlslFunction.parse(fx, "pallBallShare");
         double[] dust = vec3(fx, "DUST"), fire = vec3(fx, "FIRE"), w = vec3(GLSL, "PALL_DUST_W");
         assertEquals(PallLight.CROSS, scalar(fx, "CROSS"), 0, "к белому — как PallLight.screen");
@@ -693,7 +693,7 @@ class PallGlslTest {
      */
     @Test
     void pallPutsItsLightTogetherOnce() {
-        String march = read("core/fx_pall.fsh"), composite = read("core/fx_pall_composite.fsh");
+        String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "огонь в точке — одной суммой под пределом пламени");
         assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire);"), "свет точки — рассеянный, пучки и огонь");

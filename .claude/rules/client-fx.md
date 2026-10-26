@@ -884,6 +884,14 @@ paths:
   ставит сам): необъявленную ваниль не задаёт — новая карта или число, добавленные в один проход и забытые в другом
   (`fx_pall`, `fx_pall_composite`, `fx.vsh`), читали бы чужую текстуру или ноль. Каким шейдер стал после Veil,
   видно, прогнав его через `GlslParser.parse(…).toSourceString()` из glsl-processor (jar в jar Veil в jar Sable).
+  `ShaderSourceTest.veilPrintsEveryProgram` так и прогоняет каждую программу `core` (glsl-processor 0.2.3 — в тестах):
+  не разобрал или упал — в логе ERROR «Couldn't load vanilla shader … skipping», и Veil шейдер не пересобирает. Так было с
+  `fx_pall` в 3.7.0–3.8.0: «#» в комментарии («ревью #441») разбор считает меткой узла, с меткой печать берёт хеш
+  каждой функции, а хеш `return;` без значения — NPE (`GlslReturnNode.hashCode`). Импорт — только
+  `#moj_import <incoming:имя>` из `shaders/include` (`everyImportIsAnInclude`): импорт в кавычках NeoForge ищет рядом
+  с шейдером, Forgified Fabric API (Fabric Rendering, есть в сборке) приписывает namespace шейдера ещё раз
+  (`incoming:incoming:…` — программа не создаётся, так не грузился `fx_pall_foot` в 3.8.0), а Veil клеит его к пути
+  самого файла.
 - Дым коротких выбросов — `fx/smoke/Puffs` (источник облака, рисуют клубы `SmokePuffs`): выброс — термик `Thermal`
   своего тепла, жизнь — по толще поперёк ({@code CloudModel.SEEN}); термики одной плавучести и радиуса (с точностью
   √2) — один расчёт (`Puffs.thermal`: ~2,7 мс на термик). Так рисуются горящие обломки в полёте (`Exhaust.debris`:

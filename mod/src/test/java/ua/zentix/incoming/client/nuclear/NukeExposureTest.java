@@ -256,8 +256,8 @@ class NukeExposureTest {
     }
 
     private static String fxPall() throws IOException {
-        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/core/fx_pall.fsh")) {
-            assertNotNull(in, "fx_pall.fsh");
+        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/include/fx_pall.glsl")) {
+            assertNotNull(in, "fx_pall.glsl");
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
@@ -403,8 +403,8 @@ class NukeExposureTest {
     @Test
     void wilsonShellSeesTheBallAsADisc() throws IOException {
         String fx;
-        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/core/fx_pall.fsh")) {
-            assertNotNull(in, "fx_pall.fsh");
+        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/include/fx_pall.glsl")) {
+            assertNotNull(in, "fx_pall.glsl");
             fx = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).replaceAll("//[^\n]*", "");
         }
         GlslFunction disc = GlslFunction.parse(fx, "hgDisc"), hg = GlslFunction.parse(fx, "hg");

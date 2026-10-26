@@ -68,7 +68,7 @@ class PallNoiseTest {
 
     /**
      * Мелкие клубы ({@link VolumeNoise#detail}) в среднем — 1, и каскад «крупные × мелкие» (мелкие — плитка вчетверо
-     * мельче, как {@code coarseAt} и {@code fineAt} в {@code fx_pall.fsh}) — тоже: густота, а значит и видимость, — поля
+     * мельче, как {@code coarseAt} и {@code fineAt} в {@code fx_pall.glsl}) — тоже: густота, а значит и видимость, — поля
      * пелены.
      */
     @Test

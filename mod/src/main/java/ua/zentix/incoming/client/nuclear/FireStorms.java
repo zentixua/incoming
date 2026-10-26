@@ -28,7 +28,7 @@ final class FireStorms {
     /**
      * Цвет огня на экране (пламя с сажей), подобран на глаз: это не чёрное тело — зелёный как у него при ~1 500 K, синий
      * — при ~2 000 K ({@code BlackBody}); у чёрного тела 1 100 K на экране было бы 1, 0,26, 0. Цвета огня в пелене
-     * ({@code FIRE} в {@code fx_pall.fsh} и {@code NukePall.FIRE}, ~2 100 K), у смерча ({@code WHIRL_FIRE}) и зарева
+     * ({@code FIRE} в {@code fx_pall.glsl} и {@code NukePall.FIRE}, ~2 100 K), у смерча ({@code WHIRL_FIRE}) и зарева
      * пожаров под мглой ({@code fireLight} в {@code NukePall.light}) — свои.
      */
     static final float FIRE_R = 1.0f, FIRE_G = 0.42f, FIRE_B = 0.11f;
@@ -39,7 +39,7 @@ final class FireStorms {
     static final double FLAME_NIGHT = 1.0, FLAME_DAY = 0.6;
     /**
      * Зарево снизу на дыме и пелене ночью (на среднее пламя под точкой, у земли: выше его гасит дым — {@code storm} в
-     * {@code fx_pall.fsh}; у сплошного пожара низ дыма — рыжий, исподняя сторона пелены — тускло-красная, над слабыми
+     * {@code fx_pall.glsl}; у сплошного пожара низ дыма — рыжий, исподняя сторона пелены — тускло-красная, над слабыми
      * районами — темнее); днём — доля {@link #GLOW_DAY} (против неба его почти не видно).
      */
     static final double GLOW_NIGHT = 3, GLOW_DAY = 0.12;
