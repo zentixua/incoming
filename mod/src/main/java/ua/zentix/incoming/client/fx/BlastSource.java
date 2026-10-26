@@ -1,6 +1,7 @@
 package ua.zentix.incoming.client.fx;
 
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponSpec;
@@ -78,7 +79,7 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
      * black).
      */
     public Explosive explosive() {
-        return weapon == WeaponType.MISSILE ? Explosive.RDX : Explosive.TNT;
+        return weapon == null ? Explosive.TNT : ClientWeaponSpec.of(weapon).explosive();
     }
 
     /** Blast from a packet: weapon from the packet (by kind in old replays), numbers from its spec. */

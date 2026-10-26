@@ -14,13 +14,17 @@ import ua.zentix.incoming.nuclear.model.DustModel;
  * “Mixing in Inland and Coastal Waters”, 1979, §9.1), buoyancy overtakes momentum. If it reaches ground sooner
  * (half-width 0.094 of length — Pope, “Turbulent Flows”, 2000, table 5.1), it spreads along ground as a wall jet,
  * and products remain by launcher as cloud; farther, trail ({@code TrailModel}). Rocket ground launch clouds
- * work this way in REEDM too (Bjorklund et al., NASA CR-3646, 1982: ground cloud is exhaust while rocket is below
- * cloud-formation height; (est.) from memory), but criterion here is jet length, not height: Grad and Shahed leave at an angle.
+ * are described by Bjorklund et al., “User's Manual for REEDM”, NASA CR-3646 (December 1982), §2, p. 3:
+ * hot exhaust forms a buoyant ground cloud during the first seconds around launch, distinct from the trail.
+ * Our jet-length criterion is an estimate (est.), not a REEDM formation-height rule; launches can be angled.
  * <p>
  * <b>Heat</b> is engine heat released into air ({@link Motor#heatFlow}), like trail; <b>initial state</b> is jet
  * at ground: radius is its half-width there, temperature is axial excess, ΔT = ΔT₀·{@value #DECAY}·d′/ℓ
- * (d′ = d·√(ρ_exit/ρ) — variable-density diameter, Chen and Rodi 1980; (est.) decay constant 5 is for a scalar in a
- * round jet, from memory). Feed is shorter than rise (fractions of seconds to seconds vs minutes): cloud is
+ * (d′ = d·√(ρ_exit/ρ) — variable-density diameter). Su, Helmer and Brownell, “Quantitative planar imaging of
+ * turbulent buoyant jet mixing”, J. Fluid Mech. 643 (2010), 59–95, p. 81, doi:10.1017/S0022112009991856,
+ * reports Chen and Rodi's scalar-decay coefficient 5 for momentum-driven jets and experiments spanning 3.2–7.
+ * Applying it to hot exhaust temperature at ground contact is an estimate (est.). Feed is shorter than rise
+ * (fractions of seconds to seconds vs minutes): cloud is
  * one thermal containing all heat since feed start.
  * <p>
  * <b>Dust</b> is an order-of-magnitude estimate (est.): {@value #DUST_PER_KG} kg dust per kg exhaust striking loose
@@ -36,7 +40,7 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 public final class LaunchCloud implements SmokeGrid.Source {
     /** Round-jet half-width per length (Pope 2000, table 5.1). */
     public static final double SPREAD = 0.094;
-    /** Axial jet temperature-excess decay: ΔT/ΔT₀ = DECAY·d′/x (est.) (Chen, Rodi 1980 — from memory). */
+    /** Axial temperature-excess decay: ΔT/ΔT₀ = DECAY·d′/x (est.); scalar-jet evidence and limits above. */
     static final double DECAY = 5;
     /** Dust per kg exhaust striking loose soil, kg (est.) (order of magnitude). */
     public static final double DUST_PER_KG = 1;

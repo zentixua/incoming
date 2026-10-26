@@ -14,10 +14,17 @@ package ua.zentix.incoming.sound;
  * <li>Audible while ear sound exceeds background in at least one octave ({@link #margin}): noise masks only within its
  * band (Fletcher critical bands, 1940; narrower than octaves above 500 Hz, so octave threshold is conservative), making
  * a tonal engine audible even below background's total A-level. Quiet rural background 34 dBA at night, 40 dBA by day
- * (ANSI/ASA S12.9-2013 part 3, table C.1, category 6 “very quiet rural”, from memory — ⚠ verify; rural home at night
- * 30–35 dBA — SANS 10103 via Eskom report; quiet nighttime area 32–35 dBA — Alaska DNR). Equal A-energy per octave
- * 125 Hz–4 kHz, 63 Hz and 8 kHz 10 dB lower (estimate: leaves, insects, distant road); rain and thunderstorm +3 dB each,
- * as distant blasts.</li>
+ * (ANSI/ASA S12.9-2013/Part 3, Annex C, table C.1, category 6: very quiet suburban and rural residential;
+ * L_n = 34, L_d = 40 dBA). Quoted in SWCA, “Rancho Viejo Solar Project Noise Technical Report”
+ * (July 2024, revised November 2024), §2.2.1, p. 6:
+ * https://www.santafecountynm.gov/images/Exhibit_L_-_Noise_Report.pdf.
+ * Supporting context: Eskom Matimba noise assessment, JKA627r006 (4 July 2014), Appendix A, table A2,
+ * gives 30–35 dBA for a rural home at night (the report also uses SANS 10103);
+ * https://www.eskom.co.za/eia/gx/wp-content/uploads/migrated/MatimbaAsh/EIR/App%20Q%20-%20Noise.pdf.
+ * Alaska DNR's Pebble Noise overview, “Background”, gives quiet rural nights as 32–35 dBA:
+ * https://dnr.alaska.gov/mlw/mining/large-mines/pebble/pdf/koverview.pdf.
+ * Equal A-energy per octave 125 Hz–4 kHz, 63 Hz and 8 kHz 10 dB lower, and rain/thunderstorm +3 dB each remain
+ * estimates (leaves, insects, distant road), as for distant blasts.</li>
  * </ul>
  * Obstacles (hill, house) not modeled here: server does not know them; client muffles its path itself (occlusion,
  * {@code SoundFilters}) — client audibility always lies within what the server sends.

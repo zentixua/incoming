@@ -16,8 +16,10 @@ import ua.zentix.incoming.sound.Propagation;
  */
 public record Air(Wind wind, double stability, double humidity) {
     /**
-     * Clear-weather surface humidity, 0..1: mean relative humidity near land surface is 70–75 % (HadISDH, Willett et al. 2014,
-     * ⚠ verify); 70 % is also the ISO 9613-1 reference condition used to build distant sound recordings ({@code sound.Air}).
+     * Clear-weather surface humidity, 0..1: fixed 70 % (est.), shared with the reference air used to build distant
+     * sound recordings ({@code sound.Air}). HadISDH describes spatially and temporally varying land humidity,
+     * not a universal clear-weather mean: Willett et al., Clim. Past 10 (2014), 1983–2006,
+     * doi:10.5194/cp-10-1983-2014. No global 70–75 % mean is assumed from that dataset.
      */
     public static final double SURFACE_CLEAR = ua.zentix.incoming.sound.Air.HUMIDITY / 100;
     /** World sea level, blocks (as {@code WaterDecal.SEA_LEVEL}): air heights measured above it. */

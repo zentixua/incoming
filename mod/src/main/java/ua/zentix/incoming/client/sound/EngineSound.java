@@ -16,7 +16,6 @@ import ua.zentix.incoming.sound.Propagation;
 import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.sound.Spectrum;
 import ua.zentix.incoming.strike.WeaponSpec;
-import ua.zentix.incoming.strike.WeaponType;
 
 import java.util.Locale;
 import java.util.function.Supplier;
@@ -130,13 +129,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                     pitch *= noise.body().pitch(v);
                 }
                 case BOMB_DRILL -> pitch = 0.85;
-                case BOOSTER -> pitch *= switch (ClientWeaponSpec.of(track.weapon).booster()) {
-                    // recording voice: one recording for all solid rocket motors, pitch from their size
-                    case ICBM -> 0.7;
-                    case ROCKET -> 1.3;
-                    case SOLID_LOW -> 0.9;
-                    case SOLID, NONE -> 1;
-                };
+                case BOOSTER -> pitch *= ClientWeaponSpec.of(track.weapon).booster().pitch();
             }
             double gain = Loudness.gain(level, heard.margin() + level - heard.level(), ceiling(track)) * share;
             // distant recording already passed through FAR_AIR of air: filter only the excess
@@ -154,7 +147,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
      * ICBM (nuclear strike unchanged; under the same law its launch near the pad would be up to 5.5 dB louder).
      */
     static double ceiling(FlightTrack track) {
-        return track.weapon == WeaponType.NUKE ? Loudness.ENGINE_LUFS : Loudness.CEILING_LUFS;
+        return ClientWeaponSpec.of(track.weapon).ceilingLufs();
     }
 
     /** Noise of this path's projectile: craft spec (B-2 uses aircraft, its bomb uses bomb). */

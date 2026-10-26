@@ -73,10 +73,11 @@ public final class FireSmoke implements SmokeGrid.Source {
     }
 
     /**
-     * Transformer oil of a failed substation, spilled and burning as a pool: mineral oil burn rate 0.039 kg/(m²·s)
-     * (Babrauskas, SFPE Handbook, 5th ed., “Pool fire burning rates”, transformer oil; ⚠ from memory),
-     * effective heat of combustion ~46 MJ/kg (like diesel; ⚠ from memory), soot yield ~0.06 kg/kg (est.:
-     * between kerosene 0.012 and heavy oils ~0.1, Tewarson); pool ~{@value #OIL_AREA} m² (est.: a substation
+     * Transformer oil of a failed substation, spilled and burning as a pool: NFPA 92 (2015), table B.5.1,
+     * hydrocarbon transformer-oil row, gives 0.039 kg/(m²·s) large-pool asymptotic burning rate and 46.4 MJ/kg.
+     * The table's note c calls the rate uncertain (two data points). Using it without the pool-diameter
+     * correction and rounding the heat to 46 MJ/kg are estimates (est.); soot yield 0.06 kg/kg is also an
+     * estimate, not a verified transformer-oil measurement. Pool ~{@value #OIL_AREA} m² (est.: a substation
      * transformer holds hundreds of liters, with containment around it). Heat 3.6 MW, Heskestad flame ~4.5 m; enough oil for hours
      * of burning, so the source burns while the substation is out.
      */
