@@ -5,6 +5,8 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 /**
@@ -12,8 +14,8 @@ import java.util.List;
  * <p>
  * Две очереди. В первой — работы, которые ещё не начаты: их первая единица (у взрыва — лучи, урон и события: то, что
  * видно и чувствуется сразу) идёт по порядку постановки раньше всего остального. Работа, у которой после первой
- * единицы ещё есть работа (порции блоков взрыва, секции стёкол), переходит во вторую очередь и доделывается там по
- * порядку в оставшемся сроке — иначе бомба силы 20 с сотнями порций держала бы на секунды начало следующих ударов.
+ * единицы ещё есть работа (порции блоков взрыва, секции стёкол), переходит во вторую очередь. Продолжения чередуются
+ * по одной единице: старый обход огня не держит за собой основной фронт нового удара. Место в круге переживает тик.
  * <p>
  * Работа, чей район ещё не готов ({@link Job#ready}), пропускается, пока не станет готов, а следующие за ней идут;
  * ждёт не дольше {@link #GIVE_UP_TICKS}. Работа, которая ждёт другую ({@link Job#blocked}: огненный шар и стёкла удара
@@ -62,12 +64,12 @@ public final class UnitQueue {
         }
     }
 
-    private enum Outcome { SKIPPED, OUT_OF_TIME, MORE, PAUSED, DONE }
+    private enum Outcome { SKIPPED, OUT_OF_TIME, MORE, DONE }
 
     /** Не начатые работы. */
     private final List<Entry> heads = new ArrayList<>();
     /** Начатые, с работой после первой единицы. */
-    private final List<Entry> tails = new ArrayList<>();
+    private final Deque<Entry> tails = new ArrayDeque<>();
 
     public void add(ServerLevel level, Job job) {
         add(level.getGameTime(), job);
@@ -90,7 +92,7 @@ public final class UnitQueue {
     public long oldestWaitTicks(ServerLevel level) {
         long oldest = Long.MAX_VALUE;
         if (!heads.isEmpty()) oldest = heads.getFirst().added;
-        if (!tails.isEmpty()) oldest = Math.min(oldest, tails.getFirst().added);
+        for (Entry entry : tails) oldest = Math.min(oldest, entry.added);
         return oldest == Long.MAX_VALUE ? 0 : level.getGameTime() - oldest;
     }
 
@@ -106,7 +108,7 @@ public final class UnitQueue {
     public void work(ServerLevel level, long now, WorkClock clock) {
         for (int i = 0; i < heads.size(); ) {
             Entry e = heads.get(i);
-            Outcome o = run(level, now, e, clock, 1);
+            Outcome o = run(level, now, e, clock);
             if (o == Outcome.OUT_OF_TIME) return;
             if (o == Outcome.SKIPPED) {
                 i++;
@@ -116,22 +118,21 @@ public final class UnitQueue {
             if (o == Outcome.MORE) tails.add(e);
             else finish(level, e);
         }
-        for (int i = 0; i < tails.size(); ) {
-            Entry e = tails.get(i);
-            Outcome o = run(level, now, e, clock, Integer.MAX_VALUE);
-            // срок вышел посреди работы: следующие ждут её конца
-            if (o == Outcome.OUT_OF_TIME || o == Outcome.MORE) return;
-            if (o == Outcome.SKIPPED || o == Outcome.PAUSED) {
-                i++;
-                continue;
-            }
-            tails.remove(i);
-            finish(level, e);
+        int missed = 0;
+        while (!tails.isEmpty() && missed < tails.size()) {
+            if (clock.workedThisTick() && clock.overdue()) return;
+            Entry e = tails.removeFirst();
+            Outcome o = run(level, now, e, clock);
+            if (o == Outcome.DONE) finish(level, e);
+            else tails.addLast(e);
+            // A full circle without progress: all wait, or none of their estimates fits the remaining time.
+            if (o == Outcome.SKIPPED || o == Outcome.OUT_OF_TIME) missed++;
+            else missed = 0;
         }
     }
 
-    /** До {@code max} единиц работы {@code e}, пока часы разрешают. */
-    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, int max) {
+    /** One ready unit, with dependencies rechecked at every turn. */
+    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock) {
         try {
             if (e.job.blocked()) return Outcome.SKIPPED;
             if (!e.job.ready(level)) {
@@ -139,21 +140,14 @@ public final class UnitQueue {
                 Incoming.LOG.warn("{} cancelled: area did not load within {} ticks", e.job.describe(), GIVE_UP_TICKS);
                 return Outcome.DONE;
             }
-            for (int n = 0; n < max; n++) {
-                // между единицами работа могла дойти до того, что ждёт другую: следующие идут
-                if (n > 0 && e.job.blocked()) return Outcome.PAUSED;
-                int kind = e.job.unitKind();
-                if (!clock.canStart(kind)) return n == 0 ? Outcome.OUT_OF_TIME : Outcome.MORE;
-                long c0 = clock.begin();
-                boolean more;
-                try {
-                    more = e.job.step(level);
-                } finally {
-                    clock.end(c0, kind);
-                }
-                if (!more) return Outcome.DONE;
+            int kind = e.job.unitKind();
+            if (!clock.canStart(kind)) return Outcome.OUT_OF_TIME;
+            long c0 = clock.begin();
+            try {
+                return e.job.step(level) ? Outcome.MORE : Outcome.DONE;
+            } finally {
+                clock.end(c0, kind);
             }
-            return Outcome.MORE;
         } catch (RuntimeException ex) {
             Incoming.LOG.error("{} failed with an exception and was removed", e.job.describe(), ex);
             return Outcome.DONE;

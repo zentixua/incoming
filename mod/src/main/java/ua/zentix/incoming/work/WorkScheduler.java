@@ -1,8 +1,10 @@
 package ua.zentix.incoming.work;
 
+import net.minecraft.Util;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
@@ -19,8 +21,9 @@ import java.util.function.BooleanSupplier;
 /**
  * Общий бюджет тяжёлой работы мода на тик сервера ({@code performance.work_ms_per_tick}): полосы по порядку важности,
  * у каждой свои часы ({@link WorkClock}: своя оценка единицы — ванильный взрыв и лампа блэкаута разные величины),
- * срок полосы — то, что оставили полосы выше, не больше её собственного предела. Идёт после тика миров, так что
- * попадание, случившееся в тике, в пустой очереди делается в том же тике (картинка клиента начинается с пакета удара).
+ * срок полосы — то, что оставили полосы выше, не больше её собственного предела. Готовые попадания идут до миров:
+ * до абсолютного срока тика за вычетом измеренного резерва обязательной симуляции ({@link TickReserve}). В Post —
+ * остаток того же бюджета и старт нового попадания. Часы и расход общие для обоих окон и всех миров.
  * <p>
  * Бюджет — потолок, а не обещание: весь он — только пока у сервера есть время в тике ({@code hasTime} события —
  * ванильное «до следующего тика ещё есть время», по которому и ваниль выгружает чанки). Сервер, который отстаёт от
@@ -139,23 +142,77 @@ public final class WorkScheduler {
         return Math.min(cap, Math.max(0, total - usedAbove));
     }
 
-    public static void onServerTick(ServerTickEvent.Post e) {
-        MinecraftServer server = e.getServer();
+    public static void onServerTickPre(ServerTickEvent.Pre e) {
+        if (!impactClock(e.getServer()).isCounting()) timing(e.getServer()).begin(e.getServer());
+    }
+
+    /** Before the first world, after tickRateManager.tick has applied freeze/step for this tick. */
+    public static void onLevelTickPre(LevelTickEvent.Pre e) {
+        if (!(e.getLevel() instanceof ServerLevel level)) return;
+        MinecraftServer server = level.getServer();
+        ImpactTiming timing = timing(server);
+        if (!timing.active) return;
+        timing.level(level);
+        if (timing.earlyVisited) return;
+        timing.earlyVisited = true;
+        WorkClock impact = impactClock(server);
+        if (!level.tickRateManager().runsNormally() || impact.isCounting()) return;
+        // Lower lanes may become pending during world simulation, so leave their share even before they exist.
+        long cap = impactBudget(totalNanos(), true);
+        long budget = server.tickRateManager().isSprinting() ? cap
+                : e.hasTime() ? timing.reserve.earlyNanos(cap, Util.getNanos(), server.getNextTickTime()) : 0;
+        if (budget <= 0) return; // Keep the one-unit progress guarantee for Post on a genuinely busy tick.
+        impact.start(budget, () -> server.tickRateManager().isSprinting() || e.hasTime(), 0);
+        timing.earlyClock = impact;
+        timing.earlyBudget = budget;
+        workImpacts(levels(server), impact);
+        timing.earlyUsed = impact.usedThisTickNanos();
+    }
+
+    private static ImpactTiming timing(MinecraftServer server) {
+        return server.overworld().getData(ModAttachments.IMPACT_TIMING);
+    }
+
+    private static List<ServerLevel> levels(MinecraftServer server) {
         List<ServerLevel> levels = new ArrayList<>();
         server.getAllLevels().forEach(levels::add);
         Collections.rotate(levels, -(server.getTickCount() % levels.size()));
+        return levels;
+    }
+
+    private static void workImpacts(List<ServerLevel> levels, WorkClock impact) {
+        for (ServerLevel level : levels) {
+            if (level.tickRateManager().runsNormally() && level.hasData(ModAttachments.STRIKE_WORLD)) {
+                StrikeWorld.get(level).workImpacts(level, impact);
+            }
+        }
+    }
+
+    public static void onServerTick(ServerTickEvent.Post e) {
+        MinecraftServer server = e.getServer();
+        List<ServerLevel> levels = levels(server);
         long total = totalNanos();
         BooleanSupplier spare = server.tickRateManager().isSprinting() ? () -> true : e::hasTime;
 
         WorkClock impact = impactClock(server);
         long busy = BUSY_MS * 1_000_000L;
-        impact.start(impactBudget(total, Blackouts.pending(server) || NuclearStrikes.pending(server)), spare, busy);
-        for (ServerLevel level : levels) {
-            // «/tick freeze» останавливает и попадания (как снаряды и таймлайны)
-            if (level.tickRateManager().runsNormally() && level.hasData(ModAttachments.STRIKE_WORLD)) {
-                StrikeWorld.get(level).workImpacts(level, impact);
+        ImpactTiming timing = timing(server);
+        long cap = impactBudget(total, Blackouts.pending(server) || NuclearStrikes.pending(server));
+        if (timing.active && timing.earlyClock == impact) {
+            // This is still the same tick: no second decay, budget or counters.
+            long left = remaining(cap, impact.usedThisTickNanos(), cap);
+            if (!server.tickRateManager().isSprinting()) {
+                left = Math.min(left, Math.max(0, server.getNextTickTime() - Util.getNanos()));
             }
+            // A short early window is not a debt tick: topping it up to BUSY_MS after autosave would overrun
+            // the schedule by several units (e.g. 49 ms mandatory simulation). Only the final new unit may start.
+            impact.resume(left, spare, 0);
+            // If early work stayed inside its allowance, the permitted final unit can start a new hit in Post.
+            if (timing.earlyUsed <= timing.earlyBudget && impact.usedThisTickNanos() < cap) impact.allowLateStart();
+        } else {
+            impact.start(cap, spare, busy);
         }
+        workImpacts(levels, impact);
         for (ServerLevel level : levels) {
             if (level.hasData(ModAttachments.STRIKE_WORLD)) StrikeWorld.get(level).endImpactTick(level);
         }
@@ -170,6 +227,7 @@ public final class WorkScheduler {
         Blackouts.work(server, levels, grid);
 
         OWN[Math.floorMod(server.getTickCount(), OWN.length)] = impact.usedThisTickNanos() + nuclear.usedThisTickNanos() + grid.usedThisTickNanos();
+        if (timing.active) timing.finish(server, impact.usedThisTickNanos() + nuclear.usedThisTickNanos() + grid.usedThisTickNanos());
         report(server, impact.usedThisTickNanos(), nuclear.usedThisTickNanos(), grid.usedThisTickNanos());
     }
 

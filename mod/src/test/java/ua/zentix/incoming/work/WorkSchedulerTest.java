@@ -147,4 +147,61 @@ class WorkSchedulerTest {
         grid.end(grid.begin());
         assertFalse(grid.canStart(), "срок блэкаута вышел — только одна единица");
     }
+
+    /** Real clock policy, not WorkClock.counting: the optional consumer makes Post.hasTime false every tick. */
+    @Test
+    void readyImpactRunsBeforeBackgroundWithinMeasuredHeadroom() {
+        for (int mandatory : new int[]{40, 43, 47}) {
+            long[] now = {0};
+            WorkClock impact = WorkClock.decaying(() -> now[0], 0.5);
+            TickReserve reserve = new TickReserve();
+            reserve.observe(mandatory * MS);
+            int postBusy = 0, earlyWorked = 0;
+            long work = 0, maxTick = 0;
+            for (int tick = 0; tick < 600; tick++) {
+                long start = now[0], deadline = start + 50 * MS;
+                long early = reserve.earlyNanos(WorkScheduler.impactBudget(TOTAL, true), now[0], deadline);
+                impact.start(early, () -> now[0] < deadline, 0);
+                while (impact.canStart(0)) {
+                    long began = impact.begin(); now[0] += MS / 4; impact.end(began, 0);
+                }
+                if (impact.workedThisTick()) earlyWorked++;
+                now[0] += mandatory * MS;
+                assertTrue(now[0] - start <= 50 * MS + MS / 4);
+                now[0] = Math.max(now[0], deadline); // optional autosave takes the remaining time
+                if (now[0] >= deadline) postBusy++;
+                long unitsBeforePost = impact.units();
+                impact.resume(0, () -> now[0] < deadline, 0);
+                assertFalse(impact.canStart(0), "no fresh progress guarantee in Post");
+                assertEquals(unitsBeforePost, impact.units());
+                assertTrue(impact.usedThisTickNanos() <= TOTAL);
+                work += impact.usedThisTickNanos();
+                maxTick = Math.max(maxTick, now[0] - start);
+            }
+            assertEquals(600, postBusy);
+            assertEquals(600, earlyWorked);
+            assertTrue(work / 600.0 / MS > 2, "IMPACT no longer pinned to BUSY_MS");
+            System.out.printf(java.util.Locale.ROOT,
+                    "PL10 AFTER mandatory=%d post_busy=%d/600 early_work=%d/600 impact_ms=%.3f max_tick_ms=%.3f%n",
+                    mandatory, postBusy, earlyWorked, work / 600.0 / MS, maxTick / (double) MS);
+        }
+    }
+
+    @Test
+    void twoWindowsHaveOneBudgetAndOneProgressGuarantee() {
+        long[] now = {0};
+        WorkClock clock = WorkClock.decaying(() -> now[0], 0.5);
+        clock.start(10 * MS);
+        long began = clock.begin(); now[0] += 35 * MS; clock.end(began);
+        clock.resume(WorkScheduler.remaining(TOTAL, clock.usedThisTickNanos(), TOTAL), () -> true, 0);
+        assertFalse(clock.canStart());
+        assertEquals(35 * MS, clock.usedThisTickNanos());
+        assertEquals(1, clock.ticksWorked());
+        // Empty early window: a new impact still starts in Post on the same tick.
+        clock.start(0);
+        clock.resume(0, () -> false, 0);
+        assertTrue(clock.canStart());
+        began = clock.begin(); now[0] += MS; clock.end(began);
+        assertFalse(clock.canStart());
+    }
 }

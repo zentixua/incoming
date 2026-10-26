@@ -48,6 +48,7 @@ public final class WorkClock {
     private double[] kindEstimate = new double[0];
     /** В этом тике уже что-то сделано (одну единицу делаем всегда, иначе после очень долгой очередь встала бы). */
     private boolean worked;
+    private boolean lateStart;
     private int unitsThisTick, maxUnitsPerTick, ticksWorked, units;
 
     public WorkClock() {
@@ -97,6 +98,7 @@ public final class WorkClock {
         deadline = now + budgetNanos;
         busyDeadline = now + Math.min(budgetNanos, busyNanos);
         worked = false;
+        lateStart = false;
         unitsLastTick = unitsThisTick;
         unitsThisTick = 0;
         usedThisTick = 0;
@@ -106,6 +108,27 @@ public final class WorkClock {
             largestBefore = largest;
             largest = 0;
         }
+    }
+
+    /** Another window in the same tick: keep expenditure, estimates and the single progress guarantee. */
+    public void resume(long budgetNanos, BooleanSupplier spare, long busyNanos) {
+        this.spare = unitCost > 0 ? ALWAYS : spare;
+        long now = time.getAsLong();
+        deadline = now + Math.max(0, budgetNanos);
+        busyDeadline = now + Math.max(0, Math.min(budgetNanos, busyNanos));
+    }
+
+    /**
+     * Start one new job in the late window. The scheduler grants this only if the early window did not overrun
+     * its allowance and the common budget still has room: this, instead of an early overrun, is the last unit.
+     */
+    public void allowLateStart() {
+        lateStart = true;
+    }
+
+    /** Deterministic scenarios use only the late window, independent of the host's wall clock. */
+    public boolean isCounting() {
+        return unitCost > 0;
     }
 
     /**
@@ -131,7 +154,7 @@ public final class WorkClock {
      * и тает медленно, и полоса десятки тиков делала бы по единице за тик.
      */
     private boolean fits(long estimate) {
-        if (!worked) return true;
+        if (!worked || lateStart) return true;
         long now = time.getAsLong();
         return spare.getAsBoolean() ? now + estimate < deadline : now < busyDeadline;
     }
@@ -211,6 +234,7 @@ public final class WorkClock {
 
     /** Единица работы заняла {@code nanos}. */
     public void record(long nanos) {
+        lateStart = false;
         estimate = Math.max(nanos, estimate * DECAY);
         largest = Math.max(largest, nanos);
         usedThisTick += nanos;

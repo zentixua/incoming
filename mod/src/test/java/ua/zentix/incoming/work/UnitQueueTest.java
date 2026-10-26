@@ -74,7 +74,7 @@ class UnitQueueTest {
         tick(q, WorkClock.counting(MS), 4 * MS, 0);
         assertEquals(List.of("a:5", "b:3", "a:4"), log);
         tick(q, WorkClock.counting(MS), 100 * MS, 1);
-        assertEquals(List.of("a:5", "b:3", "a:4", "a:3", "a:2", "a:1", "a:end", "b:2", "b:1", "b:end"), log);
+        assertEquals(List.of("a:5", "b:3", "a:4", "b:2", "a:3", "b:1", "b:end", "a:2", "a:1", "a:end"), log);
         assertTrue(q.isEmpty());
     }
 
@@ -170,5 +170,27 @@ class UnitQueueTest {
         clock.end(b, 2);
         assertTrue(clock.canStart(2), "дешёвая порция влезает");
         assertTrue(!clock.canStart(1), "дорогие лучи (40 мс) в срок 30 мс не влезают");
+    }
+
+    @Test
+    void oldSweepDoesNotHoldNewFrontUntilItsEnd() {
+        List<String> log = new ArrayList<>();
+        UnitQueue queue = new UnitQueue();
+        Fake ignition = new Fake("ignition", 1000, log);
+        Fake shatter = new Fake("shatter", 1000, log);
+        queue.add(0, ignition);
+        queue.add(0, shatter);
+        WorkClock clock = WorkClock.counting(MS);
+        tick(queue, clock, 4 * MS, 0);
+        Fake front = new Fake("front", 10, log);
+        queue.add(1, front);
+        for (int t = 1; t <= 12 && front.ended == 0; t++) tick(queue, clock, 4 * MS, t);
+        assertEquals(1, front.ended, "the main front gets a turn every round");
+        assertEquals(0, ignition.ended);
+        assertEquals(0, shatter.ended);
+        queue.finish(null, 13);
+        assertTrue(queue.isEmpty());
+        assertEquals(1, ignition.ended);
+        assertEquals(1, shatter.ended);
     }
 }

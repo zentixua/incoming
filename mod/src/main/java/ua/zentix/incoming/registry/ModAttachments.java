@@ -84,6 +84,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<WorkClock>> IMPACT_CLOCK = REGISTER.register("impact_clock",
             () -> AttachmentType.builder(WorkScheduler::newImpactClock).build());
 
+    /** Overworld: measured tick reserve and the two IMPACT windows; discarded on world exit. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.work.ImpactTiming>> IMPACT_TIMING = REGISTER.register("impact_timing",
+            () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ImpactTiming()).build());
+
     /** Мир: таймлайны взрывов ({@link StrikeWorld}); не сохраняется. */
     public static final Supplier<AttachmentType<StrikeWorld>> STRIKE_WORLD = REGISTER.register("strike_world",
             () -> AttachmentType.builder(StrikeWorld::new).build());

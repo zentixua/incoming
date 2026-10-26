@@ -48,3 +48,8 @@ server its owner does. The most useful ones are below; the rest are in the same 
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
 | `nuclear.wave_speed` | 0.20 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `grid.enabled` | on | [blackout](blackout.md) |
+| `performance.work_ms_per_tick` | 30 | shared ceiling in milliseconds for impact destruction, nuclear world work and blackouts; the server also reserves time for world simulation |
+
+During dense salvos, ready impact destruction gets time before optional chunk saving. Work on older fires and
+windows takes turns with newer blast fronts, so one long sweep does not hold up the next blast's main destruction.
+Very busy servers can still spread destruction over several ticks.
