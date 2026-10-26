@@ -28,6 +28,10 @@ https://github.com/zentixua/incoming. Всё это — внутри игры: �
 - Публичные тексты — по-английски: README.md, руководство, описание мода, страницы магазинов (docs/store), заметки
   к релизам, ключи en_us; русский перевод (README.ru.md, docs/guide/ru, ru_ru) правится в том же PR. Пишем как человек:
   просто, точно, без рекламных слов, повторов и воды; каждое утверждение сверено с кодом.
+- **Languages (Artem, 26.10).** Everything in the repository is in English: code, comments, log messages, CLAUDE.md,
+  `.claude/rules`, AGENTS.md, internal docs, `tools/`, CI, commits and PRs. English plus Russian only for what players
+  need: the public docs (README, `docs/guide`, release notes, store pages) and the mod's interface (`en_us`/`ru_ru`).
+  No mixing inside one file. Chat with Artem stays in Russian.
 - **Не управлять компьютером пользователя** (никакого computer-use, кликов в игре). Всё готовим так,
   чтобы Артёму оставалось только запустить игру: мод приходит в неё выпуском и PR сборки в open-skies (автообновление).
 - **Минимум просьб «проверь в игре»** — это мешает игре. Проверяем сами: юнит-тесты, GameTest, клиент без окна
