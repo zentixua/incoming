@@ -88,8 +88,9 @@ import java.util.UUID;
  * <p>
  * Does not cover portal search ({@code PortalForcer}), which loads before the mod learns of it; respawn positions
  * replaced by another mod in {@code PlayerRespawnPositionEvent}, craft respawn, or world spawn when the bed is
- * gone. A player logging out from death screen and back in gets only an arrival ticket on the death chunk (their
- * object is there), with no respawn-site ticket: login has no death event.
+ * gone. Login from death screen initially holds the death chunk (the player object is there); dead-player ticks
+ * acquire a respawn-site ticket once that arrival ticket ends. They also acquire one if Incoming work starts
+ * after death.
  */
 public final class ArrivalTickets {
     /** Ticket level 33 − 7 = 26: below Lancet area center (27). */
@@ -181,9 +182,15 @@ public final class ArrivalTickets {
     }
 
     public static void onPlayerTick(PlayerTickEvent.Post e) {
-        if (!(e.getEntity() instanceof ServerPlayer p) || !p.hasData(ModAttachments.ARRIVAL.get())) return;
-        tick(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()), p.server.getPlayerList().getViewDistance(), p.isDeadOrDying());
-        if (p.getData(ModAttachments.ARRIVAL.get()).held == null && !needed(p.serverLevel())) forget(p);
+        if (!(e.getEntity() instanceof ServerPlayer p)) return;
+        boolean dead = p.isDeadOrDying();
+        if (p.hasData(ModAttachments.ARRIVAL.get())) {
+            Slot slot = p.getData(ModAttachments.ARRIVAL.get());
+            tick(p.server, p.getUUID(), slot, p.server.getPlayerList().getViewDistance(), dead);
+            if (slot.held == null && !needed(p.serverLevel())) forget(p);
+        }
+        // Incoming work may start after death, while the player is still on the death screen.
+        if (dead && (!p.hasData(ModAttachments.ARRIVAL.get()) || p.getData(ModAttachments.ARRIVAL.get()).held == null)) awaitRespawn(p);
     }
 
     /** World tick end: player jump within this world places an arrival ticket at the new site ({@link #moved}). */

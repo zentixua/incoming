@@ -160,6 +160,39 @@ public final class ArrivalScopeGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "arrival_late_respawn")
+    public static void workStartingOnDeathScreenProtectsRespawn(GameTestHelper h) {
+        ServerLevel destination = isolatedLevel(h);
+        h.assertTrue(StrikeWorld.get(destination).areas().size() == 0, "Another test left active Incoming areas");
+        ServerLevel source = destination.getServer().getLevel(Level.NETHER);
+        h.assertTrue(source != null, "The test needs a second dimension");
+        FakePlayer player = player(h, source, "respawn_late_work");
+        BlockPos respawn = h.absolutePos(new BlockPos(32, 11, 32));
+        player.setRespawnPosition(destination.dimension(), respawn, 0, true, false);
+        player.setHealth(0);
+        ArrivalTickets.onDeath(new LivingDeathEvent(player, source.damageSources().genericKill()));
+        ArrivalTickets.onPlayerTick(new PlayerTickEvent.Post(player));
+        idle(h, player, "death screen before work starts");
+
+        ChunkPos centre = new ChunkPos(respawn);
+        UUID flight = UUID.randomUUID();
+        StrikeGameTests.afterTest(h, () -> FlightTickets.hold(destination, centre, 0, flight, false));
+        for (int start = 0; start < 2; start++) {
+            FlightTickets.hold(destination, centre, 0, flight, true);
+            ArrivalTickets.onPlayerTick(new PlayerTickEvent.Post(player));
+            h.assertTrue(ArrivalTickets.count(destination, player.getUUID()) == 1,
+                    "Work starting on the death screen did not protect respawn");
+            h.assertTrue(centre.equals(ArrivalTickets.held(player.getData(ModAttachments.ARRIVAL.get()))),
+                    "Late respawn priority held the death location instead of the destination");
+            FlightTickets.hold(destination, centre, 0, flight, false);
+            ArrivalTickets.onPlayerTick(new PlayerTickEvent.Post(player));
+            idle(h, player, "work ended on the death screen");
+            h.assertTrue(ArrivalTickets.count(destination, player.getUUID()) == 0,
+                    "Work ending on the death screen retained respawn priority");
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", timeoutTicks = 40, batch = "arrival_work_expiry")
     public static void expiringWorkReleasesTicketsWithoutPlayerTicks(GameTestHelper h) {
         ServerLevel level = isolatedLevel(h);

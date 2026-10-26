@@ -82,7 +82,8 @@ paths:
   salvo). Non-ticking, removed once any players' `PLAYER` tickets hold radius-5 square (`DistanceManager.tickets`, AT,
   read-only), ≤ 200 ticks; `arrivalLoadsBefore{Salvo,Loiter}Areas`, `arrivalReleasedWhenPlayersHoldPlace`. Respawn
   (`PlayerList.respawn`) reads bed/anchor synchronously before own events: same ticket on death (`LivingDeathEvent`,
-  `LOWEST`) at respawn place, 100-tick lease renewed by dead-player tick, removed on respawn/logout/live tick/expiry
+  `LOWEST`) at respawn place, 100-tick lease renewed by dead-player tick (also acquired if work starts after death),
+  removed on respawn/logout/live tick/expiry
   (player no longer ticks); slot transfers in `PlayerEvent.Clone` (`respawnTicketWaitsForRespawn`,
   `respawnTicketLeaseExpires`, `respawnEventsMoveTicket`, handlers with NeoForge `FakePlayer`). Sable-craft bed is plot-
   grid point (Sable respawns at own world point): no load tickets there (`SubLevels.inPlotGrid`,
