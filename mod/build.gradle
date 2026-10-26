@@ -41,6 +41,11 @@ repositories {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
     }
+    // glsl-processor — разбор GLSL Veil (его несёт Sable): ShaderSourceTest прогоняет через него свои шейдеры
+    exclusiveContent {
+        forRepository { maven { url = 'https://maven.blamejared.com' } }
+        filter { includeModule 'io.github.ocelot', 'glsl-processor' }
+    }
     mavenCentral()
 }
 
@@ -240,6 +245,8 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     // SoundAssetsTest читает sounds.json
     testImplementation 'com.google.code.gson:gson:2.10.1'
+    // та же версия, что в Veil из Sable сборки (Veil 4.3.2): ShaderSourceTest печатает шейдеры, как Veil
+    testImplementation 'io.github.ocelot:glsl-processor:0.2.3'
 }
 
 test {

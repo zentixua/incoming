@@ -128,7 +128,7 @@ class ShaderSourceTest {
     @Test
     void pallKnowsWhereTheOpenAirIs() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
-        assertTrue(body(Files.readString(core.resolve("fx_pall.fsh")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep без pallOpen");
+        assertTrue(body(Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl")), "void pallStep(").contains("pallOpenHere("), "fx_pall: pallStep без pallOpen");
         assertTrue(body(Files.readString(include.resolve("pall_front.glsl")), "float pallThrough(").contains("pallOpenHere("), "pall_front: pallThrough без pallOpen");
         assertTrue(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main(").contains("pallOpenHere("), "fx_pall_composite: тень без pallOpen");
     }
@@ -142,7 +142,7 @@ class ShaderSourceTest {
     @Test
     void pallUnderTheCapIsInItsShadow() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
-        String pall = Files.readString(core.resolve("fx_pall.fsh")), step = blankComments(body(pall, "vec4 pallSource("));
+        String pall = Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl")), step = blankComments(body(pall, "vec4 pallSource("));
         assertTrue(blankComments(body(pall, "vec3 pallSunAt(")).contains("mushShadowFrom("), "fx_pall: солнце над пеленой без тени грибов");
         assertTrue(step.contains("pallSunAt("), "fx_pall: общий источник пыли без тени грибов");
         assertFalse(step.contains("PallSunLight"), "fx_pall: солнце в pallStep — только сквозь тень грибов");
@@ -153,7 +153,7 @@ class ShaderSourceTest {
     @Test
     void inflowAndCarpetUseOneLightingSource() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
-        String pall = Files.readString(core.resolve("fx_pall.fsh"));
+        String pall = Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl"));
         String layer = blankComments(body(pall, "void pallStep(")), stem = blankComments(body(pall, "vec4 mushAt("));
         assertTrue(layer.contains("pallSource(p, cone, vec4(0.0), dustLight)"));
         assertFalse(stem.contains("pallSource("), "в шаге гриба нет встроенного расчёта пелены");
@@ -204,22 +204,21 @@ class ShaderSourceTest {
     @Test
     void everyCallMatchesItsDeclaration() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI()), include = core.resolveSibling("include");
-        java.util.Map<String, Integer> arity = new java.util.HashMap<>();
         Pattern decl = Pattern.compile("(?m)^\\w+\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*\\{");
-        List<Path> files = new ArrayList<>();
-        try (Stream<Path> a = Files.list(include); Stream<Path> b = Files.list(core)) {
-            files.addAll(a.filter(f -> f.toString().endsWith(".glsl")).sorted().toList());
-            files.addAll(b.filter(f -> f.toString().endsWith(".fsh") || f.toString().endsWith(".vsh")).sorted().toList());
+        List<Path> files;
+        try (Stream<Path> b = Files.list(core)) {
+            files = b.filter(f -> f.toString().endsWith(".fsh") || f.toString().endsWith(".vsh")).sorted().toList();
         }
-        for (Path f : files) {
-            if (!f.getParent().equals(include)) continue;
-            Matcher m = decl.matcher(blankComments(Files.readString(f)));
-            while (m.find()) arity.put(m.group(1), m.group(2).isBlank() ? 0 : m.group(2).split(",").length);
-        }
-        assertTrue(arity.containsKey("pallField") && arity.containsKey("pallOpen"), "функции include не найдены: " + arity.keySet());
+        Set<String> found = new HashSet<>();
         List<String> bad = new ArrayList<>();
+        // программа целиком, с файлами include на их местах: имя функции уникально в программе, а не во всех файлах
+        // (у fx_depth своя along, у пелены — своя)
         for (Path f : files) {
-            String text = blankComments(Files.readString(f));
+            String text = blankComments(withImports(include, Files.readString(f), new HashSet<>()));
+            java.util.Map<String, Integer> arity = new java.util.HashMap<>();
+            Matcher d = decl.matcher(text);
+            while (d.find()) arity.put(d.group(1), d.group(2).isBlank() ? 0 : d.group(2).split(",").length);
+            found.addAll(arity.keySet());
             for (var e : arity.entrySet()) {
                 Matcher m = Pattern.compile("(?<![\\w.])" + e.getKey() + "\\s*\\(").matcher(text);
                 while (m.find()) {
@@ -240,6 +239,7 @@ class ShaderSourceTest {
                 }
             }
         }
+        assertTrue(found.contains("pallField") && found.contains("pallOpen"), "функции include не найдены: " + found);
         assertTrue(bad.isEmpty(), "вызовы не по объявлению: " + bad);
     }
 
@@ -312,11 +312,10 @@ class ShaderSourceTest {
         return source.substring(open, i);
     }
 
-    /** Текст шейдера с файлами {@code #moj_import <incoming:…>} на их местах (каждый раз — один, как у ванили). */
     @Test
     void footLightTableDimensionsMatchItsShader() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
-        String source = Files.readString(core.resolve("fx_pall.fsh"));
+        String source = Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl"));
         for (Object[] pair : new Object[][]{{"FOOT_LIGHT_AZ", PallPass.FOOT_LIGHT_AZ}, {"FOOT_LIGHT_R", PallPass.FOOT_LIGHT_R}, {"FOOT_LIGHT_H", PallPass.FOOT_LIGHT_H}}) {
             Matcher m = Pattern.compile("const int " + pair[0] + " = (\\d+);").matcher(source);
             assertTrue(m.find(), pair[0].toString());
@@ -324,30 +323,78 @@ class ShaderSourceTest {
         }
     }
 
+    /**
+     * Шейдер берёт файл только как {@code #moj_import <incoming:имя>} из {@code shaders/include}. Импорт в кавычках
+     * (относительно файла) три загрузчика сборки читают по-разному: NeoForge — как {@code namespace:путь} рядом с
+     * шейдером, Forgified Fabric API (Fabric Rendering, {@code ShaderProgramImportProcessorMixin}) приписывает к нему
+     * namespace шейдера ещё раз ({@code incoming:incoming:fx_pall.fsh} — программа не создаётся), а Veil при пересборке
+     * клеит его к пути самого файла. Предпроход ножки ({@code fx_pall_foot}) брал тело пелены кавычками и в сборке не
+     * грузился: свет у основания ножки шёл без таблицы (лог хоста 3.8.0).
+     */
     @Test
-    void relativeShaderImportKeepsItsExplicitNamespace() throws IOException, URISyntaxException {
-        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
-        assertTrue(withImports(include, "#moj_import \"incoming:fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
-        assertFalse(withImports(include, "#moj_import \"fx_pall.fsh\"", new HashSet<>()).contains("vec4 pallSource("));
+    void everyImportIsAnInclude() throws IOException, URISyntaxException {
+        Path root = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders").toURI()), include = root.resolve("include");
+        Pattern line = Pattern.compile("(?m)^\\s*#moj_import\\b.*$");
+        List<String> bad = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path p : walk.filter(f -> f.toString().matches(".*\\.(fsh|vsh|glsl)")).sorted().toList()) {
+                Matcher m = line.matcher(Files.readString(p));
+                while (m.find()) {
+                    Matcher i = INCLUDE.matcher(m.group());
+                    if (!i.lookingAt()) bad.add(root.relativize(p) + ": " + m.group().trim());
+                    else if (i.group(1) != null && !Files.isRegularFile(include.resolve(i.group(2)))) bad.add(root.relativize(p) + ": нет include/" + i.group(2));
+                }
+            }
+        }
+        assertTrue(bad.isEmpty(), "импорт не <incoming:…> из include или без файла: " + bad);
     }
 
+    /**
+     * Каждая программа {@code core} в том виде, в каком её отдаёт ваниль (файлы {@code #moj_import} на их местах),
+     * проходит разбор и печать Veil (glsl-processor той версии, что в Veil из Sable сборки). Иначе Veil пишет ERROR
+     * «Couldn't load vanilla shader» и оставляет шейдер без своей пересборки. Так было с {@code fx_pall}: «#» в
+     * комментарии разбор считает меткой узла, с меткой печать берёт хеш каждой функции, а хеш {@code return;} без
+     * значения падает ({@code GlslReturnNode.hashCode}, NPE).
+     */
+    @Test
+    void veilPrintsEveryProgram() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        List<String> bad = new ArrayList<>();
+        int files = 0;
+        try (Stream<Path> list = Files.list(core)) {
+            for (Path p : list.filter(f -> f.toString().matches(".*\\.(fsh|vsh)")).sorted().toList()) {
+                files++;
+                String source = withImports(core.resolveSibling("include"), Files.readString(p), new HashSet<>());
+                try {
+                    io.github.ocelot.glslprocessor.api.GlslParser.preprocessParse(source, new java.util.HashMap<>()).toSourceString();
+                } catch (Exception | Error e) {
+                    bad.add(p.getFileName() + ": " + e);
+                }
+            }
+        }
+        assertTrue(files > 5, "шейдеров " + files);
+        assertTrue(bad.isEmpty(), "Veil не разбирает или не печатает: " + bad);
+    }
+
+    /** {@code #moj_import <incoming:имя>} — свой файл, {@code <имя>} — ванильный ({@code light.glsl}). */
+    private static final Pattern INCLUDE = Pattern.compile("\\s*#moj_import\\s*<(incoming:)?([\\w./]+)>");
+
+    /** Текст шейдера с файлами {@code #moj_import <…>} на их местах (каждый раз — один, как у ванили). */
     private static String withImports(Path include, String source, Set<String> seen) throws IOException {
-        return withImportsFrom(include, include.resolveSibling("core"), source, seen);
-    }
-
-    /** Quoted imports are relative to the importing file, as in Mojang's GlslPreprocessor. */
-    private static String withImportsFrom(Path include, Path local, String source, Set<String> seen) throws IOException {
-        Matcher m = Pattern.compile("(?m)^\\s*#moj_import\\s*(?:<incoming:([\\w./]+)>|\"([\\w:./]+)\")").matcher(source);
+        Matcher m = Pattern.compile("(?m)^" + INCLUDE.pattern()).matcher(source);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
             m.appendReplacement(out, "");
-            // A quoted import without a namespace means minecraft:, not the namespace of its parent shader.
-            if (m.group(2) != null && !m.group(2).startsWith("incoming:")) {
-                out.append(m.group());
+            if (m.group(1) == null) {
+                if (!seen.add("minecraft:" + m.group(2))) continue;
+                try (java.io.InputStream in = ShaderSourceTest.class.getResourceAsStream("/assets/minecraft/shaders/include/" + m.group(2))) {
+                    assertTrue(in != null, "нет ванильного include " + m.group(2));
+                    out.append(withImports(include, new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), seen));
+                }
                 continue;
             }
-            Path file = (m.group(1) != null ? include.resolve(m.group(1)) : local.resolve(m.group(2).substring("incoming:".length()))).normalize();
-            if (seen.add(file.toString())) out.append(withImportsFrom(include, file.getParent(), Files.readString(file), seen));
+            Path file = include.resolve(m.group(2)).normalize();
+            if (seen.add(file.toString())) out.append(withImports(include, Files.readString(file), seen));
         }
         m.appendTail(out);
         return out.toString();

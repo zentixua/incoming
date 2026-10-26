@@ -43,9 +43,9 @@ public final class NukePall {
     private static final float[] GLOW = new float[8];
     /** Числа стены пыли слота ({@link BlastWall#slot}) — в кадр и у камеры. */
     private static final float[] WALL = new float[BlastWall.SLOT], WALL_TICK = new float[BlastWall.SLOT];
-    /** Цвет толстой пыли ({@code DUST} в {@code fx_pall.fsh}, цвет стены пыли). */
+    /** Цвет толстой пыли ({@code DUST} в {@code fx_pall.glsl}, цвет стены пыли). */
     public static final double[] DUST = {0.60, 0.53, 0.45};
-    /** Цвет толстого дыма над пожарами ({@code SMOKE} в {@code fx_pall.fsh}) и пламени пожаров на экране ({@code FIRE}). */
+    /** Цвет толстого дыма над пожарами ({@code SMOKE} в {@code fx_pall.glsl}) и пламени пожаров на экране ({@code FIRE}). */
     static final double[] SMOKE = {0.30, 0.27, 0.24}, FIRE = {1.0, 0.541, 0.180};
     /** Асимметрия пыли после дельта-Эддингтона и альбедо пыли и дыма по каналам ({@code PALL_DUST_G}, {@code PALL_DUST_W}, {@code PALL_SMOKE_W}). */
     private static final double DUST_G = PallLight.truncated(PallLight.DUST_G);
