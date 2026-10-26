@@ -6,18 +6,19 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/warhead/**"
 ---
 
-# Sable (аппараты Create Aeronautics)
+# Sable (Create Aeronautics craft)
 
-## Подводные камни
-- Sable 2.0.5–2.0.6 роняет мир («Sub-level assembly attempted inside plot of already removed sub-level»), когда аппарат
-  после взрыва распадается на много кусков: кусок без массы удаляется, его плот сразу отдаётся следующему, и дробление
-  в этом плоте находит удалённый аппарат. Миксин `mixin/sable/SubLevelSplitGuardMixin` (`incoming.mixins.json`,
-  `required: false`: не вставший миксин — только предупреждение в логе, поэтому каждый проверяет свой GameTest) оборачивает `SubLevelHeatMapManager.split` и глотает только это
-  исключение (`compat/SplitGuard`); GameTest `sableSplitGuardApplied` проверяет, что он встал.
-- Sable на каждое изменение блока читает соседние блоки (физика аппаратов), у твёрдого соседа — и его соседей, до 2 блоков
-  (`NuclearTickets.SABLE_REACH`): менять блоки только там, где готовы и соседние чанки (`NuclearTickets.neighbourhoodLoaded`,
-  `aroundLoaded`), иначе он синхронно грузит соседа. Запись мимо `setBlock` (руины, слой вспышки) сообщает ему каждое
-  место сама (`SableTerrain.changed`) — то же правило: слой вспышки у аппарата без загруженных соседей не встаёт
-  (`FlashScorch`: до фона и снова перед записью — соседи могли уйти, пока он строился; GameTest
-  `flashLayerWaitsNeighboursAtCraft`, `flashLayerRechecksNeighboursBeforeWrite`), его приносят руины, которые соседей
-  дожидаются.
+## Pitfalls
+- Sable 2.0.5–2.0.6 crashes the world (“Sub-level assembly attempted inside plot of already removed sub-level”) when
+  a craft splits into many pieces after an explosion: a massless piece is removed, its plot is immediately reused by
+  the next one, and splitting in that plot finds the removed craft. Mixin `mixin/sable/SubLevelSplitGuardMixin`
+  (`incoming.mixins.json`, `required: false`: a mixin that fails to apply only logs a warning, so everyone checks their
+  own GameTest) wraps `SubLevelHeatMapManager.split` and swallows only this exception (`compat/SplitGuard`); GameTest
+  `sableSplitGuardApplied` checks that it applied.
+- On every block change Sable reads neighboring blocks (craft physics), and for a solid neighbor, its neighbors too,
+  up to 2 blocks (`NuclearTickets.SABLE_REACH`): change blocks only where adjacent chunks are also ready
+  (`NuclearTickets.neighbourhoodLoaded`, `aroundLoaded`), otherwise it loads a neighbor synchronously. Writes bypassing
+  `setBlock` (ruins, flash layer) notify it of each position themselves (`SableTerrain.changed`) — the same rule: the
+  flash layer at a craft is not placed without loaded neighbors (`FlashScorch`: before background work and again
+  before writing — neighbors may have left while it was built; GameTests `flashLayerWaitsNeighboursAtCraft`,
+  `flashLayerRechecksNeighboursBeforeWrite`); ruins, which wait for neighbors, bring it later.

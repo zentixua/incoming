@@ -1,19 +1,19 @@
-# AGENTS.md — для агентов кроме Claude Code (Codex и других)
+# AGENTS.md — for agents other than Claude Code (Codex and others)
 
-Правила проекта — в `CLAUDE.md` в корне и в файлах областей `.claude/rules/`. Они общие для всех, кто работает над
-модом, человек это или агент; здесь — только как их брать и чем работа другого агента отличается.
+Project rules live in the root `CLAUDE.md` and the area files in `.claude/rules/`. They apply to everyone working on
+the mod, human or agent; this file only explains how to load them and how other agents' work differs.
 
-- Перед работой прочитай `CLAUDE.md` целиком: люди, принципы физики и подачи, рабочий цикл, проверки, общие правила
-  кода.
-- Файлы областей сами не подгружаются. Перед тем как читать или править файлы, открой все файлы областей, чьи
-  `paths:` (шапка файла) их покрывают: путь часто входит в несколько областей. Список областей — в разделе «Файлы
-  правил `.claude/rules/`» `CLAUDE.md`; планируешь работу, ещё не открыв файлов, — прочитай файлы областей по
-  описаниям там же.
-- Где `CLAUDE.md` называет инструменты Claude Code (Read, Edit, Write), это о Claude Code; правило за ними то же и для
-  тебя.
+- Before working, read all of `CLAUDE.md`: people, physics and presentation principles, workflow, checks, and general
+  code rules.
+- Area files do not load automatically. Before reading or editing files, open every area file whose `paths:` (in the
+  header) covers them: a path often belongs to several areas. The list is in the “`.claude/rules/` files” section of
+  `CLAUDE.md`; when planning work before opening files, read the area files based on the descriptions there.
+- Where `CLAUDE.md` names Claude Code tools (Read, Edit, Write), it refers to Claude Code; the underlying rule applies
+  to you too.
 
-Чем отличается:
-- Ревью — один круг, моделью, которая код не писала, без разговора и выводов автора: по диффу и коду вокруг него, не
-  по описанию PR; видимое или слышимое игроку — ещё по кадрам и WAV из PR. Отмечай как блокирующие только серьёзные
-  ошибки (неверное поведение, падение, превышен бюджет тика или предел цены кадра), остальное — необязательными.
-- Коммит кончается строкой `Co-Authored-By:` своего агента (его имя и адрес), не чужой.
+Differences:
+- One review round, by a model that did not write the code, without the author's conversation or conclusions: use
+  the diff and surrounding code, not the PR description; for anything players see or hear, also use the PR's frames
+  and WAV files. Only serious errors block (wrong behavior, crashes, exceeding the tick budget or frame cost limit);
+  everything else is optional.
+- End the commit with a `Co-Authored-By:` line naming your own agent (its name and address), not another one.
