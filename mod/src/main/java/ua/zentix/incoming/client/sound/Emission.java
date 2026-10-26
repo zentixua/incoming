@@ -22,7 +22,7 @@ import ua.zentix.incoming.strike.Hearing;
 record Emission(double time, double x, double y, double z, double distance, double nx, double ny, double nz, Vec3 velocity,
                 double radial, double doppler, int phase, double phaseAge, double height, Propagation.Weather weather, boolean onboard,
                 Heard[] parts) {
-    /** Слушатель впереди снаряда, если тот идёт на него не дальше этого угла от курса; позади — с {@link #BEHIND_DEG}. */
+    /** Слушатель впереди снаряда, если тот идёт на него не дальше этого угла от курса; позади — с {@link #BEHIND_DEG} (⚠ оценка). */
     static final double AHEAD_DEG = 45, BEHIND_DEG = 100;
     private static final double AHEAD_COS = Math.cos(Math.toRadians(AHEAD_DEG)), BEHIND_COS = Math.cos(Math.toRadians(BEHIND_DEG));
 

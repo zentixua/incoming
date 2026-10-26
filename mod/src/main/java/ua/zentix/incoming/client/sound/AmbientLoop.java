@@ -13,9 +13,9 @@ import net.minecraft.world.phys.Vec3;
  * плавно. Хозяин перестал её вести (подрыв убран, повтор перемотан) — петля сама стихает и уходит.
  */
 public class AmbientLoop extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
-    /** На столько громкость подходит к цели за тик (за секунду — из тишины в полную). */
+    /** На столько громкость подходит к цели за тик (за секунду — из тишины в полную; подача). */
     private static final float SLEW = 0.05f;
-    /** Хозяин молчит столько тиков — петля уходит. */
+    /** Хозяин молчит столько тиков — петля уходит (бюджет: канал не висит за ушедшим хозяином). */
     private static final int ORPHAN = 10;
 
     private float slew;

@@ -19,9 +19,9 @@ import ua.zentix.incoming.registry.ModSounds;
  * Звук пробоя приходит со скоростью звука, громкость — по закону источника ({@link Sources}).
  */
 public final class GridEffects {
-    /** Дальше вспышка дуги не освещает экран. */
+    /** Дальше вспышка дуги не освещает экран (подача). */
     private static final double FLASH_RANGE = 240;
-    /** Голубовато-белый свет дуги и его синий край. */
+    /** Голубовато-белый свет дуги и его синий край (подача: у дуги линейчатый спектр). */
     private static final int ARC = 0xDCE8FF, ARC_EDGE = 0x5A7CFF;
 
     private static final RandomSource RANDOM = RandomSource.create();

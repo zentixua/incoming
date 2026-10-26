@@ -18,7 +18,7 @@ import ua.zentix.incoming.strike.Hearing;
 final class Booms {
     /** Длительность N-волны в записях {@code sonic.crack} и {@code sonic.boom}, с ({@code tools/build_sounds.py}). */
     static final double CRACK = 0.004, BOOM = 0.032;
-    /** Громкость 1 — с этого давления (1 psi), тише — на половину децибел давления, как у взрывов ({@code Outdoor}). */
+    /** Громкость 1 — с этого давления (1 psi, подача), тише — на половину децибел давления, как у взрывов ({@code Outdoor}). */
     static final double FULL_PA = 1000 * BlastModel.kpa(1);
 
     private Booms() {}
