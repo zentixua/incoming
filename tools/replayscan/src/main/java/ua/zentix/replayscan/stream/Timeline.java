@@ -9,16 +9,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Действия повтора по порядку с тиком, в котором их применяет сервер повтора. Тик сервера повтора t читает действия,
- * пока не встретит t-е {@code next_tick} ({@code ReplayServer.handleActions}): действие после (t−1)-го {@code next_tick}
- * применено в тике t, и в конце этого тика ({@code ServerTickEvent.Post}) мир повтора — уже с ним. Снимок первого
- * куска сервер ставит до первого тика (тик 0); снимок следующего — только с {@code forcePlaySnapshot}, когда чтение
- * доходит до этого куска (действия того же тика). Остальные снимки повторяют то, что у сервера уже есть, и не читаются.
+ * Replay actions in order, with the tick in which the replay server applies them. Replay server tick t reads actions
+ * until it encounters the t-th {@code next_tick} ({@code ReplayServer.handleActions}): an action after the (t−1)-th
+ * {@code next_tick} is applied in tick t, and at the end of that tick ({@code ServerTickEvent.Post}) the replay world
+ * already contains it. The server applies the first chunk snapshot before the first tick (tick 0); the next snapshot
+ * is applied only with {@code forcePlaySnapshot}, when reading reaches that chunk (actions of the same tick). Other
+ * snapshots repeat what the server already has and are not read.
  */
 public final class Timeline {
     public static final String NEXT_TICK = "flashback:action/next_tick";
 
-    /** Действие: тик, имя, тело — отрезком массива куска; {@code snapshot} — из снимка (состояние, а не событие). */
+    /** Action: tick, name, body as a slice of the chunk array; {@code snapshot} means it is from a snapshot (state, not an event). */
     public record Action(int tick, String name, byte[] data, int off, int len, boolean snapshot) {
         public Bytes body() {
             return new Bytes(data, off, off + len);
@@ -30,26 +31,26 @@ public final class Timeline {
     private int segment = -1;
     private SegmentData data;
     private Bytes in;
-    /** Читается снимок куска: до {@code data.actionsStart}. */
+    /** Reading a chunk snapshot: up to {@code data.actionsStart}. */
     private boolean snapshot;
-    /** Сколько {@code next_tick} прочитано. */
+    /** Number of {@code next_tick} actions read. */
     private int ticks;
 
     public Timeline(ReplayFile file) {
         this.file = file;
     }
 
-    /** Тиков пройдено: последнее прочитанное {@code next_tick}. */
+    /** Ticks elapsed: the last {@code next_tick} read. */
     public int ticks() {
         return ticks;
     }
 
-    /** Что в записи не сошлось (куски не той длины): Flashback на таком повторе останавливается. */
+    /** Recording inconsistencies (chunks of the wrong length): Flashback stops on such a replay. */
     public List<String> warnings() {
         return warnings;
     }
 
-    /** Следующее действие или {@code null} в конце записи. */
+    /** Next action, or {@code null} at the end of the recording. */
     public Action next() throws IOException {
         while (true) {
             if (in != null && in.remaining() > 0) return read();

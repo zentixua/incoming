@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RuinWorkersTest {
     /**
-     * Очередь пула руин: сперва задачи чанков, которые видит игрок, потом остальные у волны, потом дальние; внутри
-     * ступени — по постановке. Счёт задач ступени снимается и у задачи, брошенной до начала.
+     * Ruins pool queue: first the tasks of the chunks that the player sees, then the rest near the wave, then the distant ones; inside the
+     *  stage - according to setting. The count of level tasks is also removed from the task abandoned before the start.
      */
     @Test
     void queueGoesByPriorityThenByOrder() {

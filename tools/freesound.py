@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Оригиналы записей Freesound — файлы без потерь, как их загрузил автор, — для tools/build_sounds.py.
+"""Original Freesound recordings, lossless files as uploaded by the author, for tools/build_sounds.py.
 
-Превью Freesound — ogg с потерями; оригинал отдаётся только после входа в Freesound (OAuth2, API v2). Один раз:
+Freesound previews are lossy ogg; originals are served only after Freesound login (OAuth2, API v2). Once:
 
-  1. https://freesound.org/apiv2/apply — ключ API (Client id и Client secret);
+  1. https://freesound.org/apiv2/apply — API key (Client id and Client secret);
   2. FREESOUND_CLIENT_ID=… FREESOUND_CLIENT_SECRET=… python3 tools/freesound.py login
-     — печатает адрес входа; после входа Freesound показывает код, его вставить сюда.
+     — prints a login URL; after login Freesound shows a code to paste here.
 
-Вход хранится вне репозитория: ~/.config/incoming/freesound.json (или файл из FREESOUND_AUTH), токен живёт сутки
-и обновляется сам, если заданы FREESOUND_CLIENT_ID и FREESOUND_CLIENT_SECRET. Скачанные оригиналы лежат
-в tools/.sound-cache/orig/<id>.<тип>; когда оригинал уже скачан, вход не нужен.
+Login is stored outside the repository: ~/.config/incoming/freesound.json (or the FREESOUND_AUTH file). The token lasts
+a day and refreshes automatically if FREESOUND_CLIENT_ID and FREESOUND_CLIENT_SECRET are set. Downloaded originals
+are in tools/.sound-cache/orig/<id>.<type>; no login is needed once the original has been downloaded.
 
-  python3 tools/freesound.py fetch 251401 475780   — скачать оригиналы (для проверки и разбора записей)
+  python3 tools/freesound.py fetch 251401 475780   — download originals (for checking and analyzing recordings)
 """
 import json
 import os
@@ -30,7 +30,7 @@ AUTH = os.environ.get("FREESOUND_AUTH") or os.path.expanduser("~/.config/incomin
 def _client():
     cid, secret = os.environ.get("FREESOUND_CLIENT_ID"), os.environ.get("FREESOUND_CLIENT_SECRET")
     if not cid or not secret:
-        sys.exit("нужны FREESOUND_CLIENT_ID и FREESOUND_CLIENT_SECRET (ключ API: https://freesound.org/apiv2/apply)")
+        sys.exit("need FREESOUND_CLIENT_ID and FREESOUND_CLIENT_SECRET (key API: https://freesound.org/apiv2/apply)")
     return cid, secret
 
 
@@ -49,16 +49,16 @@ def _grant(**fields):
 
 def login():
     cid, _ = _client()
-    print("Войдите в Freesound и разрешите доступ:")
+    print("Log in to Freesound and allow access:")
     print(f"  {API}oauth2/authorize/?client_id={cid}&response_type=code")
-    code = input("код со страницы Freesound: ").strip()
+    code = input("code from page Freesound: ").strip()
     _grant(grant_type="authorization_code", code=code)
-    print("готово, вход сохранён в", AUTH)
+    print("done, login saved in", AUTH)
 
 
 def _token():
     if not os.path.exists(AUTH):
-        sys.exit("нет входа в Freesound: python3 tools/freesound.py login (см. tools/freesound.py)")
+        sys.exit("no entry to Freesound: python3 tools/freesound.py login (see tools/freesound.py)")
     with open(AUTH) as fh:
         tok = json.load(fh)
     if time.time() > tok.get("expires_at", 0):
@@ -67,7 +67,7 @@ def _token():
 
 
 def _get(path, token):
-    """Запрос к API; на «слишком часто» (429) Freesound просит подождать — ждём и повторяем."""
+    """Request to API; on “too often” (429) Freesound asks to wait - we wait and repeat."""
     req = urllib.request.Request(API + path, headers={"Authorization": "Bearer " + token})
     for attempt in range(8):
         try:
@@ -76,12 +76,12 @@ def _get(path, token):
             if e.code != 429 or attempt == 7:
                 raise
             wait = int(e.headers.get("Retry-After") or 60)
-            print(f"  Freesound просит подождать {wait} с")
+            print(f"  Freesound asks to wait {wait} s")
             time.sleep(wait)
 
 
 def original(fid):
-    """Путь к оригиналу записи fid; нет в кэше — скачать (нужен вход)."""
+    """Path to the original entry fid; not in cache - download (login required)."""
     os.makedirs(ORIG, exist_ok=True)
     for f in os.listdir(ORIG):
         if f.split(".")[0] == str(fid) and not f.endswith(".part"):
@@ -90,7 +90,7 @@ def original(fid):
     with _get(f"sounds/{fid}/?fields=type", token) as r:
         kind = json.load(r)["type"]
     path = os.path.join(ORIG, f"{fid}.{kind}")
-    print("  скачиваю оригинал", fid)
+    print("  downloading the original", fid)
     with _get(f"sounds/{fid}/download/", token) as r, open(path + ".part", "wb") as fh:
         while chunk := r.read(1 << 20):
             fh.write(chunk)

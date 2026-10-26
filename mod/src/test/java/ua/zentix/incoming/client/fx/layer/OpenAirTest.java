@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Окно наружного воздуха у глаза ({@link OpenAir}): по секциям, глаз — далеко от края при любом месте в секции. */
+/** Outside air window at the eye ({@link OpenAir}): by section, the eye is far from the edge at any location in the section. */
 class OpenAirTest {
-    /** Размер окна в шейдере ({@code pall.glsl}: {@code PALL_OPEN_SIZE}) — тот же, что у текстуры. */
+    /** The window size in the shader ({@code pall.glsl}: {@code PALL_OPEN_SIZE}) is the same as the texture. */
     @Test
     void shaderKnowsTheWindowSize() throws java.io.IOException {
         try (var in = OpenAirTest.class.getResourceAsStream("/assets/incoming/shaders/include/pall.glsl")) {
@@ -22,9 +22,9 @@ class OpenAirTest {
         for (int size : new int[]{OpenAir.SIZE_XZ, OpenAir.SIZE_Y}) {
             for (int eye = -100; eye <= 100; eye++) {
                 int start = OpenAir.start(eye, size);
-                assertEquals(0, Math.floorMod(start, 16), "окно — по секциям");
+                assertEquals(0, Math.floorMod(start, 16), "window - in sections");
                 assertTrue(eye - start >= size / 2 - 8 && start + size - 1 - eye >= size / 2 - 8,
-                        "глаз " + eye + " в окне " + start + "…" + (start + size - 1));
+                        "eye " + eye + " in the window " + start + "…" + (start + size - 1));
             }
         }
     }

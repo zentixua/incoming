@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Шум пелены: плитка без швов, каналы равномерны, форма клубов в среднем — 1; синий шум без сгустков. */
+/** Noise pall: tiles without seams, channels are uniform, billows shape on average - 1; blue noise without clots. */
 class PallNoiseTest {
     private static final int N = 32;
     private static final byte[] VOLUME = VolumeNoise.generate(N, 0x9A11L);
@@ -14,7 +14,7 @@ class PallNoiseTest {
         return (VOLUME[VolumeNoise.CHANNELS * ((Math.floorMod(z, N) * N + Math.floorMod(y, N)) * N + Math.floorMod(x, N)) + channel] & 255) / 255.0;
     }
 
-    /** Через край плитки соседние вокселы различаются не больше, чем внутри: повтор текстуры шва не даёт. */
+    /** Across the edge of the tile, neighboring voxels differ no more than inside them: a repeat of the seam texture does not result. */
     @Test
     void tileHasNoSeams() {
         for (int c = 0; c < VolumeNoise.CHANNELS; c++) {
@@ -25,11 +25,11 @@ class PallNoiseTest {
                     seam += Math.abs(at(0, y, z, c) - at(N - 1, y, z, c));
                 }
             }
-            assertTrue(seam < 1.6 * inside + 1e-9, "канал " + c + ": шов " + seam + " против " + inside);
+            assertTrue(seam < 1.6 * inside + 1e-9, "channel " + c + ": seam " + seam + " against " + inside);
         }
     }
 
-    /** Каналы — по рангу: равномерны, среднее — половина. */
+    /** Channels - by rank: uniform, average - half. */
     @Test
     void channelsAreUniform() {
         for (int c = 0; c < VolumeNoise.CHANNELS; c++) {
@@ -46,8 +46,8 @@ class PallNoiseTest {
     }
 
     /**
-     * Форма клубов в среднем по плитке — 1 при любой сплошности (густота пелены в среднем — густота поля), край — клочьями
-     * с просветами, середина — почти сплошная.
+     * The average shape of billows on a tile is 1 with any continuity (the thickness of the pall on average is the density of the field), the edge is in shreds
+     *  with gaps, the middle is almost solid.
      */
     @Test
     void shapeKeepsMeanDensity() {
@@ -60,16 +60,16 @@ class PallNoiseTest {
                 sum += s;
                 if (s < 0.05) empty++;
             }
-            assertEquals(1, sum / n, 0.04, "сплошность " + fill);
-            if (fill == 0) assertTrue(empty / n > 0.45, "край без просветов");
-            if (fill == 1) assertTrue(empty / n < 0.2, "середина в дырах");
+            assertEquals(1, sum / n, 0.04, "continuity " + fill);
+            if (fill == 0) assertTrue(empty / n > 0.45, "edge without gaps");
+            if (fill == 1) assertTrue(empty / n < 0.2, "the middle is in holes");
         }
     }
 
     /**
-     * Мелкие клубы ({@link VolumeNoise#detail}) в среднем — 1, и каскад «крупные × мелкие» (мелкие — плитка вчетверо
-     * мельче, как {@code coarseAt} и {@code fineAt} в {@code fx_pall.glsl}) — тоже: густота, а значит и видимость, — поля
-     * пелены.
+     * Small billows ({@link VolumeNoise#detail}) on average - 1, and a cascade of “large × small” (small ones - tiles
+     *  are four times smaller, like {@code coarseAt} and {@code fineAt} in {@code fx_pall.glsl}) - too: density, and therefore visibility, - fields
+     * veil.
      */
     @Test
     void detailKeepsMeanDensity() {
@@ -83,19 +83,19 @@ class PallNoiseTest {
     }
 
     /**
-     * Видимость в самой густой пыли (по таблице — 40 блоков): прямые лучи через клубы пелены (плитка 256 блоков у 15 кт,
-     * сплошная пыль) пропускают в среднем больше, чем ровная пыль той же средней густоты, — сквозь просветы видно дальше,
-     * до 70–100 блоков. Мелкие клубы внутри крупных её почти не меняют (меньше чем на десятую): они мельче луча
-     * и по нему усредняются.
+     * Visibility in the thickest dust (according to the table - 40 blocks): direct rays through the billows pall (tiles 256 blocks in 15 kt,
+     *  solid dust) transmit on average more than even dust of the same average density - you can see further through the gaps,
+     *  to 70–100 blocks. Small billows inside large ones hardly change it (by less than a tenth): they are smaller than the ray
+     *  and are averaged over it.
      */
     @Test
     void denseDustKeepsItsVisibility() {
         double coarse = visibility(false), cascade = visibility(true);
-        assertTrue(coarse > 60 && coarse < 100, "крупные клубы: видимость " + coarse);
-        assertEquals(coarse, cascade, 0.1 * coarse, "с мелкими клубами");
+        assertTrue(coarse > 60 && coarse < 100, "large bills: visibility " + coarse);
+        assertEquals(coarse, cascade, 0.1 * coarse, "with small billows");
     }
 
-    /** Видимость (блоки) по среднему пропусканию лучей по 40 блоков в самой густой пыли: 3,912 · 40 / −ln⟨T⟩. */
+    /** Visibility (blocks) based on average ray transmission over 40 blocks in the thickest dust: 3,912 · 40 / −ln⟨T⟩. */
     private static double visibility(boolean fine) {
         double sigma = 3.912 / 40, tile = 256, length = 40;
         java.util.Random random = new java.util.Random(7);
@@ -115,7 +115,7 @@ class PallNoiseTest {
         return length * 3.912 / -Math.log(sum / rays);
     }
 
-    /** Густота каскада в точке плитки (в вокселях): крупные клубы с краями втрое чаще и мелкие — вчетверо. */
+    /** Density of the cascade at a tile point (in voxels): large billows with edges are three times more frequent and small ones are four times more frequent. */
     private static double density(double x, double y, double z, double fill, boolean fine) {
         double shape = VolumeNoise.shape(trilinear(x, y, z, 0), trilinear(3.1 * x + 11.8, 3.1 * y + 3.5, 3.1 * z + 22.7, 1), fill);
         return fine ? shape * VolumeNoise.detail(trilinear(4 * x + 17, 4 * y + 9.3, 4 * z + 5.4, 0)) : shape;
@@ -134,7 +134,7 @@ class PallNoiseTest {
         return v;
     }
 
-    /** Синий шум: каждое значение одинаково часто, средние по блокам 4×4 — ровнее, чем у белого шума, втрое. */
+    /** Blue noise: each value is equally frequent, the average across blocks 4×4 is three times smoother than white noise. */
     @Test
     void blueNoiseIsEvenAndUnclumped() {
         int n = BlueNoise.SIZE;
@@ -154,6 +154,6 @@ class PallNoiseTest {
             }
         }
         double white = 255 / Math.sqrt(12) / 4;
-        assertTrue(Math.sqrt(var / blocks) < white / 2, "разброс " + Math.sqrt(var / blocks) + " против белого " + white);
+        assertTrue(Math.sqrt(var / blocks) < white / 2, "spread " + Math.sqrt(var / blocks) + " against white " + white);
     }
 }

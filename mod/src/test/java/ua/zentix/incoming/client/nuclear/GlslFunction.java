@@ -9,17 +9,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Функция GLSL из чисел в число: объявления {@code float a = …, b = …;}, {@code if (условие) return …;},
- * {@code return …;}; в выражениях — числа, переменные (у vec2 — {@code n.x}) и постоянные файла {@code const float}, + − * /,
- * сравнения, встроенные {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos} и
- * такие же функции того же файла.
+ * GLSL function from numbers to a number: declarations {@code float a = …, b = …;}, {@code if (condition) return …;},
+ * {@code return …;}; expressions contain numbers, variables ({@code n.x} for vec2), file {@code const float} constants,
+ * + − * /, comparisons, built-ins {@code smoothstep, clamp, mix, min, max, exp, log2, pow, abs, sqrt, sign, floor, fract, sin, cos},
+ * and similar functions from the same file.
  */
 public record GlslFunction(List<String> tokens, List<String> params, String source) {
     private static final Pattern TOKEN = Pattern.compile("\\s*(\\d+\\.?\\d*(?:[eE][-+]?\\d+)?|\\.\\d+|[A-Za-z_]\\w*(?:\\.[xyzw]+)?|<=|>=|==|[-+*/(),;{}<>=])");
 
-    /** Разобранные функции: тот же текст (тот же объект строки) и имя — та же функция; вложенные вызовы разбираются раз. */
+    /** Parsed functions: same text (same string object) and name - same function; nested calls are parsed once. */
     private static final Map<List<Object>, GlslFunction> PARSED = new java.util.concurrent.ConcurrentHashMap<>();
-    /** Постоянные файла {@code const float} так же. */
+    /** The file constants {@code const float} are the same. */
     private static final Map<List<Object>, Double> CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static GlslFunction parse(String source, String name) {
@@ -28,7 +28,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
 
     private static GlslFunction parseNew(String source, String name) {
         Matcher m = Pattern.compile("float\\s+" + name + "\\s*\\(([^)]*)\\)\\s*\\{").matcher(source);
-        if (!m.find()) throw new AssertionError("в шейдере нет float " + name);
+        if (!m.find()) throw new AssertionError("there is no float in the shader " + name);
         List<String> params = new ArrayList<>();
         for (String p : m.group(1).split(",")) {
             String[] w = p.strip().split("\\s+");
@@ -47,7 +47,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
             tokens.add(t.group(1));
             at = t.end();
         }
-        if (!body.substring(at).isBlank()) throw new AssertionError(name + ": не разобрать «" + body.substring(at).trim() + "»");
+        if (!body.substring(at).isBlank()) throw new AssertionError(name + ": can't make out \"" + body.substring(at).trim() + "»");
         return new GlslFunction(tokens, params, source);
     }
 
@@ -94,10 +94,10 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                         expect(";");
                         return v;
                     }
-                    default -> throw new AssertionError("не знаю инструкцию " + w);
+                    default -> throw new AssertionError("i don't know the instructions " + w);
                 }
             }
-            throw new AssertionError("нет return");
+            throw new AssertionError("no return");
         }
 
         private boolean condition() {
@@ -110,7 +110,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                 case ">" -> a > b;
                 case ">=" -> a >= b;
                 case "==" -> a == b;
-                default -> throw new AssertionError("не знаю сравнение " + op);
+                default -> throw new AssertionError("i don't know the comparison " + op);
             };
         }
 
@@ -149,20 +149,20 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
             return v;
         }
 
-        /** Постоянная файла {@code const float NAME = число;}. */
+        /** File constant {@code const float NAME = number;}. */
         private double constant(String name) {
             return CONSTANTS.computeIfAbsent(List.of(source, name), k -> {
                 Matcher m = Pattern.compile("const\\s+float\\s+" + Pattern.quote(name) + "\\s*=\\s*([^;]+);").matcher(source);
-                if (!m.find()) throw new AssertionError("нет переменной " + name);
+                if (!m.find()) throw new AssertionError("no variable " + name);
                 return Double.parseDouble(m.group(1).strip());
             });
         }
 
-        /** Встроенная функция или функция того же файла (её параметры — по порядку). */
+        /** A built-in function or a function of the same file (its parameters are in order). */
         private double function(String name, List<Double> a) {
             if (BUILTIN.contains(name)) return builtin(name, a);
             GlslFunction f = GlslFunction.parse(source, name);
-            if (f.params.size() != a.size()) throw new AssertionError(name + ": параметров " + f.params.size() + ", а дано " + a.size());
+            if (f.params.size() != a.size()) throw new AssertionError(name + ": parameters " + f.params.size() + ", and given " + a.size());
             Map<String, Double> args = new HashMap<>();
             for (int k = 0; k < a.size(); k++) args.put(f.params.get(k), a.get(k));
             return f.call(args);
@@ -188,12 +188,12 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
                 case "fract" -> a.get(0) - Math.floor(a.get(0));
                 case "sin" -> Math.sin(a.get(0));
                 case "cos" -> Math.cos(a.get(0));
-                default -> throw new AssertionError("не знаю функцию " + name);
+                default -> throw new AssertionError("i don't know the function " + name);
             };
         }
 
         private String next() {
-            if (i >= t.size()) throw new AssertionError("конец функции раньше времени");
+            if (i >= t.size()) throw new AssertionError("end of function early");
             return t.get(i++);
         }
 
@@ -207,7 +207,7 @@ public record GlslFunction(List<String> tokens, List<String> params, String sour
 
         private void expect(String w) {
             String got = next();
-            if (!got.equals(w)) throw new AssertionError("ждал «" + w + "», а там «" + got + "»");
+            if (!got.equals(w)) throw new AssertionError("waited \"" + w + "\", and there \"" + got + "»");
         }
     }
 }

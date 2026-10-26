@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Чтение базы Voxy отражением — на подделках его классов тех же имён ({@code src/test/java/me/cortex/voxy}). */
+/** Reading the Voxy database by reflection - on fakes of its classes of the same names ({@code src/test/java/me/cortex/voxy}). */
 class VoxyTerrainTest {
     private WorldEngine engine;
 
@@ -36,7 +36,7 @@ class VoxyTerrainTest {
     void voxy() {
         engine = new WorldEngine();
         WorldEngine.current = engine;
-        assertTrue(VoxyTerrain.init(VoxyTerrainTest.class.getClassLoader()), "классы Voxy 0.2.16 найдены");
+        assertTrue(VoxyTerrain.init(VoxyTerrainTest.class.getClassLoader()), "classes Voxy 0.2.16 found");
     }
 
     @AfterEach
@@ -44,7 +44,7 @@ class VoxyTerrainTest {
         WorldEngine.current = null;
     }
 
-    /** Блок в секции уровня {@code lvl} базы подделки: воксель по мировым координатам. */
+    /** Block in section of level {@code lvl} of the fake base: voxel in world coordinates. */
     private void put(int lvl, int x, int y, int z, int id) {
         int vx = x >> lvl, vy = y >> lvl, vz = z >> lvl;
         long[] s = engine.sections.computeIfAbsent(WorldEngine.key(lvl, vx >> 5, vy >> 5, vz >> 5), k -> new long[VoxyColumns.VOLUME]);
@@ -57,19 +57,19 @@ class VoxyTerrainTest {
         put(0, 5, 64, 7, grass);
         put(0, -40, 120, -3, grass);
         VoxyTerrain t = new VoxyTerrain(null, -64, 320);
-        assertTrue(t.active(), "мир Voxy есть");
-        assertNull(t.peek(5, 7), "до чтения в памяти ничего");
+        assertTrue(t.active(), "world Voxy is");
+        assertNull(t.peek(5, 7), "nothing in memory before reading");
         TerrainSource.Reader r = t.open(null, 0);
         assertNotNull(r);
         TerrainSource.Column c = r.column(5, 7);
         assertNotNull(c);
         assertEquals(65, c.height());
         assertEquals(MapColor.GRASS, c.color());
-        assertEquals(121, r.column(-40, -3).height(), "отрицательные координаты — свой столбец секций");
-        assertNull(r.column(6, 7), "Voxy этого не видел");
-        assertEquals(65, t.peek(5, 7).height(), "прочитанное — сразу из памяти");
-        assertEquals(0, engine.refs, "acquireRef и releaseRef парами");
-        assertEquals(engine.acquired, engine.released, "каждая секция отпущена");
+        assertEquals(121, r.column(-40, -3).height(), "negative coordinates - your section column");
+        assertNull(r.column(6, 7), "Voxy didn't see this");
+        assertEquals(65, t.peek(5, 7).height(), "read - immediately from memory");
+        assertEquals(0, engine.refs, "acquireRef and releaseRef in pairs");
+        assertEquals(engine.acquired, engine.released, "each section released");
     }
 
     @Test
@@ -79,11 +79,11 @@ class VoxyTerrainTest {
         put(0, 100, 70, 100, stone);
         VoxyTerrain t = new VoxyTerrain(null, -64, 320);
         assertTrue(t.active());
-        // плитка уровня 4 берёт воксель в 16 блоков, а не блочный
+        // tile level 4 takes a voxel in 16 blocks, not a block one
         assertEquals(VoxyColumns.height(4, 64), t.open(null, 4).column(100, 100).height());
-        assertEquals(VoxyColumns.height(4, 64), t.peek(100, 100).height(), "известна только грубая");
+        assertEquals(VoxyColumns.height(4, 64), t.peek(100, 100).height(), "only rough is known");
         t.open(null, 0).column(100, 100);
-        assertEquals(71, t.peek(100, 100).height(), "подробная — первой");
+        assertEquals(71, t.peek(100, 100).height(), "detailed - first");
     }
 
     @Test
@@ -94,8 +94,8 @@ class VoxyTerrainTest {
         assertTrue(t.active());
         TerrainSource.Reader r = t.open(null, 0);
         engine.live = false;
-        assertNull(r.column(0, 0), "мир Voxy закрыт под чтением — не знаем");
-        assertFalse(t.describe().contains("off"), "источник не выключен: найдёт мир заново");
+        assertNull(r.column(0, 0), "world Voxy is closed under reading - we don’t know");
+        assertFalse(t.describe().contains("off"), "the source is not turned off: will find the world again");
     }
 
     @Test
@@ -106,16 +106,16 @@ class VoxyTerrainTest {
         assertTrue(t.active());
         engine.broken = true;
         assertNull(t.open(null, 0).column(0, 0));
-        assertTrue(t.describe().startsWith("Voxy (world open)"), "мир живой — не забыт: " + t.describe());
-        assertFalse(t.describe().contains("failures 0;"), "сбой посчитан: " + t.describe());
+        assertTrue(t.describe().startsWith("Voxy (world open)"), "the living world is not forgotten: " + t.describe());
+        assertFalse(t.describe().contains("failures 0;"), "failure counted: " + t.describe());
     }
 
-    /** Перечитанная грубая сводка стала другой (воронка вдали) — подробные под ней уходят: лучи не берут рельеф до удара. */
+    /** The re-read rough summary became different (crater in the distance) - the detailed ones disappear below it: the rays do not take the relief before impact. */
     @Test
     void finerSummariesUnderAChangedCoarseOneAreDropped() {
         Map<Long, VoxyTerrain.Section> cache = new HashMap<>();
         VoxyTerrain.Section s = new VoxyTerrain.Section(new int[1024], 0, true);
-        // столбец уровня 4 (-1, 2): блоки -512..-1 по x, 1024..1535 по z
+        // level column 4 (-1, 2): blocks -512..-1 by x, 1024..1535 by z
         cache.put(VoxyTerrain.key(4, -1, 2), s);
         cache.put(VoxyTerrain.key(0, -16, 32), s);
         cache.put(VoxyTerrain.key(0, -1, 47), s);
@@ -124,28 +124,28 @@ class VoxyTerrainTest {
         cache.put(VoxyTerrain.key(0, 0, 32), s);
         cache.put(VoxyTerrain.key(0, -17, 32), s);
         VoxyTerrain.dropFiner(cache, 4, -1, 2);
-        assertTrue(cache.containsKey(VoxyTerrain.key(4, -1, 2)), "сама остаётся");
+        assertTrue(cache.containsKey(VoxyTerrain.key(4, -1, 2)), "stays on her own");
         assertFalse(cache.containsKey(VoxyTerrain.key(0, -16, 32)));
         assertFalse(cache.containsKey(VoxyTerrain.key(0, -1, 47)));
         assertFalse(cache.containsKey(VoxyTerrain.key(2, -4, 8)));
         assertFalse(cache.containsKey(VoxyTerrain.key(3, -2, 5)));
-        assertTrue(cache.containsKey(VoxyTerrain.key(0, 0, 32)) && cache.containsKey(VoxyTerrain.key(0, -17, 32)), "соседние — нет");
+        assertTrue(cache.containsKey(VoxyTerrain.key(0, 0, 32)) && cache.containsKey(VoxyTerrain.key(0, -17, 32)), "neighboring ones - no");
     }
 
     @Test
     void otherVoxyClassesTurnTheSourceOff() {
-        assertFalse(VoxyTerrain.init(new ClassLoader(null) {}), "классов нет — источника нет");
+        assertFalse(VoxyTerrain.init(new ClassLoader(null) {}), "no classes - no source");
         assertFalse(new VoxyTerrain(null, -64, 320).active());
     }
 
     @Test
     void scanAroundIsNearestFirstAndInsideTheRadius() {
         List<long[]> cols = VoxyTerrain.around(0, 0, 4, 2048);
-        assertTrue(cols.get(0)[2] < 512L * 512, "первым — столбец у игрока");
+        assertTrue(cols.get(0)[2] < 512L * 512, "first is the player's column");
         for (int i = 1; i < cols.size(); i++) assertTrue(cols.get(i)[2] >= cols.get(i - 1)[2]);
         for (long[] c : cols) assertTrue(c[2] <= 2048L * 2048);
-        // круг 2048 блоков столбцами по 512: около π·4² ≈ 50
-        assertTrue(cols.size() > 40 && cols.size() < 70, "столбцов " + cols.size());
+        // circle 2048 blocks in columns along 512: about π·4² ≈ 50
+        assertTrue(cols.size() > 40 && cols.size() < 70, "columns " + cols.size());
     }
 
     @Test
@@ -155,7 +155,7 @@ class VoxyTerrainTest {
         for (int i = -10; i < 10; i++) cache.put(VoxyTerrain.key(4, i, -3), s);
         assertEquals(0, VoxyTerrain.trim(cache, 0, 0, 20));
         assertEquals(20 - 9, VoxyTerrain.trim(cache, 0, 0, 10));
-        assertTrue(cache.containsKey(VoxyTerrain.key(4, 0, -3)) && cache.containsKey(VoxyTerrain.key(4, -1, -3)), "ближние остались");
-        assertFalse(cache.containsKey(VoxyTerrain.key(4, -10, -3)), "дальний ушёл");
+        assertTrue(cache.containsKey(VoxyTerrain.key(4, 0, -3)) && cache.containsKey(VoxyTerrain.key(4, -1, -3)), "neighbors remained");
+        assertFalse(cache.containsKey(VoxyTerrain.key(4, -10, -3)), "the distant one left");
     }
 }

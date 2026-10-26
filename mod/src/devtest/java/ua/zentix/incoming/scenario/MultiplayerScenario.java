@@ -13,11 +13,11 @@ import ua.zentix.incoming.client.hud.ClientFlights;
 import java.util.Locale;
 
 /**
- * Мультиплеер (tools/mp_scenario.sh): выделенный сервер и два клиента. {@code mp-a} (Alpha, оператор) бьёт по игроку
- * Bravo и по точке, пока снаряды летят — выходит и заходит снова; {@code mp-b} (Bravo, цель) выходит посреди подлёта
- * и возвращается. Проверяется, что сервер и клиенты это переживают: снаряды по ушедшей цели идут в последнюю
- * точку, владелец после возвращения снова видит свои полёты, в логах нет ошибок.
- * Время — тики клиента от старта (идут и в меню), шаги — по состоянию подключения.
+ * Multiplayer (tools/mp_scenario.sh): dedicated server and two clients. {@code mp-a} (Alpha, operator) hits the player
+ * Bravo and the point while the shells are flying - leaves and enters again; {@code mp-b} (Bravo, target) comes out in the middle approaching
+ *  and returning. It is checked that the server and clients are experiencing this: the shells on the departed target go to the last
+ *  point, the owner, after returning, sees his flights again, there are no errors in the logs.
+ *  Time - client tick from the start (also goes to the menu), steps - according to the connection state.
  */
 final class MultiplayerScenario {
     private static final String ADDRESS = "127.0.0.1:" + System.getProperty("incoming.mp.port", "25599");
@@ -29,7 +29,7 @@ final class MultiplayerScenario {
     private int leftAt = -1;
     private int lastConnect = -1000;
     private boolean fired;
-    /** Bravo: тик (от входа), когда в списке игроков появился Alpha. */
+    /** Bravo: tick (from the input) when Alpha appears in the list of players. */
     private int alphaSeen = -1;
 
     MultiplayerScenario(boolean attacker) {
@@ -43,10 +43,10 @@ final class MultiplayerScenario {
         boolean inGame = mc.player != null && mc.level != null;
         if (!inGame) {
             joinedAt = -1;
-            // сервер мог ещё не подняться, а после выхода — ждём паузу и заходим снова
+            // the server might not be up yet, and after logging out, wait for a pause and log in again
             boolean away = leftAt >= 0 && tick - leftAt < 200;
             if (!away && mc.screen != null && !(mc.screen instanceof ConnectScreen) && tick - lastConnect > 200) connect(mc);
-            if (tick > 12_000) finish(mc, "не зашёл на сервер");
+            if (tick > 12_000) finish(mc, "didn't login to the server");
             return;
         }
         if (joinedAt < 0) {
@@ -60,7 +60,7 @@ final class MultiplayerScenario {
         else targetStep(mc, t);
     }
 
-    /** Alpha: ждёт Bravo, бьёт по нему и по точке рядом, выходит посреди подлёта, возвращается и доживает до конца. */
+    /** Alpha: waits for Bravo, hits him and a point nearby, leaves in the middle of the approach, returns and survives to the end. */
     private void attackerStep(Minecraft mc, int t) {
         if (!fired && t >= 100 && mc.getConnection().getPlayerInfo("Bravo") != null) {
             fired = true;
@@ -74,7 +74,7 @@ final class MultiplayerScenario {
         if (rejoins == 1 && t == 1200) finish(mc, "done");
     }
 
-    /** Bravo: заходит, ждёт Alpha, выходит, пока снаряды к нему летят (Alpha бьёт через 5 с после входа), возвращается. */
+    /** Bravo: enters, waits for Alpha, leaves while shells are flying towards him (Alpha hits through 5 s after entering), returns. */
     private void targetStep(Minecraft mc, int t) {
         if (alphaSeen < 0 && mc.getConnection().getPlayerInfo("Alpha") != null) alphaSeen = t;
         if (rejoins == 0 && alphaSeen >= 0 && t == alphaSeen + 240) leave(mc);

@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Боевой клиент со всей сборкой хоста — без Prism и без окна на рабочем столе.
+"""Production client with the full host modpack, without Prism or a desktop window.
 
-Копирует из инстанса mods/ (кроме Incoming), config/, options.txt, shaderpacks/, resourcepacks/ и, по желанию, один
-мир в отдельный каталог; кладёт тестовую сборку мода со сценариями (./gradlew scenarioJar) и запускает Minecraft так,
-как его запускает Prism: те же библиотеки из каталога Prism и ForgeWrapper для NeoForge (meta/*.json). Клиент идёт во
-вложенном KWin (tools/nested_kwin.sh). Инстанс, его миры и настройки не меняются.
+Copies instance mods/ (except Incoming), config/, options.txt, shaderpacks/, resourcepacks/ and optionally one
+world to a separate directory; installs a test mod build with scenarios (./gradlew scenarioJar) and launches
+Minecraft as Prism does: same libraries from the Prism directory and ForgeWrapper for NeoForge (meta/*.json).
+Client runs inside nested KWin (tools/nested_kwin.sh). Instance, worlds and settings remain unchanged.
 
-  tools/prod_client.py <сценарий> [--world "New World (7)"] [--dir mod/run/prod] [--prop incoming.frametimes=true]
-  tools/prod_client.py --world "New World (7)" --quickplay [--without-incoming | --incoming-jar F] --seconds 180   (вход, A/B, готовый jar)
+  tools/prod_client.py <scenario> [--world "New World (7)"] [--dir mod/run/prod] [--prop incoming.frametimes=true]
+  tools/prod_client.py --world "New World (7)" --quickplay [--without-incoming | --incoming-jar F] --seconds 180   (join, A/B, ready jar)
   tools/prod_client.py commands --no-copy --dir mod/run/film/instance/minecraft --world greenfield-film \
-      --prop "incoming.commands=dh pregen status;chunky"   (готовая копия без перекопирования: проверить моды командами)
-      в incoming.commands через «;»: команды без «/», wait:N — ещё N тиков, 0…72000 (к паузе 40 после команды и 20
-      после снимка; другое N — строка в лог и шаг пропущен), shot:имя — снимок screenshots/имя_тик.png; в конце «SCENARIO done» и выход
-  tools/prod_client.py --world /путь/к/миру --dir D --copy-only   (только копия: поправить её настройки до запуска --no-copy)
-  tools/prod_client.py commands --no-copy --dir D --world мир --size 1920x1080 --video D/take.mkv --prop "incoming.commands=…"
-      (окно игры — в видео в реальном времени, tools/x11_record.py; звук — D/audio.wav, 48 кГц)
+      --prop "incoming.commands=dh pregen status;chunky"   (prepared copy without recopying: check mods with commands)
+      incoming.commands separates entries by ";": commands without "/", wait:N adds N ticks, 0…72000 (to the 40-tick pause after a command and 20
+      after a screenshot; other N logs a line and skips the step), shot:name captures screenshots/name_tick.png; ends with "SCENARIO done" and exit
+  tools/prod_client.py --world /path/to/world --dir D --copy-only   (copy only: adjust its settings before --no-copy launch)
+  tools/prod_client.py commands --no-copy --dir D --world world --size 1920x1080 --video D/take.mkv --prop "incoming.commands=…"
+      (game window to real-time video, tools/x11_record.py; audio: D/audio.wav, 48 kHz)
   → <dir>/logs/latest.log, <dir>/screenshots/, <dir>/crash-reports/
 
-Сценарий — как у tools/client_scenario.sh (свойство incoming.scenario); с --world сценарий получает имя мира
-в свойстве incoming.world и открывает его вместо нового. --world — имя мира игрока или путь к каталогу мира (копируется
-под своим именем каталога).
+Scenario matches tools/client_scenario.sh (incoming.scenario property); with --world, scenario receives world name
+in incoming.world and opens it instead of a new world. --world is the player's world name or a world directory
+path (copied under its directory name).
 """
 import argparse
 import glob
@@ -38,7 +38,7 @@ import paths  # noqa: E402
 
 
 def maven_path(name):
-    """group:artifact:version[:classifier][@ext] → путь в каталоге библиотек."""
+    """group:artifact:version[:classifier][@ext] → path in the library directory."""
     ext = "jar"
     if "@" in name:
         name, ext = name.split("@", 1)
@@ -49,7 +49,7 @@ def maven_path(name):
 
 
 def allowed(lib):
-    """Правила библиотеки Prism/Mojang для Linux: без правил — да, иначе последнее подходящее."""
+    """Library rules Prism/Mojang for Linux: no rules - yes, otherwise the last one is suitable."""
     rules = lib.get("rules")
     if not rules:
         return True
@@ -78,7 +78,7 @@ def copy_instance(dest, world):
     for d in ("config", "shaderpacks", "resourcepacks"):
         if os.path.isdir(os.path.join(mc, d)):
             shutil.copytree(os.path.join(mc, d), os.path.join(dest, d))
-    # клиент без окна: без паузы при потере фокуса и без экрана приветствия (ключи заменяются — повтор ломает загрузку)
+    # windowless client: no pause when focus is lost and no welcome screen (keys are replaced - retry breaks loading)
     override = {"pauseOnLostFocus": "false", "onboardAccessibility": "false"}
     with open(os.path.join(mc, "options.txt")) as f:
         lines = [ln.rstrip("\n") for ln in f if ln.split(":", 1)[0] not in override]
@@ -91,11 +91,11 @@ def copy_instance(dest, world):
 
 
 def no_idle(dest):
-    """Без простоя Dynamic FPS (он в сборке): по умолчанию через 300 с без ввода он держит 10–15 к/с «на батарее», а
-    ноутбук с пределом заряда («Not charging») для него на батарее — 25.10 сцены look_gate после 300 с шли ровно 15 к/с.
-    Сценарий ввода не даёт: простой в копии выключен (idle.timeout = 0), прочие настройки игрока — как есть. Старый ключ
-    idle_time Dynamic FPS при загрузке переносит в idle.timeout поверх нового (Serialization.upgradeIdleConfig, 3.11.4) —
-    его в копии нет."""
+    """Without idle Dynamic FPS (it is assembled): by default, through 300 s no input it keeps 10–15 f/s “on battery”, and
+     laptop with charge limit (“Not charging") for him on the battery - 25.10 scenes look_gate after 300 s went exactly 15 f/s.
+     The input script does not: simple copy is disabled (idle.timeout = 0), other settings player - as is. When loading, the old key
+    idle_time Dynamic FPS is transferred to idle.timeout on top of the new one (Serialization.upgradeIdleConfig, 3.11.4) -
+     is not in the copy."""
     path = os.path.join(dest, "config", "dynamic_fps.json")
     try:
         with open(path) as f:
@@ -114,7 +114,7 @@ def no_idle(dest):
 
 
 def world_name(world):
-    """Имя мира в копии: --world — имя мира игрока или путь к каталогу мира."""
+    """The name of the world in the copy: --world is the name of the player's world or the path to the world directory."""
     return os.path.basename(os.path.normpath(world))
 
 
@@ -136,7 +136,7 @@ def launch_args(dest, props, username, game_extra, extra_jvm=()):
         seen.add(key)
         p = os.path.join(libs, maven_path(lib["name"]))
         if not os.path.isfile(p):
-            sys.exit(f"нет библиотеки {p} — запусти инстанс один раз из Prism")
+            sys.exit(f"no library {p} - launch the instance once from Prism")
         cp.append(p)
     client_jar = os.path.join(libs, maven_path(mcm["mainJar"]["name"]))
     cp.append(client_jar)
@@ -158,46 +158,46 @@ def launch_args(dest, props, username, game_extra, extra_jvm=()):
            f"-Xlog:gc:file={os.path.join(dest, 'logs', 'gc.log')}:time,uptime"]
     jvm += [f"-D{k}={v}" for k, v in props.items()]
     jvm += mcm.get("+jvmArgs", [])
-    # свои аргументы — последними: из двух -Xmx JVM берёт последний
+    # its arguments - last: of the two -Xmx JVM takes the last one
     jvm += list(extra_jvm)
     return jvm + ["-cp", os.pathsep.join(cp), neo["mainClass"]] + game + game_extra
 
 
 def main():
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    ap.add_argument("scenario", nargs="?", help="сценарий (incoming.scenario); без него клиент просто идёт в меню или в --quickplay")
-    ap.add_argument("--world", help="скопировать этот мир игрока; со сценарием — открыть его")
-    ap.add_argument("--quickplay", action="store_true", help="сразу войти в --world средствами игры (quickPlaySingleplayer)")
-    ap.add_argument("--without-incoming", action="store_true", help="сборка хоста без Incoming (сравнение A/B)")
-    ap.add_argument("--incoming-jar", help="готовый jar мода (сборка CI или релиза) вместо тестовой сборки; без сценариев")
-    ap.add_argument("--prop", action="append", default=[], metavar="KEY=VALUE", help="свойство JVM, например incoming.frametimes=true")
+    ap.add_argument("scenario", nargs="?", help="script (incoming.scenario); without it the client simply goes to the menu or to --quickplay")
+    ap.add_argument("--world", help="copy this player's world; with the script - open it")
+    ap.add_argument("--quickplay", action="store_true", help="immediately enter --world using the game (quickPlaySingleplayer)")
+    ap.add_argument("--without-incoming", action="store_true", help="host modpack without Incoming (comparison A/B)")
+    ap.add_argument("--incoming-jar", help="ready-made jar mod (build CI or release) instead of a test build; no scripts")
+    ap.add_argument("--prop", action="append", default=[], metavar="KEY=VALUE", help="property JVM, for example incoming.frametimes=true")
     ap.add_argument("--jvm", action="append", default=[], metavar="ARG",
-                    help="аргумент JVM поверх обычных, например --jvm=-Xmx12G --jvm=-XX:+UseZGC --jvm=-XX:+ZGenerational")
-    ap.add_argument("--seconds", type=int, help="закрыть клиент через столько секунд (код выхода 143)")
+                    help="argument JVM over the usual ones, for example --jvm=-Xmx12G --jvm=-XX:+UseZGC --jvm=-XX:+ZGenerational")
+    ap.add_argument("--seconds", type=int, help="close the client after so many seconds (exit code 143)")
     ap.add_argument("--dir", default=os.path.join(paths.MOD, "run", "prod"))
     ap.add_argument("--no-copy", action="store_true",
-                    help="не копировать инстанс: запустить уже готовый каталог --dir (например копию для съёмки mod/run/film/instance/minecraft)")
+                    help="do not copy the instance: launch a ready-made directory --dir (for example, a copy for shooting mod/run/film/instance/minecraft)")
     ap.add_argument("--user", default="Dev")
-    ap.add_argument("--copy-only", action="store_true", help="только скопировать инстанс (и --world) в --dir и выйти")
-    ap.add_argument("--size", default="1280x720", metavar="WxH", help="окно игры (экран вложенного KWin — с запасом на рамку)")
+    ap.add_argument("--copy-only", action="store_true", help="just copy the instance (and --world) to --dir and exit")
+    ap.add_argument("--size", default="1280x720", metavar="WxH", help="game window (attached screen KWin - with extra frame)")
     ap.add_argument("--video", metavar="FILE.mkv",
-                    help="записать окно игры в реальном времени (tools/x11_record.py: куски FILE.NNN.mkv, отметки FILE.jsonl)")
+                    help="record the game window in real time (tools/x11_record.py: pieces FILE.NNN.mkv, marks FILE.jsonl)")
     a = ap.parse_args()
     if (a.without_incoming or a.incoming_jar) and a.scenario:
-        ap.error("сценарии идут из тестовой сборки Incoming: без неё сценария нет")
+        ap.error("the scripts come from the test assembly Incoming: without it there is no script")
     if a.quickplay and not a.world:
-        ap.error("--quickplay нужен --world")
+        ap.error("--quickplay needed --world")
     if a.copy_only and a.no_copy:
-        ap.error("--copy-only и --no-copy вместе не имеют смысла")
+        ap.error("--copy-only and --no-copy together do not make sense")
     width, _, height = a.size.partition("x")
     if not (width.isdigit() and height.isdigit()):
-        ap.error("--size: ширина x высота, например 1920x1080")
+        ap.error("--size: width x height, for example 1920x1080")
     dest = os.path.abspath(a.dir)
 
     if a.no_copy:
         if not os.path.isdir(os.path.join(dest, "mods")):
-            ap.error(f"--no-copy: в {dest} нет mods/")
-        # прошлый запуск мог оставить свою сборку мода — ровно одна, та, что кладётся ниже
+            ap.error(f"--no-copy: in {dest} no mods/")
+        # the previous launch could have left its mod assembly - exactly one, the one placed below
         for old in glob.glob(os.path.join(dest, "mods", "incoming-*.jar")):
             os.remove(old)
     else:
@@ -217,8 +217,8 @@ def main():
         props["incoming.scenario"] = a.scenario
         if a.world and not a.quickplay:
             props["incoming.world"] = world_name(a.world)
-    # окно игры — во весь экран вложенного KWin сразу: размер по умолчанию 854×480, а переход на полный экран
-    # во вложенном KWin не срабатывает (весь дубль остаётся 854×480)
+    # the game window is in the full screen of the nested KWin at once: the default size is 854×480, and switching to the full screen of
+    #  in the nested KWin does not work (the entire take remains 854×480)
     game_extra = ["--width", width, "--height", height]
     if a.quickplay:
         game_extra += ["--quickPlaySingleplayer", world_name(a.world)]
@@ -228,9 +228,9 @@ def main():
     with open(argfile, "w") as f:
         for arg in launch_args(dest, props, a.user, game_extra, a.jvm):
             f.write('"' + arg.replace("\\", "\\\\").replace('"', '\\"') + '"\n')
-    # звук — как у client_scenario.sh: драйвер OpenAL Soft «wave» пишет всё, что слышит клиент, в <dest>/audio.wav
-    # (звуковой сервер хоста клиенту закрыт nested_kwin.sh, так что только в файл)
-    # для видео — 48 кГц и без прошлого audio.wav: x11_record.py отмечает, когда файл появился
+    # sound - like client_scenario.sh: driver OpenAL Soft “wave” writes everything that the client hears in <dest>/audio.wav
+    #  (the host sound server is closed to the client nested_kwin.sh, so only in file)
+    #  for video - 48 kHz and without past audio.wav: x11_record.py marks when the file appeared
     audio = os.path.join(dest, "audio.wav")
     alsoft = os.path.join(dest, "alsoft.conf")
     with open(alsoft, "w") as f:
@@ -244,18 +244,18 @@ def main():
         game = f"python3 \"{os.path.join(tools, 'x11_record.py')}\" --out \"{os.path.abspath(a.video)}\" --size {width}x{height} --audio \"{audio}\" -- {game}"
     socket = "wayland-incoming-prod-" + os.path.basename(dest)
     cmd = f"sh -c 'cd \"{dest}\" && exec {game}'"
-    # экран KWin больше окна на рамку и запас: окно с рамкой во весь экран KWin ужал бы под экран
+    # the KWin screen is larger than the window with a frame and a margin: a window with a frame in the entire screen KWin would be squeezed under the screen
     screen = [str(int(width) + 128), str(int(height) + 192)]
     sys.exit(run_in_group([os.path.join(tools, "nested_kwin.sh"), socket, *screen, cmd],
                           {**os.environ, "ALSOFT_CONF": alsoft}, a.seconds))
 
 
 def run_in_group(argv, env, seconds):
-    """Запуск в своей сессии; по сроку, Ctrl+C, обрыву терминала и внешнему TERM гасится вся группа.
+    """Launch in your session; by deadline, Ctrl+C, terminal break and external TERM, the entire group is extinguished.
 
-    Клиент — внук nested_kwin.sh (dbus-run-session → kwin → sh → java): TERM одной обёртке оставляет его работать
-    дальше, одновременно со следующей проверкой. Гасим группу: TERM, через 20 с — KILL оставшимся (как rig_trap в
-    tools/rig_procs.sh). Код выхода: как у процесса; по сроку — 143; по сигналу — 128 + его номер.
+    Client - grandson nested_kwin.sh (dbus-run-session → kwin → sh → java): TERM one wrapper leaves it to work
+     further, simultaneously with the next check. We extinguish the group: TERM, through 20 s - KILL the remaining (as rig_trap in
+    tools/rig_procs.sh). Exit code: as for the process; by deadline - 143; by signal - 128 + its number.
     """
     for sig in STOP_SIGNALS:
         signal.signal(sig, _raise_stop)
@@ -271,7 +271,7 @@ def run_in_group(argv, env, seconds):
         code = 128 + e.signum
     finally:
         for sig in STOP_SIGNALS:
-            signal.signal(sig, signal.SIG_IGN)  # повторный Ctrl+C не обрывает уборку
+            signal.signal(sig, signal.SIG_IGN)  # repeated Ctrl+C does not interrupt cleaning
         if proc is not None:
             stop_group(proc)
     return code
@@ -291,7 +291,7 @@ def _raise_stop(signum, frame):
 
 
 def group_alive(pgid):
-    """Есть ли в группе живой процесс: по /proc/*/stat, зомби (Z) не в счёт — лидер остаётся зомби до wait()."""
+    """Is there a live process in the group: according to /proc/*/stat, zombies (Z) do not count - the leader remains a zombie until wait()."""
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
             continue
@@ -300,14 +300,14 @@ def group_alive(pgid):
                 stat = f.read()
         except OSError:
             continue
-        fields = stat[stat.rindex(")") + 2:].split()  # имя процесса в скобках может содержать пробелы
+        fields = stat[stat.rindex(")") + 2:].split()  # the process name in parentheses may contain spaces
         if fields[0] != "Z" and int(fields[2]) == pgid:
             return True
     return False
 
 
 def stop_group(proc):
-    """TERM всей группе процесса, через 20 с — KILL оставшимся; лидер пожинается в конце, чтобы номер группы не ушёл."""
+    """TERM to the entire process group, through 20 s - KILL to the remaining; the leader is reaped at the end so that the group number does not leave."""
     for sig, wait in ((signal.SIGTERM, 20), (signal.SIGKILL, 5)):
         if not group_alive(proc.pid):
             break

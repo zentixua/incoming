@@ -6,21 +6,21 @@
 #     "pillow>=10",
 # ]
 # ///
-"""Текстуры мода, нарисованные кодом (фиксированный сид — результат воспроизводим).
+"""Mod textures drawn in code (fixed seed for reproducible output).
 
   uv run tools/gen_textures.py   → mod/src/main/resources/assets/incoming/textures/…
 
-  item/strike_designator, item/geiger_counter — пиксель-арт 16×16 (сетка символов + палитра);
-  item/shahed, lancet, cruise_missile, grad_rockets, bunker_buster, icbm, nuclear_warhead — боеприпасы, тоже пиксель-арт;
-  mob_effect/radiation_sickness, mob_effect/burns — значки эффектов 18×18;
-  block/trinitite — оплавленный зелёный песок 16×16, бесшовный;
-  block/substation_* — трансформаторная подстанция 16×16 (бак, фасад с табличкой, радиатор, изолятор, плита) и обгоревшие;
-  block/fixed_launcher_* — стационарная пусковая 16×16 (тумба с люком, верх с кольцом поворотного круга, низ);
-  block/sam_* — ЗРК 16×16 (шасси с жалюзи, борт контейнеров, торец с крышками четырёх труб, верх, решётка радара);
-  item/interceptor — зенитная ракета 16×16;
-  nuke/puffs — атлас 4×2 клубов гриба по 64×64 (почти серые: цвет даёт рендерер),
-  nuke/rain — лист капель чёрного дождя 64×256 (бесшовный по вертикали); круглое свечение — формулой в шейдере nuke_flare.
-Нужны Pillow и numpy.
+  item/strike_designator, item/geiger_counter — 16×16 pixel art (character grid + palette);
+  item/shahed, lancet, cruise_missile, grad_rockets, bunker_buster, icbm, nuclear_warhead — ammunition, also pixel art;
+  mob_effect/radiation_sickness, mob_effect/burns — 18×18 effect icons;
+  block/trinitite — 16×16 fused green sand, seamless;
+  block/substation_* — 16×16 transformer substation (tank, front with sign, radiator, insulator, slab) and burnt variants;
+  block/fixed_launcher_* — 16×16 fixed launcher (pedestal with hatch, top with turntable ring, bottom);
+  block/sam_* — 16×16 SAM (chassis with louvers, container side, end with four tube covers, top, radar grid);
+  item/interceptor — 16×16 interceptor missile;
+  nuke/puffs — 4×2 atlas of mushroom billows, 64×64 each (nearly gray: renderer supplies color),
+  nuke/rain — 64×256 black-rain drop sheet (vertically seamless); circular glow is a formula in the nuke_flare shader.
+Requires Pillow and numpy.
 """
 import os
 
@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "mod", "src", "main", "resources", "assets", "incoming", "textures")
 rng = np.random.default_rng(7)
 
-# Пульт наведения: защитный корпус, два объектива дальномера, экран с прицельной маркой, красная кнопка пуска
+# Aiming panel: protective housing, two rangefinder lenses, screen with reticle, red launch button
 DESIGNATOR = [
     "................",
     "..KKKK....KKKK..",
@@ -52,34 +52,34 @@ DESIGNATOR = [
 ]
 PALETTE = {
     ".": (0, 0, 0, 0),
-    "K": (24, 26, 22, 255),     # контур
-    "O": (86, 98, 58, 255),     # корпус (олива)
-    "o": (64, 74, 44, 255),     # тень корпуса
-    "L": (60, 62, 66, 255),     # оправа объектива
-    "G": (120, 190, 220, 255),  # стекло
-    "D": (30, 34, 30, 255),     # рамка экрана
-    "S": (40, 90, 50, 255),     # экран
-    "X": (140, 255, 140, 255),  # прицельная марка
-    "R": (220, 40, 30, 255),    # кнопка пуска / стрелка
-    "Y": (206, 174, 44, 255),   # корпус счётчика
-    "y": (150, 124, 32, 255),   # тень корпуса
-    "W": (232, 230, 212, 255),  # шкала
-    "g": (70, 62, 34, 255),     # решётка динамика
-    "n": (44, 44, 46, 255),     # ручки
-    "M": (196, 200, 206, 255),  # трубка датчика
-    "m": (118, 124, 134, 255),  # тень трубки
-    "H": (46, 46, 50, 255),     # рукоять датчика
-    "c": (30, 30, 30, 255),     # витой шнур
-    "B": (250, 214, 40, 255),   # знак радиации: жёлтый
-    "b": (20, 20, 20, 255),     # знак радиации: чёрный
-    "F": (255, 214, 90, 255),   # пламя: ядро
-    "f": (240, 120, 30, 255),   # пламя
-    "r": (170, 40, 20, 255),    # пламя: край
-    "A": (182, 180, 170, 255),  # планер шахеда (серо-бежевый)
-    "a": (126, 124, 116, 255),  # тень планера
+    "K": (24, 26, 22, 255),     # outline
+    "O": (86, 98, 58, 255),     # body (olive)
+    "o": (64, 74, 44, 255),     # body shadow
+    "L": (60, 62, 66, 255),     # lens frame
+    "G": (120, 190, 220, 255),  # glass
+    "D": (30, 34, 30, 255),     # screen frame
+    "S": (40, 90, 50, 255),     # screen
+    "X": (140, 255, 140, 255),  # aiming mark
+    "R": (220, 40, 30, 255),    # launch button/arrow
+    "Y": (206, 174, 44, 255),   # meter housing
+    "y": (150, 124, 32, 255),   # body shadow
+    "W": (232, 230, 212, 255),  # scale
+    "g": (70, 62, 34, 255),     # speaker grille
+    "n": (44, 44, 46, 255),     # pens
+    "M": (196, 200, 206, 255),  # sensor tube
+    "m": (118, 124, 134, 255),  # tube shadow
+    "H": (46, 46, 50, 255),     # sensor handle
+    "c": (30, 30, 30, 255),     # twisted cord
+    "B": (250, 214, 40, 255),   # radiation sign: yellow
+    "b": (20, 20, 20, 255),     # radiation sign: black
+    "F": (255, 214, 90, 255),   # flame: core
+    "f": (240, 120, 30, 255),   # flame
+    "r": (170, 40, 20, 255),    # flame: edge
+    "A": (182, 180, 170, 255),  # shahed glider (grey-beige)
+    "a": (126, 124, 116, 255),  # glider shadow
 }
 
-# Значок ожогов 18×18: язык пламени
+# Burn icon 18×18: flames
 BURNS_ICON = [
     "..................",
     "........r.........",
@@ -101,7 +101,7 @@ BURNS_ICON = [
     "..................",
 ]
 
-# Счётчик Гейгера: жёлтый корпус с ручкой, шкала со стрелкой, динамик, датчик на витом шнуре
+# Geiger counter: yellow body with handle, scale with arrow, speaker, sensor on a twisted cord
 GEIGER = [
     "................",
     ".............KK.",
@@ -121,8 +121,8 @@ GEIGER = [
     ".KKKKKKKKK......",
 ]
 
-# Боеприпасы пульта: все носом вверх (бомба — вниз), контур K, без мелочей — читаются в слоте инвентаря
-SHAHED = [  # треугольное крыло, кили на концах, толкающий винт сзади
+# Remote control ammunition: all nose up (bomb down), outline K, no small details - read in inventory slot
+SHAHED = [  # delta wing, fins at the ends, pusher propeller at the rear
     "................",
     ".......KK.......",
     "......KAAK......",
@@ -140,7 +140,7 @@ SHAHED = [  # треугольное крыло, кили на концах, т�
     "......KnnK......",
     ".......nn.......",
 ]
-LANCET = [  # цилиндр с двумя крестами крыльев, винт сзади
+LANCET = [  # cylinder with two wing crosses, screw at the back
     "................",
     ".......KK.......",
     "......KOOK......",
@@ -158,7 +158,7 @@ LANCET = [  # цилиндр с двумя крестами крыльев, ви
     "......KnnK......",
     ".......nn.......",
 ]
-CRUISE_MISSILE = [  # серый корпус, сложенные крылья, оперение, факел турбины
+CRUISE_MISSILE = [  # gray body, folded wings, tail, turbine flare
     "................",
     ".......KK.......",
     "......KMMK......",
@@ -176,7 +176,7 @@ CRUISE_MISSILE = [  # серый корпус, сложенные крылья, 
     "....KK.FF.KK....",
     ".......ff.......",
 ]
-GRAD_ROCKETS = [  # пакет труб спереди: в каждой — головка снаряда
+GRAD_ROCKETS = [  # package of pipes in front: each contains a projectile head
     "................",
     ".KKKKKKKKKKKKKK.",
     ".KOOOOOOOOOOOOK.",
@@ -194,7 +194,7 @@ GRAD_ROCKETS = [  # пакет труб спереди: в каждой — го
     "..Kn........nK..",
     "................",
 ]
-BUNKER_BUSTER = [  # толстая бомба носом вниз: оперение, жёлтый поясок, стальной нос
+BUNKER_BUSTER = [  # thick nose-down bomb: plumage, yellow belt, steel nose
     "....KK....KK....",
     "....KoK..KoK....",
     "....KooKKooK....",
@@ -212,7 +212,7 @@ BUNKER_BUSTER = [  # толстая бомба носом вниз: оперен
     "......KMmK......",
     ".......KK.......",
 ]
-ICBM = [  # белая ракета с чёрной головной частью, ступени, стабилизаторы, факел
+ICBM = [  # white rocket with a black head, stages, stabilizers, torch
     ".......KK.......",
     "......KbbK......",
     "......KbbK......",
@@ -230,7 +230,7 @@ ICBM = [  # белая ракета с чёрной головной часть�
     "......FFFF......",
     ".......ff.......",
 ]
-NUCLEAR_WARHEAD = [  # головная часть: конус с жёлто-чёрным знаком
+NUCLEAR_WARHEAD = [  # head part: cone with yellow and black mark
     "................",
     ".......KK.......",
     "......KMMK......",
@@ -269,12 +269,12 @@ def paint(rows, name):
 
 
 def rgba(rgb, a):
-    """Массивы цвета (h, w, 3) и прозрачности (h, w) в 0..1 → картинка RGBA."""
+    """Arrays of color (h, w, 3) and transparency (h, w) in 0..1 → picture RGBA."""
     return Image.fromarray(np.uint8(np.clip(np.dstack([rgb, a]), 0, 1) * 255 + 0.5), "RGBA")
 
 
 def pnoise(size, beta):
-    """Периодический (бесшовный) шум 1/f^beta через БПФ, в 0..1."""
+    """Periodic (seamless) noise 1/f^beta via FFT, in 0..1."""
     X = np.fft.fft2(rng.standard_normal((size, size)))
     k = np.fft.fftfreq(size) * size
     X /= np.maximum(np.hypot(*np.meshgrid(k, k)), 1) ** beta
@@ -288,12 +288,12 @@ def smooth(e0, e1, x):
 
 
 def gradient(v, stops):
-    """Цвет по опорным точкам [(v, (r, g, b)), …], v и компоненты в 0..1."""
+    """Color by reference points [(v, (r, g, b)), ...], v and components in 0..1."""
     return np.dstack([np.interp(v, [p for p, _ in stops], [c[i] for _, c in stops]) for i in range(3)])
 
 
 def puff(N=64):
-    """Клуб дыма: основной ком и несколько бугров, внутри «кипящий» шум, свет сверху; края прозрачные."""
+    """billows of smoke: main lump and several mounds, “boiling” noise inside, light from above; the edges are transparent."""
     u, v = np.meshgrid(np.linspace(-1, 1, N), np.linspace(-1, 1, N))
     d = np.exp(-(u ** 2 + v ** 2) / (2 * 0.42 ** 2))
     for _ in range(rng.integers(5, 10)):
@@ -302,13 +302,13 @@ def puff(N=64):
         d += rng.uniform(0.5, 0.9) * np.exp(-((u - r * np.cos(a)) ** 2 + (v - r * np.sin(a)) ** 2) / (2 * sg ** 2))
     d = d / d.max() * (0.7 + 0.6 * pnoise(N, 1.7)) * smooth(0.0, 0.3, 0.98 - np.hypot(u, v))
     alpha = smooth(0.05, 0.5, d) * 0.95
-    shade = np.gradient(d, axis=0) * N / 4  # склоны, повёрнутые вверх (плотность растёт вниз), светлее
+    shade = np.gradient(d, axis=0) * N / 4  # slopes turned upward (density increases downwards) are lighter
     lum = np.clip(0.8 + 0.25 * shade + 0.1 * (pnoise(N, 1.2) - 0.5), 0.6, 1.0)
     return rgba(np.dstack([lum] * 3), alpha)
 
 
 def trefoil(N=18):
-    """Значок лучевой болезни: знак радиации (трилистник) на жёлтом круге, пиксели по полярным координатам."""
+    """Radiation sickness icon: radiation sign (trefoil) on a yellow circle, pixels in polar coordinates."""
     img = Image.new("RGBA", (N, N))
     c = (N - 1) / 2
     for y in range(N):
@@ -318,7 +318,7 @@ def trefoil(N=18):
             if r > c + 0.3:
                 continue
             ang = np.degrees(np.arctan2(dy, dx)) % 360
-            # лепестки с центрами на 30°, 150° и 270°, по 60°
+            # petals with centers at 30°, 150° and 270°, according to 60°
             blade = any(abs((ang - a + 180) % 360 - 180) <= 30 for a in (30, 150, 270)) and 2.6 <= r <= c - 1.2
             dark = r <= 1.5 or blade
             img.putpixel((x, y), PALETTE["b"] if dark else PALETTE["B"])
@@ -326,7 +326,7 @@ def trefoil(N=18):
 
 
 def rain_sheet(w=64, h=256, drops=46):
-    """Чёрный дождь: лист тонких капель, бесшовный по вертикали (цвет даёт рендерер — здесь почти белые штрихи)."""
+    """Black rain: a sheet of thin drops, seamless vertically (the color is provided by the renderer - there are almost white strokes here)."""
     a = np.zeros((h, w))
     rgb = np.ones((h, w, 3)) * 0.9
     for _ in range(drops):
@@ -336,7 +336,7 @@ def rain_sheet(w=64, h=256, drops=46):
         for k in range(length):
             f = k / length
             a[(y0 + k) % h, x] = max(a[(y0 + k) % h, x], 0.25 + 0.75 * f ** 1.5)
-        # тяжёлая маслянистая голова капли
+        # heavy oily drop head
         a[(y0 + length) % h, x] = 1.0
         if x + 1 < w:
             a[(y0 + length) % h, x + 1] = max(a[(y0 + length) % h, x + 1], 0.5)
@@ -344,11 +344,11 @@ def rain_sheet(w=64, h=256, drops=46):
 
 
 def trinitite(N=16):
-    """Тринитит: стекловидный зелёно-серый сплав песка, пузырьки с бликом, светлые и тёмные вкрапления; бесшовный."""
+    """Trinitite: glassy green-gray alloy of sand, bubbles with reflections, light and dark inclusions; seamless."""
     shades = np.array([(58, 74, 60), (72, 92, 72), (88, 110, 84), (104, 128, 96), (126, 150, 112)]) / 255
     idx = np.clip((pnoise(N, 1.2) + 0.25 * rng.random((N, N))) / 1.25 * len(shades), 0, len(shades) - 1).astype(int)
     rgb = shades[idx]
-    for _ in range(4):  # пузырёк: тёмная точка, блик слева сверху (с переносом через край)
+    for _ in range(4):  # bubble: dark dot, highlight on the top left (with transfer over the edge)
         x, y = rng.integers(0, N, 2)
         rgb[y, x] = (40 / 255, 52 / 255, 44 / 255)
         rgb[(y - 1) % N, (x - 1) % N] = (150 / 255, 176 / 255, 140 / 255)
@@ -358,21 +358,21 @@ def trinitite(N=16):
     return rgba(rgb, np.ones((N, N)))
 
 
-# ---------------------------------------------------------------- подстанция (свой генератор: прежние текстуры не меняются)
+# ---------------------------------------------------------------- substation (its own generator: the previous textures do not change)
 
 srng = np.random.default_rng(11)
-STEEL = np.array((104, 116, 106)) / 255     # крашеная сталь бака (серо-зелёная, как у трансформаторов)
+STEEL = np.array((104, 116, 106)) / 255     # painted steel tank (gray-green, like transformers)
 CONCRETE = np.array((150, 148, 142)) / 255
 
 
 def speckle(base, N=16, amount=0.06):
-    """Ровная краска с мелкой неровностью, бесшовно."""
+    """Smooth paint with small unevenness, seamless."""
     n = pnoise(N, 1.0) - 0.5
     return np.clip(base[None, None, :] * (1 + amount * 2 * n[..., None]) + amount * 0.3 * (srng.random((N, N, 1)) - 0.5), 0, 1)
 
 
 def substation_side(N=16):
-    """Стенка бака: краска, рёбра жёсткости через 5 пикселей, светлая кромка сверху, тёмная снизу."""
+    """Tank wall: paint, stiffening ribs through 5 pixels, light edge on top, dark on bottom."""
     rgb = speckle(STEEL)
     for x in (2, 7, 12):
         rgb[:, x] *= 1.18
@@ -383,7 +383,7 @@ def substation_side(N=16):
 
 
 def substation_front(N=16):
-    """Фасад: дверца с петлями и ручкой, жёлтый треугольник «Осторожно, электрическое напряжение» с молнией."""
+    """Front: door with hinges and handle, yellow triangle “Caution, electrical voltage” with lightning."""
     rgb = speckle(STEEL)
     rgb[0] *= 1.25
     rgb[-1] *= 0.7
@@ -391,8 +391,8 @@ def substation_front(N=16):
     rgb[2:15, 13] *= 0.75
     rgb[2, 2:14] *= 0.75
     rgb[14, 2:14] *= 0.75
-    rgb[4, 3] = rgb[11, 3] = (0.3, 0.32, 0.3)             # петли
-    rgb[8:10, 12] = (0.2, 0.2, 0.2)                        # ручка
+    rgb[4, 3] = rgb[11, 3] = (0.3, 0.32, 0.3)             # loops
+    rgb[8:10, 12] = (0.2, 0.2, 0.2)                        # pen
     sign = ["....KK....",
             "....KK....",
             "...KYYK...",
@@ -411,7 +411,7 @@ def substation_front(N=16):
 
 
 def substation_top(N=16):
-    """Крышка: краска, заклёпки по краю."""
+    """Cover: paint, rivets around the edge."""
     rgb = speckle(STEEL * 1.08)
     for k in range(1, 16, 4):
         for y, x in ((1, k), (14, k), (k, 1), (k, 14)):
@@ -420,7 +420,7 @@ def substation_top(N=16):
 
 
 def substation_fins(N=16):
-    """Радиатор: частые вертикальные рёбра со светом и тенью."""
+    """Radiator: frequent vertical fins with light and shadow."""
     rgb = speckle(STEEL, amount=0.04)
     for x in range(N):
         rgb[:, x] *= (1.2, 1.0, 0.72)[x % 3]
@@ -428,7 +428,7 @@ def substation_fins(N=16):
 
 
 def substation_insulator(N=16):
-    """Изолятор ввода: коричневый глазурованный фарфор юбками — светлый край, тень под ним; сверху контакт."""
+    """Input insulator: brown glazed porcelain with skirts - light edge, shadow underneath; top contact."""
     rgb = np.zeros((N, N, 3))
     glaze = np.array((0.46, 0.2, 0.1))
     for y in range(N):
@@ -441,7 +441,7 @@ def substation_insulator(N=16):
 
 
 def substation_base(N=16):
-    """Бетонная плита с порами."""
+    """Concrete slab with pores."""
     rgb = speckle(CONCRETE, amount=0.08)
     for _ in range(8):
         x, y = srng.integers(0, N, 2)
@@ -450,7 +450,7 @@ def substation_base(N=16):
 
 
 def burnt(rgb, N=16):
-    """Выгоревшая: копоть пятнами (чёрное к низу и к центру взрыва), вздутая краска, ржавые подтёки."""
+    """Burnt out: soot in spots (black towards the bottom and towards the center of the explosion), swollen paint, rusty smudges."""
     soot = pnoise(N, 1.4)
     k = np.clip(0.25 + 0.55 * soot, 0, 1)[..., None]
     out = rgb * k
@@ -469,20 +469,20 @@ def substation():
     save(rgba(rgb, np.ones(rgb.shape[:2])), "block/substation_base")
 
 
-# ---------------------------------------------------------------- ЗРК (свой генератор: прежние текстуры не меняются)
+# ---------------------------------------------------------------- SAM (own generator: old textures do not change)
 
-OLIVE = np.array((86, 98, 58)) / 255         # защитная краска, как у пульта
+OLIVE = np.array((86, 98, 58)) / 255         # protective paint, like the remote control
 zrng = np.random.default_rng(13)
 
 
 def olive(N=16, amount=0.06):
-    """Защитная краска с мелкой неровностью, бесшовно."""
+    """Protective paint with fine unevenness, seamless."""
     n = pnoise(N, 1.0) - 0.5
     return np.clip(OLIVE[None, None, :] * (1 + amount * 2 * n[..., None]) + amount * 0.3 * (zrng.random((N, N, 1)) - 0.5), 0, 1)
 
 
 def sam_base(N=16):
-    """Шасси: жалюзи двигателя (тёмные щели со светлой кромкой), снизу — тень и грязь."""
+    """Chassis: engine shutters (dark slits with a light edge), shadow and dirt below."""
     rgb = olive()
     for y in (3, 6, 9):
         rgb[y, 2:14] *= 0.45
@@ -493,7 +493,7 @@ def sam_base(N=16):
 
 
 def sam_side(N=16):
-    """Борт пакета контейнеров: продольные рёбра, хомуты, жёлтая трафаретная полоса."""
+    """The side of the container package: longitudinal ribs, clamps, yellow stencil strip."""
     rgb = olive()
     for y in (0, 5, 10, 15):
         rgb[y] *= 0.7
@@ -505,7 +505,7 @@ def sam_side(N=16):
 
 
 def sam_tubes(N=16):
-    """Торец пакета: четыре трубы 2×2 под крышками — тёмный круг с кольцом и крестом крышки."""
+    """The end of the package: four pipes 2×2 under the covers - a dark circle with a ring and a cross on the cover."""
     rgb = olive() * 0.9
     yy, xx = np.mgrid[0:N, 0:N] + 0.5
     for cy in (4.5, 11.5):
@@ -518,7 +518,7 @@ def sam_tubes(N=16):
 
 
 def sam_top(N=16):
-    """Верх: люк с петлями и заклёпки по краю."""
+    """Top: hatch with hinges and rivets around the edge."""
     rgb = olive() * 1.05
     rgb[4:12, 4] *= 0.6
     rgb[4:12, 11] *= 0.6
@@ -532,7 +532,7 @@ def sam_top(N=16):
 
 
 def sam_radar(N=16):
-    """Полотно радара: решётка излучателей (тёмные квадраты в светлой сетке), рамка."""
+    """Radar canvas: array of emitters (dark squares in a light grid), frame."""
     base = np.array((70, 78, 66)) / 255
     rgb = np.clip(base[None, None, :] * (1 + 0.08 * (zrng.random((N, N, 1)) - 0.5)), 0, 1)
     for y in range(1, N - 1):
@@ -546,7 +546,7 @@ def sam_radar(N=16):
     return np.clip(rgb, 0, 1)
 
 
-# Зенитная ракета: светлый корпус наискосок, тёмная головка, жёлтая полоса, крестовые рули, сопло
+# Anti-aircraft missile: light body obliquely, dark head, yellow stripe, cross rudders, nozzle
 INTERCEPTOR = [
     "................",
     ".............DD.",
@@ -567,12 +567,12 @@ INTERCEPTOR = [
 ]
 INTERCEPTOR_PALETTE = {
     ".": (0, 0, 0, 0),
-    "W": (214, 216, 208, 255),   # корпус
-    "D": (60, 62, 60, 255),      # обтекатель головки
-    "Y": (214, 178, 38, 255),    # полоса боевой части
-    "F": (150, 152, 146, 255),   # рули и стабилизаторы
-    "B": (90, 88, 84, 255),      # сопло
-    "O": (255, 150, 50, 255),    # пламя
+    "W": (214, 216, 208, 255),   # body
+    "D": (60, 62, 60, 255),      # head fairing
+    "Y": (214, 178, 38, 255),    # warhead strip
+    "F": (150, 152, 146, 255),   # steering wheels and stabilizers
+    "B": (90, 88, 84, 255),      # nozzle
+    "O": (255, 150, 50, 255),    # flame
 }
 
 
@@ -592,13 +592,13 @@ def sam():
     paint_with(INTERCEPTOR, INTERCEPTOR_PALETTE, "item/interceptor")
 
 
-# ---------------------------------------------------------------- стационарная пусковая (последней: прежние не меняются)
+# ---------------------------------------------------------------- stationary launcher (latest: the previous ones do not change)
 
 lrng = np.random.default_rng(17)
 
 
 def launcher_side(N=16):
-    """Тумба: защитная краска, люк обслуживания с петлями, жёлтая трафаретная полоса, кольцо круга сверху, грязь снизу."""
+    """Cabinet: protective paint, service hatch with hinges, yellow stencil stripe, circle ring on top, dirt on bottom."""
     rgb = olive(amount=0.05) * 0.95
     rgb[0:2] = OLIVE * 0.55
     rgb[2] *= 1.15
@@ -618,7 +618,7 @@ def launcher_side(N=16):
 
 
 def launcher_top(N=16):
-    """Верх: опорное кольцо поворотного круга (тёмный обод с болтами) на плите."""
+    """Top: turntable support ring (dark rim with bolts) on the plate."""
     rgb = olive(amount=0.05)
     yy, xx = np.mgrid[0:N, 0:N] + 0.5
     r = np.hypot(xx - N / 2, yy - N / 2)
@@ -633,7 +633,7 @@ def launcher_top(N=16):
 
 
 def launcher_bottom(N=16):
-    """Низ: та же краска в тени."""
+    """Bottom: the same paint in the shade."""
     return np.clip(olive(amount=0.05) * 0.6, 0, 1)
 
 
@@ -655,7 +655,7 @@ if __name__ == "__main__":
     for i in range(8):
         atlas.paste(puff(), ((i % 4) * 64, (i // 4) * 64))
     save(atlas, "nuke/puffs")
-    # здесь была плазма ядерного шара (шар — объём гриба в проходе пелены): тот же расход генератора — капли прежние
+    # here was the plasma of a nuclear ball (the ball is the volume of the mushroom in the pall passage): the same generator consumption - the drops are the same
     pnoise(128, 1.8)
     pnoise(128, 1.3)
     save(rain_sheet(), "nuke/rain")

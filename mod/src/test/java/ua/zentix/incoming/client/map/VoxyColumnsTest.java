@@ -19,10 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Верх колонок из секций Voxy — как у слоя чанков клиента и LSS, на грубых уровнях — середина вокселя. */
+/** The top of the columns from sections Voxy is like the layer of client chunks and LSS, at rough levels it is the middle of the voxel. */
 class VoxyColumnsTest {
     private static final int GRASS = 1, STONE = 2, WATER = 3, GLASS = 4, TALL_GRASS = 5, SAND = 6;
-    /** Номер блока — биты 27–46, как у Voxy ({@code Mapper.getBlockId}). */
+    /** Block number - bits 27–46, like Voxy ({@code Mapper.getBlockId}). */
     private static final LongToIntFunction ID = v -> (int) (v >>> 27 & 0xFFFFF);
     private static final IntUnaryOperator INFO = id -> switch (id) {
         case GRASS -> VoxyColumns.KNOWN | VoxyColumns.MOTION | MapColor.GRASS.id;
@@ -41,7 +41,7 @@ class VoxyColumnsTest {
         Bootstrap.bootStrap();
     }
 
-    /** Столбец секций уровня {@code level}: воксели колонки (x, z) по высоте мира в блоках (низ вокселя). */
+    /** Column of sections of level {@code level}: column voxels (x, z) according to the height of the world in blocks (bottom of the voxel). */
     private static final class Stack {
         final int level;
         final TreeMap<Integer, long[]> sections = new TreeMap<>();
@@ -57,7 +57,7 @@ class VoxyColumnsTest {
             return this;
         }
 
-        /** Сводка: секции сверху вниз от {@code topSection} до {@code bottomSection}, которых нет — null. */
+        /** Summary: sections from top to bottom from {@code topSection} to {@code bottomSection}, which are not - null. */
         int[] summarize(int topSection, int bottomSection) {
             VoxyColumns.Summary s = new VoxyColumns.Summary(level);
             for (int sy = topSection; sy >= bottomSection && !s.done(); sy--) s.section(sy, sections.get(sy), ID, INFO);
@@ -74,19 +74,19 @@ class VoxyColumnsTest {
         int[] c = new Stack(0).put(3, 4, 63, STONE).put(3, 4, 64, GRASS).summarize(9, -2);
         int v = at(c, 3, 4);
         assertTrue(LssColumns.present(v));
-        assertEquals(65, LssColumns.height(v), "первый воздух над травой");
+        assertEquals(65, LssColumns.height(v), "first air over the grass");
         assertEquals(MapColor.GRASS.id, LssColumns.color(v));
         assertEquals(0, LssColumns.waterDepth(v));
-        assertFalse(LssColumns.present(at(c, 0, 0)), "колонка, где Voxy ничего не видел, — неизвестна");
+        assertFalse(LssColumns.present(at(c, 0, 0)), "column where Voxy saw nothing - unknown");
     }
 
     @Test
     void plantsDoNotStopTheHeightmapButGlassKeepsTheColourBelow() {
         int[] c = new Stack(0).put(1, 1, 64, GRASS).put(1, 1, 65, TALL_GRASS)
                 .put(2, 2, 70, STONE).put(2, 2, 71, GLASS).summarize(9, -2);
-        assertEquals(65, LssColumns.height(at(c, 1, 1)), "трава не держит MOTION_BLOCKING");
+        assertEquals(65, LssColumns.height(at(c, 1, 1)), "grass does not hold MOTION_BLOCKING");
         assertEquals(MapColor.GRASS.id, LssColumns.color(at(c, 1, 1)));
-        assertEquals(71, LssColumns.height(at(c, 2, 2)), "под стеклом — камень, как у слоя чанков");
+        assertEquals(71, LssColumns.height(at(c, 2, 2)), "under the glass there is a stone, like a layer of chunks");
         assertEquals(MapColor.STONE.id, LssColumns.color(at(c, 2, 2)));
     }
 
@@ -101,24 +101,24 @@ class VoxyColumnsTest {
     @Test
     void waterDepthAcrossSectionsAndCapped() {
         Stack s = new Stack(0).put(5, 5, 90, SAND);
-        for (int y = 91; y <= 98; y++) s.put(5, 5, y, WATER); // 8 блоков воды через границу секций 95|96
+        for (int y = 91; y <= 98; y++) s.put(5, 5, y, WATER); // 8 water blocks across the boundary of sections 95|96
         s.put(6, 6, 10, SAND);
         for (int y = 11; y <= 40; y++) s.put(6, 6, y, WATER);
         int[] c = s.summarize(9, -2);
         assertEquals(99, LssColumns.height(at(c, 5, 5)));
         assertEquals(MapColor.WATER.id, LssColumns.color(at(c, 5, 5)));
         assertEquals(8, LssColumns.waterDepth(at(c, 5, 5)));
-        assertEquals(LssColumns.MAX_WATER_DEPTH, LssColumns.waterDepth(at(c, 6, 6)), "глубже 16 — одинаково");
+        assertEquals(LssColumns.MAX_WATER_DEPTH, LssColumns.waterDepth(at(c, 6, 6)), "deeper 16 - the same");
     }
 
     @Test
     void coarseLevelTakesTheMiddleOfTheVoxel() {
-        // уровень 2: воксель 4 блока; верх травы — где-то от 65 до 68 блока, середина — 66
+        // level 2: voxel 4 block; top of the grass - somewhere from 65 to 68 block, middle - 66
         int[] c = new Stack(2).put(0, 0, 64, GRASS).put(1, 0, 60, SAND).put(1, 0, 64, WATER).put(1, 0, 68, WATER).summarize(2, -1);
         assertEquals(66, LssColumns.height(at(c, 0, 0)));
         assertEquals(VoxyColumns.height(2, 68), LssColumns.height(at(c, 1, 0)));
-        assertEquals(8, LssColumns.waterDepth(at(c, 1, 0)), "два вокселя воды по 4 блока");
-        // уровень 4: воксель 16 блоков — середина, ошибка до 8 блоков
+        assertEquals(8, LssColumns.waterDepth(at(c, 1, 0)), "two voxels of water per 4 block");
+        // level 4: voxel 16 blocks - middle, error up to 8 blocks
         assertEquals(64 + 8, VoxyColumns.height(4, 64));
         assertEquals(65, VoxyColumns.height(0, 64));
     }
@@ -136,7 +136,7 @@ class VoxyColumnsTest {
         assertTrue((grass & VoxyColumns.MOTION) != 0);
         assertEquals(MapColor.GRASS.id, grass & 0x3F);
         int water = VoxyColumns.info(Blocks.WATER.defaultBlockState());
-        assertTrue((water & VoxyColumns.WATER) != 0 && (water & VoxyColumns.MOTION) != 0, "вода держит MOTION_BLOCKING");
+        assertTrue((water & VoxyColumns.WATER) != 0 && (water & VoxyColumns.MOTION) != 0, "water holds MOTION_BLOCKING");
         assertEquals(0, VoxyColumns.info(Blocks.SHORT_GRASS.defaultBlockState()) & VoxyColumns.MOTION);
         assertEquals(MapColor.NONE.id, VoxyColumns.info(Blocks.GLASS.defaultBlockState()) & 0x3F);
     }

@@ -5,16 +5,16 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Подделка класса Voxy 0.2.16 для юнит-тестов: только то, что читает мод (имена и сигнатуры). */
+/** Fake class Voxy 0.2.16 for unit tests: only what the mod reads (names and signatures). */
 public class Mapper {
-    /** Номер блока — место в списке; 0 — воздух. */
+    /** Block number - place in the list; 0 - air. */
     public final List<BlockState> states = new ArrayList<>();
 
     public Mapper() {
         states.add(null);
     }
 
-    /** Воксель с блоком {@code id} (биты 27–46, как у Voxy). */
+    /** Voxel with block {@code id} (bits 27–46, same as Voxy). */
     public static long voxel(int id) {
         return (long) id << 27;
     }

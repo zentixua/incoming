@@ -25,28 +25,29 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Переводы ru и en сходятся: те же ключи и те же аргументы в каждой строке (код передаёт одни аргументы на оба
- * языка — лишний «%s» показал бы сам шаблон, пропущенный — потерял бы число или клавишу). Клавиши в строки не
- * зашиваются: их можно переназначить, поэтому подсказка получает клавишу аргументом {@code Component.keybind}.
+ * Russian and English translations match: same keys and arguments in every line (code passes the same arguments
+ * to both languages; an extra "%s" would show the template itself, a missing one would lose a number or key).
+ * Keys are not hardcoded into strings: they can be rebound, so the tooltip receives the key as a
+ * {@code Component.keybind} argument.
  */
 class LangTest {
-    /** Как {@code TranslatableContents.FORMAT_PATTERN}: ванильный разбор строки перевода. */
+    /** Like {@code TranslatableContents.FORMAT_PATTERN}: vanilla translation string parsing. */
     private static final Pattern ARG = Pattern.compile("%(?:(\\d+)\\$)?([A-Za-z%]|$)");
 
     @Test
     void ruAndEnHaveSameKeysAndArguments() throws Exception {
         JsonObject ru = load("ru_ru"), en = load("en_us");
-        assertEquals(new TreeSet<>(ru.keySet()), new TreeSet<>(en.keySet()), "ключи ru_ru и en_us");
+        assertEquals(new TreeSet<>(ru.keySet()), new TreeSet<>(en.keySet()), "keys ru_ru and en_us");
         Map<String, String> diff = new TreeMap<>();
         for (String key : ru.keySet()) {
             var a = args(ru.get(key).getAsString());
             var b = args(en.get(key).getAsString());
             if (!a.equals(b)) diff.put(key, a + " ≠ " + b);
         }
-        assertEquals(Map.of(), diff, "аргументы строк ru_ru и en_us");
+        assertEquals(Map.of(), diff, "string arguments ru_ru and en_us");
     }
 
-    /** Ваниль знает только «%s», «%2$s» и «%%»: на «%d» или «%» в конце строки вместо текста покажется ключ. */
+    /** Vanilla only knows "%s", "%2$s" and "%%": on "%d" or "%" at the end of the line a key will appear instead of text. */
     @Test
     void onlyStringArguments() throws Exception {
         for (String lang : new String[]{"ru_ru", "en_us"}) {
@@ -60,9 +61,9 @@ class LangTest {
     }
 
     /**
-     * У каждого типа урона мода есть все три сообщения о смерти, которые может выбрать ваниль
-     * ({@code DamageSource.getLocalizedDeathMessage}): основное, «.player» (без сущностей, но с тем, кто последним
-     * бил жертву) и «.item» (виновник держит переименованный предмет). Без ключа в чате был бы сам ключ.
+     * Each damage type of the mod has all three death messages that vanilla
+     * ({@code DamageSource.getLocalizedDeathMessage}) can choose from: Basic, ".player" (without entities, but with whoever
+     *  hit the victim last), and ".item" (the culprit is holding the renamed item). Without the key, the chat would only have the key itself.
      */
     @Test
     void everyDamageTypeHasAllDeathMessages() throws Exception {
@@ -74,16 +75,16 @@ class LangTest {
                 ids.add(JsonParser.parseString(Files.readString(f)).getAsJsonObject().get("message_id").getAsString());
             }
         }
-        assertFalse(ids.isEmpty(), "типов урона нет");
+        assertFalse(ids.isEmpty(), "no damage types");
         for (String lang : new String[]{"ru_ru", "en_us"}) {
             JsonObject strings = load(lang);
             for (String id : ids) {
                 for (String suffix : new String[]{"", ".player", ".item"}) {
-                    assertTrue(strings.has("death.attack." + id + suffix), lang + ": нет death.attack." + id + suffix);
+                    assertTrue(strings.has("death.attack." + id + suffix), lang + ": no death.attack." + id + suffix);
                 }
-                // «.player» — только при убийце, «.item» — при виновнике с предметом: их аргументы должны быть в строке
-                assertTrue(args(strings.get("death.attack." + id + ".player").getAsString()).contains(2), lang + " " + id + ".player без убийцы");
-                assertTrue(args(strings.get("death.attack." + id + ".item").getAsString()).contains(3), lang + " " + id + ".item без предмета");
+                // ".player" - only for the killer, ".item" - for the culprit with the item: their arguments must be in the line
+                assertTrue(args(strings.get("death.attack." + id + ".player").getAsString()).contains(2), lang + " " + id + ".player without killer");
+                assertTrue(args(strings.get("death.attack." + id + ".item").getAsString()).contains(3), lang + " " + id + ".item without item");
             }
         }
     }
@@ -97,7 +98,7 @@ class LangTest {
         }
     }
 
-    /** Номера аргументов строки: «%s» идут по порядку, «%2$s» — явный номер. */
+    /** Line argument numbers: “%s” are in order, “%2$s” is an explicit number. */
     private static TreeSet<Integer> args(String s) {
         TreeSet<Integer> out = new TreeSet<>();
         Matcher m = ARG.matcher(s);

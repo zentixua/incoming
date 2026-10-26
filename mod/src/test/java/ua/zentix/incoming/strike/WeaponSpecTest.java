@@ -16,34 +16,34 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Числа паспорта согласованы между собой: выводимые (радиус разворота, упреждение сирены) — как в описании оружия,
- * а подобранные (геометрия атаки, последний участок, пакет пусковой) не противоречат выводимым. Поменяв скорость или
- * поворот в паспорте, этот тест скажет, какое подобранное число пересмотреть.
+ * The spec numbers are consistent with each other: the output (turning radius, siren lead) - as in the weapon description,
+ *  and the selected ones (attack geometry, last section, launcher package) do not contradict the output. By changing the speed or
+ * turn in spec, this test will tell you which selected number to revise.
  */
 class WeaponSpecTest {
     private static final List<WeaponSpec> GUIDED = List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE);
 
     @Test
     void turnRadiusIsSpeedOverTurnRate() {
-        // шахед ~40 блоков, ракета ~76, B-2 ~690 (описание BomberEntity)
+        // shahed ~40 blocks, rocket ~76, B-2 ~690 (description BomberEntity)
         assertEquals(40.1, WeaponSpec.DRONE.airframe().turnRadius(WeaponSpec.DRONE.airframe().cruiseSpeed()), 0.1);
         assertEquals(76.4, WeaponSpec.MISSILE.airframe().turnRadius(WeaponSpec.MISSILE.airframe().cruiseSpeed()), 0.1);
         assertEquals(687.5, WeaponSpec.BUNKER.airframe().turnRadius(WeaponSpec.BUNKER.airframe().cruiseSpeed()), 0.1);
     }
 
     /**
-     * Как снаряд видит и бьёт ЗРК: B-2 и «Ланцет» малозаметны, бомба под B-2 — почти не видна; МБР и РСЗО ЗРК видит,
-     * но не перехватывает (МБР — не его цель, «Град» дешевле ракеты); шахед, ракета, «Ланцет» и B-2 — да.
+     * How the projectile sees and hits the SAM: B-2 and “Lancet” are barely noticeable, the bomb under B-2 is almost invisible; ICBM and MLRS SAM sees
+     *  but does not intercept (ICBM is not its target, “Grad” is cheaper than a missile); Shahed, rocket, Lancet and B-2 - yes.
      */
     @Test
     void radarSignature() {
         for (WeaponType w : WeaponType.values()) {
             WeaponSpec.Signature r = w.spec().airframe().radar();
-            assertTrue(r.visibility() > 0 && r.visibility() <= 1, w + ": заметность " + r.visibility());
+            assertTrue(r.visibility() > 0 && r.visibility() <= 1, w + ": visibility " + r.visibility());
             assertEquals(w == WeaponType.DRONE || w == WeaponType.MISSILE || w == WeaponType.LOITER || w == WeaponType.BUNKER, r.intercept(),
-                    w + ": перехват");
+                    w + ": interception");
         }
-        assertTrue(WeaponSpec.BUNKER.airframe().radar().visibility() <= 0.2, "B-2 виден издалека");
+        assertTrue(WeaponSpec.BUNKER.airframe().radar().visibility() <= 0.2, "B-2 visible from afar");
         assertTrue(WeaponSpec.LOITER.airframe().radar().visibility() < WeaponSpec.DRONE.airframe().radar().visibility());
         assertTrue(WeaponSpec.MISSILE.airframe().radar().visibility() < WeaponSpec.DRONE.airframe().radar().visibility());
         WeaponSpec.Airframe bomb = WeaponSpec.BUNKER.payload();
@@ -60,13 +60,13 @@ class WeaponSpecTest {
     }
 
     /**
-     * Заряд боевой части есть у того, у кого есть наземный взрыв, и стёкла (порог хрупкого) он выбивает до дальности
-     * из описания оружия.
+     * The warhead charge is the one who has a ground explosion, and it knocks out the glass (the fragile threshold) to the range of
+     *  from the weapon description.
      */
     @Test
     void chargeBreaksGlassAsDescribed() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.ROCKET, WeaponSpec.LOITER, WeaponSpec.BUNKER, WeaponSpec.NUKE)) {
-            assertEquals(w.blast() == WeaponSpec.Blast.NONE, w.charge() == 0, () -> w.blast() + ": заряд " + w.charge());
+            assertEquals(w.blast() == WeaponSpec.Blast.NONE, w.charge() == 0, () -> w.blast() + ": charge " + w.charge());
         }
         assertEquals(70, glassRange(WeaponSpec.DRONE), 7);
         assertEquals(105, glassRange(WeaponSpec.MISSILE), 10);
@@ -79,8 +79,8 @@ class WeaponSpecTest {
     }
 
     /**
-     * Промах: у ракеты и бомбы меньше, чем у шахеда; «Ланцет» (камера), МБР и РСЗО (у неё рассеивание) — без промаха.
-     * Выборка промахов шахеда — с его СКО по каждой оси, по горизонтали.
+     * Miss: Missile and bomb have less than Shahed; “Lancet” (camera), ICBM and MLRS (it has scattering) - without a miss.
+     *  Shahed miss sample - with its standard deviation along each axis, horizontally.
      */
     @Test
     void missIsPerWeapon() {
@@ -100,18 +100,18 @@ class WeaponSpecTest {
         assertEquals(WeaponSpec.DRONE.route().error(), Math.sqrt(sz / n), 0.05);
     }
 
-    /** Тревога звучит раньше, чем снаряд выходит на последний прямой участок: у цели успевают услышать заход. */
+    /** The alarm sounds before the projectile reaches the last straight section: at the target they have time to hear the approach. */
     @Test
     void sirenBeforeFinalLeg() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.BUNKER)) {
             double warned = w.sirenLead() * w.airframe().cruiseSpeed();
-            assertTrue(warned >= w.finalLeg(), "тревога за " + warned + " блоков, последний участок " + w.finalLeg());
+            assertTrue(warned >= w.finalLeg(), "anxiety for " + warned + " blocks, last section " + w.finalLeg());
         }
     }
 
     /**
-     * Промах ближе {@code reattackMin} атаку не отменяет: он меньше круга разворота с запасом, иначе снаряд у самой цели
-     * ушёл бы на новый заход там, где взрыватель ещё добирает.
+     * A miss closer to {@code reattackMin} does not cancel the attack: it is less than the turning circle with a margin, otherwise the projectile at the very target
+     *  would go for a new approach where the fuse is still reaching.
      */
     @Test
     void reattackInsideTurnCircle() {
@@ -119,14 +119,14 @@ class WeaponSpecTest {
             WeaponSpec.Airframe a = w.airframe();
             double circle = a.turnRadius(a.cruiseSpeed()) * WeaponSpec.TURN_MARGIN;
             assertTrue(a.attack().reattackMin() > 0 && a.attack().reattackMin() < circle,
-                    "reattackMin " + a.attack().reattackMin() + ", круг разворота " + circle);
+                    "reattackMin " + a.attack().reattackMin() + ", turning circle " + circle);
         }
     }
 
     /**
-     * Горка начинается вне круга разворота на скорости пикирования (иначе цель на атаке сразу «внутри круга» и атака
-     * отменяется), не дальше последнего прямого участка и в полосе, которую видно у цели; заход с горкой — издалека,
-     * чем её начало.
+     * The slide begins outside the turning circle at dive speed (otherwise the attack target is immediately “inside the circle” and the attack
+     *  is cancelled), no further than the last straight section and in the stripe that is visible at the target; approaching the slide - from afar,
+     *  than its beginning.
      */
     @Test
     void popUpGeometryFitsTurnAndLegs() {
@@ -138,44 +138,44 @@ class WeaponSpecTest {
         assertTrue(attack.popUpMinRange() > attack.terminalRange());
     }
 
-    /** Последний прямой участок вмещает два радиуса разворота: снаряд выходит из обхода на курс цели до атаки. */
+    /** The last straight section accommodates two turning radii: the projectile exits the detour onto the target course before the attack. */
     @Test
     void finalLegFitsTurn() {
         for (WeaponSpec w : GUIDED) {
             WeaponSpec.Airframe a = w.airframe();
-            assertTrue(w.finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "последний участок " + w.finalLeg());
+            assertTrue(w.finalLeg() >= 2 * a.turnRadius(a.cruiseSpeed()), "last section " + w.finalLeg());
         }
     }
 
     /**
-     * Точка маршрута взята около радиуса разворота: ближе снаряд кружил бы вокруг неё, а много дальше срезал бы поворот.
-     * Дальность по маршруту оператора — путь до цели на краю карты по умолчанию (10 000 блоков) с обходом в полтора раза
-     * длиннее прямой.
+     * A waypoint is captured near the turn radius: any closer and the projectile would circle it;
+     * much farther and it would cut the turn. Operator-route range covers a target at the default map edge
+     * (10 000 blocks) with a detour one and a half times the straight distance.
      */
     @Test
     void waypointCaptureAndReach() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER)) {
             WeaponSpec.Airframe a = w.airframe();
             double r = a.turnRadius(a.cruiseSpeed());
-            assertTrue(w.capture() >= 0.95 * r && w.capture() <= 2 * r, "захват точки " + w.capture() + ", радиус разворота " + r);
-            assertTrue(w.route().reach() >= 1.5 * 10_000, "дальность по маршруту " + w.route().reach());
+            assertTrue(w.capture() >= 0.95 * r && w.capture() <= 2 * r, "capture point " + w.capture() + ", turning radius " + r);
+            assertTrue(w.route().reach() >= 1.5 * 10_000, "route distance " + w.route().reach());
         }
         for (WeaponSpec w : List.of(WeaponSpec.BUNKER, WeaponSpec.NUKE, WeaponSpec.ROCKET)) assertTrue(!w.route().waypoints());
     }
 
-    /** Ячейка пусковой занята, пока снаряд горит на направляющей и сходит с неё; пуски не чаще, чем освобождается ячейка. */
+    /** The launcher cell is occupied while the projectile is burning on the rail and launch rail exit from it; launch no more often than the cell is freed. */
     @Test
     void rackHoldsSlotThroughLaunch() {
         for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER)) {
             WeaponSpec.LaunchProfile lp = w.airframe().launchProfile();
             LauncherRack rack = w.rack();
             assertTrue(rack != null && lp != null);
-            assertTrue(rack.busyTicks() >= lp.ignitionTicks() + lp.railTicks(), w.launch() + ": ячейка " + rack.busyTicks());
+            assertTrue(rack.busyTicks() >= lp.ignitionTicks() + lp.railTicks(), w.launch() + ": cell " + rack.busyTicks());
             assertTrue(rack.spacing() <= rack.busyTicks());
         }
     }
 
-    /** У каждого вида оружия свой паспорт, и порядок видов (номера в сети и сохранениях) не менялся. */
+    /** Each type of weapon has its own spec, and the order of types (numbers in the network and saves) has not changed. */
     @Test
     void everyWeaponHasSpec() {
         assertEquals(List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.BUNKER, WeaponType.NUKE, WeaponType.ROCKET, WeaponType.LOITER),
@@ -188,8 +188,8 @@ class WeaponSpecTest {
     }
 
     /**
-     * Боеприпас у каждого оружия: по предмету на снаряд, а пакет «Града» — на все трубы пусковой (40, как перезарядка
-     * БМ-21): залп по умолчанию из пульта в него помещается.
+     * Ammunition for each weapon: one item per projectile, and the “Grad” package for all launcher pipes (40, like reloading
+     * BM-21): a salvo by default from the remote control is placed in it.
      */
     @Test
     void munitionPerShotAndGradPack() {
@@ -203,26 +203,26 @@ class WeaponSpecTest {
     }
 
     /**
-     * Взрыв на земле — с зарядом; топливо к удару — у тех, кто летит на нём (шахед — бензин, ракета — JP-10), у
-     * «Ланцета» (батарея), «Града» (двигатель выгорел), бомбы и боеголовки — ноль. Числа и их источник — в Javadoc паспорта.
+     * Explosion on the ground - with a charge; fuel to strike - for those who fly on it (Shahed - gasoline, rocket - JP-10), for
+     *  "Lancet" (battery), "Grad" (engine burnt out), bombs and warheads - zero. Numbers and their source are in Javadoc spec.
      */
     @Test
     void surfaceBlastsHaveChargeAndFuelAtImpact() {
         for (WeaponType w : WeaponType.values()) {
             WeaponSpec s = w.spec();
-            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.charge() > 0, w + ": заряд " + s.charge());
-            assertTrue(s.fuelAtImpact() >= 0 && Double.isFinite(s.fuelAtImpact()), w + ": топливо " + s.fuelAtImpact());
+            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.charge() > 0, w + ": charge " + s.charge());
+            assertTrue(s.fuelAtImpact() >= 0 && Double.isFinite(s.fuelAtImpact()), w + ": fuel " + s.fuelAtImpact());
         }
         assertEquals(30, WeaponSpec.DRONE.fuelAtImpact());
         assertEquals(275, WeaponSpec.MISSILE.fuelAtImpact());
         for (WeaponSpec s : List.of(WeaponSpec.LOITER, WeaponSpec.ROCKET, WeaponSpec.BUNKER, WeaponSpec.NUKE)) assertEquals(0, s.fuelAtImpact());
     }
 
-    // ---- изделия по ТТХ: выведенные законом числа против открытых данных
+    // ---- products by performance characteristics: numbers derived by law versus open data
 
     private static final double RHO0 = StandardAtmosphere.density(0);
 
-    /** Все сущности полёта всех оружий (у B-2 — и бомба). */
+    /** All flight entities of all weapons (B-2 has a bomb). */
     private static List<WeaponSpec.Airframe> airframes() {
         List<WeaponSpec.Airframe> out = new ArrayList<>();
         for (WeaponType w : WeaponType.values()) {
@@ -233,8 +233,8 @@ class WeaponSpecTest {
     }
 
     /**
-     * У каждого изделия все поля — настоящие числа: массы, размеры, сопротивление, скорости; у кого бьёт — условия
-     * удара; БЧ — ТНТ не меньше нуля, корпус и ВВ не больше всей массы; топливо к удару не больше топлива на борту.
+     * For each product, all the fields are real numbers: masses, dimensions, resistance, speeds; from whom it hits - conditions
+     *  of the strike; Warhead - TNT is not less than zero, the body and explosives are not more than the entire mass; the fuel to impact is no more than the fuel on board.
      */
     @Test
     void everyAirframeHasArticle() {
@@ -254,13 +254,13 @@ class WeaponSpecTest {
         }
         for (WeaponType w : WeaponType.values()) {
             WeaponSpec s = w.spec();
-            assertTrue(s.striker().article().impact() != null, w + ": условия удара");
-            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.striker().article().warhead() != null, w + ": БЧ");
+            assertTrue(s.striker().article().impact() != null, w + ": impact conditions");
+            if (s.blast() != WeaponSpec.Blast.NONE) assertTrue(s.striker().article().warhead() != null, w + ": warhead");
         }
-        assertTrue(WeaponSpec.BUNKER.airframe().article().impact() == null, "B-2 сам не бьёт");
+        assertTrue(WeaponSpec.BUNKER.airframe().article().impact() == null, "B-2 does not hit itself");
     }
 
-    /** Решения Артёма: ракета — «Томагавк» ~150 кг ТНТ, шахед — исходный с 50 кг; MOP — 2,4 т ВВ. */
+    /** Artem solutions: missile - "Tomahawk" ~150 kg TNT, Shahed - original with 50 kg; MOP - 2,4 t explosives. */
     @Test
     void chargesByDecision() {
         assertEquals(150, WeaponSpec.MISSILE.charge());
@@ -268,11 +268,11 @@ class WeaponSpecTest {
         assertEquals(6.4, WeaponSpec.ROCKET.charge());
         assertEquals(3, WeaponSpec.LOITER.charge());
         assertEquals(2423, WeaponSpec.BUNKER.striker().article().warhead().explosive());
-        assertEquals(0, WeaponSpec.BUNKER.charge(), "бомба рвётся под землёй: наземного взрыва нет");
+        assertEquals(0, WeaponSpec.BUNKER.charge(), "the bomb explodes underground: there is no explosion on the ground");
         assertEquals(0, WeaponSpec.NUKE.charge());
     }
 
-    /** Игровые маршевые скорости — не больше настоящих (не по физике, чтобы подлёт было видно). */
+    /** Game marching speeds are no more than real ones (not physical, so that the approach is visible). */
     @Test
     void gameSpeedsBelowReal() {
         for (WeaponSpec s : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.BUNKER)) {
@@ -281,7 +281,7 @@ class WeaponSpecTest {
         }
     }
 
-    /** Шахед: крейсер из мощности винта и сопротивления ηP = ½ρv³·CdA — 185 км/ч ±10 % (Wikipedia). */
+    /** Shahed: cruise from propeller power and resistance ηP = ½ρv³·CdA - 185 km/h ±10 % (Wikipedia). */
     @Test
     void shahedCruiseFromPowerAndDrag() {
         Article a = WeaponSpec.DRONE.airframe().article();
@@ -289,24 +289,24 @@ class WeaponSpecTest {
         double v = Math.cbrt(2 * p.efficiency() * p.power() / (RHO0 * a.cda()));
         assertEquals(185 / 3.6, v, 185 / 3.6 * 0.1);
         assertEquals(a.real().cruise(), v, a.real().cruise() * 0.1);
-        assertEquals(a.real().dive(), dive(a, 90), a.real().dive() * 0.05, "отвесно");
-        assertEquals(a.impact().speed(), dive(a, a.impact().angle()), a.impact().speed() * 0.05, "удар в пике");
+        assertEquals(a.real().dive(), dive(a, 90), a.real().dive() * 0.05, "vertical");
+        assertEquals(a.impact().speed(), dive(a, a.impact().angle()), a.impact().speed() * 0.05, "dive kick");
     }
 
-    /** «Томагавк»: крейсер из тяги ТРДД и сопротивления T = ½ρv²·CdA — ~250 м/с ±5 % (М0,74). */
+    /** Tomahawk: cruise speed from turbofan thrust and drag T = ½ρv²·CdA is ~250 m/s ±5% (M0.74). */
     @Test
     void tomahawkCruiseFromThrust() {
         Article a = WeaponSpec.MISSILE.airframe().article();
         double v = Math.sqrt(2 * ((Article.Turbofan) a.sustainer()).thrust() / (RHO0 * a.cda()));
         assertEquals(250, v, 250 * 0.05);
-        // ускоритель Mk 106 разгоняет 1,6 т с места на ~210 м/с — дальше турбина
+        // accelerator Mk 106 accelerates 1,6 t from standstill to ~210 m/s - then the turbine
         Article.SolidMotor b = a.booster();
         double m0 = a.launchMass() + b.jettison();
         double dv = b.exhaust() * Math.log(m0 / (m0 - b.propellant()));
-        assertTrue(dv > 150 && dv < a.real().cruise(), "Δv ускорителя " + dv);
+        assertTrue(dv > 150 && dv < a.real().cruise(), "Δv accelerator " + dv);
     }
 
-    /** «Ланцет»: отвесное пике 300 км/ч ±10 % из веса и CdA; удар — тот же баланс под углом удара. */
+    /** "Lancet": vertical dive 300 km/h ±10 % of weight and CdA; impact - the same balance at the angle of impact. */
     @Test
     void lancetDiveFromWeight() {
         Article a = WeaponSpec.LOITER.airframe().article();
@@ -315,36 +315,36 @@ class WeaponSpecTest {
     }
 
     /**
-     * «Град»: точка с массой, тяга двигателя паспорта, сопротивление CdA·f(M) в стандартной атмосфере — наибольшая
-     * дальность 20,38 км ±3 % (Wikipedia), к выгоранию ~690 м/с ±3 %, удар — как в паспорте.
+     * “Grad”: point with mass, engine thrust spec, resistance CdA·f(M) in standard atmosphere - maximum
+     * range 20,38 km ±3 % (Wikipedia), to burnout ~690 m/s ±3 %, impact - as in spec.
      */
     @Test
     void gradRangeWithMachDrag() {
         Article a = WeaponSpec.ROCKET.airframe().article();
-        assertEquals(a.launchMass() - a.dryMass(), a.booster().propellant(), 0.01, "топливо — разница масс");
+        assertEquals(a.launchMass() - a.dryMass(), a.booster().propellant(), 0.01, "fuel - mass difference");
         double[] best = null;
         for (int deg = 40; deg <= 65; deg++) {
             double[] r = fly(a, a.booster(), Math.toRadians(deg), 0, 0);
             if (best == null || r[0] > best[0]) best = r;
         }
-        assertEquals(20_380, best[0], 20_380 * 0.03, "дальность");
-        assertEquals(690, best[1], 690 * 0.03, "к выгоранию");
+        assertEquals(20_380, best[0], 20_380 * 0.03, "range");
+        assertEquals(690, best[1], 690 * 0.03, "to burnout");
         assertEquals(a.real().cruise(), best[1], 5);
-        assertEquals(a.impact().speed(), best[2], 5, "скорость удара");
-        assertEquals(a.impact().angle(), best[3], 1, "угол удара");
+        assertEquals(a.impact().speed(), best[2], 5, "impact speed");
+        assertEquals(a.impact().angle(), best[3], 1, "impact angle");
     }
 
-    /** GBU-57: падение с высоты сброса на крейсерской скорости B-2 — удар как в паспорте (±2 %, ±1°). */
+    /** GBU-57: fall from drop height at cruising speed B-2 - impact as in spec (±2%, ±1°). */
     @Test
     void mopDropImpact() {
         Article bomb = WeaponSpec.BUNKER.payload().article(), b2 = WeaponSpec.BUNKER.airframe().article();
         double[] r = fly(bomb, null, 0, b2.real().cruise(), b2.real().altitude());
         assertEquals(bomb.impact().speed(), r[2], bomb.impact().speed() * 0.02);
         assertEquals(bomb.impact().angle(), r[3], 1);
-        assertTrue(r[4] > 45 && r[4] < 55, "падение ~50 с: " + r[4]);
+        assertTrue(r[4] > 45 && r[4] < 55, "drop ~50 s: " + r[4]);
     }
 
-    /** 9М96: Δv двигателя по Циолковскому — не меньше наибольшей скорости; БЧ 24 кг (ВВ + корпус). */
+    /** 9M96: engine Δv by Tsiolkovsky is no less than top speed; warhead 24 kg (explosive + casing). */
     @Test
     void samPassportBy9M96() {
         InterceptorSpec.Passport p = InterceptorSpec.SAM.passport();
@@ -352,10 +352,10 @@ class WeaponSpecTest {
         assertTrue(p.boost().exhaust() * Math.log(m0 / (m0 - p.boost().propellant())) >= p.maxSpeed());
         assertEquals(24, p.warhead().explosive() + p.warhead().caseMass(), 1e-9);
         assertTrue(p.rangeMin() < p.rangeMax() && p.altitudeMin() < p.altitudeMax() && p.fuse() > 0);
-        assertTrue(InterceptorSpec.SAM.maxSpeed() * 20 < p.maxSpeed(), "игровая медленнее настоящей");
+        assertTrue(InterceptorSpec.SAM.maxSpeed() * 20 < p.maxSpeed(), "the game one is slower than the real one");
     }
 
-    /** Звук и факелы берут двигатель из паспорта: одна тяга и одно истечение на изделие. */
+    /** The sound and torches take the engine from the spec: one thrust and one outflow per product. */
     @Test
     void noiseUsesArticleMotors() {
         assertEquals(WeaponSpec.DRONE_BOOSTER.thrust(), WeaponSpec.DRONE.airframe().noise().motor().thrust());
@@ -364,7 +364,7 @@ class WeaponSpecTest {
         assertEquals(WeaponSpec.NUKE.ascent().thrust(), WeaponSpec.NUKE.airframe().noise().motor().thrust());
     }
 
-    /** Установившаяся скорость в пике под углом θ к горизонту: тяга винта + mg·sin θ = ½ρv²·CdA. */
+    /** Steady speed at peak at an angle θ to the horizontal: propeller thrust + mg·sin θ = ½ρv²·CdA. */
     private static double dive(Article a, double angle) {
         double m = (a.dryMass() + a.launchMass()) / 2, lo = 1, hi = 500;
         for (int i = 0; i < 100; i++) {
@@ -377,10 +377,10 @@ class WeaponSpecTest {
     }
 
     /**
-     * Точка с массой над плоской землёй: тяга двигателя (если есть) вдоль скорости, сопротивление ½ρv²·CdA·f(M) по
-     * стандартной атмосфере, шаг 0,01 с.
+     * Point with mass above flat earth: engine thrust (if any) along the speed, resistance ½ρv²·CdA·f(M) according to
+     * standard atmosphere, step 0,01 s.
      *
-     * @return дальность, м; скорость к выгоранию, м/с; скорость удара, м/с; угол удара, °; время полёта, с
+     * @return range, m; speed to burnout, m/s; impact speed, m/s; impact angle, °; flight time, s
      */
     private static double[] fly(Article a, Article.SolidMotor motor, double elevation, double v0, double h0) {
         double dt = 0.01, x = 0, h = h0, t = 0, burnout = Double.NaN;

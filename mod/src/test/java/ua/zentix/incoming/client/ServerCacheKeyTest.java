@@ -108,7 +108,7 @@ class ServerCacheKeyTest {
         Path selected = server.directory(root);
         assertEquals(legacy, selected);
         assertEquals("old IDN terrain", Files.readString(selected.resolve("terrain.bin")));
-        assertFalse(Files.exists(root.resolve(canonical)), "прежние данные остаются в исходной папке");
+        assertFalse(Files.exists(root.resolve(canonical)), "the old data remains in the original folder");
     }
 
     @Test
@@ -120,7 +120,7 @@ class ServerCacheKeyTest {
         Files.createDirectories(first.getParent());
         Files.writeString(first, "first server");
         Path second = longerHost.directory(root).resolve("world-1234/minecraft_overworld.bin");
-        assertFalse(Files.exists(second), "другой хост не должен читать файл сервера с явным портом");
+        assertFalse(Files.exists(second), "another host should not read the server file with an explicit port");
         Files.createDirectories(second.getParent());
         Files.writeString(second, "second server");
         assertEquals("first server", Files.readString(first));
@@ -150,13 +150,13 @@ class ServerCacheKeyTest {
             Path selected = ServerCacheKey.fromAddress(addresses[i]).directory(root);
             assertEquals(legacy, selected, addresses[i]);
             Path file = selected.resolve("world-1234/minecraft_overworld.bin");
-            assertEquals(saved, Files.readString(file), "при новом входе читается результат предыдущего сохранения");
+            assertEquals(saved, Files.readString(file), "when entering a new entry, the result of the previous save is read");
             saved = "saved after join " + i;
             Files.writeString(file, saved);
         }
         assertEquals(saved, Files.readString(terrain));
         assertEquals("other dimension", Files.readString(otherDimension));
-        assertFalse(Files.exists(root.resolve(ServerCacheKey.fromAddress(first).key())), "новая пустая папка не появляется");
+        assertFalse(Files.exists(root.resolve(ServerCacheKey.fromAddress(first).key())), "new empty folder does not appear");
     }
 
     @Test

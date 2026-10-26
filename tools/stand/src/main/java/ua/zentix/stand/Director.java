@@ -37,21 +37,21 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * Шаги плана по тикам клиента: на титульном экране — свежий плоский мир (тот же у каждого прогона: сид, слои, полдень
- * без смены суток, погоды и мобов, наблюдатель — волна его не сносит), потом шаги {@link Plan} по порядку, команды
- * залпов — по своим часам ({@link #scheduled}: волны идут, пока шаги ждут), в конце — выход из игры. Всё, что
- * случилось, — в {@link Out}: по этим событиям stand.py режет кадры на окна замера.
+ * Plan steps by client ticks: fresh flat world from title screen (identical seed/layers/noon every run,
+ * no day cycle, weather or mobs; spectator is not pushed by the wave), then {@link Plan} steps in order;
+ * salvo commands use their own clock ({@link #scheduled}: waves continue while steps wait); exit at the end.
+ * Log everything to {@link Out}; stand.py uses these events to split frames into measurement windows.
  */
 final class Director {
     static final String WORLD = "stand";
-    /** Верх травы плоского мира: 1 + 124 + 3 + 1 слоёв от −64 (как песочница Incoming). */
+    /** Flat-world grass top: 1 + 124 + 3 + 1 layers from −64 (like Incoming sandbox). */
     static final int GROUND = 64;
-    /** Глаз над ногами. */
+    /** Eye height above feet. */
     private static final double EYE = 1.62;
     private static final long SECOND = 1_000_000_000L;
-    /** Шаг «от последнего взрыва» начался позже срока не больше чем на столько — иначе {@code late}. */
+    /** Maximum lateness when a "since last explosion" step starts; otherwise {@code late}. */
     static final double LATE_S = 2;
-    /** Камера дошла до места — не дольше, иначе шаг идёт дальше с событием {@code tp-timeout}. */
+    /** Maximum camera travel wait; afterward step proceeds with {@code tp-timeout}. */
     private static final long TP_LIMIT = 30 * SECOND;
 
     private enum Phase { TITLE, LOADING, SETUP, STEPS, DONE }
@@ -68,7 +68,7 @@ final class Director {
     private final List<Scheduled> scheduled = new ArrayList<>();
     private int index = -1;
     private Plan.Step step;
-    /** Состояние шага: начало, послана ли его команда, когда дошёл (tp), время попадания и номер кадра (окно от попадания). */
+    /** Step state: start, command sent, arrival time (tp), impact time and frame number (hit-relative window). */
     private long stepStart, reached, reachedFrame, impact;
     private boolean sent;
     private int nextShot;
@@ -87,10 +87,10 @@ final class Director {
         Stand.LOG.info("STAND: plan of {} steps", plan.steps().size());
     }
 
-    // ---------------------------------------------------------------- мир
+    // ---------------------------------------------------------------- world
 
     private void onScreen(ScreenEvent.Init.Post e) {
-        // до мира — какой экран открыт: клиент без окна, вставший на чужом экране, иначе не понять
+        // Before world entry, log the open screen: otherwise a windowless client stuck on another screen is opaque
         if (phase == Phase.TITLE || phase == Phase.LOADING) Stand.LOG.info("STAND screen {}", e.getScreen().getClass().getName());
         if (phase != Phase.TITLE || !(e.getScreen() instanceof TitleScreen)) return;
         phase = Phase.LOADING;
@@ -98,7 +98,7 @@ final class Director {
         createWorld();
     }
 
-    /** Плоский мир заново (прежний — прочь): коренная порода, 124 камня, 3 земли, трава; равнины без построек. */
+    /** Recreate flat world (remove previous): bedrock, 124 stone, 3 dirt, grass; plains without structures. */
     private void createWorld() {
         Minecraft mc = Minecraft.getInstance();
         Path old = mc.gameDirectory.toPath().resolve("saves").resolve(WORLD);
@@ -125,7 +125,7 @@ final class Director {
         }, mc.screen);
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
     private void onTick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
@@ -156,7 +156,7 @@ final class Director {
             next(now);
         }
         fireDue(now);
-        // шаги без ожидания (команда, отметка, залп) идут подряд в одном тике
+        // Non-waiting steps (command, mark, salvo) run consecutively in one tick
         for (int i = 0; i < 64 && phase == Phase.STEPS; i++) {
             if (!advance(mc, now)) return;
             next(now);
@@ -173,7 +173,7 @@ final class Director {
         out.event("world", now, "player", me);
     }
 
-    /** Видеокарта, драйвер и размер кадра — в ключ кэша и в отчёт. */
+    /** GPU, driver and frame size enter cache key and report. */
     private void gl(Minecraft mc, long now) {
         out.event("gl", now, "renderer", GL11.glGetString(GL11.GL_RENDERER), "version", GL11.glGetString(GL11.GL_VERSION),
                 "vendor", GL11.glGetString(GL11.GL_VENDOR), "width", mc.getWindow().getWidth(), "height", mc.getWindow().getHeight());
@@ -194,7 +194,7 @@ final class Director {
         shotDone = false;
     }
 
-    /** Шаг сделан? */
+    /** Is the step complete? */
     private boolean advance(Minecraft mc, long now) {
         double elapsed = (now - stepStart) / 1e9;
         return switch (step) {
@@ -251,8 +251,8 @@ final class Director {
         Vec3 at = mc.player.position();
         String wait = at.distanceTo(new Vec3(eye[0], eye[1] - EYE, eye[2])) < 1.5
                 ? Terrain.waiting(mc, Mth.floor(eye[0]), Mth.floor(eye[2])) : "camera";
-        // готово держится всю паузу подряд и хотя бы два кадра: обход видимости Sodium видит секции за новой землёй
-        // кадром позже (пауза одна без кадров — например, кадр дольше паузы — этого не удостоверяла бы)
+        // Ready must hold through the entire pause and at least two frames: Sodium visibility discovers sections
+        // behind new ground a frame later (a pause without frames, e.g. one frame longer than it, cannot prove this)
         if (wait != null) reached = -1;
         else if (reached < 0) {
             reached = now;
@@ -270,8 +270,8 @@ final class Director {
     }
 
     /**
-     * Конец залпа: все попадания; или все команды поданы, попадания были, снарядов в мире и уходов залпа, ждущих взрыва
-     * или возврата в мир, нет, а последнее попадание — {@code quietS} назад; или срок. Годен прогон только с «all».
+     * Salvo end: all hits; or all commands sent, some hits occurred, no world projectiles or salvo removals
+     * awaiting explosion/rejoin, and last hit {@code quietS} ago; or timeout. Only "all" makes a run valid.
      */
     private boolean awaitSalvo(Plan.AwaitSalvo a, long now, double elapsed) {
         int got = watch.impacts(a.id()), want = watch.expected(a.id());
@@ -285,11 +285,11 @@ final class Director {
         return true;
     }
 
-    /** Срок от последнего попадания залпа: опоздание к нему — {@code late}, иначе ждём; итог — {@code since} с запаздыванием. */
+    /** Deadline since last salvo hit: late on entry gives {@code late}, otherwise wait; output {@code since} includes lateness. */
     private boolean since(Plan.Since w, long now) {
         long last = watch.lastImpact(w.salvo()), due = last + (long) (w.seconds() * SECOND);
         if (last >= 0 && now < due) return false;
-        // опоздание — и на входе, и к концу ожидания (тик клиента мог встать дольше, чем осталось до срока)
+        // Check lateness both on entry and after waiting (client tick may stall longer than the remaining time)
         if (last < 0 || now - due > (long) (LATE_S * SECOND)) {
             out.event("late", now, "salvo", w.salvo(), "s", w.seconds(), "late_s", last < 0 ? -1 : (now - due) / 1e9);
             return true;
@@ -298,7 +298,7 @@ final class Director {
         return true;
     }
 
-    /** Окно от n-го попадания залпа; кадры — через заданные секунды от него. */
+    /** Window from nth salvo hit; frames at specified seconds afterward. */
     private boolean impactWindow(Plan.ImpactWindow w, long now, double elapsed) {
         if (impact < 0) {
             impact = watch.impactTime(w.salvo(), w.n());
@@ -324,7 +324,7 @@ final class Director {
         return s == Math.rint(s) ? String.valueOf((long) s) : String.format(Locale.ROOT, "%.1f", s);
     }
 
-    // ---------------------------------------------------------------- команды
+    // ---------------------------------------------------------------- commands
 
     private void fireDue(long now) {
         for (Iterator<Scheduled> it = scheduled.iterator(); it.hasNext(); ) {
@@ -344,9 +344,10 @@ final class Director {
     }
 
     /**
-     * Команда — в потоке сервера, от консоли (оператор); успех, число, когда послана, когда сервер начал её выполнять и
-     * когда должна была (у команд залпа по своим часам, {@code due} — nanoTime; −1 — сразу) — событием {@code cmd}: по
-     * выполнению разбор проверяет расписание волн (вставший сервер выполнил бы их пачкой, хоть клиент и слал вовремя).
+     * Execute command on server thread as console/operator; {@code cmd} event includes success, result,
+     * send time, execution start and deadline (independently timed salvo commands: {@code due} is nanoTime,
+     * −1 immediate). Parser verifies wave schedule using execution time: a stalled server would batch commands
+     * even when client sends on time.
      */
     private void server(String command, String tag, long due) {
         MinecraftServer s = Minecraft.getInstance().getSingleplayerServer();
@@ -362,7 +363,7 @@ final class Director {
         });
     }
 
-    // ---------------------------------------------------------------- конец
+    // ---------------------------------------------------------------- end
 
     private void finish(Minecraft mc, long now) {
         phase = Phase.DONE;
@@ -370,7 +371,7 @@ final class Director {
         out.event("done", now, "frames", clock.frame(), "repeated_stages", clock.repeatedStages, "steps_done", Math.min(index, plan.steps().size()));
         out.close();
         Stand.LOG.info("STAND done: {} frames", clock.frame());
-        // выход висит на «Saving worlds» — не ждать его дольше минуты: замер уже на диске
+        // Exit stuck at "Saving worlds": wait at most one minute; measurement is already on disk
         Thread guard = new Thread(() -> {
             try {
                 Thread.sleep(60_000);

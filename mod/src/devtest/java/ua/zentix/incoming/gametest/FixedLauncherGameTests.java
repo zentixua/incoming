@@ -57,28 +57,28 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Стационарная пусковая ({@link FixedLauncherBlockEntity}): заряжается воронкой и способностью предметов (вынуть так
- * нельзя), ломается с запасом; ПКМ пультом привязывает, «Огонь» привязанного пульта ставит задачу ({@link LauncherOrders#assign});
- * передний фронт редстоуна — один приказ: снаряд на направляющей её пакета от имени хозяина, боеприпас — из её запаса
- * по снаряду; отказы — задачи нет, запаса мало, занята, сектор закрыт, хозяину нельзя пульт, цель дальше дальности
- * карты. Пуски — на полосе «runway» (земля — y 3) вдоль +Z: там пусто, сектор пуска свободен.
+ * Fixed launcher ({@link FixedLauncherBlockEntity}): loaded through a hopper and item capability (cannot extract
+ * that way), drops its stock when broken; right-click with the remote binds it, "Fire" on the bound remote assigns
+ * a task ({@link LauncherOrders#assign}); a rising redstone edge gives one order: a projectile on its rack rail,
+ * owned by the owner, using one munition from its stock per projectile. Refusals: no task, insufficient stock,
+ * busy, blocked sector, owner forbidden to use the remote, target beyond map range. Launches use the "runway"
+ * (ground y 3) along +Z: empty terrain and a clear launch sector.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class FixedLauncherGameTests {
-    /** Пусковая в начале полосы «runway»: курс пуска — +Z вдоль полосы. */
+    /** launcher at the beginning of the strip "runway": launch course - +Z along the strip. */
     private static final BlockPos PAD = new BlockPos(16, 4, 8);
-    /** Середина площадки «range» (первый воздух — y 11). */
+    /** The middle of the site “range” (first air - y 11). */
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
 
     private FixedLauncherGameTests() {}
 
-    // ---------------------------------------------------------------- пуск по сигналу
-
-    /**
-     * Сигнал редстоуна (блок красного камня рядом) — шахед на направляющей пакета пусковой через 4 тика, от имени
-     * хозяина, один шахед ушёл из запаса; строка состояния — «приказ отдан». Снять и поставить сигнал снова, пока
-     * снаряд на направляющей, — отказ «занята», запас тот же. Пакет смотрит на цель.
+    // ---------------------------------------------------------------- launch on signal
+/**
+     * Redstone signal (red stone block nearby) - Shahed on the launcher package rail via 4 tick, on behalf of the
+     *  owner, one Shahed left the stock; status bar - “order given”. Remove and put on the signal again while the
+     *  projectile is on the rail - “busy” failure, the margin is the same. The package looks at the target.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "fixed_fire", skyAccess = true)
     public static void redstoneFiresMission(GameTestHelper h) {
@@ -87,30 +87,30 @@ public final class FixedLauncherGameTests {
         FixedLauncherBlockEntity be = launcher(h, PAD, owner);
         Vec3 far = Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(0, -1, 1000);
         be.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(far), far, Waypoints.NONE));
-        h.assertTrue(be.hasRack() && be.weapon() == WeaponType.DRONE, "пакета шахедов нет");
-        h.assertTrue(Math.abs(be.yaw()) < 1, "пакет не на цели: " + be.yaw());
+        h.assertTrue(be.hasRack() && be.weapon() == WeaponType.DRONE, "there is no Shahed package");
+        h.assertTrue(Math.abs(be.yaw()) < 1, "package not on target: " + be.yaw());
         load(h, be, new ItemStack(ModItems.SHAHED.get(), 2));
         h.setBlock(PAD.east(), Blocks.REDSTONE_BLOCK);
         h.runAfterDelay(6, () -> {
             List<StrikeProjectile> onRails = ours(level, be, owner);
-            h.assertTrue(onRails.size() == 1 && onRails.getFirst().flightPhase().onLauncher(), "на направляющей не один шахед: " + onRails);
-            h.assertTrue(be.stockCount() == 1, "в запасе " + be.stockCount() + " вместо 1");
-            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.fired", "строка состояния");
+            h.assertTrue(onRails.size() == 1 && onRails.getFirst().flightPhase().onLauncher(), "not exactly one Shahed on the rail: " + onRails);
+            h.assertTrue(be.stockCount() == 1, "in stock " + be.stockCount() + " instead of 1");
+            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.fired", "status bar");
             h.setBlock(PAD.east(), Blocks.AIR);
         });
         h.runAfterDelay(8, () -> h.setBlock(PAD.east(), Blocks.REDSTONE_BLOCK));
         h.runAfterDelay(14, () -> {
-            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.busy", "второй сигнал, пока снаряд на направляющей");
-            h.assertTrue(be.stockCount() == 1 && ours(level, be, owner).size() == 1, "второй сигнал пустил снаряд");
+            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.busy", "second signal while the projectile is on the rail");
+            h.assertTrue(be.stockCount() == 1 && ours(level, be, owner).size() == 1, "the second signal fired a projectile");
             h.succeed();
         });
     }
 
     /**
-     * Отказы без пуска и без расхода запаса: задачи нет; запаса меньше, чем на весь приказ (строка — сколько нужно и
-     * сколько есть); цель дальше {@code map_range} от пусковой; хозяину нельзя пульт (пульт только операторам), а ничья
-     * пусковая (поставлена командой) — без правил хозяина; сектор пуска закрыт стенами со всех сторон — пуск не удался
-     * с причиной «сектор закрыт», снятый снаряд вернулся в запас.
+     * Failures without launch and without stock consumption: no task; the stock is less than for the entire order (line - how much is needed and
+     *  how much is there); target further than {@code map_range} from launcher; the owner is not allowed a remote control (the remote control is for operators only), and a draw
+     *  launcher (set by the team) is without the owner’s rules; launch sector is closed by walls on all sides - launch failed
+     *  with the reason “sector is closed”, the removed shell was returned to stock.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "fixed_refuse", skyAccess = true)
     public static void refusesWithoutSpending(GameTestHelper h) {
@@ -120,19 +120,19 @@ public final class FixedLauncherGameTests {
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(PAD));
         Vec3 far = site.add(0, -1, 1000);
         load(h, be, new ItemStack(ModItems.SHAHED.get(), 2));
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_mission.short", "без задачи");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_mission.short", "no task");
         be.setMission(new Mission(WeaponType.DRONE, 3, 10, new Target.Point(far), far, Waypoints.NONE));
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.munitions.short", "запаса на 2 из 3");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.munitions.short", "stock for 2 of 3");
         int range = IncomingConfig.SERVER.mapRange.get();
         Vec3 beyond = site.add(0, -1, range + 100);
         be.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(beyond), beyond, Waypoints.NONE));
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.out_of_range", "цель дальше дальности карты");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.out_of_range", "target further than map range");
         boolean everyone = IncomingConfig.SERVER.designatorForEveryone.get();
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.designatorForEveryone.set(everyone));
         IncomingConfig.SERVER.designatorForEveryone.set(false);
         be.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(far), far, Waypoints.NONE));
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_rights", "хозяину нельзя пульт");
-        // стены вокруг пусковой в 4 блоках, выше набора шахеда до взведения: любой курс упирается в них
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_rights", "the owner can't control the remote control");
+        // walls around the launcher in 4 blocks, above the Shahed set before cocking: any course runs into them
         List<BlockPos> walls = new java.util.ArrayList<>();
         for (int dx = -4; dx <= 4; dx++) {
             for (int dz = -4; dz <= 4; dz++) {
@@ -143,15 +143,15 @@ public final class FixedLauncherGameTests {
         walls.forEach(p -> h.setBlock(p, Blocks.STONE));
         StrikeGameTests.afterTest(h, () -> walls.forEach(p -> h.setBlock(p, Blocks.AIR)));
         be.setOwner(null);
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.sector", "ничья пусковая в стенах");
-        h.assertTrue(be.stockCount() == 2 && ours(level, be, null).isEmpty(), "отказ потратил запас или пустил снаряд");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.sector", "draw launcher in the walls");
+        h.assertTrue(be.stockCount() == 2 && ours(level, be, null).isEmpty(), "failure spent reserve or launched a projectile");
         h.succeed();
     }
 
     /**
-     * Залп «Града» с пусковой: запас — один пакет (40 снарядов), задача — 3; залп идёт с её труб, пока он идёт —
-     * пусковая занята: ни приказа, ни новой задачи с пульта; в конце в пакете 37. Отбой хозяина посреди залпа шахедов
-     * отменяет его: что не встало на направляющую, в запасе и осталось.
+     * "Grad" salvo with launcher: supply - one package (40 shells), task - 3; the salvo comes from her pipes, while it is going on -
+     *  the launch pad is busy: no order, no new task from the console; at the end in package 37. The owner's dismissal in the middle of a volley of suicide bombers
+     *  cancels it: what did not fit on the rail remains in stock.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "fixed_salvo", skyAccess = true)
     public static void salvoPaysPerShot(GameTestHelper h) {
@@ -164,49 +164,49 @@ public final class FixedLauncherGameTests {
         be.setMission(new Mission(WeaponType.ROCKET, 3, 10, new Target.Point(target), target, Waypoints.NONE));
         load(h, be, new ItemStack(ModItems.GRAD_ROCKETS.get()));
         LaunchOrigin.Fixed origin = new LaunchOrigin.Fixed(h.absolutePos(PAD));
-        h.assertTrue(LauncherOrders.fire(level, be) == null, "залп не начался");
-        h.assertTrue(SalvoData.busy(level, origin), "залп пусковой не в списке");
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.busy", "второй приказ посреди залпа");
-        // новая задача посреди залпа сменила бы пакет, с которого стартуют его снаряды
+        h.assertTrue(LauncherOrders.fire(level, be) == null, "the salvo has not started");
+        h.assertTrue(SalvoData.busy(level, origin), "salvo launcher is not in the list");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.busy", "second order in the middle of the salvo");
+        // a new task in the middle of a salvo would change the package from which its shells are launched
         Mission grad = be.mission();
         ItemStack designator = new ItemStack(ModItems.DESIGNATOR.get());
         LauncherLinks.toggle(player, designator, be);
         Loadout drones = new Loadout(WeaponType.DRONE, 1, 0, TargetMode.LOOK, "", Loadout.Nuke.DEFAULT);
         LauncherOrders.assign(player, designator, drones, new ServerActions.Aim(new Target.Point(target), target, null), Waypoints.NONE);
-        h.assertTrue(be.mission() == grad, "задача сменилась посреди залпа: " + be.mission());
+        h.assertTrue(be.mission() == grad, "the task changed in the middle of the salvo: " + be.mission());
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(!LauncherOrders.busy(level, be), "залп ещё идёт или пакет не молчит"))
+                .thenWaitUntil(() -> h.assertTrue(!LauncherOrders.busy(level, be), "the salvo is still going on or the package is not silent"))
                 .thenExecute(() -> {
                     int left = Munitions.held(be.store().items(), ModItems.GRAD_ROCKETS.get(), 40);
-                    h.assertTrue(left == 37, "в пакете " + left + " вместо 37");
+                    h.assertTrue(left == 37, "in the package " + left + " instead of 37");
                     discard(level, be, owner);
-                    // залп шахедов (задача — с пульта, теперь пусковая свободна) и отбой после первого
+                    // shahed salvo (task - from the remote control, now the launcher is free) and hang up after the first
                     Vec3 far = site.add(0, -1, 1000);
                     Loadout salvo = new Loadout(WeaponType.DRONE, 4, 20, TargetMode.LOOK, "", Loadout.Nuke.DEFAULT);
                     LauncherOrders.assign(player, designator, salvo, new ServerActions.Aim(new Target.Point(far), far, null), Waypoints.NONE);
                     h.assertTrue(be.mission() != null && be.mission().weapon() == WeaponType.DRONE && be.mission().count() == 4,
-                            "задача после залпа не поставлена: " + be.mission());
+                            "the task after the salvo was not set: " + be.mission());
                     load(h, be, new ItemStack(ModItems.SHAHED.get(), 4));
                 })
-                .thenWaitUntil(() -> h.assertTrue(be.queue().silent(level.getGameTime()), "пакет ещё не молчит"))
-                .thenExecute(() -> h.assertTrue(LauncherOrders.fire(level, be) == null, "залп шахедов не начался"))
-                .thenWaitUntil(() -> h.assertTrue(SalvoData.get(level).remaining(owner) == 3, "первый шахед не встал"))
+                .thenWaitUntil(() -> h.assertTrue(be.queue().silent(level.getGameTime()), "the package is not silent yet"))
+                .thenExecute(() -> h.assertTrue(LauncherOrders.fire(level, be) == null, "shahed salvo has not started"))
+                .thenWaitUntil(() -> h.assertTrue(SalvoData.get(level).remaining(owner) == 3, "the first Shahed didn't get up"))
                 .thenExecute(() -> {
-                    // в запасе ещё начатый пакет «Града»: шахеды — отдельно
-                    h.assertTrue(shaheds(be) == 3, "после первого шахеда в запасе " + shaheds(be));
-                    ServerActions.recall(level.getServer(), owner, "проверка");
-                    h.assertTrue(!SalvoData.busy(level, origin) && SalvoData.get(level).remaining(owner) == 0, "отбой не отменил залп");
-                    h.assertTrue(shaheds(be) == 3, "отбой тронул запас: " + shaheds(be));
+                    // in stock there is still a started package “Grad”: Shahed - separately
+                    h.assertTrue(shaheds(be) == 3, "after the first Shahed in stock " + shaheds(be));
+                    ServerActions.recall(level.getServer(), owner, "check");
+                    h.assertTrue(!SalvoData.busy(level, origin) && SalvoData.get(level).remaining(owner) == 0, "the all-clear did not cancel the salvo");
+                    h.assertTrue(shaheds(be) == 3, "the lights out touched the stock: " + shaheds(be));
                 })
                 .thenSucceed();
     }
 
-    // ---------------------------------------------------------------- пульт
+    // ---------------------------------------------------------------- remote control
 
     /**
-     * ПКМ пультом: своя пусковая привязывается, повторный — отвязывает; чужая — нет, а своя команда — да. «Огонь»
-     * привязанного пульта ставит задачу: оружие, число, разброс, место; пакет поворачивается к цели. Ядерного — нет;
-     * цель дальше дальности карты от пусковой — нет.
+     * RMB remote control: your own launcher binds, the second launcher unbinds; someone else's - no, but your own team - yes. “Fire”
+     *  of the linked remote control sets the task: weapon, number, spread, location; the package turns towards the target. Nuclear - no;
+     * target beyond the map range from the launcher - no.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "fixed_assign", skyAccess = true)
     public static void designatorAssignsMission(GameTestHelper h) {
@@ -217,13 +217,13 @@ public final class FixedLauncherGameTests {
         FixedLauncherBlockEntity be = launcher(h, RANGE_CENTER, owner.getUUID());
         ItemStack designator = new ItemStack(ModItems.DESIGNATOR.get());
         LauncherLinks.toggle(owner, designator, be);
-        h.assertTrue(LauncherLinks.of(designator).size() == 1, "своя не привязалась");
+        h.assertTrue(LauncherLinks.of(designator).size() == 1, "didn't get attached to mine");
         LauncherLinks.toggle(owner, designator, be);
-        h.assertTrue(LauncherLinks.of(designator).isEmpty(), "повторный ПКМ не отвязал");
+        h.assertTrue(LauncherLinks.of(designator).isEmpty(), "repeated RMB did not unfasten");
         ItemStack theirs = new ItemStack(ModItems.DESIGNATOR.get());
         LauncherLinks.toggle(stranger, theirs, be);
-        h.assertTrue(LauncherLinks.of(theirs).isEmpty(), "чужая привязалась");
-        // команда хозяина по UUID — по имени из списка игроков (в игре — ещё из кэша профилей, у сервера GameTest его нет)
+        h.assertTrue(LauncherLinks.of(theirs).isEmpty(), "someone else's got attached");
+        // host team for UUID - by name from the list of players (in the game - also from the profile cache, the server GameTest does not have it)
         online(h, owner);
         online(h, stranger);
         Scoreboard board = level.getScoreboard();
@@ -232,40 +232,40 @@ public final class FixedLauncherGameTests {
         board.addPlayerToTeam(owner.getScoreboardName(), team);
         board.addPlayerToTeam(stranger.getScoreboardName(), team);
         LauncherLinks.toggle(stranger, theirs, be);
-        h.assertTrue(LauncherLinks.of(theirs).size() == 1, "пусковая своей команды не привязалась");
+        h.assertTrue(LauncherLinks.of(theirs).size() == 1, "launcher of your team is not attached");
         LauncherLinks.toggle(owner, designator, be);
 
         Vec3 east = c.add(400, 0, 0);
         Loadout drones = new Loadout(WeaponType.DRONE, 2, 5, TargetMode.LOOK, "", Loadout.Nuke.DEFAULT);
         LauncherOrders.assign(owner, designator, drones, new ServerActions.Aim(new Target.Point(east), east, null), Waypoints.NONE);
         Mission m = be.mission();
-        h.assertTrue(m != null && m.weapon() == WeaponType.DRONE && m.count() == 2 && m.spread() == 5 && m.point().equals(east), "задача: " + m);
-        h.assertTrue(be.hasRack() && Math.abs(be.yaw() - be.yawTo(east)) < 1, "пакет не к цели: " + be.yaw());
+        h.assertTrue(m != null && m.weapon() == WeaponType.DRONE && m.count() == 2 && m.spread() == 5 && m.point().equals(east), "task: " + m);
+        h.assertTrue(be.hasRack() && Math.abs(be.yaw() - be.yawTo(east)) < 1, "package not to the target: " + be.yaw());
         Loadout icbm = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", Loadout.Nuke.DEFAULT);
         LauncherOrders.assign(owner, designator, icbm, new ServerActions.Aim(new Target.Point(east), east, null), Waypoints.NONE);
-        h.assertTrue(be.mission() == m, "задача МБР принята");
-        h.assertTrue(IncomingConfig.SERVER.carrierNukes.get(), "ядерная БЧ на ракете выключена в настройках — проверка ниже пуста");
+        h.assertTrue(be.mission() == m, "iCBM task accepted");
+        h.assertTrue(IncomingConfig.SERVER.carrierNukes.get(), "the nuclear warhead on the missile is disabled in the settings - the check below is empty");
         Loadout carrier = new Loadout(WeaponType.MISSILE, 1, 0, TargetMode.LOOK, "", new Loadout.Nuke(5, true, true));
         LauncherOrders.assign(owner, designator, carrier, new ServerActions.Aim(new Target.Point(east), east, null), Waypoints.NONE);
-        h.assertTrue(be.mission() == m, "ракета с ядерной БЧ принята");
+        h.assertTrue(be.mission() == m, "missile with nuclear warhead accepted");
         Vec3 beyond = c.add(0, 0, IncomingConfig.SERVER.mapRange.get() + 100);
         owner.moveTo(beyond.add(0, 0, -50));
         LauncherOrders.assign(owner, designator, drones, new ServerActions.Aim(new Target.Point(beyond), beyond, null), Waypoints.NONE);
-        h.assertTrue(be.mission() == m, "цель дальше дальности карты от пусковой принята");
-        // сломанная пусковая отвязывается при следующем «Огне», иначе пульт остался бы в режиме задач
+        h.assertTrue(be.mission() == m, "target beyond map range from launcher accepted");
+        // a broken launcher is untied at the next “Fire”, otherwise the remote control would remain in task mode
         owner.moveTo(c.add(3, 0, 0));
         level.removeBlock(h.absolutePos(RANGE_CENTER), false);
         LauncherOrders.assign(owner, designator, drones, new ServerActions.Aim(new Target.Point(east), east, null), Waypoints.NONE);
-        h.assertTrue(LauncherLinks.of(designator).isEmpty(), "сломанная пусковая осталась привязанной");
-        h.assertTrue(LauncherLinks.of(theirs).size() == 1, "отвязалась у чужого пульта");
+        h.assertTrue(LauncherLinks.of(designator).isEmpty(), "broken launcher remained tied");
+        h.assertTrue(LauncherLinks.of(theirs).size() == 1, "got loose at someone else's remote control");
         h.succeed();
     }
 
-    // ---------------------------------------------------------------- блок
+    // ---------------------------------------------------------------- block
 
     /**
-     * Запас полон стопками пакетов «Града» (воронка держит его полным): пакет из стопки вскрывается, и его остаток ложится
-     * в запасную ячейку, а не на землю; следующие снаряды — из него, возврат — в него.
+     * The stockpile is full of stacks of "Grad" packages (crater keeps it full): a package from the stack is opened, and the remainder goes
+     *  into the spare cell, not on the ground; the next projectiles are from it, the return is into it.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "fixed_block", skyAccess = true)
     public static void fullStoreKeepsOpenedPack(GameTestHelper h) {
@@ -276,38 +276,38 @@ public final class FixedLauncherGameTests {
         IItemHandler cap = level.getCapability(Capabilities.ItemHandler.BLOCK, abs, Direction.UP);
         ItemStack grad = new ItemStack(ModItems.GRAD_ROCKETS.get());
         int per = 40, full = FixedLauncherBlockEntity.SLOTS * grad.getMaxStackSize() * per;
-        h.assertTrue(cap != null && insert(cap, grad.copyWithCount(FixedLauncherBlockEntity.SLOTS * grad.getMaxStackSize())).isEmpty(), "запас не заполнился");
-        h.assertTrue(!insert(cap, grad.copy()).isEmpty(), "в полный запас вошло ещё");
+        h.assertTrue(cap != null && insert(cap, grad.copyWithCount(FixedLauncherBlockEntity.SLOTS * grad.getMaxStackSize())).isEmpty(), "stock not filled");
+        h.assertTrue(!insert(cap, grad.copy()).isEmpty(), "the full supply included more");
         AABB around = new AABB(abs).inflate(4);
         int[] paid = {0};
         java.util.function.IntConsumer pay = n -> {
-            h.assertTrue(Munitions.pay(be.store(), new Munitions.Bill(WeaponType.ROCKET, n, 0)) == null, "не оплачено " + n);
+            h.assertTrue(Munitions.pay(be.store(), new Munitions.Bill(WeaponType.ROCKET, n, 0)) == null, "not paid " + n);
             paid[0] += n;
         };
         java.util.function.Consumer<String> check = when -> {
             int left = Munitions.held(be.store().items(), grad.getItem(), per);
-            h.assertTrue(left == full - paid[0], when + ": снарядов " + left + " вместо " + (full - paid[0]));
-            h.assertTrue(dropped(level, around, grad) == 0, when + ": пакет выпал на землю");
+            h.assertTrue(left == full - paid[0], when + ": shells " + left + " instead of " + (full - paid[0]));
+            h.assertTrue(dropped(level, around, grad) == 0, when + ": the package fell to the ground");
         };
         pay.accept(1);
-        check.accept("первый снаряд");
+        check.accept("first shell");
         Munitions.refund(be.store(), new Munitions.Bill(WeaponType.ROCKET, 1, 0));
         paid[0] -= 1;
-        check.accept("возврат");
+        check.accept("refund");
         pay.accept(1);
-        check.accept("снова снаряд");
+        check.accept("shell again");
         pay.accept(39);
-        check.accept("вскрытый пакет кончился");
+        check.accept("the opened package is empty");
         pay.accept(1);
-        check.accept("вскрыт второй пакет");
+        check.accept("second package opened");
         h.succeed();
     }
 
     /**
-     * Запас: способность предметов с любой стороны и без стороны берёт боеприпасы, а не землю и не МБР; вынуть ею
-     * нельзя; воронка сверху кладёт, снизу — не тянет; компаратор видит запас. Сохранение: хозяин, задача, запас,
-     * курс; клиенту — только пакет, курс и подъём. Сломанная — выпадает сама и роняет запас. Кирка, каменная и лучше;
-     * рецепт — по тому, стоит ли Create.
+     * Stock: Any side and no side item ability takes ammo, not ground or ICBM; It is impossible to remove
+     *  with it; hopper puts on top, does not pull from below; the comparator sees the margin. Saving: master, task, stock,
+     * course; the client receives only the package, course and ascent. Broken - falls out on its own and drops the stock. Pickaxe, stone and better;
+     *  recipe - according to whether Create is worth it.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "fixed_block", skyAccess = true)
     public static void blockLoadsSavesAndBreaks(GameTestHelper h) {
@@ -317,27 +317,27 @@ public final class FixedLauncherGameTests {
         FixedLauncherBlockEntity be = launcher(h, at, owner);
         BlockPos abs = h.absolutePos(at);
         h.assertTrue(level.getBlockState(abs).is(BlockTags.MINEABLE_WITH_PICKAXE) && level.getBlockState(abs).is(BlockTags.NEEDS_STONE_TOOL),
-                "пусковая не для каменной кирки");
+                "launcher not for stone pickaxe");
         for (Direction side : new Direction[]{Direction.UP, Direction.NORTH, null}) {
             IItemHandler cap = level.getCapability(Capabilities.ItemHandler.BLOCK, abs, side);
-            h.assertTrue(cap != null && cap.getSlots() == FixedLauncherBlockEntity.SLOTS, "способность со стороны " + side);
+            h.assertTrue(cap != null && cap.getSlots() == FixedLauncherBlockEntity.SLOTS, "outside ability " + side);
         }
         IItemHandler cap = level.getCapability(Capabilities.ItemHandler.BLOCK, abs, Direction.UP);
-        h.assertTrue(insert(cap, new ItemStack(Items.DIRT, 5)).getCount() == 5, "пусковая взяла землю");
-        h.assertTrue(insert(cap, new ItemStack(ModItems.ICBM.get())).getCount() == 1, "пусковая взяла МБР");
-        h.assertTrue(insert(cap, new ItemStack(ModItems.CRUISE_MISSILE.get(), 3)).isEmpty(), "ракеты не вошли");
-        for (int i = 0; i < cap.getSlots(); i++) h.assertTrue(cap.extractItem(i, 64, false).isEmpty(), "боеприпас вынули способностью");
-        h.assertTrue(level.getBlockState(abs).getAnalogOutputSignal(level, abs) > 0, "компаратор не видит запас");
+        h.assertTrue(insert(cap, new ItemStack(Items.DIRT, 5)).getCount() == 5, "launcher took the ground");
+        h.assertTrue(insert(cap, new ItemStack(ModItems.ICBM.get())).getCount() == 1, "launcher took ICBM");
+        h.assertTrue(insert(cap, new ItemStack(ModItems.CRUISE_MISSILE.get(), 3)).isEmpty(), "the missiles did not enter");
+        for (int i = 0; i < cap.getSlots(); i++) h.assertTrue(cap.extractItem(i, 64, false).isEmpty(), "ammunition taken out by ability");
+        h.assertTrue(level.getBlockState(abs).getAnalogOutputSignal(level, abs) > 0, "the comparator does not see the reserve");
         Vec3 east = Vec3.atBottomCenterOf(abs).add(300, 0, 0);
         be.setMission(new Mission(WeaponType.MISSILE, 2, 0, new Target.Point(east), east, Waypoints.NONE));
 
         CompoundTag saved = be.saveWithFullMetadata(level.registryAccess());
         BlockEntity copy = BlockEntity.loadStatic(abs, level.getBlockState(abs), saved, level.registryAccess());
         h.assertTrue(copy instanceof FixedLauncherBlockEntity f && owner.equals(f.owner()) && be.mission().equals(f.mission())
-                && f.stockCount() == 3 && f.yaw() == be.yaw() && f.weapon() == WeaponType.MISSILE, "сохранение: " + saved);
+                && f.stockCount() == 3 && f.yaw() == be.yaw() && f.weapon() == WeaponType.MISSILE, "saving: " + saved);
         CompoundTag update = be.getUpdateTag(level.registryAccess());
         h.assertTrue(!update.contains("owner") && !update.contains("mission") && !update.contains("stock") && update.contains("rack"),
-                "клиенту ушло лишнее: " + update);
+                "the client lost extra money: " + update);
 
         BlockPos below = at.below(), above = at.above();
         h.setBlock(below, Blocks.HOPPER);
@@ -345,33 +345,33 @@ public final class FixedLauncherGameTests {
         HopperBlockEntity top = h.getBlockEntity(above);
         top.setItem(0, new ItemStack(ModItems.SHAHED.get(), 2));
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(top.getItem(0).isEmpty(), "воронка сверху не отдала шахеды"))
+                .thenWaitUntil(() -> h.assertTrue(top.getItem(0).isEmpty(), "hopper from above did not give Shahed"))
                 .thenIdle(20)
                 .thenExecute(() -> {
                     HopperBlockEntity bottom = h.getBlockEntity(below);
-                    h.assertTrue(bottom.isEmpty(), "воронка под пусковой вытащила боеприпас");
-                    h.assertTrue(be.stockCount() == 5, "в запасе " + be.stockCount() + " вместо 5");
+                    h.assertTrue(bottom.isEmpty(), "hopper under the launcher pulled out the ammunition");
+                    h.assertTrue(be.stockCount() == 5, "in stock " + be.stockCount() + " instead of 5");
                     level.setBlock(h.absolutePos(above), Blocks.AIR.defaultBlockState(), 3);
                     level.setBlock(h.absolutePos(below), Blocks.STONE.defaultBlockState(), 3);
                     AABB box = new AABB(abs).inflate(3);
                     level.getEntitiesOfClass(ItemEntity.class, box).forEach(ItemEntity::discard);
                     level.destroyBlock(abs, true);
-                    h.assertTrue(level.getBlockState(abs).isAir(), "пусковая не сломалась");
-                    h.assertTrue(dropped(level, box, ModItems.FIXED_LAUNCHER.get().getDefaultInstance()) == 1, "сломанная пусковая не выпала");
+                    h.assertTrue(level.getBlockState(abs).isAir(), "launcher is not broken");
+                    h.assertTrue(dropped(level, box, ModItems.FIXED_LAUNCHER.get().getDefaultInstance()) == 1, "broken launcher did not fall out");
                     h.assertTrue(dropped(level, box, ModItems.SHAHED.get().getDefaultInstance()) == 2
-                            && dropped(level, box, ModItems.CRUISE_MISSILE.get().getDefaultInstance()) == 3, "запас не выпал");
+                            && dropped(level, box, ModItems.CRUISE_MISSILE.get().getDefaultInstance()) == 3, "the stock did not drop out");
                     level.getEntitiesOfClass(ItemEntity.class, box).forEach(ItemEntity::discard);
                     var recipes = level.getServer().getRecipeManager();
                     boolean create = ModList.get().isLoaded("create");
-                    h.assertTrue(recipes.byKey(Incoming.id("fixed_launcher")).isPresent() == create, "рецепт с Create: " + create);
-                    h.assertTrue(recipes.byKey(Incoming.id("fixed_launcher_vanilla")).isPresent() == !create, "рецепт без Create: " + !create);
+                    h.assertTrue(recipes.byKey(Incoming.id("fixed_launcher")).isPresent() == create, "recipe with Create: " + create);
+                    h.assertTrue(recipes.byKey(Incoming.id("fixed_launcher_vanilla")).isPresent() == !create, "recipe without Create: " + !create);
                 })
                 .thenSucceed();
     }
 
     /**
-     * Задача командой ведущего ({@code /incoming launcher … mission}): «x z» — место на земле, высоту находит сервер;
-     * «x y z» — точка как есть, и над землёй тоже.
+     * Task by the leader’s team ({@code /incoming launcher … mission}): “x z” - a place on the ground, the height is found by the server;
+     *  “x y z” - the point as it is, and above the ground too.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "fixed_command", skyAccess = true)
     public static void commandMissionTakesPlaceOrPoint(GameTestHelper h) {
@@ -380,22 +380,22 @@ public final class FixedLauncherGameTests {
         BlockPos at = h.absolutePos(RANGE_CENTER);
         Vec3 east = Vec3.atBottomCenterOf(at).add(12, 0, 0);
         String mission = String.format(Locale.ROOT, "incoming launcher %d %d %d mission drone 2 5 ", at.getX(), at.getY(), at.getZ());
-        h.assertTrue(StrikeGameTests.command(h, mission + String.format(Locale.ROOT, "%.2f %.2f", east.x, east.z)) == 1, "задача «x z» не принята");
+        h.assertTrue(StrikeGameTests.command(h, mission + String.format(Locale.ROOT, "%.2f %.2f", east.x, east.z)) == 1, "task \"x z\" not accepted");
         double ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(east.x), Mth.floor(east.z)) - 0.5;
         Mission m = be.mission();
-        h.assertTrue(m != null && m.target() instanceof Target.Ground && m.point().y == ground, "задача «x z» не на земле (y " + ground + "): " + m);
+        h.assertTrue(m != null && m.target() instanceof Target.Ground && m.point().y == ground, "task \"x z\" is not on the ground (y " + ground + "): " + m);
         double air = ground + 30;
-        h.assertTrue(StrikeGameTests.command(h, mission + String.format(Locale.ROOT, "%.2f %.2f %.2f", east.x, air, east.z)) == 1, "задача «x y z» не принята");
+        h.assertTrue(StrikeGameTests.command(h, mission + String.format(Locale.ROOT, "%.2f %.2f %.2f", east.x, air, east.z)) == 1, "task \"x y z\" not accepted");
         m = be.mission();
-        h.assertTrue(m != null && m.target() instanceof Target.Point p && p.pos().y == air, "задача «x y z» — не точка на своей высоте: " + m);
+        h.assertTrue(m != null && m.target() instanceof Target.Point p && p.pos().y == air, "the task “x y z” is not a point at its height: " + m);
         h.succeed();
     }
 
-    // ---------------------------------------------------------------- помощники
+    // ---------------------------------------------------------------- assistants
 
     /**
-     * Поставить пусковую с хозяином {@code owner}, курс пакета — на +Z. После проверки — убрать без выпадения, и всё,
-     * что с неё ушло: снаряды, залпы.
+     * Install the launcher with the host {@code owner}, the package rate is +Z. After checking, remove it without falling out, and that’s it,
+     *  that left it: shells, volleys.
      */
     private static FixedLauncherBlockEntity launcher(GameTestHelper h, BlockPos at, @Nullable UUID owner) {
         ServerLevel level = h.getLevel();
@@ -415,10 +415,10 @@ public final class FixedLauncherGameTests {
     }
 
     private static void load(GameTestHelper h, FixedLauncherBlockEntity be, ItemStack stack) {
-        h.assertTrue(be.load(stack).isEmpty(), "боеприпас не вошёл в запас");
+        h.assertTrue(be.load(stack).isEmpty(), "ammunition was not included in the reserve");
     }
 
-    /** Снаряды хозяина {@code owner} у пусковой (на направляющих и только что сошедшие). */
+    /** The host's shells are {@code owner} at the launcher (on the rails and just dropped). */
     private static List<StrikeProjectile> ours(ServerLevel level, FixedLauncherBlockEntity be, @Nullable UUID owner) {
         AABB box = new AABB(be.getBlockPos()).inflate(12);
         return StrikeWorld.projectiles(level).stream().filter(p -> box.contains(p.position()) && java.util.Objects.equals(owner, p.ownerId())).toList();
@@ -428,7 +428,7 @@ public final class FixedLauncherGameTests {
         for (StrikeProjectile p : StrikeWorld.projectiles(level)) if (java.util.Objects.equals(owner, p.ownerId())) p.discard();
     }
 
-    /** Ключ строки перевода (null — строки нет). */
+    /** Translation string key (null - no string). */
     @Nullable
     private static String key(@Nullable Component c) {
         return c != null && c.getContents() instanceof TranslatableContents t ? t.getKey() : null;
@@ -438,7 +438,7 @@ public final class FixedLauncherGameTests {
         return Munitions.held(be.store().items(), ModItems.SHAHED.get(), 1);
     }
 
-    /** Игрок «в сети» для {@link ua.zentix.incoming.target.Sides}: в карте игроков сервера по UUID; убирается после проверки. */
+    /** Player “online” for {@link ua.zentix.incoming.target.Sides}: in the server players map for UUID; removed after inspection. */
     private static void online(GameTestHelper h, FakePlayer p) {
         Map<UUID, ServerPlayer> byUuid = SamGameTests.playersByUuid(h.getLevel().getServer().getPlayerList());
         byUuid.put(p.getUUID(), p);

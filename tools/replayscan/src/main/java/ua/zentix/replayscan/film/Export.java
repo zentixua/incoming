@@ -15,13 +15,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Flashback для съёмки: повтор (открыть, перемотать, шаг), вывод видео по ключевым кадрам или глазами игрока. Flashback —
- * мод Fabric (через Sinytra Connector), API для модов у него нет: открытые члены — отражением, имена — Flashback 0.39
- * (ветка 1.21); их же зовёт окно Flashback (перемотку и очередь вывода — из потока клиента).
+ * Flashback for shooting: replay (open, rewind, step), video output by key frames or through the eyes of the player. Flashback —
+ * mod Fabric (via Sinytra Connector), API for mods it does not have: public members are reflected, names are Flashback 0.39
+ *  (branch 1.21); they are also called by the window Flashback (rewind and output queue - from the client stream).
  */
 final class Export {
     private static final String P = "com.moulberry.flashback.";
-    /** Ключи камеры — с запасом до начала: вывод ставит камеру и чуть раньше. */
+    /** The camera keys are with a margin before the start: the output puts the camera a little earlier. */
     private static final int LEAD = 40;
 
     private Export() {}
@@ -77,7 +77,7 @@ final class Export {
         }
     }
 
-    /** id сущности записавшего игрока на сервере повтора ({@code −1} — её нет). */
+    /** id of the entity of the recording player on the replay server ({@code −1} - it does not exist). */
     static int localPlayerId() {
         try {
             Object s = server();
@@ -88,8 +88,8 @@ final class Export {
     }
 
     /**
-     * Повтор встаёт на тик {@code tick} (на паузе). На следующий тик — шаг: сервер повтора читает один тик, как при
-     * проигрывании, события этого тика у клиента живые; дальше — перемотка.
+     * The replay starts at tick {@code tick} (on pause). On the next tick - step: the replay server reads one tick, as when playing
+     * , the events of this tick are live on the client; then rewind.
      */
     static void seek(int tick) {
         try {
@@ -102,7 +102,7 @@ final class Export {
     }
 
     /**
-     * Члены Flashback, которые зовёт съёмка, на месте: иначе съёмка упала бы посреди повтора.
+     * The members of Flashback, who are called by the shooting, are in place: otherwise the shooting would fall in the middle of the replay.
      */
     static void check() throws ReflectiveOperationException {
         Class<?> flashback = peek("Flashback");
@@ -120,7 +120,7 @@ final class Export {
         peek("state.EditorState").getMethod("load", Path.class);
     }
 
-    /** Класс Flashback без инициализации: проверка идёт при создании мода, до клиента. */
+    /** Class Flashback without initialization: check occurs when creating the mod, before the client. */
     private static Class<?> peek(String name) throws ClassNotFoundException {
         return Class.forName(P + name, false, Export.class.getClassLoader());
     }
@@ -133,7 +133,7 @@ final class Export {
         }
     }
 
-    /** Место вывода: тик повтора с долей ({@code startTick} задания + пройденное); не выводит — NaN. */
+    /** Output location: tick replay with share ({@code startTick} tasks + completed); does not display - NaN. */
     static double exportTick() {
         try {
             Object job = c("Flashback").getField("EXPORT_JOB").get(null);
@@ -156,10 +156,10 @@ final class Export {
     }
 
     /**
-     * Задание вывода в очередь и запуск очереди — как кнопки «Add to queue» и «Start» окна вывода Flashback: камера и угол
-     * кадра — из состояния редактора {@code state} (JSON, как его хранит Flashback), видео — MKV, H264 первым кодером
-     * Flashback (его окно выбирает его же), стерео AAC, одинаковые случайные числа частиц в каждом выводе; {@code gui} —
-     * с интерфейсом игрока (окно вывода начинает задание только без него, вернуть можно потом).
+     * Setting the output to the queue and starting the queue - as the buttons "Add to queue" and "Start" of the output window Flashback: camera and angle
+     *  frame - from the editor state {@code state} (JSON, as it stores Flashback), video - MKV, H264 by the first encoder
+     * Flashback (its window selects it), stereo AAC, identical random numbers of particles in each output; {@code gui} —
+     *  with the player interface (the output window starts the task only without it, you can return it later).
      */
     static void queue(String name, Path state, Vec3 camera, float yaw, float pitch, int width, int height, int start, int end, double fps,
                       int bitrate, boolean gui, Path video) {
@@ -188,11 +188,11 @@ final class Export {
     }
 
     /**
-     * Состояние редактора Flashback (как его хранит Flashback): одна сцена; у камеры по ключевым кадрам — дорожки камеры и
-     * угла кадра с ключом на каждый тик окна (курс без скачка через ±180°; место ключа — ноги зрителя, на {@code eye} ниже
-     * глаза); глазами игрока — без дорожек. Интерфейс повтора (чат, табло, имена) скрыт, панель предметов — только
-     * с {@code gui}, зрители повтора не видны; {@code time} не меньше 0 — время суток (окно Visuals Flashback: во время
-     * вывода Flashback берёт его из состояния задания).
+     * Editor status Flashback (as stored by Flashback): one scene; for the camera on key frames - camera tracks and
+     *  frame corner with a key for each tick of the window (course without a jump through ±180°; the place of the key is the viewer's feet, {@code eye} below the
+     *  eye); through the eyes of the player - without paths. The replay interface (chat, scoreboard, names) is hidden, the item panel is only
+     *  with {@code gui}, replay viewers are not visible; {@code time} not less than 0 - time of day (window Visuals Flashback: during
+     *  output Flashback takes it from the task state).
      */
     static String editorState(@Nullable Cameras.Path path, int a, int b, double eye, boolean gui, long time) {
         JsonArray tracks = new JsonArray();
@@ -262,9 +262,9 @@ final class Export {
     private static boolean flawlessSearched;
 
     /**
-     * Кадр — только когда мир в нём построен: «flawless frames» Sodium (открытый {@code FlawlessFrames.getProvider()};
-     * Flashback включает его точкой входа Fabric, а на NeoForge Sodium её не читает — включаем сами). Без Sodium —
-     * ничего: недостроенные кадры видит проверка.
+     * Frame - only when the world is built in it: “flawless frames” Sodium (open {@code FlawlessFrames.getProvider()};
+     * Flashback includes it with the entry point Fabric, but on NeoForge Sodium does not read it - we turn it on ourselves). Without Sodium —
+     *  nothing: unfinished frames are seen by the check.
      */
     @SuppressWarnings("unchecked")
     static void flawless(boolean on) {

@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** План съёмки в том виде, как его пишет {@code tools/clips/plan.py}, объект плана по тикам, кадр и ключи камеры. */
+/** Film plan as written by {@code tools/clips/plan.py}, subject by tick, frame and camera keys. */
 class PlanTest {
     private static final String PLAN = """
             {"replay": "r.zip", "out": "film", "width": 1080, "height": 1920, "fps": 60, "bitrate": 40000000, "tries": 3,
@@ -48,15 +48,15 @@ class PlanTest {
         assertEquals(3, s.cameras().size());
         assertEquals("player:ZentixUA", s.cameras().get(0).player());
         assertTrue(s.cameras().get(1).follow());
-        assertTrue(s.cameras().get(2).follow(), "aim: subject — камера ведёт объект");
+        assertTrue(s.cameras().get(2).follow(), "aim: subject — camera tracks the subject");
         assertArrayEquals(new double[]{0, 24}, s.cameras().get(2).rise());
-        assertArrayEquals(new double[]{0}, s.cameras().get(1).rise(), "без rise — сам глаз");
+        assertArrayEquals(new double[]{0}, s.cameras().get(1).rise(), "without rise — the eye itself");
         assertEquals(0.5, s.need().near());
-        assertEquals(1, s.need().loud(), "громкого за кадром не больше, чем в кадре — по умолчанию");
-        assertEquals(-1, s.time(), "без time — время суток записи");
+        assertEquals(1, s.need().loud(), "off-screen loudness no greater than on-screen loudness by default");
+        assertEquals(-1, s.time(), "without time — the recorded time of day");
         assertTrue(p.loud().matcher("incoming:blast.near").find());
         assertFalse(p.loud().matcher("incoming:drone.engine").find());
-        // звук полёта «Града» — подлёт, не мотор; взрыв звуком полёта не считается
+        // Grad flight sound is the approach, not a motor; an explosion does not count as flight sound
         assertTrue(p.engine().matcher("incoming:rocket.incoming").find());
         assertTrue(p.engine().matcher("airstrike:drone.engine").find());
         assertTrue(p.engine().matcher("incoming:loiter.dive").find());
@@ -65,7 +65,7 @@ class PlanTest {
 
     @Test
     void onlySmokeOfTheLiveReplayIsInFrame() throws Exception {
-        // вывод идёт вживую с a − warm = −100: удар раньше — из перемотки, Incoming его не рисует
+        // rendering runs live from a − warm = −100: an earlier impact comes from seeking, and Incoming does not render it
         Plan.Shot s = plan().shots().get(0);
         Plan.Shot t = new Plan.Shot(s.name(), s.a(), s.b(), s.dim(), s.warm(), s.hold(), s.far(), s.cameras(), s.subject(),
                 List.of(new double[]{-150, 0, 64, 0}, new double[]{-100, 0, 64, 0}, new double[]{120, 0, 64, 0}), s.need(), s.time());
@@ -77,20 +77,20 @@ class PlanTest {
     void subjectFollowsPathThenEvent() throws Exception {
         Subject s = plan().shots().get(0).subject();
         assertEquals(170, s.firstKey());
-        // путь отсортирован: 150 — между 140 и 160
+        // path is sorted: 150 is between 140 and 160
         assertEquals(60, s.aim(150).z, 1e-9);
         assertEquals(3, s.aimSize(150));
-        // до появления — место первой точки пути
+        // before appearance: position of the first path point
         assertEquals(0, s.aim(100).z, 1e-9);
-        // событие: смотрим на него, шар поднимается
+        // event: look at it, the fireball rises
         assertEquals(100, s.aim(175).z, 1e-9);
         assertTrue(s.aim(210).y > 64);
         assertEquals(8, s.aimSize(175));
-        // после событий и пути — место последнего события
+        // after events and path: position of the last event
         assertEquals(100, s.aim(400).z, 1e-9);
-        // подлёт — с севера на юг
+        // approach from north to south
         assertEquals(1, s.heading().z, 1e-6);
-        // скорость по пути: 40 блоков к югу и 4 вниз за 20 тиков
+        // path velocity: 40 blocks south and 4 down over 20 ticks
         assertEquals(Math.hypot(40, 4) / 20, s.speed(150), 1e-9);
     }
 
@@ -104,12 +104,12 @@ class PlanTest {
                   "subject": {}, "need": {"subject": 0, "near": 0, "keys": 0, "share": 0}}]}
                 """);
         Plan.Camera c = Plan.read(f).shots().get(0).cameras().get(0);
-        assertEquals(new Vec3(0, 120, 0), c.eye(), "глаз — первого по времени ключа");
+        assertEquals(new Vec3(0, 120, 0), c.eye(), "eye from the earliest key");
         Cameras.Path p = Cameras.along(c.keys(), c.fov());
         assertEquals(100, p.at(200).pos().x, 1e-9);
-        assertEquals(0, p.at(50).pos().x, 1e-9, "до первого ключа — в нём");
-        assertEquals(200, p.at(400).pos().x, 1e-9, "после последнего — в нём");
-        assertEquals(0, p.at(150).yaw(), 1e-6, "взгляд на юг весь путь");
+        assertEquals(0, p.at(50).pos().x, 1e-9, "before the first key: at that key");
+        assertEquals(200, p.at(400).pos().x, 1e-9, "after the last key: at that key");
+        assertEquals(0, p.at(150).yaw(), 1e-6, "look south throughout the path");
         assertEquals(Math.toDegrees(Math.atan2(20, 100)), p.at(250).pitch(), 1e-4);
         assertEquals(60, p.at(250).fov());
         assertArrayEquals(new double[]{0, 16}, c.rise());
@@ -117,36 +117,36 @@ class PlanTest {
 
     @Test
     void lensFitsEventWidth() {
-        // огненный шар 18 блоков в 500 блоках — 12 % ширины вертикального кадра
+        // an 18-block fireball at 500 blocks is 12% of the vertical frame width
         double fov = Cameras.fovFor(18, 500, 0.12, 9 / 16.0);
         double tanX = Math.tan(Math.toRadians(fov / 2)) * 9 / 16.0;
         assertEquals(0.12, 18 / (2 * 500 * tanX), 1e-6);
-        assertEquals(70, Cameras.fovFor(100, 10, 0.5, 9 / 16.0), "не шире 70°");
+        assertEquals(70, Cameras.fovFor(100, 10, 0.5, 9 / 16.0), "no wider than 70°");
     }
 
     @Test
     void inFrameUsesAspect() {
         Cameras.Pose p = Cameras.Pose.look(Vec3.ZERO, new Vec3(0, 0, 100), 70);
-        assertEquals(0, p.yaw(), 1e-6, "взгляд на юг — yaw 0");
-        // на 30 блоков вбок в 100 блоках: в широком кадре есть, в вертикальном (tan 0.7·0.5625 = 0.39 > 0.3) — тоже
+        assertEquals(0, p.yaw(), 1e-6, "look south: yaw 0");
+        // 30 blocks sideways at 100 blocks: in the wide frame and also in the vertical frame (tan 0.7·0.5625 = 0.39 > 0.3)
         assertTrue(Cameras.View.of(p, 9 / 16.0).in(new Vec3(30, 0, 100), 1));
-        // на 50 вбок — только в широком
+        // 50 sideways: only in the wide frame
         assertFalse(Cameras.View.of(p, 9 / 16.0).in(new Vec3(50, 0, 100), 1));
         assertTrue(Cameras.View.of(p, 16 / 9.0).in(new Vec3(50, 0, 100), 1));
     }
 
     @Test
     void viewOfPoseMatchesFrame() {
-        // кадр оценки — тот же, что у вывода: точка у края по ширине, доля ширины кадра у предмета
+        // evaluation frame matches the render: a point near the width edge, the fraction of frame width occupied by an object
         Cameras.Pose p = Cameras.Pose.look(new Vec3(0, 64, 0), new Vec3(0, 64, 100), 70);
         Cameras.View v = Cameras.View.of(p, 9 / 16.0);
         double edge = 100 * Math.tan(Math.toRadians(35)) * 9 / 16.0;
         assertTrue(v.in(new Vec3(edge * 0.99, 64, 100), 1));
         assertFalse(v.in(new Vec3(edge * 1.01, 64, 100), 1));
-        assertFalse(v.in(new Vec3(edge * 0.9, 64, 100), Cameras.SAFE), "поле оценки уже кадра");
-        assertFalse(v.in(new Vec3(0, 64, -100), 1), "за камерой");
+        assertFalse(v.in(new Vec3(edge * 0.9, 64, 100), Cameras.SAFE), "evaluation field is narrower than the frame");
+        assertFalse(v.in(new Vec3(0, 64, -100), 1), "behind the camera");
         assertEquals(0.5, v.share(new Vec3(0, 64, 100), edge), 1e-9);
-        assertEquals(1, v.right().dot(new Vec3(-1, 0, 0)), 1e-9, "взгляд на юг: вправо — запад");
+        assertEquals(1, v.right().dot(new Vec3(-1, 0, 0)), 1e-9, "looking south: right is west");
         assertEquals(1, v.up().y, 1e-9);
     }
 
@@ -155,23 +155,23 @@ class PlanTest {
         Subject.Key k = new Subject.Key(100, new Vec3(0, 64, 0), 20);
         assertEquals(64, Cameras.keyPoint(k, 100).y, 1e-9);
         assertEquals(64 + 20 * 0.4 * 0.5, Cameras.keyPoint(k, 120).y, 1e-9);
-        assertEquals(64 + 20 * 0.4, Cameras.keyPoint(k, 200).y, 1e-9, "не выше 0.4 поперечника");
+        assertEquals(64 + 20 * 0.4, Cameras.keyPoint(k, 200).y, 1e-9, "no higher than 0.4 of the diameter");
     }
 
     @Test
     void editorStateKeysEveryTickAtFeet() {
         Cameras.Path path = t -> Cameras.Pose.look(new Vec3(0, 80, 0), new Vec3(Math.sin(t / 10.0) * 10, 64, 50), 30);
         JsonObject st = JsonParser.parseString(Export.editorState(path, 100, 120, 1.62, false, -1)).getAsJsonObject();
-        assertNull(st.getAsJsonObject("replayVisuals").get("overrideTimeOfDay"), "время суток — как в записи");
+        assertNull(st.getAsJsonObject("replayVisuals").get("overrideTimeOfDay"), "time of day matches the recording");
         JsonObject scene = st.getAsJsonArray("scenes").get(0).getAsJsonObject();
         assertEquals(100, scene.get("exportStartTicks").getAsInt());
         JsonObject cam = scene.getAsJsonArray("keyframeTracks").get(0).getAsJsonObject().getAsJsonObject("keyframesByTick");
-        assertNotNull(cam.get("58"), "ключи — с запасом до начала");
+        assertNotNull(cam.get("58"), "keys start with a margin before the beginning");
         assertEquals(80 - 1.62, cam.getAsJsonObject("110").getAsJsonArray("position").get(1).getAsDouble(), 1e-9);
-        // глазами игрока — без дорожек
+        // through the player eyes: no tracks
         JsonObject pov = JsonParser.parseString(Export.editorState(null, 100, 120, 1.62, true, 18000)).getAsJsonObject();
         assertEquals(0, pov.getAsJsonArray("scenes").get(0).getAsJsonObject().getAsJsonArray("keyframeTracks").size());
-        assertEquals(18000, pov.getAsJsonObject("replayVisuals").get("overrideTimeOfDay").getAsLong(), "ночь в выводе");
+        assertEquals(18000, pov.getAsJsonObject("replayVisuals").get("overrideTimeOfDay").getAsLong(), "night in the render");
     }
 
     @Test
@@ -179,8 +179,8 @@ class PlanTest {
         List<Plan.PathKey> keys = List.of(new Plan.PathKey(100, new Vec3(0, 80, 0), new Vec3(0, 70, 50), 0),
                 new Plan.PathKey(120, new Vec3(0, 80, 20), new Vec3(0, 70, 70), 20));
         Cameras.Path path = Cameras.along(keys, 80);
-        assertEquals(10, path.roll(110), 1e-9, "крен — между ключами");
-        assertEquals(20, path.roll(130), 1e-9, "после последнего ключа — его");
+        assertEquals(10, path.roll(110), 1e-9, "bank between keys");
+        assertEquals(20, path.roll(130), 1e-9, "after the last key: its value");
         JsonObject st = JsonParser.parseString(Export.editorState(path, 100, 120, 1.62, false, -1)).getAsJsonObject();
         JsonObject cam = st.getAsJsonArray("scenes").get(0).getAsJsonObject().getAsJsonArray("keyframeTracks").get(0).getAsJsonObject()
                 .getAsJsonObject("keyframesByTick");
@@ -189,7 +189,7 @@ class PlanTest {
 
     @Test
     void rollTiltsFrameLikeFlashback() {
-        // на юг, крен 30° влево: верх кадра клонится влево (на восток, +x), точка справа на горизонте — ниже середины
+        // southward, banked 30° left: the top of the frame tilts left (east, +x), a point on the right horizon is below center
         Cameras.View v = Cameras.View.of(new Cameras.Pose(Vec3.ZERO, 0, 0, 90), 1).rolled(30);
         assertEquals(0.5, v.up().x, 1e-9);
         assertEquals(Math.cos(Math.toRadians(30)), v.up().y, 1e-9);

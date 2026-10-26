@@ -69,38 +69,37 @@ light passes them, not the density. The camera frames each cap, and `pack.py` me
 decreasing). `pack.py` also moves the water-spray maps into the new measure of the smoke maps (one normalisation for all
 puffs).
 
-## Источник и воспроизведение
+## Source and playback
 
-Кадры шара — рендер бесплатной симуляции JangaFX «Gasoline Explosion» (EmberGen, 131 кадр). Лицензия CC0 проверена
-на странице автора и в `LICENSE.txt`/`README.txt` архива. Команды выше повторяют запекание; исходные VDB в git не входят.
-Клубы и сажа — из симуляции, размеры и время — из `CloudModel`. Перевод температуры EmberGen в кельвины приближённый;
-излучение поверхности при горении — около 314 кВт/м² (CCPS: 200–350). Плёночная кривая — подача, не изменение физики.
+Ball frames - render of the free simulation JangaFX “Gasoline Explosion” (EmberGen, 131 frame). License CC0 verified by
+ on the author's page and in the `LICENSE.txt`/`README.txt` archive. The commands above repeat the baking; the original VDB is not included in git.
+Clubs and soot are from the simulation, dimensions and time are from `CloudModel`. Conversion of temperature EmberGen to kelvins is approximate;
+ surface radiation during combustion is about 314 kW/m² (CCPS: 200–350). The film curve is a presentation, not a change in physics.
 
-Рендер 512×512, 256 выборок без адаптивной выборки (шумодав Cycles прозрачную сажу не чистит: при 32 выборках кадры
-остывания были крапчатыми), кадры 256×256: горение — без увеличения, у более широких кадров остывания пиксель —
-среднее нескольких пикселей рендера. Горение — 32 кадра равно по времени симуляции, остывание — 16 до последнего
-кадра со светящимся пламенем. Кадр вмещает всё вещество: край — по плотности, а не кругом; полуразмер кадра в радиусах
-шара — в `fireball.json`. Векторы движения к следующему кадру — оптический поток (Farneback, как у клубов дыма);
-шейдер смешивает соседние кадры вдоль них.
+Render 512×512, 256 samples without adaptive sampling (noise reduction Cycles does not clean transparent soot: with 32 samples the frames
+ cooled down were speckled), frames 256×256: burning - without enlargement, for wider frames the cooling pixel is
+, the average of several render pixels. Burning - 32 frame is equal in simulation time, cooling - 16 until the last
+ frame with a luminous flame. The frame contains all the matter: the edge - in density, not in a circle; the half-size of the frame in the radii
+ of the ball is in `fireball.json`. Motion vectors to the next frame are optical flow (Farneback, like billows smoke); the
+ shader blends adjacent frames along them.
 
-Подача: верх закреплён, соседние кадры смешиваются в шейдере вдоль векторов движения. Тонкий край краснеет и темнеет;
-альфа не ниже экранной яркости, ядра выше белого теряют насыщенность. Свет окружения ограничен таблицей огня на экране,
-не прежним пересвеченным листом. Мягкий ореол — подача после Iris, не изменение физической мощности.
+presentation: the top is fixed, adjacent frames are mixed in the shader along the motion vectors. The thin edge turns red and darkens;
+alpha is not lower than screen brightness, cores above white lose saturation. The ambient light is limited by the fire table on the screen,
+ not the same overexposed sheet. Soft halo - presentation after Iris, no change in physical power.
 
-## Клуб дыма
+## billows smoke
 
-`puff6a_*`, `puff6b_*`, `puff6v_*` — рендер CC0-симуляции JangaFX «Ground Explosion» (EmberGen, 200 кадров), команды выше.
-Своя Mantaflow давала пушистый шар с почти ровными картами света, у EmberGen — клубы настоящего облака взрыва. Клуб мода —
-комок облака, а не всё облако с ножкой: берётся шапка выше шейки облака (ножку и пыль у земли мод рисует своими клубами), и
-снимается она сверху, вдоль оси облака: сбоку срез ложился прямым низом каждого кадра, и лежащая пыль налёта вставала
-стенкой с отвесным краем (ревью #443); сверху срез — за густой шапкой. Сверху шапка вытянута (1,4–1,7 : 1), и вытянутый
-клуб клал гаусс мода косой полосой с длинными ровными боками: запекание сжимает пятно вдоль большой оси до круглого (в
-данных плотности, билинейно: матрица объекта Blender такой сдвиг не держит). Кадры — с 72-го (раньше у шапки мало мелкой
-структуры) по 117-й: дальше шапка упирается в край области симуляции (y = 285) и срезана прямо, такие кадры запекание не
-берёт. Толща кадров одна (медиана 12 поперёк
-силуэта): симуляция тает своим рассеиванием, а непрозрачность и цвет облака мода — из `CloudModel`. Шесть солнц, альбедо
-0,55 и асимметрия 0,55 — прежние: кадры дают форму клубов и как свет их проходит, а не плотность. Карты брызг `pack.py`
-переводит в новую меру карт дыма (одна на все клубы).
+`puff6a_*`, `puff6b_*`, `puff6v_*` - render of CC0 simulation JangaFX “Ground Explosion” (EmberGen, 200 frames), commands above.
+ Its Mantaflow gave a fluffy ball with almost even light maps, while EmberGen gave the billows of a real explosion cloud. billows mod -
+ a lump of cloud, and not the whole cloud with stem: a cap is taken above the neck of the cloud (the mod draws the stem and dust near the ground with its billows), and
+ it is removed from above, along the axis of the cloud: from the side the cut lay with the straight bottom of each frame, and the underlying dust of the raid rose up as a wall with a steep edge (review #443); cut from above - behind the thick cap. The top cap is elongated (1,4–1,7 : 1), and the elongated
+ club laid a Gaussian mode oblique stripe with long straight sides: baking compresses the spot along the major axis to a round one (in
+ density data, bilinear: object matrix Blender does not hold such a shift). Frames - from 72 (previously the cap had little fine
+ structure) to 117: then the cap rests on the edge of the simulation area (y = 285) and is cut off straight; baking does not take such frames
+. The thickness of the frames is the same (median 12 across the
+ silhouette): the simulation melts with its scattering, and the opacity and color of the mod cloud are from `CloudModel`. Six suns, albedo
+0,55 and asymmetry 0,55 are the same: the frames give the shape of the billows and how the light passes through them, not the density. Spray maps `pack.py`
+ converts to a new measure of smoke maps (one for all billows).
 
 # Ejecta, crushed-dust and air-burst puffs
 
@@ -135,16 +134,16 @@ the matter, colour and opacity. `pack.py` writes each frame's share of the simul
 and the crushed dust take their frame by the share of their own life, the air-burst cloud by its growth, like smoke.
 The renders were made on the CPU (the GPU was busy), 160×160 at 96 samples without adaptive sampling.
 
-## Выброс, пыль дробления и облако разрыва в воздухе
+## Ejection, crushing dust and rupture cloud in the air
 
-`eject6*`, `crush6*`, `air6*` — рендер ещё трёх CC0-симуляций JangaFX (EmberGen) с той же страницы, лицензия — там же
-и в `LICENSE.txt`/`README.txt` архивов: «Grenade Dust Impact» — завеса выброса грунта и холодная пыль рыхлого (купол
-пыли с комьями вокруг), «Building Implosion» — пыль дробления камня, бетона, кладки и плиты (пыль обрушения постройки),
-«Mid-Air Explosion» — облако разрыва в воздухе. Команды — выше. Клуб — комок, который кладёт гаусс мода: кадр круглый и
-без прямого среза (`FxAtlasTest`). Две симуляции у земли сняты сверху, как шапка: сбоку их пол срезал силуэт прямо, а
-отражение в полу (облако у стенки без трения — половина свободного) клало тёмную полосу посередине каждого кадра — верх
-затеняет низ. Тор Dust Shockwave комком не снимается — не взят. Mid-Air — сбоку, поперёк полёта: струи идут вдоль
-взгляда. Кадр, упёршийся в стенку области поперёк взгляда, не берётся. Толща и свет — как у дыма; кадры дают форму
-клубов, вещество, цвет и непрозрачность — у мода. «life» в json — доля жизни симуляции у кадра: завеса и пыль
-дробления берут кадр по доле своей жизни, облако разрыва — по росту. Рендер на процессоре (видеокарта была занята),
-160×160, 96 выборок без адаптивной выборки.
+`eject6*`, `crush6*`, `air6*` - render of three more CC0 simulations JangaFX (EmberGen) from the same page, license - in the same place
+ and in `LICENSE.txt`/`README.txt` archives: “Grenade Dust Impact” - a curtain of soil ejection and cold loose dust (a dome of
+ dust with clods around), “Building Implosion” - dust crushing stone, concrete, masonry and slabs (building collapse dust),
+"Mid-Air Explosion" - a cloud of rupture in the air. Teams are higher. billows - a lump that puts a Gaussian mode: the frame is round and
+ without a straight cut (`FxAtlasTest`). Two simulations near the ground were shot from above, like a cap: from the side their floor cut off the silhouette straight, and
+ the reflection in the floor (a cloud near the wall without friction - half free) put a dark stripe in the middle of each frame - the top
+ obscures the bottom. The torus Dust Shockwave does not come off in a lump - it is not taken. Mid-Air - from the side, across the flight: the jets go along the
+ view. A frame that rests against the wall of the area across the line of sight is not taken. Thickness and light - like smoke; frames give the shape
+clubs, substance, color and opacity - from the mod. “life” in json is the share of simulation life of the frame: the curtain and dust of
+ crushing take the frame according to the share of their life, the rupture cloud - by height. Render on the processor (the video card was busy),
+160×160, 96 samples without adaptive sampling.

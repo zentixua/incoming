@@ -10,43 +10,41 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Счёт попаданий без Minecraft (его события переводит {@link ServerWatch}; тест — {@code ImpactsTest}).
- *
- * <p>Попадание — снаряд ушёл из мира убитым или убранным в радиусе цели залпа ({@link #leave}) и начался взрыв, чей
- * снаряд — он же, и это подрыв боевой части ({@link #blast}: UUID источника взрыва, тип урона боевой части). Свой
- * взрыв аварии (снаряд разбился до взведения — малый ванильный взрыв без боевой части) попаданием не бывает: стенд
- * мерил бы не удары. Порядок любой: работа попаданий Incoming идёт под бюджетом
- * тика, и взрыв начинается через тики после ухода (или до него). Сопоставление — только по UUID: взрыв другого снаряда
- * рядом чужой уход не подтверждает, вторичные подрывы того же снаряда второй раз не считаются, взрыв без снаряда
- * (нет источника) не подтверждает ничего. Уход без взрыва — переход в полёт вне мира ({@code VirtualFlights.park}
- * тоже убирает сущность): он ждёт, пока снаряд не вернётся в мир тем же UUID ({@link #join} снимает ожидание) или не
- * взорвётся; срока у ожидания нет — подрыв под нагрузкой идёт сколько угодно позже, конец залпа решает его срок.
- * Всё — в потоке сервера, кроме {@link #waiting}.
+ * Hit counting without Minecraft ({@link ServerWatch} translates events; test {@code ImpactsTest}).
+ * <p>A hit requires projectile killed/removed near salvo target ({@link #leave}) and an explosion from that
+ * same projectile, specifically its warhead ({@link #blast}: explosion-source UUID and warhead damage type).
+ * Its crash explosion (before arming, small vanilla blast without warhead) is not a hit: otherwise the bench
+ * would measure crashes. Either order: Incoming impact work uses the tick budget and explosion may start
+ * ticks after removal or before it. Match UUID only: a nearby other projectile blast confirms nothing,
+ * secondary detonations count once, sourceless explosions confirm nothing. Removal without explosion means
+ * off-world flight ({@code VirtualFlights.park} removes entities too); wait until the same UUID rejoins
+ * ({@link #join} cancels waiting) or explodes. No wait deadline: detonation under load can be arbitrarily
+ * later; salvo completion owns its timeout. Server thread only except {@link #waiting}.
  */
 final class Impacts {
-    /** Цель залпа: уход в радиусе {@code r} от (x, z) по горизонтали — попадание этого залпа. */
+    /** Salvo target: removal within horizontal radius {@code r} of (x, z) belongs to this salvo. */
     record Target(String salvo, double x, double z, double r) {}
 
-    /** Уход у цели: снаряд, залп, где, когда (nanoTime) — миг попадания. */
+    /** Removal near target: projectile, salvo, position, time (nanoTime), the impact instant. */
     record Leave(UUID uuid, String salvo, double x, double y, double z, long nanos) {}
 
-    /** Подтверждённое попадание: уход и чем подтверждён ({@code blast-after} — взрыв после ухода, {@code blast-before} — до). */
+    /** Confirmed hit: removal and confirmation ({@code blast-after} means explosion after removal, {@code blast-before} before). */
     record Hit(Leave leave, String how) {}
 
     private final List<Target> targets = new ArrayList<>();
     private final Map<UUID, Leave> pending = new LinkedHashMap<>();
-    /** Снаряды, чей взрыв уже начался, а ухода у цели ещё не было. */
+    /** Projectiles whose explosion started but target removal has not occurred. */
     private final Set<UUID> blasted = new HashSet<>();
     private final Set<UUID> counted = new HashSet<>();
-    /** Читает и поток клиента ({@link #waiting}). */
+    /** Also read by client thread ({@link #waiting}). */
     private final Map<String, Integer> waiting = new ConcurrentHashMap<>();
 
-    /** Залп ждёт попаданий у (x, z) в радиусе r; позже заявленная цель берёт уход раньше прежних (места одни). */
+    /** Salvo awaits hits within r of (x, z); later registered target claims a removal before older targets (same sites). */
     void target(String salvo, double x, double z, double r) {
         targets.addFirst(new Target(salvo, x, z, r));
     }
 
-    /** Снаряд в мире (появился или вернулся из полёта вне мира): ждущий уход — не попадание; назад — был ли он. */
+    /** Projectile joined/rejoined from off-world flight: waiting removal was not a hit; return whether it existed. */
     boolean join(UUID uuid) {
         Leave l = pending.remove(uuid);
         if (l == null) return false;
@@ -55,8 +53,8 @@ final class Impacts {
     }
 
     /**
-     * Снаряд ушёл из мира убитым или убранным в (x, y, z). Назад — попадание (взрыв уже был), иначе null; уход у цели
-     * без взрыва ждёт ({@link #waiting}), вдали от целей — забыт.
+     * Projectile killed/removed at (x, y, z). Return hit if explosion already occurred, otherwise null;
+     * target removal without explosion waits ({@link #waiting}), removal far from targets is forgotten.
      */
     Hit leave(UUID uuid, double x, double y, double z, long nanos) {
         if (counted.contains(uuid)) return null;
@@ -73,8 +71,8 @@ final class Impacts {
     }
 
     /**
-     * Начался взрыв снаряда {@code uuid} (null — у взрыва нет снаряда); {@code warhead} — это подрыв боевой части, а не
-     * авария. Не в счёт — без снаряда или не боевая часть. Назад — попадание или null.
+     * Explosion of projectile {@code uuid} started (null means no projectile); {@code warhead} distinguishes
+     * warhead detonation from crash. Ignore absent projectile/non-warhead blast; return hit or null.
      */
     Hit blast(UUID uuid, boolean warhead) {
         if (uuid == null || !warhead || counted.contains(uuid)) return null;
@@ -92,7 +90,7 @@ final class Impacts {
         return new Hit(l, how);
     }
 
-    /** Уходов залпа у цели, ждущих взрыва или возврата в мир. */
+    /** Salvo target removals awaiting explosion or rejoin. */
     int waiting(String salvo) {
         return waiting.getOrDefault(salvo, 0);
     }

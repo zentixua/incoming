@@ -20,21 +20,20 @@ import java.util.function.DoubleSupplier;
 import java.util.regex.Pattern;
 
 /**
- * Звуки вывода: каждый начатый звук — строкой {@code sounds.jsonl} (тик, id, место, громкость у камеры, в кадре ли его
- * источник); громкие ({@link Plan#loud}) считаются в кадре и за кадром — громкого за кадром не должно быть больше, чем
- * в кадре. Моторы ({@link Plan#engine}) запоминаются: {@link #engine} — громкость мотора у объекта в этом кадре.
- * Громкость у камеры — как у игры: при линейном затухании {@code громкость × (1 − расстояние / дальность)}, без
- * затухания — громкость.
+ * Export sounds: each start writes {@code sounds.jsonl} (tick, ID, position, camera volume, source in
+ * frame). Count loud sounds ({@link Plan#loud}) on/off-screen; off-screen must not exceed on-screen.
+ * Remember engines ({@link Plan#engine}); {@link #engine} gives subject engine volume in this frame.
+ * Camera volume matches game: linear attenuation {@code volume × (1 − distance / range)}, otherwise volume.
  */
 final class Sounds implements SoundEventListener {
-    /** Громче этого у камеры громкий звук считается (дальние раскаты тише). */
+    /** Minimum camera volume for counting a loud sound (distant rolls are quieter). */
     static final double LOUD = 0.1;
 
     private final Pattern loud, engine;
     private final DoubleSupplier tick;
     private final Writer out;
     private final List<SoundInstance> engines = new ArrayList<>();
-    /** Камера последнего кадра: глаз, оси (вперёд, вправо, вверх), тангенсы полукадра. */
+    /** Last-frame camera: eye, forward/right/up axes, half-frame tangents. */
     @Nullable
     private Vec3 eye, fwd, right, up;
     private double tanX, tanY;
@@ -47,7 +46,7 @@ final class Sounds implements SoundEventListener {
         out = Files.newBufferedWriter(file, StandardCharsets.UTF_8);
     }
 
-    /** Камера кадра — по ней звук в кадре или нет. */
+    /** Frame camera determines sound in-frame status. */
     void camera(Vec3 eye, Vec3 fwd, Vec3 right, Vec3 up, double tanX, double tanY) {
         this.eye = eye;
         this.fwd = fwd;
@@ -79,14 +78,14 @@ final class Sounds implements SoundEventListener {
         }
     }
 
-    /** Громкость звука у камеры; {@code range} — дальность, которую ему дала игра. */
+    /** Sound volume at camera; {@code range} is the game-assigned range. */
     private double gain(SoundInstance s, Vec3 at, double range) {
         double v = s.getVolume();
         if (s.getAttenuation() == SoundInstance.Attenuation.NONE) return v;
         return v * Math.max(0, 1 - at.distanceTo(eye) / Math.max(1e-3, range));
     }
 
-    /** Источник в кадре (с полями в десятую долю полукадра) — по камере последнего кадра. */
+    /** Source in frame with one-tenth-half-frame margins, using last-frame camera. */
     private boolean onScreen(Vec3 at) {
         Vec3 d = at.subtract(eye);
         double z = d.dot(fwd);
@@ -94,7 +93,7 @@ final class Sounds implements SoundEventListener {
         return Math.abs(d.dot(right) / z) <= tanX * 1.1 && Math.abs(d.dot(up) / z) <= tanY * 1.1;
     }
 
-    /** Самый громкий у камеры мотор, чей источник ближе {@code radius} к объекту; 0 — не слышен. */
+    /** Loudest camera engine whose source is within {@code radius} of subject; 0 inaudible. */
     double engine(@Nullable Vec3 subject, double radius) {
         var manager = Minecraft.getInstance().getSoundManager();
         engines.removeIf(s -> !manager.isActive(s));

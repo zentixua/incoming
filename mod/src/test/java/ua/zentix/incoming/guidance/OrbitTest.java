@@ -7,12 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrbitTest {
     private static final Vec3 CENTER = Vec3.ZERO;
-    /** Барражирующий: 1.6 блока/тик. */
+    /** Loitering: 1.6 block/tick. */
     private static final double SPEED = 1.6;
 
     /**
-     * Все радиусы, которые выбирает барражирующий (32–48), оба направления облёта, заход с 12 сторон, с 60–600 блоков
-     * и с курсом мимо центра до ±40°: выход на круг, и дальше аппарат держит его линию в пределах {@link Orbit#TOLERANCE}.
+     * All radii chosen by the patroller (32–48), both directions of flight, approach from 12 sides, from 60–600 blocks
+     *  and with a course past the center to ±40°: entering the circle, and then the craft maintains its line within {@link Orbit#TOLERANCE}.
      */
     @Test
     void capturesAndHoldsCircleFromAnyApproach() {
@@ -38,16 +38,16 @@ class OrbitTest {
                                 }
                             }
                             assertTrue(captured >= 0 && captured < (start + 300) / SPEED,
-                                    "не вышел на круг: R=" + radius + " side=" + side + " dir=" + dir * 30 + " start=" + start + " miss=" + miss);
+                                    "did not enter the circle: R=" + radius + " side=" + side + " dir=" + dir * 30 + " start=" + start + " miss=" + miss);
                         }
                     }
                 }
             }
         }
-        assertTrue(Math.abs(worst) <= Orbit.TOLERANCE, "ушёл с круга на " + worst + ": " + where);
+        assertTrue(Math.abs(worst) <= Orbit.TOLERANCE, "left the circle " + worst + ": " + where);
     }
 
-    /** Сторона облёта: +1 и −1 кружат в разные стороны (курсовая скорость разного знака). */
+    /** Flight side: +1 and −1 are circling in different directions (heading speed of different sign). */
     @Test
     void sideSetsDirection() {
         for (int side : new int[]{1, -1}) {
@@ -61,14 +61,14 @@ class OrbitTest {
                 pos = pos.add(flight.forward().scale(SPEED));
                 turned += net.minecraft.util.Mth.wrapDegrees(flight.yaw() - before);
             }
-            assertTrue(turned * side > 100, "сторона " + side + ": повернул на " + turned);
+            assertTrue(turned * side > 100, "side " + side + ": turned to " + turned);
         }
     }
 
     /**
-     * Центр идёт (цель — моб или игрок, 0.1–0.6 блока/тик, прямо или по кругу): аппарат выходит на круг вокруг
-     * него и держит его линию так же, как у неподвижного; у цели, которая быстро кружит сама (игрок в полёте), —
-     * вдвое свободнее: её разворотов поле курсов не предугадывает.
+     * The center goes (target - mob or player, 0.1–0.6 block/tick, straight or in a circle): craft enters a circle around
+     *  him and keeps his line the same as that of a stationary one; at the target, which quickly circles itself (the player is in flight), -
+     *  is twice as free: the course field does not predict its turns.
      */
     @Test
     void followsMovingCenter() {
@@ -89,10 +89,10 @@ class OrbitTest {
                         if (captured < 0 && orbit.captured(pos, center, vel, SPEED, flight.yaw())) captured = t;
                         if (captured >= 0) worst = Math.max(worst, Math.abs(orbit.offset(pos, center)));
                     }
-                    String what = "v=" + v + (circling ? " по кругу" : " прямо") + " side=" + side;
-                    assertTrue(captured >= 0 && captured < 600, "не вышел на круг: " + what);
+                    String what = "v=" + v + (circling ? " in a circle" : " straight") + " side=" + side;
+                    assertTrue(captured >= 0 && captured < 600, "didn't make it to the circle: " + what);
                     double allowed = circling && v > 0.3 ? 2 * Orbit.TOLERANCE : Orbit.TOLERANCE;
-                    assertTrue(worst <= allowed, "ушёл с круга на " + worst + ": " + what);
+                    assertTrue(worst <= allowed, "left the circle " + worst + ": " + what);
                 }
             }
         }

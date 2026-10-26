@@ -1,19 +1,19 @@
-# Процессы проверок (stress.sh, mp_scenario.sh): каждый сервер и клиент — в своей сессии (setsid), остановка — всей
-# сессией. Обёртки клиентов (xvfb-run, nested_kwin.sh → dbus-run-session → kwin_wayland) держат JVM внуком: kill
-# обёртки оставляет Minecraft жить сиротой, а Ctrl+C в терминале до JVM в своей сессии и не доходит — гасит rig_stop_all.
-# Подключается через source; вызывающий скрипт ставит trap (rig_trap).
+# Check processes (stress.sh, mp_scenario.sh): each server and client has its own session (setsid); stop the entire
+# session. Client wrappers (xvfb-run, nested_kwin.sh → dbus-run-session → kwin_wayland) hold the JVM as a grandchild: kill
+# of the wrapper leaves Minecraft orphaned; terminal Ctrl+C never reaches a JVM in its own session, so rig_stop_all stops it.
+# Source this file; the caller installs traps (rig_trap).
 
 RIG_SESSIONS=()
-# метка в окружении всех процессов запуска (её несут exec env, xvfb-run, dbus-run-session и KWin): сессию с тем же
-# номером после оборота PID, но без метки, остановка не тронет
+# Environment tag on all launch processes (carried by exec env, xvfb-run, dbus-run-session and KWin): shutdown leaves a session
+# with a reused PID/session number alone if it lacks this tag
 RIG_TAG="INCOMING_RIG_TAG=$$.$RANDOM"
-# сообщения — в терминал скрипта, а не в .out, куда перенаправлен вызов rig_spawn
-exec {RIG_ERR}>&2 || exec {RIG_ERR}>/dev/null # без stderr (закрыт) — сообщения в никуда, скрипт живёт
+# Messages go to the script terminal, not the .out file receiving rig_spawn output
+exec {RIG_ERR}>&2 || exec {RIG_ERR}>/dev/null # No stderr (closed): discard messages and keep the script running
 
-# rig_spawn <команда…>: в фоне и в новой сессии; RIG_LAST — pid, он же номер сессии (для wait и kill -0).
-# Без управления заданиями фоновый процесс не лидер группы, и setsid делает сессию на месте, без fork.
+# rig_spawn <command…>: background, new session; RIG_LAST is the PID and session ID (for wait and kill -0).
+# Without job control a background process is not a group leader, so setsid creates the session in place without fork.
 rig_spawn() {
-  # без fd сообщений: сироты после KILL скрипта держали бы открытым его терминал, tee или ssh
+  # Do not inherit the message fd: after script KILL, orphans would keep its terminal, tee or ssh open
   env "$RIG_TAG" setsid "$@" {RIG_ERR}>&- &
   RIG_LAST=$!
   RIG_SESSIONS+=("$RIG_LAST")
@@ -21,14 +21,14 @@ rig_spawn() {
   for _ in $(seq 50); do
     sid=$(ps -o sid= -p "$RIG_LAST" 2>/dev/null | tr -d ' ') || sid=""
     [ "$sid" = "$RIG_LAST" ] && return 0
-    [ -z "$sid" ] && return 0 # уже вышел: скрипт сам увидит это по kill -0 и скажет, что не так
+    [ -z "$sid" ] && return 0 # Already exited: the caller checks with kill -0 and reports the problem
     sleep 0.1
   done
-  echo "rig: $1 не в своей сессии (sid $sid), остановка не найдёт его детей" >&$RIG_ERR || true
+  echo "rig: $1 is outside its own session (sid $sid); shutdown will not find its children" >&$RIG_ERR || true
   return 1
 }
 
-# процессы сессии с нашей меткой (пусто — сессии нет или номер уже чужой)
+# Session processes with our tag (empty if absent or the ID now belongs to another session)
 rig_members() {
   local pid
   for pid in $(pgrep -s "$1" 2>/dev/null); do
@@ -37,21 +37,21 @@ rig_members() {
   return 0
 }
 
-# срок до KILL в секундах: RIG_GRACE (тест ставит 2), не число или пусто — 20
+# Seconds before KILL: RIG_GRACE (test uses 2); empty or non-numeric means 20
 rig_grace() {
   local g=${RIG_GRACE:-20}
   [[ $g =~ ^[0-9]+$ ]] || g=20
   echo $((10#$g))
 }
 
-# rig_stop <sid…>: TERM всей сессии (JVM успевает сохранить мир), через rig_grace с оставшимся — KILL.
+# rig_stop <sid…>: TERM the entire session (JVM can save the world), KILL remaining processes after rig_grace s.
 rig_stop() {
   local sid live=() left grace
   grace=$(rig_grace)
   for sid in "$@"; do [ -n "$(rig_members "$sid")" ] && live+=("$sid"); done
   [ ${#live[@]} -eq 0 ] && return 0
   for sid in "${live[@]}"; do pkill -TERM -s "$sid" 2>/dev/null || true; done
-  left=("${live[@]}") # срок 0 — KILL сразу
+  left=("${live[@]}") # Timeout 0: KILL immediately
   local deadline=$((SECONDS + grace))
   while [ $SECONDS -lt $deadline ]; do
     left=()
@@ -60,29 +60,29 @@ rig_stop() {
     sleep 0.2
   done
   for sid in "${left[@]}"; do
-    # сначала KILL: сообщение в закрытый терминал (или в убитый tee) не должно его отменить
+    # KILL first: writing to a closed terminal (or dead tee) must not cancel it
     local names
     names=$(ps -o comm= -s "$sid" 2>/dev/null | sort -u | tr '\n' ' ') || names=""
     pkill -KILL -s "$sid" 2>/dev/null || true
-    echo "rig: сессия $sid не вышла за $grace с после TERM — KILL: $names" >&$RIG_ERR || true
+    echo "rig: session $sid did not exit within $grace s after TERM — KILL: $names" >&$RIG_ERR || true
   done
 }
 
 rig_stop_all() {
-  # повторный Ctrl+C во время остановки не должен оборвать её до KILL
+  # A second Ctrl+C during shutdown must not interrupt it before KILL
   trap '' INT TERM HUP PIPE
   if [ ${#RIG_SESSIONS[@]} -gt 0 ]; then
-    [ -n "${RIG_SIG:-}" ] && { echo "rig: останавливаю запуски (до $(rig_grace) с)…" >&$RIG_ERR || true; }
+    [ -n "${RIG_SIG:-}" ] && { echo "rig: stopping runs (up to $(rig_grace) s)…" >&$RIG_ERR || true; }
     rig_stop "${RIG_SESSIONS[@]}"
   fi
-  # выход по сигналу — тем же сигналом: цикл вокруг скрипта и systemd видят прерывание, а не код ошибки
+  # Exit by the same signal: a wrapper loop and systemd see interruption, not an error exit code
   if [ -n "${RIG_SIG:-}" ]; then
     trap - "$RIG_SIG" EXIT
     kill -"$RIG_SIG" $$
   fi
 }
 
-# выход по любой причине (конец, ошибка set -e, Ctrl+C, kill скрипта) гасит все сессии
+# Every exit (end, set -e error, Ctrl+C, script kill) shuts down all sessions
 rig_trap() {
   trap rig_stop_all EXIT
   trap 'RIG_SIG=INT; exit 130' INT

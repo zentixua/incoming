@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldNoiseTest {
-    /** Поле в объёме — тоже около N(0, 1): разброс 3D-шума в пределах трети от плоского (для пятен гари хватает). */
+    /** The field in volume is also about N(0, 1): the spread of 3D noise is within a third of flat (enough for burning spots). */
     @Test
     void volumeRoughlyNormalised() {
         WorldNoise n = new WorldNoise(12345L, 1);
@@ -23,11 +23,11 @@ class WorldNoiseTest {
             }
         }
         double mean = sum / count, std = Math.sqrt(sq / count - mean * mean);
-        assertEquals(0, mean, 0.1, "среднее");
-        assertEquals(1, std, 0.35, "разброс");
+        assertEquals(0, mean, 0.1, "average");
+        assertEquals(1, std, 0.35, "spread");
     }
 
-    /** Поле приведено к N(0, 1): среднее и разброс по большому участку, хвосты — как у нормальной величины. */
+    /** The field is reduced to N(0, 1): average and spread over a large area, tails - like a normal value. */
     @Test
     void normalised() {
         WorldNoise n = new WorldNoise(12345L, 1);
@@ -43,13 +43,13 @@ class WorldNoiseTest {
             }
         }
         double mean = sum / count, std = Math.sqrt(sq / count - mean * mean);
-        assertEquals(0, mean, 0.05, "среднее");
-        assertEquals(1, std, 0.05, "разброс");
-        // у N(0, 1) за пределами ±1 — 31.7 %
-        assertEquals(0.317, beyond1 / (double) count, 0.06, "хвосты");
+        assertEquals(0, mean, 0.05, "average");
+        assertEquals(1, std, 0.05, "spread");
+        // at N(0, 1) beyond ±1 - 31.7 %
+        assertEquals(0.317, beyond1 / (double) count, 0.06, "tails");
     }
 
-    /** Соседние места почти одинаковы (пятна), далёкие — независимы; другое зерно и другой слой — другое поле. */
+    /** Neighboring places are almost identical (spots), distant places are independent; another seed and another layer - another field. */
     @Test
     void patchesAndIndependence() {
         WorldNoise a = new WorldNoise(1L, 1), b = new WorldNoise(2L, 1);
@@ -64,13 +64,13 @@ class WorldNoiseTest {
             layers += v * a.at(x, z, 1);
             count++;
         }
-        assertTrue(near / count > 0.9, "соседи " + near / count);
-        assertTrue(Math.abs(far / count) < 0.1, "далёкие " + far / count);
-        assertTrue(Math.abs(seeds / count) < 0.1, "зёрна " + seeds / count);
-        assertTrue(Math.abs(layers / count) < 0.1, "слои " + layers / count);
+        assertTrue(near / count > 0.9, "neighbors " + near / count);
+        assertTrue(Math.abs(far / count) < 0.1, "distant " + far / count);
+        assertTrue(Math.abs(seeds / count) < 0.1, "seed " + seeds / count);
+        assertTrue(Math.abs(layers / count) < 0.1, "layers " + layers / count);
     }
 
-    /** Масштаб модели: при 0.5 блока на метр те же пятна вдвое меньше в блоках. */
+    /** Model scale: with 0.5 block per meter, the same spots are half as large in blocks. */
     @Test
     void scaleInBlocks() {
         WorldNoise m = new WorldNoise(5L, 1), half = new WorldNoise(5L, 0.5);

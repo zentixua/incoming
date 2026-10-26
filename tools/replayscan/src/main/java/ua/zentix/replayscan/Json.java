@@ -37,10 +37,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Значения пакетов и пакетов модов — в JSON, без знания их классов: записи — по компонентам, прочие объекты — по
- * полям экземпляра; числа, строки, перечисления, UUID, id реестров, места ({@code [x, y, z]}), блоки (строкой, как
- * в {@code /setblock}), предметы, тексты, NBT (SNBT). Списки и строки обрезаются ({@link #LIST}, {@link #TEXT}),
- * глубина — не больше {@link #DEPTH}: пакет мода может нести что угодно, а строка ленты должна оставаться строкой.
+ * Values of packages and mod packages - in JSON, without knowledge of their classes: records - by components, other objects - by
+ *  instance fields; numbers, strings, enumerations, UUID, id registers, places ({@code [x, y, z]}), blocks (strings like
+ *  in {@code /setblock}), objects, texts, NBT (SNBT). Lists and lines are truncated ({@link #LIST}, {@link #TEXT}),
+ *  depth - no more than {@link #DEPTH}: the mod package can carry anything, but the tape line must remain a line.
  */
 public final class Json {
     static final int LIST = 64, TEXT = 2000, DEPTH = 6;
@@ -154,7 +154,7 @@ public final class Json {
         }
     }
 
-    /** Значение компонента записи (отражением; закрытые записи модов — через {@code setAccessible}). */
+    /** Entry component value (by reflection; private mod entries via {@code setAccessible}). */
     public static Object component(Record r, RecordComponent c) {
         try {
             var m = c.getAccessor();
@@ -205,7 +205,7 @@ public final class Json {
                     f.setAccessible(true);
                     out.add(f);
                 } catch (RuntimeException e) {
-                    // модуль не открыт: поле пропускается
+                    // module not open: field skipped
                 }
             }
         }

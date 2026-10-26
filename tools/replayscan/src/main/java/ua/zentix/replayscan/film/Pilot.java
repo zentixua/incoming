@@ -10,80 +10,80 @@ import java.util.Locale;
 import java.util.Random;
 
 /**
- * Пилот FPV (13.10, Артём: «человек видит происходящее, дым и на лету обходит препятствия — перенеси принцип»): полёт
- * камеры прокладывается, как его пролетел бы пилот FPV-дрона, только по всему, что повтор знает наперёд, — рельеф, дома
- * и кроны у клиента ({@link Grid}), дым каждого удара во времени ({@link Plume}), снаряд и место, куда он ударит. Это
- * задача оптимизации пути:
+ * FPV pilot (Artem, 13.10: "a person sees what happens, smoke, and avoids obstacles in flight; transfer
+ * that principle"): plan camera flight like an FPV-drone pilot using replay foreknowledge: client terrain,
+ * buildings/crowns ({@link Grid}), each impact smoke over time ({@link Plume}), projectile and impact site.
+ * Path optimization:
  * <ul>
- * <li>полёт задают ручки пилота ({@link Controls}): скорость, поворот курса и набор высоты в узлах через {@link #KNOT}
- * тиков (между узлами — плавно), место и курс в тик прохода мимо удара; путь — их сумма по тикам в обе стороны от
- * прохода. Так он всегда летаем: дуги и разгоны, а не зигзаг точек;</li>
- * <li>взгляд — на то, что происходит: место удара (снаряд влетает в кадр), огненный шар, потом всё больше вперёд по
- * курсу; догоняет цель с запаздыванием рук {@link #LAG}; крен — по боковому ускорению, как у дрона в вираже;</li>
- * <li>цена пути ({@link #cost}) — сумма по тикам окна: камера ближе запаса к земле, домам и кронам или над чанками,
- * которых у клиента нет; в дыму; дым или рельеф на линии взгляда; низ кадра на земле за чанками повтора (как
- * {@code low_out} вывода); удар не на своём расстоянии (мелко или не помещается); скорость и ускорение вне пределов
- * дрона; взгляд поворачивает так быстро, что дальнее смазывается; дрон летит боком (камера FPV смотрит, куда он летит);
- * снаряд перед ударом не в кадре; удар не виден в первые тики. Другие удары окна в кадре — в плюс;</li>
- * <li>поиск — затравки (проход мимо удара прямо и дугой, разными курсами, сторонами, в стороне и на высоте), лучшие
- * разные доводятся методом перекрёстной энтропии: выборка ручек вокруг лучших, разброс сужается по лучшим.</li>
+ * <li>Pilot controls ({@link Controls}) define speed, heading turn and climb at {@link #KNOT}-tick nodes
+ * (smooth between), position/heading at impact flyby; integrate both ways by ticks. Always flyable arcs
+ * and accelerations, not a zigzag of points;</li>
+ * <li>Look at action: impact site (projectile enters frame), fireball, then increasingly forward; follows
+ * with hand lag {@link #LAG}; roll from lateral acceleration like a turning drone;</li>
+ * <li>Path cost ({@link #cost}) sums window ticks: camera within clearance of ground/buildings/crowns or
+ * above absent chunks; inside smoke; smoke/terrain on sightline; lower frame ground beyond replay chunks
+ * (export {@code low_out}); impact wrong distance (too small or clipped); speed/acceleration beyond drone
+ * limits; look turn fast enough to blur distance; sideways flight (FPV camera faces travel); projectile
+ * missing before impact; impact invisible in its first ticks. Other window impacts in frame are bonuses;</li>
+ * <li>Search seeds: straight/curved passes, headings, sides, lateral/vertical offsets; refine best diverse
+ * seeds with cross-entropy: sample controls around best, narrow spread using best.</li>
  * </ul>
- * Поверх пути — руки оператора и толчки взрывов ({@link Hands}), каждый кадр вывода проверяет {@link FrameLog}.
+ * Add operator hands and explosion impulses ({@link Hands}) over path; {@link FrameLog} checks each exported frame.
  */
 final class Pilot {
-    /** Рельеф у клиента: высота земли (верх блоков, что держат движение, с листвой) в столбце; NaN — чанка нет. */
+    /** The client’s relief: the height of the ground (the top of the blocks that hold the movement, with foliage) in a column; NaN - no chunk. */
     interface Terrain {
         double ground(int x, int z);
     }
 
-    /** Шаг узлов ручек пилота, тиков. */
+    /** Pilot handle assembly pitch, tick. */
     static final int KNOT = 24;
-    /** Ручки: поворот курса — не круче, ° за тик (у 1 блока за тик — круг в 14 блоков); набор и снижение, блоков за тик. */
+    /** Handles: course rotation - no steeper, ° per tick (for 1 block per tick - circle in 14 blocks); set and decrease, blocks per tick. */
     static final double W_MAX = 4, CLIMB = 0.5;
-    /** Наклон дрона вперёд у скорости 20 м/с — 25° (сопротивление воздуха): летит боком — крен на столько же. */
+    /** The drone tilts forward at a speed of 20 m/s - 25° (air resistance): flies sideways - roll by the same amount. */
     static final double TILT = 0.0114;
-    /** Путь считается с запасом до окна (вывод ставит ключи камеры за 42 тика до начала) и после. */
+    /** The path is calculated with a margin before the window (the output puts the camera keys 42 tick before the start) and after. */
     static final int BEFORE = 50, AFTER = 10;
-    /** Запаздывание взгляда за целью, тиков (как у погони трейлера). */
+    /** Delay of sight behind the target, tick (like a chase trailer). */
     static final double LAG = 2;
-    /** Скорость дрона: наименьшая, удобная и наибольшая, блоков за тик (10, 21 и 30 м/с). */
+    /** Drone speed: lowest, comfortable and highest, blocks per tick (10, 21 and 30 m/s). */
     static final double V_MIN = 0.5, V_PREF = 1.05, V_MAX = 1.5;
-    /** Наибольшее ускорение, блоков за тик² (18 м/с², почти 2 g). */
+    /** Highest acceleration, blocks per tick² (18 m/s², almost 2 g). */
     static final double A_MAX = 0.045;
-    /** Наибольшая угловая скорость взгляда, ° за тик (44°/с): быстрее дальнее смазывается. */
+    /** Highest angular velocity of gaze, ° per tick (44°/s): the farthest is blurred faster. */
     static final double TURN = 2.2;
     /**
-     * Взгляд боком к курсу, без счёта до стольких градусов: на подлёте — почти по курсу (FPV летит на цель), у удара —
-     * доворот на шар на пролёте мимо (у пилотов — облёт с рысканием), после — снова вперёд; меняется не быстрее
-     * {@link #CRAB_RATE} ° за тик.
+     * Looking sideways to the course, without counting up to so many degrees: on approach - almost on course (FPV flies towards the target), at impact -
+     *  turns towards the ball as it flies past (for pilots - fly-by with yaw), after - forward again; changes no faster
+     * {@link #CRAB_RATE} ° per tick.
      */
     static final double CRAB_IN = 20, CRAB_PASS = 60, CRAB_OUT = 30, CRAB_RATE = 1.5;
-    /** Запас от земли, домов и крон по высоте, блоков; окрестность столбца, где ищется самый высокий блок. */
+    /** Reserve from land, houses and crowns in height, blocks; the neighborhood of the column where the tallest block is searched. */
     static final double CLEAR = 3;
     static final int REACH = 2;
-    /** Высота над землёй, где дрон летит «низко»: ниже — земля рядом, выше — уже не низко. */
+    /** The height above the ground where the drone flies “low”: lower – the ground is nearby, higher – no longer low. */
     static final double LOW = 5, HIGH = 14;
     /**
-     * Запас от дыма, блоков; удары дальше этого от удара прохода в дым пилота не берутся. Дым у камеры пилот меряет
-     * сеткой лучей вывода ({@link #smother}): закрыто больше {@link #SMOTHER_FROM} кадра — уже в счёт, от порога вывода
-     * ({@link FrameLog#SMOTHERED}) — кадр в дыму.
+     * Stock against smoke, blocks; strikes beyond this from the impact of the passage into the pilot's smoke are not taken. The pilot measures the smoke at the camera
+     *  with a grid of output rays ({@link #smother}): more than {@link #SMOTHER_FROM} frames are closed - this already counts, from the output threshold
+     *  ({@link FrameLog#SMOTHERED}) - the frame is in the smoke.
      */
     static final double SMOKE = 3, SMOTHER_FROM = 0.3;
     static final double SMOKE_REACH = 260;
-    /** Наибольший крен, °; вверх и вниз взгляд — не больше, °; после удара — вперёд по курсу на столько вниз, °. */
+    /** Maximum roll, °; up and down look - no more, °; after the impact - forward along the course so much downwards, °. */
     static final double ROLL = 35, UP = 35, DOWN = 60, AHEAD = 12;
-    /** Крен меняется не быстрее, ° за тик (40°/с): быстрее — путь виляет. */
+    /** The roll does not change faster, ° per tick (40°/s): faster - the path wobbles. */
     static final double ROLL_RATE = 1.5;
-    /** Как далеко низ кадра проверяется на чанки (как {@link FrameLog#LOW_NEAR}); уровень моря ванили. */
+    /** How far down the frame is checked for chunks (like {@link FrameLog#LOW_NEAR}); vanilla sea level. */
     static final double LOW_NEAR = 128, SEA = 63;
-    /** Затравки: курсов, проход через столько тиков после удара; доводится лучших разных. */
+    /** Seeds: courses, passing through as many ticks after impact; brings the best different ones. */
     static final int HEADINGS = 12, PASS = 24, SEEDS = 6;
-    /** Перекрёстная энтропия: выборка, лучших в ней, шагов; разброс опорных точек вначале и наименьший, блоков. */
+    /** Cross entropy: sampling the best steps in it; scatter of reference points at the beginning and smallest, blocks. */
     static final int POP = 40, ELITE = 6, ITER = 30;
-    /** Наименьший разброс поиска — доля начального ({@link Controls#sigma}). */
+    /** The smallest search spread is the share of the initial one ({@link Controls#sigma}). */
     static final double SIG_MIN = 0.03;
 
-    /** Рельеф квадратом {@code ±half} у места: высоты столбцов и наибольшие в {@link #REACH} блоках вокруг. */
+    /** Relief with a square {@code ±half} at the place: the heights of the columns and the largest in the {@link #REACH} blocks around. */
     static final class Grid {
         final int x0, z0, n;
         private final float[] ground, high;
@@ -96,7 +96,7 @@ final class Pilot {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) ground[i * n + j] = (float) t.ground(x0 + i, z0 + j);
             }
-            // наибольшая высота в квадрате ±REACH: по x, потом по z; рядом столбец без чанка — неизвестно
+            // greatest height squared ±REACH: by x, then by z; next to it is a column without a chunk - unknown
             float[] tmp = new float[n * n];
             high = new float[n * n];
             for (int i = 0; i < n; i++) {
@@ -120,12 +120,12 @@ final class Pilot {
             return m;
         }
 
-        /** Высота земли; NaN — чанка нет или за квадратом. */
+        /** Height of the ground; NaN - there is no chunk or behind the square. */
         double ground(double x, double z) {
             return at(ground, x, z);
         }
 
-        /** Наибольшая высота в {@link #REACH} блоках вокруг (запас камеры от стен и крон); NaN — где-то рядом чанка нет. */
+        /** The greatest height in {@link #REACH} blocks around (camera margin from walls and crowns); NaN - there is no chunk somewhere nearby. */
         double high(double x, double z) {
             return at(high, x, z);
         }
@@ -135,7 +135,7 @@ final class Pilot {
             return i < 0 || j < 0 || i >= n || j >= n ? Double.NaN : v[i * n + j];
         }
 
-        /** Рельеф закрывает отрезок (ближе {@code spare} блоков к концу — не в счёт); где чанка нет — не закрывает. */
+        /** The relief closes the segment (closer to {@code spare} blocks towards the end - does not count); where there is no chunk, it does not close. */
         boolean hides(Vec3 from, Vec3 to, double spare) {
             Vec3 d = to.subtract(from);
             double len = d.length();
@@ -147,9 +147,9 @@ final class Pilot {
         }
 
         /**
-         * Событие поперечником {@code size} в {@code k} видно, как его считает вывод ({@link Cameras#keySeen}): в кадре и
-         * открыты не меньше двух лучей из трёх — к середине и к бокам на 0,35 поперечника поперёк взгляда; последние
-         * {@code max(1.5, 0.4·size)} блоков у события не в счёт. Рельеф — столбцами, а не формами блоков.
+         * An event with a diameter of {@code size} in {@code k} is visible as it is considered by the conclusion ({@link Cameras#keySeen}): in the frame and
+         *  at least two rays out of three are open - to the middle and to the sides at a diameter of 0,35 across the view; The last
+         * {@code max(1.5, 0.4·size)} blocks of the event do not count. The relief is in columns, not block shapes.
          */
         boolean seen(Cameras.View v, Vec3 k, double size) {
             if (!v.in(k, 1)) return false;
@@ -161,8 +161,8 @@ final class Pilot {
         }
 
         /**
-         * Низ кадра (лучи у нижнего края: слева, посередине, справа) на земле за чанками повтора — как {@code low_out}
-         * вывода ({@link FrameLog}); сколько таких лучей.
+         * The bottom of the frame (rays at the bottom edge: left, middle, right) on the ground behind the replay chunks - like {@code low_out}
+         * output ({@link FrameLog}); how many such rays?
          */
         int lowOut(Cameras.View v) {
             int out = 0;
@@ -172,7 +172,7 @@ final class Pilot {
                 double last = SEA;
                 for (double k = 0; k <= LOW_NEAR; k += 4) {
                     double x = v.eye().x + d.x * k, y = v.eye().y + d.y * k, z = v.eye().z + d.z * k;
-                    // верхний блок столбца, как у вывода (LevelChunk.getHeight), а не место над ним
+                    // the top block of the column, like the pin (LevelChunk.getHeight), not the space above it
                     double g = ground(x, z) - 1;
                     if (Double.isNaN(g)) {
                         if (v.eye().y + d.y * LOW_NEAR <= last + 1) out++;
@@ -186,28 +186,28 @@ final class Pilot {
         }
     }
 
-    /** Путь по тикам {@code from…}: место, скорость, ускорение, взгляд (курс, тангаж), крен. */
+    /** Path along tick {@code from…}: location, speed, acceleration, gaze (course, pitch), roll. */
     record Track(int from, Vec3[] pos, Vec3[] vel, Vec3[] acc, double[] yaw, double[] pitch, double[] roll) {
         int index(double t) {
             return Mth.clamp((int) Math.round(t - from), 0, pos.length - 1);
         }
     }
 
-    /** Найденный полёт: имя кандидата, путь, цена и из чего она. */
+    /** Found flight: candidate name, route, price and what it is from. */
     record Flight(String name, double[] controls, double cost, String why) {}
 
     final int a, b;
     final double fov, aspect, tanX, tanY;
     final Subject subject;
-    /** Удар, ради которого проход. */
+    /** A blow for which a pass is made. */
     final Subject.Key main;
     final List<Plume> plumes;
-    /** Другие удары окна: в кадре — в плюс. */
+    /** Other window impacts: in the frame - a plus. */
     final List<Plume> others;
     /**
-     * Дым по образцам окна ({@link #a}…{@link #b} через 2 тика): фигуры ударов рядом, по ударам подряд; у каждого удара —
-     * конец его фигур, шар вокруг них (сперва проверяется он: ударов за 4 минуты войны — сотни) и свой ли это дым удара
-     * прохода.
+     * Smoke according to window patterns ({@link #a}…{@link #b} via 2 tick): figures of blows next to each other, by blows in a row; each blow has the
+     *  end of its figures, the ball around them (it is checked first: there are hundreds of blows in 4 minutes of war) and whether it is the smoke of the blow
+     *  of the passage.
      */
     private final Plume.Shape[][] smoke;
     private final int[][] groupEnd;
@@ -215,7 +215,7 @@ final class Pilot {
     private final boolean[][] own;
     final Grid grid;
     final long seed;
-    /** Тики пути (с запасом до и после окна) и тик прохода мимо удара — от него путь считается в обе стороны. */
+    /** tick the path (with a margin before and after the window) and tick passing the impact - from it the path is counted in both directions. */
     final int t0, t1, tp;
     final Controls controls;
 
@@ -274,7 +274,7 @@ final class Pilot {
         }
     }
 
-    /** Шар вокруг фигур удара: середина рамки и её полудиагональ. */
+    /** The ball around the impact figures: the middle of the frame and its semi-diagonal. */
     private static double[] bound(List<Plume.Shape> shapes) {
         double x0 = Double.POSITIVE_INFINITY, y0 = x0, z0 = x0, x1 = Double.NEGATIVE_INFINITY, y1 = x1, z1 = x1;
         for (Plume.Shape s : shapes) {
@@ -289,7 +289,7 @@ final class Pilot {
         return new double[]{(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, Math.sqrt(dx * dx + dy * dy + dz * dz) / 2};
     }
 
-    /** Расстояние до дыма образца {@code k} (меньше 0 — в дыму), не больше {@code limit}: дальше пилоту всё равно. */
+    /** The distance to the smoke of sample {@code k} (less than 0 - in the smoke), no more than {@code limit}: then the pilot doesn’t care. */
     double smokeClearance(int k, double x, double y, double z, double limit) {
         double best = limit;
         double[] bd = bound[k];
@@ -305,7 +305,7 @@ final class Pilot {
         return best;
     }
 
-    /** Дым образца {@code k} на линии взгляда (свой дым удара прохода — нет: на него и смотрят). */
+    /** The smoke of sample {@code k} is in the line of sight (its own smoke from the impact of the passage is not: they look at it). */
     boolean smokeOnLine(int k, Vec3 from, Vec3 to) {
         int lo = 0;
         for (int g = 0; g < groupEnd[k].length; g++) {
@@ -317,8 +317,8 @@ final class Pilot {
     }
 
     /**
-     * Отрезок проходит сквозь фигуру удара {@code g} (фигуры {@code lo}…{@code hi}) непрозрачнее {@code alpha}; сперва —
-     * сквозь шар вокруг них.
+     * The segment passes through the impact figure {@code g} (figures {@code lo}...{@code hi}) more opaque than {@code alpha}; first -
+     * through the ball around them.
      */
     private boolean crossesGroup(int k, int g, int lo, int hi, Vec3 from, Vec3 to, double alpha) {
         double[] bd = bound[k];
@@ -335,17 +335,17 @@ final class Pilot {
     }
 
     /**
-     * Доля кадра в дыму у камеры, как её меряет вывод ({@link Smoke#smothered}): лучи той же сетки до той же дальности,
-     * луч закрыт, если входит в фигуру дыма образца {@code k}. Свой дым удара — тоже: облако шара во весь кадр закрывает
-     * его так же. Прежняя проверка — середина кадра на 8–24 блока — не видела дыма у края кадра и дальше 24 блоков: на
-     * кадрах clips9 (14.10) она узнала 310 из 862 кадров в дыму, сетка — 535 (остальные — дым, которого модель не знает,
-     * README), а из 7238 чистых сетка отмечает 309.
+     * The share of the frame in the smoke of the camera, as measured by the output ({@link Smoke#smothered}): rays of the same grid to the same distance,
+     * , the ray is closed if it enters the smoke figure of sample {@code k}. The smoke of the impact is the same: the cloud of the ball covers the entire frame
+     *  it in the same way. The previous check - the middle of the frame on 8–24 blocks - did not see smoke at the edge of the frame and beyond 24 blocks: on
+     *  frames clips9 (14.10) she recognized 310 from 862 frames in smoke, the grid is 535 (the rest are smoke, which the model does not know,
+     * README), and from 7238 the grid marks 309.
      */
     double smother(int k, Cameras.View v) {
         Vec3 e = v.eye();
         double reach = Smoke.SMOTHER_REACH;
-        // луч длиной reach входит только в фигуру ближе reach: их отбор — раз на образец, а не на каждый луч (шар удара
-        // живого повтора — 30–130 блоков, отсев по нему пропускает почти всё)
+        // a beam of length reach enters only into a figure closer to reach: their selection is once per sample, and not for each ray (the ball of impact
+        //  live replay is 30–130 blocks, screening by it misses almost everything)
         Plume.Shape[] near = new Plume.Shape[smoke[k].length];
         int m = 0, lo = 0;
         double[] bd = bound[k];
@@ -374,8 +374,8 @@ final class Pilot {
     }
 
     /**
-     * Удар прохода из событий объекта в окне: тот, где кончается путь снаряда (его удар), без пути — первый в окне;
-     * в окне нет — null.
+     * The impact of a passage from the events of an object in the window: the one where the path of the projectile ends (its impact), without a path - the first in the window;
+     *  not in the window - null.
      */
     static Subject.Key mainKey(Subject s, int a, int b) {
         List<Subject.Key> in = s.keys.stream().filter(k -> k.t() >= a && k.t() <= b).toList();
@@ -384,25 +384,25 @@ final class Pilot {
         return in.stream().min(Comparator.comparingDouble(k -> Math.abs(k.t() - s.pathLast()))).orElseThrow();
     }
 
-    // ================================================================ на что смотреть
+    // ============================================================================= What to look for?
 
-    /** Куда смотреть: до удара — место удара (снаряд влетает в кадр), потом огненный шар (поднимается), потом он же. */
+    /** Where to look: before the impact - the place of impact (the projectile flies into the frame), then the fireball (rises), then the same. */
     Vec3 focus(double t) {
         if (t < main.t()) return main.pos().add(0, main.size() * 0.3, 0);
         return Cameras.keyPoint(main, Math.min(t, main.t() + Subject.KEY_HOLD));
     }
 
-    /** Насколько взгляд на цели (остальное — вперёд по курсу): первые 2 с после удара — весь, потом до четверти. */
+    /** As far as looking at the target (the rest is forward along the course): the first 2 s after the impact - all of it, then up to a quarter. */
     double weight(double t) {
         double u = t - main.t();
         return u < 40 ? 1 : Math.max(0.25, 1 - (u - 40) / 60 * 0.75);
     }
 
-    // ================================================================ полёт по пути
+    // ================================================================================= flying along the way
 
     /**
-     * Ручки пилота — вектор параметров поиска: место и курс в тик прохода {@link #tp}, потом по узлам через {@link #KNOT}
-     * тиков с {@link #t0}: скорости, повороты курса, наборы высоты.
+     * Pilot's handles - a vector of search parameters: place and course in the tick of passage {@link #tp}, then by nodes through {@link #KNOT}
+     *  ticks from {@link #t0}: speeds, course turns, climbs.
      */
     final class Controls {
         static final int PX = 0, PY = 1, PZ = 2, COURSE = 3, V = 4;
@@ -420,7 +420,7 @@ final class Pilot {
             return V + 3 * knots;
         }
 
-        /** Прямо ({@code turn} 0) или дугой: место и курс в тик прохода, скорость, поворот курса за тик, набор. */
+        /** Straight ({@code turn} 0) or arc: place and course in tick of passage, speed, turn of course per tick, set. */
         double[] steady(Vec3 p, double course, double v, double turn, double climb) {
             double[] x = new double[size()];
             x[PX] = p.x;
@@ -435,7 +435,7 @@ final class Pilot {
             return x;
         }
 
-        /** Разброс поиска вначале. */
+        /** Search scatter at the beginning. */
         double[] sigma() {
             double[] s = new double[size()];
             s[PX] = s[PZ] = 10;
@@ -449,7 +449,7 @@ final class Pilot {
             return s;
         }
 
-        /** Ручка {@code from} (узлы подряд) в тик {@code t}: между узлами — по Катмуллу — Рому, в пределах ±{@code lim}. */
+        /** Handle {@code from} (nodes in a row) in tick {@code t}: between nodes - according to Catmull - Rom, within ±{@code lim}. */
         double at(double[] x, int from, double t, double lo, double hi) {
             double u = Mth.clamp((t - t0) / KNOT, 0, knots - 1);
             int k = Math.min(knots - 2, (int) Math.floor(u));
@@ -464,7 +464,7 @@ final class Pilot {
         return new Vec3(-Math.sin(Math.toRadians(course)), 0, Math.cos(Math.toRadians(course)));
     }
 
-    /** Полёт по ручкам: путь по тикам {@link #t0}…{@link #t1} от места прохода в обе стороны, взгляд, крен. */
+    /** Flight along the handles: path along tick {@link #t0}...{@link #t1} from the passage point in both directions, look, roll. */
     Track fly(double[] x) {
         Controls c = controls;
         int n = t1 - t0 + 1, ip = tp - t0;
@@ -503,9 +503,9 @@ final class Pilot {
             double y = Math.toDegrees(Math.atan2(-look.x, look.z));
             yaw[i] = i == 0 ? y : yaw[i - 1] + Mth.wrapDegrees(y - yaw[i - 1]);
             pitch[i] = -Math.toDegrees(Math.atan2(look.y, Math.hypot(look.x, look.z)));
-            // крен дрона: в вираже — боковое ускорение (скорость × угловая скорость курса) к g, поворот вправо — крен
-            // вправо (у Flashback минус); летит боком (взгляд на угол crab от курса) — наклон дрона против
-            // сопротивления воздуха виден креном: движение влево от камеры — крен влево
+            // drone roll: in a turn - lateral acceleration (speed × heading angular velocity) to g, turn to the right - roll
+            //  to the right (Flashback has a minus); flies sideways (look at the angle crab from the course) - the tilt of the drone against
+            //  air resistance is visible as a roll: movement to the left of the camera - roll to the left
             double crab = Math.toRadians(Mth.wrapDegrees(yaw[i] - course[i])), speed = v[i] * 20;
             double lateral = speed * Math.toRadians(w[i]) * 20;
             double tilt = Math.toDegrees(Math.atan(TILT * speed * speed / 9.81));
@@ -514,7 +514,7 @@ final class Pilot {
         return new Track(t0, pos, vel, acc, yaw, pitch, Hands.gauss(bank, 2));
     }
 
-    /** Взгляд от курса, ° (плюс — правее). */
+    /** View from the course, ° (plus - to the right). */
     static double crab(Track tr, int i) {
         Vec3 v = tr.vel()[i];
         return Mth.wrapDegrees(tr.yaw()[i] - Math.toDegrees(Math.atan2(-v.x, v.z)));
@@ -524,9 +524,9 @@ final class Pilot {
         return Cameras.View.of(new Cameras.Pose(tr.pos()[i], (float) tr.yaw()[i], (float) tr.pitch()[i], fov), aspect).rolled(tr.roll()[i]);
     }
 
-    // ================================================================ цена пути
+    // ==================================================================================== price
 
-    /** Счёт нарушений по образцам окна — для строки в логе. */
+    /** Count of violations by window samples - for a line in the log. */
     static final class Tally {
         int samples, low, out, smoke, ahead, hidden, smoky, lowOut, fast, crab, turn, missed;
         double speed, height, near = Double.POSITIVE_INFINITY;
@@ -545,7 +545,7 @@ final class Pilot {
         return cost(x, null);
     }
 
-    /** Цена пути (меньше — лучше); {@code tally} — сюда счёт нарушений (null — не считать). */
+    /** Cost of travel (less is better); {@code tally} - count violations here (null - do not count). */
     double cost(double[] x, Tally tally) {
         Track tr = fly(x);
         double j = 0;
@@ -555,7 +555,7 @@ final class Pilot {
             Vec3 q = focus(t);
             double w = weight(t);
             if (tally != null) tally.samples++;
-            // земля, дома, кроны; над чанками, которых у клиента нет, — нельзя
+            // land, houses, crowns; over chunks that the client does not have - it is impossible
             double g = grid.high(p.x, p.z);
             if (Double.isNaN(g)) {
                 j += 60;
@@ -572,7 +572,7 @@ final class Pilot {
                 }
                 if (tally != null) tally.height += c;
             }
-            // дым: камера в нём, кадр в дыму (как его меряет вывод), дым на линии взгляда к удару
+            // smoke: camera in it, frame in the smoke (as the output measures it), smoke in the line of sight to the impact
             int k = (t - a) / 2;
             double sc = smokeClearance(k, p.x, p.y, p.z, SMOKE);
             if (sc < SMOKE) {
@@ -594,8 +594,8 @@ final class Pilot {
                 j += 10 * w;
                 if (tally != null) tally.hidden++;
             }
-            // расстояние до удара: на подлёте — не дальше 200 блоков, у удара и 3 с после — чтобы шар читался и помещался,
-            // лучше всего — в dPref
+            // Distance to impact: on approach, no farther than 200 blocks; at impact and for 3 s afterward,
+            // keep the fireball readable and within the frame, ideally at dPref.
             double d = p.distanceTo(main.pos());
             if (tally != null) tally.near = Math.min(tally.near, d);
             double dMin = Math.max(24, 1.5 * main.size()), dMax = Math.max(75, 4.5 * main.size()), dPref = Math.max(32, 2.8 * main.size());
@@ -608,13 +608,13 @@ final class Pilot {
             } else if (d < dMin * 0.6) {
                 j += 0.05 * (dMin * 0.6 - d) * (dMin * 0.6 - d);
             }
-            // низ кадра за чанками повтора
+            // bottom of frame behind replay chunks
             int lo = grid.lowOut(view);
             if (lo > 0) {
                 j += 5 * lo;
                 if (tally != null) tally.lowOut++;
             }
-            // дрон: скорость, ускорение
+            // drone: speed, acceleration
             double speed = v.length();
             if (tally != null) tally.speed += speed;
             if (speed > V_MAX) {
@@ -623,13 +623,13 @@ final class Pilot {
             }
             if (speed < V_MIN) j += 100 * (V_MIN - speed) * (V_MIN - speed);
             j += 6 * (speed - V_PREF) * (speed - V_PREF);
-            // плавно: ускорение в счёт всегда (дуги, а не зигзаг), выше предела — круто; крен — не рывками
+            // smooth: acceleration is always counted (arcs, not zigzag), above the limit - steep; roll - not jerky
             double acc = tr.acc()[i].length();
             j += 300 * acc * acc;
             if (acc > A_MAX) j += 10_000 * (acc - A_MAX) * (acc - A_MAX);
             double rollRate = Math.abs(tr.roll()[i] - tr.roll()[i - 2]) / 2;
             if (rollRate > ROLL_RATE) j += 0.5 * (rollRate - ROLL_RATE) * (rollRate - ROLL_RATE);
-            // взгляд: поворот за тик, вверх и вниз, боком к курсу
+            // look: turn by tick, up and down, sideways to the course
             double turn = Math.hypot(tr.yaw()[i] - tr.yaw()[i - 1], tr.pitch()[i] - tr.pitch()[i - 1]);
             if (turn > TURN) {
                 j += 0.5 * (turn - TURN) * (turn - TURN);
@@ -647,13 +647,13 @@ final class Pilot {
                 double rate = Math.abs(Mth.wrapDegrees(crab - crab(tr, i - 2))) / 2;
                 if (rate > CRAB_RATE) j += 0.5 * (rate - CRAB_RATE) * (rate - CRAB_RATE);
             }
-            // снаряд перед ударом — в кадре (влетает в место удара или проходит мимо камеры)
+            // the projectile before impact is in the frame (flies into the place of impact or passes by the camera)
             if (t >= main.t() - 40 && t < main.t()) {
                 Vec3 shell = subject.pathAt(t);
                 if (shell != null && !(view.in(shell, 0.9) && !grid.hides(p, shell, 1.5))) j += 3;
             }
         }
-        // удар — в кадре и не за рельефом в первые тики (их проверяет вывод)
+        // hit - in the frame and not behind the relief in the first tick (the output checks them)
         for (int t = main.t() + 2; t <= Math.min(b, main.t() + FrameLog.KEY_CHECK); t += 2) {
             int i = t - tr.from();
             Vec3 k = Cameras.keyPoint(main, t);
@@ -662,7 +662,7 @@ final class Pilot {
                 if (tally != null) tally.missed++;
             }
         }
-        // другие удары окна, видные в первые тики, — в плюс
+        // other window impacts visible in the first tick are a plus
         for (Plume o : others) {
             int i = o.t() + 4 - tr.from();
             if (i < 0 || i >= tr.pos().length) continue;
@@ -672,11 +672,11 @@ final class Pilot {
         return j;
     }
 
-    // ================================================================ поиск
+    // ================================================================================== search
 
     /**
-     * Лучшие {@code count} разных полётов: затравки — проходы мимо удара прямо и дугой вокруг него, лучшие разные из них
-     * доводятся ({@link #refine}).
+     * The best {@code count} of different flights: seeds - passes past the blow directly and in an arc around it, the best different of them
+     *  are completed ({@link #refine}).
      */
     List<Flight> plan(int count) {
         Random r = new Random(seed);
@@ -691,7 +691,7 @@ final class Pilot {
                         Vec3 spot = main.pos().add(right.scale(side * off));
                         double g = grid.high(spot.x, spot.z);
                         Vec3 p = new Vec3(spot.x, Math.max(main.pos().y, Double.isNaN(g) ? main.pos().y : g) + up, spot.z);
-                        // прямо или дугой к удару (он сбоку: справа — поворот вправо)
+                        // straight or in an arc to the blow (it is from the side: from the right - turn to the right)
                         for (double turn : new double[]{0, -side * 0.8}) {
                             double[] x = controls.steady(p, head, V_PREF, turn, 0);
                             String name = String.format(Locale.ROOT, "pilot-h%03.0f-%s", head, side > 0 ? "R" : "L");
@@ -702,7 +702,7 @@ final class Pilot {
             }
         }
         seeds.sort(Comparator.comparingDouble(Seed::cost));
-        // лучшие разные: другой стороной или курсом дальше 45°
+        // best different: the other side or course further 45°
         List<Seed> picks = new ArrayList<>();
         for (Seed s : seeds) {
             if (picks.size() >= SEEDS) break;
@@ -721,8 +721,8 @@ final class Pilot {
     }
 
     /**
-     * Перекрёстная энтропия: {@link #POP} наборов ручек вокруг среднего, {@link #ELITE} лучших дают новое среднее и
-     * разброс (не меньше {@link #SIG_MIN} начального); лучший за весь поиск — итог.
+     * Cross entropy: {@link #POP} sets of handles around the average, {@link #ELITE} the best ones give a new average and
+     *  spread (not less than {@link #SIG_MIN} initial); the best result in the entire search.
      */
     double[] refine(double[] start, double startCost, Random r) {
         double[] mu = start.clone(), sigma = controls.sigma(), floor = sigma.clone();
@@ -765,7 +765,7 @@ final class Pilot {
         return best;
     }
 
-    /** Камера полёта: место и взгляд по тикам пути (между тиками — по прямой), крен дрона. */
+    /** Flight camera: location and view along the tick path (between ticks - in a straight line), drone roll. */
     Cameras.Path path(Flight f) {
         Track tr = fly(f.controls());
         return new Cameras.Path() {

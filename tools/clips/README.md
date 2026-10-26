@@ -1,85 +1,94 @@
-# clips — короткие ролики (превью) по данным повторов
+# clips - short videos (previews) based on replay data
 
-Пять вертикальных роликов по 20–35 с, каждый — цепочка «пуск → полёт → удар по земле»: ракеты и «Град», шахеды и
-«Ланцеты» (и сбитый у игрока на глазах), хаос одним планом (20 с, где ударов по земле в одном месте больше всего), удары издалека длинным объективом (до трёх
-подряд), ядерный удар (пуск, вспышка глазами игрока, та же вспышка и гриб со стороны). Моменты, камеры и проверка кадров — только по
-данным повтора (`tools/replayscan`), без выбора на глаз. Отдельно — короткие отрезки глазами игроков (10–15 с, только
-камерой игрока, как он сам двигал взгляд): игрок выбирает, какие пойдут.
+Five vertical videos of 20–35 s, each a chain of “launch → flight → hit the ground”: missiles and “Grad”, Shahed and
+ “Lancet” (and shot down before the player’s eyes), chaos in one shot (20 s, where there are the most hits on the ground in one place), strikes from afar with a long lens (up to three
+ in a row), nuclear strike (launch, flash through the eyes of the player, the same flash and mushroom from the side). Moments, cameras and frame checking - only according to
+ replay data (`tools/replayscan`), without selecting by eye. Separately, there are short segments through the eyes of the players (10–15 s only
+ the player’s camera, as he himself moved his gaze): the player chooses which ones will go.
 
 ```sh
-uv run tools/clips/moments.py <база>.duckdb... --out <clips> --prefer <главный повтор> [--star player:<ник>]   # кандидаты
+uv run tools/clips/moments.py <base>.duckdb... --out <clips> --prefer <main replay> [--star player:<nik>] # candidates
        [--at 25:02]... [--fly 'at=25:02/25:40 from=x,y,z to=x,y,z']...
-uv run tools/clips/plan.py <clips>/candidates.json [--all pov,fly]                       # планы съёмки
-# съёмка: replayscan с -Dreplayscan.film=<clips>/film/<повтор>/plan.json (README replayscan, «Съёмка»)
-uv run tools/clips/edit.py <clips>/film [--music трек --credit "автор"]                  # ролики, подписи, отчёт
+uv run tools/clips/plan.py <clips>/candidates.json [--all pov,fly] # shooting plans
+# shooting: replayscan with -Dreplayscan.film=<clips>/film/<repeat>/plan.json (README replayscan, “Shooting”)
+uv run tools/clips/edit.py <clips>/film [--music track --credit "author"] # videos, captions, report
 ```
 
-- `moments.py` — кандидаты каждого ролика по базам `replaydb.py`: снаряды, залпы, удары по земле (`impact_kinds.place`
-  — `ground`; взрывы в воздухе и перехваты — только как сбитие дрона), взгляды игроков (пуск, пролёт, удар в кадре и не
-  закрыт), громкое за кадром против громкого в кадре. Сбитие — дрон, которого сбила зенитная ракета или огонь игроков
-  (взведённый дрон рвётся в воздухе), глазами игрока, который видел его не меньше 3 с из последних 6 с и в момент сбития;
-  сбития зрителей `--star` — первыми; планы глазами одного игрока, которые перекрываются, сливаются в один (`flyby+shootdown`: род и объект — важнейшего, события — все), так одни секунды не повторяются. Ракеты и шахеды — не короче 20 с: недостающее — плану удара или сбития (до него — не
-  раньше конца прошлого плана). Хаос — глазами игрока (удары в кадре — события плана) и широким штативом, в том числе
-  сверху (60°: удары в улицах; выше облаков штатив не встаёт); длинный объектив — с места игрока и над крышами (`rise`).
-  Глазами игроков (`pov`, `--pov-top` лучших из всех повторов, без `--prefer`) — отрезки, где живой игрок (записавший,
-  аккаунт Mojang — UUID версии 4, или игрок без входа Mojang — UUID ванили по нику; у ботов свои) видел больше всего: вес ядерного подрыва 6, сбития 4,
-  удара по земле в кадре 1 (в середине кадра и ближе 120 блоков — до 2), пуска 1.5, пролёта рядом 1 (ближе 30 блоков —
-  1.5; сбитие — каждому живому, кто его видел); отрезок — от 3 с до первого события до 4 с после последнего (после
-  подрыва — 10 с), 10–15 с, у края записи сдвигается; из перекрывающихся отрезков (и разных игроков в одни секунды) —
-  лучший. Запись, где записавший отметил моменты, даёт только их, глазами записавшего: маркер Flashback (клавиша «Создать
-  маркер», жмут сразу после момента; свои маркеры смены измерения Flashback не в счёт) — 15 с до него и 2 с после, а
-  ядерный подрыв за минуту до маркера — со вспышки и не меньше 10 с после неё;
-  время `--at` — по шкале Flashback (`25:02`, `1:02:03`) или по часам (`2026-10-14T19:05:30`; часы записи — по
-  времени сохранения в имени файла): момент — 10 с до и 5 с после (ядерный подрыв в этом отрезке — и 10 с после
-  вспышки), `--at <с>/<по>` — как есть (время по шкале Flashback и `--fly` — только с одной базой); подрыв в отрезке,
-  которого игрок не видел (не в кадре или все лучи к нему упёрлись в блоки ближе 16 блоков — метро), — в подписи, как
-  далеко.
-  Пролёт свободной камеры (`--fly`, ролик «7. Пролёт камеры», камера `path` съёмки): `at=<с>/<по>` по шкале Flashback,
-  `from` и `to` (`x,y,z`), `to_at` (когда камера в `to`, по умолчанию — в конце; дальше она летит той же прямой),
-  `focus` (`<с>/<по>`: удары, которые должны быть в кадре, — «по порту в 25:16–25:22»), `look` (`south`, `west`,
-  `north`, `east` или курс, как у игрока: 0 — юг, 90 — запад), `turn` (на сколько градусов взгляд может повернуть от
-  `look`, по умолчанию 25), `fov` (70), `dim`, `reach` и `ground`. Взгляд — постоянный: туда, где в кадре больше ударов
-  `focus`, потом ударов по земле, потом всех, наклон — к ним (медиана углов, 2–30° вниз); удары в кадре — события плана,
-  снаряды в кадре и каждый удар окна (расстояние, в кадре ли) — в выводе moments.py. Чанки повтора — всё, что запись
-  прислала до этого тика (сервер повтора их не забывает, съёмка идёт с начала; в другом измерении — с последнего входа
-  туда): не дальше прорисовки записавшего от мест, где он уже был. Прорисовки в разборе нет — она по обновлениям блоков (сервер шлёт их только в чанки клиента;
-  `reach` — задать в блоках). Глаз или земля нижней половины кадра (на высоте `ground`, 63, ближе 192 блоков) не в
-  них — путь медленнее (вокруг середины `focus`) и сдвинут не больше чем на 64 блока, первые скорость и сдвиг, при
-  которых он в них, а ударов `focus` в кадре не меньше; не встаёт и так — то же место в другое время записи (с ним и
-  окна), где оно в них и ударов по земле в кадре больше всего (иначе под камерой рельеф DH — у моря дно и пещеры без
-  воды). В выводе — прорисовка, с какого времени чанки у `from` и `to` в мире повтора, когда записавший был к ним
-  ближе всего, удары по земле у пути за всю запись по минутам; скорость, сдвиг и сдвиг во времени — и в числах
-  (`speed`, `shift`, `moved`). `search=<с>/<по>` — тот же пролёт в то время между `с` и `по`, где он весь в чанках
-  повтора и ударов в кадре больше всего (потом — по земле), строка «поиск … больше всего ударов в кадре»; `time` —
-  время суток в ролике (`night` — полночь, 18000, или тики дня, как у `/time set`): огни снарядов и пожары ночью
-  видны; Flashback берёт его из состояния задания вывода (окно Visuals).
-  Проходы FPV (`--fpv`, тот же ролик «7. Пролёт камеры», несколько склеек): `search` (окно записи), `near=x,z,r` (удары
-  не дальше `r` блоков от места), `shots` (4), `seconds` (9), `fov` (80), `time`. Проход — мимо самого жаркого удара по
-  земле (больше ударов рядом за время прохода; проходы не перекрываются по времени), у которого известен снаряд (он
-  влетает в кадр) и вокруг которого есть где лететь: сам удар в чанках повтора, а в 128 блоках вокруг чанки хотя бы
-  полкругом (9 направлений подряд из 16: пилот пройдёт вдоль края), в начале и в конце прохода, с запасом в 2 чанка к
-  прорисовке. У места, названного `near`, без такого удара берётся удар, где места больше всего (решают пилот и
-  проверка кадров). Удар — на 45 % прохода. Путь камеры здесь не задаётся: его прокладывает
-  съёмка, камера `pilot` (README replayscan, «Съёмка»), по миру повтора у клиента, как пилот FPV-дрона. Записи
-  Incoming старше `--min-version` (2.10.2) не берутся.
-  `candidates.json` и `candidates.md` (таблица). Журнал игры `--notes` (по журналам сервера и ведущего) — кандидату в
-  отрезке журнала его строка и прибавка к счёту `--note-bonus`:
-  `{"replays": {"<часть имени повтора>": [{"src": "nuke_detonation", "at": "2026-10-06T23:10:35"}, {"end": true, "at": "name"}]},
-  "moments": [{"from": "2026-10-06T22:27", "to": "2026-10-06T22:33", "what": "…"}]}` — опоры часов повтора (первое
-  событие по `src` или конец записи; `name` — время сохранения из имени файла), между опорами тик — по прямой.
-- `plan.py` — план съёмки на каждый повтор: пути снарядов (`tracks` и дальние строки `far`), события, прежние удары
-  (дым), камеры (глаза игрока, у удара, сбития и пуска — запасная свободная, у хаоса — широкий штатив, у ядерки — сперва объектив с места
-  игрока: огненный шар по мощности из пакета подрыва — в кадре с подъёмом, без неё шар — 35 % ширины кадра; у отрезков глазами игроков — без запасной; у пролёта — только его путь), пороги проверки по роду плана (у сбития — бой вокруг: громких
-  взрывов за кадром до трёх на один в кадре; глазами игроков — только мир построен, камера — игрок и DH; у пролёта —
-  мир построен и DH); `film/runs.json` — повтор, план и версия Incoming записи (съёмка — с jar
-  того дня).
-- `edit.py` — ролик из снятых планов (`film/<повтор>/film/best.json`; отрезок глазами игрока — ролик сам по себе, 8–20 с) простыми склейками, звук игры −14 LUFS и
-  −1 dBTP, версия с тихой музыкой, подписи EN/RU (`<ролик>.txt`; план без проверки кадров в ролик не идёт, если в нём
-  есть прошедшие, подпись — только о вошедших; до выпуска мода — `--soon`: «скоро на Modrinth и CurseForge»; отмеченный
-  игроком момент — любой длины) и `report.md`: прошёл ли каждый план проверку кадров
-  и видна ли вспышка каждого события по самим кадрам видео (то, чего лучи по блокам не видят: рельеф Distant Horizons,
-  дым, шейдеры). `--clip far=<видео>` (или `nuke=`) — ролик, снятый не из повтора (живьём, со своей проверкой кадров,
-  со звуком игры): та же громкость, версия с музыкой и подпись.
+- `moments.py` — candidates for each clip from `replaydb.py` databases: projectiles, salvos, ground impacts
+  (`impact_kinds.place` is `ground`; airbursts and intercepts only as drone shootdowns), player views (launch,
+  flyby, impact in frame and unobstructed), loud off-screen versus loud on-screen. A shootdown is a drone downed
+  by an interceptor or player fire (armed drone bursts in the air), through the eyes of a player who saw it for
+  at least 3 of the last 6 s and at shootdown; `--star` viewers first. Overlapping shots through one player's
+  eyes merge into one (`flyby+shootdown`: kind and subject from the more important one, all events), avoiding
+  repeated seconds. Missile and Shahed clips last at least 20 s; missing time goes to the impact or shootdown
+  shot (before it, no earlier than the previous shot's end). Chaos is filmed through a player's eyes (impacts
+  in frame are shot events) and from a wide tripod, including above (60°: street impacts; tripod stays below
+  clouds); long lens from player position and above roofs (`rise`). Through players' eyes (`pov`, `--pov-top`
+  best across all replays, without `--prefer`): segments where a real player (recorder, Mojang account with
+  version-4 UUID, or player without Mojang login with vanilla name-based UUID; bots have their own) saw most:
+  nuclear detonation weight 6, shootdown 4, ground impact in frame 1 (centered and within 120 blocks, up to 2),
+  launch 1.5, nearby flyby 1 (within 30 blocks, 1.5; shootdown credited to every real player who saw it).
+  Segment from 3 s before the first event to 4 s after the last (10 s after detonation), 10–15 s, shifted at
+  recording boundaries; best among overlapping segments (including different players at the same time).
+  A recording with recorder-marked moments supplies only those, through the recorder's eyes: Flashback marker
+  ("Create marker" key, pressed just after the moment; Flashback dimension-change markers do not count) takes
+  15 s before and 2 s after; nuclear detonation within a minute before a marker starts at flash and lasts at
+  least 10 s after it. `--at` time uses the Flashback timeline (`25:02`, `1:02:03`) or wall clock
+  (`2026-10-14T19:05:30`; recording clock from save time in filename): moment takes 10 s before and 5 s after
+  (nuclear detonation in that segment also takes 10 s after flash); `--at <from>/<to>` is used as is (Flashback
+  timeline times and `--fly` require a single database). A detonation in the segment the player did not see
+  (out of frame or all rays hit blocks within 16 blocks, as in a subway) is captioned with its distance.
+  Free-camera flight (`--fly`, clip "7. Camera flyby", filming camera `path`): `at=<from>/<to>` on the Flashback
+  timeline, `from` and `to` (`x,y,z`), `to_at` (when camera is at `to`, default end; afterward continues on the
+  same line), `focus` (`<from>/<to>`: impacts required in frame, e.g. "on the port at 25:16–25:22"), `look`
+  (`south`, `west`, `north`, `east` or player-style heading: 0 south, 90 west), `turn` (degrees the view may turn
+  from `look`, default 25), `fov` (70), `dim`, `reach`, `ground`. View is fixed toward the most `focus` impacts
+  in frame, then ground impacts, then all impacts; pitch toward them (median angles, 2–30° down). Impacts in
+  frame are shot events; projectiles in frame and each window impact (distance, in frame or not) are in
+  moments.py output. Replay chunks are everything sent by the recording before this tick (replay server does
+  not forget them, filming starts from the beginning; in another dimension, since last entry there): within
+  recorder render distance of places already visited. Analysis lacks render distance, so infer it from block
+  updates (server sends them only in client chunks; `reach` sets it in blocks). If eye or ground beneath the
+  lower half-frame (at `ground`, 63, within 192 blocks) is outside them, slow the path (around `focus` center)
+  and shift at most 64 blocks, taking the first speed and shift that fit while keeping at least as many
+  `focus` impacts in frame. If it still does not fit, use the same place at another recording time (moving
+  windows too) where it fits and has the most ground impacts in frame (otherwise DH terrain under the camera
+  shows seabed and caves without water). Output includes render distance, when chunks at `from` and `to`
+  entered the replay world, when recorder was nearest them, ground impacts along the path over the entire
+  recording by minute; speed, shift and time shift also as numbers (`speed`, `shift`, `moved`).
+  `search=<from>/<to>` selects the same flight at the time between `from` and `to` where it is entirely in
+  replay chunks and has most impacts in frame (then most on ground), line "search … most impacts in frame";
+  `time` is video time of day (`night` is midnight, 18000, or day ticks as in `/time set`): projectile lights
+  and fires are visible at night; Flashback takes it from export-task state (Visuals window).
+  FPV passes (`--fpv`, same clip "7. Camera flyby", several cuts): `search` (recording window), `near=x,z,r`
+  (impacts within `r` blocks of location), `shots` (4), `seconds` (9), `fov` (80), `time`. Pass goes by the
+  hottest ground impact (most nearby impacts during the pass; passes do not overlap in time) with a known
+  projectile (it enters frame) and room to fly around: impact in replay chunks, with chunks at least in a
+  half-circle within 128 blocks (9 consecutive directions of 16: pilot follows the edge), at pass start and
+  end, with a 2-chunk render-distance margin. At a `near` site without such an impact, take the impact with
+  most room (pilot and frame checks decide). Impact occurs at 45% of the pass. No camera path is specified:
+  filming lays it out, camera `pilot` (replayscan README, "Filming"), through the client's replay world like
+  an FPV-drone pilot. Recordings with Incoming older than `--min-version` (2.10.2) are excluded.
+  `candidates.json` and `candidates.md` (table). Game journal `--notes` (from server and host journals) adds its
+  entry and `--note-bonus` score to candidates within its segment:
+  `{"replays": {"<replay name fragment>": [{"src": "nuke_detonation", "at": "2026-10-06T23:10:35"}, {"end": true, "at": "name"}]},
+  "moments": [{"from": "2026-10-06T22:27", "to": "2026-10-06T22:33", "what": "…"}]}` — replay clock anchors
+  (first event by `src` or recording end; `name` is save time from filename); ticks interpolate linearly
+  between anchors.
+- `plan.py` — filming plan per replay: projectile paths (`tracks` and far records `far`), events, previous
+  impacts (smoke), cameras (player eyes; for impact, shootdown and launch, backup free camera; for chaos, wide
+  tripod; for nuke, lens first from player position: fireball from detonation-packet yield fits in frame with
+  elevation; without yield, ball occupies 35% of frame width; player-view segments have no backup; flyby has
+  only its path), check thresholds by shot kind (shootdown: surrounding fight, up to three loud off-screen
+  explosions per on-screen one; player eyes: world built only, camera is player and DH; flyby: world built
+  and DH); `film/runs.json` holds replay, plan and recording's Incoming version (filmed with that day's jar).
+- `edit.py` — clip from recorded shots (`film/<replay>/film/best.json`; player-view segment is its own clip,
+  8–20 s), with simple cuts, game audio −14 LUFS and −1 dBTP, quiet-music version, EN/RU captions (`<clip>.txt`;
+  unchecked shots are excluded if checked shots exist, captions cover only included shots; before mod release,
+  `--soon`: "coming soon to Modrinth and CurseForge"; player-marked moment can be any length), and `report.md`:
+  whether each shot passed frame checks and whether each event flash is visible in the video frames themselves
+  (what block rays miss: Distant Horizons terrain, smoke, shaders). `--clip far=<video>` (or `nuke=`) is a clip
+  filmed outside a replay (live, with its own frame checks and game audio): same loudness, music version and caption.
 
-Тесты: `uv run --with 'duckdb>=1.1,<2' --with 'numpy>=1.26' python -m unittest discover -s tools/clips/tests`
-(нужен ffmpeg).
+Tests: `uv run --with 'duckdb>=1.1,<2' --with 'numpy>=1.26' python -m unittest discover -s tools/clips/tests`
+ (need ffmpeg).

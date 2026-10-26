@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlackBodyTest {
-    /** Чёрное тело температуры солнца — диск солнца: его яркость против белой стены в полдень. */
+    /** Black body temperature of the sun - the disk of the sun: its brightness against a white wall at noon. */
     @Test
     void solarTemperatureIsTheSunDisk() {
         assertEquals(BlackBody.SUN_DISK, BlackBody.luminance(BlackBody.SUN_K), 1e-6 * BlackBody.SUN_DISK);
@@ -15,20 +15,20 @@ class BlackBodyTest {
         assertEquals(BlackBody.SUN_DISK, c[3], 1e-6 * BlackBody.SUN_DISK);
     }
 
-    /** Горячее — ярче на всём диапазоне таблицы. */
+    /** Hotter is brighter throughout the entire range of the table. */
     @Test
     void hotterIsBrighter() {
         double last = 0;
         for (double k = 500; k <= 30_000; k *= 1.05) {
             double l = BlackBody.luminance(k);
-            assertTrue(l > last, k + " K: " + l + " не ярче " + last);
+            assertTrue(l > last, k + " K: " + l + " no brighter " + last);
             last = l;
         }
     }
 
     /**
-     * Цвет — от тёмно-красного к белому и голубому: 1 500 K — красно-оранжевый (синего почти нет), 6 500 K — почти белый
-     * (это и есть белая точка D65), 15 000 K — голубой.
+     * Color - from dark red to white and blue: 1 500 K - red-orange (almost no blue), 6 500 K - almost white
+     *  (this is the white dot D65), 15 000 K - blue.
      */
     @Test
     void colourGoesFromRedToWhiteToBlue() {

@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Луч по карте высот: прямая видимость, холм между — разность хода и высота, с которой источник виден. */
+/** Beam on the height map: line of sight, the hill between - the path difference and the height from which the source is visible. */
 class SightlineTest {
     @Test
     void flatGroundIsOpen() {
@@ -21,12 +21,12 @@ class SightlineTest {
 
     @Test
     void hillInTheMiddleHidesTheBaseButNotTheColumn() {
-        // холм 40 блоков над равниной посередине пути в 2 км: источник у земли, глаз на высоте 2 блока
+        // hill 40 blocks above the plain in the middle of the path at 2 km: source near the ground, eye at the height of 2 block
         Sightline.Heights hill = (x, z) -> x >= 960 && x < 1040 ? 104 : 64;
         Sightline.Result r = Sightline.trace(hill, 0, 65, 0, 2000, 66, 0);
         double a = Math.hypot(1000, 104 - 65), b = Math.hypot(1000, 66 - 104), d = Math.hypot(2000, 1);
-        assertEquals(a + b - d, r.pathDifference(), 0.5, "кромка холма — разность хода");
-        // прямая из глаза через вершину на полпути поднимается над источником на 2·(104 − 66) + 66 − 65
+        assertEquals(a + b - d, r.pathDifference(), 0.5, "hill edge - travel difference");
+        // the straight line from the eye through the vertex rises halfway above the source by 2 (104 − 66) + 66 − 65
         assertEquals(2 * (104 - 66) + 1, r.hidden(), 3);
     }
 
@@ -37,6 +37,6 @@ class SightlineTest {
             calls[0]++;
             return 64;
         }, 0, 65, 0, 8000, 66, 0);
-        assertTrue(calls[0] < Sightline.MAX_SAMPLES, "точек " + calls[0]);
+        assertTrue(calls[0] < Sightline.MAX_SAMPLES, "points " + calls[0]);
     }
 }

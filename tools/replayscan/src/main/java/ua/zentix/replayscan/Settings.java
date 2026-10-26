@@ -4,18 +4,18 @@ import java.nio.file.Path;
 import java.util.regex.Pattern;
 
 /**
- * Настройки разбора — свойства JVM {@code replayscan.*} (запуск из Gradle: {@code -P<имя>}, README.md).
+ * Scan settings from JVM properties {@code replayscan.*} (Gradle {@code -P<name>}, README.md).
  *
- * @param replay   повтор Flashback (zip); без него мод ничего не делает
- * @param out      каталог таблиц (по умолчанию {@code replayscan/<имя повтора>} в каталоге игры)
- * @param speed    тиков повтора в секунду (20 — как в игре); сверху его держит скорость разбора
- * @param viewers  чьими глазами считать видимость: {@code recorder} (записавший), {@code players} (все игроки)
- * @param every    видимость сущностей — раз в столько тиков (событий и дальних снарядов — на каждый их пакет)
- * @param range    дальше этого (блоков) видимость не считается
- * @param subjects id типов сущностей, за которыми следить (регулярное выражение; игроки — всегда)
- * @param ask      файл камер (JSON, README.md): видимость всего из этих точек
- * @param from     с какого тика писать (до него — перемотка без таблиц)
- * @param to       до какого тика (включительно); 0 — до конца
+ * @param replay Flashback replay (zip); without it mod does nothing
+ * @param out table directory (default {@code replayscan/<replay name>} under game directory)
+ * @param speed replay ticks per second (20 normal); scan speed caps it
+ * @param viewers visibility viewpoints: {@code recorder} or {@code players} (all players)
+ * @param every entity visibility sampling interval, ticks (events/distant projectiles on every packet)
+ * @param range maximum visibility distance, blocks
+ * @param subjects entity type IDs to track (regex; players always included)
+ * @param ask camera file (JSON, README.md), visibility from these points
+ * @param from first tick to write, earlier ticks seek without tables
+ * @param to last tick inclusive, 0 to end
  */
 record Settings(Path replay, Path out, float speed, String viewers, int every, double range, Pattern subjects, Path ask, int from, int to) {
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Проверка песочницы эффектов без клиента (CI, «Остановка проверок»): `shot` ставит время суток до эффекта, а не после
-# (23.10 кадры 0,1 и 0,5 с «ночи» были днём), и у каждого снимка своё (без --time — день); `shaders` и `dh` без своих
-# модов в каталоге песочницы — отказ со строкой, а не съёмка без Iris или DH (23.10 FX снимал «под Iris» без Iris).
+# Effects sandbox check without a client (CI, "Остановка проверок"): `shot` sets time before the effect, not after
+# (23.10: 0,1 and 0,5 s "night" frames were daytime), separately for each shot (without --time, day); `shaders` and `dh`
+# without their mods in the sandbox directory refuse with a message, rather than capturing without Iris or DH (23.10: FX captured "under Iris" without Iris).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -11,7 +11,7 @@ fail=0
 ok() { echo "ok: $1"; }
 bad() { echo "FAIL: $1"; fail=1; }
 
-# команды shot — по порядку, без клиента: fx пишет их в журнал
+# shot commands in sequence, without a client: fx logs them
 FX=$tmp/fx
 fx() { echo "$1" >> "$tmp/fx.log"; }
 swap() { echo swap >> "$tmp/fx.log"; }
@@ -29,19 +29,19 @@ time day
 overlay off
 shots n2 0.5 2
 flight missile'
-[ "$(cat "$tmp/fx.log")" = "$want" ] && ok "shot: время до эффекта, без --time — день" || bad "shot — порядок команд:
+[ "$(cat "$tmp/fx.log")" = "$want" ] && ok "shot: time before effect, default day without --time" || bad "shot command order:
 $(cat "$tmp/fx.log")"
 
-# режим и моды: shaders — Sodium и Iris, dh — Distant Horizons; без режима — ничего не нужно
+# Modes and mods: shaders needs Sodium and Iris, dh needs Distant Horizons; no mode needs no mods
 mkdir -p "$tmp/mods"
-( unset INCOMING_SHADERS INCOMING_DH; mods_check "$tmp/mods" ) && ok "без shaders и dh модов не нужно" || bad "без режима — отказ"
+( unset INCOMING_SHADERS INCOMING_DH; mods_check "$tmp/mods" ) && ok "without shaders and dh, no mods required" || bad "refused without a mode"
 out=$(INCOMING_SHADERS=1 mods_check "$tmp/mods" 2>&1); rc=$?
-[ $rc = 1 ] && [[ $out == *"sodium-neoforge-*.jar"*"iris-neoforge-*.jar"* ]] && ok "shaders без Iris и Sodium — отказ: $out" || bad "shaders без модов: $rc $out"
+[ $rc = 1 ] && [[ $out == *"sodium-neoforge-*.jar"*"iris-neoforge-*.jar"* ]] && ok "shaders without Iris and Sodium refused: $out" || bad "shaders without mods: $rc $out"
 touch "$tmp/mods/sodium-neoforge-0.8.13+mc1.21.1.jar"
 out=$(INCOMING_SHADERS=1 mods_check "$tmp/mods" 2>&1); rc=$?
-[ $rc = 1 ] && [[ $out == *"iris-neoforge"* && $out != *sodium* ]] && ok "shaders без Iris — отказ" || bad "shaders без Iris: $rc $out"
+[ $rc = 1 ] && [[ $out == *"iris-neoforge"* && $out != *sodium* ]] && ok "shaders without Iris refused" || bad "shaders without Iris: $rc $out"
 touch "$tmp/mods/iris-neoforge-1.8.14-beta.1+mc1.21.1.jar"
-INCOMING_SHADERS=1 mods_check "$tmp/mods" && ok "shaders с Iris и Sodium — годится" || bad "shaders с модами — отказ"
+INCOMING_SHADERS=1 mods_check "$tmp/mods" && ok "shaders with Iris and Sodium accepted" || bad "shaders refused with mods"
 out=$(INCOMING_SHADERS=1 INCOMING_DH=1 mods_check "$tmp/mods" 2>&1); rc=$?
-[ $rc = 1 ] && [[ $out == *"DistantHorizons-*.jar"* ]] && ok "dh без Distant Horizons — отказ" || bad "dh без DH: $rc $out"
+[ $rc = 1 ] && [[ $out == *"DistantHorizons-*.jar"* ]] && ok "dh without Distant Horizons refused" || bad "dh without DH: $rc $out"
 exit $fail

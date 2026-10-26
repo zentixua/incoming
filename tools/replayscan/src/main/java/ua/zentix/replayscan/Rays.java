@@ -12,13 +12,15 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Луч по блокам мира повтора (обход клеток Амантидеса — Ву) и замеры земли у точки. Мир повтора — то, что получил
- * записавший клиент: чанк, которого он не получал или который сервер повтора сейчас не держит, — неизвестность, а не
- * воздух ({@code known} — чанки, пришедшие в записи; {@code getChunkNow} — только готовые, ничего не грузит).
+ * Ray along the blocks of the replay world (bypassing the cells of Amantides - Wu) and measuring the ground at the point. The world of replay is what the recording client received
+ * : a chunk that he did not receive or that the replay server does not currently hold - the unknown, and not
+ * air ({@code known} - chunks that came in the recording; {@code getChunkNow} - only ready-made ones, does not load anything).
  */
 final class Rays {
-    /** Что на луче: до первого непрозрачного ({@code hard}, −1 — нет), сколько прозрачного с формой
-     * (листва, стекло, вода — {@code soft}), где начался неизвестный чанк ({@code unknown}, −1 — нет). */
+    /**
+     * What's on the ray: up to the first opaque one ({@code hard}, −1 - no), how much is transparent with the shape
+     *  (foliage, glass, water - {@code soft}), where the unknown chunk began ({@code unknown}, −1 - no).
+     */
     record Hit(double hard, int soft, double unknown) {}
 
     private final ServerLevel level;
@@ -43,7 +45,7 @@ final class Rays {
         return cached;
     }
 
-    /** Состояние блока или {@code null}, если чанк неизвестен. Вне высоты мира — воздух. */
+    /** Block state or {@code null} if the chunk is unknown. Beyond the heights of the world is air. */
     @Nullable
     BlockState state(int x, int y, int z) {
         LevelChunk c = chunk(x >> 4, z >> 4);
@@ -52,7 +54,7 @@ final class Rays {
         return c.getBlockState(pos.set(x, y, z));
     }
 
-    /** Луч от {@code from} к {@code to}, последние {@code stopBefore} блоков не смотрятся (сама цель и её опора). */
+    /** The beam from {@code from} to {@code to}, the last {@code stopBefore} blocks are not visible (the target itself and its support). */
     Hit cast(Vec3 from, Vec3 to, double stopBefore) {
         Vec3 d = to.subtract(from);
         double length = d.length();
@@ -69,7 +71,7 @@ final class Rays {
         double tz = sz == 0 ? Double.POSITIVE_INFINITY : ((sz > 0 ? z + 1 - from.z : from.z - z) * tdz);
         double t = 0;
         int soft = 0;
-        // клетка глаза не смотрится: зритель стоит в воздухе, а камера бывает и у самой стены
+        // the eye cage doesn’t look good: the viewer stands in the air, but the camera is sometimes right next to the wall
         boolean first = true;
         while (t <= limit) {
             if (!first) {
@@ -113,8 +115,8 @@ final class Rays {
     }
 
     /**
-     * Сколько блоков от точки вниз до первого блока с формой столкновения: 0 — точка в блоке, −1 — неизвестный чанк,
-     * {@code max + 1} — ничего в пределах {@code max}.
+     * How many blocks from a point down to the first block with a collision shape: 0 - a point in a block, −1 - an unknown chunk,
+     * {@code max + 1} - nothing within {@code max}.
      */
     int clearance(Vec3 p, int max) {
         int x = floor(p.x), z = floor(p.z), y0 = floor(p.y);
@@ -127,8 +129,8 @@ final class Rays {
     }
 
     /**
-     * Расстояние от точки до ближайшего блока с формой столкновения в кубе со стороной {@code 2r + 1} (по центрам
-     * клеток), −1 — в кубе есть неизвестный чанк, а твёрдого не нашлось, {@code r + 1} — ничего.
+     * Distance from a point to the nearest block with a collision shape in a cube with side {@code 2r + 1} (at the centers of
+     *  cells), −1 - there is an unknown chunk in the cube, but no solid was found, {@code r + 1} - nothing.
      */
     double nearestSolid(Vec3 p, int r) {
         int x0 = floor(p.x), y0 = floor(p.y), z0 = floor(p.z);

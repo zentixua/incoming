@@ -27,17 +27,17 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** Стенд и серверы проверок (devtest). */
+/** Test stand and servers (devtest). */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RigGameTests {
     private RigGameTests() {}
 
     /**
-     * Сторож петли видит UDP-канал Sable: миксин Sable кладёт свой канал (Netty, датаграммы) в тот же список каналов
-     * сервера, что и TCP игры, на тот же адрес. Здесь такой канал поднимается на петле и кладётся в каналы сервера
-     * GameTest, как это делает Sable, — сторож молчит; потом рядом кладётся канал датаграмм, который сообщает адрес
-     * 0.0.0.0 или :: (заглушка: открывать такой сокет тест не должен), — сторож его называет.
+     * The loop guard sees the UDP channel Sable: the Sable mixin puts its channel (Netty, datagrams) in the same channel list of the
+     *  server as the TCP game, at the same address. Here such a channel is lifted on a loop and placed in the server channels
+     * GameTest, as Sable does - the watchman is silent; then a datagram channel is placed nearby, which reports the address
+     * 0.0.0.0 or :: (stub: the test should not open such a socket), - the guard calls it.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "rig_loopback")
     public static void loopbackGuardSeesUdpChannel(GameTestHelper h) throws UnknownHostException {
@@ -48,15 +48,15 @@ public final class RigGameTests {
         try {
             live.add(udp);
             SocketAddress bound = udp.channel().localAddress();
-            h.assertTrue(bound instanceof InetSocketAddress, "адрес UDP-канала не сетевой: " + bound);
-            h.assertTrue(LoopbackGuard.publicAddress(server) == null, "сторож поднял тревогу на петле: " + LoopbackGuard.publicAddress(server));
+            h.assertTrue(bound instanceof InetSocketAddress, "non-network channel address UDP: " + bound);
+            h.assertTrue(LoopbackGuard.publicAddress(server) == null, "the watchman raised the alarm on the loop: " + LoopbackGuard.publicAddress(server));
             int port = ((InetSocketAddress) bound).getPort();
             for (byte[] any : List.of(new byte[4], new byte[16])) {
                 InetSocketAddress wide = new InetSocketAddress(InetAddress.getByAddress(any), port);
                 ChannelFuture open = stub(DatagramChannel.class, wide);
                 live.add(open);
                 try {
-                    h.assertTrue(LoopbackGuard.publicAddress(server) != null, "сторож не заметил UDP на " + wide);
+                    h.assertTrue(LoopbackGuard.publicAddress(server) != null, "the watchman did not notice UDP on " + wide);
                 } finally {
                     live.remove(open);
                 }
@@ -68,55 +68,55 @@ public final class RigGameTests {
         h.succeed();
     }
 
-    /** Команды сценария {@code commands}: «;» в NBT-массиве и в кавычках — часть команды, пустые пункты отбрасываются. */
+    /** {@code commands} script commands: ";" in the NBT array and in quotes - part of the command, empty items are discarded. */
     @GameTest(template = "range", timeoutTicks = 20, batch = "rig_tools")
     public static void scenarioCommandsSplitTopLevel(GameTestHelper h) {
         String cow = "summon cow -272 110 -1142 {NoAI:1b,UUID:[I;7001,7002,7003,7004],Tags:[\"drone_target\"]}";
         List<String> got = ScenarioCommands.split("gamemode spectator; " + cow + ";wait:200;;say \"a;b\";tp @s 0 100 0 ;");
         List<String> want = List.of("gamemode spectator", cow, "wait:200", "say \"a;b\"", "tp @s 0 100 0");
-        h.assertTrue(got.equals(want), "разбор: " + got);
-        h.assertTrue(ScenarioCommands.split(" ; ").isEmpty(), "пустые пункты не отброшены");
+        h.assertTrue(got.equals(want), "parsing: " + got);
+        h.assertTrue(ScenarioCommands.split(" ; ").isEmpty(), "empty items are not discarded");
         String quoted = "summon armor_stand 0 64 0 {CustomName:'a;b',Tags:['x;y']}";
         List<String> mixed = ScenarioCommands.split("say it's here; " + quoted + "; time set day");
-        h.assertTrue(mixed.equals(List.of("say it's here", quoted, "time set day")), "апостроф и строки SNBT: " + mixed);
+        h.assertTrue(mixed.equals(List.of("say it's here", quoted, "time set day")), "apostrophe and lines SNBT: " + mixed);
         h.succeed();
     }
 
     /**
-     * Удар сценария {@code fx}: снаряд — единственный новый UUID после команды, удар — первый взрыв с ним в источнике.
-     * Чужой взрыв, взрыв без снаряда и второй взрыв своего снаряда (вторичный подрыв) ударом не считаются; без
-     * однозначного пуска (новых нет или два) не считается ничего.
+     * Impact of the scenario {@code fx}: the projectile is the only new UUID after the command, the impact is the first explosion with it at the source.
+     * Another's explosion, an explosion without a projectile and the second explosion of one's own projectile (secondary explosion) are not considered a blow; without
+     *  an unambiguous launch (there are no new ones or two) nothing is considered.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "rig_tools")
     public static void strikeWatchCountsOwnBlastOnly(GameTestHelper h) {
         UUID old = new UUID(1, 1), mine = new UUID(2, 2), other = new UUID(3, 3);
         Vec3 at = new Vec3(10, 64, 10);
         StrikeWatch w = new StrikeWatch();
-        h.assertTrue(w.launched(Set.of(old), Set.of(old, mine)), "пуск не найден");
-        h.assertTrue(mine.equals(w.projectile()), "не тот снаряд: " + w.projectile());
-        h.assertFalse(w.onBlast(other, at, 5, 105), "чужой взрыв засчитан");
-        h.assertFalse(w.onBlast(null, at, 6, 106), "взрыв без снаряда засчитан");
-        h.assertTrue(w.impactTick() < 0, "удар до своего взрыва");
-        h.assertTrue(w.onBlast(mine, at, 7, 107), "свой взрыв не засчитан");
-        h.assertFalse(w.onBlast(mine, at.add(3, 0, 0), 9, 109), "вторичный подрыв засчитан ударом");
+        h.assertTrue(w.launched(Set.of(old), Set.of(old, mine)), "launch not found");
+        h.assertTrue(mine.equals(w.projectile()), "wrong shell: " + w.projectile());
+        h.assertFalse(w.onBlast(other, at, 5, 105), "someone else's explosion counts");
+        h.assertFalse(w.onBlast(null, at, 6, 106), "explosion without a projectile is counted");
+        h.assertTrue(w.impactTick() < 0, "blow before it explodes");
+        h.assertTrue(w.onBlast(mine, at, 7, 107), "your explosion is not counted");
+        h.assertFalse(w.onBlast(mine, at.add(3, 0, 0), 9, 109), "secondary explosion is counted as a blow");
         h.assertTrue(w.impactTick() == 7 && w.impactGameTime() == 107 && at.equals(w.impactAt()),
-                "удар: " + w.impactTick() + " (сервер " + w.impactGameTime() + ") у " + w.impactAt());
+                "blow: " + w.impactTick() + " (server " + w.impactGameTime() + ") y " + w.impactAt());
         StrikeWatch two = new StrikeWatch();
-        h.assertFalse(two.launched(Set.of(), Set.of(mine, other)), "два новых снаряда — пуск засчитан");
-        h.assertFalse(two.onBlast(mine, at, 1, 101), "без пуска засчитан удар");
+        h.assertFalse(two.launched(Set.of(), Set.of(mine, other)), "two new shells - launch counted");
+        h.assertFalse(two.onBlast(mine, at, 1, 101), "without launch the hit is counted");
         StrikeWatch none = new StrikeWatch();
-        h.assertFalse(none.launched(Set.of(old), Set.of(old)), "нового снаряда нет — пуск засчитан");
+        h.assertFalse(none.launched(Set.of(old), Set.of(old)), "there is no new projectile - launch is counted");
         h.succeed();
     }
 
     /**
-     * Канал (заглушка: только {@code localAddress}), который уже «слушает» на {@code address}, — как его видит сторож
-     * в списке каналов сервера. Настоящий сокет не открывается.
+     * Channel (stub: only {@code localAddress}), which is already “listening” on {@code address}, as the guard
+     *  sees it in the list of server channels. The real socket does not open.
      */
     private static ChannelFuture stub(Class<? extends Channel> type, InetSocketAddress address) {
         Channel channel = type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (self, m, args) -> switch (m.getName()) {
             case "localAddress" -> address;
-            case "toString" -> "заглушка " + type.getSimpleName() + " " + address;
+            case "toString" -> "stub " + type.getSimpleName() + " " + address;
             case "hashCode" -> System.identityHashCode(self);
             case "equals" -> self == args[0];
             default -> throw new UnsupportedOperationException(m.getName());
@@ -124,7 +124,7 @@ public final class RigGameTests {
         return (ChannelFuture) Proxy.newProxyInstance(ChannelFuture.class.getClassLoader(), new Class<?>[]{ChannelFuture.class}, (self, m, args) -> switch (m.getName()) {
             case "channel" -> channel;
             case "isDone", "isSuccess" -> true;
-            case "toString" -> "заглушка " + channel;
+            case "toString" -> "stub " + channel;
             case "hashCode" -> System.identityHashCode(self);
             case "equals" -> self == args[0];
             default -> throw new UnsupportedOperationException(m.getName());

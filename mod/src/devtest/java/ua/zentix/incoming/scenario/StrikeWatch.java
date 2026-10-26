@@ -11,21 +11,21 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Один удар сценария на встроенном сервере: какой снаряд пущен (UUID — новый среди снарядов в мире и вне его) и когда
- * он взорвался (первый {@code ExplosionEvent.Start}, источник урона которого — этот снаряд). Сущность у клиента
- * пропадает и без взрыва — при потере отслеживания и при уходе в полёт вне мира ({@code VirtualFlights.park}: новая
- * сущность с тем же UUID), поэтому «удар» — только взрыв своего снаряда.
+ * One hit script on the built-in server: what projectile was launched (UUID - new among projectiles in the world and outside it) and when
+ *  it exploded (the first {@code ExplosionEvent.Start}, the source of damage of which is this projectile). The client's
+ *  entity disappears without an explosion - when tracking is lost and when it goes off into flight outside the world ({@code VirtualFlights.park}: new
+ *  entity with the same UUID), so the “impact” is only the explosion of its projectile.
  */
 public final class StrikeWatch {
     @Nullable
     private volatile UUID projectile;
     private volatile int impactTick = -1;
-    /** Время мира сервера у взрыва: часы клиента отстают от сервера и догоняют его рывками. */
+    /** The server's world time is exploding: the client's clock lags behind the server and catches up with it in jerks. */
     private volatile long impactGameTime = -1;
     @Nullable
     private volatile Vec3 impactAt;
 
-    /** UUID снарядов мира: в загруженном мире и вне его. */
+    /** UUID world shells: in and out of the busy world. */
     public static Set<UUID> projectiles(ServerLevel level) {
         Set<UUID> out = new HashSet<>();
         for (StrikeProjectile p : level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(StrikeProjectile.class), e -> true)) {
@@ -36,8 +36,8 @@ public final class StrikeWatch {
     }
 
     /**
-     * Пуск: снаряд — единственный новый UUID между снимками до и после команды. {@code false} — нового нет или их
-     * несколько (тогда удар не засчитывается вовсе).
+     * launch: the projectile is the only new UUID between the shots before and after the command. {@code false} - there is no new one or there are several of them
+     *  (then the strike is not counted at all).
      */
     public boolean launched(Set<UUID> before, Set<UUID> after) {
         Set<UUID> fresh = new HashSet<>(after);
@@ -46,7 +46,7 @@ public final class StrikeWatch {
         return projectile != null;
     }
 
-    /** Взрыв, чей источник — снаряд {@code by} (null — не снаряд). {@code true} — это удар нашего снаряда, первый. */
+    /** An explosion whose source is the {@code by} projectile (null is not a projectile). {@code true} is the first impact of our projectile. */
     public boolean onBlast(@Nullable UUID by, Vec3 at, int tick, long gameTime) {
         UUID mine = projectile;
         if (mine == null || !mine.equals(by) || impactTick >= 0) return false;
@@ -61,12 +61,12 @@ public final class StrikeWatch {
         return projectile;
     }
 
-    /** Тик удара (часы, которые передал {@link #onBlast}), −1 — удара ещё не было. */
+    /** tick of the strike (the clock transmitted by {@link #onBlast}), −1 - there was no strike yet. */
     public int impactTick() {
         return impactTick;
     }
 
-    /** Время мира сервера у удара, −1 — удара ещё не было. */
+    /** The time of the server's world is at strike, −1 - there has not been a strike yet. */
     public long impactGameTime() {
         return impactGameTime;
     }

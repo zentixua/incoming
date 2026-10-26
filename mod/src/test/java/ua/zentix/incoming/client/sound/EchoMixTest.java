@@ -10,11 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Сведение отражений в дорожки по сторонам: время, громкость, направление, без перегруза. */
+/** Mixing reflections into tracks on the sides: time, volume, direction, without overload. */
 class EchoMixTest {
     private static final double SECTOR = 2 * Math.PI / EchoMix.SECTORS;
 
-    /** Зерно: щелчок 0.5 в начале и тихий хвост. */
+    /** seed: click 0.5 at the beginning and a quiet tail. */
     private static float[] click() {
         float[] g = new float[EchoMix.RATE / 2];
         g[0] = 0.5f;
@@ -38,10 +38,10 @@ class EchoMixTest {
         assertEquals(1, mix.tracks().size());
         EchoMix.Track t = mix.tracks().get(0);
         assertEquals(2 * SECTOR, t.azimuth(), 1e-9);
-        assertEquals(47.4, t.start(), 20.0 / EchoMix.RATE, "начало — задержка отражения, до отсчёта");
+        assertEquals(47.4, t.start(), 20.0 / EchoMix.RATE, "start - reflection delay, up to sample");
         assertEquals(1, t.gain(), 1e-6);
         assertEquals(0, peakAt(t.pcm()));
-        assertEquals(0.5 * 0.5, t.pcm()[0] / 32767.0, 1e-3, "амплитуда — √энергии × зерно");
+        assertEquals(0.5 * 0.5, t.pcm()[0] / 32767.0, 1e-3, "amplitude - √energy × seed");
     }
 
     @Test
@@ -52,9 +52,9 @@ class EchoMixTest {
         for (EchoMix.Track t : mix.tracks()) {
             double a = t.pcm()[0] / 32767.0 / 0.5;
             e += a * a;
-            assertEquals(Math.sqrt(0.16 / 2), a, 1e-3, "поровну");
+            assertEquals(Math.sqrt(0.16 / 2), a, 1e-3, "equally");
         }
-        assertEquals(0.16, e, 1e-3, "мощность сохраняется");
+        assertEquals(0.16, e, 1e-3, "power is maintained");
     }
 
     @Test
@@ -63,7 +63,7 @@ class EchoMixTest {
         EchoMix.Track t = mix.tracks().get(0);
         assertEquals(20, t.start(), 0.2);
         int second = (int) Math.round((60 - 20) / 20.0 * EchoMix.RATE);
-        assertEquals(Math.sqrt(0.05) * 0.5, t.pcm()[second] / 32767.0, 2e-3, "второе эхо через 2 с после первого");
+        assertEquals(Math.sqrt(0.05) * 0.5, t.pcm()[second] / 32767.0, 2e-3, "second echo after 2 s after the first");
     }
 
     @Test
@@ -73,8 +73,8 @@ class EchoMixTest {
         EchoMix.Track t = EchoMix.render(click(), list).tracks().get(0);
         int peak = 0;
         for (short s : t.pcm()) peak = Math.max(peak, Math.abs(s));
-        assertTrue(peak <= Math.round(EchoMix.PEAK * 32767) + 1, "пик " + peak);
-        assertTrue(t.gain() > 1, "громкость возвращена при игре");
+        assertTrue(peak <= Math.round(EchoMix.PEAK * 32767) + 1, "peak " + peak);
+        assertTrue(t.gain() > 1, "volume returned when playing");
     }
 
     @Test
@@ -84,10 +84,10 @@ class EchoMixTest {
         for (int i = 0; i < noise.length; i++) noise[i] = (float) (r.nextGaussian() * 0.1);
         short[] near = EchoMix.render(noise, List.of(echo(0, 20, 0.5, 100))).tracks().get(0).pcm();
         short[] far = EchoMix.render(noise, List.of(echo(0, 20, 0.5, 5000))).tracks().get(0).pcm();
-        assertTrue(highs(far) < 0.2 * highs(near), "верха дальнего отражения: " + highs(far) + " против " + highs(near));
+        assertTrue(highs(far) < 0.2 * highs(near), "far reflection top: " + highs(far) + " against " + highs(near));
     }
 
-    /** Мощность разностей соседних отсчётов — мера верхов. */
+    /** The power of the differences between neighboring samples is a measure of the tops. */
     private static double highs(short[] pcm) {
         double s = 0;
         for (int i = 1; i < pcm.length; i++) s += Math.pow(pcm[i] - pcm[i - 1], 2);
@@ -98,7 +98,7 @@ class EchoMixTest {
     void tailTimeGrowsWithTheSpreadOfDelays() {
         double tight = EchoMix.render(click(), List.of(echo(0, 20, 0.1, 100), echo(1, 24, 0.1, 100))).t60();
         double wide = EchoMix.render(click(), List.of(echo(0, 20, 0.1, 100), echo(1, 140, 0.1, 100))).t60();
-        assertTrue(wide > tight, wide + " против " + tight);
+        assertTrue(wide > tight, wide + " against " + tight);
     }
 
     @Test
@@ -108,7 +108,7 @@ class EchoMixTest {
         float[] g = EchoMix.grain(stereo, 2, 44100, 3);
         assertEquals(3 * EchoMix.RATE, g.length);
         assertEquals(0.5, g[10], 1e-3);
-        assertEquals(0, g[g.length - 1], 1e-3, "конец затухает");
+        assertEquals(0, g[g.length - 1], 1e-3, "the end fades out");
     }
 
     @Test
@@ -116,37 +116,38 @@ class EchoMixTest {
         float[] ramp = new float[1001];
         for (int i = 0; i < ramp.length; i++) ramp[i] = i / 1000f;
         float[] g = EchoMix.pitch(ramp, 0.75);
-        assertEquals(1334, g.length, "на 0,75 — на треть длиннее");
-        assertEquals(0.75 * 0.1, g[100], 1e-6, "секунда звука — 0,75 с записи");
+        assertEquals(1334, g.length, "on 0,75 - a third longer");
+        assertEquals(0.75 * 0.1, g[100], 1e-6, "second of sound - 0,75 s recording");
         assertEquals(1, g[g.length - 1], 1e-3);
         assertSame(ramp, EchoMix.pitch(ramp, 1));
     }
 
     @Test
     void wideFacetSpreadsItsEnergyOverItsArrivals() {
-        // грань с разбросом прихода 0,1 с (2 тика): импульсы по всему разбросу, энергия та же, что у узкой
+        // edge with spread of arrival 0,1 s (2 tick): impulses throughout the spread, the energy is the same as that of the narrow one
         EchoMix.Track t = EchoMix.render(click(), List.of(new TerrainEcho.Reflection(300, 70, 20, 0, 40, 0.2, 100, 300, 39, 2))).tracks().get(0);
-        assertEquals(39, t.start(), 0.05, "начало — самый ранний приход через грань");
+        assertEquals(39, t.start(), 0.05, "beginning - the earliest arrival across the border");
         float[] g = click();
         double e = 0, ref = 0;
         for (float x : g) ref += x * x;
         for (short x : t.pcm()) e += Math.pow(x / 32767.0 * t.gain(), 2);
-        assertEquals(0.2, e / ref, 0.2 * 0.15, "энергия грани сохраняется (в пределах случайных совпадений импульсов)");
+        assertEquals(0.2, e / ref, 0.2 * 0.15, "the edge energy is conserved (within the limits of random pulse coincidences)");
         int pulses = 0;
         for (int i = 0; i < (int) (0.1 * EchoMix.RATE); i++) if (Math.abs(t.pcm()[i]) > 0.3 * 32767 * Math.sqrt(0.2 / 200) / t.gain()) pulses++;
-        assertTrue(pulses > 100, "импульсов в разбросе: " + pulses);
+        assertTrue(pulses > 100, "impulses spread: " + pulses);
     }
 
     /**
-     * Эхо от рельефа без гребёнки. Мера — наибольшая нормированная автокорреляция дорожки на задержках 2–50 мс при
-     * белом зерне (тогда она — автокорреляция самого отклика): у пары «звук и его копия» с долей a это a/(1+a²).
-     * Порог 0,1 — копия на −20 дБ: одно отражение на шуме слышно окраской примерно с −15…−20 дБ против прямого звука
-     * (⚠ порядок величины: S. E. Olive, F. E. Toole, «The detection of reflections in typical rooms», JAES 37, 1989);
-     * гребёнка 3.5.0 (окна по 10 мс) давала 0,4–0,5 на 10–50 мс (проба P, WAV шахеда с 300 м).
+     * Terrain echo without comb filtering. Measure the largest normalized track autocorrelation at 2–50 ms
+     * lags with white-noise seed (then it is the impulse response autocorrelation): for a sound and its copy
+     * at fraction a, it is a/(1+a²). Threshold 0,1 means a copy at −20 dB: a single reflection on noise becomes
+     * audible as coloration around −15…−20 dB relative to direct sound (⚠ order of magnitude: S. E. Olive,
+     * F. E. Toole, "The detection of reflections in typical rooms", JAES 37, 1989); the 3.5.0 comb (10 ms windows)
+     * gave 0,4–0,5 at 10–50 ms (probe P, Shahed WAV at 300 m).
      */
     @Test
     void terrainEchoHasNoComb() {
-        // холмы вокруг уха, взрыв шахеда в 300 блоках
+        // hills around the ear, Shahed explosion in 300 blocks
         Sightline.Heights hills = (x, z) -> 64 + 30 * Math.sin(x / 150.0) * Math.cos(z / 170.0) + (Math.hypot(x, z) > 600 ? 60 : 0);
         TerrainEcho.Blast shahed = new TerrainEcho.Blast() {
             @Override
@@ -160,16 +161,16 @@ class EchoMixTest {
             }
         };
         List<TerrainEcho.Reflection> found = TerrainEcho.trace(hills, 0, 100, 0, 300, 70, 40, shahed);
-        assertTrue(found.size() > 50, "отражений " + found.size());
+        assertTrue(found.size() > 50, "reflections " + found.size());
         double comb = comb(EchoMix.render(white(), found));
-        assertTrue(comb < 0.1, "гребёнка эха рельефа: " + comb);
-        // та же мера ловит сетку задержек: копии через 10 мс
+        assertTrue(comb < 0.1, "relief echo comb: " + comb);
+        // the same measure catches the delay grid: copies after 10 ms
         List<TerrainEcho.Reflection> grid = new java.util.ArrayList<>();
         for (int i = 0; i < 100; i++) grid.add(new TerrainEcho.Reflection(i, 0, 0, 0, 40 + i * 0.2, 0.01 * Math.exp(-i / 30.0), 100, 300, 40 + i * 0.2, 0));
-        assertTrue(comb(EchoMix.render(white(), grid)) > 0.3, "сетка задержек — гребёнка");
+        assertTrue(comb(EchoMix.render(white(), grid)) > 0.3, "delay grid - comb");
     }
 
-    /** Белый шум 2,8 с — зерно для мер отклика. */
+    /** White noise 2,8 s - seed for response measures. */
     private static float[] white() {
         java.util.Random r = new java.util.Random(7);
         float[] g = new float[(int) (2.8 * EchoMix.RATE)];
@@ -178,11 +179,11 @@ class EchoMixTest {
     }
 
     /**
-     * Наибольшая нормированная автокорреляция всего эха на 2–50 мс: ухо слышит сумму дорожек, а у дорожек разных
-     * сторон отклики независимы — автокорреляция суммы есть сумма их автокорреляций (по всей длине каждой). У одной
-     * грани бархатный шум и зерно, которому воздух срезал верха до ~1 кГц, сами дают случайные выступы до ~0,1–0,15
-     * на отдельных задержках (у настоящего рассеяния — так же: тонкая случайная структура спектра); гребёнка сетки
-     * задержек — одна у всех сторон и в сумме не гаснет.
+     * The largest normalized autocorrelation of the entire echo is at 2–50 ms: the ear hears the sum of the tracks, and the tracks of different
+     *  sides have independent responses - the autocorrelation of the sum is the sum of their autocorrelations (over the entire length of each). One
+     *  edge has velvety noise and a seed, the top of which has been cut off by the air up to ~1 kHz, themselves giving random protrusions up to ~0,1–0,15
+     *  at individual delays (real scattering has the same thing: a fine random structure of the spectrum); The grid comb
+     * delays is the same for all sides and does not go out in total.
      */
     static double comb(EchoMix.Mix mix) {
         int lo = (int) (0.002 * EchoMix.RATE), hi = (int) (0.05 * EchoMix.RATE);

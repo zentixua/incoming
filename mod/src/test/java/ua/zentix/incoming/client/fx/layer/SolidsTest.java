@@ -6,12 +6,12 @@ import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-/** Отпечаток секции окна заслонов: любая правка блоков меняет его (иначе тень остаётся от прежних блоков). */
+/** Imprint of a section of the screen window: any editing of blocks changes it (otherwise the shadow remains from the previous blocks). */
 class SolidsTest {
     /**
-     * Ревью #399: при умножении две правки в верхних битах слов хранилища гасили друг друга, при {@code HashCommon.mix}
-     * — правка старшего бита слова и узор {63, 47, 31, 15} в следующем. Теперь отпечаток другой для каждого такого
-     * сочетания и для случайных одиночных и парных правок.
+     * Review #399: during multiplication, two edits in the upper bits of the storage words canceled each other out, with {@code HashCommon.mix}
+     *  - an edit of the highest bit of the word and the pattern {63, 47, 31, 15} in the following. Now the fingerprint is different for each such
+     *  combination and for random single and paired edits.
      */
     @Test
     void anyBlockChangeChangesTheFingerprint() {
@@ -22,20 +22,20 @@ class SolidsTest {
             for (int i = 0; i < raw.length; i++) raw[i] = r.nextLong();
             long base = Solids.fingerprint(4, states, raw);
             int j = r.nextInt(raw.length - 1);
-            // два слова — по старшему биту
+            // two words - by the most significant bit
             long[] a = raw.clone();
             a[j] ^= 1L << 63;
             a[j + 1] ^= 1L << 63;
-            assertNotEquals(base, Solids.fingerprint(4, states, a), "две правки старших битов, слово " + j);
-            // старший бит слова и узор {63, 47, 31, 15} в следующем
+            assertNotEquals(base, Solids.fingerprint(4, states, a), "two edits of the most significant bits, a word " + j);
+            // the most significant bit of the word and the pattern {63, 47, 31, 15} as follows
             long[] b = raw.clone();
             b[j] ^= 1L << 63;
             b[j + 1] ^= 1L << 63 | 1L << 47 | 1L << 31 | 1L << 15;
-            assertNotEquals(base, Solids.fingerprint(4, states, b), "узор mix, слово " + j);
-            // случайная правка одного номера
+            assertNotEquals(base, Solids.fingerprint(4, states, b), "pattern mix, word " + j);
+            // random edit of one number
             long[] c = raw.clone();
             c[r.nextInt(raw.length)] ^= (long) (1 + r.nextInt(15)) << 4 * r.nextInt(16);
-            assertNotEquals(base, Solids.fingerprint(4, states, c), "одна правка");
+            assertNotEquals(base, Solids.fingerprint(4, states, c), "one edit");
         }
     }
 }

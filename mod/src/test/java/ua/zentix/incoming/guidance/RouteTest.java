@@ -17,13 +17,13 @@ class RouteTest {
 
     @Test
     void longFlightGetsSideWaypointOfRequestedLength() {
-        // шахед: 50 с × 2.1 бл/тик = 2100 блоков пути, последний участок 300
+        // shahed: 50 s × 2.1 block/tick = 2100 path blocks, last section 300
         Route r = Route.plan(LAUNCH, TARGET, NORTH_TO_SOUTH, 2100, 300, 1);
-        assertEquals(2, r.size(), "обход сбоку и точка входа");
-        assertEquals(2100, r.remaining(LAUNCH, TARGET), 1.0, "длина маршрута");
+        assertEquals(2, r.size(), "side bypass and entry point");
+        assertEquals(2100, r.remaining(LAUNCH, TARGET), 1.0, "route length");
         Vec3 entry = r.points().get(1);
-        assertEquals(100, entry.z, 1e-6, "вход в 300 блоках до цели по направлению захода");
-        assertTrue(Math.abs(r.points().get(0).x) > 500, "точка обхода вынесена вбок");
+        assertEquals(100, entry.z, 1e-6, "entrance in 300 blocks to the target in the direction of approach");
+        assertTrue(Math.abs(r.points().get(0).x) > 500, "the bypass point is moved to the side");
     }
 
     @Test
@@ -36,7 +36,7 @@ class RouteTest {
     @Test
     void shortFlightGoesStraightToEntry() {
         Route r = Route.plan(LAUNCH, TARGET, NORTH_TO_SOUTH, 100, 300, 1);
-        assertEquals(1, r.size(), "только точка входа");
+        assertEquals(1, r.size(), "entry point only");
     }
 
     @Test
@@ -44,25 +44,25 @@ class RouteTest {
         Route r = Route.plan(LAUNCH, TARGET, NORTH_TO_SOUTH, 2100, 300, 1);
         Vec3 side = r.points().get(0);
         r.update(side.add(5, 0, 5), 20);
-        assertEquals(1, r.index(), "точка обхода взята в радиусе захвата");
-        // точку входа проскочили мимо радиуса, но за перпендикуляром — тоже взята
+        assertEquals(1, r.index(), "the bypass point is taken within the capture radius");
+        // the entry point slipped past the radius, but beyond the perpendicular - also taken
         Vec3 entry = r.points().get(1);
         r.update(new Vec3(entry.x + 25, 64, entry.z + 10), 20);
-        assertTrue(r.finished(), "дальше — цель");
+        assertTrue(r.finished(), "next is the goal");
         assertNull(r.current());
         assertEquals(TARGET.z - entry.z - 10, r.remaining(new Vec3(entry.x, 64, entry.z + 10), TARGET), 1e-6);
     }
 
     @Test
     void entryBehindLaunchIsTakenWhenOvershot() {
-        // полёт короче последнего участка: точка входа позади старта, шахед разворачивается к ней по кругу
-        // радиусом ~40 блоков и мог кружить вокруг неё вечно, не входя в радиус захвата
+        // the flight is shorter than the last section: the entry point is behind the start, Shahed turns towards it in a circle
+        //  with a radius of ~40 blocks and could circle around it forever, without entering the capture radius
         Vec3 start = new Vec3(0, 64, 200);
         Route r = Route.plan(start, TARGET, NORTH_TO_SOUTH, 200, 300, 1);
         Vec3 entry = r.points().get(0);
-        assertEquals(100, entry.z, 1e-6, "вход позади старта");
+        assertEquals(100, entry.z, 1e-6, "entrance behind the start");
         r.update(new Vec3(entry.x + 30, 64, entry.z - 25), 20);
-        assertTrue(r.finished(), "за точкой входа по ходу участка от старта — взята");
+        assertTrue(r.finished(), "behind the entry point along the section from the start - taken");
     }
 
     @Test
@@ -81,16 +81,16 @@ class RouteTest {
         assertEquals(r.index(), back.index());
         Route orbit = Route.load(Route.plan(new Vec3(0, 64, 200), TARGET, NORTH_TO_SOUTH, 200, 300, 1).save());
         orbit.update(new Vec3(30, 64, 75), 20);
-        assertTrue(orbit.finished(), "начало маршрута сохраняется");
+        assertTrue(orbit.finished(), "the beginning of the route is saved");
     }
 
     @Test
     void operatorMarkSurvivesGateAndSaving() {
         Route plan = Route.plan(LAUNCH, TARGET, NORTH_TO_SOUTH, 2100, 300, 1);
-        assertFalse(plan.byOperator(), "маршрут пуска — не оператора");
+        assertFalse(plan.byOperator(), "launch route - not operator");
         assertFalse(Route.load(plan.after(LAUNCH, LAUNCH).save()).byOperator());
         Route op = Route.operator(List.of(new Vec3(100, 0, 100)), LAUNCH).after(LAUNCH, LAUNCH);
-        assertTrue(op.byOperator(), "точка у пусковой перед точками оператора — всё ещё его маршрут");
+        assertTrue(op.byOperator(), "the launcher's point in front of the operator's points is still his route");
         assertTrue(Route.load(op.save()).byOperator());
     }
 }

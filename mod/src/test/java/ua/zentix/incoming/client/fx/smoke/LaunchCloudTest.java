@@ -11,15 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Облако старта: когда продукты — облако (длина Мортона), сколько их, и подъём — термик MTT. */
+/** Start cloud: when the products are a cloud (Morton length), how many there are, and the rise is a thermal MTT. */
 class LaunchCloudTest {
     private static Motor motor(WeaponType w) {
         return ClientWeaponSpec.of(w).airframe(false).far().stage(FlightPhase.BOOST).motor();
     }
 
     /**
-     * Длина Мортона M^¾/F^½ из паспорта двигателя: у «Града» (10,5 кг/с, 2 000 м/с, ~50 МВт в воздухе) — ~40 м, у
-     * ускорителя шахеда — ~24 м, у ускорителя ракеты — ~41 м, у первой ступени МБР — ~100 м.
+     * Morton length M^¾/F^½ from engine spec: for “Grad” (10,5 kg/s, 2 000 m/s, ~50 MW in air) - ~40 m, at the
+     *  Shahed accelerator - ~24 m, at the rocket accelerator - ~41 m, at the first stage of the ICBM - ~100 m.
      */
     @Test
     void mortonLengthFromThePassport() {
@@ -33,8 +33,8 @@ class LaunchCloudTest {
     }
 
     /**
-     * Струя касается земли полушириной: отвесно вниз — на высоте сопла, вбок — на высоте/0,094, вверх — никогда; у сопла
-     * в 2,5 м над землёй под 30° «Град» отдаёт облаку свои продукты, пока не пролетит ~35 м.
+     * The jet touches the ground half-width: vertically downward - at the height of the nozzle, sideways - at the height / 0,094, upwards - never; at the nozzle
+     *  at 2,5 m above the ground under 30° “Grad” gives its products to the cloud until it flies ~35 m.
      */
     @Test
     void jetHitsTheGroundWithinItsMortonLength() {
@@ -53,17 +53,17 @@ class LaunchCloudTest {
         double l0 = 2.5 / (sin + LaunchCloud.SPREAD * cos), k = sin + LaunchCloud.SPREAD * cos;
         // ℓ = (2,5 + s·sin)/k ≤ L_M
         assertEquals((LaunchCloud.mortonLength(grad) * k - 2.5) / sin, fed, 0.6);
-        assertTrue(fed > 20 && fed < 50, "путь подачи " + fed + " (ℓ у трубы " + l0 + ")");
-        // шахед с рельса в 2 м под 15° — половину пути ускорителя
+        assertTrue(fed > 20 && fed < 50, "presentation path " + fed + " (ℓ at the pipe " + l0 + ")");
+        // shahed from the rail at 2 m under 15° - half the accelerator path
         assertTrue(LaunchCloud.impinges(motor(WeaponType.DRONE), 2, -Math.sin(Math.toRadians(15))));
         assertFalse(LaunchCloud.impinges(motor(WeaponType.DRONE), 20, -Math.sin(Math.toRadians(15))));
     }
 
     /**
-     * Пока струя бьёт в землю, её продукты — облако у земли, но между соплом и землёй их несёт сама струя: под ракетой виден
-     * столб до облака (кадр старта сзади, F4: в 3.5.x на 1,5 с под ракетой было пусто — все точки следа до ~38 м высоты
-     * отдавались облаку целиком). Столб — вещество на метр ṁ/u(x), u(x) = u₀·B·d′/x: не зависит от того, как быстро
-     * ракета шла, когда была в этой точке, и за пламенем, до длины Мортона, его видно.
+     * While the jet hits the ground, its products are a cloud near the ground, but between the nozzle and the ground they are carried by the jet itself: under the rocket a
+     *  column is visible to the cloud (launch frame from behind, F4: in 3.5.x on 1,5 s under the rocket it was empty - all points of the trail before ~38 m heights
+     *  were given over entirely to the cloud). Column - substance per meter ṁ/u(x), u(x) = u₀·B·d′/x: does not depend on how quickly
+     * the rocket was moving when it was at this point, and behind the flame, up to Morton’s length, it can be seen.
      */
     @Test
     void jetColumnStandsBetweenNozzleAndGround() {
@@ -76,20 +76,20 @@ class LaunchCloudTest {
             double inv = ua.zentix.incoming.client.fx.plume.TrailModel.inverseSpeed(v, 0);
             for (double x = 1.5 * flame; x <= morton; x += 1) {
                 double share = LaunchCloud.column(m, x, inv);
-                assertTrue(share > 0 && share <= 1, "доля " + share);
-                // вещество на метр столба — от струи, а не от скорости ракеты, пока столб реже положенного следа
+                assertTrue(share > 0 && share <= 1, "share " + share);
+                // substance per meter of column - from the jet, and not from the speed of the rocket, as long as the column is less than the required trace
                 if (share < 1) assertEquals(m.velocity() * LaunchCloud.JET_DECAY * LaunchCloud.diameter(m) / x, 1 / (share * inv), 1e-6 * x + 1e-6);
                 ua.zentix.incoming.client.fx.plume.TrailModel.look(trail, 0.5, inv, 0, 0, 0, 0, 0.01, Stability.D, share, look);
-                assertTrue(look[1] > 0.3, "столб в " + x + " м за соплом (ракета " + v + " м/с) виден: непрозрачность " + look[1]);
+                assertTrue(look[1] > 0.3, "pillar in " + x + " m behind the nozzle (rocket " + v + " m/s) visible: opacity " + look[1]);
             }
         }
-        // у сопла струя быстрее любого снаряда: столб там реже следа
+        // at the nozzle the jet is faster than any projectile: the column there is less frequent than the trace
         assertTrue(LaunchCloud.column(m, 1, ua.zentix.incoming.client.fx.plume.TrailModel.inverseSpeed(30, 0)) < 0.05);
     }
 
     /**
-     * Подача: тепло — тепло двигателя в воздухе × время, сажа и капли — та же толща, что у продуктов, пыль — по рыхлости;
-     * струя мимо земли не подаёт.
+     * presentation: heat - engine heat in the air × time, soot and drops - the same thickness as food, dust - looseness;
+     *  the jet does not blow past the ground.
      */
     @Test
     void feedTakesTheProductsOfTheBurn() {
@@ -98,21 +98,21 @@ class LaunchCloudTest {
         double sin = Math.sin(Math.toRadians(30)), cos = Math.cos(Math.toRadians(30));
         assertTrue(c.feed(grad, 0.05, 0, 66.5, 0, -cos, -sin, 0));
         assertTrue(c.feed(grad, 0.05, 1, 67, 0, -cos, -sin, 0));
-        assertFalse(c.feed(grad, 0.05, 0, 66.5, 0, 0, 1, 0), "струя вверх");
+        assertFalse(c.feed(grad, 0.05, 0, 66.5, 0, 0, 1, 0), "jet up");
         assertEquals(grad.heatFlow() * 0.1, c.heat(), 1e-6 * c.heat());
         double ext = grad.smoke().extinction * grad.smokeFlow() * 0.1;
         assertEquals(ext, CloudModel.SOOT_K * c.soot() + CloudModel.DROP_K * c.water(), 1e-9 * ext);
         assertEquals(LaunchCloud.DUST_PER_KG * grad.exhaust() * 0.1, c.dust(), 1e-9);
         LaunchCloud stone = new LaunchCloud(CloudModel.Air.STANDARD, 64, 0, 0.5f, 0.5f, 0.5f, 0);
         stone.feed(grad, 0.05, 0, 66.5, 0, -cos, -sin, 0);
-        assertEquals(0, stone.dust(), 0, "камень не пылит");
-        assertTrue(c.life() > 10, "облако залпа видно " + c.life() + " с");
+        assertEquals(0, stone.dust(), 0, "the stone does not generate dust");
+        assertTrue(c.life() > 10, "the cloud of the salvo is visible " + c.life() + " s");
     }
 
     /**
-     * Термик облака — MTT: у точечного источника верх центра (8F/(α³N²))^¼ при F = 3B/(4π), за ~π/N; от малого начального
-     * радиуса (шар, где тепло держит 600 K: 6 м против 150 м подъёма) — в пределах 15 % (начальный термик без импульса
-     * выходит на автомодельный подъём не сразу); ночью (N больше) — ниже как N^−½.
+     * Cloud thermal - MTT: at a point source the top of the center (8F/(α³N²))^¼ with F = 3B/(4π, for ~π/N; from the small initial
+     *  radius (the ball where the heat is held 600 K: 6 m versus 150 m rise) - within 15 % (the initial thermal without impulse
+     *  does not reach self-similar rise immediately); at night (N is larger) - lower as N^−½.
      */
     @Test
     void cloudRisesAsAnMttThermal() {

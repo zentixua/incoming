@@ -1,4 +1,4 @@
-"""Копия инстанса для клиентов шлагбаума и прочих боевых клиентов — без простоя Dynamic FPS (tools/prod_client.py)."""
+"""A copy of the instance for look gate clients and other combat clients - without downtime Dynamic FPS (tools/prod_client.py)."""
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ class NoIdleTest(unittest.TestCase):
             return json.load(f)
 
     def test_empty_config_gets_idle_off(self):
-        # 25.10: пустой конфиг игрока ({}) — настройки по умолчанию, простой через 300 с, сцены шли ровно 15 к/с
+        # 25.10: empty player config ({}) - default settings, simple after 300 s, scenes went exactly 15 fps
         with tempfile.TemporaryDirectory() as dest:
             os.makedirs(os.path.join(dest, "config"))
             with open(os.path.join(dest, "config", "dynamic_fps.json"), "w") as f:
@@ -34,7 +34,7 @@ class NoIdleTest(unittest.TestCase):
             self.assertEqual({"hidden": {"frame_rate_target": 0}}, conf["states"])
 
     def test_old_idle_time_removed(self):
-        # ревью #463: Dynamic FPS 3.11.4 при загрузке переносит старый idle_time в idle.timeout поверх нашего 0
+        # review #463: Dynamic FPS 3.11.4 when loading transfers the old idle_time to idle.timeout on top of our 0
         with tempfile.TemporaryDirectory() as dest:
             os.makedirs(os.path.join(dest, "config"))
             with open(os.path.join(dest, "config", "dynamic_fps.json"), "w") as f:

@@ -17,11 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Свечение мелкого светящегося через настоящий {@link FxQuads}: квадрат пишется, как его пишет слой; вершины кадра
- * читаются, как их читает {@code fx.vsh} (байт {@code Emit}, цвет, {@code UV2} пятна), и рисуются моделью прохода
- * свечения — выборкой в серединах его пикселей (ореол пятна — {@code glowAlpha} из {@code fx.fsh}). Энергия в проходе —
- * та же, что у источника, при любом его размере и сдвиге; без пятен ({@code FxQuads.spots}) тест падает: точечная выборка
- * то теряет источник, то даёт ему целый пиксель.
+ * The glow of the small glowing through the real {@link FxQuads}: the square is written as the layer writes it; the vertices of the frame
+ *  are read as {@code fx.vsh} reads them (byte {@code Emit}, color, {@code UV2} spots), and are drawn by the
+ *  glow pass model - sampling in the middle of its pixels (spot halo - {@code glowAlpha} from {@code fx.fsh}). The energy in the passage is
+ *  the same as that of the source, regardless of its size and shift; without spots ({@code FxQuads.spots}) the test fails: point sampling
+ *  either loses the source, or gives it a whole pixel.
  */
 class FxQuadsGlowTest {
     private static final Path SHADERS = Path.of("src/main/resources/assets/incoming/shaders");
@@ -29,7 +29,7 @@ class FxQuadsGlowTest {
 
     @BeforeAll
     static void sheet() throws IOException {
-        // лист: место far/disc — белое непрозрачное (средние для свечения — по нему), остальное пусто
+        // sheet: place far/disc - white opaque (medium for glow - along it), the rest is empty
         int[] base = new int[FxAtlas.WIDTH * FxAtlas.HEIGHT];
         FxAtlas.Sprite disc = FxAtlas.disc();
         for (int y = Math.round(disc.v0() * FxAtlas.HEIGHT); y < Math.round(disc.v1() * FxAtlas.HEIGHT); y++) {
@@ -40,21 +40,21 @@ class FxQuadsGlowTest {
         mag = GlslFunction.parse(Files.readString(SHADERS.resolve("include/bloom.glsl")).replaceAll("//[^\n]*", ""), "bloomMag");
     }
 
-    /** Код величины пятна — тот же в Java и в шейдере, туда и обратно — с шагом 0,07 %. */
+    /** The spot size code is the same in Java and in the shader, back and forth - with a step of 0,07%. */
     @Test
     void spotMagnitudeRoundTrips() {
         assertEquals(0, FxBloom.magnitude(0));
         assertEquals(0, mag.call(Map.of("code", 0.0)), 0);
         for (double v = 1e-4; v < 1e4; v *= 1.37) {
             int c = FxBloom.magnitude(v);
-            assertEquals(1, FxBloom.magnitudeOf(c) / v, 0.00035, "величина " + v);
-            assertEquals(FxBloom.magnitudeOf(c), mag.call(Map.of("code", (double) c)), 1e-9 * FxBloom.magnitudeOf(c), "шейдер, код " + c);
+            assertEquals(1, FxBloom.magnitudeOf(c) / v, 0.00035, "magnitude " + v);
+            assertEquals(FxBloom.magnitudeOf(c), mag.call(Map.of("code", (double) c)), 1e-9 * FxBloom.magnitudeOf(c), "shader, code " + c);
         }
     }
 
     /**
-     * Белый круг-ядро (как {@code FarSprites.core}) от 0,05 до 2,8 пикселя прохода свечения и в разных местах относительно его
-     * пикселей: свет в проходе — его телесный угол в пределах 2 % (пятна; без них — от нуля до многих раз).
+     * White circle-core (like {@code FarSprites.core}) from 0,05 to 2,8 pixel of the glow passage and in different places relative to its
+     * pixels: light in the passage - its solid angle within 2% (spots; without them - from zero to many times).
      */
     @Test
     void smallEmitterKeepsItsEnergyInTheGlowPass() {
@@ -70,14 +70,14 @@ class FxQuadsGlowTest {
                         LightTexture.FULL_BRIGHT, 0);
                 quads.emission(0);
                 double expected = Math.pow(size, 2), got = glowPass(quads, texel);
-                assertEquals(1, got / expected, 0.02, "ядро " + size + " пикселя прохода, сдвиг " + shift);
+                assertEquals(1, got / expected, 0.02, "core " + size + " pixel pass, shift " + shift);
             }
         }
     }
 
     /**
-     * Свет квадратов кадра в проходе свечения (в пикселях прохода²): вершины — как их читает {@code fx.vsh}; квадрат,
-     * светящийся пятнами, в проход не идёт; светящийся — светом цвета в серединах пикселей, что в нём; пятно — ореолом.
+     * The light of the frame squares in the glow pass (in pass pixels²): vertices - as {@code fx.vsh} reads them; square,
+     * , glowing in spots, does not go into the passage; luminous - with the light of color in the middle of the pixels in it; the spot is a halo.
      */
     private static double glowPass(FxQuads quads, double texel) {
         double sum = 0;
@@ -85,7 +85,7 @@ class FxQuadsGlowTest {
             long q = quads.address(i);
             int emit = MemoryUtil.memGetByte(q + 35) & 255;
             if (emit < FxBloom.EMITTER) continue;
-            // экран: x/−z, y/−z в пикселях прохода
+            // screen: x/−z, y/−z in pass pixels
             double x0 = Double.MAX_VALUE, x1 = -Double.MAX_VALUE, y0 = Double.MAX_VALUE, y1 = -Double.MAX_VALUE;
             for (int k = 0; k < 4; k++) {
                 long p = q + k * 36L;
@@ -116,9 +116,9 @@ class FxQuadsGlowTest {
     }
 
     /**
-     * Проход свечения берёт то, что закрывает огонь и его ореол: светящийся круг в 50 блоках полуразмером 5, дым за ним в
-     * пределах его полуразмера (53) и перед ним (45) — в проходе, дым дальше (60) — нет. С началом у самого светящегося
-     * дым в 53 блоках (рукав сбоку на глубине середины шара) в проход не шёл и ореол над ним оставался.
+     * The glow passage takes what covers the fire and its halo: a luminous circle in 50 half-size blocks 5, smoke behind it within
+     *  within its half-size (53) and in front of it (45) - in the passage, smoke further (60) - no. At the beginning of the most luminous
+     * , the smoke in the 53 blocks (the sleeve on the side at the depth of the middle of the ball) did not go into the passage and the halo remained above it.
      */
     @Test
     void glowPassTakesWhatStandsWithinTheFire() {
@@ -132,10 +132,10 @@ class FxQuadsGlowTest {
         quads.emission(0);
         quads.billboard(0, 4, -45, 45, 2, 0, FxAtlas.disc(), 0.2f, 0.2f, 0.2f, 0.8f, 0, 1, LightTexture.FULL_BRIGHT, 0);
         assertEquals(4, quads.size());
-        assertEquals(1, quads.glowStart(), "с дыма в 53 блоках: дальше — 60, его нет");
+        assertEquals(1, quads.glowStart(), "from smoke in 53 blocks: further - 60, there is none");
     }
 
-    /** Пятно и его квадрат: квадрат — только в слое, пятно — только в проходе, с оттенком в цвете и светом в {@code UV2}. */
+    /** The spot and its square: the square is only in the layer, the spot is only in the pass, with a tint in color and light in {@code UV2}. */
     @Test
     void spotCarriesItsLightInUv2() {
         double texel = 0.002, d = 50;
@@ -145,12 +145,12 @@ class FxQuadsGlowTest {
         quads.emission(1);
         double half = 0.2 * texel * d;
         quads.billboard(0, 0, (float) -d, (float) d, (float) half, 0, FxAtlas.disc(), 1, 0.5f, 0.25f, 1, 0, 1, LightTexture.FULL_BRIGHT, 0);
-        assertEquals(2, quads.size(), "квадрат и его пятно");
-        assertEquals(FxBloom.SKIP, MemoryUtil.memGetByte(quads.address(0) + 35) & 255, "квадрат — только в слое");
+        assertEquals(2, quads.size(), "square and its spot");
+        assertEquals(FxBloom.SKIP, MemoryUtil.memGetByte(quads.address(0) + 35) & 255, "square - only in layer");
         long spot = quads.address(1);
-        assertEquals(FxBloom.SPOT, MemoryUtil.memGetByte(spot + 35) & 255, "пятно");
-        assertEquals(255, MemoryUtil.memGetByte(spot + 20) & 255, "наибольший канал оттенка — целый байт");
-        assertEquals(Math.pow(0.5, 2.2), (MemoryUtil.memGetByte(spot + 21) & 255) / 255.0, 0.003, "оттенок — отношение линейного света каналов");
-        assertTrue((MemoryUtil.memGetShort(spot + 28) & 0xFFFF) > 0, "свет пятна — в UV2");
+        assertEquals(FxBloom.SPOT, MemoryUtil.memGetByte(spot + 35) & 255, "spot");
+        assertEquals(255, MemoryUtil.memGetByte(spot + 20) & 255, "largest hue channel - whole byte");
+        assertEquals(Math.pow(0.5, 2.2), (MemoryUtil.memGetByte(spot + 21) & 255) / 255.0, 0.003, "hue - the ratio of linear light channels");
+        assertTrue((MemoryUtil.memGetShort(spot + 28) & 0xFFFF) > 0, "spot light - in UV2");
     }
 }

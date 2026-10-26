@@ -23,25 +23,25 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Пакеты зрителю повтора после пакета входа — только когда у клиента есть мир. Клиент разбирает пакеты в своём сетевом
- * потоке по приходу (соединение в памяти тоже кодирует их: {@code Connection.configureInMemoryPipeline}), а мир создаёт
- * поток клиента, когда дойдёт до пакета входа ({@code ClientPacketListener.handleLogin}). Сервер повтора — в том же
- * процессе и шлёт сразу за входом, раньше, чем клиент создал мир: пакет мода, чей разбор читает мир клиента (Point
- * Blank — состояние оружия в руке других игроков, {@code ClientUtil.getClientLevel()} в {@code decode}), падает, и
- * клиент отключается от повтора. Поэтому всё, что сервер шлёт зрителю после пакета входа, ждёт в канале этого
- * соединения на сервере (в том же порядке), пока клиент не прошёл вход по этому же соединению: игрок клиента — на нём,
- * мир — его. Удержание и его отпуск — у каждого соединения свои.
+ * Replay-viewer packets after login wait until client has a world. Client network thread decodes on
+ * arrival (even in-memory connections encode, {@code Connection.configureInMemoryPipeline}); client
+ * thread creates world when it reaches login ({@code ClientPacketListener.handleLogin}). Same-process
+ * replay server sends immediately afterward, before world creation; mod decoders reading client world
+ * (Point Blank other-player held-weapon state, {@code ClientUtil.getClientLevel()} in {@code decode})
+ * crash and disconnect. Hold all server-to-viewer post-login packets in that server channel, in order,
+ * until client completes login on the same connection: client player belongs to it, world is its world.
+ * Hold/release state is separate per connection.
  */
 final class ViewerHold extends ChannelOutboundHandlerAdapter {
     private static final String NAME = "replayscan_film_viewer_hold";
-    /** Удержания, чей клиент ещё не прошёл вход. */
+    /** Holds whose clients have not completed login. */
     private static final Queue<ViewerHold> waiting = new ConcurrentLinkedQueue<>();
-    /** Адрес клиента последнего отпущенного удержания: у каждого соединения в памяти он свой. */
+    /** Last released client address; distinct per in-memory connection. */
     private static volatile SocketAddress released;
 
     private record Pending(Object msg, ChannelPromise promise) {}
 
-    // held, sent, mods — только в потоке канала
+    // held, sent, mods are channel-thread only
     private final ArrayDeque<Pending> held = new ArrayDeque<>();
     private volatile ChannelHandlerContext ctx;
     private volatile boolean login;
@@ -49,19 +49,19 @@ final class ViewerHold extends ChannelOutboundHandlerAdapter {
     private int mods;
 
     /**
-     * Удержание на каждом соединении, которое настраивает сервер в этом процессе (у съёмки — только зрители повторов),
-     * и его отпуск по тику клиента.
+     * Install holds on every connection configured by this server process (filming has only replay viewers),
+     * release by client tick.
      */
     static void register(IEventBus modBus) {
         modBus.addListener(RegisterConfigurationTasksEvent.class, e -> install(e.getListener().getConnection()));
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, e -> releaseReady());
     }
 
-    /** Соединение зрителя на сервере повтора, при настройке (до пакета входа). */
+    /** Replay-server viewer connection during setup, before login packet. */
     private static void install(Connection connection) {
         ChannelPipeline pipeline = connection.channel().pipeline();
         if (pipeline.get(NAME) != null) {
-            // настройка того же соединения заново, пока прежнее удержание не отпущено: оно и держит
+            // Same connection configured again before release: existing hold remains responsible
             Film.LOG.warn("Film: the replay viewer's connection is configured again before its held packets were sent");
             return;
         }
@@ -70,7 +70,7 @@ final class ViewerHold extends ChannelOutboundHandlerAdapter {
         waiting.add(hold);
     }
 
-    /** Клиент прошёл вход по соединению удержания (его игрок — на этом соединении): держанное — ему. */
+    /** Client completed login on held connection (its player uses that connection); release queued packets. */
     private static void releaseReady() {
         if (waiting.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
@@ -86,12 +86,12 @@ final class ViewerHold extends ChannelOutboundHandlerAdapter {
         }
     }
 
-    /** Держанное для соединения клиента отпущено: пакеты после входа идут ему. */
+    /** Client connection hold released; post-login packets can flow. */
     static boolean releasedFor(@Nullable ClientPacketListener listener) {
         return listener != null && listener.getConnection().channel().localAddress().equals(released);
     }
 
-    /** Почему держанное ещё не отпущено (для строки в лог, когда повтор не открылся). */
+    /** Reason hold remains, for log when replay failed to open. */
     static String state() {
         if (waiting.isEmpty()) return "no holds";
         return waiting.stream().map(h -> h.login ? "logged in, client not on this connection" : "no login packet yet")
@@ -115,8 +115,8 @@ final class ViewerHold extends ChannelOutboundHandlerAdapter {
     }
 
     /**
-     * Снят с канала: после отпуска — пусто; канал закрылся раньше, чем клиент прошёл вход, — держанное не отправлено.
-     * Обещания не закрываются: ошибку каждого {@code Connection} писала бы в лог, а канала уже нет.
+     * Removed from channel: empty after release; if channel closes before login, queued packets remain
+     * unsent. Do not complete promises: each {@code Connection} would log an error for an already-gone channel.
      */
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {

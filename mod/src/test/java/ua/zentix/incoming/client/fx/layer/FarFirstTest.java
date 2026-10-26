@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FarFirstTest {
-    /** От дальних к ближним, каждый номер один раз, равные — в порядке записи (кадр не мигает от перестановок). */
+    /** From distant to near, each number once, equal - in the order of recording (the frame does not blink due to rearrangements). */
     @Test
     void farFirstAndStable() {
         Random r = new Random(1945);
@@ -16,18 +16,18 @@ class FarFirstTest {
         for (int n : new int[]{0, 1, 2, 7, 1000, 40000}) {
             float[] keys = new float[n];
             for (int i = 0; i < n; i++) {
-                // и рядом с камерой, и за десятки километров; часть — одинаковые
+                // both near the camera and tens of kilometers away; part - identical
                 keys[i] = r.nextInt(5) == 0 ? 100 : (float) (Math.pow(10, r.nextDouble() * 5) - 1);
             }
             int[] order = sort.sort(keys, n);
             boolean[] seen = new boolean[n];
             for (int i = 0; i < n; i++) {
-                assertTrue(!seen[order[i]], "повтор " + order[i]);
+                assertTrue(!seen[order[i]], "repeat " + order[i]);
                 seen[order[i]] = true;
                 if (i == 0) continue;
                 float a = keys[order[i - 1]], b = keys[order[i]];
-                assertTrue(a >= b, n + ": " + a + " перед " + b);
-                if (a == b) assertTrue(order[i - 1] < order[i], "равные не по порядку записи");
+                assertTrue(a >= b, n + ": " + a + " before " + b);
+                if (a == b) assertTrue(order[i - 1] < order[i], "equal out of order");
             }
         }
     }

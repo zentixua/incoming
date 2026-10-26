@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Пакеты ЗРК проходят через буфер без потерь. */
+/** SAM packets pass through the buffer without loss. */
 class DefenseCodecTest {
     @Test
     void interceptRoundTrip() {
@@ -24,11 +24,11 @@ class DefenseCodecTest {
             ByteBuf buf = Unpooled.buffer();
             S2C.Intercept.CODEC.encode(buf, sent);
             assertEquals(sent, S2C.Intercept.CODEC.decode(buf));
-            assertEquals(0, buf.readableBytes(), "прочитано всё, что записано");
+            assertEquals(0, buf.readableBytes(), "everything written down has been read");
         }
     }
 
-    /** Экран радара: дальности, запас, цели со сдвигом за минусом, курсом, видом оружия и признаками. */
+    /** Radar screen: range, reserve, targets with shift minus, course, type of weapon and signs. */
     @Test
     void radarScopeRoundTrip() {
         S2C.RadarScope sent = new S2C.RadarScope(new Vec3(100.5, 70, -300.5), 3000, 1500, 3, 12, List.of(
@@ -38,12 +38,12 @@ class DefenseCodecTest {
         S2C.RadarScope.CODEC.encode(buf, sent);
         S2C.RadarScope got = S2C.RadarScope.CODEC.decode(buf);
         assertEquals(sent, got);
-        assertEquals(0, buf.readableBytes(), "прочитано всё, что записано");
+        assertEquals(0, buf.readableBytes(), "everything written down has been read");
         assertTrue(got.blips().getFirst().is(S2C.Blip.ENGAGED));
         assertTrue(!got.blips().get(1).is(S2C.Blip.HOSTILE));
     }
 
-    /** Целей больше предела в пакет не уходит (кодек списка бросает): сервер режет список сам. */
+    /** Targets exceeding the limit are not sent into the packet (the list codec throws): the server cuts the list itself. */
     @Test
     void blipLimit() {
         List<S2C.Blip> many = new ArrayList<>();

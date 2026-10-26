@@ -9,14 +9,14 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 /**
- * Выход стенда: {@code events.jsonl} — события (команды, окна замера, кадры, попадания, тик сервера, пробы; пишут поток
- * клиента и поток сервера), {@code frames.csv} — строка на кадр ({@link FrameClock}), {@code shots/} — кадры PNG.
- * Времена — миллисекунды от {@link Stand#T0}.
+ * Bench output: {@code events.jsonl} events (commands, windows, shots, hits, server ticks, probes; written
+ * by client/server threads), {@code frames.csv} row per frame ({@link FrameClock}), {@code shots/} PNGs.
+ * Times are milliseconds since {@link Stand#T0}.
  */
 final class Out {
     final Path dir, shots;
     private final Writer events, frames;
-    /** После конца прогона (выход из мира, выгрузка сущностей) писать нечего. */
+    /** Nothing to write after run ends (world exit, entity unloading). */
     private volatile boolean closed;
 
     Out(Path dir) throws IOException {
@@ -28,7 +28,7 @@ final class Out {
         frames.write("frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages\n");
     }
 
-    /** Событие: тип, время и пары ключ — значение (строки — в кавычках, числа и true/false — как есть). */
+    /** Event: type, time, key/value pairs (quote strings, numbers and true/false unchanged). */
     void event(String type, long nanos, Object... kv) {
         StringBuilder b = new StringBuilder(96).append("{\"type\":\"").append(type).append("\",\"t_ms\":")
                 .append(String.format(Locale.ROOT, "%.3f", Stand.ms(nanos)));
@@ -82,7 +82,7 @@ final class Out {
         b.append('"');
     }
 
-    /** Строка кадра (поток отрисовки). */
+    /** Frame row (render thread). */
     void frame(String line) {
         if (closed) return;
         try {
@@ -92,7 +92,7 @@ final class Out {
         }
     }
 
-    /** Раз в секунду и в конце: что накопилось — на диск (упавший клиент оставит всё, кроме последней секунды). */
+    /** Flush accumulated data every second and at end (a crashed client loses at most the last second). */
     void flush() {
         if (closed) return;
         try {

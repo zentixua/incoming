@@ -15,19 +15,19 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
- * Помеха сценариям полёта: в каждом тике мира — то, что в том же мире делают чужие удары и соседние сценарии партии.
- * Берёт район вдали и отпускает взятый тиком раньше (отпуск в {@code AreaLoader} пересчитывает уровни чанков посреди
- * тика мира) и сам пересчитывает уровни чанков ({@code runDistanceManagerUpdates}) в начале тика мира, перед модом
- * (до {@code StrikeWorld}) и перед тиком каждой сущности.
+ * Interference with flight scenarios: in each tick of the world - what other people's strikes and neighboring batch scenarios are doing in the same world.
+ *  Takes an area far away and releases the taken tick earlier (vacation in {@code AreaLoader} recalculates the chunk levels in the middle of the
+ *  tick of the world) and itself recalculates the chunk levels ({@code runDistanceManagerUpdates}) at the beginning of the tick world, before the mod
+ *  (before {@code StrikeWorld}) and before the tick of each entity.
  * <p>
- * Полёт сценария от этого меняться не должен: эталон пишется без помехи ({@code runScenarioRecord}), а сверяется
- * с ней. Решение мода, которое читает уровни или тик чанков, пока его же тикеты этого тика ещё не применены, зависит
- * от того, применил ли их кто-то посторонний, — и с помехой расходится с эталоном сразу, а не изредка в части CI
- * с другим составом (22.10: «Ланцет» сценария {@code loiter_rail.player} возвращался в мир на тик раньше или позже).
+ * The flight of the script should not change from this: the reference is written without interference ({@code runScenarioRecord}), and is checked against
+ * . The solution of a mod that reads levels or tick chunks, while its ticket for this tick has not yet been applied, depends
+ *  on whether someone else applied them - and with a hindrance diverges from the reference immediately, and not occasionally in part CI
+ *  with a different composition (22.10: “Lancet” scenario {@code loiter_rail.player} returned to the world a tick sooner or later).
  */
 final class ChunkChurn {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_test_churn", Comparator.<UUID>naturalOrder());
-    /** Район помехи: вдали от площадок GameTest и сценариев (они — в плюсе по обеим осям). */
+    /** Interference area: away from the GameTest sites and scenarios (they are in the plus on both axes). */
     private static final ChunkPos CENTRE = new ChunkPos(-100_000, -100_000);
 
     private static int users;
@@ -46,7 +46,7 @@ final class ChunkChurn {
         users++;
     }
 
-    /** Последний сценарий кончился — район помехи отпустить: тикет не должен пережить сценарии. */
+    /** The last scenario is over - let go of the interference area: the ticket should not survive the scenarios. */
     static synchronized void release(ServerLevel level) {
         if (--users == 0 && held != null) {
             StrikeWorld.get(level).areas().release(level, held);

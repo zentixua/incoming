@@ -20,18 +20,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Лучи преграды к пожарам ({@link FireRays}, {@link SoundFilters#reach}): налёт из 300 дальних пожаров стоил клиенту
- * треть тика — луч на каждый слышимый пожар в каждом тике, ~1800 блоков пути каждый (0,85 → 17,9 мс, WAV-прогон Sol,
- * финал #456). Сцена того прогона: пожары по 2 МВт на кольце 1,7–1,9 км, ночь, ухо в центре.
+ * Fire blocking beams ({@link FireRays}, {@link SoundFilters#reach}): a raid from 300 distant fires cost the client
+ *  a third tick - a beam for each audible fire in each tick, ~1800 path blocks each (0,85 → 17,9 ms, WAV-run Sol,
+ * final #456). The scene of that run: fires of 2 MW on the ring 1,7–1,9 km, night, ear in the center.
  */
 class FireRaysTest {
     private static final Vec3 EAR = new Vec3(0.5, 66.62, 0.5);
-    /** Загруженные столбцы чанков клиента: прорисовка 12 чанков вокруг уха (с запасом движка в 3). */
+    /** Loaded columns of client chunks: drawing 12 chunks around the ear (with an engine reserve of 3). */
     private static final SoundFilters.Loaded LOADED = (cx, cz) -> Math.max(Math.abs(cx), Math.abs(cz)) <= 15;
 
     /**
-     * {@code n} пожаров по 2 МВт на кольце от {@code near} до {@code far} м (углы — посередине между соседними: ни один не
-     * стоит ровно на границе секторов), через 15 с после удара.
+     * {@code n} fires by 2 MW on the ring from {@code near} to {@code far} m (angles are in the middle between neighboring ones: none of
+     *  stands exactly on the border of sectors), through 15 s after the impact.
      */
     private static List<CraterFire> ring(int n, double near, double far) {
         FuelPool law = new FuelPool(2e6 * 150 / FuelPool.Fuel.PETROL.heatJPerKg, 2, 150, 2e6, FuelPool.Fuel.PETROL);
@@ -43,7 +43,7 @@ class FireRaysTest {
         return fires;
     }
 
-    /** Мир для лучей: открытость пути к точке — {@code open}; считает лучи, проверки чанков и чтения блока и жидкости. */
+    /** The world for rays: openness of the path to the point - {@code open}; counts rays, checks chunks and reads block and liquid. */
     private static final class World implements SoundFilters.Path {
         final ToDoubleFunction<Vec3> open;
         final Map<Vec3, List<Integer>> rayed = new HashMap<>();
@@ -70,7 +70,7 @@ class FireRaysTest {
             return 1;
         }
 
-        /** Чтений мира у луча {@code from → to} пустым путём: {@code Level.clip} читает в каждой клетке блок и жидкость. */
+        /** Reading the world from the {@code from → to} beam in an empty way: {@code Level.clip} reads a block and a liquid in each cell. */
         static long reads(Vec3 from, Vec3 to) {
             long[] n = {0};
             BlockGetter.traverseBlocks(from, to, null, (c, pos) -> {
@@ -81,7 +81,7 @@ class FireRaysTest {
         }
     }
 
-    /** Мощность суммы: столько, сколько дают все слышимые пожары через настоящую открытость своего пути (до потолка). */
+    /** Power of the sum: as much as all audible fires give through the real openness of their path (to the ceiling). */
     private static double law(List<CraterFire> fires, World world) {
         double p = 0;
         for (CraterFire f : fires) {
@@ -99,11 +99,11 @@ class FireRaysTest {
     }
 
     /**
-     * Лучей в мир за тик (все обращения пути: и из тика пожара, и из бюджета) — не больше {@link FireRays#PER_TICK} и не
-     * растёт с числом пожаров: у 30, 300 и 3000 слышимых пожаров одно и то же; каждый пожар получает луч не позже
-     * {@link FireRays#lag} тиков и дальше обновляется не реже. Чтений мира за тик (блок и жидкость в каждой клетке луча,
-     * как у {@code Level.clip}, и проверки загруженных столбцов): лучи кончаются на последнем загруженном чанке — их не
-     * больше, чем у {@code PER_TICK} лучей через загруженный квадрат, против луча до каждого пожара прежде.
+     * Rays into the world per tick (all access paths: both from the tick fire and from the budget) - no more than {@link FireRays#PER_TICK} and not
+     *  grows with the number of fires: 30, 300 and 3000 audible fires have the same thing; each fire receives a beam no later than
+     * {@link FireRays#lag} tick and is then updated no less frequently. Reading the world per tick (block and liquid in each ray cell,
+     *  like {@code Level.clip}, and checking loaded columns): rays end on the last loaded chunk - there are not
+     *  more of them than {@code PER_TICK} rays through the loaded square, against the ray before each fire before.
      */
     @Test
     void raysPerTickStayBoundedAsFiresGrow() {
@@ -120,35 +120,34 @@ class FireRaysTest {
                     assertTrue(f.hear(EAR, Propagation.Weather.NIGHT));
                     if (f.heard) heard++;
                 }
-                assertEquals(n, heard, n + " пожаров: все слышны (ночь, 2 МВт, ≤ 1,9 км)");
+                assertEquals(n, heard, n + " fires: all audible (night, 2 MW, ≤ 1,9 km)");
                 if (world.tick == 0) for (CraterFire f : fires) before += World.reads(EAR, f.burnCentre().add(0, 1.5, 0));
                 world.rays = 0;
                 world.chunks = world.reads = 0;
                 int cast = rays.tick(fires, EAR, world, q);
-                assertEquals(Math.min(n, FireRays.PER_TICK), cast, n + " пожаров, тик " + world.tick + ": лучей");
-                assertEquals(cast, world.rays, n + " пожаров, тик " + world.tick + ": лучей в мир");
+                assertEquals(Math.min(n, FireRays.PER_TICK), cast, n + " fires, tick " + world.tick + ": rays");
+                assertEquals(cast, world.rays, n + " fires, tick " + world.tick + ": rays into the world");
                 worstReads = Math.max(worstReads, world.reads);
                 worstChunks = Math.max(worstChunks, world.chunks);
             }
-            assertEquals(n, world.rayed.size(), n + " пожаров: луч у каждого");
+            assertEquals(n, world.rayed.size(), n + " fires: everyone has a ray");
             for (List<Integer> at : world.rayed.values()) {
-                assertTrue(at.get(0) < lag, n + " пожаров: первый луч к тику " + at.get(0) + ", а не позже " + lag);
-                for (int k = 1; k < at.size(); k++) assertTrue(at.get(k) - at.get(k - 1) <= lag, n + " пожаров: обновление реже " + lag + " тиков");
+                assertTrue(at.get(0) < lag, n + " fires: first beam to tick " + at.get(0) + ", not later " + lag);
+                for (int k = 1; k < at.size(); k++) assertTrue(at.get(k) - at.get(k - 1) <= lag, n + " fires: updates less frequently " + lag + " tick");
             }
             System.out.printf(Locale.ROOT, "%d far fires: rays per tick %d (before: %d), block+fluid reads per tick %d (before: %d), chunk checks %d, every fire refreshed within %d ticks%n",
                     n, Math.min(n, FireRays.PER_TICK), n, worstReads, before, worstChunks, lag);
-            // луч через загруженный квадрат 31×31 столбцов: не больше 2 × (|dx| + |dy| + |dz| + 1) клеток
-            assertTrue(worstReads <= FireRays.PER_TICK * 2 * (3 * 31 * 16 + 1), n + " пожаров: чтений мира за тик " + worstReads);
+            // ray through the loaded square 31×31 columns: no more than 2 × (|dx| + |dy| + |dz| + 1) cells
+            assertTrue(worstReads <= FireRays.PER_TICK * 2 * (3 * 31 * 16 + 1), n + " fires: world readings per tick " + worstReads);
         }
     }
 
     /**
-     * Слышимый пожар — в сумме с первого тика, а не с первого луча (ревью R12: до луча пожар молчал, и 300 новых пожаров
-     * набирали мощность 19 тиков — 0 % в первый тик, 5 % во второй). Бюджет уточняет преграду, но не решает, звучит ли
-     * пожар: до своего луча пожар идёт через открытость, известную в его стороне. Мощность суммы с тика 0 и в каждом тике
-     * до конца очереди — как у всех пожаров через их настоящий путь: всё открыто (сцена ревьюера: 300 пожаров в 40 м), всё
-     * за стеной, и стена на половину круга (восток: путь закрыт, где x растёт) — первые 16 лучей идут по одному в каждый
-     * сектор, и в каждом секторе открытость уже известна.
+     * Audible fire - in total from the first tick, and not from the first ray (review R12: before the ray the fire was silent, and 300 new fires
+     *  gained power 19 tick - 0 % in the first tick, 5 % in the second). The budget specifies the obstacle, but does not decide whether the fire sounds: the fire reaches its ray through the openness known in its direction. The power of the sum with tick 0 and in each tick
+     *  until the end of the queue is like all fires through their real path: everything is open (reviewer scene: 300 fires in 40 m), everything is
+     *  behind the wall, and the wall is half a circle (east: the path is closed, where x is growing) - the first 16 rays go one at a time to each
+     *  sector, and in each sector the openness is already known.
      */
     @Test
     void heardFiresJoinTheMixOnTheirFirstTick() {
@@ -159,8 +158,8 @@ class FireRaysTest {
         for (var w : worlds.entrySet()) {
             boolean wall = w.getKey().equals("стена на востоке");
             for (double[] r : new double[][]{{40, 40}, {1700, 1900}}) {
-                // пожар ровно на границе секторов (у 30 на кольце — на 270°) или в 40 м в клетке у самой стены (x = x уха)
-                // стоит по другую сторону стены от своего сектора: стена на половину круга — вдали и без таких
+                // the fire is exactly on the border of sectors (for 30 on the ring - at 270°) or in 40 m in a cage near the wall (x = x ear)
+                //  stands on the other side of the wall from its sector: the wall is half a circle - far away and without such
                 if (wall && r[0] == 40) continue;
                 for (int n : r[0] == 40 ? new int[]{1, 300} : wall ? new int[]{32, 300, 3000} : new int[]{1, 32, 300, 3000}) {
                     List<CraterFire> fires = ring(n, r[0], r[1]);
@@ -171,7 +170,7 @@ class FireRaysTest {
                         for (CraterFire f : fires) f.hear(EAR, Propagation.Weather.NIGHT);
                         rays.tick(fires, EAR, world, q);
                         double want = law(fires, world), got = power(q);
-                        assertEquals(want, got, 1e-6 * want, String.format(Locale.ROOT, "%s, %d пожаров в %.0f–%.0f м, тик %d: мощность суммы %.8f из %.8f",
+                        assertEquals(want, got, 1e-6 * want, String.format(Locale.ROOT, "%s, %d fires in %.0f–%.0f m, tick %d: power sum %.8f of %.8f",
                                 w.getKey(), n, r[0], r[1], world.tick, got, want));
                     }
                 }
@@ -180,30 +179,30 @@ class FireRaysTest {
     }
 
     /**
-     * Открытость в стороне пожара без луча: средняя по лучам слышимых пожаров его сектора, в пустом секторе — ближайшего
-     * сектора с лучами (два на равном расстоянии — средняя обоих).
+     * Openness in the direction of a fire without a beam: average over the rays of audible fires in its sector, in the empty sector - the nearest
+     *  sector with beams (two at an equal distance - the average of both).
      */
     @Test
     void knownOpennessIsTheNearestSectorWithRays() {
         List<CraterFire> fires = ring(FireRays.SECTORS * 2, 100, 100);
         for (CraterFire f : fires) f.hear(EAR, Propagation.Weather.NIGHT);
-        // лучи — только у двух пожаров сектора 0 (один открыт, другой закрыт) и у двух в секторе 8 (закрыты)
+        // rays - only for two fires in the 0 sector (one is open, the other is closed) and for two in the 8 sector (closed)
         for (CraterFire f : fires) {
             int s = FireRays.sector(f.azimuth);
             if (s == 0 || s == 8) f.ray(EAR, new World(to -> FireRays.sector(Math.atan2(to.z - EAR.z, to.x - EAR.x)) == 0 && to.z > EAR.z + 20 ? 1 : 0), 1);
         }
         float[] known = FireRays.known(fires);
-        assertEquals(0.5f, known[0], 1e-6, "сектор 0: средняя его лучей");
-        assertEquals(0f, known[8], 1e-6, "сектор 8: его луч");
-        assertEquals(0.5f, known[3], 1e-6, "сектор 3: ближе к 0");
-        assertEquals(0f, known[6], 1e-6, "сектор 6: ближе к 8");
-        assertEquals(0.25f, known[4], 1e-6, "сектор 4: 0 и 8 на равном — средняя обоих");
+        assertEquals(0.5f, known[0], 1e-6, "sector 0: average of its rays");
+        assertEquals(0f, known[8], 1e-6, "sector 8: its beam");
+        assertEquals(0.5f, known[3], 1e-6, "sector 3: closer to 0");
+        assertEquals(0f, known[6], 1e-6, "sector 6: closer to 8");
+        assertEquals(0.25f, known[4], 1e-6, "sector 4: 0 and 8 on an equal basis - the average of both");
     }
 
     /**
-     * Луч кончается на последнем загруженном столбце чанков по пути, и только там: перебор пути шагом в четверть блока
-     * находит тот же последний загруженный столбец (в пределах столбца), и с загруженным чанком далеко за пустыми — луч
-     * доходит до него; цель в загруженной области — луч до цели.
+     * The ray ends at the last loaded column of chunks along the path, and only there: searching the path in steps of a quarter block
+     *  finds the same last loaded column (within the column), and with the loaded chunk far beyond the empty ones - the ray
+     *  reaches it; target in a busy area - beam to the target.
      */
     @Test
     void reachEndsAtTheLastLoadedChunk() {
@@ -219,10 +218,10 @@ class FireRaysTest {
             for (double t = 0; t <= 1; t += 0.25 / Math.max(1, len)) {
                 if (loaded.at(Math.floorDiv((int) Math.floor(from.x + (to.x - from.x) * t), 16), Math.floorDiv((int) Math.floor(from.z + (to.z - from.z) * t), 16))) brute = t;
             }
-            assertTrue(got >= brute - 1e-9 && got <= brute + 23 / Math.max(1, len) + 1e-9, "луч " + i + ": до " + got + ", перебор " + brute);
-            if (island) assertTrue(got >= 0.8 - 23 / len, "луч " + i + ": чанк за пустыми — луч до него");
+            assertTrue(got >= brute - 1e-9 && got <= brute + 23 / Math.max(1, len) + 1e-9, "beam " + i + ": to " + got + ", overkill " + brute);
+            if (island) assertTrue(got >= 0.8 - 23 / len, "beam " + i + ": chunk behind empty ones - beam to it");
         }
-        assertEquals(1, SoundFilters.reach(EAR, EAR.add(100, 0, 50), LOADED), 1e-12, "цель в загруженной области — луч до цели");
-        assertEquals(1, SoundFilters.reach(EAR, EAR.add(0, 30, 0), LOADED), 1e-12, "отвесно над ухом");
+        assertEquals(1, SoundFilters.reach(EAR, EAR.add(100, 0, 50), LOADED), 1e-12, "target in a busy area - beam to target");
+        assertEquals(1, SoundFilters.reach(EAR, EAR.add(0, 30, 0), LOADED), 1e-12, "vertically above the ear");
     }
 }

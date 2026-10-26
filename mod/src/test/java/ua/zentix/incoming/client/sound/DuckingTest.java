@@ -7,7 +7,7 @@ import ua.zentix.incoming.strike.WeaponType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Моторы под громким взрывом: насколько уходят вниз, сколько держатся, как возвращаются. */
+/** Motors under a loud explosion: how far they go down, how long they last, how they return. */
 class DuckingTest {
     private static final BlastSource SHAHED = BlastSource.of(WeaponType.DRONE, false);
 
@@ -24,17 +24,17 @@ class DuckingTest {
         d.blast(BlastMix.NEAR_LUFS);
         assertEquals(Math.pow(10, -Ducking.DEPTH / 20), d.factor(), 1e-6);
         for (int i = 0; i < Ducking.HOLD; i++) d.tick();
-        assertEquals(Math.pow(10, -Ducking.DEPTH / 20), d.factor(), 1e-6, "держится");
+        assertEquals(Math.pow(10, -Ducking.DEPTH / 20), d.factor(), 1e-6, "holds on");
         float prev = d.factor();
         int ticks = Ducking.HOLD;
         while (d.factor() < 1) {
             d.tick();
             ticks++;
-            assertTrue(d.factor() >= prev, "только возвращается");
-            assertTrue(20 * Math.log10(d.factor() / prev) <= Ducking.RELEASE + 1e-6, "без скачка");
+            assertTrue(d.factor() >= prev, "just coming back");
+            assertTrue(20 * Math.log10(d.factor() / prev) <= Ducking.RELEASE + 1e-6, "no jump");
             prev = d.factor();
         }
-        assertTrue(ticks >= 25 && ticks <= 40, "вернулся за " + ticks + " тиков");
+        assertTrue(ticks >= 25 && ticks <= 40, "came back for " + ticks + " tick");
     }
 
     @Test
@@ -46,14 +46,14 @@ class DuckingTest {
         double quieter = BlastMix.loudness(BlastMix.pressure(SHAHED, 150));
         Ducking alone = new Ducking();
         alone.blast(quieter);
-        assertTrue(alone.factor() < 0.9 && alone.factor() > before, "сам по себе он приглушает, но меньше");
-        // взрыв тише, но всё же приглушающий: глубина и отпускание прежние, без новой выдержки
+        assertTrue(alone.factor() < 0.9 && alone.factor() > before, "by itself it muffles, but less");
+        // the explosion is quieter, but still muffled: the depth and release are the same, without a new shutter speed
         assertTrue(Math.pow(10, -Ducking.DEPTH / 20) < before && before < 0.99);
         d.blast(quieter);
         assertEquals(before, d.factor(), 1e-6);
         d.tick();
-        assertEquals(Ducking.RELEASE, 20 * Math.log10(d.factor() / before), 1e-4, "отпускает дальше, а не держит");
+        assertEquals(Ducking.RELEASE, 20 * Math.log10(d.factor() / before), 1e-4, "lets go further instead of holding");
         d.blast(BlastMix.NEAR_LUFS);
-        assertEquals(Math.pow(10, -Ducking.DEPTH / 20), d.factor(), 1e-6, "новый близкий взрыв — снова вся глубина");
+        assertEquals(Math.pow(10, -Ducking.DEPTH / 20), d.factor(), 1e-6, "new close explosion - all the depth again");
     }
 }

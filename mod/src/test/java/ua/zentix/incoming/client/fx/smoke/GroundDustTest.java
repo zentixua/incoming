@@ -17,20 +17,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Пыль за волной обычного взрыва (F3, «тарелка»): один закон с ядеркой, высота подрыва, пыль во времени, а не конечное
- * состояние с первого кадра.
+ * Dust behind the wave of an ordinary explosion (F3, “plate”): one law with the nuke, the height of the explosion, dust in time, and not the final
+ *  state from the first frame.
  */
 class GroundDustTest {
     private static final CloudModel.Air DAY = new CloudModel.Air(CloudModel.N_STANDARD, 4, -3, 0.1, (int) Stability.C, 0.5);
 
-    /** Клубы облака в возрасте t: {x, y, z, σh, σv, сажа, пыль}. */
+    /** Cloud billows at age t: {x, y, z, σh, σv, soot, dust}. */
     private static List<double[]> blobs(CloudModel m, double t) {
         List<double[]> out = new ArrayList<>();
         m.blobs(t, (x, y, z, sh, sv, soot, dust, water, k, rise) -> out.add(new double[]{x, y, z, sh, sv, soot, dust}));
         return out;
     }
 
-    /** То же без юбки пыли разрушенного ({@link CloudModel#crushed}: у неё свой закон, не Kuhl). */
+    /** The same without the skirt of dust destroyed ({@link CloudModel#crushed}: it has its own law, not Kuhl). */
     private static List<double[]> waveBlobs(CloudModel m, double t) {
         List<double[]> out = new ArrayList<>();
         m.blobs(t, new CloudModel.Blobs() {
@@ -47,9 +47,9 @@ class GroundDustTest {
     }
 
     /**
-     * Мощность того же давления у земли: ядерный наземный W/0,5 кг (доля энергии в волне — половина, Glasstone и Dolan
-     * §1.24) против заряда W кг ТНТ на земле по Кинни–Грэхему — давление в пределах трети от 1 до 50 psi у зарядов
-     * игры (две разные подгонки: Броуд для ядерного, Кинни–Грэхем для ВВ).
+     * Power of the same pressure near the ground: nuclear ground W/0,5 kg (the share of energy in the wave is half, Glasstone and Dolan
+     * §1.24) against the charge W kg TNT on the ground according to Kinney-Graham - pressure within a third from 1 to 50 psi for the charges of
+     *  games (two different fits: Broad for nuclear, Kinney-Graham for explosive).
      */
     @Test
     void equivalentYieldGivesTheSamePressure() {
@@ -59,15 +59,15 @@ class GroundDustTest {
                 double he = BlastModel.psi(BlastModel.surfaceOverpressureKpa(r, kg));
                 if (he < 1 || he > 50) continue;
                 double ratio = HobBlast.psi(r, 0, y) / he;
-                assertTrue(ratio > 0.67 && ratio < 1.5, kg + " кг на " + r + " м: " + he + " psi ВВ против " + HobBlast.psi(r, 0, y));
+                assertTrue(ratio > 0.67 && ratio < 1.5, kg + " kg per " + r + " m: " + he + " psi BB vs " + HobBlast.psi(r, 0, y));
             }
         }
     }
 
     /**
-     * Один закон: слой волны обычного взрыва — тот же вынос и тот же слой Kuhl, что у ядерки ({@code DustModel.column}),
-     * без света вспышки и пыли обломков, со временем развития сальтации (у ядерки фаза длиннее его); вся поднятая масса —
-     * интеграл того же закона по земле.
+     * One law: the wave layer of an ordinary explosion is the same extension and the same layer Kuhl as the nuke ({@code DustModel.column}),
+     *  without flash light and debris dust, with the time of saltation development (in the nuke the phase is longer than it); the entire raised mass is
+     *  integral of the same law over the ground.
      */
     @Test
     void oneDustLawBehindTheWave() {
@@ -75,16 +75,16 @@ class GroundDustTest {
             double y = CloudModel.equivalentKt(kg), ball = 1.7 * Math.cbrt(kg);
             for (double r = 0.5; r < 200; r *= 1.5) {
                 DustModel.Column he = DustModel.chemical(r, 0, y, ball), nuke = DustModel.column(r, 0, y, true, 20_000, DustModel.Surface.REFERENCE);
-                // тот же вынос; у ВВ сальтация не успевает развиться за миллисекунды фазы (DustModel.SALTATION_S) — не больше
-                // установившегося, а взвесь у заряда (u* от 10 порогов) — та же
-                assertTrue(he.soil() <= nuke.soil() + 1e-12, kg + " кг на " + r + " м: вынос больше установившегося");
-                if (r <= 1.5 * Math.cbrt(kg)) assertEquals(1, he.soil() / nuke.soil(), 0.02, kg + " кг на " + r + " м: взвесь");
-                assertEquals(nuke.first(), he.first(), 1e-12, kg + " кг на " + r + " м: верх слоя Kuhl");
+                // the same takeaway; in explosives, saltation does not have time to develop in milliseconds of the phase (DustModel.SALTATION_S) - no more than
+                //  steady state, and the suspension at the charge (u * from 10 thresholds) is the same
+                assertTrue(he.soil() <= nuke.soil() + 1e-12, kg + " kg per " + r + " m: offset greater than established");
+                if (r <= 1.5 * Math.cbrt(kg)) assertEquals(1, he.soil() / nuke.soil(), 0.02, kg + " kg per " + r + " m: suspension");
+                assertEquals(nuke.first(), he.first(), 1e-12, kg + " kg per " + r + " m: top layer Kuhl");
                 assertEquals(nuke.positive(), he.positive(), 1e-12);
-                assertEquals(0, he.buoyant(), "у ВВ вспышки, что греет землю, нет");
-                assertEquals(0, he.debris(), "пыли обломков у поля нет");
+                assertEquals(0, he.buoyant(), "explosives do not have flashes that warm the earth");
+                assertEquals(0, he.debris(), "there is no dust or debris near the field");
             }
-            // интеграл закона по земле (мелкий шаг) — то, что слой поднял (у земли и под шаром)
+            // integral of the law over the ground (small step) - what the layer raised (near the ground and under the ball)
             double outer = HobBlast.rangeFor(GroundDust.OUTER_PSI, 0, y), sum = 0;
             int n = 4000;
             for (int i = 0; i < n; i++) {
@@ -93,13 +93,13 @@ class GroundDustTest {
             }
             GroundDust g = new CloudModel(BlastSource.of(kg > 100 ? WeaponType.MISSILE : WeaponType.DRONE, false), DAY).ground;
             if (kg == 6.4) g = new CloudModel(BlastSource.of(WeaponType.ROCKET, false), DAY).ground;
-            assertEquals(1, (g.total + g.underBall(1e3)) / sum, 0.05, kg + " кг: поднятое слоем против интеграла закона");
+            assertEquals(1, (g.total + g.underBall(1e3)) / sum, 0.05, kg + " kg: raised by the layer against the integral of the law");
         }
     }
 
     /**
-     * Пыль во времени: до фронта её нет, в первую секунду ни один клуб пыли у земли не шире фронта волны в этот миг, масса
-     * растёт от нуля; верх слоя в 0,1 с — пыльный слой Kuhl (дециметры у шахеда), а не радиус облака Чёрча.
+     * Dust in time: there is none before the front, in the first second not a single billow of dust near the ground is wider than the wave front at that moment, the mass
+     *  grows from zero; the top of the layer in 0,1 s is the dusty layer Kuhl (decimeters in Shahed), and not the radius of the Church cloud.
      */
     @Test
     void dustComesWithTheFront() {
@@ -108,24 +108,24 @@ class GroundDustTest {
         for (double t : new double[]{0, 0.002, 0.005, 0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 1}) {
             double front = m.ground.front(t), mass = 0;
             for (double[] b : waveBlobs(m, t)) {
-                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // пыль у земли (облако и ножка — выше)
+                if (b[6] <= 0 || b[5] > 0 || b[1] > 2 * b[4] + 0.5) continue; // dust near the ground (cloud and stem - higher)
                 mass += b[6];
                 double r = Math.hypot(b[0] - m.ground.drift(t, b[1])[0], b[2] - m.ground.drift(t, b[1])[1]);
-                // видимый край клуба (толща у края — 0,05: у густого ~3,7σ, не дальше 4σ) — не за фронтом
-                assertTrue(r + GroundDust.EDGE_SIGMAS * b[3] <= front + 0.5, "t " + t + ": клуб на " + r + " м, σ " + b[3] + " — за фронтом " + front);
-                if (t <= 0.1) assertTrue(b[4] < 1, "t " + t + ": σ слоя по вертикали " + b[4] + " — Kuhl, дециметры");
+                // visible edge of billows (thickness at the edge - 0,05: for a thick one ~3,7σ, no further than 4σ) - not behind the front
+                assertTrue(r + GroundDust.EDGE_SIGMAS * b[3] <= front + 0.5, "t " + t + ": billows on " + r + " m, σ " + b[3] + " - behind the front " + front);
+                if (t <= 0.1) assertTrue(b[4] < 1, "t " + t + ": σ of the layer vertically " + b[4] + " — Kuhl, decimeters");
             }
-            if (t == 0) assertEquals(0, mass, "до фронта пыли нет");
-            // за фазу волны пыль только прибывает (потом крупная оседает)
-            if (t <= 0.1) assertTrue(mass >= before - 1e-9, "t " + t + ": пыль у земли растёт от нуля, " + before + " → " + mass);
+            if (t == 0) assertEquals(0, mass, "there is no dust before the front");
+            // during the wave phase, the dust only arrives (then the coarse dust settles)
+            if (t <= 0.1) assertTrue(mass >= before - 1e-9, "t " + t + ": dust near the ground grows from zero, " + before + " → " + mass);
             before = mass;
         }
-        assertTrue(before > 10, "через секунду у земли — десятки кг пыли: " + before);
+        assertTrue(before > 10, "a second later there are tens of kg of dust near the ground: " + before);
     }
 
     /**
-     * Земля — там, где она есть: выше порога воронки пыли воронки нет; у разрыва зенитной ракеты на высоте полёта шахеда
-     * пыль волны — только у земли (ни одного клуба пыли на высоте разрыва), а с высоты 100 м её меньше полукилограмма.
+     * The earth is where it is: there is no crater dust above the crater threshold; at the explosion of an anti-aircraft missile at the altitude of the Shahed
+     * , the dust wave is only near the ground (not a single billows of dust at the height of the explosion), and from a height of 100 m it is less than half a kilogram.
      */
     @Test
     void airburstHasNoGroundDustInTheAir() {
@@ -133,25 +133,25 @@ class GroundDustTest {
         BlastSource sam = BlastSource.air(kg);
         double ball = 1.7 * Math.cbrt(kg);
         assertTrue(CloudModel.digs(kg, 0));
-        assertFalse(CloudModel.digs(kg, CloudModel.CRATER_HOB * ball * 1.01), "выше порога воронки нет");
+        assertFalse(CloudModel.digs(kg, CloudModel.CRATER_HOB * ball * 1.01), "there is no crater threshold above");
         for (double hob : new double[]{CloudModel.CRATER_HOB * ball * 1.5, 10, 45, 100, 300}) {
             CloudModel m = new CloudModel(sam, DAY, false, hob);
-            assertEquals(0, m.dust, hob + " м: пыли воронки нет");
-            if (hob > ball) assertEquals(0, m.ground.underBall(10), hob + " м: шар земли не касается");
+            assertEquals(0, m.dust, hob + " m: no dust crater");
+            if (hob > ball) assertEquals(0, m.ground.underBall(10), hob + " m: the ball does not touch the earth");
             for (double t : new double[]{0.05, 0.1, 0.5, 1, 3, 10, 30}) {
                 double aloft = 0;
                 for (double[] b : blobs(m, t)) if (b[6] > 0 && b[1] + hob > 3 * b[4] + 10) aloft += b[6];
-                // разрыв на высоте полёта шахеда и выше: пыли в воздухе (выше слоя у земли) — меньше 0,1 кг: ни облака пыли у
-                // точки разрыва, ни «тарелки»; ниже — подсос ножки может поднять пыль слоя (закон ядерки)
-                if (hob >= 45) assertTrue(aloft < 0.1, hob + " м, t " + t + ": пыли в воздухе " + aloft + " кг");
-                if (hob >= 100) assertTrue(m.ground.total < 0.5, hob + " м: пыли у земли " + m.ground.total + " кг (у шахеда на земле — сотни)");
+                // rupture at flight altitude Shahed and above: dust in the air (above the layer near the ground) - less than 0,1 kg: no cloud of dust at the
+                //  rupture point, no “plate”; below - the stem suction can raise the dust of the layer (the law of the nuke)
+                if (hob >= 45) assertTrue(aloft < 0.1, hob + " m, t " + t + ": dust in the air " + aloft + " kg");
+                if (hob >= 100) assertTrue(m.ground.total < 0.5, hob + " m: dust near the ground " + m.ground.total + " kg (Shahed has hundreds on the ground)");
             }
         }
     }
 
     /**
-     * Ослабление пыли по корзинам: крупная оседает первой и ослабляет мало — доля ослабления в воздухе не меньше доли
-     * массы; облако взрыва держит пыль по ослаблению (в 3.5.0 — по массе: облако бледнело быстрее, чем осела его толща).
+     * Weakening of dust in baskets: the coarse dust settles first and weakens little - the share of attenuation in the air is not less than the share of
+     *  mass; the explosion cloud holds the dust by weakening (in 3.5.0 - by mass: the cloud paled faster than its thickness settled).
      */
     @Test
     void fineDustOutlastsCoarse() {
@@ -159,25 +159,25 @@ class GroundDustTest {
             assertTrue(DustModel.extinctionAloft(j) >= DustModel.airborne(j) - 1e-12, "∫dt/h " + j);
         }
         assertEquals(1, DustModel.extinctionAloft(0), 1e-12);
-        assertTrue(DustModel.extinctionAloft(60) > 0.7 && DustModel.airborne(60) < 0.35, "через минуту в слое в метр");
+        assertTrue(DustModel.extinctionAloft(60) > 0.7 && DustModel.airborne(60) < 0.35, "in a minute in a layer of one meter");
     }
 
     /**
-     * Трава держит грунт: на лугу (рыхлого — ноль) пыль волны встаёт только у воронки — во много раз меньше, чем над голым
-     * грунтом, и не дальше ~15 м у шахеда (порог срыва 3 м/с против 0,34, Gaj &amp; Small).
+     * Grass holds the ground: in a meadow (loose - zero) wave dust rises only at the crater - many times less than over bare
+     *  soil, and no further than ~15 m at Shahed (break threshold 3 m/s versus 0,34, Gaj &amp; Small).
      */
     @Test
     void grassHoldsTheSoil() {
         BlastSource s = BlastSource.of(WeaponType.DRONE, false);
         CloudModel bare = new CloudModel(s, DAY, false, 0, GroundDust.Ground.BARE), meadow = new CloudModel(s, DAY, false, 0, GroundDust.Ground.uniform(0, 1));
-        assertTrue(meadow.ground.total < 0.25 * bare.ground.total, "луг " + meadow.ground.total + " против " + bare.ground.total);
+        assertTrue(meadow.ground.total < 0.25 * bare.ground.total, "meadow " + meadow.ground.total + " against " + bare.ground.total);
         DustModel.Column far = DustModel.chemical(20, 0, CloudModel.equivalentKt(50), 6.3, DustModel.Surface.COVERED);
-        assertTrue(far.soil() * DustModel.K_MIX < 0.01, "на лугу в 20 м пыли почти нет: толща " + far.soil() * DustModel.K_MIX);
+        assertTrue(far.soil() * DustModel.K_MIX < 0.01, "in the meadow at 20 m there is almost no dust: thick " + far.soil() * DustModel.K_MIX);
     }
 
     /**
-     * Вода не пылит: у берега (половина секторов — вода) пыль волны лежит только над сушей — ни одного клуба пыли у земли в
-     * секторах воды (бомба у пляжа: ковёр пыли ложился и на озеро, кадры F2a).
+     * The water does not generate dust: near the shore (half of the sectors are water), the dust of the wave lies only over the land - not a single billows of dust near the ground in the
+     *  sectors of the water (a bomb near the beach: a carpet of dust lay on the lake, footage F2a).
      */
     @Test
     void waterGivesNoDust() {
@@ -193,16 +193,16 @@ class GroundDustTest {
                 double ang = Math.atan2(b[2] - d[1], b[0] - d[0]);
                 if (ang < 0) ang += 2 * Math.PI;
                 int sector = (int) (ang / (2 * Math.PI) * GroundDust.SECTORS);
-                assertTrue(sector < GroundDust.SECTORS / 2, "t " + t + ": пыль над водой, сектор " + sector);
+                assertTrue(sector < GroundDust.SECTORS / 2, "t " + t + ": dust over water, sector " + sector);
                 land++;
             }
         }
-        assertTrue(land > 0, "над сушей пыль есть");
+        assertTrue(land > 0, "there is dust over the land");
     }
 
     /**
-     * Узкий пляж: голый грунт только у воронки (до 6 м), дальше — вода. Пыль у земли — лишь там, где пляж: ни один клуб не
-     * дальше 6 м·2 по середине (пыль с гальки у воронки не выносится на воду дальше; кадры F2a: ковёр на озере).
+     * Narrow beach: bare soil only at the crater (up to 6 m), then there is water. Dust near the ground is only where the beach is: not a single billow is
+     *  further than 6 m·2 in the middle (dust from the pebbles near the crater is not carried further onto the water; footage F2a: a carpet on the lake).
      */
     @Test
     void narrowBeachKeepsTheDustOnIt() {
@@ -213,24 +213,24 @@ class GroundDustTest {
         }
         CloudModel m = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), DAY, false, 0, new GroundDust.Ground(loose, covered));
         CloudModel open = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), DAY, false, 0, GroundDust.Ground.BARE);
-        assertTrue(m.ground.total < 0.3 * open.ground.total, "пляж " + m.ground.total + " против голого поля " + open.ground.total);
+        assertTrue(m.ground.total < 0.3 * open.ground.total, "beach " + m.ground.total + " against a bare field " + open.ground.total);
     }
 
     /**
-     * Пыль у земли живёт минутами и уходит с ветром у земли: через 30 с у шахеда днём слой ещё виден, его середина — на
-     * пути ветра у земли, не выше десятков метров (а облако — выше).
+     * Dust near the ground lives for minutes and leaves with the wind near the ground: through 30 s Shahed during the day the layer is still visible, its middle is on the
+     *  path of the wind near the ground, no higher than tens of meters (and the cloud is higher).
      */
     @Test
     void dustStaysAtTheGround() {
         CloudModel m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), DAY);
-        assertTrue(m.groundTauForTest(30) > 0.5, "30 с: слой виден, " + m.groundTauForTest(30));
-        assertTrue(m.ground.life > 120, "слой живёт минуты: " + m.ground.life);
+        assertTrue(m.groundTauForTest(30) > 0.5, "30 s: layer visible, " + m.groundTauForTest(30));
+        assertTrue(m.ground.life > 120, "the layer lives for minutes: " + m.ground.life);
         double low = Double.MAX_VALUE;
         for (double[] b : blobs(m, 30)) if (b[6] > 0 && b[5] == 0) low = Math.min(low, b[1]);
-        assertTrue(low < 0.5 * m.height(30), "у земли — пыль, а не только облако: " + low + " против " + m.height(30));
+        assertTrue(low < 0.5 * m.height(30), "the earth has dust, and not just a cloud: " + low + " against " + m.height(30));
     }
 
-    /** Дом: крыша радиуса {@code roof} м на высоте взрыва, вокруг — улица на 15 м ниже; везде голый грунт. */
+    /** House: roof of radius {@code roof} m at the height of the explosion, surrounded by a street 15 m below; Bare soil everywhere. */
     private static GroundDust.Ground house(double roof) {
         double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
         for (double[] row : h) for (int b = 0; b < row.length; b++) row[b] = GroundDust.BANDS[b] < roof ? 0 : -15;
@@ -256,10 +256,11 @@ class GroundDustTest {
     }
 
     /**
-     * Юбка растёт от точки удара (ревью R462B: приход за краем юбки был её концом, и в {@value GroundDust#SKIRT_S} с фронт
-     * прыгал с 22 м к концу колец, а клуб у края стоял в середине всего кольца, за юбкой): шахед и крылатая ракета на
-     * ровной улице в штиль — до {@value GroundDust#SKIRT_S} с фронт не дальше R·t/{@value GroundDust#SKIRT_S}, середина
-     * каждого клуба — внутри фронта, после — фронт без скачка между соседними кадрами.
+     * The skirt grows from the impact point (review R462B: arrival beyond the skirt edge was its end, so at
+     * {@value GroundDust#SKIRT_S} s the front jumped from 22 m to the ring ends, while a billow at the edge sat
+     * in the middle of the whole ring, beyond the skirt). Shahed and cruise missile on a level street in calm
+     * air: until {@value GroundDust#SKIRT_S} s, the front is no farther than R·t/{@value GroundDust#SKIRT_S};
+     * every billow center is inside the front. Afterward, the front never jumps between adjacent frames.
      */
     @Test
     void skirtGrowsFromTheImpact() {
@@ -274,22 +275,22 @@ class GroundDustTest {
             for (double t = 0.05; t <= 2 + 1e-9; t += 0.05) {
                 double front = dust.front(t);
                 if (t <= GroundDust.SKIRT_S + 1e-9) {
-                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт " + front + " дальше юбки");
+                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " s: front " + front + " further than the skirt");
                     for (double[] b : layer(dust, t)) {
                         double r = Math.hypot(b[0], b[2]);
-                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " с: клуб в " + r + " м за фронтом " + front);
+                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " s: billows " + r + " m behind the front " + front);
                     }
                 }
-                assertTrue(front - last <= reach * 0.05 / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " с: фронт прыгнул " + last + " → " + front);
+                assertTrue(front - last <= reach * 0.05 / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " s: front jumped " + last + " → " + front);
                 last = front;
             }
         }
     }
 
     /**
-     * На перекрёстке квартала (дома 10×10×12 м, улицы по 6 м) газ несёт юбку по улицам, а не в дома: где вся дуга сектора
-     * в кольце выше удара на {@link GroundDust#WALL}, юбки нет, клубы остальных идут по улицам, масса та же, что у юбки в
-     * поле.
+     * At the intersection of the block (houses 10×10×12 m, streets along 6 m) the gas carries a skirt along the streets, and not into the houses: where the entire arc of the sector
+     *  in the ring is above the impact on {@link GroundDust#WALL}, skirts no, the billows of the rest are walking along the streets, the mass is the same as that of the skirt in the
+     *  field.
      */
     @Test
     void skirtGoesDownTheStreets() {
@@ -306,9 +307,9 @@ class GroundDustTest {
         GroundDust inTown = new CloudModel(BlastSource.of(WeaponType.DRONE, false), calm, false, 0, streets).crushed;
         GroundDust inField = new CloudModel(BlastSource.of(WeaponType.DRONE, false), calm, false, 0, field).crushed;
         assertEquals(inField.total, inTown.total, 1e-9 * inField.total);
-        // клубы, которые видит игрок (ревью R468: направление выбиралось на исходных радиусах, а клуб растянут дальностью
-        // и стоком — у удара в 6,5 м от перекрёстка 8 из 22 середин были в домах): до 2 с в штиль середины всех заметных
-        // клубов юбки — на мостовой (у края — до метра), и у перекрёстка, и в улицах рядом с ним
+        // billows that the player sees (review of R468: the direction was chosen at the original radii, and the billows were stretched by range
+        //  and drain - at the impact in 6,5 m from the intersection 8 from 22 the middles were in houses): to 2 s in calm in the middle of all noticeable
+        //  skirt puffs - on the pavement (at the edge - up to a meter), and at the intersection, and in the streets next to it
         for (double[] at : new double[][]{{0, 0}, {0.5, 6.5}, {-2, 9}}) {
             GroundDust.Relief shifted = (x, z) -> town.at(x + at[0], z + at[1]);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), GroundDust.Ground.filled(1),
@@ -319,13 +320,13 @@ class GroundDustTest {
                 for (double[] c : layer(d, t)) {
                     if (c[6] < 0.005 * d.total) continue;
                     seen++;
-                    // у края улицы — до метра (запруда сдвигает середину на доли метра)
+                    // at the edge of the street - up to a meter (the dam moves the middle by fractions of a meter)
                     double low = shifted.at(c[0], c[2]);
                     for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, shifted.at(c[0] + e[0], c[2] + e[1]));
-                    assertTrue(low <= GroundDust.WALL, "удар " + at[0] + ", " + at[1] + "; " + t + " с: клуб в доме, " + c[0] + ", " + c[2]);
+                    assertTrue(low <= GroundDust.WALL, "blow " + at[0] + ", " + at[1] + "; " + t + " s: billows in the house, " + c[0] + ", " + c[2]);
                 }
             }
-            assertTrue(seen > 20, "клубов " + seen);
+            assertTrue(seen > 20, "bills " + seen);
         }
         int housed = 0, inStreet = 0;
         for (int k = 0; k < GroundDust.SECTORS; k++) {
@@ -337,23 +338,23 @@ class GroundDustTest {
                     open |= town.at(r * Math.cos(phi), r * Math.sin(phi)) <= GroundDust.WALL;
                 }
                 if (!open) {
-                    assertEquals(0, inTown.mass(k, i), 0, "сектор " + k + ", кольцо " + i + " — в доме");
+                    assertEquals(0, inTown.mass(k, i), 0, "sector " + k + ", ring " + i + " - in the house");
                     housed++;
                 } else if (inTown.mass(k, i) > 0 && r > 4) {
-                    // клуб сектора — в улице, а не в доме
+                    // billows sector - on the street, not in the house
                     double phi = inTown.heading(k, GroundDust.band(r));
-                    assertTrue(town.at(r * Math.cos(phi), r * Math.sin(phi)) <= GroundDust.WALL, "сектор " + k + ", кольцо " + i + ": клуб в доме");
+                    assertTrue(town.at(r * Math.cos(phi), r * Math.sin(phi)) <= GroundDust.WALL, "sector " + k + ", ring " + i + ": billows in the house");
                     inStreet++;
                 }
             }
         }
-        // середина дуги сектора у этого перекрёстка дальше 8 м — в доме: без поворота к улицам клубы стояли бы там
-        assertTrue(inStreet > 20, "клубов в улицах " + inStreet + ", колец целиком в домах " + housed);
-        // по улицам юбка уходит дальше, чем в поле: та же площадь πR²/8 на сектор — по открытой мостовой (счёт по сетке
-        // 0,1 м, независимо от выборок дуги), не дальше REACH_MAX·R
+        // the middle of the arc of the sector at this intersection further 8 m - in the house: without turning to the streets, the billows would have stood there
+        assertTrue(inStreet > 20, "billows in the streets " + inStreet + ", rings entirely in houses " + housed);
+        // in the streets the skirt goes further than in the field: the same area πR²/8 per sector - along the open pavement (counting on the grid
+        // 0,1 m, regardless of arc samples), no further than REACH_MAX·R
         double skirtR = inField.front(GroundDust.SKIRT_S);
         for (int k = 0; k < GroundDust.SECTORS; k++) {
-            assertEquals(1, inField.reach(k), 0, "поле");
+            assertEquals(1, inField.reach(k), 0, "field");
             double need = Math.PI * skirtR * skirtR / GroundDust.SECTORS, lo = 2 * Math.PI * k / GroundDust.SECTORS, hi = lo + 2 * Math.PI / GroundDust.SECTORS;
             java.util.List<Double> open = new java.util.ArrayList<>();
             for (double x = -3 * skirtR; x <= 3 * skirtR; x += 0.1) {
@@ -366,15 +367,15 @@ class GroundDustTest {
             java.util.Collections.sort(open);
             int cells = (int) Math.ceil(need / 0.01);
             double streetR = Math.min(cells < open.size() ? open.get(cells) : Double.MAX_VALUE, GroundDust.REACH_MAX * skirtR);
-            assertTrue(streetR > 1.2 * skirtR, "сектор " + k + ": по улицам дальше поля");
-            assertEquals(streetR / skirtR, inTown.reach(k), 0.12 * streetR / skirtR, "сектор " + k);
+            assertTrue(streetR > 1.2 * skirtR, "sector " + k + ": along the streets beyond the field");
+            assertEquals(streetR / skirtR, inTown.reach(k), 0.12 * streetR / skirtR, "sector " + k);
         }
     }
 
     /**
-     * Юбка не взбирается на дом у точки удара (ревью R462B: путь клуба начинался с точки полосы, а она уже на крыше, — пыль
-     * рождалась на крыше в 20 м над ударом): шахед на улице, в 2 м от него стена дома в 20 м по всей полуплоскости x > 2,
-     * ветер на дом. Клубы юбки до 30 с лежат низом не выше 2 м над улицей.
+     * The skirt does not climb onto the house at the point of impact (review R462B: the billows path began from the point of the strip, and it was already on the roof - dust
+     *  was born on the roof 20 m above the impact): Shahed on the street, 2 m from it the wall of the house is 20 m all over half-plane x > 2,
+     * wind to the house. billows skirts up to 30 s the bottom lying no higher than 2 m above the street.
      */
     @Test
     void skirtStaysBelowAWallBesideTheImpact() {
@@ -390,22 +391,21 @@ class GroundDustTest {
         for (double t = 0.25; t <= 30; t += 0.25) {
             for (double[] b : layer(dust, t)) {
                 double base = b[1] - 0.8 * b[4];
-                assertTrue(base <= 2, t + " с: юбка на высоте " + base + " у клуба в (" + b[0] + ", " + b[2] + ")");
+                assertTrue(base <= 2, t + " s: skirt at height " + base + " at billows (" + b[0] + ", " + b[2] + ")");
             }
         }
     }
 
     /**
-     * Клубы слоя пыли в возрасте t: {x, y, z, σh, σv, пыль (ослабление в кг смеси), масса пыли в воздухе, поверхность, с
-     * которой её подняло}.
+     * billows layer of dust aged t: {x, y, z, σh, σv, dust (attenuation in kg of mixture), mass of dust in the air, surface with which it raised}.
      */
     /**
-     * Ветер в городе: ниже крыш снос юбки — вдоль улицы и не дальше стены (ревью R468.r1: 4 из 24 середин над домами на
-     * 20 с при 3 м/с поперёк улиц; ревью R472: дома 8 м — снос сквозь стену долей сверх проекции, 8 клубов в домах на
-     * 21 с; удар в 6,5 м от перекрёстка в ветер по диагонали — клуб скачет назад на 55 м в дом, запруда пути не
-     * согласована с остановкой; ревью R472b: ветер 6 м/с, дома 8 м — путь клуба шёл от места дальше фронта, клуб на 0,6 с
-     * в доме на 1,7 м). Кадр каждые 0,05 с до 30 с: середина каждого заметного клуба — на мостовой (у края — до
-     * метра) или над крышей, и клуб за кадр не прыгает.
+     * Wind in the city: below the roofs, the demolition of the skirt is along the street and no further than the wall (review R468.r1: 4 from 24 midpoints above houses on
+     * 20 s at 3 m/s across the streets; review R472: houses 8 m - demolition through the wall of the lobes above the projection, 8 billows in houses on
+     * 21 s; blow at 6,5 m from the intersection into the wind diagonally - billows jumps back to 55 m into the house, the dam of the path is not
+     *  coordinated with the stop; review R472b: wind 6 m/s, houses 8 m - billows path went from the place further than the front, billows on 0,6 s
+     *  in the house on 1,7 m). Frame every 0,05 s to 30 s: the middle of each noticeable billows is on the pavement (at the edge - up to
+     *  meters) or above the roof, and the billows do not jump out of frame.
      */
     @Test
     void skirtInTheWindStaysInTheStreets() {
@@ -414,7 +414,7 @@ class GroundDustTest {
                 for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}, {6, 0}}) {
                     GroundDust.Relief town = town(roof, at);
                     GroundDust d = townSkirt(town, wind);
-                    String where = "дома " + roof + " м, удар " + at[0] + ", " + at[1] + ", ветер " + wind[0] + ", " + wind[1];
+                    String where = "at home " + roof + " m, blow " + at[0] + ", " + at[1] + ", wind " + wind[0] + ", " + wind[1];
                     int seen = 0;
                     List<double[]> was = List.of();
                     for (int f = 1; f <= 600; f++) {
@@ -425,25 +425,25 @@ class GroundDustTest {
                             seen++;
                             double low = town.at(c[0], c[2]);
                             for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, town.at(c[0] + e[0], c[2] + e[1]));
-                            assertTrue(low <= GroundDust.WALL || c[1] > low, where + ", " + t + " с: клуб в доме, " + c[0] + ", " + c[1] + ", " + c[2]);
+                            assertTrue(low <= GroundDust.WALL || c[1] > low, where + ", " + t + " s: billows in the house, " + c[0] + ", " + c[1] + ", " + c[2]);
                             if (t > 1 && !was.isEmpty()) {
                                 double near = Double.MAX_VALUE;
                                 for (double[] b : was) near = Math.min(near, Math.hypot(c[0] - b[0], c[2] - b[2]));
-                                assertTrue(near < 2, where + ", " + t + " с: клуб прыгнул на " + near + " м, " + c[0] + ", " + c[2]);
+                                assertTrue(near < 2, where + ", " + t + " s: billows jumped on " + near + " m, " + c[0] + ", " + c[2]);
                             }
                         }
                         was = now;
                     }
-                    assertTrue(seen > 1000, where + ": клубов " + seen);
+                    assertTrue(seen > 1000, where + ":billows " + seen);
                 }
             }
         }
     }
 
     /**
-     * Юбка в городе при ветре не зависит от частоты кадров: кадры через 1/20 и 1/60 с дают в одни и те же секунды один и
-     * тот же слой (ревью R472b: ось улицы в кэше по клетке считалась по месту первого вопроса — к 30 с один и тот же клуб
-     * в 80 м от себя при другой частоте).
+     * A skirt in the city in the wind does not depend on the frame rate: frames through 1/20 and 1/60 s give in the same seconds one and
+     *  the same layer (review R472b: the axis of the street in the cache by cell was calculated at the place of the first question - to 30 s the same billow
+     *  in 80 m from itself at a different frequency).
      */
     @Test
     void skirtInTheTownDoesNotDependOnTheFrameRate() {
@@ -452,16 +452,16 @@ class GroundDustTest {
                 for (double[] wind : new double[][]{{3, 0}, {3 / Math.sqrt(2), 3 / Math.sqrt(2)}}) {
                     GroundDust.Relief town = town(roof, at);
                     GroundDust slow = townSkirt(town, wind), fast = townSkirt(town, wind);
-                    String where = "дома " + roof + " м, удар " + at[0] + ", " + at[1] + ", ветер " + wind[0] + ", " + wind[1];
+                    String where = "at home " + roof + " m, blow " + at[0] + ", " + at[1] + ", wind " + wind[0] + ", " + wind[1];
                     for (int f = 1; f <= 600; f++) {
                         List<double[]> a = layer(slow, f / 20.0);
                         for (int i = 1; i <= 3; i++) {
                             List<double[]> b = layer(fast, (3 * f - 3 + i) / 60.0);
                             if (i < 3) continue;
-                            assertEquals(a.size(), b.size(), where + ", " + f / 20.0 + " с");
+                            assertEquals(a.size(), b.size(), where + ", " + f / 20.0 + " s");
                             for (int c = 0; c < a.size(); c++) {
                                 for (int j = 0; j < 3; j++) {
-                                    assertEquals(a.get(c)[j], b.get(c)[j], 1e-6, where + ", " + f / 20.0 + " с, клуб " + c);
+                                    assertEquals(a.get(c)[j], b.get(c)[j], 1e-6, where + ", " + f / 20.0 + " s, billows " + c);
                                 }
                             }
                         }
@@ -472,9 +472,9 @@ class GroundDustTest {
     }
 
     /**
-     * Удар в яму (воронка прежнего удара, вытянутая 12×6 м, глубиной 2,5 и 4 м) в поле при ветре 3 м/с: край ямы и поле
-     * вокруг — не стены, юбка уходит с ветром, как с ровного поля (стенд PR #472: у налёта из 100 ударов юбки ударов в
-     * старые воронки стояли в них десятки секунд — стена пыли посреди поля на 76 с).
+     * Impact into a hole (crater of the previous impact, elongated 12×6 m, depth 2,5 and 4 m) in a field with wind 3 m/s: the edge of the hole and the field
+     *  around - not walls, the skirt goes with by the wind, as if from a flat field (stand PR #472: at the raid from 100 blows of the skirt of blows in
+     *  the old craters stood in them for tens of seconds - a wall of dust in the middle of the field at 76 s).
      */
     @Test
     void skirtLeavesAPitLikeAField() {
@@ -484,14 +484,14 @@ class GroundDustTest {
             GroundDust pit = townSkirt((x, z) -> (x / 6) * (x / 6) + (z / 3) * (z / 3) < 1 ? 0 : depth, wind);
             for (double t : new double[]{5, 20, 40}) {
                 double[] a = centre(flat, t), b = centre(pit, t);
-                assertEquals(a[0], b[0], 1, depth + " м, " + t + " с");
-                assertEquals(a[1], b[1], 1, depth + " м, " + t + " с");
-                if (t >= 20) assertTrue(b[2] < 0.01, depth + " м, " + t + " с: у ямы " + b[2] + " пыли");
+                assertEquals(a[0], b[0], 1, depth + " m, " + t + " s");
+                assertEquals(a[1], b[1], 1, depth + " m, " + t + " s");
+                if (t >= 20) assertTrue(b[2] < 0.01, depth + " m, " + t + " s: by the pit " + b[2] + " dust");
             }
         }
     }
 
-    /** Середина слоя по массе в воздухе (x, z) и доля его в 8 м от удара. */
+    /** The middle of the layer by mass in the air (x, z) and its share in 8 m from the impact. */
     private static double[] centre(GroundDust g, double t) {
         double[] s = new double[4];
         for (double[] c : layer(g, t)) {
@@ -503,13 +503,13 @@ class GroundDustTest {
         return new double[]{s[1] / s[0], s[2] / s[0], s[3] / s[0]};
     }
 
-    /** Квартал: дома 10×10 м высотой roof, улицы по 6 м, удар в {@code at} от перекрёстка. */
+    /** Quarter: houses 10×10 m height roof, streets along 6 m, blow to {@code at} from the intersection. */
     private static GroundDust.Relief town(double roof, double[] at) {
         return (x, z) -> Math.floorMod((int) Math.floor(x + at[0] + 13), 16) < 10
                 && Math.floorMod((int) Math.floor(z + at[1] + 13), 16) < 10 ? roof : 0;
     }
 
-    /** Юбка шахеда в квартале при ветре (x, z), м/с. */
+    /** Shahed skirt in the quarter with the wind (x, z), m/s. */
     private static GroundDust townSkirt(GroundDust.Relief town, double[] wind) {
         GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
                 GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), town);
@@ -524,8 +524,8 @@ class GroundDustTest {
     }
 
     /**
-     * Тяжёлый клуб над пустотой падает по закону термика MTT: замкнутая формула {@code GroundDust.fall} — та же, что
-     * численный термик {@link Thermal} (РК4 тех же уравнений) с той же плавучестью g·M/ρ и объёмом, в нейтральном воздухе.
+     * A heavy billow over a void falls by the MTT thermal law: the closed-form {@code GroundDust.fall} matches the numerical
+     * thermal {@link Thermal} (RK4 of the same equations), with the same buoyancy g·M/ρ and volume in neutral air.
      */
     @Test
     void denseDustFallsLikeAThermal() {
@@ -536,15 +536,15 @@ class GroundDustTest {
             Thermal th = new Thermal(b, b / volume, 0, neutral);
             for (double t = 1; t <= 60; t += 1) {
                 double numeric = th.height(t) - 0.5 * th.r0, closed = GroundDust.fall(dust, sh, sv, t);
-                assertEquals(numeric, closed, 0.03 * numeric + 0.02, dust + " кг, σ " + sh + "/" + sv + ", " + t + " с");
+                assertEquals(numeric, closed, 0.03 * numeric + 0.02, dust + " kg, σ " + sh + "/" + sv + ", " + t + " s");
             }
         }
     }
 
     /**
-     * Удар в крышу и удар в землю — одна физика: у крыши во все стороны (поверхность на высоте взрыва) слой тот же, что у
-     * удара в голый грунт, а ровная поверхность на 20 м ниже даёт то же, что разрыв на 20 м над землёй — та же пыль на
-     * той же высоте над своей поверхностью.
+     * An impact on the roof and an impact on the ground are the same physics: the roof in all directions (the surface at the height of the explosion) has the same layer as a
+     *  impact on bare ground, and a flat surface at 20 m below gives the same as a gap at 20 m above the ground - the same dust at
+     *  the same height above its surface.
      */
     @Test
     void roofAndGroundAreOneLaw() {
@@ -556,33 +556,35 @@ class GroundDustTest {
             assertEquals(b.total, a.total, 1e-9 * b.total);
             for (double t : new double[]{0.1, 1, 10, 60}) {
                 List<double[]> la = layer(a, t), lb = layer(b, t);
-                assertEquals(lb.size(), la.size(), drop + " м, " + t + " с");
+                assertEquals(lb.size(), la.size(), drop + " m, " + t + " s");
                 for (int i = 0; i < la.size(); i++) {
-                    for (int j = 0; j < 6; j++) assertEquals(lb.get(i)[j], la.get(i)[j], 1e-9, drop + " м, " + t + " с, клуб " + i);
-                    assertTrue(la.get(i)[1] + drop <= 2 * la.get(i)[4] + 0.5, "слой — на своей поверхности");
+                    for (int j = 0; j < 6; j++) assertEquals(lb.get(i)[j], la.get(i)[j], 1e-9, drop + " m, " + t + " s, billows " + i);
+                    assertTrue(la.get(i)[1] + drop <= 2 * la.get(i)[4] + 0.5, "layer - on its surface");
                 }
             }
         }
     }
 
-    /** Узлы пути клубов от {@code from} до {@code to} с: в них уровень клуба — не середина шага. */
+    /**
+     * Billow path nodes from {@code from} to {@code to} s: billow level is not the midpoint of a step there.
+     */
     private static List<Double> nodes(double from, double to) {
         List<Double> out = new ArrayList<>();
         for (double t : GroundDust.PATH) if (t >= from && t <= to) out.add(t);
         return out;
     }
 
-    /** Поверхность под клубом {x, y, z, σh, …} — как её видит слой (по его следу, {@code GroundDust.under}). */
+    /** The surface under billows {x, y, z, σh, …} - as the layer sees it (following its trace, {@code GroundDust.under}). */
     private static double under(GroundDust g, double[] b) {
         return g.under(b[0], b[2], 0.5 * b[3]);
     }
 
     /**
-     * Пыль не висит над пустотой (жалоба 23.10: бурый пласт на высоте крыши): у удара в крышу дома (10 и 30 м) с улицей на
-     * 15 м ниже, в ветер и в штиль, каждый клуб, чей путь вышел за край, опускается быстрее из двух — тяжёлым термиком
-     * (численный {@link Thermal}: масса пыли в воздухе и размер клуба в миг выхода — независимо от модели) или ветром за
-     * кромкой ({@code GroundDust.LEE} на метр сноса): не медленнее и не быстрее (±10 %), а когда закон довёл бы его до
-     * улицы, он на ней; под поверхность под собой не уходит.
+     * Dust does not hang over the void (complaint 23.10: brown layer at roof height): when hitting the roof of a house (10 and 30 m) with the street at
+     * 15 m below, in the wind and in the calm, each billows whose path has gone over the edge descends faster of the two - heavy thermal
+     *  (numerical {@link Thermal}: the mass of dust in the air and the size of the billows at the moment of exit - regardless of the model) or the wind behind the
+     *  edge ({@code GroundDust.LEE} per meter of drift): not slower and not faster (±10%), and when the law would bring it to
+     *  street, he is on it; does not go below the surface.
      */
     @Test
     void dustNeverHangsOverTheVoid() {
@@ -601,16 +603,16 @@ class GroundDustTest {
                 int fell = 0;
                 for (double t : ts) {
                     List<double[]> now = layer(dust, t);
-                    assertEquals(n, now.size(), "клубы те же");
+                    assertEquals(n, now.size(), "billows the same");
                     for (int i = 0; i < n; i++) {
                         double[] b = now.get(i);
                         double base = b[1] - 0.8 * b[4], below = under(dust, b);
                         if (t == ts.getFirst()) lifted[i] = last[i] = base;
-                        String at = "дом " + roof + " м, ветер " + wind + ", " + t + " с, клуб " + i;
-                        assertTrue(base >= below - 1e-6 || base >= last[i] - 1e-6, at + ": уходит под поверхность " + below);
+                        String at = "house " + roof + " m, wind " + wind + ", " + t + " s, billows " + i;
+                        assertTrue(base >= below - 1e-6 || base >= last[i] - 1e-6, at + ": goes below the surface " + below);
                         last[i] = base;
-                        // клуб у наветренного края (юбка доходит до края крыши) ветер сносит обратно на крышу: лёг на неё —
-                        // выход за край считается заново
+                        // billows at the windward edge (the skirt reaches the edge of the roof) the wind blows back onto the roof: lie down on it -
+                        //  going beyond the edge is counted again
                         if (crossed[i] >= 0 && below >= lifted[i] - GroundDust.DROP) {
                             crossed[i] = -1;
                             lifted[i] = base;
@@ -622,26 +624,26 @@ class GroundDustTest {
                             law[i] = new Thermal(buoyancy, buoyancy / volume, 0, neutral);
                         }
                         if (crossed[i] < 0) continue;
-                        // опускание — быстрее из двух: тяжёлый термик или ветер за кромкой (LEE метра на метр сноса)
+                        // sinking - the faster of the two: heavy thermal or wind behind the edge (LEE meters per meter of drift)
                         double dt = t - crossed[i], z = law[i].height(dt) - 0.5 * law[i].r0;
                         double[] d = dust.drift(t, 0.8 * b[4]);
                         double lee = GroundDust.LEE * Math.hypot(d[0] - edge[i][0], d[1] - edge[i][1]), down = Math.max(z, lee);
-                        // допуск — на шаг узлов пути (миг выхода за край известен до узла): ±0,5 с закона и сноса
+                        // tolerance - per step of path nodes (the moment of going beyond the edge is known to the node): ±0,5 s the law and drift
                         double[] da = dust.drift(t + 0.5, 0.8 * b[4]), db = dust.drift(Math.max(0, t - 0.5), 0.8 * b[4]);
                         double step = law[i].height(dt + 0.5) - law[i].height(Math.max(0, dt - 0.5)) + GroundDust.LEE * Math.hypot(da[0] - db[0], da[1] - db[1]);
-                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * down + step) + 0.3, at + ": висит над пустотой, " + base + " против закона " + (lifted[i] - down));
-                        assertTrue(base >= Math.min(below, lifted[i] - 1.1 * down - step) - 0.3, at + ": падает быстрее закона, " + base + " против " + (lifted[i] - down));
+                        assertTrue(base <= Math.max(below, lifted[i] - 0.9 * down + step) + 0.3, at + ": hanging over the void, " + base + " against the law " + (lifted[i] - down));
+                        assertTrue(base >= Math.min(below, lifted[i] - 1.1 * down - step) - 0.3, at + ": falls faster than the law, " + base + " against " + (lifted[i] - down));
                         if (base <= below + 0.01 && lifted[i] > below + 5) fell++;
                     }
                 }
-                if (roof >= 30 && (!crushed || wind > 0)) assertTrue(fell > 0, "дом " + roof + ", ветер " + wind + ", crushed " + crushed + ": пыль с крыши дошла до улицы");
+                if (roof >= 30 && (!crushed || wind > 0)) assertTrue(fell > 0, "house " + roof + ", wind " + wind + ", crushed " + crushed + ": dust from the roof reached the street");
             }
         }
     }
 
     /**
-     * Сколько пыли — по материалу, а не «земля или постройка»: на твёрдом (камень, кирпич) — только осевшая пыль
-     * ({@code Surface.HARD}, 0,6 г/м²), в десятки раз меньше, чем на голом грунте.
+     * How much dust is based on the material, and not “ground or building”: on solid (stone, brick) - only settled dust
+     *  ({@code Surface.HARD}, 0,6 g/m²), tens of times less than on bare ground.
      */
     @Test
     void hardSurfaceHoldsOnlySettledDust() {
@@ -650,28 +652,28 @@ class GroundDustTest {
                 GroundDust.Ground.filled(Double.NaN), GroundDust.Relief.UNKNOWN);
         GroundDust hard = new CloudModel(s, DAY, false, 0, stone).ground, bare = new CloudModel(s, DAY, false, 0, GroundDust.Ground.BARE).ground;
         double outer = HobBlast.rangeFor(GroundDust.OUTER_PSI, 0, CloudModel.equivalentKt(s.chargeKg()));
-        assertTrue(hard.total + hard.underBall(1e3) <= DustModel.Surface.HARD.supply() * Math.PI * outer * outer * 1.0001, "не больше осевшей пыли");
-        assertTrue(hard.total < 0.05 * bare.total, "камень " + hard.total + " против голого грунта " + bare.total);
+        assertTrue(hard.total + hard.underBall(1e3) <= DustModel.Surface.HARD.supply() * Math.PI * outer * outer * 1.0001, "no more than settled dust");
+        assertTrue(hard.total < 0.05 * bare.total, "stone " + hard.total + " against bare ground " + bare.total);
     }
 
     /**
-     * Пласт тяжелее воздуха растекается гравитационным течением (Huppert &amp; Simpson 1980): в штиль d(R²)/dt =
-     * 2·Fr·√(g·M/(πρ)) по пыли, что ещё в воздухе (в первые секунды — почти вся).
+     * A layer heavier than air spreads by gravitational flow (Huppert &amp; Simpson 1980): in the calm d(R²)/dt =
+     * 2·Fr·√(g·M/(πρ)) by the dust that is still in the air (in the first seconds - almost all).
      */
     @Test
     void dustSheetSlumpsLikeAGravityCurrent() {
         GroundDust g = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD).ground;
         double r2 = (Math.pow(g.stretch(1.5), 2) - Math.pow(g.stretch(1), 2)) * g.slumpFrom / 0.5;
         double law = 2 * GroundDust.FR * Math.sqrt(CloudModel.G * g.total / (Math.PI * CloudModel.RHO));
-        assertTrue(r2 <= law * 1.02 && r2 > 0.6 * law, "d(R²)/dt " + r2 + " против закона по всей поднятой пыли " + law);
-        assertTrue(g.stretch(60) > g.stretch(10) && g.stretch(10) > 1, "растекается");
+        assertTrue(r2 <= law * 1.02 && r2 > 0.6 * law, "d(R²)/dt " + r2 + " against the law over all the dust raised " + law);
+        assertTrue(g.stretch(60) > g.stretch(10) && g.stretch(10) > 1, "spreads");
     }
 
     /**
-     * Упавшая пыль не прыгает на крышу следующего дома (ревью: без памяти пути клуб, сошедший с крыши, прыгал на крышу
-     * соседнего и разом падал): два дома (крыша рыхлой земли до 10 м и дом 15 м в 40–70 м по ветру), улица на 15 м ниже,
-     * ветер 4 м/с; и где рельеф дальше 30 м пропал — уровень клуба от узла к узлу пути поднимается не круче 45° по пути
-     * сноса ветром (ветер несёт слой через дом), и пыль с крыши доходит до улицы.
+     * The fallen dust does not jump onto the roof of the next house (review: without memory of the path, billows, who came off the roof, jumped onto the roof
+     *  of the neighboring one and fell at once): two houses (roof of loose earth up to 10 m and house 15 m at 40–70 m downwind), street at 15 m below,
+     * wind 4 m/s; and where the relief further than 30 m has disappeared - the level of billows from node to node of the path rises no steeper than 45° along the path of
+     *  demolition by the wind (the wind carries the layer through the house), and dust from the roof reaches the street.
      */
     @Test
     void fallenDustStaysDown() {
@@ -686,7 +688,7 @@ class GroundDustTest {
             };
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            // с 3 с: в первые секунды место клуба на кадре зажато фронтом волны и не совпадает с путём
+            // with 3 s: in the first seconds the place of billows in the frame is sandwiched by the wave front and does not coincide with the path
             List<Double> ts = nodes(3, 120);
             for (double t : nodes(0.25, 3)) layer(dust, t);
             List<double[]> prev = layer(dust, ts.getFirst());
@@ -696,25 +698,25 @@ class GroundDustTest {
                 List<double[]> now = layer(dust, t);
                 for (int i = 0; i < now.size(); i++) {
                     double[] a = prev.get(i), b = now.get(i);
-                    // вверх слой несёт только ветер: путь — снос ветром на высоте середины слоя
+                    // the layer is carried upward only by the wind: the path is wind drift at the height of the middle of the layer
                     double[] w0 = dust.drift(before, 0.8 * a[4]), w1 = dust.drift(t, 0.8 * b[4]);
                     double rise = (b[1] - 0.8 * b[4]) - (a[1] - 0.8 * a[4]), path = Math.hypot(w1[0] - w0[0], w1[1] - w0[1]);
                     assertTrue(rise <= GroundDust.DROP * path + 0.8 * Math.abs(b[4] - a[4]) + 1e-6,
-                            (lost ? "рельеф пропал, " : "") + t + " с, клуб " + i + ": поднялся на " + rise + " за " + path + " м пути");
+                            (lost ? "the relief has disappeared, " : "") + t + " s, billows " + i + ": climbed " + rise + " for " + path + " m of way");
                     if (b[1] - 0.8 * b[4] <= -15 + 1e-6 && a[1] - 0.8 * a[4] > -15 + 1e-6) landed++;
                 }
                 prev = now;
                 before = t;
             }
-            if (!lost) assertTrue(landed > 0, "пыль с крыши дошла до улицы");
+            if (!lost) assertTrue(landed > 0, "dust from the roof reached the street");
         }
     }
 
     /**
-     * Слой идёт по склону, а не отрывается от него (второе ревью: порог края был на шаг сетки — над склоном вниз 17°
-     * клуб висел на сотню метров, а вверх по склону уходил в него; восьмое — старт с точки полосы: на склоне 31° клуб сразу
-     * «падал с края» и висел над склоном): удар в голый грунт на склоне 10°, 17°, 31° и 42° вниз и вверх по ветру 4 м/с —
-     * с 3 до 300 с низ каждого клуба в узлах пути — на поверхности под ним (в пределах блока).
+     * The layer goes along the slope, and does not come off from it (second review: the threshold of the edge was a grid step - above the slope down 17°
+     *  the billow hung for a hundred meters, and up the slope it went into it; eighth - starting from the point of the strip: on the slope 31° billows immediately
+     *  “fell from the edge” and hung above the slope): impact into bare ground on the slope 10°, 17°, 31° and 42° downwind and upwind 4 m/s -
+     * s 3 to 300 s bottom each billows at the nodes of the path - on the surface below it (within the block).
      */
     @Test
     void dustFollowsSlopes() {
@@ -728,14 +730,14 @@ class GroundDustTest {
             GroundDust.Relief relief = (x, z) -> Math.floor(slope * x);
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            // как в игре — с первого кадра (путь строится по тому, что видел первый вызов); проверка — с 3 с: в первую
-            // секунду растущий след опускает низ под клубом быстрее, чем слой успевает лечь (по закону)
+            // as in the game - from the first frame (the path is built according to what the first call saw); check - with 3 s: in the first
+            //  second the growing trace lowers the bottom under the billows faster than the layer can lie down (by law)
             for (double t = 1 / 60.0; t < 3; t += 1 / 60.0) layer(dust, t);
             for (double t : nodes(3, 300)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                    String at = "склон " + slope + ", " + t + " с: низ " + base + " над рельефом " + below;
-                    // у склона почти в 45° (предел подъёма) ступени рельефа дают отставание ещё на блок
+                    String at = "slope " + slope + ", " + t + " s: bottom " + base + " above the relief " + below;
+                    // on a slope almost at 45° (ascent limit), the relief steps give a lag of another block
                     assertTrue(Math.abs(base - below) <= (Math.abs(slope) > 0.7 ? 2 : 1) * GroundDust.DROP + 1e-6, at);
                 }
             }
@@ -743,14 +745,14 @@ class GroundDustTest {
     }
 
     /**
-     * Столбы, стволы и фонари клуб не держат (третье ревью: поверхность в одной точке — столб в блок останавливал клуб
-     * шириной в десятки метров): ракета на голом грунте, ветер 4 м/с, столбы 1×1 в 6 м в каждой сотой колонке — клубы идут
-     * так же и на той же высоте, как без них (до 60 с — не дальше 2 м, низ — в пределах блока).
+     * The pillars, trunks and lanterns of billows do not hold (third review: the surface at one point - a pillar in a block stopped a billow
+     *  tens of meters wide): a rocket on bare ground, wind 4 m/s, pillars 1×1 in 6 m in every hundredth column - billows go
+     *  in the same way and at the same height as without them (up to 60 s - no further than 2 m, bottom - within the block).
      */
     @Test
     void postsDoNotHoldTheLayer() {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
-        // столбы и стволы — в каждой сотой колонке, вразброс
+        // pillars and trunks - in every hundredth column, scattered
         GroundDust.Relief posts = (x, z) -> Math.floorMod(java.util.Objects.hash((int) Math.floor(x), (int) Math.floor(z)) * 0x9E3779B1, 100) == 0 ? 6 : 0;
         GroundDust.Ground withPosts = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0),
                 GroundDust.Ground.filled(0), posts);
@@ -764,16 +766,16 @@ class GroundDustTest {
             for (int i = 0; i < la.size(); i++) {
                 double d = Math.hypot(la.get(i)[0] - lb.get(i)[0], la.get(i)[2] - lb.get(i)[2]);
                 double up = (la.get(i)[1] - 0.8 * la.get(i)[4]) - (lb.get(i)[1] - 0.8 * lb.get(i)[4]);
-                assertTrue(d <= 2, t + " с, клуб " + i + ": столбы задержали на " + d + " м");
-                assertTrue(Math.abs(up) <= GroundDust.DROP, t + " с, клуб " + i + ": столбы подняли слой на " + up + " м");
+                assertTrue(d <= 2, t + " s, billows " + i + ": the pillars were delayed for " + d + " m");
+                assertTrue(Math.abs(up) <= GroundDust.DROP, t + " s, billows " + i + ": the pillars raised the layer to " + up + " m");
             }
         }
     }
 
     /**
-     * Падающий клуб над неизвестным рельефом (нет чанков и карты) падает дальше — до самой низкой поверхности, что видел
-     * взрыв, а не висит (третье ревью): шахед в крышу 10 м, улица на 15 м ниже, рельеф известен только до 14 м — к 120 с
-     * ни один клуб не выше 1 м над улицей.
+     * Falling billows over an unknown relief (no chunks and maps) falls further - to the lowest surface that the
+     *  explosion saw, and does not hang (third review): Shahed into the roof of 10 m, the street is 15 m below, the relief is known only up to 14 m - to 120 s
+     *  no billows are higher than 1 m above the street.
      */
     @Test
     void fallingDustOverUnknownReliefStillFalls() {
@@ -784,14 +786,14 @@ class GroundDustTest {
         GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, known);
         GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
         for (double t = 0.3; t <= 120; t += 0.5) layer(dust, t);
-        for (double[] b : layer(dust, 120)) assertTrue(b[1] - 0.8 * b[4] <= -15 + 1 + 1e-6, "120 с: клуб в " + b[0] + " м, низ " + (b[1] - 0.8 * b[4]));
+        for (double[] b : layer(dust, 120)) assertTrue(b[1] - 0.8 * b[4] <= -15 + 1 + 1e-6, "120 s: billows in " + b[0] + " m, bottom " + (b[1] - 0.8 * b[4]));
     }
 
     /**
-     * В штиль пыль улицы не забирается на крыши (четвёртое ревью: предел подъёма был блок на выборку, и неподвижный клуб,
-     * чей растущий след задевал дома, вставал на высоту крыш над улицей): шахед на перекрёстке (дома 10×10 высотой 12 м,
-     * улицы по 6 м), штиль — до 240 с низ клуба, поднятого с улицы, пока слой тоньше домов (2σv < 12), не выше 1 м над
-     * улицей, а толще — накрывает квартал: низ не выше половины высоты домов или четверти своей толщи (2σv).
+     * In the calm, the dust of the street does not climb onto the roofs (fourth review: the lifting limit was a block per sample, and the motionless billows,
+     * , whose growing trail touched the houses, rose to the height of the roofs above the street): Shahed at the intersection (houses 10×10 height 12 m,
+     *  streets along 6 m), calm - up to 240 s the bottom of billows raised from the street, while the layer is thinner than houses (2σv < 12), not higher than 1 m above the
+     *  street, and thicker - covers the block: the bottom is not higher than half the height of the houses or a quarter of its thickness (2σv).
      */
     @Test
     void calmStreetDustStaysInTheStreet() {
@@ -809,24 +811,24 @@ class GroundDustTest {
             List<double[]> now = layer(dust, t);
             for (int i = 0; i < now.size(); i++) {
                 double[] b = now.get(i);
-                // пыль, поднятая с улицы (по поверхности, с которой её подняло, а не по тому, где клуб уже стоит)
+                // dust raised from the street (by the surface from which it was picked up, and not by where the billows is already standing)
                 if (b[7] > 0.5) continue;
                 double base = b[1] - 0.8 * b[4];
-                // слой тоньше домов (2σv < 12) — на улице; толще — переливается через крыши, но лежит не выше среднего верха
-                // под своим следом
-                if (2 * b[4] < 9) assertTrue(base <= 1 + 1e-6, t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
-                else assertTrue(base <= Math.max(4.5, 0.5 * b[4]) + 1e-6, t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base);
+                // layer thinner than houses (2σv < 12) - on the street; thicker - overflows across the roofs, but lies no higher than the middle top
+                // under its trace
+                if (2 * b[4] < 9) assertTrue(base <= 1 + 1e-6, t + " s, billows " + i + ": fine dust of the street at height " + base);
+                else assertTrue(base <= Math.max(4.5, 0.5 * b[4]) + 1e-6, t + " s, billows " + i + ": thick dust of the street at height " + base);
             }
         }
     }
 
     /**
-     * В ветер пыль улицы тоже не встаёт на высоту крыш (пятое ревью: ветер поднимал слой на дом за метры, а за домом
-     * опускал минутами — бурый пласт на высоте крыш над городом): шахед на перекрёстке с рыхлым грунтом, ветер 5 м/с — в
-     * квартале (дома 10×10×12 м, улицы по 6 м) и перед башней 40 м шириной 20 м в 30–50 м по ветру до 120 с низ клуба,
-     * поднятого с улицы, пока слой тоньше дома, не выше блока над улицей (на стены слой не взбирается, в застройке ветер
-     * идёт поверху, skimming flow), а толще — накрывает дома: низ не выше половины их высоты или четверти своей толщи
-     * (на миг, пока след весь над крышами, — не дольше 3 с подряд).
+     * In the wind, the dust of the street also does not rise to the height of the roofs (fifth review: the wind raised the layer on the house for meters, and behind the house
+     *  lowered it in minutes - a brown layer at the height of the roofs above the city): Shahed at an intersection with loose soil, wind 5 m/s - in the
+     *  quarter (at home 10×10×12 m, streets along 6 m) and in front of the tower 40 m wide 20 m in 30–50 m downwind to 120 s the bottom of billows,
+     *  raised from the street, while the layer is thinner than the house, not higher than the block above the street (the layer does not climb the walls, in buildings the wind
+     *  goes on top, skimming flow), and the thicker one covers the houses: the bottom is not higher than half of their height or a quarter of its thick
+     *  (for a moment, while the trail is all over the roofs - no longer than 3 in a row).
      */
     @Test
     void windyStreetDustStaysInTheStreet() {
@@ -841,7 +843,7 @@ class GroundDustTest {
             }
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-            String scene = relief == town ? "квартал" : "башня";
+            String scene = relief == town ? "quarter" : "tower";
             List<Double> ts = nodes(1, 120);
             List<double[]> first = layer(dust, ts.getFirst());
             double[] high = new double[first.size()];
@@ -852,14 +854,14 @@ class GroundDustTest {
                     double[] b = now.get(i);
                     if (b[7] > 0.5) continue;
                     double base = b[1] - 0.8 * b[4], wall = relief == town ? 9 : 40;
-                    // слой тоньше домов — на улице; толще — переливается, но лежит не выше среднего верха под своим следом
-                    if (2 * b[4] < wall) assertTrue(base <= 1 + 1e-6, scene + ", " + t + " с, клуб " + i + ": тонкая пыль улицы на высоте " + base);
-                    // толще — накрывает: низ не выше половины дома или четверти своей толщи (пласта над пустой улицей нет)
+                    // a layer thinner than houses - on the street; thicker - shimmers, but lies no higher than the middle top under its trace
+                    if (2 * b[4] < wall) assertTrue(base <= 1 + 1e-6, scene + ", " + t + " s, billows " + i + ": fine dust of the street at height " + base);
+                    // thicker - covers: the bottom is not higher than half the house or a quarter of its thickness (there is no layer above the empty street)
                     else {
-                        // след на миг весь на крышах — низ поднимается на узел-другой; дольше 3 с подряд — уже пласт
+                        // for a moment the trail is all over the roofs - the bottom rises a knot or two; longer than 3 s a row - already a layer
                         if (base > Math.max(0.5 * wall, 0.5 * b[4])) high[i] += t - last;
                         else high[i] = 0;
-                        assertTrue(high[i] <= 3, scene + ", " + t + " с, клуб " + i + ": толстая пыль улицы на высоте " + base + " уже " + high[i] + " с");
+                        assertTrue(high[i] <= 3, scene + ", " + t + " s, billows " + i + ": thick dust of the street at height " + base + " already " + high[i] + " s");
                     }
                 }
                 last = t;
@@ -868,11 +870,11 @@ class GroundDustTest {
     }
 
     /**
-     * Ступень и склон за ней (шестое и седьмое ревью: ступень, раз встреченная, оставалась стеной или «накрытой» навсегда,
-     * и клуб шёл под террасой и под холмом): голый грунт, ветер 5 м/с — ступень в 2 блока (ниже слоя) и в 4 блока (выше
-     * раннего слоя) в 10–20 м от удара и склон 17° за ней. Низ клуба нигде не глубже под поверхностью под ним, чем толща
-     * слоя или ступень, у которой он ждёт, а клуб, прошедший ступень дальше чем на свою ширину (σh) и ещё 20 м, — снова на
-     * поверхности (в пределах двух блоков).
+     * The step and the slope behind it (sixth and seventh reviews: a step, once encountered, remained a wall or “covered” forever,
+     *  and billows went under the terrace and under the hill): bare soil, wind 5 m/s - step in 2 block (below the layer) and in 4 block (above the
+     *  early layer) at 10–20 m from the impact and the slope 17° behind it. The bottom of the billows is nowhere deeper under the surface beneath it than the thickness of the
+     *  layer or step at which it waits, and the billows, which has passed the step further than its width (σh) and another 20 m, is again on the
+     *  surface (within two blocks).
      */
     @Test
     void dustClimbsStepsAndHillsBehindThem() {
@@ -890,18 +892,18 @@ class GroundDustTest {
             for (double t : nodes(3, 90)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                    String where = "ступень " + rise + " в " + at + " м, " + t + " с: клуб в " + b[0] + " м, низ " + base + ", поверхность " + below + ", σv " + b[4];
-                    // тоньше ступени — ждёт у неё на своём уровне (не глубже самой ступени), толще — на поверхности
-                    assertTrue(base >= below - Math.max(2 * b[4], rise) - GroundDust.DROP - 1e-6, where + " — глубже толщи и ступени");
-                    if (b[0] > at + b[3] + 20) assertTrue(base >= below - 2 * GroundDust.DROP - 1e-6, where + " — не вышел на поверхность");
+                    String where = "step " + rise + " in " + at + " m, " + t + " s: billows " + b[0] + " m, bottom " + base + ", surface " + below + ", σv " + b[4];
+                    // thinner than a step - it waits at its level (no deeper than the step itself), thicker - on the surface
+                    assertTrue(base >= below - Math.max(2 * b[4], rise) - GroundDust.DROP - 1e-6, where + " - deeper thickness and steps");
+                    if (b[0] > at + b[3] + 20) assertTrue(base >= below - 2 * GroundDust.DROP - 1e-6, where + " - did not come to the surface");
                 }
             }
         }
     }
 
     /**
-     * Квартал: участки 16×16 со сдвигом улиц, на участке дом 10×10 высотой 9–15 м (по хешу участка), между ними улицы по 6 м;
-     * перекрёсток — в точке взрыва. Не по линейке: у настоящего города шаг домов не один.
+     * Quarter: plots 16×16 with a street shift, on the plot there is a house 10×10 with a height of 9–15 m (according to the hash of the plot), between them there are streets along 6 m;
+     * crossroads - at the point of the explosion. Not in a linear mod: a real city has more than one step of houses.
      */
     private static double town(double x, double z) {
         int cx = Math.floorDiv((int) Math.floor(x) + 11, 16), cz = Math.floorDiv((int) Math.floor(z) + 11, 16);
@@ -913,10 +915,10 @@ class GroundDustTest {
     }
 
     /**
-     * Обрыв, а за ним крутой склон (девятое ревью: падающий клуб опускался только законом падения, а склон 31° под ним
-     * уходил быстрее — к минуте он висел на 50 м над склоном): ракета на голом грунте, ветер 5 м/с, обрыв 8 м в 15 м от
-     * удара и склон 31° за ним; кадры с первого — с 60 с клубы за 60 м от удара — на поверхности под ними (в пределах
-     * двух блоков).
+     * A cliff, and behind it a steep slope (ninth review: the falling billows descended only by the law of fall, and the slope 31° below it
+     *  went away faster - by the minute it was hanging 50 m above the slope): rocket on bare ground, wind 5 m/s, cliff 8 m at 15 m from
+     *  impact and the slope 31° behind it; frames from the first - from 60 s billows for 60 m from the impact - on the surface below them (within
+     *  two blocks).
      */
     @Test
     void dustFallingOffACliffLandsOnTheSlopeBelow() {
@@ -934,17 +936,17 @@ class GroundDustTest {
             for (double[] b : layer(dust, t)) {
                 if (b[0] < 60) continue;
                 double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " с: клуб в " + b[0] + " м висит на " + (base - below) + " над склоном");
+                assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " s: billows " + b[0] + " m hanging on " + (base - below) + " above the slope");
             }
         }
     }
 
     /**
-     * Овраг рядом и крутой склон вверх у ракеты (десятое ревью: минимум по следу утягивал широкий клуб на дно оврага в 6 м,
-     * и пыль этой стороны минуту лежала под землёй; старт внешнего кольца с точки полосы в 48 м сажал клуб в склон): кадры
-     * с первого, ветер 5 м/с. Овраг 6×25 м в 12 м от удара — с 3 с клуб, чей след ни разу не лёг на овраг хоть на ~20 %,
-     * не ниже ровной земли больше чем на блок (стёкший в овраг в нём и скапливается); склон 39° вверх по ветру — с 3 с низ каждого клуба не ниже поверхности
-     * под ним больше чем на два блока.
+     * There is a ravine nearby and a steep slope up near the rocket (tenth review: the minimum on the trail pulled wide billows to the bottom of the ravine at 6 m,
+     * , and the dust from this side lay underground for a minute; starting the outer ring from the point of the strip at 48 m planted the billows into the slope): footage
+     *  from the first, wind 5 m/s. Ravine 6×25 m in 12 m from the impact - with 3 s billows, whose footprint never fell on the ravine at least ~20%,
+     *  not lower than the level ground by more than a block (flowed into the ravine accumulates in it); slope 39° upwind - with 3 s the bottom of each billows not lower than the surface
+     * below it by more than two blocks.
      */
     @Test
     void gullyAndSteepUpslopeKeepDustOnTheSurface() {
@@ -959,7 +961,7 @@ class GroundDustTest {
             }
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, relief);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.MISSILE, false), air, false, 0, g).ground;
-            String scene = relief == gully ? "овраг" : "склон";
+            String scene = relief == gully ? "ravine" : "slope";
             for (double t = 1 / 60.0; t < 3; t += 1 / 60.0) layer(dust, t);
             boolean[] inside = new boolean[layer(dust, 3).size()];
             for (double t : nodes(3, 120)) {
@@ -968,14 +970,14 @@ class GroundDustTest {
                     double[] b = now.get(i);
                     double base = b[1] - 0.8 * b[4], centre = relief.at(b[0], b[2]);
                     if (relief == gully) {
-                        // клуб, чей след хоть раз заметно (от ~20 %: три выборки из 13) лёг на овраг, в него стёк и там
-                        // скапливается (тяжёлый воздух стоит в низине) — не в счёт; остальные на дно не уходят
+                        // billows, whose trace at least once noticeably (from ~20%: three samples from 13) lay on a ravine, flows into it and accumulates
+                        //  there (heavy air is in the lowlands) - does not count; the rest don't go to the bottom
                         int over = 0;
                         for (double[] d : GroundDust.FOOTPRINT) if (gully.at(b[0] + 0.5 * b[3] * d[0], b[2] + 0.5 * b[3] * d[1]) < 0) over++;
                         if (over >= 3) inside[i] = true;
-                        if (!inside[i]) assertTrue(base >= -GroundDust.DROP - 1e-6, scene + ", " + t + " с, клуб " + i + ": на дне оврага, хотя над ним " + over + " из 13 выборок следа, низ " + base);
+                        if (!inside[i]) assertTrue(base >= -GroundDust.DROP - 1e-6, scene + ", " + t + " s, billows " + i + ": at the bottom of the ravine, although above it " + over + " of 13 trace samples, bottom " + base);
                     } else {
-                        assertTrue(base >= under(dust, b) - 2 * GroundDust.DROP - 1e-6, scene + ", " + t + " с, клуб " + i + ": в склоне, низ " + base + " под " + under(dust, b));
+                        assertTrue(base >= under(dust, b) - 2 * GroundDust.DROP - 1e-6, scene + ", " + t + " s, billows " + i + ": on the slope, bottom " + base + " under " + under(dust, b));
                     }
                 }
             }

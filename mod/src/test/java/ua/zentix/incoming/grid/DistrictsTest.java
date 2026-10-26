@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DistrictsTest {
     private static final int AREA = 200;
 
-    /** Чанк принадлежит кварталу с ближайшим центром — среди всех, не только соседних клеток. */
+    /** The chunk belongs to the block with the nearest center - among all, not just neighboring cells. */
     @Test
     void nearestSeedWins() {
         for (int x = -AREA; x < AREA; x += 3) {
@@ -28,12 +28,12 @@ class DistrictsTest {
                 }
                 long got = Districts.of(x, z);
                 double mine = Math.hypot(Districts.seedX(got) - px, Districts.seedZ(got) - pz);
-                assertEquals(best, mine, 1e-9, "чанк " + x + " " + z);
+                assertEquals(best, mine, 1e-9, "chunk " + x + " " + z);
             }
         }
     }
 
-    /** Кварталы — около 80 блоков (25 чанков), без крошечных и огромных. */
+    /** Quarters - about 80 blocks (25 chunks), without tiny and huge ones. */
     @Test
     void districtsAreCityBlockSized() {
         Long2IntOpenHashMap size = new Long2IntOpenHashMap();
@@ -43,7 +43,7 @@ class DistrictsTest {
         int min = Integer.MAX_VALUE, max = 0;
         long sum = 0, n = 0;
         for (var e : size.long2IntEntrySet()) {
-            // квартал на краю области обрезан
+            // the block at the edge of the area is cut off
             int cx = Districts.cellX(e.getLongKey()), cz = Districts.cellZ(e.getLongKey());
             if (Math.abs(cx) * Districts.CELL > AREA - 12 || Math.abs(cz) * Districts.CELL > AREA - 12) continue;
             min = Math.min(min, e.getIntValue());
@@ -51,14 +51,14 @@ class DistrictsTest {
             sum += e.getIntValue();
             n++;
         }
-        assertEquals(25, sum / (double) n, 1, "средний квартал, чанков");
-        assertTrue(min >= 6, "самый маленький квартал: " + min);
-        assertTrue(max <= 60, "самый большой квартал: " + max);
+        assertEquals(25, sum / (double) n, 1, "middle quarter, chunks");
+        assertTrue(min >= 6, "smallest quarter: " + min);
+        assertTrue(max <= 60, "largest quarter: " + max);
     }
 
     /**
-     * Квартал — одно целое: из любого его чанка в любой можно пройти, не выходя из квартала (с шагом и по диагонали:
-     * граница ячейки Вороного по центрам чанков идёт наискось и местами оставляет стык углами).
+     * The quarter is one whole: you can go from any of its chunks to any of them without leaving the quarter (with steps and diagonally:
+     *  the border of the crater cell at the centers of the chunks goes obliquely and in some places leaves a junction at the corners).
      */
     @Test
     void districtsAreConnected() {
@@ -67,7 +67,7 @@ class DistrictsTest {
             for (int z = -60; z < 60; z++) {
                 long d = Districts.of(x, z);
                 if (!seen.add(d)) continue;
-                // все чанки квартала в окрестности и сколько из них достижимо от этого
+                // all the chunks of the block in the vicinity and how many of them are reachable from this
                 int total = 0;
                 LongOpenHashSet members = new LongOpenHashSet();
                 for (int a = x - 12; a <= x + 12; a++) {
@@ -89,7 +89,7 @@ class DistrictsTest {
                         if (members.contains(k) && reached.add(k)) queue.add(new long[]{c[0] + s[0], c[1] + s[1]});
                     }
                 }
-                assertEquals(total, reached.size(), "квартал с чанком " + x + " " + z + " разорван");
+                assertEquals(total, reached.size(), "block with chunk " + x + " " + z + " torn");
             }
         }
     }

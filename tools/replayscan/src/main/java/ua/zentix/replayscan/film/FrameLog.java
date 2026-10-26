@@ -24,23 +24,23 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Проверка каждого кадра вывода по данным игры, а не на глаз: в момент отрисовки кадра (конец мира) — где объект на
- * экране и какую долю ширины кадра он занимает, закрыт ли он блоками (лучи к середине и краям), дымом слоя эффектов
- * ({@link Smoke}), облаками или туманом у края прорисовки, нарисован ли он (секция сущности построена; снаряд без
- * сущности у клиента рисует Incoming по пути от сервера) и построен ли весь мир у камеры, слышен ли его мотор, видно ли
- * каждое событие в первые 12 тиков; у плана глазами игрока — камера ли это игрок; со своей ли глубиной Distant Horizons
- * рисует LOD ({@link DhDepth}). Лучи и кадр — те же, что у оценки камер ({@link Cameras.View}, {@link Cameras#open},
- * {@link Cameras#keySeen}). Строка JSON на кадр — {@code qa.jsonl}; итог ({@link #verdict}) — по порогам плана, без
- * просмотра кадров.
+ * Check each exported frame using game data, not visual inspection. At render time (world end), record
+ * subject screen position/width share; occlusion by blocks (centre/edge rays), effects-layer smoke
+ * ({@link Smoke}), clouds/render-edge fog; actual rendering (entity section built; Incoming draws absent
+ * client projectiles by server track); full world built at camera; audible engine; each event visible
+ * within first 12 ticks. Player-POV plans also require player camera; Distant Horizons must render LOD
+ * with its own depth ({@link DhDepth}). Rays/view match camera scoring ({@link Cameras.View},
+ * {@link Cameras#open}, {@link Cameras#keySeen}). One JSON row per frame in {@code qa.jsonl};
+ * {@link #verdict} applies plan thresholds without viewing frames.
  */
 final class FrameLog {
-    /** Кадр в дыму: столько лучей сетки кадра закрыто дымом у камеры ({@link Smoke#smothered}). */
+    /** Smoke-filled frame: this fraction of frame-grid rays blocked near camera ({@link Smoke#smothered}). */
     static final double SMOTHERED = 0.6;
-    /** Сколько тиков после события оно проверяется: вспышка и огненный шар. */
+    /** Ticks after an event checked for flash/fireball visibility. */
     static final int KEY_CHECK = 12;
-    /** Скорость звука, блоков за тик: мотор мода звучит из точки, где снаряд был, когда звук вышел. */
+    /** Sound speed, blocks/tick: mod engine sounds from the projectile position at emission time. */
     static final double SOUND = 17.15;
-    /** Distant Horizons стоит: глубину его LOD в кадре проверяет {@link DhDepth}. */
+    /** Distant Horizons present: {@link DhDepth} checks its frame LOD depth. */
     static final boolean DH = net.neoforged.fml.ModList.get().isLoaded("distanthorizons");
 
     private final Subject s;
@@ -49,7 +49,7 @@ final class FrameLog {
     @Nullable
     private final UUID pov;
     private final Smoke smoke;
-    /** Путь камеры плана (у глаз игрока — нет): крен кадра. */
+    /** Plan camera path (absent for player POV): frame roll. */
     @Nullable
     private final Cameras.Path path;
     private final Sounds sounds;
@@ -72,14 +72,14 @@ final class FrameLog {
         out = Files.newBufferedWriter(dir.resolve("qa.jsonl"), StandardCharsets.UTF_8);
         sounds = new Sounds(dir.resolve("sounds.jsonl"), plan.loud(), plan.engine(), Export::exportTick);
         mc.getSoundManager().addListener(sounds);
-        // проходы LOD до плана — не его
+        // LOD passes before the shot do not belong to it
         if (DH) DhDepth.take();
     }
 
-    /** Кадр вывода нарисован: мир и слой эффектов уже в нём. */
+    /** Export frame rendered, including world and effects layer. */
     void onStage(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
-        // глубина LOD этого кадра (DhDepth.take: 1 — своя, −1 — мира); снимается и в кадрах не вывода
+        // This frame LOD depth (DhDepth.take: 1 own, −1 world); also sampled outside export
         int dh = DH ? DhDepth.take() : 0;
         if (!Export.exporting()) return;
         double t = Export.exportTick();
@@ -87,7 +87,7 @@ final class FrameLog {
         Minecraft mc = Minecraft.getInstance();
         Camera cam = e.getCamera();
         Vec3 eye = cam.getPosition();
-        // копии: векторы камеры — её живые поля; крен ключа Flashback кладёт поверх них (Cameras.View.rolled)
+        // Copy camera vectors, which are live fields; overlay Flashback key roll (Cameras.View.rolled)
         Matrix4f proj = e.getProjectionMatrix();
         double tanY = 1 / proj.m11(), tanX = 1 / proj.m00();
         Cameras.View view = new Cameras.View(eye, vec(cam.getLookVector()), vec(cam.getLeftVector()).scale(-1), vec(cam.getUpVector()), tanX, tanY)
@@ -126,29 +126,29 @@ final class FrameLog {
                 cloud = Cameras.throughClouds(clouds, eye, aim);
                 fog = !shot.far() && Cameras.beyondFog(eye, aim);
                 BlockPos bp = BlockPos.containing(aim);
-                // сущность в непостроенной секции игра не рисует (isSectionCompiled), стену цели — тоже; снаряд, которого
-                // у клиента нет (ушёл из сущностей записавшего, за чанки повтора), рисует Incoming по пути от сервера
-                // (дальние строки пути) — секции ему не нужны
+                // Game does not render entities in unbuilt sections (isSectionCompiled), nor target wall; Incoming
+                // draws client-absent projectiles (outside recorder entities/replay chunks) using server track
+                // (distant track rows), requiring no section
                 boolean byServer = s.uuid != null && before && !fromEntity && t >= s.pathFirst() && t <= s.pathLast();
                 drawn = shot.far() || byServer || mc.level.isOutsideBuildHeight(bp) || mc.levelRenderer.isSectionCompiled(bp);
-                // дым — только до события: после него в кадре и должны быть огонь и дым самого удара
+                // Smoke only before event: afterward the strike fire/smoke should appear in frame
                 if (before) clear = smoke.transmittance(eye.x, eye.y, eye.z, aim.x, aim.y, aim.z, size * 2 + 4);
                 if (shot.far()) unknown = unknown(mc, eye, aim);
             }
         }
-        // источник мотора отстаёт от снаряда на путь, пройденный, пока звук шёл к камере
+        // the source of the motor lags behind the projectile by the distance traveled while the sound was traveling to the camera
         double engine = s.uuid != null && before && aim != null
                 ? sounds.engine(aim, Math.max(8, 2 * s.size) + 1.2 * speed * aim.distanceTo(eye) / SOUND) : 0;
         boolean isPov = pov != null && mc.getCameraEntity() != null && pov.equals(mc.getCameraEntity().getUUID());
         boolean built = mc.levelRenderer.hasRenderedAllSections();
-        // свободная камера в блоке (путь плана идёт и там, где при оценке чанков ещё не было)
+        // free camera in the block (the plan path also goes where there were no chunks when evaluating chunks)
         boolean blocked = pov == null && Cameras.inBlocks(mc.level, eye);
-        // низ кадра свободной камеры — на земле вне чанков повтора
+        // bottom of the free camera frame - on the ground outside the replay chunks
         boolean low = pov == null && lowOutside(mc, view);
-        // кадр свободной камеры почти весь в дыму у самой камеры
+        // the frame of the free camera is almost completely covered in smoke near the camera itself
         double smother = pov == null ? smoke.smothered(view) : 0;
 
-        // события в первые тики: каждое — в кадре и не закрыто
+        // events in the first tick: each is in the frame and not closed
         StringBuilder keys = new StringBuilder();
         for (int i = 0; i < s.keys.size(); i++) {
             Subject.Key k = s.keys.get(i);
@@ -192,7 +192,7 @@ final class FrameLog {
         return new Vec3(v.x(), v.y(), v.z());
     }
 
-    /** Сущность объекта у клиента повтора (UUID те же, что в записи); id запоминается. */
+    /** The entity of the object in the replay client (UUID is the same as in the record); id is remembered. */
     @Nullable
     private Entity entity(Minecraft mc) {
         if (entityId >= 0) {
@@ -208,7 +208,7 @@ final class FrameLog {
         return null;
     }
 
-    /** Где на луче к дальнему объекту начинается чанк, которого у клиента нет (дальше — только рельеф DH); −1 — нет. */
+    /** Where on the ray to the distant object begins a chunk that the client does not have (further - only the DH relief); −1 - no. */
     private static double unknown(Minecraft mc, Vec3 eye, Vec3 at) {
         Vec3 d = at.subtract(eye);
         double len = d.length();
@@ -219,17 +219,17 @@ final class FrameLog {
         return -1;
     }
 
-    /** Как далеко от камеры низ кадра ещё проверяется: дальше LOD Distant Horizons в кадре — обычная даль. */
+    /** How far from the camera the bottom of the frame is is still checked: further LOD Distant Horizons in the frame is the usual distance. */
     static final double LOW_NEAR = 128;
-    /** Уровень моря ванили: высота земли на луче, пока чанков на нём не было. */
+    /** Vanilla sea level: the height of the land on the beam while there were no chunks on it. */
     private static final double SEA = 63;
 
     /**
-     * Низ кадра (лучи у нижнего края: слева, посередине, справа) встречает землю вне чанков повтора: ближе
-     * {@link #LOW_NEAR} блоков на луче начинается чанк, которого у клиента нет, и луч к {@link #LOW_NEAR} блокам уже у земли
-     * (её высота — последняя по чанкам на луче, без них — уровень моря ванили): там только рельеф Distant Horizons (у моря — дно и
-     * пещеры без воды) или пусто. Луч, который за чанками ещё высоко (длинный объектив вдаль), — обычная даль. Чанки повтора —
-     * только вокруг записавшего.
+     * The bottom of the frame (rays at the bottom edge: left, middle, right) meets the ground outside the replay chunks: closer to
+     * {@link #LOW_NEAR} blocks on the ray a chunk begins, which the client does not have, and the ray to {@link #LOW_NEAR} blocks is already at the ground
+     *  (its height is the last according to the chunks on the ray, without them - vanilla sea level): there only relief Distant Horizons (near the sea - bottom and
+     *  caves without water) or empty. The beam, which is still high behind the chunks (long lens into the distance), is the usual distance. Replay chunks -
+     * only around the one who recorded it.
      */
     private static boolean lowOutside(Minecraft mc, Cameras.View v) {
         for (double sx : new double[]{-0.9, 0, 0.9}) {
@@ -262,23 +262,23 @@ final class FrameLog {
         }
     }
 
-    /** Итог проверки: годится ли план, почему нет и числа. */
+    /** Result checks: is the plan suitable, why is there no number. */
     record Verdict(boolean pass, String why, double rank, JsonObject numbers) {}
 
     /**
-     * Итог по кадрам: мир построен (не меньше {@code ready} кадров и первые 10 — все); до первого события объект в кадре,
-     * виден, не в дыму, облаках и тумане, в построенной секции и не мельче порога — не меньше долей плана за всё время
-     * и за последнюю секунду; каждое событие видно в первые {@link #KEY_CHECK} тиков (доля событий — по плану);
-     * мотор слышен; громкого за кадром не больше, чем в кадре; у плана глазами игрока камера — этот игрок; LOD Distant
-     * Horizons с глубиной мира и свободная камера в блоке — ни в одном кадре; низ кадра свободной камеры на земле вне
-     * чанков повтора — не больше чем в 2 % кадров; кадров в дыму у самой камеры — не больше доли {@code smother} плана.
+     * Result by frames: the world is built (no less than {@code ready} frames and the first 10 - all); before the first event, the object in the frame,
+     * , is visible, not in smoke, clouds and fog, in the constructed section and not smaller than the threshold - no less than a fraction of the shot for the entire time
+     *  and for the last second; each event is visible in the first {@link #KEY_CHECK} tick (proportion of events is according to plan);
+     * motor is audible; there is no more loudness behind the scenes than in the frame; in the shot through the eyes of the player, the camera is that player; LOD Distant
+     * Horizons with the depth of the world and a free camera in the block - not in a single frame; bottom of the frame of a free camera on the ground outside the
+     *  replay chunks - no more than in 2 % of frames; frames in the smoke near the camera itself - no more than a fraction of the {@code smother} plan.
      */
     Verdict verdict(boolean isPovShot) {
         Plan.Need need = shot.need();
         double rReady = frames == 0 ? 0 : (double) readyN / frames, approach = pre == 0 ? 1 : (double) preOk / pre;
         double nearHit = near == 0 ? 1 : (double) nearOk / near, engine = pre == 0 ? 1 : (double) eng / pre;
         double povShare = frames == 0 ? 0 : (double) povN / frames;
-        // события плана — те, что в его тиках (план может начаться после события: продолжение другого плана)
+        // plan events are those in its tick (a plan can start after the event: continuation of another plan)
         int keysOk = 0, keysIn = 0;
         for (int i = 0; i < keyN.length; i++) {
             Subject.Key k = s.keys.get(i);
