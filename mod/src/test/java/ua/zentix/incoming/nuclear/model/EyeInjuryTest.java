@@ -13,7 +13,7 @@ class EyeInjuryTest {
     void figureRangeGivesTenSeconds() {
         for (double y : new double[]{1, 15, 300, 10_000}) {
             for (double dark : new double[]{0, 0.5, 1}) {
-                assertEquals(EyeInjury.EDGE_S, EyeInjury.dazzleSeconds(EyeInjury.edgeFluence(y, dark), y, dark), 1e-9, y + " cT, darkness " + dark);
+                assertEquals(EyeInjury.EDGE_S, EyeInjury.dazzleSeconds(EyeInjury.edgeFluence(y, dark), y, dark), 1e-9, y + " kt, darkness " + dark);
             }
         }
     }

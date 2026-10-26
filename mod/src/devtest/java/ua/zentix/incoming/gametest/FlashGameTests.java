@@ -123,7 +123,7 @@ public final class FlashGameTests {
         io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
         S2C.NukeFlashMarks.CODEC.encode(buf, packet);
         S2C.NukeFlashMarks back = S2C.NukeFlashMarks.CODEC.decode(buf);
-        h.assertTrue(back.chunk() == chunk.getPos().toLong() && same(back.marks(), before), "the package of traces was sorted out in the wrong way");
+        h.assertTrue(back.chunk() == chunk.getPos().toLong() && same(back.marks(), before), "trace packet decoded as the wrong type");
 
         // the removed block leaves the traces
         BlockPos gone = h.absolutePos(probe);
@@ -282,7 +282,7 @@ public final class FlashGameTests {
                     FlashMarks.Layer layer = m.layers().stream().filter(l -> l.detonation() == d.id()).findFirst().orElseThrow();
                     if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
                     else if (m.layers().stream().anyMatch(l -> l.detonation() < 0) || layer.time() != d.gameTime() || layer.chars().length == 0) {
-                        failure = "smoke and silhouettes of the wall - more than one layer of explosion #" + d.id() + " (time " + d.gameTime() + "):" + layers;
+                        failure = "scorch and wall silhouettes belong to different detonation layers #" + d.id() + " (time " + d.gameTime() + "):" + layers;
                     }
                 }
             } else if (w.plannedChunks() > 0 || w.prepTiles() > 0) {

@@ -150,7 +150,7 @@ class FlightScaleTest {
     }
 
     /**
-     * Bomb at 1: B-2 at the real echelon 12 km and 250 m/s drops it at the drop line (the same angle to the point as on
+     * Bomb at 1: B-2 at the real cruise altitude 12 km and 250 m/s drops it at the drop line (the same angle to the point as on
      *  in-game); with real resistance and the Mach curve, it falls ~50 s and hits with the impact speed spec GBU-57
      *  (511 m/s; with us it goes with the rudders directly to the point, and not according to ballistics - ±10%). Penetration at the target - at this speed.
      */
@@ -161,7 +161,7 @@ class FlightScaleTest {
         Ballistics.Drag drag = bomb.drag(1);
         Vec3 aim = new Vec3(0, Air.SEA, 0), velocity = new Vec3(0, 0, b2.cruiseSpeed(1));
         Vec3 release = aim.add(0, h, -line);
-        assertEquals(0, BombDrop.miss(release, velocity, aim, drag), "hits the reset line");
+        assertEquals(0, BombDrop.miss(release, velocity, aim, drag), "hits from the release line");
         FlightController f = new FlightController(0, 0);
         Vec3 pos = release.add(0, -BombDrop.DROP_BELOW, 0);
         double v = velocity.length();

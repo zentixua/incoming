@@ -35,7 +35,7 @@ final class Cameras {
         }
     }
 
-    /** Camera by tick replay (with share); roll - Grad, plus - left (camera key Flashback). */
+    /** Camera by tick replay (with share); roll - degrees, plus - left (camera key Flashback). */
     interface Path {
         Pose at(double t);
 
@@ -80,7 +80,7 @@ final class Cameras {
         }
 
         /**
-         * Frame with roll (Grad, plus - to the left, like the Flashback key): Flashback rotates the camera around its forward
+         * Frame with roll (degrees, plus - to the left, like the Flashback key): Flashback rotates the camera around its forward
          *  axis ({@code rotateZ}) after the camera has calculated its vectors - they have no roll.
          */
         View rolled(double roll) {
@@ -179,7 +179,7 @@ final class Cameras {
             return level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z));
         }
 
-        /** The chamber is not in the block and there is half a block of air around it; there is no chunk - we don’t know. */
+        /** Camera is outside blocks with half a block of air around it; absent chunk means unknown. */
         boolean free(Vec3 p) {
             return loaded(p) && !inBlocks(level, p);
         }

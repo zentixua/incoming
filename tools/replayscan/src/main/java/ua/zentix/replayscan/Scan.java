@@ -100,7 +100,7 @@ final class Scan implements Closeable {
     /** The names of the fields with the location of the event in mod packages are in order of preference (nested entries too). */
     private static final List<String> PLACE_NAMES = List.of("pos", "position", "burst", "center", "origin");
     private static final TicketType<ChunkPos> ASK_TICKET = TicketType.create("replayscan", Comparator.comparingLong(ChunkPos::toLong));
-    /** Visibility is not considered further from the axis of view than this much Grad (will not be included in any frame). */
+    /** Visibility is not considered further from the axis of view than this much degrees (will not be included in any frame). */
     private static final double MAX_ANGLE = 75;
     /** Measurements of the ground at the scene of the event: down to the block - no further, the nearest block - in a cube of the same radius. */
     private static final int CLEAR_MAX = 64, SOLID_RADIUS = 6;

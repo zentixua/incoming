@@ -17,14 +17,14 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Trajectory standard ({@code scenario-baseline.json} in the devtest resources): for each standard scenario - how the
+ * Trajectory reference ({@code scenario-baseline.json} in the devtest resources): for each reference scenario - how the
  *  flight ended, on what tick, where (from the middle of the site) and a hash of the projectile positions by tick. The script compares its flight
- *  with the standard exactly: any change in flight is visible. Change the standard only in PR, where the shift is explained for each
+ *  with the reference exactly: any change in flight is visible. Change the reference only in PR, where the shift is explained for each
  *  scenario. Write again - {@code ./gradlew runScenarioRecord} (writes here, in the source code).
  */
 final class Baseline {
     private static final String RESOURCE = "/scenario-baseline.json";
-    /** Where to write the standard (task {@code runScenarioRecord}); without it - compare. */
+    /** Where to write the reference (task {@code runScenarioRecord}); without it - compare. */
     private static final String RECORD = System.getProperty("incoming.scenario.record");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -69,7 +69,7 @@ final class Baseline {
         Map<String, Entry> out = new TreeMap<>();
         try (InputStream in = Baseline.class.getResourceAsStream(RESOURCE)) {
             if (in == null) {
-                Incoming.LOG.warn("There is no standard trajectories {}: the standard scenarios will fall - write ./gradlew runScenarioRecord", RESOURCE);
+                Incoming.LOG.warn("There is no reference trajectories {}: the reference scenarios will fall - write ./gradlew runScenarioRecord", RESOURCE);
                 return out;
             }
             JsonObject root = GSON.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);

@@ -75,7 +75,7 @@ import java.util.function.Consumer;
  *     <li>work budget per tick (root 1): the hit streak is not more than the total period and one, with blackout - units
  *          per strip; the hit queue empties; everything chosen by the shell explosions is demolished ({@link #checkWork}). Clock
  *         general for the server: the excess is counted to all scenarios whose flight was on that tick;</li>
- *     <li>flight coincides with the standard ({@link Baseline}), if the scenario it.</li>
+ *     <li>flight coincides with the reference ({@link Baseline}), if the scenario it.</li>
  * </ul>
  */
 final class ScenarioRun {
@@ -461,7 +461,7 @@ final class ScenarioRun {
         return e;
     }
 
-    /** Launch rail exit point with guide: above the ground of the launcher location. */
+    /** Launch rail exit point with rail: above the ground of the launcher location. */
     private Vec3 rail() {
         return launchSite().add(0, 2, 0);
     }
@@ -700,7 +700,7 @@ final class ScenarioRun {
             checkWork();
             List<SyncLoadWatch.Violation> reads = SyncLoadWatch.since(launchGameTime);
             h.assertTrue(reads.isEmpty(), "synchronous loading of chunks due to the fault of the mod: " + reads);
-            // with a real load, the flight depends on the generation speed on the machine: the standard is not about it
+            // with a real load, the flight depends on the generation speed on the machine: the reference is not about it
             if (s.baselined() && !ScenarioMode.REAL_CHUNKS) checkBaseline();
         } catch (GameTestAssertException e) {
             throw new GameTestAssertException(e.getMessage() + " — " + ScenarioMode.reproduce(s));
@@ -747,7 +747,7 @@ final class ScenarioRun {
         if (stationaryAim == null) return;
         if (s.launch().weapon == WeaponType.BUNKER) {
             h.assertTrue(outcome.end.equals("entry") || outcome.end.equals("blast"), "the bomb did not reach the ground: " + outcome.end);
-            // the standard and the result end with the input: the explosion after it is checked here (and its blocks - in checkWork)
+            // the reference and the result end with the input: the explosion after it is checked here (and its blocks - in checkWork)
             h.assertTrue(detonated, "the bomb entered the ground and did not explode for " + IMPACT_LIMIT + " tick");
             double miss = outcome.at.subtract(stationaryAim).horizontalDistance();
             h.assertTrue(miss <= BombDrop.REACH_PAD + 3, String.format(Locale.ROOT, "the bomb entered the ground %.1f blocks from the point", miss));
@@ -801,8 +801,8 @@ final class ScenarioRun {
             return;
         }
         Baseline.Entry expected = Baseline.expected(s.id());
-        h.assertTrue(expected != null, "trajectoriesMatchBaseline: the scenario is not in the standard - write ./gradlew runScenarioRecord and explain in PR");
-        h.assertTrue(expected.equals(got), "trajectoriesMatchBaseline: the flight diverged from the standard: it was " + expected + ", it became " + got);
+        h.assertTrue(expected != null, "trajectoriesMatchBaseline: the scenario is not in the reference - write ./gradlew runScenarioRecord and explain in PR");
+        h.assertTrue(expected.equals(got), "trajectoriesMatchBaseline: the flight diverged from the reference: it was " + expected + ", it became " + got);
     }
 
     private static double round(double v) {

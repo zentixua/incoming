@@ -94,7 +94,7 @@ final class ProbeScenario {
      * The game time from which the scene begins is as in the reference run of all scenes in a row (comparison 22.10, compare-final:
      * beginning of the scene in v3.4.1 and main - within 200 tick). The wind of the world and its stability class depend only on time
      * games ({@code util.Wind}, {@code util.Air}): at night, near the boundary of the classes D and E, the wind near the ground is 1 or 5 m/s, and the trail of the fire is
-     * to stands up like a pillar, then spreads out. Sampling scenes without this would be in a different air than the standard; the scene that the game has not reached
+     * to stands up like a pillar, then spreads out. Sampling scenes without this would be in a different air than the reference; the scene that the game has not reached
      *  catches up with its time with accelerated ticks ({@code /tick sprint}). Time does not go backwards, so the sample scenes
      *  go in reference order ({@link #ALL}); a scene that started later (the previous scene took longer: the launch scenes are waiting for the
      *  rocket to descend), is valid as long as its air is the same as at the reference time ({@link #air}: the wind changes over the game day, and not over
@@ -112,8 +112,8 @@ final class ProbeScenario {
             java.util.Map.entry("sam-side", 21690), java.util.Map.entry("sam-behind", 22182), java.util.Map.entry("sam-night-side", 22634),
             java.util.Map.entry("sam-burst", 23922), java.util.Map.entry("sam-night-burst", 24810));
     /**
-     * The same air: wind near the ground - no further than this, m/s, its direction - Grad, stability class (continuous,
-     * {@code util.Stability}) - a fraction of the class (⚠ assessment: smoke drift per minute - within meters and Grad).
+     * The same air: wind near the ground - no further than this, m/s, its direction - degrees, stability class (continuous,
+     * {@code util.Stability}) - a fraction of the class (⚠ assessment: smoke drift per minute - within meters and degrees).
      */
     static final double SAME_WIND = 0.3, SAME_DIR = 3, SAME_CLASS = 0.1;
     /** The game time at which the current scene began; −1 - not a single one yet. */
@@ -159,7 +159,7 @@ final class ProbeScenario {
 
     ProbeScenario() {
         String prop = System.getProperty("incoming.probe.cases");
-        // sample - in the order of the standard: the game time is caught up only forward
+        // sample - in the order of the reference: the game time is caught up only forward
         cases = prop == null || prop.isBlank() ? ALL : ordered(prop.split(","));
         Writer w = null;
         try {
@@ -275,7 +275,7 @@ final class ProbeScenario {
             at(tick + 20, this::nextCase);
             return;
         }
-        // the scene ended: and at the end the air is the same as that of the standard at the same place in its stage (the scenes go up to a minute, and the
+        // the scene ended: and at the end the air is the same as that of the reference at the same place in its stage (the scenes go up to a minute, and the
         //  started later could cross the class boundary by the end)
         Integer ref = caseIndex >= 0 ? START.get(current) : null;
         if (ref != null && startedAt >= 0) {
@@ -716,7 +716,7 @@ final class ProbeScenario {
             if (s.at == tick) s.action.run();
         }
         if (hover) p.getAbilities().flying = true;
-        // price of effects layer once per second after the explosion (budget: “Grad” salvo - no more than 2 ms video card)
+        // price of effects layer once per second after the explosion (budget: “Grad” salvo - no more than 2 ms GPU)
         int from = blastTick >= 0 ? blastTick : launchTick;
         if (from >= 0 && (tick - from) % 20 == 0) {
             Incoming.LOG.info("SCENARIO probe {} layer {} s: {}", current, (tick - from) / 20,

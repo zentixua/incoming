@@ -74,7 +74,7 @@ class SamTrailScreenTest {
                 Math.toRadians(55), 1, 1, new Vector3f(1, 1, 1), 8000, 192, 192, 0, Sight.Air.at(0, 20000));
     }
 
-    /** Raster of real vertices FxQuads (including byte alpha), without GL and video card. */
+    /** Raster of real vertices FxQuads (including byte alpha), without GL and GPU. */
     private static final class Screen {
         static final int W = 640, H = 360;
         final double[] alpha = new double[W * H];

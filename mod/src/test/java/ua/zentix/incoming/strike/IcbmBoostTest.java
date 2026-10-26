@@ -51,9 +51,9 @@ class IcbmBoostTest {
             y += speed;
         }
         // block = meter, tick = 0,05 s: blocks/tick × 20 = m/s
-        assertEquals(height(10), y, height(10) * 0.05, "height through 10 s");
-        assertEquals(velocity(10) / 20, speed, velocity(10) / 20 * 0.05, "speed via 10 s");
-        assertEquals(8.2, speed, 8.2 * 0.05, "speed via 10 s, blocks/tick");
+        assertEquals(height(10), y, height(10) * 0.05, "height after 10 s");
+        assertEquals(velocity(10) / 20, speed, velocity(10) / 20 * 0.05, "speed after 10 s");
+        assertEquals(8.2, speed, 8.2 * 0.05, "speed after 10 s, blocks/tick");
         assertTrue(speed < cruise, "spec limit reached in 10 s");
     }
 }

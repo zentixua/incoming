@@ -18,7 +18,7 @@ class CloudModelTest {
                 {300, 9030}, {360, 9480}, {420, 9770}, {480, 9920}, {570, 9970}};
         for (double[] p : seen) {
             double top = CloudModel.top(p[0], hob, y, false);
-            assertEquals(p[1], top, p[1] * (p[0] < 30 ? 0.12 : 0.06), () -> p[0] + " from: " + top);
+            assertEquals(p[1], top, p[1] * (p[0] < 30 ? 0.12 : 0.06), () -> p[0] + " s: " + top);
         }
         double end = CloudModel.top(1e5, hob, y, false);
         assertEquals(10_000, end, 100, "top after stabilization");
@@ -38,7 +38,7 @@ class CloudModelTest {
                 {300, 4380}, {360, 4740}, {420, 5020}, {480, 5270}};
         for (double[] p : seen) {
             double top = CloudModel.top(p[0], hob, y, false);
-            assertEquals(p[1], top, p[1] * 0.05, () -> p[0] + " from: " + top);
+            assertEquals(p[1], top, p[1] * 0.05, () -> p[0] + " s: " + top);
         }
         double v = CloudModel.riseSpeed(480, hob, y, false);
         assertTrue(v > 2 && v < 6, "after 8 minutes it still grows: " + v + " m/s");
@@ -56,7 +56,7 @@ class CloudModelTest {
         double[][] table = {{18, 2}, {42, 4}, {66, 6}, {150, 10}, {228, 12}};
         for (double[] p : table) {
             double top = CloudModel.top(p[0], 0, 1000, false), seen = p[1] * mile;
-            assertEquals(seen, top, seen * 0.2, () -> p[0] + " from: " + top);
+            assertEquals(seen, top, seen * 0.2, () -> p[0] + " s: " + top);
         }
         // in the first minute - on average ~134 m/s (300 miles per hour)
         assertEquals(134, (CloudModel.top(60, 0, 1000, false) - CloudModel.top(0, 0, 1000, false)) / 60, 134 * 0.2);
@@ -113,7 +113,7 @@ class CloudModelTest {
                 double prev = -1;
                 for (double t = 0; t < 4 * ts; t += 5) {
                     double h = CloudModel.top(t, hob, y, surface);
-                    assertTrue(h > prev, y + " cT, " + t + " s");
+                    assertTrue(h > prev, y + " kt, " + t + " s");
                     assertTrue(CloudModel.capBottom(t, hob, y, surface) < h);
                     prev = h;
                 }

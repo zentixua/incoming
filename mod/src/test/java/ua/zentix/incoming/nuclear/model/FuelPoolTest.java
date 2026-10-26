@@ -53,7 +53,7 @@ class FuelPoolTest {
                 int burning = 0;
                 for (int k = 0; k < n; k++) if (p.cellSeconds(k, n) > t) burning++;
                 double want = p.share(t) * n;
-                assertTrue(burning >= want - 1e-9 && burning < want + 1, String.format("on %.1f with %d on, law %.2f", t, burning, want));
+                assertTrue(burning >= want - 1e-9 && burning < want + 1, String.format("at %.1f s, %d cells are burning, law %.2f", t, burning, want));
             }
         }
     }

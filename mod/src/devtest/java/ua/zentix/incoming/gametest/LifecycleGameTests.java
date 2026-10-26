@@ -141,7 +141,7 @@ public final class LifecycleGameTests {
     public static void ticketsReleasedWhenUnloadedWithChunk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 1, 0);
-        // on the guide (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
+        // on the rail (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.placeOnLauncher(start, 0, 40, 1000, 0, new Target.Point(start.add(0, 0, 3000)), start.add(0, 0, 3000), null);
         m.setRoute(Route.direct());
@@ -183,7 +183,7 @@ public final class LifecycleGameTests {
     public static void projectileParksOnShutdown(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 1, 0);
-        // on the guide (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
+        // on the rail (stands before ignition): holds the ticket of its chunk and does not fly away anywhere
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.placeOnLauncher(start, 0, 40, 1000, 0, new Target.Point(start.add(0, 0, 3000)), start.add(0, 0, 3000), null);
         m.setRoute(Route.direct());
@@ -206,7 +206,7 @@ public final class LifecycleGameTests {
 
     /**
      * Stopping the server while the projectile is on the launcher in a closed cell: after launch, it returns to the world on the same
-     *  guide (and not above the terrain, like a projectile in flight) and is still hidden while the package is rising.
+     *  rail (and not above the terrain, like a projectile in flight) and is still hidden while the package is rising.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "shutdown_rail", skyAccess = true)
     public static void parkedLauncherRoundReturnsToRail(GameTestHelper h) {
@@ -221,7 +221,7 @@ public final class LifecycleGameTests {
         h.runAfterDelay(8, () -> {
             h.assertTrue(level.getEntity(id) instanceof StrikeProjectile, "the projectile did not return to the world: " + state(level, m));
             StrikeProjectile back = (StrikeProjectile) level.getEntity(id);
-            h.assertTrue(back != m && back.position().distanceTo(rail) < 1e-6, "the projectile did not return to the guide: " + back.position() + " instead of " + rail);
+            h.assertTrue(back != m && back.position().distanceTo(rail) < 1e-6, "the projectile did not return to the rail: " + back.position() + " instead of " + rail);
             h.assertTrue(back.flightPhase() == FlightPhase.READY && !back.isActive(), "the projectile in the closed cell is visible: " + state(level, back));
             back.discard();
             h.succeed();
@@ -443,7 +443,7 @@ public final class LifecycleGameTests {
 
     /**
      * A world without players (Nether, where no one has entered) after 300 tick entities stop ticking, and the ticket of the
-     *  projectile is not considered forced loading: while the world is being hit, the world does not fall asleep. The projectile on the guide stands
+     *  projectile is not considered forced loading: while the world is being hit, the world does not fall asleep. The projectile on the rail stands
      *  before being ignited and ticks in place - its age grows only while the world ticks.
      */
     @GameTest(template = "pad", timeoutTicks = 1200, batch = "empty_dimension")
@@ -843,7 +843,7 @@ public final class LifecycleGameTests {
                 if (!level.shouldTickBlocksAt(ChunkPos.asLong(x, z))) continue;
                 for (int nx = -1; nx <= 1; nx++) {
                     for (int nz = -1; nz <= 1; nz++) {
-                        if (!Terrain.ready(level, x + nx, z + nz)) return "chunke " + dx + " " + dz + " (neighbor " + nx + " " + nz + " not ready)";
+                        if (!Terrain.ready(level, x + nx, z + nz)) return "chunk " + dx + " " + dz + " (neighbor " + nx + " " + nz + " not ready)";
                     }
                 }
             }

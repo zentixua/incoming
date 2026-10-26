@@ -121,9 +121,9 @@ class TerrainTilesTest {
         assertEquals(-1, TerrainTiles.urgency(true, 0, true, null, never, now), "under construction");
         assertEquals(0, TerrainTiles.urgency(false, 0, false, null, never, now), "not yet built");
         assertEquals(0, TerrainTiles.urgency(false, now - s, true, full, never, now), "the relief has changed");
-        assertEquals(1, TerrainTiles.urgency(false, now - 6 * s, false, new TerrainTiles.Columns(), never, now), "empty via 5 s");
-        assertEquals(-1, TerrainTiles.urgency(false, now - 6 * s, false, partial, never, now), "incomplete - not through 5 s");
-        assertEquals(1, TerrainTiles.urgency(false, now - 31 * s, false, partial, never, now), "incomplete via 30 s");
+        assertEquals(1, TerrainTiles.urgency(false, now - 6 * s, false, new TerrainTiles.Columns(), never, now), "empty after 5 s");
+        assertEquals(-1, TerrainTiles.urgency(false, now - 6 * s, false, partial, never, now), "incomplete - not after 5 s");
+        assertEquals(1, TerrainTiles.urgency(false, now - 31 * s, false, partial, never, now), "incomplete after 30 s");
         assertEquals(-1, TerrainTiles.urgency(false, now - 999 * s, false, full, never, now), "full - only by event");
         assertEquals(1, TerrainTiles.urgency(false, now - 31 * s, false, full, 30 * s, now), "complete - according to source clock");
     }
@@ -185,10 +185,10 @@ class TerrainTilesTest {
         partial[2].columns.set(0, new TerrainSource.Column(64, MapColor.GRASS, 0));
         assertEquals(TerrainTiles.Kids.READY, TerrainTiles.kids(partial, never, now));
         partial[2].builtAt = now - 31 * s;
-        assertEquals(TerrainTiles.Kids.REFRESHING, TerrainTiles.kids(partial, never, now), "incomplete via 30 s");
+        assertEquals(TerrainTiles.Kids.REFRESHING, TerrainTiles.kids(partial, never, now), "incomplete after 30 s");
         TerrainTiles.Tile[] empty = kids(now - 6 * s);
         empty[1].columns = new TerrainTiles.Columns();
-        assertEquals(TerrainTiles.Kids.REFRESHING, TerrainTiles.kids(empty, never, now), "empty via 5 s");
+        assertEquals(TerrainTiles.Kids.REFRESHING, TerrainTiles.kids(empty, never, now), "empty after 5 s");
         // complete - according to source hours
         assertEquals(TerrainTiles.Kids.REFRESHING, TerrainTiles.kids(kids(now - 31 * s), 30 * s, now));
     }
@@ -328,7 +328,7 @@ class TerrainTilesTest {
         }
         int around = (2 * TerrainTiles.PREFETCH_RADIUS + 1) * (2 * TerrainTiles.PREFETCH_RADIUS + 1);
         assertTrue(TerrainTiles.capacity(w, h) >= 2 * widest + around, "limit " + TerrainTiles.capacity(w, h) + ", the widest view " + widest);
-        assertEquals(768, TerrainTiles.capacity(200, 120), "small card - no less than the previous limit");
+        assertEquals(768, TerrainTiles.capacity(200, 120), "small map - no less than the previous limit");
     }
 
     /** Readings immediately according to the number of source streams - only while the map is on the screen; in advance - two, no matter how many threads there are. */
@@ -350,10 +350,10 @@ class TerrainTilesTest {
         java.util.function.BooleanSupplier hasNot = () -> ++asked[0] < 0;
         assertFalse(TerrainTiles.prefetchWanted(false, true, has), "disabled in settings");
         assertEquals(0, asked[0], "disabled - inventory is not displayed");
-        assertTrue(TerrainTiles.prefetchWanted(true, true, hasNot), "the card was opened");
+        assertTrue(TerrainTiles.prefetchWanted(true, true, hasNot), "the map was opened");
         assertEquals(0, asked[0], "opened - the inventory does not look");
         assertTrue(TerrainTiles.prefetchWanted(true, false, has), "remote control in inventory");
-        assertFalse(TerrainTiles.prefetchWanted(true, false, hasNot), "without remote control and card");
+        assertFalse(TerrainTiles.prefetchWanted(true, false, hasNot), "without remote control and map");
         assertEquals(2, asked[0]);
     }
 
@@ -370,7 +370,7 @@ class TerrainTilesTest {
         TerrainTiles.prefetchInGameThread(layer, false, () -> {
             throw new AssertionError("source open");
         }, () -> {
-            throw new AssertionError("hours asked");
+            throw new AssertionError("clock queried");
         }, 0, b -> {
             throw new AssertionError("tile built");
         });
@@ -379,9 +379,9 @@ class TerrainTilesTest {
     }
 
     /**
-     * A layer of chunks in advance - under the deadline by hours, and not by the number of tiles: the columns are read until the clock reaches the deadline
-     *  (here each column is a unit of hours), the started tile is finished reading in the next tick from the same place (while it is
-     *  started, it is marked “under construction” - the card in the frame does not build it a second time), the finished one goes into the layer, and in the same
+     * A layer of chunks in advance - under the deadline by clock units, and not by the number of tiles: the columns are read until the clock reaches the deadline
+     *  (here each column is a unit of clock units), the started tile is finished reading in the next tick from the same place (while it is
+     *  started, it is marked “under construction” - the map in the frame does not build it a second time), the finished one goes into the layer, and in the same
      *  tic the next of the neighbors begins. The one started, which is no longer needed in advance (the player has left), is thrown.
      */
     @Test

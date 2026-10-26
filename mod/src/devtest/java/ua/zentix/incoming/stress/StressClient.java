@@ -31,11 +31,12 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Load stand player (only devtest, property {@code incoming.stress.client}): enters the server
- *  ({@code --quickPlayMultiplayer}), flies in a circle (moving target), from time to time looks at the camera of the
- *  projectile and redirects it with the LMB, launches it from the remote control (package, like a remote control screen and binoculars). The role of {@code leaver} comes out
- *  mid-strike when the director orders ({@link StressDirector#LEAVE}) and returns. Once in 5 writes {@code STRESSC}: fps, projectiles on the client and in HUD, errors.
- *  When the server stops, the client exits.
+ * Stress-rig player (devtest only, property {@code incoming.stress.client}): joins the server
+ * ({@code --quickPlayMultiplayer}), flies in a circle as a moving target, occasionally views a projectile
+ * camera and retargets with LMB, and launches from the remote (the same packet as the remote screen and
+ * binoculars). The {@code leaver} role leaves mid-strike when the director orders it
+ * ({@link StressDirector#LEAVE}), then returns. Logs {@code STRESSC} every 5 s: fps, client and HUD
+ * projectiles, errors. Exits when the server stops.
  */
 @Mod(value = Incoming.MOD_ID, dist = Dist.CLIENT)
 public final class StressClient {
@@ -87,9 +88,9 @@ public final class StressClient {
             log("camera: active=%b viewing=%b", ProjectileCamera.isActive(), ProjectileCamera.isViewing());
         }
         if (tick % 600 == 380 && ProjectileCamera.isViewing()) {
-            // LMB in the projectile chamber: redirect to what is under the crosshair
+            // LMB in the projectile camera: redirect to what is under the crosshair
             KeyMapping.click(mc.options.keyAttack.getKey());
-            log("LMB in the chamber");
+            log("LMB in the camera");
         }
         if (tick % 600 == 480 && ProjectileCamera.isActive()) ProjectileCamera.exit();
         if (leave) {

@@ -34,14 +34,14 @@ class BlastWallTest {
             assertEquals(w.shock(t), w.head(t), 1e-9, t + " s");
             double tail = w.tail(t), ball = w.underBall(t);
             double r = FireballModel.radius(t, GROUND.yieldKt(), true), y = FireballModel.centreHeight(t, 0, GROUND.yieldKt(), true);
-            assertEquals(Math.sqrt(Math.max(0, r * r - y * y)), ball, 1e-9, t + " c: edge of the ball on the ground");
+            assertEquals(Math.sqrt(Math.max(0, r * r - y * y)), ball, 1e-9, t + " s: edge of the ball on the ground");
             double len = w.shock(t) - tail;
             if (ball > 0) len = Math.min(len, (w.shock(t) - ball) / BlastWall.HANDOFF_TO);
-            assertEquals(Math.max(1e-3, len), w.length(t), 1e-9, t + " from: wedge - from the front to the end of the phase, transition to pall - to the edge of the ball");
+            assertEquals(Math.max(1e-3, len), w.length(t), 1e-9, t + " s: wedge - from the front to the end of the phase, transition to pall - to the edge of the ball");
             if (w.wall(t) != BlastWall.Wall.NONE) {
                 // top - the layer where the wedge ends (at the edge of the ball - meters, and not the layer at the epicenter at 18 km)
-                assertTrue(GROUND.metres(w.wall(t).height()) < 120, t + " with: top of wedge " + GROUND.metres(w.wall(t).height()) + " m");
-                assertTrue(w.head(t) - BlastWall.HANDOFF_TO * w.length(t) >= ball - 1e-6, t + " c: transition of the head to pall - in the ball");
+                assertTrue(GROUND.metres(w.wall(t).height()) < 120, t + " s: top of wedge " + GROUND.metres(w.wall(t).height()) + " m");
+                assertTrue(w.head(t) - BlastWall.HANDOFF_TO * w.length(t) >= ball - 1e-6, t + " s: transition of the head to pall - in the ball");
                 if (ball > 0 && w.backAge(t) < 1) inBall++;
             }
             if (t < firstEnd) {
@@ -123,8 +123,8 @@ class BlastWallTest {
                 double model = Math.min(t - HobBlast.arrivalSeconds(back, hob, yield), positive);
                 double game = Math.min(t - d.arrivalTicks(d.slantOf(d.blocks(back))) / (20 * d.scale()), positive);
                 double law = law(back, hob, yield, model), inGame = law(back, hob, yield, game);
-                assertTrue(top <= 1.02 * law + 0.01, burst + t + " from: top " + top + " m above the boundary layer (" + law + " m)");
-                assertEquals(inGame, top, 0.02 * inGame + 0.01, burst + t + " c: top - non-boundary layer aged dust");
+                assertTrue(top <= 1.02 * law + 0.01, burst + t + " s: top " + top + " m above the boundary layer (" + law + " m)");
+                assertEquals(inGame, top, 0.02 * inGame + 0.01, burst + t + " s: top is not the boundary layer at the dust age");
                 if (w.backAge(t) >= 1) ends++;
                 tops[k] = top;
                 heads++;
@@ -180,12 +180,12 @@ class BlastWallTest {
         for (double t = 0.1; t <= 6; t += 0.02) {
             double ball = GROUND.blocks(w.underBall(t));
             if (ball <= 0 || !w.slot(t, s) || s[3] <= 0) continue;
-            assertTrue(s[0] - BlastWall.HANDOFF_TO * s[1] - s[5] >= ball - 0.01, t + " with: head or splash in the ball");
+            assertTrue(s[0] - BlastWall.HANDOFF_TO * s[1] - s[5] >= ball - 0.01, t + " s: head or splash in the ball");
             // to the very edge - without it: there is the end of the transition to pall, and float of the slot gives 1e-10
             for (double r = 0; r < 0.999 * ball; r += 0.05 * ball) {
                 for (double wet : new double[]{0, 0.5, 1}) {
                     for (double up : new double[]{-0.3, 0.05, 0.5})
-                        assertEquals(0, BlastWall.sigma(s, r, 0, up * s[2], wet), t + " with: head in ball in " + r + " blocks from the epicenter");
+                        assertEquals(0, BlastWall.sigma(s, r, 0, up * s[2], wet), t + " s: head inside the sphere at " + r + " blocks from the epicenter");
                 }
             }
             checked++;
@@ -276,7 +276,7 @@ class BlastWallTest {
                 for (double t = 0.01; t < 120; t += 0.01) {
                     if (!w.slot(t, slot) || slot[3] <= 0) continue;
                     if (tile < 0) tile = slot[11];
-                    assertEquals(tile, slot[11], 0, burst + t + " c: head noise tile changes");
+                    assertEquals(tile, slot[11], 0, burst + t + " s: head noise tile changes");
                     double s = slot[0] - place;
                     if (s < 0 || s > BlastWall.HANDOFF_TO * slot[1]) continue;
                     if (Double.isNaN(first)) first = slot[0];
@@ -287,7 +287,7 @@ class BlastWallTest {
                         maxO = Math.max(maxO, o);
                         // the neighboring place is a meter closer to the epicenter: the noise does not add up, it is compressed to the extent of the wind against the front
                         double near = BlastWall.origin(place - 1, 0, z, (s + 1) / slot[1] * slot[8], slot[2], slot[4])[0];
-                        assertTrue(o - near > 0, burst + place + " blocks, " + t + " s: there was noise");
+                        assertTrue(o - near > 0, burst + place + " blocks, " + t + " s: noise collapsed");
                         squeeze = Math.max(squeeze, o - near);
                     }
                 }
@@ -309,7 +309,7 @@ class BlastWallTest {
         float[] slot = new float[BlastWall.SLOT];
         for (double t = 1; t < 10; t += 1) {
             if (!w.slot(t, slot) || slot[3] <= 0) continue;
-            assertTrue(slot[4] > 1 && slot[4] < 60, t + " with: air path " + slot[4]);
+            assertTrue(slot[4] > 1 && slot[4] < 60, t + " s: air path " + slot[4]);
         }
     }
 
@@ -449,7 +449,7 @@ class BlastWallTest {
         h = s[2];
         NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, top);
         NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - len, 0.1 * h, 0, 0.1 * h, c);
-        assertTrue(luminance(top) > 2.5 * luminance(c), t + " s, at night there is no shadow in the depths of my head: " + luminance(c) + " at the top " + luminance(top));
+        assertTrue(luminance(top) > 2.5 * luminance(c), t + " s: no shadow deep inside the head at night: " + luminance(c) + " at the top " + luminance(top));
     }
 
     /** Wall and light of the ball and fires at 15 kt at the moment t: at {@code wall} and {@code glow}. */

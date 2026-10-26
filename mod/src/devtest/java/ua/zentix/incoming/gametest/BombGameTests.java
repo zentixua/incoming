@@ -23,8 +23,9 @@ import ua.zentix.incoming.warhead.Warheads;
 import java.util.Locale;
 
 /**
- * Concrete-piercing bomb according to physics: path in the ground according to Young based on the block material (data card {@code incoming:penetration}),
- *  void sensor, underground explosion at a given depth - deep without a crater, shallow with an ejection crater.
+ * Physics of the bunker-buster: soil penetration follows Young using block materials (the
+ * {@code incoming:penetration} data map), with a void sensor and an underground explosion by scaled depth:
+ * no crater when deep, an ejecta crater when shallow.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -51,9 +52,9 @@ public final class BombGameTests {
     }
 
     /**
-     * Path according to the material: stone and concrete (S 0,84), deep shale (0,67), earth (12) - exactly Yang's path for his environment
-     *  (data map is read block by block), the bomb is up; concrete slab above the ground - the ground behind it with S/2 (the same move
-     * {@link Penetration.Run} that unit tests compare).
+     * Penetration by material: stone and concrete (S 0.84), deepslate (0.67), soil (12) — exactly Young's path
+     * for that medium (the data map is read block by block), ending at rest. For a concrete slab above soil,
+     * the soil behind it uses S/2 (the same {@link Penetration.Run} that unit tests check).
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_penetration", skyAccess = true)
     public static void penetrationByMaterial(GameTestHelper h) {
@@ -68,11 +69,11 @@ public final class BombGameTests {
         for (Case c : cases) {
             BunkerBusterEntity.Path path = down(h, c.top, c.v);
             double expect = Penetration.depth(mop, c.s, c.v);
-            h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": the bomb didn’t go off - " + path.end());
+            h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": bomb did not come to rest — " + path.end());
             h.assertTrue(Math.abs(path.length() - expect) < 1e-6, c.name + ": path " + m(path.length()) + ", according to Young " + m(expect));
         }
-        // in stone at 235 m/s - ~3,9 m: hit after a game fall (reset from B-2 on 12 blocks/tick from 170 blocks), twice
-        //  slower than the real one
+        // In stone at 235 m/s, ~3.9 m: impact after the game fall (B-2 drop at 12 blocks/tick from 170 blocks),
+        // half the real speed.
         double stone = down(h, cases[0].top, 235).length();
         h.assertTrue(stone > 3.4 && stone < 4.5, "stone on 235 m/s: " + m(stone));
         // concrete slab in a block above the ground
@@ -98,10 +99,10 @@ public final class BombGameTests {
     }
 
     /**
-     * The path in homogeneous earth at an angle is the same as Yang's path that is vertical: the axis, crossing the faces of the blocks, does not begin the layer
-     *  anew. Found through {@code surface_bomb} (ET 23.10): the bomb B-2 enters under 89°, and the path in the ground was 18–29 %
-     *  longer than the law (under 80° - by 40%; plumb - exactly): the tail of the axis outside the shape of the block with a length of error float was considered
-     *  void. Speed ​​- 160 m/s, path ~35 m: height of the platform.
+     * An oblique path through homogeneous soil equals the vertical Young path: crossing block faces must not
+     * restart the layer. Found by the end-to-end {@code surface_bomb} test (ET 23.10): at 89°, the B-2 bomb's
+     * soil path exceeded the law by 18–29 % (40 % at 80°; vertical was exact). A tail outside the block shape
+     * as short as float error was counted as a void. Speed 160 m/s, path ~35 m: fits the platform height.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "bomb_oblique", skyAccess = true)
     public static void obliquePathIsYoung(GameTestHelper h) {
@@ -111,14 +112,14 @@ public final class BombGameTests {
             h.getLevel().setBlock(h.absolutePos(p), (p.getY() == 38 ? Blocks.PODZOL : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         double v = 160, expect = Penetration.depth(mop, 12, v);
-        h.assertTrue(expect > 25 && expect < 36, "path along Yang " + m(expect) + " does not fit into the earth cube");
+        h.assertTrue(expect > 25 && expect < 36, "path along Young " + m(expect) + " does not fit into the earth cube");
         Vec3 face = Vec3.atBottomCenterOf(h.absolutePos(top)).add(0.13, 1, 0.29);
         for (double pitch : new double[]{90, 89, 80, 70}) {
             for (double yaw : new double[]{0, 30, 45}) {
                 double p = Math.toRadians(pitch), y = Math.toRadians(yaw);
                 Vec3 dir = new Vec3(Math.cos(p) * Math.sin(y), -Math.sin(p), Math.cos(p) * Math.cos(y));
                 BunkerBusterEntity.Path path = BunkerBusterEntity.plan(h.getLevel(), face, dir, v, 0);
-                h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, pitch + "°/" + yaw + "°: the bomb didn’t go off - " + path.end());
+                h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, pitch + "°/" + yaw + "°: bomb did not come to rest — " + path.end());
                 h.assertTrue(Math.abs(path.length() - expect) < 1e-3 * expect,
                         pitch + "°/" + yaw + "°: path " + m(path.length()) + ", according to Young " + m(expect));
             }
@@ -178,7 +179,7 @@ public final class BombGameTests {
     }
 
     /**
-     * Charge at a depth of ~20 m in the stone (reduced depth 1,5): no crater - the top above the charge is intact; at the place of the charge there is a
+     * Charge at a depth of ~20 m in the stone (scaled depth 1,5): no crater - the top above the charge is intact; at the place of the charge there is a
      *  cavity, nearby there is crushed rock (cobblestone), the arch of the passage in the crack zone has collapsed with rubble.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "bomb_deep", skyAccess = true)
@@ -192,7 +193,7 @@ public final class BombGameTests {
         Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 8, 32)));
         generateNow(level, charge, 3);
         BuriedBlast law = new BuriedBlast(2423, 29 - charge.y + h.absolutePos(BlockPos.ZERO).getY());
-        h.assertTrue(!law.breaches(), "charge shallow: reduced depth " + m(law.scaledDepth()));
+        h.assertTrue(!law.breaches(), "charge shallow: scaled depth " + m(law.scaledDepth()));
         Warheads.bunker(level, charge, charge.add(0, 20, 0), null, null);
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "demolition work is underway");
@@ -228,7 +229,7 @@ public final class BombGameTests {
         });
     }
 
-    /** Charge at a depth of 3 m (reduced depth 0,22): ejection crater - the top above the charge and around it has been demolished. */
+    /** Charge at a depth of 3 m (scaled depth 0,22): ejection crater - the top above the charge and around it has been demolished. */
     @GameTest(template = "range", timeoutTicks = 400, batch = "bomb_shallow", skyAccess = true)
     public static void shallowChargeBlowsACrater(GameTestHelper h) {
         ServerLevel level = h.getLevel();

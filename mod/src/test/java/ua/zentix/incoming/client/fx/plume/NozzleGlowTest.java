@@ -57,7 +57,7 @@ class NozzleGlowTest {
             NozzleGlow.Shine prev = g.at(0);
             for (double t = 0.0005; t <= g.burn() + NozzleGlow.AFTER; t += 0.0005) {
                 NozzleGlow.Shine s = g.at(t);
-                assertTrue(Math.abs(s.coneKelvin() - prev.coneKelvin()) < 5, w + " bell on " + t + " from: " + prev.coneKelvin() + " → " + s.coneKelvin());
+                assertTrue(Math.abs(s.coneKelvin() - prev.coneKelvin()) < 5, w + " bell on " + t + " s: " + prev.coneKelvin() + " → " + s.coneKelvin());
                 assertTrue(Math.abs(s.throatKelvin() - prev.throatKelvin()) < 5, w + " throat on " + t + " s");
                 prev = s;
             }
@@ -96,7 +96,7 @@ class NozzleGlowTest {
         for (WeaponType w : BOOSTED) {
             NozzleGlow g = glow(w);
             for (NozzleGlow.Wall wall : new NozzleGlow.Wall[]{g.throatWall, g.coneWall}) {
-                // the standard is smaller both in time and in thickness: the unit is thicker than the heating depth for the decline, the bell at the compartment was underestimated
+                // the reference is smaller both in time and in thickness: the unit is thicker than the heating depth for the decline, the bell at the compartment was underestimated
                 double[] coarse = NozzleGlow.surface(wall, g.burn(), g.tail, 10, 1, 1), fine = NozzleGlow.surface(wall, g.burn(), g.tail, 10, 3, 3);
                 // with 0,5 s: in the first fractions of a second of ignition, the heated layer is thinner than the assembly (for carbon fiber for 0,05 s - 0,16 mm), but the
                 //  wall is then covered by a full torch, and by the time of decline the difference goes away
@@ -198,7 +198,7 @@ class NozzleGlowTest {
         assertTrue(m.spent(0).coneKelvin() > 2000 && m.spent(0).coneKelvin() < m.motor().temperature(), "bell at the compartment: " + m.spent(0).coneKelvin());
         // the bell goes out (below the Draper point, ~800 K) in tens of seconds, the massive throat holds red longer
         assertTrue(dark(m, true) > 10 && dark(m, true) < 60, "the bell of the rocket darkens behind " + dark(m, true) + " s");
-        assertTrue(m.spent(20 * 20).throatKelvin() > 1000, "rocket throat through 20 s still red");
+        assertTrue(m.spent(20 * 20).throatKelvin() > 1000, "rocket throat after 20 s still red");
         // shahed has shorter work (2,5 s), smaller nozzle - in seconds
         assertTrue(dark(d, true) > 2 && dark(d, true) < 15, "shahed's bell darkens behind " + dark(d, true) + " s");
     }

@@ -76,9 +76,9 @@ class PallFieldTest {
             double ball = FireballModel.groundRadius(t, 0, 15, true);
             for (int i = 0; i < PallField.BINS && CALM.metres(p.radius(i)) < ball; i++) {
                 p.dust(i, 20 * t, v);
-                assertEquals(0, v[0], t + " with: dust pall in a ball in " + CALM.metres(p.radius(i)) + " m");
+                assertEquals(0, v[0], t + " s: pall dust inside the sphere at " + CALM.metres(p.radius(i)) + " m");
                 p.spray(i, 20 * t, v);
-                assertEquals(0, v[0], t + " with: splashes in a ball in " + CALM.metres(p.radius(i)) + " m");
+                assertEquals(0, v[0], t + " s: spray inside the sphere at " + CALM.metres(p.radius(i)) + " m");
                 inside++;
             }
         }
@@ -159,11 +159,11 @@ class PallFieldTest {
         double arrival = arrival(p, i), prev = 0;
         for (double age = 1.5; age <= 1800; age += 0.5) {
             p.dust(i, arrival + 20 * age, v);
-            assertTrue(v[1] >= prev - 1e-9, age + " c: the top of the dust has dropped");
+            assertTrue(v[1] >= prev - 1e-9, age + " s: the top of the dust has dropped");
             prev = v[1];
         }
         p.dust(i, arrival + 20 * 5, v);
-        assertTrue(v[1] > 60 && v[1] < 150, "to 1 km via 5 s top " + v[1]);
+        assertTrue(v[1] > 60 && v[1] < 150, "to 1 km after 5 s top " + v[1]);
         p.dust(i, arrival + 20 * 600, v);
         assertTrue(v[1] > 120 && v[1] < 350, "in 1 km in 10 minutes top " + v[1]);
         double[] s = new double[4];
@@ -276,7 +276,9 @@ class PallFieldTest {
         return (mu * sun * Math.exp(-tau / mu) + PallLight.diffuse(w, g, tau, tau, PallLight.LAND, mu, sun, 1, 0, sky, 0, -2.0 / 3)) / (mu * sun + sky);
     }
 
-    /** Light on the ground under the pall of Hiroshima at {@code metres} m from the epicenter through {@code age} from after the front. */
+    /**
+     * Ground light under the Hiroshima pall at {@code metres} m from the epicenter, {@code age} s after the front.
+     */
     private static double hiroshimaLight(PallField p, double metres, double age) {
         int i = (int) (metres / p.reach() * PallField.BINS);
         double ticks = arrival(p, i) + 20 * age;
@@ -633,7 +635,7 @@ class PallFieldTest {
             p.dust(i, arrival + 20 * age, dust);
             p.spray(i, arrival + 20 * age, spray);
             assertEquals(Math.max(1, PallField.sprayTop(Math.max(1, GROUND.blocks(WaterModel.sprayHeight(wind))), age)), spray[1], 1e-9);
-            assertTrue(spray[1] < dust[1], age + " with: splashes " + spray[1] + " no less than dust " + dust[1]);
+            assertTrue(spray[1] < dust[1], age + " s: splashes " + spray[1] + " no less than dust " + dust[1]);
         }
     }
 
@@ -698,11 +700,11 @@ class PallFieldTest {
     }
 
     /**
-     * The base wave is only for a “water” explosion: it rises in seconds, grows and melts in minutes according to the laws of its clubs
+     * The base wave is only for a “water” explosion: it rises in seconds, grows and melts in minutes according to the laws of its billows
      *  ({@link WaterModel}, model watch), weakening is apparently in it; rolls over the shore (this is water raised at the
      *  epicenter), the pall frame covers it.
      */
-    /** In a world of a smaller scale, a wave is by the clock and the standards of its billows: model seconds - tick / (20·scale), blocks - × scale. */
+/** In a world of a smaller scale, a wave is by the clock and the standards of its billows: model seconds - tick / (20·scale), blocks - × scale. */
     @Test
     void surgeFollowsTheWorldScale() {
         Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);

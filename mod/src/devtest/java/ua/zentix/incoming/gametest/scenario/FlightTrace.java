@@ -7,7 +7,7 @@ import java.util.HexFormat;
 /**
  * Flight hash by tick (FNV-1a, 64 bit): tick from launch, which projectile of the scenario (in order of appearance), phase, out of world
  * or is it, location from the middle of the site accurate to 0,001 block. Any shift in trajectory, phase, or departure from the world
- *  changes the hash; the standard stores it instead of thousands of points.
+ *  changes the hash; the reference stores it instead of thousands of points.
  */
 final class FlightTrace {
     private static final long OFFSET = 0xcbf29ce484222325L, PRIME = 0x100000001b3L;

@@ -169,7 +169,7 @@ class MushroomGlslTest {
                 }
             }
         }
-        // light to layer in card pass: with two pall threads (pallDiffuse) - as in Java
+        // light to layer in map pass: with two pall threads (pallDiffuse) - as in Java
         GlslFunction through = GlslFunction.parse(read("include/pall.glsl") + GLSL + read("core/fx_mush_shadow.fsh"), "through");
         for (double tau : new double[]{0, 0.3, 2, 9, 64}) {
             for (double w : new double[]{0.5, 0.9, 0.99}) {
@@ -233,7 +233,7 @@ class MushroomGlslTest {
             double g = at[1];
             assertDark(dark, PallLight.albedo(PallLight.linear(((rgb >> 8) & 0xFF) / 255.0), g), g, String.format(Locale.ROOT, "%06X", rgb));
         }
-        // cap - drops and NO₂ (shadow card takes green): the whitest in power and time
+        // cap - drops and NO₂ (shadow map takes green): the whitest in power and time
         double[] w = new double[4];
         double white = 0, g = 0;
         for (double kt : new double[] {0.1, 1, 15, 100, 1000, 10_000}) {
@@ -292,7 +292,7 @@ class MushroomGlslTest {
             double e = BlackBody.luminance(MushroomModel.edgeTemperature(t, kt, false)) * s.capR() * s.capR() / (d * d);
             double toward = e * MushroomField.ballFace(flat, vy, 0, sd, 0.2, 1, 0), away = e * MushroomField.ballFace(-flat, vy, 0, sd, 0.2, 1, 0);
             double side = e * MushroomField.ballFace(0, vy, 0, sd, 0.2, 1, 0), top = e * MushroomField.ballFace(vy, vy, 1, sd, 0.2, 1, 0);
-            String at = String.format(Locale.ROOT, "%.2f with: to the ball %.1f, away %.2f, sideways %.2f, top %.2f noon", t, toward, away, side, top);
+            String at = String.format(Locale.ROOT, "%.2f s: to the ball %.1f, away %.2f, sideways %.2f, top %.2f noon", t, toward, away, side, top);
             if (t < 1) {
                 assertTrue(toward > 150 && toward < 300, at);
                 assertTrue(away > 3 && side > 20 && top > 20, at);
@@ -362,7 +362,7 @@ class MushroomGlslTest {
 
     /**
      * billows and edge are the same numbers as the mushroom frame in Java; at the distance to which the frame takes the substance (in units of
-     *  clubs of the part), the edge shifted outward by the strongest billows no longer provides substance, and deeper than the edge shifted inward
+     *  billows of the part), the edge shifted outward by the strongest billows no longer provides substance, and deeper than the edge shifted inward
      *  just as strongly - all the density.
      */
     @Test
@@ -426,13 +426,13 @@ class MushroomGlslTest {
                 a.put("j", (double) j);
                 double w = weight.call(Map.of("age", age.call(a))), s = seed.call(a);
                 if (psi > 0 && s != lastSeed[j]) {
-                    assertTrue(w < 0.01 && lastW[j] < 0.01, "layer " + j + " changed the pattern in sight: " + psi + " glad");
+                    assertTrue(w < 0.01 && lastW[j] < 0.01, "layer " + j + " changed the pattern in sight: " + psi + " rad");
                 }
                 lastSeed[j] = s;
                 lastW[j] = w;
                 sum += w;
             }
-            assertEquals(1, sum, 1e-9, psi + " glad");
+            assertEquals(1, sum, 1e-9, psi + " rad");
         }
         int n = 400;
         for (double low = 0; low <= 0.5 + 1e-9; low += 0.05) {

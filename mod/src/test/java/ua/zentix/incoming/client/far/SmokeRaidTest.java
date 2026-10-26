@@ -25,14 +25,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Price of smoke raid from 100 impacts (scene bench 25.10, scene “100”: filling 41/104/175 screens outside/from the edge/inside with
- *  budget 4, video card 13,5/39,4/55,5 ms vs 2,9/5,8/6,4 for 3.4.1): 100 Shahed by Vogel's sunflower in the circle 120 m,
+ *  budget 4, GPU 13,5/39,4/55,5 ms vs 2,9/5,8/6,4 for 3.4.1): 100 Shahed by Vogel's sunflower in the circle 120 m,
  *  through 1,5 s, windows - through 35 s after the last one; fuel in the crater burns 150 s - 70 trail fires; wind 4 m/s,
  * class D. Clouds - model ({@link CloudModel}: cap, stem tube, dust near the ground), trail - {@link FireSmoke#lay}; frame
  *  lays out the same layer receiver as in the game ({@link SmokePuffs}), three cameras of the stand. Half of the frame (one billows per
  *  gauss and tube place) - 18/70/153 screen, up to 10 times higher than the budget (before the budget did not apply here at all).
  */
 class SmokeRaidTest {
-    /** Fuel fire in crater Shahed (as {@code PlumeContinuityTest.POOL}): 150 burns with impact. */
+    /**
+     * Fuel fire in a Shahed crater (as in {@code PlumeContinuityTest.POOL}): burns for 150 s after impact.
+     */
     record Fire(double x, double z, double born, long seed) implements SmokeGrid.Source {
         static final FireSmoke.Fuel POOL = new FireSmoke.Fuel(2.2e6, Math.PI * 4, 0.04 / 43.4e6);
         static final double WIND = 4, BURNS = 150;

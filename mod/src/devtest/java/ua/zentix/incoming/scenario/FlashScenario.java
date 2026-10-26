@@ -197,8 +197,8 @@ final class FlashScenario {
         });
         shot(FAR, 230, "smoke_before");
         // arcs - close, from the shadow side (ball - back left): lights in 3–17 blocks and substation in 12; the game is in 4 tick
-        //  per second: after the explosion, the client without a video card draws 3 frames per second, and on 20 tick frame for tick did not keep up with
-        //  (identical pictures in a row, two-tick arc flash between them)
+//  per second: after the explosion, the client without a GPU draws 3 frames per second, and on 20 tick frame for tick did not keep up with
+//  (identical pictures in a row, two-tick arc flash between them)
         at(FAR, 232, () -> {
             BlockPos f = far;
             Minecraft.getInstance().player.getAbilities().flying = true;

@@ -20,9 +20,9 @@ import java.util.UUID;
  *  tick of the world) and itself recalculates the chunk levels ({@code runDistanceManagerUpdates}) at the beginning of the tick world, before the mod
  *  (before {@code StrikeWorld}) and before the tick of each entity.
  * <p>
- * The flight of the script should not change from this: the standard is written without interference ({@code runScenarioRecord}), and is checked against
+ * The flight of the script should not change from this: the reference is written without interference ({@code runScenarioRecord}), and is checked against
  * . The solution of a mod that reads levels or tick chunks, while its ticket for this tick has not yet been applied, depends
- *  on whether someone else applied them - and with a hindrance diverges from the standard immediately, and not occasionally in part CI
+ *  on whether someone else applied them - and with a hindrance diverges from the reference immediately, and not occasionally in part CI
  *  with a different composition (22.10: “Lancet” scenario {@code loiter_rail.player} returned to the world a tick sooner or later).
  */
 final class ChunkChurn {

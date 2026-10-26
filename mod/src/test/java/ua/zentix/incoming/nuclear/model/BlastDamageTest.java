@@ -17,7 +17,7 @@ class BlastDamageTest {
         assertEquals(scaledPas, i, 0.2 * scaledPas, "Z = " + z);
     }
 
-    /** The momentum grows as ∛W at the same reduced range. */
+    /** The momentum grows as ∛W at the same scaled range. */
     @Test
     void impulseScalesWithCubeRoot() {
         double w = 125;

@@ -320,7 +320,7 @@ final class GuideShots {
 
     /**
      * Map: from the remote control screen - “Open guidance map...”, zoom out, move, select a place outside the village, two points
-     *  of the route (Shift + LMB), drag the second one, fire; then the card again (key ",") - Shahed on it.
+     *  of the route (Shift + LMB), drag the second one, fire; then the map again (key ",") - Shahed on it.
      */
     private void mapGif() {
         run(() -> {
@@ -345,7 +345,7 @@ final class GuideShots {
         });
         until("relief map", 2400, () -> {
             TerrainTiles.Progress p = TerrainTiles.progress();
-            if (tick % 100 == 0) Incoming.LOG.info("SCENARIO guide: card {} from {} ({}), {}", p.ready(), p.visible(), p.layers(), TerrainTiles.stats());
+            if (tick % 100 == 0) Incoming.LOG.info("SCENARIO guide: map {} from {} ({}), {}", p.ready(), p.visible(), p.layers(), TerrainTiles.stats());
             return p.visible() > 0 && p.ready() >= p.visible();
         });
         run(() -> {
@@ -522,9 +522,9 @@ final class GuideShots {
     }
 
     /**
-     * SAM (GIF): SAM in the spectator's clearing, missiles from the crater on the side. Shahed fly with a launcher behind the village (“from”) towards the village,
+     * SAM (GIF): SAM in the spectator's clearing, missiles from the hopper on the side. Shahed fly with a launcher behind the village (“from”) towards the village,
      * ZRK hits them on approach. The viewer is in 25 blocks behind the SAM and away from it: the missiles leave the containers vertically,
-     *  and the column of smoke launching above the SAM close up would cover the entire frame. Shahed is launched when all four missiles are on the guides:
+     *  and the column of smoke launching above the SAM close up would cover the entire frame. Shahed is launched when all four missiles are on the rails:
      *  in GIF is a SAM salvo, not a reload.
      */
     private void sam() {
@@ -557,7 +557,7 @@ final class GuideShots {
             mc.player.getInventory().selected = 8;
             mc.gameRenderer.setRenderHand(false); // hand and remote control in hand would cover half the frame
         });
-        until("sAM missiles on guides", 1200, () -> {
+        until("sAM missiles on rails", 1200, () -> {
             onServer(server -> {
                 if (server.overworld().getBlockEntity(sam[0]) instanceof SamBlockEntity be) ready[0] = be.ready();
             });

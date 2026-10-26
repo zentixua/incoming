@@ -69,7 +69,7 @@ class FrontDustTest {
                 Blob b = emit(p, age, front.radiusAt(arrival + age));
                 if (b.dust <= 0) continue;
                 double tau = k * b.dust / (2 * Math.PI * b.h * b.v), most = Math.max(FrontDust.EDGE_TAU, FrontDust.fullTau(p.area(), p.contrast(), p.sigma()));
-                assertTrue(tau <= most + 1e-9, r + " m, " + age + " with: billows thickness " + tau);
+                assertTrue(tau <= most + 1e-9, r + " m, " + age + " s: billow depth " + tau);
                 assertTrue(b.y - 64 >= 0 && b.y - 64 <= b.v + 1e-12, "billows stands on the ground");
                 full = Math.max(full, k * b.dust / (FrontDust.COLUMN_TAU * p.area() * p.contrast() * FrontDust.envelope(age, phase)));
             }

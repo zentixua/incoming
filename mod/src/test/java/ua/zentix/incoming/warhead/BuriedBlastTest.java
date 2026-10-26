@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Underground explosion at reduced depth (TM 5-855-1, estimates in {@link BuriedBlast}). */
+/** Underground explosion at scaled depth (TM 5-855-1, estimates in {@link BuriedBlast}). */
 class BuriedBlastTest {
     private static final double MOP = 2423, HOLE = Math.PI * 0.8 * 0.8 / 4;
 

@@ -76,7 +76,7 @@ public final class GameTestShards {
 
         Map<String, Double> mine = new TreeMap<>();
         for (TestFunction t : tests) mine.put(t.batchName(), weights.get(t.batchName()));
-        Incoming.LOG.info("GameTest: part of {} from {} - tests {} from {}, batch {}, according to previous runs ~{} s; batch: {}",
+        Incoming.LOG.info("GameTest: shard {} of {} — {} of {} tests, {} batches, ~{} s based on previous runs; batches: {}",
                 part, count, tests.size(), total, mine.size(),
                 String.format(Locale.ROOT, "%.0f", mine.values().stream().mapToDouble(Double::doubleValue).sum()), String.join(", ", mine.keySet()));
     }

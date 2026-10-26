@@ -246,7 +246,7 @@ public final class RuinBackgroundGameTests {
                 RuinPlan retrogen = RuinPlanner.planFromDisk(level, d, chunk, RuinBackgroundGameTests::asRetrogen);
                 diff = memory.differs(retrogen);
                 if (diff == null) diff = flashDiffers(memory, retrogen);
-                h.assertTrue(diff == null, "chunk plan " + c + " with additional generation under zero is not the same as for a chunk in memory:" + diff);
+                h.assertTrue(diff == null, "chunk plan " + c + " s additional generation under zero is not the same as for a chunk in memory:" + diff);
                 // map from the editor: there are no height maps on disk - they are counted in blocks, like vanilla when loading
                 RuinPlan noHeights = RuinPlanner.planFromDisk(level, d, chunk, tag -> {
                     tag.remove("Heightmaps");
@@ -471,7 +471,7 @@ public final class RuinBackgroundGameTests {
      * {@code ServerStoppingEvent} - the mod removes the ticket and waits for generation ({@link ua.zentix.incoming.util.StopDrain#drain});
      *  after that, not a single Nether holder is busy generating, and the vanilla stop cycle is as is
      *  ({@code removeTicketsOnClosing}, {@code ServerChunkCache.tick(() -> true, false)}, server tasks with tick deadline
-     * through 1 ms, like {@code waitUntilNextTick}) ends: Nether card empties ({@code hasWork()} false, no ticket).
+     * through 1 ms, like {@code waitUntilNextTick}) ends: Nether map empties ({@code hasWork()} false, no ticket).
      * Without waiting, vanilla call {@code tick} on this holder is not returned until someone else’s thread will not finish the generation:
      *  The unloading task A puts itself back in the queue, and the generation layers need a server thread. Wall time is only
      *  limits against freezing (call longer than 10 s - test red), not a measure of speed.
@@ -530,7 +530,7 @@ public final class RuinBackgroundGameTests {
                 h.assertTrue(drained && busy == 0, "generation has not ended beyond the waiting limit: holders are occupied " + busy);
                 h.assertTrue(!(updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g) || g.getGenerationRefCount() == 0,
                         "A is still generating");
-                // vanilla stop loop as is: each call to tick returns, the card is empty
+                // vanilla stop loop as is: each call to tick returns, the map is empty
                 long deadline = System.nanoTime() + 60_000_000_000L;
                 int rounds = 0;
                 while (map.hasWork()) {

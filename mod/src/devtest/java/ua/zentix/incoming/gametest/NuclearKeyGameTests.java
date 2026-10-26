@@ -39,12 +39,13 @@ import static ua.zentix.incoming.gametest.MunitionGameTests.give;
 import static ua.zentix.incoming.gametest.MunitionGameTests.held;
 
 /**
- * Non-operator nuclear strike ({@link NuclearKeys}, {@code nuclear.ops_only = false}): the second key, when there are
- *  others in the network - from a player nearby, not from far away and not from oneself; The key has expired - there is no launch, the paid amount was returned; one on the network -
- *  without a key; ICBM flies no less than 90 s (operator command - by setting); the carrier launches through 90 after the alarm
- *  at the target, and can only be removed by a nuclear release; launch is visible to everyone. Players - {@code FakePlayer} NeoForge: they are not in the list of
- *  players, so “online” is transmitted explicitly. Each test has its own batch: nuclear shutdown and
- * {@link NuclearStrikes#clear} are common to the world.
+ * Non-operator nuclear strike ({@link NuclearKeys}, {@code nuclear.ops_only = false}): when others are
+ * online, the second key must come from a nearby player, not from afar or oneself. An expired key prevents
+ * launch and refunds the cost; when alone online, no key is needed. ICBM flight takes at least 90 s
+ * (operator commands use the setting); a carrier launches 90 s after the alarm at the target and only
+ * nuclear recall can cancel it. Everyone sees the launch. Players are NeoForge {@code FakePlayer}s:
+ * they are absent from the player list, so online status is supplied explicitly. Each test has its own
+ * batch: nuclear recall and {@link NuclearStrikes#clear} are world-wide.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -84,7 +85,7 @@ public final class NuclearKeyGameTests {
         h.assertTrue(near.last("incoming.nuke.key.prompt") != null, "the player was not invited nearby");
         h.assertTrue(far.last("incoming.nuke.key.prompt") == null, "called a player in 40 blocks");
 
-        h.assertFalse(NuclearKeys.confirm(far, online), "key from 40 blocks accepted");
+        h.assertFalse(NuclearKeys.confirm(far, online), "key of 40 blocks accepted");
         h.assertTrue(far.last("incoming.nuke.key.none") != null, "the distant one is not told that there is nothing to confirm");
         h.assertFalse(NuclearKeys.confirm(a, online), "the starter turned his second key");
         h.assertValueEqual(NuclearKeys.get(level).pending(), 1, "the order left without a key nearby");

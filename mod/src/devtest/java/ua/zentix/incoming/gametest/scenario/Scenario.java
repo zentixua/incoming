@@ -13,7 +13,7 @@ import java.util.SplittableRandom;
 /**
  * Flight scenario: how the projectile was launched × what the target was × what happened to it in flight × seed. Everything that the script selects
  *  randomly (approach direction, range, route length, instant and magnitude of disturbance, hill) is from the grain
- * ({@link #params}), so the same script flies the same way in any run: this is the standard of trajectories.
+ * ({@link #params}), so the same script flies the same way in any run: this is the reference of trajectories.
  */
 public record Scenario(Launch launch, TargetKind target, Disturbance disturbance, int seed) {
     /** How the projectile was launched. {@code rail} - with a launcher in the world (at the shooter), otherwise approach from afar, outside the world. */
@@ -100,7 +100,7 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
     }
 
     /**
-     * Scenario in the trajectories standard: seed 0 (set of a normal run) and not craft - the Sable mod does not control the physics,
+     * Scenario in the trajectories reference: seed 0 (set of a normal run) and not craft - the Sable mod does not control the physics,
      *  and it decides where the craft will be for approach.
      */
     boolean baselined() {
@@ -117,17 +117,17 @@ public record Scenario(Launch launch, TargetKind target, Disturbance disturbance
 
     /**
      * Known flaws of the mod that open PR fixes: the broken script property is written to the log, and does not fail the test.
-     *  Only this is forgiven - the flight period, ticket, synchronous loading remain mandatory; this scenario is not in the standard
+     *  Only this is forgiven - the flight period, ticket, synchronous loading remain mandatory; this scenario is not in the reference
      *  (its flight will change with the correction). Here - with a link to PR, which is repairing; after merging it, remove it and write the
-     *  standard again. Now there are none.
+     *  reference again. Now there are none.
      */
     Set<Property> knownIssues() {
         return Set.of();
     }
 
     /**
-     * Place of the scenario in full space: its own site in the world ({@link ScenarioSite}) and seed parameters do not depend on the run set. Disturbance is the most significant digit: the new one (to the end of the enumeration) does not shift the previous scenarios, and the standard
-     *  remains true; a new weapon or type of target is shifted - the standard is recorded again.
+     * Place of the scenario in full space: its own site in the world ({@link ScenarioSite}) and seed parameters do not depend on the run set. Disturbance is the most significant digit: the new one (to the end of the enumeration) does not shift the previous scenarios, and the reference
+     *  remains true; a new weapon or type of target is shifted - the reference is recorded again.
      */
     int cell() {
         int combo = (disturbance.ordinal() * Launch.values().length + launch.ordinal()) * TargetKind.values().length + target.ordinal();

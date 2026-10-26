@@ -141,7 +141,7 @@ class FireStormTest {
         FireStorm.Grid g = grid(SMALL);
         assertTrue(g.cell() <= 2 * reach / 24 + 1e-9 && g.cell() >= 2, "cell " + g.cell());
         assertTrue(g.index().length > 100, "cells " + g.index().length);
-        assertTrue(g.whirls().size() >= 1, "and 1 has a tornado");
+        assertTrue(g.whirls().size() >= 1, "a vortex at 1 kt too");
     }
 
     @Test

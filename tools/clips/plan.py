@@ -8,7 +8,7 @@
   uv run tools/clips/plan.py <clips>/candidates.json [--pick rockets-0,drones-1] [--all pov,fly] [--top 1] [--out <clips>/film]
          [--size 1080x1920] [--fps 60] [--replays <copy directory>]
 
-Takes --top the best candidates of each roller (or --pick and all candidates of rollers --all), retrieves projectile paths from the database (tracks and distant
+Takes --top the best candidates of each clip (or --pick and all candidates of rollers --all), retrieves projectile paths from the database (tracks and distant
  lines far), previous impacts (smoke) and measurement and writes a plan for each replay: <out>/<replay>/plan.json; survey output; —
 <out>/<replay>/film. <out>/runs.json - what to run: replay, plan and version of the Incoming record (jar of that day).
 """

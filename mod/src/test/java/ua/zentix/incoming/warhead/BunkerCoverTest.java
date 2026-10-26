@@ -33,7 +33,7 @@ class BunkerCoverTest {
         assertFalse(new BuriedBlast(MOP, BunkerCover.depth(top, 40)).breaches());
     }
 
-    /** The breakthrough boundary is the reduced depth 1 m/kg^⅓: for 2,4 t - 13,4 m; a meter shallower - a breakthrough, a meter deeper - no. */
+    /** The breakthrough boundary is the scaled depth 1 m/kg^⅓: for 2,4 t - 13,4 m; a meter shallower - a breakthrough, a meter deeper - no. */
     @Test
     void breachBoundaryIsScaledDepthOne() {
         double edge = Math.cbrt(MOP);

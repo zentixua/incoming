@@ -237,7 +237,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // front-side: rocket launch rail exit with a guide and goes over the camera
+            // front-side: rocket launch rail exit with a rail and goes over the camera
             Vec3 from = ground(at.add(fwd.scale(12)).add(right.scale(-7))).add(0, 2.4, 0);
             return CineCamera.track(from, smoothFocus(() -> nearest(CruiseMissileEntity.class, at, 150), at.add(0, 2.5, 0), 0.35), 68);
         });
@@ -284,7 +284,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // on the side of the catapult: jerk along the guide, open the wings, go up
+            // on the side of the catapult: jerk along the rail, open the wings, go up
             Vec3 from = ground(at.add(right.scale(8)).add(fwd.scale(2))).add(0, 1.9, 0);
             return CineCamera.track(from, smoothFocus(() -> newest(LoiterEntity.class), at.add(fwd.scale(3)).add(0, 2, 0), 0.35), 62);
         }).endWhen(() -> {
@@ -329,7 +329,7 @@ public final class Trailer {
             Vec3 at = l.position();
             Vec3 fwd = Vec3.directionFromRotation(0, l.getYRot());
             Vec3 right = new Vec3(-fwd.z, 0, fwd.x);
-            // low on the side and in front of the package: pipes, ignition, shells go above the chamber in arcs
+            // low on the side and in front of the package: pipes, ignition, shells go above the camera in arcs
             Vec3 a = ground(at.add(right.scale(9)).add(fwd.scale(5))).add(0, 2.2, 0);
             Vec3 b = ground(at.add(right.scale(8)).add(fwd.scale(8))).add(0, 2.0, 0);
             return CineCamera.dolly(a, b, 150, () -> at.add(fwd.scale(3)).add(0, 2.2, 0), 72);
@@ -407,7 +407,7 @@ public final class Trailer {
             placeHidden(mushroomView());
         });
         shot("mushroom").length(1600).speed(4).hidden().camera(() -> {
-            // cap rises above 5 km: the frame is wider and higher, the base of the trunk is above the bottom strip of the film porridge
+            // cap rises above 5 km: frame wider and higher, stem base above the lower letterbox bar
             return CineCamera.track(mushroomView(), () -> village.add(0, 2800, 0), 75);
         }).when(() -> sinceDetonation() > 420, 3000);
         // black rain in a trail of precipitation, Geiger counter in hand

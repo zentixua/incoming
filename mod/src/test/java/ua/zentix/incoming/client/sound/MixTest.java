@@ -301,9 +301,10 @@ class MixTest {
                 over(mixed), over(raw));
         assertTrue(unmixed > Loudness.CEILING_LUFS + 2, "without mixture volley above the ceiling: " + unmixed);
         assertTrue(top <= Loudness.CEILING_LUFS + 1, "volley in the mixture - at the ceiling " + Loudness.CEILING_LUFS + " LUFS: " + top);
-        // and does not rest on the full scale amount (in the run RV1 - ~20 cuts per scene, without a mixture here - thousands): the peak is above
-        // full scale - only in the tick of the blow (the first 50 ms), where the peaks of the close-up angle and the blow to the chest of one explosion coincide (both
-        //  from the impact from the first sample; so a single explosion in 50 and 3.4.1 was cut off) - this is caught by the limiter OpenAL Soft
+        // The sum also stays below full scale (RV1 run: ~20 clips per scene, thousands here without mixing).
+        // A peak exceeds full scale only in the impact tick (first 50 ms), where the near perspective and chest-hit
+        // peaks of one explosion coincide (both start at impact, from the first sample; a single explosion at
+        // 50 m in 3.4.1 also clipped this way). The OpenAL Soft limiter catches this.
         int impact = tickLen, tails = 0;
         for (int i = 0; i < n; i++) {
             if (Math.abs(mixed[i]) < 1) continue;

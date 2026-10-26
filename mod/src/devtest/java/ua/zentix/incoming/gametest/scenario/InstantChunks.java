@@ -24,7 +24,7 @@ import java.util.concurrent.locks.LockSupport;
  * Why. Mod areas ({@code AreaLoader}: your chunk and the chunk in front of the projectile, the target area) begin to tick when the
  *  square around is ready, and the background generation prepares it for a different number of ticks - from run to run and from car to car.
  *  A projectile at the edge of ticking chunks leaves the world or remains in it depending on whether the neighbor has time, and the trajectory diverges
- *  from the standard. With instant generation, readiness is a function of ticket, and ticket is a function of flight: the flight is repeated exactly.
+ *  from the reference. With instant generation, readiness is a function of ticket, and ticket is a function of flight: the flight is repeated exactly.
  * <p>
  *  There is one place in tick ({@link ServerTickEvent.Post} - after the levels and tests GameTest): the order of tests in batch does not affect it. Reading unready chunks of the mod is still visible ({@link SyncLoadWatch}): the chunk that tickets
  *  did not ask for will not appear on its own.

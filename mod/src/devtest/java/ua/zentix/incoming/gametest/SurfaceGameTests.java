@@ -149,7 +149,6 @@ public final class SurfaceGameTests {
     }
 
     // ---------------------------------------------------------------- report
-
     /** Report line: checked ({@code checked}) and passed. */
     private record Row(String weapon, String surface, String should, String got, boolean checked, boolean ok, String note) {
         String line() {
@@ -207,7 +206,6 @@ public final class SurfaceGameTests {
     }
 
     // ---------------------------------------------------------------- projectile impact
-
     /** The entity of a weapon with an impact axis from the spec: angle to the horizon {@link Article.Impact#angle}, heading to +z. */
     private static Entity striker(ServerLevel level, WeaponType weapon) {
         EntityType<? extends Entity> type = switch (weapon) {
@@ -246,14 +244,14 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Breakdown radius according to FM 5-250, m: K = R³·M·C, external charge without clogging; M - tab. B-3 by radius steps, group
+     * breach radius according to FM 5-250, m: K = R³·M·C, external charge without tamping; M - tab. B-3 by radius steps, group
      *  “rock, good masonry, concrete block” - flooring stone and roof concrete ({@link BreachModel}).
      */
     static double breachRadius(double tntKg) {
         return BreachModel.Material.ROCK.radius(tntKg, BreachModel.UNTAMPED);
     }
 
-    /** FM rounds the breakdown radius of the external charge up to ½ foot (~0,25 m, 3-12b): legal tolerance in both directions, m. */
+    /** FM rounds the breach radius of the external charge up to ½ foot (~0,25 m, 3-12b): legal tolerance in both directions, m. */
     static final double FM_ROUND = 0.25;
 
     /** Volume of a slab with thickness {@code t} within a radius of {@code r} from the charge on its face, m³. */
@@ -333,22 +331,22 @@ public final class SurfaceGameTests {
         double tnt = weapon.spec().charge(), count = hits.size();
         double dEq = 2 * Math.sqrt(area / hits.size() / Math.PI);
         String got = s.slab()
-                ? String.format(Locale.ROOT, "%d bl. slabs for %d (%s/impact), breakdown %d, hole %s m", removed, hits.size(), f(removed / count), through,
+                ? String.format(Locale.ROOT, "%d bl. slabs for %d (%s/impact), breach %d, hole %s m", removed, hits.size(), f(removed / count), through,
                 f(2 * Math.sqrt(holes / count / Math.PI)))
                 : String.format(Locale.ROOT, "%d bl. for %d (%s/impact), Ø %s m, depth. %d", removed, hits.size(), f(removed / count), f(dEq), maxDepth);
         String should;
         boolean ok;
         if (s.slab()) {
-            // FM 5-250: everything within the radius of the breakdown is demolished, the breakdown is a radius greater than the thickness (1 m); the slab above the void is also a
-            //  panel - beyond the breakdown, the wave breaks it no further than the masonry (12 psi, Jarrett): upper limit
-            //  radius along the steps of the table. B-3 ± rounding FM; not broken - there is nothing to demolish along FM (only the crater on top)
+            // FM 5-250: everything within the radius of the breach is demolished, the breach is a radius greater than the thickness (1 m); the slab above the void is also a
+//  panel - beyond the breach, the wave breaks it no further than the masonry (12 psi, Jarrett): upper limit
+//  radius along the steps of the table. B-3 ± rounding FM; not broken - there is nothing to demolish along FM (only the crater on top)
             double r = breachRadius(tnt), rLo = Math.max(0, r - FM_ROUND), rHi = r + FM_ROUND;
             double rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
             boolean breach = rLo > 1, none = rHi < 1;
             double vLo = breach ? count * slabVolume(rLo, 1) : 0, vHi = count * slabVolume(rHi, 1);
             // edge of the hole - in whole blocks: ±2√V blocks for edge noise
             int lo = (int) Math.max(0, Math.floor(0.6 * vLo - 2 * Math.sqrt(vLo))), hi = (int) Math.ceil(1.45 * vHi + 2 * Math.sqrt(vHi));
-            should = String.format(Locale.ROOT, "%d–%d block, breakdown %s (FM R %s–%s m, masonry %s m)", lo, hi,
+            should = String.format(Locale.ROOT, "%d–%d block, breach %s (FM R %s–%s m, masonry %s m)", lo, hi,
                     breach ? "everyone" : none ? "no" : "any", f(rLo), f(rHi), f(rPanel));
             ok = removed >= lo && removed <= hi && (!breach || through == hits.size()) && (!none || through == 0);
         } else {
@@ -372,7 +370,6 @@ public final class SurfaceGameTests {
     }
 
     // ---------------------------------------------------------------- next: walls and glass
-
     /** Masonry, boards, glass. */
     private static final double BRICK_PSI = 12, WOOD_PSI = 4;
     /** Fractions of the radius of the threshold of the glass: the near ones are knocked out, the distant ones are intact (edge of the model 0,9–1,11). */
@@ -463,11 +460,10 @@ public final class SurfaceGameTests {
     }
 
     // ---------------------------------------------------------------- bomb B-2
-
     /** The target of the bomb is on the strip (like {@code bunkerBusterDrillsAndDetonatesUnderground}) and the square of its surface. */
     private static final int BOMB_X = 16, BOMB_Z = 200, BOMB_HALF = 15;
 
-    /** The top of the surface under the bomb: the thickness is deeper than its path along Yang and the crushing zone. */
+    /** The top of the surface under the bomb: the thickness is deeper than its path along Young and the crushing zone. */
     private static int bombTop(Surface s) {
         return switch (s) {
             case SOIL, PAVED -> 72;
@@ -494,8 +490,8 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Bomb B-2 on the surface: the real entity from the reset B-2. The path in the ground from the entrance to the explosion is according to Young for layers
-     *  of the surface (according to the speed and angle of impact of the bomb itself); ejection crater - according to the given depth of the explosion; for slabs -
+     * Bomb B-2 on the surface: the real entity from the release B-2. The path in the ground from the entrance to the explosion is according to Young for layers
+     *  of the surface (according to the speed and angle of impact of the bomb itself); ejection crater - according to the scaled depth of the explosion; for slabs -
      *  the bomb went through (the explosion was deeper than the slab), the void sensor did not arm (before it - 4 m of solid).
      */
     private static void bomb(GameTestHelper h, Surface s) {
@@ -563,7 +559,7 @@ public final class SurfaceGameTests {
         });
     }
 
-    /** Bomb line: path vs Young, crater vs given depth (printed once). */
+    /** Bomb line: path vs Young, crater vs scaled depth (printed once). */
     private static Row bombRow(ServerLevel level, Surface s, int top, Vec3 step, double v, Vec3 entry, Vec3 charge, Set<BlockPos> fallen) {
         Vec3 dir = step.normalize();
         double sin = Math.max(0.05, -dir.y);
@@ -616,7 +612,7 @@ public final class SurfaceGameTests {
         boolean craterOk = law.breaches() ? gotR >= 0.5 * lawR && gotR <= 1.5 * lawR
                 : removedTop >= 1 && columns <= 3 && (!loose || fallenTop > 0);
         boolean throughSlab = !s.slab() || depth > 1 + (s == Surface.DECK ? VOID : ROOM);
-        String should = String.format(Locale.ROOT, "path %s m (Yang, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
+        String should = String.format(Locale.ROOT, "path %s m (Young, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
                 f(law.scaledDepth()), law.breaches() ? "crater R " + f(lawR) + " m (" + f(0.5 * lawR) + "–" + f(1.5 * lawR) + ")"
                         : "camouflage, only movement at the top (no shedding)")
                 + (s.slab() ? ", explosion under the slab" : "");

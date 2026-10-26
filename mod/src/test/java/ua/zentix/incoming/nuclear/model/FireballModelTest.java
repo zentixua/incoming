@@ -64,7 +64,7 @@ class FireballModelTest {
         double last = Double.MAX_VALUE;
         for (double t = tMax; t < 1e4; t *= 1.05) {
             double k = FireballModel.temperature(t, y);
-            assertTrue(k < last && k > FireballModel.AMBIENT_K, t + " from: " + k);
+            assertTrue(k < last && k > FireballModel.AMBIENT_K, t + " s: " + k);
             last = k;
         }
     }
@@ -119,7 +119,7 @@ class FireballModelTest {
                 assertTrue(late < v0 / 15, y + " kt");
                 for (double t = 0.01; t < 1e4; t *= 1.1) {
                     double ballTop = FireballModel.centreHeight(t, hob, y, surface) + FireballModel.radius(t, y, surface);
-                    assertTrue(ballTop <= CloudModel.top(t, hob, y, surface) + 1e-6, y + " cT, " + t + " c: ball above the cloud");
+                    assertTrue(ballTop <= CloudModel.top(t, hob, y, surface) + 1e-6, y + " kt, " + t + " s: ball above the cloud");
                 }
             }
         }
@@ -144,8 +144,9 @@ class FireballModelTest {
     }
 
     /**
-     * Front separation (G&D 2.120, 2.125): for 20 the minimum brightness is 11 ms, separation is 15 ms. To a minimum the pattern of the middle is not
-     *  visible, to the separation - all of it; between them it grows without jumps.
+     * Front breakaway (G&D 2.120, 2.125): at 20 kt the brightness minimum is at 11 ms, breakaway at 15 ms.
+     * The interior pattern is invisible before the minimum and fully visible by breakaway; it grows smoothly
+     * between them.
      */
     @Test
     void breakawayUnmasksTheInterior() {

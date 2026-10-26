@@ -60,7 +60,7 @@ class TerrainSurveyTest {
         int[] y = hill();
         // undergenerated: heightmap without decorations and buildings
         assertNull(TerrainSurvey.decode(chunk("minecraft:features", y, HEIGHT), Heightmap.Types.MOTION_BLOCKING, MIN_Y, HEIGHT));
-        // another type of card is not recorded in the file
+        // another type of map is not recorded in the file
         assertNull(TerrainSurvey.decode(chunk("minecraft:full", y, HEIGHT), Heightmap.Types.WORLD_SURFACE, MIN_Y, HEIGHT));
         // length not according to the height of the world (the world was of a different height): packaging with a different number of bits
         assertNull(TerrainSurvey.decode(chunk("minecraft:full", y, 4064), Heightmap.Types.MOTION_BLOCKING, MIN_Y, HEIGHT));
@@ -185,7 +185,7 @@ class TerrainSurveyTest {
         assertNotNull(survey.cached(TYPE, 0, 101));
         survey.remember(TYPE, TerrainSurvey.MAX_KNOWN, new TerrainSurvey.Heights(hill(), Terrain.Source.DISK, 101));
         assertNotNull(survey.cached(TYPE, 0, 101), "active flight does not lose already known terrain due to someone else's unloading");
-        assertNull(survey.cached(TYPE, 1, 101), "a card that has not been read for a long time is forced out");
+        assertNull(survey.cached(TYPE, 1, 101), "a map that has not been read for a long time is forced out");
     }
 
 }

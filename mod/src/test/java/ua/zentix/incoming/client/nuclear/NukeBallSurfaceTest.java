@@ -42,7 +42,7 @@ class NukeBallSurfaceTest {
         return l1 * l1 * l1;
     }
 
-    /** The frames are on the way up from 0 straight up and are grabbed to roll into a ring at the gaming facilities. */
+    /** The frames are on the way up from 0 straight up and are grabbed to roll into a ring at the game yields. */
     @Test
     void framesCoverTheRiseUntilTheRingRollsUp() {
         NukeBallSurface.Data d = read();

@@ -91,8 +91,8 @@ public final class MunitionGameTests {
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 5);
 
-        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "salvo from 3 Shahed was not accepted");
-        h.assertValueEqual(held(p, shahed), 2, "shahed after a volley from 3");
+        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "salvo of 3 Shahed was not accepted");
+        h.assertValueEqual(held(p, shahed), 2, "shahed after a volley of 3");
         h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 3, "unreleased in salvo");
 
         h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "salvo without ammunition accepted");
@@ -103,7 +103,7 @@ public final class MunitionGameTests {
         Item grad = ModItems.GRAD_ROCKETS.get();
         give(p, grad, 1);
         h.assertTrue(ServerActions.strike(p, WeaponType.ROCKET, 12, 15, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "\"Grad\" salvo was not accepted");
-        h.assertValueEqual(held(p, grad), 28, "shells in a package after a salvo from 12");
+        h.assertValueEqual(held(p, grad), 28, "shells in a package after a salvo of 12");
         h.assertValueEqual(count(p, grad), 1, "started package is not the same item");
 
         // nuclear warhead on a rocket: without it the rocket cannot be removed
@@ -174,7 +174,7 @@ public final class MunitionGameTests {
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 4);
         h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 4, 20, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "the salvo was not received");
-        h.assertValueEqual(held(p, shahed), 0, "a salvo from 4 did not remove all 4");
+        h.assertValueEqual(held(p, shahed), 0, "a salvo of 4 did not remove all 4");
         boolean[] done = {false};
         h.onEachTick(() -> {
             if (done[0] || SalvoData.get(level).remaining(id) > 2) return;
@@ -342,7 +342,7 @@ public final class MunitionGameTests {
             ResourceLocation expected = Incoming.id(e.getValue() && !create ? name + "_vanilla" : name);
             h.assertTrue(found.size() == 1 && found.getFirst().id().equals(expected), name + ": recipes " + found.stream().map(RecipeHolder::id).toList()
                     + " instead of " + expected);
-            if (!(found.getFirst().value() instanceof ShapedRecipe shaped)) throw new GameTestAssertException(name + ": the recipe is out of shape");
+            if (!(found.getFirst().value() instanceof ShapedRecipe shaped)) throw new GameTestAssertException(name + ": recipe has the wrong shape");
             List<ItemStack> grid = new ArrayList<>();
             for (Ingredient i : shaped.getIngredients()) {
                 if (!i.isEmpty() && i.hasNoItems()) throw new GameTestAssertException(name + ": ingredient without items");

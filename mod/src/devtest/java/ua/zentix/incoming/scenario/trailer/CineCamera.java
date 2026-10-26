@@ -112,7 +112,7 @@ final class CineCamera {
         return t -> Pose.look(a.lerp(b, Mth.clamp(t / ticks, 0, 1)), at.get(), 0, fov);
     }
 
-    /** Flying around a point: radius, height above it, initial angle (Grad, 0 - to +Z) and speed (Grad per tick). */
+    /** Flying around a point: radius, height above it, initial angle (degrees, 0 - to +Z) and speed (degrees per tick). */
     static Path orbit(Supplier<Vec3> center, double radius, double height, double startDeg, double degPerTick, double fov) {
         return t -> {
             Vec3 c = center.get();

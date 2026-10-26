@@ -53,7 +53,7 @@ class PlumeRendererTest {
                 Flame f = FlameModel.of(motor, 0);
                 if (f == null || f.length() <= 0) continue;
                 seen++;
-                // rear axial: chamber behind the nozzle on −Z, screen — x and y
+                // rear axial: camera behind the nozzle on −Z, screen — x and y
                 double behind = area(f, new Vector3f(0, 0, -50), new Vector3f(1, 0, 0), new Vector3f(0, 1, 0));
                 double cross = Math.PI * f.widthAt(f.flame()) * f.widthAt(f.flame());
                 assertTrue(behind >= 0.9 * cross, w + ": behind " + behind + " m² at flame cross section " + cross);

@@ -124,7 +124,7 @@ public final class FuelFireGameTests {
             most[0] = Math.max(most[0], n);
             long t = level.getGameTime();
             if (t < born + Math.round(16 * law.seconds()) && t > born + 40) {
-                h.assertTrue(n == law.cells(), String.format(Locale.ROOT, "%s: on %.0f with lit %d cells from %d", weapon, (t - born) / 20.0, n, law.cells()));
+                h.assertTrue(n == law.cells(), String.format(Locale.ROOT, "%s: at %.0f s, %d of %d cells are burning", weapon, (t - born) / 20.0, n, law.cells()));
             }
             if (n == 0 && !ever.isEmpty() && out[0] == Long.MIN_VALUE) out[0] = t;
         });
@@ -134,7 +134,7 @@ public final class FuelFireGameTests {
             for (BlockPos c : ever) {
                 h.assertTrue(!(level.getBlockState(c).getBlock() instanceof BaseFireBlock), "after the fuel the fire remained: " + c.toShortString());
             }
-            String got = String.format(Locale.ROOT, "%s: cells %d (law %d), extinguished at %.1f (law %.1f)", weapon, most[0], law.cells(),
+            String got = String.format(Locale.ROOT, "%s: %d cells (law %d), extinguished at %.1f s (law %.1f s)", weapon, most[0], law.cells(),
                     (out[0] - born) / 20.0, law.seconds());
             Incoming.LOG.info("FUELFIRE {}", got);
             h.assertTrue(most[0] == law.cells(), got);

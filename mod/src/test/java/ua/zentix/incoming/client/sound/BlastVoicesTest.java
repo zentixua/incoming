@@ -134,7 +134,7 @@ class BlastVoicesTest {
         for (int t = 1; t < 300; t++) {
             clock[0] = t;
             mix.at(t);
-            assertEquals(0, voices.reserve(t, BlastVoices.SPARE), "tick " + t + ": the world took nothing, the neighbor is the loudest");
+            assertEquals(0, voices.reserve(t, BlastVoices.SPARE), "tick " + t + ": the world took nothing, the near event is loudest");
             assertTrue(!near.fading(), "tick " + t + ": neighbor alive after stock");
         }
 
@@ -159,7 +159,7 @@ class BlastVoicesTest {
             mix.at(t);
             voices.reserve(t, 0);
             assertEquals(t >= 20 + BlastVoices.ATTACK, strong.fading(), "tick " + t + ": the attack is over - gives way like a tail");
-            assertTrue(!loud.fading(), "tick " + t + ": the loudest is as good as the stock");
+            assertTrue(!loud.fading(), "tick " + t + ": the loudest event does not yield to the reserve");
         }
     }
 
@@ -361,7 +361,7 @@ class BlastVoicesTest {
         assertEquals(8, voices.steady());
         assertEquals(12, voices.channels(), "subsiding keeps channels still FADE tick");
         assertEquals(1, voices.yielded);
-        // the new one is the loudest - the voice is always: inferior to the quietest in priority (attack v - with a reserve of KEEP)
+        // new loudest event always gets a voice: the lowest-priority event yields (attack v has a KEEP margin)
         clock[0] = 31;
         mix.at(31);
         voices.prune(31);
@@ -384,7 +384,7 @@ class BlastVoicesTest {
         mix.at(2);
         assertTrue(b.heard() > a.heard() && b.heard() < BlastVoices.KEEP * a.heard());
         assertNull(voices.admit(b, fakes(clock, 4, 102), 2, 0, 1, 1, 1, Integer.MAX_VALUE));
-        // after an attack - inferior to the same
+        // after the attack, yields to the same event
         clock[0] = 2 + BlastVoices.ATTACK;
         mix.at(clock[0]);
         Mix.Blast c = flat(mix, clock[0], 0.13, 100);
@@ -392,7 +392,7 @@ class BlastVoicesTest {
         assertNotNull(voices.admit(c, fakes(clock, 4, 200), clock[0], 0, 1, 1, 1, Integer.MAX_VALUE));
     }
 
-    /** The voice whose recording has ended (the sound is still holding the channel) is inferior to the first, even the new quiet one. */
+    /** A voice whose recording ended (its sound still holds a channel) yields first, even to a quiet new event. */
     @Test
     void endedRecordingYieldsFirst() {
         double[] clock = {0};
@@ -494,9 +494,9 @@ class BlastVoicesTest {
             assertNotNull(voices.admit(flat(mix, 0, 0.01 * Math.pow(1.5, i), 200), fakes(clock, 2, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "voice " + i);
         }
         assertEquals(8, voices.steady());
-        assertEquals(18, voices.channels(), "sound 8, the losers keep 10 from 12 stock");
-        assertNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 4, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "the group from 4 lacks the balance 2");
-        assertNotNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 2, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "group from 2 - enough");
+        assertEquals(18, voices.channels(), "sound 8, the losers keep 10 of 12 stock");
+        assertNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 4, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "the group of 4 lacks the balance 2");
+        assertNotNull(voices.admit(flat(mix, 0, 100, 200), fakes(clock, 2, 200), 0, 0, 1, 1, 1, Integer.MAX_VALUE), "group of 2 - enough");
     }
 
     /**

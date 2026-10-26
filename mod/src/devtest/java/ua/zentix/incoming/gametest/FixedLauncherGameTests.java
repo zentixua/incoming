@@ -75,11 +75,10 @@ public final class FixedLauncherGameTests {
     private FixedLauncherGameTests() {}
 
     // ---------------------------------------------------------------- launch on signal
-
-    /**
-     * Redstone signal (red stone block nearby) - Shahed on the launcher package guide via 4 tick, on behalf of the
+/**
+     * Redstone signal (red stone block nearby) - Shahed on the launcher package rail via 4 tick, on behalf of the
      *  owner, one Shahed left the stock; status bar - “order given”. Remove and put on the signal again while the
-     *  projectile is on the guide - “busy” failure, the margin is the same. The package looks at the target.
+     *  projectile is on the rail - “busy” failure, the margin is the same. The package looks at the target.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "fixed_fire", skyAccess = true)
     public static void redstoneFiresMission(GameTestHelper h) {
@@ -94,14 +93,14 @@ public final class FixedLauncherGameTests {
         h.setBlock(PAD.east(), Blocks.REDSTONE_BLOCK);
         h.runAfterDelay(6, () -> {
             List<StrikeProjectile> onRails = ours(level, be, owner);
-            h.assertTrue(onRails.size() == 1 && onRails.getFirst().flightPhase().onLauncher(), "there is more than one Shahed on the guide: " + onRails);
+            h.assertTrue(onRails.size() == 1 && onRails.getFirst().flightPhase().onLauncher(), "not exactly one Shahed on the rail: " + onRails);
             h.assertTrue(be.stockCount() == 1, "in stock " + be.stockCount() + " instead of 1");
             h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.fired", "status bar");
             h.setBlock(PAD.east(), Blocks.AIR);
         });
         h.runAfterDelay(8, () -> h.setBlock(PAD.east(), Blocks.REDSTONE_BLOCK));
         h.runAfterDelay(14, () -> {
-            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.busy", "second signal while the projectile is on the guide");
+            h.assertValueEqual(key(be.lastReport()), "incoming.fixed_launcher.busy", "second signal while the projectile is on the rail");
             h.assertTrue(be.stockCount() == 1 && ours(level, be, owner).size() == 1, "the second signal fired a projectile");
             h.succeed();
         });
@@ -123,7 +122,7 @@ public final class FixedLauncherGameTests {
         load(h, be, new ItemStack(ModItems.SHAHED.get(), 2));
         h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.fixed_launcher.no_mission.short", "no task");
         be.setMission(new Mission(WeaponType.DRONE, 3, 10, new Target.Point(far), far, Waypoints.NONE));
-        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.munitions.short", "stock for 2 from 3");
+        h.assertValueEqual(key(LauncherOrders.fire(level, be)), "incoming.munitions.short", "stock for 2 of 3");
         int range = IncomingConfig.SERVER.mapRange.get();
         Vec3 beyond = site.add(0, -1, range + 100);
         be.setMission(new Mission(WeaponType.DRONE, 1, 0, new Target.Point(beyond), beyond, Waypoints.NONE));
@@ -152,7 +151,7 @@ public final class FixedLauncherGameTests {
     /**
      * "Grad" salvo with launcher: supply - one package (40 shells), task - 3; the salvo comes from her pipes, while it is going on -
      *  the launch pad is busy: no order, no new task from the console; at the end in package 37. The owner's dismissal in the middle of a volley of suicide bombers
-     *  cancels it: what did not fit on the guide remains in stock.
+     *  cancels it: what did not fit on the rail remains in stock.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "fixed_salvo", skyAccess = true)
     public static void salvoPaysPerShot(GameTestHelper h) {
@@ -306,7 +305,7 @@ public final class FixedLauncherGameTests {
 
     /**
      * Stock: Any side and no side item ability takes ammo, not ground or ICBM; It is impossible to remove
-     *  with it; crater puts on top, does not pull from below; the comparator sees the margin. Saving: master, task, stock,
+     *  with it; hopper puts on top, does not pull from below; the comparator sees the margin. Saving: master, task, stock,
      * course; the client receives only the package, course and ascent. Broken - falls out on its own and drops the stock. Pickaxe, stone and better;
      *  recipe - according to whether Create is worth it.
      */
@@ -346,11 +345,11 @@ public final class FixedLauncherGameTests {
         HopperBlockEntity top = h.getBlockEntity(above);
         top.setItem(0, new ItemStack(ModItems.SHAHED.get(), 2));
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(top.getItem(0).isEmpty(), "crater from above did not give Shahed"))
+                .thenWaitUntil(() -> h.assertTrue(top.getItem(0).isEmpty(), "hopper from above did not give Shahed"))
                 .thenIdle(20)
                 .thenExecute(() -> {
                     HopperBlockEntity bottom = h.getBlockEntity(below);
-                    h.assertTrue(bottom.isEmpty(), "crater under the launcher pulled out the ammunition");
+                    h.assertTrue(bottom.isEmpty(), "hopper under the launcher pulled out the ammunition");
                     h.assertTrue(be.stockCount() == 5, "in stock " + be.stockCount() + " instead of 5");
                     level.setBlock(h.absolutePos(above), Blocks.AIR.defaultBlockState(), 3);
                     level.setBlock(h.absolutePos(below), Blocks.STONE.defaultBlockState(), 3);
@@ -419,7 +418,7 @@ public final class FixedLauncherGameTests {
         h.assertTrue(be.load(stack).isEmpty(), "ammunition was not included in the reserve");
     }
 
-    /** The host's shells are {@code owner} at the launcher (on the guides and just dropped). */
+    /** The host's shells are {@code owner} at the launcher (on the rails and just dropped). */
     private static List<StrikeProjectile> ours(ServerLevel level, FixedLauncherBlockEntity be, @Nullable UUID owner) {
         AABB box = new AABB(be.getBlockPos()).inflate(12);
         return StrikeWorld.projectiles(level).stream().filter(p -> box.contains(p.position()) && java.util.Objects.equals(owner, p.ownerId())).toList();

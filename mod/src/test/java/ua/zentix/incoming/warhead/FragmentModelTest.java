@@ -87,7 +87,7 @@ class FragmentModelTest {
 
     /**
      * Belt: with a sheer impact, almost all fragments fall within ±30° from the plane across the axis (scatter 10°, tilt
-     * Taylor and warhead speed - several Grad), azimuth - uniform.
+     * Taylor and warhead speed - several degrees), azimuth - uniform.
      */
     @Test
     void beltAcrossAxis() {

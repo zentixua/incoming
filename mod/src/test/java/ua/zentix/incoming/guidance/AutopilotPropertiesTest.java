@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class AutopilotPropertiesTest {
     private static final int SCENARIOS = 10_000;
-    /** Circling: so many Grad turns in the turning radius from the fixed point of the target - already circles. */
+    /** Circling: so many degrees turns in the turning radius from the fixed point of the target - already circles. */
     private static final double MAX_TURN = 720;
 
     enum Weapon {

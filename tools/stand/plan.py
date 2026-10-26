@@ -4,7 +4,7 @@ All geometry is here: target, launch point, camera position and look point, stri
 count, each impact point and launch time. Impact points do not use Incoming salvo spread, which uses the
 shared world RNG (`SalvoData.fire`: `level.random`; no command/world-rule seed in 3.4.1 or later). Otherwise
 runs land differently: the edge camera alternates between inside and beside the dust wall, and frame time
-of two same-version runs differs by 30 %. Each point therefore uses its own zero-spread command
+of two same-version runs differs by 30 %. Each point therefore uses its own command with spread 0
 (`salvo drone 1 0 at P from L via P`); points follow a Vogel sunflower in the spread disk (uniform area,
 each salvo/wave has its own rotation), identical for every version. Shahed miss remains (σ 3 m from the
 spec, `Route.error`). Launch points form a circle at `launch.dist`: strike i uses point i mod launchers,

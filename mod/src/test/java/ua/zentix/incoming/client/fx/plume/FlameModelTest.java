@@ -28,7 +28,7 @@ class FlameModelTest {
 
     @Test
     void passportMotorsAreSelfConsistent() {
-        // pressure in the chambers of a solid propellant rocket engine is MPa units, thrust is determined by flow rate and speed
+        // pressure in the cameras of a solid propellant rocket engine is MPa units, thrust is determined by flow rate and speed
         for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE, WeaponType.ROCKET, WeaponType.NUKE}) {
             Motor m = motor(w, FlightPhase.BOOST);
             double pc = m.chamberPressure();

@@ -65,10 +65,10 @@ import java.util.UUID;
 
 /**
  * SAM ({@link SamBlockEntity}): shoots down other people's projectiles from the mod within the firing range - one rocket at the target, with a reloading
- *  guide; does not touch his own, team, distant ones, ICBM and “Grad”; does not fire without rockets; the target outside of loading hits without
+ *  rail; does not touch his own, team, distant ones, ICBM and “Grad”; does not fire without rockets; the target outside of loading hits without
  *  loading a single chunk; The radar does not see the target behind the hill. The block is charged with a crater (it cannot be removed), breaks and
  *  explodes with its contents, the recipe depends on whether Create is worth it. Each check has its own batch: SAM sees all the
- *  shells in the world, and the next check would throw off its missile count. Ranges - spec SAM; guides and reloading - during the
+ *  shells in the world, and the next check would throw off its missile count. Ranges - spec SAM; rails and reloading - during the
  *  check ({@link #air}), everything returns after it. The walls of the site (barriers along its height) block the radar from low
  *  targets behind them: distant targets are higher.
  */
@@ -111,14 +111,14 @@ public final class SamGameTests {
         });
         h.succeedWhen(() -> {
             h.assertTrue(a.isRemoved() && b.isRemoved(), "shahed are still flying: " + h.relativeVec(a.position()) + ", " + h.relativeVec(b.position()));
-            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 2, "shot down " + (log.total(FlightLog.Event.INTERCEPTED) - intercepted) + " from 2");
+            h.assertTrue(log.total(FlightLog.Event.INTERCEPTED) - intercepted == 2, "shot down " + (log.total(FlightLog.Event.INTERCEPTED) - intercepted) + " of 2");
             h.assertTrue(!BlastLog.near(h, new BlockPos(10, 3, 200), 8) && !BlastLog.near(h, new BlockPos(22, 3, 200), 8), "shahed reached the target");
             h.assertTrue(launches.targets().equals(Set.of(a.getUUID(), b.getUUID())) && launches.count() == 2,
                     "missiles " + launches.count() + " by " + launches.targets());
             List<Long> at = launches.ticks();
             h.assertTrue(at.get(0) - placed >= 20, "first rocket through " + (at.get(0) - placed) + " tick after installation - no recharging");
             h.assertTrue(at.get(1) - at.get(0) >= 20, "second rocket through " + (at.get(1) - at.get(0)) + " tick after the first - no reload");
-            h.assertTrue(sam.ready() + sam.stockCount() == 1, "missiles left " + (sam.ready() + sam.stockCount()) + " from 1");
+            h.assertTrue(sam.ready() + sam.stockCount() == 1, "missiles left " + (sam.ready() + sam.stockCount()) + " of 1");
             h.assertTrue(launches.viewed, "the rocket was not visible in the world");
             h.assertTrue(debris[0], "the downed Shahed did not fall to pieces");
             h.assertTrue(crew.alerts() >= 1, "there was no alarm");
@@ -163,7 +163,7 @@ public final class SamGameTests {
         h.succeedWhen(() -> {
             h.assertTrue(own.isRemoved() && team.isRemoved(), "shahed are still flying");
             h.assertTrue(launches.count() == 0, "launched missiles at friendly forces: " + launches.count());
-            h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles " + (sam.ready() + sam.stockCount()) + " from 4");
+            h.assertTrue(sam.ready() + sam.stockCount() == 4, "missiles " + (sam.ready() + sam.stockCount()) + " of 4");
             h.assertTrue(seenFriendly.containsAll(Set.of(own.getUUID(), team.getUUID())), "the owner’s radar did not see his own");
             h.assertTrue(seenHostileByStranger.containsAll(Set.of(own.getUUID(), team.getUUID())), "someone else's radar would not hit them - the check is empty");
             h.assertTrue(owner.alerts() == 0 && mate.alerts() == 0, "worry about your own");
@@ -317,7 +317,7 @@ public final class SamGameTests {
             h.assertTrue(engageable[0], "shahed was not in firing range - check is empty");
             h.assertTrue(launches.count() == 0 && sam.ready() == 0, "launch without rockets");
             // detonation at the target (there is no crater on the stone - according to the law of charge; there is nothing to break there)
-            h.assertTrue(BlastLog.near(h, new BlockPos(16, 3, 200), 8), "shahed missed the target");
+            h.assertTrue(BlastLog.near(h, new BlockPos(16, 3, 200), 8), "Shahed did not reach the target");
         });
     }
 
@@ -374,11 +374,10 @@ public final class SamGameTests {
     }
 
     // ---------------------------------------------------------------- block
-
-    /**
-     * SAM block: the crater above it puts anti-aircraft missiles in stock, the ability accepts only them (16 per cell, two
-     *  cells), it cannot be removed with it - and the crater under it does not pull out; the comparator sees the margin. Broken - the
-     *  itself and everything in it falls out (from the guides too); exploded - drops rockets. Pickaxe, stone or better. The recipe is with the exact
+/**
+     * SAM block: the hopper above it puts anti-aircraft missiles in stock, the ability accepts only them (16 per cell, two
+     *  cells), it cannot be removed with it - and the hopper under it does not pull out; the comparator sees the margin. Broken - the
+     *  itself and everything in it falls out (from the rails too); exploded - drops rockets. Pickaxe, stone or better. The recipe is with the exact
      *  mechanism Create, if Create is worth it, otherwise - vanilla.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "sam_block", skyAccess = true)
@@ -398,28 +397,28 @@ public final class SamGameTests {
         for (int i = 0; i < cap.getSlots(); i++) h.assertTrue(cap.extractItem(i, 64, false).isEmpty(), "the rocket was taken out by the ability");
         int comparator = level.getBlockState(h.absolutePos(at)).getAnalogOutputSignal(level, h.absolutePos(at));
         h.assertTrue(comparator > 0, "the comparator does not see the reserve");
-        // the crater under the SAM pulls up but won’t pull it out; crater puts on top
+        // the hopper under the SAM pulls up but won’t pull it out; hopper puts on top
         BlockPos below = at.below(), above = at.above();
         h.setBlock(below, Blocks.HOPPER);
         h.setBlock(above, Blocks.HOPPER);
         int before = sam.stockCount() + sam.ready();
         h.startSequence()
                 .thenExecute(() -> {
-                    // make room: SAM places missiles on guides (2), stock - 30
-                    h.assertTrue(sam.ready() <= 2, "more than two guides");
+                    // make room: SAM places missiles on rails (2), stock - 30
+                    h.assertTrue(sam.ready() <= 2, "more than two rails");
                     HopperBlockEntity top = h.getBlockEntity(above);
                     top.setItem(0, new ItemStack(ModItems.INTERCEPTOR.get(), 2));
                 })
                 .thenWaitUntil(() -> {
                     HopperBlockEntity top = h.getBlockEntity(above);
-                    h.assertTrue(top.getItem(0).isEmpty(), "crater from above did not release the missiles");
+                    h.assertTrue(top.getItem(0).isEmpty(), "hopper from above did not release the missiles");
                 })
                 .thenIdle(20)
                 .thenExecute(() -> {
                     HopperBlockEntity bottom = h.getBlockEntity(below);
-                    h.assertTrue(bottom.isEmpty(), "crater under SAM pulled out missiles");
+                    h.assertTrue(bottom.isEmpty(), "hopper under SAM pulled out missiles");
                     h.assertTrue(sam.stockCount() + sam.ready() == before + 2, "missiles " + (sam.stockCount() + sam.ready()) + " instead of " + (before + 2));
-                    h.assertTrue(sam.ready() == 2, "on guides " + sam.ready());
+                    h.assertTrue(sam.ready() == 2, "on rails " + sam.ready());
                     level.setBlock(h.absolutePos(above), Blocks.AIR.defaultBlockState(), 3);
                     level.setBlock(h.absolutePos(below), Blocks.STONE.defaultBlockState(), 3);
                     AABB box = new AABB(h.absolutePos(at)).inflate(3);
@@ -450,8 +449,7 @@ public final class SamGameTests {
     }
 
     // ---------------------------------------------------------------- assistants
-
-    /** Air defense rules for the duration of the test: guides and reload in seconds; return after it. */
+/** Air defense rules for the duration of the test: rails and reload in seconds; return after it. */
     private static void air(GameTestHelper h, int rails, int reloadSeconds) {
         IncomingConfig.Server c = IncomingConfig.SERVER;
         int rails0 = c.samRails.get(), reload0 = c.samReloadSeconds.get();

@@ -175,7 +175,7 @@ public final class PursuitGameTests {
                 h.assertFalse(p.targetLost(), p.weapon() + " lost a living target");
                 StrikeProjectile.Pursuit expected = p.weapon().spec().tracking() == WeaponSpec.Tracking.CAMERA
                         ? StrikeProjectile.Pursuit.WAITING : StrikeProjectile.Pursuit.NONE;
-                h.assertValueEqual(p.pursuit(), expected, p.weapon() + ": cell chase");
+                h.assertValueEqual(p.pursuit(), expected, p.weapon() + ": pursuit in the camera");
             }
             h.succeed();
         });

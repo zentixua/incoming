@@ -147,7 +147,7 @@ class InterceptorFlightTest {
             assertTrue(turn <= byG + 1e-9, i + "-th tick after launch rail exit: turn " + turn + "° cooler " + SPEC.lateralG() + " g");
             if (Math.toDegrees(Math.asin(f.direction().y)) <= 10) level = i;
         }
-        assertTrue(level >= 5 && level <= 10, "10° above the horizon - at " + level + "-m tick after guide");
+        assertTrue(level >= 5 && level <= 10, "10° above the horizon - at " + level + "-m tick after rail");
     }
 
     /** Where is Shahed via {@code tick} tick: with {@code z0} it goes on 46 blocks above SAM, in 6 blocks on the side, with z −41 - dive 18° to the target at z 100. */
@@ -162,7 +162,7 @@ class InterceptorFlightTest {
     /**
      * Shahed GameTest {@code shootsDownHostileDrones}: he starts diving into the target behind SAM even before it (from 46 blocks under 18°)
      *  and passes over SAM, descending. A missile that lands at any tick - from a target in 96 blocks to SAM to a target that is already
-     * 15 blocks behind it - knocks it down to the ground: on one guide with reloading, the second missile launch, when the second
+     * 15 blocks behind it - knocks it down to the ground: on one rail with reloading, the second missile launch, when the second
      *  is already above SAM.
      */
     @Test
@@ -186,7 +186,7 @@ class InterceptorFlightTest {
         }
     }
 
-    /** The fuse on the guide is not armed: the target next to the launcher does not explode the rocket at launch. */
+    /** The fuse on the rail is not armed: the target next to the launcher does not explode the rocket at launch. */
     @Test
     void fuzeIsSafeOnTheRail() {
         Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "тест", RAIL, new Vec3(0, 1, 0));
@@ -207,7 +207,7 @@ class InterceptorFlightTest {
     @Test
     void fuzeFiresAtClosestApproachWithinRadius() {
         Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "тест", RAIL, new Vec3(1, 0, 0));
-        // the fuse is cocked behind the guide
+        // the fuse is cocked behind the rail
         for (int i = 1; i <= SPEC.railTicks() + 1; i++) f.moveTo(f.steer(RAIL.add(1000, 0, 0)));
         Vec3 p0 = f.position(), step = new Vec3(14, 0, 0);
         Vec3 near = p0.add(16, 3, 0), wide = p0.add(16, SPEC.fuse() + 2, 0);
@@ -221,7 +221,7 @@ class InterceptorFlightTest {
     }
 
     /**
-     * launch: SAM rocket - vertically out of the container, rocket with an inclined guide - upward at its angle towards the target;
+     * launch: SAM rocket - vertically out of the container, rocket with an inclined rail - upward at its angle towards the target;
      *  the first tick the course does not change, during acceleration the speed increases.
      */
     @Test
@@ -239,7 +239,7 @@ class InterceptorFlightTest {
         double speed = f.speed();
         for (int i = 1; i <= SPEC.railTicks(); i++) {
             f.moveTo(f.steer(target));
-            assertEquals(rail, f.direction(), "guide course");
+            assertEquals(rail, f.direction(), "rail course");
             assertTrue(f.speed() > speed);
             speed = f.speed();
         }

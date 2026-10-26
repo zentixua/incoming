@@ -45,7 +45,7 @@ record Plan(Path replay, Path out, int width, int height, double fps, int bitrat
      * @param far subject beyond render distance: skip edge fog/entity-section checks, ray uses ready chunks
      * @param smoke strikes {@code [t, x, y, z, ball diameter?, kind?]}, smoke ({@link Plume}) for camera/pilot scoring;
      *              frame-visible subset is {@link Shot#live}
-     * @param time export day ticks, as {@code /time set} (18000 midnight), negative keeps recorded time
+     * @param time export day ticks, as {@code /time set} (18000 midnight), less than 0 keeps recorded time
      */
     record Shot(String name, int a, int b, String dim, int warm, int hold, boolean far, List<Camera> cameras, Subject subject,
                 List<double[]> smoke, Need need, long time) {
@@ -80,8 +80,8 @@ record Plan(Path replay, Path out, int width, int height, double fps, int bitrat
      * Frame thresholds: subject captured share before first event ({@code subject}), same for final second
      * ({@code near}), events visible in first 12 ticks ({@code keys}), minimum frame-width share ({@code share}),
      * frames with audible engine ({@code engine}), off-screen loud sounds at most {@code loud} times on-screen
-     * (negative disables), frames smoke-filled at camera ({@link Smoke#smothered}) at most {@code smother}
-     * (negative disables).
+     * (less than 0 disables), frames smoke-filled at camera ({@link Smoke#smothered}) at most {@code smother}
+     * (less than 0 disables).
      */
     record Need(double subject, double near, double keys, double share, double engine, double loud, double smother) {}
 

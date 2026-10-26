@@ -27,7 +27,7 @@ class ClatterTest {
         for (int t = 0; t < 120; t++) c.tick(t, 0, 0, 0, NIGHT, out);
         assertTrue(out.isEmpty(), "until the sound arrives - silence");
         c.tick(120, 0, 0, 0, NIGHT, out);
-        assertEquals(1, out.size(), "sound - through 343 m / 343 m/s after the front");
+        assertEquals(1, out.size(), "sound - after 343 m / 343 m/s after the front");
     }
 
     /** Sounds from different places are incoherent: two identical destructions at once - +3 dB, not +6. */

@@ -38,7 +38,7 @@ class HearingTest {
         assertTrue(day < night * 0.8, "during the day " + day + ", at night " + night);
         // the sound overtakes Shahed: from the edge of audibility at night it can be heard long before it arrives
         double lead = night * (1 / drone.cruiseSpeed() - 1 / (Noise.SOUND / 20)) / 20;
-        assertTrue(lead > 30, "for " + lead + " from before arrival");
+        assertTrue(lead > 30, "for " + lead + " s before arrival");
     }
 
     /**

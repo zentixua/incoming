@@ -121,7 +121,7 @@ class CraterFireTest {
                 if (wasPlaying) lastThen = d;
             }
             System.out.printf(java.util.Locale.ROOT, "fire %.0f W heard to %.0f m (6763a1c8: %.0f m)%n", watts, last, lastThen);
-            assertTrue(last > 300 && last >= lastThen, watts + " Tue: heard further than 300 m and no closer than 6763a1c8");
+            assertTrue(last > 300 && last >= lastThen, watts + " W: audible beyond 300 m and no closer than in 6763a1c8");
         }
     }
 

@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FxParticleTest {
     /**
-     * billows from the chain is visible by whether it overlaps its neighbors on the screen: along the trail - always, on the side there is a young club
+     * billows from the chain is visible by whether it overlaps its neighbors on the screen: along the trail - always, on the side there is a young billow
      *  smaller than a step (a chain of dots on the tape) - no, grown to two steps - entirely; between them - without decreasing.
      */
     @Test

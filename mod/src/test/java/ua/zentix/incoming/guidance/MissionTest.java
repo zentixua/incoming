@@ -52,7 +52,7 @@ class MissionTest {
         int t = 0;
         while (flown < 1000) {
             speed = t < 40 ? Math.min(3.4, speed + 0.09) : Math.min(4, speed + 0.09);
-            assertFalse(slow.exhausted(), "stock ran out at " + flown + " blocks from 1000");
+            assertFalse(slow.exhausted(), "stock ran out at " + flown + " blocks of 1000");
             slow.spend(speed);
             flown += speed;
             t++;

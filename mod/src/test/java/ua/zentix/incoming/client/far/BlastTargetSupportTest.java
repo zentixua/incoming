@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Target for the explosion package ({@link FarBlasts#target}): a slab above the void - only according to the support sent by the server breakdown
+ * Target for the explosion package ({@link FarBlasts#target}): a slab above the void - only according to the support sent by the server breach
  *  ({@code BreachGameTests}: the support of the package coincides with what the rays demolish), and not according to the client’s own rule; there is no support -
  *  according to the substance of the material.
  */
@@ -102,12 +102,12 @@ class BlastTargetSupportTest {
                 GroundDust.Ground.BARE);
         for (double t : new double[]{0.3, 1}) {
             double[] at0 = meanHeight(exact.crushed, t);
-            assertTrue(at0[1] > 0, t + " c: cold dust no break");
+            assertTrue(at0[1] > 0, t + " s: no cold breach dust");
             for (double hob : new double[]{5, 30}) {
                 CloudModel far = new CloudModel(src, CloudModel.Air.STANDARD, FarBlasts.target(roof, GroundMaterial.WOOD, SHAHED, hob), hob,
                         GroundDust.Ground.BARE);
                 double[] at = meanHeight(far.crushed, t);
-                assertEquals(at0[0], at[0], 0.5, "height " + hob + " m, " + t + " c: dust from the breach - near the roof");
+                assertEquals(at0[0], at[0], 0.5, "height " + hob + " m, " + t + " s: dust from the breach - near the roof");
             }
         }
         // dust waves - from the surface around: when the ground is 5 m below, it is there, and not at the roof

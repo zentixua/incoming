@@ -62,7 +62,7 @@ class BurnInjuryTest {
         assertTrue(BurnInjury.ignites(Cover.HEAVY, 39, 20_000));
         assertFalse(BurnInjury.ignites(Cover.SKIN, 1000, 15));
         assertFalse(BurnInjury.ignites(Cover.SOLID, 1000, 15));
-        // 15 CT pulse is shorter, the tissue lights up earlier than 35
+        // At 15 kt the pulse is shorter; fabric ignites earlier than at 35 kt.
         assertTrue(BurnInjury.ignites(Cover.THIN, 13, 15));
     }
 

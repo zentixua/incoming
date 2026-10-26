@@ -105,7 +105,7 @@ class PallGlslTest {
      * The head of the wall at the point is the same as in Java ({@link BlastWall#sigma}): frame ({@code pallWallInside}), weakening from the edge of
      *  to the end of the wedge or splash over water ({@code pallWallDensity}), shift and top of the splash ({@code pallWallAt}), average head
      * ({@code pallWallMean}). Each sample of thickness to light ({@code wallMove}: {@code wallChord}, {@code wallChordNear}, shadow of
-     *  clubs in {@code wall}) has its own attenuation, like {@code NukePall.chord}, and not the point where the beam comes from: from the edge to the end of the
+     *  billows in {@code wall}) has its own attenuation, like {@code NukePall.chord}, and not the point where the beam comes from: from the edge to the end of the
      *  wedge it changes significantly. The shader is assembled with the same text as in the file (slot numbers - according to the mat4 columns), and
      *  is compared with Java according to the slots of the explosion head near the ground and in the air, at points and at points shifted by the ray. The transition to the veil
      *  behind the wedge is one constant with Java ({@link BlastWall#HANDOFF_TO}) at the frame, at the ring of segments ({@code pallWallSpans})
@@ -153,7 +153,7 @@ class PallGlslTest {
                         for (double wet : new double[]{0, 0.35, 1}) {
                             double angle = 0.3 + s / 97, r = slot[0] - s, x = r * Math.cos(angle), y = r * Math.sin(angle);
                             double want = BlastWall.sigma(slot, x, y, z, wet), shader = head.call(args(slot, slot[0] - Math.hypot(x, y), z, wet));
-                            String where = d.surface() + ", " + t + " with: s = " + s + ", z = " + z + ", water " + wet;
+                            String where = d.surface() + ", " + t + " s: s = " + s + ", z = " + z + ", water " + wet;
                             assertEquals(want, shader, 1e-4 * Math.abs(want) + 1e-7, where);
                             points++;
                             if (want > 0) inside++;
@@ -211,7 +211,7 @@ class PallGlslTest {
         }
         assertEquals(2 * PallField.ROWS, ua.zentix.incoming.client.fx.layer.PallPass.ROWS, "table rows - not for two slots");
         String f = body(GLSL, "PallAt pallField(");
-        assertTrue(f.contains("vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));"), "dust is out of line");
+        assertTrue(f.contains("vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));"), "dust uses the wrong row");
         assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "haze - not in your own line");
         int water = f.indexOf("if (W.w > 0.5) {"), read = f.indexOf("vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));");
         assertTrue(water >= 0 && read > water, "splashes - not in their own line or can be read without water under the pall");

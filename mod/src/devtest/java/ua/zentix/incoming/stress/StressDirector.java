@@ -226,11 +226,11 @@ public final class StressDirector {
         /** tick test setting: how long the rack chunk was loaded. */
         int setupTick;
         boolean raised;
-        /** B-2 from a combat launch, retargeted outside the world to a point behind itself: approach again and reset. */
+        /** B-2 from a combat launch, retargeted outside the world to a point behind itself: approach again and release. */
         boolean b2Behind;
         boolean retargeted;
         int bombs;
-        /** Bomb hits: from the target horizontally (early release or release not from the echelon - the bomb is far from the point). */
+        /** Bomb hits: from the target horizontally (early release or release not from the cruise altitude - the bomb is far from the point). */
         final List<Double> impactOff = new ArrayList<>();
 
         GroundProbe(String name, String how, Vec3 center, int ordered, boolean steering, boolean mustGround) {
@@ -519,7 +519,7 @@ public final class StressDirector {
         ServerPlayer p = need(s, name, "teleport");
         if (p == null) return;
         if (level == null) {
-            problems.add("шаг пропущен: телепорт " + name + ", there is no destination world");
+            problems.add("шаг пропущен: телепорт " + name + ", мира назначения нет");
             return;
         }
         ArrayDeque<TpRequest> queue = deferredTeleports.computeIfAbsent(name, k -> new ArrayDeque<>());
@@ -630,7 +630,7 @@ public final class StressDirector {
                 // a player in the area waits for his ticket (up to TELEPORT_WAIT), a player who leaves - no longer than TELEPORT_HOLD
                 if (!arrived && s.getTickCount() - from[0] < (inArea ? TELEPORT_WAIT : TELEPORT_HOLD)) return false;
                 release.run();
-                log("teleport area %s released via %d ticks%s", name, s.getTickCount() - placed, arrived ? "" : ", the player’s ticket is not on it");
+                log("teleport area %s released after %d ticks%s", name, s.getTickCount() - placed, arrived ? "" : ", the player’s ticket is not on it");
                 return true;
             });
             return true;
@@ -738,7 +738,7 @@ public final class StressDirector {
         }
         var sub = ua.zentix.incoming.compat.SubLevels.byId(s.overworld(), craftCenter, craftId);
         if (sub == null) {
-            problems.add("шаг пропущен: удар по аппарату, аппарата " + craftId + " no more");
+            problems.add("шаг пропущен: удар по аппарату, аппарата " + craftId + " больше нет");
             return;
         }
         Vec3 c = ua.zentix.incoming.compat.SubLevels.center(sub);
@@ -886,7 +886,7 @@ public final class StressDirector {
                     pr.raised = true;
                     pr.stand.teleportTo(pr.stand.getX(), pr.stand.getY() + 40, pr.stand.getZ());
                     pr.center = pr.stand.position();
-                    log("test %s: target raised to 40 blocks, out-of-world missile at %.0f blocks", pr.name, d);
+                    log("probe %s: target raised by 40 blocks, out-of-world missile at %.0f blocks", pr.name, d);
                     break;
                 }
             }
@@ -981,7 +981,7 @@ public final class StressDirector {
                 k++;
             }
         }
-        log("targets killed: %d from %d", k, villagers.size());
+        log("targets killed: %d of %d", k, villagers.size());
     }
 
     private void retargetSome(MinecraftServer s) {
@@ -1008,7 +1008,7 @@ public final class StressDirector {
             }
             if (p.retarget(t, point)) n++;
         }
-        log("retargeted: %d from %d in the world", n, inWorld.size());
+        log("retargeted: %d of %d in the world", n, inWorld.size());
     }
 
     private void markCleared(MinecraftServer s) {
@@ -1044,9 +1044,11 @@ public final class StressDirector {
     private record Gone(UUID id, Watch w, Vec3 end, @Nullable String how, int at, Level level, long gameTime) {}
 
     /**
-     * How many ticks does a removed projectile wait for its explosion: for an unready area, the vanilla explosion is postponed until it is loaded ({@code Warheads.whenReady}) - until {@link Warheads#DEFERRED_GIVE_UP_TICKS}, then canceled; the projectile,
-     * , returned to the world and shot down at the same tick, explodes later. Whose explosion is based on the source of damage ({@link #blastBy}),
-     *  the neighbor will not take it, so you can wait the whole time: the district chunk on the stand is loaded and on 1400 with an extra tick.
+     * How many ticks a removed projectile waits for its explosion: in an unready area, the vanilla explosion
+     * is deferred until loading ({@code Warheads.whenReady}), up to {@link Warheads#DEFERRED_GIVE_UP_TICKS},
+     * then cancelled. A projectile that reenters the world and is shot down in the same tick explodes later.
+     * The damage source identifies its explosion ({@link #blastBy}); a neighbor cannot claim it, so waiting
+     * the full duration is safe: an area chunk on the rig can take more than 1400 ticks to load.
      */
     private static final int BLAST_WAIT = Warheads.DEFERRED_GIVE_UP_TICKS + 20;
     private final List<Gone> awaitingBlast = new ArrayList<>();
@@ -1168,7 +1170,7 @@ public final class StressDirector {
     /**
      * What's waiting for a worthwhile tick: a task in the queue of each world's chunk thread ({@code ServerChunkCache.mainThreadProcessor}).
      * Synchronous loading ({@code ServerChunkCache.getChunk}) waits in {@code managedBlock} and executes the tasks of this
-     * queue - the report is written from the server thread in the middle of a stop, without racing with ticket cards. The task that reached the
+     * queue - the report is written from the server thread in the middle of a stop, without racing with ticket maps. The task that reached the
      *  thread after this tick is silent.
      */
     private void diagnoseStall(MinecraftServer s, long stallStart) {

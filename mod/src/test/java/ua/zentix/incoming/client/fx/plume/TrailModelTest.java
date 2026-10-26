@@ -209,7 +209,7 @@ class TrailModelTest {
         assertEquals(1, std, 0.01);
     }
 
-    /** The shaking of the axis and the blurring of the trail together is the average Briggs trail: Var(shear) = σ_y² − σ_r² (σ_z² − σ_r² in height). */
+    /** The shaking of the axis and the blurring of the trail together is the average Briggs trail: Var(displacement) = σ_y² − σ_r² (σ_z² − σ_r² in height). */
     @Test
     void bendsMakeUpTheAveragedPlume() {
         double[] out = new double[3];

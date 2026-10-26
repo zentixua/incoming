@@ -747,7 +747,7 @@ public final class GridGameTests {
     /**
      * Reading a chunk from the disk is not for the world (LOD, maps: other mods call {@code ChunkSerializer.read}, including in their
      *  streams) does not touch the blackout queue: a copy of an already loaded chunk in the server thread and reading in someone else's thread does not
-     *  put light from the disk on the world's chunk (otherwise the queue is over and over again would pass his lamps) and do not write in her cards.
+     *  put light from the disk on the world's chunk (otherwise the queue is over and over again would pass his lamps) and do not write in her maps.
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "grid_foreign_read", skyAccess = true)
     public static void foreignChunkReadsLeaveQueueAlone(GameTestHelper h) {

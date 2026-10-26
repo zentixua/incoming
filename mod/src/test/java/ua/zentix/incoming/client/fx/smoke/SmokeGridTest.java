@@ -182,7 +182,7 @@ class SmokeGridTest {
 
     /**
      * The fraction of the cross-section, which the cascade correctly shows: σ is not less than a cell - the whole thing, not more than half a cell - no; cell - at the location of the
-     *  club (there is a small cascade near the eye, larger ones further on, behind the mesh - none).
+     *  billow (there is a small cascade near the eye, larger ones further on, behind the mesh - none).
      */
     @Test
     void resolvedShareFollowsTheCascadeCell() {

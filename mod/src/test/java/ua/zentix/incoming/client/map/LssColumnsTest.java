@@ -197,7 +197,7 @@ class LssColumnsTest {
         assertEquals(7, s.chunks(), "came again - right there");
     }
 
-    /** File: everything that was (and rough) reads the same; someone else's file is an error, not garbage in the card. */
+    /** File: everything that was (and rough) reads the same; someone else's file is an error, not garbage in the map. */
     @Test
     void fileRoundTrip() throws IOException {
         LssColumns.Store s = new LssColumns.Store();

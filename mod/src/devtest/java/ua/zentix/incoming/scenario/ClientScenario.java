@@ -173,7 +173,7 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
-        // script lines, sandbox and samples write the layer time on the video card in parts: the sample is always running
+        // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if (scenario.startsWith("mp-")) {
             new MultiplayerScenario("mp-a".equals(scenario)); // your own server, without a script world (tools/mp_scenario.sh)
@@ -970,18 +970,18 @@ public final class ClientScenario {
     private static final int FS_FAR = 2000, FS_ROOF = 800;
     /** How long to wait for ready chunks after transfer (software OpenGL builds sections slowly). */
     private static final int FS_LOAD = 350;
-    /** Pall measurement windows on a video card with and without a storm (one at a time). */
+    /** Pall measurement windows on a GPU with and without a storm (one at a time). */
     private static final int FS_GPU_WINDOWS = 16;
 
     /**
-     * Firestorm (the “movie-level nuke” plan, step 4): air 15 CT over the forest and plains (at the spawn point there is ice
+     * Firestorm (the “movie-level nuke” plan, step 4): air 15 kt over the forest and plains (at the spawn point there is ice
      *  and the sea), frames after ~1, 5 and 15 minutes - from 2 km (40 blocks above the ground and above the terrain in front), from
      *  roofs in 800 m (30 above the ground) and from inside the fire zone of the fire tornado. Before the explosion, the viewer flies around the points at 2 km and
      * 800 m (chunks are ready). Minutes are skipped: the server's clock is forward, the client's is rewinding, like a replay Flashback
      *  ({@code ClientNuclear.rewound}: picture - by age of detonation). Night ({@code INCOMING_FIRESTORM=night}, default) -
      *  detonation at 4000 (morning pall - after 16,7 minutes), immediately after it - {@code time set 18000} and rewind: morning remains at
      *  detonation time, on the screen - night. Pall quality - {@code INCOMING_PALL} (by default MEDIUM, as in the setting);
-     *  in the log - lines {@code SCENARIO firestorm} (pall and storm, time on the video card), at the roof after 5 minutes - windows according to 2 s
+     *  in the log - lines {@code SCENARIO firestorm} (pall and storm, time on the GPU), at the roof after 5 minutes - windows according to 2 s
      *  with and without a storm in turn (lines {@code SCENARIO firestorm gpu}).
      */
     private void planFirestorm() {
@@ -1137,8 +1137,8 @@ public final class ClientScenario {
         at(r5, () -> fsGo(fsX, fsRoofY, roof));
         at(r5 + FS_LOAD, () -> fsFace("roof"));
         fsShot(r5 + FS_LOAD + 60, "roof");
-        // the same point: pall time on a video card with and without a storm - windows by 2 s in turn (shared machine: in a row
-        //  by 10 s one window would fall on someone else's load entirely)
+        // the same point: pall time on a GPU with and without a storm - windows by 2 s in turn (shared machine: in a row
+//  by 10 s one window would fall on someone else's load entirely)
         int gpu = r5 + FS_LOAD + 70;
         for (int k = 0; k < FS_GPU_WINDOWS; k++) {
             boolean on = k % 2 == 0;
@@ -1422,7 +1422,7 @@ public final class ClientScenario {
     private static final Vec3 FRONT_GZ = new Vec3(0.5, 320, -1499.5);
 
     /**
-     * pall behind the front at night, like a replay frame from the host (camera at 400 m from the ground 15 CT, at 120 m above the ground, looking
+     * pall behind the front at night, like a replay frame from the host (camera at 400 m from the ground 15 kt, at 120 m above the ground, looking
      *  slightly upward, FOV 50): behind the epicenter is a block of towers (they are being demolished wave, ruins are standing). Frames - from the arrival of the front
      *  to the camera: 0, 2, 5, 10, 20 and 60 s (pall_front_*), in the log - pall at the camera. Quality - {@code INCOMING_PALL}
      *  (default MEDIUM). {@code INCOMING_EXPORT=2560x1440} - like the output of the video Flashback: from the explosion the window reports
@@ -1545,7 +1545,7 @@ public final class ClientScenario {
             int g = where.ground, y = where.deep;
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 80, y + 4, z + 3));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 79, y + 4, z + 2));
-            // mine - up to the sky above its mouth (the relief there is higher than that of the chamber)
+            // mine - up to the sky above its mouth (the relief there is higher than that of the camera)
             int top = Math.max(g, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + 77, z));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 76, y, z - 1, x + 78, top + 3, z + 1));
             fences(x, g, z);
@@ -1642,7 +1642,7 @@ public final class ClientScenario {
         long now = mc.level.getGameTime();
         for (var w : ua.zentix.incoming.client.nuclear.ClientNuclear.warnings()) {
             long left = w.detonateTime() - now;
-            // the warhead comes from the launch side (from behind) almost vertically: on the 2 we look back and up
+            // The warhead arrives almost vertically from the launch side (behind us): look back and up for 2 s.
             if (left == 45) cmd("tp @s ~ ~ ~ 0 -65");
             if (left == 38 || left == 30) shot(tick + 1, "reentry");
             if (left == 22) cmd("tp @s ~ ~ ~ 180 -8");
@@ -1920,7 +1920,7 @@ public final class ClientScenario {
     private boolean smokeArmed, smokeShotsPlanned;
 
     /**
-     * Measurement of an explosion on a copy of the player's world (tools/prod_client.py nuke-profile --world ...): 15 CT in the air in 300 blocks
+     * Measurement of an explosion on a copy of the player's world (tools/prod_client.py nuke-profile --world ...): 15 kt in the air in 300 blocks
      *  from the player, then the second one in 600 on the other side. The detonation line in the log gives a breakdown of the time; next - how many
      *  chunks are loaded and entities in the world at this moment.
      */
@@ -2420,7 +2420,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Projectile scenario far-models: weapon, B-2 is it, phase, pitch and roll (Grad), speed (blocks per tick). */
+    /** Projectile scenario far-models: weapon, B-2 is it, phase, pitch and roll (degrees), speed (blocks per tick). */
     private record FarShow(String name, WeaponType weapon, boolean bomber, ua.zentix.incoming.entity.FlightPhase phase,
                            float pitch, float roll, double speed) {}
 
@@ -2583,7 +2583,7 @@ public final class ClientScenario {
     }
 
     /**
-     * A row of shells at a range of d: in a horizontal fan ±spread Grad, at elev Grad above the eye; packets - once
+     * A row of shells at a range of d: in a horizontal fan ±spread degrees, at elev degrees above the eye; packets - once
      *  in {@link ua.zentix.incoming.net.S2C.FarFlights#PERIOD} tick with tick start, frame name - through 60 tick, then
      *  each in its place. After the frame, the flights are repulsed: the trail does not move to the next row.
      */
@@ -2732,8 +2732,8 @@ public final class ClientScenario {
         at(700, () -> cmd(String.format(java.util.Locale.ROOT, "incoming missile at %.1f %.1f %.1f", target.x, target.y, target.z)));
         at(1100, () -> cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z)));
         if (end > 1750) {
-            // on the real scale - another B-2 at the echelon 12 km: its target is 12 km ahead of the viewer, the drop line is ~10 km
-            //  before it, and it passes over the viewer before the drop; the camera looks at him (distant view: body and footprint at height)
+            // on the real scale - another B-2 at the cruise altitude 12 km: its target is 12 km ahead of the viewer, the drop line is ~10 km
+//  before it, and it passes over the viewer before the drop; the camera looks at him (distant view: body and footprint at height)
             at(1300, () -> cmd("incoming bunker at 0.5 12000.5"));
             for (int t = 1850; t <= 2100; t += 5) at(t, ClientScenario::lookAtBomber);
             at(2110, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s ~ ~ ~ facing %.1f %.1f %.1f", target.x, target.y, target.z)));
@@ -2937,7 +2937,7 @@ public final class ClientScenario {
      * A salvo on the guidance map - frames salvo-map_* (dashed paths of projectiles to targets, scatter area) and the time during which the
      *  map opened, in the log (“Targeting map: view terrain ready in ..."): in the remote there are six Shahed with a spread of 40,
      *  place by clicking in ~130 blocks, fire on Enter, the map is again open for the entire flight. In the player's copy of the world
-     * (prod_client.py --world) - where he stands; the card is opened when DH has loaded its LOD (as in target-map).
+     * (prod_client.py --world) - where he stands; the map is opened when DH has loaded its LOD (as in target-map).
      */
     private void planSalvoMap() {
         at(40, () -> {
@@ -3278,7 +3278,7 @@ public final class ClientScenario {
                 if (net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) logDhThreads();
             });
         }
-        // end - in 3 s after the hit (card frames after the hit) or by deadline
+        // end - in 3 s after the hit (map frames after the hit) or by deadline
         for (int t = o + 220; t <= o + MAP_FLIGHT_WAIT; t += 20) {
             at(t, () -> {
                 if (mapDone) return;
@@ -3490,7 +3490,7 @@ public final class ClientScenario {
     }
 
     /**
-     * MLRS: salvo from 12 over an area of 12 blocks in 200 blocks ahead. First, the projectile chamber - the package has a plan for the entire
+     * MLRS: salvo from 12 over an area of 12 blocks in 200 blocks ahead. First, the projectile camera - the package has a plan for the entire
      *  queue; the second salvo - through the eyes of the shooter: arcs of smoky traces above the head and explosions at the target.
      */
     private void planRocket() {

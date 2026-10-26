@@ -26,7 +26,7 @@ class MushroomFieldTest {
                 double top = MushroomField.top(s), reach = MushroomField.reach(s);
                 assertTrue(Double.isFinite(top) && top >= 1, t + " s, front " + front + ": top " + top);
                 assertTrue(Double.isFinite(reach) && reach >= 1, t + " s, front " + front + ": radius " + reach);
-                if (front == 0) assertEquals(0, s.skirtTau(), 0, t + " with: skirt before the front arrives");
+                if (front == 0) assertEquals(0, s.skirtTau(), 0, t + " s: skirt before the front arrives");
             }
         }
     }
@@ -65,11 +65,11 @@ class MushroomFieldTest {
             double r = MushroomField.REACH_COLUMN * MushroomField.columnUnit(c);
             double reach = MushroomField.reach(s, c), top = MushroomField.top(s, c);
             assertTrue(reach >= c.mid() + c.half() + r - 1e-9 && reach >= c.crownR() + r - 1e-9, t + " s: radius " + reach);
-            assertTrue(top >= c.top() + r - 1e-9, t + " from: top " + top);
-            assertTrue(reach >= MushroomField.reach(s) && top >= MushroomField.top(s), t + " with: mushroom frame");
+            assertTrue(top >= c.top() + r - 1e-9, t + " s: top " + top);
+            assertTrue(reach >= MushroomField.reach(s) && top >= MushroomField.top(s), t + " s: mushroom frame");
             // and no wider than necessary: the frame with the pillar is no wider than three of its radii and no higher than its radius above it
             assertTrue(reach <= Math.max(MushroomField.reach(s), 3 * c.outer()), t + " s: radius " + reach + " at the pillar " + c.outer());
-            assertTrue(top <= Math.max(MushroomField.top(s), c.top() + c.outer()), t + " from: top " + top + " at the pillar " + c.top());
+            assertTrue(top <= Math.max(MushroomField.top(s), c.top() + c.outer()), t + " s: top " + top + " at the pillar " + c.top());
         }
         MushroomModel.Shape s = MushroomModel.shape(5, 15, 0, true, 3_000);
         assertEquals(MushroomField.reach(s), MushroomField.reach(s, null), 0, "without pillar - mushroom frame");
@@ -131,7 +131,7 @@ class MushroomFieldTest {
     /**
      * The color of the cap is from drops and NO₂, without hours. Observations: in reflected light the cloud is white, in transmitted light it is red-brown, and
      *  there is brown light inside it (Taylor and Minge 1963); first the cloud is “red or red-brown” (G&D §2.08). What the physics
-     *  of this substance gives: cap 15 CT after rising reflects almost white (channels are not lower than 0,6, blue is not less than 0,75 red), and the
+     *  of this substance gives: cap 15 kt after rising reflects almost white (channels are not lower than 0,6, blue is not less than 0,75 red), and the
      *  beam from above comes out under it and stands in its middle brown (blue is less than a third of red). A just-folded
      *  ring in reflected light is ocher (the shade on the screen is 28–45°; for red-brown it is less than 25°), and it does not become red-brown
      *  at any fraction of NO₂: for a strong absorption R∞ ∝ ω' ∝ 1/σ along the channel - shade 29°. Red-brown - light that has passed through the ring
@@ -178,7 +178,7 @@ class MushroomFieldTest {
             MushroomField.capMatter(MushroomModel.shape(t, 15, hob, false, 1e9), 0, 0, w);
             double[] c = reflect(w);
             double ratio = c[2] / c[0];
-            assertTrue(ratio >= last, t + " from: " + ratio);
+            assertTrue(ratio >= last, t + " s: " + ratio);
             last = ratio;
         }
     }
@@ -239,16 +239,16 @@ class MushroomFieldTest {
             for (double t = 0.25 * tr; t <= tr; t += 0.05 * tr) {
                 MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 1e9);
                 double sigma = MushroomField.capMatter(s, 0, 0, dry);
-                assertEquals(sigma, MushroomField.capMatter(s, 0, 1e-6, wet), 0, kt + " cT, " + t + " s: weakening");
+                assertEquals(sigma, MushroomField.capMatter(s, 0, 1e-6, wet), 0, kt + " kt, " + t + " s: weakening");
                 for (int i = 0; i < 4; i++) {
-                    assertEquals(dry[i], wet[i], 1e-6, kt + " cT, " + t + " s, channel " + i);
+                    assertEquals(dry[i], wet[i], 1e-6, kt + " kt, " + t + " s, channel " + i);
                     if (i < 3 && dry[i] < 1 / (4 - 3 * dry[3])) dark = true;
                 }
                 double steam = MushroomModel.rollUp(t, kt, false), share = MushroomField.STEAM_SHARE * steam;
                 MushroomField.capMatter(s, 0, steam, wet);
                 for (int i = 0; i < 3; i++) {
                     double mixed = dry[i] + (MushroomField.steamAlbedo(i, dry[3]) - dry[i]) * share;
-                    assertEquals(mixed, wet[i], 1e-12, kt + " cT, " + t + " s, channel " + i + ": mixture");
+                    assertEquals(mixed, wet[i], 1e-12, kt + " kt, " + t + " s, channel " + i + ": mixture");
                 }
             }
         }
@@ -266,7 +266,7 @@ class MushroomFieldTest {
         return r;
     }
 
-    /** Color shade on the screen, Grad (as in HSV): linear r, g, b - in screen values, γ 2,2. */
+    /** Color shade on the screen, degrees (as in HSV): linear r, g, b - in screen values, γ 2,2. */
     private static double hue(double[] linear) {
         double r = PallLight.display(linear[0]), g = PallLight.display(linear[1]), b = PallLight.display(linear[2]);
         double max = Math.max(r, Math.max(g, b)), min = Math.min(r, Math.min(g, b)), c = max - min;

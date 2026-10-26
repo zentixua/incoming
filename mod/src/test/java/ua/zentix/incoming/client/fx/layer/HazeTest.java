@@ -145,7 +145,7 @@ class HazeTest {
         for (double t : new double[]{0.1, 1, 3}) {
             HeatPass.Frame f = frame(PIXEL);
             f.exhaust(50, 100, 0, 0, -1, 0, b, Double.POSITIVE_INFINITY, t, 20);
-            assertTrue(f.shape.m00() > 0 && f.shape.m00() <= 20 + b.gasReach(t) + 1e-3, t + " from: " + f.shape.m00());
+            assertTrue(f.shape.m00() > 0 && f.shape.m00() <= 20 + b.gasReach(t) + 1e-3, t + " s: " + f.shape.m00());
         }
     }
 

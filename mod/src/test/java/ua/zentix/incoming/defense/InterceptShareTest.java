@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *  ({@link Interceptor#steer}, {@link Interceptor#fuze}), range - spec {@link InterceptorSpec#SAM}, SAM launches
  *  at the target, like {@link SamBlockEntity}: while scanning the sky once in {@link SamBlockEntity#SWEEP} tick, when the target closer
  *  fire range and it is visible, one missile on the target, the next one - when the last one ended without defeat. The ground is flat
- *  (the radar does not cover the terrain here), there are as many guides as you like.
+ *  (the radar does not cover the terrain here), there are as many rails as you like.
  * <p>
  * Targets: Shahed and the cruise missile are their real autopilots ({@link DroneAutopilot}, {@link MissileAutopilot}) with a dive
  *  and slide; “Lancet” - approach and circle over the target ({@link Orbit}, radius {@link LoiterEntity#LOITER_RADIUS}), dive at

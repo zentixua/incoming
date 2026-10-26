@@ -82,7 +82,7 @@ public final class MapGameTests {
         IncomingConfig.SERVER.mapPlayers.set(false);
         S2C.MapPlayers off = ServerActions.mapPlayers(fresh(viewer), all);
         h.assertTrue(off != null && !off.shown(), "turned off in the world settings, but the map draws");
-        h.assertValueEqual(names(off), Set.of("map_near", "map_far"), "remote control targets when the card is turned off");
+        h.assertValueEqual(names(off), Set.of("map_near", "map_far"), "remote control targets when the map is turned off");
         IncomingConfig.SERVER.mapPlayers.set(true);
 
         // not an operator (FakePlayer without rights), remote control - only for operators

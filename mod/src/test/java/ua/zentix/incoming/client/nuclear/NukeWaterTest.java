@@ -68,11 +68,11 @@ class NukeWaterTest {
         for (double t : new double[]{3, 6}) {
             assertTrue(wall.slot(t, s));
             double head = s[0], lag = s[5], low = 0.1 * s[2] * s[6];
-            assertTrue(lag > 30, t + " c: path of the head during the rise of the spray " + lag);
+            assertTrue(lag > 30, t + " s: path of the head during the rise of the spray " + lag);
             assertTrue(s[7] > 0, t + " s: no splashes");
             assertTrue(BlastWall.sigma(s, head - 0.25 * lag, 0, low, 0) > 0, t + " s: there is no dust on the head");
-            assertEquals(0, BlastWall.sigma(s, head - 0.7 * lag, 0, low, 1), t + " c: splashes ahead, near the dark ring");
-            assertTrue(BlastWall.sigma(s, head - lag - 0.5 * s[1], 0, low, 1) > 0, t + " c: no splashes behind the ring");
+            assertEquals(0, BlastWall.sigma(s, head - 0.7 * lag, 0, low, 1), t + " s: splashes ahead, near the dark ring");
+            assertTrue(BlastWall.sigma(s, head - lag - 0.5 * s[1], 0, low, 1) > 0, t + " s: no splashes behind the ring");
         }
     }
 

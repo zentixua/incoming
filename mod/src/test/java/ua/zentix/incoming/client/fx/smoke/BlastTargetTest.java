@@ -37,7 +37,7 @@ class BlastTargetTest {
         }
     }
 
-    /** Slab breakdown - √(R² − t²) at the breakdown radius R (BreachGameTests); A slab that is not pierced is not a slab. */
+    /** Slab breach - √(R² − t²) at the breach radius R (BreachGameTests); A slab that is not pierced is not a slab. */
     @Test
     void slabHoleFollowsTheBreachLaw() {
         double r = BreachModel.Material.POOR.radius(SHAHED, BreachModel.UNTAMPED);
@@ -112,8 +112,8 @@ class BlastTargetTest {
         var air = new CloudModel.Air(CloudModel.N_STANDARD, 6, 0, 0.1, (int) Stability.C, 0.5);
         double breach = BreachModel.Material.ROCK.radius(SHAHED, BreachModel.UNTAMPED);
         var m = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, BlastTarget.of(GroundMaterial.STONE, false, 1, breach), 0, hard);
-        assertTrue(m.crushed.tau(10) < 3, "τ on 10 s " + m.crushed.tau(10));
-        assertTrue(m.crushed.tau(30) > CloudModel.SEEN, "τ on 30 s " + m.crushed.tau(30));
+        assertTrue(m.crushed.tau(10) < 3, "τ at 10 s " + m.crushed.tau(10));
+        assertTrue(m.crushed.tau(30) > CloudModel.SEEN, "τ at 30 s " + m.crushed.tau(30));
     }
 
     /** Dust color: concrete and stone are lighter than soil, slate is darker, wood is ocher (red is more blue). */

@@ -96,7 +96,7 @@ class WaterModelTest {
         assertEquals(0, WaterModel.columnTop(0, 23));
         assertNull(WaterModel.column(0, 23));
         assertTrue(WaterModel.columnTop(2, 23) > 0.5 * max, "for 2 s - above half");
-        assertTrue(WaterModel.columnTop(9, 23) > 0.95 * max, "to 9 s - almost all");
+        assertTrue(WaterModel.columnTop(9, 23) > 0.95 * max, "by 9 s - almost all");
         assertEquals(0, WaterModel.columnFall(9, 23));
         assertEquals(1, WaterModel.columnFall(40, 23), 1e-9);
         assertEquals(0, WaterModel.columnTop(40, 23), "fallen - by the water");
@@ -115,12 +115,12 @@ class WaterModelTest {
         double two = WaterModel.columnTop(2, 100) * under;
         assertTrue(two > 5000 * ft && two < 6000 * ft, "for 2 s: " + two / ft + " feet");
         WaterModel.Column twelve = WaterModel.column(12, 100), twenty = WaterModel.column(20, 100);
-        assertEquals(3300 * ft, 2 * (twelve.mid() + twelve.half()), 0.05 * 3300 * ft, "diameter to 12 s");
-        assertEquals(500 * ft, 2 * twelve.half(), 0.05 * 500 * ft, "wall to 12 s");
-        assertEquals(2000 * ft, 2 * (twenty.mid() + twenty.half()), 0.05 * 2000 * ft, "diameter to 20 s");
+        assertEquals(3300 * ft, 2 * (twelve.mid() + twelve.half()), 0.05 * 3300 * ft, "diameter by 12 s");
+        assertEquals(500 * ft, 2 * twelve.half(), 0.05 * 500 * ft, "wall by 12 s");
+        assertEquals(2000 * ft, 2 * (twenty.mid() + twenty.half()), 0.05 * 2000 * ft, "diameter by 20 s");
         assertEquals(2 * twelve.half(), 2 * twenty.half(), 1e-9, "wall of the same thickness");
-        assertTrue(WaterModel.columnTop(20.5, 100) < WaterModel.columnTop(20, 100), "to 20 s settles");
-        assertTrue(WaterModel.columnTop(12, 100) > 0.99 * WaterModel.columnTop(11, 100), "to 12 s still standing");
+        assertTrue(WaterModel.columnTop(20.5, 100) < WaterModel.columnTop(20, 100), "by 20 s settles");
+        assertTrue(WaterModel.columnTop(12, 100) > 0.99 * WaterModel.columnTop(11, 100), "by 12 s still standing");
     }
 
     /**
@@ -137,10 +137,10 @@ class WaterModelTest {
                 continue;
             }
             assertEquals(WaterModel.columnTop(t, 15), c.top(), 1e-9, t + " s");
-            assertTrue(c.crownA() >= c.half() - 1e-9 && c.crownH() >= c.half() - 1e-9, t + " c: the crown is thinner than the wall");
-            assertTrue(c.crownA() <= 2.5 * c.crownH(), t + " with: crown flat: " + c.crownA() + " on " + c.crownH());
-            assertTrue(c.mid() - c.half() > 0, t + " with: hollow post");
-            assertTrue(c.water() <= prevWater + 1e-12 && c.water() > 0, t + " with: water " + c.water());
+            assertTrue(c.crownA() >= c.half() - 1e-9 && c.crownH() >= c.half() - 1e-9, t + " s: the crown is thinner than the wall");
+            assertTrue(c.crownA() <= 2.5 * c.crownH(), t + " s: crown flat: " + c.crownA() + " on " + c.crownH());
+            assertTrue(c.mid() - c.half() > 0, t + " s: hollow post");
+            assertTrue(c.water() <= prevWater + 1e-12 && c.water() > 0, t + " s: water " + c.water());
             prevWater = c.water();
         }
         WaterModel.Column risen = WaterModel.column(6, 15);
@@ -149,7 +149,7 @@ class WaterModelTest {
         assertTrue(early.crownR() < 1.1 * (early.mid() + early.half()), "the jets are still flying - there is no crown");
         // the crown falls with the outer curtain: settling column - without cap, top - edge of the wall
         WaterModel.Column falling = WaterModel.column(15, 15);
-        assertTrue(WaterModel.columnTop(15, 15) < WaterModel.columnTop(9, 15), "to 15 s the pillar settling");
+        assertTrue(WaterModel.columnTop(15, 15) < WaterModel.columnTop(9, 15), "by 15 s the pillar settling");
         assertEquals(falling.mid() + falling.half(), falling.crownR(), 1e-9, "subsidence pillar without crown");
         assertTrue(falling.crownH() <= falling.half() + 1e-9, "the top of the settling column is the edge of the wall");
     }

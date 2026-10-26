@@ -63,7 +63,7 @@ class EchoMixTest {
         EchoMix.Track t = mix.tracks().get(0);
         assertEquals(20, t.start(), 0.2);
         int second = (int) Math.round((60 - 20) / 20.0 * EchoMix.RATE);
-        assertEquals(Math.sqrt(0.05) * 0.5, t.pcm()[second] / 32767.0, 2e-3, "second echo via 2 s after the first");
+        assertEquals(Math.sqrt(0.05) * 0.5, t.pcm()[second] / 32767.0, 2e-3, "second echo after 2 s after the first");
     }
 
     @Test

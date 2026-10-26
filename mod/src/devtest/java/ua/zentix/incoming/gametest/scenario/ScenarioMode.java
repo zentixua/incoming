@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  *     <li>{@code incoming.scenario.only} ({@code -PscenarioOnly=…}) - only scripts whose name matches
  *      regular expression (without backslash: argument file MDG doubles it): this is how one fall is repeated; </li>
  *     <li>{@code incoming.scenario.realChunks} ({@code -PscenarioRealChunks}) - real loading of chunks: without
- *     {@link InstantChunks}, server at the pace of the game (20 tick/s), the properties are the same, the standard is not checked (the flight depends on how fast the machine generates).</li>
+ *     {@link InstantChunks}, server at the pace of the game (20 tick/s), the properties are the same, the reference is not checked (the flight depends on how fast the machine generates).</li>
  * </ul>
  */
 final class ScenarioMode {

@@ -46,7 +46,7 @@ class ExposureSourceTest {
     /**
      * billows of the smoke layer shines the same sky light as the blocks and particles in the open air ({@link FarView#sky}, light map),
      *  and not {@link FarView#ambient}: with it, white smoke at night came out darker than the moonlit stone nearby (night trail of ZRK
-     *  clubs, 22.10).
+     *  billows, 22.10).
      */
     @Test
     void puffsTakeTheWorldsSkyLight() throws IOException {

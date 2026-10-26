@@ -273,7 +273,7 @@ def finish(cid: str, preview: str, cand: dict, videos: list[Path], ok: bool, lin
     # the moment noted by the player - the length as he noted
     lo, hi = (0, math.inf) if cand.get("numbers", {}).get("mark") else LENGTH.get(preview, (20, 35))
     return [f"## {cid} — {'good' if ok else 'HAS NOTES'}", "", f"File {clean.name}, {length:.1f} s"
-            + ("" if lo - 1 / 30 <= length <= hi + 1 / 30 else f" (outside {lo}–{hi} c)") + f"; caption: {cid}.txt.", *lines, ""]
+            + ("" if lo - 1 / 30 <= length <= hi + 1 / 30 else f" (outside {lo}–{hi} s)") + f"; caption: {cid}.txt.", *lines, ""]
 
 
 def clip_spec(spec: str) -> tuple[str, Path]:

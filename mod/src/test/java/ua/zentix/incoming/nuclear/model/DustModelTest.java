@@ -116,7 +116,7 @@ class DustModelTest {
     void layerRisesOverHeatedGround() {
         for (double r : new double[]{600, 1000, 1400}) {
             double h = hiroshima(r).height(5);
-            assertTrue(h > 50 && h < 150, r + " m: through 5 s top " + h);
+            assertTrue(h > 50 && h < 150, r + " m: after 5 s top " + h);
         }
         double h1 = hiroshima(1000).ceiling(), h14 = hiroshima(1400).ceiling();
         assertTrue(h1 > 120 && h1 < 350, "1 km: top " + h1);
@@ -190,7 +190,7 @@ class DustModelTest {
         assertEquals(0, hiroshima(HobBlast.rangeFor(DustModel.DEBRIS_FROM_PSI, HOB, YIELD) + 1).debris(), 1e-12);
     }
 
-    /** More power means a wider and higher layer: the same shape in terms of reduced range, the top is like ∛Y. */
+    /** More power means a wider and higher layer: the same shape in terms of scaled range, the top is like ∛Y. */
     @Test
     void largerYieldWiderDust() {
         double ys = Math.cbrt(1000 / YIELD);

@@ -1773,7 +1773,7 @@ public final class NuclearGameTests {
                 .thenSucceed();
     }
 
-    /** Remove the ticket chunk and bring its holder to wait for unloading: not in the visible card, but in memory (full chunk). */
+    /** Remove the ticket chunk and bring its holder to wait for unloading: not in the visible map, but in memory (full chunk). */
     private static void toPendingUnload(GameTestHelper h, net.minecraft.server.level.ServerChunkCache chunks, ChunkPos p) {
         chunks.removeRegionTicket(HOLD, p, 0, p);
         // ticket levels, transfer of removed holders to pendingUnloads; without a time reserve, the unloading queue is not sorted,
@@ -2089,7 +2089,7 @@ public final class NuclearGameTests {
         h.succeed();
     }
 
-    /** Cruise missile on a guide: stands until ignited. */
+    /** Cruise missile on a rail: stands until ignited. */
     private static CruiseMissileEntity onRail(ServerLevel level, Vec3 rail, Vec3 target, @Nullable Loadout.Nuke warhead) {
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.placeOnLauncher(rail, 0, 40, 1000, 0, new Target.Point(target), target, null);

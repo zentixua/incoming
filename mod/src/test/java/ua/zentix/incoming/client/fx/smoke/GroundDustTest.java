@@ -124,7 +124,7 @@ class GroundDustTest {
     }
 
     /**
-     * The earth is where it is: there is no crater dust above the crater threshold; at the explosion of an anti-aircraft missile at the altitude of the suicide bomber
+     * The earth is where it is: there is no crater dust above the crater threshold; at the explosion of an anti-aircraft missile at the altitude of the Shahed
      * , the dust wave is only near the ground (not a single billows of dust at the height of the explosion), and from a height of 100 m it is less than half a kilogram.
      */
     @Test
@@ -256,10 +256,11 @@ class GroundDustTest {
     }
 
     /**
-     * The skirt grows from the point of impact (review of R462B: coming beyond the edge of the skirt was its end, and in {@value GroundDust#SKIRT_S} from the front
-     *  jumped from 22 m to the end of the rings, and billows at the edge stood in the middle of the entire ring, behind the skirt): Shahed and cruise missile on a
-     *  flat street in a calm - up to {@value GroundDust#SKIRT_S} with the front no further than R·t/{@value GroundDust#SKIRT_S}, the middle of
-     *  each billows - inside the front, after - the front without a jump between adjacent frames.
+     * The skirt grows from the impact point (review R462B: arrival beyond the skirt edge was its end, so at
+     * {@value GroundDust#SKIRT_S} s the front jumped from 22 m to the ring ends, while a billow at the edge sat
+     * in the middle of the whole ring, beyond the skirt). Shahed and cruise missile on a level street in calm
+     * air: until {@value GroundDust#SKIRT_S} s, the front is no farther than R·t/{@value GroundDust#SKIRT_S};
+     * every billow center is inside the front. Afterward, the front never jumps between adjacent frames.
      */
     @Test
     void skirtGrowsFromTheImpact() {
@@ -274,10 +275,10 @@ class GroundDustTest {
             for (double t = 0.05; t <= 2 + 1e-9; t += 0.05) {
                 double front = dust.front(t);
                 if (t <= GroundDust.SKIRT_S + 1e-9) {
-                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " from: front " + front + " further than the skirt");
+                    assertTrue(front <= reach * t / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " s: front " + front + " further than the skirt");
                     for (double[] b : layer(dust, t)) {
                         double r = Math.hypot(b[0], b[2]);
-                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " from: billows " + r + " m behind the front " + front);
+                        assertTrue(r <= Math.max(front, 1) + 1e-6, w + ", " + t + " s: billows " + r + " m behind the front " + front);
                     }
                 }
                 assertTrue(front - last <= reach * 0.05 / GroundDust.SKIRT_S + 1e-6, w + ", " + t + " s: front jumped " + last + " → " + front);
@@ -322,7 +323,7 @@ class GroundDustTest {
                     // at the edge of the street - up to a meter (the dam moves the middle by fractions of a meter)
                     double low = shifted.at(c[0], c[2]);
                     for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, shifted.at(c[0] + e[0], c[2] + e[1]));
-                    assertTrue(low <= GroundDust.WALL, "blow " + at[0] + ", " + at[1] + "; " + t + " with: billows in the house, " + c[0] + ", " + c[2]);
+                    assertTrue(low <= GroundDust.WALL, "blow " + at[0] + ", " + at[1] + "; " + t + " s: billows in the house, " + c[0] + ", " + c[2]);
                 }
             }
             assertTrue(seen > 20, "bills " + seen);
@@ -390,7 +391,7 @@ class GroundDustTest {
         for (double t = 0.25; t <= 30; t += 0.25) {
             for (double[] b : layer(dust, t)) {
                 double base = b[1] - 0.8 * b[4];
-                assertTrue(base <= 2, t + " with: skirt at height " + base + " at billows (" + b[0] + ", " + b[2] + ")");
+                assertTrue(base <= 2, t + " s: skirt at height " + base + " at billows (" + b[0] + ", " + b[2] + ")");
             }
         }
     }
@@ -424,11 +425,11 @@ class GroundDustTest {
                             seen++;
                             double low = town.at(c[0], c[2]);
                             for (double[] e : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) low = Math.min(low, town.at(c[0] + e[0], c[2] + e[1]));
-                            assertTrue(low <= GroundDust.WALL || c[1] > low, where + ", " + t + " with: billows in the house, " + c[0] + ", " + c[1] + ", " + c[2]);
+                            assertTrue(low <= GroundDust.WALL || c[1] > low, where + ", " + t + " s: billows in the house, " + c[0] + ", " + c[1] + ", " + c[2]);
                             if (t > 1 && !was.isEmpty()) {
                                 double near = Double.MAX_VALUE;
                                 for (double[] b : was) near = Math.min(near, Math.hypot(c[0] - b[0], c[2] - b[2]));
-                                assertTrue(near < 2, where + ", " + t + " from: billows jumped on " + near + " m, " + c[0] + ", " + c[2]);
+                                assertTrue(near < 2, where + ", " + t + " s: billows jumped on " + near + " m, " + c[0] + ", " + c[2]);
                             }
                         }
                         was = now;
@@ -441,7 +442,7 @@ class GroundDustTest {
 
     /**
      * A skirt in the city in the wind does not depend on the frame rate: frames through 1/20 and 1/60 s give in the same seconds one and
-     *  the same layer (review R472b: the axis of the street in the cache by cell was calculated at the place of the first question - to 30 s the same club
+     *  the same layer (review R472b: the axis of the street in the cache by cell was calculated at the place of the first question - to 30 s the same billow
      *  in 80 m from itself at a different frequency).
      */
     @Test
@@ -485,7 +486,7 @@ class GroundDustTest {
                 double[] a = centre(flat, t), b = centre(pit, t);
                 assertEquals(a[0], b[0], 1, depth + " m, " + t + " s");
                 assertEquals(a[1], b[1], 1, depth + " m, " + t + " s");
-                if (t >= 20) assertTrue(b[2] < 0.01, depth + " m, " + t + " from: by the pit " + b[2] + " dust");
+                if (t >= 20) assertTrue(b[2] < 0.01, depth + " m, " + t + " s: by the pit " + b[2] + " dust");
             }
         }
     }
@@ -564,7 +565,9 @@ class GroundDustTest {
         }
     }
 
-    /** Nodes of the billows path from {@code from} to {@code to} with: in them the billows level is not the middle of the step. */
+    /**
+     * Billow path nodes from {@code from} to {@code to} s: billow level is not the midpoint of a step there.
+     */
     private static List<Double> nodes(double from, double to) {
         List<Double> out = new ArrayList<>();
         for (double t : GroundDust.PATH) if (t >= from && t <= to) out.add(t);
@@ -711,7 +714,7 @@ class GroundDustTest {
 
     /**
      * The layer goes along the slope, and does not come off from it (second review: the threshold of the edge was a grid step - above the slope down 17°
-     *  the club hung for a hundred meters, and up the slope it went into it; eighth - starting from the point of the strip: on the slope 31° billows immediately
+     *  the billow hung for a hundred meters, and up the slope it went into it; eighth - starting from the point of the strip: on the slope 31° billows immediately
      *  “fell from the edge” and hung above the slope): impact into bare ground on the slope 10°, 17°, 31° and 42° downwind and upwind 4 m/s -
      * s 3 to 300 s bottom each billows at the nodes of the path - on the surface below it (within the block).
      */
@@ -733,7 +736,7 @@ class GroundDustTest {
             for (double t : nodes(3, 300)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                    String at = "slope " + slope + ", " + t + " from: bottom " + base + " above the relief " + below;
+                    String at = "slope " + slope + ", " + t + " s: bottom " + base + " above the relief " + below;
                     // on a slope almost at 45° (ascent limit), the relief steps give a lag of another block
                     assertTrue(Math.abs(base - below) <= (Math.abs(slope) > 0.7 ? 2 : 1) * GroundDust.DROP + 1e-6, at);
                 }
@@ -742,7 +745,7 @@ class GroundDustTest {
     }
 
     /**
-     * The pillars, trunks and lanterns of billows do not hold (third review: the surface at one point - a pillar in a block stopped a club
+     * The pillars, trunks and lanterns of billows do not hold (third review: the surface at one point - a pillar in a block stopped a billow
      *  tens of meters wide): a rocket on bare ground, wind 4 m/s, pillars 1×1 in 6 m in every hundredth column - billows go
      *  in the same way and at the same height as without them (up to 60 s - no further than 2 m, bottom - within the block).
      */
@@ -889,7 +892,7 @@ class GroundDustTest {
             for (double t : nodes(3, 90)) {
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                    String where = "step " + rise + " in " + at + " m, " + t + " from: billows " + b[0] + " m, bottom " + base + ", surface " + below + ", σv " + b[4];
+                    String where = "step " + rise + " in " + at + " m, " + t + " s: billows " + b[0] + " m, bottom " + base + ", surface " + below + ", σv " + b[4];
                     // thinner than a step - it waits at its level (no deeper than the step itself), thicker - on the surface
                     assertTrue(base >= below - Math.max(2 * b[4], rise) - GroundDust.DROP - 1e-6, where + " - deeper thickness and steps");
                     if (b[0] > at + b[3] + 20) assertTrue(base >= below - 2 * GroundDust.DROP - 1e-6, where + " - did not come to the surface");
@@ -933,7 +936,7 @@ class GroundDustTest {
             for (double[] b : layer(dust, t)) {
                 if (b[0] < 60) continue;
                 double base = b[1] - 0.8 * b[4], below = under(dust, b);
-                assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " from: billows " + b[0] + " m hanging on " + (base - below) + " above the slope");
+                assertTrue(base <= below + 2 * GroundDust.DROP + 1e-6, t + " s: billows " + b[0] + " m hanging on " + (base - below) + " above the slope");
             }
         }
     }
@@ -972,7 +975,7 @@ class GroundDustTest {
                         int over = 0;
                         for (double[] d : GroundDust.FOOTPRINT) if (gully.at(b[0] + 0.5 * b[3] * d[0], b[2] + 0.5 * b[3] * d[1]) < 0) over++;
                         if (over >= 3) inside[i] = true;
-                        if (!inside[i]) assertTrue(base >= -GroundDust.DROP - 1e-6, scene + ", " + t + " s, billows " + i + ": at the bottom of the ravine, although above it " + over + " from 13 trace samples, bottom " + base);
+                        if (!inside[i]) assertTrue(base >= -GroundDust.DROP - 1e-6, scene + ", " + t + " s, billows " + i + ": at the bottom of the ravine, although above it " + over + " of 13 trace samples, bottom " + base);
                     } else {
                         assertTrue(base >= under(dust, b) - 2 * GroundDust.DROP - 1e-6, scene + ", " + t + " s, billows " + i + ": on the slope, bottom " + base + " under " + under(dust, b));
                     }

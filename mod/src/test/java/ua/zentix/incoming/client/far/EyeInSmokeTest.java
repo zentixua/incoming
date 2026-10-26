@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Eye in the Smoke (complaint 24.10, final pass 3.7.0, scene sam-burst: the wind carries the SAM trail through the camera). The frame - squares
- *  of clubs and a veil of a layer ({@link SmokePuffs}, the same piece of tube as the trace, {@link FarFlightView#line}) - should
+ *  of billows and a veil of a layer ({@link SmokePuffs}, the same piece of tube as the trace, {@link FarFlightView#line}) - should
  *  repeat the substance itself: passing a beam from the eye through a Gaussian tube. Previously, billows tubes melted as soon as the eye
  *  entered their edge (~3,7σ), and the substance went into one veil with a thickness in the middle of the screen: the entire frame is a smooth white pall, and above the
  *  tube, where the beam does not meet it, too.
@@ -31,7 +31,7 @@ class EyeInSmokeTest {
      * 0,1σ; two glances - straight at the axis and 40° above (the tube goes to the bottom of the frame, the top looks past it into the sky). Frame - 18
      * parts (6 × 3), transmission of the part - average over 64 rays.
      * <ul>
-     * <li>Eye in the tube (|d| ≤ σ: its billows have melted, the substance is a veil) - each part is no further than 0,15 from the substance (clubs of
+     * <li>Eye in the tube (|d| ≤ σ: its billows have melted, the substance is a veil) - each part is no further than 0,15 from the substance (billows of
      * tubes walk on ~0,3σ - detail, not error).</li>
      * <li>Where the substance is lighter at the top of the frame than at the bottom (tube in the lower part) than on 0,1, the frame is also lighter at the top - not
      *  less than half of this difference without 0,03: the veil with one square gave one thing everywhere (before - smooth white pall and above the

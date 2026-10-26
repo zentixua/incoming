@@ -318,7 +318,7 @@ class SelectTest(unittest.TestCase):
                              "moment - 10 s before and 5 s after, from/to - as is; time outside the recording is not hers")
             r.name = "test"
             self.assertTrue(all(x.numbers.get("mark") is None for x in r.pov()), "no time in the name - no hour markers")
-            # time on the Flashback scale - without recording hours; nuclear explosion in the moment - and 10 after the flash
+            # time on the Flashback scale - without recording clocks; nuclear burst within the marked interval, plus 10 s after the flash
             r.at = ["00:30", "01:35/01:40", "01:39"]
             self.assertEqual([x[:2] for x in r.marks()], [(400, 700), (1780, 2100), (1900, 2000)])
         finally:
@@ -453,7 +453,7 @@ class SelectTest(unittest.TestCase):
         self.assertEqual(lens["eye"], [EYE[0], EYE[1], EYE[2] + 2])
         self.assertEqual(lens["aim"], [0.5, 64.0 + 30, 1200.0], "look - above the explosion, motionless")
         self.assertAlmostEqual(lens["fov"], 28.6, delta=0.1)
-        self.assertLessEqual(sum(x.b - x.a for x in c[0].shots), 35 * clips.TICK, "the roller is no longer than 35 s")
+        self.assertLessEqual(sum(x.b - x.a for x in c[0].shots), 35 * clips.TICK, "the clip is no longer than 35 s")
 
     def test_nuke_lens_by_yield(self):
         """Detonation power in the package: lens - along the radius of the ball (20 kt in the air - 232 block), ball with rise in the frame."""

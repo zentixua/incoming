@@ -107,7 +107,7 @@ class MixedShotTest {
 
     /**
      * Transition in order Minecraft (review of R4: there were 4/9, 6/9, 8/9 power): loud new one comes to the client tick after
-     * tick engine, the tail is inferior; in each next tick of the engine, the voice ticks and gives off volume, and the hum loop counts its own
+     * tick engine, the tail yields; in each next tick of the engine, the voice ticks and gives off volume, and the hum loop counts its own
      *  in the same place, according to the same clock - the power of the voice and hum together - the share of the tail in the mixture in each tick.
      */
     @Test

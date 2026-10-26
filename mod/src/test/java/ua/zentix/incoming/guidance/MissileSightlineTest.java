@@ -62,7 +62,7 @@ class MissileSightlineTest {
                 };
                 String end = strike(start, ground, pit + 6);
                 System.out.println("MissileSightlineTest, canopy, quarry " + pit + ", entry from " + start + ": " + end);
-                if (!end.startsWith("hit") && !end.contains("into the canopy")) {
+                if (!end.startsWith("hit") && !end.contains("in the canopy")) {
                     misses.add(String.format(Locale.ROOT, "quarry %.0f, entry from %.0f: %s", pit, start, end));
                 }
             }

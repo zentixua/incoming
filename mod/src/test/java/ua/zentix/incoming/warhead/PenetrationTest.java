@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Breakthrough according to Yang (SAND97-2426, adj. A) - numbers in the package reference book (ref/passport.md, “Breakthrough MOP according to Yang”). */
+/** Breakthrough according to Young (SAND97-2426, adj. A) - numbers in the package reference book (ref/passport.md, “Breakthrough MOP according to Young”). */
 class PenetrationTest {
     private static final Penetration.Body MOP = Penetration.body(WeaponSpec.BUNKER.payload().article());
     /** Impact conditions of the present discharge from 12 km (spec). */

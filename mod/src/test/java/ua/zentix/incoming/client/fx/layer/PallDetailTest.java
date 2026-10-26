@@ -6,12 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Pall details by time on the video card: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
+/** Pall details by time on the GPU: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
 class PallDetailTest {
     private static final long MS = 1_000_000L;
     private static final int LOW = PallPass.LADDER.length - 1;
 
-    /** Frames of 16 ms with one time on the video card, {@code frames} pieces; watch - in {@code clock[0]}. */
+    /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
     private static void frames(PallPass.Detail d, double gpuMs, int frames, long[] clock) {
         for (int i = 0; i < frames; i++) {
             clock[0] += 16 * MS;

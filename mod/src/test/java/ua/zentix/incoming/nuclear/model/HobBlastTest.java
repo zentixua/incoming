@@ -70,7 +70,7 @@ class HobBlastTest {
             "1000, 20, 2300", "1000, 5, 4400", "1000, 3, 5900", "1000, 1, 13000", "1000, 0.5, 24000",
     })
     void surfaceBurst(double yieldKt, double psi, double metres) {
-        assertEquals(metres, HobBlast.rangeFor(psi, 0, yieldKt), metres * 0.1, () -> yieldKt + " cT, " + psi + " psi");
+        assertEquals(metres, HobBlast.rangeFor(psi, 0, yieldKt), metres * 0.1, () -> yieldKt + " kt, " + psi + " psi");
     }
 
     /** The pressure drops with range at any detonation height, and Broad’s junction with the DNA standard is without a step. */

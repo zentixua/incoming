@@ -27,7 +27,7 @@ class BreachModelTest {
         assertEquals(21, rc.charge(3.5 * FOOT, BreachModel.TAMPED) / M112_TNT_KG, 21 * 0.05);
     }
 
-    /** The breakdown radius is an inversion of the formula: the charge required by FM for this radius breaks through it (inside the steps). */
+    /** The breach radius is an inversion of the formula: the charge required by FM for this radius breaks through it (inside the steps). */
     @Test
     void radiusInvertsCharge() {
         for (BreachModel.Material m : BreachModel.Material.values()) {

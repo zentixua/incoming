@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlackRainModelTest {
-    /** Like in Hiroshima: 15 air temperature, fires up to 2 km, wind 2,5 m/s to the east (+x). */
+    /**
+     * As in Hiroshima: 15 kt airburst, fires out to 2 km, wind 2.5 m/s east (+x).
+     */
     private static final BlackRainModel HIROSHIMA = new BlackRainModel(15, 2000, 0, 2.5, 1);
 
     @Test

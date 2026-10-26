@@ -172,7 +172,7 @@ public final class BurnGameTests {
     }
 
     private static String about(LivingEntity e) {
-        return String.format(Locale.ROOT, "burn level %d, health %.2f from %.2f", level(e), e.getHealth(), e.getMaxHealth());
+        return String.format(Locale.ROOT, "burn level %d, health %.2f of %.2f", level(e), e.getHealth(), e.getMaxHealth());
     }
 
     private static String fmt(double v) {

@@ -78,7 +78,7 @@ final class LeakCheck {
     private static final long GC_PAUSE_S = 5, OPEN_LIMIT_S = 900;
     /**
      * GC searches for paths to the roots of thread VM by depth-first traversal (JDK 21): on its default stack (1 MB) a deep chain of
-     *  links overflows the stack, and JVM crashes SIGSEGV without hs_err (the game is on the first reset; a list of 2 million
+     *  links overflows the stack, and JVM crashes SIGSEGV without hs_err (the game is on the first dump; a list of 2 million
      *  links: with 1 MB drops, with 1,5 MB and more - no). With a stack less than this (KB)
      * paths are not searched.
      */
@@ -459,7 +459,7 @@ final class LeakCheck {
         try {
             ManagementFactory.getPlatformMBeanServer().invoke(new ObjectName("com.sun.management:type=HotSpotDiagnostic"), "dumpHeap",
                     new Object[] {file.toString(), true}, new String[] {String.class.getName(), boolean.class.getName()});
-            Incoming.LOG.info("SCENARIO leak heap dump: {} MB for {} with → {}", Files.size(file) >> 20, (System.nanoTime() - t) / NANOS, dir.getParent().relativize(file));
+            Incoming.LOG.info("SCENARIO leak heap dump: {} MB in {} s → {}", Files.size(file) >> 20, (System.nanoTime() - t) / NANOS, dir.getParent().relativize(file));
         } catch (Exception | LinkageError ex) {
             Incoming.LOG.warn("SCENARIO leak heap dump: Heap snapshot not taken ({})", file, ex);
         }
@@ -479,7 +479,7 @@ final class LeakCheck {
         private static final int DETAILS = 40, PER_HOLDER = 2, HOLDERS = 25, LOG_HOLDERS = 5, HOLDER_LINKS = 4, STACK = 8, CHAIN_HEAD = 8, CHAIN_TAIL = 14;
         private final jdk.jfr.Recording recording = new jdk.jfr.Recording();
 
-        /** {@code paths} - search for paths to the roots during reset (you need a thread stack VM not less than {@link #PATH_STACK_KB}). */
+        /** {@code paths} - search for paths to the roots during dump (you need a thread stack VM not less than {@link #PATH_STACK_KB}). */
         OldObjects(boolean paths) {
             recording.setName("incoming-leak");
             recording.enable("jdk.OldObjectSample").withStackTrace().with("cutoff", paths ? "infinity" : "0 ns");
@@ -560,7 +560,7 @@ final class LeakCheck {
             for (Sample s : samples) roots.merge(s.root, 1, Integer::sum);
 
             List<String> out = new ArrayList<>();
-            out.add(String.format(Locale.ROOT, "Sampling of old objects JFR, measurement %d: sample %d (reset %d ms), with a path to the root %d, through the world %d (%s)%s",
+            out.add(String.format(Locale.ROOT, "Sampling of old objects JFR, measurement %d: sample %d (dump %d ms), with a path to the root %d, through the world %d (%s)%s",
                     r, samples.size(), took, rooted, world.size(), String.join(", ", WORLD_MARKS), broken > 0 ? ", not disassembled " + broken : ""));
             out.add("");
             out.add("Roots, all sample:");
@@ -593,7 +593,7 @@ final class LeakCheck {
             if (shown < world.size()) out.add("... shown " + shown + " from " + world.size());
             Path txt = dir.resolve("old-" + r + ".txt");
             Files.write(txt, out);
-            Incoming.LOG.info("SCENARIO leak menu {} jfr: sample {}, with a path to the root {}, through the world {}, holders {} (reset {} ms) → {}, {}", r, samples.size(),
+            Incoming.LOG.info("SCENARIO leak menu {} jfr: sample {}, with a path to the root {}, through the world {}, holders {} (dump {} ms) → {}, {}", r, samples.size(),
                     rooted, world.size(), byCount.size(), took, dir.getParent().relativize(file), dir.getParent().relativize(txt));
             for (int i = 0; i < Math.min(LOG_HOLDERS, byCount.size()); i++) {
                 Incoming.LOG.info("SCENARIO leak menu {} holder {} × {}", r, byCount.get(i).getValue().size(), byCount.get(i).getKey());

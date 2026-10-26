@@ -71,7 +71,7 @@ public final class EyeGameTests {
         h.assertValueEqual(FlashEyes.scars(p).scars().size(), 2, "spots after the second flash");
         for (int i = 0; i < 2 * RetinaScars.MAX; i++) NuclearWarhead.expose(level, d, p, null);
         h.assertValueEqual(FlashEyes.scars(p).scars().size(), RetinaScars.MAX, "spots after many flashes");
-        h.assertTrue(p.isAlive() && p.getRemainingFireTicks() <= 0, "in 4 km from 15 the skin was burned - the check is not about the eyes");
+        h.assertTrue(p.isAlive() && p.getRemainingFireTicks() <= 0, "at 4 km from a 15 kt burst, skin was burned — the check is not about eyes");
         FakePlayer creative = player(h, 0, -45);
         creative.setGameMode(GameType.CREATIVE);
         NuclearWarhead.expose(level, d, creative, null);

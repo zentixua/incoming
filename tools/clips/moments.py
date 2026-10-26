@@ -220,7 +220,7 @@ def direction(yaw: float, pitch: float) -> tuple[float, float, float]:
 
 
 def axes(yaw: float, pitch: float, roll: float = 0.0) -> tuple[tuple, tuple, tuple]:
-    """Forward, right and up camera; roll - Grad, plus - to the left, like the key Flashback (Cameras.View.rolled)."""
+    """Forward, right and up camera; roll - degrees, plus - to the left, like the key Flashback (Cameras.View.rolled)."""
     fwd = direction(yaw, pitch)
     yr = math.radians(yaw)
     right = (-math.cos(yr), 0.0, -math.sin(yr))
@@ -509,7 +509,7 @@ and at shootdown; --star viewers first, then those who saw it longer (all such v
             if off <= on:
                 return ({"kind": "pov", "viewer": p[0]},
                         f"eyes {p[0]}: hit in {p[3]:.0f} blocks, in frame {p[4]:+.2f} {p[5]:+.2f}, loud in the frame {on}, behind the scenes {off}")
-        return {"kind": "auto", "rig": "tripod", "dist": [60, 90, 130], "elev": [6, 16, 28], "share": 0.22}, "free chamber at impact"
+        return {"kind": "auto", "rig": "tripod", "dist": [60, 90, 130], "elev": [6, 16, 28], "share": 0.22}, "free camera at impact"
 
     def impact_shot(self, name: str, f: Flight, before: int = 60, after: int = 100) -> Shot:
         cam, why = self.camera_for_impact(f)
@@ -643,9 +643,9 @@ and at shootdown; --star viewers first, then those who saw it longer (all such v
                            # from above (60°) impacts are visible in the streets and trenches, which cover houses from the sides
                            "elev": [12, 25, 40, 60]},
                           {"keys": [key(h) for h in group], "centre": [cx, cy, cz], "spread": spread},
-                          f"{n} hits the ground for {window / TICK:.0f} with in a circle {spread:.0f} blocks")]
+                          f"{n} ground impacts over {window / TICK:.0f} s in a circle {spread:.0f} blocks")]
             out.append(Candidate("chaos", self.name, str(self.db), n + (1 if len(weapons) > 1 else 0), t0, "+".join(weapons),
-                                 f"{n} hits the ground for {window / TICK:.0f} with with {mmss(t0)} ({', '.join(weapons)}), scatter {spread:.0f} blocks",
+                                 f"{n} ground impacts over {window / TICK:.0f} s starting at {mmss(t0)} ({', '.join(weapons)}), scatter {spread:.0f} blocks",
                                  {"ground": n, "spread": round(spread), "weapons": weapons, "seconds": window // TICK}, shots))
         # through the eyes of the players: windows where there are the most impacts on the ground in the frame, and there is less loud noise off-screen than in the frame
         rows = self.views["impact"]
@@ -663,7 +663,7 @@ and at shootdown; --star viewers first, then those who saw it longer (all such v
                     continue
                 # player's eyes first: shots as the player saw them
                 out.append(Candidate("chaos", self.name, str(self.db), n + 2, t0, "pov",
-                                     f"eyes {viewer}: {n} hits the ground in frame behind {window / TICK:.0f} with with {mmss(t0)}, loud behind the scenes {off}",
+                                     f"eyes {viewer}: {n} ground impacts in frame over {window / TICK:.0f} s starting at {mmss(t0)}, loud off-screen {off}",
                                      {"ground_in_frame": n, "loud_on": on, "loud_off": off, "seconds": window // TICK},
                                      [Shot("chaos", "chaos", t0 - 40, t0 + window + 40, {"kind": "pov", "viewer": viewer},
                                            {"keys": [{"t": r[2], "pos": [r[8], r[9], r[10]], "size": BLAST.get(weapon.get(r[1]), 16), "id": r[1]}
@@ -1065,7 +1065,7 @@ name-based UUID, `OfflinePlayer:<name>`); bots (Almighty and other mods) have th
         return dt
 
     def fly(self) -> list[Candidate]:
-        """7 - flight of the free chamber (`--fly`, time on the Flashback scale): eye - in a straight line from `from` through `to` (at
+        """7 - flight of the free camera (`--fly`, time on the Flashback scale): eye - in a straight line from `from` through `to` (at
         `to_at`) and further; gaze - constant (`aim_flight`): towards `look`, turned no further than `turn` to where in the
          frame there are more window impacts `focus`, then impacts on the ground, then everyone; tilt towards them. Replay chunks are what
          the recording sent before tick (`seen_chunks`): there are none under the eye and on the ground in the lower half of the frame - there is relief there
@@ -1381,7 +1381,7 @@ def annotate(r: Replay, cands: list[Candidate], notes: dict, bonus: float) -> No
         hit = [what for a, b, what in spans if a <= c.t <= b]
         if hit:
             c.score += bonus
-            c.summary += " - according to the magazine: " + "; ".join(hit)
+            c.summary += " - according to the log: " + "; ".join(hit)
             c.numbers["notes"] = hit
 
 
@@ -1440,19 +1440,19 @@ def main():
     p.add_argument("--out", default="clips")
     p.add_argument("--top", type=int, default=8, help="candidates for the video")
     p.add_argument("--pov-top", type=int, default=15, help="candidates “through the eyes of the players” (each with their own video)")
-    p.add_argument("--fov", type=float, default=70, help="players' vertical viewing angle, Grad")
-    p.add_argument("--aspect", type=float, default=9 / 16, help="frame width to height (vertical roller - 9:16)")
+    p.add_argument("--fov", type=float, default=70, help="players' vertical field of view, degrees")
+    p.add_argument("--aspect", type=float, default=9 / 16, help="frame width to height (vertical clip - 9:16)")
     p.add_argument("--center", type=float, default=0.7, help="frame share for \"in the middle\"")
     p.add_argument("--soft", type=int, default=2, help="the beam is clear if there are no more than that many blocks of foliage, glass and water in the path")
     p.add_argument("--prefer", default="", help="replays (part of the name, separated by commas), whose candidates come first")
     p.add_argument("--star", default="", help="spectators (player:<nik>, separated by commas), whose drone downings come first")
-    p.add_argument("--notes", help="game log: props of hours of replays and segments with what happened (README.md)")
-    p.add_argument("--note-bonus", type=float, default=1.0, help="increase to the candidate's score in the journal segment")
+    p.add_argument("--notes", help="game log: replay clock anchors and annotated segments (README.md)")
+    p.add_argument("--note-bonus", type=float, default=1.0, help="candidate score bonus within an annotated log segment")
     p.add_argument("--at", action="append", default=[],
-                   help="moment through the eyes of the person who recorded it: on a scale Flashback 25:02 or on a clock 2026-10-14T19:05:30 (or from/to "
-                        "via /); a recording with marked moments (and markers Flashback) gives “through the eyes of the players” only their")
+                   help="moment from the recorder's point of view: Flashback timeline time 25:02 or wall-clock time 2026-10-14T19:05:30 "
+                        "(or from/to separated by /); a recording with marked moments (and Flashback markers) contributes POV clips only for those moments")
     p.add_argument("--fly", action="append", default=[], type=fly_spec,
-                   help="free chamber span: 'at=25:02/25:40 from=x,y,z to=x,y,z [to_at=25:32] [look=south] [turn=25] [fov=70]'")
+                   help="free camera span: 'at=25:02/25:40 from=x,y,z to=x,y,z [to_at=25:32] [look=south] [turn=25] [fov=70]'")
     p.add_argument("--fpv", action="append", default=[], type=fpv_spec,
                    help="camera passes, like a FPV drone, past the hottest beats: '[search=14:00/20:00] [near=x,z,r] "
                         "[shots=4] [seconds=9] [fov=80] [time=night]'")

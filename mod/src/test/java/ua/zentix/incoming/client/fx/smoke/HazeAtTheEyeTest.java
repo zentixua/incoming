@@ -15,9 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * haze at the eye after arrival: optical depth of the eye ray (1,6 m above the street) downwind from the impact - the entire cloud, dust wave and
- *  skirt of destroyed dust. The standard is camera recordings after Shahed strikes on the streets of Kharkov: on 5–10 s the street in a gray-white
+ *  skirt of destroyed dust. The reference is camera recordings after Shahed strikes on the streets of Kharkov: on 5–10 s the street in a gray-white
  *  haze, cars and houses in 30–60 m are visible (τ beam in 40 m - approx. 1–2: the haze is visible, you can see through it), by the minute it’s clear.
- * ⚠ The standard itself is an estimate of τ from camera frames, not frozen.
+ * ⚠ The reference itself is an estimate of τ from camera frames, not frozen.
  */
 class HazeAtTheEyeTest {
     private static final CloudModel.Air CALM = new CloudModel.Air(CloudModel.N_STANDARD, 3, 0, 0.1, (int) Stability.C, 0.5);
@@ -45,8 +45,9 @@ class HazeAtTheEyeTest {
     }
 
     /**
-     * Shahed into the pavement near the lawn (complaint: at the blow next to the grass in 40 m on 6 there was a brown wall - the turf gave off a centimeter of
-     *  soil, like bare earth): there is grass around the crater. On 6 and 10 s in 40 there is the same haze as on the street, by the minute it’s clear.
+     * Shahed into pavement beside a lawn (complaint: an impact beside grass left a brown wall at 40 m at 6 s;
+     * turf released a centimeter of soil like bare ground). Grass surrounds the crater. At 6 and 10 s, haze
+     * at 40 m matches the street case; clear by one minute.
      */
     @Test
     void streetHitByALawnIsNotABrownWall() {
@@ -59,10 +60,11 @@ class HazeAtTheEyeTest {
     }
 
     /**
-     * Shahed at the intersection of the block (houses 10×10×12 m, streets along 6 m; the wind near the ground is {@link LocalWind}): in the street the wind is
-     *  many times weaker than the field, and haze lasts longer - by 30 s 40 m along the street is still visible (the field is clear by this time), by
-     * 5 minutes it goes away. ⚠ Standard - assessment: in a canyon street the air changes through the top in minutes (Oke 1988), cameras
-     *  Kharkov - haze on 11–13 p.
+     * Shahed at a block intersection (10×10×12 m houses, 6 m streets; local ground wind from {@link LocalWind}):
+     * street wind is several times weaker than field wind, so haze lasts longer. It remains visible 40 m
+     * along the street at 30 s (the field is clear by then) and clears by 5 minutes. ⚠ The reference is an
+     * estimate: street-canyon air exchanges through the top over minutes (Oke 1988); Kharkiv cameras show
+     * haze at 11–13 s.
      */
     @Test
     void streetCanyonHoldsTheHazeLonger() {
@@ -91,7 +93,7 @@ class HazeAtTheEyeTest {
         CloudModel low = new CloudModel(drone, air, false, 0, flat), lowField = new CloudModel(drone, CALM, false, 0, flat);
         for (double t : new double[]{1, 3}) {
             assertEquals(highField.thermal.driftX(t), high.thermal.driftX(t), 0.05 * highField.thermal.driftX(t), t + " s: in 100 m");
-            assertTrue(low.thermal.driftX(t) < 0.8 * lowField.thermal.driftX(t), t + " from: near the ground " + low.thermal.driftX(t) + " against " + lowField.thermal.driftX(t));
+            assertTrue(low.thermal.driftX(t) < 0.8 * lowField.thermal.driftX(t), t + " s: near the ground " + low.thermal.driftX(t) + " against " + lowField.thermal.driftX(t));
         }
     }
 

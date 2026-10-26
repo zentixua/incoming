@@ -322,7 +322,7 @@ def report(a):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--fov", type=float, default=70, help="vertical viewing angle, Grad")
+    p.add_argument("--fov", type=float, default=70, help="vertical viewing angle, degrees")
     p.add_argument("--aspect", type=float, default=16 / 9, help="frame width to height (9:16 - 0.5625)")
     p.add_argument("--center", type=float, default=0.7, help="frame share for \"in the middle\"")
     p.add_argument("--soft", type=int, default=2, help="the ray is clear if there are no more than that many blocks of transparent shape in the path")

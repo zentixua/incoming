@@ -97,7 +97,7 @@ record Plume(int t, Vec3 pos, double size, Look look) {
      * from {@code y} to {@code top}); opacity 0..1.
      */
     record Shape(double x, double y, double z, double r, double top, boolean cylinder, double alpha) {
-        /** Distance to shape (negative inside). */
+        /** Distance to shape (less than 0 inside). */
         double distance(double px, double py, double pz) {
             if (!cylinder) {
                 double dx = px - x, dy = py - y, dz = pz - z;
@@ -195,7 +195,7 @@ record Plume(int t, Vec3 pos, double size, Look look) {
         }
     }
 
-    /** Point distance to smoke (negative inside); no smoke this tick means infinity. */
+    /** Point distance to smoke (less than 0 inside); no smoke this tick means infinity. */
     double clearance(Vec3 p, double at) {
         double best = Double.POSITIVE_INFINITY;
         if (!alive(at)) return best;
@@ -244,7 +244,7 @@ record Plume(int t, Vec3 pos, double size, Look look) {
 
     /**
      * Particle path over {@code age} mod ticks: velocity += rise (stronger while hot) and wind, position +=
-     * velocity, velocity *= drag. Tables for unit initial velocity, unit wind/tick² and rise displacement.
+     * velocity, velocity *= drag. Tables for initial velocity 1, wind 1/tick² and rise displacement.
      */
     static final class Motion {
         private final double[] move, wind, rise;

@@ -566,7 +566,7 @@ def round_footprint(arr, view=2):
 #  - the wall of the area across the view would cut off the silhouette straight - such a frame is not taken (like the cap); along the view, the wall
 #    cuts only the thickness along the ray, and not the silhouette, and the frame is good;
 #  - the elongated silhouette is compressed to a round one (--round, like the cap above): the shape of the cloud is set by the mod gauss, not the frame;
-#  - a ring (torus of dust) - not a lump: --wedge takes a piece of it so many Grad wide, facing the camera (wedge_mask).
+#  - a ring (torus of dust) - not a lump: --wedge takes a piece of it so many degrees wide, facing the camera (wedge_mask).
 # Light - six suns with albedo and asymmetry billows of smoke (CLUBS["puff"]): the color and opacity of the substance is from the mod.
 VIEWS = {"side": 1, "front": 0, "top": 2}
 

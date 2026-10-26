@@ -129,7 +129,7 @@ public final class ScorchGameTests {
         StringBuilder table = new StringBuilder();
         for (int r = 0; r < RINGS; r++) {
             int n = grass[r] + burnt[r] + charred[r];
-            table.append(String.format(Locale.ROOT, "%n %d–%d blocks, light up to %.1f, pressure up to %.1f, see ball %d: turf %d, earth %d (large %d), burnt %d; plants %d from %d; biome %.2f",
+            table.append(String.format(Locale.ROOT, "%n %d–%d blocks, light up to %.1f, pressure up to %.1f, see ball %d: turf %d, earth %d (large %d), burnt %d; plants %d of %d; biome %.2f",
                     FIRST + r * RING, FIRST + (r + 1) * RING, fluence[r], psi[r], seen[r], grass[r], burnt[r], coarse[r], charred[r], plantsLeft[r], plants[r],
                     cells[r] == 0 ? 0 : levels[r] / (double) cells[r]));
             h.assertTrue(n == plants[r], "in the ring " + r + " the top of the platform is not turf or earth: " + (plants[r] - n) + table);

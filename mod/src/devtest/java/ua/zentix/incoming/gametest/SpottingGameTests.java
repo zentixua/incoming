@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 /**
  * Intelligence ({@link Sightings}): who the party sees and what follows from this for the remote control ({@link ServerActions#sighted}) and
- *  card. {@code FakePlayer} NeoForge is not added to the world: inspection and map get the list of players themselves.
+ *  map. {@code FakePlayer} NeoForge is not added to the world: inspection and map get the list of players themselves.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -168,7 +168,7 @@ public final class SpottingGameTests {
         return got != null && got.target() instanceof Target.Sighted s && s.quarry().equals(aim.target()) && s.seen().equals(aim.point());
     }
 
-    /** Forgotten: through {@code sight_memory} there is nothing noticed either for the remote control or for the card. */
+    /** Forgotten: through {@code sight_memory} there is nothing noticed either for the remote control or for the map. */
     @GameTest(template = "pad", batch = "spotting_memory", timeoutTicks = 60)
     public static void spottedIsForgotten(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -232,7 +232,7 @@ public final class SpottingGameTests {
         return p;
     }
 
-    /** Remove the pause between card requests. */
+    /** Remove the pause between map requests. */
     private static ServerPlayer fresh(ServerPlayer p) {
         p.removeData(ModAttachments.LAST_MAP_PLAYERS.get());
         return p;

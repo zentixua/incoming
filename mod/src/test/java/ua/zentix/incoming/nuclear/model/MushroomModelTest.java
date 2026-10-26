@@ -44,7 +44,7 @@ class MushroomModelTest {
         for (double t = tm; t < 600; t *= 1.01) {
             double edge = MushroomModel.edgeTemperature(t, 15, false);
             assertTrue(edge <= MushroomModel.coreTemperature(t, 15, false) + 1e-9, t + " s");
-            assertTrue(edge <= last, t + " from: " + edge);
+            assertTrue(edge <= last, t + " s: " + edge);
             assertTrue(last == Double.MAX_VALUE || last - edge < 0.02 * last, t + " s: jump " + last + " → " + edge);
             last = edge;
         }
@@ -90,13 +90,14 @@ class MushroomModelTest {
         double last = Double.MAX_VALUE;
         for (double t = 0.2; t < 900; t += 0.2) {
             double k = MushroomModel.coreTemperature(t, 15, false);
-            assertTrue(k <= last && k > MushroomModel.AMBIENT_K, t + " from: " + k);
+            assertTrue(k <= last && k > MushroomModel.AMBIENT_K, t + " s: " + k);
             last = k;
         }
     }
 
     /**
-     * At night, the 15 CT core glows for minutes: after a minute - brightly (brighter than a white wall at noon with the eye getting used to it), after two and a half - still noticeable, after ten - not. For 1 kt it goes out earlier.
+     * At night the 15 kt core glows for minutes: bright after one minute (brighter than a white wall at noon,
+     * with eye adaptation), still visible after two and a half, invisible after ten. At 1 kt it fades sooner.
      */
     @Test
     void coreGlowsForMinutesAtNight() {
@@ -132,16 +133,16 @@ class MushroomModelTest {
         for (double t = 1; t < MushroomModel.lifeSeconds(15); t += 3) {
             MushroomModel.Shape s = MushroomModel.shape(t, 15, 0, true, 2_000);
             assertNotNull(s, t + " s");
-            assertTrue(s.stemTop() <= s.capY() + 1e-9, t + " with: stem above the middle of the ring");
-            assertTrue(s.stemTop() >= s.capBottom() - 1e-9, t + " c: the ground stem did not reach the cap");
-            assertTrue(s.skirtR() + s.skirtW() <= 2_000 + 1e-9, t + " with: skirt further than front");
-            assertTrue(s.ringR() + s.ringA() <= s.capR() + 1e-9, t + " with: ring wider than cap");
+            assertTrue(s.stemTop() <= s.capY() + 1e-9, t + " s: stem above the middle of the ring");
+            assertTrue(s.stemTop() >= s.capBottom() - 1e-9, t + " s: the ground stem did not reach the cap");
+            assertTrue(s.skirtR() + s.skirtW() <= 2_000 + 1e-9, t + " s: skirt further than front");
+            assertTrue(s.ringR() + s.ringA() <= s.capR() + 1e-9, t + " s: ring wider than cap");
             assertTrue(s.top() >= s.capY(), t + " s");
         }
         // near the air, a column of dust rises from the ground and catches up with the cap later
         double high = 4 * FireballModel.maxRadius(15, false);
         MushroomModel.Shape air = MushroomModel.shape(5, 15, high, false, 2_000);
-        assertTrue(air.stemTop() < air.capBottom(), "air: stem at the cap already through 5 s");
+        assertTrue(air.stemTop() < air.capBottom(), "air: stem at the cap already after 5 s");
         MushroomModel.Shape late = MushroomModel.shape(60, 15, 0, true, 5_000);
         assertEquals(MushroomModel.RING * late.capR(), late.ringR(), 1e-9);
         double tau = late.capDrops() * 2 * Math.min(late.ringA(), late.ringB());
@@ -214,15 +215,15 @@ class MushroomModelTest {
                     MushroomModel.Shape s = MushroomModel.shape(t, y, hob, surface, 1e9);
                     double foot = MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s));
                     double body = MushroomModel.stemRadius(0, s.stemR(), 0);
-                    assertTrue(foot <= Math.max(MushroomModel.DUST_BASE * s.capR(), body) + 1e-9, y + " cT, " + t + " with: the bell is wider than the circle of dust");
-                    assertTrue(s.skirtR() + s.skirtW() > 1.2 * foot, y + " cT, " + t + " with: skirt under stem");
+                    assertTrue(foot <= Math.max(MushroomModel.DUST_BASE * s.capR(), body) + 1e-9, y + " kt, " + t + " s: the bell is wider than the circle of dust");
+                    assertTrue(s.skirtR() + s.skirtW() > 1.2 * foot, y + " kt, " + t + " s: skirt under stem");
                 }
             }
         }
     }
 
     /**
-     * Boiling hours cap - the integral of the circulation rate from the explosion: from zero, without jumps, only forward, and to stabilization
+     * Boiling clock cap - the integral of the circulation rate from the explosion: from zero, without jumps, only forward, and to stabilization
      *  rise. The revolution of the cap 15 kt at the 20 second is 15–35 s (the substance bypasses the cross section of the ring at the rate of rise), then
      *  slower; over the entire life - several revolutions, for 1 and 15 kt - the same order.
      */
@@ -235,20 +236,20 @@ class MushroomModelTest {
             for (double t = 1e-3; t < c.end(); t += 0.01) fastest = Math.max(fastest, rate(kt, t));
             for (double t = step; t < c.end(); t += step) {
                 double v = c.at(t);
-                assertTrue(v >= last, kt + " cT, " + t + " s");
+                assertTrue(v >= last, kt + " kt, " + t + " s");
                 // per step - no more than with the fastest access
-                assertTrue(v - last <= 1.01 * fastest * step, kt + " cT, " + t + " from: " + (v - last));
+                assertTrue(v - last <= 1.01 * fastest * step, kt + " kt, " + t + " s: " + (v - last));
                 last = v;
             }
-            assertEquals(c.at(c.end()), c.at(3 * c.end()), 0, kt + " kt: the clock stands after the end of the table");
-            assertTrue(c.at(c.end()) > 10 && c.at(c.end()) < 40, kt + " kt: " + c.at(c.end()) + " glad");
+            assertEquals(c.at(c.end()), c.at(3 * c.end()), 0, kt + " kt: clock stops after the end of the table");
+            assertTrue(c.at(c.end()) > 10 && c.at(c.end()) < 40, kt + " kt: " + c.at(c.end()) + " rad");
             // table - the same integral as direct addition in small steps
             double sum = 0, rate0 = rate(kt, 1e-3);
             for (double t = 0; t < 120; t += 0.01) {
                 double r = rate(kt, t + 0.005);
                 sum += (t == 0 ? 0.5 * (rate0 + r) : r) * 0.01;
             }
-            assertEquals(sum, c.at(120), 0.01 * sum, kt + " kt: hours through 2 minutes");
+            assertEquals(sum, c.at(120), 0.01 * sum, kt + " kt: clock after 2 minutes");
         }
         double turn20 = 2 * Math.PI / rate(15, 20), turn120 = 2 * Math.PI / rate(15, 120);
         assertTrue(turn20 > 15 && turn20 < 35, "revolution at 20 second: " + turn20 + " s");
@@ -273,13 +274,13 @@ class MushroomModelTest {
             double hob = 240 * Math.cbrt(kt), tr = MushroomModel.rollUpSeconds(kt, false);
             assertEquals(0, MushroomModel.shape(0.2 * tr, kt, hob, false, 1e9).capDrops(), 0, kt + " kt: drops in a ball");
             MushroomModel.Shape rolled = MushroomModel.shape(tr, kt, hob, false, 1e9);
-            assertEquals(MushroomModel.DROP_SIGMA, rolled.capDrops(), 1e-12, kt + " cT: drops in a ring");
+            assertEquals(MushroomModel.DROP_SIGMA, rolled.capDrops(), 1e-12, kt + " kt: drops in a ring");
             for (double t = 0.5; t < MushroomModel.lifeSeconds(kt); t *= 1.7) {
                 MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, false, 1e9);
                 double molecules = s.capNo2() * MushroomModel.capVolume(s);
-                assertEquals(MushroomModel.NO2_SHARE * MushroomModel.NOX_PER_KT * kt * s.life(), molecules, 1e-9 * molecules, kt + " cT, " + t + " s");
+                assertEquals(MushroomModel.NO2_SHARE * MushroomModel.NOX_PER_KT * kt * s.life(), molecules, 1e-9 * molecules, kt + " kt, " + t + " s");
                 assertTrue(MushroomModel.capAbsorption(s, 0) < MushroomModel.capAbsorption(s, 1)
-                        && MushroomModel.capAbsorption(s, 1) < MushroomModel.capAbsorption(s, 2), kt + " cT, " + t + " with: NO₂ brown");
+                        && MushroomModel.capAbsorption(s, 1) < MushroomModel.capAbsorption(s, 2), kt + " kt, " + t + " s: NO₂ brown");
             }
         }
         assertEquals(8.1, MushroomModel.NO2_CROSS[2] / MushroomModel.NO2_CROSS[0], 0.1);
@@ -300,7 +301,7 @@ class MushroomModelTest {
                 double slope = (CloudModel.top(t + 1e-3, 0, 15, surface) - CloudModel.top(t - 1e-3, 0, 15, surface)) / 2e-3;
                 assertEquals(slope, CloudModel.riseSpeed(t, 0, 15, surface), 1e-4 * Math.max(slope, 1), t + " s");
                 double ball = (FireballModel.centreHeight(t + 1e-3, 0, 15, surface) - FireballModel.centreHeight(t - 1e-3, 0, 15, surface)) / 2e-3;
-                assertEquals(slope, ball, 1e-4 * Math.max(slope, 1), t + " with: ball");
+                assertEquals(slope, ball, 1e-4 * Math.max(slope, 1), t + " s: ball");
             }
         }
     }
@@ -317,7 +318,7 @@ class MushroomModelTest {
         double prev = 0;
         for (double kt = 0.1; kt <= 1000.001; kt *= 1.02) {
             double life = MushroomModel.lifeSeconds(kt), r = CloudModel.capRadius(kt), td = MushroomModel.dispersalSeconds(kt);
-            assertTrue(life > prev, kt + " kt: " + life + " with after " + prev);
+            assertTrue(life > prev, kt + " kt: " + life + " s after " + prev);
             assertEquals(CloudModel.stabilizationSeconds(kt) + td, life, 1e-9, kt + " kt");
             assertEquals(r * r, MushroomModel.RICHARDSON * MushroomModel.DISSIPATION * td * td * td, 1e-9 * r * r, kt + " kt");
             prev = life;
@@ -343,7 +344,7 @@ class MushroomModelTest {
         for (double kt : new double[]{1, 15, 1000}) {
             for (boolean surface : new boolean[]{false, true}) {
                 double hob = surface ? 0 : 240 * Math.cbrt(kt), life = MushroomModel.lifeSeconds(kt);
-                String at = kt + " cT, " + (surface ? "ground" : "air");
+                String at = kt + " kt, " + (surface ? "ground" : "air");
                 assertEquals(0, MushroomModel.stemRise(0, hob, kt, surface), 1e-9, at);
                 double v0 = MushroomModel.stemRise(1e-3, hob, kt, surface) / 1e-3, rise = CloudModel.riseSpeed(0, hob, kt, surface);
                 assertEquals(MushroomModel.STEM_INFLOW * rise, v0, 1e-3 * v0, at + ": at the moment of explosion");
@@ -352,7 +353,7 @@ class MushroomModelTest {
                 double prev = 0;
                 for (double t = 1; t < life; t += 10) {
                     double h = MushroomModel.stemRise(t, hob, kt, surface);
-                    assertTrue(h >= prev && h <= all + 1e-9, at + ", " + t + " from: " + h);
+                    assertTrue(h >= prev && h <= all + 1e-9, at + ", " + t + " s: " + h);
                     prev = h;
                 }
             }
@@ -372,7 +373,7 @@ class MushroomModelTest {
                     MushroomModel.Shape s = MushroomModel.shape(t, kt, hob, surface, 1e9);
                     if (s == null) break;
                     if (prev != null) {
-                        String at = kt + " cT, " + (surface ? "ground" : "air") + ", " + t + " s";
+                        String at = kt + " kt, " + (surface ? "ground" : "air") + ", " + t + " s";
                         assertTrue(s.top() >= prev.top() - 1e-9, at + ": top down " + prev.top() + " → " + s.top());
                         assertTrue(s.capY() >= prev.capY() - 1e-9, at + ": ring dropped " + prev.capY() + " → " + s.capY());
                     }

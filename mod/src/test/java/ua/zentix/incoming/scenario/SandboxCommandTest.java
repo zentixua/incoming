@@ -109,7 +109,7 @@ class SandboxCommandTest {
         }
     }
 
-    /** A real explosion in the middle of the bridge: stone flooring 1–6 m above the riverbed (breakdown of the slab). */
+    /** A real explosion in the middle of the bridge: stone flooring 1–6 m above the riverbed (breach of the slab). */
     @Test
     void realTakesBridgeDeck() {
         assertEquals(0, SandboxCommand.parse("real missile").deck());

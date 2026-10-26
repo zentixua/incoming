@@ -430,7 +430,7 @@ def puff(src, out, prefix="puff6", like=None):
 
 
 def remeasure(dest, prefix, like):
-    """Billows cards prefix on the sheet - to the extent of new smoke (like - his puff6.json): the layer has one measure of cards for all clubs
+    """Billows cards prefix on the sheet - to the extent of new smoke (like - his puff6.json): the layer has one map scale for all billows
     (FxSixLight), and billows of smoke is baked again without splashes. Light - linear (on the sheet - degree 1/2,2), the alpha is the same."""
     meta = json.load(open(os.path.join(dest, f"{prefix}.json")))
     k = like["diffuse"] / meta["diffuse"]

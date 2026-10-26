@@ -36,7 +36,7 @@ public final class RecallGameTests {
     private RecallGameTests() {}
 
     /**
-     * Player A cancels: his rocket self-destructs in flight, B-2 turns away before reset, the rocket on the guide is removed
+     * Player A cancels: his rocket self-destructs in flight, B-2 turns away before release, the rocket on the rail is removed
      *  along with his launcher, the off-world rocket disappears, his salvo is cancelled. A missile with a nuclear warhead from the same player, strikes by
      *  of player B and his launcher - as they were; the MLRS missile and the dropped bomb have nothing to respond to.
      */

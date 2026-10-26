@@ -143,7 +143,7 @@ class CameraShakeTest {
                             }
                             CameraShake.tick(true);
                         }
-                        String what = kt + " cT, " + psi + " psi, course " + yaw + ", pitch " + pitch;
+                        String what = kt + " kt, " + psi + " psi, course " + yaw + ", pitch " + pitch;
                         assertTrue(most < 0.5, what + ": " + most + "° per frame");
                         if (psi == 1) assertTrue(most * 200 < 30, what + ": " + most * 200 + " °/s");
                         double[] o = CameraShake.offsets(0.5, yaw, pitch, 0, yaw, 1);
@@ -239,7 +239,7 @@ class CameraShakeTest {
 
     /**
      * The camera rotation, as {@code Camera.setRotation} builds it, is in double: in float the course of JOML is about 0 (half the angle
-     *  is about 90°, the cosine is from the sine) itself is mistaken up to three hundredths of a Grad.
+     *  is about 90°, the cosine is from the sine) itself is mistaken up to three hundredths of a degrees.
      */
     private static Quaterniond rotation(double yaw, double pitch, double roll) {
         return new Quaterniond().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll));
@@ -269,7 +269,7 @@ class CameraShakeTest {
         BodySway.Motion motion = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), 1, tp, tp, 0, new Vec3(0, 0, 1), 0, true);
         double strength = CameraShake.tremor(pa, BlastModel.chemicalImpulse(m, kg, true), 0, 3);
         assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20 && strength > 0);
-        // for 1/120 the camera moves no more than a blow to the neck and the fastest trembling give
+        // Over 1/120 s the camera moves no more than the neck impulse and fastest tremor allow.
         double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])) * BodySway.RATE / 120
                 + 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_PITCH * strength / 120, last = 0, most = 0;
         int turns = 0, sign = 0;
@@ -343,7 +343,7 @@ class CameraShakeTest {
 
     /**
      * Ground push: from zero to zero without jumps, up and down (nod) stronger than sideways, weaker - less; There is no shock in the
-     *  projectile chamber (as well as impact vibration).
+     *  projectile camera (as well as impact vibration).
      */
     @Test
     void groundJoltNodsWithoutSteps() {

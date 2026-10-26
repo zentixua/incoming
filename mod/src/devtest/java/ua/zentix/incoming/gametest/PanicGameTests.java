@@ -68,11 +68,12 @@ public final class PanicGameTests {
     }
 
     /**
-     * Detonation of 0,1 kt high above the ground to the west of the site (visible above the wall of barriers), the scale is such that the mobs
-     * {@link #PSI}. The flash (light of one entity, as in {@code PulseJob}) is seen by cows, cadaver, a resident and a parrot - all
-     *  panic; the wave prolongs the panic. For 10, everyone goes east, further from the epicenter, and when the deadline expires, the goal of
-     *  escape for everyone is removed. They never run: a sitting tame wolf and a horse with its owner. The cow in the glass pen
-     * 1×1 panics, but looks for the way less and less often (locked - no more than {@link #PENNED_SEARCHES} times during the whole panic).
+     * A 0.1 kt burst high above ground west of the platform (visible above the barrier wall), scaled to
+     * {@link #PSI} at the mobs. Cows, a husk, a villager and a parrot see the flash (light per entity, as in
+     * {@code PulseJob}) and all panic; the wave extends panic. Within 10 s each moves east, away from the
+     * epicenter; when the duration ends, all escape targets are cleared. Friendly mobs never flee: a sitting
+     * tamed wolf and a horse with its rider. A cow in a 1×1 glass pen panics but searches less often
+     * (when trapped, no more than {@link #PENNED_SEARCHES} times during all of panic).
      */
     @GameTest(template = "range", timeoutTicks = 1400, batch = "nuke_panic", skyAccess = true)
     public static void mobsFleeTheBlastAndCalmDown(GameTestHelper h) {
@@ -145,9 +146,9 @@ public final class PanicGameTests {
                         Mob m = mobs.get(i);
                         double gone = away(m, burst) - start[i];
                         h.assertTrue(gone >= 4, String.format(Locale.ROOT, "%s left the epicenter on block %.1f", m.getType().toShortString(), gone));
-                        h.assertTrue(MobPanic.panicking(m), m.getType().toShortString() + " has already calmed down through 10 s");
+                        h.assertTrue(MobPanic.panicking(m), m.getType().toShortString() + " has already calmed down after 10 s");
                     }
-                    h.assertTrue(MobPanic.panicking(penned), "the cow in the pen has already calmed down through 10 s");
+                    h.assertTrue(MobPanic.panicking(penned), "the cow in the pen has already calmed down after 10 s");
                 })
                 .thenWaitUntil(() -> {
                     for (Mob m : all) {

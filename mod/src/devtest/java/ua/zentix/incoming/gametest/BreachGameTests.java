@@ -26,17 +26,17 @@ import ua.zentix.incoming.warhead.Warheads;
 import java.util.Locale;
 
 /**
- * Breakdown of the slab by an applied charge (FM 5-250, {@link BreachModel}; complaint 23.10: a rocket on the bridge deck a meter of stone
- *  over the river and across the stadium field above the room left a hole in the block). A slab of stone above a void: thinner than the breakdown radius
+ * breach of the slab by an applied charge (FM 5-250, {@link BreachModel}; complaint 23.10: a rocket on the bridge deck a meter of stone
+ *  over the river and across the stadium field above the room left a hole in the block). A slab of stone above a void: thinner than the breach radius
  *  is a hole according to the law, thicker is not broken (only the crater on top). The soil is a half-space - a regular crater
- * ({@code BlastGameTests.craterTest}): there is no void underneath - there is no breakdown.
+ * ({@code BlastGameTests.craterTest}): there is no void underneath - there is no breach.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BreachGameTests {
     /** Middle of the “range” platform: upper floor block (floor – 11 layers, y 1…11 pads). */
     private static final BlockPos TOP = new BlockPos(32, 11, 32);
-    /** The half-width of the slab and the voids underneath it, blocks: beyond the breakdown radius of any warhead. */
+    /** The half-width of the slab and the voids underneath it, blocks: beyond the breach radius of any warhead. */
     private static final int HALF = 8;
 
     private BreachGameTests() {}
@@ -53,9 +53,9 @@ public final class BreachGameTests {
 
     /**
      * The same with a slab from the {@code block} block. The support that the server sends to the client in the explosion package ({@link Warheads#support}:
-     *  picture of the target - a slab above the void or a support) - the same result: the slab is there and only where the breakdown rays demolish it,
+     *  picture of the target - a slab above the void or a support) - the same result: the slab is there and only where the breach rays demolish it,
      *  as thick as a slab (front review F: the client measured the slab with his rule and showed the breach where the server did not break through).
-     * Without {@code blast} - only a support: on the boards, the wave breaks what is further than the breakdown (their pressure-impulse curve), and the demolished
+     * Without {@code blast} - only a support: on the boards, the wave breaks what is further than the breach (their pressure-impulse curve), and the demolished
      *  cannot be distinguished from the broken one; the support beam is the same {@code SlabBreach.march} as the stone breaker with {@code blast}.
      */
     private static void slab(GameTestHelper h, WeaponType weapon, BlockState block, int thickness, boolean breaks, boolean blast) {
@@ -73,7 +73,7 @@ public final class BreachGameTests {
         }
         double tnt = weapon.spec().charge();
         BreachModel.Material material = ModDataMaps.Penetrability.of(block).breaching();
-        h.assertTrue(material != null, "the block does not have a breakdown group: " + block);
+        h.assertTrue(material != null, "the block does not have a breach group: " + block);
         double r = material.radius(tnt, BreachModel.UNTAMPED);
         h.assertTrue(breaks == r > thickness, String.format(Locale.ROOT, "check empty: R %.2f m, plate %d m", r, thickness));
         Vec3 at = weapon == WeaponType.MISSILE ? Vec3.atBottomCenterOf(top.above()) : Vec3.atCenterOf(top);
@@ -81,10 +81,10 @@ public final class BreachGameTests {
         S2C.Blast.Support support = Warheads.support(level, at, tnt, S2C.Blast.DOWN, null).orElse(null);
         h.assertTrue(support != null, "the charge is at the edge of the plate, but there is no support in the package");
         h.assertTrue(!support.loose(), "slab - not loose");
-        h.assertTrue(breaks == support.slab() > 0, String.format(Locale.ROOT, "package support: plate %.2f m, and breakdown %s", support.slab(), breaks));
+        h.assertTrue(breaks == support.slab() > 0, String.format(Locale.ROOT, "package support: plate %.2f m, and breach %s", support.slab(), breaks));
         if (breaks) {
             h.assertTrue(Math.abs(support.slab() - thickness) < 0.15, String.format(Locale.ROOT, "thickness in package %.2f m, plate %d m", support.slab(), thickness));
-            h.assertTrue(Math.abs(support.breach() - r) < 0.01, String.format(Locale.ROOT, "breakdown radius in the package %.2f m, law %.2f m", support.breach(), r));
+            h.assertTrue(Math.abs(support.breach() - r) < 0.01, String.format(Locale.ROOT, "breach radius in the package %.2f m, law %.2f m", support.breach(), r));
         }
         if (!blast) {
             h.succeed();
@@ -102,7 +102,7 @@ public final class BreachGameTests {
                     for (int y = bottom; y <= top.getY(); y++) {
                         BlockState s = level.getBlockState(new BlockPos(top.getX() + dx, y, top.getZ() + dz));
                         if (!s.isAir()) {
-                            // on the lower edge inside the breakdown circle - must be demolished; half block reserve: 1352 beam at the edge
+                            // on the lower edge inside the breach circle - must be demolished; half block reserve: 1352 beam at the edge
                             //  holes lie through ~0,3 m, and in the corner of the block, which extends tens of centimeters into the circle,
                             //  the beam may not reach
                             if (breaks && y == bottom && near <= hole - 0.5) missed++;
@@ -110,14 +110,14 @@ public final class BreachGameTests {
                         }
                         gone++;
                         if (y == bottom) bottomGone++;
-                        // beyond the radius of the breakdown (and the crater in the stone) nothing was demolished: the span stands
+                        // beyond the radius of the breach (and the crater in the stone) nothing was demolished: the span stands
                         if (near > Math.max(hole, r) + 0.6) far++;
                     }
                 }
             }
             String got = String.format(Locale.ROOT, "%s (%.0f kg) on the slab %d m: R %.2f m, hole at the bottom r %.2f m; demolished %d, on the lower edge of %d, "
                     + "not demolished in circle %d, demolished behind it %d", weapon, tnt, thickness, r, hole, gone, bottomGone, missed, far);
-            Incoming.LOG.info("BLASTBENCH breakdown {}", got);
+            Incoming.LOG.info("BLASTBENCH breach {}", got);
             h.assertTrue(far == 0, got);
             if (breaks) {
                 h.assertTrue(missed == 0, got);
@@ -169,7 +169,7 @@ public final class BreachGameTests {
     /**
      * The rocket hit the ground at 3 m from the relief ledge into the block (review complaint: gentle rays along the top layer went out into the
      *  void at the ledge and cut off a wedge of earth to 4 m - four times further than the crater). The void at the ledge is in the open air: this is
-     *  the surface of the earth, the edge of the crater law, and not the back edge of the slab: there is no breakdown. No crater or debris - just
+     *  the surface of the earth, the edge of the crater law, and not the back edge of the slab: there is no breach. No crater or debris - just
      *  the main explosion of the charge applied to the edge.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_terrace", skyAccess = true)
@@ -190,14 +190,14 @@ public final class BreachGameTests {
         Warheads.Probe blast = Warheads.testSurfaceCharge(level, Vec3.atBottomCenterOf(top.above()), tnt, 2 * r + 4);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "the explosion didn't end");
-            h.assertTrue(blast.breached() == 0, "near a ledge in the open air demolished by a breakdown " + blast.breached() + " blocks");
+            h.assertTrue(blast.breached() == 0, "near a ledge in the open air demolished by a breach " + blast.breached() + " blocks");
         });
     }
 
     /**
-     * A charge in the ground at a depth of 6,5 m in the open air (like a bomb at the given depth ~0,5; 1210 kg is the fraction that
-     *  remained in the ground): the radius of breakdown of the earth ~10 m is greater than the depth, but the surface is the limit of the law crater
-     *  ({@code BuriedBlast}), the breakdown does not go to it (review complaint: cone of earth to the surface above the ejection crater).
+     * A charge in the ground at a depth of 6,5 m in the open air (like a bomb at the scaled depth ~0,5; 1210 kg is the fraction that
+     *  remained in the ground): the radius of breach of the earth ~10 m is greater than the depth, but the surface is the limit of the law crater
+     *  ({@code BuriedBlast}), the breach does not go to it (review complaint: cone of earth to the surface above the ejection crater).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "blast_breach_buried_open", skyAccess = true)
     public static void buriedChargeLeavesTheSurfaceToTheCrater(GameTestHelper h) {
@@ -214,8 +214,8 @@ public final class BreachGameTests {
         Warheads.Probe blast = Warheads.testBuriedCharge(level, at, tnt, r + 4);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "the explosion didn't end");
-            h.assertTrue(blast.breached() == 0, "carried to the open surface by breakdown " + blast.breached() + " blocks");
-            h.assertTrue(h.getBlockState(new BlockPos(32, 20, 32)).is(Blocks.DIRT), "the top of the charge is blown away by the breakdown");
+            h.assertTrue(blast.breached() == 0, "carried to the open surface by breach " + blast.breached() + " blocks");
+            h.assertTrue(h.getBlockState(new BlockPos(32, 20, 32)).is(Blocks.DIRT), "the top of the charge is blown away by the breach");
         });
     }
 
@@ -249,9 +249,9 @@ public final class BreachGameTests {
             int near = 0, far = 0;
             for (int x = 33; x <= 36; x++) if (h.getBlockState(new BlockPos(x, 14, 32)).isAir()) near++;
             for (int x = 23; x <= 31; x++) if (h.getBlockState(new BlockPos(x, 14, 32)).isAir()) far++;
-            String got = String.format(Locale.ROOT, "bomb %.0f kg in stone: R %.2f m; demolished by breakdown %d, to the near void %d from 4, to the far void %d",
+            String got = String.format(Locale.ROOT, "bomb %.0f kg in stone: R %.2f m; demolished by breach %d, to the near void %d of 4, to the far void %d",
                     tnt, r, blast.breached(), near, far);
-            Incoming.LOG.info("BLASTBENCH breakdown {}", got);
+            Incoming.LOG.info("BLASTBENCH breach {}", got);
             h.assertTrue(near == 4, got);
             h.assertTrue(far == 0, got);
         });
@@ -273,8 +273,8 @@ public final class BreachGameTests {
         Warheads.Probe blast = Warheads.testSurfaceCharge(level, at, tnt, 2 * BreachModel.Material.EARTH.radius(tnt, BreachModel.UNTAMPED) + 4, axis);
         h.succeedWhen(() -> {
             h.assertTrue(blast.done(), "the explosion didn't end");
-            String got = String.format(Locale.ROOT, "%s (%.1f kg): support package %s, breakdown demolished %d blocks", what, tnt, support, blast.breached());
-            Incoming.LOG.info("BLASTBENCH breakdown support {}", got);
+            String got = String.format(Locale.ROOT, "%s (%.1f kg): support package %s, breach demolished %d blocks", what, tnt, support, blast.breached());
+            Incoming.LOG.info("BLASTBENCH breach support {}", got);
             h.assertTrue(slab == blast.breached() > 0, got);
             h.assertTrue(slab == breaks, got);
         });
@@ -291,7 +291,7 @@ public final class BreachGameTests {
     /**
      * Rocket (150 kg) at an angle spec (45° to the horizon) along the flooring in 2 m of stone above the void: R stone 2,7 m - punched (hole
      * ~1,8 m). Along the course, the path through the flooring is 2,8 m, longer than R: the support along the beam along the course (14f6c04) “did not penetrate” what the beams
-     *  carry; The breakdown is decided by the rays at the normal - along it and the support.
+     *  carry; The breach is decided by the rays at the normal - along it and the support.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
     public static void obliqueMissileOnTwoMetresOneDecision(GameTestHelper h) {
@@ -320,7 +320,7 @@ public final class BreachGameTests {
 
     /**
      * Roof from lower half-blocks (review 1, B3): the client’s previous probe was not solid (the top is not a full face), there was no type of roof;
-     *  for breakdown, a block with a collision shape is an obstacle. Shahed - broken, "Grad" - not.
+     *  for breach, a block with a collision shape is an obstacle. Shahed - broken, "Grad" - not.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
     public static void droneOnHalfSlabRoofOneDecision(GameTestHelper h) {
@@ -344,7 +344,7 @@ public final class BreachGameTests {
 
     /**
      * A meter-high stone wall on the floor of the platform, Shahed strike from the side (course +x with a downward slope) into the middle of the block; behind the wall is
-     * emptiness. Above it there is one crown (foliage that is not cut off by decay) - open sky for breakdown (height map without foliage,
+     * emptiness. Above it there is one crown (foliage that is not cut off by decay) - open sky for breach (height map without foliage,
      *  review 1, B3): support; under the stone canopy there is a ceiling, a meter of stone has been broken (R 1,75 m). The face normal is +x, not the course.
      */
     private static void wall(GameTestHelper h, boolean crown) {

@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * Flight scenarios (root 5 of the foundation plan): instead of one example per property - weapon × target × disturbance × seed,
  *  and each flight has the same properties ({@link ScenarioRun}). The flight with one seed is repeated exactly, so the
- *  seed scripts 0 are checked against the standard trajectories ({@code trajectoriesMatchBaseline}, {@link Baseline}).
+ *  seed scripts 0 are checked against the reference trajectories ({@code trajectoriesMatchBaseline}, {@link Baseline}).
  * <p>
  * In a normal run GameTest (CI) — seed 0 of all combinations. More grains - {@code ./gradlew runScenarioSweep}
  *  ({@code -PscenarioSeeds=N}, up to {@link Scenario#MAX_SEEDS}): a separate template namespace, there are only scripts;

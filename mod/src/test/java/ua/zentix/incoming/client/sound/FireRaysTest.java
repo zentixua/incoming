@@ -170,7 +170,7 @@ class FireRaysTest {
                         for (CraterFire f : fires) f.hear(EAR, Propagation.Weather.NIGHT);
                         rays.tick(fires, EAR, world, q);
                         double want = law(fires, world), got = power(q);
-                        assertEquals(want, got, 1e-6 * want, String.format(Locale.ROOT, "%s, %d fires in %.0f–%.0f m, tick %d: power sum %.8f from %.8f",
+                        assertEquals(want, got, 1e-6 * want, String.format(Locale.ROOT, "%s, %d fires in %.0f–%.0f m, tick %d: power sum %.8f of %.8f",
                                 w.getKey(), n, r[0], r[1], world.tick, got, want));
                     }
                 }

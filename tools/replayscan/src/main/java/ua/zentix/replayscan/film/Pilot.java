@@ -53,7 +53,7 @@ final class Pilot {
     /** Highest angular velocity of gaze, ° per tick (44°/s): the farthest is blurred faster. */
     static final double TURN = 2.2;
     /**
-     * Looking sideways to the course, without counting up to so many Grads: on approach - almost on course (FPV flies towards the target), at impact -
+     * Looking sideways to the course, without counting up to so many degrees: on approach - almost on course (FPV flies towards the target), at impact -
      *  turns towards the ball as it flies past (for pilots - fly-by with yaw), after - forward again; changes no faster
      * {@link #CRAB_RATE} ° per tick.
      */
@@ -125,7 +125,7 @@ final class Pilot {
             return at(ground, x, z);
         }
 
-        /** The greatest height in {@link #REACH} blocks around (chamber margin from walls and crowns); NaN - there is no chunk somewhere nearby. */
+        /** The greatest height in {@link #REACH} blocks around (camera margin from walls and crowns); NaN - there is no chunk somewhere nearby. */
         double high(double x, double z) {
             return at(high, x, z);
         }
@@ -594,8 +594,8 @@ final class Pilot {
                 j += 10 * w;
                 if (tally != null) tally.hidden++;
             }
-            // distance to impact: on approach - no further than 200 blocks, at impact and 3 after - so that the ball can be read and placed,
-            //  is best - in dPref
+            // Distance to impact: on approach, no farther than 200 blocks; at impact and for 3 s afterward,
+            // keep the fireball readable and within the frame, ideally at dPref.
             double d = p.distanceTo(main.pos());
             if (tally != null) tally.near = Math.min(tally.near, d);
             double dMin = Math.max(24, 1.5 * main.size()), dMax = Math.max(75, 4.5 * main.size()), dPref = Math.max(32, 2.8 * main.size());

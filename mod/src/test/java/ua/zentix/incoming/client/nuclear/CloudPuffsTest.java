@@ -21,22 +21,23 @@ class CloudPuffsTest {
         assertTrue(CloudPuffs.glow(70, 15) > 0.75, "70 s: " + CloudPuffs.glow(70, 15));
         assertTrue(CloudPuffs.glow(90, 15) > 0.5, "90 s: " + CloudPuffs.glow(90, 15));
         assertTrue(CloudPuffs.glow(200, 15) < 0.01);
-        assertTrue(CloudPuffs.glow(50, 1) < CloudPuffs.glow(50, 15) - 0.3, "1 has noticeably shorter");
+        assertTrue(CloudPuffs.glow(50, 1) < CloudPuffs.glow(50, 15) - 0.3, "noticeably shorter at 1 kt");
     }
 
     /**
-     * The light from above on the dust is a ball: curled up into a ring, the cap is mixed with air on the outside, and through 20 s 15 its light
-     *  a kilometer away is less than a thousandth of a day ({@link MushroomModel#light}); the extinguished ball does not illuminate the dust from above - and according to
-     *  the numbers of the pall slot.
+     * The fireball lights dust from above: after rolling into a ring, the cap's exterior mixes with air.
+     * At 20 s for 15 kt, its light a kilometer away is less than one thousandth of daylight
+     * ({@link MushroomModel#light}). An extinguished fireball does not light dust from above; the pall slot
+     * values must agree.
      */
     @Test
     void onlyTheFireballLightsTheDustFromAbove() {
         MushroomModel.Shape cap = MushroomModel.shape(20, 15, 0, true, 3_000);
-        assertTrue(MushroomModel.light(cap, 15, true, 1_000) < 1e-3, "cap via 20 s: " + MushroomModel.light(cap, 15, true, 1_000));
+        assertTrue(MushroomModel.light(cap, 15, true, 1_000) < 1e-3, "cap after 20 s: " + MushroomModel.light(cap, 15, true, 1_000));
         float[] light = new float[8];
         assertTrue(new CloudPuffs(GROUND).pallLight(cap, light));
         double lit = CloudPuffs.ball(luminance(light), light[0], GROUND.blocks(1_000));
-        assertTrue(lit < 1e-3, "15 kt through 20 s: light from above in a kilometer " + lit);
+        assertTrue(lit < 1e-3, "15 kt after 20 s: light from above in a kilometer " + lit);
     }
 
     /**
@@ -54,12 +55,12 @@ class CloudPuffsTest {
             assertTrue(puffs.pallLight(s, light));
             BlackBody.light(MushroomModel.edgeTemperature(t, 15, true), bb);
             for (int c = 0; c < 3; c++) assertEquals(bb[c], light[4 + c], 1e-6 * bb[c] + 1e-30, t + " s, channel " + c);
-            assertTrue(light[4] >= light[5] && light[5] >= light[6], t + " with: warm ball: " + light[4] + " " + light[5] + " " + light[6]);
+            assertTrue(light[4] >= light[5] && light[5] >= light[6], t + " s: warm ball: " + light[4] + " " + light[5] + " " + light[6]);
             for (double m : new double[]{50, 400, 2_000}) {
                 double body = MushroomModel.light(s, 15, true, m), dust = CloudPuffs.ball(bb[3], light[0], GROUND.blocks(m));
                 assertEquals(body, dust, 1e-5 * body, t + " s, " + m + " m");
             }
-            assertEquals(GROUND.blocks(s.capY()), light[7], 1e-3, t + " with: middle cap");
+            assertEquals(GROUND.blocks(s.capY()), light[7], 1e-3, t + " s: middle cap");
             assertEquals(CloudPuffs.glow(t, 15), light[1], 1e-6);
             assertTrue(light[3] > light[0], "edge of fires " + light[3] + " beyond the radius cap " + light[0]);
         }

@@ -13,7 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Relief under the pall ({@link PallGround}): where its ray ends, behind which there is no world. */
 class PallGroundTest {
-    /** 15 CT near the ground at a height of 109, scale 1. */
+    /**
+     * 15 kt near the ground at height 109, scale 1.
+     */
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 109, 0), 109, 15, true, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
     private static final Sightline.Heights UNKNOWN = (x, z) -> Double.NaN;
     /**
@@ -171,7 +173,7 @@ class PallGroundTest {
         assertTrue(worst < 15, "step " + worst);
     }
 
-    /** The player leaves - the chunks are unloaded, the client no longer knows: the card remains as it was seen. */
+    /** The player leaves - the chunks are unloaded, the client no longer knows: the map remains as it was seen. */
     @Test
     void seenCellsStaySeen() {
         PallGround g = ground();

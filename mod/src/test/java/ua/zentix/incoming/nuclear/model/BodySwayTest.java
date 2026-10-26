@@ -33,14 +33,14 @@ class BodySwayTest {
     @Test
     void farWaveLeavesTheBodyStill() {
         for (double tPlus : new double[]{0.3, 1, 2}) {
-            assertTrue(peakDeg(0.1, tPlus) < 0.5, "0,1 psi, phase " + tPlus + " from: " + peakDeg(0.1, tPlus));
+            assertTrue(peakDeg(0.1, tPlus) < 0.5, "0,1 psi, phase " + tPlus + " s: " + peakDeg(0.1, tPlus));
         }
         assertEquals(0, tilt(0, 1).length);
         assertTrue(peakDeg(0.01, 1) < 0.05);
     }
 
     /**
-     * 1 psi (wind 16 m/s, Beaufort 7–8 “prevents walking”, on the wave phase, and front impact - 11 N s) swings on Grad: y 1–2 kt
+     * 1 psi (wind 16 m/s, Beaufort 7–8 “prevents walking”, on the wave phase, and front impact - 11 N s) swings on degrees: y 1–2 kt
      *  (phase 0,3–0,6 s) the person stands with his back to the wave (up to 8° forward), at 15 kt (1,3 s) - also, but facing it (4,5° back) —
      *  takes a step back. From 2 psi (wind 31 m/s, hurricane gust) - to the border and forward: the man is walking.
      */
@@ -48,7 +48,7 @@ class BodySwayTest {
     void onePsiSwaysTwoPsiKnocksDown() {
         for (double tPlus : new double[]{0.3, 0.5, 0.6}) {
             double a = peakDeg(1, tPlus);
-            assertTrue(a > 2 && a < Math.toDegrees(BodySway.FORWARD), "1 psi, phase " + tPlus + " from: " + a);
+            assertTrue(a > 2 && a < Math.toDegrees(BodySway.FORWARD), "1 psi, phase " + tPlus + " s: " + a);
         }
         double a15 = peakDeg(1, phase(1, 15));
         assertTrue(a15 > Math.toDegrees(BodySway.BACK) && a15 < Math.toDegrees(BodySway.FORWARD), "1 psi, 15 kt: " + a15);
@@ -95,7 +95,7 @@ class BodySwayTest {
     /**
      * Beyond the boundary, a person walks: the tilt remains on it while the wind is stronger than equilibrium, and the body straightens, without
      *  flying over the vertical, while the wind blows in phase. Then it is driven back to the explosion only by the reverse wind of rarefaction
-     *  (up to 13,5% of front pressure, pressure - 1,8%): for 2–3 psi - on Grad, for 5 psi and stronger - stronger, after the phase
+     *  (up to 13,5% of front pressure, pressure - 1,8%): for 2–3 psi - on degrees, for 5 psi and stronger - stronger, after the phase
      *  (back to the wave - back to the edge 4,5°). Facing the wave - the same with boundaries in reverse.
      */
     @Test
@@ -163,7 +163,7 @@ class BodySwayTest {
     }
 
     /**
-     * An ordinary explosion pushes with one sharp blow with the arrival of the front (the phase is milliseconds, the wind behind it adds almost nothing): Shahed in 20 m knocks you down (tilt - to the edge of stability), in 300 m - tenths of a Grad, like
+     * An ordinary explosion pushes with one sharp blow with the arrival of the front (the phase is milliseconds, the wind behind it adds almost nothing): Shahed in 20 m knocks you down (tilt - to the edge of stability), in 300 m - tenths of a degrees, like
      *  the usual swaying of a standing person.
      */
     @Test
@@ -240,8 +240,8 @@ class BodySwayTest {
     }
 
     /**
-     * How much does it shake: with Shahed (50 kg) in 100 m the camera goes to 1–4°, in 300 m - by tenths of Grad; closer and
-     *  has a larger charge - more; the swing ends after 1–6 s (up to a hundredth Grad).
+     * How much does it shake: with Shahed (50 kg) in 100 m the camera goes to 1–4°, in 300 m - by tenths of degrees; closer and
+     *  has a larger charge - more; the swing ends after 1–6 s (up to a hundredth degrees).
      */
     @Test
     void headSwingGrowsWithTheBlast() {
@@ -256,7 +256,7 @@ class BodySwayTest {
     }
 
     /**
-     * The inclination of the body from the neck does not change: sample {@link BodySway#tilt} - the same as up to the head on the neck (the standard was removed from the code
+     * The inclination of the body from the neck does not change: sample {@link BodySway#tilt} - the same as up to the head on the neck (the reference was removed from the code
      * main 9840901d: charge, m, row length there, sample 1, 10, 50, 100, 200); the row can be longer - until the head
      *  has calmed down, the body adds a sample less than {@link BodySway#STILL}.
      */

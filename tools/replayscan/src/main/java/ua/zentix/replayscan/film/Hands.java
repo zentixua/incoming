@@ -12,7 +12,7 @@ import java.util.Random;
  *  window, the same for evaluation and output:
  * <ul>
  * <li> place and view - Gaussian smoothing without lag (window is known entirely);</li>
- * <li>hands - drone trembling: sum of sines 0,4–4 Hz (the candidate has his own seed), in Grad - by frame angle;</li>
+ * <li>hands - drone trembling: sum of sines 0,4–4 Hz (the candidate has his own seed), in degrees - by frame angle;</li>
  * <li>explosions - a push when a wave reaches the camera (17,15 block per tick, like the sound of a mod): range over distance and
  *  fireball, 4–6 Hz with attenuation, the gaze throws up, the place is pushed by the explosion. The shaking of the mod itself (5° with
  *  frequency ~10 Hz) before shooting is turned off in its client settings ({@code camera_shake = 0}, shooting task):
@@ -58,7 +58,7 @@ final class Hands {
         double[] ny = noise(r, n, YAW, F_LO, F_HI), np = noise(r, n, PITCH, F_LO, F_HI), nr = noise(r, n, ROLL, F_LO, F_HI);
         double[] nx = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5), nyy = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5),
                 nz = noise(r, n, POS, F_LO * 0.5, F_HI * 0.5);
-        // in Grad the shaking is smaller at the long focus: on the screen - the same
+        // in degrees the shaking is smaller at the long focus: on the screen - the same
         double q = Mth.clamp(fov / 60, 0.25, 1.3);
         for (int i = 0; i < n; i++) {
             yaw[i] += ny[i] * q;

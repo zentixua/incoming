@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Air of the world: resistance class for sun, wind and cloudiness, humidity for weather, density and sound according to ISO 2533. */
+/** Air of the world: stability class for sun, wind and cloudiness, humidity for weather, density and sound according to ISO 2533. */
 class AirTest {
     /** Noon on a clear day - a day of play with 6000-th tick: the sun is at its zenith. */
     private static final long NOON = 6000;

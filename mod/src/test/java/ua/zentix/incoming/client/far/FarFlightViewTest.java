@@ -197,7 +197,7 @@ class FarFlightViewTest {
         // path of the accelerating SAM rocket for 0,5 s: v₀·t + a·t²/2
         Flame sam = ua.zentix.incoming.client.fx.plume.FlameModel.at(ClientWeaponSpec.SAM_BOOST, 0);
         double path = 16 * 0.5 + 0.5 * 180 * 0.25;
-        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(path, sam.flame()), 1e-12, "via 0,5 s after launch - smoke");
+        assertEquals(1, ua.zentix.incoming.client.fx.plume.TrailModel.emerged(path, sam.flame()), 1e-12, "after 0,5 s after launch - smoke");
     }
 
     @Test

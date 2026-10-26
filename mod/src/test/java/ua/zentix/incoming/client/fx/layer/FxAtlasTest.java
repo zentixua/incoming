@@ -243,7 +243,7 @@ class FxAtlasTest {
         assertEquals(0, FxAtlas.fireballMix(-1));
     }
 
-    /** billows: 16 frames of three cards 128, edge growth is from 1 and growing, the limit of motion vectors is what the shader expects. */
+    /** billows: 16 frames of three maps 128, edge growth is from 1 and growing, the limit of motion vectors is what the shader expects. */
     @Test
     void puffFramesMatchTheBake() throws IOException {
         JsonObject o = json("puff6.json");
@@ -299,7 +299,7 @@ class FxAtlasTest {
     /**
      * billows of smoke - billows, not “cotton wool”: in the opaque core of each frame (opacity greater than 0,6) the light from above (map A,
      * green) departs from its smoothing over 9×9 pixels on average by 12 % or more. The former billows of his Mantaflow —
-     *  fluffy ball with smooth cards (0,01–0,08 in the frames that the clouds took): the clouds in the game were smooth dark balls
+     *  fluffy ball with smooth maps (0,01–0,08 in the frames that the clouds took): the clouds in the game were smooth dark balls
      *  without the light tops of the billows; cloud cap EmberGen from above - 0,13–0,19.
      */
     @Test
@@ -442,8 +442,8 @@ class FxAtlasTest {
     }
 
     /**
-     * billows of other ready-made simulations ({@code bake.py clubs-vdb}): the same 16 frames of three cards 128, that of smoke, in the amount of smoke
-     *  (one normalization of cards for all billows of the layer); growth from 1 does not decrease; the share of life - from 0 to 1 does not decrease (phenomenon frame -
+     * billows of other ready-made simulations ({@code bake.py clubs-vdb}): the same 16 frames of three maps 128, that of smoke, in the amount of smoke
+     *  (one normalization of maps for all billows of the layer); growth from 1 does not decrease; the share of life - from 0 to 1 does not decrease (phenomenon frame -
      * {@link FxAtlas#lifeFrame}); there is a fine structure; places on the sheet - one shader frame step from the beginning of the smoke frames and not
      *  overlap with neighbors.
      */
@@ -456,7 +456,7 @@ class FxAtlasTest {
             assertEquals(FxAtlas.PUFF6_FRAMES, o.get("frames").getAsInt(), c.prefix);
             assertEquals("abv", o.get("maps").getAsString());
             assertEquals(FxAtlas.PUFF6_FLOW, o.get("flow").getAsFloat(), 1e-6, c.prefix + ": the limit of motion vectors is what the shader expects");
-            assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, c.prefix + ": cards - to the extent of smoke");
+            assertEquals(smoke.get("diffuse").getAsFloat(), o.get("diffuse").getAsFloat(), 1e-6, c.prefix + ": maps - to the extent of smoke");
             for (int i = 0; i < FxAtlas.PUFF6_FRAMES; i++) {
                 for (char m : "abv".toCharArray()) image(String.format(Locale.ROOT, "%s6%c_%02d.png", c.prefix, m, i), tile);
             }
@@ -565,7 +565,7 @@ class FxAtlasTest {
         return best;
     }
 
-    /** billows of splashes: the same 16 frames of three cards as for smoke, in the amount of smoke (one normalization of cards for all billows of the layer). */
+    /** billows of splashes: the same 16 frames of three maps as for smoke, in the amount of smoke (one normalization of maps for all billows of the layer). */
     @Test
     void sprayFramesMatchTheBake() throws IOException {
         JsonObject o = json("spray6.json"), smoke = json("puff6.json");

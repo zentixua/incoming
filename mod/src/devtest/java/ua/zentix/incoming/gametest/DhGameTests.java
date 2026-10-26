@@ -128,7 +128,7 @@ public final class DhGameTests {
     }
 
     /**
-     * A copy of a chunk from the disk with the ruins of the plane ({@link FarLods#testCopy}: save data, parsed as a chunk not in the world) -
+     * A copy of a chunk from the disk with the ruins from the plan ({@link FarLods#testCopy}: save data, parsed as a chunk not in the world) -
      *  block to block is the same as the chunk after a real replacement, and the biomes are the same.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "dh_ruins", skyAccess = true)
@@ -228,7 +228,7 @@ public final class DhGameTests {
                     }
                 }
             }
-            h.assertTrue(burnt > grass, "the grass burned " + burnt + " columns from 256");
+            h.assertTrue(burnt > grass, "the grass burned " + burnt + " columns of 256");
             BlockPos m = far.getMiddleBlockPosition(ground);
             var biome = copy[0].getNoiseBiome(m.getX() >> 2, m.getY() >> 2, m.getZ() >> 2);
             h.assertTrue(biome.unwrapKey().map(k -> k.location().getNamespace().equals(Incoming.MOD_ID)).orElse(false),
