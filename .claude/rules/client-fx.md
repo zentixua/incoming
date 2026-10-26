@@ -1102,3 +1102,18 @@ paths:
   из другого Post-слушателя: фронт шахеда был уже в 26 м на первом кадре возраста 0. `BlastEffects.Timeline` не
   выполняет возраст 0 второй раз в том же тике. Счётчик не зависит от пакетов синхронизации времени мира; ядерные
   часы и общая очередь `Effects` этим не меняются.
+
+- Blast sources provide `Source.bounds` before `emit`: bounds use the model's absolute age, growth and wind,
+  without generating puffs or querying terrain. `SmokeVisibility` uses the actual layer matrix (including bob and zoom),
+  side planes (distant effects fold in front of the far plane), and haze at the nearest/highest bound edge.
+  `SmokePreparation` selects up to 128 nearby/large blast sources and refreshes up to 16 within a cooperative 2 ms
+  budget per frame. Other selected sources retain their last complete sample; waiting raises refresh priority.
+  Dust-path catch-up pauses between complete nodes and never publishes a partial cloud; source age keeps advancing.
+  Refresh priority uses distance to the bound's centre, so broad empty margins cannot dominate nearby clouds.
+  Replay retains source order because puff merging is order-sensitive. Fire and nuclear sources retain their existing paths.
+  `GroundDust.support` builds interval bounds once from displayed-ring mass moments, monotone lofted fractions and
+  entrainment survival; common ring settling cancels from these moments. Retained `PATH` positive/negative wind sums
+  cover terrain delays outside street canyons without adding imaginary wind turns. The former farthest-ring estimate
+  added kilometres of empty margin even to small clouds.
+  `FarTerrain.dust` caches cells and missing heights before all `TerrainTiles` backends: loaded columns for one tick,
+  distant columns for one second; switching to a loaded chunk or rewinding refreshes a cell immediately.

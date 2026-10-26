@@ -177,6 +177,9 @@ public final class GroundDust {
     public final double life;
     /** С какого возраста подсос забирает пыль в ножку, с (бесконечность — не забирает). */
     public final double drawnFrom;
+    private double boundInitialV;
+    private final double[] boundRadius = new double[STEPS], boundWidth = new double[STEPS],
+            windForward = new double[STEPS], windBackward = new double[STEPS];
 
     /**
      * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над голым грунтом в воздухе {@code air};
@@ -345,6 +348,67 @@ public final class GroundDust {
         while (s0 < STEPS && drawn[s0] <= 0) s0++;
         drawnFrom = s0 < STEPS ? time(s0 - 1) : Double.POSITIVE_INFINITY;
         life = lifeSeconds();
+        for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (!ball[k][i] && mass[k][i] > 0) {
+            boundInitialV = Math.max(boundInitialV, first[k][i] / 2.5);
+        }
+        support();
+    }
+
+    /**
+     * Interval bounds for the moments used by emit. Settling is common to a display annulus and cancels
+     * from its normalized moments. Lift only increases and stem survival only decreases: their endpoint
+     * products bound each ring's weight throughout an interval, including between table samples.
+     * This is built once, without terrain. Using the outermost ring as every puff's width made the old
+     * envelope several kilometres wider than the cloud after a raid.
+     */
+    private void support() {
+        double[] upper = new double[RINGS];
+        for (int s = 0; s < STEPS; s++) {
+            double t0 = time(s), t1 = s + 1 < STEPS ? time(s + 1) : Math.max(t0, CloudModel.LIFE_MAX);
+            double stem0 = at(stemTime, t0), stem1 = at(stemTime, t1);
+            boundWidth[s] = -1;
+            for (int k = 0; k < SECTORS; k++) for (int a = 0; a < ANNULI; a++) {
+                double lower = 0, all = 0, moment = 0, lo = Double.POSITIVE_INFINITY, hi = 0;
+                for (int i = 0; i < RINGS; i++) {
+                    upper[i] = 0;
+                    if (annulus[i] != a || ball[k][i] || mass[k][i] <= 0) continue;
+                    double m = mass[k][i];
+                    lower += m * liftedShare(k, i, t0) * Math.exp(-stem[k][i] * stem1 / DustModel.STEM_S);
+                    double u = m * liftedShare(k, i, t1) * Math.exp(-stem[k][i] * stem0 / DustModel.STEM_S);
+                    if (u <= 0) continue;
+                    upper[i] = u; all += u; moment += u * r[i];
+                    lo = Math.min(lo, r[i]); hi = Math.max(hi, r[i]);
+                }
+                // Same cutoff as emit, with an upper bound on mass over the entire interval.
+                if (all * DustModel.extinctionAloft(at(settled[a], t0)) <= 1e-9) continue;
+                double mean = lower > 0 ? Math.min(hi, moment / lower) : hi;
+                double anchor = moment / all, variance = 0;
+                for (int i = 0; i < RINGS; i++) variance += upper[i] * (r[i] - anchor) * (r[i] - anchor);
+                double limit = 0.25 * (hi - lo) * (hi - lo);
+                variance = lower > 0 ? Math.min(limit, variance / lower) : limit;
+                double own = Math.max(Math.sqrt(variance) * reach[k], Math.PI * mean / SECTORS / 1.25 * openArc[k][a]);
+                boundRadius[s] = Math.max(boundRadius[s], mean * reach[k]);
+                boundWidth[s] = Math.max(boundWidth[s], own);
+            }
+            // A cached terrain path can have been prepared with an earlier distribution of mass.
+            // Its accumulated radial delay is bounded by the largest earlier mean times total growth.
+            if (s > 0) boundRadius[s] = Math.max(boundRadius[s], boundRadius[s - 1]);
+        }
+        // The terrain integrator can retain any fraction of a wind increment. On an open surface it
+        // cannot rotate that increment: bound its scalar forward/backward travel on the very same PATH.
+        // Include the next path node, because the displayed state interpolates towards that node.
+        for (int a = 0; a < ANNULI; a++) {
+            int p = 1; double previous = 0, forward = 0, backward = 0;
+            for (int s = 0; s < STEPS; s++) {
+                double end = s + 1 < STEPS ? time(s + 1) : CloudModel.LIFE_MAX;
+                while (p < PATH.length && PATH[p - 1] <= end) {
+                    double t = PATH[p++], value = air.wind(Math.max(2, 0.8 * at(sv[a], t))) * t, change = value - previous;
+                    forward += Math.max(0, change); backward += Math.max(0, -change); previous = value;
+                }
+                windForward[s] = Math.max(windForward[s], forward);
+                windBackward[s] = Math.max(windBackward[s], backward);
+            }
+        }
     }
 
     /** Середина кольца счёта i, м (проверки). */
@@ -505,6 +569,7 @@ public final class GroundDust {
         }
         double from = 2 * Math.PI * k / SECTORS;
         while (c.size() <= at) {
+            SmokePreparation.checkpoint();
             double[] last = c.get(c.size() - 1);
             double r1 = 0.5 * c.size(), gap = Double.MAX_VALUE;
             double[] next = {last[0], last[1], 0};
@@ -855,6 +920,34 @@ public final class GroundDust {
         emit(t, fade, true, (x, y, z, sh, sv, dust, mass, source) -> out.blob(x, y, z, sh, sv, dust));
     }
 
+    /** Envelope of the same radial growth, spread and wind law, without visiting the terrain path. */
+    public void bounds(double t, double floor, double ceiling, SmokeBounds out) {
+        if (total <= 0 || t <= 0) return;
+        int s = (int) node(t);
+        if (boundWidth[s] < 0) return;
+        double v = boundInitialV, lowWind = Double.POSITIVE_INFINITY, highWind = 0;
+        for (double[] row : sv) {
+            double sigma = at(row, t), drift = air.wind(Math.max(2, 0.8 * sigma)) * t;
+            v = Math.max(v, sigma); lowWind = Math.min(lowWind, drift); highWind = Math.max(highWind, drift);
+        }
+        double radial = boundRadius[s] * stretch(t);
+        double spread = CloudModel.spreadH(air.spread(), path(t));
+        double width = Math.max(Math.hypot(boundWidth[s] * stretch(t), spread), v);
+        // A street chain advances at most CHAIN_STEP per half-metre radius. Held motion can remove either
+        // radial or wind increments. Allow both signs, plus the final correction out of a wall.
+        double r = (walled ? 2 * CHAIN_STEP / 0.5 : 2) * radial + OUT_MAX + SmokeBounds.PUFF * width;
+        double x0, x1, z0, z1;
+        if (walled) {
+            double wind = 2 * Math.hypot(air.windX(), air.windZ()) * (windForward[s] + windBackward[s]);
+            x0 = z0 = -wind; x1 = z1 = wind;
+        } else {
+            double lo = lowWind - windForward[s], hi = highWind + windBackward[s];
+            x0 = Math.min(air.windX() * lo, air.windX() * hi); x1 = Math.max(air.windX() * lo, air.windX() * hi);
+            z0 = Math.min(air.windZ() * lo, air.windZ() * hi); z1 = Math.max(air.windZ() * lo, air.windZ() * hi);
+        }
+        out.box(x0 - r, floor - SmokeBounds.PUFF * width, z0 - r, x1 + r, ceiling + SmokeBounds.PUFF * width + 0.8 * v, z1 + r);
+    }
+
     /** Клуб слоя для проверок — и масса пыли в нём, кг (по ней — тяжесть слоя), и поверхность, с которой её подняло, м. */
     interface Probe {
         void blob(double x, double y, double z, double sh, double sv, double dust, double mass, double source);
@@ -1055,10 +1148,12 @@ public final class GroundDust {
         }
         // догонка за один вызов — не больше CATCH_UP узлов (первый вызов в большом возрасте): дальше — в следующих кадрах
         for (int k = 0; k < CATCH_UP && p.node + 2 < PATH.length && PATH[p.node + 1] <= t; k++) {
+            SmokePreparation.checkpoint();
+            Track next = p.next.copy();
+            step(next, sector, show, PATH[p.node + 1], PATH[p.node + 2], source, ux, uz, own);
             p.node++;
             p.now = p.next;
-            p.next = p.now.copy();
-            step(p.next, sector, show, PATH[p.node], PATH[p.node + 1], source, ux, uz, own);
+            p.next = next;
         }
         double u = Math.max(0, Math.min(1, (t - PATH[p.node]) / (PATH[p.node + 1] - PATH[p.node])));
         return new double[]{p.now.level + u * (p.next.level - p.now.level), p.now.heldX + u * (p.next.heldX - p.now.heldX),

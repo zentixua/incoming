@@ -427,6 +427,8 @@ public final class CloudModel {
         // точки взрыва, а не от грубой высоты земли вдали (там, где высота поверхностей неизвестна, — ровно у грани)
         crushed = GroundDust.skirt(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
+        // The wind integral is source data, like Thermal's table, not work for an invisible source in each frame.
+        shear(Math.min(1, life));
     }
 
     /**
@@ -840,6 +842,31 @@ public final class CloudModel {
         if (t >= life) return 0;
         if (life < LIFE_MAX) return 1;
         return Math.min(1, (life - t) / (0.1 * life));
+    }
+
+    /** Conservative support at absolute age, without emitting dust or querying terrain. */
+    public void bounds(double t, double floor, double ceiling, SmokeBounds out) {
+        if (t < 0 || t >= life) return;
+        double cx = driftX(t), cz = driftZ(t), cy = height(t), sh = sigmaH(t), sv = sigmaV(t);
+        double he = heBallRadius(t), fuel = fuelBallRadius(t);
+        if (he > 0) out.puff(cx, heBallHeight(t), cz, he / Math.sqrt(5), he / Math.sqrt(5));
+        if (fuel > 0) out.puff(cx, fuelBallHeight(t), cz, fuel / Math.sqrt(5), fuel / Math.sqrt(5));
+        if (he <= 0 && fuel <= 0) {
+            double lean = shear(t), w = Math.hypot(air.windX(), air.windZ());
+            double ux = w > 0 ? air.windX() / w : 0, uz = w > 0 ? air.windZ() / w : 0;
+            double hand = handoff(t), ball = ballRadius(t) / Math.sqrt(5), by = ballHeight(t);
+            for (double q : LAYER_Q) out.puff(cx + hand * ux * q * lean, by + hand * (cy + q * sv - by),
+                    cz + hand * uz * q * lean, ball + hand * (sh - ball), ball + hand * (SLICE * sv - ball));
+        }
+        // The stem uses these very same seven cross-sections; no dust mass or terrain is needed for support.
+        double bottom = cy - 1.5 * sv + hob, ss = Math.max(0.35 * sh, 1), h0 = Math.min(ss, 0.5 * bottom);
+        double top = Math.min(bottom, h0 + stemTop(t));
+        if (bottom > 2 && top > h0) for (int i = 0; i <= STEM_PIECES; i++) {
+            double h = h0 + (top - h0) * i / STEM_PIECES, lean = air.wind(h) / air.wind(cy + hob);
+            out.puff(cx * lean, h - hob, cz * lean, ss, ss);
+        }
+        ground.bounds(t, floor, ceiling, out);
+        crushed.bounds(t, floor, ceiling, out);
     }
 
     /**

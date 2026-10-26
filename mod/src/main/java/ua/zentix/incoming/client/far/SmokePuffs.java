@@ -386,7 +386,8 @@ final class SmokePuffs {
     /** Облака, которых объём не рисует, — в кадр. */
     static void collect(FarView view, FarSprites out) {
         double seconds = SmokeGrid.seconds(view.partial());
-        SmokeGrid.quads(s -> s.emit(seconds, sink(view, out, s, seconds)));
+        SmokeGrid.quads(seconds, view.camera().x, view.camera().y, view.camera().z,
+                b -> SmokeVisibility.visible(view, b), (s, sampledAt) -> sink(view, out, s, sampledAt));
     }
 
     /**

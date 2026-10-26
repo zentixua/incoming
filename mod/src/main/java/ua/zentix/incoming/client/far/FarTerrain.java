@@ -30,18 +30,16 @@ public final class FarTerrain {
     /**
      * Surface carrying dense dust: leaves and plants that do not block motion are permeable; follow the column to support below.
      * Solid wood, stone, roofs and water all stop the scan alike. Chunk reads only; no world generation.
-     * The frame-local cache also bounds repeated column scans while rebuilding a puff's path after a rewind.
+     * Cells cache loaded columns for one tick and LOD columns (including unknown cells) for one second.
+     * The latter goes through TerrainTiles for LSS, Voxy and DH alike, not just the loaded-chunk branch.
      */
     public static Sightline.Heights dust(ClientLevel level) {
-        java.util.Map<Long, Integer> cache = new java.util.HashMap<>();
-        long[] tick = {Long.MIN_VALUE};
+        DustHeightCache cache = new DustHeightCache();
         Sightline.Heights fallback = of(level);
         return (x, z) -> {
-            if (tick[0] != level.getGameTime()) { cache.clear(); tick[0] = level.getGameTime(); }
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
-            if (chunk == null) return fallback.at(x, z);
-            long key = ((long) x << 32) ^ (z & 0xffffffffL);
-            return cache.computeIfAbsent(key, k -> dustY(chunk, x, z) + 1);
+            return cache.at(x, z, level.getGameTime(), chunk == null ? 20 : 1,
+                    (cx, cz) -> chunk == null ? fallback.at(cx, cz) : dustY(chunk, cx, cz) + 1);
         };
     }
 
