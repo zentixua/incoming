@@ -24,30 +24,30 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Эхо взрыва от рельефа у этого слушателя — у любого взрыва, ядерного ({@code client.nuclear.NukeEchoes}) и обычного
- * ({@link BlastSounds}): пока фронт идёт, лучи из уха по карте высот
- * ({@link TerrainEcho}, по {@link #RAYS_PER_TICK} за тик) находят склоны, которые вернут удар; запись прямого удара
- * читается в фоне. Когда фронт дошёл и лучи готовы — в фоне же сводятся дорожки по сторонам ({@link EchoMix}), и они
- * встают в очередь своих источников OpenAL ({@link OwnSources}) от настоящего начала прямого удара. Лучей не хватило
- * (слушатель вошёл или перенёсся к самому приходу фронта) — они доводятся по {@link #ARRIVAL_RAYS} за тик, и эхо
- * начинается позже (начало дорожек, что уже прошло, пропускается). Только вживую.
+ * Terrain echoes of a blast at this listener — any blast, nuclear ({@code client.nuclear.NukeEchoes}) or conventional
+ * ({@link BlastSounds}): while the front travels, rays from the ear across the height map
+ * ({@link TerrainEcho}, {@link #RAYS_PER_TICK} per tick) find slopes that will return the impact; the direct-impact
+ * recording is read in the background. Once the front arrives and rays are ready, directional tracks are mixed in the
+ * background too ({@link EchoMix}), then queued on our own OpenAL sources ({@link OwnSources}) from the actual start
+ * of the direct impact. If rays are unfinished (listener entered or teleported just as the front arrived), they are
+ * completed at {@link #ARRIVAL_RAYS} per tick, and echoes start later (the elapsed track opening is skipped). Live only.
  */
 public class BlastEchoes {
-    /** Лучей за тик, пока фронт идёт (все {@link TerrainEcho#RAYS} — за 6 тиков; бюджет чтений рельефа). */
+    /** Rays per tick while the front travels (all {@link TerrainEcho#RAYS} in 6 ticks; terrain-read budget). */
     static final int RAYS_PER_TICK = 12;
-    /** Лучей за тик, когда фронт уже у слушателя, а лучи не готовы (бюджет). */
+    /** Rays per tick when the front is already at the listener but rays are unfinished (budget). */
     static final int ARRIVAL_RAYS = 24;
-    /** Слушатель ушёл дальше этого от места, откуда пущены лучи, — лучи заново (бюджет: путь эха сбит до 2×64 м). */
+    /** Listener moved farther than this from the ray origin — restart rays (budget: echo path error up to 2×64 m). */
     private static final double MOVED = 64;
-    /** Зерно — столько секунд начала записи прямого удара (подача). */
+    /** The grain uses this many seconds from the start of the direct-impact recording (presentation). */
     public static final double GRAIN_SECONDS = 2.8;
-    /** Посыл в хвост реверберации (подача, −12 дБ). */
+    /** Send to the reverb tail (presentation, −12 dB). */
     private static final float SEND = 0.25f;
 
     private final OwnSources.Clock clock;
     private final Vec3 burst;
     private final TerrainEcho.Blast blast;
-    /** Запись прямого удара: её вариант выбирает это зерно — то же, что у прямого удара. */
+    /** Direct-impact recording: this seed selects its variant — the same seed as the direct impact. */
     public final long seed;
     private final CompletableFuture<float[]> grain;
     private final List<TerrainEcho.Reflection> found = new ArrayList<>();
@@ -60,30 +60,30 @@ public class BlastEchoes {
     private EchoMix.Mix done;
     @Nullable
     private OwnSources.Anchor anchor;
-    /** Прямой удар, от начала которого ждёт эхо (для строки сценария: какая запись). */
+    /** Direct impact whose start anchors the echoes (for the scenario line: which recording). */
     @Nullable
     private SoundInstance direct;
-    /** Самая долгая порция лучей за тик, нс (для строки сценария). */
+    /** Longest batch of rays in a tick, ns (for the scenario line). */
     private long traceSlowest;
-    /** Где слушателя застал фронт (лучи доводятся отсюда); null — фронт ещё не дошёл. */
+    /** Where the front caught the listener (rays are completed from here); null — front has not arrived yet. */
     @Nullable
     private Vec3 heard;
     private float volume, pitch;
-    /** Взрыв в смеси взрывов ({@link #bus}); null — без смеси. */
+    /** Blast in the blast mix ({@link #bus}); null — no mix. */
     @Nullable
     private Mix.Blast bus;
-    /** Огибающие дорожек для смеси ({@link Envelope#of}, {@link Envelope#energy}) — в фоне, вместе со сведением. */
+    /** Track envelopes for the mix ({@link Envelope#of}, {@link Envelope#energy}) — in the background, with mixing. */
     @Nullable
     private CompletableFuture<float[][][]> profiles;
     private int queued;
     private boolean stopped;
 
     /**
-     * @param clock часы взрыва, по которым ждёт начало прямого удара
-     * @param burst где взрыв
-     * @param blast приход и давление его фронта
-     * @param sound запись прямого удара: её начало — зерно эха
-     * @param seed  зерно, которым выбран вариант записи прямого удара
+     * @param clock blast clock that times the start of the direct impact
+     * @param burst where the blast occurs
+     * @param blast arrival and pressure of its front
+     * @param sound direct-impact recording: its opening is the echo grain
+     * @param seed  seed that selected the direct-impact recording variant
      */
     public BlastEchoes(OwnSources.Clock clock, Vec3 burst, TerrainEcho.Blast blast, SoundEvent sound, long seed) {
         this.clock = clock;
@@ -97,17 +97,18 @@ public class BlastEchoes {
                 });
     }
 
-    /** Фронт ещё идёт: часть лучей. */
+    /** Front is still travelling: a batch of rays. */
     public void approach(Vec3 ear) {
         trace(ear, RAYS_PER_TICK);
     }
 
     /**
-     * Прямой удар вот-вот уйдёт движку: эхо — от его настоящего начала. До {@code play}: с буфером, который движок уже
-     * держит (второй подрыв за игру), звук стартует в потоке звука раньше, чем {@code play} вернётся.
+     * Direct impact is about to be handed to the engine: echoes start from its actual start. Before {@code play}:
+     * with a buffer the engine already holds (second detonation in a session), sound starts on the sound thread
+     * before {@code play} returns.
      *
-     * @param tick   тик по часам взрыва, когда прямой удар отдают движку
-     * @param direct прямой удар (null — начало по тику)
+     * @param tick   tick on the blast clock when the direct impact is handed to the engine
+     * @param direct direct impact (null — start by tick)
      */
     public void expect(double tick, @Nullable SoundInstance direct) {
         if (stopped) return;
@@ -116,21 +117,22 @@ public class BlastEchoes {
     }
 
     /**
-     * Эхо обычного взрыва — в смеси взрывов ({@link Mix}) вместе с его прямым ударом: дорожки — слои взрыва {@code blast}
-     * по мощности, со своей задержкой (без них позднее эхо, когда прямой удар уже стих, взрыв считался бы тихим, и его
-     * множитель гасил бы эхо среди других взрывов); громкость дорожек — × множитель взрыва. У ядерки смеси нет. Хвост
-     * реверберации ({@link OwnSources#reverb}: посыл 0,25, поздние отражения 1,2) в смесь не идёт: он на ~10 дБ ниже эха,
-     * а эхо — на 10–20 дБ ниже прямого удара, к сумме это меньше 0,05 дБ. Звать до {@link #arrive}.
+     * A conventional blast's echoes join the blast mix ({@link Mix}) with its direct impact: tracks are power layers
+     * of {@code blast}, each with its own delay (without them, late echoes after the direct impact faded would count
+     * the blast as quiet, and its factor would suppress the echoes among other blasts); track volume is multiplied
+     * by the blast factor. Nuclear strikes have no mix. The reverb tail ({@link OwnSources#reverb}: send 0.25, late
+     * reflections 1.2) is omitted from the mix: it is ~10 dB below the echoes, which are 10–20 dB below the direct
+     * impact, adding less than 0.05 dB to the sum. Call before {@link #arrive}.
      */
     void bus(@Nullable Mix.Blast blast) {
         this.bus = blast;
     }
 
     /**
-     * Фронт у слушателя: недосчитанные лучи — по {@link #ARRIVAL_RAYS} за тик, дальше сведение в фоне.
+     * Front at the listener: unfinished rays at {@link #ARRIVAL_RAYS} per tick, then background mixing.
      *
-     * @param volume громкость прямого удара (эхо — доля её)
-     * @param pitch  высота тона прямого удара (эхо — того же звука)
+     * @param volume direct-impact volume (echoes are a fraction of it)
+     * @param pitch  direct-impact pitch (echoes use the same sound)
      */
     public void arrive(Vec3 ear, float volume, float pitch) {
         if (stopped) return;
@@ -140,12 +142,12 @@ public class BlastEchoes {
         finish();
     }
 
-    /** Лучи из места прихода фронта — ещё порция; все готовы — сведение в фоне. */
+    /** Rays from the front's arrival position — another batch; once all are ready, mix in the background. */
     private void finish() {
         Vec3 ear = heard;
         if (ear == null || mix != null) return;
         trace(ear, ARRIVAL_RAYS);
-        // в измерении с потолком лучей нет
+        // no rays in a dimension with a ceiling
         ClientLevel level = Minecraft.getInstance().level;
         if (nextRay < TerrainEcho.RAYS && level != null && !level.dimensionType().hasCeiling()) return;
         List<TerrainEcho.Reflection> list = List.copyOf(found);
@@ -161,7 +163,7 @@ public class BlastEchoes {
         });
     }
 
-    /** Огибающая и энергия каждой дорожки ({@link EchoMix#RATE}), для смеси. */
+    /** Envelope and energy of each track ({@link EchoMix#RATE}), for the mix. */
     private static float[][][] profiles(EchoMix.Mix m) {
         float[][][] out = new float[m.tracks().size()][][];
         for (int i = 0; i < out.length; i++) {
@@ -173,7 +175,7 @@ public class BlastEchoes {
         return out;
     }
 
-    /** Каждый тик после удара: лучи, которых не хватило, и готовые дорожки — в очередь своих источников. */
+    /** Each tick after impact: remaining rays and ready tracks queued on our own sources. */
     public void tick() {
         if (stopped) return;
         if (mix == null) finish();
@@ -188,16 +190,16 @@ public class BlastEchoes {
                 false, blast == null ? null : blast::factor));
     }
 
-    /** Дорожка эха — своему источнику: false — места нет. */
+    /** Echo track to our own source: false — no slot. */
     @FunctionalInterface
     interface Player {
         boolean play(EchoMix.Track track, float gain);
     }
 
     /**
-     * Дорожки {@code done} — своим источникам ({@code player}) с громкостью прямого удара {@code volume} × своей, принятые —
-     * слоями взрыва {@code blast} в смеси (огибающие {@code env}; null — без смеси): от начала прямого удара со своей
-     * задержкой, как их голоса. Сколько принято.
+     * Send tracks {@code done} to our own sources ({@code player}) at direct-impact {@code volume} × track volume;
+     * accepted tracks become layers of {@code blast} in the mix (envelopes {@code env}; null — no mix), starting at the
+     * direct impact with their own delays, like their voices. Returns the number accepted.
      */
     static int queue(EchoMix.Mix done, float @Nullable [][][] env, float volume, @Nullable Mix.Blast blast, Player player) {
         int queued = 0;
@@ -211,17 +213,17 @@ public class BlastEchoes {
         return queued;
     }
 
-    /** Дорожки уже в очереди своих источников (или их нет и не будет): больше эхо ничего не готовит. */
+    /** Tracks are already queued on our own sources (or there are and will be none): echoes prepare nothing further. */
     public boolean settled() {
         return stopped || done != null;
     }
 
-    /** Взрыв, чьё эхо ещё не готово, кончился (фронт так и не дошёл до уха): ожидание — прочь; готовое звучит дальше. */
+    /** Blast ended before its echoes were ready (front never reached the ear): discard waiting; ready tracks keep playing. */
     public void release() {
         if (!settled()) stop();
     }
 
-    /** Взрыв убран или стал прошлым: голоса и ожидание начала — прочь, новых нет. */
+    /** Blast removed or now in the past: discard voices and start waiting; no new ones. */
     public void stop() {
         stopped = true;
         OwnSources.stop(this);
@@ -245,7 +247,7 @@ public class BlastEchoes {
         traceSlowest = Math.max(traceSlowest, System.nanoTime() - t0);
     }
 
-    /** Карта высот без пустоты под миром (у неё верх — дно мира). */
+    /** Height map without void below the world (its top is the world bottom). */
     private static Sightline.Heights ground(ClientLevel level) {
         Sightline.Heights h = FarTerrain.of(level);
         int floor = level.getMinBuildHeight() + 1;
@@ -256,8 +258,8 @@ public class BlastEchoes {
     }
 
     /**
-     * Начало записи прямого удара (тот вариант, что выберет зерно) — в зерно {@link EchoMix#RATE}. В фоновом потоке:
-     * ресурсы читаются так же, как их читает загрузка звуков.
+     * Opening of the direct-impact recording (the variant selected by the seed) as a grain at {@link EchoMix#RATE}.
+     * On a background thread: resources are read just as sound loading reads them.
      */
     private static float[] read(SoundEvent direct, long seed) {
         Minecraft mc = Minecraft.getInstance();
@@ -269,7 +271,7 @@ public class BlastEchoes {
             int limit = (int) (GRAIN_SECONDS * rate * channels) + 8192;
             FloatArrayList samples = new FloatArrayList(limit);
             while (samples.size() < limit && ogg.readChunk(samples::add)) {
-                // читаем до нужной длины
+                // read to the required length
             }
             return EchoMix.grain(samples.toFloatArray(), channels, rate, GRAIN_SECONDS);
         } catch (Exception e) {
@@ -277,7 +279,7 @@ public class BlastEchoes {
         }
     }
 
-    /** Строка {@code SCENARIO}: лучи, отражения и сильнейшие из них (задержка, сторона, уровень). */
+    /** {@code SCENARIO} line: rays, reflections and the strongest ones (delay, direction, level). */
     public String describe() {
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "echo rays %d/%d (slowest tick %.2f ms) taps %d", nextRay, TerrainEcho.RAYS,
                 traceSlowest / 1e6, found.size()));
@@ -286,7 +288,7 @@ public class BlastEchoes {
             Vec3 e = from, bu = burst;
             if (e != null) sb.append(String.format(Locale.ROOT, " ear %.0f,%.0f,%.0f burst %.0f,%.0f,%.0f", e.x, e.y, e.z, bu.x, bu.y, bu.z));
             double sum = found.stream().mapToDouble(TerrainEcho.Reflection::energy).sum();
-            // начало: по старту прямого удара в движке (sound) или по тику (tick — движок его не запустил за срок)
+            // start: actual direct-impact start in the engine (sound) or tick (tick — engine did not start it in time)
             var sound = direct == null ? null : direct.getSound();
             sb.append(String.format(Locale.ROOT, " sum %.1fdB tracks %d queued %d t60 %.1f vol %.2f start +%.2fs by %s of %s", 10 * Math.log10(Math.max(1e-9, sum)),
                     m.tracks().size(), queued, m.t60(), volume, anchor == null ? Double.NaN : anchor.lateSeconds(),

@@ -4,17 +4,17 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.material.MapColor;
 import org.jetbrains.annotations.Nullable;
 
-/** Откуда карта берёт рельеф: верх земли и его цвет в каждой колонке. */
+/** Map terrain source: ground top and colour in each column. */
 interface TerrainSource {
     /**
-     * Верх колонки: первая высота воздуха над землёй (как карта высот), цвет верхнего блока на карте и глубина
-     * воды над дном (0 — суша).
+     * Column top: first air height above ground (as in a heightmap), top block's map colour, and water depth
+     * above the bottom (0 means land).
      */
     record Column(int height, MapColor color, int waterDepth) {}
 
-    /** Чтение колонок для одной плитки; держит свои кэши, закрывается после плитки. */
+    /** Column reader for one tile; owns its caches, closed after the tile. */
     interface Reader extends AutoCloseable {
-        /** Колонка (x, z) или null, если о ней ничего не известно. */
+        /** Column (x, z), or null if nothing is known about it. */
         @Nullable
         Column column(int x, int z);
 
@@ -22,53 +22,53 @@ interface TerrainSource {
         void close();
     }
 
-    /** Можно ли читать не в потоке игры (иначе плитки строятся в кадре, понемногу). */
+    /** Whether reads may run off the game thread (otherwise tiles are built gradually within frames). */
     boolean offThread();
 
     /**
-     * Сколько чтений из фоновых потоков сразу имеет смысл, когда карта ждёт только источника: столько, сколько у него
-     * своих потоков на чтение (больше — ждали бы в его же очереди). Источнику, что читается в потоке игры, не нужно.
+     * Useful concurrent background reads while the map waits only for this source: as many as its own read threads
+     * (more would wait in its own queue). Not needed by a source read on the game thread.
      */
     default int parallelism() {
         return 1;
     }
 
-    /** Читатель для мира, который сейчас у клиента; null — источник для него недоступен. */
+    /** Reader for the client's current world; null if this source is unavailable there. */
     @Nullable
     Reader open(ClientLevel level);
 
     /**
-     * Читатель для плитки уровня {@code detail} (колонка — середина клетки {@code 2^detail} блоков): источник с грубыми
-     * данными (Voxy) читает их на этом уровне, а не по блоку; остальным уровень не нужен.
+     * Reader for a level {@code detail} tile (column at the centre of a {@code 2^detail}-block cell): a source with coarse
+     * data (Voxy) reads that level rather than individual blocks; others do not need the level.
      */
     @Nullable
     default Reader open(ClientLevel level, int detail) {
         return open(level);
     }
 
-    /** Через сколько перестраивать плитку, у которой рельеф есть везде (новое источник может и сообщить: {@link #changes}). */
+    /** Time before rebuilding a complete terrain tile (source may also report changes: {@link #changes}). */
     long refreshNanos();
 
-    /** Чанк, рельеф которого источник обновил. */
+    /** Chunk whose terrain the source updated. */
     @FunctionalInterface
     interface ChunkSink {
         void changed(int chunkX, int chunkZ);
     }
 
-    /** Раз в тик, в потоке игры: чанки мира {@code level}, которые источник обновил с прошлого раза. */
+    /** Once per tick on the game thread: chunks in world {@code level} updated by the source since last call. */
     default void changes(ClientLevel level, ChunkSink sink) {}
 
     /**
-     * {@link #changes} сообщает о чанках, данные которых появились (пришли клиенту), а не изменились: перечитывать
-     * нужно только плитки с дырами.
+     * {@link #changes} reports chunks whose data appeared (arrived on the client), rather than changed:
+     * only tiles with holes need rereading.
      */
     default boolean arrivals() {
         return false;
     }
 
     /**
-     * Колонка сразу, из памяти источника, из любого потока, без ожидания; null — не знает или так не умеет (тогда
-     * берутся готовые плитки). Лучи, звук и ядерка ({@code TerrainTiles.height}) спрашивают сначала его.
+     * Column immediately from source memory, any thread, without waiting; null if unknown or unsupported (then use
+     * ready tiles). Rays, sound and the nuke ({@code TerrainTiles.height}) ask this first.
      */
     @Nullable
     default Column peek(int x, int z) {
@@ -76,35 +76,35 @@ interface TerrainSource {
     }
 
     /**
-     * Источник работает в этом мире (у дальних источников: сервер раздаёт рельеф). Из дальних берётся первый работающий
-     * по порядку предпочтения ({@code TerrainTiles}), остальные молчат.
+     * Source operates in this world (for distant sources: server distributes terrain). Use the first active distant
+     * source by preference ({@code TerrainTiles}); the others remain idle.
      */
     default boolean active() {
         return true;
     }
 
-    /** Источник работает, но рельефа ещё не отдал ничего: карта пишет об этом {@link #pendingNote}. */
+    /** Source operates but has supplied no terrain yet: map shows {@link #pendingNote}. */
     default boolean waiting() {
         return false;
     }
 
-    /** Ключ надписи на карте, пока источник ждёт ({@link #waiting} или его чтения стоят в очереди). */
+    /** Map label key while source waits ({@link #waiting} or its reads are queued). */
     default String pendingNote() {
         return "incoming.map.far_pending";
     }
 
-    /** Раз в тик, в потоке игры: всё, что источник знал раньше, могло измениться (прочитан его кэш) — перечитать все плитки. */
+    /** Once per tick, game thread: all prior source data may have changed (cache read), so reread every tile. */
     default boolean invalidated(ClientLevel level) {
         return false;
     }
 
-    /** Раз в тик, в потоке игры, пока слой работает: игрок здесь (источник может читать заранее вокруг него). */
+    /** Once per tick, game thread, while the layer is active: player is here (source may prefetch around them). */
     default void tickNear(double playerX, double playerZ) {}
 
-    /** Мир клиента сменился: источник больше не нужен, его фоновая работа кончается. */
+    /** Client world changed: source no longer needed, end its background work. */
     default void close() {}
 
-    /** Для лога: что источник отдал с начала мира (колонки, отказы и почему). */
+    /** For logs: data supplied since world entry (columns, failures and reasons). */
     default String describe() {
         return "";
     }

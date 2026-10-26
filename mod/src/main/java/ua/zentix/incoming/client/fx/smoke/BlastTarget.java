@@ -7,59 +7,58 @@ import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Во что попал заряд — семейство взрыва и вещество цели. Выбирается из того, что клиент знает о месте: материал под точкой
- * ({@code S2C.Blast.material}), опора у грани удара из пакета ({@code S2C.Blast.Support}: плиту над пустотой находит пробой
- * сервера, {@link BreachModel}: путь в плите / радиус пробоя её материала ≤ 1 и за ней пустота под перекрытием) и высота над
- * поверхностью ({@code FarBlasts.overSurface}), — а не по тому, крыша это, дорога или земля (решение Артёма 23.10). Без
- * Minecraft: опору из пакета берёт {@code FarBlasts.target}.
+ * What the charge hit: explosion family and target matter. Chosen from client knowledge of the site: material under
+ * point ({@code S2C.Blast.material}), impact-face support from packet ({@code S2C.Blast.Support}: server breach finds
+ * a slab above a void, {@link BreachModel}: path through slab / material breach radius ≤ 1, with a void beneath the
+ * slab beyond it), and height above surface ({@code FarBlasts.overSurface}), rather than roof, road or ground labels
+ * (Artem's decision, 23.10). No Minecraft: {@code FarBlasts.target} takes support from packet.
  * <ul>
- * <li>{@link Family#SOIL} — рыхлое на опоре (почва, песок, гравий, снег, глина): воронка выбрасывает грунт завесой
+ * <li>{@link Family#SOIL}: supported loose matter (soil, sand, gravel, snow, clay); crater throws a soil curtain
  * ({@link Ejecta}).</li>
- * <li>{@link Family#HARD} — связное на опоре (скала, бетон, кладка, доски на земле): конуса грунта нет, только сколы и
- * пыль дробления цвета материала.</li>
- * <li>{@link Family#SLAB} — плита над пустотой, которую заряд пробивает (крыша, настил, перекрытие): обломки плиты вверх
- * и вниз, пыль пролома; грунта нет.</li>
- * <li>{@link Family#WATER} — вода ({@link WaterBlast}).</li>
- * <li>{@link Family#AIR} — разрыв выше, чем заряд роет воронку ({@link CloudModel#digs}): шар продуктов без грунта.</li>
+ * <li>{@link Family#HARD}: supported cohesive matter (rock, concrete, masonry, boards on ground); no soil cone, only
+ * chips and crushing dust in the material's colour.</li>
+ * <li>{@link Family#SLAB}: slab above a void that the charge breaches (roof, decking, floor); slab fragments upward
+ * and downward, breach dust; no soil.</li>
+ * <li>{@link Family#WATER}: water ({@link WaterBlast}).</li>
+ * <li>{@link Family#AIR}: burst above cratering height ({@link CloudModel#digs}); detonation-product ball without soil.</li>
  * </ul>
- * Числа вещества ({@link Matter}) — оценки с причиной у каждого: опытов по всем целям для зарядов 6,4–150 кг нет
- * (physics.md фронта F, 25.10). Внутри помещения (выход продуктов через проёмы) закон не верен — его здесь нет.
+ * Matter values ({@link Matter}) are estimates, each with its reason: no tests for every target with 6.4–150 kg charges
+ * (front F physics.md, 25.10). Law is invalid indoors (products venting through openings); no indoor model here.
  *
- * @param family   семейство
- * @param material материал под точкой (пакет взрыва)
- * @param slab     толщина пробитой плиты по нормали грани, м (0 — не плита)
- * @param hole     радиус пролома плиты, м: √(R² − t²) у радиуса пробоя R (BreachGameTests: дыра √(R² − t²)); 0 — не плита
- * @param face     где заряд лежит на грани плиты (null — не плита или место не известно)
- * @param normal   нормаль пробитой грани внутрь плиты — ось дыры (у не плиты — вниз)
- * @param atFace   заряд у грани, которую нашёл сервер (опора пакета): разрушенное — у точки взрыва, а не на высоте рельефа
- *                 под ней, которую клиент вдали знает грубо (ревью 3 фронта F)
+ * @param family   family
+ * @param material material under point (blast packet)
+ * @param slab     breached slab thickness along face normal, m (0 if not a slab)
+ * @param hole     slab hole radius, m: √(R² − t²) for breach radius R (BreachGameTests: hole √(R² − t²)); 0 if not a slab
+ * @param face     charge location on slab face (null if not a slab or location unknown)
+ * @param normal   breached face normal into slab, hole axis (downward for non-slab)
+ * @param atFace   charge at server-found face (packet support): destroyed matter at explosion point, rather than
+ *                 underlying terrain height, which client knows coarsely at distance (front F review 3)
  */
 public record BlastTarget(Family family, GroundMaterial material, double slab, double hole, @Nullable Vec3 face, Vec3 normal,
                           boolean atFace) {
-    /** Вниз мира: ось у цели без плиты. */
+    /** World down: target axis without a slab. */
     static final Vec3 DOWN = new Vec3(0, -1, 0);
 
-    /** Семейство взрыва по цели. */
+    /** Explosion family by target. */
     public enum Family { SOIL, HARD, SLAB, WATER, AIR }
 
     /**
-     * Вещество цели для картинки: насыпная плотность (масса разрушенного объёма), крупность выброса, которую видит свет, и
-     * цвет сухой мелкой пыли. ⚠ Все — оценки по составу материала, а не замеры выброса этих зарядов:
+     * Target matter for visuals: bulk density (destroyed volume mass), ejecta grain size seen by light, and dry fine
+     * dust colour. ⚠ All estimated from material composition, not measured ejecta of these charges:
      * <ul>
-     * <li>плотность — справочная насыпная/кажущаяся: почва и песок 1600 (как {@link CloudModel#SOIL_DENSITY}), гравий
-     * 1700, снег 400 (уплотнённый 300–500), бетон и камень 2500 (бетон 2400, гранит 2650 — одно число на класс),
-     * глубинный сланец 2800, кладка 1900 (кирпич 1800–2000), древесина 500, обожжённая глина 1900;</li>
-     * <li>крупность — диаметр, по площади которого свет видит баллистический выброс (ослабление 3Q/(2ρd), Q = 2, как
-     * {@code DustModel}): песок — средний 0,25–0,5 мм (USDA, physics.md [S21]) → 0,35 мм; почва — 1 мм (песок и мелкие
-     * агрегаты; комья 2–30 см свет почти не задерживают, у них своя доля {@code clods}); снег — зерно ~1 мм; глина —
-     * комочки ~5 мм; гравий — 10 мм (гравий по USDA 2–75 мм);</li>
-     * <li>доля комьев ({@code clods}) — что летит кусками и видно частицами вблизи, а не завесой: почва и глина ½
-     * (связность держит комья — physics.md), гравий ⅘ (сам — куски), песок и снег 0 (сыпучее, «нет основания делать весь
-     * выброс кубиками»);</li>
-     * <li>цвет пыли — сухая мелкая фракция (на экране, толстым слоем): почва — как стена пыли ядерки, песок и снег — свои,
-     * бетон и камень светло-серые (цемент и известняк светлые), сланец тёмно-серый, кладка — смесь раствора и кирпича,
-     * древесина — охристые опилки, обожжённая глина — светлее блока (мелкая пыль светлее массива: зёрна мельче — больше
-     * рассеяния).</li>
+     * <li>density: reference bulk/apparent values: soil and sand 1600 (as {@link CloudModel#SOIL_DENSITY}), gravel 1700,
+     * snow 400 (compacted 300–500), concrete and stone 2500 (concrete 2400, granite 2650, one value per class),
+     * deepslate 2800, masonry 1900 (brick 1800–2000), wood 500, terracotta 1900;</li>
+     * <li>grain size: diameter whose area makes ballistic ejecta visible to light (extinction 3Q/(2ρd), Q = 2, as
+     * {@code DustModel}): sand medium 0.25–0.5 mm (USDA, physics.md [S21]) → 0.35 mm; soil 1 mm (sand and small
+     * aggregates; 2–30 cm clods hardly attenuate light, with their own {@code clods} share); snow grain ~1 mm; clay
+     * lumps ~5 mm; gravel 10 mm (USDA gravel 2–75 mm);</li>
+     * <li>clod share ({@code clods}): pieces seen as nearby particles rather than curtain: soil and clay ½
+     * (cohesion holds clods, physics.md), gravel ⅘ (already pieces), sand and snow 0 (granular, "no basis for making
+     * all ejecta into cubes");</li>
+     * <li>dust colour: dry fines (on screen, thick layer): soil as nuclear dust wall, sand and snow their own colours,
+     * concrete and stone light grey (cement and limestone light), slate dark grey, masonry a mortar/brick mixture,
+     * wood ochre sawdust, terracotta lighter than block (fine dust lighter than solid material: finer grains scatter more).</li>
      * </ul>
      */
     public enum Matter {
@@ -74,19 +73,19 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         WOOD(500, 0, 500, 1, FINES_LOOSE, false, 0.70f, 0.58f, 0.40f),
         WATER(1000, 0, 1000, 0, 0, false, 0.80f, 0.85f, 0.90f);
 
-        /** Насыпная плотность, кг/м³. */
+        /** Bulk density, kg/m³. */
         public final double density;
-        /** Диаметр выброса, по площади которого его видит свет, м (0 — завесы нет: связное). */
+        /** Ejecta diameter whose area is seen by light, m (0 means no curtain: cohesive matter). */
         public final double grain;
-        /** Плотность зёрна, кг/м³. */
+        /** Grain density, kg/m³. */
         public final double grainDensity;
-        /** Доля баллистического выброса, что летит комьями (частицы вблизи), а не зёрнами завесы. */
+        /** Ballistic ejecta share travelling as clods (nearby particles), rather than curtain grains. */
         public final double clods;
-        /** Доля разрушенного для смеси корзин DustModel (размерный состав — оценка) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
+        /** Destroyed share for DustModel bin mixture (size distribution estimated) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
         public final double fines;
-        /** Рыхлое: воронка выбрасывает его завесой. */
+        /** Loose matter: crater throws it as a curtain. */
         public final boolean loose;
-        /** Цвет сухой мелкой пыли на экране. */
+        /** Dry fine dust colour on screen. */
         public final float r, g, b;
 
         Matter(double density, double grain, double grainDensity, double clods, double fines, boolean loose, float r, float g, float b) {
@@ -101,12 +100,12 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
             this.b = b;
         }
 
-        /** Ослабление баллистического выброса на кг, м²/кг: 3Q/(2ρd), Q = 2 (геометрическая оптика, как {@code DustModel}). */
+        /** Ballistic ejecta extinction per kg, m²/kg: 3Q/(2ρd), Q = 2 (geometrical optics, as {@code DustModel}). */
         public double extinction() {
             return grain > 0 ? 3 * 2 / (2 * grainDensity * grain) : 0;
         }
 
-        /** Вещество материала пакета. */
+        /** Matter for the packet material. */
         public static Matter of(GroundMaterial m) {
             return switch (m) {
                 case DIRT -> DIRT;
@@ -124,39 +123,41 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     }
 
     /**
-     * Доля разрушенного рыхлого (и досок), что уходит в воздух пылью мельче ~50 мкм — прежняя оценка
-     * {@link CloudModel#DUST_LOFTED}: у грунта мелочь большей частью остаётся в комьях и падает с ними.
+     * Share of destroyed loose matter (and boards) becoming airborne dust below ~50 μm: previous estimate
+     * {@link CloudModel#DUST_LOFTED}; soil fines mostly stay in clods and fall with them.
      */
     static final double FINES_LOOSE = CloudModel.DUST_LOFTED;
     /**
-     * Мелочь PM10 контактного взрыва по бетону на массу образца: Costa, Bodiot, Lecysyn и др., «Analyse des particules
-     * produites par explosion au contact d'éprouvettes en béton», 38e Congrès Français sur les Aérosols (2025), с. 116–119,
-     * рис. 5–6, DOI 10.25576/ASFERA-CFA2025-43915: на фильтре 0–2 г/кг (верх погрешности ~2,4), порядок — 1 г/кг. ⚠ Оценка:
-     * знаменатель опыта — весь образец, а не разрушенное; собранное — и осевшее; в воздух принято всё.
+     * PM10 fines from contact explosion on concrete per specimen mass: Costa, Bodiot, Lecysyn et al., "Analyse des
+     * particules produites par explosion au contact d'éprouvettes en béton", 38e Congrès Français sur les Aérosols
+     * (2025), pp. 116–119, figs. 5–6, DOI 10.25576/ASFERA-CFA2025-43915: filter 0–2 g/kg (upper uncertainty ~2.4),
+     * order 1 g/kg. ⚠ Estimate: experiment denominator is entire specimen, not destroyed mass; collected material
+     * includes settled dust; assume all airborne.
      */
     static final double PM10_CONTACT = 0.001;
     /**
-     * То же у связного (скала, бетон, кладка): вся смесь корзин {@link ua.zentix.incoming.nuclear.model.DustModel}, у которой
-     * PM10 — {@link #PM10_CONTACT}, — PM10 / его доля в смеси ({@code DustModel.PM10_SHARE}). ⚠ Оценка: опыты — по бетону,
-     * камень и кладка — по аналогии; прежние 0,1 замерами не подтверждались (в 20 раз больше, у глаза на улице — стена).
+     * Same for cohesive matter (rock, concrete, masonry): full {@link ua.zentix.incoming.nuclear.model.DustModel} bin
+     * mixture with PM10 {@link #PM10_CONTACT}, namely PM10 / mixture share ({@code DustModel.PM10_SHARE}). ⚠ Estimate:
+     * experiments on concrete, stone and masonry by analogy; prior 0.1 unsupported by measurements (20 times more,
+     * a wall at the eye in the street).
      */
     static final double FINES_CRUSHED = PM10_CONTACT / ua.zentix.incoming.nuclear.model.DustModel.PM10_SHARE;
 
-    /** Удар в голый рыхлый грунт — как у взрыва без сведений о цели (проверки, прежние вызовы). */
+    /** Impact on bare loose soil, as for an explosion without target information (tests, legacy calls). */
     public static final BlastTarget SOIL = new BlastTarget(Family.SOIL, GroundMaterial.DIRT, 0, 0, null, DOWN, false);
 
-    /** Вещество цели. */
+    /** Target matter. */
     public Matter matter() {
         return Matter.of(material);
     }
 
     /**
-     * Семейство: вода — вода; выше, чем заряд роет воронку, — разрыв в воздухе; плита над пустотой, которую заряд
-     * пробивает ({@code slab} > 0), — плита; иначе — по связности того, во что попал: рыхлое — грунт, связное — твёрдое.
+     * Family: water is water; above cratering height is airburst; a breached slab over a void ({@code slab} > 0) is
+     * slab; otherwise by target cohesion: loose is soil, cohesive is hard.
      *
-     * @param loose рыхлое ли то, во что попал (группа пробоя «земля», FM 5-250 табл. B-3)
-     * @param slab  толщина пробитой плиты над пустотой по нормали грани, м (0 — опора сплошная)
-     * @param digs  заряд роет воронку на своей высоте ({@link CloudModel#digs})
+     * @param loose whether target is loose (earth breach group, FM 5-250 table B-3)
+     * @param slab  breached slab thickness above void along face normal, m (0 means continuous support)
+     * @param digs  charge craters at its height ({@link CloudModel#digs})
      */
     public static Family family(GroundMaterial material, boolean loose, double slab, boolean digs) {
         if (material.isWater()) return Family.WATER;
@@ -165,24 +166,24 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         return loose ? Family.SOIL : Family.HARD;
     }
 
-    /** Цель по материалу, без мира (чанка у клиента нет): опора — сплошная, связность — по веществу материала. */
+    /** Target by material, without world (no client chunk): continuous support, cohesion from material matter. */
     public static BlastTarget of(GroundMaterial material, double tntKg, double hobM) {
         return new BlastTarget(family(material, Matter.of(material).loose, 0, CloudModel.digs(tntKg, hobM)), material, 0, 0, null, DOWN, false);
     }
 
     /**
-     * Цель с опорой из мира: {@code loose} — связность того, во что попал; {@code slab} — толщина плиты до пустоты по оси
-     * (0 — не дошли до пустоты в пределах пробоя), {@code breach} — радиус пробоя её материала у этого заряда, м.
+     * Target with world support: {@code loose} is target cohesion; {@code slab} thickness to void along axis (0 if
+     * no void reached within breach range), {@code breach} material breach radius for this charge, m.
      */
     public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach) {
         return of(material, loose, slab, breach, null, DOWN);
     }
 
     /**
-     * То же с местом заряда на грани {@code face} и нормалью грани внутрь плиты {@code normal} (опора пакета). Опора — это
-     * контакт, который нашёл сервер (заряд у грани, {@code SlabBreach.locate}): высота над рельефом вокруг здесь не решает
-     * — вдали клиент знает её грубо (плитка {@code FarTerrain} без дома даёт крышу в 5 м над землёй, и пролом стал бы
-     * разрывом в воздухе без массы и пыли; ревью 2 фронта F). Разрыв в воздухе — только без опоры.
+     * Same with charge location {@code face} and inward slab face normal {@code normal} (packet support). Support
+     * means server-found contact (charge at face, {@code SlabBreach.locate}): surrounding terrain height does not
+     * decide here, since client knows it coarsely at distance (a {@code FarTerrain} tile without the house puts roof
+     * 5 m above ground, making breach an airburst without mass or dust; front F review 2). Airburst only without support.
      */
     public static BlastTarget of(GroundMaterial material, boolean loose, double slab, double breach, @Nullable Vec3 face, Vec3 normal) {
         Family f = family(material, loose, slab, true);
@@ -191,23 +192,23 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         return new BlastTarget(f, material, plate ? slab : 0, hole, plate ? face : null, plate ? normal.normalize() : DOWN, true);
     }
 
-    /** Середина дыры на тыльной грани плиты (null — не плита или место заряда не известно). */
+    /** Hole centre on rear slab face (null if not a slab or charge location unknown). */
     @Nullable
     public Vec3 exit() {
         return face == null ? null : face.add(normal.scale(slab));
     }
 
-    /** Разлёт тыльного откола около оси дыры, градусы (⚠ оценка). */
+    /** Rear spall spread about hole axis, degrees (⚠ estimate). */
     public static final double SPALL_CONE_DEG = 30;
 
     /**
-     * {@code n} кусков тыльного откола: из дыры на тыльной грани ({@link #exit}: круг радиуса {@link #hole} поперёк оси
-     * дыры, кусок — в 0,3 м за гранью) по нормали пробитой грани {@link #normal}, а не вниз мира и не курсом боевой части:
-     * плиту толкает давление продуктов, а оно по нормали (сэндвич Гёрни одномерен; импульс самой боевой части — у шахеда
-     * ~200 кг × 50 м/с против пробки ~3,5 т × 29 м/с в метре досок — на порядок меньше, ⚠ им пренебрегаем), и дыра
-     * сервера — около нормали. Скорость — пробки по Гёрни ({@link #plugSpeed}) ±30 % (⚠ разброс — подача), направление —
-     * в конусе ±{@value #SPALL_CONE_DEG}°, наружу от оси с той же стороны, где кусок в дыре. Тяжесть — у частицы. Не плита —
-     * ничего.
+     * {@code n} rear spall pieces: from rear-face hole ({@link #exit}: disc of radius {@link #hole} across hole axis,
+     * piece 0.3 m beyond face) along breached face normal {@link #normal}, rather than world down or warhead heading:
+     * product pressure pushes slab along normal (Gurney sandwich is one-dimensional; warhead momentum, Shahed
+     * ~200 kg × 50 m/s versus plug ~3.5 t × 29 m/s in a metre of boards, is an order smaller, ⚠ neglected), and server
+     * hole lies about normal. Speed is Gurney plug speed ({@link #plugSpeed}) ±30 % (⚠ presentation: spread), direction
+     * in a ±{@value #SPALL_CONE_DEG}° cone, outward from axis on piece's side of hole. Particle handles gravity.
+     * Non-slab emits nothing.
      */
     public void spall(double tntKg, int n, java.util.function.DoubleSupplier random, Ejecta.Pieces out) {
         Vec3 exit = exit();
@@ -223,9 +224,9 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     }
 
     /**
-     * Разрушенный объём цели, м³: у плиты — пролом (круг радиуса {@link #hole} толщины {@link #slab}); иначе — чаша закона
-     * воронки по грунту материала ({@link CraterModel#chargeVolume}: тот же закон, что роет сервер; ⚠ у связного сервер
-     * снимает метры и хранит остаток глубины, {@code SurfaceDamage}, — объём тот же); у воды и в воздухе — 0.
+     * Destroyed target volume, m³: slab breach (disc radius {@link #hole}, thickness {@link #slab}); otherwise crater-law
+     * bowl for material soil ({@link CraterModel#chargeVolume}: same law server digs with; ⚠ for cohesive matter server
+     * removes metres and retains depth remainder, {@code SurfaceDamage}, same volume); water and air 0.
      */
     public double volume(double tntKg) {
         return switch (family) {
@@ -236,16 +237,16 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     }
 
     /**
-     * Постоянная Гёрни ТНТ √(2E), м/с: 2,44 км/с (Cooper P. W., «Explosives Engineering», Wiley-VCH 1996, табл. 27.1;
-     * Kennedy J. E., «Gurney energy of explosives», Sandia SC-RR-70-790, 1970).
+     * TNT Gurney constant √(2E), m/s: 2.44 km/s (Cooper P. W., "Explosives Engineering", Wiley-VCH 1996, table 27.1;
+     * Kennedy J. E., "Gurney energy of explosives", Sandia SC-RR-70-790, 1970).
      */
     static final double GURNEY_TNT = 2440;
 
     /**
-     * Скорость тыльного откола пробитой плиты, м/с: пробка пролома массы M ({@link #mass}) под зарядом C — открытый
-     * «сэндвич» Гёрни (Kennedy 1970): v = √(2E)·[((1 + 2M/C)³ + 1)/(6(1 + M/C)) + M/C]^(−½). ⚠ Формула — для слоя ВВ,
-     * лежащего на всей плите; у заряда, что меньше пролома, вниз толкает его часть, и настоящий откол медленнее (насколько —
-     * в источниках нет). У шахеда (50 кг) в метре досок — ~29 м/с, в метре камня — ~6 м/с. Не плита — 0.
+     * Rear spall speed of breached slab, m/s: breach plug mass M ({@link #mass}) under charge C, open Gurney sandwich
+     * (Kennedy 1970): v = √(2E)·[((1 + 2M/C)³ + 1)/(6(1 + M/C)) + M/C]^(−½). ⚠ Formula assumes an explosive layer covering
+     * the whole slab; a charge smaller than breach pushes only part downward, and real spall is slower (sources do
+     * not quantify). Shahed (50 kg) in a metre of boards ~29 m/s, in a metre of stone ~6 m/s. Non-slab 0.
      */
     public double plugSpeed(double tntKg) {
         double m = mass(tntKg);
@@ -255,43 +256,43 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
     }
 
     /**
-     * Доля разрушенного пробитой плиты, что лежала в воронке со стороны заряда; остальное — тыльный откол, он уходит в
-     * пустоту за плитой. Опыты контактных взрывов по плите 0,3 м обычного железобетона, пробитой насквозь (Zhang W. и др.,
-     * «The impacts of contact explosions on ultra-high performance reinforced concrete slabs», Sci. Rep. 14:25700 (2024),
-     * табл. 3, NRCS-3…5: 2,2–5 кг ТНТ): объём воронки к сумме с отколом (диаметр² × глубина, форма одна) — 0,17, 0,21,
-     * 0,46 — тем больше, чем сильнее заряд пробивает. ⚠ Оценка 0,3: опыты меньше наших зарядов и плит, форма принята одна.
+     * Destroyed breached slab share in crater on charge side; rest is rear spall entering void behind slab.
+     * Contact explosion tests on 0.3 m ordinary reinforced concrete slab breached through (Zhang W. et al., "The impacts
+     * of contact explosions on ultra-high performance reinforced concrete slabs", Sci. Rep. 14:25700 (2024), table 3,
+     * NRCS-3…5: 2.2–5 kg TNT): crater volume / crater plus spall volume (diameter² × depth, same shape) 0.17, 0.21, 0.46,
+     * increasing with breach strength. ⚠ Estimate 0.3: experiments smaller than our charges and slabs, same shape assumed.
      */
     public static final double SLAB_FRONT = 0.3;
 
     /**
-     * Пыль разрушенного, что уходит в воздух со стороны заряда, кг: {@link #mass} × доля мелочи вещества
-     * ({@link Matter#fines}); у пробитой плиты — только из воронки на грани удара ({@link #SLAB_FRONT}): мелочь откола
-     * уходит с ним в пустоту за плитой (под крышей — в помещение, его воздух здесь не считается).
+     * Destroyed dust becoming airborne on charge side, kg: {@link #mass} × matter fines share ({@link Matter#fines});
+     * breached slab only from crater on impact face ({@link #SLAB_FRONT}): spall fines enter the void behind slab with
+     * it (indoors under a roof; indoor air not modelled here).
      */
     public double dust(double tntKg) {
         return mass(tntKg) * matter().fines * (family == Family.SLAB ? SLAB_FRONT : 1);
     }
 
-    /** Баллистический выброс разрушенного, кг: {@link #mass} без пыли, что ушла в воздух. */
+    /** Ballistic destroyed ejecta, kg: {@link #mass} minus airborne dust. */
     public double ballistic(double tntKg) {
         return mass(tntKg) * (1 - matter().fines);
     }
 
     /**
-     * Баллистический выброс кусками — частицами вблизи, кг: у грунта — доля комьев вещества ({@link Matter#clods}), остальное —
-     * зёрна завесы ({@link Ejecta#grains}); у твёрдого и плиты завесы нет — весь. Куски + зёрна завесы + пыль = {@link #mass},
-     * у пробитой плиты — ещё мелочь тыла, что уходит в комнату за ней ({@link #SLAB_FRONT}).
+     * Ballistic ejecta pieces as nearby particles, kg: soil uses matter clod share ({@link Matter#clods}), remainder
+     * is curtain grains ({@link Ejecta#grains}); hard and slab have no curtain, so all pieces. Pieces + curtain grains
+     * + dust = {@link #mass}; breached slabs also include rear fines entering room behind ({@link #SLAB_FRONT}).
      */
     public double clods(double tntKg) {
         return family == Family.SOIL ? ballistic(tntKg) * matter().clods : ballistic(tntKg);
     }
 
-    /** То же объёмом на месте (насыпной плотностью), м³: столько чаши или пролома летит кусками. */
+    /** Same as in-place volume (bulk density), m³: bowl or breach volume travelling as pieces. */
     public double clodVolume(double tntKg) {
         return clods(tntKg) / matter().density;
     }
 
-    /** Масса разрушенного вещества цели, кг: {@link #volume} × насыпная плотность. */
+    /** Destroyed target matter mass, kg: {@link #volume} × bulk density. */
     public double mass(double tntKg) {
         return volume(tntKg) * matter().density;
     }

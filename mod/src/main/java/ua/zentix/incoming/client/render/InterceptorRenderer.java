@@ -22,8 +22,8 @@ import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.entity.InterceptorEntity;
 
 /**
- * Зенитная ракета: модель ({@link WeaponModels.Mesh#INTERCEPTOR_BODY}, нос по +Z), повёрнутая по курсу и тангажу,
- * и факел двигателя за соплом ({@link PlumeRenderer}): на разгоне — длинный и яркий, потом — маршевый, короче.
+ * SAM missile: model ({@link WeaponModels.Mesh#INTERCEPTOR_BODY}, nose along +Z) rotated by heading and pitch,
+ * and engine plume behind the nozzle ({@link PlumeRenderer}): long and bright during boost, shorter in cruise mode.
  */
 public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
     public InterceptorRenderer(EntityRendererProvider.Context ctx) {
@@ -45,8 +45,8 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
     }
 
     /**
-     * Факел: срез сопла — у хвоста модели; на разгоне и в маршевом режиме — свой режим двигателя
-     * ({@link ClientWeaponSpec#SAM_BOOST}, {@link ClientWeaponSpec#SAM_SUSTAIN}) по закону факела; null — не видно.
+     * Plume: nozzle exit at model tail; boost and cruise use their respective motor modes
+     * ({@link ClientWeaponSpec#SAM_BOOST}, {@link ClientWeaponSpec#SAM_SUSTAIN}) with the plume law; null if invisible.
      */
     @Nullable
     static Exhaust.Plume plume(InterceptorEntity e, float partial) {
@@ -58,7 +58,7 @@ public class InterceptorRenderer extends EntityRenderer<InterceptorEntity> {
 
     @Override
     public boolean shouldRender(InterceptorEntity e, Frustum frustum, double x, double y, double z) {
-        // модель и факел длиннее габаритов сущности
+        // Model and plume exceed entity bounds.
         return frustum.isVisible(e.getBoundingBox().inflate(8));
     }
 

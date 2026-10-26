@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/** Один ключ серверных кэшей клиента: адрес Minecraft без DNS/SRV-поиска, а у одиночной игры — папка мира. */
+/** One client server-cache key: Minecraft address without DNS/SRV lookup, or the world folder in singleplayer. */
 public record ServerCacheKey(String key, List<String> legacyKeys) {
     private static final int DEFAULT_PORT = 25565;
     private static final Pattern UNSAFE = Pattern.compile("[^A-Za-z0-9._-]");
@@ -36,12 +36,12 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
         String host = parsed.getHost().toLowerCase(Locale.ROOT);
         int port = parsed.getPort();
         boolean ipv6 = host.contains(":");
-        // Скобки отделяют весь IPv6-хост от порта; обратимое кодирование не смешивает ':' с '_' и '%' в зоне.
+        // Brackets separate the entire IPv6 host from the port; reversible encoding keeps ':' distinct from '_' and zone '%'.
         String keyHost = ipv6 ? "[" + URLEncoder.encode(host, StandardCharsets.UTF_8) + "]" : safe(host);
         String key = keyHost + (port == DEFAULT_PORT ? "" : "_" + port);
         String oldHost = ipv6 ? "[" + host + "]" : host;
         String explicit = safe(oldHost + ":" + port);
-        // Разобранные варианты имеют приоритет; исходное старое имя сохраняет также кэш IDN и иных написаний.
+        // Parsed variants take priority; the original old name also preserves caches for IDNs and other spellings.
         String original = safe(address);
         List<String> legacy = port != DEFAULT_PORT ? List.of(explicit, original)
                 : ipv6 ? List.of(safe(oldHost), explicit, safe(host), original) : List.of(safe(host), explicit, original);
@@ -49,11 +49,11 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
     }
 
     /**
-     * Новая папка имеет приоритет. Если есть только прежняя, читаем и сохраняем в ней: создание новой после записи
-     * одного измерения спрятало бы остальные измерения прежней папки при следующем входе. Файлы не переносим.
-     * Прежние имена ищем без учёта регистра. Без порта — раньше явного 25565; внутри варианта точное имя — раньше
-     * отличающихся регистром, затем имена по алфавиту. После разобранных вариантов — старое имя от исходной строки.
-     * Вызывается потоком ввода-вывода, результат хранится до конца работы с кэшем.
+     * The new folder takes priority. If only the old one exists, read and save there: creating a new one after writing
+     * one dimension would hide the old folder's other dimensions on next login. Do not move files.
+     * Find old names case-insensitively. No port before explicit 25565; within a variant, exact name before case
+     * variants, then alphabetically. After parsed variants, use the old name derived from the original string.
+     * Called by the I/O thread; result retained for the rest of the cache operation.
      */
     public Path directory(Path root) throws IOException {
         Path canonical = root.resolve(key);
@@ -69,7 +69,7 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
                 }
             }
         } catch (NoSuchFileException e) {
-            // Первый вход: корневой папки кэша ещё нет. Прочие ошибки чтения не прячем созданием новой папки.
+            // First login: cache root does not yet exist. Do not hide other read errors by creating a new folder.
         }
         return canonical;
     }

@@ -1,26 +1,26 @@
 package ua.zentix.incoming.client.sound;
 
 /**
- * Моторы снарядов на миг уходят вниз, когда до уха доходит громкий взрыв, и возвращаются за секунду с небольшим
- * (без Minecraft, проверяется юнит-тестом). Так сводят звук в играх с «окном громкости» (HDR-звук): громкое на миг
- * задаёт окно, тихое под ним приглушается — взрыв не тонет в моторах соседних снарядов залпа. Громче файла
- * Minecraft звук не играет, поэтому место взрыву освобождают моторы, а не взрыв пережимается. Числа — подача: это сведение,
- * а не маскировка слухом.
+ * Projectile engines dip briefly when a loud blast reaches the ear and recover in just over a second (without
+ * Minecraft, covered by a unit test). Games with a “loudness window” (HDR audio) mix this way: loud sound briefly
+ * sets the window, quiet sound beneath it is attenuated so the blast does not drown in neighbouring salvo
+ * projectile engines. Minecraft cannot play louder than the file, so engines make room for the blast instead of
+ * compressing it. Values are presentation: mixing, not auditory masking.
  */
 final class Ducking {
-    /** Взрыв у уха тише этого (LUFS) моторы не трогает, с {@link #FULL} — приглушает на всю {@link #DEPTH}. */
+    /** Blasts below this at the ear (LUFS) leave engines alone; from {@link #FULL}, attenuate by full {@link #DEPTH}. */
     static final double FROM = -24, FULL = -15;
-    /** Глубина, дБ. */
+    /** Depth, dB. */
     static final double DEPTH = 8;
-    /** Столько тиков приглушение держится, потом отпускает на {@link #RELEASE} дБ за тик. */
+    /** Hold attenuation for this many ticks, then release at {@link #RELEASE} dB per tick. */
     static final int HOLD = 4;
-    /** Отпускание, дБ за тик (6 дБ/с: вся глубина — за ~1,3 с). */
+    /** Release, dB per tick (6 dB/s: full depth in ~1.3 s). */
     static final double RELEASE = 0.3;
 
     private double db;
     private int hold;
 
-    /** До уха дошёл взрыв с громкостью прямого звука lufs. */
+    /** Blast with direct-sound loudness lufs reached the ear. */
     void blast(double lufs) {
         double t = Math.max(0, Math.min(1, (lufs - FROM) / (FULL - FROM)));
         double depth = DEPTH * t * t * (3 - 2 * t);
@@ -30,13 +30,13 @@ final class Ducking {
         }
     }
 
-    /** Раз в тик. */
+    /** Once per tick. */
     void tick() {
         if (hold > 0) hold--;
         else db = Math.max(0, db - RELEASE);
     }
 
-    /** Множитель громкости моторов. */
+    /** Engine volume multiplier. */
     float factor() {
         return (float) Math.pow(10, -db / 20);
     }

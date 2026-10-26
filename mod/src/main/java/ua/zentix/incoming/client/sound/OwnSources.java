@@ -24,53 +24,52 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.DoubleSupplier;
 
 /**
- * Свои источники OpenAL — для эха от рельефа ({@link EchoMix}) и удара фронта ядерки ({@link BlastPulse}): мимо
- * звукового движка Minecraft, чтобы Sound Physics Remastered, который ставит свои фильтры EFX всем источникам движка,
- * не накладывал на отражения свои отражения, и чтобы дорожка из своих отсчётов (а не файла ресурсов) начиналась точно
- * в свой кадр.
+ * Our own OpenAL sources for terrain echoes ({@link EchoMix}) and nuke-front impact ({@link BlastPulse}): bypass
+ * Minecraft's sound engine so Sound Physics Remastered, which sets EFX filters on all engine sources, does not
+ * add its reflections to reflections, and so a track of our own samples (rather than a resource file) starts
+ * exactly in its frame.
  * <p>
- * Источник стоит в 3 блоках от уха в сторону своей стороны света (как {@link ClientSounds#atEar}), без затухания
- * по расстоянию; громкость — категория «Общая» (общая громкость — усиление слушателя, его ставит движок). Фильтр
- * EFX на прямом пути и на посыле — преграда в эту сторону ({@link SoundFilters#openToward}: Sound Physics свои
- * источники не трогает, поэтому и при нём) и оглушение ({@link Deafness}), посыл — в свой слот реверберации (хвост
- * поверх дорожек). Без EFX — без преград, оглушения и хвоста.
+ * Source is 3 blocks from the ear toward its compass direction (like {@link ClientSounds#atEar}), with no distance
+ * attenuation; category volume is “Master” (overall volume is listener gain, set by engine). Direct and send EFX
+ * filters apply barriers in that direction ({@link SoundFilters#openToward}: Sound Physics does not touch our own
+ * sources, so needed with it too) and deafness ({@link Deafness}); send goes to our own reverb slot (tail over
+ * tracks). Without EFX, no barriers, deafness or tail.
  * <p>
- * Время голосов — от {@link Anchor}: от того, когда движок на деле запустил прямой звук, а не от тика, в который его
- * попросили.
+ * Voice time comes from {@link Anchor}: when engine actually started the direct sound, not its request tick.
  * <p>
- * Всё — в потоке клиента (кадр, тик); контекст OpenAL у процесса один, его делает текущим движок. Ошибки AL общие с
- * потоком звука движка ({@code alGetError} мог бы забрать его ошибку или отдать ему нашу), поэтому удачу проверяем
- * по самим объектам ({@code alIsSource}, {@code alIsBuffer}…). Перезапуск движка (смена устройства, F3+T) удаляет
- * контекст со всеми объектами — источники забываются без вызовов AL ({@link #engineLoaded}).
+ * All on client thread (frame, tick); process has one OpenAL context, made current by engine. AL errors are shared
+ * with engine sound thread ({@code alGetError} could consume its error or give it ours), so check success on the
+ * objects themselves ({@code alIsSource}, {@code alIsBuffer}…). Engine restart (device change, F3+T) deletes the
+ * context and all objects — forget sources without AL calls ({@link #engineLoaded}).
  */
 public final class OwnSources {
-    /** Своих источников не больше: остальные — у движка (у OpenAL Soft всего 256; бюджет). */
+    /** Maximum own sources: rest belong to engine (OpenAL Soft has 256 total; budget). */
     public static final int MAX = 12;
-    /** Отставание старта больше этого (с) — начать с середины, а не сначала (подача). */
+    /** Start lag above this (s): begin in the middle, not the start (presentation). */
     private static final double LATE = 0.03;
     /**
-     * Голос, который играется целиком ({@code whole}), опоздал больше этого (с) — не играть: удар фронта через секунду
-     * после прямого звука был бы вторым ударом (подача).
+     * A voice played whole ({@code whole}) more than this late (s) is skipped: a front impact a second after direct
+     * sound would be a second impact (presentation).
      */
     private static final double WHOLE_LATE = 1;
-    /** Сколько тиков ждать, что движок запустит звук начала; не запустил — начало по тику (запас). */
+    /** Ticks to await the engine starting anchor sound; if not, anchor by tick (margin). */
     private static final double ANCHOR_WAIT = 40;
-    /** Фильтр голоса меняется, когда громкость или верха ушли дальше этого (бюджет вызовов EFX). */
+    /** Voice filter changes when gain or highs move farther than this (EFX-call budget). */
     private static final float FILTER_STEP = 0.005f;
 
-    /** Часы, по которым ждёт голос: тики с долей кадра. */
+    /** Clock used by waiting voice: ticks with frame fraction. */
     @FunctionalInterface
     public interface Clock {
         double ticks(float partialTick);
     }
 
     /**
-     * Начало, от которого ждут голоса: когда движок на деле запустил звук {@code sound} — {@link PlaySoundSourceEvent}
-     * приходит из потока звука сразу после play. Запись без preload декодируется при первом звуке, а тик клиента без
-     * окна — раз в кадр: прямой звук начинается позже своего тика, и эхо по тику опережало бы его. Начало заводится
-     * <b>до</b> {@code play}: с буфером, который движок уже держит, звук стартует в потоке звука сразу, раньше, чем
-     * {@code play} вернётся. Звук движок не взял (нет каналов, громкость в нуле) или так и не начал (звук заменил чужой
-     * мод) — начало по тику {@code tick}.
+     * Anchor awaited by voices: actual engine start of {@code sound} — {@link PlaySoundSourceEvent} arrives from
+     * sound thread immediately after play. A non-preloaded recording decodes on first sound; a headless client's
+     * tick runs once per frame: direct sound starts later than its tick, so tick-based echoes would precede it.
+     * Set anchor <b>before</b> {@code play}: with a buffer engine already holds, sound starts immediately on the
+     * sound thread, before {@code play} returns. Engine refused it (no channels, zero volume) or never started it
+     * (another mod replaced sound) — anchor at {@code tick}.
      */
     public static final class Anchor {
         final Object owner;
@@ -78,10 +77,10 @@ public final class OwnSources {
         final SoundInstance sound;
         final Clock clock;
         final double tick;
-        /** {@link System#nanoTime()} старта звука, 0 — ещё не начался (пишет поток звука). */
+        /** Sound-start {@link System#nanoTime()}, 0 — not started yet (written by sound thread). */
         volatile long started;
         double zero = Double.NaN;
-        /** Начало — по старту звука (а не по тику). */
+        /** Anchor follows sound start (not tick). */
         boolean heard;
 
         Anchor(Object owner, @Nullable SoundInstance sound, Clock clock, double tick) {
@@ -91,23 +90,23 @@ public final class OwnSources {
             this.tick = tick;
         }
 
-        /** Начало по часам (тики), NaN — ещё не знаем. */
+        /** Anchor on the clock (ticks), NaN — not known yet. */
         public double zero() {
             return zero;
         }
 
-        /** Насколько начало позже своего тика, с (NaN — ещё не знаем). */
+        /** How much later than its tick the start is, s (NaN — not known yet). */
         public double lateSeconds() {
             return (zero - tick) / 20;
         }
 
-        /** Начало — по старту звука (иначе по тику). */
+        /** Anchor follows sound start (otherwise tick). */
         public boolean heard() {
             return heard;
         }
     }
 
-    /** Один голос: дорожка, её сторона, время и преграда в её сторону. */
+    /** One voice: track, direction, time and barrier in its direction. */
     public static final class Voice {
         final Object owner;
         final Anchor anchor;
@@ -116,22 +115,22 @@ public final class OwnSources {
         final float gain;
         final short[] pcm;
         final int rate;
-        /** Играть с начала, даже опоздав: у удара фронта скачок — в первые миллисекунды, середина без него — тишина. */
+        /** Play from start even if late: front jump is in first milliseconds; its absence makes the middle silent. */
         final boolean whole;
-        /** Громкость и верха за преградой в сторону голоса (1 — открыто); заново — когда голос зазвучит. */
+        /** Barrier gain and highs toward voice (1 — open); recompute when voice starts. */
         float blockedGain, blockedHighs;
         int source, buffer;
         boolean started, done;
-        /** Звучал, когда игра встала на паузу (после паузы — дальше; отзвучавший до неё — не заново). */
+        /** Was playing when game paused (resume after pause; sounds finished before it do not restart). */
         boolean held;
-        /** Что стоит в фильтре голоса (NaN — ещё ничего). */
+        /** Current voice-filter values (NaN — nothing yet). */
         float filterGain = Float.NaN, filterHighs = Float.NaN;
-        /** Слух, каким его слышит этот голос (удар самой волны — как до неё, {@link Deafness#before}); null — слух сейчас. */
+        /** Hearing used by this voice (wave's own impact uses before-wave hearing, {@link Deafness#before}); null — current hearing. */
         float @Nullable [] heard;
-        /** Множитель смеси взрывов ({@link Mix}), каждый кадр; null — громкость своя. */
+        /** Blast-mix factor ({@link Mix}), every frame; null — own gain. */
         @Nullable
         DoubleSupplier mix;
-        /** Громкость, что стоит у источника. */
+        /** Gain currently set on source. */
         float applied;
 
         Voice(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole, float open) {
@@ -153,9 +152,9 @@ public final class OwnSources {
     }
 
     private static final List<Voice> VOICES = new ArrayList<>();
-    /** Начала, которых ещё ждут (старт звука пишет поток звука). */
+    /** Anchors still awaited (sound thread writes sound start). */
     private static final List<Anchor> ANCHORS = new CopyOnWriteArrayList<>();
-    /** Фильтр прямого пути и слот реверберации: 0 — ещё не созданы, −1 — EFX нет. */
+    /** Direct-path filter and reverb slot: 0 — not created, −1 — no EFX. */
     private static int filter, slot, effect;
     private static boolean paused;
     private static int started;
@@ -163,8 +162,8 @@ public final class OwnSources {
     private OwnSources() {}
 
     /**
-     * Начало для голосов {@code owner}: старт звука {@code sound}, который отдадут движку в тик {@code tick} по часам
-     * {@code clock} (null — начало по тику). Звать до {@code play} этого звука.
+     * Anchor for {@code owner}'s voices: start of {@code sound}, to be handed to engine at {@code tick} on
+     * {@code clock} (null — tick-based anchor). Call before {@code play} for this sound.
      */
     public static Anchor anchor(Object owner, @Nullable SoundInstance sound, Clock clock, double tick) {
         Anchor a = new Anchor(owner, sound, clock, tick);
@@ -173,12 +172,12 @@ public final class OwnSources {
         return a;
     }
 
-    /** Сколько своих источников свободно сейчас. */
+    /** Own sources currently free. */
     public static int free() {
         return MAX - VOICES.size();
     }
 
-    /** Поток звука: движок запустил звук — начало тех, кто его ждёт. */
+    /** Sound thread: engine started sound — anchor for those awaiting it. */
     public static void onSource(PlaySoundSourceEvent e) {
         if (ANCHORS.isEmpty()) return;
         long now = System.nanoTime();
@@ -186,26 +185,26 @@ public final class OwnSources {
     }
 
     /**
-     * Дорожка в очередь: зазвучит через {@code after} тиков после начала {@code anchor}, со стороны {@code azimuth}
-     * (преграда в эту сторону — у уха, когда голос зазвучит). {@code owner} — чей голос (снять все его — {@link #stop}).
+     * Queue a track: plays {@code after} ticks after {@code anchor}, from {@code azimuth} (barrier toward it sampled
+     * at ear when voice starts). {@code owner} owns the voice (remove all with {@link #stop}).
      *
-     * @return false — мест нет или OpenAL не готов
+     * @return false — no slots or OpenAL not ready
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate) {
         return play(owner, anchor, after, azimuth, gain, pcm, rate, false);
     }
 
     /**
-     * Как {@link #play(Object, Anchor, double, double, float, short[], int)}; {@code whole} — опоздавший голос играть с
-     * начала, а не с середины (кадр у клиента бывает длиннее, чем фронт в дорожке).
+     * Like {@link #play(Object, Anchor, double, double, float, short[], int)}; {@code whole} starts a late voice at
+     * the beginning rather than middle (a client frame can exceed the front duration in the track).
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole) {
         return play(owner, anchor, after, azimuth, gain, pcm, rate, whole, false);
     }
 
     /**
-     * Как {@link #play(Object, Anchor, double, double, float, short[], int, boolean)}; {@code before} — удар самой волны:
-     * его слышит ухо, каким оно было до неё ({@link Deafness#before}).
+     * Like {@link #play(Object, Anchor, double, double, float, short[], int, boolean)}; {@code before} marks the wave's
+     * own impact: heard with the ear as it was before the wave ({@link Deafness#before}).
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole,
                                boolean before) {
@@ -213,13 +212,13 @@ public final class OwnSources {
     }
 
     /**
-     * Как {@link #play(Object, Anchor, double, double, float, short[], int, boolean, boolean)}; {@code mix} — множитель
-     * смеси взрывов ({@link Mix}): громкость голоса — {@code gain} × он, каждый кадр.
+     * Like {@link #play(Object, Anchor, double, double, float, short[], int, boolean, boolean)}; {@code mix} is blast-mix
+     * factor ({@link Mix}): voice gain is {@code gain} × it, every frame.
      */
     public static boolean play(Object owner, Anchor anchor, double after, double azimuth, float gain, short[] pcm, int rate, boolean whole,
                                boolean before, @Nullable DoubleSupplier mix) {
         if (pcm.length == 0 || VOICES.size() >= MAX || !ready()) return false;
-        // преграда — при старте голоса (frame): до него он ждёт до ~24 с
+        // barrier sampled at voice start (frame): it waits up to ~24 s before that
         Voice v = new Voice(owner, anchor, after, azimuth, gain, pcm, rate, whole, 1);
         if (before) v.heard = new float[]{Deafness.gain(), Deafness.highs()};
         v.mix = mix;
@@ -243,7 +242,7 @@ public final class OwnSources {
             AL10.alSourcei(v.source, AL10.AL_BUFFER, v.buffer);
             AL10.alSourcei(v.source, AL10.AL_LOOPING, AL10.AL_FALSE);
             AL10.alSourcei(v.source, AL10.AL_SOURCE_RELATIVE, AL10.AL_FALSE);
-            // без затухания по расстоянию: громкость — наша (как у Channel.disableAttenuation)
+            // no distance attenuation: gain is ours (like Channel.disableAttenuation)
             AL10.alSourcei(v.source, 0xD000, AL10.AL_NONE);
             AL10.alSourcef(v.source, AL10.AL_MAX_GAIN, 16);
             AL10.alSourcef(v.source, AL10.AL_GAIN, v.applied);
@@ -257,7 +256,7 @@ public final class OwnSources {
         return true;
     }
 
-    /** Хвост реверберации своего слота: время спада и доля посыла. */
+    /** Own slot's reverb tail: decay time and send fraction. */
     public static void reverb(double t60, float send) {
         if (!ready() || !effects() || slot <= 0) return;
         EXTEfx.alEffectf(effect, EXTEfx.AL_REVERB_DECAY_TIME, (float) Math.max(0.1, Math.min(20, t60)));
@@ -265,7 +264,7 @@ public final class OwnSources {
         EXTEfx.alAuxiliaryEffectSlotf(slot, EXTEfx.AL_EFFECTSLOT_GAIN, Math.max(0, Math.min(1, send)));
     }
 
-    /** Кадр: начала, старт дорожек, которым пора, место у уха, фильтр, пауза; отзвучавшие — прочь. */
+    /** Frame: anchors, start due tracks, ear-relative position, filter, pause; remove finished voices. */
     public static void frame(RenderFrameEvent.Pre e) {
         if (VOICES.isEmpty() && ANCHORS.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
@@ -281,7 +280,7 @@ public final class OwnSources {
             return;
         }
         if (pause) {
-            // на паузе: звучащие — встать, и только они пойдут дальше после неё
+            // paused: stop playing voices; only these resume afterward
             if (!paused) {
                 for (Voice v : VOICES) {
                     if (v.started && AL10.alGetSourcei(v.source, AL10.AL_SOURCE_STATE) == AL10.AL_PLAYING) {
@@ -331,7 +330,7 @@ public final class OwnSources {
                 continue;
             }
             if (late > LATE && !v.whole) AL10.alSourcef(v.source, AL11.AL_SEC_OFFSET, (float) late);
-            // голос ждал до ~24 с: игрок мог войти в дом или выйти — преграда по месту уха сейчас
+            // voice waited up to ~24 s: player may have entered or left a house — barrier at ear's current position
             v.obstruct(SoundFilters.openToward(ear, v.azimuth));
             if (efx) filter(v, v.heard == null ? deafGain : v.heard[0], v.heard == null ? deafHighs : v.heard[1]);
             AL10.alSourcePlay(v.source);
@@ -341,16 +340,16 @@ public final class OwnSources {
     }
 
     /**
-     * Ошибка нашего отказа — забрать: ошибки AL общие с потоком звука, и его следующая проверка ({@code Channel.create})
-     * приняла бы её за свою — источник движка, уже выделенный, ушёл бы в никуда.
+     * Consume error from our failure: AL errors are shared with sound thread; its next check ({@code Channel.create})
+     * would treat it as its own, losing an engine source already allocated.
      */
     private static void spent() {
         AL10.alGetError();
     }
 
     /**
-     * Фильтр голоса на прямом пути и на посыле: преграда в его сторону и слух ({@link Deafness}: громкость и доля верхов).
-     * Параметры фильтра источник копирует, когда фильтр ставят: один объект фильтра — на все голоса.
+     * Voice filter on direct path and send: barrier in its direction and hearing ({@link Deafness}: gain and high
+     * fraction). Source copies filter parameters when set: one filter object for all voices.
      */
     private static void filter(Voice v, float deafGain, float deafHighs) {
         float gain = v.blockedGain * deafGain, highs = v.blockedHighs * Math.max(0.01f, deafHighs);
@@ -368,8 +367,8 @@ public final class OwnSources {
     }
 
     /**
-     * Начала, чей звук уже начался (по часам: сейчас минус сколько он уже звучит), или которого движок не взял
-     * ({@code play} отказывает сразу: в движке звука нет), или не начался за срок.
+     * Anchors whose sound has started (clock now minus its elapsed playing time), was refused by engine
+     * ({@code play} refuses immediately: no sound in engine), or did not start before timeout.
      */
     private static void anchors(Minecraft mc, float partial) {
         if (ANCHORS.isEmpty()) return;
@@ -387,13 +386,13 @@ public final class OwnSources {
         }
     }
 
-    /** Ждущие начала — по тику: звук, которого они ждали, движок уже не запустит. */
+    /** Resolve awaited anchors by tick: engine will no longer start the awaited sound. */
     private static void settle() {
         for (Anchor a : ANCHORS) if (Double.isNaN(a.zero)) a.zero = a.tick;
         ANCHORS.clear();
     }
 
-    /** Снять голоса и начала хозяина (подрыв убран или стал прошлым). */
+    /** Remove owner's voices and anchors (detonation removed or now in the past). */
     public static void stop(Object owner) {
         ANCHORS.removeIf(a -> a.owner == owner);
         for (Iterator<Voice> it = VOICES.iterator(); it.hasNext(); ) {
@@ -404,7 +403,7 @@ public final class OwnSources {
         }
     }
 
-    /** Перемотка повтора, выход из мира: тишина. */
+    /** Replay rewind, world exit: silence. */
     public static void reset() {
         if (ready()) for (Voice v : VOICES) free(v);
         VOICES.clear();
@@ -412,7 +411,7 @@ public final class OwnSources {
         paused = false;
     }
 
-    /** Движок звука загружен заново: прежний контекст удалён вместе с источниками и фильтрами. */
+    /** Sound engine reloaded: old context deleted with sources and filters. */
     static void engineLoaded() {
         VOICES.clear();
         settle();
@@ -421,8 +420,8 @@ public final class OwnSources {
     }
 
     /**
-     * Для строки {@code SCENARIO}: сколько голосов ждёт и звучит, сколько начато всего, преграда у голосов (громкость
-     * за преградой: самая сильная и средняя, 1 — открыто).
+     * For {@code SCENARIO} line: voices waiting and playing, total started, voice barriers (strongest and mean
+     * gain behind barrier, 1 — open).
      */
     public static String describe() {
         int playing = 0;
@@ -437,9 +436,9 @@ public final class OwnSources {
     }
 
     /**
-     * Моно- и стерео-источников у устройства ({@code ALC_MONO_SOURCES}, {@code ALC_STEREO_SOURCES}) — по ним движок делит
-     * каналы ({@code Library.getChannelCount}); устройство их не назвало — как у движка, 30 моно; null — контекста ещё
-     * нет (событие загрузки из конструктора движка, до {@code Library.init}).
+     * Device mono and stereo sources ({@code ALC_MONO_SOURCES}, {@code ALC_STEREO_SOURCES}), used by engine to divide
+     * channels ({@code Library.getChannelCount}); unspecified by device — engine default, 30 mono; null — no
+     * context yet (load event from engine constructor before {@code Library.init}).
      */
     static int @Nullable [] deviceSources() {
         try {
@@ -480,13 +479,13 @@ public final class OwnSources {
             }
             if (v.buffer != 0) AL10.alDeleteBuffers(v.buffer);
         } catch (RuntimeException | LinkageError ignored) {
-            // контекст уже ушёл — объекты удалены с ним
+            // context already gone — objects deleted with it
         }
         v.source = v.buffer = 0;
         v.done = true;
     }
 
-    /** Фильтр и слот EFX (создаются при первой нужде); false — EFX нет. */
+    /** EFX filter and slot (created on first need); false — no EFX. */
     private static boolean effects() {
         if (filter == 0) create();
         return filter > 0;
@@ -499,7 +498,7 @@ public final class OwnSources {
                 filter = -1;
                 return;
             }
-            // удача — по самим объектам (ошибки AL общие с потоком звука): тип, который не встал, читается обратно прежним
+            // success checked on objects themselves (AL errors shared with sound thread): a type not set reads back as old type
             int f = EXTEfx.alGenFilters();
             if (f == 0 || !EXTEfx.alIsFilter(f)) {
                 filter = -1;
@@ -512,7 +511,7 @@ public final class OwnSources {
                 return;
             }
             filter = f;
-            // хвост: реверберация открытого места — редкие поздние отражения, верха гаснут быстрее; не встал — без хвоста
+            // tail: outdoor reverb — sparse late reflections, highs decay faster; failed to set — no tail
             slot = -1;
             int e = EXTEfx.alGenEffects();
             if (e == 0 || !EXTEfx.alIsEffect(e)) return;

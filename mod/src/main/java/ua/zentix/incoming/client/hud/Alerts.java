@@ -14,9 +14,9 @@ import ua.zentix.incoming.registry.ModSounds;
 import ua.zentix.incoming.strike.WeaponType;
 
 /**
- * Тревога у тех, по кому бьют: сирена с двух сторон «города» и мигающая надпись над хотбаром.
- * Сирена у каждого своя с памятью 26 с (длина записи) — вторая поверх не включается, но надпись обновляется.
- * И строка хода залпа у того, кто его запустил.
+ * Alert for those under attack: sirens on both sides of the city and flashing text above the hotbar.
+ * Each player has their own siren with 26 s memory (recording length): no second siren over it, but text updates.
+ * Also the salvo progress line for the player who launched it.
  */
 public final class Alerts {
     private static final int SIREN_MEMORY = 530;
@@ -37,11 +37,11 @@ public final class Alerts {
         bannerLeft = BANNER_TICKS;
         if (ticks - lastSiren < SIREN_MEMORY) return;
         lastSiren = ticks;
-        // две сирены по разные стороны от цели, чуть разного тона — как на улицах города
+        // Two sirens on opposite sides of the target, with slightly different pitch, as on city streets.
         Vec3 c = p.pos();
         Vec3 a = missile ? c.add(125, 15, -65) : c.add(115, 15, 80);
         Vec3 b = missile ? c.add(-95, 15, 115) : c.add(-130, 15, -70);
-        // громкость — мощность уличной сирены и путь до уха (Sources), приходит со скоростью звука
+        // Volume follows street siren power and path to the ear (Sources), arriving at the speed of sound.
         Sources.play(ModSounds.SIREN.get(), a, Sources.SIREN, 1.0f);
         Sources.play(ModSounds.SIREN.get(), b, Sources.SIREN, 0.97f);
     }
@@ -64,12 +64,12 @@ public final class Alerts {
         lastSiren = ticks - SIREN_MEMORY;
     }
 
-    /** Свой отбой: строки хода залпа больше нет; тревога остаётся — над игроком могут лететь и чужие удары. */
+    /** Own abort: clear salvo progress; alert remains, since hostile strikes may still be flying over the player. */
     public static void salvoCancelled() {
         salvoLeft = 0;
     }
 
-    /** Надпись тревоги (мигает) и ход залпа — над хотбаром, на высоте строки actionbar. */
+    /** Alert text (flashing) and salvo progress above the hotbar, at actionbar height. */
     public static void render(GuiGraphics g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.options.hideGui) return;

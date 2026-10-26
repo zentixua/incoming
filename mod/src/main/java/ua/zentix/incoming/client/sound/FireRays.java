@@ -7,35 +7,36 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /**
- * Лучи преграды от уха к пожарам в воронках — не больше {@link #PER_TICK} за тик, сколько бы пожаров ни горело (без
- * Minecraft, проверяется юнит-тестом). Луч на каждый слышимый пожар в каждом тике стоил налёту из 300 пожаров в 1,7–1,9 км
- * 300 лучей по ~1800 блоков пути в тик; тик клиента в сцене Sol после #456 — 0,85 → 17,9 мс. Теперь каждый пожар помнит
- * открытость своего последнего луча; в тике лучи достаются слышимым пожарам без луча (по одному на сектор, пока такие
- * есть), потом самым давним. Сам луч кончается на последнем загруженном чанке ({@link SoundFilters#reach}): дальше мир
- * клиента пуст.
+ * Barrier rays from ear to crater fires — at most {@link #PER_TICK} per tick regardless of fire count (without
+ * Minecraft, covered by a unit test). A ray to each audible fire each tick cost a raid of 300 fires at 1.7–1.9 km
+ * 300 rays of ~1800 blocks per tick; client tick in Sol's scene after #456: 0.85 → 17.9 ms. Each fire now remembers
+ * its last ray's openness; each tick gives rays to audible fires without one (one per sector while any remain),
+ * then the stalest. The ray itself ends at the last loaded chunk ({@link SoundFilters#reach}): client world beyond
+ * is empty.
  * <p>
- * Бюджет решает только, когда уточняется преграда, а не слышен ли пожар: слышимый пожар идёт в сумму в тот же тик
- * ({@link #tick}), до своего луча — с открытостью, известной в его стороне ({@link #known}). Цена бюджета — запаздывание
- * преграды: луч к каждому пожару обновляется раз в {@link #lag} тиков (300 пожаров — до 19 тиков, 0,95 с; 3000 — до 188,
- * 9,4 с), и пожар, за которым стена встала или ушла (игрок шагнул за угол), до своего луча звучит по-прежнему. Петля этого
- * не скрывает: её громкость идёт к цели на 0,05 за тик ({@code AmbientLoop}), шаг меньше — за один тик.
+ * Budget decides only when the barrier is refined, not whether fire is audible: an audible fire joins the sum
+ * that same tick ({@link #tick}), using openness known in its direction until its own ray ({@link #known}). The
+ * budget costs barrier lag: each fire's ray updates every {@link #lag} ticks (300 fires: up to 19 ticks, 0.95 s;
+ * 3000: up to 188, 9.4 s); a fire whose wall appeared or disappeared (player rounded a corner) sounds as before
+ * until its ray. The loop does not hide this: volume approaches target by 0.05 per tick ({@code AmbientLoop}),
+ * a smaller step takes one tick.
  */
 final class FireRays {
-    /** Лучей за тик (бюджет чтений мира: 300 пожаров — круг за ~1 с). */
+    /** Rays per tick (world-read budget: 300 fires cycle in ~1 s). */
     static final int PER_TICK = 16;
     /**
-     * Секторов направления вокруг уха для открытости, известной в стороне пожара: столько же, сколько лучей за тик, —
-     * в первый тик налёта по лучу в каждый сектор, где есть пожары.
+     * Direction sectors around the ear for openness known toward a fire: as many as rays per tick — first raid
+     * tick gives a ray to every sector containing fires.
      */
     static final int SECTORS = PER_TICK;
-    /** Поздние первыми: очередь держит самые давние — по тику последнего луча, без луча — по очереди в своём секторе. */
+    /** Latest first: queue keeps the stalest by last ray tick; without a ray, by order within its sector. */
     private static final Comparator<CraterFire> LATEST_FIRST = Comparator.comparingLong((CraterFire f) -> f.rayAt).thenComparingInt(f -> f.turn).reversed();
 
     private long tick;
 
     /**
-     * Тик после {@link CraterFire#hear} у всех: лучи ({@link #cast}), потом в {@code loops} — каждый слышимый пожар: через
-     * свой последний луч, без луча — через открытость, известную в его стороне ({@link #known}). Сколько лучей.
+     * Tick after all {@link CraterFire#hear} calls: rays ({@link #cast}), then every audible fire into {@code loops}
+     * via its last ray, or without one, via openness known in its direction ({@link #known}). Returns ray count.
      */
     int tick(List<CraterFire> fires, Vec3 ear, SoundFilters.Path path, Quarters loops) {
         int cast = cast(fires, ear, path);
@@ -45,8 +46,8 @@ final class FireRays {
     }
 
     /**
-     * Лучи из уха {@code ear} слышимым пожарам ({@link CraterFire#heard}) — сперва тем, у кого луча не было (первыми — по
-     * одному из каждого сектора), потом самым давним, не больше {@link #PER_TICK}. Сколько лучей.
+     * Rays from {@code ear} to audible fires ({@link CraterFire#heard}): first those without a ray (one from each
+     * sector first), then the stalest, at most {@link #PER_TICK}. Returns ray count.
      */
     int cast(List<CraterFire> fires, Vec3 ear, SoundFilters.Path path) {
         tick++;
@@ -63,11 +64,11 @@ final class FireRays {
     }
 
     /**
-     * Открытость, известная в каждом секторе: средняя по последним лучам слышимых пожаров сектора, в секторе без них — у
-     * ближайшего сектора с ними. Преграду решает путь у уха (стены дома, гребень, лес), а дальше загруженного мира пусто:
-     * пожары в одной стороне на одной дальности проходят одни и те же блоки у уха; ⚠ пожар много ближе или дальше соседей
-     * сектора может стоять по другую сторону преграды — это оценка до его луча, в пределах {@link #lag} тиков. После
-     * {@link #cast} луч есть хоть у одного слышимого пожара, если слышен хоть один.
+     * Openness known in each sector: mean of audible fires' latest rays, or nearest sector with rays if none here.
+     * The path near the ear determines the barrier (house walls, ridge, forest); beyond loaded world is empty:
+     * fires in one direction at one range pass the same blocks near the ear. ⚠ A fire much closer or farther than
+     * its sector neighbours may lie across a barrier — this is an estimate until its ray, within {@link #lag}
+     * ticks. After {@link #cast}, at least one audible fire has a ray if any fire is audible.
      */
     static float[] known(List<CraterFire> fires) {
         float[] sum = new float[SECTORS], known = new float[SECTORS];
@@ -88,12 +89,12 @@ final class FireRays {
         return known;
     }
 
-    /** Сектор направления {@code azimuth} (atan2(dz, dx)). */
+    /** Sector for direction {@code azimuth} (atan2(dz, dx)). */
     static int sector(double azimuth) {
         return Math.floorMod((int) Math.floor(azimuth / (2 * Math.PI) * SECTORS), SECTORS);
     }
 
-    /** Тиков, за которые луч доходит до каждого из {@code fires} слышимых пожаров (и обновляется у каждого). */
+    /** Ticks for rays to reach (and update) each of {@code fires} audible fires. */
     static int lag(int fires) {
         return Math.max(1, (fires + PER_TICK - 1) / PER_TICK);
     }

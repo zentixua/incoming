@@ -3,46 +3,46 @@ package ua.zentix.incoming.client.sound;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 
 /**
- * Физика звука без Minecraft (проверяется юнит-тестами): задержка распространения и Доплер.
+ * Sound physics without Minecraft (covered by unit tests): propagation delay and Doppler.
  * <p>
- * Слушатель в момент {@code now} слышит то, что источник излучил в момент {@code t}, где
- * |p(t) − L| = c·(now − t) — «запаздывающее время». Отсюда и честный Доплер (частота растёт, пока источник
- * приближается), и то, что дальний слушатель ещё слышит мотор, когда снаряд уже взорвался, — ровно до прихода фронта,
- * и то, что сверхзвуковой снаряд не слышно, пока до уха не дошёл его конус Маха.
+ * At {@code now}, the listener hears what the source emitted at {@code t}, where
+ * |p(t) − L| = c·(now − t) — the “retarded time”. This gives both accurate Doppler (frequency rises while the source
+ * approaches) and a distant listener still hearing the engine after the projectile has exploded, exactly until the front
+ * arrives, as well as a supersonic projectile remaining inaudible until its Mach cone reaches the ear.
  */
 public final class Acoustics {
-    /** Скорость звука: 343 м/с при 20 °C (по таблице 343,2 — на километре 2 мс) = 17.15 блока за тик. */
+    /** Speed of sound: 343 m/s at 20 °C (the table gives 343.2 — 2 ms over a kilometre) = 17.15 blocks per tick. */
     public static final double SPEED = BlastModel.SOUND_SPEED / 20;
 
     private Acoustics() {}
 
-    /** Траектория источника: положение в момент t (тики, дробные). */
+    /** Source trajectory: position at time t (ticks, fractional). */
     public interface Path {
-        /** Положение в момент t; вне известного отрезка — ближайший край. */
+        /** Position at time t; outside the known interval, the nearest endpoint. */
         void at(double t, double[] out);
 
-        /** Самый ранний известный момент. */
+        /** Earliest known time. */
         double start();
 
-        /** Скорость, быстрее которой источник на пути не двигался, блоков/тик (оценка сверху). */
+        /** Upper bound on the source's speed along the path, blocks/tick. */
         double maxSpeed();
     }
 
-    /** Самый короткий шаг поиска корней, тиков: пары корней ближе этого (касание конуса Маха) — один миг. */
+    /** Minimum root-search step, ticks: pairs of roots closer than this (Mach-cone tangency) are one instant. */
     private static final double MIN_STEP = 0.05;
-    /** Шагов поиска не больше. */
+    /** Maximum number of search steps. */
     private static final int MAX_STEPS = 400;
 
     /**
-     * Моменты излучения того, что слушатель в точке (lx, ly, lz) слышит сейчас, — корни
-     * f(t) = |p(t) − L| − c·(now − t) на известном пути, от позднего к раннему (не больше {@code out.length}).
-     * Дозвуковой источник даёт ровно один корень (f растёт: f′ = c − v<sub>r</sub> > 0), если его звук уже дошёл;
-     * сверхзвуковой — ни одного вне конуса Маха и пару внутри: поздний (источник уходит, тон ниже) и ранний (звук,
-     * изданный на подходе, приходит задом наперёд). Поиск — шагами назад от {@code now}: f меняется не быстрее
-     * c + v<sub>max</sub> за тик, поэтому шаг |f| / (c + v<sub>max</sub>) корня не перешагнёт; смена знака —
-     * делением пополам.
+     * Emission times of what the listener at (lx, ly, lz) hears now: the roots of
+     * f(t) = |p(t) − L| − c·(now − t) along the known path, latest first (at most {@code out.length}).
+     * A subsonic source gives exactly one root (f increases: f′ = c − v<sub>r</sub> > 0) if its sound has arrived;
+     * a supersonic source gives none outside the Mach cone and a pair inside: the late root (the source recedes,
+     * pitch is lower) and the early root (sound emitted on approach arrives backwards). Search steps back from
+     * {@code now}: f changes by at most c + v<sub>max</sub> per tick, so a step of |f| / (c + v<sub>max</sub>)
+     * cannot skip a root; a sign change is resolved by bisection.
      *
-     * @return сколько корней найдено (0 — звук ещё не дошёл или слушатель вне конуса)
+     * @return number of roots found (0 — the sound has not arrived or the listener is outside the cone)
      */
     public static int emissions(Path path, double now, double lx, double ly, double lz, double[] out) {
         double[] p = new double[3];
@@ -56,7 +56,7 @@ public final class Acoustics {
             t = t1;
             f = f1;
         }
-        // шагов не хватило (скорость сверху завышена: скачок пути между тиками) — дальше ровно по тику, корни — так же
+        // not enough steps (speed bound too high: path jumps between ticks) — continue in exact one-tick steps, same roots
         while (n < out.length && t > start) {
             double t1 = Math.max(start, t - 1);
             double f1 = f(path, now, lx, ly, lz, t1, p);
@@ -68,8 +68,8 @@ public final class Acoustics {
     }
 
     /**
-     * Корень f между a (f(a) = fa) и b: делением пополам до тысячной тика, потом хордой (между тиками путь — прямая,
-     * f почти линейна — хорда сходится сразу).
+     * Root of f between a (f(a) = fa) and b: bisect to a thousandth of a tick, then use a chord (between ticks
+     * the path is straight, f is nearly linear — the chord converges immediately).
      */
     private static double refine(Path path, double now, double lx, double ly, double lz, double a, double fa, double b, double[] p) {
         double fb = f(path, now, lx, ly, lz, b, p);
@@ -96,9 +96,9 @@ public final class Acoustics {
     }
 
     /**
-     * Момент излучения того, что слушатель слышит сейчас, — поздний корень ({@link #emissions}): у дозвукового
-     * источника он один, у сверхзвукового — звук уходящего источника (ранний, изданный на подходе, звучит задом
-     * наперёд — так звук играть нельзя). {@code NaN} — звук ещё не дошёл: раньше прихода ничего не звучит.
+     * Emission time of what the listener hears now: the late root ({@link #emissions}). A subsonic source has
+     * just one; for a supersonic source this is the receding source's sound (the early root, emitted on approach,
+     * plays backwards — sound cannot be played that way). {@code NaN} means sound has not arrived: nothing plays before arrival.
      */
     public static double emissionTime(Path path, double now, double lx, double ly, double lz) {
         double[] roots = new double[1];
@@ -111,11 +111,11 @@ public final class Acoustics {
     }
 
     /**
-     * Множитель частоты для движущегося источника и неподвижного слушателя: f' = f · c / (c − v·n),
-     * где n — единичный вектор от источника к уху, v — скорость источника (блоков/тик). Без предела: у позднего корня
-     * ({@link #emissionTime}) c − v·n > 0 всегда, и сверхзвуковой уходящий источник звучит ниже; отрицательный —
-     * звук, изданный на подходе быстрее звука (задом наперёд). Ровно на конусе Маха (c = v·n) — бесконечность:
-     * там звук приходит весь разом, N-волной ({@code SonicBoom}).
+     * Frequency multiplier for a moving source and a stationary listener: f' = f · c / (c − v·n),
+     * where n is the unit vector from source to ear, v is source velocity (blocks/tick). Unbounded: at the late root
+     * ({@link #emissionTime}), c − v·n > 0 always, and a receding supersonic source has a lower pitch; a negative value
+     * is sound emitted while approaching faster than sound (backwards). Exactly on the Mach cone (c = v·n), infinity:
+     * there the sound arrives all at once, as an N-wave ({@code SonicBoom}).
      */
     public static double doppler(double vx, double vy, double vz, double nx, double ny, double nz) {
         double radial = vx * nx + vy * ny + vz * nz;
@@ -124,7 +124,7 @@ public final class Acoustics {
         return SPEED / gap;
     }
 
-    /** Плавная ступенька 0→1 между a и b. */
+    /** Smooth 0→1 step between a and b. */
     public static double smoothstep(double a, double b, double x) {
         double t = Math.max(0, Math.min(1, (x - a) / (b - a)));
         return t * t * (3 - 2 * t);

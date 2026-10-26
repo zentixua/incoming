@@ -5,25 +5,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Дым короткими выбросами — источник облака клиента (рисуют запечённые клубы слоя эффектов, {@code far/SmokePuffs}):
- * каждый выброс — тёплый клуб одним термиком ({@link Thermal}, тот же закон MTT, что у облака взрыва и облака старта):
- * всплывает своим теплом, сносится ветром, расплывается и тает, пока толща поперёк его середины больше
- * {@link CloudModel#SEEN}. Так рисуется дым того, что горит или тлеет недолго и мелко для шлейфа Бриггса: горящий
- * обломок в полёте (выброс за каждый отрезок пути), дымки поверхностей, подожжённых ядерной вспышкой.
+ * Smoke in brief puffs — client cloud source (drawn by baked effects-layer billows, {@code far/SmokePuffs}): each
+ * puff is a warm billow in one thermal ({@link Thermal}, same MTT law as blast and launch clouds): rises by
+ * its own heat, drifts with wind, spreads and fades while optical depth across centre exceeds
+ * {@link CloudModel#SEEN}. Draws smoke from things burning or smouldering too briefly and small for a Briggs
+ * plume: flying burning debris (a puff for each path segment), wisps from surfaces ignited by nuclear flash.
  * <p>
- * Вещество выброса — сажа (чёрная, {@link CloudModel#SOOT_K}) или светлый аэрозоль тления: у него своё ослабление на
- * массу и альбедо, в клуб он идёт пылью с тем же ослаблением ({@link SmokeGrid#dustK}).
+ * Puff matter is soot (black, {@link CloudModel#SOOT_K}) or light smouldering aerosol: own mass extinction and
+ * albedo, enters billow as dust with same extinction ({@link SmokeGrid#dustK}).
  * <p>
- * Термики одной плавучести и начального радиуса (с точностью до {@link #BIN}) — один и тот же расчёт: подъём
- * интегрируется тысячами шагов, а выбросов — сотни.
+ * Thermals of same buoyancy and initial radius (within {@link #BIN}) share one calculation: rise integrates
+ * over thousands of steps, while there are hundreds of puffs.
  */
 public final class Puffs implements SmokeGrid.Source {
-    /** Плавучесть и радиус термиков одного расчёта совпадают с точностью до множителя (ошибка высоты ∝ B^¼ — до 4 %). */
+    /** Thermals sharing calculation match buoyancy and radius within this factor (height error ∝ B^¼ — up to 4 %). */
     static final double BIN = Math.sqrt(2);
     /**
-     * Кэш термиков: воздух — до шага, который подъёма не меняет (N — 0,001 с⁻¹, ветер — 0,5 м/с), плавучесть и радиус —
-     * до {@link #BIN}; последние {@value #CACHED} расчётов. Воздух у каждого источника свой объект ({@code FarBlasts.air}
-     * по времени суток), а расчёт — тысячи шагов: по одному объекту кэш сбрасывался бы на каждом выбросе.
+     * Thermal cache: air rounded to increments not affecting rise (N — 0.001 s⁻¹, wind — 0.5 m/s), buoyancy and
+     * radius to {@link #BIN}; last {@value #CACHED} calculations. Each source has its own air object
+     * ({@code FarBlasts.air} by time of day), each calculation thousands of steps: object identity would reset
+     * cache on every puff.
      */
     static final int CACHED = 64;
     private static final Map<String, Thermal> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true) {
@@ -40,16 +41,16 @@ public final class Puffs implements SmokeGrid.Source {
     private final float dustR, dustG, dustB;
     private final long seed;
     private final List<Puff> puffs = new ArrayList<>();
-    /** Новых выбросов больше не будет (источник иссяк или ушёл из мира). */
+    /** No more new puffs (source exhausted or left world). */
     private boolean closed;
-    /** Часы сетки последнего выброса: без новых дольше {@link #QUIET} источник иссяк сам (обломок упал или исчез). */
+    /** Grid clock of last puff: no new ones beyond {@link #QUIET} exhausts source itself (debris fell or vanished). */
     private double lastFed = Double.NaN;
     static final double QUIET = 1;
     private boolean gone;
 
     /**
-     * @param air    воздух на месте
-     * @param albedo цвет аэрозоля тления на экране (сажа — своя, чёрная): альбедо — {@link SmokeGrid#dustAlbedo}
+     * @param air    local air
+     * @param albedo smouldering-aerosol screen colour (soot has its own black): albedo from {@link SmokeGrid#dustAlbedo}
      */
     public Puffs(CloudModel.Air air, float albedoR, float albedoG, float albedoB, long seed) {
         this.air = air;
@@ -59,7 +60,7 @@ public final class Puffs implements SmokeGrid.Source {
         this.seed = seed;
     }
 
-    /** Термик плавучести тепла {@code heat}, Дж, с начальной температурой {@code kelvin} и радиусом не меньше {@code r0}. */
+    /** Thermal from buoyancy of {@code heat}, J, with initial {@code kelvin} temperature and radius at least {@code r0}. */
     static Thermal thermal(CloudModel.Air air, double heat, double kelvin, double r0) {
         long kb = Math.round(Math.log(Math.max(heat, 1)) / Math.log(BIN)), kr = Math.round(Math.log(Math.max(r0, 0.05)) / Math.log(BIN));
         long kt = Math.round(kelvin / 50);
@@ -70,9 +71,9 @@ public final class Puffs implements SmokeGrid.Source {
     }
 
     /**
-     * Выброс в (x, y, z) в миг {@code seconds} (часы сетки): тепло {@code heat}, Дж, газ температуры {@code kelvin} в шаре не
-     * меньше {@code r0} м; сажи {@code soot}, кг; аэрозоля тления {@code aerosol}, кг, с ослаблением {@code k} м²/кг; виден не
-     * дольше, чем до {@code until} (часы сетки; волна ядерки сметает дымки) — NaN без срока.
+     * Puff at (x, y, z) at {@code seconds} (grid clock): {@code heat}, J, gas at {@code kelvin} in sphere at least
+     * {@code r0} m; {@code soot}, kg; smouldering {@code aerosol}, kg, with extinction {@code k} m²/kg; visible
+     * until at most {@code until} (grid clock; nuclear wave sweeps away wisps), NaN — no deadline.
      */
     public void add(double x, double y, double z, double seconds, double heat, double kelvin, double r0, double soot, double aerosol, double k,
                     double until) {
@@ -85,7 +86,7 @@ public final class Puffs implements SmokeGrid.Source {
         puffs.add(new Puff(x, y, z, seconds, until, th, soot, dust, life));
     }
 
-    /** Сколько выброс видно, с: пока толща поперёк середины больше порога ({@link CloudModel#SEEN}). */
+    /** Puff visible duration, s: while centre-crossing optical depth exceeds threshold ({@link CloudModel#SEEN}). */
     private double life(Thermal th, double soot, double dust) {
         double ext = CloudModel.SOOT_K * soot + SmokeGrid.dustK(dustR, dustG, dustB) * dust;
         if (tau(th, ext, 0) < CloudModel.SEEN) return 0;
@@ -103,18 +104,18 @@ public final class Puffs implements SmokeGrid.Source {
         return ext / (2 * Math.PI * th.sigmaH(t) * th.sigmaV(t));
     }
 
-    /** Новых выбросов не будет: источник уходит, когда растают уже выпущенные. */
+    /** No new puffs: source leaves after existing puffs fade. */
     public void close() {
         closed = true;
     }
 
-    /** Смена мира, перемотка: дым пропадает сразу. */
+    /** World change, rewind: smoke vanishes immediately. */
     public void end() {
         gone = true;
         puffs.clear();
     }
 
-    /** Живых выбросов. */
+    /** Live puffs. */
     public int size() {
         return puffs.size();
     }
@@ -127,7 +128,7 @@ public final class Puffs implements SmokeGrid.Source {
         for (Puff p : puffs) {
             double t = Math.max(0, seconds - p.born);
             Thermal th = p.thermal;
-            // выброс, что дожил до предела густым, тает за последнюю десятую жизни (как облако взрыва)
+            // puff still dense at lifetime limit fades over final tenth of life (like blast cloud)
             double fade = p.life < CloudModel.LIFE_MAX ? 1 : Math.min(1, (p.life - t) / (0.1 * p.life));
             out.blob(p.x + th.driftX(t), p.y + th.height(t), p.z + th.driftZ(t), th.sigmaH(t), th.sigmaV(t), p.soot * fade, p.dust * fade, 0,
                     dustR, dustG, dustB, th.kelvin(t), th.rise(t));
@@ -145,7 +146,7 @@ public final class Puffs implements SmokeGrid.Source {
         return seed;
     }
 
-    /** Кадр клуба — по росту самого молодого выброса (у старых клубы уже крупные, кадр у них не меняется заметно). */
+    /** Billow frame from youngest puff's growth (old billows already large, their frame barely changes). */
     @Override
     public double puffGrowth(double seconds) {
         if (puffs.isEmpty()) return 2;

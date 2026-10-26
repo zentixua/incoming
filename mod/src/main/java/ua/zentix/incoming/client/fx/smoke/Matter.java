@@ -3,16 +3,16 @@ package ua.zentix.incoming.client.fx.smoke;
 import ua.zentix.incoming.client.fx.plume.Smoke;
 
 /**
- * Конденсированные продукты двигателя ({@link Smoke}: Al₂O₃, соли, сажа, лёд) — веществами сетки дыма. У сетки их три:
- * сажа (ω 0,25), пыль (ω по цвету грунта) и капли (ω ≈ 1, не поглощают). Продукт с ослаблением σ_m и альбедо ω — смесь
- * сажи и капель с той же сырой толщей σ_m·m и тем же альбедо: доля толщи сажи (1 − ω)/(1 − ω_сажи), остальное — капли.
- * Асимметрия у капель 0,85 (у дыма двигателей 0,6–0,8, {@link Smoke#ASYMMETRY}): вперёд они рассеивают чуть больше —
- * известное отличие, не подбор.
+ * Condensed engine products ({@link Smoke}: Al₂O₃, salts, soot, ice) as smoke-grid substances. Grid has three:
+ * soot (ω 0.25), dust (ω from ground colour), droplets (ω ≈ 1, no absorption). Product with extinction σ_m and
+ * albedo ω becomes soot/droplet mixture with same raw optical depth σ_m·m and albedo: soot optical-depth share
+ * (1 − ω)/(1 − ω_soot), rest droplets. Droplet asymmetry 0.85 (engine smoke 0.6–0.8, {@link Smoke#ASYMMETRY}):
+ * they scatter slightly more forward — known difference, not tuning.
  */
 public final class Matter {
     private Matter() {}
 
-    /** В out[0] — сажа, out[1] — капли, кг: та же толща и альбедо, что у kg продукта smoke. */
+    /** out[0] soot, out[1] droplets, kg: same optical depth and albedo as kg of product smoke. */
     public static void of(Smoke smoke, double kg, double[] out) {
         double e = smoke.extinction * kg;
         double soot = Math.max(0, Math.min(e, e * (1 - smoke.albedo) / (1 - CloudModel.SOOT_W)));

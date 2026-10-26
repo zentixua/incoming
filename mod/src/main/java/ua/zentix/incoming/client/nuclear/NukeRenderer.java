@@ -35,30 +35,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Картинка ядерного удара в мире (DESIGN-nuke §6): янтарное небо, след входа боеголовки и чёрный дождь — своим
- * проходом; огненный шар, гриб и столб воды ({@link MushroomField}), стена пыли и облако Вильсона ({@link BlastWall}) —
- * объёмом в проходе пелены слоя эффектов; свет шара вокруг — светом частиц и бликом с вуалью там же ({@link #fireballs}).
+ * Nuclear strike visuals in the world (DESIGN-nuke §6): amber sky, warhead reentry trail and black rain use their own
+ * pass; the fireball, mushroom and water column ({@link MushroomField}), dust wall and Wilson cloud ({@link BlastWall}) are
+ * volumes in the effects layer pall pass; light around the ball uses particle lighting and glare with veiling light there ({@link #fireballs}).
  * <p>
- * Дальняя плоскость отсечения в 1.21.1 — 4 × дальность прорисовки, а гриб 15 кт — 10 км в высоту. Всё, что
- * дальше {@code 0.97·far}, переносится на эту дистанцию по тому же лучу и уменьшается во столько же раз (угловой
- * размер сохраняется). Рисуется всё после мира ({@code AFTER_LEVEL}), с проверкой глубины, но без записи: ландшафт
- * и облака ближе — закрывают гриб, небо — нет. Под шейдерами Iris только этот этап и виден: всё, что нарисовано
- * раньше, шейдерпак пропускает через свои проходы — туман на дальности прорисовки съедает гриб целиком. Туман
- * ванили тоже не действует — своя дымка по настоящей дальности.
+ * The far clipping plane in 1.21.1 is 4 × render distance, while a 15 kt mushroom is 10 km tall. Everything
+ * beyond {@code 0.97·far} is moved to that distance along the same ray and scaled down by the same factor (angular
+ * size is preserved). Everything is drawn after the world ({@code AFTER_LEVEL}), with depth testing but no depth writes: closer terrain
+ * and clouds occlude the mushroom, the sky does not. Under Iris shaders only this stage is visible: the shader pack runs everything drawn
+ * earlier through its own passes — fog at the render distance consumes the entire mushroom. Vanilla fog
+ * also has no effect — own haze based on true distance.
  */
 public final class NukeRenderer {
     private static final ResourceLocation RAIN = Incoming.id("textures/nuke/rain.png");
     private static final float[][] ICOSPHERE = Icosphere.build(3);
-    /** Свет шара кадра ({@link BlackBody#light}), середина шапки в мире, числа блика ({@link Sight#light}). */
+    /** Frame ball light ({@link BlackBody#light}), world-space cap center, glare parameters ({@link Sight#light}). */
     private static final double[] BALL = new double[4], CENTRE = new double[3], GLARE = new double[5];
 
-    /** Круглое свечение по формуле ({@code nuke_flare}): голова следа боеголовки, послеобраз вспышки. */
+    /** Analytic circular glow ({@code nuke_flare}): warhead trail head, flash afterimage. */
     @Nullable
     static ShaderInstance flare;
 
     private NukeRenderer() {}
 
-    /** Шина мода: шейдер свечения (и заново при перезагрузке ресурсов). */
+    /** Mod bus: glow shader (also on resource reload). */
     public static void registerShaders(RegisterShadersEvent e) {
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("nuke_flare"), DefaultVertexFormat.POSITION_TEX_COLOR), s -> flare = s);
@@ -68,7 +68,7 @@ public final class NukeRenderer {
         }
     }
 
-    /** Свечение по формуле, сложением света; шейдера нет — false (не рисовать). */
+    /** Analytic glow, additive light; false if the shader is absent (do not draw). */
     static boolean setupFlare() {
         ShaderInstance s = flare;
         if (s == null) return false;
@@ -96,7 +96,7 @@ public final class NukeRenderer {
         }
     }
 
-    /** Чёрный дождь — после слоя эффектов: капли у самой камеры ближе любого дыма. */
+    /** Black rain after the effects layer: drops right at the camera are closer than any smoke. */
     public static void renderRain(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || NukeSky.blackRain() <= 0) return;
         ClientLevel level = Minecraft.getInstance().level;
@@ -110,19 +110,19 @@ public final class NukeRenderer {
         }
     }
 
-    // ---------------------------------------------------------------- огненный шар
+    // ---------------------------------------------------------------- fireball
 
     /**
-     * Свет огненного шара и шапки вокруг (DESIGN-nuke, шаг M2) — тело рисует объём гриба ({@link MushroomField}): шар
-     * светит частицам и лентам кадра ({@link FxLights}: пыль и дым у шара), а в глазу — бликом и вуалью
-     * ({@link FarSprites#eyeLight}) с пробой видимости тела (закрыт ли он рельефом и постройками, с LOD Distant Horizons,
-     * пеленой и стеной пыли, чужими шапками и ножками грибов). Яркость — чёрное тело
-     * видимой температуры шапки снаружи ({@link MushroomModel#edgeTemperature}): шар, пока шар, — днём ярче неба
-     * секунды, ночью — дольше (глаз привык к темноте, {@link Sight#adapted}); свернувшаяся шапка снаружи смешана
-     * с воздухом и гаснет. Дымка воздуха — по настоящей дальности (в метрах модели). Шар на экране — с экспозицией по
-     * огню ({@link NukeExposure}): блик и вуаль не ярче его там ({@link NukeExposure#capShown}), а размер блика и
-     * вуали — по яркости, какой её видит кадр: с экспозицией шара и пересветом кадра во вспышку
-     * ({@link NukeFlash#overexposure}) — во вспышку блик в полкадра, когда кадр догнал её, — ореол у края шара.
+     * Light around the fireball and cap (DESIGN-nuke, step M2) — the mushroom volume draws their body ({@link MushroomField}): the ball
+     * lights frame particles and ribbons ({@link FxLights}: dust and smoke near the ball), and produces glare and veiling light in the eye
+     * ({@link FarSprites#eyeLight}), with body visibility probes (occlusion by terrain and buildings, with Distant Horizons LOD,
+     * pall and dust wall, other mushrooms' caps and stems). Brightness is a black body at the cap's
+     * visible outer temperature ({@link MushroomModel#edgeTemperature}): while still a ball, it is brighter than the daytime sky for
+     * seconds, longer at night (the eye adapts to darkness, {@link Sight#adapted}); the rolled cap's outside mixes
+     * with air and fades. Air haze uses true distance (in model meters). The on-screen ball uses exposure set for
+     * fire ({@link NukeExposure}): glare and veiling light do not exceed it there ({@link NukeExposure#capShown}); their sizes
+     * follow the brightness seen by the frame: with ball exposure and frame overexposure during the flash
+     * ({@link NukeFlash#overexposure}) — half-frame glare during the flash; once the frame catches up, a halo around the ball edge.
      */
     public static void fireballs(FarView view, FarSprites out, FxLights lights) {
         List<ClientNuclear.Active> all = ClientNuclear.detonations();
@@ -138,28 +138,28 @@ public final class NukeRenderer {
             MushroomField.centre(a, s, CENTRE);
             double dx = CENTRE[0] - cam.x, dy = CENTRE[1] - cam.y, dz = CENTRE[2] - cam.z, r = d.blocks(s.capR());
             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            // цвет: свет частицам — линейный на единицу яркости, блику и вуали — на экране, самый яркий канал — 1
+            // color: particle light is linear per unit brightness; glare and veiling light use screen color, with the brightest channel at 1
             float lr = (float) (BALL[0] / BALL[3]), lg = (float) (BALL[1] / BALL[3]), lb = (float) (BALL[2] / BALL[3]);
             double top = Math.max(BALL[0], Math.max(BALL[1], BALL[2]));
             float cr = (float) Math.pow(BALL[0] / top, 1 / 2.2), cg = (float) Math.pow(BALL[1] / top, 1 / 2.2), cb = (float) Math.pow(BALL[2] / top, 1 / 2.2);
             double air = MushroomField.air(d, cam, view.range()).transmittance(d.metres(dist), d.metres(dy)), seen = surface * air;
-            // огонь шара на экране (доля белого) с экспозицией по огню, пока шар — шар (свернувшаяся шапка — как прежде,
-            // NukeExposure.filmShare): блик и вуаль не ярче его
+            // ball fire on screen (fraction of white), with fire exposure while the ball is a ball (rolled cap as before,
+            // NukeExposure.filmShare): glare and veiling light do not exceed it
             double film = NukeExposure.filmShare(MushroomModel.rollUp(s.t(), d.yieldKt(), d.surface()));
             double shown = film * NukeExposure.capShown(BALL[0] * adapt * air, BALL[1] * adapt * air, BALL[2] * adapt * air, adapt)
                     + (1 - film) * Math.min(1, Math.pow(seen, 1 / 2.2));
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
-            // блик — по тому, как кадр видит поверхность: с экспозицией шара по ней сквозь воздух (mushAt в fx_pall) и пересветом
+            // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
             double exposed = seen * (film * NukeExposure.gain(seen, adapt) + 1 - film) * NukeFlash.overexposure(a, view.partial());
             if (seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
         }
     }
 
-    // ---------------------------------------------------------------- небо
+    // ---------------------------------------------------------------- sky
 
     /**
-     * Янтарное небо после вспышки ({@link NukeSky#amber}): купол у дальней плоскости — мир ближе закрывает его,
-     * поэтому окрашено только небо, сильнее всего в сторону подрыва.
+     * Amber sky after the flash ({@link NukeSky#amber}): a dome near the far plane — closer world geometry occludes it,
+     * so only the sky is colored, most strongly toward the detonation.
      */
     private static void drawSkyGlow(Vec3 cam, float partial, float far) {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
@@ -178,9 +178,9 @@ public final class NukeRenderer {
         }
     }
 
-    // ---------------------------------------------------------------- вход боеголовки
+    // ---------------------------------------------------------------- warhead reentry
 
-    /** Последние 3 с перед подрывом: светящаяся черта с головой-звездой сверху вниз к цели. */
+    /** Last 3 s before detonation: a glowing streak with a star-shaped head descending toward the target. */
     private static void drawReentry(ClientLevel level, Camera camera, Vec3 cam, float partial, float far) {
         double now = level.getGameTime() + partial;
         for (S2C.NukeWarning w : ClientNuclear.warnings()) {
@@ -189,7 +189,7 @@ public final class NukeRenderer {
             Vec3 end = w.target().add(0, w.airBurst() ? w.burstHeight() : 0, 0);
             Vec3 dir = reentryDirection(w);
             double f = left / NukeSounds.REENTRY_TICKS; // 1 → 0
-            // от 60 км до точки подрыва, почти по прямой (≈ 7 км/с)
+            // from 60 km to the detonation point, almost straight (≈ 7 km/s)
             double path = 60_000 * w.scale();
             Vec3 head = end.add(dir.scale(-path * f));
             Vec3 tail = head.add(dir.scale(-Math.min(path * 0.25, path * (1 - f) + 2000 * w.scale())));
@@ -201,7 +201,7 @@ public final class NukeRenderer {
                 Vec3 p = head.lerp(tail, i / (double) steps).subtract(cam);
                 double dist = p.length();
                 double k = dist > far ? far / dist : 1;
-                // угловой размер: голова-звезда ~2°, хвост сужается; раскалённая плазма — от белого к оранжевому
+                // angular size: star-shaped head ~2°, tapering tail; incandescent plasma from white to orange
                 float size = (float) (dist * k * (i == 0 ? 0.035 : 0.012 * (1 - 0.7 * i / (double) steps)));
                 float a = (float) (i == 0 ? 1 : 0.8 * (1 - i / (double) steps));
                 FarDraw.billboard(b, l, up, (float) (p.x * k), (float) (p.y * k), (float) (p.z * k), size, 0, 0, 0, 1, 1, 1f, 0.9f - 0.4f * i / steps, 0.7f - 0.5f * i / steps, a);
@@ -210,7 +210,7 @@ public final class NukeRenderer {
         }
     }
 
-    /** Направление входа: со стороны пуска, под крутым углом (~70° к горизонту). */
+    /** Reentry direction: from the launch side, at a steep angle (~70° to the horizon). */
     static Vec3 reentryDirection(S2C.NukeWarning w) {
         Vec3 h = w.target().subtract(w.launchPos());
         Vec3 flat = new Vec3(h.x, 0, h.z);
@@ -218,9 +218,9 @@ public final class NukeRenderer {
         return flat.scale(0.34).add(0, -0.94, 0).normalize();
     }
 
-    // ---------------------------------------------------------------- чёрный дождь
+    // ---------------------------------------------------------------- black rain
 
-    /** Тёмные тяжёлые капли вокруг игрока в следе осадков: как ванильный дождь, только свой и местный. */
+    /** Dark heavy drops around the player in the fallout plume: like vanilla rain, but separate and local. */
     private static void drawBlackRain(ClientLevel level, Vec3 cam, float partial) {
         float k = NukeSky.blackRain();
         if (k <= 0) return;
@@ -239,7 +239,7 @@ public final class NukeRenderer {
                 if (top <= bottom) continue;
                 long seed = BlockPos.asLong(x, 0, z) * 3129871L;
                 float off = (seed & 0xFF) / 255f;
-                // блок ширины, лицом к камере, как ванильный дождь; на текстуре — много тонких капель
+                // one block wide, facing the camera, like vanilla rain; the texture has many thin drops
                 float nx = (float) (-ddz / Math.max(hd, 0.01)) * 0.5f, nz = (float) (ddx / Math.max(hd, 0.01)) * 0.5f;
                 float px = (float) ddx, pz = (float) ddz;
                 float v0 = -(time * 0.045f + off * 7), v1 = v0 + (top - bottom) / 8;
@@ -254,9 +254,9 @@ public final class NukeRenderer {
         FarDraw.draw(b);
     }
 
-    // ---------------------------------------------------------------- общее
+    // ---------------------------------------------------------------- shared
 
-    /** Икосфера: список вершин треугольников {x, y, z, u, v} на единичной сфере, шов развёртки без растяжки. */
+    /** Icosphere: triangle vertex list {x, y, z, u, v} on a unit sphere, UV seam without stretching. */
     static final class Icosphere {
         private Icosphere() {}
 
@@ -290,7 +290,7 @@ public final class NukeRenderer {
                 }
                 float max = Math.max(u[0], Math.max(u[1], u[2]));
                 for (int j = 0; j < 3; j++) {
-                    if (max - u[j] > 0.5f) u[j] += 1; // треугольник на шве: развёртка не перескакивает через всю текстуру
+                    if (max - u[j] > 0.5f) u[j] += 1; // triangle at the seam: UVs do not jump across the whole texture
                     Vector3f n = tris.get(i + j);
                     out[i + j] = new float[]{n.x, n.y, n.z, u[j] * 2, (float) (Math.acos(Mth.clamp(n.y, -1, 1)) / Math.PI)};
                 }

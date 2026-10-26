@@ -36,30 +36,30 @@ import ua.zentix.incoming.warhead.BuriedBlast;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Что видят и слышат игроки при взрывах вблизи: вспышка по модели облака ({@link CloudModel}), твёрдое частицами —
- * осколки, искры, комья грунта, языки пламени, пока горит топливо; огненный шар, дым, пыль и облако конденсации — объём
- * сетки дыма (облако модели — источник сетки, его ведёт {@link FarBlasts}). Звук, слух и толчок тела приходят вместе
- * с фронтом ударной волны (17 блоков за тик). Бомба под землёй — прежняя картинка.
+ * What players see and hear in nearby explosions: flash from the cloud model ({@link CloudModel}), solid matter as particles —
+ * fragments, sparks, soil clods, tongues of flame while fuel burns; fireball, smoke, dust and condensation cloud — the smoke
+ * grid volume (the model cloud is a grid source, managed by {@link FarBlasts}). Sound, hearing effects and body impulse arrive together
+ * with the shock front (17 blocks per tick). Underground bombs retain their previous visuals.
  */
 public final class BlastEffects {
     private BlastEffects() {}
 
     /**
-     * Пакет взрыва: ближе {@link FarBlasts#NEAR} — частицы и звук здесь; картинку дальше прорисовки и звук
-     * дальше {@link FarBlasts#NEAR} ведёт {@link FarBlasts} (пакеты приходят до {@code far_range}).
+     * Blast packet: closer than {@link FarBlasts#NEAR} — particles and sound here; visuals beyond render distance and sound
+     * beyond {@link FarBlasts#NEAR} are managed by {@link FarBlasts} (packets arrive up to {@code far_range}).
      */
     public static void blast(S2C.Blast p) {
-        // одно облако на взрыв: у объёма, у картинки вдали и у вспышки с частицами здесь
+        // one cloud per blast: shared by the volume, distant visuals and the flash with particles here
         CloudModel cloud = FarBlasts.add(p);
-        // топливо в воронке: от сервера — пакетом своего огня на блоках (fuelFire); в повторе, записанном до него, и у
-        // взрыва без сервера (песочница) — дым и гул у места удара, как тогда
+        // crater fuel: the server sends its block fire in a separate packet (fuelFire); in replays recorded before that packet and for
+        // a blast without a server (sandbox), smoke and rumble remain at the impact point as before
         if (!p.fuelApart() && cloud != null && cloud.poolWatts > 0) legacyPool(p.pos(), cloud.pool);
         if (bodyOnly(p.pos())) Effects.add(new Body(p.pos(), GroundMaterial.byId(p.material()), p.seed(), BlastSource.of(p)));
         else if (FarBlasts.near(p.pos())) {
             GroundMaterial mat = GroundMaterial.byId(p.material());
             if (cloud == null && p.kind() != S2C.Blast.BUNKER) cloud = FarBlasts.model(p);
-            // осколки — только у боевой части оружия; взрыв без оружия в пакете (вторичные подрывы после ядерки, повтор
-            // до этого поля) корпуса не имеет
+            // fragments belong only to the weapon warhead; a blast without a weapon in its packet (secondary explosions after the nuke, replays
+            // predating this field) has no casing
             Vec3 axis = p.weapon() == S2C.Blast.NO_WEAPON ? null : p.axis();
             switch (p.kind()) {
                 case S2C.Blast.MISSILE -> Effects.add(new Missile(p.pos(), mat, p.seed(), axis, cloud));
@@ -71,9 +71,9 @@ public final class BlastEffects {
     }
 
     /**
-     * Зенитная ракета разорвалась в воздухе ({@link S2C.Intercept}): облако разрыва — модель облака заряда боевой части
-     * ({@link FarBlasts#airburst}: вспышка, шар продуктов, облачко сажи — запечёнными клубами слоя, вдали — раскат), вблизи
-     * ещё искры осколков; сбила — горящее топливо цели. Хлопок и лёгкая тряска — с фронтом.
+     * An anti-aircraft missile burst in the air ({@link S2C.Intercept}): the burst cloud follows the warhead charge cloud model
+     * ({@link FarBlasts#airburst}: flash, products fireball, soot puff — baked effects layer billows; distant rumble); nearby,
+     * also fragment sparks; on a kill — the target's burning fuel. The crack and light shake arrive with the front.
      */
     public static void intercept(S2C.Intercept p) {
         BlastSource source = BlastSource.air(Airburst.CHARGE_KG);
@@ -83,15 +83,15 @@ public final class BlastEffects {
     }
 
     /**
-     * Камера далеко (камера снаряда), а тело игрока ближе {@link FarBlasts#NEAR}: картинку и звук ведёт {@link FarBlasts}
-     * у камеры, а волна у самого игрока всё равно бьёт по ушам и толкает ({@link Body}).
+     * The camera is far away (projectile camera), but the player's body is closer than {@link FarBlasts#NEAR}: {@link FarBlasts} manages visuals and sound
+     * at the camera, while the wave still hits the player's ears and pushes the body ({@link Body}).
      */
     private static boolean bodyOnly(Vec3 pos) {
         Player player = Minecraft.getInstance().player;
         return !FarBlasts.near(pos) && player != null && player.getEyePosition().distanceTo(pos) <= FarBlasts.NEAR;
     }
 
-    /** Только фронт у тела игрока ({@link BlastHit}): без картинки, звука и эха — их ведёт дальняя модель у камеры. */
+    /** Only the front at the player's body ({@link BlastHit}): visuals, sound and echoes are handled by the distant model at the camera. */
     static final class Body extends Timeline {
         Body(Vec3 pos, GroundMaterial mat, long seed, BlastSource source) {
             super(pos, mat, seed, source, false);
@@ -107,82 +107,82 @@ public final class BlastEffects {
         }
     }
 
-    // ---------------------------------------------------------------- общее
+    // ---------------------------------------------------------------- shared
 
-    /** Ближе этого вспышка взрыва по модели — в полную силу, блоков: радиус шара продуктов детонации. */
+    /** Within this distance the model blast flash is at full strength, blocks: detonation products fireball radius. */
     static double flashNear(CloudModel m) {
         return m.heBall;
     }
 
-    /** Дальше этого вспышки нет, блоков: вуаль спадает как радиус шара / d и здесь слабее {@link Flash#FLOOR}. */
+    /** Beyond this distance there is no flash, blocks: the veil falls as fireball radius / d and is below {@link Flash#FLOOR} here. */
     static double flashRange(CloudModel m) {
         return flashNear(m) * FlashFalloff.PEAK / Flash.FLOOR;
     }
 
     /**
-     * Раскат вдали удара о грунт с энергией {@code tntKg} (вход бомбы, обвал свода): та доля энергии, что ушла в воздух
-     * ({@link BunkerImpact#airTnt}), — глухим ударом из-под земли, по дальней модели, как газы бомбы под землёй.
+     * Distant rumble of a ground impact with {@code tntKg} energy (bomb entry, roof collapse): the energy share that enters the air
+     * ({@link BunkerImpact#airTnt}) produces a muffled underground thud via the distant model, like buried bomb gases.
      */
     static BlastSource thud(double tntKg) {
         return new BlastSource(WeaponType.BUNKER, BunkerImpact.airTnt(tntKg), 0, true, true);
     }
 
     /**
-     * Фронт звука и ударной волны: срабатывает у слушателя (камера) один раз, когда до него дошёл, — звук; у тела
-     * игрока — слух и наклон тела ({@link BlastHit}). Обычный взрыв ({@code source} не null) звучит по заряду
-     * ({@link BlastSounds#arrive}), его эхо ищет склоны, пока фронт идёт ({@link BlastEchoes}).
+     * Sound and shock front: triggers once at the listener (camera) on arrival — sound; at the player's
+     * body — hearing effects and body sway ({@link BlastHit}). A conventional blast ({@code source} not null) sounds according to its charge
+     * ({@link BlastSounds#arrive}); its echoes seek slopes as the front travels ({@link BlastEchoes}).
      */
     abstract static class Timeline implements Effects.Effect {
         final Vec3 pos;
         final GroundMaterial mat;
         final RandomSource random;
-        /** Зерно взрыва: по нему же звук выбирает вариант записи. */
+        /** Blast seed: sound uses it to choose the recording variant too. */
         final long seed;
-        /** Что взорвалось; null — у взрыва свои звуки ({@link #arrive}). */
+        /** What exploded; null — the blast has its own sounds ({@link #arrive}). */
         @Nullable
         final BlastSource source;
         @Nullable
         private final BlastEchoes echoes;
         /**
-         * Фронт волны во времени ({@link ChemicalFront}: Кинни–Грэхем и Ренкин–Гюгонио) — по нему приходят звук и удар по
-         * телу и его же видно кольцом ({@code FarBlasts.front}); null — у взрыва своя волна (бомба под землёй): со
-         * скоростью звука.
+         * Wave front over time ({@link ChemicalFront}: Kinney–Graham and Rankine–Hugoniot) — sound and body impulse arrive by
+         * this front, also visible as a ring ({@code FarBlasts.front}); null — the blast has its own wave (underground bomb): at
+         * the speed of sound.
          */
         @Nullable
         private final ChemicalFront front;
         /**
-         * Дольше этого звук до уха не ждём, тиков, сколько бы ни жила картинка события: событие дальше
-         * {@link FarBlasts#NEAR} озвучивает {@link FarBlasts}, а до уха, что было ближе края при рождении, звук идёт и
-         * тогда, когда слушатель уходит, — до 1 км (уходя от края со скоростью до ~130 м/с, быстрее элитр и аппаратов).
+         * Maximum wait for sound to reach the ear, ticks, regardless of the visual event lifetime: {@link FarBlasts} handles sound for an event beyond
+         * {@link FarBlasts#NEAR}; sound still travels to an ear that was inside the boundary at birth even
+         * if the listener moves away — up to 1 km (retreating from the boundary at up to ~130 m/s, faster than elytra and craft).
          */
         static final int SOUND_WAIT = 60;
         private boolean arrived, hit, over;
         private long bornTick = Long.MIN_VALUE, lastTick = Long.MIN_VALUE;
-        /** Часы взрыва, по которым эхо и удар у уха ждут начала прямого звука ({@link BlastSounds#clock}). */
+        /** Blast clock used by echoes and the ear impulse to wait for direct sound to start ({@link BlastSounds#clock}). */
         private final OwnSources.Clock clock = BlastSounds.clock();
 
         Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source) {
             this(pos, mat, seed, source, true);
         }
 
-        /** @param heard у камеры звучит (эхо ищет склоны); нет — только фронт у тела ({@link Body}) */
+        /** @param heard sound plays at the camera (echoes seek slopes); otherwise — only the front at the body ({@link Body}) */
         Timeline(Vec3 pos, GroundMaterial mat, long seed, @Nullable BlastSource source, boolean heard) {
             this.pos = pos;
             this.mat = mat;
             this.seed = seed;
             this.random = RandomSource.create(seed);
             this.source = source;
-            // взрыв под землёй волной в воздух не выходит (газы — из хода, своим пакетом): ни эха, ни удара по телу
+            // an underground blast sends no wave into the air (gases leave the bore in their own packet): no echoes or body impulse
             this.echoes = source == null || !heard || source.underground() ? null : BlastSounds.echoes(source, pos, seed, clock);
             this.front = source == null || source.underground() || source.chargeKg() <= 0 ? null : ChemicalFront.cached(source.chargeKg(), source.surface());
         }
 
-        /** Тики с взрыва до прихода фронта на {@code d} блоков: вблизи фронт быстрее звука (у шахеда в 100 м — на 0,7 тика). */
+        /** Ticks from the blast to front arrival at {@code d} blocks: nearby the front exceeds sound speed (by 0.7 ticks at 100 m for a Shahed). */
         double arrivalTicks(double d) {
             return FarBlasts.arrivalTicks(front, d);
         }
 
-        /** Фронт срывает траву и листья вокруг ({@link FrontLitter}): огненный шар модели, высота разрыва над землёй. */
+        /** The front tears off grass and leaves around it ({@link FrontLitter}): model fireball, burst height above ground. */
         void litter(ClientLevel level, CloudModel model) {
             FrontLitter.spawn(level, pos, front, model.ballRadius(0.5 * model.burnSeconds), model.hob, random);
         }
@@ -207,7 +207,7 @@ public final class BlastEffects {
                 }
             }
             if (arrived && echoes != null) echoes.tick();
-            // тело — после звуков: их слышит ухо, каким оно было до волны
+            // body after sound: the ear hears it in its pre-wave state
             LocalPlayer player = mc.player;
             if (!hit && source != null && !source.underground() && player != null) {
                 Vec3 body = player.getEyePosition();
@@ -223,7 +223,7 @@ public final class BlastEffects {
                 over = true;
                 if (echoes != null) echoes.release();
             }
-            // картинка кончилась, а звук ещё идёт к уху: событие живёт до его прихода, а не столько, сколько видно
+            // visuals ended while sound still travels to the ear: the event lives until arrival, beyond its visible lifetime
             return !over || !arrived;
         }
 
@@ -231,30 +231,30 @@ public final class BlastEffects {
 
 
         /**
-         * Фронт у слушателя: у обычного взрыва — его звук по заряду ({@link BlastSounds#arrive}).
+         * Front at the listener: a conventional blast uses charge-based sound ({@link BlastSounds#arrive}).
          *
-         * @param band пояс фронта: 1 — ближе 17 блоков, 2 — 17..34 …
+         * @param band front band: 1 — within 17 blocks, 2 — 17..34 …
          */
         void arrive(ClientLevel level, int band) {
             if (source != null) BlastSounds.arrive(source, pos, seed, clock, echoes);
         }
 
         /**
-         * Вспышка на экране: свет мгновенный, сила — {@link FlashFalloff} по расстоянию, взгляду и прямой видимости
-         * от камеры (с борта снаряда и в камере наблюдения — оттуда, куда смотрит игрок, а не от его тела) и по свету
-         * вокруг глаза: днём под небом экран едва светлеет ({@link FlashFalloff#daylight}), ночью и в укрытии — вспышка.
+         * Screen flash: light is instantaneous; strength follows {@link FlashFalloff} by distance, view direction and line of sight
+         * from the camera (on board a projectile and in the observer camera — from where the player looks, rather than their body), and by light
+         * around the eye: by day under open sky the screen barely brightens ({@link FlashFalloff#daylight}); at night and under cover — a flash.
          *
-         * @param near ближе этого — полная сила, блоки
+         * @param near within this distance — full strength, blocks
          */
         void flash(ClientLevel level, double near, double range, float decay) {
             flash(level, pos, near, range, decay);
         }
 
         /**
-         * Вспышка по модели облака: свет — шар продуктов детонации ({@link CloudModel#heBall}, ближе его радиуса — полная
-         * сила; дальше вуаль спадает как радиус/d и пропадает там, где она слабее {@link Flash#FLOOR}), гаснет, как
-         * остывает шар (чёрное тело от {@link CloudModel#HE_BALL_HOT} к {@link CloudModel#HE_BALL_END} за его жизнь),
-         * цвета чёрного тела в начале.
+         * Flash from the cloud model: light is the detonation products fireball ({@link CloudModel#heBall}, full strength within its
+         * radius; beyond it the veil falls as radius/d and vanishes below {@link Flash#FLOOR}), fading as
+         * the ball cools (black body from {@link CloudModel#HE_BALL_HOT} to {@link CloudModel#HE_BALL_END} over its lifetime),
+         * with the initial black-body colour.
          */
         void flash(ClientLevel level, CloudModel m) {
             double near = flashNear(m), range = flashRange(m);
@@ -267,12 +267,12 @@ public final class BlastEffects {
             flash(level, pos, near, range, decay, rgb);
         }
 
-        /** То же с источником света в {@code at}. */
+        /** Same, with the light source at {@code at}. */
         void flash(ClientLevel level, Vec3 at, double near, double range, float decay) {
             flash(level, at, near, range, decay, 0xFFF1C8);
         }
 
-        /** То же своего цвета. */
+        /** Same, with a custom colour. */
         void flash(ClientLevel level, Vec3 at, double near, double range, float decay, int rgb) {
             Minecraft mc = Minecraft.getInstance();
             Player player = mc.player;
@@ -293,10 +293,10 @@ public final class BlastEffects {
         }
 
         /**
-         * Выброс по цели модели облака ({@link BlastTarget}): у грунта — комья воронки, у твёрдого — сколы её (связной) чаши, у
-         * плиты над пустотой — обломки пролома с лица и с тыла, у воды — струи, у разрыва в воздухе — ничего (грунта под ним нет;
-         * прежде комья летели и у разрыва над крышей, physics.md фронта F). Пыль — облако модели, завеса зёрен — его событие;
-         * кусками летит только своя доля выброса ({@link BlastTarget#clods}).
+         * Ejecta by cloud model target ({@link BlastTarget}): soil — crater clods; solid — chips of its (cohesive) bowl;
+         * slab over a void — front and rear breach debris; water — jets; airburst — none (no ground there;
+         * previously clods also flew from a burst above a roof, front F physics.md). Dust is the model cloud, the grain curtain belongs to its event;
+         * only the ejecta's clod share flies as pieces ({@link BlastTarget#clods}).
          */
         void ejecta(ClientLevel level, CloudModel model) {
             BlastTarget t = model.target;
@@ -311,9 +311,9 @@ public final class BlastEffects {
         }
 
         /**
-         * Куски выброса {@code law} объёмом {@code volume} м³ с грани в {@code origin} наружу {@code up} ({@link Ejecta#pieces}:
-         * место вылета, скорость и угол — те же, что у завесы слоя эффектов). Частица — кусок или горсть: число — объём на ком
-         * {@link #CLOD_M3} (счёт представления массы, а не дробления).
+         * Ejecta pieces under {@code law}, volume {@code volume} m³, outward {@code up} from the face at {@code origin} ({@link Ejecta#pieces}:
+         * launch position, speed and angle match the effects layer curtain). A particle is a piece or handful: count is volume per clod
+         * {@link #CLOD_M3} (mass representation count, rather than fragmentation).
          */
         void pieces(ClientLevel level, Ejecta law, Vec3 origin, Vec3 up, double volume) {
             if (law.radius <= 0) return;
@@ -322,29 +322,29 @@ public final class BlastEffects {
         }
 
         /**
-         * Обломки пролома плиты над пустотой: лицевая крошка — с грани заряда наружу, против оси дыры, тем же законом выброса,
-         * что у воронки радиуса пролома (⚠ своего закона крошки лицевой грани в моде нет); тыльный откол — из дыры на тыльной
-         * грани по оси дыры ({@link BlastTarget#spall}: нормаль пробитой грани — у крыши вниз, у стены вбок; скорость пробки по
-         * Гёрни). Кусками — весь выброс пролома без пыли ({@link BlastTarget#clodVolume}), поровну спереди и сзади (⚠ доли нет в
-         * источниках: physics.md фронта F — дробление спереди и откол сзади, без чисел). Места заряда на грани нет (опоры в
-         * пакете нет) — крошка с точки взрыва, откола нет.
+         * Breach debris from a slab over a void: front chips leave the charge face outward, opposite the hole axis, under the same ejecta law
+         * as a crater of the breach radius (⚠ the mod has no dedicated law for front-face chips); rear spall leaves the hole on the rear
+         * face along the hole axis ({@link BlastTarget#spall}: pierced face normal — down for a roof, sideways for a wall; plug speed by
+         * Gurney). Pieces carry all breach ejecta except dust ({@link BlastTarget#clodVolume}), half at each face (⚠ sources give no
+         * split: front F physics.md — front crushing and rear spall, without numbers). No charge position on the face (no support in
+         * the packet) — chips from the blast point, no spall.
          */
         void slab(ClientLevel level, BlastTarget t, double tnt) {
             double half = t.clodVolume(tnt) / 2;
             pieces(level, new Ejecta(t.hole(), 0, 0), t.face() != null ? t.face() : pos, t.normal().scale(-1), half);
             BlockState piece = mat.particleBlock();
-            // откол летит в пустоту под плитой — до пола; срок с запасом (5 с, как прежде)
+            // spall flies into the void below the slab — to the floor; lifetime with margin (5 s, as before)
             t.spall(tnt, count(half), random::nextDouble, (p, v) -> spawn(level, piece, p, v, 100));
         }
 
-        /** Частиц на объём {@code m3}: ком {@link #CLOD_M3}, с плотностью частиц игрока, не больше {@link #MAX_CLODS}. */
+        /** Particles per volume {@code m3}: clod {@link #CLOD_M3}, with the player's particle density, at most {@link #MAX_CLODS}. */
         private int count(double m3) {
             return (int) Math.min(MAX_CLODS, Math.round(m3 / CLOD_M3 * Fx.density(pos)));
         }
 
         /**
-         * Кусок с места {@code at} со скоростью {@code v} (м/с): живёт до возврата на высоту вылета и ещё секунду, но не меньше
-         * {@code least} тиков.
+         * Piece from {@code at} with velocity {@code v} (m/s): lives until it returns to launch height plus one second, but at least
+         * {@code least} ticks.
          */
         private void spawn(ClientLevel level, BlockState block, Vec3 at, Vec3 v, int least) {
             Vec3 tick = v.scale(1 / 20.0);
@@ -354,14 +354,14 @@ public final class BlastEffects {
             Minecraft.getInstance().particleEngine.add(p);
         }
 
-        /** Вверх мира. */
+        /** World up. */
         static final Vec3 UP = new Vec3(0, 1, 0);
 
         /**
-         * Взрыв на воде: столб брызг и водяная пыль — облако модели ({@link ua.zentix.incoming.client.fx.smoke.WaterBlast}
-         * у события {@code FarBlasts}); здесь — струи и комья воды частицами: бросок со скоростью до √(2gH) (H — верх столба
-         * того же закона) из полости в половину радиуса столба, в конусе струй закона, с настоящей тяжестью. Комьев — по
-         * одному на {@link #SPLASH_PER_KG} кг воды столба (О: видимые на экране струи, не капли), не больше {@link #MAX_CLODS}.
+         * Water blast: spray column and mist are the model cloud ({@link ua.zentix.incoming.client.fx.smoke.WaterBlast}
+         * at the {@code FarBlasts} event); here — jets and water clumps as particles: launch at up to √(2gH) (H — the column top
+         * from the same law), from a cavity of half the column radius, within the law's jet cone, with real gravity. One clump per
+         * {@link #SPLASH_PER_KG} kg of column water (E: jets visible on screen, rather than droplets), at most {@link #MAX_CLODS}.
          */
         void splash(ClientLevel level, double tntKg) {
             ua.zentix.incoming.client.fx.smoke.WaterBlast w = FarBlasts.water(level, pos, tntKg, FarBlasts.air(level, pos));
@@ -378,10 +378,10 @@ public final class BlastEffects {
             }
         }
 
-        /** Воды столба на один ком-частицу, кг (О). */
+        /** Column water per clump particle, kg (E). */
         static final double SPLASH_PER_KG = 5;
 
-        /** Фонтан грунта у входа бомбы в грунт (бетонобойная — своим законом в S5). */
+        /** Soil fountain at bomb ground entry (the bunker buster uses its own law in S5). */
         void spray(ClientLevel level, int scale) {
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 1, 0), 1.5, 1.5, 1.5, scale == 1 ? 0.9 : 1.3, scale == 1 ? 350 : 900);
             Particles.burst(level, FxParticles.block(mat), pos.add(0, 3, 0), 4, 3, 4, 0.4, scale == 1 ? 150 : 400);
@@ -392,17 +392,17 @@ public final class BlastEffects {
         }
     }
 
-    /** Ком грунта выброса — объём, м³ (ком ~25 см; оценка), и больше комьев на взрыв не бывает (бюджет частиц). */
+    /** Ejecta soil clod volume, m³ (~25 cm clod; estimate), and the maximum clod count per blast (particle budget). */
     static final double CLOD_M3 = 0.25 * 0.25 * 0.25;
     static final int MAX_CLODS = 1200;
-    /** Тяжесть, м/с², и она же в блоках за тик². */
+    /** Gravity, m/s², and the same in blocks per tick². */
     static final double G = 9.80665, GRAVITY = G / 400;
 
-    /** Ком выброса: частица блока с настоящей тяжестью и сроком на весь полёт (у ванильной — 1,6 g и до 2 с). */
+    /** Ejecta clod: block particle with real gravity and lifetime covering the entire flight (vanilla uses 1.6 g and up to 2 s). */
     static final class Clod extends net.minecraft.client.particle.TerrainParticle {
         Clod(ClientLevel level, Vec3 at, BlockState state, int life) {
             super(level, at.x, at.y, at.z, 0, 0, 0, state);
-            // ванильная частица тянет вниз 0,04 блока за тик² — 16 м/с²
+            // vanilla particles accelerate downward at 0.04 blocks per tick² — 16 m/s²
             this.gravity = (float) (GRAVITY / 0.04);
             this.friction = 0.995f;
             setLifetime(life);
@@ -410,8 +410,8 @@ public final class BlastEffects {
     }
 
     /**
-     * Удары осколков взрыва ({@link FragmentHits}): лучи — в тик взрыва, удары — в тик прилёта каждого. Ось null —
-     * осколков нет.
+     * Blast fragment hits ({@link FragmentHits}): rays at the blast tick, hits at each arrival tick. Null axis —
+     * no fragments.
      */
     static final class FragmentQueue {
         private final Vec3 pos;
@@ -435,12 +435,12 @@ public final class BlastEffects {
         }
     }
 
-    // ================================================================ шахед, «Ланцет», «Град» (fx)
+    // ================================================================ Shahed, Lancet, Grad (fx)
 
     static final class Drone extends Timeline {
-        /** Облако по модели: вспышка, размер шара для осколков и искр, сколько горит топливо. */
+        /** Cloud model: flash, fireball size for fragments and sparks, fuel burning time. */
         private final CloudModel model;
-        /** Снаряд РСЗО: звук свой — сухой разрыв. */
+        /** MLRS rocket: its own sound — a dry burst. */
         private final boolean rocket;
         private final FragmentQueue fragments;
 
@@ -451,7 +451,7 @@ public final class BlastEffects {
             this.fragments = new FragmentQueue(pos, axis, seed, model.source);
         }
 
-        /** Радиус огненного шара модели, блоки: по нему осколки, искры и языки пламени. */
+        /** Model fireball radius, blocks: drives fragments, sparks and tongues of flame. */
         float radius() {
             return (float) Math.max(0.5 * model.fuelBall, model.heBall);
         }
@@ -467,8 +467,8 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model);
-            // топливо, что не сгорело шаром, горит в воронке огнём Minecraft на блоках (сервер, `FuelFires`): его дым и звук
-            // приходят пакетом с этими блоками (`fuelFire`)
+            // fuel not consumed by the fireball burns in the crater as Minecraft block fire (server, `FuelFires`): its smoke and sound
+            // arrive in a packet with those blocks (`fuelFire`)
             crater(model, pos, t, rocket ? 1.25f : 1.1f);
             return t < 240;
         }
@@ -476,24 +476,24 @@ public final class BlastEffects {
     }
 
     /**
-     * Звук воронки по модели облака: выброс падает обратно — через секунду (О: полёт выброса на высоту порядка диаметра
-     * воронки), масса — воронка без пыли, что ушла в воздух. Гул горящего топлива — от его огня на блоках ({@link #fuelFire}).
+     * Crater sound from the cloud model: ejecta fall back after one second (E: ejecta flight to a height of about the crater
+     * diameter); mass — crater material excluding airborne dust. Burning fuel rumble comes from its block fire ({@link #fuelFire}).
      */
     static void crater(CloudModel model, Vec3 pos, int t, float pitch) {
         double charge = model.source.chargeKg();
         if (t == 20 && charge > 0) {
-            // масса — разрушенного у цели (тот же бюджет, что у пыли облака и выброса); у разрыва в воздухе и на воде — 0
+            // mass of material destroyed at the target (same budget as cloud dust and ejecta); airbursts and water blasts — 0
             double kg = model.target.ballistic(charge);
             if (kg > 0) BlastSounds.debris(pos, kg, 2 * CraterModel.chargeRadius(charge, model.target.material().soil()), pitch);
         }
     }
 
-    // ================================================================ разрыв зенитной ракеты
+    // ================================================================ anti-aircraft missile airburst
 
     static final class Airburst extends Timeline {
-        /** Заряд разрыва, кг ТНТ — для облака, звука, слуха и удара по телу: боевая часть ракеты ЗРК по её паспорту. */
+        /** Burst charge, kg TNT, for cloud, sound, hearing and body impulse: SAM warhead from its spec. */
         static final double CHARGE_KG = InterceptorSpec.SAM.passport().warhead().tnt();
-        /** Облако разрыва по модели: вспышка, шар, облачко ({@link FarBlasts#airburst}). */
+        /** Model burst cloud: flash, fireball, puff ({@link FarBlasts#airburst}). */
         private final CloudModel model;
         private final boolean kill;
 
@@ -507,7 +507,7 @@ public final class BlastEffects {
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
                 flash(level, model);
-                // осколки корпуса боевой части — искрами
+                // warhead casing fragments as sparks
                 for (int i = 0; i < 30; i++) {
                     Fx.spark().vel(Explosions.dir(random, -1).scale(0.6 + random.nextDouble() * 1.2)).life(8 + random.nextInt(14)).gravity(0.03f)
                             .spawn(level, pos);
@@ -520,10 +520,10 @@ public final class BlastEffects {
 
     }
 
-    // ================================================================ крылатая ракета (mfx)
+    // ================================================================ cruise missile (mfx)
 
     static final class Missile extends Timeline {
-        /** Облако по модели: вспышка, размер шара, сколько горит топливо. */
+        /** Cloud model: flash, fireball size, fuel burning time. */
         private final CloudModel model;
 
         private final FragmentQueue fragments;
@@ -549,23 +549,23 @@ public final class BlastEffects {
                 return true;
             }
             if (t == 1) ejecta(level, model);
-            // вторичных подрывов нет: вторичное — топливо в воронке (огонь на блоках сервера) и горящие обломки сервера
+            // no secondary explosions: secondary effects are crater fuel (server block fire) and server burning debris
             crater(model, pos, t, 0.9f);
             return t < 340;
         }
 
     }
 
-    // ================================================================ бетонобойная бомба (bfx)
+    // ================================================================ bunker-busting bomb (bfx)
 
     static final class Bunker extends Timeline {
-        /** Место заряда; основание эффекта ({@link #pos}) — верх над ним: оттуда вспышка, комья, звук. */
+        /** Charge position; effect base ({@link #pos}) is the surface above it: the flash, clods and sound originate there. */
         private final Vec3 charge;
         private final Vec3 surface;
         private final int depth;
-        /** Подземный взрыв по приведённой глубине. */
+        /** Underground blast by scaled depth. */
         private final BuriedBlast law;
-        /** Облако прорыва наружу ({@link FarBlasts#add}); null — взрыв под землёй. */
+        /** Breakout cloud ({@link FarBlasts#add}); null — underground blast. */
         @Nullable
         private final CloudModel cloud;
 
@@ -579,30 +579,30 @@ public final class BlastEffects {
         }
 
         /**
-         * Прорыв наружу — вспышка и комья воронки по той доле заряда, что вышла в воздух (облако — у {@link FarBlasts}); глубже
-         * вспышку видно только в самой полости. Поверхность в зоне трещин вспучивается, с потолка ходов сыплется крошка.
+         * Breakout — flash and crater clods for the charge share that enters the air (cloud at {@link FarBlasts}); deeper down,
+         * the flash is visible only inside the cavity. The surface in the cracking zone heaves, chips fall from nearby bore ceilings.
          */
         @Override
         boolean run(ClientLevel level, int t) {
             if (t == 0) {
                 if (cloud != null) {
-                    // вспышка — над воронкой, комья — по воронке выброса закона (её роет сервер)
+                    // flash above the crater, clods from the law's ejecta crater (dug by the server)
                     flash(level, cloud);
                     CraterModel.Soil soil = mat.soil();
                     pieces(level, new Ejecta(law.craterRadius(soil), 0, 0), pos, UP, law.craterVolume(soil));
                 } else {
-                    // под землёй вспышку видно только в самой полости и рядом
+                    // underground, the flash is visible only inside the cavity and nearby
                     flash(level, charge, 8, 70, 0.8f);
                 }
                 return true;
             }
             if (t % 2 == 0 && t >= 2 && t <= 220 && cloud == null) {
-                // каменная крошка с потолка полости и ходов рядом
+                // stone chips from the cavity ceiling and nearby bores
                 Particles.burst(level, FxParticles.fallingDust(mat), charge.add(0, 7, 0), 7, 1, 7, 0, 14);
             }
             if (t <= 16 && depth <= law.fracture()) heave(level, t * 2);
-            // выброс воронки падает обратно, как у воронки наземного взрыва ({@link #crater}): грунт чаши закона без пыли,
-            // что ушла в воздух, с высоты порядка диаметра воронки; под землёй и в воде выброса нет
+            // crater ejecta fall back as for a surface blast crater ({@link #crater}): soil in the law's bowl excluding airborne
+            // dust, from a height of about the crater diameter; no ejecta underground or in water
             if (t == 20 && cloud != null && !mat.isWater()) {
                 CraterModel.Soil soil = mat.soil();
                 BlastSounds.debris(surface, law.craterVolume(soil) * CloudModel.SOIL_DENSITY * (1 - CloudModel.DUST_LOFTED),
@@ -618,7 +618,7 @@ public final class BlastEffects {
             }
         }
 
-        /** Прорыв наружу — звук взрыва той доли заряда, что вышла в воздух ({@link BlastSounds#arrive}); глубже — глухой удар. */
+        /** Breakout — blast sound for the charge share that enters the air ({@link BlastSounds#arrive}); deeper down — a muffled thud. */
         @Override
         void arrive(ClientLevel level, int band) {
             if (!source.underground()) {
@@ -631,12 +631,12 @@ public final class BlastEffects {
         }
     }
 
-    // ================================================================ вход бомбы, выброс газов, провал
+    // ================================================================ bomb entry, gas venting, collapse
 
     /**
-     * Бомба вошла в грунт: облако пыли выброса из воронки входа ({@link BunkerImpact#entryVolume}, без жара — у земли, по
-     * ветру; рисует слой) и комья; тупой удар приходит со скоростью звука — ближе {@link FarBlasts#NEAR} здесь, дальше —
-     * раскатом облака той доли энергии удара, что ушла в воздух ({@link #thud}), как у взрывов.
+     * Bomb entered the ground: entry crater ejecta dust cloud ({@link BunkerImpact#entryVolume}, no heat — near the ground, with
+     * the wind; drawn by the layer) and clods; a dull thud arrives at sound speed — here within {@link FarBlasts#NEAR}, farther away —
+     * as cloud rumble for the impact energy share that entered the air ({@link #thud}), as for blasts.
      */
     public static void bunkerImpact(S2C.BunkerImpact p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
@@ -644,7 +644,7 @@ public final class BlastEffects {
         ClientLevel world = Minecraft.getInstance().level;
         double tnt = BunkerImpact.equivalentTnt(WeaponType.BUNKER.spec().striker().article().dryMass(), p.speed());
         if (world != null && !mat.isWater()) {
-            // в воду — без пыли грунта (брызги — частицами ниже)
+            // into water — no soil dust (spray particles below)
             double d = WeaponType.BUNKER.spec().striker().article().diameter();
             BlastSource none = new BlastSource(WeaponType.BUNKER, 0, 0, true, false);
             FarBlasts.cloud(world, none, CloudModel.dust(none, FarBlasts.air(world, pos), BunkerImpact.entryVolume(d), 2 * d), pos, mat,
@@ -669,10 +669,10 @@ public final class BlastEffects {
     }
 
     /**
-     * Топливо удара горит на блоках (сервер, {@code warhead/FuelFires}): пламя рисует сам мир; очаг пожара
-     * ({@link FireSmoke#fuel}: дым, свет пламени на мир и дым, пламя вдали) и его гул — у клиента, по закону топлива
-     * оружия на клетках пакета ({@code WeaponSpec.pool(lit)}: легло на меньшую площадь — горит дольше и слабее, как у
-     * сервера). Пакет приходит и с переменой (стекло, засыпало, залило) — очаг и гул идут за ней.
+     * Impact fuel burns on blocks (server, {@code warhead/FuelFires}): the world draws the flame; the fire source
+     * ({@link FireSmoke#fuel}: smoke, flame light on the world and smoke, distant flame) and its rumble are client-side, following the weapon's
+     * fuel law on packet cells ({@code WeaponSpec.pool(lit)}: deposited on a smaller area — longer, weaker burning, as on the
+     * server). A packet also arrives on changes (drained, buried, flooded) — the source and rumble follow them.
      */
     public static void fuelFire(S2C.FuelFire p) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -681,11 +681,11 @@ public final class BlastEffects {
         long age = Math.max(0, level.getGameTime() - p.blastTick());
         if (pool.seconds() <= 0 || age / 20.0 >= pool.seconds()) return;
         FuelBurn burn = FireSmoke.fuel(level, p.id(), pool, p.cells(), p.smothered(), age / 20.0);
-        // гул — у пожара ближе {@link FarBlasts#NEAR}, как и прежде (звук воронки дальше не заводится)
+        // rumble for fires within {@link FarBlasts#NEAR}, as before (no crater sound is started farther away)
         if (burn != null && FarBlasts.near(burn.centre())) BlastSounds.fire(burn, (int) age);
     }
 
-    /** Дым и гул топлива в воронке у самой точки удара (огня сервера на блоках нет: старая запись, песочница без сервера). */
+    /** Crater fuel smoke and rumble at the impact point (no server block fire: old recording, sandbox without a server). */
     private static void legacyPool(Vec3 pos, ua.zentix.incoming.nuclear.model.FuelPool pool) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
@@ -695,10 +695,10 @@ public final class BlastEffects {
     }
 
     /**
-     * Газы взрыва вырываются по скважине: облако той доли заряда, что вышла в воздух ({@code airKg}), из устья хода — по
-     * той же модели облака (жар, сажа, пыль; рисует слой), раскат вдали — глухой, из-под земли; вблизи — рёв выброса.
-     * Голос у выброса один: дальше {@link FarBlasts#NEAR} его раскат заводит облако ({@link FarBlasts#cloud}), ближе —
-     * рёв здесь.
+     * Blast gases vent through the bore: a cloud of the charge share that entered the air ({@code airKg}), from the bore mouth, using
+     * the same cloud model (heat, soot, dust; drawn by the layer); distant rumble is muffled, underground; nearby — vent roar.
+     * One voice per vent: beyond {@link FarBlasts#NEAR} the cloud starts its rumble ({@link FarBlasts#cloud}); nearby —
+     * the roar here.
      */
     public static void vent(S2C.Vent p) {
         GroundMaterial mat = GroundMaterial.byId(p.material());
@@ -723,8 +723,8 @@ public final class BlastEffects {
     }
 
     /**
-     * Свод над полостью обрушился до верха: пыль над провалом (грунт объёма полости, без жара — у земли, по ветру; рисует
-     * слой) и гул обвала.
+     * The roof above the cavity collapsed to the surface: dust above the collapse (cavity-volume soil, no heat — near the ground, with the wind; drawn
+     * by the layer) and collapse rumble.
      */
     public static void collapse(S2C.Collapse p) {
         Vec3 pos = p.pos();

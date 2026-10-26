@@ -1,43 +1,43 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 /**
- * Стенная струя у земли от струи двигателя, ударившей в неё под углом: куда она уносит пыль. Без Minecraft.
+ * Ground wall jet from an engine jet striking at an angle: where it carries dust. Without Minecraft.
  * <p>
- * <b>Доля по направлениям.</b> Струя, упавшая на плоскость под углом α к ней, растекается по ней во все стороны, но
- * неравно: вперёд (по горизонтальной доле струи) — больше. Доля потока на радиан азимута φ от направления «вперёд» —
- * w(φ) = sin³α / (2π·(1 − cos α·cos φ)²) (Hasson, Peck, «Thickness distribution in a sheet formed by impinging jets»,
- * AIChE J. 10(5), 1964: невязкий поворот, скорость в пелене та же, что в струе; у одной струи на плоскость — та же
- * половина картины двух встречных). Отвесно (α = 90°) — поровну во все стороны; полого — почти вся вперёд. Скорость у
- * всех долей одна, поэтому импульс по направлениям — тот же w(φ), а его сумма вдоль плоскости — M·cos α: ровно то,
- * что струя несла вдоль земли (земля без трения отнимает только отвесную долю). Это ⚠ закон для невязкого поворота;
- * у затопленной турбулентной струи так же лишь в области поворота (Beltaos 1976 мерил наклонные струи воздуха — по
- * описанию, картина вокруг точки удара близка к осесимметричной со сдвигом вперёд; данных у нас нет).
+ * <b>Directional shares.</b> Jet striking plane at angle α spreads in all directions unequally: more forward
+ * (along jet horizontal component). Flow share per azimuth radian φ from “forward” is
+ * w(φ) = sin³α / (2π·(1 − cos α·cos φ)²) (Hasson, Peck, “Thickness distribution in a sheet formed by impinging jets”,
+ * AIChE J. 10(5), 1964: inviscid turning, sheet speed same as jet; one jet on plane gives same half-pattern as
+ * two opposing jets). Vertical (α = 90°): equal in all directions; shallow: almost all forward. All shares have
+ * same speed, so momentum by direction follows same w(φ), summing along plane to M·cos α: exactly what jet
+ * carried along ground (frictionless ground removes only vertical component). ⚠ Law for inviscid turning;
+ * submerged turbulent jet follows it only in turning region (Beltaos 1976 measured inclined air jets —
+ * description says impact pattern nearly axisymmetric shifted forward; we do not have data).
  * <p>
- * w(φ) — это закон средней аномалии Кеплера: dM/dν = (1 − e²)^{3/2}/(1 + e·cos ν)² при e = cos α, ν = φ − π. Поэтому
- * направления равной доли берутся точно: равные шаги M, обратное уравнение Кеплера ({@link #azimuths}).
+ * w(φ) is Kepler's mean-anomaly law: dM/dν = (1 − e²)^{3/2}/(1 + e·cos ν)² at e = cos α, ν = φ − π. So equal-share
+ * directions are exact: equal M steps, inverse Kepler equation ({@link #azimuths}).
  * <p>
- * <b>Как далеко.</b> Стенная струя — «затяжка»: импульс на радиан i(φ, t) = I(t)·w(φ) (I(t) — импульс, который струя
- * отдала земле к этому мигу, ṁ·u по подаче) несёт воздух, который она подхватила, — слой толщиной S·r у радиальной
- * стенной струи (S = {@value #SPREAD}: у плоской стенной 0,073 — Launder, Rodi, Annu. Rev. Fluid Mech. 15, 1983, ⚠ по
- * памяти; у радиальной рост в 1/0,83 раза больше — Lin, CSME 2008), т. е. массу ρ·S·r³/3 на радиан. Без трения о землю
- * (⚠ верхняя оценка) i(t) = (ρSr³/3)·dr/dt: r⁴ = r₀⁴ + 12·∫i dt/(ρS) (у короткого толчка ∫i dt = i·t; у ровной подачи
- * длиной T с итоговым импульсом i, пока она идёт, — i·t²/(2T)). Затяжка толкает пыль, пока её фронт быстрее ветра у земли
- * (dr/dt = 3i/(ρSr³)); дальше пыль несёт ветер — фронт стоит на (3i/(ρSU))^{1/3}. Пыль затяжки — по её массе (∝ r′² по
- * радиусу): середина на ¾ r, второй момент ⅗ r².
+ * <b>Range.</b> Wall jet is a “puff”: impulse per radian i(φ, t) = I(t)·w(φ) (I(t) — impulse jet delivered to ground
+ * by this instant, ṁ·u over feed) carries entrained air, a layer of thickness S·r for radial wall jet
+ * (S = {@value #SPREAD}: plane wall jet 0.073 — Launder, Rodi, Annu. Rev. Fluid Mech. 15, 1983, ⚠ from memory;
+ * radial growth 1/0.83 times larger — Lin, CSME 2008), mass ρ·S·r³/3 per radian. Without ground friction
+ * (⚠ upper bound), i(t) = (ρSr³/3)·dr/dt: r⁴ = r₀⁴ + 12·∫i dt/(ρS) (short impulse: ∫i dt = i·t; constant feed
+ * of duration T with final impulse i, while ongoing: i·t²/(2T)). Puff pushes dust while front faster than
+ * surface wind (dr/dt = 3i/(ρSr³)); afterward wind carries dust — front stops at (3i/(ρSU))^{1/3}. Puff dust
+ * follows its mass (∝ r′² radially): mean at ¾ r, second moment ⅗ r².
  */
 public final class WallJet {
-    /** Рост толщины радиальной стенной струи: 0,073 у плоской (Launder, Rodi 1983) / 0,83 (Lin 2008). */
+    /** Radial wall-jet thickness growth: plane 0.073 (Launder, Rodi 1983) / 0.83 (Lin 2008). */
     public static final double SPREAD = 0.073 / 0.83;
-    /** Направлений равной доли. */
+    /** Equal-share directions. */
     public static final int DIRECTIONS = 32;
-    /** cos α не ближе к 1, чем на это: у струи вдоль самой земли доля «вперёд» — сколь угодно узкий пик. */
+    /** cos α stays this far below 1: a ground-parallel jet's “forward” share is an arbitrarily narrow peak. */
     static final double GRAZING = 1e-3;
 
     private WallJet() {}
 
     /**
-     * Доля потока стенной струи на радиан азимута φ от «вперёд» у струи под углом α к земле (sin α = sinA; положе
-     * {@link #GRAZING} — как у этого предела, тот же, что у {@link #azimuths}).
+     * Wall-jet flow share per azimuth radian φ from “forward” for jet at ground angle α (sin α = sinA; shallower
+     * than {@link #GRAZING} uses that limit, same as {@link #azimuths}).
      */
     public static double share(double sinA, double phi) {
         double c = Math.min(1 - GRAZING, Math.sqrt(Math.max(0, 1 - sinA * sinA)));
@@ -46,8 +46,8 @@ public final class WallJet {
     }
 
     /**
-     * {@link #DIRECTIONS} азимутов от «вперёд», у каждого — равная доля потока (1/n) по {@link #share}: середины n
-     * равных шагов средней аномалии, обратное уравнение Кеплера (e = cos α, ν = φ − π).
+     * {@link #DIRECTIONS} azimuths from “forward”, each equal flow share (1/n) by {@link #share}: midpoints of n
+     * equal mean-anomaly steps, inverse Kepler equation (e = cos α, ν = φ − π).
      */
     public static double[] azimuths(double sinA, int n) {
         double e = Math.min(1 - GRAZING, Math.sqrt(Math.max(0, 1 - sinA * sinA)));
@@ -55,7 +55,7 @@ public final class WallJet {
         double ratio = Math.sqrt((1 + e) / (1 - e));
         for (int k = 0; k < n; k++) {
             double m = 2 * Math.PI * (k + 0.5) / n - Math.PI;
-            // E − e·sin E = M, Ньютон от ±π: сходится при любом e < 1 (Charles, Tatum, Celest. Mech. 69, 1998)
+            // E − e·sin E = M, Newton from ±π: converges for any e < 1 (Charles, Tatum, Celest. Mech. 69, 1998)
             double big = Math.signum(m) * Math.PI;
             for (int it = 0; it < 50; it++) {
                 double f = big - e * Math.sin(big) - m, d = 1 - e * Math.cos(big);
@@ -70,8 +70,8 @@ public final class WallJet {
     }
 
     /**
-     * Фронт затяжки в направлении с импульсом i на радиан (Н·с/рад) и его интегралом по времени iTime (Н·с²/рад), начав с
-     * радиуса r0; дальше места, где ветер у земли wind (м/с) её обгоняет, не идёт.
+     * Puff front in direction with impulse i per radian (N·s/rad) and time integral iTime (N·s²/rad), starting
+     * at radius r0; stops where surface wind wind (m/s) overtakes it.
      */
     public static double reach(double i, double iTime, double r0, double wind) {
         if (i <= 0 || iTime <= 0) return r0;

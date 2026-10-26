@@ -20,38 +20,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Куда попали осколки взрыва ({@link FragmentModel}): первые лучи того же зерна и оси, что у сервера, тем же путём по
- * блокам ({@link FragmentTrace}) — там, где на стене появилась выбоина или выбито стекло, клиент и показывает удар.
- * Сам осколок в полёте не виден: стальной, ~500–700 K — ниже точки Дрейпера, мельче сантиметра и быстрее звука.
- * Видно удар: о камень и металл быстрый осколок высекает искры (горящие частицы стали), из грунта и дерева выбивает
- * облачко пыли и щепы, из стекла — осколки стекла. Сколько лучей показывать — по доле частиц ({@link Fx#density}),
- * не больше {@link #SHOWN} (вдали — меньше), не дальше {@link #RANGE} от взрыва и не больше {@link #TICK_BUDGET} за тик
- * на все взрывы. Луч клиента идёт в тик взрыва, по блокам, которые главный взрыв сервера ещё не снёс: в зоне, где
- * волна ломает стены, удары показаны и на стенах, которые сейчас рухнут; дальше — там же, где выбоины сервера.
+ * Where blast fragments hit ({@link FragmentModel}): first rays with the same seed and axis as the server, along the same block
+ * path ({@link FragmentTrace}) — the client shows the hit where a wall chip or broken glass appears.
+ * The fragment itself is invisible in flight: steel, ~500–700 K — below the Draper point, smaller than a centimetre and supersonic.
+ * The hit is visible: a fast fragment strikes sparks from stone and metal (burning steel particles), throws a puff of
+ * dust and splinters from soil and wood, glass shards from glass. Ray count follows particle share ({@link Fx#density}),
+ * at most {@link #SHOWN} (fewer at distance), within {@link #RANGE} of the blast and at most {@link #TICK_BUDGET} per tick
+ * across all blasts. Client rays run on the blast tick through blocks the main server blast has not yet destroyed: in the zone where
+ * the wave breaks walls, hits also appear on walls about to collapse; beyond it — at the same places as server chips.
  */
 final class FragmentHits {
     private FragmentHits() {}
 
-    /** Больше ударов осколков на взрыв клиент не показывает (из тысяч). */
+    /** Maximum fragment hits the client shows per blast (out of thousands). */
     static final int SHOWN = 256;
-    /** Дальше клиент осколок не ведёт, блоков: облачко и искры там мельче пикселя, а лучи стоили бы кадра. */
+    /** Maximum client fragment tracing distance, blocks: the puff and sparks are subpixel there, but rays would cost frame time. */
     static final double RANGE = 96;
-    /** Камера дальше этого от взрыва — ударов не видно (облачко в полблока мельче пикселя), блоков. */
+    /** Beyond this camera-to-blast distance hits are invisible (half-block puff is subpixel), blocks. */
     static final double SEEN = 200;
-    /** Лучей на всех взрывах за тик клиента не больше (залп «Градов» в одном тике). */
+    /** Maximum rays across all blasts per client tick (Grad salvo in one tick). */
     static final int TICK_BUDGET = 1024;
     private static long budgetTick = Long.MIN_VALUE;
     private static int budgetLeft;
     /**
-     * Искры о твёрдое — от этой скорости удара, м/с (оценка: сталь о камень высекает искры и при десятках м/с, яркие
-     * вспышки удара — от сотен).
+     * Sparks on hard material start at this impact speed, m/s (estimate: steel sparks against stone even at tens of m/s; bright
+     * impact flashes start at hundreds).
      */
     static final double SPARK_SPEED = 300;
 
-    /** Удар осколка: через {@code tick} тиков после взрыва в {@code point}. */
+    /** Fragment hit: {@code tick} ticks after the blast, at {@code point}. */
     record Hit(int tick, Vec3 point, BlockPos pos, BlockState state, @Nullable Direction face, double speed, double joules) {}
 
-    /** Удары первых лучей взрыва по сегодняшним блокам клиента, по времени. */
+    /** First blast ray hits against current client blocks, by time. */
     static List<Hit> of(ClientLevel level, @Nullable WeaponType weapon, Vec3 pos, Vec3 axis, long seed) {
         List<Hit> out = new ArrayList<>();
         FragmentModel model = weapon == null ? null : FragmentModel.of(weapon.spec());
@@ -64,7 +64,7 @@ final class FragmentHits {
             budgetTick = now;
             budgetLeft = TICK_BUDGET;
         }
-        // вдали удар мельче: лучей — меньше по расстоянию (вблизи — все SHOWN)
+        // distant hits are smaller: fewer rays with distance (all SHOWN nearby)
         int n = Math.min(Math.min(model.traced(), budgetLeft), (int) (Fx.count(SHOWN, pos) * Math.min(1, RANGE / Math.max(d, 1))));
         budgetLeft -= n;
         for (int i = 0; i < n; i++) {
@@ -93,19 +93,19 @@ final class FragmentHits {
         return new Hit(tick, point, pos, state, face, v, FragmentModel.energy(f.mass(), v));
     }
 
-    /** Показать удар {@code h}. */
+    /** Show hit {@code h}. */
     static void show(ClientLevel level, Hit h, RandomSource rnd) {
         Vec3 n = h.face == null ? Vec3.ZERO : Vec3.atLowerCornerOf(h.face.getNormal());
         Vec3 at = h.point.add(n.scale(0.05));
         BlockParticleOption dust = new BlockParticleOption(ParticleTypes.BLOCK, h.state);
-        // кусков блока — по энергии удара (оценка: облачко на каждые ~200 Дж, от 1 до 6)
+        // block piece count by impact energy (estimate: a puff per ~200 J, from 1 to 6)
         int bits = Mth.clamp((int) (h.joules / 200), 1, 6);
         for (int i = 0; i < bits; i++) {
             Vec3 d = n.scale(0.05 + 0.1 * rnd.nextDouble()).add(rnd.nextGaussian() * 0.04, 0.03 + 0.06 * rnd.nextDouble(), rnd.nextGaussian() * 0.04);
             level.addParticle(dust, at.x, at.y, at.z, d.x, d.y, d.z);
         }
         if (h.face != null && h.speed >= SPARK_SPEED && hard(level, h)) {
-            // искры — горящие частицы стали, сколотые о твёрдое: летят от грани веером
+            // sparks are burning steel particles chipped off on hard material: fan out from the face
             int sparks = 2 + rnd.nextInt(3);
             for (int i = 0; i < sparks; i++) {
                 Vec3 d = n.scale(0.15 + 0.25 * rnd.nextDouble()).add(rnd.nextGaussian() * 0.2, rnd.nextGaussian() * 0.2, rnd.nextGaussian() * 0.2);
@@ -115,7 +115,7 @@ final class FragmentHits {
         }
     }
 
-    /** Камень, кирпич, металл: о них осколок высекает искры (грунт, дерево, листва — нет). */
+    /** Stone, brick, metal: fragments strike sparks from them (not from soil, wood or leaves). */
     static boolean hard(ClientLevel level, Hit h) {
         SoundType s = h.state.getSoundType(level, h.pos, null);
         return s == SoundType.STONE || s == SoundType.DEEPSLATE || s == SoundType.DEEPSLATE_BRICKS || s == SoundType.DEEPSLATE_TILES

@@ -41,60 +41,60 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 /**
- * Пелена после ударной волны — объёмом, тремя проходами в слое эффектов (до квадратов частиц):
+ * Post-shock pall as a volume, in three effects layer passes (before particle quads):
  * <ol>
- *     <li>{@code fx_pall} — луч на пиксель кадра пониженного разрешения (вдвое или вчетверо, {@link Quality}) по полю
- *     подрыва ({@code client/nuclear/PallField}: таблица по радиусу) × трёхмерный шум ({@link VolumeNoise}); начало шагов
- *     сдвинуто синим шумом ({@link BlueNoise}) и от кадра к кадру;</li>
- *     <li>{@code fx_pall_resolve} — накопление по кадрам: прошлое переносится по глубине мира за пикселем, зажато
- *     в пределы соседей (зерно уходит, след за движением — нет);</li>
- *     <li>{@code fx_pall_composite} — на кадр: свет пелены плюс мир за ней, ослабленный и в тени пелены (тень — по
- *     полю без шума в каждом пикселе); из пониженного разрешения — с весом по сходству расстояния до мира (края домов
- *     чёткие).</li>
+ *     <li>{@code fx_pall} — one ray per reduced-resolution frame pixel (half or quarter, {@link Quality}) through the detonation
+ *     field ({@code client/nuclear/PallField}: radial table) × 3D noise ({@link VolumeNoise}); step origin
+ *     shifted by blue noise ({@link BlueNoise}) and between frames;</li>
+ *     <li>{@code fx_pall_resolve} — temporal accumulation: reproject history by world depth behind the pixel, clamp to
+ *     neighbouring values (grain fades, without motion trails);</li>
+ *     <li>{@code fx_pall_composite} — composite: pall light plus the world behind it, attenuated and shadowed by the pall (shadow from the
+ *     noiseless field at each pixel); upsample by world-distance similarity weights (sharp building
+ *     edges).</li>
  * </ol>
- * Квадраты слоя после этого рисуются со своей долей пелены перед ними ({@code fx.vsh}: те же поле и таблица, без
- * шума).
+ * Layer quads then draw with their share of pall in front ({@code fx.vsh}: same field and table, without
+ * noise).
  * <p>
- * Над горящим городом в тех же проходах — огненный шторм ({@code client/nuclear/FireStorm}): у слота подрыва своя
- * карта огня ({@link Fire}, RGBA16F по клеткам источников с уменьшенными копиями — скопления источников света и дыма):
- * в лучах — столбы дыма и зарево снизу на пелене и дыме, огненные смерчи; на кадре — пламя на поверхностях города
- * (по расстоянию до мира за пикселем, и на LOD Distant Horizons); у квадратов слоя — свет пожаров снизу.
+ * Above a burning city, the same passes draw the firestorm ({@code client/nuclear/FireStorm}): each detonation slot has a
+ * fire map ({@link Fire}, RGBA16F source cells with mip levels — clusters of light and smoke sources):
+ * rays draw smoke columns, upward glow on pall and smoke, fire whirls; composite draws flames on city surfaces
+ * (by world distance behind the pixel, including Distant Horizons LOD); layer quads receive firelight from below.
  * <p>
- * В тех же лучах — грибы кадра объёмом ({@code mushroom.glsl}, {@code client/nuclear/MushroomField}): таблица грибов
- * (RGBA32F, строка на гриб и строка света чёрного тела) — у лучей, накопления (перенос по расстоянию гриба) и квадратов
- * слоя (что гриб закрывает перед частицей). Гриб рисуется и без пелены, и при пелене, выключенной в настройке (тогда —
- * на ступени LOW): другого гриба нет.
+ * Same rays draw frame mushrooms as volumes ({@code mushroom.glsl}, {@code client/nuclear/MushroomField}): mushroom table
+ * (RGBA32F, one mushroom row and one black-body light row) shared by rays, accumulation (reprojection by mushroom distance) and layer
+ * quads (mushroom occlusion in front of the particle). Mushroom draws even without pall or with pall disabled in settings (then at
+ * LOW): no other mushroom renderer.
  * <p>
- * Днём грибы кладут тень на мир: до лучей — карта тени ({@code fx_mush_shadow}, плитка
- * {@link MushroomField#SHADOW}² на гриб в плоскости поперёк солнца: доля света солнца, что гриб пропускает к трём
- * высотам, — прямым пучком и рассеянным вперёд), на кадре — выборка из неё в каждом пикселе мира ({@code fx_pall_composite}).
+ * By day mushrooms shadow the world: shadow map before rays ({@code fx_mush_shadow}, tile
+ * {@link MushroomField#SHADOW}² per mushroom in a plane perpendicular to the sun: sunlight fraction transmitted to three
+ * heights, as direct beam and forward scattering); composite samples it at each world pixel ({@code fx_pall_composite}).
  * <p>
- * Своих текстур — три кадра пониженного разрешения (RGBA16F), таблица 128×4, таблица грибов 256×5 (RGBA32F), карта тени
- * грибов 128×512 (RGBA16F, 0,5 МБ), шум 64³ (RG8) и 64² (R8): всё вместе меньше 2,5 МБ на 1080p; карты огня — до 0,7 МБ на слот (сторона до 256 клеток), карты рельефа и воды под пеленой — 64 КБ на слот. Шум считается в фоне при первом
- * подрыве (около секунды); пока он не готов, пелены нет.
+ * Custom textures — three reduced-resolution frames (RGBA16F), 128×4 table, 256×5 mushroom table (RGBA32F), 128×512 mushroom shadow
+ * map (RGBA16F, 0.5 MB), noise 64³ (RG8) and 64² (R8): together under 2.5 MB at 1080p; fire maps up to 0.7 MB per slot (side up to 256 cells), terrain/water maps under the pall — 64 KB per slot. Noise computed in the background on the first
+ * detonation (about one second); no pall until ready.
  * <p>
- * Подробность сама держит бюджет ({@link Detail}): время проходов на видеокарте меряют метки времени OpenGL, читаемые
- * через кадры (без ожидания), и пока оно дольше {@link Detail#BUDGET_MS} мс, кадр лучей мельчает и шагов меньше
- * ({@link #LADDER}, не ниже LOW); есть запас — подробность возвращается к выбранной в настройке. В сценарии клиента
- * и пока Flashback выводит видео кадры не в реальном времени: медленный кадр там ничего не стоит, и подробность —
- * всегда из настройки ({@link Detail#pin}). Строка {@code SCENARIO pall} — {@link #describe}.
+ * Detail holds its own budget ({@link Detail}): GPU pass times measured by OpenGL timestamps, read after
+ * a few frames (no waiting); while above {@link Detail#BUDGET_MS} ms, ray frame resolution and step count decrease
+ * ({@link #LADDER}, no lower than LOW); with headroom, detail returns toward the setting. In client scenarios
+ * and Flashback video export, frames are not real-time: a slow frame costs nothing there, so detail always
+ * follows the setting ({@link Detail#pin}). {@code SCENARIO pall} line — {@link #describe}.
  */
 public final class PallPass {
-    /** Узлов таблицы по радиусу (ширина текстуры). */
+    /** Radial table nodes (texture width). */
     public static final int WIDTH = 128;
-    /** Строк таблицы: пыль, брызги и мгла двух подрывов. */
+    /** Table rows: dust, spray and haze for two detonations. */
     public static final int ROWS = 6;
     /**
-     * Блок текстуры трёхмерного шума: за двенадцатью двумерными, которые привязывает {@code ShaderInstance}
+     * 3D noise texture unit: after the twelve 2D units bound by {@code ShaderInstance}
      * ({@code Sampler0}–{@code Sampler11}).
      */
     private static final int NOISE_UNIT = 12;
-    /** Перенос накопленного считается не дальше стольких блоков (небо за пеленой). */
+    /** Maximum accumulation reprojection distance in blocks (sky behind the pall). */
     private static final float REPROJECT_MAX = 600;
-    /** Глаз сдвинулся за кадр дальше — накопленное не годится (телепорт, камера снаряда). */
+    /** Eye displacement beyond this in one frame invalidates history (teleport, projectile camera). */
     private static final double JUMP = 30;
 
-    /** Качество пелены из настройки — самая подробная ступень {@link #LADDER}: во сколько раз кадр мельче полного и шагов на луч. */
+    /** Pall quality setting — finest {@link #LADDER} rung: frame downscale factor and steps per ray. */
     public enum Quality {
         OFF(0, 0), LOW(4, 20), MEDIUM(2, 28), HIGH(2, 48);
 
@@ -105,58 +105,58 @@ public final class PallPass {
             this.steps = steps;
         }
 
-        /** Ступень {@link #LADDER} этого качества (OFF — −1). */
+        /** {@link #LADDER} rung for this quality (OFF — −1). */
         int step() {
             for (int i = 0; i < LADDER.length; i++) if (LADDER[i].factor == factor && LADDER[i].steps == steps) return i;
             return -1;
         }
     }
 
-    /** Ступень подробности: во сколько раз кадр лучей мельче полного и шагов на луч. */
+    /** Detail rung: ray frame downscale factor and steps per ray. */
     record Step(int factor, int steps) {
-        /** Цена кадра в долях: лучей — пиксели / фактор², у каждого — шаги. */
+        /** Relative frame cost: rays — pixels / factor², each with its steps. */
         double cost() {
             return steps / (double) (factor * factor);
         }
     }
 
     /**
-     * Ступени подробности от HIGH до LOW: каждая следующая — от 0,5 до 0,85 цены прошлой. Шаги меняются без нового
-     * кадра, фактор — с новыми кадрами пониженного разрешения (накопленное сначала).
+     * Detail rungs from HIGH to LOW: each costs 0.5 to 0.85 of the previous one. Step count changes without a new
+     * framebuffer; factor changes recreate reduced-resolution frames (history restarts).
      */
     static final Step[] LADDER = {new Step(2, 48), new Step(2, 36), new Step(2, 28), new Step(2, 22), new Step(3, 26),
             new Step(3, 20), new Step(4, 24), new Step(4, 20)};
 
     /**
-     * Ступень подробности по времени проходов на видеокарте: дольше бюджета в среднем за полсекунды (и не меньше
-     * четырёх замеров) — сразу на ступень, что по цене в него влезет; запас — на ступень вверх, если и с ней по цене
-     * выйдет не больше {@link #UP_SHARE} бюджета два окна подряд и после прошлой смены прошло {@link #HOLD_NS} (после
-     * подъёма, за которым сразу пришлось опуститься, — вчетверо дольше). Не выше выбранного в настройке и не ниже LOW;
-     * прибитая ({@link #pin}) — ступень настройки, замеры её не трогают. Без мира и OpenGL — юнит-тест.
+     * Detail rung by GPU pass time: above budget over a half-second average (with at least
+     * four measurements) — immediately switch to a rung estimated to fit; headroom — one rung up if its estimated cost
+     * is at most {@link #UP_SHARE} of budget for two consecutive windows and {@link #HOLD_NS} has passed since the last change (four times
+     * longer after an increase immediately followed by a decrease). No higher than the setting and no lower than LOW;
+     * pinned ({@link #pin}) — setting rung, unaffected by measurements. No world or OpenGL — unit test.
      */
     static final class Detail {
-        /** Бюджет пелены на кадр на видеокарте, мс. */
+        /** Per-frame GPU pall budget, ms. */
         static final double BUDGET_MS = 2;
         static final double UP_SHARE = 0.7;
         static final long WINDOW_NS = 500_000_000L, HOLD_NS = 3_000_000_000L;
         static final int MIN_SAMPLES = 4, CALM_WINDOWS = 2;
 
-        /** Ступень сейчас и самая подробная (из настройки); −1 — ещё не задана. */
+        /** Current and finest rung (from setting); −1 — not set yet. */
         int level = -1, ceiling = -1;
-        /** Номер ступени по счёту смен: замеры, снятые до смены, не считаются. */
+        /** Rung generation by change count: measurements before a change are ignored. */
         int generation;
-        /** Сколько раз ступень менялась по замерам. */
+        /** Rung changes caused by measurements. */
         int changes;
-        /** Среднее последнего окна, мс. */
+        /** Last window average, ms. */
         double lastMean;
-        /** Ступень прибита к настройке ({@link #pin}). */
+        /** Rung pinned to the setting ({@link #pin}). */
         boolean pinned;
         private double sum;
         private int samples, calm;
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE;
         private boolean skip;
 
-        /** Потолок из настройки: сменился — сразу на него. */
+        /** Setting ceiling: if changed, switch to it immediately. */
         void ceiling(int c) {
             if (c == ceiling) return;
             ceiling = c;
@@ -164,9 +164,9 @@ public final class PallPass {
         }
 
         /**
-         * Прибить ступень к настройке или отпустить: кадры не в реальном времени (сценарий клиента, вывод видео
-         * Flashback) — медленный кадр не должен снижать подробность. true — сменилось (ступень — потолок, замеры —
-         * заново).
+         * Pin rung to setting or release it: non-real-time frames (client scenario, Flashback video
+         * export) — a slow frame must not reduce detail. true — changed (rung at ceiling, measurements
+         * reset).
          */
         boolean pin(boolean on) {
             if (on == pinned) return false;
@@ -177,18 +177,18 @@ public final class PallPass {
         }
 
         /**
-         * Замеры до этого — не в счёт (пелены не было в кадре, сменился размер кадра): пары меток в полёте сняты
-         * на прежнем поколении, первый кадр после — с холодными кэшами.
+         * Ignore earlier measurements (pall out of view, frame size changed): pending timestamp pairs belong
+         * to the previous generation; first frame afterwards has cold caches.
          */
         void restart() {
             calm = 0;
             if (ceiling >= 0) set(level);
         }
 
-        /** Замер кадра, снятый на ступени поколения {@code gen}, в момент {@code now} (нс); true — ступень сменилась. */
+        /** Frame measurement at rung generation {@code gen}, time {@code now} (ns); true — rung changed. */
         boolean sample(double ms, int gen, long now) {
             if (gen != generation || ceiling < 0 || pinned) return false;
-            // первый кадр ступени — с новыми кадрами и холодными кэшами
+            // first rung frame has new framebuffers and cold caches
             if (skip) {
                 skip = false;
                 return false;
@@ -205,7 +205,7 @@ public final class PallPass {
             if (mean > BUDGET_MS && level < floor) {
                 int to = level + 1;
                 while (to < floor && mean * LADDER[to].cost() / LADDER[level].cost() > BUDGET_MS) to++;
-                // подняли, а ступень не по силам — следующий подъём не скоро
+                // an increase exceeded capacity — delay the next increase
                 holdUntil = now + (raisedAt != Long.MIN_VALUE && now - raisedAt < 2 * HOLD_NS ? 4 * HOLD_NS : HOLD_NS);
                 calm = 0;
                 set(to);
@@ -236,15 +236,15 @@ public final class PallPass {
         }
     }
 
-    /** Огненный шторм слота ({@code client/nuclear/FireStorm}): числа для шейдера и карта огня. */
+    /** Slot firestorm ({@code client/nuclear/FireStorm}): shader parameters and fire map. */
     public static final class Fire {
-        /** Слот огня ({@code pall.glsl}); нули — у слота шторма нет. */
+        /** Fire slot ({@code pall.glsl}); zeroes — no storm for this slot. */
         public final Matrix4f params = new Matrix4f().zero();
-        /** Карта огня: RGBA по клеткам, сторона {@link #side}, x быстрее; null — шторма нет. */
+        /** Fire map: RGBA per cell, side {@link #side}, x fastest; null — no storm. */
         @Nullable
         public float[] map;
         public int side;
-        /** Чья карта и какое её заполнение: текстура грузится заново, только когда они другие. */
+        /** Map owner and fill generation: reload texture only when either changes. */
         @Nullable
         public Object source;
         public int version;
@@ -262,18 +262,18 @@ public final class PallPass {
     }
 
     /**
-     * Рельеф и вода под пеленой слота ({@code client/nuclear/PallGround}): где кончается луч, за которым нет мира, и из
-     * чего пелена (пыль над сушей, брызги над водой). Карта высот над землёй под эпицентром (R) и доли воды (G), RG16F с
-     * билинейной выборкой, края — как у края.
+     * Terrain and water beneath a slot's pall ({@code client/nuclear/PallGround}): endpoint for rays without a world hit, and
+     * pall material (dust over land, spray over water). Map of height above epicentre ground (R) and water fraction (G), RG16F with
+     * bilinear sampling, clamped edges.
      */
     public static final class Ground {
-        /** Полсторона карты, низ и верх карты (над землёй под эпицентром), клетка — блоки ({@code pall.glsl}); нули — карты нет. */
+        /** Map half-side, bottom and top (above epicentre ground), cell size — blocks ({@code pall.glsl}); zeroes — no map. */
         public final Vector4f params = new Vector4f();
-        /** По клеткам высота и доля воды (два числа на клетку), сторона {@link #side}, x быстрее; null — карты нет. */
+        /** Height and water fraction per cell (two numbers), side {@link #side}, x fastest; null — no map. */
         @Nullable
         public float[] map;
         public int side;
-        /** Чья карта и какое её заполнение: текстура грузится заново, только когда они другие. */
+        /** Map owner and fill generation: reload texture only when either changes. */
         @Nullable
         public Object source;
         public int version;
@@ -290,99 +290,99 @@ public final class PallPass {
         }
     }
 
-    /** Пелена кадра — что её рисует ({@code client/nuclear/NukePall#frame}). */
+    /** Frame pall — renderer input ({@code client/nuclear/NukePall#frame}). */
     public static final class Frame {
-        /** Слоты подрывов ({@code pall.glsl}): не больше двух самых заметных. */
+        /** Detonation slots ({@code pall.glsl}): at most two most prominent. */
         public final Matrix4f slot0 = new Matrix4f().zero(), slot1 = new Matrix4f().zero();
-        /** Таблица поля: {@link #ROWS} строк по {@link #WIDTH} узлов, RGBA. */
+        /** Field table: {@link #ROWS} rows of {@link #WIDTH} nodes, RGBA. */
         public final float[] table = new float[ROWS * WIDTH * 4];
-        /** Рамка всех слотов от глаза, блоки. */
+        /** Eye-relative bounds of all slots, blocks. */
         public final Vector3f min = new Vector3f(), max = new Vector3f();
-        /** Направление на солнце и его сила днём 0..1. */
+        /** Direction to sun and daytime strength 0..1. */
         public final Vector4f sun = new Vector4f();
         /**
-         * Свет солнца и неба — линейный (белая стена в полдень — 1, {@code client/nuclear/PallLight}); зарево пожаров под
-         * мглой — на белой стене на экране, поверх {@link #base}.
+         * Sun and sky light — linear (white wall at noon — 1, {@code client/nuclear/PallLight}); fire glow beneath
+         * haze — on a screen white wall, added over {@link #base}.
          */
         public final Vector3f sunLight = new Vector3f(), skyLight = new Vector3f(), fireLight = new Vector3f();
-        /** Свет неба кадра на экране — белая стена: днём 1, ночью — как у клубов стены пыли ({@code FarView.ambient}). */
+        /** Screen frame skylight on a white wall: 1 by day, at night like dust wall billows ({@code FarView.ambient}). */
         public float base = 1;
         /**
-         * Свет шара и пожаров на пелене слотов ({@code client/nuclear/CloudPuffs#pallLight}): glow — радиус шапки, накал
-         * пожаров, снос середины шапки по ветру и край зоны пожаров (блоки); hot — свет чёрного тела видимой температуры
-         * шапки (rgb, линейный, белая стена в полдень — 1) и высота её середины над землёй под эпицентром (блоки, w).
-         * Нули — без отсвета.
+         * Ball and fire light on slot pall ({@code client/nuclear/CloudPuffs#pallLight}): glow — cap radius, fire
+         * glow, cap centre wind drift and fire zone edge (blocks); hot — black-body light at visible cap
+         * temperature (rgb, linear, white wall at noon — 1), centre height above epicentre ground (blocks, w).
+         * Zeroes — no glow.
          */
         public final Vector4f glow0 = new Vector4f(), glow1 = new Vector4f(), hot0 = new Vector4f(), hot1 = new Vector4f();
-        /** Сила отсвета пожаров на пыли при свете неба кадра ({@code CloudPuffs#glowOnSmoke}). */
+        /** Fire glow strength on dust under frame skylight ({@code CloudPuffs#glowOnSmoke}). */
         public float glowOnSmoke;
-        /** Цвет тонкой пелены на экране (rgb) — для квадратов слоя перед частицами; w — 1, если пелена есть. */
+        /** Thin pall screen colour (rgb) — for layer quads before particles; w — 1 if pall exists. */
         public final Vector4f ambient = new Vector4f();
         /**
-         * Пыль у глаза: ослабление там (1/блок) и толща по вертикали над глазом и под ним до земли — докуда идёт луч
-         * ({@code pallClip} в {@code fx_pall}: дальше толщи 12 по лучу не видно ничего). Нули — луч не обрывается.
+         * Eye dust: local extinction (1/block), vertical optical depths above the eye and below it to ground — ray range
+         * ({@code pallClip} in {@code fx_pall}: nothing visible beyond ray depth 12). Zeroes — no ray cutoff.
          */
         public final Vector3f eyeDust = new Vector3f();
         public Quality quality = Quality.MEDIUM;
-        /** Огненный шторм слотов. */
+        /** Slot firestorms. */
         public final Fire fire0 = new Fire(), fire1 = new Fire();
-        /** Рамка шторма от глаза (столбы, зарево, смерчи), блоки: там шаги луча гуще; min > max — шторма нет. */
+        /** Eye-relative storm bounds (columns, glow, whirls), blocks: denser ray steps there; min > max — no storm. */
         public final Vector3f fireMin = new Vector3f(), fireMax = new Vector3f();
         /**
-         * Огненные смерчи кадра (до четырёх, по столбцу на смерч): основание (x, z от глаза, земля от глаза по y) и радиус
-         * ядра; высота, сила 0..1 (0 — смерча нет), секунды с его начала, закрутка ±1; наклон по ветру (x, z на блок
-         * высоты), пламя, зерно.
+         * Frame fire whirls (up to four, one column each): base (eye-relative x, z, ground y) and core
+         * radius; height, strength 0..1 (0 — no whirl), seconds since start, rotation ±1; wind lean (x, z per block of
+         * height), flame, seed.
          */
         public final Matrix4f whirlPos = new Matrix4f().zero(), whirlShape = new Matrix4f().zero(), whirlLean = new Matrix4f().zero();
-        /** Рельеф и вода под пеленой слотов. */
+        /** Terrain and water beneath slot pall. */
         public final Ground ground0 = new Ground(), ground1 = new Ground();
         /**
-         * Воздух кадра ({@code pall.glsl}: {@code PallAir}; {@code MushroomField#air}): дымка, чистый воздух и погода у
-         * глаза, 1/блок, и 1 / масштаб высоты дымки, 1/блок — гриб, пелена и стена вдали тают в дымке до них.
+         * Frame air ({@code pall.glsl}: {@code PallAir}; {@code MushroomField#air}): haze, clear air and weather at the
+         * eye, 1/block, and 1 / haze height scale, 1/block — distant mushroom, pall and wall fade through intervening haze.
          */
         public final Vector4f air = new Vector4f();
         /**
-         * Вода слотов ({@code pall.glsl}): радиус и верх базисной волны (блоки), её ослабление в самой густой части
-         * (1/блок; нули — волны нет), 1 — под пеленой есть вода (шейдер читает её карту), 0 — нет.
+         * Slot water ({@code pall.glsl}): base surge radius and top (blocks), extinction at its densest part
+         * (1/block; zeroes — no surge); 1 — water beneath pall (shader reads its map), 0 — none.
          */
         public final Vector4f water0 = new Vector4f(), water1 = new Vector4f();
         /**
-         * Стена пыли слотов ({@code client/nuclear/BlastWall#slot}, {@code pall.glsl}): голова-вал (нули — головы нет)
-         * и облако Вильсона (z = 0 — облака нет).
+         * Slot dust wall ({@code client/nuclear/BlastWall#slot}, {@code pall.glsl}): rolling head (zeroes — no head)
+         * and Wilson cloud (z = 0 — no cloud).
          */
         public final Matrix4f wall0 = new Matrix4f().zero(), wall1 = new Matrix4f().zero();
         public final Vector4f wilson0 = new Vector4f(), wilson1 = new Vector4f();
         /**
-         * Мир кадра кончается не ближе стольких блоков по земле от глаза (дальность прорисовки): луч в пустоту прошёл его,
-         * ничего не задев, — рельеф под пеленой ({@link Ground}) режет его только дальше.
+         * Frame world extends at least this many horizontal blocks from the eye (render distance): a ray into the void passed through it
+         * without a hit — terrain beneath the pall ({@link Ground}) clips it only farther away.
          */
         public float floorFrom;
         /**
-         * Грибы кадра ({@code mushroom.glsl}): строки грибов таблицы {@link MushroomField#WIDTH} × {@link MushroomField#ROWS}
-         * (строка света чёрного тела здесь не нужна — она в видеопамяти с начала) и их число.
+         * Frame mushrooms ({@code mushroom.glsl}): mushroom rows of the {@link MushroomField#WIDTH} × {@link MushroomField#ROWS} table
+         * (black-body light row unneeded here — already in VRAM), and count.
          */
         public final float[] mushrooms = new float[MushroomField.WIDTH * MushroomField.ROWS * 4];
         public int mushroomCount;
-        /** Во сколько раз ярче кажется свет при свете неба кадра ({@code Sight.adapted}): свечение грибов. */
+        /** Apparent light brightness multiplier under frame skylight ({@code Sight.adapted}): mushroom glow. */
         public float exposure = 1;
         /**
-         * Огненные шары, что светят на мир кадра ({@code MushroomField.balls}): середины и радиусы, свет и ослабление
-         * воздуха по столбцам; светит ли хоть один (иначе вывод на кадр их не считает и кадр не копирует).
+         * Fireballs lighting the frame world ({@code MushroomField.balls}): centres/radii, light and air extinction by
+         * column; whether any emits light (otherwise composite skips them and does not copy the frame).
          */
         public final Matrix4f balls = new Matrix4f().zero(), ballLight = new Matrix4f().zero();
         public boolean ballsLit;
-        /** Свет открытого неба на белом блоке, как его рисует Minecraft (карта освещения: небо 15, блоки 0), на экране. */
+        /** Open-sky light on a white block as Minecraft draws it (lightmap: sky 15, blocks 0), on screen. */
         public final Vector3f openSky = new Vector3f(1);
         /**
-         * Затенение граней блоков Minecraft ({@code ClientLevel.getShade}): верх, низ, север и юг, запад и восток. Оно уже
-         * в пикселе мира, и вывод на кадр снимает его с цвета блока под светом шара.
+         * Minecraft block face shading ({@code ClientLevel.getShade}): top, bottom, north/south, west/east. Already
+         * in the world pixel; composite removes it from the block colour under fireball light.
          */
         public final Vector4f faceShade = new Vector4f(1, 0.5f, 0.8f, 0.6f);
-        /** Сетка дыма обычных взрывов этого кадра ({@code client/fx/smoke}); null — дыма нет. */
+        /** This frame's conventional blast smoke grid ({@code client/fx/smoke}); null — no smoke. */
         @Nullable
         public SmokeGrid.Frame smoke;
         /**
-         * Шум клубов дыма ({@code fx_pall}: {@code SmokeNoise}, {@code SmokeWind}) и огненные шары, что светят на дым
+         * Smoke billow noise ({@code fx_pall}: {@code SmokeNoise}, {@code SmokeWind}) and fireballs lighting smoke
          * ({@code SmokeBalls}, {@code SmokeBallLight}).
          */
         public final Vector4f smokeNoise = new Vector4f(), smokeWind = new Vector4f(0, 0, 0, 2);
@@ -394,23 +394,23 @@ public final class PallPass {
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
-    /** Шум не вышел (ошибка в фоне): пелены нет до перезапуска. */
+    /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
 
     private static int fullW, fullH, lowW, lowH, factor;
-    /** Кадр луча и два накопленных (по очереди: прошлый и этот). */
+    /** Ray frame and two history frames (alternating previous/current). */
     private static final int[] TEXTURES = {-1, -1, -1}, FBOS = {-1, -1, -1};
     private static int latest;
     private static int table = -1, noise = -1, blue = -1, mushrooms = -1;
-    /** Карта тени грибов от солнца (плитка {@link MushroomField#SHADOW}² на гриб) и её кадр; −1 — не вышла, тени нет. */
+    /** Mushroom sun shadow map ({@link MushroomField#SHADOW}² tile per mushroom) and framebuffer; −1 — failed, no shadow. */
     private static int shadowMap = -1, shadowFbo = -1;
     private static int footMap = -1, footFbo = -1;
-    /** Копия кадра для света шаров на мире ({@link #copyFrame}) и её размер; −1 — ещё не нужна была. */
+    /** Frame copy for fireball world light ({@link #copyFrame}) and size; −1 — not needed yet. */
     private static int frameCopy = -1, copyW, copyH;
-    /** Карты огня слотов (текстура, её сторона, чья и какое заполнение) и карты этого кадра (−1 — нет). */
+    /** Slot fire maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
     private static final int[] FIRE = {-1, -1}, FIRE_SIDE = new int[2], FIRE_VERSION = new int[2], FIRE_NOW = {-1, -1};
     private static final Object[] FIRE_SOURCE = new Object[2];
-    /** Карты рельефа под пеленой слотов (текстура, сторона, чья и какое заполнение) и карты этого кадра (−1 — нет). */
+    /** Slot pall terrain maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
     private static final int[] GROUND = {-1, -1}, GROUND_SIDE = new int[2], GROUND_VERSION = new int[2], GROUND_NOW = {-1, -1};
     private static final Object[] GROUND_SOURCE = new Object[2];
     @Nullable
@@ -430,37 +430,37 @@ public final class PallPass {
     private static long frame;
     private static final int[] VIEWPORT = new int[4];
 
-    // время на видеокарте: метки времени (glQueryCounter) до и после проходов, по кольцу из RING пар — читаются через
-    // кадры, когда готовы, без ожидания. Не запрос GL_TIME_ELAPSED: он у OpenGL один на всех, а Minecraft держит его на
-    // весь кадр, пока на экране F3 с загрузкой видеокарты (TimerQuery), — вложенный не начался бы
+    // GPU time: timestamps (glQueryCounter) before and after passes in a ring of RING pairs — read after
+    // a few frames once ready, without waiting. Not GL_TIME_ELAPSED: OpenGL has one shared query, and Minecraft holds it for
+    // the entire frame while F3 GPU load is displayed (TimerQuery) — a nested query would not start
     private static final int RING = 4;
     private static final int[] QUERIES = new int[2 * RING];
-    /** Поколение ступени ({@link Detail#generation}), на которой снята пара; −1 — пара свободна. */
+    /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
     private static int ring;
-    /** Метки времени: 0 — не проверяли, 1 — есть, −1 — нет (тогда подробность — из настройки). */
+    /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported (detail follows setting then). */
     private static int timer;
-    /** Сценарий клиента ({@code tools/client_scenario.sh}): кадры не в реальном времени, подробность — из настройки. */
+    /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
     private static int gpuFrames, drawn, lastDrawn;
 
     private PallPass() {}
 
-    /** Пелена без подрывов: квадраты слоя её не берут. */
+    /** Pall without detonations: layer quads ignore it. */
     public static Frame empty() {
         return EMPTY;
     }
 
     /**
-     * Пелену можно рисовать: её шейдеры собрались и шум не сломался (до его готовности — тоже да: он ещё будет). Нет —
-     * голову стены у глаза показывает пелена на экране ({@code NukeDust.veil}).
+     * Pall can be drawn: shaders compiled and noise has not failed (also true before noise is ready: it will arrive). Otherwise —
+     * screen veil shows the wall head at the eye ({@code NukeDust.veil}).
      */
     public static boolean available() {
         return !failed && march != null && resolve != null && composite != null;
     }
 
-    /** Шум готовится в фоне со входа в мир ({@code IncomingClient}; и с первого подрыва): до готовности пелены и гриба нет. */
+    /** Noise prepared in background on world entry ({@code IncomingClient}; and first detonation): no pall or mushroom until ready. */
     public static void prepare() {
         if (textures == null) {
             textures = CompletableFuture.supplyAsync(() -> new byte[][]{
@@ -468,35 +468,35 @@ public final class PallPass {
         }
     }
 
-    /** Таблица поля для квадратов слоя ({@code Sampler5} шейдера {@code fx}); −1 — пелены в кадре нет. */
+    /** Field table for layer quads ({@code Sampler5} in {@code fx}); −1 — no pall in frame. */
     static int table() {
         return table;
     }
 
-    /** Таблица грибов ({@code Sampler11} шейдера {@code fx}): в кадре, где пелена нарисована, — грибы этого кадра. */
+    /** Mushroom table ({@code Sampler11} in {@code fx}): mushrooms of the frame where pall was drawn. */
     static int mushroomMap() {
         return mushrooms;
     }
 
-    /** Карта огня слота {@code k} этого кадра ({@code Sampler7}/{@code Sampler8} шейдера {@code fx}); −1 — нет. */
+    /** Frame slot {@code k} fire map ({@code Sampler7}/{@code Sampler8} in {@code fx}); −1 — absent. */
     static int fireMap(int k) {
         return FIRE_NOW[k];
     }
 
-    /** Карта рельефа и воды слота {@code k} этого кадра ({@code Sampler9}/{@code Sampler10} шейдера {@code fx}); −1 — нет. */
+    /** Frame slot {@code k} terrain/water map ({@code Sampler9}/{@code Sampler10} in {@code fx}); −1 — absent. */
     static int groundMap(int k) {
         return GROUND_NOW[k];
     }
 
-    /** Числа карты рельефа слота {@code k} кадра {@code f} ({@code pall.glsl}); карты нет — нули. */
+    /** Terrain map parameters for slot {@code k} in frame {@code f} ({@code pall.glsl}); zeroes if absent. */
     static Vector4f groundParams(Frame f, int k) {
         return GROUND_NOW[k] < 0 ? NO_GROUND : k == 0 ? f.ground0.params : f.ground1.params;
     }
 
     /**
-     * Пелена, стена пыли и грибы кадра перед точкой ({@code pall_front.glsl}) — шейдеру {@code s}: карты в блоки 5, 9, 10,
-     * 11 и числа кадра {@code f}. Пелена не нарисована ({@code drawn} — нет) — пустой кадр (шейдер её не читает), карты —
-     * {@code fallback}. Одни числа квадратам слоя и пробам источников ({@link SourceProbes}).
+     * Frame pall, dust wall and mushrooms in front of a point ({@code pall_front.glsl}) to shader {@code s}: maps on units 5, 9, 10,
+     * 11 and frame {@code f} parameters. Pall undrawn ({@code drawn} false) — empty frame (shader skips it), maps use
+     * {@code fallback}. Same parameters for layer quads and source probes ({@link SourceProbes}).
      */
     static void bindFront(ShaderInstance s, Frame f, boolean drawn, int fallback) {
         Frame front = drawn ? f : empty();
@@ -525,17 +525,17 @@ public final class PallPass {
     }
 
     /**
-     * Пелена этого кадра после накопления ({@code Sampler6} шейдера {@code fx}: свет и пропускание до мира за пикселем —
-     * свет пелены перед квадратом слоя берётся из него).
+     * This frame's accumulated pall ({@code Sampler6} in {@code fx}: light and transmission to the world behind each pixel —
+     * supplies pall light in front of a layer quad).
      */
     static int frame() {
         return TEXTURES[1 + latest];
     }
 
     /**
-     * Нарисовать пелену кадра в текущий кадр (после мира, до квадратов слоя); false — не вышло (нет шейдеров, шум не
-     * готов). {@code view} — вид кадра от глаза {@code eye}, {@code scene} — расстояния до мира ({@link SceneDepth}),
-     * {@code haze} — дымка воздуха и туман Minecraft ({@link FxFrame.Fog#haze}): тень на мире за ними тает.
+     * Draw frame pall into the current frame (after world, before layer quads); false — failed (no shaders, noise not
+     * ready). {@code view} — frame view from {@code eye}, {@code scene} — world distances ({@link SceneDepth}),
+     * {@code haze} — air haze and Minecraft fog ({@link FxFrame.Fog#haze}): world shadow fades through them.
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
         ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting;
@@ -563,7 +563,7 @@ public final class PallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, WIDTH, ROWS, GL11.GL_RGBA, GL11.GL_FLOAT, tableBuffer);
-        // тень грибов — днём, если карта есть; иначе плиток нет (их тексели — нули): вывод на кадр карту не читает
+        // mushroom shadow by day if map exists; otherwise no tiles (zero texels): composite skips the map
         boolean shade = sh != null && shadowMap >= 0 && f.sun.w > 0 && f.mushroomCount > 0;
         if (!shade) {
             for (int k = 0; k < MushroomField.MUSHROOMS; k++) {
@@ -571,7 +571,7 @@ public final class PallPass {
                 Arrays.fill(f.mushrooms, at, at + 4, 0f);
             }
         }
-        // строки грибов (свет чёрного тела под ними — с начала)
+        // mushroom rows (black-body light below them already present)
         mushroomBuffer.clear();
         mushroomBuffer.put(f.mushrooms, 0, MushroomField.WIDTH * MushroomField.MUSHROOMS * 4).flip();
         GlStateManager._bindTexture(mushrooms);
@@ -603,11 +603,11 @@ public final class PallPass {
         RenderSystem.disableBlend();
         RenderSystem.colorMask(true, true, true, true);
 
-        // сетка дыма обычных взрывов — до лучей (её читают все проходы)
+        // conventional blast smoke grid before rays (read by every pass)
         SmokePass.begin();
         if (f.smoke != null) SmokePass.fill(f.smoke);
 
-        // 0. карта тени грибов от солнца — плитки грибов кадра одна над другой
+        // 0. mushroom sun shadow map — frame mushroom tiles stacked vertically
         if (shade) {
             GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, shadowFbo);
             RenderSystem.viewport(0, 0, MushroomField.SHADOW, MushroomField.SHADOW * f.mushroomCount);
@@ -623,8 +623,8 @@ public final class PallPass {
                 if (f.mushrooms[at + MushroomField.FOOT * 4 + 2] > 0 && f.mushrooms[at + 11 * 4 + 3] > 0) litFoot = true;
             }
         }
-        // Свет основания — в своей малой таблице; основной проход содержит только её выборки.
-        // Текстуры и параметры источника общие: тот же pallSource, без второго встроенного вызова в лучах.
+        // base light in a separate small table; main pass only samples it
+        // shared source textures and parameters: same pallSource, without a second inlined ray call
         for (int pass = 0; pass < 2; pass++) {
             if (pass == 0 && !litFoot) continue;
             m = pass == 0 ? fl : march;
@@ -645,7 +645,7 @@ public final class PallPass {
             RenderSystem.setShaderTexture(5, ground0);
             RenderSystem.setShaderTexture(6, ground1);
             RenderSystem.setShaderTexture(7, mushrooms);
-            // тень грибов на пелене от солнца — та же карта, что на мире (без неё — таблица: плиток в ней нет)
+            // mushroom sun shadow on pall uses the same map as on the world (without it — table: it contains no tiles)
             RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
@@ -692,7 +692,7 @@ public final class PallPass {
             quad(m, true);
         }
 
-        // 2. накопление: из прошлого накопленного — в другое
+        // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[next]);
         RenderSystem.setShaderTexture(0, TEXTURES[0]);
@@ -708,10 +708,10 @@ public final class PallPass {
         quad(r, false);
         latest = next - 1;
 
-        // 3. на кадр
+        // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
-        // свет огненных шаров делает мир ярче, а смешивание только ослабляет: копия кадра, вывод пишет пиксель мира целиком
+        // fireball light brightens the world, but blending only attenuates: copy frame, composite writes the entire world pixel
         boolean balls = f.ballsLit && copyFrame();
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.SRC_ALPHA,
@@ -750,7 +750,7 @@ public final class PallPass {
         c.safeGetUniform("PallFaceShade").set(f.faceShade.x, f.faceShade.y, f.faceShade.z, f.faceShade.w);
         OpenAir.bind(c, open);
         SmokePass.bind(c, f.smoke);
-        // пламя на поверхностях мерцает по трёхмерному шуму
+        // surface flame flickers by 3D noise
         quad(c, true);
         RenderSystem.enableDepthTest();
         end(timing);
@@ -762,7 +762,7 @@ public final class PallPass {
         return true;
     }
 
-    /** Квадрат на весь кадр своим шейдером; у прохода лучей — ещё и трёхмерный шум на своём блоке текстуры. */
+    /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */
     private static void quad(ShaderInstance s, boolean withNoise) {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
@@ -776,12 +776,12 @@ public final class PallPass {
         s.apply();
         int unit = GlStateManager._getActiveTexture();
         if (withNoise) {
-            // трёхмерную текстуру ShaderInstance не привязывает (у него все — двумерные): свой блок, своя привязка
+            // ShaderInstance cannot bind a 3D texture (all its textures are 2D): custom unit and binding
             GlStateManager._activeTexture(GL13.GL_TEXTURE0 + NOISE_UNIT);
             GL11.glBindTexture(GL12.GL_TEXTURE_3D, noise);
             GlStateManager._activeTexture(unit);
             Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "PallNoise"), NOISE_UNIT);
-            // узор поверхности огненного шара — тоже трёхмерный, свой блок
+            // fireball surface pattern is also 3D, on its own unit
             NukeBallSurface.bind(s);
         }
         BufferUploader.draw(mesh);
@@ -795,8 +795,8 @@ public final class PallPass {
     }
 
     /**
-     * Карта огня слота {@code k} в видеопамять, если она другая (другой подрыв или новое заполнение), с уменьшенными
-     * копиями — скопления источников; вне карты — нули (край — прозрачная рамка). −1 — у слота шторма нет.
+     * Upload slot {@code k} fire map if changed (new detonation or fill generation), with mip levels — source
+     * clusters; zeroes outside the map (transparent border). −1 — no storm in this slot.
      */
     private static int fire(int k, Fire f) {
         if (!f.on()) return -1;
@@ -832,7 +832,7 @@ public final class PallPass {
         return FIRE[k];
     }
 
-    /** Карта рельефа и воды под пеленой слота {@code k} в видеопамять, если она другая (другой подрыв или новое заполнение); −1 — карты нет. */
+    /** Upload slot {@code k} pall terrain/water map if changed (new detonation or fill generation); −1 — no map. */
     private static int ground(int k, Ground g) {
         if (!g.on()) return -1;
         float[] map = g.map;
@@ -866,7 +866,7 @@ public final class PallPass {
         return GROUND[k];
     }
 
-    /** Шум из фона — в видеопамять (один раз); false — ещё не готов. */
+    /** Background noise to VRAM (once); false — not ready yet. */
     private static boolean upload() {
         if (noise >= 0) return true;
         CompletableFuture<byte[][]> ready = textures;
@@ -934,7 +934,7 @@ public final class PallPass {
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, WIDTH, ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, (FloatBuffer) null);
             tableBuffer = MemoryUtil.memAllocFloat(ROWS * WIDTH * 4);
 
-            // таблица грибов: числа по текселям — без смешивания (texelFetch), свет чёрного тела — линейно по температуре
+            // mushroom table: per-texel parameters without filtering (texelFetch), black-body light linear by temperature
             mushrooms = GlStateManager._genTexture();
             GlStateManager._bindTexture(mushrooms);
             GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
@@ -956,8 +956,8 @@ public final class PallPass {
     }
 
     /**
-     * Карта тени грибов: плитки {@link MushroomField#SHADOW}² грибов одна над другой, линейно между текселями (тень на земле
-     * гладкая), без повтора на краю; не вышла — тени нет.
+     * Mushroom shadow map: {@link MushroomField#SHADOW}² mushroom tiles stacked vertically, linear between texels (smooth ground
+     * shadow), clamped edges; failure — no shadow.
      */
     private static void shadowMap() {
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -1007,8 +1007,8 @@ public final class PallPass {
     }
 
     /**
-     * Копия кадра, в который рисует вывод (привязанного сейчас), — до вывода, своей текстурой во весь кадр от его угла
-     * (место под размер кадра — заново при смене): свет шаров на мире ({@code fx_pall_composite}). false — копии нет.
+     * Copy the composite target frame (currently bound) before compositing, as a custom full-frame texture from its corner
+     * (storage resized with the frame): fireball world light ({@code fx_pall_composite}). false — no copy.
      */
     private static boolean copyFrame() {
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
@@ -1031,7 +1031,7 @@ public final class PallPass {
         return true;
     }
 
-    /** Кадры пониженного разрешения под размер кадра игры и качество (заново при смене). */
+    /** Reduced-resolution frames matching game frame size and quality (recreated on change). */
     private static boolean ensure(int w, int h, int f) {
         if (TEXTURES[0] >= 0 && w == fullW && h == fullH && f == factor) return true;
         fullW = w;
@@ -1040,7 +1040,7 @@ public final class PallPass {
         lowW = Math.max(1, (w + f - 1) / f);
         lowH = Math.max(1, (h + f - 1) / f);
         history = false;
-        // замеры прежнего размера кадра — не этой цены
+        // measurements at the previous frame size represent a different cost
         DETAIL.restart();
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         boolean ok = true;
@@ -1066,7 +1066,7 @@ public final class PallPass {
         return true;
     }
 
-    /** Есть ли метки времени OpenGL (GL 3.3 или ARB_timer_query, и счётчик не пустой); пары заводятся при первой проверке. */
+    /** OpenGL timestamps supported (GL 3.3 or ARB_timer_query, nonempty counter); pairs created on first check. */
     private static boolean timer() {
         if (timer == 0) {
             GLCapabilities caps = GL.getCapabilities();
@@ -1082,7 +1082,7 @@ public final class PallPass {
         return timer > 0;
     }
 
-    /** Прочитать готовые пары меток (от старых к новым, без ожидания) — в сводку и в {@link Detail}. */
+    /** Read ready timestamp pairs (oldest first, no waiting) into the summary and {@link Detail}. */
     private static void poll(long now) {
         for (int k = 0; k < RING; k++) {
             int i = (ring + k) % RING;
@@ -1095,7 +1095,7 @@ public final class PallPass {
             int was = DETAIL.level;
             if (DETAIL.sample(ms, ISSUED[i], now)) {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
-                // в игре — DEBUG: смена ступени бывает раз в несколько секунд; в сценарии ступень прибита (draw)
+                // in game — DEBUG: rung changes every few seconds; scenario rung is pinned (draw)
                 Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail 1/%d × %d steps → 1/%d × %d",
                         DETAIL.lastMean, Detail.BUDGET_MS, from.factor, from.steps, to.factor, to.steps));
             }
@@ -1103,14 +1103,14 @@ public final class PallPass {
         }
     }
 
-    /** Метка до проходов; −1 — кадр не меряется (меток нет или все пары ещё в полёте). */
+    /** Timestamp before passes; −1 — unmeasured frame (unsupported or all pairs still pending). */
     private static int begin() {
         if (!timer() || ISSUED[ring] >= 0) return -1;
         GL33.glQueryCounter(QUERIES[2 * ring], GL33.GL_TIMESTAMP);
         return ring;
     }
 
-    /** Метка после проходов: пара в полёте, читается через кадры ({@link #poll}). */
+    /** Timestamp after passes: pair pending, read after a few frames ({@link #poll}). */
     private static void end(int pair) {
         if (pair < 0) return;
         GL33.glQueryCounter(QUERIES[2 * pair + 1], GL33.GL_TIMESTAMP);
@@ -1118,7 +1118,7 @@ public final class PallPass {
         ring = (pair + 1) % RING;
     }
 
-    /** Раз в секунду (тик слоя): сводка времени. */
+    /** Once per second (layer tick): timing summary. */
     static void second() {
         lastGpuMean = gpuFrames > 0 ? gpuSum / gpuFrames : 0;
         lastGpuMax = gpuMax;
@@ -1127,7 +1127,7 @@ public final class PallPass {
         gpuFrames = drawn = 0;
     }
 
-    /** Строка сценария: кадров с пеленой за секунду, разрешение, ступень подробности, время на видеокарте. */
+    /** Scenario line: pall frames per second, resolution, detail rung, GPU time. */
     public static String describe() {
         if (lastDrawn == 0) return failed ? "failed" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
@@ -1139,14 +1139,14 @@ public final class PallPass {
     }
 
     /**
-     * Перемотка повтора, смена мира, кадр без пелены: накопленное — от другого кадра; метки времени, снятые до этого,
-     * подробность не считает (пелена вернётся — может быть, в другом месте и через минуты).
+     * Replay seek, world change, frame without pall: history belongs to a different frame; detail ignores timestamps recorded
+     * before this (pall may return elsewhere, minutes later).
      */
     public static void reset() {
         if (previousEye != null) DETAIL.restart();
         history = false;
         previousEye = null;
-        // карты огня прежних подрывов не держим (текстуры остаются — под следующий)
+        // release maps of previous detonation fires (textures remain for the next one)
         FIRE_SOURCE[0] = FIRE_SOURCE[1] = null;
         FIRE_NOW[0] = FIRE_NOW[1] = -1;
         GROUND_SOURCE[0] = GROUND_SOURCE[1] = null;

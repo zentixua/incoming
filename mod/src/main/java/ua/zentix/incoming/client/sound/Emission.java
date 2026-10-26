@@ -9,32 +9,32 @@ import ua.zentix.incoming.sound.Spectrum;
 import ua.zentix.incoming.strike.Hearing;
 
 /**
- * Что слушатель слышит от снаряда в этот тик: «запаздывающий» момент излучения {@code time} и всё, что из него
- * выводят слои звука ({@link EngineSound.Layer#tone}) — положение, расстояние, направление на ухо, скорость, Доплер,
- * фаза полёта и путь звука до уха ({@link #heard}: уровень каждой шумящей части после пути). Считается раз в тик на
- * снаряд, общий для всех его слоёв.
+ * What the listener hears from a projectile this tick: “retarded” emission {@code time} and everything sound layers
+ * derive from it ({@link EngineSound.Layer#tone}) — position, distance, direction to ear, velocity, Doppler,
+ * flight phase and sound path to ear ({@link #heard}: each noisy part's level after propagation). Computed once
+ * per projectile per tick, shared by all its layers.
  *
- * @param nx      единичный вектор от источника к уху
- * @param radial  проекция скорости на него (больше нуля — снаряд идёт на слушателя)
- * @param height  высота источника над землёй под слушателем, м ({@link Hearing#height})
- * @param onboard слушатель сидит на самом снаряде (камера снаряда)
+ * @param nx      unit vector from source to ear
+ * @param radial  velocity projected onto it (positive — projectile approaches listener)
+ * @param height  source height above ground below listener, m ({@link Hearing#height})
+ * @param onboard listener is on the projectile itself (projectile camera)
  */
 record Emission(double time, double x, double y, double z, double distance, double nx, double ny, double nz, Vec3 velocity,
                 double radial, double doppler, int phase, double phaseAge, double height, Propagation.Weather weather, boolean onboard,
                 Heard[] parts) {
-    /** Слушатель впереди снаряда, если тот идёт на него не дальше этого угла от курса; позади — с {@link #BEHIND_DEG} (⚠ оценка). */
+    /** Listener ahead if projectile approaches within this angle of heading; behind from {@link #BEHIND_DEG} (⚠ estimate). */
     static final double AHEAD_DEG = 45, BEHIND_DEG = 100;
     private static final double AHEAD_COS = Math.cos(Math.toRadians(AHEAD_DEG)), BEHIND_COS = Math.cos(Math.toRadians(BEHIND_DEG));
 
     /**
-     * Шумящая часть у уха после пути по открытому воздуху: мощность звука у источника, A-уровень у уха, насколько она
-     * громче фона в самой выгодной октаве ({@link Propagation#margin}) и доля верхов (октава 4 кГц против всего звука).
+     * Noisy part at the ear after an open-air path: source sound power, A-level at ear, margin above background
+     * in the best octave ({@link Propagation#margin}) and high fraction (4 kHz octave relative to all sound).
      */
     record Heard(double power, double level, double margin, double highs) {
         static final Heard SILENT = new Heard(Noise.SILENT, Noise.SILENT, Double.NEGATIVE_INFINITY, 1);
     }
 
-    /** Слышимое из момента te: его данные о снаряде должны быть ({@link FlightTrack#covers}). */
+    /** Audible from time te: projectile data must exist for it ({@link FlightTrack#covers}). */
     static Emission at(FlightTrack track, double te, Vec3 ear, boolean onboard, Propagation.Weather weather) {
         double[] p = new double[3];
         track.at(te, p);
@@ -47,12 +47,12 @@ record Emission(double time, double x, double y, double z, double distance, doub
                 Hearing.height(new Vec3(p[0], p[1], p[2]), ear), weather, onboard, new Heard[Noise.Part.values().length]);
     }
 
-    /** Путь звука до уха: ухо на {@link Propagation#EAR} над лугом, источник — на {@link #height}. */
+    /** Sound path to the ear: ear {@link Propagation#EAR} above meadow, source at {@link #height}. */
     Propagation.Path path(double distance) {
         return Propagation.Path.over(distance, height, weather);
     }
 
-    /** Часть {@code part} шума снаряда у уха (считается раз за тик). */
+    /** Projectile noise {@code part} at the ear (computed once per tick). */
     Heard heard(Noise noise, Noise.Part part, boolean drilling) {
         Heard h = parts[part.ordinal()];
         if (h != null) return h;
@@ -69,9 +69,9 @@ record Emission(double time, double x, double y, double z, double distance, doub
     }
 
     /**
-     * Доля верхов части {@code part}, как если бы до уха было {@code distance} блоков (та же высота источника и погода,
-     * воздух — в условиях записей, {@link Propagation.Weather#recorded}): сколько их съел бы путь, уже вошедший в дальнюю
-     * запись.
+     * High fraction of {@code part} as if the ear were {@code distance} blocks away (same source height and weather,
+     * air at recording conditions, {@link Propagation.Weather#recorded}): what the path already contained in the
+     * distant recording would have absorbed.
      */
     double heardAt(Noise noise, Noise.Part part, boolean drilling, double distance) {
         double lw = noise.power(part, FlightPhase.byId(phase), phaseAge, velocity.length(), drilling);
@@ -79,8 +79,8 @@ record Emission(double time, double x, double y, double z, double distance, doub
     }
 
     /**
-     * Доля верхов звука мощностью {@code lw} со спектром {@code spectrum} после пути {@code path}: насколько октава
-     * 4 кГц ослабла по пути сильнее, чем звук в целом (EFX глушит их выше 5 кГц).
+     * High fraction of sound power {@code lw} with {@code spectrum} after {@code path}: how much more the 4 kHz
+     * octave attenuated along the path than sound overall (EFX muffles above 5 kHz).
      */
     static double highs(double lw, Spectrum spectrum, Propagation.Path path) {
         double[] bands = new double[Propagation.BANDS];
@@ -91,9 +91,9 @@ record Emission(double time, double x, double y, double z, double distance, doub
     }
 
     /**
-     * Насколько слушатель впереди снаряда: 1 — снаряд идёт на него не дальше {@link #AHEAD_DEG} от курса, 0 — слушатель
-     * сбоку-сзади (дальше {@link #BEHIND_DEG}), между — плавно. Шум вентилятора и рассекаемого воздуха уносит вперёд:
-     * на пролёте он стихает за доли секунды, а не обрывается в точке, где снаряд ближе всего.
+     * How far ahead of the projectile the listener is: 1 — projectile approaches within {@link #AHEAD_DEG} of heading,
+     * 0 — listener sideways/behind (beyond {@link #BEHIND_DEG}), smoothly between. Fan and airflow noise project
+     * forward: they fade in fractions of a second on a pass, rather than cutting off at closest approach.
      */
     double ahead() {
         double v = velocity.length();

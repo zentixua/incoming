@@ -1,8 +1,8 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 /**
- * История величины источника по времени (сила очага пожара): круговой буфер записей по возрастанию времени, значение в
- * миг t — по прямой между записями, раньше первой — первая, позже последней — последняя. Без Minecraft.
+ * Source magnitude history over time (fire source strength): circular buffer of records in increasing time order;
+ * value at t interpolates linearly, first value before first record, last value after last. Without Minecraft.
  */
 public final class History {
     private final double[] when, value;
@@ -13,20 +13,20 @@ public final class History {
         value = new double[capacity];
     }
 
-    /** Запись: в миг t — v (t не меньше прошлой записи). */
+    /** Record: value v at t (t no earlier than previous record). */
     public void record(double t, double v) {
         int i = records++ % when.length;
         when[i] = t;
         value[i] = v;
     }
 
-    /** Значение в миг t (поиск — делением пополам); записей нет — 0. */
+    /** Value at t (binary search); 0 if no records. */
     public double at(double t) {
         if (records == 0) return 0;
         int n = Math.min(records, when.length), first = records - n, last = (records - 1) % when.length;
         if (t >= when[last]) return value[last];
         if (t <= when[first % when.length]) return value[first % when.length];
-        // номера first..records−1 идут по времени: последняя запись не позже t
+        // Indices first..records−1 follow time: latest record no later than t.
         int lo = first, hi = records - 1;
         while (hi - lo > 1) {
             int m = (lo + hi) >>> 1;

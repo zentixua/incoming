@@ -16,98 +16,97 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Звуки мира, которые не моторы и не взрывы, — по закону источника, как моторы ({@code sound/Noise}): у источника —
- * мощность звука (A-уровень L<sub>WA</sub>, дБА) из его паспорта ниже, у записи — октавный спектр и громкость самого
- * файла ({@link Spectra}, меряет {@code tools/build_sounds.py}); до уха — путь ISO 9613 ({@link Propagation}: разлёт,
- * воздух, земля, тень днём, фон по октавам), громкость в игре — {@link Loudness}, файл приведён к одной мерке
- * {@link Loudness#ENGINE_LUFS}. Ручных дальностей нет: докуда слышно, решают мощность, путь и фон. Звук приходит со
- * скоростью звука ({@link #play}).
+ * World sounds other than engines and blasts follow source law, like engines ({@code sound/Noise}): source sound
+ * power (A-weighted L<sub>WA</sub>, dBA) from its spec below, recording octave spectrum and file loudness
+ * ({@link Spectra}, measured by {@code tools/build_sounds.py}); ISO 9613 path to ear ({@link Propagation}: spreading,
+ * air, ground, daytime shadow, octave background), game volume from {@link Loudness}, file adjusted to one
+ * {@link Loudness#ENGINE_LUFS} reference. No manual ranges: power, path and background decide audibility. Sound
+ * arrives at sound speed ({@link #play}).
  * <p>
- * Числа — с источником; где замеров нет — оценка порядка с отметкой «О».
+ * Numbers have sources; without measurements, marked order-of-magnitude estimates.
  */
 public final class Sources {
     /**
-     * Источник: A-уровень мощности звука, дБА; спектр записи и её громкость, LUFS; потолок громкости в игре, LUFS
-     * ({@link Loudness#CEILING_LUFS}; у звуков ядерного удара — прежний {@link Loudness#ENGINE_LUFS}: они не меняются).
+     * Source: A-weighted sound power level, dBA; recording spectrum and loudness, LUFS; game loudness ceiling,
+     * LUFS ({@link Loudness#CEILING_LUFS}; nuclear-strike sounds keep old {@link Loudness#ENGINE_LUFS}: unchanged).
      */
     public record Source(double lwA, Spectrum spectrum, double fileLufs, double ceilingLufs) {
         Source(double lwA, Spectrum spectrum, double fileLufs) {
             this(lwA, spectrum, fileLufs, Loudness.CEILING_LUFS);
         }
 
-        /** Тот же источник другой мощности (закон источника считает её из своих чисел). */
+        /** Same source at different power (source law computes it from its own numbers). */
         public Source power(double lwA) {
             return new Source(lwA, spectrum, fileLufs, ceilingLufs);
         }
     }
 
     /**
-     * Сирена гражданской обороны (электромеханическая, на улице): уличные сирены оповещения — 100–130 дБ(C) в 100 футах
-     * (30,5 м) на оси (FEMA CPG 1-17, «Outdoor Warning Systems Guide», 1980); взято 115 дБ(C) — середина класса больших
-     * городских, у тона сирены (400–600 Гц) A ≈ C − 3: L<sub>WA</sub> = 112 + 20·lg 30,5 + 11 ≈ 153 дБА (О: тип сирен в
-     * городе мода не задан). Ротор вертится — на оси громче, в стороне тише; здесь — по оси, среднее не считается.
+     * Civil-defense siren (electromechanical, outdoor): outdoor warning sirens give 100–130 dB(C) at 100 feet
+     * (30.5 m) on axis (FEMA CPG 1-17, “Outdoor Warning Systems Guide”, 1980); use 115 dB(C), middle of large-city
+     * class; siren tone (400–600 Hz) A ≈ C − 3: L<sub>WA</sub> = 112 + 20·lg 30.5 + 11 ≈ 153 dBA (estimate: mod
+     * city's siren type unspecified). Rotor rotates — louder on axis, quieter aside; here on-axis, no averaging.
      */
     public static final Source SIREN = new Source(153, Spectra.SIREN, Spectra.SIREN_LUFS);
-    /** Сирена ядерной тревоги — та же уличная сирена ({@link #SIREN}), своя запись. */
+    /** Nuclear alarm siren — same outdoor siren ({@link #SIREN}), own recording. */
     public static final Source NUKE_ALARM = new Source(153, Spectra.NUKE_ALARM, Spectra.NUKE_ALARM_LUFS, Loudness.ENGINE_LUFS);
     /**
-     * Короткое замыкание с дугой в подстанции: О ~140 дБА (~120 дБА в 10 м; замеров звука дуговых пробоев
-     * распределительных подстанций в открытом доступе не нашлось — порядок удара грома вблизи, на запись которого он
-     * и собран).
+     * Substation arc short circuit: estimate ~140 dBA (~120 dBA at 10 m; no public sound measurements found for
+     * distribution-substation arc faults — order of nearby thunder, whose recording was used to build it).
      */
     public static final Source GRID_FAIL = new Source(140, Spectra.GRID_FAIL, Spectra.GRID_FAIL_LUFS);
-    /** Треск дуги выбитой подстанции: О ~115 дБА (~95 дБА в 1 м). */
+    /** Disabled substation arc crackle: estimate ~115 dBA (~95 dBA at 1 m). */
     public static final Source GRID_SPARK = new Source(115, Spectra.GRID_SPARK, Spectra.GRID_SPARK_LUFS);
     /**
-     * Гул работающего трансформатора подстанции: силовой трансформатор ~10 МВА — около 68 дБА средним по поверхности
-     * в 0,3 м (NEMA TR 1, таблица уровней; ⚠ по памяти), площадь поверхности замера ~40 м²: L<sub>WA</sub> = 68 + 10·lg 40
-     * ≈ 84 дБА.
+     * Operating substation transformer hum: ~10 MVA power transformer around 68 dBA surface mean at 0.3 m
+     * (NEMA TR 1 level table; ⚠ from memory), measurement surface area ~40 m²: L<sub>WA</sub> = 68 + 10·lg 40
+     * ≈ 84 dBA.
      */
     public static final Source GRID_HUM = new Source(84, Spectra.GRID_HUM, Spectra.GRID_HUM_LUFS);
-    /** Квартал гаснет или загорается — щелчок автомата и гул, что глохнет (или включается): О ~100 дБА у его середины. */
+    /** City block loses or regains power — breaker click and hum dying or starting: estimate ~100 dBA at its centre. */
     public static final Source GRID_POWER_DOWN = new Source(100, Spectra.GRID_POWER_DOWN, Spectra.GRID_POWER_DOWN_LUFS);
     public static final Source GRID_POWER_UP = new Source(100, Spectra.GRID_POWER_UP, Spectra.GRID_POWER_UP_LUFS);
-    /** Обрушение дома в руинах ядерного удара: О ~125 дБА (снос зданий — ~100–110 дБА в 100 м вокруг). */
+    /** House collapse in nuclear ruins: estimate ~125 dBA (building demolition ~100–110 dBA at 100 m around it). */
     public static final Source NUKE_COLLAPSE = new Source(125, Spectra.NUKE_COLLAPSE, Spectra.NUKE_COLLAPSE_LUFS, Loudness.ENGINE_LUFS);
-    /** Осыпь обломков в руинах: О ~110 дБА. */
+    /** Debris fall in ruins: estimate ~110 dBA. */
     public static final Source RUIN_DEBRIS = new Source(110, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
-     * Пуск МБР — запись старта со стола; мощность — закон РДТТ первой ступени из паспорта
-     * ({@link Noise.Rocket#power}, {@code WeaponSpec.ICBM_NOISE}), здесь — только запись.
+     * ICBM launch — recording of pad launch; power from first-stage solid motor law in spec
+     * ({@link Noise.Rocket#power}, {@code WeaponSpec.ICBM_NOISE}); only recording here.
      */
     public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS, Loudness.ENGINE_LUFS);
 
     /**
-     * Шум пламени: доля тепловыделения открытого турбулентного пламени, что уходит звуком, — 10⁻⁶–10⁻⁵ (Strahle W. C.,
-     * «Combustion noise», Prog. Energy Combust. Sci. 4, 1978; ⚠ по памяти): нижний край, оценка.
+     * Flame noise: fraction of open turbulent flame heat release converted to sound, 10⁻⁶–10⁻⁵ (Strahle W. C.,
+     * “Combustion noise”, Prog. Energy Combust. Sci. 4, 1978; ⚠ from memory): lower edge, estimate.
      */
     public static final double FLAME_EFFICIENCY = 1e-6;
-    /** Гул огня в воронке: запись пожара, мощность — от тепла лужи ({@link #flame}). */
+    /** Crater-fire roar: fire recording, power from pool heat ({@link #flame}). */
     public static final Source BLAST_FIRE = new Source(Double.NaN, Spectra.BLAST_FIRE, Spectra.BLAST_FIRE_LUFS);
     /**
-     * Звуком уходит такая доля энергии падения обломков и грунта: удары камней о землю и друг о друга — О 10⁻⁴ (у ударов
-     * твёрдых тел 10⁻⁴–10⁻³, порядок).
+     * This fraction of debris and ground falling energy becomes sound: stone impacts on ground and each other —
+     * estimate 10⁻⁴ (solid-body impacts 10⁻⁴–10⁻³, order of magnitude).
      */
     public static final double IMPACT_EFFICIENCY = 1e-4;
-    /** Осыпь выброса воронки: запись, мощность — от массы и высоты падения ({@link #fall}). */
+    /** Crater ejecta fall: recording, power from mass and fall height ({@link #fall}). */
     public static final Source EJECTA = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS);
     /**
-     * Стёкла, которые выбила ядерная волна у слушателя: запись — окна вылетают по улице, мощность — от энергии
-     * осколков ({@link Clatter#watts}). Потолок — ядерки ({@link Loudness#ENGINE_LUFS}).
+     * Glass blown out by nuclear wave near listener: recording of windows blown out along a street, power from
+     * shard energy ({@link Clatter#watts}). Nuclear ceiling ({@link Loudness#ENGINE_LUFS}).
      */
     public static final Source RUIN_GLASS = new Source(Double.NaN, Spectra.NUKE_GLASS, Spectra.NUKE_GLASS_LUFS, Loudness.ENGINE_LUFS);
-    /** Обломки, что снесла ядерная волна у слушателя: запись осыпи, мощность — от энергии обломков ({@link Clatter#watts}). */
+    /** Debris torn off by nuclear wave near listener: fall recording, power from debris energy ({@link Clatter#watts}). */
     public static final Source RUIN_CLATTER = new Source(Double.NaN, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
-     * Гул горящего города: запись большого пожара, мощность — от тепла горящего ({@link #flame}: шторм модели и огонь в
-     * своих чанках, {@code NukeAfter}).
+     * Burning-city roar: large-fire recording, power from burning heat ({@link #flame}: model storm and fire in
+     * local chunks, {@code NukeAfter}).
      */
     public static final Source NUKE_FIRE = new Source(Double.NaN, Spectra.NUKE_FIRE, Spectra.NUKE_FIRE_LUFS, Loudness.ENGINE_LUFS);
 
-    /** Звук, который ещё идёт к уху: событие, место, тон, источник, сколько тиков в пути, кто его сыграет. */
+    /** Sound still travelling to ear: event, position, pitch, source, ticks in transit, who plays it. */
     private record Pending(SoundEvent event, Vec3 at, float pitch, Source source, ClientLevel level, long born, @Nullable Player player) {}
 
-    /** Кто играет звук, когда его фронт дошёл до уха, с громкостью этого мига (по умолчанию — разовый звук мира). */
+    /** Plays sound when its front reaches ear, at that instant's volume (default: world one-shot). */
     @FunctionalInterface
     interface Player {
         void play(SoundEvent event, Vec3 at, float volume, float pitch);
@@ -118,38 +117,38 @@ public final class Sources {
 
     private Sources() {}
 
-    /** A-уровень мощности пламени тепловыделением {@code watts}, Вт ({@link #FLAME_EFFICIENCY}), дБА по спектру записи. */
+    /** Flame A-weighted power level for heat release {@code watts}, W ({@link #FLAME_EFFICIENCY}), dBA from recording spectrum. */
     public static double flame(double watts, Spectrum spectrum) {
         return lw(FLAME_EFFICIENCY * watts) + spectrum.aWeighting();
     }
 
     /**
-     * A-уровень мощности осыпи: {@code kg} массы падает с {@code height} м за {@code seconds} с
-     * ({@link #IMPACT_EFFICIENCY}), дБА по спектру записи.
+     * Fall A-weighted power level: {@code kg} mass falls from {@code height} m over {@code seconds} s
+     * ({@link #IMPACT_EFFICIENCY}), dBA from recording spectrum.
      */
     public static double fall(double kg, double height, double seconds, Spectrum spectrum) {
         return lw(IMPACT_EFFICIENCY * kg * 9.81 * height / Math.max(seconds, 0.1)) + spectrum.aWeighting();
     }
 
-    /** Уровень мощности, дБ отн. 1 пВт. */
+    /** Power level, dB re 1 pW. */
     public static double lw(double watts) {
         return watts > 0 ? 10 * Math.log10(watts / 1e-12) : Noise.SILENT;
     }
 
     /**
-     * Громкость в игре источника {@code s} в {@code at} у уха {@code ear}: уровень у уха по пути ISO 9613 против фона
-     * ({@link Loudness#gain}, не громче потолка источника), файл — к мерке {@link Loudness#ENGINE_LUFS}. Преграды — не
-     * здесь (их ставит звук сам).
+     * Game volume of source {@code s} at {@code at}, ear {@code ear}: ear level along ISO 9613 path against
+     * background ({@link Loudness#gain}, no louder than source ceiling), file adjusted to
+     * {@link Loudness#ENGINE_LUFS}. Barriers are not here (sound applies them itself).
      */
     public static float volume(Source s, Vec3 at, Vec3 ear, Propagation.Weather weather) {
         return Loudness.volume(gain(s, at, ear, weather), s.fileLufs);
     }
 
     /**
-     * Громкость источника {@code s} у уха в общей калиброванной мере — против мерки {@link Loudness#ENGINE_LUFS}, без
-     * файла ({@link Loudness#gain}): 0 — в каждой октаве ниже фона, не слышно. По ней решают, слышно ли; громкость файла
-     * ({@link #volume}) — только для воспроизведения: она меняется с пересведением файла, а слышимость — свойство звука у
-     * уха.
+     * Source {@code s} gain at ear in shared calibrated measure — relative to {@link Loudness#ENGINE_LUFS},
+     * without file ({@link Loudness#gain}): 0 — every octave below background, inaudible. Determines audibility;
+     * file volume ({@link #volume}) is for playback only: remixing changes it, whereas audibility belongs to
+     * sound at the ear.
      */
     static double gain(Source s, Vec3 at, Vec3 ear, Propagation.Weather weather) {
         if (Double.isNaN(s.lwA) || s.lwA == Noise.SILENT) return 0;
@@ -159,7 +158,7 @@ public final class Sources {
         return Loudness.gain(level, Propagation.margin(bands, weather), s.ceilingLufs);
     }
 
-    /** Громкость у уха камеры сейчас (0 — мира нет). */
+    /** Current volume at camera ear (0 — no world). */
     public static float volume(Source s, Vec3 at) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return 0;
@@ -167,14 +166,14 @@ public final class Sources {
     }
 
     /**
-     * Разовый звук источника {@code s} в {@code at}: зазвучит, когда до уха дойдёт его фронт (скорость звука
-     * {@link Noise#SOUND}), громкостью по пути в тот миг; тише порога слышимости — не играется.
+     * One-shot of source {@code s} at {@code at}: plays when its front reaches ear (sound speed
+     * {@link Noise#SOUND}), at that instant's path-based volume; below audible threshold — skipped.
      */
     public static void play(SoundEvent event, Vec3 at, Source s, float pitch) {
         play(event, at, s, pitch, null);
     }
 
-    /** Как {@link #play(SoundEvent, Vec3, Source, float)}, но звук, дошедший до уха, играет {@code player}. */
+    /** Like {@link #play(SoundEvent, Vec3, Source, float)}, but {@code player} plays the sound reaching ear. */
     static void play(SoundEvent event, Vec3 at, Source s, float pitch, @Nullable Player player) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
@@ -182,7 +181,7 @@ public final class Sources {
         tick(mc);
     }
 
-    /** Раз в тик клиента ({@link ClientSounds#tick}): звуки, чей фронт дошёл до уха. */
+    /** Once per client tick ({@link ClientSounds#tick}): sounds whose front reached ear. */
     static void tick() {
         ticks++;
         tick(Minecraft.getInstance());
@@ -199,7 +198,7 @@ public final class Sources {
         for (Iterator<Pending> it = PENDING.iterator(); it.hasNext(); ) {
             Pending p = it.next();
             double d = ear.distanceTo(p.at), path = (ticks - p.born) * Noise.SOUND / 20;
-            // мир сменился или звук ушёл дальше, чем клиент помнит путь звука, — забыть
+            // world changed or sound travelled beyond client's remembered sound path — forget
             if (p.level != mc.level || path > Hearing.RANGE) {
                 it.remove();
                 continue;
@@ -213,7 +212,7 @@ public final class Sources {
         }
     }
 
-    /** Выход из мира, перемотка: звуков в пути нет. */
+    /** World exit, rewind: no sounds in transit. */
     static void reset() {
         PENDING.clear();
     }

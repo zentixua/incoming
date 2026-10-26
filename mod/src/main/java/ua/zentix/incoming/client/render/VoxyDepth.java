@@ -11,38 +11,38 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Источник {@link LodDepth} — глубина рельефа Voxy (на NeoForge 1.21.1 — только через Roxy, официальный jar Voxy
- * 0.2.16 для 1.21.11). API у Voxy нет, поэтому только чтение его классов отражением, без миксинов и без записи
- * (так же глубину Voxy берёт Roxy, MIT: {@code compat/RoxyLodEntityOcclusion}):
+ * {@link LodDepth} source: Voxy terrain depth (NeoForge 1.21.1 only via Roxy, official Voxy 0.2.16 jar for 1.21.11).
+ * Voxy has no API: read its classes by reflection only, no mixins or writes (same way Roxy obtains Voxy depth,
+ * MIT: {@code compat/RoxyLodEntityOcclusion}):
  * <ul>
- *   <li>{@code IGetVoxyRenderSystem.getNullable()} — рендерер Voxy этого мира или null;</li>
- *   <li>его поле {@code pipeline} (свой конвейер без шейдерпака, {@code IrisVoxyRenderPipeline} под шейдерпаком) →
- *       {@code fb} → {@code getDepthTex().id} — текстура глубины, в которую Voxy рисует непрозрачные LOD;</li>
- *   <li>{@code pipeline.properties} — диапазон глубины ({@code isZero2One}), её направление ({@code isReverseZ}),
- *       значение очистки ({@code clearDepth}) и ближней плоскости ({@code inverseClearDepth});</li>
- *   <li>{@code getViewport()} → {@code projection} — проекция, которой записана глубина, и {@code frameId} — рисовал
- *       ли Voxy с прошлого кадра.</li>
+ *   <li>{@code IGetVoxyRenderSystem.getNullable()}: this world's Voxy renderer or null;</li>
+ *   <li>its {@code pipeline} field (own pipeline without shader pack, {@code IrisVoxyRenderPipeline} with one) →
+ *       {@code fb} → {@code getDepthTex().id}: depth texture where Voxy draws opaque LODs;</li>
+ *   <li>{@code pipeline.properties}: depth range ({@code isZero2One}), direction ({@code isReverseZ}),
+ *       clear value ({@code clearDepth}), near-plane value ({@code inverseClearDepth});</li>
+ *   <li>{@code getViewport()} → {@code projection}: projection that wrote depth; {@code frameId}: whether Voxy rendered
+ *       since last frame.</li>
  * </ul>
- * Что в текстуре (Voxy 0.2.16, {@code AbstractRenderPipeline.initDepthStencil}): перед LOD Voxy ставит ближнюю
- * плоскость там, где рисовал Minecraft (так LOD не ложатся поверх мира), — это {@link LodDepth.View#world}, а не LOD
- * в 8–16 блоках; под шейдерпаком он потом возвращает там очистку. Небо — очистка. Остальное — LOD его проекцией: у
- * шейдерпака своя программа цвета, но вершины ставит Voxy той же проекцией ({@code vxProj} пака), поэтому чужих
- * плоскостей, как у DH под Iris, нет.
+ * Texture contents (Voxy 0.2.16, {@code AbstractRenderPipeline.initDepthStencil}): before LODs, Voxy sets near-plane
+ * depth where Minecraft drew (preventing LODs over the world): {@link LodDepth.View#world}, rather than LOD 8–16 blocks
+ * away; with a shader pack, restores clear depth there afterward. Sky is clear depth. Rest is LODs with Voxy projection:
+ * shader pack has its own colour program, but Voxy positions vertices with the same projection (pack's {@code vxProj}),
+ * so no mismatched planes as in DH under Iris.
  * <p>
- * Без шейдерпака (и под шейдерпаком, который просит LOD в глубине Minecraft, {@code renderToVanillaDepth}) Voxy
- * переносит LOD и в глубину Minecraft, прижимая те, что дальше её дальней плоскости, к самой плоскости
- * ({@code blit_texture_depth_cutout.frag}): дальний взрыв прятался бы за любой LOD-землёй рядом с ним, поэтому
- * {@link LodDepth.View#pinsWorldDepth}. Классы или поля Voxy другой версии не нашлись — источника нет (строка в лог),
- * игра идёт как без Voxy; сломалось чтение на ходу — одно предупреждение, и источник выключен.
+ * Without a shader pack (or with a pack requesting LODs in Minecraft depth, {@code renderToVanillaDepth}), Voxy also
+ * transfers LODs to Minecraft depth, pinning those beyond its far plane to that plane
+ * ({@code blit_texture_depth_cutout.frag}): a distant blast would hide behind any LOD ground near it, hence
+ * {@link LodDepth.View#pinsWorldDepth}. Voxy classes or fields missing in another version means no source (log line),
+ * game continues as without Voxy; runtime read failure logs one warning and disables source.
  */
 final class VoxyDepth implements LodDepth.Source {
     private static final String CORE = "me.cortex.voxy.client.core.";
 
     private final Method renderSystem, viewport, depthTex, zeroToOne, reverseZ, clearDepth, nearDepth;
     private final Field pipeline, fb, properties, textureId, projection, frameId;
-    /** {@code frameId} кадра Voxy, глубину которого слой уже взял; −1 — ещё ни одного. */
+    /** Voxy frame {@code frameId} whose depth the layer already took; −1 if none. */
     private int taken = -1, last = -1;
-    /** Как читалась глубина в прошлый раз, что попал в лог; −1 — ещё никак. */
+    /** Last logged depth decoding mode; −1 if none. */
     private int logged = -1;
     private String described = "";
     private boolean broken;
@@ -73,11 +73,11 @@ final class VoxyDepth implements LodDepth.Source {
         frameId = view.getField("frameId");
     }
 
-    /** При запуске клиента: стоит ли Voxy и нашлись ли все его классы и поля; null — нет. */
+    /** At client startup: Voxy installed and all classes and fields found; null if unavailable. */
     @Nullable
     static LodDepth.Source init() {
         if (!ModList.get().isLoaded("voxy")) return null;
-        // тот же кадр с глубиной Voxy и без неё — для сравнения кадров
+        // Same frame with and without Voxy depth, for frame comparisons.
         if (!Boolean.parseBoolean(System.getProperty("incoming.lodDepth.voxy", "true"))) {
             Incoming.LOG.info("Voxy depth for the effects layer: off (-Dincoming.lodDepth.voxy=false)");
             return null;
@@ -98,12 +98,12 @@ final class VoxyDepth implements LodDepth.Source {
         try {
             Object system = renderSystem.invoke(null);
             if (system == null) return false;
-            // null — идёт проход теней шейдерпака: глубина не этого взгляда
+            // Null during shader pack shadow pass: depth is for another view.
             Object view = viewport.invoke(system);
             Object pipe = pipeline.get(system);
             if (view == null || pipe == null) return false;
             int frame = frameId.getInt(view);
-            // Voxy этот кадр не рисовал (пауза, меню, LOD выключены): глубина в его текстуре — прошлого кадра
+            // Voxy did not render this frame (pause, menu, LODs disabled): its texture holds previous-frame depth.
             if (frame == taken) return false;
             last = frame;
             Object buffer = fb.get(pipe);
@@ -130,7 +130,7 @@ final class VoxyDepth implements LodDepth.Source {
             out.how = described;
             return true;
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            // Voxy поменялся так, что поля есть, а значения другие: слой дальше без LOD Voxy, игра идёт
+            // Voxy changed: fields exist but values differ; layer proceeds without Voxy LODs, game continues.
             broken = true;
             Incoming.LOG.warn("Voxy depth for the effects layer: reading Voxy failed ({}), Voxy terrain no longer hides distant smoke and blasts", e.toString());
             return false;
@@ -138,8 +138,8 @@ final class VoxyDepth implements LodDepth.Source {
     }
 
     /**
-     * Конец кадра: кадр Voxy, который идёт сейчас, — уже прошлый, даже если слой в нём глубину не брал (кадр без
-     * эффектов): следующий кадр берёт её, только если Voxy нарисовал новый.
+     * End of frame: current Voxy frame is now old, even if layer did not use its depth (no effects this frame).
+     * Next frame takes depth only if Voxy rendered anew.
      */
     @Override
     public void endFrame() {
@@ -153,7 +153,7 @@ final class VoxyDepth implements LodDepth.Source {
         }
     }
 
-    /** Расстояние до ближней плоскости проекции Voxy, блоков: для строки лога. */
+    /** Voxy projection near-plane distance, blocks, for the log line. */
     private float nearest(LodDepth.View v, boolean reverse) {
         float d = reverse ? 1 : 0;
         v.inverseProjection.transform(point.set(0, 0, v.negativeOneToOne ? d * 2 - 1 : d, 1));

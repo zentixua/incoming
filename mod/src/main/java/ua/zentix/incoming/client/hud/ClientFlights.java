@@ -29,20 +29,20 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Свои снаряды в полёте, как их прислал сервер ({@link S2C.Flights}, раз в 5 тиков): время до удара между пакетами
- * убывает по тикам клиента, позиция — там, где клиент рисует корпус: у сущности, если она видна клиенту, иначе по пути
- * дальней картинки, а без него по присланным — между двумя последними пакетами, с отставанием на один пакет
- * (интерполяция снимков, без угадывания вперёд). Номер снаряда («№3») постоянный, пока снаряд летит.
+ * Own projectiles in flight as sent by the server ({@link S2C.Flights}, every 5 ticks): impact ETA decreases by client
+ * ticks between packets; position is where the client draws the body: at the entity if visible, otherwise on the
+ * distant visual track, or, without it, between the last two packets with one packet of delay (snapshot
+ * interpolation, no prediction). Projectile number (No. 3) is constant throughout flight.
  */
 public final class ClientFlights {
-    /** Сколько точек пути помнить на снаряд (пакет раз в 5 тиков: ~2 минуты полёта). */
+    /** Track points retained per projectile (packet every 5 ticks: ~2 minutes of flight). */
     private static final int TRAIL = 480;
     private static final List<Tracked> FLIGHTS = new ArrayList<>();
-    /** Место корпуса по пути дальней картинки (кадр рисуется в одном потоке). */
+    /** Body position on the distant visual track (frame drawn in one thread). */
     private static final double[] AT = new double[3];
     /**
-     * Снаряды, которые клиент сейчас видит, по UUID. Метки HUD, карта и камера спрашивают сущность каждого полёта
-     * каждый кадр — перебор всех сущностей мира (в сборке с Create их тысячи) на 30–90 полётов был бы заметен.
+     * Projectiles currently visible to the client, by UUID. HUD markers, map and camera request each flight's entity
+     * every frame; scanning all world entities (thousands in a pack with Create) for 30–90 flights would be noticeable.
      */
     private static final Map<UUID, StrikeProjectile> VISIBLE = new HashMap<>();
     private static long tick;
@@ -50,17 +50,17 @@ public final class ClientFlights {
 
     private ClientFlights() {}
 
-    /** Снаряд: данные от сервера и постоянный номер. */
+    /** Projectile: server data and persistent number. */
     public static final class Tracked {
         public final UUID id;
         public final int number;
         S2C.Flight data;
-        /** Сетевой номер сущности цели ({@link S2C.Flights#NO_ENTITY} — нет). */
+        /** Target entity network ID ({@link S2C.Flights#NO_ENTITY} if absent). */
         int targetEntity = S2C.Flights.NO_ENTITY;
-        /** Позиция из предыдущего пакета и тики клиента, когда пришли предыдущий и последний. */
+        /** Position from the previous packet and client ticks when the previous and latest packets arrived. */
         private Vec3 prevPos;
         private long prevAt, at;
-        /** Пройденный путь по пакетам сервера (для карты), не больше {@link #TRAIL} точек. */
+        /** Travelled track from server packets (for the map), at most {@link #TRAIL} points. */
         private final ArrayDeque<Vec3> trail = new ArrayDeque<>();
 
         Tracked(S2C.Flight data, int number) {
@@ -95,7 +95,7 @@ public final class ClientFlights {
             return data.nuclear();
         }
 
-        /** Секунды до удара с учётом прошедших с пакета тиков. */
+        /** Seconds to impact, accounting for ticks elapsed since the packet. */
         public double etaSeconds(float partialTick) {
             return Math.max(0, data.eta() - (tick - at) - partialTick) / 20.0;
         }
@@ -105,8 +105,8 @@ public final class ClientFlights {
         }
 
         /**
-         * Сущность цели, если клиент её видит (сетевой номер — из пакета сервера): метку ставить туда, где она нарисована,
-         * а не в точку из пакета раз в 5 тиков (при зуме ×4–×64 отставание точки — во столько же раз больше на экране).
+         * Target entity if visible to the client (network ID from the server packet): put the marker where it is drawn,
+         * rather than at the point sent every 5 ticks (at ×4–×64 zoom the point's lag on screen grows by the same factor).
          */
         @Nullable
         public net.minecraft.world.entity.Entity targetEntity() {
@@ -115,12 +115,12 @@ public final class ClientFlights {
             return level == null ? null : level.getEntity(targetEntity);
         }
 
-        /** Цель пропала: снаряд идёт в последнюю известную точку. */
+        /** Target disappeared: projectile flies to its last known point. */
         public boolean targetLost() {
             return data.targetLost();
         }
 
-        /** Чья цель: ник, тип сущности, аппарат; для точки — null. */
+        /** Target identity: username, entity type, craft; null for a point. */
         @Nullable
         public Component targetLabel() {
             String n = data.targetName();
@@ -134,17 +134,17 @@ public final class ClientFlights {
             };
         }
 
-        /** Сущность снаряда, если клиент её видит. */
+        /** Projectile entity if visible to the client. */
         @Nullable
         public StrikeProjectile entity() {
             StrikeProjectile p = VISIBLE.get(id);
-            // после смены измерения старый мир клиента уходит целиком, без событий по каждой сущности
+            // After a dimension change the old client world leaves as a whole, without events for each entity.
             return p != null && !p.isRemoved() && p.level() == Minecraft.getInstance().level ? p : null;
         }
 
         /**
-         * Где снаряд сейчас — там, где клиент рисует его корпус (метка на экране, карта, камера): у сущности — её
-         * сглаженное место, вдали — путь дальней картинки ({@link FarFlightView#drawnAt}); без них — между пакетами.
+         * Current projectile position, where the client draws its body (screen marker, map, camera): smoothed entity
+         * position, or distant visual track ({@link FarFlightView#drawnAt}); without either, between packets.
          */
         public Vec3 position(float partialTick) {
             StrikeProjectile p = entity();
@@ -155,8 +155,8 @@ public final class ClientFlights {
         }
 
         /**
-         * Наибольший размер корпуса (размах или длина), блоков — его угловой размер даёт рамку снаряда на экране: у B-2 —
-         * самолёт, у его бомбы — бомба.
+         * Largest body dimension (span or length), blocks: its angular size sets the projectile's screen frame;
+         * the aircraft for B-2, the bomb for its bomb.
          */
         public double bodySize() {
             StrikeProjectile p = entity();
@@ -165,20 +165,20 @@ public final class ClientFlights {
             return ClientWeaponSpec.of(weapon()).airframe(!bomber).far().size();
         }
 
-        /** Скорость, блоков за тик: у сущности — за последний тик, иначе между двумя последними пакетами. */
+        /** Speed, blocks per tick: entity's last tick, otherwise between the last two packets. */
         public Vec3 velocity() {
             StrikeProjectile p = entity();
             if (p != null) return p.position().subtract(p.xo, p.yo, p.zo);
             return data.pos().subtract(prevPos).scale(1.0 / Math.max(1, at - prevAt));
         }
 
-        /** Пройденный путь по пакетам сервера, от старых точек к новым. */
+        /** Travelled track from server packets, oldest points first. */
         public Collection<Vec3> trail() {
             return Collections.unmodifiableCollection(trail);
         }
     }
 
-    /** Скорость в км/ч из блоков за тик (блок — метр, 20 тиков в секунду). */
+    /** Speed in km/h from blocks per tick (block is a metre, 20 ticks per second). */
     public static double kmh(double blocksPerTick) {
         return blocksPerTick * 20 * 3.6;
     }
@@ -208,13 +208,13 @@ public final class ClientFlights {
     }
 
     public static void onLeave(EntityLeaveLevelEvent e) {
-        // снаряд, вернувшийся в мир, — новая сущность с тем же UUID: убираем только ту, что ушла
+        // A projectile returning to the world is a new entity with the same UUID: remove only the one that left.
         if (e.getLevel().isClientSide() && e.getEntity() instanceof StrikeProjectile p) VISIBLE.remove(p.getUUID(), p);
     }
 
     /**
-     * Мир клиента уходит (смена измерения): его сущности уходят вместе с ним, без {@link EntityLeaveLevelEvent}
-     * по каждой, — снаряды этого мира забыть, иначе они держали бы весь старый мир в памяти.
+     * Client world leaves (dimension change): its entities leave with it without individual {@link EntityLeaveLevelEvent}s.
+     * Forget projectiles of this world, otherwise they would retain the entire old world in memory.
      */
     public static void onLevelUnload(LevelEvent.Unload e) {
         if (e.getLevel() instanceof ClientLevel level) VISIBLE.values().removeIf(p -> p.level() == level);
@@ -226,7 +226,7 @@ public final class ClientFlights {
         nextNumber = 1;
     }
 
-    /** По времени до удара, ближайший первым. */
+    /** By impact ETA, soonest first. */
     public static List<Tracked> all() {
         return FLIGHTS;
     }

@@ -10,30 +10,32 @@ import ua.zentix.incoming.sound.Spectra;
 import ua.zentix.incoming.strike.Article;
 
 /**
- * Мотор зенитной ракеты — те же законы, что у моторов снарядов ({@link EngineSound}): мощность звука РДТТ — доля
- * механической мощности струи по его тяге и истечению из паспорта ({@link Noise.Rocket}: на разгоне — двигатель
- * разгона, дальше — маршевый режим), путь до уха — {@link Propagation} (разлёт, воздух по октавам, земля, тень днём,
- * фон), громкость в игре — {@link Loudness}; докуда слышно, выходит само: пока хоть одна октава громче фона. Запись —
- * петля ускорителя ({@code booster.engine}, одна на все РДТТ), голос — по величине двигателя.
+ * SAM engine uses the same laws as projectile engines ({@link EngineSound}): solid rocket motor sound power is a
+ * fraction of jet mechanical power from spec thrust and exhaust velocity ({@link Noise.Rocket}: boost engine
+ * during acceleration, sustain afterward); path to ear is {@link Propagation} (spreading, octave air, ground,
+ * daytime shadow, background), game volume is {@link Loudness}; audible range follows naturally: while any octave
+ * exceeds background. Recording is the booster loop ({@code booster.engine}, one for all solid rocket motors),
+ * voice from engine size.
  * <p>
- * Звучит слоем {@link EngineSound.Layer#SAM} в общем хозяйстве моторов ({@link ClientSounds}): путь — из путей ПВО
- * ({@link ua.zentix.incoming.client.flight.FlightTracks#interceptors}: по сущности и по пакетам сервера), момент
- * излучения, каналы ({@link VoiceBudget}), перезапуск после F3+T и смены устройства, преграды — как у снарядов.
+ * Plays as {@link EngineSound.Layer#SAM} in shared engine management ({@link ClientSounds}): path from air-defense
+ * tracks ({@link ua.zentix.incoming.client.flight.FlightTracks#interceptors}: entity and server packets), emission
+ * time, channels ({@link VoiceBudget}), restart after F3+T and device change, barriers — as for projectiles.
  */
 public final class InterceptorSound {
     private static final InterceptorSpec SPEC = InterceptorSpec.SAM;
-    /** Двигатель на разгоне и в маршевом режиме (игровом, не по физике — {@link InterceptorSpec.Passport#sustain}). */
+    /** Boost and sustain engine (game sustain, not physical — {@link InterceptorSpec.Passport#sustain}). */
     static final Noise.Rocket BOOST = rocket(SPEC.passport().boost()), SUSTAIN = rocket(SPEC.passport().sustain());
     /**
-     * Голос записи: одна запись на все РДТТ, тон — по величине двигателя (как у {@link EngineSound.Layer#BOOSTER}:
-     * ускоритель шахеда и ракеты 1, снаряд «Града» 1,3); 9М96 (Ø 0,24 м) — между ними. Сдвиг записи в пределах ±25 %. Подача.
+     * Recording voice: one recording for all solid rocket motors, pitch from engine size (as for
+     * {@link EngineSound.Layer#BOOSTER}: Shahed and missile booster 1, Grad rocket 1.3); 9M96 (Ø 0.24 m) lies between.
+     * Recording shift within ±25 %. Presentation.
      */
     static final double VOICE = 1.2;
-    /** Звук схода слышен, только если мотор зазвучал у уха с первых тиков разгона (подача). */
+    /** Launch rail exit sound is audible only if engine sound reached the ear from the first boost ticks (presentation). */
     static final int IGNITION_HEARD = 10;
     /**
-     * Корпус по паспорту — для N-волны, когда ракета быстрее звука ({@link Booms}: шкала полёта до настоящей скорости
-     * 9М96). Слоя обтекания у ЗРК нет: тон записи ({@code reference}) не нужен.
+     * Body from spec for the N-wave when missile is supersonic ({@link Booms}: flight scale up to real 9M96 speed).
+     * SAM has no airflow layer: recording pitch ({@code reference}) is unnecessary.
      */
     static final Noise.Body BODY = new Noise.Body(SPEC.passport().diameter(), SPEC.passport().length(), Double.NaN, Spectra.BOMB_FALL);
 
@@ -43,13 +45,13 @@ public final class InterceptorSound {
         return new Noise.Rocket(m.thrust(), m.exhaust(), Spectra.BOOSTER_ENGINE);
     }
 
-    /** Мощность звука мотора в момент излучения, дБ: на разгоне — двигатель разгона, дальше — маршевый режим. */
+    /** Engine sound power at emission, dB: boost engine during acceleration, sustain afterward. */
     static double power(Emission e) {
         Noise.Rocket motor = FlightPhase.byId(e.phase()).boosterLit() ? BOOST : SUSTAIN;
         return motor.power(FlightPhase.BOOST, e.phaseAge());
     }
 
-    /** Громкость, тон и доля верхов мотора у уха из того, что слушатель слышит сейчас. */
+    /** Engine volume, pitch and high fraction at the ear from what the listener hears now. */
     static EngineSound.Tone tone(Emission e) {
         double lw = power(e);
         if (lw == Noise.SILENT) return EngineSound.Tone.SILENT;
@@ -57,16 +59,16 @@ public final class InterceptorSound {
         double[] bands = new double[Propagation.BANDS];
         double level = Propagation.level(lw, Spectra.BOOSTER_ENGINE, path, bands);
         double gain = Loudness.gain(level, Propagation.margin(bands, e.weather()));
-        // предел тона у Minecraft — 0,5…2 (SoundEngine)
+        // Minecraft pitch limit is 0.5…2 (SoundEngine)
         double pitch = Math.max(0.5, Math.min(2, VOICE * e.doppler()));
         return new EngineSound.Tone(gain, pitch, Emission.highs(lw, Spectra.BOOSTER_ENGINE, path));
     }
 
     /**
-     * Мотор впервые слышен у уха: если это звук самого схода (а не середины полёта — ракета появилась у клиента уже в
-     * пути), удар поджига — как у ускорителей снарядов ({@code EngineSound.launchEvents}): запись старта ускорителя
-     * ({@code launch.booster}) громкостью по мощности звука двигателя разгона на полной тяге и пути до уха, голосом этого
-     * двигателя.
+     * Engine first audible at the ear: if it is the launch rail exit sound (not mid-flight — missile appeared on
+     * client already travelling), ignition impact works like projectile boosters ({@code EngineSound.launchEvents}):
+     * booster launch recording ({@code launch.booster}) with volume from full-thrust boost-engine sound power and
+     * path to ear, with that engine's voice.
      */
     static void heard(Emission e) {
         if (!FlightPhase.byId(e.phase()).boosterLit() || e.phaseAge() >= IGNITION_HEARD) return;

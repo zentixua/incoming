@@ -11,23 +11,23 @@ import ua.zentix.incoming.client.fx.particle.FxBudget;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
 /**
- * Твёрдое обычного взрыва — частицами {@link Fx}: горящие куски с дымными хвостами (если было топливо), искры. Топливо в
- * воронке горит огнём Minecraft на блоках (сервер, {@code warhead/FuelFires}). Дым, пыль и огненный шар — облако по модели взрыва ({@code client/fx/smoke}) у события
- * {@code FarBlasts}: запечённые клубы и кадры шара слоя эффектов; здесь их нет. Удары осколков корпуса — {@link FragmentHits}.
- * Куски и искры — по размеру огненного шара модели
- * ({@code r}, блоки). Прорыв бомбы из-под земли ({@link #burst}) — прежняя картинка из частиц.
+ * Conventional blast solids as {@link Fx} particles: burning pieces with smoky tails (if fuel was present), sparks. Crater
+ * fuel burns as Minecraft block fire (server, {@code warhead/FuelFires}). Smoke, dust and fireball are the blast model cloud ({@code client/fx/smoke}) at the
+ * {@code FarBlasts} event: baked billows and fireball frames in the effects layer; none here. Casing fragment hits — {@link FragmentHits}.
+ * Pieces and sparks follow the model fireball size
+ * ({@code r}, blocks). Bomb breakout from underground ({@link #burst}) — previous particle visuals.
  */
 final class Explosions {
     private Explosions() {}
 
-    /** Бугров вокруг главного шара. */
+    /** Bulges around the main fireball. */
     static final int LOBES = 4;
 
     /**
-     * Мгновенная часть наземного взрыва (t = 0) — твёрдое: искры продуктов взрыва и, если в баке было топливо, горящие
-     * куски корпуса, пропитанные им, с дымными хвостами (их дым тоньше клетки сетки — частицами). Осколки корпуса БЧ сами
-     * не светятся (≈500–700 K, {@code warhead.FragmentModel}) и дыма не дают — гореть нечему: их видно по ударам
-     * ({@link FragmentHits}). Число горящих кусков и искр — по радиусу шара r (оценка, как прежде по радиусу картинки).
+     * Instantaneous part of a surface blast (t = 0) — solids: explosive products sparks and, if the tank held fuel, fuel-soaked burning
+     * casing pieces with smoky tails (their smoke is thinner than a grid cell — particles). Warhead casing fragments themselves
+     * do not glow (≈500–700 K, {@code warhead.FragmentModel}) or smoke — nothing to burn: they are visible through hits
+     * ({@link FragmentHits}). Burning piece and spark counts follow fireball radius r (estimate, as previously by visual radius).
      */
     static void solids(ClientLevel level, Vec3 c, float r, boolean fuel, RandomSource rnd) {
         float k = Fx.density(c);
@@ -52,9 +52,9 @@ final class Explosions {
 
 
     /**
-     * Огненный шар радиуса {@code radius}, светящий {@code ticks} тиков: главный шар над точкой взрыва (у наземного —
-     * полусфера, низ уходит в землю) и бугры по краю, которые остывают чуть раньше. Растёт и остывает он в кадрах
-     * анимации; сам поднимается медленно, как горячий газ.
+     * Fireball of radius {@code radius}, glowing for {@code ticks} ticks: main ball above the blast point (hemisphere for a surface blast,
+     * its bottom below ground), and edge bulges that cool a little earlier. It grows and cools in animation
+     * frames; the ball itself rises slowly, like hot gas.
      */
     static void fireball(ClientLevel level, Vec3 c, float radius, int ticks, RandomSource rnd) {
         float half = (float) (radius * FarSprites.FIREBALL);
@@ -68,12 +68,12 @@ final class Explosions {
         }
     }
 
-    /** Клубов дыма в шаре взрыва радиуса {@code r} при доле частиц {@code k} ({@link Fx#density}). */
+    /** Smoke billow count in a blast fireball of radius {@code r} at particle share {@code k} ({@link Fx#density}). */
     static int ballSmoke(float r, float k) {
         return Math.round(22 * r / 4 * k) + 4;
     }
 
-    /** Пыль и дым, которые ударная волна гонит по земле во все стороны. */
+    /** Dust and smoke driven along the ground in all directions by the shock wave. */
     private static void dustSurge(ClientLevel level, Vec3 c, float r, GroundMaterial mat, RandomSource rnd, float k) {
         int n = Math.round(44 * r / 4 * k) + 6;
         int light = lighten(rgb(mat), 0.35f);
@@ -86,8 +86,8 @@ final class Explosions {
     }
 
     /**
-     * Вторичный подрыв в воронке (боекомплект, топливо): языки огня и искры; его дым и жар — часть облака взрыва в сетке
-     * дыма (топливо, что горит в нём, — уже в модели облака).
+     * Secondary crater explosion (ammunition, fuel): flame tongues and sparks; its smoke and heat belong to the blast cloud in the smoke
+     * grid (fuel burning inside it is already in the cloud model).
      */
     static void cookoff(ClientLevel level, Vec3 p, float r, RandomSource rnd) {
         for (int i = 0; i < 8; i++) {
@@ -99,7 +99,7 @@ final class Explosions {
         }
     }
 
-    /** Случайное направление; {@code minUp} — нижняя граница вертикальной составляющей (0 — полусфера). */
+    /** Random direction; {@code minUp} — lower bound on the vertical component (0 — hemisphere). */
     static Vec3 dir(RandomSource rnd, double minUp) {
         double y = minUp + (1 - minUp) * rnd.nextDouble();
         double a = rnd.nextDouble() * Mth.TWO_PI, h = Math.sqrt(1 - y * y);

@@ -8,25 +8,26 @@ import ua.zentix.incoming.Incoming;
 import java.util.Locale;
 
 /**
- * Источник {@link LodDepth} — глубина рельефа Distant Horizons в этом кадре, для того, что рисуется после мира: аппаратная проверка глубины его
- * не видит (DH рисует LOD в свою текстуру глубины и переносит в кадр только цвет; под шейдерами Iris — та же
- * текстура, {@code dhDepthTex} пака). Текстура и проекция DH — из его публичного API ({@link DhDepthApi}); без DH
- * или с API другой версии глубины DH нет, и после мира виден только рельеф Minecraft.
+ * {@link LodDepth} source: this frame's Distant Horizons terrain depth for rendering after the world; hardware depth
+ * testing cannot see it (DH renders LODs to its own depth texture, transferring only colour to the frame; same
+ * texture under Iris shaders, pack's {@code dhDepthTex}). DH texture and projection from public API
+ * ({@link DhDepthApi}); without DH or with another API version, no DH depth, and only Minecraft terrain is visible
+ * after the world.
  * <p>
- * Чьей проекцией записана глубина: LOD рисует сам DH — своей {@code dhProjectionMatrix}. Шейдерпак с поддержкой DH
- * рисует их программой пака в свой кадр (Iris подменяет {@code IDhApiFramebuffer}), и Iris строит ей перспективу
- * с плоскостями отсечения из {@code DhApiRenderParam} ({@code nearClipPlane}, {@code farClipPlane}). Эти плоскости
- * у DH не те, что в его матрице: в матрице ближняя не дальше 7,5 блока ({@code RenderUtil.setDhProjectionMatrix}),
- * в параметрах — пятая часть прорисовки по углу кадра, у Артёма ~23 блока. Глубина пака, прочитанная матрицей DH, втрое
- * ближе настоящей: LOD города в 3–5 км «стоят» в 1–1,5 км, и столбы разрывов на 1,5 км пропадают за ними целиком
+ * Projection that wrote depth: DH renders LODs itself with its {@code dhProjectionMatrix}. A DH-supporting shader
+ * pack renders them using its program into its own framebuffer (Iris replaces {@code IDhApiFramebuffer}); Iris
+ * builds perspective with {@code DhApiRenderParam} clip planes ({@code nearClipPlane}, {@code farClipPlane}).
+ * These DH planes differ from its matrix: matrix near plane at most 7.5 blocks ({@code RenderUtil.setDhProjectionMatrix}),
+ * parameters use a fifth of render distance by frame angle, ~23 blocks for Artem. Pack depth read with DH's matrix
+ * is three times nearer than reality: city LODs at 3–5 km appear at 1–1.5 km, entirely hiding blast columns at 1.5 km
  * (Complementary).
  */
 public final class DhDepth implements LodDepth.Source {
     private static final DhDepth SOURCE = new DhDepth();
-    /** Как читалась глубина DH в прошлый раз, что попал в лог (направление, диапазон, кто рисует); −1 — ещё никак. */
+    /** Last logged DH depth mode (direction, range, renderer); −1 if none yet. */
     private static int logged = -1;
     private static String described = "";
-    /** Для лога: проекция DH кадра негодна. */
+    /** For logs: invalid DH frame projection. */
     private static final int UNUSABLE = 8;
     private static final Vector4f VIEW = new Vector4f();
     private static final Frame FRAME = new Frame();
@@ -34,21 +35,21 @@ public final class DhDepth implements LodDepth.Source {
 
     private DhDepth() {}
 
-    /** Глубина DH в кадре, как её отдаёт API: текстура, проекция, диапазон и направление, кто рисует. */
+    /** Frame DH depth as provided by API: texture, projection, range and direction, renderer. */
     static final class Frame {
         int texture;
         boolean negativeOneToOne;
         float empty;
-        /** Дальше — больше (прямая глубина), иначе обратная. */
+        /** Farther means larger (forward depth), otherwise reversed. */
         boolean forward;
-        /** LOD рисует чужая программа (шейдерпак Iris) в свой кадр. */
+        /** Another program (Iris shader pack) renders LODs into its own framebuffer. */
         boolean foreign;
-        /** Проекция DH ({@code dhProjectionMatrix}) и плоскости отсечения его параметров кадра, блоков. */
+        /** DH projection ({@code dhProjectionMatrix}) and its frame parameter clip planes, blocks. */
         final Matrix4f projection = new Matrix4f();
         float near, far;
     }
 
-    /** При запуске клиента: есть ли DH с API, которое умеет отдать глубину, и подписка на его кадры; null — нет. */
+    /** At client startup: DH API can provide depth, subscribe to its frames; null if unavailable. */
     static LodDepth.Source init() {
         if (!ModList.get().isLoaded("distanthorizons")) return null;
         try {
@@ -56,7 +57,7 @@ public final class DhDepth implements LodDepth.Source {
             DhDepthApi.subscribe();
             return SOURCE;
         } catch (LinkageError e) {
-            // API DH без нужных классов или методов: игра грузится, дым вдали не прячется за LOD
+            // DH API lacks required classes or methods: game loads, distant smoke is not hidden by LODs.
             Incoming.LOG.warn("Distant Horizons: API differs from the one the mod was built for — DH terrain does not hide distant smoke and blasts", e);
             return null;
         }
@@ -76,12 +77,12 @@ public final class DhDepth implements LodDepth.Source {
         int how = (f.forward ? 1 : 0) | (f.negativeOneToOne ? 2 : 0) | (f.foreign ? 4 : 0);
         boolean usable = out.inverseProjection.isFinite();
         int state = usable ? how : UNUSABLE;
-        // строка — только когда меняется, как читается глубина (в лог и строку сценария), а не каждый кадр
+        // Log only depth mode changes (log and scenario line), not every frame.
         if (state != logged) {
             logged = state;
             described = LodDepth.describe(f.forward, f.negativeOneToOne, f.empty, along(out.inverseProjection, f.forward ? 0 : 1, f.negativeOneToOne),
                     String.format(Locale.ROOT, " (DH planes %.1f to %.0f), LOD drawn by %s", f.near, f.far, f.foreign ? "the shader pack" : "DH"));
-            // проекция кадра негодна (плоскости DH совпали, матрица не задана): LOD этого кадра для слоя — как без DH
+            // Invalid frame projection (DH planes coincide, matrix unset): layer treats this frame's LODs as without DH.
             if (usable) Incoming.LOG.info("Distant Horizons depth for the effects layer: {}", described);
             else Incoming.LOG.warn("Distant Horizons depth for the effects layer: DH projection is not invertible ({}), DH terrain ignored", described);
         }
@@ -91,24 +92,24 @@ public final class DhDepth implements LodDepth.Source {
     }
 
     /**
-     * LOD рисует программа шейдерпака перспективой Iris (прямая глубина, NDC от −1 до 1): читать её
-     * {@link #irisPlanes}. Без шейдерпака — и когда Iris стоит без него — DH рисует сам своей матрицей, обратной
-     * глубиной ({@code REVERSE_Z}, очистка 0, NDC от 0 до 1 в матрице), и подмены кадра нет: матрица DH верна как есть.
+     * Shader pack renders LODs with Iris perspective (forward depth, NDC −1 to 1): read via {@link #irisPlanes}.
+     * Without a shader pack, including Iris installed without one, DH renders itself with its own matrix and reversed
+     * depth ({@code REVERSE_Z}, clear 0, matrix NDC 0 to 1); no framebuffer replacement, DH matrix is correct as is.
      */
     static boolean irisDrawn(boolean foreign, boolean forward, boolean negativeOneToOne) {
         return foreign && forward && negativeOneToOne;
     }
 
-    /** Расстояние по оси взгляда (блоки) из значения текстуры глубины DH — как {@code along} в {@code fx_depth}. */
+    /** View-axis distance (blocks) from a DH depth texture value, as {@code along} in {@code fx_depth}. */
     static float along(Matrix4f inverseProjection, float depth, boolean negativeOneToOne) {
         inverseProjection.transform(VIEW.set(0, 0, negativeOneToOne ? depth * 2 - 1 : depth, 1));
         return -VIEW.z / VIEW.w;
     }
 
     /**
-     * Проекция, которой Iris рисует LOD программой шейдерпака ({@code LodRendererEvents}: {@code setPerspective} с углом
-     * и сторонами кадра Minecraft и плоскостями {@code DhApiRenderParam}), из проекции DH: та же, кроме строки глубины —
-     * прямая глубина, NDC от −1 до 1.
+     * Projection Iris uses to render LODs with the pack's program ({@code LodRendererEvents}: {@code setPerspective}
+     * with Minecraft FOV/aspect and {@code DhApiRenderParam} planes), derived from DH projection: identical except
+     * depth row, forward depth, NDC −1 to 1.
      */
     static Matrix4f irisPlanes(Matrix4f projection, float near, float far) {
         return projection.m22((far + near) / (near - far)).m32(2 * far * near / (near - far));

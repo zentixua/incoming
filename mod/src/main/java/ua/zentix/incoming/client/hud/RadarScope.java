@@ -15,17 +15,17 @@ import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponType;
 
 /**
- * Экран радара ЗРК в левом верхнем углу — у своих рядом с ЗРК ({@link S2C.RadarScope}, раз в осмотр радара): круг
- * дальности радара «север вверх», внутри — круг дальности огня, бегущий луч развёртки, цели: чужие — красные (за
- * которыми идёт ракета — оранжевые), свои — зелёные; под кругом — ракеты на направляющих и в запасе. Пакеты от двух
- * ЗРК сразу — экран ближнего. Пакетов нет {@link #STALE} тиков (отошёл, ЗРК сломан или выгружен) — экран гаснет.
+ * SAM radar scope at top left, for friendlies near the SAM ({@link S2C.RadarScope}, once per radar sweep): north-up
+ * radar range circle with engagement range circle, moving sweep and targets: hostiles red (orange if pursued by a
+ * missile), friendlies green; below, missiles on rails and in reserve. Packets from two SAMs show the nearer scope.
+ * No packets for {@link #STALE} ticks (moved away, SAM broken or unloaded) fades the scope out.
  */
 public final class RadarScope {
-    /** Без пакета столько тиков — экрана нет. */
+    /** No scope after this many ticks without a packet. */
     static final int STALE = 40;
     private static final int RADIUS = 34, MARGIN = 8;
     private static final int GREEN = 0xFF46F07A, DIM = 0x6046F07A, HOSTILE = 0xFFFF4030, ENGAGED = 0xFFFFA020;
-    /** Луч развёртки — оборот за столько тиков. */
+    /** Sweep makes one turn in this many ticks. */
     private static final float SWEEP = 40;
 
     @Nullable
@@ -34,7 +34,7 @@ public final class RadarScope {
 
     private RadarScope() {}
 
-    /** Пакет радара: ЗРК дальше того, чей экран сейчас показан, его не перебивает. */
+    /** Radar packet: a SAM farther away than the currently displayed one does not replace it. */
     public static void received(S2C.RadarScope p) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
@@ -44,7 +44,7 @@ public final class RadarScope {
         received = ticks;
     }
 
-    /** Раз в тик клиента (не на паузе). */
+    /** Once per client tick (unpaused). */
     public static void tick() {
         ticks++;
         if (scope != null && ticks - received > STALE) scope = null;
@@ -75,7 +75,7 @@ public final class RadarScope {
             float x = cx + b.dx() * scale, y = cy + b.dz() * scale;
             if (b.is(S2C.Blip.HOSTILE)) hostile++;
             int color = !b.is(S2C.Blip.HOSTILE) ? GREEN : b.is(S2C.Blip.ENGAGED) ? ENGAGED : HOSTILE;
-            // хвост — откуда летит (курс Minecraft: 0° — на +Z, вниз по экрану)
+            // Tail shows approach direction (Minecraft heading: 0° toward +Z, down the screen).
             float yaw = b.yaw() * Mth.DEG_TO_RAD;
             HudDraw.line(g, x, y, x + Mth.sin(yaw) * 4, y - Mth.cos(yaw) * 4, 1, color & 0x80FFFFFF);
             HudDraw.disc(g, x, y, size(b.weapon()) * (b.is(S2C.Blip.ENGAGEABLE) ? 1.35f : 1f), color);
@@ -85,7 +85,7 @@ public final class RadarScope {
         g.drawString(font, line, MARGIN, cy + RADIUS + 4, 0xFFFFFFFF);
     }
 
-    /** Радиус отметки, px: по длине корпуса оружия — «Ланцет» и шахед мелкие, ракета и МБР крупнее, B-2 — крупнее всех. */
+    /** Blip radius, px: weapon body length; Lancet and Shahed small, missile and ICBM larger, B-2 largest. */
     static float size(int weapon) {
         WeaponType[] all = WeaponType.values();
         if (weapon < 0 || weapon >= all.length) return 1.6f;

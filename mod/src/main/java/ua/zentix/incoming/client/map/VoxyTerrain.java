@@ -28,61 +28,61 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Рельеф из базы LOD самого Voxy на клиенте (на NeoForge 1.21.1 — Voxy 0.2.16 через Roxy): всё, что Voxy видел (чанки
- * клиента за всю игру в этом мире), что прислал ему сервер с LOD Server Support и что игрок импортировал
- * ({@code /voxy import current} — сохранение одиночной игры целиком). Так дальний рельеф есть и в одиночной игре,
- * где LSS не работает, и без Distant Horizons.
+ * Terrain from Voxy's own client LOD database (NeoForge 1.21.1: Voxy 0.2.16 via Roxy): everything Voxy has seen
+ * (client chunks throughout play in this world), received from a LOD Server Support server, and imported by the
+ * player ({@code /voxy import current}: entire singleplayer save). Distant terrain thus works in singleplayer,
+ * where LSS does not, and without Distant Horizons.
  * <p>
- * API у Voxy нет (лицензия ARR: его код не копируем, только зовём): только чтение его классов отражением, без миксинов,
- * тем же путём, что LSS ({@code compat/VoxyTerrainProbe}, MIT): {@code WorldIdentifier.ofEngineNullable(Level)} — мир
- * Voxy (null — Voxy его не держит), {@code WorldEngine.acquireIfExists(уровень, x, y, z)} — секция 32³ вокселей или null,
- * {@code WorldSection.copyDataTo}, {@code release()} — сразу после копии (иначе секция не выгрузится),
- * {@code acquireRef/releaseRef} вокруг чтения (мир не закроется под ним), {@code Mapper.getBlockId} и
- * {@code getBlockStateFromBlockId} — блок вокселя. Секции нет в памяти Voxy — он читает свою базу в вызывающем потоке,
- * поэтому только из фоновых потоков, никогда из потока игры.
+ * Voxy has no API (ARR licence: call its code, never copy): read its classes by reflection only, no mixins, through
+ * the same path as LSS ({@code compat/VoxyTerrainProbe}, MIT): {@code WorldIdentifier.ofEngineNullable(Level)} is
+ * the Voxy world (null if Voxy does not hold it), {@code WorldEngine.acquireIfExists(level, x, y, z)} gives a 32³-voxel
+ * section or null, {@code WorldSection.copyDataTo}, {@code release()} immediately after copying (otherwise section
+ * cannot unload), {@code acquireRef/releaseRef} around reads (world cannot close during them), {@code Mapper.getBlockId}
+ * and {@code getBlockStateFromBlockId} give the voxel block. Section absent from Voxy memory means database read on
+ * the calling thread, so background threads only, never the game thread.
  * <p>
- * Уровни Voxy (воксель 1, 2, 4, 8, 16 блоков) — те же, что у плиток карты, поэтому плитка уровня L читает секции уровня
- * L ({@link #open(ClientLevel, int)}): 2×2 столбца секций на плитку любого уровня, а не (2^L)² участков, как у DH.
- * Прочитанный столбец — сводка верха колонок ({@link VoxyColumns}, 4 КБ) в памяти: из неё мгновенно отвечает
- * {@link #peek} (лучи, звук, ядерка). Чтобы лучам не ждать карты, вокруг игрока до {@link #SCAN_RADIUS} фоновый обход
- * читает уровень 4 (16 блоков) раз в {@link #RESCAN_NS}. Событий об изменениях Voxy не даёт (его единственный слот
- * {@code setDirtyCallback} занят его рендером): перечитанная сводка, которая стала другой, сама сообщает плиткам над
- * ней ({@link #changes}). Классы или методы Voxy другой версии — одна строка в лог, и источника нет.
+ * Voxy levels (voxel 1, 2, 4, 8, 16 blocks) match map tile levels, so a level L tile reads level L sections
+ * ({@link #open(ClientLevel, int)}): 2×2 section columns per tile at any level, rather than (2^L)² regions as in DH.
+ * Read columns become surface summaries ({@link VoxyColumns}, 4 KB) in memory: {@link #peek} answers instantly
+ * (rays, sound, nuke). To keep rays from waiting for the map, background scan around the player to {@link #SCAN_RADIUS}
+ * reads level 4 (16 blocks) every {@link #RESCAN_NS}. Voxy provides no change events (its only
+ * {@code setDirtyCallback} slot is used by its renderer): a changed reread summary notifies overlying tiles itself
+ * ({@link #changes}). Different Voxy classes or methods mean one log line and no source.
  */
 final class VoxyTerrain implements TerrainSource {
-    /** Уровень, который обход вокруг игрока читает для лучей и звука: воксель 16 блоков, шаг луча не мельче. */
+    /** Level scanned around the player for rays and sound: 16-block voxel, ray step no smaller. */
     static final int SCAN_LEVEL = 4;
-    /** Докуда обход вокруг игрока, блоков: дальность дальних полётов и взрывов по умолчанию и LOD Voxy по умолчанию (~8 км). */
+    /** Scan range around the player, blocks: default far-flight and blast range, and default Voxy LOD range (~8 km). */
     static final int SCAN_RADIUS = 8192;
-    /** Сводок в памяти не больше этого (по 4 КБ, ~32 МБ): сверх — самые дальние от игрока уходят. */
+    /** At most this many summaries in memory (4 KB each, ~32 MB): discard farthest from the player above that. */
     static final int LIMIT = 8192;
-    /** Обход не чаще этого и заново, только если игрок ушёл дальше {@link #SCAN_MOVE} или сводки устарели. */
+    /** Minimum scan interval; restart only if player moved beyond {@link #SCAN_MOVE} or summaries became stale. */
     private static final long SCAN_PERIOD_NS = 30_000_000_000L;
     private static final double SCAN_MOVE = 512;
-    /** Сводка старше этого перечитывается обходом (воронки и руины вдали появляются в базе Voxy, когда он их увидел). */
+    /** Scan rereads older summaries (distant craters and ruins enter Voxy's database when it sees them). */
     private static final long RESCAN_NS = 60_000_000_000L;
-    /** Плитка берёт сводку из памяти, если она моложе этого (прочитана только что соседней плиткой или обходом). */
+    /** Tile takes a summary from memory if younger than this (just read by a neighbouring tile or scan). */
     private static final long FRESH_NS = 5_000_000_000L;
-    /** Полная плитка перечитывается раз в 2 минуты (изменение, замеченное обходом, приходит раньше, {@link #changes}). */
+    /** Complete tile reread every 2 minutes (scan-detected changes arrive earlier, {@link #changes}). */
     private static final long REFRESH_NS = 120_000_000_000L;
-    /** Мир Voxy проверяется не чаще этого: он появляется после входа в мир и уходит при выходе или перезапуске Voxy. */
+    /** Minimum Voxy world check interval: world appears after login, disappears on exit or Voxy restart. */
     private static final long RESOLVE_NS = 1_000_000_000L;
 
-    /** Методы Voxy 0.2.16; null — Voxy не стоит, его классы другие или чтение сломалось на ходу ({@link #disable}). */
+    /** Voxy 0.2.16 methods; null if absent, different classes, or read broke at runtime ({@link #disable}). */
     @Nullable
     private static volatile Access access;
-    /** Для лога: прочитано столбцов секций и секций, время, отказы. */
+    /** For logs: section columns and sections read, time, failures. */
     private static final AtomicLong columnsRead = new AtomicLong(), sectionsRead = new AtomicLong(), nanos = new AtomicLong(),
             maxNanos = new AtomicLong(), failures = new AtomicLong();
     @Nullable
     private static volatile String firstFailure;
-    /** Обход вокруг игрока — одним фоновым потоком на все миры. */
+    /** One background thread scans around the player across all worlds. */
     private static final ExecutorService scanner = Executors.newSingleThreadExecutor(
             new ThreadFactoryBuilder().setNameFormat("Incoming Voxy terrain").setDaemon(true).setPriority(Thread.MIN_PRIORITY).build());
-    /** Буфер секции (32768 вокселей, 256 КБ) на поток. */
+    /** Section buffer (32768 voxels, 256 KB) per thread. */
     private static final ThreadLocal<long[]> buffer = ThreadLocal.withInitial(() -> new long[VoxyColumns.VOLUME]);
 
-    /** Отражение до классов Voxy, только чтение. */
+    /** Reflection into Voxy classes, read only. */
     static final class Access {
         final MethodHandle ofEngineNullable, acquireIfExists, copyDataTo, release, acquireRef, releaseRef, isLive, mapper, blockId, stateOf;
 
@@ -111,8 +111,8 @@ final class VoxyTerrain implements TerrainSource {
     }
 
     /**
-     * При запуске клиента: стоит ли Voxy и нашлись ли все его классы и методы. Нет — источника нет (одна строка в лог),
-     * игра идёт как без Voxy.
+     * At client startup: Voxy installed and all classes and methods found. If not, no source (one log line),
+     * game continues as without Voxy.
      */
     static boolean init() {
         if (!ModList.get().isLoaded("voxy")) return false;
@@ -131,24 +131,24 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Voxy поменялся так, что методы есть, а вызов не тот: источник выключается до перезапуска одной строкой в лог. */
+    /** Voxy changed: methods exist but invocation differs; disable source until restart with one log line. */
     private static void disable(Throwable e) {
         if (access == null) return;
         access = null;
         Incoming.LOG.warn("Voxy terrain: reading Voxy failed ({}) — far terrain from Voxy is off", e.toString());
     }
 
-    /** Свёрнутый верх колонок столбца секций уровня {@code level}: прочитан тогда-то, есть ли хоть одна колонка. */
+    /** Column-top summary of a level {@code level} section column: read time, whether any column exists. */
     record Section(int[] columns, long readAt, boolean any) {}
 
     /**
-     * Мир Voxy, который сейчас у клиента, и всё прочитанное из него: другой мир Voxy (вышли, Voxy перезапустил свой
-     * экземпляр) — новый объект, и чтения, начатые для старого, кладут своё в старый.
+     * Current client Voxy world and everything read from it: a different Voxy world (exit, Voxy restarted its
+     * instance) gets a new object; reads started for the old world store results in the old object.
      */
     static final class Engine {
         final Object engine, mapper;
         final Map<Long, Section> cache = new ConcurrentHashMap<>();
-        /** Сведения о блоке по номеру Voxy ({@link VoxyColumns#info}); 0 — ещё не смотрели. */
+        /** Block information by Voxy ID ({@link VoxyColumns#info}); 0 if not yet inspected. */
         volatile int[] infos = new int[1024];
         final AtomicBoolean any = new AtomicBoolean();
 
@@ -158,20 +158,20 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Мир клиента (в юнит-тестах — null: подделка Voxy отдаёт свой мир). */
+    /** Client world (null in unit tests: fake Voxy provides its own world). */
     @Nullable
     private final Level level;
-    /** Высоты мира: какие секции Voxy смотреть. */
+    /** World height bounds: which Voxy sections to read. */
     private final int minY, maxY;
     @Nullable
     private volatile Engine engine;
-    /** Когда мир Voxy искали; искали ли вообще (до первого раза часы не сравниваются: nanoTime бывает любым). */
+    /** Last Voxy world lookup time; whether ever looked up (no clock comparison before first: nanoTime is arbitrary). */
     private long resolvedAt;
     private boolean resolvedOnce;
-    /** Чанки ({@code ChunkPos.asLong}), над которыми сводка перечитана другой: плитки там — перестроить. */
+    /** Chunks ({@code ChunkPos.asLong}) beneath changed reread summaries: rebuild their tiles. */
     private final Set<Long> changed = ConcurrentHashMap.newKeySet();
     private volatile boolean scanning, closed;
-    /** Обход был (и сколько колонок секций прошёл, за сколько); где и когда начат последний. */
+    /** Scan completed (section columns visited, duration); where and when last started. */
     private volatile boolean scanned;
     private volatile int lastScanColumns;
     private volatile long lastScanNanos, scanStarted;
@@ -187,12 +187,12 @@ final class VoxyTerrain implements TerrainSource {
         this.maxY = maxY;
     }
 
-    /** Ключ сводки: уровень и столбец секций. */
+    /** Summary key: level and section column. */
     static long key(int level, int sx, int sz) {
         return (long) level << 60 | ((long) sx & 0x3FFFFFFFL) << 30 | (long) sz & 0x3FFFFFFFL;
     }
 
-    /** Мир Voxy этого мира клиента: в потоке игры, не чаще {@link #RESOLVE_NS}. */
+    /** Voxy world for this client world: game thread, at most once per {@link #RESOLVE_NS}. */
     @Nullable
     private Engine resolve() {
         Access a = access;
@@ -213,9 +213,9 @@ final class VoxyTerrain implements TerrainSource {
     }
 
     /**
-     * Отказ при вызове Voxy: изменилось устройство ({@link LinkageError}, не тот тип) — источник выключен; мир Voxy
-     * закрыт под чтением ({@link IllegalStateException}, и сам Voxy говорит {@code isLive() == false}) — забыть его,
-     * найти заново; другое (и другое {@code IllegalStateException} у живого мира) — в счётчик отказов, первый — в лог.
+     * Voxy call failure: changed structure ({@link LinkageError}, wrong type) disables source; Voxy world closed
+     * during read ({@link IllegalStateException}, Voxy reports {@code isLive() == false}) means forget and resolve
+     * again; other failures (including other {@code IllegalStateException} in a live world) counted, first logged.
      */
     private void fail(Throwable t, @Nullable Engine in) {
         if (t instanceof LinkageError || t instanceof WrongMethodTypeException || t instanceof ClassCastException) {
@@ -233,7 +233,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Жив ли мир Voxy (не закрыт): не вышло спросить — считаем закрытым. */
+    /** Whether Voxy world is live (not closed): if query fails, treat as closed. */
     private static boolean live(Engine e) {
         Access a = access;
         if (a == null) return false;
@@ -245,7 +245,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Сведения о блоке {@code id} мира Voxy {@code e}: 0 — не знаем (Voxy ещё дописывает свой список, сбой). */
+    /** Block {@code id} information in Voxy world {@code e}: 0 if unknown (Voxy still appending its list, failure). */
     private static int info(Access a, Engine e, int id) {
         int[] t = e.infos;
         if (id < t.length && t[id] != 0) return t[id];
@@ -255,7 +255,7 @@ final class VoxyTerrain implements TerrainSource {
             if (!(state instanceof BlockState s)) return 0;
             v = VoxyColumns.info(s);
         } catch (RuntimeException ex) {
-            // список блоков Voxy растёт в его потоке без замка: номер, которого ещё не видно, — как воздух, спросим позже
+            // Voxy block list grows on its thread without a lock: an ID not yet visible is air; ask later.
             return 0;
         } catch (Throwable ex) {
             if (ex instanceof Error err) throw err;
@@ -270,8 +270,8 @@ final class VoxyTerrain implements TerrainSource {
     }
 
     /**
-     * Столбец секций уровня {@code lvl} из базы Voxy — в вызывающем (фоновом) потоке; null — не прочитан (сбой, мир
-     * Voxy закрыт). Сводка — в память; стала другой — плитки над ней перестроятся.
+     * Level {@code lvl} section column from Voxy's database on the calling (background) thread; null if unread
+     * (failure, Voxy world closed). Cache summary in memory; changes rebuild overlying tiles.
      */
     @Nullable
     private Section read(Engine e, int lvl, int sx, int sz) {
@@ -313,7 +313,7 @@ final class VoxyTerrain implements TerrainSource {
         Section was = e.cache.put(key(lvl, sx, sz), now);
         if (was != null && !Arrays.equals(was.columns, columns)) {
             markChanged(lvl, sx, sz);
-            // подробные сводки под ней — до перемены (воронка, руины): лучи и звук ({@link #peek}) берут подробную первой
+            // Finer summaries below it predate the change (crater, ruins): rays and sound ({@link #peek}) prefer detailed data.
             dropFiner(e.cache, lvl, sx, sz);
         }
         if (any) e.any.set(true);
@@ -335,7 +335,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Сводка столбца моложе {@code maxAge} — из памяти, иначе — прочитать. */
+    /** Column summary younger than {@code maxAge} from memory, otherwise read. */
     @Nullable
     private Section section(Engine e, int lvl, int sx, int sz, long maxAge) {
         Section s = e.cache.get(key(lvl, sx, sz));
@@ -344,7 +344,7 @@ final class VoxyTerrain implements TerrainSource {
         return read != null ? read : s;
     }
 
-    /** Сводки уровней мельче {@code lvl} под её столбцом секций (sx, sz) — из памяти; прочитаются заново, когда понадобятся. */
+    /** Evict summaries finer than {@code lvl} under its section column (sx, sz); reread when needed. */
     static void dropFiner(Map<Long, Section> cache, int lvl, int sx, int sz) {
         for (int l = 0; l < lvl; l++) {
             int k = lvl - l, n = 1 << k;
@@ -354,7 +354,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Чанки под столбцом секций — через каждые 64 блока (плитка уровня 0), их плитки на всех уровнях перестроятся. */
+    /** Chunks under the section column, every 64 blocks (level 0 tile): rebuild their tiles at all levels. */
     private void markChanged(int lvl, int sx, int sz) {
         int span = VoxyColumns.SIDE << lvl, x0 = sx * span, z0 = sz * span;
         int step = Math.min(span, TerrainTiles.SIZE);
@@ -373,7 +373,7 @@ final class VoxyTerrain implements TerrainSource {
         return true;
     }
 
-    /** Чтение базы Voxy — в наших потоках: сколько их сразу, столько секций читается параллельно. */
+    /** Voxy database reads run on our threads: as many concurrent threads, as many parallel section reads. */
     @Override
     public int parallelism() {
         return 4;
@@ -415,12 +415,12 @@ final class VoxyTerrain implements TerrainSource {
         };
     }
 
-    /** Колонка (x, z) в сводке её столбца секций уровня {@code level}. */
+    /** Column (x, z) in its level {@code level} section-column summary. */
     static int index(int level, int x, int z) {
         return ((z >> level) & 31) << 5 | (x >> level) & 31;
     }
 
-    /** Самая подробная сводка в памяти, где колонка известна. */
+    /** Most detailed summary in memory where column is known. */
     @Nullable
     @Override
     public Column peek(int x, int z) {
@@ -436,8 +436,8 @@ final class VoxyTerrain implements TerrainSource {
     }
 
     /**
-     * Раз в тик, в потоке игры: обход вокруг игрока — в фоне, не чаще {@link #SCAN_PERIOD_NS}, раньше — если игрок ушёл
-     * дальше {@link #SCAN_MOVE}.
+     * Once per tick on the game thread: background scan around the player, at most once per {@link #SCAN_PERIOD_NS},
+     * earlier if the player moved beyond {@link #SCAN_MOVE}.
      */
     @Override
     public void tickNear(double playerX, double playerZ) {
@@ -463,7 +463,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Обход: столбцы секций уровня {@link #SCAN_LEVEL} в круге {@link #SCAN_RADIUS}, ближние первыми; потом — лишнее из памяти. */
+    /** Scan: level {@link #SCAN_LEVEL} section columns in circle {@link #SCAN_RADIUS}, nearest first; then evict excess. */
     private void scan(Engine e, double x, double z) {
         long start = System.nanoTime();
         List<long[]> todo = around(x, z, SCAN_LEVEL, SCAN_RADIUS);
@@ -479,7 +479,7 @@ final class VoxyTerrain implements TerrainSource {
         scanned = true;
     }
 
-    /** Столбцы секций уровня {@code level} (x, z), середина которых в круге {@code radius} блоков, ближние первыми. */
+    /** Level {@code level} section columns (x, z) with centres in a {@code radius}-block circle, nearest first. */
     static List<long[]> around(double x, double z, int level, int radius) {
         int span = VoxyColumns.SIDE << level, r = radius / span + 1;
         int cx = (int) Math.floor(x / span), cz = (int) Math.floor(z / span);
@@ -495,7 +495,7 @@ final class VoxyTerrain implements TerrainSource {
         return out;
     }
 
-    /** Сводок больше {@code limit} — самые дальние от (x, z) уходят, пока не останется девять десятых. */
+    /** More than {@code limit} summaries: discard farthest from (x, z) until nine tenths remain. */
     static int trim(Map<Long, Section> cache, double x, double z, int limit) {
         if (cache.size() <= limit) return 0;
         List<long[]> all = new ArrayList<>(cache.size());
@@ -524,7 +524,7 @@ final class VoxyTerrain implements TerrainSource {
         }
     }
 
-    /** Обход прошёл, а в базе Voxy вокруг нет ничего: Voxy этого места не видел. */
+    /** Scan finished with nothing nearby in Voxy's database: Voxy has not seen this place. */
     @Override
     public boolean waiting() {
         Engine e = engine;

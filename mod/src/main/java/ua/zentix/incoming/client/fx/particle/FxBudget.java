@@ -1,30 +1,30 @@
 package ua.zentix.incoming.client.fx.particle;
 
 /**
- * Места для частиц эффектов в пуле ({@link FxPool}). Каждая частица входит в группу, и полная группа новых частиц
- * не принимает: важное (облака взрывов, вспышки) не делит место с долгой мелочью (пыль у земли, шлейфы, хвосты
- * осколков), и долгие облака первых попаданий не вытесняются поздними. Сколько частиц группе не досталось места,
- * пул считает ({@link FxPool#refused}).
+ * Effects particle pool slots ({@link FxPool}). Each particle belongs to a group; a full group rejects new particles:
+ * important effects (blast clouds, flashes) do not share slots with long-lived details (ground dust, trails, fragment
+ * tails), and long-lived first-impact clouds are not evicted by later ones. The pool counts particles denied slots
+ * per group ({@link FxPool#refused}).
  */
 public enum FxBudget {
-    /** Облака и огонь взрывов: шар, остывающий в дым, догорание — то, что видно и из-за постройки. */
+    /** Blast clouds and fire: fireball cooling to smoke, residual burning — visible from behind structures too. */
     CLOUD(5120),
-    /** Клубы у земли: вал пыли взрыва, выхлоп и облако на пусковой, ударные кольца, пыль провала и ударной волны. */
+    /** Ground billows: blast dust roll, launcher exhaust and cloud, shock rings, collapse and shock-wave dust. */
     GROUND(3584),
-    /** Клубы объёма у шлейфов снарядов (сам шлейф — лента по точкам пути, мест не занимает). */
+    /** Projectile trail volume billows (trail itself is a path-point ribbon, using no slots). */
     TRAIL(5120),
-    /** Дымные хвосты осколков и обломков. */
+    /** Smoky fragment and debris tails. */
     DEBRIS(2560),
     /**
-     * Брызги за фронтом ядерной волны над водой: капли с гребней и запасные клубы водяной пыли. Своя группа: дуга
-     * фронта у камеры над озером рождает сотни брызг за тик и заняла бы места пыли у земли на суше рядом.
+     * Spray behind the nuclear front over water: crest droplets and fallback mist billows. Separate group: the front arc
+     * near a camera over a lake spawns hundreds of spray particles per tick and would take nearby land ground-dust slots.
      */
     SPRAY(2048),
-    /** Вспышки. */
+    /** Flashes. */
     FLASH(512),
-    /** Искры. */
+    /** Sparks. */
     SPARK(15360),
-    /** Пепел, бумага и мелкий мусор, что сыплется вокруг камеры после ядерной волны (как погода). */
+    /** Ash, paper and small debris falling around the camera after a nuclear wave (like weather). */
     ASH(3072);
 
     final int limit;
@@ -33,12 +33,12 @@ public enum FxBudget {
         this.limit = limit;
     }
 
-    /** Сколько частиц группы может жить одновременно. */
+    /** Maximum simultaneous particles per group. */
     public int limit() {
         return limit;
     }
 
-    /** Мест у всех групп вместе — размер пула. */
+    /** Total slots across all groups — pool size. */
     static int total() {
         int sum = 0;
         for (FxBudget b : values()) sum += b.limit;

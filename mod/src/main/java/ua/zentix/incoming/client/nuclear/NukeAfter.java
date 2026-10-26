@@ -27,44 +27,44 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Город горит (DESIGN-nuke §5): гул пожаров со всех горящих мест, ветер, который тянет в огонь, треск и поздние
- * обрушения в руинах рядом, вторичные взрывы в горящих кварталах. Всё — от возраста подрыва, а не от разовых событий:
- * подрыв, застанный при входе в мир или после перемотки повтора, звучит в своём возрасте; вторичные взрывы — по
- * расписанию из зерна подрыва ({@link FireField#secondaries}), из прошлого не повторяются.
+ * Burning city (DESIGN-nuke §5): fire roar from all burning locations, wind drawn into fire, crackling and late
+ * collapses in nearby ruins, secondary explosions in burning districts. All follow detonation age, not one-time events:
+ * a detonation encountered on world entry or after a replay seek sounds at its age; secondary explosions follow
+ * a schedule from the detonation seed ({@link FireField#secondaries}), without repeating past ones.
  * <p>
- * Гул — {@link #QUADRANTS} петли по сторонам света вокруг уха, по закону источника ({@link FireRoar}): тепло каждого
- * очага — шторм модели вдали ({@link FireStorm}: горящая доля клетки × площадь × {@link FirePlume#BLOCK_WATTS}, как
- * его рисует пелена) и настоящий огонь {@link FireWatch} в своих чанках (блок огня — та же грань), звуком уходит доля
- * {@link Sources#FLAME_EFFICIENCY}, до уха — путь ISO 9613, громкость — {@code Loudness}. Шторм — с доверием модели
- * ({@link FireStorm#gate}: сервер жжёт и огонь в своих чанках не погашен), в своих чанках — только настоящий огонь.
- * Ветер в огонь и вторичные взрывы — по модели {@link FireField} (счёт пожаров сервера), в меру того, что горит в
- * своих чанках против модели там же ({@link #trust}), и без того, что уже горит в своих чанках (счётчик пожаров у подрыва
- * один).
+ * Roar uses {@link #QUADRANTS} loops at cardinal directions around the ear, from the source law ({@link FireRoar}): each source's heat
+ * comes from the distant model storm ({@link FireStorm}: burning cell fraction × area × {@link FirePlume#BLOCK_WATTS}, as
+ * drawn by the pall) and real {@link FireWatch} fire in local chunks (a fire block is the same face); sound receives the fraction
+ * {@link Sources#FLAME_EFFICIENCY}, travels to the ear by ISO 9613, and uses {@code Loudness} for volume. The storm uses model trust
+ * ({@link FireStorm#gate}: the server burns and local-chunk fire has not been extinguished); local chunks use real fire only.
+ * Wind into fire and secondary explosions use the {@link FireField} model (server fire count), scaled by actual burning in
+ * local chunks relative to the model there ({@link #trust}), and excluding fire already burning in local chunks (one fire counter per
+ * detonation).
  */
 final class NukeAfter {
     static final int QUADRANTS = FireRoar.QUADRANTS;
     /**
-     * Огонь клетки шторма — на такой высоте над землёй, м: О — пламя горящих домов над крышами низкой застройки (у
-     * шторма Гамбурга — десятки метров); высота источника меняет только землю и тень днём на пути.
+     * Storm-cell fire source height above ground, m: estimate — flame from burning houses above low-rise roofs (the
+     * Hamburg storm reached tens of meters); source height only changes ground effect and daytime shadow along the path.
      */
     static final double STORM_FLAME_M = 5;
     /**
-     * Тон петель гула по сторонам (разный: четыре одинаковые копии одной записи складывались бы в гребёнку) и ветра в
-     * огонь: записи — в своей скорости, сдвиг не больше ±25 % ({@code SHIFT_MAX} сборки звуков, {@code NukeTonesTest}).
+     * Pitch of directional roar loops (different: four identical copies of one recording would create comb filtering) and wind into
+     * fire: recordings play at their own speed, shifted no more than ±25 % ({@code SHIFT_MAX} in sound building, {@code NukeTonesTest}).
      */
     static final float[] ROAR_TONES = {0.9f, 0.97f, 1.04f, 1.11f};
     static final float WIND_TONE = 1;
-    /** Ветер в огонь: мощность стока ∑ s / d от пожаров не дальше {@link #WIND_RANGE}; полная — у 5000 пожаров в 100 блоках. */
+    /** Wind into fire: sink strength ∑ s / d from fires within {@link #WIND_RANGE}; full at 5000 fires 100 blocks away. */
     private static final double WIND_RANGE = 1500, WIND_REF = 5000 / 100.0, WIND_VOLUME = 0.3;
-    /** Точек модели на кольцо — по окружности через столько блоков. */
+    /** Model points per ring: this many blocks apart around the circumference. */
     private static final double ARC = 64;
-    /** Пересчёт мощности — раз в столько тиков (громкость петель между ними плавная). */
+    /** Recalculate strength once per this many ticks (loop volume transitions smoothly between them). */
     private static final int EVERY = 5;
-    /** Обрушения: места руин рядом (не дальше), сколько помнить, частота у начала и спад. */
+    /** Collapses: nearby ruin locations (maximum distance), number retained, initial rate and decay. */
     private static final double COLLAPSE_TAU = 2 * 60 * 20;
     private static final int RUINS_KEPT = 512;
     private static final double COLLAPSE_RATE = 1 / 50.0;
-    /** Пока своих чанков с моделью мало (ожидается меньше стольких пожаров), модели верим как есть. */
+    /** While local chunks contain little model coverage (fewer expected fires than this), trust the model as is. */
     private static final double TRUST_MIN = 40;
 
     private final ClientNuclear.Active a;
@@ -77,20 +77,20 @@ final class NukeAfter {
     private final AmbientLoop[] roar = new AmbientLoop[QUADRANTS];
     @Nullable
     private AmbientLoop wind;
-    /** Тиков до новой попытки запустить петлю (гул по сторонам, ветер — последняя). */
+    /** Ticks before retrying a loop start (directional roar, wind last). */
     private final int[] retry = new int[QUADRANTS + 1];
     private final float[] roarVolume = new float[QUADRANTS];
     private final double[] roarDistance = new double[QUADRANTS];
     private final FireRoar fire = new FireRoar();
-    /** Тепло горящего у подрыва сейчас, Вт: шторм вдали и огонь в своих чанках (для строки сценария). */
+    /** Current heat burning from this detonation, W: distant storm plus fire in local chunks (for the scenario line). */
     private double stormWatts, seenWatts;
     private float windVolume;
     private Vec3 windToward = Vec3.ZERO;
     private double windDistance;
-    /** Доверие модели: сколько горит в своих чанках против модели там же (1 — как в модели, 0 — пожаров нет). */
+    /** Model trust: actual local-chunk fire relative to the model there (1 — matches model; 0 — no fires). */
     private double trust = 1;
     private double modelLoaded, seenLoaded, modelRest = 1;
-    /** Места руин рядом с подрывом (из обломков, что прислал сервер), выборка не больше {@link #RUINS_KEPT}. */
+    /** Ruin locations near the detonation (from debris sent by the server), sampled to at most {@link #RUINS_KEPT}. */
     private final List<BlockPos> ruins = new ArrayList<>();
     private int ruinsSeen;
     private double firstRuin = Double.NaN;
@@ -102,7 +102,7 @@ final class NukeAfter {
         this.random = RandomSource.create(d.seed() ^ 0xAF7E5L);
     }
 
-    /** Модель огня — при первой нужде (радиусы подрыва считаются по таблицам). */
+    /** Fire model on first need (detonation radii are calculated from tables). */
     private FireField field() {
         if (field == null) {
             field = new FireField(d);
@@ -111,7 +111,7 @@ final class NukeAfter {
         return field;
     }
 
-    /** Горит ли ещё что-то от этого подрыва (звук горящего города). */
+    /** Whether anything from this detonation is still burning (burning-city sound). */
     boolean burning() {
         double t = a.ticks(0);
         return t > 0 && t < field().endTicks() && field().total > 0;
@@ -124,12 +124,12 @@ final class NukeAfter {
         FireField f = field();
         double t = a.ticks(0);
         if (nextSecondary < 0) {
-            // подрыв, застанный не с начала: прошлые взрывы не повторяются
+            // detonation encountered after its start: do not repeat past explosions
             nextSecondary = 0;
             while (nextSecondary < secondaries.size() && secondaries.get(nextSecondary).ticks() <= t) nextSecondary++;
         }
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
-        // модель пожаров сервера кончилась — гул ведёт шторм, пока он горит (до утра пелены)
+        // server fire model ended — the storm drives the roar while it burns (until pall morning)
         boolean field = f.total > 0 && t < f.endTicks();
         if (!field && !a.storm.burningAt(t)) {
             end();
@@ -142,10 +142,10 @@ final class NukeAfter {
     }
 
     /**
-     * Гул пожаров у уха по сторонам ({@link #roar}), ветер в огонь и доверие модели. Ветер — к пожарам модели
-     * {@link FireField} и к огню в своих чанках: модель вдали — только то, чего там не видно (сервер ставит пожары и туда,
-     * где игроки, — их чанки первыми, — а счётчик у подрыва один, поэтому модель вдали — без той доли, что горит в своих
-     * чанках). {@code field} — модель пожаров сервера ещё горит.
+     * Directional fire roar at the ear ({@link #roar}), wind into fire, and model trust. Wind is drawn toward {@link FireField} model
+     * fires and local-chunk fire: the distant model contains only what is not visible there (the server also starts fires where
+     * players are — their chunks first — with one counter per detonation, so the distant model excludes the share burning in local
+     * chunks). {@code field} means the server fire model is still burning.
      */
     private void measure(ClientLevel level, FireField f, double t, Vec3 ear, boolean field) {
         double[] wind = new double[4];
@@ -169,7 +169,7 @@ final class NukeAfter {
         }
         double all = f.burning(t);
         double rest = all <= 0 ? 0 : Math.max(0, 1 - seen[0] / all);
-        // модель вдали — только если сервер жжёт (Detonation.fires), без доли, что горит в своих чанках
+        // distant model only if the server burns (Detonation.fires), excluding the share burning in local chunks
         double model = d.fires() ? trust * rest : 0;
         for (int i = 0; i < f.fires.length; i++) {
             double burning = f.burning(i, t);
@@ -180,7 +180,7 @@ final class NukeAfter {
             for (int j = 0; j < n; j++) {
                 double ang = 2 * Math.PI * (j + 0.5) / n + offset;
                 double x = b.x + Math.cos(ang) * r, z = b.z + Math.sin(ang) * r;
-                // в своих чанках огонь видно на деле: модель там — только для сверки
+                // local chunks show actual fire: the model there is for comparison only
                 if (level.getChunkSource().getChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4, false) != null) {
                     modelHere += each;
                     continue;
@@ -191,10 +191,10 @@ final class NukeAfter {
         modelLoaded = modelHere;
         modelRest = rest;
         seenLoaded = seen[0];
-        // сверка: модель против огня в своих чанках, плавно (огонь встаёт со вспышкой, волна сбивает часть, гаснет не сразу)
+        // comparison: model versus local-chunk fire, smoothly (fire starts with the flash, the wave blows some out, it does not fade immediately)
         if (modelHere >= TRUST_MIN) {
             trust += 0.2 * (Math.min(4, seen[0] / modelHere) - trust);
-            // шторму — только пока огонь молод: ванильный потом прогорает по-своему, а шторм горит до утра
+            // for the storm, only while fire is young: vanilla fire later burns out its own way, while the storm burns until morning
             if (t < f.lastIgnition() + FireField.RISE + 0.7 * FireField.TAU) a.storm.seen(trust);
         }
         double sink = wind[3];
@@ -205,11 +205,11 @@ final class NukeAfter {
     }
 
     /**
-     * Шторм вдали — в гул ({@link #fire}): клетки, что горят сейчас по карте шторма ({@link FireStorm#map}: доля площади
-     * клетки, что горит, — то же пламя, что рисует пелена), кроме своих чанков (там — настоящий огонь), с доверием модели
-     * ({@link FireStorm#gate}). Тепло клетки — горящая площадь × {@link FirePlume#BLOCK_WATTS} (горящая грань дерева, Вт/м²).
+     * Distant storm into the roar ({@link #fire}): cells currently burning on the storm map ({@link FireStorm#map}: fraction of cell area
+     * burning — the same flame drawn by the pall), except local chunks (real fire there), with model trust
+     * ({@link FireStorm#gate}). Cell heat is burning area × {@link FirePlume#BLOCK_WATTS} (burning wood face, W/m²).
      *
-     * @return тепло шторма вдали, Вт
+     * @return distant storm heat, W
      */
     private double storm(ClientLevel level, double t, Vec3 ear) {
         FireStorm s = a.storm;
@@ -232,7 +232,7 @@ final class NukeAfter {
         return sum;
     }
 
-    /** Громкость петель гула по сторонам — по уровню у уха ({@link FireRoar}), запись — {@link Sources#NUKE_FIRE}. */
+    /** Directional roar-loop volume follows ear level ({@link FireRoar}); recording — {@link Sources#NUKE_FIRE}. */
     private void roar() {
         Sources.Source src = Sources.NUKE_FIRE;
         ClientLevel level = Minecraft.getInstance().level;
@@ -243,7 +243,7 @@ final class NukeAfter {
         }
     }
 
-    /** Пожар {@code s} в точке: сток ветра в огонь — к нему. */
+    /** Fire {@code s} at a point: the wind sink points toward it. */
     private static void sink(double[] wind, Vec3 ear, double x, double z, double s) {
         if (s <= 0) return;
         double dx = x - ear.x, dz = z - ear.z, flat = Math.sqrt(dx * dx + dz * dz);
@@ -257,9 +257,9 @@ final class NukeAfter {
     }
 
     /**
-     * Петли гула и ветра: ведутся каждый тик. Петлю, которой движок не держит (не дал канал, снял при перезапуске звука
-     * или смене устройства, ползунок «Окружение» был в нуле), — запустить заново, каждую сама по себе; пока ползунок в
-     * нуле — не запускать (как сирены, {@link NukeSounds}).
+     * Roar and wind loops: maintained each tick. Restart any loop the engine is not retaining (no channel, removed on sound restart
+     * or device change, "Ambient" slider was zero), independently; do not start while the slider is
+     * zero (like sirens, {@link NukeSounds}).
      */
     private void sound(Vec3 ear) {
         boolean ambient = Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.AMBIENT) > 0;
@@ -271,7 +271,7 @@ final class NukeAfter {
         wind = loop(QUADRANTS, wind, ambient, ear, windToward, windVolume, windDistance, ModSounds.NUKE_FIRE_WIND.get(), WIND_TONE, d.seed() ^ 0x3D);
     }
 
-    /** Одна петля: звучит — вести; нет — запустить, если есть что и можно. */
+    /** One loop: maintain if playing; otherwise start if there is something to play and it is allowed. */
     @Nullable
     private AmbientLoop loop(int i, @Nullable AmbientLoop l, boolean ambient, Vec3 ear, Vec3 toward, float volume, double distance,
                              SoundEvent event, float pitch, long seed) {
@@ -289,11 +289,11 @@ final class NukeAfter {
         return fresh;
     }
 
-    /** Вторичные взрывы, чей час настал: наш взрыв — картинка и звук с фронтом, без разрушений. */
+    /** Secondary explosions whose time has come: our blast — visuals and sound with a front, without destruction. */
     private void secondaries(ClientLevel level, double t) {
         while (nextSecondary < secondaries.size() && secondaries.get(nextSecondary).ticks() <= t) {
             FireField.Secondary s = secondaries.get(nextSecondary++);
-            // пожары погашены или выключены у сервера — и взрываться нечему
+            // fires extinguished or disabled on the server — nothing left to explode
             if (!d.fires() || trust < 0.2) continue;
             double y = FarTerrain.of(level).at((int) Math.floor(s.x()), (int) Math.floor(s.z()));
             if (Double.isNaN(y) || y <= level.getMinBuildHeight() + 1) y = d.groundY() + 1;
@@ -303,7 +303,7 @@ final class NukeAfter {
         }
     }
 
-    /** Места снесённого рядом (обломки от сервера) — для обрушений. */
+    /** Nearby demolished locations (debris from the server), for collapses. */
     void ruins(List<S2C.NukeDebris.Piece> pieces) {
         if (Double.isNaN(firstRuin)) firstRuin = a.ticks(0);
         for (S2C.NukeDebris.Piece p : pieces) {
@@ -316,7 +316,7 @@ final class NukeAfter {
         }
     }
 
-    /** Треск и поздние обрушения в руинах рядом, всё реже. */
+    /** Crackling and late collapses in nearby ruins, becoming less frequent. */
     private void collapses(double t) {
         if (ruins.isEmpty() || Double.isNaN(firstRuin) || t < firstRuin + 40) return;
         double rate = COLLAPSE_RATE * Math.exp(-(t - firstRuin) / COLLAPSE_TAU);
@@ -324,12 +324,12 @@ final class NukeAfter {
         BlockPos p = ruins.get(random.nextInt(ruins.size()));
         Vec3 at = Vec3.atCenterOf(p);
         boolean small = random.nextFloat() < 0.35f;
-        // докуда слышно — мощность обрушения и путь до уха (Sources), а не дальность
+        // audible reach follows collapse power and the path to the ear (Sources), not distance
         Sources.play(small ? ModSounds.DEBRIS_FALL.get() : ModSounds.NUKE_COLLAPSE.get(), at, small ? Sources.RUIN_DEBRIS : Sources.NUKE_COLLAPSE,
                 0.8f + random.nextFloat() * 0.3f);
     }
 
-    /** Петли стихают (подрыв убран, огонь кончился). */
+    /** Loops fade (detonation removed, fire ended). */
     void end() {
         for (AmbientLoop l : roar) if (l != null) l.end();
         if (wind != null) wind.end();

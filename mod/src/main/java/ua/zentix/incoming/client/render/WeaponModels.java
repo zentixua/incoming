@@ -22,25 +22,25 @@ import ua.zentix.incoming.entity.FlightPhase;
 import java.util.List;
 
 /**
- * Модели снарядов — гладкие сетки OBJ с текстурами из {@code tools/gen_models.py} (models/weapon, textures/block/weapon).
- * Грузятся как дополнительные модели блоков (атлас блоков), разбираются в {@link QuadMesh} и рисуются слоем
- * сущностей: свет и тени мира, под шейдерами Iris — как обычные сущности. Подвижные детали — отдельные OBJ, здесь их поворачивают по фазе полёта:
- * винт шахеда и «Ланцета», крылья ракеты и «Ланцета», воздухозаборник ракеты, створки бомболюка B-2, стартовые ускорители до отделения.
- * Пакет РСЗО ({@link Mesh#ROCKET_RACK}) рисует {@link LauncherRenderer}, пакет контейнеров ЗРК ({@link Mesh#SAM_PACK}) —
- * {@link SamRenderer}.
- * Шарниры — те же числа, что в gen_models.py.
+ * Projectile models: smooth OBJ meshes with textures from {@code tools/gen_models.py} (models/weapon, textures/block/weapon).
+ * Loaded as additional block models (block atlas), decoded to {@link QuadMesh}, drawn through entity render type:
+ * world light and shadows, under Iris shaders as ordinary entities. Moving parts are separate OBJs, rotated here
+ * by flight phase: Shahed and Lancet propellers, missile and Lancet wings, missile intake, B-2 bomb bay doors,
+ * launch boosters before separation. MLRS rack ({@link Mesh#ROCKET_RACK}) drawn by {@link LauncherRenderer};
+ * SAM container rack ({@link Mesh#SAM_PACK}) by {@link SamRenderer}.
+ * Pivots use the same numbers as gen_models.py.
  * <p>
- * Рисуют по позе снаряда ({@link ProjectilePose}), а не по сущности, и отдают детали в {@link Parts}: тот же код
- * рисует снаряд вблизи (вершины в буфер слоя сущностей, {@link Buffers}) и вдали, где сущности у клиента нет
- * ({@link FarModels}: детали лежат в видеопамяти, на кадр — только их положение). У деталей есть упрощённые копии
- * ({@code <деталь>_lod1}, gen_models.py) — для модели, мелкой на экране.
+ * Draw from projectile pose ({@link ProjectilePose}), rather than entity, supplying parts to {@link Parts}: shared
+ * code draws nearby projectiles (vertices into entity render-type buffer, {@link Buffers}) and distant ones absent
+ * on client ({@link FarModels}: parts in video memory, only their positions per frame). Parts have simplified copies
+ * ({@code <part>_lod1}, gen_models.py) for models small on screen.
  */
 public final class WeaponModels {
     private WeaponModels() {}
 
     /**
-     * Деталь модели: один OBJ и, если {@code lod}, его упрощённая копия {@code <имя>_lod1}; {@code translucent} —
-     * полупрозрачная (размытый диск винта), рисуется поверх непрозрачных без записи глубины.
+     * Model part: one OBJ and, if {@code lod}, its simplified {@code <name>_lod1} copy; {@code translucent} means
+     * translucent (blurred propeller disc), drawn over opaque parts without depth writes.
      */
     public enum Mesh {
         DRONE_BODY("drone_body", true), DRONE_PROP("drone_prop", true), DRONE_DISC("drone_disc", false, true),
@@ -51,14 +51,14 @@ public final class WeaponModels {
         BOMBER_DOOR_R_IN("bomber_door_r_in", false), BOMBER_DOOR_R_OUT("bomber_door_r_out", false),
         BOMB_BODY("bomb_body", true), ICBM_BODY("icbm_body", true), ROCKET_BODY("rocket_body", true), ROCKET_RACK("rocket_rack_body", false),
         LOITER_BODY("loiter_body", true), LOITER_WINGS("loiter_wings", true), LOITER_PROP("loiter_prop", true), LOITER_DISC("loiter_disc", false, true),
-        /** Зенитная ракета ЗРК: вдали её не рисуют (полёт короткий, вид — только в мире), упрощённой копии нет. */
+        /** SAM missile: not drawn at distance (short flight, visible only in world), no simplified copy. */
         INTERCEPTOR_BODY("interceptor_body", false),
-        /** Пакет контейнеров ЗРК над его блоком: стоит на месте, вдали его не рисуют, упрощённой копии нет. */
+        /** SAM container rack above its block: stationary, not drawn at distance, no simplified copy. */
         SAM_PACK("sam_pack", false);
 
-        /** Имя OBJ (models/weapon/&lt;имя&gt;.obj). */
+        /** OBJ name (models/weapon/&lt;name&gt;.obj). */
         public final String file;
-        /** Есть упрощённая копия. */
+        /** Simplified copy exists. */
         public final boolean lod;
         public final boolean translucent;
         private final ModelResourceLocation location, lodLocation;
@@ -88,23 +88,23 @@ public final class WeaponModels {
             return QuadMesh.builder().add(quads, new Matrix4f()).build();
         }
 
-        /** Сетка детали; coarse — упрощённая копия, если она есть (без неё — та же полная). */
+        /** Part mesh; coarse selects simplified copy if available (otherwise same full mesh). */
         QuadMesh mesh(boolean coarse) {
             return (coarse ? this.coarse : mesh).get();
         }
 
-        /** Нарисовать деталь в текущей системе координат (нос по +Z); coarse — упрощённую копию, если она есть. */
+        /** Draw part in current coordinate system (nose +Z); coarse selects simplified copy if available. */
         public void draw(PoseStack pose, VertexConsumer vc, int light, float alpha, boolean coarse) {
             mesh(coarse).draw(pose.last(), vc, QuadMesh.white(alpha), light, OverlayTexture.NO_OVERLAY);
         }
 
-        /** Полную копию, непрозрачной (пусковые, сброшенный ускоритель). */
+        /** Full copy, opaque (launchers, spent booster). */
         public void draw(PoseStack pose, MultiBufferSource buffers, int light) {
             draw(pose, buffers.getBuffer(SOLID), light, 1, false);
         }
     }
 
-    /** Слой непрозрачных деталей и полупрозрачных (размытые диски винтов). */
+    /** Render type for opaque and translucent parts (blurred propeller discs). */
     static final RenderType SOLID = RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS);
     static final RenderType TRANSLUCENT = RenderType.entityTranslucent(InventoryMenu.BLOCK_ATLAS);
 
@@ -115,21 +115,21 @@ public final class WeaponModels {
         }
     }
 
-    /** Ресурсы перезагружены (F3+T, пакет ресурсов): сетки снарядов и пусковых собираются из новых моделей. */
+    /** Resources reloaded (F3+T, resource pack): projectile and launcher meshes rebuild from new models. */
     public static void baked(ModelEvent.BakingCompleted e) {
         QuadMesh.Cached.invalidateAll();
     }
 
-    /** Как нарисовать снаряд в его системе координат (нос по +Z) по его позе: какие детали и где. */
+    /** How to draw projectile in its axes (nose +Z) from its pose: which parts and where. */
     @FunctionalInterface
     public interface Look {
         void render(ProjectilePose p, PoseStack pose, Parts parts);
     }
 
-    /** Куда идут детали модели. */
+    /** Model part destination. */
     @FunctionalInterface
     public interface Parts {
-        /** Деталь в текущей системе координат pose; coarse — упрощённая копия, alpha — прозрачность полупрозрачной. */
+        /** Part in current pose coordinate system; coarse selects simplified copy, alpha sets translucent opacity. */
         void part(Mesh mesh, PoseStack pose, boolean coarse, float alpha);
 
         default void part(Mesh mesh, PoseStack pose, boolean coarse) {
@@ -137,7 +137,7 @@ public final class WeaponModels {
         }
     }
 
-    /** Детали — вершинами в буферы слоёв сущностей со светом мира (снаряд вблизи); один на рендерер, поток отрисовки. */
+    /** Parts as vertices into entity render-type buffers with world light (nearby projectile); one per renderer, render thread. */
     public static final class Buffers implements Parts {
         private MultiBufferSource buffers;
         private int light;
@@ -154,12 +154,12 @@ public final class WeaponModels {
         }
     }
 
-    /** Ускоритель ещё на снаряде: на пусковой и пока горит. */
+    /** Booster still on projectile: on launcher and while burning. */
     private static boolean boosterAttached(ProjectilePose p) {
         return p.phase.ordinal() <= FlightPhase.BOOST.ordinal();
     }
 
-    /** Доля раскрытия (0…1) детали, которая раскрывается после отделения ускорителя за {@code ticks} тиков. */
+    /** Deployment share (0…1) of a part deploying in {@code ticks} ticks after booster separation. */
     private static float deployed(ProjectilePose p, float delay, float ticks) {
         FlightPhase ph = p.phase;
         if (ph.ordinal() < FlightPhase.CLIMB.ordinal()) return 0;
@@ -168,9 +168,9 @@ public final class WeaponModels {
         return k * k * (3 - 2 * k);
     }
 
-    // ---------------------------------------------------------------- шахед
+    // ---------------------------------------------------------------- Shahed
 
-    /** Шарнир винта — ось Z. Скорость винта, рад/тик: на пусковой мотор уже крутится на малом газу. */
+    /** Propeller pivot: Z axis. Propeller speed, rad/tick: engine already idles on the launcher. */
     public static void drone(ProjectilePose p, PoseStack pose, Parts parts) {
         parts.part(Mesh.DRONE_BODY, pose, p.coarse);
         if (boosterAttached(p)) parts.part(Mesh.DRONE_BOOSTER, pose, p.coarse);
@@ -180,13 +180,13 @@ public final class WeaponModels {
         pose.mulPose(new Quaternionf().rotationZ(p.age * rate));
         parts.part(Mesh.DRONE_PROP, pose, p.coarse);
         pose.popPose();
-        // размытый диск: чем быстрее винт, тем он плотнее
+        // Blurred disc: denser at higher propeller speed.
         parts.part(Mesh.DRONE_DISC, pose, p.coarse, Mth.clamp((rate - 0.6f) / 1.6f, 0, 1));
     }
 
-    // ---------------------------------------------------------------- крылатая ракета
+    // ---------------------------------------------------------------- cruise missile
 
-    /** Шарниры крыльев: (±0.21, 0, 0.45), поворот вокруг Y; сложенное крыло лежит вдоль корпуса назад. */
+    /** Wing pivots: (±0.21, 0, 0.45), rotation around Y; folded wing lies backward along the body. */
     private static final float WING_PIVOT_X = 0.21f, WING_PIVOT_Z = 0.45f;
 
     public static void missile(ProjectilePose p, PoseStack pose, Parts parts) {
@@ -201,7 +201,7 @@ public final class WeaponModels {
             parts.part(side > 0 ? Mesh.MISSILE_WING_L : Mesh.MISSILE_WING_R, pose, p.coarse);
             pose.popPose();
         }
-        // воздухозаборник выдвигается из брюха после крыльев
+        // Intake extends from belly after wings.
         float intake = deployed(p, 8, 6);
         pose.pushPose();
         pose.translate(0, 0.16f * (1 - intake), 0);
@@ -211,9 +211,9 @@ public final class WeaponModels {
 
     // ---------------------------------------------------------------- B-2
 
-    /** Шарниры створок — по кромкам отсеков (ось Z): внутренние у x = ±0.4, внешние у ±3.0; y — низ крыла там. */
+    /** Door pivots along bay edges (Z axis): inner at x = ±0.4, outer at ±3.0; y is wing underside there. */
     private static final float DOOR_HINGE_IN = 0.4f, DOOR_HINGE_OUT = 3.0f, DOOR_Y_IN = -0.93f, DOOR_Y_OUT = -0.68f;
-    /** За сколько блоков до точки сброса открываются створки (≈ 10 тиков полёта). */
+    /** Blocks before drop point when doors open (≈ 10 flight ticks). */
     private static final double DOORS_OPEN_AHEAD = 120;
 
     public static void bomber(ProjectilePose p, PoseStack pose, Parts parts) {
@@ -225,14 +225,14 @@ public final class WeaponModels {
         door(pose, parts, Mesh.BOMBER_DOOR_R_OUT, -DOOR_HINGE_OUT, DOOR_Y_OUT, -open);
     }
 
-    /** Створки: открываются на подходе к точке сброса, закрываются через секунду после него. */
+    /** Doors open approaching drop point, close one second after drop. */
     private static float bayOpen(ProjectilePose p) {
         if (p.phase == FlightPhase.EGRESS) return 1 - Mth.clamp((p.phaseAge - 20) / 20f, 0, 1);
         double d = Math.hypot(p.aimX - p.x, p.aimZ - p.z) - BomberEntity.releaseLine(p.y - p.aimY);
         return (float) Mth.clamp(1 - d / DOORS_OPEN_AHEAD, 0, 1);
     }
 
-    /** Створка поворачивается вокруг оси Z на шарнире; знак угла — наружу от отсека. */
+    /** Door rotates around Z at its pivot; angle sign points outward from bay. */
     private static void door(PoseStack pose, Parts parts, Mesh mesh, float hingeX, float hingeY, float open) {
         pose.pushPose();
         pose.translate(hingeX, hingeY, 0);
@@ -242,17 +242,17 @@ public final class WeaponModels {
         pose.popPose();
     }
 
-    // ---------------------------------------------------------------- бомба и МБР
+    // ---------------------------------------------------------------- bomb and ICBM
 
     public static void bomb(ProjectilePose p, PoseStack pose, Parts parts) {
-        // бомба медленно вращается в падении — решётчатые рули держат её вращение
+        // Bomb rotates slowly while falling; grid fins maintain rotation.
         pose.pushPose();
         pose.mulPose(new Quaternionf().rotationZ(p.age * 0.05f));
         parts.part(Mesh.BOMB_BODY, pose, p.coarse);
         pose.popPose();
     }
 
-    /** Реактивный снаряд РСЗО: в полёте вращается — его крутят косо поставленные перья стабилизатора. */
+    /** MLRS rocket spins in flight, driven by canted stabilizer fins. */
     public static void rocket(ProjectilePose p, PoseStack pose, Parts parts) {
         pose.pushPose();
         if (!p.phase.onLauncher()) pose.mulPose(new Quaternionf().rotationZ(p.age * 0.5f));
@@ -261,8 +261,8 @@ public final class WeaponModels {
     }
 
     /**
-     * «Ланцет»: крылья сложены вдоль корпуса на катапульте и раскрываются сразу после толчка (рисуем их кресты
-     * вырастающими от корпуса), толкающий винт с размытым диском; на круге — ровный газ, в пике — полный.
+     * Lancet: wings folded along body on catapult, deploy immediately after push (draw cruciform wings growing out
+     * from body), pusher propeller with blurred disc; steady throttle in orbit, full in dive.
      */
     public static void loiter(ProjectilePose p, PoseStack pose, Parts parts) {
         parts.part(Mesh.LOITER_BODY, pose, p.coarse);
@@ -281,7 +281,7 @@ public final class WeaponModels {
         if (rate > 0) parts.part(Mesh.LOITER_DISC, pose, p.coarse, Mth.clamp((rate - 0.6f) / 1.6f, 0, 1));
     }
 
-    /** Ракета ЗРК: корпус. */
+    /** SAM missile: body. */
     public static void interceptor(ProjectilePose p, PoseStack pose, Parts parts) {
         parts.part(Mesh.INTERCEPTOR_BODY, pose, p.coarse);
     }

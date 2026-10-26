@@ -24,66 +24,66 @@ import ua.zentix.incoming.nuclear.radiation.Shielding;
 
 
 /**
- * Куски блоков, которые сорвала и несёт ударная волна: кувыркающиеся тела с текстурой своего блока (как частица
- * разрушения блока, только объёмные) летят, падают, бьются о землю и ложатся. Частицы ванильного движка на листе блоков:
- * свет мира, туман и шейдерпак — как у всего в мире, своё — только тело. Сколько их живёт сразу — не больше {@link #CAP}
- * (меньше по настройке «Частицы»): когда мест нет, новый кусок ближе к камере вытесняет самый дальний, иначе не рождается.
+ * Block pieces torn off and carried by the shock wave: tumbling bodies with their block texture (like block-breaking
+ * particles, but three-dimensional) fly, fall, hit the ground and settle. Vanilla engine particles on the block atlas:
+ * world light, fog and shader pack as for everything in the world; only the body is custom. At most {@link #CAP} alive at once
+ * (fewer by the Particles setting): when full, a new piece closer to the camera evicts the farthest; otherwise it is not spawned.
  * <p>
- * Кусок — тело своего вещества ({@link Kind}): обломок камня или дерева — куб, доска, осколок стекла, лист. Волна его не
- * бросает, а несёт ветер за фронтом ({@link Wind}): кусок срывается с места в покое, воздух разгоняет его квадратичным
- * сопротивлением dv/dt = g + (g/v_t²)·|u − v|·(u − v), где v_t — скорость падения тела в тихом воздухе
- * ({@link #terminal}) из его массы и площади: клок листвы (v_t ~1,7 м/с) уходит с ветром сразу и долго планирует, стекло и доска
- * (14–19 м/с) разгоняются за десятые секунды, камень (~100 м/с) почти не сдвигается и падает рядом. Тот же размер, что
- * видно, задаёт и сопротивление.
+ * A piece is a body of its material ({@link Kind}): stone or wood chunk — cube, plank, glass shard, leaf. The wave does not
+ * throw it; wind behind the front carries it ({@link Wind}): torn off at rest, the piece accelerates under quadratic air
+ * drag dv/dt = g + (g/v_t²)·|u − v|·(u − v), where v_t is the body's terminal fall speed in still air
+ * ({@link #terminal}) from its mass and area: a foliage tuft (v_t ~1.7 m/s) follows the wind immediately and glides for a long time; glass and planks
+ * (14–19 m/s) accelerate over tenths of a second; stone (~100 m/s) barely moves and falls nearby. The same visible size
+ * also sets the drag.
  */
 public final class Fragments {
-    /** Сколько кусков живёт сразу при «Частицы: все». */
+    /** Maximum live pieces with Particles: All. */
     static final int CAP = 1200;
-    /** Жизнь куска: обломок, доска, стекло — от {@link #LIFE_SHORT} − 40 тиков; лист планирует до {@link #LIFE_MAX}. */
+    /** Piece lifetime: chunk, plank, glass — from {@link #LIFE_SHORT} − 40 ticks; a leaf glides up to {@link #LIFE_MAX}. */
     static final int LIFE_SHORT = 110, LIFE_MAX = 300;
-    /** Самое долгое ожидание вылета, тиков. */
+    /** Maximum launch delay, ticks. */
     public static final int DELAY_MAX = 40;
-    /** Последние столько тиков жизни кусок уменьшается до нуля (ложится и крошится). */
+    /** During this many final lifetime ticks, the piece shrinks to zero (settles and crumbles). */
     private static final int SHRINK = 15;
-    /** Кусок, что пролежал на земле столько тиков, уходит. */
+    /** A piece resting on the ground for this many ticks disappears. */
     private static final int REST = 20;
-    /** Ускорение свободного падения, блоков за тик² (9,81 м/с²; блок — метр, тик — 1/20 с). */
+    /** Gravitational acceleration, blocks per tick² (9.81 m/s²; block — metre, tick — 1/20 s). */
     public static final double G = 9.81 / 400;
-    /** Плотность воздуха у земли, кг/м³. */
+    /** Ground-level air density, kg/m³. */
     static final double AIR = 1.2;
     /**
-     * Коэффициент сопротивления: квадратная пластина поперёк потока — 1,17, куб гранью — 1,05 (Hoerner, «Fluid-Dynamic
-     * Drag», 1965, гл. 3). Кувыркаясь, пластина ловит поток то гранью, то ребром — у неё это верхняя оценка сопротивления.
+     * Drag coefficient: square plate across the flow — 1.17, cube face-on — 1.05 (Hoerner, “Fluid-Dynamic
+     * Drag”, 1965, ch. 3). A tumbling plate meets the flow face-on and edge-on — this is an upper drag estimate for it.
      */
     static final double CD_PLATE = 1.17, CD_CUBE = 1.05;
     /**
-     * Масса листвы на площадь, кг/м²: сухая — 0,03–0,15 у листвы деревьев (Poorter и др., New Phytologist 182, 2009), живой
-     * лист — вдвое-втрое тяжелее с водой (⚠ оценка 0,2). Скорость падения выходит ~1,7 м/с — как у падающих листьев.
+     * Foliage mass per area, kg/m²: dry tree foliage — 0.03–0.15 (Poorter et al., New Phytologist 182, 2009); a living
+     * leaf with water is two to three times heavier (⚠ estimate 0.2). Terminal speed is ~1.7 m/s, like falling leaves.
      */
     static final double LEAF_AREAL = 0.2;
     /**
-     * Кусок кроны — клок листвы с веткой в 0,2–0,35 м, а не отдельный лист: волна рвёт и листья, и ветки, а рисуется
-     * выборка — несколько кусков на блок кроны, где настоящих листьев сотни; лист в 10 см с 60 блоков мельче пикселя, и
-     * выборка из листьев пропадала бы целиком. Масса на площадь у клока — та же, что у листьев (ветка тонкая, ⚠ оценка).
+     * A canopy piece is a 0.2–0.35 m foliage tuft with a twig, rather than an individual leaf: the wave tears both leaves and branches, while the drawing
+     * samples a few pieces per canopy block that contains hundreds of real leaves; a 10 cm leaf at 60 blocks is subpixel, so
+     * a sample of leaves would vanish entirely. Tuft mass per area matches leaves (thin twig, ⚠ estimate).
      */
     static final float SPRIG_MIN = 0.2f, SPRIG_MAX = 0.35f;
-    /** Толщина доски, м (2,5 см — обычная доска обшивки и пола). */
+    /** Plank thickness, m (2.5 cm — a normal cladding or floor plank). */
     static final double BOARD_THICK = 0.025;
     /**
-     * Ветер вверх — доля ветра вдоль земли у куска (Kuhl и др. 1992, §3.4: вертикальная скорость в пыльном слое за фронтом —
-     * 0,02 ветра у дна и 0,04–0,12 у верха); у каждого куска своя.
+     * Upward wind as a fraction of horizontal wind at the piece (Kuhl et al. 1992, §3.4: vertical velocity in the dusty layer behind the front —
+     * 0.02 of wind at the bottom and 0.04–0.12 at the top); each piece has its own fraction.
      */
     public static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
-     * Ветер вверх у куска с постройки или кроны — до этой доли ветра: у кромки тупого тела поток срывается, и оторвавшийся
-     * слой уходит вверх под 15–30° (обтекание куба на земле: Castro и Robins, J. Fluid Mech. 79, 1977; ⚠ угол по памяти,
-     * взят 25°, tg 0,47); так кромка дома и крона подбрасывают сорванное. Доля держится весь полёт, хотя область срыва —
-     * одна-две высоты постройки за ней, а путь воздуха за фазу — того же порядка (⚠ приближение).
+     * Upward wind for a piece from a structure or canopy, up to this wind fraction: flow separates at a bluff-body edge, and the detached
+     * layer rises at 15–30° (flow around a ground-mounted cube: Castro and Robins, J. Fluid Mech. 79, 1977; ⚠ angle from memory,
+     * 25° chosen, tan 0.47); house edges and canopies thus lift torn material. The fraction persists throughout flight, although the separation region is
+     * one to two structure heights downstream, and air displacement over the phase is of the same order (⚠ approximation).
      */
     public static final double LIFT_EDGE = Math.tan(Math.toRadians(25));
     /**
-     * Живые куски — свой список, а не по смерти куска: движок выбрасывает частицы и без неё (переполнение очереди, смена
-     * мира), поэтому кусок, который не тикал дольше {@link #LOST} тиков, считается ушедшим.
+     * Live pieces use a separate list rather than death callbacks: the engine also discards particles without those (queue overflow, world
+     * change), so a piece not ticked for more than {@link #LOST} ticks is considered gone.
      */
     private static final FarthestPool<Fragment> LIVE = new FarthestPool<>(Particle::isAlive, Particle::remove);
     private static final int LOST = 2;
@@ -92,20 +92,20 @@ public final class Fragments {
 
     private Fragments() {}
 
-    /** Вещество куска — от него тело и сопротивление. */
+    /** Piece material — determines body and drag. */
     public enum Kind {
-        /** Обломок камня, кирпича, земли, металла, бревна — куб. */
+        /** Stone, brick, soil, metal or log chunk — cube. */
         CHUNK(1.5),
-        /** Доска (доски, двери, заборы, ступени из дерева) — длинная тонкая пластина. */
+        /** Plank (planks, doors, fences, wooden stairs) — long thin plate. */
         BOARD(2),
-        /** Осколок стекла окна — тонкая пластина. */
+        /** Window glass shard — thin plate. */
         PANE(3),
-        /** Клок листвы кроны ({@link #SPRIG_MIN}–{@link #SPRIG_MAX} м) — тонкая пластина. */
+        /** Canopy foliage tuft ({@link #SPRIG_MIN}–{@link #SPRIG_MAX} m) — thin plate. */
         LEAF(6);
 
         /**
-         * Сколько кусков рисуется на снесённый блок — выборка для картинки, а не число осколков (у кроны в кубометре — сотни
-         * листьев): клоки листвы и стекло мельче обломков, их нужно больше, чтобы было видно.
+         * Pieces drawn per destroyed block — a visual sample, rather than the fragment count (a cubic metre of canopy holds hundreds of
+         * leaves): foliage tufts and glass are smaller than chunks; more are needed to be visible.
          */
         public final double perBlock;
 
@@ -113,7 +113,7 @@ public final class Fragments {
             this.perBlock = perBlock;
         }
 
-        /** Вещество блока {@code s} (на месте {@code p}). */
+        /** Material of block {@code s} (at {@code p}). */
         public static Kind of(LevelReader level, BlockPos p, BlockState s) {
             if (s.is(BlockTags.LEAVES)) return LEAF;
             if (Shielding.window(level, p, s)) return PANE;
@@ -123,21 +123,21 @@ public final class Fragments {
         }
     }
 
-    /** Ветер, что несёт кусок. */
+    /** Wind carrying a piece. */
     public interface Wind {
         /**
-         * Ветер сейчас в точке (x, y, z): {@code into[0]}, {@code into[2]} — вдоль земли, блоков за тик; {@code into[1]} —
-         * скорость вдоль своего направления от источника волны (в фазе разрежения — меньше нуля).
+         * Current wind at (x, y, z): {@code into[0]}, {@code into[2]} — along the ground, blocks per tick; {@code into[1]} —
+         * speed along its direction from the wave source (negative during the rarefaction phase).
          */
         void at(double x, double y, double z, double[] into);
     }
 
     /**
-     * Скорость падения тела в тихом воздухе, м/с: v_t = √(2mg / (ρ·C·A)). Пластина (лист, стекло, доска) — масса на
-     * площадь грани σ: √(2σg / (ρ·C_пл)); куб ребром L из вещества плотности ρ_в: √(2ρ_в·L·g / (ρ·C_куб)).
+     * Terminal fall speed in still air, m/s: v_t = √(2mg / (ρ·C·A)). Plate (leaf, glass, plank) — mass per
+     * face area σ: √(2σg / (ρ·C_plate)); cube of edge L and material density ρ_m: √(2ρ_m·L·g / (ρ·C_cube)).
      *
-     * @param density плотность вещества, кг/м³ ({@link Shielding#material}; у стекла — масса окна на квадратный метр)
-     * @param size    ребро куба или длина пластины, м
+     * @param density material density, kg/m³ ({@link Shielding#material}; for glass — window mass per square metre)
+     * @param size    cube edge or plate length, m
      */
     public static double terminal(Kind kind, double density, double size) {
         double g = 9.81;
@@ -149,20 +149,20 @@ public final class Fragments {
         };
     }
 
-    /** Сопротивление g/v_t², 1/блок, у тела со скоростью падения {@code terminalMps}, м/с, в тихом воздухе. */
+    /** Drag g/v_t², 1/block, for a body of terminal speed {@code terminalMps}, m/s, in still air. */
     public static double drag(double terminalMps) {
         double vt = terminalMps / 20;
         return G / (vt * vt);
     }
 
     /**
-     * Тик полёта тела со скоростью {@code v} (блоков за тик, меняется на месте) в ветре (ux, uy, uz) с сопротивлением
-     * {@code drag} = g/v_t² (1/блок): квадратичное сопротивление за тик — точно (|v − u| спадает как 1/(1 + k·|v − u|·t):
-     * у листа k·|v − u| в сотни раз больше единицы, и шаг Эйлера разошёлся бы), тяжесть — вокруг него. Возвращает |v − u|.
+     * One body flight tick with velocity {@code v} (blocks per tick, mutated in place) in wind (ux, uy, uz) with drag
+     * {@code drag} = g/v_t² (1/block): exact quadratic drag over the tick (|v − u| falls as 1/(1 + k·|v − u|·t):
+     * for a leaf k·|v − u| is hundreds of times above one and an Euler step would diverge), gravity split around it. Returns |v − u|.
      */
     public static double step(double[] v, double ux, double uy, double uz, double drag) {
-        // тяжесть — половиной до сопротивления и половиной после (у листа время установления — 3 тика, и тяжесть одним
-        // шагом после сопротивления сдвинула бы скорость падения на 15 %)
+        // half gravity before drag and half after (a leaf settles in 3 ticks; a single gravity
+        // step after drag would shift terminal speed by 15 %)
         double rx = v[0] - ux, ry = v[1] - 0.5 * G - uy, rz = v[2] - uz, rel = Math.sqrt(rx * rx + ry * ry + rz * rz);
         double keep = 1 / (1 + drag * rel);
         v[0] = ux + rx * keep;
@@ -172,12 +172,12 @@ public final class Fragments {
     }
 
     /**
-     * Кусок блока {@code state} (с места {@code from}: его цвет травы и листвы) вещества {@code kind} с центром (x, y, z) и
-     * скоростью (vx, vy, vz), блоков за тик (сорванный на месте — покой): вылетает через {@code delay} тиков (до тех пор не
-     * виден и стоит) и летит с ветром {@code wind}. {@code size} — ребро обломка или длина доски и осколка, блоки (клок листвы —
-     * своего размера). {@code edge} — кусок с постройки или кроны: поток на её кромке подбрасывает его ({@link #LIFT_EDGE}).
+     * Piece of block {@code state} (from {@code from}: its grass and foliage colour), material {@code kind}, centre (x, y, z) and
+     * velocity (vx, vy, vz), blocks per tick (torn off in place — at rest): launches after {@code delay} ticks (invisible and stationary
+     * until then), flies in {@code wind}. {@code size} — chunk edge or plank/shard length, blocks (foliage tuft has its
+     * own size). {@code edge} — piece from a structure or canopy: flow at its edge lifts it ({@link #LIFT_EDGE}).
      *
-     * @return false — не родился (воздух, блок без модели, мест нет)
+     * @return false — not spawned (air, block without a model, no slots)
      */
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                                float size, Wind wind, int delay, boolean edge) {
@@ -185,17 +185,17 @@ public final class Fragments {
     }
 
     /**
-     * То же, но тело летит со своей скоростью падения в тихом воздухе {@code terminalMps}, м/с, а рисуется размером
-     * {@code size}: так рисуют крупнее то, что настоящего размера на экране не видно (сор у камеры — комочек почвы в 2 мм
-     * гранью в 6–12 см, подача), а полёт, оседание и снос остаются у настоящего тела. NaN — скорость падения по размеру и
-     * веществу ({@link #terminal}).
+     * Same, but the body flies with its own still-air terminal speed {@code terminalMps}, m/s, and is drawn at
+     * {@code size}: enlarges matter invisible on screen at real size (camera litter — a 2 mm soil grain drawn with a 6–12 cm
+     * face, presentation), while flight, settling and drift remain those of the real body. NaN — terminal speed by size and
+     * material ({@link #terminal}).
      */
     public static boolean torn(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
                                float size, double terminalMps, Wind wind, int delay, boolean edge) {
         if (state.isAir() || state.getRenderShape() != RenderShape.MODEL || !state.shouldSpawnTerrainParticles()) return false;
-        // мест нет — самый дальний от камеры уходит, если он дальше нового ({@link FarthestPool}): волна идёт к камере, и
-        // ближние места снесённого приходят последними — иначе все места занимали бы куски дальних чанков, а у камеры,
-        // где их и видно, не было бы ни одного
+        // no slots — evict the farthest from the camera if farther than the new piece ({@link FarthestPool}): wave travels toward the camera, and
+        // nearby destroyed sites arrive last — otherwise distant chunk debris would take all slots and the camera,
+        // where pieces are visible, would see none
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = eye.distanceToSqr(x, y, z);
         if (!LIVE.admit(d, cap(), tick, f -> eye.distanceToSqr(f.x(), f.y(), f.z()))) return false;
@@ -213,52 +213,52 @@ public final class Fragments {
     }
 
     /**
-     * Сколько кусков дать новому источнику, что хочет {@code wanted}: не больше свободных мест, но не меньше четверти
-     * предела — их место освободят самые дальние ({@link #torn}). Залп из восьми взрывов в одном тике иначе рождал
-     * 8 × 900 клочков ради 1200 мест, и почти все тут же вытеснялись (десятки мс в тике рождения).
+     * Piece allowance for a new source requesting {@code wanted}: no more than free slots, but at least one quarter of the
+     * cap — the farthest will free their slots ({@link #torn}). Otherwise an eight-blast salvo in one tick spawned
+     * 8 × 900 tufts for 1200 slots, almost all immediately evicted (tens of ms on the birth tick).
      */
     public static int share(int wanted) {
         return Math.min(wanted, Math.max(cap() / 4, cap() - alive()));
     }
 
-    /** Сколько кусков живёт. */
+    /** Live piece count. */
     public static int alive() {
         return LIVE.size();
     }
 
-    /** Тик клиента (не на паузе): ушедшие куски — из счёта. */
+    /** Client tick (unpaused): remove departed pieces from the count. */
     public static void tick() {
         tick++;
         LIVE.purge(f -> f.isAlive() && tick - f.ticked <= LOST);
     }
 
-    /** Выход из мира: движок сам убирает частицы. */
+    /** World exit: the engine removes particles itself. */
     public static void reset() {
         LIVE.clear();
     }
 
-    /** Кусок: прямоугольное тело с полуразмерами по своим осям, повёрнутое вокруг своей оси, с текстурой блока на гранях. */
+    /** Piece: rectangular body with half-sizes along its axes, rotated around its own axis, block texture on faces. */
     private static final class Fragment extends Particle {
-        /** Оси тела по граням: нормаль, первая и вторая оси грани (номер оси тела), знак нормали; a × b = нормаль. */
+        /** Body face axes: normal, first and second face axes (body axis index), normal sign; a × b = normal. */
         private static final int[][] FACES = {{0, 1, 2, 1}, {0, 2, 1, -1}, {1, 2, 0, 1}, {1, 0, 2, -1}, {2, 0, 1, 1}, {2, 1, 0, -1}};
         private static final Quaternionf TURN = new Quaternionf();
         private static final Vector3f[] AXES = {new Vector3f(), new Vector3f(), new Vector3f()};
         private static final double[] AIR_NOW = new double[3], VEL = new double[3];
 
-        /** Полуразмеры по осям тела, блоки. */
+        /** Half-sizes along body axes, blocks. */
         private final float[] half = new float[3];
         private final float lift, u0, v0, u1, v1;
         private final float ax, ay, az;
-        /** Сопротивление g/v_t², 1/блок. */
+        /** Drag g/v_t², 1/block. */
         private final double drag;
         private final Wind wind;
         private float angle, angleO, spin;
         private int delay, rest;
-        /** Первый тик полёта прошёл (рамка вынута из блоков). */
+        /** First flight tick passed (bounds extracted from blocks). */
         private boolean out;
-        /** Упёрся в блок не снизу (потолок, крона над ним): ваниль его больше не двигает, а onGround не ставит. */
+        /** Hit a block other than from above (ceiling, canopy above): vanilla no longer moves it, but does not set onGround. */
         private boolean stuck;
-        /** Тик {@link Fragments#tick}, в который кусок тикал в последний раз (движок выбросил его — перестаёт). */
+        /** {@link Fragments#tick} tick when the piece last ticked (stops when the engine discards it). */
         private long ticked = Fragments.tick;
 
         Fragment(ClientLevel level, BlockState state, BlockPos from, Kind kind, double x, double y, double z, double vx, double vy, double vz,
@@ -270,7 +270,7 @@ public final class Fragments {
                 case CHUNK -> size;
                 case BOARD -> Math.min(1, 1.6f * size);
                 case PANE -> 0.6f * size;
-                // клок своего размера (0 — клок кроны); скорость падения у пластины от размера не зависит
+                // tuft of its own size (0 — canopy tuft); a plate's terminal speed is independent of size
                 case LEAF -> size > 0 ? size : SPRIG_MIN + (SPRIG_MAX - SPRIG_MIN) * random.nextFloat();
             };
             half[0] = 0.5f * len;
@@ -286,7 +286,7 @@ public final class Fragments {
                 case PANE -> 0.01f;
                 case LEAF -> 0.01f;
             };
-            // место частицы — низ её рамки; рамка — по наибольшему полуразмеру (тело кувыркается)
+            // particle position is the bottom of its bounds; bounds use the largest half-size (body tumbles)
             float box = 2 * Math.max(half[0], Math.max(half[1], half[2]));
             setPos(x, y - 0.5 * box, z);
             xo = this.x;
@@ -302,8 +302,8 @@ public final class Fragments {
             drag = drag(terminalMps > 0 ? terminalMps : terminal(kind, Shielding.material(level, from, state), len));
             lift = (float) (LIFT_MIN + ((edge ? LIFT_EDGE : LIFT_MAX) - LIFT_MIN) * random.nextDouble());
             TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, level, from);
-            // на грани — кусок текстуры размером с тело (16 пикселей на блок); у стекла — от края: окно прозрачно, кроме рамки
-            // и бликов по краю, а прозрачные пиксели частица не рисует
+            // face uses a texture patch the size of the body (16 pixels per block); glass uses the edge: window is transparent except the frame
+            // and edge highlights, and the particle does not draw transparent pixels
             float span = Mth.clamp(2 * Math.max(half[0], half[1]), 0.125f, 1);
             float ou = kind == Kind.PANE ? 0 : random.nextFloat() * (1 - span), ov = kind == Kind.PANE ? 0 : random.nextFloat() * (1 - span);
             u0 = sprite.getU(ou);
@@ -346,11 +346,11 @@ public final class Fragments {
                 return;
             }
             if (!out) {
-                // рамка — по наибольшему размеру тела: у длинной доски из пролома у пола она заходит в пол, а ваниль не
-                // выталкивает частицу из блока, в котором та уже стоит, — доска ушла бы в пол; выше — на свободное место (руины
-                // встают к вылету, поэтому проверка — в первый тик полёта, а не при рождении)
-                // только пол под серединой: рамка у пролома в стене задевает и соседние блоки по бокам, и их проверка
-                // подняла бы кусок на блок, в стену над проломом
+                // bounds use the largest body size: a long plank from a breach near the floor intersects the floor, and vanilla does not
+                // push a particle out of a block it already occupies — the plank would sink into the floor; raise it to free space (ruins
+                // appear by launch time, so check on the first flight tick rather than at birth)
+                // only the floor below the centre: wall-breach bounds also touch neighbouring side blocks; checking them
+                // would raise the piece by a block, into the wall above the breach
                 out = true;
                 for (int i = 0; i < 4 && !level.noCollision(new net.minecraft.world.phys.AABB(x - 0.05, getBoundingBox().minY, z - 0.05, x + 0.05,
                         getBoundingBox().minY + 0.5 * bbHeight, z + 0.05)); i++) {
@@ -359,8 +359,8 @@ public final class Fragments {
                 }
             }
             if (onGround || stuck) {
-                // лёг или упёрся: ваниль после касания земли (или потолка, кроны снизу — тогда onGround не ставится) частицу
-                // больше не двигает (stoppedByCollision) — кувырок гаснет, полежит и раскрошится
+                // settled or blocked: after touching ground (or ceiling/canopy from below — then onGround stays unset), vanilla no longer
+                // moves the particle (stoppedByCollision) — tumbling fades, it rests then crumbles
                 xd = yd = zd = 0;
                 super.tick();
                 spin *= 0.5f;
@@ -369,7 +369,7 @@ public final class Fragments {
                 if (++rest >= REST) lifetime = Math.min(lifetime, age + SHRINK);
                 return;
             }
-            // ветер: вдоль земли — у места, откуда сорвало, вверх — своя доля его (вихри пыльного слоя)
+            // wind: horizontal from the detachment site, upward as its own fraction (dust-layer eddies)
             wind.at(x, y + bbHeight * 0.5, z, AIR_NOW);
             VEL[0] = xd;
             VEL[1] = yd;
@@ -380,10 +380,10 @@ public final class Fragments {
             zd = VEL[2];
             double x0 = x, y0 = y, z0 = z;
             super.tick();
-            // скорость есть, а место то же: упёрся в блок (ваниль больше не двигает)
+            // velocity exists, but position is unchanged: blocked by a block (vanilla no longer moves it)
             stuck = x == x0 && y == y0 && z == z0 && xd * xd + yd * yd + zd * zd > 1e-8;
             angleO = angle;
-            // кувыркается тем быстрее, чем быстрее его обтекает воздух
+            // tumbles faster with faster airflow around it
             spin = Math.copySign((float) Math.min(0.8, 0.1 + 0.25 * rel), spin);
             angle += spin;
         }
@@ -405,7 +405,7 @@ public final class Fragments {
                 float hn = half[f[0]] * shrink, ha = half[f[1]] * shrink, hb = half[f[2]] * shrink;
                 float s = f[3];
                 float nx = n.x * s, ny = n.y * s, nz = n.z * s;
-                // тень граней, как у блоков: верх светлее, низ темнее, бока между
+                // face shading like blocks: lighter top, darker bottom, sides between
                 float shade = nx * nx * 0.6f + nz * nz * 0.8f + ny * ny * (ny > 0 ? 1 : 0.5f);
                 float r = rCol * shade, g = gCol * shade, bl = bCol * shade;
                 float cx = px + nx * hn, cy = py + ny * hn, cz = pz + nz * hn;

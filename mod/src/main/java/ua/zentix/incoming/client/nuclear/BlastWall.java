@@ -9,76 +9,76 @@ import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 /**
- * Голова слоя пыли ударной волны (DESIGN-nuke §6): самая молодая, низкая и густая часть того же слоя, что потом стоит
- * пеленой ({@link PallField}), — законы одни ({@link DustModel}). Сам фронт не виден — это скачок давления в прозрачном
- * воздухе; ветер за ним вдоль земли ({@link Detonation#groundWind}) поднимает с земли пыль и обломки, над водой —
- * брызги ({@link WaterModel#spray}). Своего вещества у волны нет.
+ * Head of the shock-wave dust layer (DESIGN-nuke §6): youngest, lowest and densest part of the same layer that later remains
+ * as pall ({@link PallField}), governed by the same laws ({@link DustModel}). The front itself is invisible — a pressure jump in transparent
+ * air; wind behind it along the ground ({@link Detonation#groundWind}) lofts ground dust and debris, or spray over water
+ * ({@link WaterModel#spray}). The wave has no matter of its own.
  * <p>
- * Голова — клин от фронта назад до места, где кончилась положительная фаза (своя на каждой дальности, {@link HobBlast},
- * {@link #length}; у наземного первые ~0,6 с — короче: голова с переходом к пелене не заходит в огненный шар на земле,
- * {@link #underBall}): у переднего края пыли ещё нет, и слой нулевой высоты; назад поднятое растёт как импульс скоростного
- * напора ({@link DustModel#lifted}), а верх — как пыльный пограничный слой Kuhl, u^(5/6) ({@link #top}); поэтому
- * густота у земли — больше всего у самого края, на десятой части клина (в 2,6 раза гуще, чем в его конце,
- * {@link #shape}), а столб над землёй растёт назад. За клином пыль остаётся слоем пелены (её таблица — та же пыль,
- * {@link PallField}): голова отдаёт ей место на полдлины клина ({@link #handoff}). Где ветер больше не поднимает пыль,
- * густоты у края нет, и голова сходит на нет, отрываясь от фронта, — пыль стоит (MET: «перестала идти по земле на
- * 945 м»).
+ * The head is a wedge from the front back to where the positive phase ended (different at every distance, {@link HobBlast},
+ * {@link #length}; shorter for the first ~0.6 s of a surface burst: the head and its pall transition do not enter the ground-level fireball,
+ * {@link #underBall}): no dust yet at the leading edge, and zero layer height; rearward, lofted material grows with dynamic-pressure
+ * impulse ({@link DustModel#lifted}), while the top follows Kuhl's dusty boundary layer, u^(5/6) ({@link #top}); thus
+ * ground density peaks near the edge, one tenth into the wedge (2.6 times denser than at its end,
+ * {@link #shape}), while the column above ground grows rearward. Behind the wedge, dust remains as a pall layer (its table holds the same dust,
+ * {@link PallField}): the head hands over across half a wedge length ({@link #handoff}). Where wind no longer lofts dust,
+ * edge density vanishes and the head fades, separating from the front — dust remains in place (MET: "stopped moving along the ground at
+ * 945 m").
  * <p>
- * Клин — объём в проходе пелены ({@code PallPass}: {@code pallWall*} в {@code pall.glsl}, числа слота — {@link #slot}),
- * с вихрями слоя — шумом в координатах самой пыли ({@link #carried}): клубы встают там, где фронт сорвал пыль с земли, и
- * остаются там, сдвинутые ветром за фронтом на его путь за фазу (десятки метров), а фронт уходит дальше. Против фронта
- * пыль у края идёт вверх и назад — так катится вал. Метры и секунды модели; в мир — через {@link Detonation#blocks}.
+ * The wedge is a volume in the pall pass ({@code PallPass}: {@code pallWall*} in {@code pall.glsl}, slot parameters — {@link #slot}),
+ * with layer eddies — noise in dust coordinates ({@link #carried}): billows form where the front tore dust from the ground and
+ * stay there, shifted by wind behind the front by its phase displacement (tens of meters), while the front moves on. Relative to the front,
+ * edge dust moves up and backward — the roller rolls this way. Model meters and seconds; world conversion through {@link Detonation#blocks}.
  */
 public final class BlastWall {
     /**
-     * Голова в момент: передний край пыли (блоки от эпицентра по земле), верх клина (блоки) и густота 0..1 против самой
-     * густой пыли пелены прежде ({@link PallField#SIGMA_DENSE}, видно на 40 м; 0 — головы нет).
+     * Head at a time: dust leading edge (ground blocks from ground zero), wedge top (blocks), density 0..1 relative to the former
+     * densest pall dust ({@link PallField#SIGMA_DENSE}, visibility 40 m; 0 — no head).
      */
     public record Wall(double head, double height, double density) {
         static final Wall NONE = new Wall(0, 0, 0);
     }
 
     /**
-     * Плитка шума клубов головы — доля верха слоя к концу фазы волны ({@link DustModel.Column#first}, наибольшего по
-     * дальности): клубы (четверть плитки) — около пятой его части, вихри слоя — его толщины (Kuhl §3). Плитка у подрыва
-     * одна на всё время: шум — в координатах пыли, и плитка, растущая с головой, двигала бы клубы по земле.
+     * Head-billow noise tile is a fraction of the layer top at wave phase end ({@link DustModel.Column#first}, maximum over
+     * distance): billows (quarter tile) are about a fifth of it; layer eddies match layer thickness (Kuhl §3). One tile per detonation
+     * for its lifetime: noise uses dust coordinates, and a tile growing with the head would move billows along the ground.
      */
     static final double TILE = 0.9;
     /**
-     * Путь воздуха за фронтом за положительную фазу на месте — доля U·t₊ (U — ветер сразу за фронтом): скорость частиц
-     * по Фридлендеру u(t) = U(1 − t/t₊)e^(−t/t₊), ∫₀^t₊ = U·t₊/e (Glasstone &amp; Dolan §3.57: форма спада; коэффициент
-     * спада 1 — у слабых волн, вдали; ближе к эпицентру спад круче, и путь меньше — оценка сверху).
+     * Air displacement behind the front over the local positive phase, fraction of U·t₊ (U — wind immediately behind the front): particle speed
+     * follows Friedlander u(t) = U(1 − t/t₊)e^(−t/t₊), ∫₀^t₊ = U·t₊/e (Glasstone &amp; Dolan §3.57: decay shape; decay
+     * coefficient 1 for weak distant waves; closer to ground zero decay is steeper and displacement smaller — upper estimate).
      */
     static final double CARRY = Math.exp(-1);
-    /** Голова отдаёт место пелене от конца клина (доля его длины) до этой доли ({@link #handoff}). */
+    /** Head hands over to pall from the wedge end (fraction of its length) to this fraction ({@link #handoff}). */
     static final double HANDOFF_FROM = 1, HANDOFF_TO = 1.5;
-    /** Головы нет, когда ослабление в ней слабее этого, 1/м (видно на 4 км). */
+    /** No head when its extinction is below this, 1/m (visibility 4 km). */
     static final double GONE = 1e-3;
-    /** Узлов таблицы слоя по дальности. */
+    /** Layer-table nodes by distance. */
     private static final int NODES = 256;
-    /** Облако Вильсона: середина оболочки — доля радиуса фронта (за фронтом, в фазе разрежения), полутолщина — доля. */
+    /** Wilson cloud: shell center is this front-radius fraction (behind the front, in the negative phase), half-thickness is this fraction. */
     static final double WILSON_AT = 0.93, WILSON_WIDTH = 0.06;
-    /** Толща облака Вильсона поперёк оболочки в самой густой его поре. */
+    /** Wilson-cloud optical depth across the shell at its densest time. */
     static final double WILSON_TAU = 0.5;
-    /** Чисел слота стены для шейдера ({@link #slot}): голова (mat4) и облако Вильсона (vec4). */
+    /** Wall slot parameters for the shader ({@link #slot}): head (mat4) and Wilson cloud (vec4). */
     public static final int SLOT = 20;
 
     private final Detonation d;
-    /** Высота подрыва над землёй, м; мощность — кубическим корнем от 15 кт (масштаб форм). */
+    /** Burst height above ground, m; yield as cube-root ratio to 15 kt (shape scale). */
     private final double hob, ys;
-    /** Докуда таблица слоя по земле, м. */
+    /** Ground reach of the layer table, m. */
     private final double tableM;
     /**
-     * Слой по дальности (узлы от 0 до {@link #tableM}): толща всего поднятого ({@link DustModel.Column#lifted}) и когда на
-     * месте кончается положительная фаза — приход фронта в игре и фаза на месте ({@link DustModel.Column#positive}), с
-     * модели (не убывает с дальностью).
+     * Layer by distance (nodes 0 to {@link #tableM}): optical depth of all lofted material ({@link DustModel.Column#lifted}) and when the local
+     * positive phase ends — game front arrival plus local phase ({@link DustModel.Column#positive}), in
+     * model seconds (nondecreasing with distance).
      */
     private final double[] lifted = new double[NODES], phaseEnd = new double[NODES];
-    /** Положительная фаза в конце таблицы, с модели: за таблицей конец клина — путь фронта за неё. */
+    /** Positive phase at the table end, model s: beyond the table, wedge end follows front travel over this phase. */
     private final double lastPositive;
-    /** Влажный воздух — облако Вильсона есть ({@link CloudModel#wilsonCloud}). */
+    /** Humid air means a Wilson cloud exists ({@link CloudModel#wilsonCloud}). */
     private final boolean humid;
-    /** Плитка шума клубов головы, м ({@link #TILE}). */
+    /** Head-billow noise tile, m ({@link #TILE}). */
     private final double tileM;
 
     public BlastWall(Detonation d) {
@@ -105,17 +105,17 @@ public final class BlastWall {
         tileM = TILE * first;
     }
 
-    /** Влажность в эпицентре (облако Вильсона видно во влажном воздухе): из биома на клиенте, над водой — 1. */
+    /** Ground-zero humidity (Wilson cloud visible in humid air): from client biome; 1 over water. */
     static double humidity(Detonation d) {
         var level = net.minecraft.client.Minecraft.getInstance().level;
         if (level == null) return 0.5;
-        // блок поверхности: у суши — под первым воздухом, у воды с прицела (гладь, 62,889) — сама вода
+        // surface block: on land, below first air; for crosshair water height (surface, 62.889), the water itself
         var pos = new net.minecraft.core.BlockPos(Mth.floor(d.burst().x), NukeWater.surfaceBlock(d.groundY()), Mth.floor(d.burst().z));
         if (!level.getFluidState(pos).isEmpty()) return 1;
         return level.getBiome(pos).value().getModifiedClimateSettings().downfall();
     }
 
-    /** Таблица слоя на {@code groundM} м от эпицентра (линейно между узлами; дальше таблицы — пыли нет). */
+    /** Layer table at {@code groundM} m from ground zero (linear between nodes; no dust beyond the table). */
     private double at(double[] table, double groundM) {
         double x = Math.max(0, groundM) / tableM * (NODES - 1);
         if (x >= NODES - 1) return 0;
@@ -123,28 +123,28 @@ public final class BlastWall {
         return Mth.lerp(x - i, table[i], table[i + 1]);
     }
 
-    /** Приход фронта в игре на {@code groundM} м от эпицентра по земле, секунды модели. */
+    /** Game-front arrival at ground distance {@code groundM} m from ground zero, model seconds. */
     private double arrival(double groundM) {
         return d.arrivalTicks(d.slantOf(d.blocks(groundM))) / (20 * d.scale());
     }
 
-    /** Фронт по земле в момент t (секунды модели), м: наклонная дальность фронта в игре — по земле. */
+    /** Ground front at time t (model seconds), m: game-front slant range converted to ground distance. */
     double shock(double t) {
         if (t <= 0) return 0;
         double front = d.metres(d.frontRadius(t * 20 * d.scale()));
         return Math.sqrt(Math.max(0, front * front - hob * hob));
     }
 
-    /** Передний край пыли по земле в момент t (секунды модели), м: сам фронт в игре — пыль встаёт сразу за ним. */
+    /** Dust leading edge on ground at time t (model seconds), m: the game front itself — dust rises right behind it. */
     double head(double t) {
         return shock(t);
     }
 
     /**
-     * Длина клина в момент t, м: от фронта в игре до места, где положительная фаза на месте уже кончилась ({@link #tail}),
-     * — за краем пыль моложе своей фазы, её поднимает ветер волны; пока фаза не кончилась нигде — весь путь фронта.
-     * Голова с переходом к пелене ({@link #HANDOFF_TO} длин) — не в огненном шаре на земле ({@link #underBall}): там шар,
-     * а не пыль, и клин короче — до места, где пыль ещё моложе своей фазы ({@link #backAge}).
+     * Wedge length at time t, m: from the game front to where the local positive phase has ended ({@link #tail});
+     * dust behind the edge is younger than its phase and lifted by wave wind; until phase end anywhere, the entire front travel.
+     * The head plus pall transition ({@link #HANDOFF_TO} lengths) stays outside the ground fireball ({@link #underBall}): there is ball,
+     * not dust, so the wedge is shorter — ending where dust is still younger than its phase ({@link #backAge}).
      */
     double length(double t) {
         double shock = shock(t), len = shock - tail(t), ball = underBall(t);
@@ -153,23 +153,23 @@ public final class BlastWall {
     }
 
     /**
-     * Докуда по земле от эпицентра в момент t (секунды модели) лежит огненный шар, м; 0 — земли он не касается
-     * ({@link FireballModel#groundRadius}: тот же шар, что в грибе). У наземного 15 кт фронт выходит из шара к ~0,13 с
-     * (первые 2 мс он на метр впереди шара — голова там в сантиметр высотой), клин доходит до конца фазы к ~0,6 с, шар
-     * отрывается от земли к ~4,4 с; воздушного (592 м) шар земли не касается.
+     * Ground reach of the fireball from ground zero at time t (model seconds), m; 0 if it does not touch the ground
+     * ({@link FireballModel#groundRadius}: the same ball as in the mushroom). For a 15 kt surface burst the front exits the ball by ~0.13 s
+     * (for the first 2 ms it is a meter ahead of the ball — the head is a centimeter high), the wedge reaches phase end by ~0.6 s, and the ball
+     * lifts off the ground by ~4.4 s; an airburst (592 m) ball does not touch ground.
      */
     double underBall(double t) {
         return FireballModel.groundRadius(t, hob, d.yieldKt(), d.surface());
     }
 
-    /** Конец клина по земле в момент t (секунды модели), м. */
+    /** Wedge end on ground at time t (model seconds), m. */
     private double back(double t) {
         return Math.max(0, shock(t) - length(t));
     }
 
     /**
-     * Возраст пыли в конце клина в момент t, секунды модели: с прихода фронта в игре, не больше положительной фазы на месте
-     * (с модели).
+     * Dust age at wedge end at time t, model seconds: since game-front arrival, capped at the local positive phase
+     * (from the model).
      */
     private double backSeconds(double t) {
         double back = back(t);
@@ -177,10 +177,10 @@ public final class BlastWall {
     }
 
     /**
-     * Какая доля положительной фазы на месте прошла к моменту t там, где кончается клин, 0..1: 1 — клин до конца фазы
-     * ({@link #tail}). Пока фаза не кончилась нигде, клин — весь путь фронта, и пыль в его конце (у эпицентра) моложе своей
-     * фазы; у огненного шара клин короче — тоже. Такая пыль ниже и тоньше: пограничный слой за свежим фронтом начинается
-     * с нулевой толщины.
+     * Fraction of local positive phase elapsed by t where the wedge ends, 0..1: 1 — wedge reaches phase end
+     * ({@link #tail}). Until phase end anywhere, the wedge spans all front travel, and dust at its end (ground zero) is younger than its
+     * phase; likewise for the shorter wedge near the fireball. Such dust is lower and optically thinner: the boundary layer behind a fresh front starts
+     * at zero thickness.
      */
     double backAge(double t) {
         double back = back(t);
@@ -188,8 +188,8 @@ public final class BlastWall {
     }
 
     /**
-     * Докуда по земле к моменту t (секунды модели) положительная фаза кончилась, м: где приход фронта в игре и фаза на
-     * месте вместе — не позже t (0 — нигде). За таблицей — путь фронта за фазу в её конце.
+     * Ground distance at which the positive phase has ended by t (model seconds), m: game-front arrival plus local phase
+     * is no later than t (0 — nowhere). Beyond the table, front travel over the phase at its end.
      */
     double tail(double t) {
         if (t <= phaseEnd[0]) return 0;
@@ -205,25 +205,25 @@ public final class BlastWall {
     }
 
     /**
-     * Верх клина в момент t, м: верх слоя там, где кончается клин, в возрасте пыли там — пыльный пограничный слой по пути
-     * фронта по своей нормали за местом ({@link DustModel#waveTop}; к концу фазы — {@link DustModel.Column#first}).
+     * Wedge top at time t, m: layer top at wedge end at the dust age there — dusty boundary layer from front travel along
+     * its own normal past the location ({@link DustModel#waveTop}; at phase end — {@link DustModel.Column#first}).
      */
     double height(double t) {
-        // не ниже миллиметра, как длина клина: делители шейдера (smoothstep по верху) не вырождаются
+        // at least a millimeter, like wedge length: shader divisors (smoothstep over top) stay nondegenerate
         return Math.max(1e-3, DustModel.waveTop(back(t), hob, d.yieldKt(), backSeconds(t)));
     }
 
-    /** Ослабление у земли в конце фазы волны там, где пыль подняло на {@code groundM}, при верхе {@code top} (1/м). */
+    /** Ground extinction at wave phase end where dust was lofted at {@code groundM}, with top {@code top} (1/m). */
     private double sigma(double groundM, double top) {
         return at(lifted, groundM) / (PallField.column(0) * Math.max(top, 1e-3));
     }
 
     /**
-     * Место пыли головы в координатах её самой — откуда её подняло (копия — {@code pallWallOrigin}): точка (rx, rz — от
-     * эпицентра по земле, z — над рельефом) за вычетом пути с ветром за фронтом ({@code carried} × {@link #carriedShare} по
-     * доле u фазы); у земли воздух стоит, выше идёт по закону 1/7 турбулентного пограничного слоя (z против верха в конце
-     * клина {@code top}), вверх — 0,02–0,08 пути (Kuhl §3.4: вертикальная скорость в слое — 0,02 u∞ у дна и 0,04–0,12 у
-     * верха). Шум клубов головы — в этих координатах: клубы стоят там, где пыль сорвало, а не едут с фронтом.
+     * Head-dust position in its own coordinates — where it was lofted (copy — {@code pallWallOrigin}): point (rx, rz — ground distance from
+     * ground zero, z — above terrain) minus displacement with wind behind the front ({@code carried} × {@link #carriedShare} at
+     * phase fraction u); air is stationary at ground level, above it follows the turbulent boundary-layer 1/7 law (z relative to wedge-end
+     * top {@code top}), upward — 0.02–0.08 of displacement (Kuhl §3.4: vertical layer speed is 0.02 u∞ at the bottom and 0.04–0.12 at
+     * the top). Head-billow noise uses these coordinates: billows stay where dust was torn away rather than traveling with the front.
      */
     static double[] origin(double rx, double rz, double z, double u, double top, double carried) {
         double zr = Mth.clamp(z / Math.max(top, 0.001), 0, 1);
@@ -232,16 +232,16 @@ public final class BlastWall {
         return new double[] {rx - rx / len * x, z - x * (0.02 + 0.06 * zr), rz - rz / len * x};
     }
 
-    /** Ветер сразу за фронтом вдоль земли на {@code groundM} от эпицентра по земле, м/с. */
+    /** Wind immediately behind the front along the ground at ground distance {@code groundM} from ground zero, m/s. */
     double wind(double groundM) {
         return d.groundWind(d.blocks(Math.max(0, groundM)));
     }
 
     /**
-     * Путь пыли с ветром за фронтом в момент t (секунды модели), м: путь воздуха за всю положительную фазу ({@link #CARRY})
-     * там, где сейчас середина клина. На своём месте пыль проходит его за фазу — {@link #carriedShare} по её доле, а в фазе
-     * разрежения ветер обратный, слабее и дольше (Glasstone и Dolan 1977, §3.05: давление ниже атмосферного не больше
-     * ~4 psi, фаза длиннее положительной) — тот же Фридлендер, и пыль возвращается к эпицентру.
+     * Dust displacement with wind behind the front at time t (model seconds), m: air displacement over the entire positive phase ({@link #CARRY})
+     * where the wedge middle is now. At its own location dust covers this distance over the phase — {@link #carriedShare} by phase fraction; during the
+     * negative phase, wind reverses, weaker and longer (Glasstone and Dolan 1977, §3.05: pressure no more than
+     * ~4 psi below atmospheric, phase longer than positive) — same Friedlander, returning dust toward ground zero.
      */
     double carried(double t) {
         double mid = Math.max(0, head(t) - 0.5 * length(t));
@@ -249,12 +249,12 @@ public final class BlastWall {
     }
 
     /**
-     * Доля пути с ветром ({@link #carried}), пройденная пылью за долю u положительной фазы с прихода фронта: скорость
-     * воздуха — как давление волны Фридлендера ({@code BlastPulse.friedlander}, тот же закон у шума ветра за фронтом),
-     * ∫₀^u (1 − x)e^(−x) dx / e^(−1) = u·e^(1 − u). К концу положительной фазы — 1; в фазе разрежения ветер обратный
-     * (наибольший — e^(−2) от пика, на 2t₊), и пыль идёт назад: к 2t₊ — 0,74, к 5t₊ — 0,09, а полный импульс волны — ноль,
-     * и вдали воздух возвращается на место. Отступление: у сильной волны вблизи спад круче (b &gt; 1), и вынос там
-     * остаётся — здесь его нет. Копия — {@code pallWallCarried}.
+     * Fraction of wind displacement ({@link #carried}) covered by dust over fraction u of the positive phase since front arrival: air
+     * speed follows Friedlander wave pressure ({@code BlastPulse.friedlander}, same law as wind noise behind the front),
+     * ∫₀^u (1 − x)e^(−x) dx / e^(−1) = u·e^(1 − u). At positive-phase end — 1; negative-phase wind reverses
+     * (peak e^(−2) of the maximum, at 2t₊), and dust returns: 0.74 at 2t₊, 0.09 at 5t₊; total wave impulse is zero,
+     * and distant air returns to its original location. Deviation: a strong nearby wave decays more steeply (b &gt; 1), leaving residual
+     * displacement — absent here. Copy — {@code pallWallCarried}.
      */
     static double carriedShare(double u) {
         if (u <= 0) return 0;
@@ -262,9 +262,9 @@ public final class BlastWall {
     }
 
     /**
-     * Ослабление пыли у земли в конце фазы волны в момент t (1/м): у переднего края (пыль, которую волна поднимает сейчас)
-     * и в конце клина — в {@code into}; ослабление брызг над водой — третьим. Вернёт наибольшее; пока фронт в огненном
-     * шаре ({@link #underBall}) — нули: головы ещё нет.
+     * Ground dust extinction at wave phase end at time t (1/m): at the leading edge (dust being lofted now)
+     * and wedge end, into {@code into}; spray extinction over water is third. Returns the maximum; while the front is inside the fireball
+     * ({@link #underBall}), all zero: no head yet.
      */
     double sigmas(double t, double[] into) {
         double edge = head(t), len = length(t), top = height(t);
@@ -272,9 +272,9 @@ public final class BlastWall {
             java.util.Arrays.fill(into, 0, 3, 0);
             return 0;
         }
-        // клин короче фазы (у шара, или фаза ещё нигде не кончилась): пыль в конце подняла лишь долю поднятого за фазу
-        // (DustModel.lifted), а верх ниже — слой в возрасте этой пыли (height); у края — та же доля фазы: поднятое у фронта
-        // растёт с возрастом линейно
+        // wedge shorter than phase (near the ball, or no phase has ended yet): end dust contains only a fraction of phase-total lofted material
+        // (DustModel.lifted), and its top is lower — layer at this dust age (height); same phase fraction at the edge: lofted material at the front
+        // grows linearly with age
         double age = backAge(t);
         into[0] = age * sigma(edge, top);
         into[1] = DustModel.lifted(age) * sigma(Math.max(0, edge - len), top);
@@ -282,7 +282,7 @@ public final class BlastWall {
         return Math.max(into[0], Math.max(into[1], into[2]));
     }
 
-    /** Голова в момент t (секунды модели): блоки и густота против самой густой пыли пелены прежде. */
+    /** Head at time t (model seconds): blocks and density relative to the former densest pall dust. */
     public Wall wall(double t) {
         double[] s = new double[3];
         if (t <= 0 || sigmas(t, s) < GONE) return Wall.NONE;
@@ -290,20 +290,20 @@ public final class BlastWall {
     }
 
     /**
-     * Числа слота стены для {@code pall.glsl} в момент t (секунды модели), блоки и 1/блок; false — ни головы, ни облака
-     * Вильсона (в {@code into} нули). Голова — mat4 по столбцам ({@code pallWall*}):
+     * Wall slot parameters for {@code pall.glsl} at time t (model seconds), blocks and 1/block; false — neither head nor Wilson
+     * cloud ({@code into} zeroed). Head is column-major mat4 ({@code pallWall*}):
      * <ul>
-     *     <li>[0..3] — передний край пыли от эпицентра, длина клина, его верх в конце; ослабление-масштаб (1/блок; 0 — головы
-     *     нет);</li>
-     *     <li>[4..7] — путь пыли с ветром за фронтом ({@link #carried(double)}); брызги над водой: отставание от края
-     *     пыли, доля верха, ослабление (1/блок);</li>
-     *     <li>[8..11] — какая доля фазы прошла в конце клина ({@link #backAge}: доля клина u — доля фазы u × она), 0, 0;
-     *     плитка шума клубов ({@link #TILE});</li>
-     *     <li>[12..15] — 0, 0; ослабление пыли у земли в конце фазы волны у переднего края и в конце клина — доли
-     *     масштаба.</li>
+     *     <li>[0..3] — dust leading edge from ground zero, wedge length, top at its end; extinction scale (1/block; 0 — no
+     *     head);</li>
+     *     <li>[4..7] — dust displacement with wind behind the front ({@link #carried(double)}); spray over water: lag behind dust
+     *     edge, top fraction, extinction (1/block);</li>
+     *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this), 0, 0;
+     *     billow noise tile ({@link #TILE});</li>
+     *     <li>[12..15] — 0, 0; ground dust extinction at wave phase end, at leading edge and wedge end — fractions of
+     *     scale.</li>
      * </ul>
-     * [16..19] — облако Вильсона ({@code pallWilson}): радиус середины оболочки от точки подрыва, полутолщина, ослабление в
-     * середине (0 — облака нет), высота точки подрыва над землёй под эпицентром.
+     * [16..19] — Wilson cloud ({@code pallWilson}): shell-center radius from the detonation point, half-thickness, central
+     * extinction (0 — no cloud), detonation-point height above ground zero.
      */
     public boolean slot(double t, float[] into) {
         java.util.Arrays.fill(into, 0, SLOT, 0f);
@@ -318,8 +318,8 @@ public final class BlastWall {
             into[2] = (float) d.blocks(top);
             into[3] = (float) (ref / d.scale());
             into[4] = (float) d.blocks(carried(t));
-            // над водой — брызги: ниже пыли (высота срыва гребней), позади края пыли на путь фронта за SPRAY_LAG, но тоже
-            // не в огненном шаре на земле: у него — ближе к фронту
+            // over water, spray: lower than dust (crest stripping height), behind dust edge by front travel over SPRAY_LAG, but also
+            // outside the ground fireball: closer to the front there
             double u = wind(Math.max(0, head - 0.5 * len)), ball = underBall(t);
             double lag = Math.max(0, head - head(Math.max(0, t - WaterModel.SPRAY_LAG)));
             if (ball > 0) lag = Math.min(lag, Math.max(0, head - ball - HANDOFF_TO * len));
@@ -327,7 +327,7 @@ public final class BlastWall {
             into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, top), 0.15, 1);
             into[7] = (float) (s[2] / d.scale());
             into[8] = (float) backAge(t);
-            // плитка шейдера — не мельче блока
+            // shader tile at least one block
             into[11] = (float) Math.max(1, d.blocks(tileM));
             into[14] = (float) (s[0] / ref);
             into[15] = (float) (s[1] / ref);
@@ -338,7 +338,7 @@ public final class BlastWall {
             double front = d.metres(d.frontRadius(t * 20 * d.scale())), w = WILSON_WIDTH * front;
             into[16] = (float) d.blocks(WILSON_AT * front);
             into[17] = (float) d.blocks(w);
-            // толща поперёк оболочки — WILSON_TAU в самой густой поре: у гауссовой оболочки ∫ = √π · полутолщина · σ
+            // optical depth across shell is WILSON_TAU at its densest time: Gaussian-shell ∫ = √π · half-thickness · σ
             into[18] = (float) (WILSON_TAU * wilson / (Math.sqrt(Math.PI) * Math.max(1e-3, d.blocks(w))));
             into[19] = (float) d.blocks(hob);
         }
@@ -347,38 +347,38 @@ public final class BlastWall {
 
 
     /**
-     * Облако Вильсона 0..1 в момент t (секунды модели): во влажном воздухе в фазе разрежения за фронтом воздух
-     * расширяется и остывает ниже точки росы — оболочка тумана. Встаёт с 0,15·∛(Y/15) с, тает к 3,5·∛(Y/15) с (у 15 кт —
-     * 0,15–3,5 с); в сухом воздухе его нет.
+     * Wilson cloud 0..1 at time t (model seconds): in humid air during the negative phase behind the front, air
+     * expands and cools below dew point — a fog shell. Appears from 0.15·∛(Y/15) s, fades by 3.5·∛(Y/15) s (15 kt:
+     * 0.15–3.5 s); absent in dry air.
      */
     double wilson(double t) {
         if (!humid) return 0;
         return smooth(0.15 * ys, 0.5 * ys, t) * (1 - smooth(1.5 * ys, 3.5 * ys, t));
     }
 
-    /** Докуда по земле от эпицентра (без сноса) может быть голова в момент t, блоки; 0 — головы нет. */
+    /** Maximum ground distance from ground zero (without drift) for the head at time t, blocks; 0 — no head. */
     public double reach(double t) {
         double[] s = new double[3];
         return t > 0 && sigmas(t, s) >= GONE ? d.blocks(head(t)) : 0;
     }
 
-    /** Докуда от точки подрыва может быть облако Вильсона в момент t, блоки; 0 — облака нет. */
+    /** Maximum distance from the detonation point for a Wilson cloud at time t, blocks; 0 — no cloud. */
     public double wilsonReach(double t) {
         if (wilson(t) <= 0) return 0;
         return d.blocks((WILSON_AT + 2 * WILSON_WIDTH) * d.metres(d.frontRadius(t * 20 * d.scale())));
     }
 
-    // ---------------------------------------------------------------- законы клина (общие с шейдером: pallWall* в pall.glsl)
+    // ---------------------------------------------------------------- wedge laws (shared with shader: pallWall* in pall.glsl)
 
-    /** Верх клина по доле u его длины за краем — доля верха в конце: u^(5/6) (Kuhl), за клином — весь. Копия {@code pallWallTop}. */
+    /** Wedge top at fraction u of its length behind the edge, fraction of end top: u^(5/6) (Kuhl); full behind the wedge. Copy {@code pallWallTop}. */
     static double top(double u) {
         return Math.pow(Mth.clamp(u, 0, 1), 5 / 6.0);
     }
 
     /**
-     * Густота у земли по доле u клина — против густоты в его конце: поднятое к этой доле фазы ({@link DustModel#lifted}) в
-     * слое верха {@link #top}; столб над землёй растёт назад как поднятое. Самая густая — у u ≈ 0,1 (в 2,6 раза), за клином —
-     * 1. Копия {@code pallWallShape}.
+     * Ground density at wedge fraction u relative to its end: material lofted by this phase fraction ({@link DustModel#lifted}) in a
+     * layer with top {@link #top}; column above ground grows rearward with lofted material. Densest at u ≈ 0.1 (2.6 times); behind the wedge,
+     * 1. Copy {@code pallWallShape}.
      */
     static double shape(double u) {
         if (u <= 0) return 0;
@@ -386,16 +386,16 @@ public final class BlastWall {
         return DustModel.lifted(x) / Math.pow(Math.max(x, 1e-4), 5 / 6.0);
     }
 
-    /** Доля головы за клином: от {@link #HANDOFF_FROM} до {@link #HANDOFF_TO} его длины место переходит к пелене. Копия {@code pallWallFade}. */
+    /** Head share behind the wedge: from {@link #HANDOFF_FROM} to {@link #HANDOFF_TO} of its length, hand over to pall. Copy {@code pallWallFade}. */
     static double handoff(double u) {
         return 1 - smooth(HANDOFF_FROM, HANDOFF_TO, u);
     }
 
     /**
-     * Доля густоты головы без шума (среднее по клубам) против густоты у земли в конце клина: {@code s} — за передним краем
-     * пыли (блоки; впереди — меньше нуля), {@code z} — над рельефом (блоки), {@code len} — длина клина, {@code top} — его
-     * верх в конце. По высоте — профиль пелены ({@link PallField#profile}) до верха клина здесь; под рельефом карты — до
-     * половины верха (карта грубее мира). Копия {@code pallWallMean}.
+     * Head density share without noise (billow mean), relative to ground density at wedge end: {@code s} — behind the dust leading
+     * edge (blocks; negative ahead), {@code z} — above terrain (blocks), {@code len} — wedge length, {@code top} — its
+     * end top. Vertically, pall profile ({@link PallField#profile}) up to the local wedge top; below map terrain, down to
+     * half the top (map is coarser than the world). Copy {@code pallWallMean}.
      */
     static double mean(double s, double z, double len, double top) {
         double u = s / Math.max(len, 0.001);
@@ -406,9 +406,9 @@ public final class BlastWall {
     }
 
     /**
-     * Ослабление средней головы (без клубов) в точке, 1/блок — как {@code pallWallAt} и {@code pallWallMean}: {@code slot}
-     * — числа {@link #slot}, {@code relX}, {@code relZ} — точка от эпицентра (блоки), {@code up} — над рельефом под ней,
-     * {@code wet} — доля воды под ней (над водой голова — брызги: ниже и позади края пыли).
+     * Mean-head extinction (without billows) at a point, 1/block, as in {@code pallWallAt} and {@code pallWallMean}: {@code slot}
+     * contains {@link #slot} parameters; {@code relX}, {@code relZ} — point relative to ground zero (blocks); {@code up} — above its terrain;
+     * {@code wet} — water fraction below it (over water the head is spray: lower and behind the dust edge).
      */
     static double sigma(float[] slot, double relX, double relZ, double up, double wet) {
         if (slot[3] <= 0) return 0;
@@ -419,7 +419,7 @@ public final class BlastWall {
         return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));
     }
 
-    /** Ослабление-множитель головы {@code s} блоков за краем (с отставанием брызг): пыль — от края к концу клина, брызги — свои. */
+    /** Head extinction multiplier {@code s} blocks behind the edge (including spray lag): dust from edge to wedge end; spray has its own. */
     private static double density(float[] slot, double s, double wet) {
         double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);
         double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u);
@@ -427,9 +427,9 @@ public final class BlastWall {
     }
 
     /**
-     * Толща средней головы по вертикали над точкой от {@code from} до {@code to} (блоки над рельефом под ней; {@code to} —
-     * хоть бесконечность): интеграл {@link #sigma} по высоте — по Симпсону порознь под рельефом и над ним (там излом), до
-     * верха клина в этом месте. Сколько пыли головы над глазом и под ним — докуда идёт луч пелены ({@link NukePall}).
+     * Mean-head vertical optical depth above a point from {@code from} to {@code to} (blocks above local terrain; {@code to} may be
+     * infinite): height integral of {@link #sigma}, using Simpson separately below and above terrain (a kink there), up to the
+     * local wedge top. Head dust above and below the eye determines pall-ray reach ({@link NukePall}).
      */
     static double tau(float[] slot, double relX, double relZ, double from, double to, double wet) {
         if (slot[3] <= 0) return 0;

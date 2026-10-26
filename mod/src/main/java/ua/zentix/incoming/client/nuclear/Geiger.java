@@ -17,13 +17,13 @@ import ua.zentix.incoming.registry.ModSounds;
 import java.util.Locale;
 
 /**
- * Счётчик Гейгера в руке: щелчки с пуассоновой частотой по мощности дозы (фон 0.15 мкЗв/ч — щелчок раз в
- * пару секунд, у эпицентра — сплошной треск) и показания над хотбаром: мощность дозы и накопленная доза.
+ * Handheld Geiger counter: clicks at a Poisson rate based on dose rate (background 0.15 μSv/h — a click every
+ * couple of seconds; near ground zero — a continuous crackle), and readings above the hotbar: dose rate and accumulated dose.
  */
 public final class Geiger {
-    /** Щелчков в секунду на 1 мкЗв/ч (у бытовых счётчиков порядка единиц). */
+    /** Clicks per second per 1 μSv/h (of order unity for household counters). */
     private static final double CPS_PER_USV = 2.5;
-    /** Выше — счётчик захлёбывается: треск не частит дальше. */
+    /** Above this the counter saturates: the crackle gets no faster. */
     private static final double MAX_CPS = 400;
     private static final RandomSource RANDOM = RandomSource.create();
 
@@ -41,7 +41,7 @@ public final class Geiger {
         double usv = GeigerFormat.microSievertsPerHour(r == null ? 0 : r.rate());
         double lambda = Math.min(MAX_CPS, usv * CPS_PER_USV) / 20;
         int clicks = poisson(lambda);
-        // больше трёх щелчков за тик ухо уже не различает
+        // the ear cannot distinguish more than three clicks per tick
         for (int i = 0; i < Math.min(3, clicks); i++) {
             mc.getSoundManager().play(SimpleSoundInstance.forUI(ModSounds.GEIGER_CLICK.get(), 0.9f + RANDOM.nextFloat() * 0.2f, 0.5f));
         }
@@ -58,7 +58,7 @@ public final class Geiger {
         return k - 1;
     }
 
-    /** Показания над хотбаром справа — только со счётчиком в руке. */
+    /** Readings above the hotbar on the right — only with the counter in hand. */
     public static void render(GuiGraphics g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;

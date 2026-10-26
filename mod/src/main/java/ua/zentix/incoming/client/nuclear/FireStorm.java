@@ -15,107 +15,107 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Огненный шторм над горящим городом (план «ядерка уровня кино», шаг 4): что горит вдали и как — модель клиента без
- * мира и без пакета, как и пелена ({@link PallField}). Её рисует объём пелены ({@code fx/layer/PallPass}: столбы дыма,
- * зарево снизу, огненные смерчи) и пламя на поверхностях ({@code fx_pall_composite}).
+ * Firestorm above the burning city ("cinema-level nuke" plan, step 4): what burns at distance and how — a client model without
+ * world access or a packet, like the pall ({@link PallField}). Drawn by the pall volume ({@code fx/layer/PallPass}: smoke columns,
+ * glow from below, fire whirls) and surface flame ({@code fx_pall_composite}).
  * <p>
- * <b>Источники.</b> Очаги поджига собраны в источники по сетке {@link #CELL} блоков. Доля горящего в клетке — по тому же
- * закону, что у сервера и звука ({@link FireField}, {@code RuinPlanner.fire}): свет зажигает min(1, q/20), на
- * {@link FireField#SHARE} места есть чему гореть, а волна с приходом сбивает часть огня (от 2 psi — половину): сила
- * клетки до волны — {@link Grid#before}, после — {@link Grid#strength}; свет — не порогом, а с горючестью района:
- * районы (шум мира, пятна по {@link #DISTRICT_BLOCKS}, зерно — подрыва) горят по-разному, клетки внутри — тоже
- * (логнормальный разброс {@link #SIGMA_SPOT}), и край зоны поджига рваный. Сила клетки — сколько её площади горит
- * (0..несколько), поджиг — вспышкой (когда свет там набрал порог, {@link Detonation#flashTicks}: как слой вспышки у
- * сервера, {@code FlashScorch}) и разброс поджига до {@link #IGNITE_SPREAD_S}. Настоящих блоков огня у сервера — не
- * больше 20 000 на подрыв после волны (до неё — и те, что она собьёт; их видит {@link ua.zentix.incoming.client.fx.FireWatch}), а визуально горит вся зона поджига: «живой огонь ванили по всей
- * карте» план не делает.
+ * <b>Sources.</b> Ignition sites are grouped into sources on a {@link #CELL}-block grid. Burning cell fraction uses the same
+ * law as the server and sound ({@link FireField}, {@code RuinPlanner.fire}): light ignites min(1, q/20), fuel exists over
+ * {@link FireField#SHARE} of the area, and the wave blows out part of the fire on arrival (half at 2 psi and above): cell strength
+ * before the wave is {@link Grid#before}, after it {@link Grid#strength}; light uses district flammability rather than a threshold:
+ * districts (world noise, {@link #DISTRICT_BLOCKS}-sized patches, detonation seed) burn differently, as do cells within them
+ * (lognormal spread {@link #SIGMA_SPOT}), producing a ragged ignition-zone edge. Cell strength is the fraction of its area burning
+ * (0..several); ignition follows the flash (when local light reaches threshold, {@link Detonation#flashTicks}: like the server flash layer,
+ * {@code FlashScorch}) with ignition spread up to {@link #IGNITE_SPREAD_S}. The server has at most
+ * 20 000 real fire blocks per detonation after the wave (before it, also those it will blow out; {@link ua.zentix.incoming.client.fx.FireWatch} sees them), while visually the whole ignition zone burns: the plan does not make "live vanilla fire across the whole
+ * map".
  * <p>
- * <b>Время.</b> По настоящим секундам после поджига клетки, как пелена: занимается за {@link #FLAME_RISE_S} с с долей
- * {@link #START} от полной, разгорается в шторм e-кратно за {@link #GROW_S} с, с {@link #PEAK_S} с (у каждой клетки
- * своё) стихает e-кратно за {@link #DECAY_S} с до тления {@link #EMBERS}, к утру — как мгла пелены ({@link PallField#end})
- * — гаснет за последнюю минуту. Дым живёт дольше пламени ({@link #SMOKE_EMBERS}). Всё — от возраста подрыва: повтор после
- * перемотки и вошедший позже видят то же.
+ * <b>Time.</b> Real seconds since cell ignition, like the pall: catches over {@link #FLAME_RISE_S} s at fraction
+ * {@link #START} of full strength, grows into a storm e-fold over {@link #GROW_S} s, then from {@link #PEAK_S} s (cell-specific)
+ * decays e-fold over {@link #DECAY_S} s to smoldering {@link #EMBERS}; toward morning, like pall haze ({@link PallField#end}),
+ * fades over the final minute. Smoke outlives flame ({@link #SMOKE_EMBERS}). All follows detonation age: a replay after
+ * seeking and a late joiner see the same thing.
  * <p>
- * <b>Карта.</b> Для видеокарты — текстура по сетке ({@link #fill}): R — пламя, G — дым столбов (сильные клетки — сильнее:
- * {@link #COLUMN_POWER}), B — дым × доля подъёма столба ({@link #COLUMN_RISE_S}), с уменьшенными копиями. Копии и есть
- * скопления источников: свет и дым на высоте h берутся с уровня, где клетка карты — ширина столба или зарева на этой
- * высоте (как деревья источников света), — сколько ни горит клеток, выборка на шаг луча одна. Ниже, пока столб уже
- * клетки ({@link #PILLAR}), у каждой клетки — свой столб на её месте (четыре ближние клетки на шаг луча): у земли столбы
- * стоят порознь и сливаются выше. Вода, лёд и снег, что знает клиент, не горят ({@link #survey}).
+ * <b>Map.</b> A grid texture for the GPU ({@link #fill}): R — flame, G — column smoke (strong cells stronger:
+ * {@link #COLUMN_POWER}), B — smoke × column-rise fraction ({@link #COLUMN_RISE_S}), with mipmaps. Mipmaps are
+ * source clusters: light and smoke at height h use the level whose cell width matches column or glow width at that
+ * height (like light-source trees); regardless of burning cell count, one sample per ray step. Lower down, while columns are narrower than
+ * cells ({@link #PILLAR}), each cell has its own column in place (four nearest cells per ray step): near ground columns
+ * are separate and merge higher up. Water, ice and snow known to the client do not burn ({@link #survey}).
  * <p>
- * <b>Смерчи.</b> У самых сильных источников — несколько огненных смерчей ({@link Whirl}), редких и коротких: событие, а не
- * обои. Всё из зерна подрыва.
+ * <b>Whirls.</b> A few fire whirls ({@link Whirl}) at the strongest sources, rare and brief: an event rather than
+ * wallpaper. All from the detonation seed.
  * <p>
- * Сетка считается в фоне (десятки тысяч клеток с шумом), до готовности шторма нет.
+ * The grid is calculated in the background (tens of thousands of cells with noise); no storm until ready.
  */
 public final class FireStorm {
-    /** Клетка источников, блоков. */
+    /** Source cell width, blocks. */
     static final double CELL = 32;
-    /** Сторона карты не больше стольких клеток (у 15 кт воздушного — около 170). */
+    /** Maximum map side in cells (about 170 for a 15 kt airburst). */
     static final int MAX_SIDE = 256;
-    /** Районы горят по-разному: пятна такого размера, блоков (кварталы, парки, промзона). */
+    /** Districts burn differently: patches of this size, blocks (city blocks, parks, industrial areas). */
     static final double DISTRICT_BLOCKS = 360;
-    /** Разброс горючести районов (σ логарифма) и клеток внутри района. */
+    /** Spread of district flammability (log σ) and cells within a district. */
     static final double SIGMA_DISTRICT = 0.75, SIGMA_SPOT = 0.65;
-    /** Свет на земле с горючестью района: σ логарифма — край зоны поджига рваный, а не круг. */
+    /** Ground light with district flammability: log σ makes the ignition-zone edge ragged rather than circular. */
     static final double SIGMA_EDGE = 0.35;
-    /** Порог поджига ({@code RuinPlanner.fire}). */
+    /** Ignition threshold ({@code RuinPlanner.fire}). */
     static final double FULL_Q = 20;
-    /** Клетки загораются в течение стольких секунд после вспышки (большинство — сразу). */
+    /** Cells ignite over this many seconds after the flash (most immediately). */
     static final double IGNITE_SPREAD_S = 30;
-    /** Волна сбивает огонь клетки за столько тиков от прихода. */
+    /** The wave blows out cell fire over this many ticks from arrival. */
     static final double BLOW_TICKS = 20;
-    /** Пламя в клетке занимается за столько секунд — до доли {@link #START} от полной силы. */
+    /** Cell flame catches over this many seconds, up to fraction {@link #START} of full strength. */
     static final double FLAME_RISE_S = 12, START = 0.3;
-    /** Разгорается в шторм e-кратно за столько секунд. */
+    /** Grows into a storm e-fold over this many seconds. */
     static final double GROW_S = 80;
-    /** С этой секунды после поджига (±30 % по клетке) стихает e-кратно за {@link #DECAY_S} до тления {@link #EMBERS}. */
+    /** From this second after ignition (±30 % per cell), decays e-fold over {@link #DECAY_S} to smoldering {@link #EMBERS}. */
     static final double PEAK_S = 360, DECAY_S = 540, EMBERS = 0.2;
-    /** Дым стихает слабее пламени: тлеющее дымит. */
+    /** Smoke decays less than flame: smoldering material emits smoke. */
     static final double SMOKE_EMBERS = 0.45;
-    /** Подача дыма в столбы — сила клетки в этой степени: сильные очаги дают столбы, слабые — низкую мглу. */
+    /** Smoke emission into columns — cell strength raised to this power: strong sources produce columns, weak ones low haze. */
     static final double COLUMN_POWER = 1.4;
-    /** Столб от поджига встаёт до верха за столько секунд. */
+    /** Column rises to its top over this many seconds from ignition. */
     static final double COLUMN_RISE_S = 25;
-    /** Каналов на клетку карты (RGBA). */
+    /** Channels per map cell (RGBA). */
     static final int CHANNELS = 4;
-    /** Карта — заново через столько тиков, пока где-то занимается огонь, и через столько — потом. */
+    /** Refill map every this many ticks while fire is catching anywhere, and every this many afterward. */
     static final int FILL_FAST = 4, FILL_SLOW = 20;
 
-    // ---------------------------------------------------------------- законы (общие с шейдером, pall.glsl)
+    // ---------------------------------------------------------------- laws (shared with shader, pall.glsl)
 
-    /** Снос столба ветром растёт с высотой: на высоте h — h·(1 + h/hb), в долях скорости ветра против подъёма. */
+    /** Wind drift of the column grows with height: at height h, h·(1 + h/hb), in units of wind speed relative to rise speed. */
     static final double BEND_HEIGHT = 200;
     /**
-     * Полуширина столба у земли — такая доля клетки, дальше растёт на {@link #SPREAD} блока за блок подъёма (вовлечение
-     * воздуха): у земли столбы клеток стоят порознь, выше сливаются в общую мглу.
+     * Ground-level column half-width is this cell fraction, then grows by {@link #SPREAD} blocks per block of rise (air
+     * entrainment): cell columns stand separately at ground level, merging into common haze higher up.
      */
     static final double PILLAR = 0.3, SPREAD = 0.22;
-    /** Скорость подъёма дыма в столбе, м/с (в огненном шторме — десятки). */
+    /** Smoke rise speed in the column, m/s (tens in a firestorm). */
     static final double UPDRAFT_MS = 25;
 
-    /** Снос столба на высоте {@code h} над землёй, блоки на единицу отношения ветра к подъёму ({@code fireBend}). */
+    /** Column drift at height {@code h} above ground, blocks per unit wind-to-rise ratio ({@code fireBend}). */
     static double bend(double h, double hb) {
         double x = Math.max(h, 0);
         return x * (1 + x / hb);
     }
 
-    /** Полуширина столба на высоте {@code h}, блоки ({@code fireWidth}). */
+    /** Column half-width at height {@code h}, blocks ({@code fireWidth}). */
     static double width(double h, double cell) {
         return PILLAR * cell + SPREAD * Math.max(h, 0);
     }
 
-    /** Уровень карты, где клетка — ширина {@code w} ({@code fireLod}). */
+    /** Map level where cell width is {@code w} ({@code fireLod}). */
     static double lod(double w, double cell) {
         return log2(Math.max(2 * w / cell, 1));
     }
 
-    /** Уровень карты для зарева на высоте {@code h}: свет со всей площади шириной ~2h ({@code fireGlowLod}). */
+    /** Map level for glow at height {@code h}: light from the entire area of width ~2h ({@code fireGlowLod}). */
     static double glowLod(double h, double cell) {
         return log2(Math.max(2 * Math.max(h, 6) / cell, 1));
     }
 
-    /** Столб по высоте: от низин (до 40 блоков ниже земли под эпицентром) до верха, где растекается в мглу ({@code fireColumn}). */
+    /** Vertical column profile: from lowlands (up to 40 blocks below ground zero) to the top, spreading into haze ({@code fireColumn}). */
     static double column(double h, double top) {
         return smooth(-40, 0, h) * (1 - smooth(0.65 * top, top, h));
     }
@@ -124,16 +124,16 @@ public final class FireStorm {
         return Math.log(x) / Math.log(2);
     }
 
-    // ---------------------------------------------------------------- время
+    // ---------------------------------------------------------------- time
 
-    /** Пламя клетки через {@code ageS} секунд после её поджига, доля полной силы ({@code peakS} — её начало спада). */
+    /** Cell flame {@code ageS} seconds after ignition, fraction of full strength ({@code peakS} is its decay start). */
     static double flame(double ageS, double peakS) {
         if (ageS <= 0) return 0;
         double grow = START + (1 - START) * (1 - Math.exp(-ageS / GROW_S));
         return smooth(0, FLAME_RISE_S, ageS) * grow * decay(ageS, peakS, EMBERS);
     }
 
-    /** Дым клетки (подача в столб), доля полной. */
+    /** Cell smoke (emission into a column), fraction of full strength. */
     static double smoke(double ageS, double peakS) {
         if (ageS <= 0) return 0;
         double grow = START + (1 - START) * (1 - Math.exp(-ageS / GROW_S));
@@ -144,18 +144,18 @@ public final class FireStorm {
         return ageS <= peakS ? 1 : floor + (1 - floor) * Math.exp(-(ageS - peakS) / DECAY_S);
     }
 
-    // ---------------------------------------------------------------- сетка
+    // ---------------------------------------------------------------- grid
 
-    /** Огненный смерч: где, когда, какой (всё — блоки и секунды после подрыва). */
+    /** Fire whirl: where, when, what (all blocks and seconds since detonation). */
     public record Whirl(double x, double z, double startS, double lengthS, double radius, double height, int spin, double driftDir, double phase) {
-        /** Сила 0..1 через {@code seconds} после подрыва: встаёт за 8 с, держится, опадает за 12 с. */
+        /** Strength 0..1 at {@code seconds} after detonation: rises over 8 s, holds, subsides over 12 s. */
         public double strength(double seconds) {
             double age = seconds - startS;
             if (age <= 0 || age >= lengthS) return 0;
             return smooth(0, 8, age) * (1 - smooth(lengthS - 12, lengthS, age));
         }
 
-        /** Где основание через {@code seconds} после подрыва: смерч бредёт по пожару (1,5 блока/с). */
+        /** Base position at {@code seconds} after detonation: the whirl wanders across the fire (1.5 blocks/s). */
         public double baseX(double seconds) {
             return x + Math.cos(driftDir) * DRIFT * Math.max(0, seconds - startS);
         }
@@ -168,26 +168,26 @@ public final class FireStorm {
     }
 
     /**
-     * Сетка источников: клетки зоны (номер в карте), сила после волны и до неё, поджиг и приход волны (тики после
-     * подрыва), начало спада (с).
+     * Source grid: zone cells (map index), post- and pre-wave strength, ignition and wave arrival (ticks since
+     * detonation), decay start (s).
      */
     record Grid(int side, double cell, int[] index, float[] strength, float[] column, float[] before, float[] start, float[] arrival, float[] peak,
                 double total, List<Whirl> whirls) {
-        /** Последний поджиг, тики после подрыва. */
+        /** Last ignition, ticks since detonation. */
         double lastStart() {
             double last = 0;
             for (float s : start) last = Math.max(last, s);
             return last;
         }
 
-        /** Последний приход волны к клетке, где она сбивает огонь, тики после подрыва. */
+        /** Last wave arrival at a cell where it blows out fire, ticks since detonation. */
         double lastBlow() {
             double last = 0;
             for (int k = 0; k < arrival.length; k++) if (before[k] != strength[k]) last = Math.max(last, arrival[k]);
             return last;
         }
 
-        /** Сила клетки {@code k} через {@code ticks} после подрыва: до волны — {@link #before}, за {@link #BLOW_TICKS} — к {@link #strength}. */
+        /** Cell {@code k} strength at {@code ticks} since detonation: before wave — {@link #before}; over {@link #BLOW_TICKS}, toward {@link #strength}. */
         double strengthAt(int k, double ticks) {
             if (ticks <= arrival[k]) return before[k];
             if (ticks >= arrival[k] + BLOW_TICKS) return strength[k];
@@ -202,32 +202,32 @@ public final class FireStorm {
     @Nullable
     private Grid grid;
     private boolean failed;
-    /** Карта последнего {@link #fill}: RGBA по клеткам, x быстрее; номер версии растёт с каждым заполнением. */
+    /** Map from latest {@link #fill}: RGBA per cell, x fastest; version increases on each fill. */
     private float[] map = new float[0];
     private int version;
-    /** Сколько горит в последнем заполнении (сумма пламени по клеткам). */
+    /** Burning amount in the latest fill (sum of cell flames). */
     private double burning;
-    /** Время последнего {@link #fill}; до какого времени шторм молод ({@link #young}), тики после подрыва. */
+    /** Time of last {@link #fill}; until when the storm is young ({@link #young}), ticks since detonation. */
     private double filledAt = Double.NaN, youngUntil = Double.NaN;
-    /** Доверие модели огня (пожары у сервера включены): 0..1, пишет тик клиента ({@link #trust}, плавно). */
+    /** Fire-model trust (server fires enabled): 0..1, written smoothly by client tick ({@link #trust}). */
     private double gate;
     /**
-     * Сколько горит в своих чанках против модели там же, пока огонь молод ({@code NukeAfter}): 1 — как в модели, 0 —
-     * сервер не жжёт или погасили. Живёт со штормом и после перемотки повтора: огонь, сверенный молодым, позже не
-     * сверить — ванильный прогорает по-своему, а шторм горит до утра.
+     * Local-chunk burning relative to the model there while fire is young ({@code NukeAfter}): 1 — matches model; 0 —
+     * server does not burn, or extinguished. Lives with the storm even after replay seek: fire checked while young cannot be
+     * checked later — vanilla burns out its own way, while the storm burns until morning.
      */
     private double seen = 1;
-    /** Верх рельефа под смерчами, блоки (NaN — не замеряли: тогда земля под эпицентром); пишет тик клиента. */
+    /** Terrain top under whirls, blocks (NaN — not sampled: use ground zero); written by client tick. */
     private double[] whirlGround = new double[0];
     /**
-     * Доля клетки, где есть чему гореть, по рельефу у клиента ({@link #survey}): вода, лёд и снег не горят; где не знаем
-     * (дальше прорисовки без карты рельефа) — как под эпицентром. По номеру клетки зоны, как у сетки.
+     * Fraction of cell with fuel, from client terrain ({@link #survey}): water, ice and snow do not burn; unknown areas
+     * (beyond render distance without a terrain map) follow ground zero. By zone-cell index, like the grid.
      */
     private float[] dry = new float[0];
-    /** Клетку хоть раз видели ({@link #survey}): ушёл игрок, чанки выгрузились — она остаётся такой, какой её видели. */
+    /** Cell seen at least once ({@link #survey}): player leaves, chunks unload — retain what was seen. */
     private boolean[] surveyed = new boolean[0];
     private int surveyAt;
-    /** Сухость менялась после последнего заполнения карты: заполнить снова не позже чем через {@link #FILL_FAST} тиков. */
+    /** Dryness changed since last map fill: refill within {@link #FILL_FAST} ticks. */
     private boolean dirty;
 
     FireStorm(Detonation d, PallField pall) {
@@ -236,7 +236,7 @@ public final class FireStorm {
         this.gate = d.fires() ? 1 : 0;
     }
 
-    /** Сетка готова (в первый раз — запуск счёта в фоне); null — ещё нет или шторма нет (не горит ничего). */
+    /** Grid ready (first call starts background calculation); null — not yet, or no storm (nothing burns). */
     @Nullable
     Grid grid() {
         if (grid != null || failed) return grid;
@@ -253,55 +253,55 @@ public final class FireStorm {
         return grid;
     }
 
-    /** Сколько всего горит (сумма сил клеток) — для строки сценария; 0 — сетка не готова. */
+    /** Total burning (sum of cell strengths) for the scenario line; 0 — grid not ready. */
     double total() {
         Grid g = grid;
         return g == null ? 0 : g.total;
     }
 
-    /** Клеток-источников (0 — сетка не готова или не горит ничего). */
+    /** Source cells (0 — grid not ready or nothing burns). */
     int cells() {
         Grid g = grid;
         return g == null ? 0 : g.index.length;
     }
 
-    /** Горит ли шторм в миг {@code ticks} после подрыва (карта — заново, если пора, {@link #refresh}). */
+    /** Whether the storm burns at {@code ticks} since detonation (refill map if due, {@link #refresh}). */
     boolean burningAt(double ticks) {
         refresh(ticks);
         return burning > 0;
     }
 
-    /** Сколько горит сейчас (сумма пламени по клеткам последней карты) — для строки сценария. */
+    /** Current burning (sum of cell flames in the latest map) for the scenario line. */
     double burning() {
         return burning;
     }
 
-    /** Среднее пламя по зоне пожаров в последней карте, доля полной силы (0 — сетка не готова или не горит ничего). */
+    /** Mean flame over the fire zone in the latest map, fraction of full strength (0 — grid not ready or nothing burns). */
     double meanFlame() {
         int n = cells();
         return n == 0 ? 0 : burning / n;
     }
 
-    /** Смерчи подрыва (пусто — сетка не готова). */
+    /** Detonation whirls (empty — grid not ready). */
     public List<Whirl> whirls() {
         Grid g = grid;
         return g == null ? List.of() : g.whirls;
     }
 
-    /** Сверка с огнём в своих чанках, пока он молод (пишет {@code NukeAfter}). */
+    /** Compare against local-chunk fire while young (written by {@code NukeAfter}). */
     void seen(double trust) {
         seen = trust;
     }
 
     /**
-     * Горят ли пожары у сервера на деле, 0..1: нет, если сервер их не зажигает ({@link Detonation#fires}) или в своих
-     * чанках, где модель ждёт огня, его не было, пока он молод.
+     * Whether server fires actually burn, 0..1: no if the server does not ignite them ({@link Detonation#fires}), or local
+     * chunks had no fire where the model expected it while young.
      */
     double trust() {
         return d.fires() ? Math.min(1, seen / 0.3) : 0;
     }
 
-    /** Доверие модели, к которому плавно идёт тик клиента ({@link #trust}). */
+    /** Model trust approached smoothly by client tick ({@link #trust}). */
     void gate(double g) {
         gate = g;
     }
@@ -311,9 +311,9 @@ public final class FireStorm {
     }
 
     /**
-     * Тик клиента: верх рельефа под смерчами, что идут или вот-вот встанут ({@code seconds} — после подрыва), — в пяти
-     * точках по ядру, как пыль у земли ({@code CloudPuffs.track}): смерч бредёт по крышам и склонам, а не по высоте
-     * эпицентра. Где рельефа не знать — прежняя высота.
+     * Client tick: terrain top under active or imminent whirls ({@code seconds} since detonation), at five
+     * points across the core, like ground dust ({@code CloudPuffs.track}): a whirl wanders across roofs and slopes, not at ground-zero
+     * elevation. Unknown terrain retains the previous height.
      */
     void track(double seconds, Sightline.Heights heights) {
         Grid g = grid;
@@ -336,28 +336,28 @@ public final class FireStorm {
             }
             if (n == 0) continue;
             double h = sum / n;
-            // плавно: смерч не прыгает с крыши на улицу
+            // smoothly: the whirl does not jump from roof to street
             whirlGround[i] = Double.isNaN(whirlGround[i]) ? h : whirlGround[i] + 0.2 * (h - whirlGround[i]);
         }
     }
 
-    /** Что знает клиент о поверхности в колонке. */
+    /** Client knowledge of column surface. */
     @FunctionalInterface
     interface Surface {
-        /** −1 — не знаем, 0 — есть чему гореть, 1 — вода, лёд или снег. */
+        /** −1 — unknown; 0 — fuel present; 1 — water, ice or snow. */
         int wet(int x, int z);
     }
 
-    /** Клеток зоны за тик {@link #survey}: у 15 кт вся зона — за 7 секунд. */
+    /** Zone cells per {@link #survey} tick: full 15 kt zone in 7 seconds. */
     static final int SURVEY_CELLS = 128;
-    /** Точек на клетку по стороне (3 × 3). */
+    /** Points per cell side (3 × 3). */
     static final int SURVEY_POINTS = 3;
 
     /**
-     * Тик клиента: доля сухой земли в следующих {@link #SURVEY_CELLS} клетках зоны по кругу — по точкам 3 × 3 в клетке,
-     * что знает клиент ({@code surface}: свои чанки и плитки карты рельефа). Модель огня рельефа не знает, а горящее море
-     * или ледник видно сразу. Где не знаем ничего и не знали, клетка — как под эпицентром ({@code unknownWet}: доля воды там,
-     * {@code NukeWater.under}, у подрыва над морем — и догадка по высоте земли): подрыв над морем вдали иначе жёг бы море.
+     * Client tick: dry-ground fraction in the next {@link #SURVEY_CELLS} zone cells, cycling through them — 3 × 3 points per cell,
+     * using client knowledge ({@code surface}: local chunks and terrain-map tiles). The fire model has no terrain knowledge, while burning sea
+     * or glacier is immediately visible. Where nothing is or was known, the cell follows ground zero ({@code unknownWet}: water fraction there,
+     * {@code NukeWater.under}, including a ground-height guess for a sea burst): otherwise a distant sea burst would burn the sea.
      */
     void survey(Surface surface, double unknownWet) {
         Grid g = grid;
@@ -367,7 +367,7 @@ public final class FireStorm {
             Arrays.fill(dry, (float) (1 - unknownWet));
             surveyed = new boolean[g.index.length];
             surveyAt = 0;
-            // карта, заполненная до первого обхода, считала всё сушей: заполнить заново сразу
+            // a map filled before the first survey treated everything as land: refill immediately
             filledAt = Double.NaN;
         }
         double half = g.side * g.cell / 2, step = g.cell / SURVEY_POINTS;
@@ -397,7 +397,7 @@ public final class FireStorm {
         }
     }
 
-    /** Доля сухой земли в клетке под точкой (блоки мира); вне зоны пожаров — 1. */
+    /** Dry-ground fraction in the cell beneath a point (world blocks); 1 outside the fire zone. */
     double dryAt(double x, double z) {
         Grid g = grid;
         if (g == null || dry.length != g.index.length) return 1;
@@ -408,12 +408,12 @@ public final class FireStorm {
         return k < 0 ? 1 : dry[k];
     }
 
-    /** Земля под смерчем {@code i}, блоки (не замеряли — под эпицентром). */
+    /** Ground beneath whirl {@code i}, blocks (not sampled — ground zero). */
     double whirlGround(int i) {
         return i < whirlGround.length && !Double.isNaN(whirlGround[i]) ? whirlGround[i] : d.groundY();
     }
 
-    /** Половина стороны карты, блоки (0 — сетки нет). */
+    /** Map half-side, blocks (0 — no grid). */
     double half() {
         Grid g = grid;
         return g == null ? 0 : g.side * g.cell / 2;
@@ -438,9 +438,9 @@ public final class FireStorm {
     }
 
     /**
-     * Карта на момент {@code ticks} после подрыва (тики клиента), если пора: раз в {@link #FILL_FAST} тиков, пока где-то
-     * занимается огонь и встают столбы, потом — раз в {@link #FILL_SLOW}; после перемотки (время назад) — сразу. true —
-     * карта новая ({@link #map}, {@link #version}).
+     * Map at {@code ticks} since detonation (client ticks), if due: every {@link #FILL_FAST} ticks while fire catches and columns rise
+     * anywhere, then every {@link #FILL_SLOW}; immediately after a seek (time backward). true —
+     * new map ({@link #map}, {@link #version}).
      */
     boolean refresh(double ticks) {
         Grid g = grid();
@@ -461,22 +461,22 @@ public final class FireStorm {
     }
 
     /**
-     * Где-то огонь ещё занимается, встаёт столб или волна сбивает огонь: с последнего поджига прошло меньше двух подъёмов
-     * столба или волна ещё идёт по зоне.
+     * Somewhere fire is still catching, a column is rising, or the wave is blowing out fire: fewer than two column-rise times since
+     * the last ignition, or the wave is still crossing the zone.
      */
     private boolean young(Grid g, double ticks) {
         if (Double.isNaN(youngUntil)) youngUntil = Math.max(g.lastStart() + 20 * 2 * Math.max(COLUMN_RISE_S, FLAME_RISE_S), g.lastBlow() + BLOW_TICKS);
         return ticks < youngUntil;
     }
 
-    /** Утро: за последнюю минуту до конца мглы пелены всё гаснет. */
+    /** Morning: everything fades over the final minute before pall haze ends. */
     static double morning(double ticks, double end) {
         return 1 - smooth(end - PallField.HAZE_FADE_TICKS, end, ticks);
     }
 
     /**
-     * Карта момента {@code ticks} (утро — {@code end}) в {@code out}: RGBA по клеткам, вне зоны — нули; {@code dry} — доля
-     * сухой земли по клеткам зоны ({@link #survey}; null — вся суша).
+     * Map at {@code ticks} (morning — {@code end}) into {@code out}: RGBA per cell, zero outside the zone; {@code dry} is the dry-ground
+     * fraction per zone cell ({@link #survey}; null — all land).
      */
     static void fill(Grid g, double ticks, double end, @Nullable float[] dry, float[] out) {
         Arrays.fill(out, 0);
@@ -497,13 +497,13 @@ public final class FireStorm {
     }
 
     /**
-     * Сетка источников подрыва: клетки в зоне поджига {@code reach} (блоки по земле от эпицентра), сила по закону
-     * поджига с горючестью района и клетки, поджиг — вспышкой, часть огня сбивает волна; смерчи. Чистая функция подрыва
-     * (зерно — его).
+     * Detonation source grid: cells within ignition zone {@code reach} (ground blocks from ground zero), strength from the ignition
+     * law with district and cell flammability, ignition by flash, partial blowout by wave; whirls. Pure function of the detonation
+     * (its seed).
      */
     static Grid build(Detonation d, double reach) {
         if (reach <= 0) return empty(CELL, 0);
-        // клетка — 32 блока, у малого масштаба удара — мельче: в зоне не меньше 24 клеток поперёк
+        // cell width 32 blocks, smaller at small strike scale: at least 24 cells across the zone
         double cell = Math.max(2, Math.min(CELL, 2 * reach / 24));
         int side = Math.min(MAX_SIDE, 2 * (int) Math.ceil(reach * 1.05 / cell) + 2);
         double half = side * cell / 2;
@@ -541,7 +541,7 @@ public final class FireStorm {
             }
         }
         if (count == 0) return empty(cell, side);
-        // районы — к среднему 0 и разбросу 1 по клеткам зоны: z ~ N(0, 1)
+        // districts normalized to mean 0 and spread 1 over zone cells: z ~ N(0, 1)
         double mean = sum / count, std = Math.sqrt(Math.max(1e-9, sum2 / count - mean * mean));
         int[] index = new int[count];
         float[] strength = new float[count], column = new float[count], before = new float[count], start = new float[count], arrival = new float[count],
@@ -558,7 +558,7 @@ public final class FireStorm {
                 Vec3 p = new Vec3(b.x + x, d.groundY() + 1, b.z + z);
                 double q = d.fluence(p) * Math.exp(SIGMA_EDGE * district - SIGMA_EDGE * SIGMA_EDGE / 2);
                 if (q < ThermalModel.IGNITE) continue;
-                // свет зажигает, волна потом сбивает часть огня (у сервера — половину от 2 psi): плавно, без кольца на карте
+                // light ignites; the wave later blows out some fire (server: half at 2 psi and above), smoothly, no ring on the map
                 double chance = Math.min(1, q / FULL_Q), keep = 1 - (1 - FireField.BLOWN_KEEP) * smooth(1.5, 2.5, d.psi(p));
                 double fuel = Math.exp(SIGMA_DISTRICT * district - SIGMA_DISTRICT * SIGMA_DISTRICT / 2);
                 long h = hash(seed, i, j);
@@ -592,16 +592,16 @@ public final class FireStorm {
         return new Grid(side, cell, new int[0], new float[0], new float[0], new float[0], new float[0], new float[0], new float[0], 0, List.of());
     }
 
-    /** Смерчей на подрыв: от суммы сил (у 15 кт — три, у 1 кт — один), не больше {@link #MAX_WHIRLS}. */
+    /** Whirls per detonation: from summed strengths (three for 15 kt, one for 1 kt), capped at {@link #MAX_WHIRLS}. */
     static final int MAX_WHIRLS = 4;
-    /** Смерчи — не ближе стольких блоков друг к другу. */
+    /** Minimum whirl spacing in blocks. */
     static final double WHIRL_GAP = 250;
-    /** Первый смерч — через столько секунд после поджига его клетки, следующие — через {@link #WHIRL_EVERY_S}. */
+    /** First whirl this many seconds after its cell ignites; later ones every {@link #WHIRL_EVERY_S}. */
     static final double WHIRL_FIRST_S = 150, WHIRL_EVERY_S = 140;
 
     /**
-     * Смерчи у самых сильных клеток (не дальше 0,8 зоны, не ближе {@link #WHIRL_GAP} друг к другу): по одному на окно
-     * в пару минут, когда шторм в силе, каждый — 45–90 с; радиус ядра по силе клетки, высота — 90–130 блоков.
+     * Whirls at the strongest cells (within 0.8 of the zone, at least {@link #WHIRL_GAP} apart): one per window
+     * of a couple of minutes at storm strength, each lasting 45–90 s; core radius from cell strength, height 90–130 blocks.
      */
     private static List<Whirl> whirls(Detonation d, long seed, int side, double cell, double half, double reach, int[] index, float[] strength,
                                       float[] start, double total) {
@@ -629,7 +629,7 @@ public final class FireStorm {
         return List.copyOf(out);
     }
 
-    // ---------------------------------------------------------------- случайное
+    // ---------------------------------------------------------------- randomness
 
     private static long hash(long seed, int i, int j) {
         long h = seed ^ (i * 0x9E3779B97F4A7C15L) ^ (j * 0xC2B2AE3D27D4EB4FL);
@@ -641,12 +641,12 @@ public final class FireStorm {
         return h;
     }
 
-    /** Число 0..1 из младших 17 бит. */
+    /** Number 0..1 from the low 17 bits. */
     private static double unit(long bits) {
         return ((bits & 0x1FFFF) + 0.5) / 0x20000;
     }
 
-    /** Нормальное N(0, 1) из хеша (Бокс — Мюллер), в пределах ±3. */
+    /** Normal N(0, 1) from hash (Box–Muller), clamped to ±3. */
     private static double gauss(long h) {
         double u1 = unit(h), u2 = unit(h >>> 20);
         return Math.max(-3, Math.min(3, Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2)));

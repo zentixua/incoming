@@ -7,11 +7,11 @@ import ua.zentix.incoming.Incoming;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Клиентские таймлайны эффектов (взрывы, выброс газов, обрушение): тикают вместе с миром, на паузе стоят. */
+/** Client effect timelines (blasts, gas vents, collapses): tick with the world, stop when paused. */
 public final class Effects {
     private Effects() {}
 
-    /** Эффект; tick(t) вызывается с t = 0, 1, 2 …, false — закончился. */
+    /** Effect; tick(t) is called with t = 0, 1, 2 …, false — finished. */
     public interface Effect {
         boolean tick(ClientLevel level, int t);
     }
@@ -31,7 +31,7 @@ public final class Effects {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         Running r = new Running(effect);
-        // нулевой тик — сразу, в момент события (вспышка не ждёт)
+        // tick zero immediately, at the event (the flash does not wait)
         if (run(level, r)) RUNNING.add(r);
     }
 

@@ -7,11 +7,11 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.sound.PlaySoundEvent;
 
 /**
- * Тишина после вспышки (DESIGN-nuke §5): животные вокруг эпицентра — до {@link ua.zentix.incoming.nuclear.Detonation#radiusMax}
- * — замолкают: их голоса ({@code entity.*.ambient}, категории «Существа» и «Окружение» — летучие мыши) не звучат
- * {@link #FULL} тиков после подрыва, потом понемногу возвращаются к {@link #BACK}. Только голоса без повода — крик
- * от удара, смерть и шаги звучат. Возраст подрыва — его часы на клиенте: подрыв, застанный при входе в мир или после
- * перемотки повтора, тоже тихий в свой срок.
+ * Silence after the flash (DESIGN-nuke §5): animals around ground zero — out to {@link ua.zentix.incoming.nuclear.Detonation#radiusMax}
+ * — fall silent: their voices ({@code entity.*.ambient}, "Creatures" and "Ambient" categories — bats) are muted for
+ * {@link #FULL} ticks after detonation, then gradually return by {@link #BACK}. Only unprompted calls: cries
+ * from hits, deaths and footsteps still sound. Detonation age follows its client clock: a detonation encountered on world entry or after
+ * a replay seek is also silent for its allotted time.
  */
 public final class AnimalSilence {
     static final double FULL = 4 * 60 * 20, BACK = 8 * 60 * 20;
@@ -28,7 +28,7 @@ public final class AnimalSilence {
         if (share >= 1 || share > 0 && RANDOM.nextDouble() < share) e.setSound(null);
     }
 
-    /** Какую долю голосов животных в этом месте сейчас не слышно (0..1). */
+    /** What fraction of animal voices at this location is currently inaudible (0..1). */
     static double silence(double x, double z) {
         double best = 0;
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
@@ -40,7 +40,7 @@ public final class AnimalSilence {
         return best;
     }
 
-    /** Доля тишины через {@code ticks} после подрыва. */
+    /** Silence fraction {@code ticks} after detonation. */
     static double share(double ticks) {
         if (ticks < 0 || ticks > BACK) return 0;
         return ticks < FULL ? 1 : 1 - (ticks - FULL) / (BACK - FULL);

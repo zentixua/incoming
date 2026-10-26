@@ -12,8 +12,8 @@ import org.joml.Quaternionf;
 import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 
 /**
- * Стационарная пусковая: поворотный круг над блоком и пакет оружия задачи — тот же, что у прицепа
- * ({@link LauncherRenderer#renderRack}), по курсу пакета и с подъёмом на угол возвышения.
+ * Fixed launcher: turntable above the block and mission weapon rack, shared with the trailer
+ * ({@link LauncherRenderer#renderRack}), following rack heading and raised to elevation.
  */
 public class FixedLauncherRenderer implements BlockEntityRenderer<FixedLauncherBlockEntity> {
     public FixedLauncherRenderer(BlockEntityRendererProvider.Context ctx) {}
@@ -22,7 +22,7 @@ public class FixedLauncherRenderer implements BlockEntityRenderer<FixedLauncherB
     public void render(FixedLauncherBlockEntity be, float partialTick, PoseStack pose, MultiBufferSource buffers, int packedLight, int packedOverlay) {
         Level level = be.getLevel();
         if (level == null) return;
-        // блок целый и непрозрачный: свет внутри него — ноль, круг и пакет над ним освещены как место над блоком
+        // Full opaque block: zero light inside; turntable and rack above it use light from above the block.
         int light = LevelRenderer.getLightColor(level, be.getBlockPos().above());
         pose.pushPose();
         pose.translate(0.5, 0, 0.5);
@@ -32,22 +32,22 @@ public class FixedLauncherRenderer implements BlockEntityRenderer<FixedLauncherB
         pose.popPose();
     }
 
-    /** Пакет больше блока (контейнеры ракет — 7 м): без этого его отсекало бы по кубу блока. */
+    /** Rack exceeds the block (missile containers 7 m): otherwise culled by the block cube. */
     @Override
     public AABB getRenderBoundingBox(FixedLauncherBlockEntity be) {
         return new AABB(be.getBlockPos()).inflate(7, 0, 7).expandTowards(0, 7, 0);
     }
 
     /**
-     * Пакет выходит за секцию чанка блока: секцию отсекло (взгляд вверх у самого пакета, склон), а верх пакета в кадре —
-     * без этого пропал бы весь пакет. Такие рисуются отдельным списком, рамка и дальность проверяются так же.
+     * Rack extends beyond the block's chunk section: section culled (looking up beside rack, slope) while rack top
+     * is in frame would hide the whole rack. Render these from a separate list, checking bounds and distance as usual.
      */
     @Override
     public boolean shouldRenderOffScreen(FixedLauncherBlockEntity be) {
         return true;
     }
 
-    /** Пакет видно издалека, как прицеп (по умолчанию блок-сущности рисуются до 64 блоков). */
+    /** Rack visible from afar, like the trailer (block entities default to a 64-block render range). */
     @Override
     public int getViewDistance() {
         return 160;

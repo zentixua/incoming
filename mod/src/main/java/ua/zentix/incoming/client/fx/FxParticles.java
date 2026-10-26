@@ -10,7 +10,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 import ua.zentix.incoming.warhead.GroundMaterial;
 
-/** Ванильные частицы грунта по материалу и точки по рельефу (свои частицы эффектов — {@link ua.zentix.incoming.client.fx.particle.Fx}). */
+/** Vanilla ground particles by material and points by terrain (custom effects particles — {@link ua.zentix.incoming.client.fx.particle.Fx}). */
 final class FxParticles {
     private FxParticles() {}
 
@@ -26,7 +26,7 @@ final class FxParticles {
         return new DustParticleOptions(new Vector3f(m.r, m.g, m.b), scale);
     }
 
-    /** Точка на поверхности на расстоянии r по курсу yaw от центра (клиенту известна только карта высот MOTION_BLOCKING). */
+    /** Surface point at distance r along yaw from the centre (client knows only the MOTION_BLOCKING heightmap). */
     static Vec3 ground(Level level, Vec3 c, double yawDeg, double r) {
         double a = Math.toRadians(yawDeg);
         double x = c.x - Math.sin(a) * r, z = c.z + Math.cos(a) * r;

@@ -31,41 +31,41 @@ import java.nio.ByteBuffer;
 import java.util.Locale;
 
 /**
- * Наклейка на воду в слое эффектов: тёмное кольцо фронта ядерной волны — рябь под ветром за фронтом, у эпицентра с пеной
- * (профиль по модели — {@code client/nuclear/NukeWater}). Один проход во весь кадр перед квадратами слоя: место за
- * пикселем — по расстоянию до мира ({@link SceneDepth}: глубина Minecraft и Distant Horizons) и матрицам кадра,
- * вода ли там — гладь (поверхность за пикселем горизонтальна, и соседние пиксели на той же высоте: стены, стволы,
- * трава, мобы и края предметов перед небом на той же высоте в блоке — не вода) на высоте верха стоячей воды — 8/9 блока
- * (в прорисовке; вода пишет глубину и в ванили, и под Iris; допуск растёт с ошибкой глубины вдали, под шейдерпаком —
- * ещё на его волны и дрожание кадра, {@link #PACK_DROP}, {@link #PACK_STEP}, {@link #PACK_JITTER}), дальше прорисовки (LOD DH) — гладь моря
- * или место ниже его, тогда — пересечение луча с его гладью (LOD без глубины воды показывает дно). Шум ряби и пены —
- * у каждого кольца свой, от его центра. Воду рисует сам Minecraft или шейдерпак, наклейка только темнит её и белит
- * пеной поверх, с той же дымкой воздуха и туманом Minecraft, что у частиц.
+ * Effects layer water decal: dark nuclear wave front ring — ripples under post-front wind, with foam near the epicentre
+ * (model profile — {@code client/nuclear/NukeWater}). One full-frame pass before layer quads: position behind each
+ * pixel from world distance ({@link SceneDepth}: Minecraft and Distant Horizons depth) and frame matrices;
+ * water identified by a level surface (surface behind pixel horizontal, neighbours at the same height: walls, trunks,
+ * grass, mobs and object edges against the sky at the same within-block height are not water) at still-water top — 8/9 block
+ * (within render distance; water writes depth in vanilla and Iris; tolerance grows with distant depth error and, under a shader pack,
+ * its waves and frame jitter, {@link #PACK_DROP}, {@link #PACK_STEP}, {@link #PACK_JITTER}); beyond render distance (DH LOD) — sea surface
+ * or a point below it, then ray/sea-surface intersection (LOD without water depth shows the bottom). Each ring has its own ripple and foam
+ * noise from its centre. Minecraft or the shader pack draws water; the decal only darkens it and adds white
+ * foam, with the same air haze and Minecraft fog as particles.
  * <p>
- * Профиль кольца — строка текстуры {@link #SAMPLES}×{@link #RINGS}: темнота и пена за фронтом на {@link #sampleAt}
- * блоков (выборки гуще у фронта: там кольцо резкое).
+ * Ring profile — a row in texture {@link #SAMPLES}×{@link #RINGS}: darkness and foam behind the front at {@link #sampleAt}
+ * blocks (samples denser near the sharp front).
  */
 public final class WaterDecal {
-    /** Колец в кадре — не больше; выборок профиля. */
+    /** Maximum frame rings; profile samples. */
     public static final int RINGS = 4, SAMPLES = 64;
-    /** Верх стоячей воды над низом блока (у {@code LiquidBlockRenderer} — 8/9). */
+    /** Still-water top above block bottom ({@code LiquidBlockRenderer} — 8/9). */
     public static final double SURFACE = 8.0 / 9.0;
     /**
-     * Уровень моря на клиенте: генератора у клиента нет, а {@code Level.getSeaLevel} в 1.21.1 устарел и всегда 63 —
-     * море обычного мира (вода до 62, первый воздух над ней — 63).
+     * Client sea level: no client generator; {@code Level.getSeaLevel} in 1.21.1 is deprecated and always 63 —
+     * Overworld sea (water through 62, first air above — 63).
      */
     public static final int SEA_LEVEL = 63;
     /**
-     * Под шейдерпаком гладь ниже 8/9 на его волны, блоков: Complementary Reimagined (у хоста) по умолчанию опускает
-     * верх воды вершинами ({@code WAVING_WATER_VERTEX}: −0,05 ± 0,025 под открытым небом, −0,05 под крышей), с запасом.
+     * Under a shader pack, waves lower the surface below 8/9, blocks: Complementary Reimagined (host's pack) by default lowers
+     * water-top vertices ({@code WAVING_WATER_VERTEX}: −0.05 ± 0.025 under open sky, −0.05 under a roof), with margin.
      */
     static final float PACK_DROP = 0.08f;
-    /** Под шейдерпаком гладь не плоская: перепад от вершины к соседней, блоков (у Complementary — до 0,05). */
+    /** Shader-pack surface is not flat: neighbouring vertex height difference, blocks (Complementary — up to 0.05). */
     static final float PACK_STEP = 0.05f;
     /**
-     * Под шейдерпаком кадр дрожит для TAA, пикселей: глубина записана лучом, сдвинутым на долю пикселя, а наклейка читает
-     * её лучом через середину пикселя — высота места ошибается на сдвиг × расстояние. У Complementary по умолчанию
-     * ({@code TAA_JITTER} 1) — до 0,055 пикселя.
+     * Shader-pack frame jitter for TAA, pixels: depth was written by a ray shifted by a pixel fraction, while the decal reads
+     * it along the pixel-centre ray — position height error is shift × distance. Complementary default
+     * ({@code TAA_JITTER} 1) — up to 0.055 pixel.
      */
     static final float PACK_JITTER = 0.06f;
     @Nullable
@@ -77,19 +77,19 @@ public final class WaterDecal {
     private static final Vector4f HAZE = new Vector4f();
     private static int count, texture = -1, lastCount;
     private static boolean wanted, packChecked;
-    /** {@code IrisApi.isShaderPackInUse} (по рефлексии: мод от Iris не зависит); null — Iris нет. */
+    /** {@code IrisApi.isShaderPackInUse} (reflection: mod does not depend on Iris); null — no Iris. */
     @Nullable
     private static MethodHandle packInUse;
 
     private WaterDecal() {}
 
-    /** На сколько блоков за фронтом выборка {@code i} профиля длины {@code length}: гуще у фронта. */
+    /** Distance behind the front for profile sample {@code i} of {@code length}, blocks: denser near front. */
     public static double sampleAt(int i, double length) {
         double f = (double) i / (SAMPLES - 1);
         return length * f * f;
     }
 
-    /** Начало кадра: колец ещё нет; нужны ли они (шейдер есть, у измерения небо, камера не в воде). */
+    /** Frame start: no rings yet; whether needed (shader exists, dimension has sky, camera outside water). */
     static void begin(@Nullable ClientLevel level, Camera camera) {
         lastCount = count;
         count = 0;
@@ -97,20 +97,20 @@ public final class WaterDecal {
                 && camera.getFluidInCamera() == FogType.NONE;
     }
 
-    /** Кольца в этом кадре нужны (иначе профили можно не считать). */
+    /** Rings needed this frame (otherwise skip profile computation). */
     public static boolean wanted() {
         return wanted && count < RINGS;
     }
 
     /**
-     * Кольцо в кадр: центр (мир, блоки), радиус фронта по воде, длина профиля за ним и сам профиль — темнота воды и пена
-     * 0..1 на {@link #sampleAt} блоков за фронтом. False — места нет.
+     * Add a frame ring: centre (world, blocks), water front radius, profile length behind it and profile — water darkness and foam
+     * 0..1 at {@link #sampleAt} blocks behind the front. False — no slot.
      */
     public static boolean ring(double x, double z, double radius, double length, float[] dark, float[] foam) {
         return ring(x, z, radius, length, dark, foam, false);
     }
 
-    /** Обычный водяной взрыв: patchy — кружево пены с ограниченной непрозрачностью; ядерные барашки без изменений. */
+    /** Conventional water blast: patchy — lace-like foam with capped opacity; nuclear whitecaps unchanged. */
     public static boolean ring(double x, double z, double radius, double length, float[] dark, float[] foam, boolean patchy) {
         if (!wanted()) return false;
         int row = count++;
@@ -128,14 +128,14 @@ public final class WaterDecal {
         return true;
     }
 
-    /** Есть что рисовать. */
+    /** There is something to draw. */
     static boolean active() {
         return count > 0 && shader != null;
     }
 
     /**
-     * Проход наклейки: до квадратов слоя, после {@code FarDraw.begin} (вид от глаза; здесь — свои матрицы во весь кадр).
-     * {@code scene} — текстура расстояний до мира ({@link SceneDepth#update}).
+     * Decal pass: before layer quads, after {@code FarDraw.begin} (eye-relative view; custom full-frame matrices here).
+     * {@code scene} — world-distance texture ({@link SceneDepth#update}).
      */
     static void draw(RenderLevelStageEvent e, FarView view, int scene, FxFrame.Fog fog) {
         ShaderInstance s = shader;
@@ -175,7 +175,7 @@ public final class WaterDecal {
         RenderSystem.enableDepthTest();
     }
 
-    /** Мир сейчас рисует шейдерпак Iris. */
+    /** Iris shader pack currently renders the world. */
     private static boolean shaderPack() {
         if (!packChecked) {
             packChecked = true;
@@ -204,7 +204,7 @@ public final class WaterDecal {
         }
     }
 
-    /** Профили кадра — в текстуру (своя, 64×4, RGBA8: темнота, пена; место — один раз, дальше — только пиксели). */
+    /** Frame profiles to texture (custom 64×4 RGBA8: darkness, foam; allocate once, then update pixels only). */
     private static void upload() {
         boolean fresh = texture < 0;
         if (fresh) {
@@ -228,7 +228,7 @@ public final class WaterDecal {
         }
     }
 
-    /** Для строки сценария: колец на воде в прошлом кадре. */
+    /** For the scenario line: water rings in the previous frame. */
     public static String describe() {
         return String.format(Locale.ROOT, "%d ring(s)%s", lastCount, shader == null ? " (no shader)" : "");
     }

@@ -14,60 +14,61 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Факел двигателя вблизи ({@link Flame}, из {@code FlameModel}): полосы вдоль оси сопла, развёрнутые к камере (с любой
- * стороны — струя, а не плоская картинка), — оболочка (пламя догорания и остывающий хвост) кусками от среза до точки
- * Дрейпера, свет и цвет каждого места — из закона модели ({@link Flame#sheath}: белое пламя, жёлтый и оранжевый хвост,
- * гаснущий к концу), и ядро до конца сверхзвуковой части. Ширина — струи в этом месте ({@link Flame#widthAt}). Струя —
- * цилиндр: сбоку видна её длина, с торца — сечение. Полоса вдоль оси с торца сходит в отрезок поперёк (вид строго сзади
- * — «палка»), поэтому у среза сопла — ещё сечение струи лицом к камере: круг пламени (полуширина в конце пламени) и ядра
- * (полуширина у среза), {@code far/disc} того же потока, что сечение ({@link #HALO}). Геометрия — {@link #layout} (её
- * площадь с торца и сбоку сверяет {@code PlumeRendererTest}).
+ * Nearby engine plume ({@link Flame}, from {@code FlameModel}): nozzle-axis ribbons facing the camera (jet from
+ * every side, rather than a flat image), sheath (afterburning flame and cooling tail) in pieces from exit to Draper
+ * point, each position's light and colour from the model law ({@link Flame#sheath}: white flame, yellow and orange
+ * tail fading toward the end), plus core to the supersonic section's end. Width is local jet width
+ * ({@link Flame#widthAt}). Jet is a cylinder: length visible from the side, cross-section end-on. End-on, an axial
+ * ribbon becomes a transverse segment (directly from behind, a stick), so add a camera-facing jet cross-section at
+ * the nozzle exit: flame circle (half-width at flame end) and core circle (half-width at exit), {@code far/disc}
+ * with the same flux as the cross-section ({@link #HALO}). Geometry: {@link #layout} (end-on and side areas checked
+ * by {@code PlumeRendererTest}).
  * <p>
- * Рисует струю слой эффектов после мира ({@code FxLayer}, через {@link FarSprites}), а не сущность в мире: под Iris всё,
- * что нарисовано до конца мира, проходит через шейдерпак (Complementary: свет «глаз» ×1,5 в степени 1,5, облака и
- * дымка неба поверх того, что не пишет глубину), и днём струя в 75 раз ярче белой стены выходила бледным обрывком у
- * сопла (кадры шлагбаума RV2: 53 тёплых пикселя против 494 у 3.4.1), а ночью — видна. Сущность при отрисовке только
- * оставляет струю кадра ({@link #render}); яркость — с привыканием глаза кадра слоя ({@link FarView#exposure}), тем же,
- * что у света этого факела вдали: что ярче белого экрана, рисуется во всю силу и белеет ({@code Sight.WHITE}). Блик и
- * вуаль — у света факела ({@code FarFlightView}) на любой дальности. Светит поверх того, что за ней (сложением), и
- * ложится поверх дыма своего следа у того же места.
+ * Effects layer draws jet after the world ({@code FxLayer}, via {@link FarSprites}), rather than the world entity:
+ * under Iris, everything drawn before world end passes through the shader pack (Complementary: eyes light ×1.5
+ * raised to 1.5, clouds and sky haze over anything not writing depth), leaving a daytime jet 75 times brighter than
+ * a white wall as a pale stub at the nozzle (RV2 look gate frames: 53 warm pixels versus 494 in 3.4.1), though visible
+ * at night. Entity render only records this frame's jet ({@link #render}); brightness uses effects-layer frame eye
+ * adaptation ({@link FarView#exposure}), the same as its distant light: brighter than screen white draws at full
+ * strength and whitens ({@code Sight.WHITE}). Glare and veiling light belong to plume light ({@code FarFlightView})
+ * at any distance. Shines additively over what is behind it, and overlays its own trail smoke at the same position.
  */
 public final class PlumeRenderer {
     /**
-     * Полуразмер квадрата сечения на его радиус: круг {@code far/disc} с мягким краем — того же потока, что круг радиуса r
-     * ({@link FarSprites#DISC}). Не ореол: его хвост в три радиуса — свечение вокруг, а не струя, и с торца факел выходил
-     * «солнцем» (свет в глазу вокруг — блик и вуаль у {@code FarFlightView}).
+     * Cross-section quad half-size per radius: soft-edged {@code far/disc} circle has the same flux as a circle of
+     * radius r ({@link FarSprites#DISC}). Not a halo: its three-radius tail is surrounding glow, not the jet, which
+     * made the end-on plume look like a sun (surrounding light in the eye: glare and veil in {@code FarFlightView}).
      */
     static final float HALO = (float) FarSprites.DISC;
-    /** Слои {@link #layout}: куски оболочки, ядро, сечение пламени, сечение ядра. */
+    /** {@link #layout} layers: sheath pieces, core, flame cross-section, core cross-section. */
     static final int SHEATH = 0, CORE = 1, FLAME_DISC = 2, CORE_DISC = 3;
 
-    /** Куда {@link #layout} кладёт квадраты: слой, кусок оболочки (у остальных 0), четыре угла (система снаряда). */
+    /** {@link #layout} quad output: layer, sheath piece (0 for others), four corners (projectile axes). */
     interface Quads {
-        /** У полос a, b — край ближе к соплу, c, d — дальше; у сечений — углы квадрата. */
+        /** Ribbon a, b edge nearer nozzle, c, d farther; cross-sections use square corners. */
         void quad(int layer, int piece, Vector3f a, Vector3f b, Vector3f c, Vector3f d);
     }
 
-    /** Струя кадра: факел, поворот системы снаряда, место снаряда в мире. */
+    /** Frame jet: plume, projectile-axis rotation, projectile world position. */
     private record Jet(Exhaust.Plume plume, Quaternionf rotation, Vec3 origin) {}
 
     /**
-     * Струи этого кадра — по сущности: Iris рисует сущности ещё и в карту теней, и струя одной сущности легла бы дважды.
-     * Только поток отрисовки.
+     * This frame's jets by entity: Iris also renders entities into the shadow map, which would duplicate a jet.
+     * Render thread only.
      */
     private static final Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
 
-    /** Горячее сопло кадра: вид сопла, поворот системы ускорителя (ось сопла — −Z), срез сопла в мире, доля вблизи. */
+    /** Frame hot nozzle: nozzle view, booster-axis rotation (nozzle along −Z), world nozzle exit, near share. */
     private record Hot(NozzleGlow.Shine shine, Quaternionf rotation, Vec3 nozzle, float near) {}
 
-    /** Горячие сопла этого кадра — по сущности, как струи ({@link #FRAME}). */
+    /** This frame's hot nozzles by entity, like jets ({@link #FRAME}). */
     private static final Map<net.minecraft.world.entity.Entity, Hot> HOT = new IdentityHashMap<>();
 
     private PlumeRenderer() {}
 
     /**
-     * Сущность key рисуется в этом кадре с горячим соплом s ({@link NozzleGlow}): срез — в nozzle (мир), ось сопла — −Z
-     * системы rotation; near — доля вблизи, как у струи.
+     * Entity key renders this frame with hot nozzle s ({@link NozzleGlow}): exit at nozzle (world), nozzle axis −Z
+     * of rotation; near is the near share, as for the jet.
      */
     public static void glow(NozzleGlow.Shine s, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 nozzle, float near) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
@@ -76,20 +77,20 @@ public final class PlumeRenderer {
     }
 
     /**
-     * Сущность key рисуется в этом кадре со струёй p: её нарисует слой эффектов ({@link #collect}).
+     * Entity key renders this frame with jet p: effects layer will draw it ({@link #collect}).
      *
-     * @param rotation поворот системы снаряда (нос по +Z)
-     * @param origin   положение снаряда в мире в этот кадр
+     * @param rotation projectile-axis rotation (nose along +Z)
+     * @param origin   projectile world position this frame
      */
     public static void render(Exhaust.Plume p, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 origin) {
-        // с борта своего двигателя струи не видно (как и света факела вдали, FarFlightView.onboard): Iris рисует сущность
-        // камеры в карту теней, и без этого слой нарисовал бы струю у самого глаза
+        // Onboard view cannot see its own engine jet (same as distant plume light, FarFlightView.onboard): Iris draws the camera
+        // entity into the shadow map; without this the layer would draw the jet right at the eye.
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
         FRAME.put(key, new Jet(p, new Quaternionf(rotation), origin));
     }
 
-    /** Струи кадра — в квадраты слоя эффектов (от глаза кадра {@code view.camera()}). */
+    /** Frame jets into effects-layer quads (relative to frame eye {@code view.camera()}). */
     public static void collect(FarView view, FarSprites out) {
         if (FRAME.isEmpty() && HOT.isEmpty()) return;
         Vec3 eye = view.camera();
@@ -99,15 +100,15 @@ public final class PlumeRenderer {
     }
 
     /**
-     * Конец кадра ({@code FxLayer}, этап после мира, и тогда, когда слой ничего не рисовал): струи кадра забыты — иначе
-     * без сбора (слой не готов, перезагрузка ресурсов) они держали бы сущности и легли бы потом струёй прошлого места.
+     * End of frame ({@code FxLayer}, after-world stage, including when the layer drew nothing): forget frame jets;
+     * without collection (layer unready, resource reload), they would retain entities and later draw at old positions.
      */
     public static void endFrame() {
         FRAME.clear();
         HOT.clear();
     }
 
-    /** Выход из мира. */
+    /** World exit. */
     public static void reset() {
         FRAME.clear();
         HOT.clear();
@@ -118,20 +119,20 @@ public final class PlumeRenderer {
         Flame f = p.flame();
         Quaternionf rot = jet.rotation(), inv = new Quaternionf(rot).conjugate();
         Vec3 o = jet.origin();
-        // от среза сопла до глаза — в системе снаряда (сопло на (0, y, z)); оси экрана там же — копии (векторы вида живые)
+        // Nozzle exit to eye in projectile axes (nozzle at (0, y, z)); screen axes copied into the same space (view vectors are live).
         Vector3f cam = new Vector3f((float) (eye.x - o.x), (float) (eye.y - o.y), (float) (eye.z - o.z)).rotate(inv).sub(0, p.y(), 0);
         Vector3f left = new Vector3f(view.left()).rotate(inv), up = new Vector3f(view.up()).rotate(inv);
         float ox = (float) (o.x - eye.x), oy = (float) (o.y - eye.y), oz = (float) (o.z - eye.z);
         Flame.Sheath sheath = f.sheath();
-        // дымка воздуха до струи гасит её свет, как у света этого факела вдали (FarFlightView: яркость × пропускание, потом
-        // на экран): на 0,8 прорисовки без скачка
+        // Air haze to the jet attenuates its light like this plume's distant light (FarFlightView: brightness × transmittance,
+        // then to screen): no jump at 0.8 render distance.
         double dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
         float near = p.near();
-        // свет струи — поверх дыма её же выхлопа: след и столб у струи — то же вещество, свечение и рассеянный им свет
-        // складываются (⚠ самопоглощение не учитывается); по квадратам сортировка резала струю ступенями между клубами
-        // (кадры F6 сзади). Запас — глубина струи вдоль взгляда и клубы следа у оси (до ~3,7σ₀, σ₀ — половина ширины струи
-        // в её конце, TrailModel.Trail.of): у всех кусков один ключ — ближняя точка струи минус клубы у оси; дым ближе этого,
-        // чужой и свой, её закрывает
+        // Jet light over its own exhaust smoke: trail and column at the jet are the same matter; emission and scattered light
+        // add (⚠ self-absorption ignored); sorting individual quads cut the jet into steps between billows
+        // (F6 frames from behind). Margin is view-axis jet depth and trail billows near the axis (up to ~3.7σ₀, σ₀ half jet width
+        // at its end, TrailModel.Trail.of): all pieces share one key, nearest jet point minus axis billows; smoke nearer than that,
+        // both own and other sources, occludes it.
         Vector3f nozzle = new Vector3f(0, p.y(), p.z()).rotate(rot).add(ox, oy, oz);
         Vector3f tail = new Vector3f(0, p.y(), p.z() - (float) f.length()).rotate(rot).add(ox, oy, oz);
         float key = (float) Math.max(1e-3, Math.min(nozzle.length(), tail.length()) - 2 * f.spread());
@@ -162,10 +163,10 @@ public final class PlumeRenderer {
     }
 
     /**
-     * Горячее сопло: круг среза в его плоскости — свет раструба (что видно через срез — его стенки), и круг горла на его
-     * глубине — сверх раструба, долей, видной через срез ({@link NozzleGlow.Shine#throatSeen}). Спереди среза сопла не
-     * видно. Мельче пятна {@link Sight#MIN_PIXELS} — круглое пятно, бледнее во столько же раз (свет тот же, как у
-     * {@link Sight#point}). Дымка и привыкание глаза — как у струи.
+     * Hot nozzle: exit circle in its plane shows bell light (bell walls visible through the exit); throat circle at
+     * its depth adds beyond the bell, by the fraction visible through the exit ({@link NozzleGlow.Shine#throatSeen}).
+     * No nozzle visible from in front of the exit. Below {@link Sight#MIN_PIXELS} spot size, use a circular spot dimmed
+     * by the same factor (same light, as {@link Sight#point}). Haze and eye adaptation as for the jet.
      */
     private static void draw(Hot hot, Vec3 eye, double exposure, FarView view, FarSprites out) {
         NozzleGlow.Shine s = hot.shine();
@@ -174,27 +175,27 @@ public final class PlumeRenderer {
         float nx = (float) (hot.nozzle().x - eye.x), ny = (float) (hot.nozzle().y - eye.y), nz = (float) (hot.nozzle().z - eye.z);
         double dist = Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (dist < 1e-3) return;
-        // косинус между осью сопла (наружу) и направлением на глаз
+        // Cosine between outward nozzle axis and eye direction.
         double cos = -(axis.x * nx + axis.y * ny + axis.z * nz) / dist;
         if (cos <= 0) return;
         double lit = exposure * view.air(dist, ny);
-        // свет через срез: горло — своим кругом на его доле, видной через срез, раструб — остальной площадью среза; кругом
-        // поверх круга слой только складывает, поэтому раструб — ровным светом среза за вычетом доли горла (поток точный,
-        // ⚠ горло холоднее раструба в середине не темнеет)
+        // Light through exit: throat circle at its visible fraction, bell on remaining exit area; the layer adds circles
+        // over circles, so use uniform exit light for the bell minus throat share (exact flux,
+        // ⚠ throat colder than bell does not darken the centre).
         double throatShare = s.throatSeen(cos) * (s.throatRadius() * s.throatRadius()) / (s.exitRadius() * s.exitRadius());
-        // срез — чуть позади своей плоскости: не в одной глубине с краем сетки сопла
+        // Exit slightly behind its plane, avoiding the same depth as nozzle mesh edge.
         plate(out, view, new Vector3f(axis).mul(0.01f).add(nx, ny, nz), ax, ay, s.exitRadius(), cos, dist, NozzleGlow.color(s.coneKelvin()),
                 s.coneLuminance() * (1 - throatShare) * lit, hot.near());
         plate(out, view, new Vector3f(axis).mul((float) -s.depth()).add(nx, ny, nz), ax, ay, s.throatRadius(), cos, dist,
                 NozzleGlow.color(s.throatKelvin()), s.throatLuminance() * s.throatSeen(cos) * lit, hot.near());
     }
 
-    /** Круг радиуса r с центром c (от глаза) в плоскости осей ax, ay, видный под косинусом cos с дальности dist. */
+    /** Circle radius r, centre c (eye-relative), in ax, ay plane, seen with cosine cos from distance dist. */
     private static void plate(FarSprites out, FarView view, Vector3f c, Vector3f ax, Vector3f ay, double r, double cos, double dist, int color,
                               double lum, float near) {
         if (lum <= 0) return;
-        // эллипс тоньше пятна в полтора пикселя (малая ось — r·cos) — круглым пятном лицом к камере с тем же светом
-        // (площадь эллипса — π·r²·cos): иначе с ребра — игла тоньше пикселя, мерцающие точки
+        // Ellipse narrower than a one-and-a-half-pixel spot (minor axis r·cos): camera-facing circular spot with the same light
+        // (ellipse area π·r²·cos); otherwise edge-on it is a subpixel needle, flickering dots.
         double least = 0.5 * Sight.MIN_PIXELS * view.pixel() * dist;
         if (r * cos < least) {
             double spot = Math.max(least, r * Math.sqrt(cos));
@@ -208,9 +209,9 @@ public final class PlumeRenderer {
     }
 
     /**
-     * Квадраты факела f со срезом сопла на z0 (система снаряда, нос по +Z) для камеры cam и осей экрана left, up там же:
-     * куски оболочки по местам {@link Flame#sheath} и ядро — полосы вдоль оси, повёрнутые к камере, и сечения — круги
-     * пламени и ядра у среза лицом к камере.
+     * Quads of plume f with nozzle exit at z0 (projectile axes, nose +Z), for camera cam and screen axes left, up in
+     * the same space: sheath pieces at {@link Flame#sheath} positions and core as camera-facing axial ribbons;
+     * flame and core cross-sections at the exit as camera-facing circles.
      */
     static void layout(Flame f, float z0, Vector3f cam, Vector3f left, Vector3f up, Quads out) {
         double[] xs = f.sheath().x();
@@ -231,7 +232,7 @@ public final class PlumeRenderer {
         disc(out, CORE_DISC, new Vector3f(0, 0, z0 - 0.5f * (float) f.width()), left, up, HALO * (float) f.width());
     }
 
-    /** Поперёк оси Z к камере в точке оси z: единичный вектор, перпендикулярный оси и лучу к камере. */
+    /** Across Z axis toward camera at axial point z: unit vector perpendicular to axis and camera ray. */
     private static Vector3f side(Vector3f cam, float z) {
         Vector3f toCam = new Vector3f(cam).sub(0, 0, z);
         Vector3f side = new Vector3f(0, 0, -1).cross(toCam);
@@ -239,7 +240,7 @@ public final class PlumeRenderer {
         return side.normalize();
     }
 
-    /** Квадрат полуразмера s с центром at лицом к камере (оси экрана left, up). */
+    /** Camera-facing quad of half-size s centred at at (screen axes left, up). */
     private static void disc(Quads out, int layer, Vector3f at, Vector3f left, Vector3f up, float s) {
         Vector3f l = new Vector3f(left).mul(s), u = new Vector3f(up).mul(s);
         out.quad(layer, 0, new Vector3f(at).sub(l).sub(u), new Vector3f(at).sub(l).add(u), new Vector3f(at).add(l).add(u), new Vector3f(at).add(l).sub(u));
