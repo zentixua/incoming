@@ -72,28 +72,51 @@ class FireballRadiationTest {
     }
 
     @Test
-    void pulseKeepsTheMeasuredIntegralAnchorsAndThePromptPeak() {
+    void broadPulseKeepsTheMeasuredIntegralAnchors() {
         assertEquals(1, integrate(0, 0.2, FireballRadiation::pulse), 1e-6);
         assertEquals(0.0015 / 0.0024, integrate(0, 0.1, FireballRadiation::pulse), 1e-6,
                 "Khristoforov p.110: 0.15% at reduced time 0.1, 0.24% at 0.2");
-        assertEquals(0.06, integrate(0, 0.0015, FireballRadiation::pulse), 1e-6,
-                "estimated initial lobe is part of the same budget, not extra flash energy");
-        double[] out = new double[4];
+        assertEquals(0, FireballRadiation.pulse(0), 0, "continuous onset, no sub-frame initial peak");
+        assertEquals(1.0 / 15, FireballRadiation.PULSE_PEAK, 1e-15);
+        assertEquals(10, FireballRadiation.pulse(FireballRadiation.PULSE_PEAK), 1e-12,
+                "one broad maximum, fixed by duration and budget");
         for (double kg : new double[]{6.4, 10, 50, 150, 450, 500}) {
             CloudModel m = new CloudModel(BlastSource.air(kg), CloudModel.Air.STANDARD);
-            m.emittedLight(0, out);
-            assertTrue(out[3] > 32, kg + " kg: prompt daytime core exceeds Sight.WHITE without changing glare/bloom");
-            double prompt = m.radiation.he(0, m.heBallRadius(0), m.heBallKelvin(0));
-            double t = 0.05 * Math.cbrt(kg);
-            double later = m.radiation.he(t, m.heBallRadius(t), m.heBallKelvin(t));
-            assertTrue(prompt > 10 * later, kg + " kg: emissivity is not constant over the HE phase");
             assertEquals(0, m.radiation.he(m.heBallSeconds, m.heBall, CloudModel.HE_BALL_END), 0);
             double[] before = new double[4], after = new double[4];
-            for (double u : new double[]{0.0015, 0.002, 0.07340067340067341, 0.2}) {
+            for (double u : new double[]{0, FireballRadiation.PULSE_PEAK, 0.2}) {
                 double edge = u * Math.cbrt(kg), step = 1e-8 * Math.cbrt(kg);
                 m.ballLight(edge - step, before);
                 m.ballLight(edge + step, after);
                 assertEquals(before[3], after[3], 0.01, kg + " kg: no discontinuity at pulse knot " + u);
+            }
+        }
+    }
+
+    @Test
+    void broadPulseIsResolvedAcrossFrameRatesAndFrameOffsets() {
+        // Sample the actual HE source at arbitrary frame phases. A 5–8 ms prompt spike fails the peak bound at
+        // ordinary FPS. The broad pulse keeps both peak and integrated energy stable even at 20 FPS (tick rate).
+        for (double kg : new double[]{6.4, 10, 50, 150, 450, 500}) {
+            CloudModel m = new CloudModel(BlastSource.air(kg), CloudModel.Air.STANDARD);
+            double budget = FireballRadiation.VISIBLE_SHARE * kg * 4.184e6;
+            double peak = 10 * budget / m.radiation.heTimeScale();
+            double[] light = new double[4];
+            for (int fps : new int[]{20, 30, 60, 144, 240}) {
+                for (int phase = 0; phase < 16; phase++) {
+                    double energy = 0, sampledPeak = 0, dt = 1.0 / fps;
+                    for (double t = phase * dt / 16; t < m.heBallSeconds; t += dt) {
+                        m.emittedLight(t, light);
+                        double power = area(m.heBallRadius(t)) * FireballRadiation.visibleExitance(m.heBallKelvin(t))
+                                * light[3] / BlackBody.luminance(m.heBallKelvin(t));
+                        energy += power * dt;
+                        sampledPeak = Math.max(sampledPeak, power);
+                    }
+                    String label = kg + " kg at " + fps + " FPS, frame phase " + phase;
+                    assertEquals(budget, energy, budget * 0.03, label + ": integrated visible energy");
+                    assertTrue(sampledPeak >= 0.85 * peak && sampledPeak <= peak * (1 + 1e-12),
+                            label + ": broad peak is always captured within 15%");
+                }
             }
         }
     }

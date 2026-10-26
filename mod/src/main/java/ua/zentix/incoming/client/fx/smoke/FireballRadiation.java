@@ -19,15 +19,13 @@ record FireballRadiation(double heJoules, double heTimeScale, double fuel, doubl
      */
     static final double VISIBLE_SHARE = 0.0024;
     /**
-     * Reduced time u = t/m⅓, s/kg⅓. Fig.2b, visible curve 5: a narrow initial peak, then a weaker broad pulse.
-     * ⚠ Coarse two-triangle approximation, not a digitized waveform: 6% in the initial lobe, ending at u=0.0015;
-     * its unresolved rise is replaced by a step at zero. The broad lobe starts at u=0.002 and ends at u=0.2.
-     * The text on p.110 gives E/Q = 0.15% at u=0.1 and 0.24% at u=0.2. Those integral anchors fix the broad peak;
-     * its resulting u≈0.0734 and the early peak ≈0.80 MW/kg⅔ agree in order with the plotted, ×10 visible curve.
+     * Reduced time u = t/m⅓, s/kg⅓. Fig.2b, visible curve 5; p.110 gives E/Q = 0.15% at u=0.1 and 0.24% at u=0.2.
+     * ⚠ One triangular approximation, not a digitized waveform. The unresolved millisecond lobe is folded into the
+     * broad pulse, preserving those energy anchors instead of adding an FPS-dependent peak. With onset at zero and
+     * end at u=0.2, the anchors fix the peak at u=1/15. Geometry, total energy and the screen flash are unchanged.
      */
-    static final double PROMPT_SHARE = 0.06, PROMPT_END = 0.0015, LATE_START = 0.002, PULSE_END = 0.2;
-    private static final double LATE_PEAK = PULSE_END
-            - (1 - PROMPT_SHARE) * 0.1 * 0.1 / ((PULSE_END - LATE_START) * (1 - 0.0015 / VISIBLE_SHARE));
+    static final double PULSE_END = 0.2;
+    static final double PULSE_PEAK = PULSE_END - 0.1 * 0.1 / (PULSE_END * (1 - 0.0015 / VISIBLE_SHARE));
     /** TNT equivalent, J/kg (NIST SP 811, ton of TNT = 4.184·10⁹ J). */
     static final double TNT_J_PER_KG = 4.184e6;
     /** Stefan–Boltzmann constant and hc/k in SI (from defining h, c, k, BIPM SI Brochure). */
@@ -55,11 +53,7 @@ record FireballRadiation(double heJoules, double heTimeScale, double fuel, doubl
     /** Normalized power density in reduced time; its integral is one, with 0.625 emitted by u=0.1. */
     static double pulse(double u) {
         if (u < 0 || u >= PULSE_END) return 0;
-        double prompt = PROMPT_SHARE * 2 / PROMPT_END * Math.max(0, 1 - u / PROMPT_END);
-        double late = (1 - PROMPT_SHARE) * 2 / (PULSE_END - LATE_START)
-                * Math.max(0, Math.min((u - LATE_START) / (LATE_PEAK - LATE_START),
-                (PULSE_END - u) / (PULSE_END - LATE_PEAK)));
-        return prompt + late;
+        return 2 / PULSE_END * Math.min(u / PULSE_PEAK, (PULSE_END - u) / (PULSE_END - PULSE_PEAK));
     }
 
     double he(double t, double radius, double kelvin) {

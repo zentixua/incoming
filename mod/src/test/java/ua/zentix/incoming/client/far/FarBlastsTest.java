@@ -153,16 +153,17 @@ class FarBlastsTest {
         double day = Sight.adapted(1, 1), night = Sight.adapted(1, 0.17), h = 130;
         double[] light = new double[4];
         for (CloudModel m : MODELS) {
+            double nightPeak = 0;
             // днём зарево на облаках — только пока светят продукты детонации (~3000 K); шар топлива (~1500 K) их не светит
             for (double t = 0; t < m.fireSeconds; t += 0.05) {
                 m.emittedLight(t, light);
+                nightPeak = Math.max(nightPeak, FarBlasts.cloudGlow(light[3], m.ballRadius(t), h, night));
                 boolean lit = FarBlasts.SKY_PEAK * FarBlasts.cloudGlow(light[3], m.ballRadius(t), h, day) >= Sight.THRESHOLD;
                 assertTrue(!lit || t < m.heBallSeconds, m.source + ": днём зарево на " + t + " с, вспышка до " + m.heBallSeconds);
             }
-            m.emittedLight(0, light);
-            assertTrue(FarBlasts.SKY_PEAK * FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) > Sight.THRESHOLD,
+            assertTrue(FarBlasts.SKY_PEAK * nightPeak > Sight.THRESHOLD,
                     m.source + ": ночью низ облаков над взрывом видимо светлеет; бюджет не требует полубелого неба от любого заряда");
-            assertTrue(FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) <= 1, "не ярче белого");
+            assertTrue(nightPeak <= 1, "не ярче белого");
         }
     }
 
@@ -172,8 +173,11 @@ class FarBlastsTest {
         double day = Sight.adapted(1, 1), night = Sight.adapted(1, 0.17);
         double[] light = new double[4];
         for (CloudModel m : MODELS) {
-            m.ballLight(0, light);
-            double peak = light[3];
+            double peak = 0;
+            for (double t = 0; t < m.heBallSeconds; t += 0.01) {
+                m.ballLight(t, light);
+                peak = Math.max(peak, light[3]);
+            }
             assertTrue(FarBlasts.behind(peak, day, 1) < 0.5, m.source + ": днём зарево из-за края едва видно");
             assertEquals(Sight.VEIL_PEAK, FarBlasts.behind(peak, night, 1), 1e-9, m.source + ": ночью — в силу вуали, не ярче её");
         }
