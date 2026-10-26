@@ -33,6 +33,7 @@ import ua.zentix.incoming.guidance.AltitudeHold;
 import ua.zentix.incoming.guidance.Autopilot;
 import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.Craft;
+import ua.zentix.incoming.util.Relief;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
@@ -178,6 +179,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         @Override
         public double relief(int x, int z) {
             return StrikeProjectile.this.relief(level(), x, z);
+        }
+
+        @Override
+        public Relief reliefSurvey() {
+            return Terrain.relief(level(), virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
         }
 
         @Override
@@ -1286,7 +1292,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3 pos = position();
         double yawRad = Math.toRadians(flight.yaw());
         double[] track = {pos.x, pos.z, pos.x - Math.sin(yawRad) * distance, pos.z + Math.cos(yawRad) * distance};
-        return Autopilot.reliefAlong(track, (x, z) -> relief(level, x, z));
+        return Autopilot.reliefAlong(track, Terrain.relief(level, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF));
     }
 
     /**
