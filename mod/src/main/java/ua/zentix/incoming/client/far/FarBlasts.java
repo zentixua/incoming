@@ -313,6 +313,9 @@ public final class FarBlasts {
         public double age(double seconds) { return sourceAge(seconds); }
 
         @Override
+        public void maintain(double seconds) { model.maintain(sourceAge(seconds)); }
+
+        @Override
         public boolean bounds(double seconds, ua.zentix.incoming.client.fx.smoke.SmokeBounds out) {
             double t = sourceAge(seconds);
             model.bounds(t, level.getMinBuildHeight() - y, level.getMaxBuildHeight() - y, out);

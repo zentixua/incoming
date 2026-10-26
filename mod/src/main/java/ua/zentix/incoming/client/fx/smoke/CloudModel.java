@@ -872,6 +872,13 @@ public final class CloudModel {
         crushed.bounds(t, floor, ceiling, out);
     }
 
+    /** Advance only terrain-dependent dust history; no cap, condensation, colour or puff preparation. */
+    public void maintain(double t) {
+        if (t <= 0 || t >= life) return;
+        ground.maintain(t);
+        crushed.maintain(t);
+    }
+
     /**
      * Клубы облака в возрасте t (с), от точки взрыва (y — от точки удара вверх): огненный шар (горячий, в огненной
      * стадии), облако (термик: сажа, пыль воронки и пыль ножки, дошедшая до его низа), ножка — от земли вверх, докуда

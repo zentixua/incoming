@@ -13,14 +13,19 @@ paths:
   planes (distant effects fold in front of the far plane), and haze at the nearest/highest bound edge.
 - `SmokePreparation` selects at most 128 nearby/large sources with 20% retention hysteresis and refreshes at most
   16 within a cooperative 2 ms frame budget. A source gets at most 0.5 ms before yielding to the next one. Refresh
-  priority uses snapshot age in seconds, including time hidden, with young clouds first. Never replay a partial
-  snapshot, a snapshot from the future, or one older than 0.25 s. Preserve original source order during replay:
+  priority uses snapshot age in seconds, including time hidden, with young clouds first. Reserve the measured
+  source cost plus margin before starting its next emit. Never replay a partial snapshot or one from the future.
+  On return from exclusion, discard a snapshot older than 0.25 s until the first fresh update; continuously visible clouds retain their last
+  complete snapshot even when the refresh round is longer at low FPS. Preserve original source order during replay:
   puff merging is order-sensitive. Fire and nuclear sources retain their existing paths.
 - Selection uses distance to the bound centre: broad empty margins must not dominate nearby clouds.
   `GroundDust.support` builds interval bounds from displayed-ring mass moments, monotone lofted fractions and
   entrainment survival; common ring settling cancels. Positive/negative wind sums cover terrain delays.
-- Skipped dust history advances directly to the current absolute-time bracket in at most four coarse steps of two probes each.
-  Wind, mass, spread, fall time and lifetime still use absolute age. Never replay all omitted path nodes on return.
+- Dust keeps the original fine `PATH` nodes and spatial sampling density: coarse hidden steps skip walls and put
+  street dust on roofs. `Source.maintain` advances only hidden terrain paths, without cloud emission, in a rotating
+  0.5 ms share of the same 2 ms budget (0.125 ms slices). Completed nodes survive a yield; a completed path bracket
+  is reused until the next node. Terrain access stays on the client thread. A return never synchronously bypasses
+  the preparation budget to catch up, and cannot publish a partial or pre-hide snapshot.
 - `FarTerrain.dust` shares one weakly world-owned cell cache across strikes, before every `TerrainTiles` backend
   (LSS, Voxy, DH): loaded columns for one tick, distant columns for one second, including absent heights. Switching
   to loaded chunks or rewinding invalidates cells immediately. Cache values must not retain the weak world key.

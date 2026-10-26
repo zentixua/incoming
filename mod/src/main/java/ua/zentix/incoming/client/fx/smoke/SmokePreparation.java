@@ -14,6 +14,8 @@ public final class SmokePreparation {
     static final int SOURCES = 128, UPDATES = 16;
     static final long NANOS = 2_000_000;
     static final long SOURCE_NANOS = NANOS / 4;
+    static final long MAINTENANCE_NANOS = NANOS / 4, MAINTENANCE_SLICE = MAINTENANCE_NANOS / 4;
+    private static final long MIN_RESERVE = 50_000;
     /** Presentation: never draw an obsolete position when the camera returns. */
     static final double MAX_SAMPLE_AGE = 0.25;
     private static long deadline = Long.MAX_VALUE;
@@ -40,17 +42,18 @@ public final class SmokePreparation {
         final SmokeBounds bounds = new SmokeBounds();
         Snapshot ready, staging;
         double priority, sampledAt, age;
-        long frame;
-        boolean hasSample, dead, legacy, selected;
+        long frame, maintained, estimate = SOURCE_NANOS;
+        boolean hasSample, dead, legacy, selected, wasSelected, bounded, returning;
         Entry(SmokeGrid.Source source) { this.source = source; }
     }
 
     private final IdentityHashMap<SmokeGrid.Source, Entry> entries = new IdentityHashMap<>();
     private final ArrayList<Entry> selected = new ArrayList<>(SOURCES);
+    private final ArrayList<Entry> maintenance = new ArrayList<>();
     private final java.util.PriorityQueue<Entry> nearest = new java.util.PriorityQueue<>(Comparator.comparingDouble(e -> e.priority));
     private long frame;
 
-    public void reset() { entries.clear(); selected.clear(); nearest.clear(); }
+    public void reset() { entries.clear(); selected.clear(); nearest.clear(); maintenance.clear(); }
 
     public void draw(List<SmokeGrid.Source> sources, Set<SmokeGrid.Source> inGrid, double seconds,
                      double x, double y, double z, Predicate<SmokeBounds> visible, Draw draw) {
@@ -60,18 +63,22 @@ public final class SmokePreparation {
     void draw(List<SmokeGrid.Source> sources, Set<SmokeGrid.Source> inGrid, double seconds,
               double x, double y, double z, Predicate<SmokeBounds> visible, Draw draw, LongSupplier timer) {
         frame++;
+        long frameDeadline = timer.getAsLong() + NANOS;
         selected.clear();
         nearest.clear();
+        maintenance.clear();
         for (var it = sources.iterator(); it.hasNext();) {
             SmokeGrid.Source s = it.next();
             Entry e = entries.computeIfAbsent(s, Entry::new);
             e.frame = frame;
             boolean retained = e.selected;
-            e.legacy = e.selected = false;
+            e.wasSelected = e.selected;
+            e.legacy = e.selected = e.bounded = false;
             if (s.ended() || e.dead) { entries.remove(s); it.remove(); continue; }
             if (inGrid.contains(s)) continue;
             e.bounds.clear();
             boolean bounded = s.bounds(seconds, e.bounds);
+            e.bounded = bounded;
             if (bounded && (e.bounds.empty() || !visible.test(e.bounds))) continue;
             if (!bounded && !s.budgeted()) {
                 // Nuclear sources keep their established path and limits.
@@ -87,20 +94,31 @@ public final class SmokePreparation {
         }
         entries.values().removeIf(e -> e.frame != frame);
         selected.addAll(nearest);
-        for (Entry e : selected) e.selected = true;
+        for (Entry e : selected) {
+            e.selected = true;
+            // Only a return from exclusion invalidates an old snapshot. Continuously visible clouds must remain
+            // present even when low FPS makes the refresh round longer than this threshold.
+            if (!e.wasSelected) e.returning = true;
+            if (seconds < e.sampledAt || e.returning && seconds - e.sampledAt > MAX_SAMPLE_AGE) e.hasSample = false;
+        }
+        for (Entry e : entries.values()) if (e.bounded && !e.selected && !e.dead && e.source.age(seconds) >= 1)
+            maintenance.add(e);
+        maintenance.sort(Comparator.comparingLong(e -> e.maintained));
         // Real sample age includes time off screen. Young rapidly changing clouds get the first slots;
         // otherwise refresh the oldest sample first, with contribution breaking ties.
         selected.sort(Comparator.<Entry>comparingInt(e -> e.age < 1 ? 1 : 0).reversed()
                 .thenComparing(Comparator.comparingDouble((Entry e) -> e.hasSample ? seconds - e.sampledAt : Double.POSITIVE_INFINITY).reversed())
                 .thenComparing(Comparator.comparingDouble((Entry e) -> e.priority).reversed()));
         clock = timer;
-        long frameDeadline = timer.getAsLong() + NANOS;
+        long visibleDeadline = frameDeadline - (maintenance.isEmpty() ? 0 : MAINTENANCE_NANOS);
         try {
             int updates = 0;
             for (Entry e : selected) {
                 long now = timer.getAsLong();
-                if (updates >= UPDATES || now >= frameDeadline) break;
-                deadline = Math.min(frameDeadline, now + SOURCE_NANOS);
+                if (updates >= UPDATES || now + MIN_RESERVE > visibleDeadline) break;
+                // Reserve the measured source cost (with margin), not just the instant of starting emit.
+                if (now + e.estimate > visibleDeadline) continue;
+                deadline = Math.min(visibleDeadline, now + SOURCE_NANOS);
                 updates++;
                 if (e.staging == null) e.staging = new Snapshot();
                 e.staging.clear();
@@ -109,10 +127,24 @@ public final class SmokePreparation {
                     Snapshot swap = e.ready; e.ready = e.staging; e.staging = swap;
                     e.sampledAt = seconds;
                     e.hasSample = true;
+                    e.returning = false;
+                    e.estimate = Math.clamp((timer.getAsLong() - now) * 5 / 4, MIN_RESERVE, SOURCE_NANOS);
                 } catch (Pause ignored) {
                     // Completed path nodes remain cached. A partial cloud is never published.
                     // Its own slice is exhausted; other clouds may still finish within the frame budget.
+                    e.estimate = SOURCE_NANOS;
                 }
+            }
+            long maintenanceDeadline = Math.min(frameDeadline, timer.getAsLong() + MAINTENANCE_NANOS);
+            int advanced = 0;
+            for (Entry e : maintenance) {
+                long now = timer.getAsLong();
+                if (advanced >= UPDATES || now + MAINTENANCE_SLICE > maintenanceDeadline) break;
+                deadline = now + MAINTENANCE_SLICE;
+                e.maintained = frame;
+                advanced++;
+                try { e.source.maintain(seconds); }
+                catch (Pause ignored) { /* Fine path nodes are resumable; rotate fairly through hidden sources. */ }
             }
         } finally {
             deadline = Long.MAX_VALUE;
@@ -124,8 +156,8 @@ public final class SmokePreparation {
             Entry e = entries.get(s);
             if (e.legacy) {
                 if (!s.emit(seconds, draw.sink(s, seconds))) { entries.remove(s); it.remove(); }
-            } else if (e.selected && e.hasSample && !e.dead && seconds >= e.sampledAt
-                    && seconds - e.sampledAt <= MAX_SAMPLE_AGE) e.ready.replay(draw.sink(s, e.sampledAt));
+            } else if (e.selected && e.hasSample && !e.dead && seconds >= e.sampledAt)
+                e.ready.replay(draw.sink(s, e.sampledAt));
         }
     }
 

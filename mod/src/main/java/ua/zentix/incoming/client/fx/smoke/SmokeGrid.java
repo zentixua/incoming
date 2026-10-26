@@ -94,6 +94,9 @@ public final class SmokeGrid {
         /** Absolute source age, used only to prioritize rapidly changing young clouds. */
         default double age(double seconds) { return Double.POSITIVE_INFINITY; }
 
+        /** Incremental hidden history only, on the client thread under the shared preparation budget. */
+        default void maintain(double seconds) {}
+
         /** Conventional source also uses the preparation budget when its short-lived support is not bounded. */
         default boolean budgeted() { return false; }
 

@@ -918,6 +918,22 @@ public final class GroundDust {
      */
     public void blobs(double t, double fade, Blobs out) {
         emit(t, fade, true, (x, y, z, sh, sv, dust, mass, source) -> out.blob(x, y, z, sh, sv, dust));
+        preparedNode = pathNode(t);
+    }
+
+    private int preparedNode = -1;
+    private static final Probe DISCARD = (x, y, z, sh, sv, dust, mass, source) -> {};
+
+    /** Keep the fine terrain path current without generating a rendered cloud. Called in a bounded maintenance slice. */
+    public void maintain(double t) {
+        if (t < PATH[PATH_FROM] || total <= 0 || pathNode(t) == preparedNode) return;
+        emit(t, 1, true, DISCARD);
+        preparedNode = pathNode(t);
+    }
+
+    private static int pathNode(double t) {
+        int node = java.util.Arrays.binarySearch(PATH, t);
+        return Math.min(PATH.length - 2, node < 0 ? -node - 2 : node);
     }
 
     /** Envelope of the same radial growth, spread and wind law, without visiting the terrain path. */
@@ -1099,8 +1115,6 @@ public final class GroundDust {
 
     /** Выборок пути на шаг {@link #PATH} не больше стольких (шаг выборки — полширины клуба, не меньше метра). */
     static final int PROBES = 16;
-    /** Presentation: at most four coarse steps over unseen history, retaining absolute wind, size and fall time. */
-    static final int RETURN_STEPS = 4, RETURN_PROBES = 2;
     /** Узел {@link #PATH}, с которого строится путь (0,5 с): к нему фронт прошёл кольца показа, их радиус установился. */
     static final int PATH_FROM = 2;
 
@@ -1146,24 +1160,8 @@ public final class GroundDust {
             step(p.next, sector, show, PATH[PATH_FROM], PATH[PATH_FROM + 1], source, ux, uz, own);
             paths[show][sector] = p;
         }
-        int node = java.util.Arrays.binarySearch(PATH, t);
-        if (node < 0) node = -node - 2;
-        node = Math.min(PATH.length - 2, node);
-        if (node > p.node + 1) {
-            SmokePreparation.checkpoint();
-            Track now = p.next.copy();
-            double from = PATH[p.node + 1], span = PATH[node] - from;
-            // Re-evaluate width, buoyancy and canyon release at coarse absolute ages. No omitted PATH-node replay.
-            for (int j = 0; j < RETURN_STEPS; j++)
-                step(now, sector, show, from + span * j / RETURN_STEPS, from + span * (j + 1) / RETURN_STEPS,
-                        source, ux, uz, own, RETURN_PROBES);
-            Track next = now.copy();
-            step(next, sector, show, PATH[node], PATH[node + 1], source, ux, uz, own);
-            // Publish the pair atomically: a paused source never leaves a partially advanced path.
-            p.node = node;
-            p.now = now;
-            p.next = next;
-        } else if (node > p.node) {
+        int node = pathNode(t);
+        while (node > p.node) {
             SmokePreparation.checkpoint();
             Track next = p.next.copy();
             step(next, sector, show, PATH[p.node + 1], PATH[p.node + 2], source, ux, uz, own);
@@ -1254,15 +1252,11 @@ public final class GroundDust {
 
     /** Шаг пути клуба от t0 до t1 ({@link #level}). */
     private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
-        step(tr, sector, show, t0, t1, source, ux, uz, own, PROBES);
-    }
-
-    private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own, int probes) {
         double[] p0 = place(sector, show, t0, source, ux, uz, own), p1 = place(sector, show, t1, source, ux, uz, own);
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
-        int n = (int) Math.max(1, Math.min(probes, Math.ceil(len / Math.max(1, w))));
+        int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
         // в улице — не реже метра пути: поперечный снос и стену держит каждая выборка ({@link #canyon})
-        if (walled) n = (int) Math.max(n, Math.min(probes, Math.ceil(len)));
+        if (walled) n = (int) Math.max(n, Math.min(PROBES, Math.ceil(len)));
         double[] w0 = drift(t0, 0.8 * at(sv[show], t0)), w1 = drift(t1, 0.8 * at(sv[show], t1));
         // склон — не круче блока на метр пути и роста полуширины следа (растущий след сам достаёт ниже по склону — это не
         // край); за краем ветер опускает слой на LEE метра на метр сноса

@@ -34,6 +34,7 @@ class CloudReturnTest {
             var site = terrain == 1 ? new LocalWind(0, 15, 20, 10, 1, 2, .6, 30) : LocalWind.OPEN;
             model = new CloudModel(BlastSource.of(weapon, false), new CloudModel.Air(.01, 5, -2, .2, 3, .6, site), false, 0, ground);
         }
+        @Override public void maintain(double seconds) { model.maintain(seconds - born); }
         @Override public double age(double seconds) { return seconds - born; }
         @Override public boolean bounds(double seconds, SmokeBounds out) {
             model.bounds(age(seconds), -64, 320, out);
@@ -60,7 +61,7 @@ class CloudReturnTest {
         assertEquals(before, clock[0], "real CloudModel.emit must not be called for a hidden young source");
     }
 
-    @Test void hiddenHistoryHasBoundedWorkAndIsCompleteOnFirstReturn() {
+    @Test void maintainedHistoryHasBoundedReturnWorkAndIsComplete() {
         for (var weapon : WEAPONS) for (int terrain = 0; terrain < 3; terrain++) {
             for (double hidden : new double[]{10, 60, 120, 300, 600, 1800}) {
                 for (boolean seen : new boolean[]{false, true}) {
@@ -70,10 +71,15 @@ class CloudReturnTest {
                         blast.emit(t, DISCARD);
                     }
                     double t = (seen ? 120 : 0) + hidden;
+                    // Hidden paths are maintained at their existing fine nodes, without CloudModel emission.
+                    for (double at : GroundDust.PATH) {
+                        if (at > t) break;
+                        if (!seen || at > 120) blast.maintain(at);
+                    }
                     blast.reads = 0;
                     var first = new ArrayList<double[]>();
                     blast.model.blobs(t, (x,y,z,sh,sv,s,d,w,k,rise) -> first.add(new double[]{x,y,z,sh,sv,s,d,w}));
-                    assertTrue(blast.reads <= (seen ? 60_000 : 100_000),
+                    assertTrue(blast.reads <= 5_000,
                             weapon + " terrain=" + terrain + " hidden=" + hidden + " seen=" + seen + " reads=" + blast.reads);
                     var again = new ArrayList<double[]>();
                     blast.model.blobs(t, (x,y,z,sh,sv,s,d,w,k,rise) -> again.add(new double[]{x,y,z,sh,sv,s,d,w}));
@@ -81,6 +87,21 @@ class CloudReturnTest {
                     for (int i = 0; i < first.size(); i++) assertArrayEquals(first.get(i), again.get(i), 1e-9,
                             "the first return must already be current, with no catch-up left for later frames");
                 }
+            }
+        }
+    }
+
+    @Test void unpreparedLongHistoryCannotBypassTheFrameSlice() {
+        for (double age : new double[]{60, 600, 1800}) {
+            long[] clock = {0};
+            var blast = new Blast(WeaponType.MISSILE, 2, 0, 0, clock);
+            var sources = new ArrayList<SmokeGrid.Source>(); sources.add(blast);
+            var prep = new SmokePreparation();
+            for (int f = 0; f < 8; f++) {
+                long before = blast.reads;
+                prep.draw(sources, Set.of(), age, 0, 0, 0, b -> true, (s,t) -> DISCARD, () -> clock[0]);
+                // A completed fine path node can finish just beyond the cooperative boundary.
+                assertTrue(blast.reads - before <= 30_000, "unbounded return work at age " + age);
             }
         }
     }

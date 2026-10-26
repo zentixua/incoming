@@ -64,6 +64,7 @@ class SmokePreparationTest {
         prep.draw(sources, Set.of(), 10.1, 0, 0, 0, b -> true, draw,
                 () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
         assertEquals(10, seen[0], "an interrupted source must not show a partial cloud");
+        prep.draw(sources, Set.of(), 11, 0, 0, 0, b -> false, draw, () -> 0);
         seen[0] = -1; checks[0] = 0;
         prep.draw(sources, Set.of(), 100, 0, 0, 0, b -> true, draw,
                 () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
@@ -71,6 +72,31 @@ class SmokePreparationTest {
         source.pause = false;
         prep.draw(sources, Set.of(), 101, 0, 0, 0, b -> true, draw, () -> 0);
         assertEquals(101, seen[0]);
+    }
+
+    @Test void returnedSnapshotExpiresUntilItsFirstFreshUpdate() {
+        var prep = new SmokePreparation(); var source = new Source(0);
+        List<SmokeGrid.Source> sources = new ArrayList<>(List.of(source));
+        double[] seen = {-1};
+        SmokePreparation.Draw draw = (s,t) -> { seen[0] = t; return DISCARD; };
+        prep.draw(sources, Set.of(), 10, 0, 0, 0, b -> true, draw, () -> 0);
+        prep.draw(sources, Set.of(), 10.1, 0, 0, 0, b -> false, draw, () -> 0);
+        source.pause = true;
+        for (double t : new double[]{10.2, 10.3}) {
+            seen[0] = -1;
+            int[] checks = {0};
+            prep.draw(sources, Set.of(), t, 0, 0, 0, b -> true, draw,
+                    () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
+            assertEquals(t < 10.25 ? 10 : -1, seen[0], "a short return must not make the pre-hide sample immortal");
+        }
+        source.pause = false;
+        prep.draw(sources, Set.of(), 10.4, 0, 0, 0, b -> true, draw, () -> 0);
+        assertEquals(10.4, seen[0]);
+        source.pause = true;
+        int[] checks = {0};
+        prep.draw(sources, Set.of(), 11, 0, 0, 0, b -> true, draw,
+                () -> ++checks[0] < 3 ? 0 : SmokePreparation.NANOS);
+        assertEquals(10.4, seen[0], "a fresh continuously visible snapshot must not expire");
     }
 
     @Test void onePausedCloudDoesNotAbortOtherUpdates() {
@@ -87,6 +113,48 @@ class SmokePreparationTest {
         prep.draw(new ArrayList<>(List.of(slow, other)), Set.of(), 0, 0, 0, 0, b -> true,
                 (s,t) -> DISCARD, () -> nanos[0]);
         assertEquals(1, other.calls, "a paused foreground cloud must not stop the queue");
+    }
+
+    @Test void lastEmitReservesItsCostBeforeStarting() {
+        long[] nanos = {0};
+        var sources = new ArrayList<SmokeGrid.Source>();
+        for (int i = 0; i < 128; i++) sources.add(new Source(0) {
+            @Override public boolean emit(double t, SmokeGrid.Sink out) {
+                nanos[0] += 150_000;
+                return super.emit(t, out);
+            }
+        });
+        var prep = new SmokePreparation();
+        for (int f = 0; f < 100; f++) {
+            long before = nanos[0];
+            prep.draw(sources, Set.of(), f / 20.0, 0, 0, 0, b -> true, (s,t) -> DISCARD, () -> nanos[0]);
+            assertTrue(nanos[0] - before <= SmokePreparation.NANOS, "last emit overran the frame budget");
+        }
+    }
+
+    @Test void hiddenMaintenanceIsBoundedFairAndNeverEmits() {
+        long[] nanos = {0};
+        int[] advanced = new int[64];
+        var sources = new ArrayList<SmokeGrid.Source>();
+        for (int i = 0; i < advanced.length; i++) {
+            int index = i;
+            sources.add(new Source(1000) {
+                @Override public void maintain(double seconds) {
+                    advanced[index]++;
+                    nanos[0] += SmokePreparation.MAINTENANCE_SLICE / 2;
+                    SmokePreparation.checkpoint();
+                }
+            });
+        }
+        var prep = new SmokePreparation();
+        for (int f = 0; f < 32; f++) {
+            long before = nanos[0];
+            prep.draw(sources, Set.of(), 10 + f / 20.0, 0, 0, 0, b -> false,
+                    (s,t) -> { fail("hidden cloud was drawn"); return DISCARD; }, () -> nanos[0]);
+            assertTrue(nanos[0] - before <= SmokePreparation.MAINTENANCE_NANOS);
+        }
+        for (int count : advanced) assertTrue(count > 0, "hidden maintenance starved a cloud");
+        for (var source : sources) assertEquals(0, ((Source)source).calls);
     }
 
     @Test void returnedAndYoungCloudsPrecedeFreshForegroundSnapshots() {
