@@ -1,26 +1,26 @@
 package ua.zentix.incoming.grid;
 
 /**
- * Кварталы сети: неровные районы около 80 блоков, из целых чанков. Центры — по сетке из клеток по {@link #CELL} чанков,
- * каждый сдвинут внутри своей клетки на случайную (по координатам клетки, одну и ту же всегда) величину; чанк
- * принадлежит кварталу с ближайшим центром (ячейки Вороного). Так границы кварталов вдали не складываются в сетку
- * квадратов. Всё выводится из координат: ничего не хранится, и сервер, и проверки получают одно и то же.
+ * Grid districts: irregular areas of about 80 blocks, made of whole chunks. Centers use a grid of cells of {@link #CELL}
+ * chunks, each shifted within its cell by a random amount (from cell coordinates, always the same); a chunk belongs to
+ * the district with the nearest center (Voronoi cells). Distant district boundaries therefore do not form a square grid.
+ * Everything is derived from coordinates: nothing stored, server and checks get the same result.
  */
 public final class Districts {
-    /** Шаг сетки центров, чанков (5 чанков = 80 блоков). */
+    /** Center grid spacing, chunks (5 chunks = 80 blocks). */
     public static final int CELL = 5;
-    /** Сдвиг центра не дальше этой доли клетки от её середины: кварталы разного размера, но без вырожденных. */
+    /** Maximum center offset from cell center as a fraction of the cell: districts vary in size without degenerating. */
     private static final double JITTER = 0.8;
 
     private Districts() {}
 
-    /** Квартал чанка: ключ клетки его центра (как {@code ChunkPos.asLong} по клеткам). */
+    /** A chunk's district: key of its center's cell (as {@code ChunkPos.asLong} for cells). */
     public static long of(int chunkX, int chunkZ) {
         double px = chunkX * 16 + 8, pz = chunkZ * 16 + 8;
         int cx = Math.floorDiv(chunkX, CELL), cz = Math.floorDiv(chunkZ, CELL);
         long best = 0;
         double bestD = Double.MAX_VALUE;
-        // свой центр бывает дальше 1,27 клетки (угол клетки, сдвинутый центр), а центр через клетку — ближе: смотрим 5×5
+        // own center may be farther than 1.27 cells (cell corner, shifted center), and a center two cells away closer: scan 5×5
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
                 int x = cx + dx, z = cz + dz;
@@ -47,7 +47,7 @@ public final class Districts {
         return (int) (district >>> 32);
     }
 
-    /** Центр квартала, блоки. */
+    /** District center, blocks. */
     public static double seedX(long district) {
         return seedX(cellX(district), cellZ(district));
     }
@@ -64,7 +64,7 @@ public final class Districts {
         return (cellZ + 0.5 + JITTER * (unit(cellX, cellZ, 2) - 0.5)) * CELL * 16;
     }
 
-    /** Случайное число квартала в [0, 1): одно и то же для той же клетки и того же {@code salt}. */
+    /** District random number in [0, 1): identical for the same cell and {@code salt}. */
     public static double unit(long district, int salt) {
         return unit(cellX(district), cellZ(district), salt);
     }

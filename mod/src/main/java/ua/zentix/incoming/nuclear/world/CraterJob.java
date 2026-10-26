@@ -22,18 +22,18 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Воронка наземного подрыва (DESIGN-nuke §1.7, §3.5): параболоид с неровным краем, вал выброса до двух радиусов,
- * на дне и стенках — тринитит. Глубина и вал отсчитываются от природного грунта в каждом столбце: на склоне
- * воронка идёт по склону, а не срезает холм до высоты эпицентра.
+ * Surface-burst crater (DESIGN-nuke §1.7, §3.5): paraboloid with irregular edge, ejecta rim to two radii, trinitite on
+ * floor and walls. Depth and rim measured from natural ground in each column: on a slope, the crater follows the slope
+ * instead of cutting the hill to epicenter height.
  * <p>
- * Идёт по чанкам от центра наружу, по столбцу за шаг под общим бюджетом времени. Чанк догружается в фоне
- * тикетом ({@link NuclearTickets}) — текущий и несколько следующих, — пока он не готов, работа ждёт.
- * Номер чанка сохраняется в мире, после перезапуска воронка дороется с того же места (операции повторяемы).
+ * Visits chunks outward from center, one column per step under the shared time budget. Chunks load in the background
+ * via tickets ({@link NuclearTickets}) — current and several ahead; work waits until ready. Chunk index is world-saved,
+ * so after restart digging resumes at the same position (operations repeatable).
  */
 public final class CraterJob {
-    /** Сколько чанков вперёд просить загрузить. */
+    /** How many chunks ahead to request loading. */
     private static final int LOOKAHEAD = 4;
-    /** Сколько блоков вниз искать природный грунт под постройками. */
+    /** How many blocks down to search for natural ground under buildings. */
     private static final int MAX_DEPTH = 96;
     /** Same vanilla blast-proof boundary as the charge/breach rays (obsidian). */
     private static final float BLAST_PROOF = 1200;
@@ -48,11 +48,11 @@ public final class CraterJob {
     private CraterModel.Soil soil;
     private List<BlockState> rim = List.of();
 
-    /** @param startChunk с какого чанка продолжить (0 — новая воронка) */
+    /** @param startChunk chunk to resume from (0 — new crater) */
     public CraterJob(Detonation d, int startChunk) {
         this.d = d;
         this.gz = BlockPos.containing(d.burst().x, d.groundY(), d.burst().z);
-        // наибольший грунт — влажный (×1.3): вал доходит до двух радиусов
+        // largest soil multiplier is wet (×1.3): rim reaches two radii
         this.outer = Mth.ceil(d.blocks(CraterModel.radius(d.yieldKt(), CraterModel.Soil.WET)) * 2) + 1;
         ChunkPos c = new ChunkPos(gz);
         int rc = (outer >> 4) + 1;
@@ -70,12 +70,12 @@ public final class CraterJob {
         return d;
     }
 
-    /** Сколько чанков уже вырыто (для сохранения). */
+    /** Chunks already dug (for persistence). */
     public int progress() {
         return next;
     }
 
-    /** Грунт под эпицентром, по которому считается профиль (null — чанк эпицентра ещё не загружен). */
+    /** Soil under the epicenter used for the profile (null — epicenter chunk not loaded yet). */
     @Nullable
     public CraterModel.Soil soil() {
         return soil;
@@ -89,7 +89,7 @@ public final class CraterJob {
 
     public enum Step { PROGRESS, WAIT, DONE }
 
-    /** Один столбец. WAIT — нужный чанк ещё грузится, продолжим в следующем тике. */
+    /** One column. WAIT — required chunk still loading, resume next tick. */
     public Step step(ServerLevel level, RandomSource random) {
         if (next >= chunks.size()) {
             release(level);
@@ -108,7 +108,7 @@ public final class CraterJob {
         return Step.PROGRESS;
     }
 
-    /** Грунт эпицентра: от него радиус и глубина воронки и из чего вал. */
+    /** Epicenter soil: determines crater radius, depth and rim material. */
     private boolean sampleSoil(ServerLevel level) {
         ChunkPos c = new ChunkPos(gz);
         NuclearTickets.hold(level, c, true);
@@ -116,7 +116,7 @@ public final class CraterJob {
         GroundMaterial mat = GroundMaterial.sample(level, gz);
         soil = mat.soil();
         rim = mat.debris();
-        // продолжение после перезапуска: чанк эпицентра уже вырыт, держать его незачем
+        // resume after restart: epicenter chunk already dug, no reason to hold it
         if (next > 0) NuclearTickets.hold(level, c, false);
         return true;
     }
@@ -136,18 +136,18 @@ public final class CraterJob {
         digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random);
     }
 
-    /** Как столбец воронки встаёт в блоки. */
+    /** How a crater column is applied to blocks. */
     public enum Mode {
-        /** Ядерка: в чаше испаряется и всё над грунтом, глубина — вниз до целого блока. */
+        /** Nuclear: vaporizes everything above soil within the bowl too; depth rounded down to whole blocks. */
         VAPORIZE,
         /**
-         * Обычный заряд: снимается только грунт (постройки над воронкой ломает волна), а глубина и вал — целым числом
-         * блоков со случайной добавкой по дробной части: у чаши мельче блока объём в среднем тот же, что у закона.
+         * Conventional charge: removes soil only (blast breaks buildings over the crater); depth and rim use whole blocks
+         * with random rounding by fractional part: a sub-block bowl has the law's volume on average.
          */
         DIG
     }
 
-    /** Профиль воронки: глубина чаши и высота вала над природным грунтом, блоков, на расстоянии r блоков от центра. */
+    /** Crater profile: bowl depth and rim height above natural ground, blocks, at radius r blocks from center. */
     public interface Profile {
         double depth(double r);
 
@@ -155,33 +155,33 @@ public final class CraterJob {
     }
 
     /**
-     * Один столбец воронки (ядерной и обычной — один закон формы, {@link CraterModel#bowl}, {@link CraterModel#rim}):
-     * неровный край (радиус «дышит» по углу), глубина и вал — от природного грунта столбца, в чаше снимается всё над
-     * профилем (под водой яма заполняется водой), на вал ложится выброшенный грунт {@code rimStates}. Блоки меняются через
-     * {@link ColumnScar#replace}. Чанк столбца и его соседи должны быть готовы.
+     * One crater column (nuclear and conventional share shape law, {@link CraterModel#bowl}, {@link CraterModel#rim}):
+     * irregular edge (radius “breathes” with angle), depth and rim from the column's natural ground; remove everything above
+     * the bowl profile (underwater pit fills with water); ejecta soil {@code rimStates} forms the rim. Blocks change via
+     * {@link ColumnScar#replace}. Column chunk and neighbors must be ready.
      *
-     * @param outer  дальше этого от центра по горизонтали столбец не трогается, блоков
-     * @param phase  сдвиг фазы неровного края
-     * @param glaze  чем стекленеет дно (у ядерки — тринитит), null — ничем
-     * @param mode   ядерная или обычная воронка ({@link Mode})
+     * @param outer  horizontal distance beyond which the column is untouched, blocks
+     * @param phase  irregular-edge phase offset
+     * @param glaze  floor glazing material (nuclear — trinitite), null — none
+     * @param mode   nuclear or conventional crater ({@link Mode})
      */
     public static void digColumn(ServerLevel level, int x, int z, net.minecraft.world.phys.Vec3 centre, double outer, double phase, Profile profile,
                                  List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random) {
         double dx = x + 0.5 - centre.x, dz = z + 0.5 - centre.z;
         if (dx * dx + dz * dz > outer * outer) return;
-        // неровный край: радиус «дышит» по углу
+        // irregular edge: radius “breathes” with angle
         double wobble = 1 + 0.08 * Math.sin(Math.atan2(dz, dx) * 7 + phase);
         double r = Math.hypot(dx, dz) / wobble;
         double depth = profile.depth(r);
         double lift = profile.rim(r);
         if (depth <= 0 && (mode == Mode.VAPORIZE ? lift < 1 : lift <= 0)) return;
 
-        // высоты — как у карты высот: первый воздух над блоком
+        // heights as heightmaps: first air above a block
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         int ground = naturalSurface(level, x, z, top);
         if (mode == Mode.DIG) ground = SurfaceBlocks.excavationTop(level, x, z, ground, top, centre.y);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
-        // итоговая поверхность = природный грунт + вал − чаша (у кромки они перекрываются)
+        // resulting surface = natural ground + rim − bowl (overlap near edge)
         double relief = lift - depth;
         BlockPos damagedPos = null;
         double damagedDepth = 0;
@@ -204,13 +204,13 @@ public final class CraterJob {
             }
         }
         if (relief < 0) {
-            // в чаше снято всё: и постройки над грунтом, и грунт до профиля; под водой яма заполняется водой
+            // everything above bowl profile removed: buildings above soil and soil to profile; underwater pit fills with water
             int floor = Mth.floor(ground + relief);
             BlockState fill = level.getBlockState(m.setY(ground)).getFluidState().isSource()
                     ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();
             for (int y = mode == Mode.VAPORIZE ? top - 1 : ground - 1; y >= floor; y--) {
                 BlockState s = level.getBlockState(m.setY(y));
-                if (y >= ground && !s.getFluidState().isEmpty()) continue; // сама вода над дном остаётся
+                if (y >= ground && !s.getFluidState().isEmpty()) continue; // water above the floor itself remains
                 if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getBlock().getExplosionResistance() >= BLAST_PROOF)) break;
                 if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
@@ -220,7 +220,7 @@ public final class CraterJob {
                 ColumnScar.replace(level, m, bottom, glaze);
             }
         } else if (relief >= 1 && !rimStates.isEmpty()) {
-            // вал: выброшенный грунт ложится поверх природного
+            // rim: ejected soil lies over natural ground
             int crest = Mth.floor(ground + relief);
             for (int y = ground; y < crest; y++) {
                 BlockState was = level.getBlockState(m.setY(y));
@@ -231,7 +231,7 @@ public final class CraterJob {
         if (damagedPos != null) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
     }
 
-    /** Первый воздух над природным грунтом (ниже построек, деревьев и прочего надземного). */
+    /** First air above natural ground (below buildings, trees and other above-ground objects). */
     public static int naturalSurface(ServerLevel level, int x, int z, int top) {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         for (int y = top - 1; y >= Math.max(level.getMinBuildHeight(), top - MAX_DEPTH); y--) {

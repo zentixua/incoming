@@ -1,17 +1,16 @@
 #version 150
 
-// Сетка дыма (client/fx/smoke/SmokeGrid, client/fx/layer/SmokePass): клетка слоя текстуры — вклад одного гауссова клуба,
-// сложением. Слой — ширина 2N (страница 0 слева, страница 1 справа), высота N (z мира), номер слоя — каскад·N + высота.
-// Страница 0: ослабление сажи, пыли и капель (1/м) и Σ ослабление × ΔT (кК); страница 1: Σ ослабление пыли × её альбедо
-// (r, g, b) и Σ ослабление × подъём (м/с). Клуб уже в своём каскаде со своими σ (смазан на полклетки, SmokeGrid.put).
+// Smoke grid (client/fx/smoke/SmokeGrid, client/fx/layer/SmokePass): texture-layer cell adds one Gaussian billow's
+// contribution. Layer width 2N (page 0 left, page 1 right), height N (world z), layer index cascade·N + height.
+// Page 0: soot, dust and droplet extinction (1/m), Σ extinction × ΔT (kK); page 1: Σ dust extinction × dust albedo
+// (r, g, b), Σ extinction × rise (m/s). Billow already in its cascade with its σ (half-cell blur, SmokeGrid.put).
 
-// таблица клубов (SmokeGrid.BLOB_ROWS строк по клубу): 0 — центр от глаза, σh; 1 — σv, пиковые ослабления сажи, пыли,
-// капель; 2 — альбедо пыли, x полуотрезка; 3 — ΔT (кК), подъём, y и z полуотрезка (клуб, размазанный по отрезку,
-// SmokeGrid.line)
+// billow table (SmokeGrid.BLOB_ROWS rows per billow): 0 eye-relative center, σh; 1 σv, peak soot, dust, droplet extinction;
+// 2 dust albedo, half-segment x; 3 ΔT (kK), rise, half-segment y and z (billow spread along segment, SmokeGrid.line)
 uniform sampler2D Sampler0;
-// каскады: столбец c — угол от глаза и клетка
+// cascades: column c — eye-relative corner and cell size
 uniform mat4 SmokeCorner;
-// x — каскад, y — слой по высоте в нём
+// x — cascade, y — height layer within it
 uniform vec4 SmokeSlice;
 
 in float blob;
@@ -19,15 +18,15 @@ in float blob;
 out vec4 fragColor;
 
 const float SMOKE_N = 64.0;
-// Ослабление клуба в клетке — не больше, 1/м: шаг хода по веществу — от полклетки (≥ 1 м), толща шага ≥ 64 — непрозрачно
-// так же, как при большем; предел держит сумму клубов в половинной точности (до 65504) и с весом подъёма
+// Maximum billow extinction in a cell, 1/m: matter-marching step starts at half-cell (≥ 1 m), step optical depth ≥ 64 is
+// as opaque as larger values; cap keeps billow sum within half precision (up to 65504), including rise weighting
 const float SMOKE_CAP = 128.0;
-// подъём для шума клубов — не больше, м/с (то же основание)
+// maximum rise for billow noise, m/s (same reason)
 const float SMOKE_RISE_CAP = 64.0;
-// короче этого (в σ) отрезок — точка (SmokeGrid.LINE_POINT)
+// segment shorter than this (in σ) is a point (SmokeGrid.LINE_POINT)
 const float SMOKE_LINE_POINT = 0.05;
 
-// erf по Абрамовицу и Стиган 7.1.26 (SmokeGrid.erf)
+// Abramowitz–Stegun 7.1.26 erf (SmokeGrid.erf)
 float smokeErf(float x) {
     float ax = abs(x);
     float t = 1.0 / (1.0 + 0.3275911 * ax);
@@ -35,7 +34,7 @@ float smokeErf(float x) {
     return sign(x) * y;
 }
 
-// гаусс по отрезку против гаусса в точке у точки q (в осях, где σ — единица) при полуотрезке a там (SmokeGrid.line)
+// segment Gaussian relative to point Gaussian at q (in axes with unit σ), half-segment a there (SmokeGrid.line)
 float smokeLine(vec3 q, vec3 a) {
     float len = length(a);
     if (len < SMOKE_LINE_POINT) {
@@ -44,7 +43,7 @@ float smokeLine(vec3 q, vec3 a) {
     vec3 u = a / len;
     float along = dot(q, u);
     float across = dot(q, q) - along * along;
-    // далеко по оси разность erf уходит в ошибку приближения (1,5·10⁻⁷) — не ниже нуля
+    // far along axis, erf difference reaches approximation error (1.5·10⁻⁷), clamp at zero
     return exp(-0.5 * max(across, 0.0)) * 1.2533141 / (2.0 * len) * max(0.0, smokeErf((len - along) * 0.70710678) + smokeErf((len + along) * 0.70710678));
 }
 

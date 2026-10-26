@@ -1,31 +1,31 @@
 package ua.zentix.incoming.util;
 
 /**
- * Ветер мира — один на всё: снос облака и осадков ядерного удара ({@code NuclearWarhead}), дым, пыль и шлейфы на
- * клиенте, снос снарядов в полёте. Зависит только от времени игры, поэтому сервер и клиент считают его одинаково без пакета. На каждые сутки
- * игры — свой ветер: направление равновероятно, скорость 5–15 м/с (тот же выбор, что был у ядерки на подрыв); между
- * сутками он плавно поворачивается и меняет силу (вектором: при развороте на встречный проходит через штиль).
+ * World wind shared by everything: nuclear cloud/fallout drift ({@code NuclearWarhead}), client smoke, dust and plumes,
+ * projectile flight drift. Depends only on game time, so server and client compute identically without a packet.
+ * Each game day has its own wind: uniform direction, speed 5–15 m/s (same choice as nuclear per-burst wind previously);
+ * between days, smoothly turns and changes strength as a vector (reversal passes through calm).
  * <p>
- * Это ветер над приземным слоем, на высоте {@link #REFERENCE} — его несёт облако ядерного удара. Ниже он слабеет по
- * степенному закону u(z) = U·(z/{@link #REFERENCE})^p ({@link #at(double, double)}); показатель p — по классу
- * устойчивости ({@link Stability#alpha}: от 0,07 днём до 0,55 ясной ночью, EPA по Irwin 1979). Профиль измерен в
- * приземном слое и продолжен здесь до высоты отсчёта 1 км — обычной верхней границы дневного слоя перемешивания
- * (оценка): у земли (10 м) нейтрально выходит половина, ясной безветренной ночью — меньше десятой части.
+ * Wind is above the surface layer at height {@link #REFERENCE}, carrying the nuclear cloud. Below it, weakens by
+ * u(z) = U·(z/{@link #REFERENCE})^p ({@link #at(double, double)}); p from stability class ({@link Stability#alpha}:
+ * 0.07 by day to 0.55 on clear nights, EPA via Irwin 1979). Profile measured in surface layer, extended here to 1 km
+ * reference height, the usual daytime mixing-layer upper bound (est.): at ground level (10 m), neutral wind is half,
+ * clear calm night less than a tenth.
  *
- * @param direction направление, рад: дует в сторону (cos, sin) в плоскости x–z
- * @param speed     скорость на высоте {@link #REFERENCE}, м/с
+ * @param direction direction, rad: blows toward (cos, sin) in the x–z plane
+ * @param speed     speed at {@link #REFERENCE}, m/s
  */
 public record Wind(double direction, double speed) {
-    /** Высота отсчёта скорости над землёй, м. */
+    /** Speed reference height above ground, m. */
     public static final double REFERENCE = 1000;
-    /** Ниже этой высоты над землёй профиль не продолжается (шероховатость травы и кустов), м. */
+    /** Profile not extended below this height above ground (grass/shrub roughness), m. */
     static final double FLOOR = 1;
-    /** Сутки игры, тиков. */
+    /** Game day, ticks. */
     static final long DAY = 24_000;
-    /** Скорость: от SLOWEST до SLOWEST + SPREAD, м/с. */
+    /** Speed: SLOWEST to SLOWEST + SPREAD, m/s. */
     static final double SLOWEST = 5, SPREAD = 10;
 
-    /** Ветер в тик игры gameTime. */
+    /** Wind at game tick gameTime. */
     public static Wind at(long gameTime) {
         long day = Math.floorDiv(gameTime, DAY);
         double f = (double) (gameTime - day * DAY) / DAY, k = f * f * (3 - 2 * f);
@@ -34,18 +34,18 @@ public record Wind(double direction, double speed) {
         return new Wind(Math.atan2(z, x), Math.sqrt(x * x + z * z));
     }
 
-    /** Скорость на высоте height метров над землёй при показателе профиля alpha, м/с (выше отсчёта — как на нём). */
+    /** Speed at height meters above ground with profile exponent alpha, m/s (above reference, reference value). */
     public double at(double height, double alpha) {
         double z = Math.max(FLOOR, Math.min(height, REFERENCE));
         return speed * Math.pow(z / REFERENCE, alpha);
     }
 
-    /** Составляющая x единичного направления. */
+    /** Unit direction x component. */
     public double x() {
         return Math.cos(direction);
     }
 
-    /** Составляющая z единичного направления. */
+    /** Unit direction z component. */
     public double z() {
         return Math.sin(direction);
     }
@@ -58,12 +58,12 @@ public record Wind(double direction, double speed) {
         return SLOWEST + SPREAD * unit(mix(day, 0xD1B54A32D192ED03L));
     }
 
-    /** Число 0..1 из 53 старших бит. */
+    /** Number 0..1 from the upper 53 bits. */
     private static double unit(long h) {
         return (h >>> 11) * 0x1.0p-53;
     }
 
-    /** SplitMix64 (Steele, Lea, Flood 2014) от суток и соли. */
+    /** SplitMix64 (Steele, Lea, Flood 2014) from day and salt. */
     private static long mix(long day, long salt) {
         long z = day * 0xBF58476D1CE4E5B9L + salt;
         z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;

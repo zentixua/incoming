@@ -5,17 +5,16 @@ import net.minecraft.world.level.chunk.PalettedContainer;
 
 import java.util.function.Predicate;
 
-/** Вопросы к блокам секции по её палитре — без прохода по всем 4096 местам, где палитра отвечает точно. */
+/** Section block queries through its palette, avoiding all 4096 positions where the palette is exact. */
 public final class Palettes {
     private Palettes() {}
 
     /**
-     * Есть ли в блоках {@code states} состояние по {@code filter}. Сперва отвечает палитра ({@code maybeHas}): у малых
-     * палитр «нет» точно. Глобальная палитра (больше 256 разных состояний в секции — обычное дело в детальном городе)
-     * отвечает «может быть» всегда ({@code GlobalPalette.maybeHas}), а малая помнит и ушедшие состояния, — тогда
-     * точный подсчёт по блокам, как у ванили ({@code LevelChunkSection.recalcBlockCounts}): он быстрее прохода с
-     * проверкой каждого места (фильтр — по разным состояниям, а не по местам). Подсчёт может назвать и состояние
-     * с нулём блоков (Lithium считает по записям палитры) — такое не в счёт.
+     * Whether {@code states} contains a state matching {@code filter}. Palette answers first ({@code maybeHas}): small
+     * palettes give an exact “no”. Global palette (over 256 states per section, common in detailed cities) always answers
+     * “maybe” ({@code GlobalPalette.maybeHas}); small palettes remember removed states too — then count blocks exactly, as
+     * vanilla does ({@code LevelChunkSection.recalcBlockCounts}): faster than testing every position (filter runs per
+     * distinct state, not per position). Count may report a state with zero blocks (Lithium counts palette entries) — ignore it.
      */
     public static boolean contains(PalettedContainer<BlockState> states, Predicate<BlockState> filter) {
         if (!states.maybeHas(filter)) return false;

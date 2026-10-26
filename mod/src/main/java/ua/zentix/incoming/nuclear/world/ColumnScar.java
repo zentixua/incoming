@@ -13,24 +13,25 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.util.PoiRecords;
 
 /**
- * Общее для разрушений ядерного удара: замена блока через мир (блок-сущности, воронка), счётчик пожаров подрыва,
- * световой импульс с тенью. Что волна делает со столбцом — {@link RuinPlanner}, подмена чанка — {@link RuinPlan}.
+ * Shared nuclear destruction helpers: block replacement through the world (block entities, crater), detonation fire
+ * counter, thermal fluence with shadows. {@link RuinPlanner} handles columns, {@link RuinPlan} applies chunks.
  */
 public final class ColumnScar {
-    /** Без каскада обновлений соседей и без выпадения предметов; клиенты получают изменения пачками по секциям. */
+    /** No neighbor-update cascade or item drops; clients receive section-batched changes. */
     private static final int FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
 
     private ColumnScar() {}
 
-    /** Счётчики на подрыв: пожаров не больше заданного. */
+    /** Per-detonation counters: fires capped at configured count. */
     public static final class Budget {
-        /** Поджигает ли подрыв (свежий — да, забытый — только выжигает). */
+        /** Whether the detonation ignites fires (fresh — yes, forgotten — scorches only). */
         final boolean ignites;
         int fires;
         /**
-         * Огонь слоя вспышки в счёте, по чанкам, где руины ещё не встали ({@code RuinPlan.write}): руины поверх слоя без
-         * его плана ({@link FlashScorch#marked}: руины подрыва забыты после простоя) не знают, какой огонь чанка в счёте, — он
-         * уходит из счёта весь, а входит тот, что горит дальше. Счётчик после перезапуска — новый, слоя чанка он не брал.
+         * Counted flash-layer fire, by chunks not yet ruined ({@code RuinPlan.write}): ruins over a layer without its plan
+         * ({@link FlashScorch#marked}: detonation ruins forgotten after idle time) do not know which chunk fire is counted —
+         * remove all of it from the count, add back fire that keeps burning. Counter after restart is new, counted none of
+         * the chunk's layer fire.
          */
         final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap layer = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
 
@@ -38,46 +39,43 @@ public final class ColumnScar {
             this.ignites = ignites;
         }
 
-        /** Для проверок: пожаров в счёте. */
+        /** For checks: counted fires. */
         public int firesForTest() {
             return fires;
         }
 
-        /** Для проверок: огня слоя вспышки чанка в счёте ({@link #layer}). */
+        /** For checks: counted flash-layer fire in the chunk ({@link #layer}). */
         public int layerForTest(net.minecraft.world.level.ChunkPos chunk) {
             return layer.get(chunk.toLong());
         }
     }
 
     /**
-     * Заменить блок без выпадения и без осиротевших данных блок-сущности. Все замены блоков выжигания и воронки
-     * идут здесь.
+     * Replace a block without drops or orphaned block entity data. All scorch and crater block replacements go here.
      * <p>
-     * Сперва блок-сущность берётся через {@link ServerLevel#getBlockEntity}: у чанка, который ещё ни разу не тикал
-     * (свежая генерация у края прорисовки), она лежит отложенными данными — после генерации это заглушка «DUMMY»
-     * у каждой кровати, колокола, сундука деревни ({@code WorldGenRegion.setBlock}), после загрузки — сохранённые
-     * данные с {@code keepPacked}. {@code onRemove} старого блока снимает только живую блок-сущность, отложенные
-     * данные остаются при воздухе или воде, и при первом тике или сохранении чанка ваниль пишет «Tried to load
-     * a DUMMY block entity … found air». Запрос поднимает их в живую блок-сущность, и замена её снимает.
-     * У блок-сущности сооружения или улья свежая генерация оставляет и живую сущность, и заглушку на том же месте
-     * ({@code ProtoChunk.setBlockEntity} заглушку не снимает, ваниль чистит их первым тиком чанка или сохранением, а зона
-     * за волной грузит чанки без тика): запрос отдаёт живую, и заглушка снимается рядом с ней — иначе сохранение
-     * чанка подняло бы её над воздухом (21 место в 600–840 блоках от подрыва 15 кт).
+     * First fetch the block entity via {@link ServerLevel#getBlockEntity}: a never-ticked chunk (fresh generation at render
+     * edge) holds deferred data — after generation, a “DUMMY” placeholder for each village bed, bell and chest
+     * ({@code WorldGenRegion.setBlock}); after loading, saved data with {@code keepPacked}. The old block's {@code onRemove}
+     * removes only a live block entity; deferred data remains in air or water, and on first tick or save vanilla logs
+     * “Tried to load a DUMMY block entity … found air”. Fetching promotes it to a live block entity, removed by replacement.
+     * For structure or beehive block entities, fresh generation leaves both live entity and placeholder at the same position
+     * ({@code ProtoChunk.setBlockEntity} does not remove the placeholder; vanilla clears them on first chunk tick or save,
+     * but the post-wave zone loads without ticking): fetch returns the live one, and remove the placeholder alongside it —
+     * otherwise chunk save would promote it above air (21 positions 600–840 blocks from a 15 kt burst).
      * <p>
-     * {@code UPDATE_SUPPRESS_DROPS} не спасает от содержимого контейнеров: сундук, бочка, печь высыпают его
-     * в {@code onRemove} — в деревне это тысячи предметов на земле, которые потом тикают. Как {@code /setblock}
-     * и {@code /fill}: {@link Clearable#tryClear} очищает блок-сущность до замены.
+     * {@code UPDATE_SUPPRESS_DROPS} does not suppress container contents: chest, barrel and furnace spill them in
+     * {@code onRemove} — thousands of ground items in a village, then ticking. As {@code /setblock} and {@code /fill} do,
+     * {@link Clearable#tryClear} empties the block entity before replacement.
      * <p>
-     * Сундук генерации, который ещё не открывали, хранит не предметы, а таблицу добычи: она разворачивается при первом
-     * чтении содержимого — и {@code onRemove} читает его, чтобы высыпать. Карта исследователя в добыче ищет
-     * сооружение и рисует биомы прямо в потоке сервера (на стенде — 567 мс за один сундук). Волна испаряет сундук,
-     * добыча не выпадает: таблица снимается до замены.
+     * An unopened generated chest holds a loot table, not items: expanded at first content read — and {@code onRemove}
+     * reads it to spill it. An explorer map in loot searches for a structure and renders biomes on the server thread
+     * (bench — 567 ms for one chest). The blast vaporizes the chest without loot: remove the table before replacement.
      */
     public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
         replace(level, pos, old, with, FLAGS);
     }
 
-    /** То же с флагами {@code flags} ({@code setBlock}): с обновлением соседей сыпучее над местом падает. */
+    /** The same with {@code flags} ({@code setBlock}): neighbor updates make loose material above the position fall. */
     public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with, int flags) {
         if (old.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(pos);
@@ -89,7 +87,7 @@ public final class ColumnScar {
         level.setBlock(pos, with, flags);
     }
 
-    /** Световой импульс в точке с учётом тени от рельефа и построек, кал/см². */
+    /** Thermal fluence at a point with terrain and building shadows, cal/cm². */
     static double lit(Level level, Detonation d, BlockPos pos) {
         Vec3 p = Vec3.atCenterOf(pos).add(0, 0.5, 0);
         return ThermalShadow.visible(level, d.burst(), p) ? d.fluence(p) : 0;

@@ -10,55 +10,55 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Факел двигателя из данных паспорта ({@link Motor}) — один закон для всех двигателей.
+ * Engine plume from spec data ({@link Motor}) — one law for all engines.
  * <ol>
- * <li><b>Струя</b>: газ из камеры (полная температура T₀, давление p₀ — по изоэнтропе от среза) расширяется до давления
- * воздуха на высоте (стандартная атмосфера): число Маха M_j, температура T_j и радиус r_j полностью расширенной струи
- * (изоэнтропа, без потерь). Недорасширенная струя за срезом шире сопла, перерасширенная — уже.</li>
- * <li><b>Ядро</b> — сверхзвуковая середина, где газ ещё не смешался с воздухом: L_c = 3,45·d_j·(1 + 0,38·M_j)²
- * (Eldred, NASA SP-8072, 1971, по полностью расширенной струе; формула и её разбор — James и др., Trans. JSASS 14,
- * 2016, Po_2_17: у M = 3 это 15,8 d; Varnier, AIAA J. 39(10), 2001, по замерам вдвое короче — ⚠ точность в 2 раза).</li>
- * <li><b>Догорание</b>: продукты твёрдого топлива богаты горючим (CO, H₂ — {@link Motor#monoxide}, {@link Motor#hydrogen}) и
- * догорают в подмешанном воздухе. За ядром доля продуктов на оси спадает как у круглой струи, ∝ 1/x (оценка: так спадают
- * скорость и примесь в дальней части струи); пламя кончается, где смесь на оси стехиометрическая: x_f = L_c/f_st
- * (Burke–Schumann: пламя струи — поверхность стехиометрической смеси), f_st = 1/(1 + воздух на кг продуктов: CO —
- * 2,46 кг, H₂ — 34,5 кг). Температура пламени — адиабатическая при f_st: смесь продуктов и воздуха плюс теплота
- * сгорания (CO 10,1 МДж/кг, H₂ 120 МДж/кг) на теплоёмкость {@link #CP_FLAME} (⚠ без диссоциации и излучения — верхняя
- * оценка, настоящая на 10–20 % ниже).</li>
- * <li><b>Хвост</b>: за пламенем газ остывает тем же законом ∝ 1/x и виден, пока горячее точки Дрейпера (798 K — с неё
- * раскалённое тело видно в темноте).</li>
- * <li><b>Свет</b>: газ в видимом почти не светит — светят конденсированные частицы (Al₂O₃, сажа): степень черноты
- * ε = 1 − e^(−τ), τ = σ_m·(поглощение горячих)·c·2r_j, c — их плотность в струе. Яркость — ε × чёрное тело
- * ({@link BlackBody}) при температуре газа, цвет — цветность чёрного тела. За ядром частицы разбавляются: τ ∝ 1/x (масса
- * в сечении та же, путь растёт как x, плотность падает как x²). Яркость оболочки (пламя и хвост) — в каждом месте оси
- * ({@link Flame#sheath}: её рисует струя вблизи), у частей — средняя по их площади сбоку (свет вдали и на мир).</li>
- * <li><b>Алмазы</b> — скачки уплотнения, когда давление на срезе не равно давлению воздуха (и при недорасширении, и при
- * перерасширении); заметны при расхождении больше {@link #DIAMONDS} (⚠ оценка: слабые скачки не разогревают газ до
- * свечения).</li>
+ * <li><b>Jet</b>: chamber gas (stagnation temperature T₀, pressure p₀ — isentropic from exit) expands to ambient
+ * pressure at altitude (standard atmosphere): fully expanded jet Mach M_j, temperature T_j and radius r_j
+ * (isentropic, no losses). Underexpanded jet beyond exit is wider than the nozzle; overexpanded — narrower.</li>
+ * <li><b>Core</b> — supersonic centre where gas has not mixed with air: L_c = 3.45·d_j·(1 + 0.38·M_j)²
+ * (Eldred, NASA SP-8072, 1971, fully expanded jet; formula and analysis — James et al., Trans. JSASS 14,
+ * 2016, Po_2_17: at M = 3 it is 15.8 d; Varnier, AIAA J. 39(10), 2001, measures half as long — (est.) factor-of-2 accuracy).</li>
+ * <li><b>Afterburning</b>: solid propellant products are fuel-rich (CO, H₂ — {@link Motor#monoxide}, {@link Motor#hydrogen}) and
+ * burn in entrained air. Beyond the core the axial product fraction decays like a round jet, ∝ 1/x (est.) (velocity and
+ * admixture decay this way in the far jet); flame ends where the axial mixture is stoichiometric: x_f = L_c/f_st
+ * (Burke–Schumann: jet flame is the stoichiometric mixture surface), f_st = 1/(1 + air per kg of products: CO —
+ * 2.46 kg, H₂ — 34.5 kg). Flame temperature is adiabatic at f_st: products/air mixture plus heat of
+ * combustion (CO 10.1 MJ/kg, H₂ 120 MJ/kg) divided by heat capacity {@link #CP_FLAME} (est.) (no dissociation or radiation — upper
+ * estimate, real temperature 10–20 % lower).</li>
+ * <li><b>Tail</b>: beyond the flame, gas cools by the same ∝ 1/x law and remains visible while above the Draper point (798 K —
+ * incandescent matter becomes visible in darkness).</li>
+ * <li><b>Light</b>: gas emits almost no visible light — condensed particles (Al₂O₃, soot) emit it: emissivity
+ * ε = 1 − e^(−τ), τ = σ_m·(hot-particle absorption)·c·2r_j, c — their jet density. Luminance — ε × black body
+ * ({@link BlackBody}) at gas temperature; colour — black-body chromaticity. Beyond core, particles dilute: τ ∝ 1/x (same cross-section
+ * mass, path grows as x, density falls as x²). Sheath luminance (flame and tail) sampled along the axis
+ * ({@link Flame#sheath}: drawn by nearby jet); part luminance is side-area mean (distant and world light).</li>
+ * <li><b>Diamonds</b> — shocks when exit pressure differs from ambient (both underexpansion and
+ * overexpansion); visible beyond a ratio of {@link #DIAMONDS} (est.) (weak shocks do not heat gas enough to
+ * glow).</li>
  * </ol>
- * Нет факела ({@code null}), если газ на выходе холоднее точки Дрейпера или его свет ночью не виден глазу (поршень,
- * ТРДД: частиц почти нет, горючего в выхлопе нет). Ширина — слой смешения растёт от кромки сопла внутрь до оси к концу
- * ядра и столько же наружу (⚠ оценка: настоящий слой растёт наружу сильнее).
+ * No plume ({@code null}) if exit gas is below the Draper point or its light is invisible to the eye at night (piston,
+ * turbofan: almost no particles, no exhaust fuel). Width — mixing layer grows inward from the nozzle lip to the axis by the core
+ * end and equally outward (est.) (real layer grows outward more).
  */
 public final class FlameModel {
-    /** Точка Дрейпера, K. */
+    /** Draper point, K. */
     public static final double DRAPER = 798;
-    /** Отношение давлений среза и воздуха (или обратное), с которого видны алмазы. */
+    /** Exit/ambient pressure ratio (or inverse) where diamonds become visible. */
     public static final double DIAMONDS = 1.3;
-    /** Воздух на килограмм CO и H₂ при полном сгорании, кг (кислород 0,571 и 8 кг на кг, в воздухе его 23,2 % по массе). */
+    /** Air per kilogram of CO and H₂ for complete combustion, kg (oxygen 0.571 and 8 kg/kg, air is 23.2 % oxygen by mass). */
     static final double AIR_CO = 2.46, AIR_H2 = 34.5;
-    /** Теплота сгорания CO и H₂ (низшая), Дж/кг. */
+    /** CO and H₂ lower heating values, J/kg. */
     static final double HEAT_CO = 10.1e6, HEAT_H2 = 120e6;
-    /** Теплоёмкость горячей смеси продуктов и воздуха, Дж/(кг·K) (⚠ оценка: 1,2–1,4 кДж/(кг·K) при 1 500–2 500 K). */
+    /** Hot products/air mixture heat capacity, J/(kg·K) (est.) (1.2–1.4 kJ/(kg·K) at 1 500–2 500 K). */
     static final double CP_FLAME = 1_300;
-    /** Коэффициент длины ядра Элдреда. */
+    /** Eldred core length coefficient. */
     static final double ELDRED = 3.45, ELDRED_MACH = 0.38;
     /**
-     * Свет, который глаз видит на самом тёмном экране: порог Кошмидера при привыкании ночью в грозу (свет неба 0,12,
+     * Light the eye sees on the darkest screen: Koschmieder threshold with nighttime thunderstorm adaptation (skylight 0.12,
      * {@code Sight.adapted}).
      */
     static final double DIMMEST = Sight.THRESHOLD * Math.pow(0.12, Sight.ADAPT);
-    /** Высоты в кэше — ступенями, м: давление на 50 м меняется на 0,6 %. */
+    /** Altitude cache steps, m: pressure changes by 0.6 % over 50 m. */
     static final double STEP = 50;
 
     private static final Map<Long, Flame> CACHE = new ConcurrentHashMap<>();
@@ -68,7 +68,7 @@ public final class FlameModel {
 
     private FlameModel() {}
 
-    /** Факел двигателя на высоте altitude метров над уровнем моря (ступенями {@link #STEP}); null — не видно. */
+    /** Engine plume at altitude metres above sea level ({@link #STEP} steps); null — invisible. */
     @Nullable
     public static Flame at(Motor motor, double altitude) {
         long step = Math.round(altitude / STEP);
@@ -80,17 +80,17 @@ public final class FlameModel {
         return f == NONE ? null : f;
     }
 
-    /** Ступень доли расхода в кэше ({@link #at(Motor, double, double)}), по логарифму: соседние — на 2 %. */
+    /** Cached plateau-flow fraction step ({@link #at(Motor, double, double)}), logarithmic: neighbouring steps differ by 2 %. */
     static final double SHARE_STEP = -Math.log(0.98);
 
     /**
-     * Факел двигателя на доле share расхода полки — РДТТ на выходе на режим и на спаде тяги ({@code strike.ThrustCurve}),
-     * на высоте altitude. Пока сопло в критике (давление в камере выше воздуха в ((γ + 1)/2)^(γ/(γ − 1)) раз), — тот же
-     * закон для двигателя с этим расходом ({@link Motor#throttled}). Ниже сопло не в критике: полностью расширенная струя
-     * закона там дозвуковая, её скорость к перепаду 1 уходит в ноль, а радиус — в бесконечность (свет рос бы к концу спада).
-     * Поэтому там — факел при критическом перепаде, а его свет убывает с расходом: частиц в струе — по расходу, и струя на
-     * спаде оптически тонкая (ε ≈ τ ∝ расходу; у «Томагавка» в критике ε ≈ 0,14). Доля — ступенями {@link #SHARE_STEP}
-     * (кэш); null — не видно.
+     * Engine plume at fraction share of plateau flow — solid rocket motor thrust rise and decay ({@code strike.ThrustCurve}),
+     * at altitude. While nozzle is choked (chamber pressure exceeds ambient by ((γ + 1)/2)^(γ/(γ − 1))), same
+     * law for a motor with this flow ({@link Motor#throttled}). Below that nozzle is unchoked: the law's fully expanded jet
+     * is subsonic, velocity tends to zero at pressure ratio 1 and radius to infinity (light would rise toward the end of decay).
+     * Therefore use the plume at the critical ratio, with light decreasing with flow: jet particles follow flow; the decaying jet
+     * is optically thin (ε ≈ τ ∝ flow; Tomahawk at choking has ε ≈ 0.14). Fraction quantized by {@link #SHARE_STEP}
+     * (cache); null — invisible.
      */
     @Nullable
     public static Flame at(Motor motor, double altitude, double share) {
@@ -103,7 +103,7 @@ public final class FlameModel {
         return f == null || share >= choke ? f : f.dimmed(share / choke);
     }
 
-    /** Факел без кэша (юнит-тесты). */
+    /** Uncached plume (unit tests). */
     @Nullable
     public static Flame of(Motor m, double altitude) {
         double ta = StandardAtmosphere.temperature(altitude), pa = StandardAtmosphere.pressure(altitude);
@@ -115,7 +115,7 @@ public final class FlameModel {
         double vj = mach * Math.sqrt(g * Motor.R * tj / m.molarMass()), rhoj = pa * m.molarMass() / (Motor.R * tj);
         double perNozzle = m.exhaust() / m.nozzles(), rj = Math.sqrt(perNozzle / (rhoj * vj * Math.PI));
         double core = ELDRED * 2 * rj * Math.pow(1 + ELDRED_MACH * mach, 2);
-        // догорание: пламя до стехиометрической смеси на оси, при своей адиабатической температуре
+        // afterburning: flame extends to axial stoichiometric mixture, at its adiabatic temperature
         double air = m.monoxide() * AIR_CO + m.hydrogen() * AIR_H2, flame = core, tf = tj;
         if (air > 0) {
             double fst = 1 / (1 + air);
@@ -133,12 +133,12 @@ public final class FlameModel {
         double pe = m.exitPressure();
         boolean diamonds = pe > pa * DIAMONDS || pe * DIAMONDS < pa;
         Jet jet = new Jet(core, flame, tf, ta, tau);
-        // средние яркости частей — по площади сбоку того же закона, что вдоль оси (в середине части яркость чёрного тела
-        // хвоста в десятки раз ниже средней: B(T) круто растёт с T, и хвост у конца пламени светит почти как пламя)
+        // mean part luminance by side area under the same axial law (black-body tail luminance at the part midpoint
+        // is tens of times below the mean: B(T) rises steeply with T, and the tail near flame end glows almost as brightly as flame)
         double[] flameRgb = new double[3], tailRgb = new double[3];
         double flameL = jet.mean(0, flame, width, flameRgb), tailL = jet.mean(flame, length, width, tailRgb);
-        // середина света — центр потока: ядро (конус, его центр площади сбоку — на трети длины) и оболочка; середина
-        // длины до точки Дрейпера лежала втрое дальше от сопла, чем светящееся пламя, и свет на дым вставал в хвосте
+        // light centre is flux centroid: core (cone, side-area centroid one third along) and sheath; the midpoint
+        // of length to the Draper point was three times farther from the nozzle than luminous flame, placing smoke light in the tail
         double coreFlux = coreL * core * width;
         double middle = (coreFlux * core / 3 + jet.moment(0, length, width)) / (coreFlux + jet.flux(0, length, width));
         return new Flame(core, flame, length, width, diamonds, coreL, flameL, tailL, color(tj), color(tf), tailL > 0 ? pack(tailRgb) : color(DRAPER),
@@ -146,35 +146,35 @@ public final class FlameModel {
     }
 
     /**
-     * Закон оболочки струи вдоль оси (пламя догорания вокруг ядра и хвост за ним): в x метрах от среза степень черноты
-     * ε(x) = 1 − e^(−τ(x)), τ(x) = τ₀ у ядра и τ₀·L_c/x за ним (частицы разбавляются); температура — пламени до его конца
-     * и T_a + (T_f − T_a)·x_f/x за ним; яркость — ε × чёрное тело.
+     * Axial jet sheath law (afterburning flame around core, tail behind): at x metres from exit, emissivity
+     * ε(x) = 1 − e^(−τ(x)), τ(x) = τ₀ within core and τ₀·L_c/x beyond (particle dilution); temperature — flame temperature until flame end,
+     * then T_a + (T_f − T_a)·x_f/x; luminance — ε × black body.
      */
     private record Jet(double core, double flame, double tf, double ta, double tau) {
-        /** Температура газа в x метрах от среза, K. */
+        /** Gas temperature at x metres from exit, K. */
         double temperature(double x) {
             return x <= flame ? tf : ta + (tf - ta) * flame / x;
         }
 
-        /** Степень черноты поперёк струи в x. */
+        /** Cross-jet emissivity at x. */
         double emissivity(double x) {
             return 1 - Math.exp(-(x <= core ? tau : tau * core / x));
         }
 
-        /** Яркость оболочки сбоку в x (белая стена в полдень — 1). */
+        /** Side-view sheath luminance at x (white wall at noon — 1). */
         double luminance(double x) {
             return emissivity(x) * BlackBody.luminance(temperature(x));
         }
 
         /**
-         * Площадь оболочки сбоку на метр оси в x при полуширине у среза w: вся струя 2w(1 + x/L_c), у среза — без конуса
-         * ядра 2w(1 − x/L_c) (пламя обнимает ядро, {@link Flame#partAreas}).
+         * Sheath side area per axial metre at x with exit half-width w: whole jet 2w(1 + x/L_c), excluding the core
+         * cone near exit 2w(1 − x/L_c) (flame surrounds core, {@link Flame#partAreas}).
          */
         double side(double x, double w) {
             return x < core ? 4 * w * x / core : 2 * w * (1 + x / core);
         }
 
-        /** Средняя яркость оболочки по площади от a до b; в rgb — поток света (линейный) для цвета. */
+        /** Mean sheath luminance over area from a to b; rgb receives light flux (linear) for colour. */
         double mean(double a, double b, double w, double[] rgb) {
             if (b <= a) return 0;
             int n = 64;
@@ -190,12 +190,12 @@ public final class FlameModel {
             return area > 0 ? flux / area : 0;
         }
 
-        /** Поток света оболочки от a до b (яркость × площадь сбоку). */
+        /** Sheath light flux from a to b (luminance × side area). */
         double flux(double a, double b, double w) {
             return integral(a, b, w, false);
         }
 
-        /** Момент потока оболочки от a до b относительно среза (x × яркость × площадь). */
+        /** Sheath flux moment from a to b relative to exit (x × luminance × area). */
         double moment(double a, double b, double w) {
             return integral(a, b, w, true);
         }
@@ -211,7 +211,7 @@ public final class FlameModel {
             return sum;
         }
 
-        /** Места вдоль оси: срез, ядро, пламя, хвост к точке Дрейпера — чаще у конца пламени, где свет падает круче. */
+        /** Axial positions: exit, core, flame, tail to Draper point — denser near flame end where light drops more steeply. */
         Flame.Sheath sheath(double length) {
             double[] xs = new double[13];
             int n = 0;
@@ -228,14 +228,14 @@ public final class FlameModel {
         }
     }
 
-    /** Цветность чёрного тела температуры kelvin: sRGB, наибольший канал — 255. */
+    /** Black-body chromaticity at kelvin: sRGB, maximum channel 255. */
     public static int color(double kelvin) {
         double[] l = new double[4];
         BlackBody.light(kelvin, l);
         return pack(l);
     }
 
-    /** Линейный rgb (первые три числа) → sRGB, наибольший канал — 255. */
+    /** Linear rgb (first three numbers) → sRGB, maximum channel 255. */
     static int pack(double[] rgb) {
         double max = Math.max(rgb[0], Math.max(rgb[1], rgb[2]));
         if (max <= 0) return 0;
@@ -244,13 +244,13 @@ public final class FlameModel {
         return out;
     }
 
-    /** Кодирование sRGB (IEC 61966-2-1). */
+    /** sRGB encoding (IEC 61966-2-1). */
     public static double srgb(double c) {
         c = Math.max(0, Math.min(1, c));
         return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
     }
 
-    /** Байт sRGB → линейная доля. */
+    /** sRGB byte → linear fraction. */
     public static double linear(int srgb) {
         double c = srgb / 255.0;
         return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);

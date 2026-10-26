@@ -1,21 +1,21 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Видимая воронка наземного подрыва: радиус 23·Y^0.3 м, глубина 7.7·Y^0.3 м (сухой грунт),
- * профиль — параболоид, вокруг — вал выброса.
+ * Apparent surface-burst crater: radius 23·Y^0.3 m, depth 7.7·Y^0.3 m (dry soil),
+ * paraboloid profile with an ejecta rim around it.
  */
 public final class CraterModel {
     /**
-     * Грунт под эпицентром. Влажность — насыщение водой, а не вид грунта: сухой песок — эталонная среда кривых воронок
-     * (TM 23-200: сухой песок 1,0, насыщенный грунт 1,5, гранит и песчаник 0,8); Glasstone и Dolan 1977, §6.09:
-     * «в грунте, насыщенном водой, радиус заметно больше».
+     * Soil beneath the epicenter. Moisture is water saturation, not soil type: dry sand is the reference medium for crater
+     * curves (TM 23-200: dry sand 1.0, saturated soil 1.5, granite and sandstone 0.8); Glasstone and Dolan 1977, §6.09:
+     * “in water-saturated soil, the radius is noticeably larger”.
      */
     public enum Soil {
-        /** Сухой грунт: почва, песок, гравий, щебень (рыхлое и сыпучее выше уровня воды). */
+        /** Dry soil: earth, sand, gravel, rubble (loose and granular material above water level). */
         DRY(1.0),
-        /** Скала. */
+        /** Rock. */
         ROCK(0.7),
-        /** Грунт, насыщенный водой (дно под водой). */
+        /** Water-saturated soil (underwater bottom). */
         WET(1.3);
 
         final double factor;
@@ -25,11 +25,11 @@ public final class CraterModel {
         }
     }
 
-    /** Диаметр воронки заряда на ∛W, м/кг^⅓, и её глубина — доля диаметра ({@link #chargeRadius}). */
+    /** Charge crater diameter per ∛W, m/kg^⅓, and depth as a diameter fraction ({@link #chargeRadius}). */
     public static final double CHARGE_D = 0.65, CHARGE_DEPTH = 0.25;
-    /** Высота вала на кромке — доля глубины. */
+    /** Rim height at the edge as a fraction of depth. */
     private static final double RIM = 0.25;
-    /** Внутренний склон вала начинается с этой доли радиуса. */
+    /** Inner rim slope starts at this radius fraction. */
     private static final double RIM_INNER = 0.8;
 
     private CraterModel() {
@@ -43,27 +43,27 @@ public final class CraterModel {
         return 7.7 * Math.pow(yieldKt, 0.3) * soil.factor;
     }
 
-    /** Глубина чаши на горизонтальном расстоянии r от эпицентра, м (0 за радиусом). */
+    /** Bowl depth at horizontal distance r from the epicenter, m (0 beyond the radius). */
     public static double profileDepth(double r, double yieldKt, Soil soil) {
         return bowl(r, radius(yieldKt, soil), depth(yieldKt, soil));
     }
 
     /**
-     * Высота вала над исходной поверхностью, м: растёт от 0.8 радиуса к кромке до 0.25 глубины,
-     * снаружи квадратично сходит на нет к двум радиусам. Итоговая поверхность = вал − чаша.
+     * Rim height above the original surface, m: rises from 0.8 radius to 0.25 depth at the edge,
+     * then falls quadratically to zero at two radii. Resulting surface = rim − bowl.
      */
     public static double rimHeight(double r, double yieldKt, Soil soil) {
         return rim(r, radius(yieldKt, soil), depth(yieldKt, soil));
     }
 
-    /** Чаша-параболоид радиуса {@code rc} и глубины {@code depth}: глубина на расстоянии r, м (0 за радиусом). */
+    /** Paraboloid bowl of radius {@code rc} and depth {@code depth}: depth at distance r, m (0 beyond the radius). */
     public static double bowl(double r, double rc, double depth) {
         if (r >= rc) return 0;
         double u = r / rc;
         return depth * (1 - u * u);
     }
 
-    /** Вал вокруг чаши радиуса {@code rc} и глубины {@code depth}, м: тот же закон у ядерной и обычной воронки. */
+    /** Rim around a bowl of radius {@code rc} and depth {@code depth}, m: same law for nuclear and conventional craters. */
     public static double rim(double r, double rc, double depth) {
         double peak = RIM * depth;
         if (r <= RIM_INNER * rc || r >= 2 * rc) return 0;
@@ -72,30 +72,30 @@ public final class CraterModel {
     }
 
     /**
-     * Видимая воронка заряда {@code tntKg} кг ТНТ на поверхности грунта (контактный взрыв): диаметр {@link #CHARGE_D}·∛W м,
-     * глубина — четверть диаметра. Данные (Ambrosini, Luccioni, Danesi, «Craters produced by explosions on the soil
-     * surface», Mecánica Computacional XXII, 2003): опыт EMRTC — 250 кг ТНТ на земле, Ø 3,8 м (0,60·∛W); расчёт с центром
-     * заряда на уровне земли — 0,61·∛W, заряд, лежащий на земле, — 0,42·∛W; статистика ~200 наземных взрывов Кинни и
-     * Грэхема — 0,8·∛W ± 30 %; «глубина обычно около четверти диаметра» (там же). Заряд с заглублением (бомба с
-     * замедлением) роет больше — это {@code BuriedBlast}. Грунт — те же множители, что у ядерной ({@link Soil}). Удар
-     * корпуса (у шахеда ~1 МДж против 200 МДж заряда) воронку не меняет.
+     * Apparent crater for charge {@code tntKg} kg TNT on the soil surface (contact explosion): diameter {@link #CHARGE_D}·∛W m,
+     * depth one quarter of diameter. Data (Ambrosini, Luccioni, Danesi, “Craters produced by explosions on the soil surface”,
+     * Mecánica Computacional XXII, 2003): EMRTC experiment — 250 kg TNT on ground, Ø 3.8 m (0.60·∛W); calculation with charge
+     * center at ground level — 0.61·∛W, charge resting on ground — 0.42·∛W; Kinney and Graham statistics of ~200 surface blasts —
+     * 0.8·∛W ± 30 %; “depth usually about a quarter of diameter” (ibid.). A buried charge (delayed bomb) digs more —
+     * {@code BuriedBlast}. Soil uses the same multipliers as nuclear craters ({@link Soil}). Body impact (Shahed ~1 MJ versus
+     * 200 MJ charge) does not change the crater.
      */
     public static double chargeRadius(double tntKg, Soil soil) {
         return tntKg <= 0 ? 0 : 0.5 * CHARGE_D * Math.cbrt(tntKg) * soil.factor;
     }
 
-    /** Глубина воронки заряда, м: {@link #CHARGE_DEPTH} диаметра. */
+    /** Charge crater depth, m: {@link #CHARGE_DEPTH} of diameter. */
     public static double chargeDepth(double tntKg, Soil soil) {
         return 2 * CHARGE_DEPTH * chargeRadius(tntKg, soil);
     }
 
-    /** Объём чаши воронки заряда (параболоид π/2·r²·h), м³: столько грунта выброшено. */
+    /** Charge crater bowl volume (paraboloid π/2·r²·h), m³: this much soil is ejected. */
     public static double chargeVolume(double tntKg, Soil soil) {
         double r = chargeRadius(tntKg, soil);
         return Math.PI / 2 * r * r * chargeDepth(tntKg, soil);
     }
 
-    /** Будет ли воронка: подрыв не выше 0.1 максимального радиуса шара наземного взрыва. */
+    /** Whether a crater forms: burst no higher than 0.1 of the surface-burst fireball's maximum radius. */
     public static boolean formsCrater(double hobM, double yieldKt) {
         return hobM <= 0.1 * FireballModel.maxRadius(yieldKt, true);
     }

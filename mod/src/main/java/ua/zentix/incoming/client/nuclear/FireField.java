@@ -9,53 +9,53 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Где и сколько горит после подрыва — модель клиента для звука горящего города и вторичных взрывов (сам огонь ставит
- * сервер, клиент видит только блоки огня в своих чанках). Кольца вокруг эпицентра шириной {@link #RING}: в кольце
- * свет зажигает долю колонок по той же вероятности, что у сервера ({@code RuinPlanner.fire}: min(1, q/20), q — свет на
- * земле, к краю руин след света сходит на нет), на {@link #SHARE} колонок есть чему гореть. Огонь встаёт со вспышкой
- * (слой вспышки сервера, {@code FlashScorch}: место — когда свет там набрал порог поджига, {@link Detonation#flashTicks}),
- * волна с её приходом сбивает от 2 psi половину ({@link #keep}). Предел пожаров подрыва у сервера ({@link #MAX_FIRES})
- * — на то, что горит после волны ({@code RuinPlan.write}): в счёт идёт только огонь, который волна не собьёт, а слой
- * вспышки зажигает, пока таких меньше предела, и сбиваемый — без счёта. Модель режет кольца от эпицентра тем же счётом,
- * что у слоя: зажигает столько же и до того же кольца (до волны — и то, что она собьёт: у эпицентра от 2 psi вдвое
- * больше предела), а с волной оставляет то, что оставил бы слой без руин. Руин модель не знает — это её известный
- * предел: огонь слоя в счёте, который руины гасят (завал, обвал), уходит из счёта сервера, и руины дальше кольца, где
- * слой упёрся в предел и не зажёг ничего, ставят свои пожары. В городе после волны у сервера горит и за последним
- * кольцом модели (у 15 кт в воздухе — дальше ~146 блоков), а у модели там пусто; рядом с игроком это поправляют
- * {@link ua.zentix.incoming.client.fx.FireWatch} (настоящий огонь своих чанков) и {@code NukeAfter.trust}, вдали — нет. Сколько горит потом —
- * {@link #envelope}: разгорается {@link #RISE} тиков от
- * поджига, потом гаснет со временем {@link #TAU}. Что на деле горит рядом, клиент сверяет по своим чанкам
+ * Where and how much burns after detonation — client model for burning-city sound and secondary explosions (the server places
+ * the fire itself; the client sees only fire blocks in local chunks). Rings of width {@link #RING} around ground zero: in each ring
+ * light ignites a fraction of columns with the same probability as the server ({@code RuinPlanner.fire}: min(1, q/20), q is light on the
+ * ground, fading at the ruin edge); {@link #SHARE} of columns contain fuel. Fire starts with the flash
+ * (server flash layer, {@code FlashScorch}: each location when light reaches the ignition threshold there, {@link Detonation#flashTicks});
+ * on arrival, the wave blows out half at 2 psi and above ({@link #keep}). The server fire limit per detonation ({@link #MAX_FIRES})
+ * counts what burns after the wave ({@code RuinPlan.write}): only fire the wave will not blow out counts; the flash
+ * layer keeps igniting while this count is below the limit, and ignites removable fire without counting it. The model cuts rings from ground zero with the same count
+ * as the layer: the same amount ignited out to the same ring (before the wave, including what it will blow out: at 2 psi and above near ground zero, twice
+ * the limit); the wave then leaves what the layer would have left without ruins. The model has no knowledge of ruins — its known
+ * limitation: counted layer fire extinguished by ruins (rubble, collapse) leaves the server count, while ruins beyond the ring where
+ * the layer hit its limit and ignited nothing start their own fires. After the wave in a city, the server also has fires beyond the model's last
+ * ring (beyond ~146 blocks for a 15 kt airburst), while the model is empty there; near the player this is corrected by
+ * {@link ua.zentix.incoming.client.fx.FireWatch} (actual local-chunk fire) and {@code NukeAfter.trust}; not at distance. Later burning follows
+ * {@link #envelope}: it grows for {@link #RISE} ticks from
+ * ignition, then decays with time constant {@link #TAU}. The client checks actual nearby fire against local chunks
  * ({@link ua.zentix.incoming.client.fx.FireWatch}).
  */
 final class FireField {
-    /** Ширина кольца, блоков. */
+    /** Ring width, blocks. */
     static final double RING = 32;
-    /** Доля колонок, где огню есть на чём встать (трава, земля, дерево — не камень и не вода). */
+    /** Fraction of columns with somewhere for fire to stand (grass, dirt, wood — not stone or water). */
     static final double SHARE = 0.6;
-    /** Пожаров подрыва после волны у сервера по умолчанию ({@code fires_per_detonation}); клиент своё число сервера не знает. */
+    /** Default server post-wave fires per detonation ({@code fires_per_detonation}); the client does not know the server's custom value. */
     static final int MAX_FIRES = 20_000;
-    /** Огонь разгорается, тиков. */
+    /** Fire growth time, ticks. */
     static final double RISE = 20 * 20;
-    /** И гаснет со временем, тиков: трава и земля прогорают за секунды, дома и лес — минуты. */
+    /** And decay time, ticks: grass and dirt burn out in seconds, houses and forest in minutes. */
     static final double TAU = 5 * 60 * 20;
-    /** Порог вероятности пожара от света ({@code RuinPlanner.fire}). */
+    /** Light ignition probability threshold ({@code RuinPlanner.fire}). */
     private static final double FULL_Q = 20;
-    /** К краю руин след света сходит на нет на этой доле радиуса ({@code RuinPlanner.edge}). */
+    /** Light marks fade at the ruin edge over this fraction of radius ({@code RuinPlanner.edge}). */
     private static final double EDGE_FADE = 0.2;
 
     final Detonation d;
-    /** Зажжённых вспышкой пожаров в кольце, со сбиваемыми волной (срез по {@link #MAX_FIRES} — по тем, что останутся). */
+    /** Flash-ignited fires in a ring, including those blown out by the wave ({@link #MAX_FIRES} caps those that remain). */
     final double[] lit;
-    /** Доля их, что волна не сбивает (1 или {@code RuinPlanner.BLOWN_KEEP} от 2 psi). */
+    /** Share not blown out by the wave (1 or {@code RuinPlanner.BLOWN_KEEP} at 2 psi and above). */
     final double[] keep;
-    /** Пожаров в кольце после волны ({@link #lit} × {@link #keep}): то, что горит потом; всего — не больше {@link #MAX_FIRES}. */
+    /** Post-wave fires in a ring ({@link #lit} × {@link #keep}): what burns later; total capped at {@link #MAX_FIRES}. */
     final double[] fires;
     /**
-     * Поджиг кольца вспышкой и приход фронта к земле в середине кольца (по наклонной от точки подрыва: у воздушного
-     * подрыва волна доходит до земли под ним через секунду, а свет — сразу), тиков после подрыва.
+     * Flash ignition of a ring and front arrival at ground in its middle (slant range from the detonation point: an airburst
+     * wave reaches the ground below it after a second, while light arrives immediately), ticks since detonation.
      */
     final double[] ignite, arrival;
-    /** Пожаров после волны всего. */
+    /** Total post-wave fires. */
     final double total;
 
     FireField(Detonation d) {
@@ -70,7 +70,7 @@ final class FireField {
             double places = after < MAX_FIRES ? candidates(d, i) : 0;
             if (places <= 0) continue;
             k[i] = keepAt(d, i);
-            // в счёте сервера — только несбиваемые: на кольце, где он полон, — их остаток и сбиваемые между ними
+            // server counts only fires not blown out: the ring filling it receives the remaining count and removable fires between them
             f[i] = Math.min(MAX_FIRES - after, places * k[i]);
             l[i] = f[i] / k[i];
             ig[i] = d.flashTicks(d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)), ThermalModel.IGNITE);
@@ -84,13 +84,13 @@ final class FireField {
         this.total = after;
     }
 
-    /** Доля пожаров, которых волна не сбивает от 2 psi ({@code RuinPlanner.BLOWN_KEEP}). */
+    /** Share of fires not blown out by the wave at 2 psi and above ({@code RuinPlanner.BLOWN_KEEP}). */
     static final double BLOWN_KEEP = 0.5;
 
     /**
-     * Сколько мест кольца {@code ring} зажгла бы вспышка без предела пожаров: доля колонок, где огню есть на чём встать,
-     * по вероятности света в середине кольца ({@code RuinPlanner.fire}); в огненном шаре у земли и где свет ниже порога
-     * поджига — 0.
+     * How many locations in {@code ring} the flash would ignite without a fire limit: fraction of columns with a place for fire,
+     * using light probability at the ring middle ({@code RuinPlanner.fire}); inside the fireball at ground level or below the ignition
+     * threshold — 0.
      */
     static double candidates(Detonation d, int ring) {
         double r = radius(ring), ruin = d.ruinRadius();
@@ -101,7 +101,7 @@ final class FireField {
         return SHARE * Math.min(1, q / FULL_Q) * area;
     }
 
-    /** Доля огня кольца {@code ring}, которую волна не собьёт: {@link #BLOWN_KEEP} от 2 psi в середине кольца, иначе 1. */
+    /** Share of {@code ring} fire the wave will not blow out: {@link #BLOWN_KEEP} at 2 psi and above at ring middle, otherwise 1. */
     static double keepAt(Detonation d, int ring) {
         return d.psi(new Vec3(d.burst().x + radius(ring), d.groundY() + 1, d.burst().z)) >= 2 ? BLOWN_KEEP : 1;
     }
@@ -115,42 +115,42 @@ final class FireField {
         return (ring + 0.5) * RING;
     }
 
-    /** Доля огня, что горит через {@code ticks} после того, как его зажгла вспышка. */
+    /** Fraction of fire burning {@code ticks} after flash ignition. */
     static double envelope(double ticks) {
         if (ticks <= 0) return 0;
         return ticks < RISE ? ticks / RISE : Math.exp(-(ticks - RISE) / TAU);
     }
 
-    /** Сколько горит в кольце через {@code ticks} после подрыва: зажжённое вспышкой, с приходом волны — без сбитого. */
+    /** Amount burning in the ring {@code ticks} after detonation: flash-ignited fires, minus those blown out when the wave arrives. */
     double burning(int ring, double ticks) {
         return lit[ring] * envelope(ticks - ignite[ring]) * (ticks < arrival[ring] ? 1 : keep[ring]);
     }
 
-    /** Сколько горит всего. */
+    /** Total burning amount. */
     double burning(double ticks) {
         double s = 0;
         for (int i = 0; i < fires.length; i++) s += burning(i, ticks);
         return s;
     }
 
-    /** Огонь кончился: тиков после подрыва, когда от него осталось меньше 2 %. */
+    /** Fire ended: ticks since detonation when less than 2 % remains. */
     double endTicks() {
         return lastIgnition() + RISE + TAU * Math.log(50);
     }
 
-    /** Поджиг последнего кольца с огнём (вспышка), тики после подрыва. */
+    /** Ignition of the last burning ring (flash), ticks since detonation. */
     double lastIgnition() {
         double last = 0;
         for (int i = 0; i < lit.length; i++) if (lit[i] > 0) last = Math.max(last, ignite[i]);
         return last;
     }
 
-    /** Вторичный взрыв в горящем городе: газ, топливо, склады. */
+    /** Secondary explosion in the burning city: gas, fuel, warehouses. */
     record Secondary(double ticks, double x, double z, boolean big, long seed) {}
 
     /**
-     * Вторичные взрывы подрыва (всё — от зерна подрыва: у всех клиентов и в повторе одни и те же): чем больше горит,
-     * тем больше их, по месту — где горит, по времени — от {@link #SECONDARY_AFTER} после прихода волны, всё реже.
+     * Detonation secondary explosions (all from the detonation seed: identical on all clients and in replay): more burning means
+     * more explosions; locations where fire burns; timing from {@link #SECONDARY_AFTER} after wave arrival, becoming less frequent.
      */
     List<Secondary> secondaries() {
         List<Secondary> out = new ArrayList<>();
@@ -163,7 +163,7 @@ final class FireField {
             while (ring < fires.length - 1 && u > fires[ring]) u -= fires[ring++];
             double r = (ring + random.nextDouble()) * RING;
             double angle = random.nextDouble() * 2 * Math.PI;
-            // время: после того как разгорелось, всё реже (среднее — SECONDARY_TAU), не позже SECONDARY_END
+            // timing: after fire develops, becoming less frequent (mean — SECONDARY_TAU), no later than SECONDARY_END
             double t = arrival[ring] + SECONDARY_AFTER - SECONDARY_TAU * Math.log(1 - random.nextDouble() * (1 - Math.exp(-SECONDARY_END / SECONDARY_TAU)));
             out.add(new Secondary(t, d.burst().x + Math.cos(angle) * r, d.burst().z + Math.sin(angle) * r, random.nextFloat() < 0.2f, random.nextLong()));
         }
@@ -171,6 +171,6 @@ final class FireField {
         return out;
     }
 
-    /** Вторичные взрывы — не раньше стольких тиков после прихода волны, в среднем через столько и не позже. */
+    /** Secondary explosions no earlier than this many ticks after wave arrival, this mean delay, and no later than this. */
     static final double SECONDARY_AFTER = 30 * 20, SECONDARY_TAU = 3 * 60 * 20, SECONDARY_END = 10 * 60 * 20;
 }

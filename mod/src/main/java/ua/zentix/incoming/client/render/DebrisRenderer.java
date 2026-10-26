@@ -13,7 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Quaternionf;
 import ua.zentix.incoming.entity.DebrisEntity;
 
-/** Обломок кувыркается в полёте; блок рисуется так же, как падающий блок. */
+/** Debris tumbles in flight; block drawn as a falling block. */
 public class DebrisRenderer extends EntityRenderer<DebrisEntity> {
     public DebrisRenderer(EntityRendererProvider.Context ctx) {
         super(ctx);

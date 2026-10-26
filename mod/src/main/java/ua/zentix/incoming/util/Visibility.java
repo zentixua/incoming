@@ -1,10 +1,10 @@
 package ua.zentix.incoming.util;
 
 /**
- * Дальность видимости по погоде, метры (= блоки), одна на всё: дымка картинки вдали ({@code client.far.Sight}) и свет
- * ядерной вспышки сквозь воздух ({@code nuclear.model.ThermalModel}). Ясно — 20 км. Дождь Minecraft — умеренный
- * (3–8 мм/ч): 5 км; гроза — ливень, 1 км (ITU-R P.1814, табл. 2: ослабление в дожде 1,076·R^0,67 дБ/км, V = 3,91/σ;
- * у грозы наблюдений нет — оценка по ливню 25–100 мм/ч, 0,6–1,8 км).
+ * Weather visibility range, meters (= blocks), shared by everything: distant visual haze ({@code client.far.Sight}) and
+ * nuclear flash transmission through air ({@code nuclear.model.ThermalModel}). Clear — 20 km. Minecraft rain is moderate
+ * (3–8 mm/h): 5 km; thunderstorm is heavy rain, 1 km (ITU-R P.1814, table 2: rain attenuation 1.076·R^0.67 dB/km,
+ * V = 3.91/σ; no thunderstorm observations — estimated from 25–100 mm/h heavy rain, 0.6–1.8 km).
  */
 public final class Visibility {
     public static final double CLEAR = 20_000, RAIN = 5_000, THUNDER = 1_000;

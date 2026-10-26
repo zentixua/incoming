@@ -7,18 +7,17 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Места POI (кровати, рабочие места жителей, колокола), которых нет в данных POI мира. Постройку, вставленную мимо
- * {@code setBlock} (WorldEdit, схемы карт, сборка аппарата Sable прямо в секции), ваниль в данные POI не вносит,
- * а снятие такого блока через мир ({@code ServerLevel.onBlockStateChange} → {@code PoiManager.remove}) пишет в лог
- * ошибку PoiSection «POI data mismatch: never registered» — на каждый блок: в городе с карты это больше сотни строк
- * за вечер залпов.
+ * POI positions (beds, villager job sites, bells) absent from world POI data. Vanilla does not register buildings
+ * inserted outside {@code setBlock} (WorldEdit, map schematics, Sable craft assembled directly in sections); removing
+ * such a block through the world ({@code ServerLevel.onBlockStateChange} → {@code PoiManager.remove}) logs PoiSection
+ * “POI data mismatch: never registered” per block: over a hundred lines in an evening of salvos on a city map.
  */
 public final class PoiRecords {
     private PoiRecords() {}
 
     /**
-     * Место POI блока {@code state} в {@code pos} — в данные, если его там нет. Звать перед тем, как блок снимет
-     * мир: удаление из данных идёт задачей сервера после смены блока и найдёт запись.
+     * Register POI for block {@code state} at {@code pos} if absent. Call before world removal: data removal runs as a
+     * server task after block change and will find the entry.
      */
     public static void recordIfMissing(ServerLevel level, BlockPos pos, BlockState state) {
         PoiTypes.forState(state).ifPresent(type -> {
@@ -27,10 +26,10 @@ public final class PoiRecords {
     }
 
     /**
-     * То же для места и шести его соседей. Снятый блок уводит за собой соседа обновлением формы: изножье — изголовье
-     * кровати (место POI у кровати — изголовье), опора — колокол. Сосед уходит через мир мимо того, кто снимал блок,
-     * и без записи в данных POI ваниль пишет ошибку (после ракет по домам — пары соседних мест по этажам). Сосед,
-     * который устоял, остаётся в данных — как поставленный через мир.
+     * The same for a position and its six neighbors. Shape updates remove neighbors with a removed block: bed foot removes
+     * head (bed POI is at the head); support removes bell. The neighbor disappears through the world outside the original
+     * remover, and absent POI data logs an error (after missiles at houses, adjacent-position pairs on floors). A surviving
+     * neighbor remains registered as if placed through the world.
      */
     public static void recordWithNeighbours(ServerLevel level, BlockPos pos, BlockState state) {
         recordIfMissing(level, pos, state);

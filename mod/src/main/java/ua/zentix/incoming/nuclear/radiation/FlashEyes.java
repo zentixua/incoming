@@ -16,25 +16,24 @@ import ua.zentix.incoming.nuclear.model.EyeInjury;
 import ua.zentix.incoming.registry.ModAttachments;
 
 /**
- * Глаза игрока и вспышка ({@link EyeInjury}, G&amp;D §12.83–12.88). Засветку всего поля (временную) считает клиент сам
- * ({@code NukeFlash}); здесь — ожог сетчатки: постоянное слепое пятно там, где на сетчатке был шар, у того, кто
- * смотрел в его сторону (шар в поле зрения, не дальше 60° от взгляда) и видел его. Игрок, привыкший к темноте, — с
- * широким зрачком, ожог дальше.
+ * Player eyes and flash ({@link EyeInjury}, G&amp;D §12.83–12.88). Client computes temporary whole-field bleaching itself
+ * ({@code NukeFlash}); here, retinal burn: permanent blind spot where the ball was imaged, for someone looking toward it
+ * (ball in field of view, within 60° of gaze) and seeing it. Dark-adapted player has a wider pupil, burns at longer range.
  */
 public final class FlashEyes {
-    /** Шар дальше этого угла от взгляда (косинус 60°) — за краем того, что видно на экране. */
+    /** Ball beyond this gaze angle (cosine of 60°) is outside the on-screen view. */
     private static final double FIELD_COS = 0.5;
 
     private FlashEyes() {}
 
-    /** Насколько глаз у {@code eye} привык к темноте: 0 — день, 1 — ночь (свет неба и блоков у глаза). */
+    /** Eye dark adaptation at {@code eye}: 0 — day, 1 — night (skylight and block light at eye). */
     public static double darkness(Level level, Vec3 eye) {
         return EyeInjury.darkness(level.getMaxLocalRawBrightness(BlockPos.containing(eye), skyDarken(level)));
     }
 
     /**
-     * На сколько ступеней (0..11) небо сейчас темнее дня, как {@code Level.updateSkyBrightness}: клиент ваниль считает
-     * его только при входе в мир, и ночь у клиента была бы днём.
+     * How many levels (0..11) darker the sky currently is than day, as {@code Level.updateSkyBrightness}: vanilla client
+     * computes it only on world entry, so client night would count as day.
      */
     static int skyDarken(Level level) {
         double rain = 1 - level.getRainLevel(1) * 5 / 16.0, thunder = 1 - level.getThunderLevel(1) * 5 / 16.0;
@@ -42,15 +41,15 @@ public final class FlashEyes {
         return (int) ((1 - sun * rain * thunder) * 11);
     }
 
-    /** Докуда (блоки) сетчатка может обжечься у смотревшего на шар — самый тёмный глаз. */
+    /** Maximum retinal burn range (blocks) for someone looking at the ball — darkest-adapted eye. */
     public static double reach(Detonation d) {
         return d.blocks(EyeInjury.retinaRange(d.yieldKt(), 1, d.visibility()));
     }
 
     /**
-     * Игрок {@code p}, который видит шар: ожог сетчатки, если смотрел в его сторону и был в пределах ожога; у спящего
-     * глаза закрыты. Игрока, которого правила не дают ранить пустившему {@code owner} (без PvP, своя команда), ожог не
-     * трогает, как и ожог кожи ({@link FlashBurns}).
+     * Player {@code p} seeing the ball: retinal burn if looking toward it and within burn range; sleeping eyes are closed.
+     * A player whom launcher {@code owner} cannot damage under the rules (no PvP, same team) is unaffected, as with skin burns
+     * ({@link FlashBurns}).
      */
     public static void flash(Level level, Detonation d, ServerPlayer p, @Nullable Entity owner) {
         if (p.isSleeping() || owner instanceof Player attacker && !p.canHarmPlayer(attacker)) return;
@@ -61,7 +60,7 @@ public final class FlashEyes {
         PacketDistributor.sendToPlayer(p, new S2C.RetinaScars(next));
     }
 
-    /** Ожог сетчатки у сущности {@code e}, которая видит шар, при привыкании к темноте {@code dark}; нет ожога — null. */
+    /** Retinal burn for entity {@code e} seeing the ball, with dark adaptation {@code dark}; null if no burn. */
     @Nullable
     public static RetinaScars.Scar scar(Detonation d, LivingEntity e, double dark) {
         Vec3 eye = e.getEyePosition(), f = e.getViewVector(1), to = d.burst().subtract(eye);
@@ -70,7 +69,7 @@ public final class FlashEyes {
         double depth = to.dot(f);
         if (depth < FIELD_COS * len) return null;
         if (d.metres(len) > EyeInjury.retinaRange(d.yieldKt(), dark, d.visibility())) return null;
-        // базис взгляда без крена — тот же, что у послеобраза на экране
+        // roll-free gaze basis — same as the on-screen afterimage
         double yaw = Math.toRadians(e.getViewYRot(1));
         Vec3 right = new Vec3(-Math.cos(yaw), 0, -Math.sin(yaw)), up = right.cross(f);
         return new RetinaScars.Scar((float) (to.dot(right) / depth), (float) (to.dot(up) / depth), (float) (d.fireballRadius() / depth));
@@ -80,7 +79,7 @@ public final class FlashEyes {
         return e.getData(ModAttachments.RETINA);
     }
 
-    /** Пятна заново целиком: вход в мир, возрождение, смена измерения. */
+    /** Resend all scars: login, respawn, dimension change. */
     public static void sync(ServerPlayer p) {
         PacketDistributor.sendToPlayer(p, new S2C.RetinaScars(scars(p)));
     }

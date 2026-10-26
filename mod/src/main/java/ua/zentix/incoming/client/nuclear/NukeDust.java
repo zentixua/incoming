@@ -24,77 +24,77 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Стена пыли ударной волны вблизи. Пока голова стены ближе {@link #NEAR} к камере — по её дуге у камеры летят клочья
- * мусора и сорванное с земли. Блоки, которые снесла волна (сервер называет их, {@code S2C.NukeDebris}), срываются
- * кусками своего вещества, когда до них доходит фронт, и их несёт ветер за фронтом ({@link BlastGust}): листья, доски,
- * стекло, обломки ({@code Fragments}); выбитое в пыль уходит из пролома полосой по ветру — клубами слоя эффектов
- * ({@link BlastDust}). Пока стена проходит мимо игрока — сорванное с земли, которое ветер несёт от эпицентра. Саму пыль
- * слоя у камеры рисует пелена объёмом ({@link NukePall#drawsHead}), как голову стены вдали: одна среда — один рисунок.
- * Квадраты клубов в шаге-двух от глаза и шире кадра ложились бы на неё второй пылью — пиксели картинки лестницей во весь
- * экран, тёмные шары над верхом стены. Только когда пелена не рисуется (качество OFF, сломался шум), пыль у камеры —
- * запасная: клубы по дуге головы во всю её высоту, клубы вокруг игрока, пока голова стены у него (не выше её верха), и
- * пелена на весь экран (накрывает за несколько тиков, гаснет за несколько секунд).
+ * Shock-wave dust wall up close. While the wall head is within {@link #NEAR} of the camera, scraps of litter and material torn
+ * from the ground fly along its nearby arc. Blocks demolished by the wave (named by the server, {@code S2C.NukeDebris}) break
+ * into pieces of their material when the front reaches them, carried by wind behind the front ({@link BlastGust}): leaves, boards,
+ * glass, rubble ({@code Fragments}); pulverized material leaves the breach as a downwind streak of effects-layer billows
+ * ({@link BlastDust}). While the wall passes the player, ground litter is carried away from ground zero. The pall volume renders
+ * the layer dust at the camera ({@link NukePall#drawsHead}), like the distant wall head: one medium, one rendering.
+ * Billow quads a step or two from the eye and wider than the frame would add a second dust over it — texture pixels stair-stepping across the
+ * screen, dark balls above the wall top. Only when the pall is not rendered (quality OFF, broken noise) does camera dust use
+ * a fallback: billows along the head arc over its full height, billows around the player while the wall head is there (no higher than its top), and
+ * a full-screen veil (covers in a few ticks, fades in a few seconds).
  */
 public final class NukeDust {
     private static final RandomSource RANDOM = RandomSource.create();
-    /** Ближе стольких блоков к камере голова стены рождает свою пыль и обломки (дальше частицы не видны за ней самой). */
+    /** Within this many blocks of the camera, the wall head spawns dust and debris (farther particles are hidden by the wall itself). */
     static final double NEAR = 160;
-    /** Шаг мест пыли вдоль дуги фронта у камеры, блоков. */
+    /** Dust-location spacing along the front arc near the camera, blocks. */
     private static final double STEP = 9;
-    /** Мест пыли за тик — не больше. */
+    /** Maximum dust locations per tick. */
     private static final int MAX_SPOTS = 40;
     /**
-     * Сорванное с земли — где давление на фронте не меньше (скоростной напор ~0,1 psi), psi: трава, подстилка, листва —
-     * лёгкие пластины ({@code Fragments.Kind.LEAF}), их и уносит ветер; комья земли ему не по силам.
+     * Ground litter begins at this minimum front pressure (dynamic pressure ~0.1 psi), psi: grass, litter, foliage are
+     * light plates ({@code Fragments.Kind.LEAF}) that wind can carry; clods of dirt are too heavy.
      */
     private static final double TEARS_PSI = 1.5;
-    /** Пыль у фронта не быстрее, блоков за тик: у эпицентра фронт идёт десятками блоков за тик. */
+    /** Maximum front-dust speed, blocks per tick: near ground zero the front travels tens of blocks per tick. */
     private static final double DUST_SPEED = 4;
     /**
-     * Обломки снесённого: ближе стольких блоков к камере — все, дальше — реже, по квадрату расстояния (дальние чанки
-     * иначе занимают все места кусков раньше, чем фронт дойдёт до ближних).
+     * Demolished debris: all within this many blocks of the camera; farther away, sparser by distance squared (distant chunks would
+     * otherwise occupy every fragment slot before the front reaches nearby ones).
      */
     private static final double DEBRIS_FULL = 48;
-    /** Пыль проломов ближе {@link #DEBRIS_FULL} — полосой у каждой кучки в клетке со стороной столько блоков, дальше — одной на чанк. */
+    /** Breach dust within {@link #DEBRIS_FULL}: one streak per cluster in a cell this many blocks wide; beyond — one per chunk. */
     private static final int CELL = 4;
     /**
-     * Минеральное вещество ({@link Shielding#material}: грунт 1600, камень и кирпич 2300) — от этой плотности, кг/м³, металл
-     * (7800) — с {@link #METAL}: в пыль крошится только минеральное, и из него — кладка, не природная земля ({@link #ground}).
+     * Mineral material ({@link Shielding#material}: soil 1600, stone and brick 2300) starts at this density, kg/m³; metal
+     * (7800) starts at {@link #METAL}: only mineral material crumbles into dust, and only masonry, not natural ground ({@link #ground}).
      */
     private static final double MINERAL = 1500, METAL = 7000;
-    /** Руины чанка встали позже фронта больше чем на столько тиков — его обломки не летят: волна уже прошла. */
+    /** Chunk ruins appeared more than this many ticks after the front: no flying debris, because the wave has already passed. */
     static final int DEBRIS_LATE = 20;
     /**
-     * Тёмные клубы пыли (с землёй и сором) — доля цвета стены в начале и в конце жизни; дым при прохождении стены —
-     * вполовину серее её и темнее.
+     * Dark dust billows (with soil and litter): share of wall color at the start and end of life; smoke during wall passage is
+     * halfway grayer than the wall, and darker.
      */
     private static final float DARK_FROM = 0.67f, DARK_TO = 0.74f, SMOKE_GREY = 0.5f, SMOKE_FROM = 0.55f, SMOKE_TO = 0.75f;
     /**
-     * Пелена у глаза ({@link #veil}): на сколько пелена накрывает экран за тик и гаснет за тик (доля), её непрозрачность —
-     * пыль на VEIL_DEPTH блоков перед глазом, не больше VEIL_MAX.
+     * Eye veil ({@link #veil}): coverage gained and lost per tick (fraction); opacity is
+     * dust over VEIL_DEPTH blocks in front of the eye, capped at VEIL_MAX.
      */
     private static final float VEIL_RISE = 0.12f, VEIL_DECAY = 0.96f, VEIL_MAX = 0.85f;
     private static final double VEIL_DEPTH = 6;
-    /** Пелена на экране, к чему она идёт (гаснет за тик на VEIL_DECAY) и какой её хочет голова у глаза в прошлом тике. */
+    /** On-screen veil, its target (decays by VEIL_DECAY per tick), and what the head at the eye requested last tick. */
     private static float veil, veilTarget, veilWanted;
-    /** Цвет пелены над водой — серо-белые брызги; над сушей — цвет стены у глаза. */
+    /** Veil color over water — gray-white spray; over land — wall color at the eye. */
     private static final float[] VEIL_SPRAY = {0xAE / 255f, 0xB8 / 255f, 0xBE / 255f};
     private static final float[] veilRgb = new float[3];
-    /** Числа слота стены для запасных клубов вокруг игрока ({@link #gust}). */
+    /** Wall slot parameters for fallback billows around the player ({@link #gust}). */
     private static final float[] GUST_WALL = new float[BlastWall.SLOT];
-    /** Пыль проломов у камеры по подрывам ({@link BlastDust}): источник облака, пока в нём есть пыль. */
+    /** Camera breach dust per detonation ({@link BlastDust}): cloud source while it contains dust. */
     private static final Map<ClientNuclear.Active, BlastDust> DUST = new IdentityHashMap<>();
-    /** Для строки сценария: пакетов обломков, мест в них, кусков по веществу и полос пыли с последнего сброса. */
+    /** For the scenario line: debris packets, their locations, pieces by material, and dust streaks since the last reset. */
     private static int packets, places, streaks;
     private static final int[] TORN = new int[Fragments.Kind.values().length];
 
     private NukeDust() {}
 
     /**
-     * Голова стены у глаза (тик, {@link NukePall#tick}): средняя голова там с ослаблением {@code sigma} (1/блок) — пелена на
-     * весь экран цветом стены у глаза ({@link NukePall#dustColor}), над водой — брызги. Только пока пелена выключена
-     * (качество OFF) или не рисуется (сломался её шум): иначе голову у глаза рисует сама пелена, и экран темнел бы дважды. Где голова не дошла или ветер уже
-     * не поднимает пыль (дальше ~0,3 psi до глаза доходит только звук), — ничего.
+     * Wall head at the eye (tick, {@link NukePall#tick}): mean head there with extinction {@code sigma} (1/block) — full-screen veil
+     * in wall color at the eye ({@link NukePall#dustColor}); over water, spray. Only while pall is disabled
+     * (quality OFF) or not rendered (broken noise): otherwise the pall itself renders the head at the eye and the screen would darken twice. Nothing where the head has not arrived or wind
+     * no longer lofts dust (beyond ~0.3 psi only sound reaches the eye).
      */
     static void veil(ClientNuclear.Active a, Vec3 eye, double sigma, boolean spray) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -110,11 +110,11 @@ public final class NukeDust {
     }
 
     /**
-     * Тик: голова стены у камеры. Клубы встают по дуге фронта ближе {@link #NEAR} к камере — гуще у земли, выше — крупнее,
-     * летят от эпицентра медленнее фронта и отстают от него шлейфом, а у земли поднимаются (вал); где волна сильнее,
-     * с ними летят тёмные клочья мусора и сорванное с верха земли (дёрн, подстилка, листва). Рельеф — карта высот
-     * загруженных чанков клиента (под потолком — высота эпицентра). Клубы — цветом стены в своём месте
-     * ({@link #wallColor}: свет стены в кадре), а не по карте освещения.
+     * Tick: wall head at the camera. Billows spawn along the front arc within {@link #NEAR} of the camera — denser near ground, larger above,
+     * moving away from ground zero more slowly than the front and trailing behind it, rising near ground (roller); where the wave is stronger,
+     * dark scraps of litter and material torn from the ground surface (turf, litter, foliage) fly with them. Terrain uses the heightmap of
+     * loaded client chunks (under a ceiling, ground-zero height). Billows use wall color at their location
+     * ({@link #wallColor}: frame wall light), not the lightmap.
      */
     static void front(ClientNuclear.Active a, Vec3 eye) {
         Detonation d = a.d;
@@ -124,12 +124,12 @@ public final class NukeDust {
         if (level == null) return;
         double ex = eye.x - d.burst().x, ez = eye.z - d.burst().z, l = Math.sqrt(ex * ex + ez * ez), r = w.head();
         if (Math.abs(l - r) > NEAR) return;
-        // дуга фронта ближе NEAR к камере: её половина — угол от направления на камеру
+        // front arc within NEAR of the camera: half-angle measured from the camera direction
         double half = l < 1 ? Math.PI : Math.acos(Mth.clamp((l * l + r * r - NEAR * NEAR) / (2 * l * r), -1, 1));
         double toward = Math.atan2(ez, ex);
         double ticks = a.ticks(0);
         double speed = Math.min(DUST_SPEED, d.frontRadius(ticks + 1) - d.frontRadius(ticks));
-        // под потолком (Незер) верх карты высот — потолок: пыль — на высоте эпицентра, без кусков поверхности
+        // under a ceiling (Nether) the heightmap top is the ceiling: dust at ground-zero height, no surface pieces
         boolean ceiling = level.dimensionType().hasCeiling();
         int floor = level.getMinBuildHeight() + 1;
         int n = Math.min(MAX_SPOTS, (int) Math.round(2 * half * r / STEP * w.density() * Fx.density(eye)));
@@ -147,17 +147,17 @@ public final class NukeDust {
             int bx = Mth.floor(x), bz = Mth.floor(z);
             LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
             if (chunk == null) continue;
-            // над водой пыли нет: там брызги (NukeWater)
+            // no dust over water: spray there (NukeWater)
             if (!ceiling && NukeWater.water(chunk, bx, bz, m)) continue;
             int top = ceiling ? floor : chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, bx & 15, bz & 15) + 1;
             boolean surface = top > floor;
             if (!surface) top = Mth.floor(d.groundY());
             if (puffs) {
-                // гуще у земли; клуб выше — крупнее, у земли — поднимается, наверху — уходит назад со стеной
+                // denser near ground; higher billows are larger; near ground they rise, at the top they move back with the wall
                 double up = Math.pow(RANDOM.nextDouble(), 1.6), h = w.height() * 0.8 * up;
                 double v = speed * (0.25 + 0.45 * RANDOM.nextDouble());
                 boolean dark = RANDOM.nextFloat() < 0.35f;
-                // цвет головы стены в месте клуба; рассеиваясь, клуб светлеет, как она выше
+                // wall-head color at the billow location; dispersing billow brightens like the wall higher up
                 double y = top + 0.5 + h;
                 if (!wallColor(a, sky, x, y, z, dark ? DARK_FROM : 1, from)
                         || !wallColor(a, sky, x, y + 0.4 * w.height(), z, 1.05f * (dark ? DARK_TO : 1), to)) continue;
@@ -171,14 +171,14 @@ public final class NukeDust {
             if (psi < 1) continue;
             double thrown = Detonation.throwSpeed(d.dynamicPressureKpa(at));
             if (RANDOM.nextFloat() < 0.6f) {
-                // клочья мусора: мелкие, тёмные, тяжёлые — летят дальше пыли и падают
+                // litter scraps: small, dark, heavy — travel farther than dust and fall
                 double u = thrown * (0.4 + 0.7 * RANDOM.nextDouble());
                 Fx.smoke().vel(cos * u, u * (0.2 + 0.4 * RANDOM.nextDouble()), sin * u).size(0.12f, 0.2f).life(30 + RANDOM.nextInt(30))
                         .color(0x2A2420, 0x3A322C).alpha(0.95f).drag(0.97f).gravity(0.05f).collide().wind(0).fadeIn(0).fadeFrom(0.8f).spin(0.3f)
                         .budget(FxBudget.DEBRIS).spawn(level, x, top + 0.5 + RANDOM.nextDouble() * 2, z);
             }
             if (surface && psi >= TEARS_PSI && RANDOM.nextFloat() < 0.5f) {
-                // сорванное с верха земли — в покое, его подхватывает ветер за фронтом
+                // ground-surface material starts at rest and is picked up by wind behind the front
                 m.set(bx, top - 1, bz);
                 BlockState cover = chunk.getBlockState(m);
                 if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, x, top + 0.3, z, 0, 0, 0, 0, BlastGust.at(a, at), 0, false);
@@ -187,10 +187,10 @@ public final class NukeDust {
     }
 
     /**
-     * Блоки, которые снесла волна (сервер — тем, кто видит чанк, {@code S2C.NukeDebris}: выборка мест и сколько снесено
-     * всего): каждое место выборки срывается кусками своего вещества в покое, когда до него дошёл фронт, и их несёт ветер
-     * за фронтом в этом месте ({@link BlastGust}); вдали — реже. Пыль, выбитая из кладки, — полосой по
-     * ветру ({@link BlastDust}): масса — за все снесённые места, которые место выборки представляет.
+     * Blocks demolished by the wave (server to chunk viewers, {@code S2C.NukeDebris}: sampled locations and total demolished
+     * count): each sampled location breaks into initially stationary pieces of its material when reached by the front, then local wind behind
+     * the front carries them ({@link BlastGust}); sparser at distance. Pulverized masonry dust forms a downwind
+     * streak ({@link BlastDust}): mass accounts for every demolished location represented by the sample.
      */
     static void debris(ClientNuclear.Active a, S2C.NukeDebris packet) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -198,7 +198,7 @@ public final class NukeDust {
         Detonation d = a.d;
         double now = a.ticks(0), weight = packet.weight();
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        // пыль проломов: кучками по клеткам у камеры, дальше — одной на чанк (масса, середина и разброс мест)
+        // breach dust: clustered by cells near the camera, farther away one per chunk (mass, center and position spread)
         Map<Long, double[]> heaps = new HashMap<>();
         packets++;
         for (S2C.NukeDebris.Piece p : packet.pieces()) {
@@ -209,7 +209,7 @@ public final class NukeDust {
             BlastGust gust = BlastGust.at(a, c);
             Fragments.Kind kind = Fragments.Kind.of(level, p.pos(), p.state());
             double dist = c.distanceTo(eye);
-            // вдали мелочь не видна: реже
+            // small pieces are invisible at distance: spawn fewer
             double expect = kind.perBlock * Fx.density(c) * Math.min(1, DEBRIS_FULL * DEBRIS_FULL / (dist * dist));
             int n = (int) expect + (RANDOM.nextDouble() < expect - (int) expect ? 1 : 0);
             places++;
@@ -218,8 +218,8 @@ public final class NukeDust {
                         c.z + (RANDOM.nextDouble() - 0.5) * 0.6, 0, 0, 0, 0.25f + 0.35f * RANDOM.nextFloat(), gust, delay, !ground(p.state()))) TORN[kind.ordinal()]++;
             }
             if (dist > NEAR || kind != Fragments.Kind.CHUNK) continue;
-            // в пыль крошится кладка — камень, кирпич, бетон; дерево, лёд и металл — нет; природный грунт и скала — пыль
-            // самой пелены (вынос с земли, DustModel), а не обломков
+            // masonry crumbles into dust — stone, brick, concrete; wood, ice and metal do not; natural soil and rock are dust of
+            // the pall itself (ground entrainment, DustModel), not debris
             double material = Shielding.material(level, p.pos(), p.state());
             if (material < MINERAL || material >= METAL || ground(p.state())) continue;
             double mass = weight * BlastDust.FINES * Shielding.density(level, p.pos(), p.state());
@@ -241,18 +241,18 @@ public final class NukeDust {
         for (double[] h : heaps.values()) {
             if (h[0] <= 0) continue;
             Vec3 mid = new Vec3(h[1] / h[0], h[2] / h[0], h[3] / h[0]);
-            // разброс мест кучки — её начальный размер (σ по каждой оси)
+            // cluster position spread is its initial size (σ on each axis)
             dust.add(mid, h[0], Math.sqrt(Math.max(0, h[4] / h[0] - mid.lengthSqr()) / 3), eye);
             streaks++;
         }
     }
 
     /**
-     * Природная земля и скала: грунт, песок и песчаник, гравий, глина, камень, сланец, руды, кальцит и капельник рельефа,
-     * терракота плато, снег (и тюк сена — не кладка, хоть звук у него земляной). Волна срывает
-     * гребни и уступы рельефа, но пыль с земли — вынос пелены ({@code DustModel}: грунт, поднятый ветром за фронтом); пыль
-     * обломков модели — глина стен и штукатурка построек, её и даёт кладка. Без этого сорванные уступы холмов давали тонны
-     * пыли полосами с камерой внутри (сцена {@code film}).
+     * Natural ground and rock: soil, sand and sandstone, gravel, clay, stone, deepslate, ores, calcite and terrain dripstone,
+     * plateau terracotta, snow (and hay bales, not masonry despite their earthy sound). The wave tears away
+     * terrain crests and ledges, but ground dust is pall entrainment ({@code DustModel}: soil lofted by wind behind the front); model debris
+     * dust represents clay walls and building plaster, supplied by masonry. Without this, torn hill ledges produced tons
+     * of dust streaks with the camera inside ({@code film} scene).
      */
     private static boolean ground(BlockState s) {
         return s.is(BlockTags.DIRT) || s.is(BlockTags.SAND) || s.is(BlockTags.BASE_STONE_OVERWORLD) || s.is(BlockTags.BASE_STONE_NETHER)
@@ -264,16 +264,16 @@ public final class NukeDust {
     }
 
     /**
-     * Есть ли на верхнем блоке {@code s} что сорвать ветру: дёрн, подстилка, листва кроны — лёгкие пластины. С камня, песка,
-     * гравия, снега кусков нет: песок и снег уходят пылью и брызгами слоя (пелена), а камень ветру не по силам.
+     * Whether top block {@code s} has material wind can tear off: turf, litter, crown foliage — light plates. No pieces from stone, sand,
+     * gravel or snow: sand and snow enter the layer as dust and spray (pall), while stone is too heavy for wind.
      */
     private static boolean litter(BlockState s) {
         return s.is(BlockTags.LEAVES) || s.is(BlockTags.DIRT);
     }
 
     /**
-     * Цвет пыли у камеры: цвет стены пыли в точке (x, y, z) мира ({@link NukePall#dustColor}) × {@code dark}; false — стены
-     * уже нет.
+     * Camera dust color: dust-wall color at world point (x, y, z) ({@link NukePall#dustColor}) × {@code dark}; false — the wall
+     * is gone.
      */
     private static boolean wallColor(ClientNuclear.Active a, NukePall.Sky sky, double x, double y, double z, float dark, float[] into) {
         if (!NukePall.dustColor(a, sky, x, y, z, into)) return false;
@@ -282,15 +282,15 @@ public final class NukeDust {
     }
 
     /**
-     * Один тик прохождения стены: сорванное с земли летит от эпицентра; запасные клубы пыли и дыма (цветом стены у игрока)
-     * — только в самой голове стены, по её средней густоте в месте клуба: выше её верха пыли нет, туда доходит только ветер.
+     * One tick of wall passage: ground litter flies away from ground zero; fallback dust and smoke billows (wall color at the player)
+     * exist only inside the wall head, based on its mean density at the billow position: no dust above its top, only wind reaches there.
      */
     static void gust(ClientNuclear.Active a, Vec3 ear, double psi, int age) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         Detonation d = a.d;
         boolean ceiling = level.dimensionType().hasCeiling();
-        // над водой — брызги и водяная пыль, сорванного с земли нет
+        // over water — spray and mist, no ground litter
         boolean wet = !ceiling && NukeWater.waterAround(level, ear.x, ear.z);
         boolean puffs = !NukePall.drawsHead(a, ear);
         if (!puffs && (ceiling || wet)) return;
@@ -304,7 +304,7 @@ public final class NukeDust {
             grey(dust0, SMOKE_FROM, smoke0);
             grey(dust1, SMOKE_TO, smoke1);
         }
-        // ветер волны у игрока: им летит сорванное с земли
+        // wave wind at the player carries ground litter
         BlastGust wind = BlastGust.at(a, ear);
         double[] air = new double[3];
         wind.at(ear.x, ear.y, ear.z, air);
@@ -314,12 +314,12 @@ public final class NukeDust {
         int n = (int) (Mth.clamp(psi * 12, 12, 90) * (1 - age / 60.0));
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         for (int i = 0; i < n; i++) {
-            // появляются с наветренной стороны и по бокам, пролетают мимо
+            // spawn upwind and to the sides, fly past
             double along = -14 + RANDOM.nextDouble() * 20, side = (RANDOM.nextDouble() - 0.5) * 30, up = -2 + RANDOM.nextDouble() * 8;
             Vec3 p = ear.add(away.scale(along)).add(-away.z * side, up, away.x * side);
             double v = speed * (0.7 + RANDOM.nextDouble() * 0.6);
             if (i % 5 == 0 && !ceiling && !wet) {
-                // сорванное с земли с наветренной стороны — трава, листва, подстилка — уже летит с ветром и кувыркается
+                // upwind ground litter — grass, foliage, litter — already travels with the wind and tumbles
                 int bx = Mth.floor(p.x), bz = Mth.floor(p.z);
                 LevelChunk chunk = level.getChunkSource().getChunk(bx >> 4, bz >> 4, false);
                 if (chunk == null) continue;
@@ -328,8 +328,8 @@ public final class NukeDust {
                 if (litter(cover)) Fragments.torn(level, cover, m, Fragments.Kind.LEAF, p.x, Math.max(p.y, m.getY() + 1.2), p.z, air[0], 0, air[2], 0,
                         wind, 0, false);
             } else if (puffs && RANDOM.nextDouble() < inHead(a, GUST_WALL, p)) {
-                // бурая пыль и серый дым клубами — стена, которая проходит сквозь игрока (цветом стены, со светом); над
-                // водой — брызги и водяная пыль
+                // brown dust and gray smoke billows are the wall passing through the player (wall color, with light); over
+                // water — spray and mist
                 boolean smoke = i % 5 == 1;
                 Fx.Spec puff = Fx.smoke().vel(away.x * v, 0.01 + RANDOM.nextDouble() * 0.04, away.z * v).size(1.2f, 5 + RANDOM.nextFloat() * 3).growFast();
                 if (wet) puff.life(40 + RANDOM.nextInt(40)).color(0xC4CDD3, 0xEEF2F4).alpha(0.55f).budget(FxBudget.SPRAY);
@@ -340,8 +340,8 @@ public final class NukeDust {
     }
 
     /**
-     * Доля средней головы стены в точке {@code p} мира, 0..1 ({@link BlastWall#sigma} к её густоте там): {@code slot} —
-     * числа слота стены ({@link BlastWall#slot}), рельеф и вода под точкой — по карте пелены.
+     * Mean wall-head share at world point {@code p}, 0..1 ({@link BlastWall#sigma} relative to its density there): {@code slot} contains
+     * wall slot parameters ({@link BlastWall#slot}); terrain and water below the point come from the pall map.
      */
     private static double inHead(ClientNuclear.Active a, float[] slot, Vec3 p) {
         double wet = a.ground.hasWater() ? a.ground.water(p.x, p.z) : 0;
@@ -351,7 +351,7 @@ public final class NukeDust {
         return BlastWall.sigma(slot, p.x - d.burst().x, p.z - d.burst().z, p.y - d.groundY() - a.ground.at(p.x, p.z), wet) / k;
     }
 
-    /** Дым в стене: её цвет вполовину к серому той же яркости ({@link #SMOKE_GREY}) и темнее в {@code k} раз. */
+    /** Wall smoke: its color halfway toward gray of equal brightness ({@link #SMOKE_GREY}), darkened by factor {@code k}. */
     private static void grey(float[] c, float k, float[] into) {
         float luma = 0.2126f * c[0] + 0.7152f * c[1] + 0.0722f * c[2];
         for (int i = 0; i < 3; i++) into[i] = Mth.lerp(SMOKE_GREY, c[i], luma) * k;
@@ -359,17 +359,17 @@ public final class NukeDust {
 
     static void tick() {
         DUST.values().removeIf(BlastDust::ended);
-        // голова у глаза держит пелену, ушла — пелена гаснет (гасить её и тогда, когда голова её держит, — мигание через тик)
+        // head at the eye holds the veil; once gone, the veil fades (fading while held would flicker every other tick)
         veilTarget = Math.max(veilTarget * VEIL_DECAY, veilWanted);
         veilWanted = 0;
-        // стена накрывает за несколько тиков, а не вспышкой
+        // wall covers the screen over a few ticks, not in a flash
         veil = veil < veilTarget ? Math.min(veilTarget, veil + VEIL_RISE) : veilTarget;
         if (veil < 0.01f) veil = veilTarget = 0;
     }
 
     /**
-     * Строка сценария: пакетов обломков и мест в них, кусков по веществу (обломок, доска, стекло, лист), живых кусков,
-     * полос пыли проломов всего и сейчас (с наибольшей толщей поперёк).
+     * Scenario line: debris packets and their locations, pieces by material (rubble, board, glass, leaf), living pieces,
+     * total and current breach-dust streaks (with maximum transverse optical depth).
      */
     public static String describe() {
         StringBuilder live = new StringBuilder();
@@ -386,7 +386,7 @@ public final class NukeDust {
         java.util.Arrays.fill(TORN, 0);
     }
 
-    /** Пелена поверх мира (под вспышкой): цветом стены у глаза, над водой — серо-белая. */
+    /** Veil over the world (under the flash): wall color at the eye, gray-white over water. */
     static void render(GuiGraphics g) {
         if (veil <= 0) return;
         int a = (int) (veil * 255), rgb = 0;

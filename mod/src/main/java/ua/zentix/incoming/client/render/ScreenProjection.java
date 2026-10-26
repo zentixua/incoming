@@ -8,10 +8,10 @@ import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
 /**
- * Матрицы кадра (снимаются после неба): проекция точки мира на экран — метки HUD и камеры снаряда, послеобраз
- * ядерной вспышки. Всё, что на экране задано размером в мире (рамка цели и снаряда), считается здесь: матрица кадра
- * строится из поля зрения после модов зума (Ok Zoomer меняет его на выходе {@code GameRenderer.getFov}), а поле зрения
- * из {@code options.fov} или события {@code ComputeFov} зума не видит ({@code FovSourceTest}).
+ * Frame matrices (captured after sky): world point to screen for HUD and projectile camera markers, nuclear flash
+ * afterimage. Anything sized in world units on screen (target and projectile frames) is computed here: frame matrix
+ * uses FOV after zoom mods (Ok Zoomer changes {@code GameRenderer.getFov} return), whereas {@code options.fov} and
+ * {@code ComputeFov} event FOV do not see zoom ({@code FovSourceTest}).
  */
 public final class ScreenProjection {
     private static final Matrix4f VIEW_PROJ = new Matrix4f(), PROJ = new Matrix4f(), VIEW = new Matrix4f();
@@ -33,9 +33,9 @@ public final class ScreenProjection {
     }
 
     /**
-     * Точка на экране в долях (0..1 слева направо и сверху вниз) и угловой масштаб, или null, если точка за спиной.
+     * Screen point as fractions (0..1 left to right and top to bottom) and angular scale, or null if behind viewer.
      *
-     * @return {x, y, w}: w — «глубина» для пересчёта размера (размер на экране ≈ радиус / w)
+     * @return {x, y, w}: w is depth for size conversion (screen size ≈ radius / w)
      */
     @Nullable
     public static float[] project(Vec3 world) {
@@ -47,16 +47,15 @@ public final class ScreenProjection {
     }
 
     /**
-     * Прямоугольник на экране (доли 0..1, {x0, y0, x1, y1}) вокруг коробки мира {@code box} в матрицах кадра — её угловой
-     * размер в этом кадре (с зумом: матрица кадра строится из поля зрения после модов зума); null — угол коробки за
-     * спиной.
+     * Screen rectangle (fractions 0..1, {x0, y0, x1, y1}) around world box {@code box} using frame matrices: angular
+     * size in this frame (with zoom: frame matrix uses FOV after zoom mods); null if a box corner is behind viewer.
      */
     @Nullable
     public static float[] rect(AABB box) {
         return valid ? rect(VIEW_PROJ, camera, box) : null;
     }
 
-    /** То же для матрицы вида и проекции {@code viewProj} и глаза {@code eye}. */
+    /** Same for projection-view matrix {@code viewProj} and eye {@code eye}. */
     @Nullable
     public static float[] rect(Matrix4f viewProj, Vec3 eye, AABB box) {
         float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
@@ -76,9 +75,9 @@ public final class ScreenProjection {
     }
 
     /**
-     * Прямоугольник на экране (доли 0..1, {x0, y0, x1, y1}) вокруг шара радиуса {@code radius} с серединой {@code centre}
-     * в матрицах кадра: его угловой размер в этом кадре (с зумом), null — середина за спиной. Тело, у которого нет своей
-     * коробки в мире клиента (снаряд вдали — у него только путь), — шаром своего наибольшего размера.
+     * Screen rectangle (fractions 0..1, {x0, y0, x1, y1}) around a sphere of radius {@code radius} centred at
+     * {@code centre} using frame matrices: angular size this frame (with zoom), null if centre behind viewer.
+     * Body without its own box in the client world (distant projectile has only a track) uses a sphere of its largest dimension.
      */
     @Nullable
     public static float[] rect(Vec3 centre, double radius) {
@@ -86,8 +85,8 @@ public final class ScreenProjection {
     }
 
     /**
-     * То же для проекции {@code proj}, вида {@code view} и глаза {@code eye}: квадрат со стороной 2·radius на глубине
-     * середины, лицом к глазу, — угловой поперечник шара 2·radius/глубина (шар много меньше расстояния до него).
+     * Same for projection {@code proj}, view {@code view} and eye {@code eye}: square of side 2·radius at centre
+     * depth, facing eye; sphere's angular diameter 2·radius/depth (sphere much smaller than its distance).
      */
     @Nullable
     public static float[] rect(Matrix4f proj, Matrix4f view, Vec3 eye, Vec3 centre, double radius) {
@@ -108,12 +107,12 @@ public final class ScreenProjection {
         return new float[]{x0, y0, x1, y1};
     }
 
-    /** Вертикальный масштаб проекции: доля высоты экрана на единицу (радиус / глубина). */
+    /** Vertical projection scale: screen-height fraction per unit (radius / depth). */
     public static float verticalScale() {
         return projScale * 0.5f;
     }
 
-    /** Горизонтальный масштаб проекции: доля ширины экрана на единицу (сдвиг вбок / глубина). */
+    /** Horizontal projection scale: screen-width fraction per unit (sideways offset / depth). */
     public static float horizontalScale() {
         return projScaleX * 0.5f;
     }

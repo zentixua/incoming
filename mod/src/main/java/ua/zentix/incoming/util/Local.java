@@ -4,8 +4,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Локальные координаты, как «^x ^y ^z» в командах: x — влево, y — вверх, z — вперёд по направлению взгляда.
- * Формулы те же, что у ванильного {@code LocalCoordinates}, поэтому смещения из команд переносятся один в один.
+ * Local coordinates as command “^x ^y ^z”: x left, y up, z forward along gaze. Same formulas as vanilla
+ * {@code LocalCoordinates}, so command offsets transfer exactly.
  */
 public final class Local {
     private Local() {}
@@ -30,7 +30,7 @@ public final class Local {
         return base.add(offset(yRot, xRot, left, up, forward));
     }
 
-    /** Горизонтальное направление курса (как «rotated ~ 0»). */
+    /** Horizontal heading direction (as “rotated ~ 0”). */
     public static Vec3 horizontal(float yRot) {
         return new Vec3(-Mth.sin(yRot * Mth.DEG_TO_RAD), 0, Mth.cos(yRot * Mth.DEG_TO_RAD));
     }

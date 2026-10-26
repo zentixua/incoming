@@ -1,51 +1,51 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Топливо, что осталось в воронке после огненного шара ({@link FuelFireball#POOL_SHARE}) и догорает там тонким слоем на
- * грунте. Один закон у сервера (где и сколько горит огонь на блоках, {@code warhead/FuelFires}) и у дыма и звука клиента.
- * Без Minecraft.
+ * Fuel remaining in the crater after the fireball ({@link FuelFireball#POOL_SHARE}), burning as a thin layer on soil.
+ * One law for the server (where and how long block fire burns, {@code warhead/FuelFires}) and client smoke and sound.
+ * Without Minecraft.
  * <p>
- * Площадь — круг воронки заряда ({@link CraterModel#chargeRadius} сухого грунта): топливо пропитывает выброшенный и
- * перемешанный грунт чаши. Выгорание с единицы площади — у большой лужи ({@link Fuel#poolBurn}) × {@link #THIN_LAYER}:
- * слой в миллиметры на грунте горит медленнее глубокой лужи. Горит {@link #seconds}, тепловыделение {@link #watts}: у
- * шахеда ~2,5 мин по ~2 МВт, у ракеты ~16 мин по ~3 МВт. К концу (последняя пятая) слой выгорает пятнами — горящая
- * площадь и тепло сходят на нет ({@link #share}).
+ * Area is the charge crater disk ({@link CraterModel#chargeRadius} for dry soil): fuel soaks into ejected, mixed bowl
+ * soil. Mass burning rate per area is a large pool's ({@link Fuel#poolBurn}) × {@link #THIN_LAYER}: a millimeters-thin
+ * layer on soil burns slower than a deep pool. Burns for {@link #seconds}, heat release {@link #watts}: Shahed ~2.5 min
+ * at ~2 MW, missile ~16 min at ~3 MW. Near the end (last fifth), the layer burns out in patches — burning area and heat
+ * fade to zero ({@link #share}).
  *
- * @param kg      топлива в воронке, кг
- * @param radius  радиус круга, по которому оно лежит, м
- * @param seconds сколько горит, с (0 — топлива нет)
- * @param watts   тепловыделение, пока горит в полную силу, Вт
- * @param fuel    что горит
+ * @param kg      crater fuel, kg
+ * @param radius  radius of the disk it covers, m
+ * @param seconds burn duration, s (0 — no fuel)
+ * @param watts   heat release while burning fully, W
+ * @param fuel    fuel type
  */
 public record FuelPool(double kg, double radius, double seconds, double watts, Fuel fuel) {
     /**
-     * Выгорание топлива тонким слоем на грунте против глубокой лужи: у разлива толщиной в миллиметры наибольшая скорость
-     * горения — порядка пятой доли глубокой (Mealy, Benfer, Gottuk, «Liquid fuel spill fire dynamics», Fire Safety Science
-     * 10, 2011: тепло уходит в подложку); у топлива в пористом слое песка она тоже ниже, чем у лужи того же размера. В
-     * воронке шахеда — ~2 мм бензина, ракеты — ~8 мм JP-10 в перемешанном грунте (⚠ одна доля на оба: зависимость от
-     * толщины и грунта по их корреляциям не взята).
+     * Thin fuel layer on soil versus deep-pool burning: for a millimeters-thin spill, maximum burning rate is about one
+     * fifth of a deep pool (Mealy, Benfer, Gottuk, “Liquid fuel spill fire dynamics”, Fire Safety Science 10, 2011: heat lost
+     * to substrate); fuel in porous sand also burns slower than an equally sized pool. Shahed crater — ~2 mm gasoline;
+     * missile — ~8 mm JP-10 in mixed soil (⚠ one fraction for both: thickness and soil dependence from their correlations
+     * not used).
      */
     public static final double THIN_LAYER = 0.2;
-    /** Доля жизни слоя, за которую он выгорает пятнами до нуля (⚠ форма спада — оценка). */
+    /** Lifetime fraction over which the layer burns out in patches to zero (⚠ decay shape is an estimate). */
     static final double FADE = 0.2;
     public static final FuelPool NONE = new FuelPool(0, 0, 0, 0, Fuel.NONE);
 
     /**
-     * Топливо: теплота сгорания (низшая, справочная), выход сажи в пламени — оценка: у жидких углеводородов 0,01–0,06 г/г
-     * (SFPE Handbook, гл. 36, Khan, Tewarson, Chaos; таблица не сверена), взята середина, — и выгорание большой лужи с
-     * единицы площади (Babrauskas, SFPE Handbook, гл. «Heat Release Rates», табл. для бассейнов диаметром больше 1 м).
+     * Fuel: lower heating value (reference), flame soot yield — estimate: liquid hydrocarbons 0.01–0.06 g/g
+     * (SFPE Handbook, ch. 36, Khan, Tewarson, Chaos; table not checked), midpoint used — and large-pool mass burning rate per
+     * area (Babrauskas, SFPE Handbook, “Heat Release Rates”, table for pools over 1 m diameter).
      */
     public enum Fuel {
         NONE(0, 0, 0),
-        /** Бензин двухтактного двигателя шахеда (MD-550): 43,4 МДж/кг; выгорание лужи — 0,055 кг/(м²·с). */
+        /** Gasoline for Shahed's two-stroke engine (MD-550): 43.4 MJ/kg; pool burning rate 0.055 kg/(m²·s). */
         PETROL(43.4e6, 0.04, 0.055),
         /**
-         * JP-10 крылатой ракеты (экзо-тетрагидродициклопентадиен): 42,1 МДж/кг; выгорание лужи — как у керосина,
-         * 0,039 кг/(м²·с) (⚠ замеров JP-10 нет — близкий по составу и летучести).
+         * Cruise missile JP-10 (exo-tetrahydrodicyclopentadiene): 42.1 MJ/kg; pool burning rate as for kerosene,
+         * 0.039 kg/(m²·s) (⚠ no JP-10 measurements — similar composition and volatility).
          */
         JP10(42.1e6, 0.04, 0.039);
 
-        /** Теплота сгорания, Дж/кг; выход сажи, кг/кг; выгорание большой лужи с единицы площади, кг/(м²·с). */
+        /** Heat of combustion, J/kg; soot yield, kg/kg; large-pool mass burning rate per area, kg/(m²·s). */
         public final double heatJPerKg, sootYield, poolBurn;
 
         Fuel(double heatJPerKg, double sootYield, double poolBurn) {
@@ -56,8 +56,8 @@ public record FuelPool(double kg, double radius, double seconds, double watts, F
     }
 
     /**
-     * Топливо {@code fuel} в баке к удару, {@code fuelKg} кг, у заряда {@code chargeKg} кг ТНТ, на земле: в воронке — доля
-     * {@link FuelFireball#POOL_SHARE}, по кругу воронки заряда. Без топлива или заряда — {@link #NONE}.
+     * Tank fuel {@code fuel} at impact, {@code fuelKg} kg, with charge {@code chargeKg} kg TNT, on ground: fraction
+     * {@link FuelFireball#POOL_SHARE} remains across the charge crater disk. No fuel or charge — {@link #NONE}.
      */
     public static FuelPool of(Fuel fuel, double fuelKg, double chargeKg) {
         double kg = FuelFireball.POOL_SHARE * Math.max(0, fuelKg);
@@ -67,14 +67,14 @@ public record FuelPool(double kg, double radius, double seconds, double watts, F
         return new FuelPool(kg, radius, kg / burn, burn * fuel.heatJPerKg, fuel);
     }
 
-    /** Площадь, по которой лежит топливо, м². */
+    /** Area covered by fuel, m². */
     public double area() {
         return Math.PI * radius * radius;
     }
 
     /**
-     * Доля тепловыделения и горящей площади в возрасте t, с: полное, пока горит, к концу (последняя {@link #FADE} жизни)
-     * гаснет пятнами (гладкий спад 3u² − 2u³); 0 — топлива нет или выгорело.
+     * Heat release and burning area share at age t, s: full while burning, fading in patches over the last {@link #FADE}
+     * of lifetime (smooth decay 3u² − 2u³); 0 — no fuel or burned out.
      */
     public double share(double t) {
         if (seconds <= 0 || t < 0 || t >= seconds) return 0;
@@ -82,22 +82,22 @@ public record FuelPool(double kg, double radius, double seconds, double watts, F
         return u >= 1 ? 1 : u * u * (3 - 2 * u);
     }
 
-    /** Высота пламени по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт), не меньше полуметра. */
+    /** Heskestad flame height, m: L = 0.235·Q^⅖ − 1.02·D (Q — kW), at least half a meter. */
     public double flame() {
         return watts <= 0 ? 0 : Math.max(0.5, 0.235 * Math.pow(watts / 1e3, 0.4) - 1.02 * 2 * radius);
     }
 
     /**
-     * Сколько блоков (клеток по 1 м²) накрывает топливо: площадь, округлённая до целых, не меньше одной клетки, если
-     * топливо есть. Блок — метр: шахед — 5 клеток, ракета — 9.
+     * Blocks (1 m² cells) covered by fuel: rounded area, at least one cell if fuel exists. A block is a meter:
+     * Shahed — 5 cells, missile — 9.
      */
     public int cells() {
         return seconds <= 0 ? 0 : (int) Math.max(1, Math.round(area()));
     }
 
     /**
-     * То же топливо на {@code m} клетках из {@code n} по закону ({@link #cells}): легло на меньшую площадь (узкая яма,
-     * шахта, остальное некуда) — слой толще, горит дольше во столько же раз и слабее; при m ≥ n — как есть.
+     * Same fuel on {@code m} of {@code n} cells given by the law ({@link #cells}): smaller area (narrow pit, shaft, no room
+     * for the rest) — thicker layer, burning that many times longer and weaker; m ≥ n — unchanged.
      */
     public FuelPool spread(int m, int n) {
         if (seconds <= 0 || m <= 0 || m >= n) return this;
@@ -106,14 +106,14 @@ public record FuelPool(double kg, double radius, double seconds, double watts, F
     }
 
     /**
-     * Когда гаснет клетка {@code k} из {@code n} (0 — та, что горит дольше всех: самая низкая, куда топливо стекло), с:
-     * горит, пока доля горящей площади ({@link #share}) больше k/n. Клетка 0 горит всю жизнь слоя, край — гаснет первым.
+     * When cell {@code k} of {@code n} goes out (0 — longest burning: lowest, where fuel drained), s: burns while burning
+     * area share ({@link #share}) exceeds k/n. Cell 0 burns the full layer lifetime, edge goes out first.
      */
     public double cellSeconds(int k, int n) {
         if (seconds <= 0 || n <= 0 || k >= n) return 0;
         double s = Math.max(0, (double) k / n);
         if (s <= 0) return seconds;
-        // обращение 3u² − 2u³ = s на [0, 1]
+        // inverse of 3u² − 2u³ = s on [0, 1]
         double u = 0.5 - Math.sin(Math.asin(1 - 2 * s) / 3);
         return seconds - FADE * seconds * u;
     }

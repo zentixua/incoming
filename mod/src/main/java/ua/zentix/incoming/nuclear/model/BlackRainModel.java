@@ -1,44 +1,43 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Чёрный дождь от пожаров: огненный шторм поднимает влажный воздух с сажей в облако подрыва, и из него идёт дождь — у
- * любого подрыва над горящим городом. Хиросима (воздушный подрыв; Uda 1953 по RERF): дождь начался через ~20 минут, в
- * зоне сильного дождя (19 × 11 км к северо-западу от города, зона пожаров — около 2 км) лил 1–2 часа, слабый доходил до
- * 29 км. Здесь — полоса от зоны пожаров по ветру: над пожарами дождь идёт с {@link #START_S} по {@link #END_S} после
- * подрыва, облако уносит ветром, и оно выдождивается за {@link #DRIFT_S} пути; полоса шире зоны пожаров на
- * {@link #SPREAD} пройденного пути (у Хиросимы — 5,5 км полуширины в 17 км за зоной). В точке по ветру дождь
- * начинается позже — на путь облака до неё — и идёт столько же. x, z — метры от эпицентра; ветер дует в сторону
+ * Black rain from fires: a firestorm lifts moist, sooty air into the detonation cloud, which produces rain — for any
+ * burst above a burning city. Hiroshima (airburst; Uda 1953 via RERF): rain began after ~20 minutes; in the heavy-rain
+ * zone (19 × 11 km northwest of the city, fire zone about 2 km) it poured for 1–2 hours, with light rain reaching 29 km.
+ * Here, a downwind band from the fire zone: over fires, rain runs from {@link #START_S} to {@link #END_S} after detonation;
+ * wind carries the cloud, which rains out over {@link #DRIFT_S} of travel; the band widens beyond the fire zone by
+ * {@link #SPREAD} of distance traveled (Hiroshima — 5.5 km half-width 17 km beyond the zone). At a downwind point, rain
+ * starts later by the cloud's travel time and lasts just as long. x, z are meters from the epicenter; wind blows toward
  * (cos, sin).
  *
- * <p>Часы — огненного шторма: настоящие секунды, сжатые в {@link #COMPRESSION} раз, как шторм у клиента (разгар
- * за 80 с, спад с 360 с против 20 минут и полутора часов в жизни; решение Артёма), — дождь идёт из того дыма, который
- * видно.
+ * <p>The clock is the firestorm's: real seconds compressed by {@link #COMPRESSION}, as for the client storm (peak at 80 s,
+ * decline from 360 s versus 20 minutes and an hour and a half in reality; Artem's decision) — rain comes from visible smoke.
  *
- * <p>Радиоактивность: у воздушного подрыва продукты деления остаются в облаке, и дождь вымывает их часть на землю — в
- * сотни раз слабее следа наземного (DS86, гл. 6: Хиросима, Кои–Такасу — 1–3 Р за всё время, Нагасаки, Нисияма —
- * 20–40 Р). На земле под дождём мощность дозы в H+1 до {@link #RAIN_H1} Р/ч на 15 кт (оценка между двумя городами),
- * ∝ Y и доле воздушного подрыва; спад — закон Уэя–Вигнера, как у следа ({@link FalloutModel}). У наземного подрыва
- * то, что упало, — его след.
+ * <p>Radioactivity: in an airburst, fission products remain in the cloud, and rain washes some onto the ground — hundreds
+ * of times weaker than surface-burst fallout (DS86, ch. 6: Hiroshima, Koi–Takasu — 1–3 R total; Nagasaki, Nishiyama —
+ * 20–40 R). Ground dose rate under rain at H+1 reaches {@link #RAIN_H1} R/h per 15 kt (estimate between the two cities),
+ * ∝ Y and the airburst share; decay follows Way–Wigner, as for fallout ({@link FalloutModel}). For a surface burst,
+ * deposited material is its fallout.
  *
- * @param fireRadiusM радиус зоны пожаров по земле, м; 0 — пожаров нет, нет и дождя
- * @param airShare    доля продуктов деления, оставшихся в облаке (1 − доля наземного подрыва)
+ * @param fireRadiusM ground radius of the fire zone, m; 0 — no fires, no rain
+ * @param airShare    share of fission products remaining in the cloud (1 − surface-burst share)
  */
 public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirRad, double windSpeedMps, double airShare) {
-    /** Во сколько раз часы шторма быстрее настоящих. */
+    /** How many times faster the storm clock runs than real time. */
     public static final double COMPRESSION = 15;
-    /** Дождь над пожарами начинается и кончается, настоящие секунды после подрыва. */
+    /** Rain starts and ends above the fires, real seconds after detonation. */
     public static final double START_S = 20 * 60, END_S = START_S + 90 * 60;
-    /** Сколько облако дождит, уходя по ветру, настоящие секунды. */
+    /** How long the cloud rains while moving downwind, real seconds. */
     public static final double DRIFT_S = 2 * 3600;
-    /** На сколько полоса расширяется на метр пути по ветру. */
+    /** Band widening per meter traveled downwind. */
     public static final double SPREAD = 0.2;
-    /** Мощность дозы на земле под дождём в H+1 у зоны пожаров, Р/ч, на 15 кт воздушного подрыва. */
+    /** Ground dose rate under rain at H+1 near the fire zone, R/h, per 15 kt airburst. */
     public static final double RAIN_H1 = 2;
     private static final double MIN_WIND = 0.5;
 
     /**
-     * Когда в точке начинается дождь, секунды часов шторма после подрыва; бесконечность — точка вне полосы.
-     * Идёт он {@link #durationSeconds} секунд.
+     * When rain starts at a point, storm-clock seconds after detonation; infinity — outside the band.
+     * It lasts {@link #durationSeconds} seconds.
      */
     public double startSeconds(double x, double z) {
         if (fireRadiusM <= 0) return Double.POSITIVE_INFINITY;
@@ -51,25 +50,25 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
         return (START_S + past / wind()) / COMPRESSION;
     }
 
-    /** Сколько секунд часов шторма дождь идёт в точке. */
+    /** Storm-clock seconds of rain at a point. */
     public static double durationSeconds() {
         return (END_S - START_S) / COMPRESSION;
     }
 
-    /** Идёт ли дождь в точке через {@code seconds} секунд часов шторма. */
+    /** Whether rain is falling at the point after {@code seconds} storm-clock seconds. */
     public boolean raining(double x, double z, double seconds) {
         double start = startSeconds(x, z);
         return seconds >= start && seconds < start + durationSeconds();
     }
 
-    /** Когда дождь кончается в самой дальней точке полосы, секунды часов шторма. */
+    /** When rain ends at the band's farthest point, storm-clock seconds. */
     public double endSeconds() {
         return fireRadiusM <= 0 ? 0 : (END_S + DRIFT_S) / COMPRESSION;
     }
 
     /**
-     * Мощность дозы от вымытого дождём на землю в H+1, Р/ч ({@code seconds} — часы шторма): с начала дождя в точке; у
-     * зоны пожаров полная, по ветру спадает e-кратно на трети полосы, поперёк — гаусс на половину полуширины.
+     * Dose rate from rain-washed ground deposits at H+1, R/h ({@code seconds} — storm clock): from rain onset at the point;
+     * full near the fire zone, decaying e-fold over a third of the band downwind, Gaussian across it with half the half-width.
      */
     public double depositH1(double x, double z, double seconds) {
         if (airShare <= 0 || seconds < startSeconds(x, z)) return 0;

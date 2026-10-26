@@ -6,14 +6,14 @@ import net.minecraft.client.gui.GuiGraphics;
 import ua.zentix.incoming.IncomingConfig;
 
 /**
- * Вспышка взрыва на экране: свет приходит мгновенно,
- * яркость зависит от расстояния и прямой видимости, затухает за несколько тиков. Ванильное «без вспышек молний»
- * (доступность) держит её не ярче {@link #CALM} — как и ядерную ({@code NukeFlash}).
+ * Blast flash on screen: light arrives instantaneously,
+ * brightness depends on distance and line of sight, fades over a few ticks. Vanilla Hide Lightning Flashes
+ * (accessibility) caps it at {@link #CALM} — as for the nuclear flash ({@code NukeFlash}).
  */
 public final class Flash {
-    /** Слабее этого вспышки на экране нет (подача). */
+    /** Below this strength no flash appears on screen (presentation). */
     public static final float FLOOR = 0.01f;
-    /** Предел силы вспышки на экране при ванильном «без вспышек молний»: у обычной и у ядерной одна (удобство игрока). */
+    /** Screen flash cap with vanilla Hide Lightning Flashes: shared by conventional and nuclear flashes (player convenience). */
     public static final float CALM = 0.4f;
     private static float intensity;
     private static float decay = 0.75f;
@@ -21,7 +21,7 @@ public final class Flash {
 
     private Flash() {}
 
-    /** @param strength 0..1, @param decayPerTick множитель за тик (0.75 — быстрая вспышка, 0.97 — долгое сияние) */
+    /** @param strength 0..1, @param decayPerTick per-tick multiplier (0.75 — quick flash, 0.97 — long glow) */
     public static void trigger(float strength, float decayPerTick, int rgb) {
         float s = (float) (strength * IncomingConfig.CLIENT.flash.get());
         if (calm()) s = Math.min(s, CALM);
@@ -32,7 +32,7 @@ public final class Flash {
         }
     }
 
-    /** Включено ванильное «без вспышек молний» (доступность): вспышка не слепит. */
+    /** Vanilla Hide Lightning Flashes is enabled (accessibility): the flash does not dazzle. */
     public static boolean calm() {
         return Minecraft.getInstance().options.hideLightningFlash().get();
     }

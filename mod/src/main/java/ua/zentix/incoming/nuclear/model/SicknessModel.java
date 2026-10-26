@@ -1,76 +1,75 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Острая лучевая болезнь по накопленной дозе (Гр у поверхности тела — то, что меряет прибор, Glasstone & Dolan 1977
- * §12.108) и времени после облучения (игровые часы, 1000 тиков). Течение — по G&D табл. 12.108 и §12.113–12.122:
- * первичная реакция (тошнота, рвота), скрытый период, разгар; после разгара выздоровление ({@link Stage#NONE}) или
- * смерть ({@link Stage#FATAL}).
+ * Acute radiation sickness by accumulated dose (Gy at body surface — instrument reading, Glasstone & Dolan 1977 §12.108)
+ * and time after exposure (game hours, 1000 ticks). Course follows G&D table 12.108 and §12.113–12.122: prodrome
+ * (nausea, vomiting), latent period, manifest illness; then recovery ({@link Stage#NONE}) or death ({@link Stage#FATAL}).
  *
- * <p>Умрёт ли облучённый, решает его случайность {@code fate} (0..1, своя у каждого): смерть, если
- * {@code fate < deathChance(доза)}. Кривая — логнормальная по дозе без лечения: ЛД50 ≈ 4,5 Гр у поверхности
- * (≈ 3,2 Гр в середине тела: середина — 70 % поверхности, G&D §12.108), разброс подобран так, что при 2 Гр не умирает
- * почти никто, при 6 Гр — 80 %, при 10 Гр — все: «0–80 %» при 2–6 Гр и «80–100 %» при 6–10 Гр у G&D.
+ * <p>Whether an exposed subject dies is determined by their own random {@code fate} (0..1): death if
+ * {@code fate < deathChance(dose)}. Curve is lognormal in untreated dose: LD50 ≈ 4.5 Gy at surface (≈ 3.2 Gy midbody:
+ * midbody is 70 % of surface, G&D §12.108); spread fitted so almost nobody dies at 2 Gy, 80 % at 6 Gy, everyone at 10 Gy:
+ * G&D's “0–80 %” at 2–6 Gy and “80–100 %” at 6–10 Gy.
  *
- * <p>Времена — опорные точки по дозе (между ними — по логарифму дозы и времени), G&D табл. 12.108:
+ * <p>Times are dose anchors (log dose/time interpolation), G&D table 12.108:
  * <ul>
- *   <li>начало рвоты: 3 ч при 1 Гр, 2 ч при 2, 1 ч при 6, 30 мин при 10, сразу при 50 («delay time»);</li>
- *   <li>первичная реакция: «первый день-два» (§12.115–12.116), у больших доз короче;</li>
- *   <li>скрытый период: «до двух недель и больше» при 1–2 Гр, «от нескольких дней до двух недель» при 2–10 Гр,
- *       у кишечной формы (10–50 Гр) — дни, у мозговой (от 50 Гр) его нет;</li>
- *   <li>смерть: кроветворная форма (2–10 Гр) — «критический период 4–6 недель», кишечная (10–50 Гр) — «5–14 дней»,
- *       мозговая — «1–48 часов»: 36 ч при 50 Гр (случай Келли, 1958: около 40 Гр, смерть через 35 ч) и быстрее с дозой
- *       как D^−1,5 (оценка). Опорные точки: 6 недель при 2 Гр, 30 дней при 6, 12 при 10, 36 ч при 50; между ними —
- *       переход форм (18 дней при 8 Гр, 5 при 20, 2 при 40);</li>
- *   <li>выздоровление выживших: разгар кончается через 5 недель при 1 Гр, 8 при 2 и 10 при 6 Гр и больше (дальше —
- *       месяцы слабости, которых здесь нет).</li>
+ *   <li>vomiting onset: 3 h at 1 Gy, 2 h at 2, 1 h at 6, 30 min at 10, immediate at 50 (“delay time”);</li>
+ *   <li>prodrome: “first day or two” (§12.115–12.116), shorter at high doses;</li>
+ *   <li>latent period: “up to two weeks or more” at 1–2 Gy, “a few days to two weeks” at 2–10 Gy;
+ *       gastrointestinal form (10–50 Gy) — days, cerebral form (from 50 Gy) — none;</li>
+ *   <li>death: hematopoietic form (2–10 Gy) — “critical period 4–6 weeks”, gastrointestinal (10–50 Gy) — “5–14 days”,
+ *       cerebral — “1–48 hours”: 36 h at 50 Gy (Kelley case, 1958: about 40 Gy, death after 35 h), faster with dose as
+ *       D^−1.5 (est.). Anchors: 6 weeks at 2 Gy, 30 days at 6, 12 at 10, 36 h at 50; form transitions between them
+ *       (18 days at 8 Gy, 5 at 20, 2 at 40);</li>
+ *   <li>survivor recovery: manifest illness ends after 5 weeks at 1 Gy, 8 at 2, 10 at 6 Gy and above
+ *       (followed by months of weakness, omitted here).</li>
  * </ul>
  */
 public final class SicknessModel {
-    /** Стадия болезни. */
+    /** Sickness stage. */
     public enum Stage { NONE, PRODROMAL, LATENT, MANIFEST, FATAL }
 
-    /** Смертельная доза для половины без лечения, Гр у поверхности тела. */
+    /** Untreated lethal dose for half of subjects, Gy at body surface. */
     public static final double LD50 = 4.5;
-    /** Разброс логнормальной кривой смерти (σ логарифма дозы). */
+    /** Lognormal death-curve spread (σ of log dose). */
     public static final double LD_BETA = 0.34;
-    /** Меньше этого болезни нет (G&D: до 1 Гр — без симптомов). */
+    /** No sickness below this (G&D: below 1 Gy, no symptoms). */
     public static final double MIN_DOSE = 1;
 
     private static final double DAY = 24;
-    /** Опорные дозы, Гр. */
+    /** Anchor doses, Gy. */
     private static final double[] DOSE = {1, 2, 6, 10, 50};
-    /** Начало первичной реакции, ч. */
+    /** Prodrome onset, h. */
     private static final double[] ONSET = {3, 2, 1, 0.5, 0.1};
-    /** Длительность первичной реакции, ч. */
+    /** Prodrome duration, h. */
     private static final double[] PRODROMAL = {24, 36, 24, 12, 2};
-    /** Конец скрытого периода, ч после облучения (у 50 Гр — сразу за первичной реакцией). */
+    /** End of latent period, h after exposure (at 50 Gy, immediately after prodrome). */
     private static final double[] LATENT_END = {21 * DAY, 18 * DAY, 12 * DAY, 5 * DAY, 2.1};
-    /** Смерть обречённых, ч после облучения. */
+    /** Death of doomed subjects, h after exposure. */
     private static final double[] DEATH = {42 * DAY, 42 * DAY, 30 * DAY, 12 * DAY, 36};
-    /** Конец разгара у выживших, ч после облучения. */
+    /** End of manifest illness in survivors, h after exposure. */
     private static final double[] RECOVERY = {35 * DAY, 56 * DAY, 70 * DAY, 70 * DAY, 70 * DAY};
-    /** Выше 50 Гр смерть быстрее: 36 ч·(50/D)^1,5. */
+    /** Above 50 Gy, death comes sooner: 36 h·(50/D)^1.5. */
     private static final double CNS_EXP = 1.5;
 
-    /** Течение при дозе: моменты после облучения, ч. */
+    /** Course at a dose: times after exposure, h. */
     public record Course(double onset, double latentFrom, double manifestFrom, double death, double recovery) {
     }
 
     private SicknessModel() {
     }
 
-    /** Вероятность смерти без лечения при дозе {@code doseGy}: Φ(ln(D/ЛД50)/β); до 1 Гр — 0. */
+    /** Untreated death probability at dose {@code doseGy}: Φ(ln(D/LD50)/β); below 1 Gy — 0. */
     public static double deathChance(double doseGy) {
         if (doseGy < MIN_DOSE) return 0;
         return Fragility.probability(doseGy, LD50, LD_BETA);
     }
 
-    /** Умрёт ли облучённый со случайностью {@code fate} (0..1) при дозе {@code doseGy}. */
+    /** Whether a subject with random {@code fate} (0..1) dies at {@code doseGy}. */
     public static boolean fated(double doseGy, double fate) {
         return fate < deathChance(doseGy);
     }
 
-    /** Течение при дозе {@code doseGy}; null — меньше 1 Гр, болезни нет. */
+    /** Course at {@code doseGy}; null — below 1 Gy, no sickness. */
     public static Course course(double doseGy) {
         if (doseGy < MIN_DOSE) return null;
         double onset = at(ONSET, doseGy);
@@ -78,14 +77,14 @@ public final class SicknessModel {
         double death = doseGy > DOSE[DOSE.length - 1]
                 ? DEATH[DEATH.length - 1] * Math.pow(DOSE[DOSE.length - 1] / doseGy, CNS_EXP)
                 : at(DEATH, doseGy);
-        // у больших доз всё сжимается к смерти: рвота сразу, первичная реакция — до половины срока
+        // at high doses, everything compresses toward death: immediate vomiting, prodrome up to half the remaining time
         onset = Math.min(onset, death * 0.1);
         latentFrom = Math.min(latentFrom, death * 0.5);
         double manifestFrom = Math.max(latentFrom, Math.min(at(LATENT_END, doseGy), death * 0.5));
         return new Course(onset, latentFrom, manifestFrom, death, Math.max(manifestFrom, at(RECOVERY, doseGy)));
     }
 
-    /** Стадия при дозе doseGy через hours игровых часов после облучения; {@code fated} — облучённый обречён. */
+    /** Stage at doseGy after hours game hours since exposure; {@code fated} — subject is doomed. */
     public static Stage stage(double doseGy, double hours, boolean fated) {
         Course c = course(doseGy);
         if (c == null || hours < c.onset) return Stage.NONE;
@@ -95,39 +94,39 @@ public final class SicknessModel {
         return hours < c.recovery ? Stage.MANIFEST : Stage.NONE;
     }
 
-    /** Через сколько игровых часов начинается первичная реакция; бесконечность при дозе < 1 Гр. */
+    /** Game hours to prodrome onset; infinity for dose < 1 Gy. */
     public static double onsetHours(double doseGy) {
         Course c = course(doseGy);
         return c == null ? Double.POSITIVE_INFINITY : c.onset;
     }
 
-    /** Снижение максимального здоровья в разгаре, единиц (2 = одно сердце). */
+    /** Maximum health reduction during manifest illness, units (2 = one heart). */
     public static double maxHealthPenalty(double doseGy) {
         if (doseGy >= 6) return 10;
         if (doseGy >= 2) return 4;
         return 0;
     }
 
-    /** Множитель расхода сытости в разгаре. */
+    /** Hunger consumption multiplier during manifest illness. */
     public static double hungerMultiplier(double doseGy) {
         if (doseGy >= 2) return 2;
         if (doseGy >= 1) return 1.5;
         return 1;
     }
 
-    /** Нет естественной регенерации в разгаре (≥ 2 Гр). */
+    /** No natural regeneration during manifest illness (≥ 2 Gy). */
     public static boolean noRegeneration(double doseGy) {
         return doseGy >= 2;
     }
 
-    /** Уровень слабости в разгаре (усилитель эффекта): −1 — нет, 0 — I, 1 — II. */
+    /** Weakness level during manifest illness (effect amplifier): −1 — none, 0 — I, 1 — II. */
     public static int weaknessAmplifier(double doseGy) {
         if (doseGy >= 6) return 1;
         if (doseGy >= 1) return 0;
         return -1;
     }
 
-    /** Значение опорной таблицы при дозе: по логарифмам дозы и значения, за краями — крайнее. */
+    /** Anchor table value at a dose: log dose/value interpolation, clamped to edge values beyond the table. */
     private static double at(double[] values, double doseGy) {
         if (doseGy <= DOSE[0]) return values[0];
         int last = DOSE.length - 1;

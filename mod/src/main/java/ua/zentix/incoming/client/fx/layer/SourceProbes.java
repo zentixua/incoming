@@ -19,29 +19,29 @@ import ua.zentix.incoming.Incoming;
 import java.util.Arrays;
 
 /**
- * Какая доля яркого источника (огненный шар, пожар, факел) видна в кадре — для его блика и вуали. Они — свет,
- * рассеянный в самом глазу: их квадрат стоит у глаза ({@code FarSprites#eye}), и ни глубина, ни расстояние до мира за
- * его пикселями их не режут — закрыть их может только то, что закрывает сам источник. Луч по рельефу дальше прорисовки
- * ({@code Sightline}: шаг от 16 блоков, высоты карты) мимо высоток проходит, а LOD Distant Horizons не видит вовсе:
- * пожар за городом вдали, сам закрытый домами, светил бы сквозь них бликом и вуалью.
+ * Visible fraction of a bright source (fireball, fire, plume) in the frame — for its glare and veil. These are light
+ * scattered in the eye itself: their quad sits at the eye ({@code FarSprites#eye}); neither depth nor world distance behind
+ * their pixels clips them — only matter blocking the source itself can hide them. Terrain rays beyond render distance
+ * ({@code Sightline}: steps from 16 blocks, map heights) miss high-rises and cannot see Distant Horizons LOD at all:
+ * a distant fire behind the city, itself hidden by buildings, would shine through them as glare and veil.
  * <p>
- * Поэтому видимость — по тому, что на экране: на каждый источник кадра проба — пиксель своей текстуры, шейдер
- * {@code fx_probe} читает расстояние до мира ({@link SceneDepth}: глубина Minecraft и LOD DH) в середине источника на
- * экране и по верхней половине круга вокруг неё (как лучи по блокам в прорисовке, {@code FarBlasts#clear}: нижнюю
- * часть диска у земли закрывает земля под самим источником) и сравнивает с расстоянием до его передней половины, с той
- * же мягкостью, что у тела в слое. Квадрат блика берёт свою пробу в вершинном шейдере слоя ({@code fx.vsh}) по номеру
- * ({@link FxQuads#seenBy}). Источник вне кадра пробе не виден — там видимость решают лучи вызывающего. Объёма пелены
- * ядерного удара, стены пыли и грибов глубина мира не видит (огненный шар за пылью, за чужой шапкой или ножкой) — проба
- * берёт и их пропускание (пелену — до передней границы источника, {@code pall_front.glsl}, тем же кодом и числами, что
- * квадратам слоя; грибы — до его середины), в кадре и вне его; своя шапка источник не закрывает. Блику и вуали слой пелену и грибы больше не режет: свет
- * в глазу идёт от источника, а не от углов квадрата.
+ * Visibility therefore uses what is on screen: each frame source gets a probe — a pixel in a custom texture; shader
+ * {@code fx_probe} reads world distance ({@link SceneDepth}: Minecraft and DH LOD depth) at the source's screen
+ * centre and over the upper half of a surrounding circle (like block rays within render distance, {@code FarBlasts#clear}: the lower
+ * disc near ground is hidden by ground below the source itself), then compares with distance to its front half, using the
+ * same softness as its layer body. Glare quad reads its probe in the layer vertex shader ({@code fx.vsh}) by index
+ * ({@link FxQuads#seenBy}). An off-screen source is invisible to the screen probe — caller rays decide visibility there. World depth cannot see nuclear pall,
+ * dust wall and mushroom volumes (fireball behind dust, another cap or stem) — the probe also
+ * takes their transmission (pall to source front, {@code pall_front.glsl}, same code and parameters as layer
+ * quads; mushrooms to its centre), in and out of frame; the source's own cap does not hide it. The layer does not clip glare and veil by pall or mushrooms again: eye
+ * light comes from the source, rather than quad corners.
  */
 public final class SourceProbes {
-    /** Проб в строке текстуры. */
+    /** Probes per texture row. */
     static final int WIDTH = 256;
-    /** Проб в кадре не больше: номер пробы — в 16-битном поле вершины слоя ({@link FxQuads#vertex}). */
+    /** Maximum frame probes: index stored in a 16-bit layer vertex field ({@link FxQuads#vertex}). */
     static final int MAX = Short.MAX_VALUE;
-    /** Вершина пробы: середина источника от глаза, радиус и номер, угол квадрата на её пикселе. */
+    /** Probe vertex: eye-relative source centre, radius and index, quad corner on its pixel. */
     static final VertexFormat FORMAT = VertexFormat.builder()
             .add("Position", VertexFormatElement.POSITION)
             .add("UV0", VertexFormatElement.UV0)
@@ -52,18 +52,18 @@ public final class SourceProbes {
     static ShaderInstance shader;
     private static final int[] VIEWPORT = new int[4];
     private int fbo = -1, texture = -1, rows;
-    /** Источники кадра: середина от глаза (xyz) и радиус, блоков. */
+    /** Frame sources: eye-relative centre (xyz) and radius, blocks. */
     private float[] sources = new float[4 * 64];
     private int n;
 
-    /** Новый кадр: источников нет. */
+    /** New frame: no sources. */
     void begin() {
         n = 0;
     }
 
     /**
-     * Источник с серединой (x, y, z) от глаза радиуса r, блоков — номер его пробы (с 1); 0 — проб в кадре уже
-     * {@link #MAX}: такой источник видимость берёт только от лучей вызывающего.
+     * Source at eye-relative (x, y, z), radius r, blocks — its probe index (from 1); 0 — frame already has
+     * {@link #MAX} probes: such a source uses only caller rays for visibility.
      */
     public int add(double x, double y, double z, double r) {
         if (n >= MAX) return 0;
@@ -77,10 +77,10 @@ public final class SourceProbes {
     }
 
     /**
-     * Посчитать пробы кадра по текстуре расстояний до мира {@code scene} ({@link SceneDepth#update}) и пелене кадра
-     * {@code pall} с её грибами ({@link PallPass#bindFront}; {@code pallDrawn} — нарисована): вид от глаза, проекция
-     * кадра, угол пикселя, рад. Текстура видимости (доля, по номеру пробы − 1: x — остаток от {@link #WIDTH}, y — частное);
-     * −1 — проб нет или не вышло.
+     * Compute frame probes from world-distance texture {@code scene} ({@link SceneDepth#update}) and frame pall
+     * {@code pall} with its mushrooms ({@link PallPass#bindFront}; {@code pallDrawn} — drawn): eye-relative view, frame
+     * projection, pixel angle, rad. Visibility texture (fraction by probe index − 1: x — remainder by {@link #WIDTH}, y — quotient);
+     * −1 — no probes or failure.
      */
     int update(int scene, PallPass.Frame pall, boolean pallDrawn, Matrix4f view, Matrix4f projection, double pixel) {
         ShaderInstance s = shader;
@@ -102,7 +102,7 @@ public final class SourceProbes {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, FORMAT);
         for (int i = 0; i < n; i++) {
             float x = sources[4 * i], y = sources[4 * i + 1], z = sources[4 * i + 2], r = sources[4 * i + 3];
-            // квадрат ровно на свой пиксель, против часовой стрелки
+            // quad exactly covers its pixel, counter-clockwise
             b.addVertex(x, y, z).setUv(r, i).setNormal(-1, -1, 0);
             b.addVertex(x, y, z).setUv(r, i).setNormal(1, -1, 0);
             b.addVertex(x, y, z).setUv(r, i).setNormal(1, 1, 0);
@@ -116,7 +116,7 @@ public final class SourceProbes {
         return texture;
     }
 
-    /** Текстура видимости и её кадр — не меньше {@code need} строк (растёт, не убывает). */
+    /** Visibility texture and framebuffer with at least {@code need} rows (grows, never shrinks). */
     private boolean ensure(int need) {
         if (fbo >= 0 && need <= rows) return true;
         if (texture < 0) texture = GlStateManager._genTexture();

@@ -17,13 +17,13 @@ import ua.zentix.incoming.entity.BunkerBusterEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 
 /**
- * Снаряд — модель {@link WeaponModels}, повёрнутая по курсу и тангажу, плюс крен в вираже. Позиция приходит каждый
- * тик и плавно интерполируется между тиками. За соплом — струя факела двигателя ({@link PlumeRenderer}); его свет
- * (блик, вуаль, с края прорисовки и ядро) — у {@code client.far.FarFlightView}.
+ * Projectile: {@link WeaponModels} model rotated by heading and pitch, plus roll in turns. Position arrives each
+ * tick and interpolates smoothly between ticks. Engine jet behind nozzle ({@link PlumeRenderer}); its light
+ * (glare, veil, and core from render-distance edge) belongs to {@code client.far.FarFlightView}.
  */
 public class StrikeProjectileRenderer<T extends StrikeProjectile> extends EntityRenderer<T> {
     private final WeaponModels.Look look;
-    /** Поза кадра: рендерер рисует сущности по одной в потоке отрисовки. */
+    /** Frame pose: renderer draws entities one by one on the render thread. */
     private final ProjectilePose state = new ProjectilePose();
     private final WeaponModels.Buffers parts = new WeaponModels.Buffers();
 
@@ -42,15 +42,15 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
         look.render(state, pose, parts.into(buffers, packedLight));
         Exhaust.Plume plume = Exhaust.plume(entity, partialTick);
         if (plume != null) {
-            // с 0,8 прорисовки струю сменяет свет того же факела дальней картинки (FarFlightView): к краю, где туман
-            // Minecraft и шейдерпака съедает сущность, факел — уже он
+            // From 0.8 render distance the same plume's distant light replaces the jet (FarFlightView): by the edge, where
+            // Minecraft and shader pack fog eat the entity, that light already represents the plume.
             Vec3 at = entity.getPosition(partialTick);
             double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
             float near = (float) (1 - FarView.farShare(at.distanceTo(entityRenderDispatcher.camera.getPosition()), world));
             if (near > 0) PlumeRenderer.render(plume.dimmed(near), entity, rotation, at);
         }
-        // горячее сопло ускорителя: под факелом, а на спаде тяги — когда огонь гаснет; вдали его ничто не сменяет (сопло —
-        // доли пикселя), поэтому во всю силу, как у отделившегося: иначе на отделении у края прорисовки оно вспыхивало бы
+        // Hot booster nozzle: beneath plume, visible during thrust decay as fire fades; no distant replacement (nozzle spans
+        // fractions of a pixel), so full strength as on the separated booster; otherwise it would flare on separation near render edge.
         Exhaust.Hot hot = Exhaust.hot(entity, partialTick);
         if (hot != null) {
             Vec3 at = entity.getPosition(partialTick);
@@ -63,8 +63,8 @@ public class StrikeProjectileRenderer<T extends StrikeProjectile> extends Entity
 
     @Override
     public boolean shouldRender(T entity, Frustum frustum, double x, double y, double z) {
-        // модель длиннее габаритов сущности: проверяем по раздутому объёму; дальше своей дальности корпус — у дальней
-        // картинки (FarView.entityReach: за дальней плоскостью кадра модель отсекалась бы)
+        // Model exceeds entity bounds: test expanded volume; beyond its range the distant visual owns the body
+        // (FarView.entityReach: beyond frame's far plane the model would be clipped).
         return entity.isActive() && frustum.isVisible(entity.getBoundingBox().inflate(24))
                 && entity.position().distanceToSqr(x, y, z) < Math.pow(FarView.entityReach(FarView.depthFar()), 2);
     }

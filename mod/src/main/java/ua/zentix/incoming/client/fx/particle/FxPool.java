@@ -9,34 +9,34 @@ import ua.zentix.incoming.client.fx.layer.FxQuads;
 import java.util.Arrays;
 
 /**
- * Все живые частицы эффектов: свой пул вместо ванильного движка частиц. Их рисует один проход после мира вместе
- * с дальней картинкой ({@link ua.zentix.incoming.client.fx.layer.FxLayer}): отсортированными от дальних к ближним,
- * с мягкими краями у земли и рельефа Distant Horizons. В ванильном движке у слоя одна очередь без сортировки (кто
- * родился позже, тот поверх), и её предел вытесняет старые облака.
+ * All live effects particles: custom pool instead of the vanilla particle engine. Drawn in one post-world pass together
+ * with distant visuals ({@link ua.zentix.incoming.client.fx.layer.FxLayer}): sorted far to near,
+ * with soft edges against ground and Distant Horizons terrain. The vanilla engine has one unsorted queue per layer (later
+ * births draw on top), and its limit evicts old clouds.
  * <p>
- * Места — по группам {@link FxBudget}: полная группа новую частицу не принимает. Объекты частиц переиспользуются,
- * рождение и смерть ничего не выделяют. Тикает поток игры (не на паузе, мир не заморожен), рисует — поток отрисовки
- * (тот же поток).
+ * Slots by {@link FxBudget} groups: full groups reject new particles. Particle objects are reused;
+ * birth and death allocate nothing. Ticked by the game thread (unpaused, world unfrozen), drawn by the render thread
+ * (the same thread).
  */
 public final class FxPool {
     public static final FxPool INSTANCE = new FxPool();
 
     final RandomSource random = RandomSource.create();
     private final FxParticle[] parts = new FxParticle[FxBudget.total()];
-    /** Живые — {@code parts[0..count)}; за ними — объекты для новых. */
+    /** Live particles — {@code parts[0..count)}; following objects reserved for new ones. */
     private int count;
-    /** Сколько было живых после прошлого тика: рождённые позже ждут следующего тика, как в ванильном движке. */
+    /** Live count after previous tick: later births wait for the next tick, like the vanilla engine. */
     private int settled;
     private final int[] live = new int[FxBudget.values().length];
     private final long[] refused = new long[FxBudget.values().length];
-    /** Мир, в котором живут частицы: сменился (другое измерение) — старые убираются, как в ванильном движке. */
+    /** Particle world: changes (another dimension) remove old particles, like the vanilla engine. */
     private ClientLevel level;
 
     private FxPool() {}
 
     /**
-     * Новая частица по настройке в (x, y, z), размеры — с множителями (хвост искры тоньше к концу). Полная группа —
-     * не рождается (и это считается).
+     * New configured particle at (x, y, z), sizes multiplied (spark tail thins toward its end). Full group —
+     * no spawn (counted).
      */
     void spawn(Fx.Spec spec, ClientLevel level, double x, double y, double z, float sizeScale0, float sizeScale1) {
         int g = spec.budget.ordinal();
@@ -52,9 +52,9 @@ public final class FxPool {
     }
 
     /**
-     * Тик частиц (после тика мира, как ванильный движок; не на паузе и не в заморозке). Рождённые после прошлого
-     * тика — в тиках сущностей, эффектами, хвостами искр — встают в конец и тикают со следующего, как в ванильном
-     * движке; умершие уходят за живых одним проходом, порядок живых сохраняется.
+     * Particle tick (after world tick, like vanilla; neither paused nor frozen). Births after the previous
+     * tick — from entity ticks, effects, spark tails — append at the end and tick from the next tick, like vanilla;
+     * dead particles move past live ones in a single pass, preserving live order.
      */
     public void tick(ClientLevel level) {
         if (level != this.level) {
@@ -81,7 +81,7 @@ public final class FxPool {
         settled = w;
     }
 
-    /** Видимые в кадре — в общий кадр слоя. */
+    /** Visible particles into the shared layer frame. */
     public void collect(FxFrame frame, FxQuads out, float partial) {
         FrustumIntersection frustum = frame.frustum;
         for (int i = 0; i < count; i++) {
@@ -92,7 +92,7 @@ public final class FxPool {
         }
     }
 
-    /** Выход из мира, смена измерения, сценарии. */
+    /** World exit, dimension change, scenarios. */
     public void clear() {
         level = null;
         count = settled = 0;
@@ -103,17 +103,17 @@ public final class FxPool {
         return count;
     }
 
-    /** Сколько частиц группы живёт. */
+    /** Live particles per group. */
     public int live(FxBudget b) {
         return live[b.ordinal()];
     }
 
-    /** Сколько частиц группе не досталось места с запуска игры. */
+    /** Particles denied group slots since game launch. */
     public long refused(FxBudget b) {
         return refused[b.ordinal()];
     }
 
-    /** Сколько живых частиц ближе {@code radius} к точке и в конусе {@code cos} вокруг направления (для сценариев). */
+    /** Live particle count within {@code radius} of a point and cone {@code cos} around a direction (for scenarios). */
     public int near(double ex, double ey, double ez, double lx, double ly, double lz, double radius, double cos) {
         int n = 0;
         for (int i = 0; i < count; i++) {

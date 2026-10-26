@@ -1,23 +1,23 @@
-// Огненные шары кадра (FxLights) — общее у fx.vsh и fx.fsh: свет шаров на клубе считается у вершины, а у клуба, лежащего
-// на горизонтали (слой пыли у земли), — в каждом пикселе: у квадрата в десятки метров свет по углам, сведённый к
-// середине, под самым шаром выходил тёмным диском (кадры F2a, «Град» ночью в 0,1 с).
+// Frame fireballs (FxLights), shared by fx.vsh and fx.fsh: billow light computed per vertex; for a horizontal billow
+// (ground dust layer), per pixel: on a quad tens of meters across, corner light interpolated to center made a dark disk
+// directly beneath the ball (F2a frames, Grad at night, 0.1 s).
 
-// огненные шары (FxLights), по столбцу на шар: центр от камеры и радиус (0 — шара нет); освещённость у его поверхности
-// против света вокруг глаза, с цветом, и его огонь на экране (w)
+// fireballs (FxLights), one column per ball: camera-relative center and radius (0 — absent); surface illuminance
+// relative to light around eye, with color, and on-screen fire (w)
 uniform mat4 FxBalls;
 uniform mat4 FxBallLight;
-// свет неба на экране у вещества под открытым небом (FarView.sky, его яркость): им цвет вершины клуба уже умножен
+// on-screen skylight for exposed material (FarView.sky, its luminance): billow vertex color already multiplied by it
 uniform float FxAmbient;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-// дальше стольких радиусов шар не освещает (от половины — плавно к нулю): теней нет, и ночью свет шара за сотни блоков
-// ложился бы и на дым за холмом
+// no ball illumination beyond this many radii (smooth fade from halfway): no shadows, so at night distant ball light
+// would also hit smoke behind hills
 const float BALL_REACH = 16.0;
 
-// свет огненных шаров на точке p в долях света неба (им цвет вершины клуба уже умножен: FarView.sky на экране, в линейном —
-// его степень 2,2) и его направление — среднее по свету; не ярче огня на экране, как у balls: предел — в той же мере.
-// Ночь — уже в привыкании глаза (FxBallLight, Sight.exposure): не делённый на свет неба, огонь на дыме ночью выходил в
-// 3–14 раз слабее
+// fireball light at p relative to skylight (already multiplied into billow vertex color: FarView.sky on screen, power
+// 2.2 in linear), direction averaged by light; no brighter than on-screen fire, as balls: cap in the same units.
+// Night is already in eye adaptation (FxBallLight, Sight.exposure): without dividing by skylight, fire on smoke at night
+// was 3–14 times weaker
 vec3 ballsToward(vec3 p, out vec3 dir) {
     float sky = max(FxAmbient, 1e-3), skyLinear = pow(sky, 2.2);
     vec3 sum = vec3(0.0);
@@ -27,9 +27,9 @@ vec3 ballsToward(vec3 p, out vec3 dir) {
         if (r <= 0.0) continue;
         vec3 v = FxBalls[i].xyz - p;
         float d2 = max(dot(v, v), r * r), reach = BALL_REACH * r * BALL_REACH * r;
-        // освещённость шаром (доля белого, линейная) — в долях линейного света неба: клуб в свете шара против клуба в свете неба
+        // ball illuminance (linear fraction of white) relative to linear skylight: ball-lit billow versus sky-lit billow
         vec3 add = FxBallLight[i].rgb * (r * r / d2) * (1.0 - smoothstep(0.25 * reach, reach, d2)) / skyLinear;
-        // на экране свет шара — цвет вершины (× свет неба) × степень 1/2,2 линейного: предел огня w (на экране) — в той же мере
+        // on-screen ball light is vertex color (× skylight) × power 1/2.2 of linear light: fire cap w (on screen) uses the same units
         add = add / (1.0 + dot(add, LUMA) / pow(max(FxBallLight[i].w, 1e-4) / sky, 2.2));
         sum += add;
         d += dot(add, LUMA) * v / sqrt(max(dot(v, v), 1e-6));

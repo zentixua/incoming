@@ -1,7 +1,7 @@
 #version 150
 
-// Модели снарядов вдали в плитки атласа (client/render/FarModels): вырезка, как у ванильной сущности; в атлас — с
-// умноженной альфой, чтобы мип-уровни усредняли закрытое и свет без тёмной каймы по краю силуэта.
+// Distant projectile models into atlas tiles (client/render/FarModels): cutout as vanilla entities; premultiplied alpha
+// in atlas so mip levels average coverage and light without a dark fringe along the silhouette.
 uniform sampler2D Sampler0;
 
 in vec4 vertexColor;

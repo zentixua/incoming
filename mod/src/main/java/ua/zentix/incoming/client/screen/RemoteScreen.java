@@ -48,21 +48,21 @@ import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 
 /**
- * Экран пульта (вместо меню в чате): оружие, количество, разброс и цель — куда смотрю, вокруг меня,
- * игрок из списка, аппарат рядом или место на карте ({@link MapScreen}); у ядерной — мощность и подрыв, пуск через 3 с взведения.
- * Настройки сохраняются в пульте; пуск проверяет сервер.
+ * Remote screen (replaces chat menu): weapon, count, spread and target: where I look, around me, player from list,
+ * nearby craft, or map location ({@link MapScreen}); nuclear weapon adds yield and burst, launch after 3 s arming.
+ * Settings saved in remote; server validates launch.
  */
 public class RemoteScreen extends Screen {
     private static final int W = 320;
-    /** Строка текста: высота шрифта Minecraft. */
+    /** Text line: Minecraft font height. */
     private static final int LINE = 9;
     /**
-     * Высота окна без строк описания оружия и подсказки цели. Тексты переносятся по ширине окна, а не уходят за его края:
-     * описанию — столько строк, сколько у самого длинного из меню (окно не прыгает при смене оружия), подсказке — две.
+     * Window height without weapon description and target hint. Text wraps to window width rather than overflowing:
+     * description gets as many lines as the menu's longest (window stays stable when switching weapons), hint gets two.
      */
     private static final int BASE_H = 204, HINT_LINES = 2;
     private static final int PAGE = 8;
-    /** Настройки для тех, у кого нет пульта в руке (экран из команды). */
+    /** Settings for those without remote in hand (screen opened by command). */
     private static Loadout detached = Loadout.DEFAULT;
 
     @Nullable
@@ -72,15 +72,15 @@ public class RemoteScreen extends Screen {
     private UUID aircraft;
     private int page;
     private final List<Choice> choices = new ArrayList<>();
-    /** Строк описания оружия и высота окна: считаются в {@link #init()} по шрифту. */
+    /** Weapon description lines and window height: computed in {@link #init()} from font. */
     private int descLines = 1, h = BASE_H + (1 + HINT_LINES) * LINE;
 
     private record Choice(Component label, String player, @Nullable UUID aircraft) {}
 
-    /** Игроков спрашивать у сервера раз в столько тиков, пока открыт режим «игрок». */
+    /** Query server for players every this many ticks while player mode is open. */
     private static final int PLAYERS_PERIOD = 10;
     private int ticks;
-    /** Игроки, которые сейчас в списке. */
+    /** Players currently listed. */
     private List<String> shownPlayers = List.of();
 
     public RemoteScreen() {
@@ -107,26 +107,26 @@ public class RemoteScreen extends Screen {
         int x0 = (width - W) / 2, y0 = (height - h) / 2;
         int y = y0 + 22;
 
-        // оружие
+        // Weapon.
         List<Cell> weapons = new ArrayList<>();
         for (WeaponType w : menu) {
             weapons.add(new Cell(Button.builder(label(w.displayName(), loadout.weapon() == w), btn -> set(loadout.withWeapon(w)))
                     .bounds(0, y, 0, 20).tooltip(Tooltip.create(w.description())).build()));
         }
         row(weapons, x0);
-        // под кнопками — описание выбранного оружия (render)
+        // Selected weapon description below buttons (render).
         y += 22 + descLines * LINE + 3;
 
-        // количество и разброс; у ядерной — мощность и подрыв
+        // Count and spread; nuclear weapon uses yield and burst.
         int sw = (W - 12) / 2;
         Loadout.Nuke n = loadout.nuke();
         if (loadout.nuclear()) {
-            // МБР: мощность и подрыв; ракета и B-2 с ядерной БЧ: переключатель БЧ, мощность, у ракеты — подрыв
+            // ICBM: yield and burst; nuclear missile and B-2: warhead switch, yield, and burst for missile.
             WeaponSpec.Warhead warhead = loadout.weapon().spec().warhead();
             List<Cell> nuke = new ArrayList<>();
             if (!warhead.always()) nuke.add(new Cell(warheadButton(n, 0, y, 0)));
-            // мощность — любое целое от 1 до MAX_YIELD, как у команды и Loadout.Nuke (сервер урежет до max_yield);
-            // подписи пресетов — у своих значений; ширина ряда — по самой длинной подписи
+            // Yield: any integer 1 to MAX_YIELD, as in command and Loadout.Nuke (server caps at max_yield);
+            // preset names at their values; row width from longest label.
             List<Component> yields = new ArrayList<>();
             for (int kt = 1; kt <= Loadout.Nuke.MAX_YIELD; kt++) yields.add(yieldLabel(kt));
             nuke.add(new Cell(new IntSlider(0, y, 0, 20, RemoteScreen::yieldLabel, 1, Loadout.Nuke.MAX_YIELD, n.yieldKt(),
@@ -149,7 +149,7 @@ public class RemoteScreen extends Screen {
         }
         y += 26;
 
-        // режим цели
+        // Target mode.
         List<Cell> modes = new ArrayList<>();
         for (TargetMode m : TargetMode.values()) {
             modes.add(new Cell(Button.builder(label(m.displayName(), loadout.mode() == m), b -> {
@@ -160,13 +160,13 @@ public class RemoteScreen extends Screen {
         row(modes, x0);
         y += 24;
 
-        // место на карте: открыть карту наведения
+        // Map location: open targeting map.
         if (loadout.mode() == TargetMode.MAP) {
             addRenderableWidget(Button.builder(Component.translatable("incoming.remote.open_map").withStyle(ChatFormatting.YELLOW), b -> openMap())
                     .bounds(x0 + 4, y, W - 8, 20).build());
         }
 
-        // список: игроки или аппараты рядом
+        // List: players or nearby craft.
         choices.clear();
         if (loadout.mode() == TargetMode.PLAYER) collectPlayers();
         if (loadout.mode() == TargetMode.AIRCRAFT) collectAircraft();
@@ -193,12 +193,12 @@ public class RemoteScreen extends Screen {
             }).bounds(x0 + W - 24, y0 + 4, 20, 14).build());
         }
 
-        // огонь, отбой, настройки
+        // Fire, abort, settings.
         int by = y0 + h - 26;
-        // пульт с привязанными пусковыми ставит им задачу, а не пускает сам (launcher.LauncherLinks)
+        // Remote with linked launchers assigns them missions rather than launching itself (launcher.LauncherLinks).
         int linked = linked();
         Component fireLabel = linked > 0 ? Component.translatable("incoming.remote.assign", linked) : Component.translatable("incoming.remote.fire");
-        // маршрут и место пуска с карты — у цели «На карте», как у огня с самой карты
+        // Map route and launch site apply to On the map target, as when firing from map itself.
         boolean map = loadout.mode() == TargetMode.MAP;
         addRenderableWidget(Button.builder(fireLabel.copy().withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
                 b -> fire(map ? MapTarget.waypoints(minecraft.level) : Waypoints.NONE, map ? launchFrom() : Optional.empty()))
@@ -211,30 +211,30 @@ public class RemoteScreen extends Screen {
                 .bounds(x0 + 210, by, 106, 22).build());
     }
 
-    /** Сколько стационарных пусковых привязано к пульту в руке ({@link LauncherLinks}): им пульт ставит задачу. */
+    /** Fixed launchers linked to held remote ({@link LauncherLinks}): remote assigns them missions. */
     int linked() {
         LocalPlayer p = Minecraft.getInstance().player;
         return hand != null && p != null ? LauncherLinks.of(p.getItemInHand(hand)).size() : 0;
     }
 
     /**
-     * Место пуска с карты, с которого уйдёт удар этого пульта: выбранное оператором или хостом
-     * ({@link MapScreen#mayPickLaunchSite}), если пульт не ставит задачу привязанным пусковым (они пускают со своего
-     * места) и оружие с него стартует или заходит (МБР — со своей площадки: старое место вдали её пуск не остановит).
-     * Пусто — пуск у игрока; от того же места карта рисует путь и считает его длину.
+     * Map launch site for this remote's strike: selected by operator or host ({@link MapScreen#mayPickLaunchSite}),
+     * if remote is not assigning linked launchers (which launch from their own sites) and weapon launches or approaches
+     * from it (ICBM uses its own pad: an old distant selection cannot block launch). Empty means near player;
+     * map draws path and computes its length from the same location.
      */
     Optional<Vec3> launchFrom() {
         if (linked() > 0 || !MapScreen.mayPickLaunchSite() || loadout.weapon().spec().launch() == WeaponSpec.Launch.ICBM) return Optional.empty();
         return MapTarget.launchPoint(Minecraft.getInstance().level);
     }
 
-    /** Чужие игроки, которых видит или недавно видела своя сторона ({@link MapPlayers#targets}): по другим пульт не бьёт. */
+    /** Hostile players seen now or recently by friendlies ({@link MapPlayers#targets}): remote cannot strike others. */
     private void collectPlayers() {
         shownPlayers = MapPlayers.targets(Minecraft.getInstance().level);
         for (String n : shownPlayers) choices.add(new Choice(Component.literal(n), n, null));
     }
 
-    /** В режиме «игрок» список обновляется по ответам сервера, пока экран открыт. */
+    /** In player mode, update list from server replies while screen remains open. */
     @Override
     public void tick() {
         if (loadout.mode() != TargetMode.PLAYER) return;
@@ -253,17 +253,17 @@ public class RemoteScreen extends Screen {
         }
     }
 
-    /** Обычная или ядерная БЧ на крылатой ракете и B-2 (сервер проверит права и carrier_nukes). */
+    /** Conventional or nuclear warhead on cruise missile and B-2 (server checks permissions and carrier_nukes). */
     private Button warheadButton(Loadout.Nuke n, int x, int y, int w) {
         Component text = n.onCarrier()
                 ? Component.translatable("incoming.remote.warhead.nuclear").withStyle(ChatFormatting.GOLD)
                 : Component.translatable("incoming.remote.warhead.conventional");
-        // ползунок мощности рядом меняет пульт без перестройки экрана: состояние — на миг нажатия, не n
+        // Yield slider beside it changes remote without rebuilding screen: use state at click time, not n.
         return Button.builder(text, b -> set(loadout.withNuke(loadout.nuke().withOnCarrier(!loadout.nuke().onCarrier())))).bounds(x, y, w, 20)
                 .tooltip(Tooltip.create(Component.translatable("incoming.remote.warhead.tooltip"))).build();
     }
 
-    /** «15 кт (Хиросима)»; у мощности не из пресетов — без имени. */
+    /** "15 kt (Hiroshima)"; no name for a yield outside presets. */
     private static Component yieldLabel(int kt) {
         for (Yield y : Yield.values()) {
             if ((int) y.kt() == kt) return Component.translatable("incoming.remote.yield", kt, Component.translatable(y.key()));
@@ -271,12 +271,12 @@ public class RemoteScreen extends Screen {
         return Component.translatable("incoming.remote.yield", kt, Component.empty());
     }
 
-    /** Выбранное — жёлтым с чертой, без жирного: жирный шире, и выбор раздвигал бы ряд {@link #row}. */
+    /** Selection yellow with underline, not bold: bold is wider and would expand the {@link #row}. */
     private static Component label(Component text, boolean selected) {
         return selected ? text.copy().withStyle(ChatFormatting.YELLOW, ChatFormatting.UNDERLINE) : text.copy().withStyle(ChatFormatting.GRAY);
     }
 
-    /** Кнопка ряда {@link #row} и все надписи, какие она показывает: ширина — по самой длинной, ряд не прыгает при переключении. */
+    /** {@link #row} button and all its possible labels: width from longest, so row stays stable when switching. */
     private record Cell(AbstractWidget button, List<Component> texts) {
         Cell(AbstractWidget button) {
             this(button, List.of(button.getMessage()));
@@ -284,8 +284,8 @@ public class RemoteScreen extends Screen {
     }
 
     /**
-     * Ряд кнопок во всю ширину окна: каждой — ширина её надписи с полями и поровну остатка, иначе длинная надпись
-     * («Куда смотрю», «Подрыв: воздушный») прокручивалась бы в кнопке равной ширины. Не помещаются и так — поровну.
+     * Full-window button row: label width with margins per button, plus equal shares of remaining space; otherwise
+     * long labels ("Where I look", "Burst: air") would scroll in equal-width buttons. Still do not fit: equal widths.
      */
     private void row(List<Cell> cells, int x0) {
         int n = cells.size(), free = W - 8 - 4 * (n - 1);
@@ -294,7 +294,7 @@ public class RemoteScreen extends Screen {
         for (int i = 0; i < n; i++) sum += need[i] = cells.get(i).texts().stream().mapToInt(font::width).max().orElse(0) + 8;
         int spare = free - sum, x = x0 + 4;
         for (int i = 0; i < n; i++) {
-            // остаток делится нарастающим итогом: ряд кончается ровно у края окна
+            // Divide remaining space cumulatively: row ends exactly at window edge.
             int w = spare >= 0 ? need[i] + spare * (i + 1) / n - spare * i / n : free * (i + 1) / n - free * i / n;
             AbstractWidget b = cells.get(i).button();
             b.setX(x);
@@ -310,7 +310,7 @@ public class RemoteScreen extends Screen {
         rebuildWidgets();
     }
 
-    /** Ползунок меняет только своё число: сохранить, не перестраивая экран (фокус остаётся на ползунке). */
+    /** Slider changes only its own value: save without rebuilding screen (focus stays on slider). */
     private void commit(Loadout l) {
         loadout = l;
         save();
@@ -329,7 +329,7 @@ public class RemoteScreen extends Screen {
         }
     }
 
-    /** Настройки пульта, с которыми пойдёт пуск. */
+    /** Remote settings used for launch. */
     Loadout loadout() {
         return loadout;
     }
@@ -338,24 +338,24 @@ public class RemoteScreen extends Screen {
         Minecraft.getInstance().setScreen(new MapScreen(this));
     }
 
-    /** На карте выбрано место: цель пульта — «На карте» (само место помнит {@link MapTarget}). */
+    /** Map site selected: remote target is On the map (site itself remembered by {@link MapTarget}). */
     void aimAtPlace() {
         if (loadout.mode() == TargetMode.MAP) return;
         loadout = loadout.withMode(TargetMode.MAP);
         save();
     }
 
-    /** На карте выбран игрок: цель пульта — он (удар по правилам сервера: {@code ServerActions.sighted}). */
+    /** Map player selected: remote targets that player (server strike rules: {@code ServerActions.sighted}). */
     void aimAtPlayer(String name) {
         loadout = loadout.withMode(TargetMode.PLAYER).withPlayer(name);
         save();
     }
 
     /**
-     * Огонь по цели пульта; с карты наведения — по выбранному там месту или игроку ({@link #aimAtPlace},
-     * {@link #aimAtPlayer}), по точкам маршрута {@code via}, если оружие по ним летает, и с места пуска {@code from}
-     * ({@link #launchFrom}). Карта открывается и клавишей, без показа пульта, поэтому здесь —
-     * {@code Minecraft.getInstance()}, а не поле экрана.
+     * Fire at remote target; from targeting map, at its selected site or player ({@link #aimAtPlace},
+     * {@link #aimAtPlayer}), via {@code via} waypoints if weapon uses them and from launch site {@code from}
+     * ({@link #launchFrom}). Map also opens by key without showing remote, so use {@code Minecraft.getInstance()}
+     * here rather than the screen field.
      */
     void fire(Waypoints via, Optional<Vec3> from) {
         if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return;
@@ -365,13 +365,13 @@ public class RemoteScreen extends Screen {
         if (loadout.mode() == TargetMode.MAP) {
             Optional<MapTarget.Place> place = MapTarget.get(Minecraft.getInstance().level);
             LocalPlayer p = Minecraft.getInstance().player;
-            // маршрут длиннее дальности оружия (от места пуска, без него — от игрока): пуска нет — карта покажет, что не так
+            // Route beyond weapon range (from launch site, otherwise player): no launch; map shows the problem.
             if (place.isEmpty() || p == null
                     || !via.isEmpty() && !via.within(loadout.weapon(), from.orElse(p.position()), new Vec3(place.get().x(), 0, place.get().z()))) {
                 openMap();
                 return;
             }
-            // верх земли там по карте — оценка сервера, пока чанк места у него не готов
+            // Map ground height there is server's estimate until its target chunk is ready.
             aim = place.map(t -> C2S.AimHint.ground(t.x(), t.z(), TerrainTiles.height(Mth.floor(t.x()), Mth.floor(t.z()))));
         } else {
             aim = nukePoint();
@@ -386,8 +386,8 @@ public class RemoteScreen extends Screen {
     }
 
     /**
-     * МБР бьёт по точке, выбранной в момент нажатия: за 3 с взведения игрок может отвернуться. Для режимов
-     * «куда смотрю» и «вокруг меня» точка фиксируется сразу; игрок и аппарат — цели, их позицию возьмёт сервер.
+     * ICBM strikes the point selected at click time: player may look away during 3 s arming. Fix the point immediately
+     * for where I look and around me modes; player and craft are targets whose positions the server resolves.
      */
     private Optional<C2S.AimHint> nukePoint() {
         LocalPlayer p = Minecraft.getInstance().player;
@@ -423,16 +423,16 @@ public class RemoteScreen extends Screen {
                         .<Component>map(p -> points > 0 ? Component.translatable("incoming.remote.hint.map_route", Mth.floor(p.x()), Mth.floor(p.z()), points)
                                 : Component.translatable("incoming.remote.hint.map", Mth.floor(p.x()), Mth.floor(p.z())))
                         .orElse(Component.translatable("incoming.remote.hint.no_map"));
-                // место пуска с карты (его пуск и возьмёт)
+                // Map launch site (the launch will use it).
                 yield launchFrom().<Component>map(f -> place.copy().append(Component.translatable("incoming.remote.hint.launch", Mth.floor(f.x), Mth.floor(f.z))))
                         .orElse(place);
             }
         };
-        // подсказка — над кнопками пуска: последняя строка внизу, лишние растут вверх
+        // Hint above launch buttons: last line at bottom, extra lines grow upward.
         lines(g, hint.copy().withStyle(ChatFormatting.DARK_GRAY), y0 + h - 28, true);
     }
 
-    /** Текст по середине окна, перенесённый по его ширине: от {@code y} вниз или, если {@code up}, вверх до {@code y}. */
+    /** Text centred in window, wrapped to width: downward from {@code y}, or, if {@code up}, upward ending at {@code y}. */
     private void lines(GuiGraphics g, Component text, int y, boolean up) {
         List<FormattedCharSequence> split = font.split(text, W - 8);
         int top = up ? y - split.size() * LINE : y;
@@ -441,7 +441,7 @@ public class RemoteScreen extends Screen {
         }
     }
 
-    /** Подсказка для движущейся цели ({@code player}, {@code aircraft}): идёт ли выбранное оружие за ней ({@link WeaponSpec.Tracking}). */
+    /** Moving-target hint ({@code player}, {@code aircraft}): whether selected weapon tracks it ({@link WeaponSpec.Tracking}). */
     private Component movingHint(String what) {
         return loadout.weapon().spec().tracking() == WeaponSpec.Tracking.CAMERA
                 ? Component.translatable("incoming.remote.hint." + what + ".camera", Component.keybind(Incoming.CAMERA_KEY))
@@ -463,8 +463,8 @@ public class RemoteScreen extends Screen {
     }
 
     /**
-     * Ползунок с целым значением и подписью «Количество: 5». Значение уходит в пульт, когда его отпустили мышью
-     * или сдвинули стрелками; пока тянут мышью — только подпись.
+     * Integer slider with label "Count: 5". Save value to remote when released by mouse or moved by arrow keys;
+     * while dragging, update label only.
      */
     private static final class IntSlider extends AbstractSliderButton {
         private final IntFunction<Component> label;

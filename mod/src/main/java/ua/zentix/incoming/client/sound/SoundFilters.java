@@ -37,81 +37,81 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Фильтр нижних частот OpenAL EFX на наши звуки: воздух по дороге «съедает» верха (чем дальше, тем глуше),
- * холм или дом между источником и ухом глушит ещё сильнее, а после близкой ударной волны всё глухо (оглушение);
- * в пелене пыли после ядерной волны звуки вдали глуше ({@link NukePall#muffle}).
+ * OpenAL EFX low-pass for our sounds: air along the path “absorbs” highs (farther means more muffled), a hill or
+ * house between source and ear muffles further, and after a nearby shock wave everything is muffled (deafness);
+ * distant sounds are more muffled in the dust pall after a nuclear wave ({@link NukePall#muffle}).
  * <p>
- * Звук с фильтром — {@link Muffled}: разовый получает фильтр при старте ({@link PlaySoundSourceEvent}),
- * мотор снаряда — каждый тик ({@link #update}). Всё, что трогает OpenAL, идёт в звуковом потоке, где контекст
- * текущий; параметры фильтра копируются в источник при привязке, поэтому один объект фильтра на всех.
- * Путь наших звуков — наш и при Sound Physics Remastered: каждый наш звук играет в 3 блоках от уха в сторону источника
- * (или на месте, где его слышно с запаздыванием), громкость и верха по пути считает наша модель, а он видел бы только
- * эти 3 блока — дальний удар звучал бы как ближний. Поэтому прямой фильтр нашего звука — наш вместо его ({@link #direct}),
- * а сборке и игроку — строка 0 на каждый звук {@code incoming:} в его {@code sound_rates.properties} (README): так он не
- * кладёт свои отражения поверх нашего эха. Его новые оценки играющих звуков ({@code update_moving_sounds}) наш фильтр
- * перекрывает каждый тик ({@link #OWN}). Чужие звуки — его: на них наш фильтр оглушения и пелены
- * умножается на его ({@link Spr}), прямой фильтр у источника OpenAL один, и наш на минуты пелены снимал бы с каждого
- * звука его преграды.
+ * Filtered sound implements {@link Muffled}: one-shots get a filter at start ({@link PlaySoundSourceEvent}),
+ * projectile engine each tick ({@link #update}). All OpenAL access runs on sound thread with current context;
+ * binding copies filter parameters to source, so one filter object serves all.
+ * Our sound paths remain ours with Sound Physics Remastered: each sound plays 3 blocks from ear toward source
+ * (or at its retarded audible position); our model computes path volume and highs, whereas it would see only
+ * these 3 blocks — distant impact would sound near. So our direct filter replaces its filter ({@link #direct});
+ * modpack and player need a 0 entry for every {@code incoming:} sound in its {@code sound_rates.properties}
+ * (README), preventing its reflections over our echoes. Our filter overwrites its new playing-sound evaluations
+ * ({@code update_moving_sounds}) every tick ({@link #OWN}). Other sounds use its path: our deafness/pall filter
+ * multiplies its filter ({@link Spr}); OpenAL source has one direct filter, and ours would otherwise remove
+ * barriers from every sound for the pall's minutes.
  */
 public final class SoundFilters {
-    /** Где фильтр EFX меряет верха, Гц: затухание верхов в воздухе — ISO 9613-1 на этой частоте ({@link Air}). */
+    /** Frequency where EFX measures highs, Hz: air high attenuation is ISO 9613-1 at this frequency ({@link Air}). */
     private static final double HIGHS_HZ = 5000;
 
-    /** Номер фильтра OpenAL (создаётся в звуковом потоке при первой нужде), −1 — EFX нет. */
+    /** OpenAL filter ID (created on sound thread on first need), −1 — no EFX. */
     private static volatile int filter;
     private static Boolean soundPhysics;
     /**
-     * Фильтр Sound Physics Remastered, каким он был при старте чужих петель (вода, маяк, петли модов): в оглушении и
-     * пелене их фильтр мы ставим каждый тик ({@link #loops}), и его доля — отсюда. Только звуковой поток; ключи слабые —
-     * звук забыт, запись уходит.
+     * Sound Physics Remastered filter at the start of others' loops (water, beacon, mod loops): during deafness
+     * and pall we set their filter each tick ({@link #loops}), taking its share from here. Sound thread only;
+     * weak keys — forget sound, entry goes away.
      */
     private static final Map<SoundInstance, float[]> SPR_AT_START = new WeakHashMap<>();
     /**
-     * Наш фильтр на наших звуках, пока стоит Sound Physics: с её {@code update_moving_sounds} она раз в несколько тиков
-     * оценивает каждый играющий звук заново и ставит свой фильтр и поглощение воздухом, в том числе при строке 0 в
-     * {@code sound_rates}; {@link #loops} каждый тик возвращает наш — после неё. Только звуковой поток; ключи слабые.
+     * Our filter on our sounds while Sound Physics is present: its {@code update_moving_sounds} re-evaluates each
+     * playing sound every few ticks, setting its own filter and air absorption even with a 0 entry in
+     * {@code sound_rates}; {@link #loops} restores ours each tick after it. Sound thread only; weak keys.
      */
     private static final Map<SoundInstance, float[]> OWN = new WeakHashMap<>();
     /**
-     * Чужие петли (вода и Незер вокруг, маяк, вагонетка, петли модов), которым сейчас стоит наш фильтр, и какой: его
-     * ведёт {@link #loops}. Только поток клиента; ключи слабые.
+     * Others' loops (ambient water and Nether, beacon, minecart, mod loops) currently carrying our filter, and its
+     * values: managed by {@link #loops}. Client thread only; weak keys.
      */
     private static final Map<SoundInstance, float[]> LOOPS = new WeakHashMap<>();
     /**
-     * Меньше этого фильтр петли не меняется (вызовы OpenAL в каждом тике на каждую петлю — лишние). Только без Sound
-     * Physics: с её {@code update_moving_sounds} она раз в несколько тиков ставит петле свой фильтр вместо нашего, и наш
-     * нужен каждый тик (у порванных перепонок он не меняется неделями игры).
+     * Loop filter does not change below this (OpenAL calls per loop per tick are unnecessary). Only without
+     * Sound Physics: its {@code update_moving_sounds} replaces our loop filter every few ticks, so ours is needed
+     * every tick (with ruptured eardrums it stays unchanged for game weeks).
      */
     private static final float LOOP_STEP = 0.005f;
     /**
-     * Слух вернулся разом (смерть, перемотка повтора, настройка): вернуть фильтр всем чужим петлям, и тем, что начались в
-     * оглушении после прошлого {@link #loops} и в {@link #LOOPS} ещё не попали. Только поток клиента.
+     * Hearing returned at once (death, replay rewind, setting): restore filters to all others' loops, including
+     * those started during deafness since last {@link #loops} and not yet in {@link #LOOPS}. Client thread only.
      */
     private static boolean restoreAll;
 
     private SoundFilters() {}
 
-    /** Звук, которому нужен фильтр: общая громкость и доля верхов (0..1). */
+    /** Sound needing a filter: overall gain and high fraction (0..1). */
     public interface Muffled {
         float lowpassGain();
 
         float lowpassHighs();
     }
 
-    /** Воздух и преграды по пути наших звуков включены (настройка); Sound Physics их не отменяет — путь наш. */
+    /** Air and barriers on our sound paths enabled (setting); Sound Physics does not override them — path is ours. */
     static boolean pathEffects() {
         return IncomingConfig.CLIENT.soundMuffling.get();
     }
 
-    /** Стоит ли Sound Physics Remastered. */
+    /** Whether Sound Physics Remastered is installed. */
     private static boolean soundPhysics() {
         if (soundPhysics == null) soundPhysics = ModList.get().isLoaded("sound_physics_remastered");
         return soundPhysics;
     }
 
     /**
-     * Доля верхов, дошедшая по воздуху за d блоков: затухание на 5 кГц при влажности воздуха мира у земли
-     * ({@link ClientAir}: ясно — 33 дБ/км, дождь — 27).
+     * High fraction surviving d blocks of air: 5 kHz attenuation at world's surface-air humidity
+     * ({@link ClientAir}: clear — 33 dB/km, rain — 27).
      */
     static float air(double d) {
         if (!pathEffects()) return 1;
@@ -119,10 +119,10 @@ public final class SoundFilters {
     }
 
     /**
-     * Есть ли между ухом и точкой твёрдые блоки (холм, дом): 1 — прямой путь, 0 — закрыто. Листва — не преграда: звук
-     * она почти не держит (ISO 9613-2, прил. A: ~1 дБ на 10–20 м густой кроны), а кроны на пути к низко летящему снаряду
-     * то закрывали бы, то открывали его, и мотор вдали дрожал бы громкостью. Клиентский мир: незагруженные чанки пусты,
-     * ничего не грузится.
+     * Solid blocks between ear and point (hill, house): 1 — direct path, 0 — blocked. Foliage is not a barrier:
+     * it barely blocks sound (ISO 9613-2, annex A: ~1 dB per 10–20 m dense canopy), while crowns on a path to a
+     * low-flying projectile would alternately block and open it, making distant engine volume flutter. Client
+     * world: unloaded chunks are empty, nothing is loaded.
      */
     static float open(Vec3 from, Vec3 to) {
         Minecraft mc = Minecraft.getInstance();
@@ -133,16 +133,16 @@ public final class SoundFilters {
         return level.clip(new ThroughLeaves(from, end, player)).getType() == HitResult.Type.MISS ? 1 : 0;
     }
 
-    /** Путь звука от уха: преграды и воздух (мир клиента и настройка; проверки подменяют). */
+    /** Sound path from ear: barriers and air (client world and setting; substituted in checks). */
     interface Path {
-        /** Доля открытого пути от {@code from} к {@code to} ({@link SoundFilters#open}). */
+        /** Open-path fraction from {@code from} to {@code to} ({@link SoundFilters#open}). */
         float open(Vec3 from, Vec3 to);
 
-        /** Доля верхов, что оставляет воздух на {@code distance} блоках ({@link SoundFilters#air}). */
+        /** High fraction air leaves over {@code distance} blocks ({@link SoundFilters#air}). */
         float air(double distance);
     }
 
-    /** Путь в мире клиента. */
+    /** Path in client world. */
     static final Path WORLD = new Path() {
         @Override
         public float open(Vec3 from, Vec3 to) {
@@ -155,22 +155,22 @@ public final class SoundFilters {
         }
     };
 
-    /** Загружен ли у клиента столбец чанков. */
+    /** Whether chunk column is loaded on client. */
     interface Loaded {
         boolean at(int cx, int cz);
     }
 
     /**
-     * Докуда луч от {@code from} к {@code to} идёт по загруженным чанкам клиента — доля пути (0..1), конец последнего
-     * загруженного столбца по лучу (обход столбцов по лучу, Amanatides–Woo). Дальше мир клиента пуст — незагруженный чанк
-     * отдаёт воздух, — и ничего не закрывает: луч до самой цели дал бы тот же ответ, только шагов больше на порядок
-     * (пожар в 1,9 км — ~1900 шагов, загружены первые сотни).
+     * How far a ray from {@code from} to {@code to} passes through loaded client chunks: path fraction (0..1),
+     * end of last loaded column along ray (column traversal, Amanatides–Woo). Beyond, client world is empty:
+     * unloaded chunk returns air, blocking nothing; tracing to the target would give the same result with an
+     * order of magnitude more steps (fire at 1.9 km: ~1900 steps, only first hundreds loaded).
      */
     static double reach(Vec3 from, Vec3 to, Loaded loaded) {
         double dx = to.x - from.x, dz = to.z - from.z;
         int cx = Mth.floor(from.x / 16), cz = Mth.floor(from.z / 16);
         int sx = dx > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
-        // доля пути до следующей границы столбца по x и по z и шаг доли на столбец
+        // path fraction to next column boundary in x and z, and fraction step per column
         double stepX = dx != 0 ? 16 / Math.abs(dx) : Double.POSITIVE_INFINITY, stepZ = dz != 0 ? 16 / Math.abs(dz) : Double.POSITIVE_INFINITY;
         double nextX = dx != 0 ? ((sx > 0 ? (cx + 1) * 16 - from.x : from.x - cx * 16) / Math.abs(dx)) : Double.POSITIVE_INFINITY;
         double nextZ = dz != 0 ? ((sz > 0 ? (cz + 1) * 16 - from.z : from.z - cz * 16) / Math.abs(dz)) : Double.POSITIVE_INFINITY;
@@ -190,25 +190,25 @@ public final class SoundFilters {
     }
 
     /**
-     * Лучи {@link #openToward}: длина (короче ближних отражений эха, {@code TerrainEcho.NEAR}: склон, который отвечает,
-     * — не преграда) и наклоны (вдоль, выше, круто вверх), рад.
+     * {@link #openToward} rays: length (shorter than nearest echo reflections, {@code TerrainEcho.NEAR}: responding
+     * slope is not a barrier) and inclinations (along, above, steeply upward), rad.
      */
     private static final double TOWARD_REACH = 12;
     private static final double[] TOWARD_PITCH = {0, 0.35, 0.9};
 
     /**
-     * Открыто ли ухо в сторону {@code azimuth} для далёкого источника там (эхо от склонов): доля трёх лучей на
-     * {@link #TOWARD_REACH} блоков — вдоль, выше и круто вверх, — что не упёрлись в твёрдое (в доме — стены и крыша,
-     * в окно — открыто). Для своих источников ({@link OwnSources}): их Sound Physics не трогает, поэтому — и при нём;
-     * выключено настройкой — 1.
+     * Whether ear is open toward {@code azimuth} for a distant source there (slope echoes): fraction of three
+     * {@link #TOWARD_REACH}-block rays — along, above and steeply upward — not hitting solid (house: walls and roof;
+     * window: open). For our own sources ({@link OwnSources}): Sound Physics leaves them alone, so also needed
+     * with it; disabled in settings — 1.
      */
     static float openToward(Vec3 ear, double azimuth) {
         return IncomingConfig.CLIENT.soundMuffling.get() ? openRays(ear, azimuth) : 1;
     }
 
     /**
-     * Доля лучей {@link #openToward} в сторону {@code azimuth}, что не упёрлись в твёрдое, — без настройки звука (ветровая
-     * тень стены у ядерной волны). Мира или игрока нет — 1.
+     * Fraction of {@link #openToward} rays toward {@code azimuth} not hitting solid, independent of sound setting
+     * (wall wind shadow for nuclear wave). No world or player — 1.
      */
     public static float openRays(Vec3 ear, double azimuth) {
         Minecraft mc = Minecraft.getInstance();
@@ -223,7 +223,7 @@ public final class SoundFilters {
         return open / (float) TOWARD_PITCH.length;
     }
 
-    /** Луч по твёрдым блокам, сквозь листву. */
+    /** Ray through solid blocks, passing foliage. */
     private static final class ThroughLeaves extends ClipContext {
         ThroughLeaves(Vec3 from, Vec3 to, Player player) {
             super(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player);
@@ -235,7 +235,7 @@ public final class SoundFilters {
         }
     }
 
-    /** Громкость и верха за преградой: закрытый путь — тише на 4 дБ и глухо (обход по дифракции). */
+    /** Gain and highs behind barrier: blocked path 4 dB quieter and muffled (diffraction around it). */
     static float blockedGain(float open) {
         return 1 - 0.37f * (1 - open);
     }
@@ -244,7 +244,7 @@ public final class SoundFilters {
         return 1 - 0.8f * (1 - open);
     }
 
-    // ---------------------------------------------------------------- звуковой поток
+    // ---------------------------------------------------------------- sound thread
 
     public static void onEngineLoad(SoundEngineLoadEvent e) {
         filter = 0;
@@ -272,10 +272,10 @@ public final class SoundFilters {
         gain *= Deafness.gain(sound) * (1 - 0.3f * m);
         highs *= Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
         boolean ours = gain < 0.999f || highs < 0.999f;
-        // Sound Physics Remastered поставил свой фильтр этому звуку только что (в начале Channel.play, событие — сразу
-        // после него, в той же задаче звукового потока)
+        // Sound Physics Remastered just set this sound's filter (at start of Channel.play, event immediately
+        // afterward in the same sound-thread task)
         float[] spr = !own && (ours || sound.isLooping()) ? Spr.now() : null;
-        // чужие петли ведём каждый тик в оглушении (loops): их фильтр Sound Physics нужен и потом
+        // manage others' loops every tick during deafness (loops): their Sound Physics filter is needed later too
         if (spr != null && sound.isLooping()) SPR_AT_START.put(sound, spr);
         float[] f = direct(own, gain, highs, soundPhysics(), spr);
         if (f == null) return;
@@ -284,9 +284,9 @@ public final class SoundFilters {
     }
 
     /**
-     * Наш звук при Sound Physics: его поглощение воздухом по расстоянию OpenAL ({@code AL_AIR_ABSORPTION_FACTOR}, он
-     * ставит его каждому звуку, и при строке 0 в {@code sound_rates} тоже) — обратно 0, как у движка Minecraft: воздух
-     * по пути уже в нашем фильтре, а мотор стоит там, где его слышно, и верха вдали срезались бы дважды.
+     * Our sound with Sound Physics: reset its OpenAL distance air absorption ({@code AL_AIR_ABSORPTION_FACTOR},
+     * set on every sound, even a 0 entry in {@code sound_rates}) to 0 as Minecraft engine does: our filter already
+     * includes path air, engine sits where it is heard, so distant highs would otherwise be cut twice.
      */
     private static void ownPath(SoundInstance sound, int source, float[] f) {
         if (filter <= 0 || !soundPhysics()) return;
@@ -295,11 +295,11 @@ public final class SoundFilters {
     }
 
     /**
-     * Прямой фильтр звука при старте: громкость и доля верхов, или null — фильтр не ставить. Наш звук ({@code own}) —
-     * наш фильтр вместо фильтра Sound Physics: путь наш, его фильтр видел только 3 блока до уха, и преграда у уха
-     * считалась бы дважды; стоит Sound Physics ({@code soundPhysics}) — наш ставится и без глушения, чтобы снять его
-     * (и тогда, когда его фильтр не прочитать). Чужой — наш поверх его ({@code spr}, null — нет или не прочитать):
-     * оглушение и пелена, а путь — его.
+     * Direct filter at sound start: gain and high fraction, or null — do not set. Our sound ({@code own}) uses
+     * our filter instead of Sound Physics: path is ours, its filter saw only 3 blocks to ear, and ear barrier
+     * would count twice; with Sound Physics ({@code soundPhysics}) set ours even without muffling to remove its
+     * filter (including when it cannot be read). Others use ours over theirs ({@code spr}, null — absent or
+     * unreadable): deafness and pall are ours, path is theirs.
      */
     static float @Nullable [] direct(boolean own, float gain, float highs, boolean soundPhysics, float @Nullable [] spr) {
         boolean ours = gain < 0.999f || highs < 0.999f;
@@ -308,14 +308,14 @@ public final class SoundFilters {
         return spr != null ? new float[]{gain * spr[0], highs * spr[1]} : new float[]{gain, highs};
     }
 
-    /** Каждый тик для звука, который играет: новые параметры фильтра (мотор улетает, скрывается за холмом). */
+    /** Each tick for playing sound: new filter parameters (engine flies away, hides behind hill). */
     static void update(SoundInstance sound, float gain, float highs) {
         ChannelAccess.ChannelHandle handle = Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.get(sound);
         if (handle == null) return;
         float m = NukePall.muffle(sound);
         float g = gain * Deafness.gain(sound) * (1 - 0.3f * m), h = highs * Math.max(0.01f, Deafness.highs(sound) * (1 - 0.75f * m));
-        // звук наш ({@link Muffled}): его путь — наш, фильтр Sound Physics с его старта сюда не входит ({@link #direct});
-        // её новые оценки после этого тика перекрывает {@link #loops}
+        // sound is ours ({@link Muffled}): path ours, Sound Physics start filter omitted ({@link #direct});
+        // {@link #loops} overwrites its new evaluations after this tick
         handle.execute(channel -> {
             set(channel.source, g, h);
             ownPath(sound, channel.source, new float[]{g, h});
@@ -323,11 +323,12 @@ public final class SoundFilters {
     }
 
     /**
-     * Тик клиента (после тика звука, где Sound Physics ставит в очередь звукового потока свои новые оценки): наш фильтр
-     * снова на наших звуках, пока она стоит ({@link #OWN}), и фильтр оглушения и пелены на чужих петлях. Фильтр на
-     * источнике остаётся до конца звука, а петля звучит, пока её не снимут: начатая до волны, она звучала бы чисто часы
-     * оглушения, а начатая в оглушении — глухо и после. Ставится, пока он не 1, и один раз — когда снова 1 (фильтр Sound Physics с её старта — обратно); новые
-     * оценки Sound Physics для таких петель ({@code updateMovingSounds}) он, пока стоит, перекрывает, как у наших петель.
+     * Client tick (after sound tick queues Sound Physics re-evaluations on sound thread): restore our filters
+     * on our sounds while it is present ({@link #OWN}), and deafness/pall filters on others' loops. Source filter
+     * lasts until sound ends, loop lasts until removed: one started before wave would sound clear through hours
+     * of deafness; one started in deafness would stay muffled afterward. Set while not 1, and once when 1 again
+     * (restore Sound Physics start filter); while present, overwrites Sound Physics loop re-evaluations
+     * ({@code updateMovingSounds}), as for our loops.
      */
     public static void loops() {
         SoundEngine engine = Minecraft.getInstance().getSoundManager().soundEngine;
@@ -358,21 +359,21 @@ public final class SoundFilters {
                 float[] spr = SPR_AT_START.get(sound);
                 if (spr != null) set(channel.source, g * spr[0], h * spr[1]);
                 else if (on) set(channel.source, g, h);
-                // свой фильтр ставили, только если EFX есть (без него AL_DIRECT_FILTER — ошибка, её принял бы движок)
+                // own filter set only if EFX exists (without it AL_DIRECT_FILTER errors, which engine would treat as its own)
                 else if (filter > 0) AL10.alSourcei(channel.source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
             });
         }
     }
 
-    /** Слух вернулся разом: следующий {@link #loops} вернёт фильтр всем чужим петлям. Поток клиента. */
+    /** Hearing returned at once: next {@link #loops} restores filters to all others' loops. Client thread. */
     public static void restoreLoops() {
         restoreAll = true;
     }
 
     /**
-     * Sound Physics Remastered: его фильтр прямого звука ({@code SoundPhysics.directFilter0}, один на все звуки — перед
-     * каждым он ставит в него параметры и копирует их в источник). Внутренности чужого мода, через отражение: не нашлось —
-     * один раз в лог, и наш фильтр снова ставится вместо его.
+     * Sound Physics Remastered direct filter ({@code SoundPhysics.directFilter0}, one for all sounds — sets values
+     * then copies to source before each). Other mod internals via reflection: not found — log once, and our filter
+     * again replaces its filter.
      */
     private static final class Spr {
         @Nullable
@@ -383,7 +384,7 @@ public final class SoundFilters {
         private static Method get;
         private static boolean tried, logged;
 
-        /** Громкость и доля верхов, которые он только что поставил звуку; null — его нет, он выключен или не прочитать. */
+        /** Gain and high fraction it just set on sound; null — absent, disabled or unreadable. */
         @Nullable
         static float[] now() {
             if (!soundPhysics() || !find()) return null;

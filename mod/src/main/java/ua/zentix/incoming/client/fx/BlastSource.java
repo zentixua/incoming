@@ -9,29 +9,29 @@ import ua.zentix.incoming.warhead.BunkerCover;
 import ua.zentix.incoming.warhead.BuriedBlast;
 
 /**
- * Что взорвалось — то, что картинке и звуку нужно от взрыва, из пакета {@link S2C.Blast} и паспорта оружия
- * ({@link WeaponSpec}): заряд и топливо к удару берутся только отсюда, а не из вида пакета (по виду «Ланцет» был шахедом).
- * Без Minecraft.
+ * What exploded — what visuals and sound need from a blast, from the {@link S2C.Blast} packet and weapon spec
+ * ({@link WeaponSpec}): impact charge and fuel come only from here, rather than the packet kind (by kind, Lancet used to be Shahed).
+ * No Minecraft dependencies.
  *
- * @param weapon      оружие; null — взрыв не оружия из паспорта (разрыв зенитной ракеты)
- * @param chargeKg    заряд в тротиловом эквиваленте, кг ({@link WeaponSpec#charge}); у бомбы под землёй — доля её
- *                    заряда, что вышла в воздух ({@link BuriedBlast#airCharge})
- * @param fuelKg      топливо, что сгорает огненным шаром, кг ({@link WeaponSpec#fuelAtImpact})
- * @param surface     взрыв на земле (волна отражается от неё — давление как у заряда в 1,8 раза больше) или в воздухе
- * @param underground бомба взорвалась под землёй ({@link S2C.Blast#BUNKER})
+ * @param weapon      weapon; null — the blast is not from a weapon in the spec (anti-aircraft missile burst)
+ * @param chargeKg    TNT-equivalent charge, kg ({@link WeaponSpec#charge}); for an underground bomb — the share of its
+ *                    charge that entered the air ({@link BuriedBlast#airCharge})
+ * @param fuelKg      fuel consumed in the fireball, kg ({@link WeaponSpec#fuelAtImpact})
+ * @param surface     blast on the ground (wave reflected by it — pressure as for a charge 1.8 times larger), or in the air
+ * @param underground bomb exploded underground ({@link S2C.Blast#BUNKER})
  */
 public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double fuelKg, boolean surface, boolean underground) {
     /**
-     * Взрывчатка — брутто-формула CHNO. Свободный углерод продуктов детонации — по правилам Кистяковского–Вильсона
-     * (Akhavan, «The Chemistry of Explosives», гл. 4): при кислородном балансе ниже −40 % (модифицированные, Springall
-     * Roberts) кислород сперва уходит в воду, остаток — в CO; выше — сперва CO, потом вода, потом CO₂. Что не стало CO —
-     * сажа: тротил беден кислородом (баланс −74 %) — в продуктах 18,5 % массы углерода, дым чёрный; гексоген (−21,6 %) —
-     * углерода нет, дым серый — грунт, вода и то, что сгорело рядом.
+     * Explosive — CHNO molecular formula. Free carbon in detonation products follows the Kistiakowsky–Wilson rules
+     * (Akhavan, “The Chemistry of Explosives”, ch. 4): below −40 % oxygen balance (modified, Springall
+     * Roberts), oxygen first forms water, then CO; above — first CO, then water, then CO₂. Carbon not turned into CO is
+     * soot: TNT is oxygen-poor (balance −74 %) — products contain 18.5 % carbon by mass, black smoke; RDX (−21.6 %) —
+     * no carbon, grey smoke from soil, water and nearby burning matter.
      */
     public enum Explosive {
-        /** Тротил C₇H₅N₃O₆. */
+        /** TNT C₇H₅N₃O₆. */
         TNT(7, 5, 3, 6),
-        /** Гексоген C₃H₆N₆O₆ (основа PBXN-107 «Томагавка»: 86 % гексогена, остальное — связка, её углерод не в счёт). */
+        /** RDX C₃H₆N₆O₆ (basis of Tomahawk PBXN-107: 86 % RDX, the rest is binder, whose carbon is not counted). */
         RDX(3, 6, 6, 6);
 
         final int c, h, n, o;
@@ -43,17 +43,17 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
             this.o = o;
         }
 
-        /** Молярная масса, г/моль. */
+        /** Molar mass, g/mol. */
         double molarMass() {
             return 12.011 * c + 1.008 * h + 14.007 * n + 15.999 * o;
         }
 
-        /** Кислородный баланс до CO₂ и H₂O, доля массы (тротил −0,74, гексоген −0,216). */
+        /** Oxygen balance to CO₂ and H₂O, mass fraction (TNT −0.74, RDX −0.216). */
         public double oxygenBalance() {
             return -1600 * (2 * c + h / 2.0 - o) / molarMass() / 100;
         }
 
-        /** Свободного углерода в продуктах детонации на кг взрывчатки, кг (правила Кистяковского–Вильсона). */
+        /** Free carbon in detonation products per kg of explosive, kg (Kistiakowsky–Wilson rules). */
         public double freeCarbon() {
             double oxygen = o, carbon;
             if (oxygenBalance() < -0.40) {
@@ -67,52 +67,52 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
     }
 
 
-    /** Топливо в баке — по паспорту ({@link WeaponSpec#fuel}): шахед — бензин, ракета — JP-10; у остальных к удару его нет. */
+    /** Tank fuel from the spec ({@link WeaponSpec#fuel}): Shahed — gasoline, missile — JP-10; others have none at impact. */
     public FuelPool.Fuel fuel() {
         return fuelKg <= 0 || weapon == null ? FuelPool.Fuel.NONE : weapon.spec().fuel();
     }
 
     /**
-     * Состав взрывчатки: «Томагавк» — PBXN-107 на гексогене (ref/passport.md); у шахеда, «Ланцета», «Града» и разрыва
-     * зенитной ракеты состав не публикуется — тротиловый, как у боевых частей их семейств (оценка; дым на съёмках ударов —
-     * чёрный).
+     * Explosive composition: Tomahawk — RDX-based PBXN-107 (ref/passport.md); for Shahed, Lancet, Grad and anti-aircraft
+     * missile bursts the composition is unpublished — TNT, as in warheads of their families (est.) (smoke in strike footage is
+     * black).
      */
     public Explosive explosive() {
         return weapon == WeaponType.MISSILE ? Explosive.RDX : Explosive.TNT;
     }
 
-    /** Взрыв из пакета: оружие из пакета (в старом повторе — по виду), числа — из его паспорта. */
+    /** Blast from a packet: weapon from the packet (by kind in old replays), numbers from its spec. */
     public static BlastSource of(S2C.Blast p) {
         return p.kind() == S2C.Blast.BUNKER ? buried(p.pos().y, p.surfaceY()) : of(p.weaponType(), false);
     }
 
-    /** Взрыв оружия {@code w} на земле ({@code underground} — бомба под землёй). */
+    /** Blast of weapon {@code w} on the ground ({@code underground} — buried bomb). */
     public static BlastSource of(WeaponType w, boolean underground) {
         WeaponSpec s = w.spec();
         return new BlastSource(w, s.charge(), s.fuelAtImpact(), true, underground);
     }
 
     /**
-     * Бомба взорвалась на высоте {@code chargeY} под верхом {@code surfaceY} ({@link BunkerCover}): над землёй — та доля её
-     * заряда, что ушла в воздух ({@link BuriedBlast}); не прорвалась наружу — взрыв под землёй.
+     * Bomb exploded at {@code chargeY} below surface {@code surfaceY} ({@link BunkerCover}): above ground — the share of its
+     * charge that entered the air ({@link BuriedBlast}); no breakout — underground blast.
      */
     public static BlastSource buried(double chargeY, float surfaceY) {
         BuriedBlast law = law(chargeY, surfaceY);
         return new BlastSource(WeaponType.BUNKER, law.airCharge(hole()), 0, true, !law.breaches());
     }
 
-    /** Закон подрыва бомбы на высоте {@code chargeY} под верхом {@code surfaceY}. */
+    /** Bomb detonation law at {@code chargeY} below surface {@code surfaceY}. */
     public static BuriedBlast law(double chargeY, float surfaceY) {
         return new BuriedBlast(WeaponType.BUNKER.spec().warheadTnt(), BunkerCover.depth((int) surfaceY, chargeY));
     }
 
-    /** Сечение хода бомбы, м² (корпус по паспорту). */
+    /** Bomb bore cross-section, m² (body from the spec). */
     public static double hole() {
         double d = WeaponType.BUNKER.spec().striker().article().diameter();
         return Math.PI * d * d / 4;
     }
 
-    /** Разрыв в воздухе заряда {@code chargeKg} кг ТНТ без топлива. */
+    /** Airburst of {@code chargeKg} kg TNT with no fuel. */
     public static BlastSource air(double chargeKg) {
         return new BlastSource(null, chargeKg, 0, false, false);
     }

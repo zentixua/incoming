@@ -8,25 +8,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Горящее топливо воронки, как его знает клиент: состояние с сервера ({@code S2C.FuelFire}, {@code warhead/FuelFires}) —
- * клетки в порядке выгорания и какие погасли раньше срока, — и закон топлива ({@link FuelPool}). Отсюда тепло очага дыма
- * ({@link FireSmoke#pool}), его место и гул ({@code CraterFire}): стекло — очаг там, где оно теперь горит; засыпало или
- * залило — горит меньшая площадь; кончилось всё — очаг гаснет. Без Minecraft-клиента.
+ * Burning crater fuel as known to the client: server state ({@code S2C.FuelFire}, {@code warhead/FuelFires}) —
+ * cells in burnout order and those extinguished early — plus the fuel law ({@link FuelPool}). Supplies smoke source heat
+ * ({@link FireSmoke#pool}), position and rumble ({@code CraterFire}): drained fuel moves the source to where it now burns; buried or
+ * flooded fuel burns over a smaller area; all finished — source dies out. No Minecraft client dependency.
  */
 public final class FuelBurn {
-    /** Воронка (номер сервера; −1 — без сервера: старый повтор, песочница — только у места удара). */
+    /** Crater (server ID; −1 — serverless: old replay, sandbox — only at the impact point). */
     final int id;
-    /** Закон топлива на клетках этой воронки. */
+    /** Fuel law on this crater's cells. */
     final FuelPool law;
-    /** Когда гаснет каждая клетка по закону, с от удара. */
+    /** Law-based extinction time of each cell, s after impact. */
     private final double[] outs;
     private List<BlockPos> cells = List.of();
     private long smothered;
     private Vec3 centre = Vec3.ZERO;
 
     /**
-     * Воронка {@code id} с законом {@code law} на {@code lit} клетках (по закону гаснут в {@link FuelPool#cellSeconds}),
-     * нынешние места {@code cells} и погасшие раньше срока {@code smothered} (биты по номеру клетки).
+     * Crater {@code id} with {@code law} on {@code lit} cells (law-based extinction at {@link FuelPool#cellSeconds}),
+     * current positions {@code cells} and early-extinguished {@code smothered} (bits by cell index).
      */
     FuelBurn(int id, FuelPool law, int lit, List<BlockPos> cells, long smothered) {
         this.id = id;
@@ -36,12 +36,12 @@ public final class FuelBurn {
         update(cells, smothered);
     }
 
-    /** Топливо без сервера — по закону {@code law} у одной точки {@code pos} (старый повтор, песочница, проверки). */
+    /** Serverless fuel — {@code law} at a single point {@code pos} (old replay, sandbox, checks). */
     public static FuelBurn at(FuelPool law, BlockPos pos) {
         return new FuelBurn(-1, law, law.cells(), List.of(pos), 0);
     }
 
-    /** Новое состояние с сервера: места клеток и какие погасли раньше срока. */
+    /** New server state: cell positions and which were extinguished early. */
     void update(List<BlockPos> cells, long smothered) {
         this.cells = List.copyOf(cells);
         this.smothered = smothered;
@@ -56,26 +56,26 @@ public final class FuelBurn {
         if (n > 0) centre = new Vec3(x / n, y / n, z / n);
     }
 
-    /** Клетки, чьё топливо не кончилось раньше срока (огонь на них — топливо, {@link FuelCells}). */
+    /** Cells whose fuel did not end early (their fire is fuel, {@link FuelCells}). */
     List<BlockPos> live() {
         List<BlockPos> out = new ArrayList<>(cells.size());
         for (int k = 0; k < cells.size(); k++) if ((smothered >>> k & 1) == 0) out.add(cells.get(k));
         return out;
     }
 
-    /** Закон топлива на клетках этой воронки. */
+    /** Fuel law on this crater's cells. */
     public FuelPool law() {
         return law;
     }
 
-    /** Середина горящих клеток: очаг дыма, свет и гул. */
+    /** Centre of burning cells: smoke source, light and rumble. */
     public Vec3 centre() {
         return centre;
     }
 
     /**
-     * Доля тепловыделения закона в {@code t} с от удара ({@link FuelPool#share}), × доля клеток, которым по закону ещё
-     * гореть, что не погасли раньше срока: засыпанная клетка уносит свою часть площади.
+     * Law's heat release fraction at {@code t} s after impact ({@link FuelPool#share}), × fraction of cells still meant to
+     * burn under the law that have not gone out early: a buried cell removes its area share.
      */
     public double share(double t) {
         double share = law.share(t);

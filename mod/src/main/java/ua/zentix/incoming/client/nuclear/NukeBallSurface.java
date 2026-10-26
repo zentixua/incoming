@@ -21,25 +21,25 @@ import java.nio.ByteOrder;
 import java.util.Optional;
 
 /**
- * Узор поверхности огненного шара ядерки ({@code textures/fx/nukeball.bin}, {@code tools/bake_fx}: запекание Blender
- * и {@code pack.py}): у каждого кадра — карта по направлениям от центра шара (октаэдрическая, ось y — вверх), в текселе
- * — во сколько раз перепад температуры поверхности там больше среднего; среднее p⁴ по сфере — 1 (Стефан–Больцман:
- * шар светит мощностью модели). Яркость и цвет — чёрное тело температуры {@code MushroomModel}, узор — только где
- * поверхность горячее и холоднее. Кадры — по пути всплытия шара в его радиусах ({@code FireballModel.surfaceRise}).
- * В видеопамять — трёхмерной текстурой R16 (u, v, кадр): между кадрами — линейно. Рисует проход пелены
- * ({@code fx_pall}: {@code PallBall}); не прочитан — шар без узора, как прежде ({@link #ready}).
+ * Nuclear fireball surface pattern ({@code textures/fx/nukeball.bin}, {@code tools/bake_fx}: Blender bake
+ * and {@code pack.py}): each frame maps directions from the ball center (octahedral, y axis up); each texel
+ * holds how many times the local surface-temperature variation exceeds the mean; mean p⁴ over the sphere is 1 (Stefan–Boltzmann:
+ * the ball emits the model power). Brightness and color are a black body at the {@code MushroomModel} temperature; the pattern only sets where
+ * the surface is hotter or colder. Frames follow the ball's rise distance in ball radii ({@code FireballModel.surfaceRise}).
+ * Uploaded as a 3D R16 texture (u, v, frame): linear between frames. Drawn by the pall pass
+ * ({@code fx_pall}: {@code PallBall}); if not loaded, the ball has no pattern, as before ({@link #ready}).
  */
 public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBallSurface.Data> {
     public static final NukeBallSurface INSTANCE = new NukeBallSurface();
     private static final ResourceLocation FILE = Incoming.id("textures/fx/nukeball.bin");
-    /** Узор в файле — p / {@link #P_MAX} в 16 битах ({@code pack.py}: BALL_P). */
+    /** File pattern is p / {@link #P_MAX} in 16 bits ({@code pack.py}: BALL_P). */
     public static final double P_MAX = 2.0;
-    /** Блок текстуры: трёхмерную ShaderInstance не привязывает (у него все — двумерные), свой блок, своя привязка. */
+    /** Texture unit: ShaderInstance does not bind 3D textures (all its textures are 2D); own unit, own binding. */
     static final int UNIT = 15;
 
-    /** Прочитанный файл: сторона карты, путь всплытия кадров в радиусах шара, узор (кадр, v, u) в 16 битах. */
+    /** Loaded file: map size, frame rise distance in ball radii, 16-bit pattern (frame, v, u). */
     public record Data(int side, float[] rises, short[] values) {
-        /** Узор в текселе (u, v) кадра k. */
+        /** Pattern in texel (u, v) of frame k. */
         public double at(int k, int u, int v) {
             return (values[(k * side + v) * side + u] & 0xFFFF) / 65535.0 * P_MAX;
         }
@@ -51,7 +51,7 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
     private NukeBallSurface() {
     }
 
-    /** Разбор файла: int32 сторона, int32 кадров, float32 путь кадров, uint16 узор — всё little-endian. */
+    /** File parsing: int32 size, int32 frame count, float32 frame distance, uint16 pattern — all little-endian. */
     public static Data parse(InputStream in) throws IOException {
         ByteBuffer b = ByteBuffer.wrap(in.readAllBytes()).order(ByteOrder.LITTLE_ENDIAN);
         int side = b.getInt(), frames = b.getInt();
@@ -78,7 +78,7 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         }
     }
 
-    /** Поток отрисовки: в видеопамять (та же текстура при перезагрузке ресурсов). */
+    /** Render thread: upload to video memory (reuse the texture on resource reload). */
     @Override
     protected void apply(Data d, ResourceManager resources, ProfilerFiller profiler) {
         if (d == null) {
@@ -113,14 +113,14 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         data = d;
     }
 
-    /** Узор прочитан и в видеопамяти: шар берёт его ({@code MushroomField}: доля узора), иначе — прежние языки клубов. */
+    /** Pattern loaded and in video memory: the ball uses it ({@code MushroomField}: pattern share), otherwise the previous billow tongues. */
     public static boolean ready() {
         return data != null;
     }
 
     /**
-     * Место кадра для пути всплытия {@code rise} (радиусы шара): номер с долей по пути кадров (между кадрами — по прямой,
-     * за краями — крайний).
+     * Frame position for rise distance {@code rise} (ball radii): index plus fraction along the frame distance (linear between frames,
+     * clamped at the ends).
      */
     public static double frame(double rise) {
         Data d = data;
@@ -135,19 +135,19 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         return rises.length - 1;
     }
 
-    /** Путь всплытия кадров в радиусах шара; null — узор не прочитан. */
+    /** Frame rise distance in ball radii; null — pattern not loaded. */
     public static float[] rises() {
         Data d = data;
         return d == null ? null : d.rises;
     }
 
-    /** Кадров в текстуре (0 — не прочитана). */
+    /** Frames in the texture (0 — not loaded). */
     public static int frames() {
         Data d = data;
         return d == null ? 0 : d.rises.length;
     }
 
-    /** Привязка к проходу лучей пелены после {@code apply()} шейдера: блок {@link #UNIT}, сэмплер {@code PallBall}. */
+    /** Bind to the pall ray pass after shader {@code apply()}: unit {@link #UNIT}, sampler {@code PallBall}. */
     public static void bind(ShaderInstance s) {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
@@ -156,7 +156,7 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         com.mojang.blaze3d.shaders.Uniform.uploadInteger(com.mojang.blaze3d.shaders.Uniform.glGetUniformLocation(s.getId(), "PallBall"), UNIT);
     }
 
-    /** Снять привязку после отрисовки. */
+    /** Unbind after rendering. */
     public static void unbind() {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
@@ -165,8 +165,8 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
     }
 
     /**
-     * Октаэдрическая карта направления (x, y, z; y — вверх) → u 0..1 (как {@code mushOctU} в {@code mushroom.glsl} и
-     * {@code octa_decode} в {@code pack.py}): верхняя полусфера — ромб в середине, нижняя — его углы.
+     * Octahedral direction map (x, y, z; y up) → u 0..1 (as in {@code mushOctU} in {@code mushroom.glsl} and
+     * {@code octa_decode} in {@code pack.py}): upper hemisphere — diamond in the center; lower — its corners.
      */
     public static double octU(double x, double y, double z) {
         double s = Math.abs(x) + Math.abs(y) + Math.abs(z);
@@ -174,7 +174,7 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
         return 0.5 * (x / s + 1);
     }
 
-    /** То же — v ({@code mushOctV}). */
+    /** Same for v ({@code mushOctV}). */
     public static double octV(double x, double y, double z) {
         double s = Math.abs(x) + Math.abs(y) + Math.abs(z);
         if (y < 0) return 0.5 * ((1 - Math.abs(x / s)) * Math.signum(z) + 1);

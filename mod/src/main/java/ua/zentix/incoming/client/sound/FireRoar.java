@@ -6,26 +6,27 @@ import ua.zentix.incoming.sound.Spectrum;
 import java.util.Arrays;
 
 /**
- * Гул пожаров у уха — по закону источника, без Minecraft (проверяется юнит-тестом): каждый очаг — тепловыделение, Вт,
- * звуком уходит его доля {@link Sources#FLAME_EFFICIENCY} (шум турбулентного пламени, {@link Sources#flame}); очаги разных
- * мест некогерентны — мощности складываются. До уха — путь ISO 9613 ({@link Propagation}), громкость — {@link Loudness}.
+ * Fire roar at the ear from source law, without Minecraft (covered by a unit test): each fire has heat release,
+ * W; fraction {@link Sources#FLAME_EFFICIENCY} becomes sound (turbulent flame noise, {@link Sources#flame}); fires
+ * at different sites are incoherent, so powers add. Path to ear is ISO 9613 ({@link Propagation}), volume is
+ * {@link Loudness}.
  * <p>
- * Очагов у горящего города — десятки тысяч (клетки шторма и огонь в своих чанках), поэтому путь считается не по каждому:
- * очаги — в {@link #QUADRANTS} четверти вокруг уха (cos²/sin² между соседними, как у петель гула) и в кольца по
- * логарифму расстояния ({@link #RINGS_PER_OCTAVE} на удвоение). В кольце точно складывается разлёт — Σ P/(4πd²), а
- * воздух, земля и тень берутся на расстоянии, среднем по силе пришедшего: в кольце они меняются меньше чем на десятую
- * долю децибела на сотню метров у верхней октавы.
+ * A burning city has tens of thousands of fires (storm cells and fire in local chunks), so paths are not computed
+ * individually: fires go into {@link #QUADRANTS} quarters around the ear (cos²/sin² between neighbours, like roar
+ * loops), and logarithmic distance rings ({@link #RINGS_PER_OCTAVE} per doubling). A ring sums spreading exactly,
+ * Σ P/(4πd²); air, ground and shadow use distance weighted by arriving strength: within a ring they vary by less
+ * than a tenth of a decibel per hundred metres at the highest octave.
  */
 public final class FireRoar {
     public static final int QUADRANTS = 4;
-    /** Колец на удвоение расстояния. */
+    /** Rings per distance doubling. */
     static final int RINGS_PER_OCTAVE = 4;
-    /** Кольца — от метра до 2¹⁶ м (65 км, дальше {@code Hearing.RANGE}). */
+    /** Rings from one metre to 2¹⁶ m (65 km, beyond {@code Hearing.RANGE}). */
     static final int RINGS = 16 * RINGS_PER_OCTAVE + 1;
-    /** Ближе — всё равно что в стольких метрах: очаг — не точка, а горящая грань у уха. */
+    /** Closer counts as this many metres: a fire is a burning face near the ear, not a point. */
     static final double NEAR = 1;
 
-    /** Сумма в кольце: P/d² (Вт/м²·4π), то же × d и × высоту очага над ухом. */
+    /** Ring sum: P/d² (W/m²·4π), the same × d and × fire height above ear. */
     private final double[] power = new double[QUADRANTS * RINGS], dist = new double[QUADRANTS * RINGS], height = new double[QUADRANTS * RINGS];
     private final double[] bands = new double[Propagation.BANDS], ring = new double[Propagation.BANDS];
     private final double[] level = new double[QUADRANTS], margin = new double[QUADRANTS], distance = new double[QUADRANTS];
@@ -36,7 +37,7 @@ public final class FireRoar {
         Arrays.fill(height, 0);
     }
 
-    /** Очаг тепловыделением {@code watts}, Вт, на (dx, dy, dz) от уха, м. */
+    /** Fire with heat release {@code watts}, W, at (dx, dy, dz) from ear, m. */
     public void add(double dx, double dy, double dz, double watts) {
         if (!(watts > 0)) return;
         double d = Math.max(NEAR, Math.sqrt(dx * dx + dy * dy + dz * dz));
@@ -57,8 +58,8 @@ public final class FireRoar {
     }
 
     /**
-     * Уровни у уха по четвертям для записи со спектром {@code shape} в погоду {@code weather}: A-уровень ({@link #level}),
-     * запас над фоном в лучшей октаве ({@link #margin}) и расстояние, среднее по силе ({@link #distance}).
+     * Quarter ear levels for a recording with {@code shape} in {@code weather}: A-level ({@link #level}), headroom
+     * above background in the best octave ({@link #margin}) and strength-weighted distance ({@link #distance}).
      */
     public void finish(Spectrum shape, Propagation.Weather weather) {
         for (int q = 0; q < QUADRANTS; q++) {
@@ -68,7 +69,7 @@ public final class FireRoar {
                 int k = q * RINGS + r;
                 if (power[k] <= 0) continue;
                 double d = dist[k] / power[k], hs = Math.max(0, height[k] / power[k] + Propagation.EAR);
-                // мощность, у которой на расстоянии d разлёт тот же, что сумма очагов кольца
+                // power with the same spreading at distance d as the ring's summed fires
                 double lw = Sources.lw(power[k] * d * d);
                 Propagation.level(lw, shape, Propagation.Path.over(d, hs, weather), ring);
                 for (int b = 0; b < bands.length; b++) bands[b] += Math.pow(10, ring[b] / 10);
@@ -92,7 +93,7 @@ public final class FireRoar {
         }
     }
 
-    /** A-уровень у уха в четверти {@code q} после {@link #finish}, дБА. */
+    /** A-level at ear in quarter {@code q} after {@link #finish}, dBA. */
     public double level(int q) {
         return level[q];
     }
@@ -101,12 +102,12 @@ public final class FireRoar {
         return margin[q];
     }
 
-    /** Расстояние до пожаров четверти, среднее по силе, м. */
+    /** Strength-weighted distance to the quarter's fires, m. */
     public double distance(int q) {
         return distance[q];
     }
 
-    /** Громкость в игре четверти {@code q} у файла громкостью {@code fileLufs}, потолок {@code ceilingLufs}. */
+    /** Game volume of quarter {@code q} for a {@code fileLufs} file, ceiling {@code ceilingLufs}. */
     public float volume(int q, double fileLufs, double ceilingLufs) {
         return Loudness.volume(Loudness.gain(level[q], margin[q], ceilingLufs), fileLufs);
     }

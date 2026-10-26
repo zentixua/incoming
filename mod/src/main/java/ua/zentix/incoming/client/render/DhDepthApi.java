@@ -15,14 +15,14 @@ import org.joml.Matrix4f;
 import ua.zentix.incoming.Incoming;
 
 /**
- * Связь {@link DhDepth} с API Distant Horizons; класс грузится, только если DH стоит. Проекция и плоскости отсечения —
- * из события {@code DhApiBeforeRenderEvent} этого кадра (последнего с перспективой: под Iris DH рисует ещё и тени, своей
- * проекцией без перспективы), там же — рисует ли LOD чужая программа в свой кадр (подмена {@code IDhApiFramebuffer}:
- * её ставит Iris перед каждым проходом, когда LOD рисует шейдерпак); текстура, диапазон и направление глубины — из
- * {@code renderProxy} (API 7.2).
+ * Link between {@link DhDepth} and Distant Horizons API; class loads only with DH installed. Projection and clip
+ * planes from this frame's {@code DhApiBeforeRenderEvent} (last perspective event: under Iris, DH also renders
+ * shadows with its own non-perspective projection); same event reports another program rendering LODs into its own
+ * framebuffer ({@code IDhApiFramebuffer} replacement set by Iris before every pass rendered by the shader pack).
+ * Texture, depth range and direction from {@code renderProxy} (API 7.2).
  */
 final class DhDepthApi {
-    /** Мажорная версия API, против которой собран мод; 7.2 — с диапазоном и направлением глубины. */
+    /** API major version used for the build; 7.2 adds depth range and direction. */
     private static final int API_MAJOR = 7, API_MINOR = 2;
     private static final float[] ROWS = new float[16];
     private static final Matrix4f PROJECTION = new Matrix4f();
@@ -44,10 +44,10 @@ final class DhDepthApi {
             @Override
             public void beforeRender(DhApiCancelableEventParam<DhApiRenderParam> event) {
                 DhApiMat4f m = event.value.dhProjectionMatrix;
-                // строка 3 перспективы — (0, 0, −1, 0); у проекции теней её нет
+                // Perspective row 3 is (0, 0, −1, 0); shadow projection lacks it.
                 if (Math.abs(m.m32 + 1) > 1e-3f) return;
                 m.putValuesInArray(ROWS);
-                // DH отдаёт по строкам, JOML читает по столбцам
+                // DH provides rows, JOML reads columns.
                 PROJECTION.set(ROWS).transpose();
                 near = event.value.nearClipPlane;
                 far = event.value.farClipPlane;
@@ -70,7 +70,7 @@ final class DhDepthApi {
             out.forward = direction == EDhApiDepthDirection.FORWARD_Z;
             out.empty = direction.farDepth;
         } catch (IllegalStateException e) {
-            // рендерер DH ещё не создан
+            // DH renderer not yet created.
             return false;
         }
         out.projection.set(PROJECTION);

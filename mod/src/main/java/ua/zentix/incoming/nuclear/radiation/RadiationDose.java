@@ -4,9 +4,9 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 /**
- * Облучение игрока (data attachment): накопленная доза, Гр; заражение одежды и кожи радиоактивной пылью
- * (облучает, пока не смыть водой), Р/ч; момент, когда доза перевалила 1 Гр (от него идут стадии болезни),
- * и текущая мощность дозы для счётчика Гейгера.
+ * Player irradiation (data attachment): accumulated dose, Gy; clothing and skin contamination with radioactive dust
+ * (irradiates until washed off with water), R/h; time dose crossed 1 Gy (sickness stages start there);
+ * and current dose rate for the Geiger counter.
  */
 public record RadiationDose(float doseGy, float contamination, long exposedAt, float rate) {
     public static final RadiationDose NONE = new RadiationDose(0, 0, -1, 0);

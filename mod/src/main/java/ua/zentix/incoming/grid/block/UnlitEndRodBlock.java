@@ -15,7 +15,7 @@ import net.minecraft.world.phys.HitResult;
 
 import java.util.function.Supplier;
 
-/** Двойник стержня Энда (светящиеся трубки вывесок): форма и направление те же, но без искр. */
+/** End rod counterpart (glowing sign tubes): same shape and facing, without sparks. */
 public class UnlitEndRodBlock extends EndRodBlock implements Unlit {
     private final Supplier<Block> lit;
 
@@ -61,7 +61,7 @@ public class UnlitEndRodBlock extends EndRodBlock implements Unlit {
         return Unlit.clone(lit);
     }
 
-    /** Погасший стержень не сыплет светящихся частиц. */
+    /** An unlit rod emits no glowing particles. */
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {}
 }

@@ -1,47 +1,48 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Ударная волна: соотношения Ренкина–Гюгонио за фронтом (скоростной напор, ветер, скорость фронта) и давление наземного
- * взрыва обычного заряда по Кинни–Грэхему. Давление ядерного подрыва — {@link HobBlast} (по высоте подрыва).
- * Дальность наклонная, в метрах (= блоках); заряд — в кг ТНТ.
+ * Blast wave: post-front Rankine–Hugoniot relations (dynamic pressure, wind, front speed) and Kinney–Graham surface blast
+ * pressure for a conventional charge. Nuclear burst pressure is {@link HobBlast} (by height of burst).
+ * Slant range in meters (= blocks); charge in kg TNT.
  */
 public final class BlastModel {
-    /** Атмосферное давление, кПа. */
+    /** Atmospheric pressure, kPa. */
     public static final double P0 = 101.325;
-    /** Скорость звука, м/с: к ней стремится фронт вдали. */
+    /** Sound speed, m/s: the distant front approaches it. */
     public static final double SOUND_SPEED = 343.0;
-    /** кПа в одном psi. */
+    /** kPa per psi. */
     public static final double KPA_PER_PSI = 6.895;
-    /** Усиление наземного взрыва отражением от земли (часть энергии уходит в воронку и грунт — не вдвое). */
+    /** Surface blast enhancement by ground reflection (some energy goes into crater and soil — less than double). */
     private static final double GROUND_REFLECTION = 1.8;
 
     private BlastModel() {
     }
 
     /**
-     * Избыточное давление наземного взрыва обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, кПа: волна
-     * от земли отражается ({@link #GROUND_REFLECTION}).
+     * Surface blast overpressure of a conventional charge {@code tntKg} kg TNT at slant range R, kPa: the wave reflects
+     * from the ground ({@link #GROUND_REFLECTION}).
      */
     public static double surfaceOverpressureKpa(double slantRangeM, double tntKg) {
         return kinneyGraham(slantRangeM, tntKg * GROUND_REFLECTION);
     }
 
-    /** Избыточное давление заряда {@code tntKg} кг ТНТ в свободном воздухе (разрыв в воздухе, без отражения от земли), кПа. */
+    /** Overpressure of charge {@code tntKg} kg TNT in free air (airburst, no ground reflection), kPa. */
     public static double freeAirOverpressureKpa(double slantRangeM, double tntKg) {
         return kinneyGraham(slantRangeM, tntKg);
     }
 
-    /** Давление обычного заряда на наклонной дальности, кПа: на земле ({@link #surfaceOverpressureKpa}) или в воздухе. */
+    /** Conventional charge pressure at slant range, kPa: surface ({@link #surfaceOverpressureKpa}) or air. */
     public static double overpressureKpa(double slantRangeM, double tntKg, boolean surface) {
         return surface ? surfaceOverpressureKpa(slantRangeM, tntKg) : freeAirOverpressureKpa(slantRangeM, tntKg);
     }
 
     /**
-     * Положительная фаза волны обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, с: Кинни–Грэхем для
-     * химического ВВ (Kinney &amp; Graham 1985, «Explosive Shocks in Air»; формула — по handoff ref/formulas.md §3, с
-     * книгой в этой работе не сверена): t₊/∛W = 980·(1 + (Z/0,54)¹⁰) / ((1 + (Z/0,02)³)·(1 + (Z/0,74)⁶)·√(1 + (Z/6,9)²)) мс/кг^⅓,
-     * Z = R/∛W; на земле — W × {@link #GROUND_REFLECTION}, как у давления. Вдали формула выходит на постоянную 4,2 мс·∛W
-     * (у 50 кг на земле — 19 мс), вблизи — миллисекунды: у обычного взрыва вся фаза слышна, у ядерного вдали — нет.
+     * Positive blast phase of a conventional charge {@code tntKg} kg TNT at slant range R, s: Kinney–Graham for chemical HE
+     * (Kinney &amp; Graham 1985, “Explosive Shocks in Air”; formula from handoff ref/formulas.md §3, not checked against the
+     * book in this work): t₊/∛W = 980·(1 + (Z/0.54)¹⁰) / ((1 + (Z/0.02)³)·(1 + (Z/0.74)⁶)·√(1 + (Z/6.9)²)) ms/kg^⅓,
+     * Z = R/∛W; on the surface — W × {@link #GROUND_REFLECTION}, as for pressure. At long range the formula approaches
+     * 4.2 ms·∛W (50 kg on the surface — 19 ms), near the burst — milliseconds: the whole phase is audible for a conventional
+     * blast, unlike a distant nuclear blast.
      */
     public static double chemicalPhaseSeconds(double slantRangeM, double tntKg, boolean surface) {
         double w = Math.cbrt(Math.max(1e-9, surface ? tntKg * GROUND_REFLECTION : tntKg));
@@ -51,10 +52,11 @@ public final class BlastModel {
     }
 
     /**
-     * Импульс фазы сжатия обычного заряда {@code tntKg} кг ТНТ на наклонной дальности R, Па·с: Кинни–Грэхем (там же):
-     * I/∛W = 0,067·√(1 + (Z/0,23)⁴) / (Z²·∛(1 + (Z/1,55)³)) бар·мс/кг^⅓, Z = R/∛W; на земле — W × {@link #GROUND_REFLECTION}.
-     * Сверка с UFC 3-340-02 (рис. 2-7, падающий импульс): Z = 1 — 117 Па·с/кг^⅓ против ~134, Z = 10 — 20 против ~18
-     * (в пределах 15 %).
+     * Positive-phase impulse of a conventional charge {@code tntKg} kg TNT at slant range R, Pa·s: Kinney–Graham (ibid.):
+     * I/∛W = 0.067·√(1 + (Z/0.23)⁴) / (Z²·∛(1 + (Z/1.55)³)) bar·ms/kg^⅓, Z = R/∛W;
+     * on the surface — W × {@link #GROUND_REFLECTION}.
+     * Check against UFC 3-340-02 (fig. 2-7, incident impulse): Z = 1 — 117 Pa·s/kg^⅓ versus ~134, Z = 10 — 20 versus ~18
+     * (within 15 %).
      */
     public static double chemicalImpulse(double slantRangeM, double tntKg, boolean surface) {
         double w = Math.cbrt(Math.max(1e-9, surface ? tntKg * GROUND_REFLECTION : tntKg));
@@ -63,13 +65,13 @@ public final class BlastModel {
         return 100 * w * 0.067 * Math.sqrt(1 + a * a * a * a) / (z * z * Math.cbrt(1 + b * b * b));
     }
 
-    /** Дальность, где давление наземного взрыва заряда {@code tntKg} падает до {@code kpa} (0 — нет заряда или давления). */
+    /** Range where surface blast pressure of charge {@code tntKg} falls to {@code kpa} (0 — no charge or pressure). */
     public static double rangeForSurfaceOverpressure(double kpa, double tntKg) {
         if (tntKg <= 0 || kpa >= surfaceOverpressureKpa(0, tntKg)) return 0;
         return Solve.decreasingRoot(r -> surfaceOverpressureKpa(r, tntKg), kpa, 1e-3, 1e8);
     }
 
-    /** Кинни–Грэхем: давление на дальности R от заряда W кг ТНТ в свободном воздухе, кПа (масштаб Z = R / ∛W). */
+    /** Kinney–Graham: pressure at range R from charge W kg TNT in free air, kPa (scaled Z = R / ∛W). */
     private static double kinneyGraham(double rangeM, double chargeKg) {
         double z = Math.max(0, rangeM) / Math.cbrt(chargeKg);
         double a = z / 4.5, b = z / 0.048, c = z / 0.32, d = z / 1.35;
@@ -84,12 +86,12 @@ public final class BlastModel {
         return psi * KPA_PER_PSI;
     }
 
-    /** Скоростной напор за фронтом, кПа: q = 2.5·P² / (7·P0 + P). */
+    /** Post-front dynamic pressure, kPa: q = 2.5·P² / (7·P0 + P). */
     public static double dynamicPressureKpa(double overpressureKpa) {
         return 2.5 * overpressureKpa * overpressureKpa / (7 * P0 + overpressureKpa);
     }
 
-    /** Скорость фронта по Ренкину–Гюгонио, м/с: U = 343·√(1 + 6P/(7·P0)). */
+    /** Rankine–Hugoniot front speed, m/s: U = 343·√(1 + 6P/(7·P0)). */
     public static double frontSpeed(double overpressureKpa) {
         return SOUND_SPEED * Math.sqrt(1 + 6 * Math.max(0, overpressureKpa) / (7 * P0));
     }
@@ -106,8 +108,8 @@ public final class BlastModel {
     }
 
     /**
-     * Скорость воздуха сразу за фронтом по Ренкину–Гюгонио, м/с: u = 5P/(7·P0) · 343 / √(1 + 6P/(7·P0)) — 5 psi ≈ 72 м/с,
-     * 1 psi ≈ 17 м/с.
+     * Rankine–Hugoniot air speed immediately behind the front, m/s: u = 5P/(7·P0) · 343 / √(1 + 6P/(7·P0)) — 5 psi ≈ 72 m/s,
+     * 1 psi ≈ 17 m/s.
      */
     public static double windSpeed(double overpressureKpa) {
         double x = Math.max(0, overpressureKpa) / P0;
@@ -115,11 +117,11 @@ public final class BlastModel {
     }
 
     /**
-     * Длительность положительной фазы у слушателя на наклонной дальности R, с: Кинни–Грэхем для ядерного взрыва
-     * (KG85 NE, табл. XI; формула и проверка по таблице — Garcés 2019, Infrasound Monitoring for Atmospheric Studies,
-     * гл. 8, прил. 4: 2 кт на 8 км — 0,67 с, 1 т на 1 км — 0,057 с), отражение от земли — как у давления
-     * ({@link #GROUND_REFLECTION}): W = 1.8·Y кт, Z = R / ∛W, м/кт^⅓. Таблица — от Z = 35 (ближе — как на её краю), до
-     * 5000; дальше формула выходит на постоянную 0,77·∛W (как ANSI S2.20: 1 кт на 10 км — 0,52 с, на 100 км — 0,93).
+     * Positive-phase duration at a listener at slant range R, s: Kinney–Graham for nuclear explosions
+     * (KG85 NE, table XI; formula and table check — Garcés 2019, Infrasound Monitoring for Atmospheric Studies, ch. 8, app. 4:
+     * 2 kt at 8 km — 0.67 s, 1 t at 1 km — 0.057 s), ground reflection as for pressure ({@link #GROUND_REFLECTION}):
+     * W = 1.8·Y kt, Z = R / ∛W, m/kt^⅓. Table from Z = 35 (closer — its edge value) to 5000; beyond that the formula approaches
+     * 0.77·∛W (as ANSI S2.20: 1 kt at 10 km — 0.52 s, at 100 km — 0.93).
      */
     public static double positivePhaseSeconds(double slantRangeM, double yieldKt) {
         double w = Math.cbrt(GROUND_REFLECTION * Math.max(1e-6, yieldKt));

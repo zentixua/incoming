@@ -15,16 +15,15 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import java.util.Set;
 
 /**
- * Ожоги светом шара ({@link FlashBurns}): эффект длится, пока ожоги заживают, и всё это время здоровье не поднимается
- * выше того, что ожоги оставили. Уровень — ступень потери здоровья ({@link BurnInjury#level}, десятые доли);
- * уровень {@link #SHOCK} — ожоговый шок: здоровья {@link BurnInjury#SHOCK_LEFT}, в конце срока обожжённый умирает
- * (урон {@code burn_shock}: ни броня, ни огнестойкость, ни сопротивление, ни чары его не убавляют). Ни молоко, ни
- * другие средства ожоги не лечат; тотем бессмертия спасает, как от любой смерти.
+ * Fireball light burns ({@link FlashBurns}): effect lasts while burns heal, capping health at what they left throughout.
+ * Level is the health-loss step ({@link BurnInjury#level}, tenths); {@link #SHOCK} means burn shock: health
+ * {@link BurnInjury#SHOCK_LEFT}, death at expiry ({@code burn_shock} damage: unaffected by armor, fire resistance,
+ * resistance or enchantments). Milk and other remedies do not heal burns; a totem of undying saves as from any death.
  */
 public class BurnsEffect extends MobEffect {
-    /** Уровень эффекта у обожжённого, которого ждёт шок. */
+    /** Effect level for a burned subject facing shock. */
     public static final int SHOCK = BurnInjury.SHOCK_LEVEL;
-    /** Модификатор предела здоровья. */
+    /** Health cap modifier. */
     static final ResourceLocation ID = Incoming.id("burns");
 
     public BurnsEffect() {
@@ -45,6 +44,6 @@ public class BurnsEffect extends MobEffect {
 
     @Override
     public void fillEffectCures(Set<EffectCure> cures, MobEffectInstance effectInstance) {
-        // ожоги заживают только со временем
+        // burns heal only with time
     }
 }

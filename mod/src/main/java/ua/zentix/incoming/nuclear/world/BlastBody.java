@@ -36,77 +36,78 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Волна по телу ({@link BlastInjury}, DESIGN-nuke §4): давление на лёгкие, бросок с ударом о препятствие на пути или
- * кувырками по земле, осколки окна между телом и взрывом, завал рухнувшим домом. Давление доходит туда, куда от тела
- * есть путь по воздуху к небу (сквозь окна и деревянные двери — их волна выбивает): в бункер и закрытую пещеру — нет.
- * Ветер за фронтом — под небом (и под кроной: листву волна продувает) и там, откуда виден шар (сквозь проём); в доме
- * без такого окна только давление. Блок здесь — метр при любом {@code effects_scale}: масштаб сжимает радиусы
- * подрыва, а тело летит среди стен своего размера.
+ * Blast on the body ({@link BlastInjury}, DESIGN-nuke §4): lung pressure, throw into a path obstacle or ground tumbling,
+ * fragments of a window between body and blast, burial by a collapsed house. Pressure reaches where an air path to sky
+ * exists from the body (through windows and wooden doors — the blast breaks them): not a bunker or sealed cave.
+ * Post-front wind reaches open sky (and under crowns: blast blows through leaves) and positions seeing the ball
+ * (through an opening); a house without such a window receives pressure only. A block here is a meter at any
+ * {@code effects_scale}: scale compresses burst radii while the body flies among full-size walls.
  * <p>
- * Окно перед телом и стена за спиной — какими их застал фронт ({@link Before}): стекло лопается и летит в тело, а стена
- * отражает волну в миг прихода, ещё до того, как рухнет, — а руины чанка встают на тик раньше фронта. Стена на пути
- * броска — по миру, как он есть: что волна сносит, падает раньше, чем до этого места долетит тело (фронт быстрее).
+ * Window ahead and wall behind are as the front found them ({@link Before}): glass breaks and flies into the body;
+ * the wall reflects the wave at arrival before collapsing, while chunk ruins are applied one tick before the front.
+ * Walls along the throw path use the current world: blast-destroyed objects fall before the body reaches them
+ * (front is faster).
  */
 public final class BlastBody {
-    /** Сколько клеток воздуха от тела обходится в поисках неба: не нашлось — тело в закрытом. */
+    /** Maximum air cells searched from the body for sky: none found — body is enclosed. */
     private static final int AIR_CELLS = 2048;
-    /** Осколки окна долетают до тела, блоков (табл. 12.43: 2–4 м от окна). */
+    /** Window fragment reach to the body, blocks (table 12.43: 2–4 m from window). */
     static final double GLASS_REACH = 4;
     /**
-     * Насколько тело к приходу фронта могло отойти по горизонтали от места, где запомнило стену и окно ({@link Before}),
-     * блоков: стена за спиной — вплотную, полблока меняют её; окно — до {@link #GLASS_REACH} впереди, два блока — нет.
-     * Дальше — по миру как есть.
+     * Allowed horizontal body movement by front arrival from the remembered wall/window position ({@link Before}), blocks:
+     * wall directly behind — half a block changes it; window up to {@link #GLASS_REACH} ahead — two blocks do not.
+     * Beyond that, use the current world.
      */
     private static final double WALL_DRIFT = 0.5, GLASS_DRIFT = 2;
     /**
-     * Бросок в игре — не быстрее, блоков за тик: ваниль откатывает игрока, сдвинутого больше чем на 10 за тик, а 6 —
-     * это 120 м/с, гибель наверняка (о твёрдое — с 42 м/с).
+     * Maximum in-game throw speed, blocks/tick: vanilla rolls back a player moved over 10 per tick; 6 is 120 m/s,
+     * certainly fatal (solid impact from 42 m/s).
      */
     private static final double MAX_THROW = 6;
-    /** Подскок при броске, блоков за тик: кувырок отрывает тело от земли, но не выше прыжка — урона от падения нет. */
+    /** Throw hop, blocks/tick: tumbling lifts the body but no higher than a jump — no fall damage. */
     private static final double HOP = 0.42;
 
     private BlastBody() {}
 
     /**
-     * Волна, которая бьёт по телу: ядерный подрыв ({@link #of(Detonation)}) или взрыв обычного заряда
-     * ({@code warhead.StagedExplosion}). Давление, напор, ветер и фаза — в точке тела; что до тела доходит — у каждой своё.
+     * Wave hitting the body: nuclear detonation ({@link #of(Detonation)}) or conventional charge blast
+     * ({@code warhead.StagedExplosion}). Pressure, dynamic pressure, wind and phase at the body; each has its own reach rules.
      */
     public interface Wave {
         Vec3 centre();
 
-        /** Избыточное давление на фронте, кПа. */
+        /** Front overpressure, kPa. */
         double overpressureKpa(Vec3 p);
 
-        /** Скоростной напор вдоль земли, кПа. */
+        /** Dynamic pressure along the ground, kPa. */
         double dynamicPressureKpa(Vec3 p);
 
-        /** Ветер за фронтом, м/с. */
+        /** Post-front wind, m/s. */
         double windSpeed(Vec3 p);
 
-        /** Положительная фаза, с. */
+        /** Positive phase, s. */
         double phaseSeconds(Vec3 p);
 
-        /** Слабее этого волна по телу не бьёт, кПа. */
+        /** Below this strength the wave does not hit the body, kPa. */
         double hitKpa();
 
-        /** Тело в ветре за фронтом: открыто к волне — его бросает. */
+        /** Body in post-front wind: open to the wave — thrown. */
         boolean wind(ServerLevel level, LivingEntity e);
 
-        /** Давление доходит до тела и без ветра (воздухом сквозь проёмы). */
+        /** Pressure reaches the body even without wind (air through openings). */
         boolean reaches(ServerLevel level, LivingEntity e);
 
-        /** Номер волны для случайности тела ({@link #fate}). */
+        /** Wave number for body randomness ({@link #fate}). */
         long id();
 
-        /** Тип урона. */
+        /** Damage type. */
         net.minecraft.resources.ResourceKey<net.minecraft.world.damagesource.DamageType> damage();
 
-        /** Волна ударила тело в ветре (паника мобов у ядерки). */
+        /** Wave hit the body in wind (nuclear mob panic). */
         default void blown(ServerLevel level, LivingEntity e) {}
     }
 
-    /** Волна ядерного подрыва. */
+    /** Nuclear detonation wave. */
     public static Wave of(Detonation d) {
         return new Wave() {
             @Override
@@ -167,27 +168,27 @@ public final class BlastBody {
     }
 
     /**
-     * Окно и стена у тела в {@code at}, какими их застал фронт: стена вплотную за спиной (отражение) и стекло между
-     * телом и взрывом не дальше {@link #GLASS_REACH}.
+     * Window and wall near the body at {@code at}, as the front found them: wall directly behind (reflection) and glass
+     * between body and blast within {@link #GLASS_REACH}.
      *
-     * @param drift на сколько блоков по горизонтали тело ушло от {@code at} к приходу фронта
+     * @param drift horizontal blocks the body moved from {@code at} by front arrival
      */
     public record Before(Vec3 at, boolean backed, boolean glass, double drift) {
-        /** Тело к приходу фронта — в {@code now}. */
+        /** Body at {@code now} when the front arrives. */
         public Before drifted(Vec3 now) {
             return new Before(at, backed, glass, Math.max(drift, Math.hypot(now.x - at.x, now.z - at.z)));
         }
     }
 
     /**
-     * Что волна делает телу.
+     * What the wave does to the body.
      *
-     * @param throwSpeed скорость броска, м/с (0 — не бросает)
-     * @param wind       тело в ветре за фронтом (под небом, под кроной или видит шар)
+     * @param throwSpeed throw speed, m/s (0 — no throw)
+     * @param wind       body in post-front wind (open sky, under crown or seeing the ball)
      */
     public record Wound(double death, double injury, double throwSpeed, Vec3 away, boolean wind) {}
 
-    /** Окно и стена у тела сейчас (мир до руин чанка — {@link BlastFront#remember}). */
+    /** Window and wall near the body now (world before chunk ruins — {@link BlastFront#remember}). */
     public static Before before(ServerLevel level, Detonation d, LivingEntity e) {
         return new Before(e.position(), wallBehind(level, d.burst(), e), windowAhead(level, d.burst(), e), 0);
     }
@@ -207,24 +208,24 @@ public final class BlastBody {
     }
 
     /**
-     * Удар волны по телу. Творческий режим ран не получает, но волна бросает и его.
+     * Wave impact on the body. Creative mode takes no wounds, but is still thrown.
      *
-     * @param before окно и стена, какими их застал фронт (со сдвигом тела к его приходу); null — по миру как есть
-     * @return тело было в ветре за фронтом (обратный ветер тянет только таких)
+     * @param before window and wall as the front found them (with body drift at arrival); null — current world
+     * @return body was in post-front wind (reverse wind pulls only such bodies)
      */
     public static boolean hit(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner, @Nullable Before before) {
         return hit(level, of(d), e, owner, before);
     }
 
-    /** Удар волны {@code wave} по телу ({@link #hit(ServerLevel, Detonation, LivingEntity, Entity, Before)}). */
+    /** Wave {@code wave} hits the body ({@link #hit(ServerLevel, Detonation, LivingEntity, Entity, Before)}). */
     public static boolean hit(ServerLevel level, Wave wave, LivingEntity e, @Nullable Entity owner, @Nullable Before before) {
         return hit(level, wave, e, null, owner, before);
     }
 
     /**
-     * Удар волны по телу.
+     * Wave impact on the body.
      *
-     * @param direct что взорвалось (снаряд) — для урона, null — без него
+     * @param direct what exploded (projectile), for damage; null — none
      */
     public static boolean hit(ServerLevel level, Wave wave, LivingEntity e, @Nullable Entity direct, @Nullable Entity owner, @Nullable Before before) {
         Wound w = wound(level, wave, e, before);
@@ -235,18 +236,18 @@ public final class BlastBody {
             e.push(w.away().x * v, Math.min(HOP, 0.25 * v), w.away().z * v);
             e.hurtMarked = true;
         }
-        // в укрытии (дом без окна к шару, пещера, ферма мобов под крышей) волна не пугает: бежать оттуда некуда
+        // in shelter (house without a window toward the ball, cave, roofed mob farm) the wave causes no panic: nowhere to flee
         if (w.wind()) wave.blown(level, e);
         return w.wind();
     }
 
-    /** Что волна сделает телу; null — не дойдёт (слабее 0.3 psi, в закрытом). */
+    /** What the wave will do to the body; null — will not reach it (below 0.3 psi, enclosed). */
     @Nullable
     public static Wound wound(ServerLevel level, Detonation d, LivingEntity e, @Nullable Before before) {
         return wound(level, of(d), e, before);
     }
 
-    /** Что волна {@code d} сделает телу; null — не дойдёт. */
+    /** What wave {@code d} will do to the body; null — will not reach it. */
     @Nullable
     public static Wound wound(ServerLevel level, Wave d, LivingEntity e, @Nullable Before before) {
         double kpa = d.overpressureKpa(e.position());
@@ -263,7 +264,7 @@ public final class BlastBody {
         double drag = wind ? BlastInjury.HUMAN_DRAG_PER_KG * BlastInjury.HUMAN_WIDTH / Math.max(0.1, e.getBbWidth())
                 * (1 - e.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE)) : 0;
         BlastInjury.Throw t = BlastInjury.thrown(kpa, d.windSpeed(e.position()), d.phaseSeconds(e.position()), drag);
-        // удар — о первое твёрдое на пути тела, со скоростью, набранной к нему; нет такого — кувырки по земле
+        // impact against the first solid object on the body's path, at speed gained by then; none — ground tumbling
         double wall = t.peak() > 0 ? march(level, mid, away, radius + t.stop(), BlastBody::solid) : -1;
         double impact = wall >= 0 ? t.speedAfter(Math.max(0, wall - radius)) : 0;
         boolean glass = BlastModel.psi(kpa) >= BlockResponse.FRAGILE_PSI
@@ -276,13 +277,13 @@ public final class BlastBody {
         return new Wound(death, injury, t.peak(), away, wind);
     }
 
-    /** Завал: тело, которое руины чанка засыпали. Кто жив, остаётся под завалом и задыхается, пока не выберется. */
+    /** Burial: body covered by chunk ruins. Survivors stay buried and suffocate until they escape. */
     public static void bury(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
         if (!buried(level, e)) return;
         harm(level, of(d), e, null, owner, BlastInjury.CRUSH_DEATH, BlastInjury.CRUSH_INJURY, fate(e, d.id()));
     }
 
-    /** Живые в чанке, которых не засыпало (снимок до руин): засыпанные после руин — {@link #buried}. */
+    /** Living entities in the chunk not buried (snapshot before ruins): buried after ruins — {@link #buried}. */
     public static List<LivingEntity> free(ServerLevel level, LevelChunk chunk) {
         int x = chunk.getPos().getMinBlockX(), z = chunk.getPos().getMinBlockZ();
         List<LivingEntity> out = new ArrayList<>();
@@ -294,8 +295,8 @@ public final class BlastBody {
     }
 
     /**
-     * Тело в блоках: его рамка задевает твёрдое. Рамка у края чанка заходит в соседний; пока тот не готов, чтение его
-     * ждало бы загрузки в потоке сервера — тогда не засыпано (не видно).
+     * Body inside blocks: its bounds intersect solid material. At a chunk edge the bounds enter a neighbor; if unready,
+     * reading it would wait for loading on the server thread — then treat as not buried (unknown).
      */
     public static boolean buried(ServerLevel level, LivingEntity e) {
         AABB box = e.getBoundingBox().deflate(1e-3);
@@ -311,13 +312,13 @@ public final class BlastBody {
         if (dmg >= 0.5f) e.hurt(ModDamageTypes.source(level, wave.damage(), direct, owner), dmg);
     }
 
-    /** Случайность тела 0..1 ({@link BlastInjury#lostShare}): своя у каждого и у каждой волны. */
+    /** Body randomness 0..1 ({@link BlastInjury#lostShare}): unique per body and wave. */
     static double fate(LivingEntity e, long wave) {
         long h = HashCommon.mix(e.getUUID().getMostSignificantBits() ^ HashCommon.mix(e.getUUID().getLeastSignificantBits() ^ wave));
         return (h >>> 11) * 0x1.0p-53;
     }
 
-    /** Прочь от взрыва по горизонтали (единичный). */
+    /** Horizontally away from blast (unit vector). */
     private static Vec3 away(Vec3 centre, LivingEntity e) {
         Vec3 away = new Vec3(e.getX() - centre.x, 0, e.getZ() - centre.z);
         return away.lengthSqr() < 1e-4 ? new Vec3(1, 0, 0) : away.normalize();
@@ -327,14 +328,14 @@ public final class BlastBody {
         return e.position().add(0, e.getBbHeight() * 0.5, 0);
     }
 
-    /** Над точкой нет ничего, кроме листвы: ветер за фронтом крону продувает (дождь листва держит — карта без неё). */
+    /** Only leaves above the point: post-front wind blows through crowns (leaves block rain — use the map excluding them). */
     public static boolean windAt(ServerLevel level, Vec3 p) {
         return Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(p.x), Mth.floor(p.z)) <= p.y;
     }
 
     /**
-     * Есть ли от тела путь по воздуху к небу (обход клеток, не больше {@link #AIR_CELLS}): воздух, неполные блоки,
-     * стекло и листва, деревянные и открытые двери, люки и калитки. Неготовый чанк — путь есть (за ним не видно).
+     * Whether an air path to sky exists from the body (cell traversal, at most {@link #AIR_CELLS}): air, partial blocks,
+     * glass and leaves, wooden and open doors, trapdoors and fence gates. Unready chunk — path exists (cannot see beyond it).
      */
     private static boolean airReaches(ServerLevel level, LivingEntity e) {
         LongOpenHashSet seen = new LongOpenHashSet();
@@ -377,9 +378,9 @@ public final class BlastBody {
     }
 
     /**
-     * Расстояние до первого блока из {@code material}, чью форму столкновений задевает луч из {@code from} в сторону
-     * {@code dir} (единичный), не дальше {@code max} блоков: по сетке (Amanatides–Woo), в клетке — по самой форме (ковёр
-     * под ногами, лестница сбоку и плита ниже луча — не стена); −1 — нет такого или дальше неготовый чанк.
+     * Distance to the first {@code material} block whose collision shape intersects a ray from {@code from} along unit
+     * {@code dir}, within {@code max} blocks: grid traversal (Amanatides–Woo), actual shape within a cell (carpet underfoot,
+     * ladder to the side and slab below the ray are not walls); −1 — none or unready chunk ahead.
      */
     private static double march(ServerLevel level, Vec3 from, Vec3 dir, double max, Predicate<BlockState> material) {
         int x = Mth.floor(from.x), y = Mth.floor(from.y), z = Mth.floor(from.z);

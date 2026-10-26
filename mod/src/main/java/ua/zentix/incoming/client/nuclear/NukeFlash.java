@@ -34,68 +34,68 @@ import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 import java.util.List;
 
 /**
- * Вспышка ядерного взрыва на экране (DESIGN-nuke §6): кадр, выставленный на то, что камера видела до вспышки, пересвечен
- * её светом и догоняет его ({@link NukeExposure#overexposure}, подача): до второго максимума и в нём — белый, потом
- * ярче и ярче проступают тёмные силуэты, у 15 кт в 1,4 км через полсекунды кадр пересвечен в ~3 раза, через секунду —
- * как был ({@link #overexposed}: усиление кадра и рассеянный в объективе свет). Свет и время импульса — физика;
- * прежде белый экран стоял весь импульс (~10·t_max: у 15 кт 1,2 с) и гас ещё 2–4 с. Затем — тёмно-оранжевое
- * «пятно» послеобраза там, где шар был на сетчатке, если игрок на него смотрел (ходит со взглядом). Весь мир в это время освещён, как молнией: ночь
- * на миг становится днём. Сила — по световому импульсу у игрока: прямая видимость и шар в поле зрения — полная, иначе
- * треть (засветка неба).
+ * Nuclear explosion flash on screen (DESIGN-nuke §6): a frame set for what the camera saw before the flash is overexposed by
+ * its light and catches up ({@link NukeExposure#overexposure}, presentation): white before and at the second maximum, then
+ * dark silhouettes emerge ever more brightly; for 15 kt at 1.4 km after half a second the frame is overexposed ~3 times, after a second
+ * it is as before ({@link #overexposed}: frame gain and light scattered in the lens). Pulse light and timing follow physics;
+ * previously the screen stayed white through the full pulse (~10·t_max: 1.2 s for 15 kt), then faded for another 2–4 s. Next comes a dark-orange
+ * afterimage "spot" where the ball was on the retina, if the player looked at it (moves with gaze). Meanwhile the entire world is lit like lightning: night
+ * briefly becomes day. Strength follows the light pulse at the player: full with direct visibility and the ball in view, otherwise
+ * one third (sky glare).
  *
- * <p>Глаза (G&amp;D §12.83–12.88): засветка всего поля — вуаль по {@link EyeInjury#dazzleSeconds} от импульса у глаза
- * (видел шар — весь, не видел, но под открытым небом — рассеянный небом, под крышей — нет) и того, привык ли глаз к
- * темноте: сперва светлый послеобраз, через секунды — серая днём, чёрная ночью, гаснет к концу срока; чем короче
- * засветка, тем вуаль слабее. Ожоги сетчатки — постоянные тёмные пятна там, где на сетчатке был шар (с сервера,
- * {@link FlashEyes}); ходят со взглядом. Творческий режим и наблюдатель — не глаза, а камера (ранений у них нет): ни
- * засветки, ни пятен, пока игрок в этом режиме (пятна остаются за ним), белый экран и послеобраз у них те же; в повторе
- * Flashback зритель — наблюдатель. Спящий глаза закрыл. Смерть засветку снимает.
+ * <p>Eyes (G&amp;D §12.83–12.88): full-field dazzle is a veil from {@link EyeInjury#dazzleSeconds}, based on the pulse at the eye
+ * (ball seen — full; unseen but under open sky — sky-scattered; under a roof — none) and dark adaptation:
+ * a bright afterimage at first, turning gray by day or black at night after seconds, fading by the deadline; shorter
+ * dazzle means a weaker veil. Retinal burns are permanent dark spots where the ball was on the retina (from server,
+ * {@link FlashEyes}); they move with gaze. Creative and spectator use a camera rather than eyes (they cannot be injured): no
+ * dazzle or spots in these modes (spots remain attached to the player), with the same white screen and afterimage; the Flashback
+ * viewer is a spectator. A sleeping player has closed eyes. Death clears dazzle.
  */
 public final class NukeFlash {
     @Nullable
     private static ClientNuclear.Active current;
-    /** Сила вспышки 0..1 для этого игрока. */
+    /** Flash strength 0..1 for this player. */
     private static float strength;
     /**
-     * Во сколько раз свет вспышки у камеры во втором максимуме ярче того, на что выставлен кадр (≥ 1): по нему кадр
-     * догоняет вспышку ({@link NukeExposure#overexposure}).
+     * Ratio of flash light at the camera at the second maximum to the light the frame is set for (≥ 1): controls how the frame
+     * catches up with the flash ({@link NukeExposure#overexposure}).
      */
     private static double peak = 1;
-    /** Послеобраз: сколько тиков ещё и сколько было всего. */
+    /** Afterimage: remaining ticks and original total. */
     private static int afterLeft, afterTotal;
     /**
-     * Где послеобраз на сетчатке: место на экране в миг вспышки (доли ширины и высоты) и полуразмер пятна (доля высоты).
-     * Пятно — ожог сетчатки, поэтому оно ходит вместе со взглядом, а не стоит в мире.
+     * Afterimage location on the retina: screen position at flash time (fractions of width and height), spot half-size (fraction of height).
+     * The spot is a retinal burn, so it moves with gaze rather than staying in the world.
      */
     private static float afterX, afterY, afterSize;
     private static long ticks, endTick;
     /**
-     * Пересвет кадра, при котором рассеянный в объективе свет белит весь кадр (белое — доля пересвета / VEIL_X: в
-     * объективе рассеивается порядка процента света кадра, ⚠ оценка), и наибольшее усиление кадра на экране (больше — кадр
-     * и так белый). Подача.
+     * Frame overexposure at which lens-scattered light whitens the entire frame (white share = overexposure / VEIL_X: the lens
+     * scatters about a percent of frame light) (est.), and maximum on-screen frame gain (above this the frame
+     * is already white). Presentation.
      */
     private static final double VEIL_X = 100, GAIN_MAX = 16;
-    /** Пересвет, ниже которого кадра не трогаем: усиление меньше шага экрана. */
+    /** Overexposure below which the frame stays unchanged: gain is smaller than a screen step. */
     private static final double SETTLED = 1.004;
     /**
-     * Засветка неба при полном пропускании воздуха, доля белого экрана, и засветка, с которой мир освещён вспышкой
-     * ({@link #lightUpWorld}). <b>Оценки</b>, не выведены: обе — доли экрана, а не свет; засветка — без мощности и без
-     * 1/d², предел ей — только воздух (Glasstone, рис. 7.104; дальше половины видимости — продолжение подбора). Поэтому
-     * мир вспыхивает до ~5,3 видимости при любой мощности, а свет шара во втором максимуме там ({@code MushroomModel.light}
-     * сквозь тот же воздух) — у 1 кт 0,5 % полуденного, у 15 кт 4,5 %, у 1 Мт 90 %: ночью (глаз привык к темноте,
-     * {@code Sight.adapted}) это вспышка, днём у малых мощностей вдали засветка сильнее, чем физика.
+     * Sky glare at full air transmittance, fraction of a white screen, and glare threshold for flash lighting the world
+     * ({@link #lightUpWorld}). (est.), not derived: both are screen fractions, not light; glare has no yield or
+     * 1/d² term, limited only by air (Glasstone, fig. 7.104; beyond half the visibility range — extrapolated tuning). Thus
+     * the world flashes out to ~5.3 visibility ranges at any yield, while ball light at the second maximum there ({@code MushroomModel.light}
+     * through the same air) is 0.5 % of noon light for 1 kt, 4.5 % for 15 kt, 90 % for 1 Mt: at night (dark-adapted eye,
+     * {@code Sight.adapted}) this is a flash; by day, glare from small yields at distance exceeds physics.
      */
     private static final double SKY_GLARE = 0.6, WORLD_FLASH = 0.05;
-    /** Доля импульса, которую рассеивает небо к тому, кто шар не видит (оценка). */
+    /** Fraction of the pulse scattered by the sky toward someone who cannot see the ball (est.). */
     private static final double SCATTERED = 0.15;
-    /** Вуаль засветки в начале (полю не разглядеть почти ничего) и время, за которое светлый послеобраз темнеет, с. */
+    /** Initial dazzle veil (almost nothing discernible in the field) and time for the bright afterimage to darken, s. */
     private static final float VEIL = 0.9f, AFTERGLOW_S = 2;
-    /** Вуаль после послеобраза днём — серая (засвеченные колбочки), ночью — чёрная. */
+    /** Veil after the afterimage: gray by day (dazzled cones), black at night. */
     private static final float DAY_GREY = 0.45f;
-    /** Засветка поля: начало (свои тики клиента, конец импульса), срок, с, сила 0..1, насколько глаз был ночным. */
+    /** Field dazzle: start (local client ticks, pulse end), duration in s, strength 0..1, degree of dark adaptation. */
     private static double veilStart, veilSeconds;
     private static float veilStrength, veilDark;
-    /** Ожоги сетчатки — пятна в поле зрения ({@link RetinaScars.Scar}). */
+    /** Retinal burns — spots in the visual field ({@link RetinaScars.Scar}). */
     private static List<RetinaScars.Scar> scars = List.of();
 
     private NukeFlash() {}
@@ -109,9 +109,9 @@ public final class NukeFlash {
         boolean sees = NuclearWarhead.sees(mc.level, d, p);
         double q = d.fluence(eye);
         double distM = d.metres(eye.distanceTo(d.burst()));
-        // кроме настоящего светового импульса — ослеплённое небо (SKY_GLARE): свет шара, рассеянный воздухом, — пропускание
-        // прямого и рассеянного света вместе (ThermalModel.transmittance, как у светового импульса), а не пучка: блик шара
-        // (NukeRenderer.fireballs) — пучок, засвеченное небо — рассеянный свет
+        // in addition to the actual light pulse — dazzled sky (SKY_GLARE): ball light scattered by air, using transmittance
+        // of direct and scattered light together (ThermalModel.transmittance, as for the light pulse), not a beam: ball glare
+        // (NukeRenderer.fireballs) is a beam, dazzled sky is diffuse light
         double sky = Math.min(1, q / 2 + SKY_GLARE * ThermalModel.transmittance(distM, d.visibility()));
         lightUpWorld(mc.level, d, sky);
         double s = sky;
@@ -121,17 +121,17 @@ public final class NukeFlash {
         s *= inView ? 1 : sees ? 0.45 : 0.3;
         s *= IncomingConfig.CLIENT.flash.get();
         if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, sees ? q : Detonation.underOpenSky(mc.level, eye) ? q * SCATTERED : 0);
-        // «без вспышек молний»: без засветки мира, белый экран — неполный
+        // "Hide Lightning Flashes": no world glare, partial white screen
         if (Flash.calm()) s = Math.min(s, Flash.CALM);
         if (s <= strength && current != null) return;
         current = a;
         strength = (float) s;
         peak = 1 + flashOnCamera(mc.level, d, distM) * (inView ? 1 : sees ? 0.45 : 0.3);
         endTick = ticks + (long) Math.ceil((FireballModel.secondMaximumSeconds(d.yieldKt()) * d.scale() + NukeExposure.settled(peak, SETTLED)) * 20);
-        // пятно больше видимого шара: глаз «размазывает» засветку
+        // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
-            // 5–30 с по световому импульсу (кал/см²)
+            // 5–30 s from the light pulse (cal/cm²)
             afterTotal = afterLeft = (int) (20 * Mth.clamp(5 + q * 2.5, 5, 30));
             afterX = spot[0];
             afterY = spot[1];
@@ -140,10 +140,10 @@ public final class NukeFlash {
     }
 
     /**
-     * Свет шара у камеры во втором максимуме — против того, на что выставлен кадр (свет неба: {@link Sight#adapted}):
-     * ламбертов шар наибольшего радиуса, чёрное тело {@link FireballModel#PEAK_K}, L·R²/max(d², R²) сквозь воздух
-     * (прямой и рассеянный вместе, {@link ThermalModel#transmittance}, как у засветки неба). У 15 кт в 1,4 км днём ~2 000,
-     * в 5 км ~200; ночью — в ~1 200 раз больше.
+     * Ball light at the camera at the second maximum relative to the frame's set exposure (sky light, {@link Sight#adapted}):
+     * Lambertian sphere of maximum radius, black body at {@link FireballModel#PEAK_K}, L·R²/max(d², R²) through air
+     * (direct and scattered together, {@link ThermalModel#transmittance}, as for sky glare). For 15 kt at 1.4 km by day ~2 000,
+     * at 5 km ~200; at night ~1 200 times more.
      */
     static double flashOnCamera(ClientLevel level, Detonation d, double distM) {
         double r = FireballModel.maxRadius(d.yieldKt(), d.surface());
@@ -151,15 +151,15 @@ public final class NukeFlash {
         return Sight.adapted(light, FarView.ambient(level, 0));
     }
 
-    /** Засветка поля импульсом {@code q} кал/см² у глаза; уже идущая, которая кончится позже, остаётся. */
+    /** Field dazzle from pulse {@code q} cal/cm² at the eye; keep existing dazzle that ends later. */
     private static void dazzle(ClientLevel level, Detonation d, Vec3 eye, double q) {
         double dark = FlashEyes.darkness(level, eye);
         double seconds = EyeInjury.dazzleSeconds(q, d.yieldKt(), dark);
         float k = IncomingConfig.CLIENT.flash.get().floatValue();
         if (Flash.calm()) k = Math.min(k, Flash.CALM);
         if (seconds <= 0 || k <= 0) return;
-        // с максимума импульса: прежде — с его конца, когда кончался белый экран; кадр теперь догоняет вспышку раньше
-        // (overexposed), и глаз между ними видел бы ясно
+        // from pulse maximum: previously from pulse end when the white screen ended; the frame now catches up with the flash earlier
+        // (overexposed), leaving a gap in which the eye would see clearly
         double start = ticks + FireballModel.secondMaximumSeconds(d.yieldKt()) * 20 * d.scale();
         if (start + seconds * 20 <= veilStart + veilSeconds * 20) return;
         veilStart = start;
@@ -169,11 +169,11 @@ public final class NukeFlash {
     }
 
     /**
-     * Где на экране глаз самого игрока видит шар радиуса {@code radius} в точке {@code at}: по его глазу и взгляду, а не по
-     * камере кадра (камера снаряда, вид от третьего лица смотрят не его глазами). Масштаб — проекция кадра, если кадр —
-     * его глаза (поле зрения с подзорной трубой, бегом), иначе — его поле зрения из настроек.
+     * Where the player's own eye sees a ball of radius {@code radius} at {@code at} on screen: from their eye and gaze rather than
+     * the frame camera (projectile camera and third-person view do not look through their eyes). Scale uses the frame projection if the frame is
+     * their eyes (FOV with spyglass, sprinting); otherwise their configured FOV.
      *
-     * @return {x, y — доли ширины и высоты экрана; полуразмер — доля высоты} или null, если шар у него за спиной
+     * @return {x, y — fractions of screen width and height; half-size — fraction of height}, or null if the ball is behind the player
      */
     @Nullable
     private static float[] retina(Minecraft mc, LocalPlayer p, Vec3 at, double radius) {
@@ -194,10 +194,10 @@ public final class NukeFlash {
     }
 
     /**
-     * Мир освещён вспышкой, как молнией: ванильная вспышка неба (свет неба у всех блоков — полный, как днём) на
-     * 1.5–3 с × ∛(Y/15), у всех, кому видно засвеченное небо (засветка не меньше {@link #WORLD_FLASH}: у воздушного
-     * подрыва на 240·∛Y м в ясную погоду 1 и 15 кт — до ~107 км, 1 Мт — до ~119 км; в дождь — 27, 28 и 44 км; в грозу — 6,
-     * 7 и 17 км). Выключенная вспышка в настройках или ванильное «без вспышек молний» ({@link Flash#calm}) — без неё.
+     * World flash lighting, like lightning: vanilla sky flash (full sky light at every block, as in daylight) for
+     * 1.5–3 s × ∛(Y/15), for everyone who can see the dazzled sky (glare at least {@link #WORLD_FLASH}: for an airburst
+     * at 240·∛Y m in clear weather, 1 and 15 kt out to ~107 km, 1 Mt out to ~119 km; in rain 27, 28 and 44 km; in a thunderstorm 6,
+     * 7 and 17 km). Absent if flash is disabled in settings or vanilla "Hide Lightning Flashes" is on ({@link Flash#calm}).
      */
     private static void lightUpWorld(ClientLevel level, Detonation d, double sky) {
         if (sky < WORLD_FLASH || IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
@@ -214,12 +214,12 @@ public final class NukeFlash {
         }
     }
 
-    /** Глаза, а не камера: не творческий режим и не наблюдатель (и не зритель повтора). */
+    /** Eyes rather than a camera: neither creative nor spectator (nor a replay viewer). */
     private static boolean eyes(@Nullable LocalPlayer p) {
         return p != null && !p.isCreative() && !p.isSpectator();
     }
 
-    /** Возрождение после смерти: засветку и послеобраз умерших глаз новое тело не несёт (пятна сетчатки шлёт сервер). */
+    /** Respawn after death: the new body does not carry the dead eyes' dazzle or afterimage (server sends retinal spots). */
     public static void respawned() {
         afterLeft = 0;
         veilSeconds = 0;
@@ -232,14 +232,14 @@ public final class NukeFlash {
         veilSeconds = 0;
     }
 
-    /** Ожоги сетчатки с сервера — все пятна целиком (состояние, не событие). */
+    /** Retinal burns from the server — all spots in full (state, not an event). */
     public static void scars(RetinaScars s) {
         scars = s.scars();
     }
 
     /**
-     * Насколько экран сейчас белый (0..1): для неба и тумана тоже — доля, на которую пересвет {@link #overexposure}
-     * поднимает середину тонов к белому, 1 − 1/X.
+     * How white the screen is now (0..1): also for sky and fog — the fraction by which overexposure {@link #overexposure}
+     * raises midtones toward white, 1 − 1/X.
      */
     public static float whiteness(float partialTick) {
         ClientNuclear.Active a = current;
@@ -248,8 +248,8 @@ public final class NukeFlash {
     }
 
     /**
-     * Пересвет кадра вспышкой подрыва {@code a} (≥ 1; 1 — кадр догнал её или вспышка не та, что на экране): по нему и блик
-     * шара ({@code NukeRenderer.fireballs}).
+     * Frame overexposure from detonation {@code a}'s flash (≥ 1; 1 — frame caught up, or a different flash than on screen): also used for ball
+     * glare ({@code NukeRenderer.fireballs}).
      */
     static double overexposure(ClientNuclear.Active a, float partialTick) {
         if (a != current || strength <= 0) return 1;
@@ -270,11 +270,11 @@ public final class NukeFlash {
     }
 
     /**
-     * Кадр, пересвеченный вспышкой ({@link #overexposure}, подача): усиление кадра — пересвет X в значениях экрана
-     * (X^(1/2,2), не больше {@link #GAIN_MAX}: светлое уходит в белое, тёмное остаётся тёмным — силуэты против вспышки, как
-     * на плёнке), поверх — рассеянный в объективе свет, белый в доле X / {@link #VEIL_X} (сначала бело-голубой, потом
-     * тёплый). Белая заливка во весь экран одним цветом прятала кадр целиком, усиление — только то, что в нём светлое.
-     * Усиление — смешиванием «цвет кадра × (1 + c)» за проходы по ×2.
+     * Frame overexposed by the flash ({@link #overexposure}, presentation): frame gain is overexposure X in screen values
+     * (X^(1/2.2), capped at {@link #GAIN_MAX}: bright becomes white, dark stays dark — silhouettes against the flash, like
+     * film), with lens-scattered light on top, white share X / {@link #VEIL_X} (blue-white at first, then
+     * warm). A uniform white fill hid the whole frame; gain affects only bright content.
+     * Gain uses "frame color × (1 + c)" blending in ×2 passes.
      */
     private static void overexposed(GuiGraphics g, float partial, int w, int h) {
         ClientNuclear.Active a = current;
@@ -306,18 +306,18 @@ public final class NukeFlash {
         float white = (float) (strength * Math.min(1, x / VEIL_X));
         if (white > 0.004f) {
             int alpha = Math.min(255, (int) (white * 255));
-            // сначала бело-голубой, потом тёплый
+            // blue-white at first, then warm
             int rgb = a.seconds(partial) < FireballModel.firstMinimumSeconds(a.d.yieldKt()) * 4 ? 0xEEF4FF : 0xFFF8E8;
             g.fill(0, 0, w, h, (alpha << 24) | rgb);
         }
     }
 
     /**
-     * Послеобраз — оранжевое пятно там, где шар был на сетчатке в миг вспышки, медленно гаснет; двигается вместе со
-     * взглядом, как настоящий: повернул голову — пятно в том же месте экрана, а шар уходит. Место и размер на экране —
-     * из мига вспышки: смена поля зрения (подзорная труба, бег) его не двигает, как и сетчатку.
-     * Складывается со светом: обычным смешиванием тёмное ядро пятна ложилось бы поверх ещё светящегося шара тёмной
-     * точкой (шар всплывает, а пятно остаётся там, где была вспышка).
+     * Afterimage — an orange spot where the ball was on the retina at flash time, fading slowly; moves with
+     * gaze like a real one: turn your head and the spot stays at the same screen position while the ball moves away. Screen position and size
+     * come from flash time: FOV changes (spyglass, sprinting) do not move it, just as they do not move the retina.
+     * Additive light: normal blending would put the spot's dark core over the still-glowing ball as a dark
+     * dot (the ball rises while the spot stays where the flash was).
      */
     private static void afterimage(GuiGraphics g, float partial, int w, int h) {
         float px = Mth.clamp(afterSize * h, 14, 400);
@@ -330,7 +330,7 @@ public final class NukeFlash {
         RenderSystem.setShader(() -> shader);
         RenderSystem.enableBlend();
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
-        // пятно до 800 пикселей — свечением по формуле (из картинки — квадратами по её пикселю)
+        // spot up to 800 pixels — analytic glow (an image would show texture-pixel squares)
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
         Matrix4f m = g.pose().last().pose();
         spot(b, m, x, y, px, 0.55f, 0.24f, 0.08f, a);
@@ -341,9 +341,9 @@ public final class NukeFlash {
     }
 
     /**
-     * Вуаль засветки: с максимума импульса (до него — белый кадр {@link #overexposed}) гаснет к концу срока как
-     * (1 − t/T)²; цвет — светлый послеобраз, который за секунды темнеет (днём к серому, ночью к чёрному: привыкший к
-     * темноте глаз не видит тусклого).
+     * Dazzle veil: from pulse maximum (before it — white frame, {@link #overexposed}), fades by its deadline as
+     * (1 − t/T)²; color is a bright afterimage darkening over seconds (toward gray by day, black at night: a dark-adapted
+     * eye cannot see dim light).
      */
     private static void veil(GuiGraphics g, float partial, int w, int h) {
         if (veilSeconds <= 0) return;
@@ -359,9 +359,9 @@ public final class NukeFlash {
     }
 
     /**
-     * Ожоги сетчатки — тёмные пятна с мягким краем там, где на сетчатке был шар, в поле зрения игрока из настроек (как
-     * сетчатка: подзорная труба и бег их не двигают). У центра взгляда пятно заметно, сбоку мозг его почти заполняет
-     * (§12.85: вне центра ожог обычно не замечают) — бледнее.
+     * Retinal burns — dark, soft-edged spots where the ball was on the retina, in the player's configured FOV (like
+     * the retina: spyglass and sprinting do not move them). Near gaze center the spot is noticeable; to the side the brain mostly fills it in
+     * (§12.85: off-center burns usually go unnoticed), so it is fainter.
      */
     private static void scars(GuiGraphics g, int w, int h) {
         Minecraft mc = Minecraft.getInstance();
@@ -374,7 +374,7 @@ public final class NukeFlash {
         boolean any = false;
         for (RetinaScars.Scar s : scars) {
             float x = (float) ((0.5 + s.x() * sx) * w), y = (float) ((0.5 - s.y() * sy) * h), r = (float) Math.max(2, s.r() * sy * h);
-            // сбоку на 20° — втрое бледнее, чем у центра
+            // 20° off-axis — three times fainter than at the center
             double off = Math.toDegrees(Math.atan(Math.hypot(s.x(), s.y())));
             float a = (float) (0.85 / (1 + Math.pow(off / 14, 2)));
             any |= disc(b, m, x, y, r, a, w, h);
@@ -384,7 +384,7 @@ public final class NukeFlash {
         RenderSystem.disableBlend();
     }
 
-    /** Тёмный круг радиуса r с краем ещё в полрадиуса до прозрачного; за экраном — не рисуется. */
+    /** Dark circle of radius r with an extra half-radius fade to transparent; not drawn off screen. */
     private static boolean disc(BufferBuilder b, Matrix4f m, float x, float y, float r, float a, int w, int h) {
         float outer = r * 1.5f;
         if (x + outer < 0 || y + outer < 0 || x - outer > w || y - outer > h) return false;
@@ -405,7 +405,7 @@ public final class NukeFlash {
         return true;
     }
 
-    /** Квадрат свечения с серединой (x, y) и полуразмером half, в пикселях интерфейса. */
+    /** Glow quad centered at (x, y) with half-size half, in GUI pixels. */
     private static void spot(BufferBuilder b, Matrix4f m, float x, float y, float half, float r, float g, float bl, float a) {
         b.addVertex(m, x - half, y - half, 0).setUv(0, 0).setColor(r, g, bl, a);
         b.addVertex(m, x - half, y + half, 0).setUv(0, 1).setColor(r, g, bl, a);

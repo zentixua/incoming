@@ -57,32 +57,32 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * /incoming — то же, что пульт, но для операторов и автоматизации (командные блоки, функции):
+ * /incoming — the same as the designator, for operators and automation (command blocks, functions):
  * <pre>
- *   /incoming drone|missile|bunker                   куда смотрю
- *   /incoming missile ENOTzRPG                       по игроку или мобу (у оператора снаряд идёт за ним)
- *   /incoming bunker at ~ ~-20 ~                     по точке
- *   /incoming missile at x z                         по месту на земле: высоту находит сервер, как у места с карты
- *   /incoming salvo drone 6 25 [me|look|ник|at x y z|at x z] залп: сколько, разброс
- *          … [from x z] [via x z [x z …]]            место пуска (оператор) и точки маршрута, как на карте пульта;
- *                                                     один снаряд — salvo drone 1 0 …
- *   /incoming menu | clear | give [игроки] | help
- *   /incoming nuke [кт] [air|ground]                  МБР туда, куда смотрю (по умолчанию — воздушный подрыв)
- *   /incoming nuke at x y z [кт] [air|ground]         МБР по точке
- *   /incoming nuke now [at x y z] [кт] [air|ground]   подрыв сразу, без полёта (только оператор)
- *   /incoming radiation [игрок] | radiation clear [игроки]
- *   /incoming grid …                                  сеть и блэкаут ({@link GridCommand})
- *   /incoming launcher x y z                          стационарная пусковая (оператор): состояние;
- *          … fire | clear | load N | owner игрок|none   приказ по задаче, снять задачу, боеприпасы задачи, хозяин;
- *          … mission оружие N разброс x y z|x z [via x z …] задача, как с пульта, без правил
+ *   /incoming drone|missile|bunker                   where I am looking
+ *   /incoming missile ENOTzRPG                       at a player or mob (an operator's projectile follows it)
+ *   /incoming bunker at ~ ~-20 ~                     at a point
+ *   /incoming missile at x z                         at a ground position: the server finds the height, as for a map position
+ *   /incoming salvo drone 6 25 [me|look|name|at x y z|at x z] salvo: count, spread
+ *          … [from x z] [via x z [x z …]]            launch position (operator) and waypoints, as on the designator map;
+ *                                                     one projectile — salvo drone 1 0 …
+ *   /incoming menu | clear | give [players] | help
+ *   /incoming nuke [kt] [air|ground]                  ICBM where I am looking (default — airburst)
+ *   /incoming nuke at x y z [kt] [air|ground]         ICBM at a point
+ *   /incoming nuke now [at x y z] [kt] [air|ground]   immediate detonation, no flight (operator only)
+ *   /incoming radiation [player] | radiation clear [players]
+ *   /incoming grid …                                  power grid and blackout ({@link GridCommand})
+ *   /incoming launcher x y z                          fixed launcher (operator): status;
+ *          … fire | clear | load N | owner player|none   fire mission, clear mission, mission munitions, owner;
+ *          … mission weapon N spread x y z|x z [via x z …] mission, as from the designator, without rules
  * </pre>
- * Ник подсказывает Tab, регистр букв не важен. «shahed» — синоним drone. Команда игрока без
- * прав оператора бьёт по правилам пульта ({@link #rules}) и тратит боеприпасы из инвентаря ({@code strike.Munitions});
- * оператор, консоль и командный блок не платят.
+ * Tab completes player names; case does not matter. “shahed” is an alias for drone. A player command without
+ * operator permission follows the designator rules ({@link #rules}) and consumes inventory munitions ({@code strike.Munitions});
+ * operators, the console and command blocks do not pay.
  * <p>
- * Место пуска {@code from} — где встаёт пусковая (для постановочных боёв: видно, кто откуда стреляет); задаёт его только
- * оператор, консоль и командный блок. Точки {@code via} — те же, что игрок ставит на карте пульта ({@link Waypoints}),
- * и только у оружия, которое по ним летает.
+ * The {@code from} launch position is where the launcher is placed (for staged battles: who fires from where is visible);
+ * only operators, the console and command blocks can set it. {@code via} points are the same ones players place on the
+ * designator map ({@link Waypoints}), and apply only to weapons that fly through them.
  */
 public final class IncomingCommand {
     private static final SimpleCommandExceptionType TARGET_NOT_FOUND = new SimpleCommandExceptionType(Component.translatable("incoming.target_not_found"));
@@ -105,10 +105,10 @@ public final class IncomingCommand {
         }));
         root.then(Commands.literal("clear").executes(ctx -> {
             CommandSourceStack s = ctx.getSource();
-            // оператор (консоль, командный блок) и хост снимают всё, и ядерные удары; игрок — только свои, как с пульта
+            // operators (console, command blocks) and the host clear everything, including nuclear strikes; players clear only their own, as with the designator
             boolean trusted = s.hasPermission(2) || s.getEntity() instanceof ServerPlayer p && NuclearKeys.trusted(p);
             if (!trusted && s.getEntity() instanceof ServerPlayer p) {
-                // отбой — до строки: без sendCommandFeedback sendSuccess не зовёт поставщик строки
+                // cancel before producing the message: without sendCommandFeedback, sendSuccess does not call the message supplier
                 Component done = ServerActions.recall(p);
                 s.sendSuccess(() -> done, false);
                 return 1;
@@ -151,17 +151,17 @@ public final class IncomingCommand {
             case BUNKER -> new String[]{"bunker"};
             case ROCKET -> new String[]{"rocket", "grad"};
             case LOITER -> new String[]{"loiter", "lancet"};
-            case NUKE -> new String[0]; // своя ветка: мощность и подрыв вместо количества и разброса
+            case NUKE -> new String[0]; // separate branch: yield and burst type instead of count and spread
         };
     }
 
-    // ---------------------------------------------------------------- ядерный удар
+    // ---------------------------------------------------------------- nuclear strike
 
     private interface NukeAction {
         int run(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke) throws CommandSyntaxException;
     }
 
-    /** «[кт] [air|ground]» после любой ядерной команды. */
+    /** “[kt] [air|ground]” after any nuclear command. */
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T yieldArgs(T node, NukeAction action) {
         return node.executes(ctx -> action.run(ctx, new Loadout.Nuke(IncomingConfig.SERVER.nukeDefaultYield.get(), true)))
                 .then(Commands.argument("kt", IntegerArgumentType.integer(1, Loadout.Nuke.MAX_YIELD))
@@ -176,7 +176,7 @@ public final class IncomingCommand {
         return nuke
                 .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
                         (ctx, n) -> nukeAt(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n))))
-                // подрыв без полёта — инструмент хоста: не платит, без тревоги; не оператору его нет и при ops_only = false
+                // detonation without flight is a host tool: no payment or warning; unavailable to non-operators even with ops_only = false
                 .then(yieldArgs(Commands.literal("now").requires(s -> s.hasPermission(2)), (ctx, n) -> nukeNow(ctx.getSource(), lookPoint(ctx), n))
                         .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
                                 (ctx, n) -> nukeNow(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n)))));
@@ -253,9 +253,9 @@ public final class IncomingCommand {
                                 (ctx, path) -> entity(ctx, w, count(ctx), spread(ctx), EntityArgument.getEntity(ctx, "target"), path)))));
     }
 
-    // ---------------------------------------------------------------- откуда и через где
+    // ---------------------------------------------------------------- origin and waypoints
 
-    /** Откуда и через где летит приказ: место пуска (null — у стреляющего или издалека) и точки маршрута. */
+    /** Where the order flies from and through: launch position (null — near the shooter or from afar) and waypoints. */
     private record Path(@Nullable LaunchOrigin from, Waypoints via) {
         static final Path NONE = new Path(null, Waypoints.NONE);
     }
@@ -265,9 +265,9 @@ public final class IncomingCommand {
     }
 
     /**
-     * «[from x z] [via x z [x z …]]» после цели залпа: место пуска — там встаёт пусковая (только у оператора, консоли
-     * и командного блока) — и точки маршрута, как на карте пульта (только у оружия, которое по ним летает: паспорт,
-     * {@link WeaponSpec.Route#waypoints}).
+     * “[from x z] [via x z [x z …]]” after the salvo target: launch position — where the launcher is placed (operators,
+     * console and command blocks only) — and waypoints, as on the designator map (only for weapons that fly through them:
+     * the spec, {@link WeaponSpec.Route#waypoints}).
      */
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T pathArgs(T node, WeaponType w, Order order) {
         RequiredArgumentBuilder<CommandSourceStack, Coordinates> from = Commands.argument("site", Vec2Argument.vec2())
@@ -280,7 +280,7 @@ public final class IncomingCommand {
                 .then(Commands.literal("from").requires(s -> s.hasPermission(2)).then(from));
     }
 
-    /** «via x z [x z …]»: до {@link Waypoints#MAX} точек по порядку пролёта; {@code from} — после места пуска. */
+    /** “via x z [x z …]”: up to {@link Waypoints#MAX} points in flight order; {@code from} comes after the launch position. */
     private static LiteralArgumentBuilder<CommandSourceStack> via(Order order, boolean from) {
         ArgumentBuilder<CommandSourceStack, ?> next = null;
         for (int i = Waypoints.MAX; i >= 1; i--) {
@@ -293,20 +293,20 @@ public final class IncomingCommand {
         return Commands.literal("via").then(next);
     }
 
-    /** Место пуска (если {@code from}) и первые {@code points} точек маршрута из команды. */
+    /** Launch position (if {@code from}) and the first {@code points} waypoints from the command. */
     private static Path path(CommandContext<CommandSourceStack> ctx, boolean from, int points) {
         List<Vec3> via = new ArrayList<>(points);
         for (int i = 1; i <= points; i++) via.add(column(ctx, "point" + i));
         return new Path(from ? new LaunchOrigin.Place(column(ctx, "site")) : null, new Waypoints(via));
     }
 
-    /** Место «x z» по горизонтали; «~» — от того, кто дал команду (в числах double: {@code Vec2Argument.getVec2} — float). */
+    /** Horizontal “x z” position; “~” is relative to the caller (using doubles: {@code Vec2Argument.getVec2} uses floats). */
     private static Vec3 column(CommandContext<CommandSourceStack> ctx, String name) {
         Vec3 p = ctx.getArgument(name, Coordinates.class).getPosition(ctx.getSource());
         return new Vec3(p.x, 0, p.z);
     }
 
-    /** Количество и разброс залпа зажимает пуск ({@link ServerActions#clamp}). */
+    /** Launch clamps the salvo count and spread ({@link ServerActions#clamp}). */
     private static int count(CommandContext<CommandSourceStack> ctx) {
         return IntegerArgumentType.getInteger(ctx, "count");
     }
@@ -330,14 +330,14 @@ public final class IncomingCommand {
         return fire(ctx.getSource(), w, count, spread, place.aim(ctx), Loadout.Nuke.DEFAULT, path);
     }
 
-    /** Цель «at …» из команды. */
+    /** “at …” target from a command. */
     private interface Place {
         ServerActions.Aim aim(CommandContext<CommandSourceStack> ctx);
     }
 
     /**
-     * «x y z» — сама точка, на этой высоте: в воздухе снаряд взорвётся в воздухе (бомба упадёт на землю под ней), под
-     * землёй бомба пробьётся к ней.
+     * “x y z” is the point itself, at that height: in the air the projectile explodes in the air (a bomb falls to the ground
+     * below it); underground, a bomb penetrates toward it.
      */
     private static ServerActions.Aim point(CommandContext<CommandSourceStack> ctx) {
         Vec3 pos = Vec3Argument.getVec3(ctx, "pos");
@@ -345,9 +345,9 @@ public final class IncomingCommand {
     }
 
     /**
-     * «x z» — место на земле, как с карты пульта ({@link Target.Ground}): высоту находит сервер, когда чанк там готов
-     * (район цели снаряд грузит сам). Тот, кто даёт команду, высоты далёкого места не знает, а точка выше земли — это
-     * взрыв в воздухе.
+     * “x z” is a ground position, as on the designator map ({@link Target.Ground}): the server finds the height when the chunk
+     * there is ready (the projectile loads its target area itself). The caller does not know a distant position's height,
+     * and a point above ground means an airburst.
      */
     private static ServerActions.Aim ground(CommandContext<CommandSourceStack> ctx) {
         Vec3 p = column(ctx, "place");
@@ -364,8 +364,8 @@ public final class IncomingCommand {
     }
 
     /**
-     * Пуск от имени игрока (заход из-за его спины) или от консоли/командного блока; место пуска и точки маршрута
-     * {@code path} сначала проверяются ({@link ServerActions#routeProblem}).
+     * Launch on behalf of a player (approaching from behind them) or the console/command block; the launch position and
+     * waypoints in {@code path} are checked first ({@link ServerActions#routeProblem}).
      */
     private static int fire(CommandSourceStack s, WeaponType w, int count, int spread, ServerActions.Aim aim, Loadout.Nuke nuke, Path path) {
         ServerPlayer player = s.getEntity() instanceof ServerPlayer p ? p : null;
@@ -381,12 +381,13 @@ public final class IncomingCommand {
         return ok ? 1 : 0;
     }
 
-    // ---------------------------------------------------------------- стационарная пусковая
+    // ---------------------------------------------------------------- fixed launcher
 
     /**
-     * «launcher x y z …» — стационарная пусковая для ведущего и скриптов (только оператор): состояние; приказ по задаче,
-     * как сигнал редстоуна; задача — как с пульта, но без правил игрока (цель — место); снять задачу; положить в запас
-     * боеприпасы оружия задачи; хозяин (снаряды — от его имени, свои по {@code /team}) или ничья (без правил хозяина).
+     * “launcher x y z …” — fixed launcher for the game master and scripts (operator only): status; fire its mission,
+     * as with a redstone signal; mission as from the designator, without player rules (target is a position); clear mission;
+     * stock munitions for the mission's weapon; owner (projectiles act on their behalf, allies by {@code /team}) or unowned
+     * (without owner rules).
      */
     private static LiteralArgumentBuilder<CommandSourceStack> launcher() {
         RequiredArgumentBuilder<CommandSourceStack, Coordinates> at = Commands.argument("launcher", BlockPosArgument.blockPos())
@@ -429,7 +430,7 @@ public final class IncomingCommand {
         return Commands.literal("launcher").requires(s -> s.hasPermission(2)).then(at.then(mission));
     }
 
-    /** Цель задачи ({@code place} — точка или место на земле) и точки маршрута, если оружие по ним летает. */
+    /** Mission target ({@code place} — a point or ground position) and waypoints, if the weapon flies through them. */
     private static RequiredArgumentBuilder<CommandSourceStack, Coordinates> missionTarget(RequiredArgumentBuilder<CommandSourceStack, Coordinates> node,
                                                                                          WeaponType w, Place place) {
         node.executes(ctx -> launcherMission(ctx, w, place, Waypoints.NONE));
@@ -437,7 +438,7 @@ public final class IncomingCommand {
         return node;
     }
 
-    /** Пусковая в месте из команды: только в готовом чанке (ради команды его не грузим). */
+    /** Launcher at the command's position: only in a ready chunk (do not load it for a command). */
     private static FixedLauncherBlockEntity launcherAt(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerLevel level = ctx.getSource().getLevel();
         BlockPos pos = BlockPosArgument.getBlockPos(ctx, "launcher");
@@ -446,7 +447,7 @@ public final class IncomingCommand {
         throw NO_LAUNCHER.create();
     }
 
-    /** Пусковая, которой можно сменить задачу: прошлый приказ не идёт ({@link LauncherOrders#busy}). */
+    /** Launcher whose mission can be changed: its previous order is not running ({@link LauncherOrders#busy}). */
     private static FixedLauncherBlockEntity idleLauncherAt(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         FixedLauncherBlockEntity be = launcherAt(ctx);
         if (LauncherOrders.busy(ctx.getSource().getLevel(), be)) throw LAUNCHER_BUSY.create();
@@ -489,9 +490,9 @@ public final class IncomingCommand {
     }
 
     /**
-     * Приказ командой — по правилам пульта ({@link ServerActions#sighted}) и с оплатой боеприпасами, кроме операторов
-     * сервера (и {@code /execute as} из консоли или командного блока — права у них): хост и ведущий устраивают события
-     * без правил, как консоль и командный блок.
+     * A command order follows designator rules ({@link ServerActions#sighted}) and pays munitions, except for server
+     * operators (and {@code /execute as} from the console or a command block — their permissions apply): the host and game
+     * master stage events without rules, as do the console and command blocks.
      */
     private static boolean rules(CommandSourceStack s) {
         return !s.hasPermission(2);

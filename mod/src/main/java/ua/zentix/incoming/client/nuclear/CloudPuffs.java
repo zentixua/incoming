@@ -7,25 +7,25 @@ import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
- * Свет подрыва на пыли (DESIGN-nuke §6): шар сверху и пожары снизу — им светятся стена пыли, облако Вильсона и пелена
- * за ними ({@code fx_pall}, числа слота — {@link #pallLight}) и пыль у камеры ({@code NukePall.dustColor}). Шар — тот же
- * источник, что светит ножку и частицы ({@link MushroomModel#light}: ламбертов шар радиуса шапки, чёрное тело её видимой
- * температуры, L·R²/d²); пожары — {@link #glow}, {@link #burn}. Своих клубов здесь больше нет (имя осталось от них): гриб
- * и столб воды — объём ({@link MushroomField}), стена пыли, облако Вильсона и базисная волна — объём в пелене
+ * Detonation light on dust (DESIGN-nuke §6): ball above and fires below illuminate the dust wall, Wilson cloud and the pall
+ * behind them ({@code fx_pall}, slot parameters — {@link #pallLight}), and dust at the camera ({@code NukePall.dustColor}). The ball is the same
+ * source that lights the stem and particles ({@link MushroomModel#light}: Lambertian sphere of cap radius, black body at its visible
+ * temperature, L·R²/d²); fires use {@link #glow}, {@link #burn}. This no longer has its own billows (the name remains): mushroom
+ * and water column are volumes ({@link MushroomField}); dust wall, Wilson cloud and base surge are volumes in the pall
  * ({@link BlastWall}, {@link PallField}).
  */
 public final class CloudPuffs {
-    /** Свет чёрного тела шапки: r, g, b, яркость (поток клиента). */
+    /** Cap black-body light: r, g, b, brightness (client thread). */
     private static final double[] BALL = new double[4];
-    /** Над водой: брызги и водяная пыль у земли (её цвет продолжает пелена над водой — {@code MIST} в {@code fx_pall}). */
+    /** Over water: spray and mist near the ground (its color continues into the pall over water — {@code MIST} in {@code fx_pall}). */
     static final int SPRAY = 0xE6EAED;
-    /** Отсвет накала в самом дыме и сила свечения клуба поверх дыма. */
+    /** Incandescent light within the smoke, and billow glow strength over the smoke. */
     private static final double GLOW_IN_SMOKE = 0.85, EMISSIVE = 0.3;
 
     private final Detonation d;
-    /** Докуда по земле световой импульс поджигает (≥ {@link ThermalModel#IGNITE}), м: там под пылью горит. */
+    /** Ground distance to which the light pulse ignites (≥ {@link ThermalModel#IGNITE}), m: fires burn beneath the dust there. */
     private final double fireGround;
-    /** {@link #pallLight} в миг {@link #nowT} без доли тика ({@link #pallLightNow}) и был ли гриб. */
+    /** {@link #pallLight} at {@link #nowT} without partial tick ({@link #pallLightNow}), and whether a mushroom existed. */
     private final float[] now = new float[8];
     private double nowT = Double.NaN;
     private boolean nowLit;
@@ -37,22 +37,22 @@ public final class CloudPuffs {
         fireGround = Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
-    /** Сколько секунд модели гриб виден: поднимается и рассеивается ({@link MushroomModel#lifeSeconds}). */
+    /** How many model seconds the mushroom is visible: rise and dispersion ({@link MushroomModel#lifeSeconds}). */
     public static double lifeSeconds(Detonation d) {
         return MushroomModel.lifeSeconds(d.yieldKt());
     }
 
     /**
-     * Растяжка времени свечения с мощностью: 1 у 15 кт, у 1 кт — ×0.51 (шар и гриб вдвое ниже, остывают быстрее:
-     * накал полный 20 с и гаснет к 75 с).
+     * Glow time stretch with yield: 1 at 15 kt, ×0.51 at 1 kt (ball and mushroom are half as high, cool faster:
+     * full incandescence for 20 s, fades by 75 s).
      */
     static double glowScale(double yieldKt) {
         return Math.pow(Math.max(yieldKt, 0.1) / 15, 0.25);
     }
 
     /**
-     * Отсвет пожаров под пылью стены во времени 0..1 ({@link #burn}): у 15 кт полный 40 с, к 90 с — 0.57, гаснет к 150 с;
-     * у 1 кт — вдвое короче ({@link #glowScale}).
+     * Fire glow beneath wall dust over time, 0..1 ({@link #burn}): at 15 kt full for 40 s, 0.57 at 90 s, fades by 150 s;
+     * at 1 kt half as long ({@link #glowScale}).
      */
     static double glow(double t, double yieldKt) {
         double k = glowScale(yieldKt);
@@ -60,17 +60,17 @@ public final class CloudPuffs {
     }
 
     /**
-     * Свет шара на белой стене к нему в долях белой стены в полдень (без привыкания глаза) по числам слота
-     * ({@link #pallLight}: радиус и яркость чёрного тела) на расстоянии {@code d} от его середины — {@link MushroomModel#light}
-     * (у {@code fx_pall} — то же, {@code pallBallShare}, × привыкание глаза); d и радиус — в одних единицах.
+     * Ball light on a white wall facing it, in fractions of a white wall at noon (without eye adaptation), from slot parameters
+     * ({@link #pallLight}: black-body radius and brightness) at distance {@code d} from its center — {@link MushroomModel#light}
+     * (same in {@code fx_pall}, {@code pallBallShare}, × eye adaptation); d and radius use the same units.
      */
     static double ball(double luminance, double radius, double d) {
         return luminance * radius * radius / Math.max(Math.max(d * d, radius * radius), 1e-6);
     }
 
     /**
-     * Отсвет пожаров под пылью 0..1 ({@code pallBurn} в {@code pall.glsl} — то же): в зоне поджига до {@code fireR}
-     * ({@link #pallLight}), снизу сильнее, с накалом {@code glow}.
+     * Fire glow beneath dust 0..1 (same as {@code pallBurn} in {@code pall.glsl}): in the ignition zone out to {@code fireR}
+     * ({@link #pallLight}), stronger from below, with incandescence {@code glow}.
      */
     static double burn(double r, double up, double glow, double fireR) {
         double e = Math.max(fireR, 1e-3);
@@ -78,21 +78,21 @@ public final class CloudPuffs {
     }
 
     /**
-     * Сила отсвета на дыме при свете неба {@code ambient}: отсвет накала в самом дыме и свечение поверх него. Днём глаз
-     * привыкает к свету — отсвет виден слабее.
+     * Glow strength on smoke at sky light {@code ambient}: incandescent light within smoke and glow over it. By day the eye
+     * adapts to light, making the glow less visible.
      */
     public static double glowOnSmoke(float ambient) {
         return GLOW_IN_SMOKE * (1 - 0.5 * ambient) + EMISSIVE;
     }
 
     /**
-     * Свет шара и пожаров на стене пыли, облаке Вильсона и пелене за ними у гриба {@code s} ({@code MushroomField.shape})
-     * — им {@code fx_pall} светит пыль (шар — пучок {@link #ball} от середины шапки, пожары — {@link #burn} снизу), а
-     * {@code NukePall.dustColor} — пыль у камеры. В {@code into}: радиус шапки (у шара — его радиус), накал пожаров, снос
-     * середины шапки по ветру и край зоны пожаров (блоки), свет чёрного тела видимой температуры шапки
-     * ({@link MushroomModel#edgeTemperature}: r, g, b линейные, в долях белой стены в полдень), высота середины шапки над
-     * землёй под эпицентром (блоки). Середина — как у тела гриба и света частиц ({@code MushroomField.centre}). false —
-     * гриба уже (или ещё) нет (в {@code into} нули): нет и отсвета.
+     * Ball and fire light on the dust wall, Wilson cloud and pall behind them for mushroom {@code s} ({@code MushroomField.shape})
+     * — used by {@code fx_pall} to light dust (ball — {@link #ball} beam from the cap center; fires — {@link #burn} from below), and
+     * by {@code NukePall.dustColor} for camera dust. Into {@code into}: cap radius (ball radius for a ball), fire incandescence, downwind
+     * drift of the cap center, fire-zone edge (blocks), black-body light at the visible cap temperature
+     * ({@link MushroomModel#edgeTemperature}: linear r, g, b, fractions of a white wall at noon), cap-center height above
+     * ground zero (blocks). Same center as the mushroom body and particle light ({@code MushroomField.centre}). false —
+     * the mushroom no longer (or not yet) exists ({@code into} zeroed): no glow either.
      */
     public boolean pallLight(MushroomModel.Shape s, float[] into) {
         java.util.Arrays.fill(into, 0, 8, 0f);
@@ -109,8 +109,8 @@ public final class CloudPuffs {
     }
 
     /**
-     * {@link #pallLight} гриба подрыва {@code a} в его миг без доли тика — один расчёт на миг: форма гриба и спектр
-     * чёрного тела стоят десятков микросекунд, а пыль у камеры ({@code NukePall.dustColor}) берёт свет на каждый клуб.
+     * {@link #pallLight} of detonation {@code a}'s mushroom at its time without partial tick — one calculation per time: mushroom shape and black-body
+     * spectrum cost tens of microseconds, while camera dust ({@code NukePall.dustColor}) reads light for every billow.
      */
     boolean pallLightNow(ClientNuclear.Active a, float[] into) {
         double t = a.seconds(0);

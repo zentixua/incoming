@@ -3,33 +3,33 @@ package ua.zentix.incoming.nuclear.model;
 import ua.zentix.incoming.util.Visibility;
 
 /**
- * Световой импульс: Q = f·Y·10¹²·τ / (4π·(100·R)²) кал/см², f — доля энергии в свете: 0.35 воздушный, 0.18 наземный.
- * Пропускание воздуха τ = exp(−(R/V)^0.544) — прямой и рассеянный свет вместе, подбор по кривым Glasstone 1964, рис. 7.104
- * (видимость 10 и 50 миль): ±0,03 до половины видимости, при видимости меньше 16 км (дождь, гроза) — продолжение
- * подбора. R, V — метры.
+ * Thermal fluence: Q = f·Y·10¹²·τ / (4π·(100·R)²) cal/cm², f — thermal energy fraction: 0.35 airburst, 0.18 surface burst.
+ * Air transmittance τ = exp(−(R/V)^0.544), direct and scattered light together, fitted to Glasstone 1964 fig. 7.104
+ * (10 and 50 mile visibility): ±0.03 to half visibility; below 16 km visibility (rain, thunderstorm), extrapolated fit.
+ * R, V in meters.
  */
 public final class ThermalModel {
-    /** Ожог 1-й степени, кал/см². */
+    /** First-degree burn, cal/cm². */
     public static final double BURN_1 = 3;
-    /** Ожог 2-й степени. */
+    /** Second-degree burn. */
     public static final double BURN_2 = 5;
-    /** Ожог 3-й степени. */
+    /** Third-degree burn. */
     public static final double BURN_3 = 8;
-    /** Воспламенение листвы, травы, шерсти. */
+    /** Ignition of foliage, grass, wool. */
     public static final double IGNITE = 5;
-    /** Световой импульс, кал/см², при котором горючее руин ядерки загорается наверняка ({@code RuinPlanner}). */
+    /** Thermal fluence, cal/cm², at which nuclear ruin combustibles ignite with certainty ({@code RuinPlanner}). */
     public static final double IGNITE_ALL = 20;
-    /** Видимость, м: ясно, дождь, гроза — та же, что у картинки ({@link Visibility}). */
+    /** Visibility, m: clear, rain, thunderstorm — same as visuals ({@link Visibility}). */
     public static final double VISIBILITY_CLEAR = Visibility.CLEAR;
     public static final double VISIBILITY_RAIN = Visibility.RAIN;
     public static final double VISIBILITY_THUNDER = Visibility.THUNDER;
-    /** Показатель степени пропускания по Glasstone 1964, рис. 7.104. */
+    /** Transmittance exponent from Glasstone 1964, fig. 7.104. */
     private static final double TRANSMITTANCE_POWER = 0.544;
 
     private ThermalModel() {
     }
 
-    /** Плотность световой энергии на наклонной дальности R, кал/см². */
+    /** Thermal energy density at slant range R, cal/cm². */
     public static double fluenceCalPerCm2(double slantRangeM, double yieldKt, boolean surfaceBurst, double visibilityM) {
         double r = Math.max(slantRangeM, 1);
         double f = surfaceBurst ? 0.18 : 0.35;
@@ -37,12 +37,12 @@ public final class ThermalModel {
         return f * yieldKt * 1e12 * transmittance(r, visibilityM) / (4 * Math.PI * rCm * rCm);
     }
 
-    /** Доля светового импульса, что проходит наклонную дальность R при видимости V (прямой и рассеянный свет). */
+    /** Thermal pulse fraction transmitted over slant range R at visibility V (direct and scattered light). */
     public static double transmittance(double slantRangeM, double visibilityM) {
         return Math.exp(-Math.pow(Math.max(slantRangeM, 0) / visibilityM, TRANSMITTANCE_POWER));
     }
 
-    /** Дальность, где плотность энергии падает до q, м. */
+    /** Range where energy density falls to q, m. */
     public static double rangeForFluence(double q, double yieldKt, boolean surfaceBurst, double visibilityM) {
         return Solve.decreasingRoot(r -> fluenceCalPerCm2(r, yieldKt, surfaceBurst, visibilityM), q, 1, 1e8);
     }

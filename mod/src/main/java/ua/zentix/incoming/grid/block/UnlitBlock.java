@@ -14,7 +14,7 @@ import net.minecraft.world.phys.HitResult;
 
 import java.util.function.Supplier;
 
-/** Двойник лампы без свойств состояния: светокамень, морской фонарь, грибосвет. */
+/** Counterpart of a lamp with no state properties: glowstone, sea lantern, shroomlight. */
 public class UnlitBlock extends Block implements Unlit {
     private final Supplier<Block> lit;
 

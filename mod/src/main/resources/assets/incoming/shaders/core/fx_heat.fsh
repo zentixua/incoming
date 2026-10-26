@@ -5,64 +5,64 @@
 #moj_import <incoming:scene.glsl>
 #moj_import <incoming:heat.glsl>
 
-// Свет вспышки и огня обычного оружия на мир и дрожание воздуха над огнём (client/fx/layer/HeatPass): проход во весь кадр
-// после пелены и до квадратов слоя по копии кадра (Sampler0) — пиксель пишется целиком.
-// - Дрожание: показатель преломления воздуха n − 1 ∝ плотности ∝ 1/T, и горячий газ над огнём, шаром и в струе сопла
-//   отклоняет луч на ∫∇n·dl. Пульсации температуры рвут газ на вихри от внешнего масштаба ℓ вниз (Колмогоров); угол
-//   прихода за путём L — σ = δn·√(5,82·L/ℓ)·(ℓ/D)^(1/6) по одной оси (hazeAngle; D — пятно, что глаз различает у газа),
-//   вихри быстрее, чем глаз копит свет, сливаются (hazeSeen). Изображение за газом сдвигается на этот угол × (1 − s/D)
-//   (s — до газа, D — до мира). Сдвиг — в долях того, что различает глаз (острота зрения, в бинокль — пиксель): подача,
-//   HeatPass. Газ — столб вдоль своей оси (у огня и шара — вверх, у сопла — по струе), радиус растёт по оси, избыток
-//   температуры и скорость за своими местами падают как 1/x; узор вихрей — октавы шума от ℓ втрое мельче, пока крупнее
-//   пятна, и его несёт газ (два слоя со сдвигом в полцикла, смена слоя — при нулевом весе).
-// - Ударная волна ядерки: воздух за фронтом сжат (Ренкин–Гюгонио), n − 1 ∝ плотности, и луч, что пересекает сферу фронта,
-//   гнётся к её середине на производную добавки пути (тонкая оболочка: путь — функция Доусона, nuclear/model/ShockOptics,
-//   сверяет ShockOpticsGlslTest), среднюю по ширине пикселя там, где луч пересёк фронт. У касательной — пиксели, вдали от
-//   неё — ничто: фронт виден тонким кольцом по краю на фоне неба и земли. Сдвиг фронта меньше FRONT_SHIFT_MIN — нет.
-// - Свет: огненный шар взрыва, пламя лужи, горящие обломки и масло подстанции — ламбертовы шары яркостью чёрного тела
-//   (L·R²/max(d², R²), mushBallFace — прямой пучок по косинусу к грани, рассеянный воздухом и отражённый землёй), как
-//   свет шара ядерки на мир (fx_pall_composite): цвет блока — пиксель, делённый на свет открытого неба (relit). Факел
-//   двигателя — три равномерных светящихся отрезка по оси струи (ядро, пламя, хвост до точки Дрейпера): прямой свет —
-//   точный интеграл по отрезку над гранью (heatSegment), рассеянный и отражённый — как у шара в середине части.
-// - Тени: прямой свет закрывают блоки — луч от точки мира к источнику по клеткам окна блоков вокруг глаза (heatBlocked,
-//   HeatPass.blocked; окно — Solids): заслон известен точно, в кадре он или нет. За окном теней нет.
+// Conventional flash/fire light on the world and heat haze above fire (client/fx/layer/HeatPass): fullscreen pass after
+// pall, before layer quads, using a frame copy (Sampler0); writes the whole pixel.
+// - Haze: air refractive index n − 1 ∝ density ∝ 1/T; hot gas above fire/ball and in nozzle jets bends rays by ∫∇n·dl.
+//   Temperature fluctuations break gas into eddies from outer scale ℓ downward (Kolmogorov); angle of arrival after
+//   path L is σ = δn·√(5.82·L/ℓ)·(ℓ/D)^(1/6) per axis (hazeAngle; D — resolved spot at gas). Eddies faster than eye
+//   integration blur together (hazeSeen). Background shifts by this angle × (1 − s/D) (s — gas distance, D — world
+//   distance). Shift in fractions of eye resolution (visual acuity; binoculars use a pixel): presentation: HeatPass.
+//   Gas is a column along its axis (fire/ball upward, nozzle along jet); radius grows along axis, temperature excess
+//   and speed fall as 1/x beyond their reference positions; eddy pattern uses noise octaves shrinking threefold from ℓ
+//   while larger than the resolved spot, carried by gas (two layers half a cycle apart, switching at zero weight).
+// - Nuclear shock: post-front air compressed (Rankine–Hugoniot), n − 1 ∝ density; a ray crossing the front sphere bends
+//   toward center by the extra-path derivative (thin shell: Dawson function, nuclear/model/ShockOptics, checked by
+//   ShockOpticsGlslTest), averaged over pixel width at intersection. Near tangency, pixels; away from it, nothing:
+//   front appears as a thin edge ring against sky and ground. No shift below FRONT_SHIFT_MIN.
+// - Light: blast fireball, pool flame, burning debris and substation oil are Lambertian spheres at black-body radiance
+//   (L·R²/max(d², R²), mushBallFace — direct cosine-weighted beam, air-scattered and ground-reflected), as nuclear
+//   fireball world light (fx_pall_composite): block color is pixel divided by open-sky light (relit). Engine flame uses
+//   three uniform glowing axial segments (core, flame, tail to Draper point): direct light is exact segment integral
+//   above a face (heatSegment); scattered/reflected light as a sphere at each part's center.
+// - Shadows: blocks occlude direct light — world point to source ray through the block window around the eye
+//   (heatBlocked, HeatPass.blocked; window — Solids): occluder known exactly, on-screen or not. No shadows beyond window.
 
-// копия кадра (линейная выборка) и расстояние до мира за пикселем
+// frame copy (linear sampling) and world distance behind pixel
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
-// видимость прямого света источников из прохода в половинном разрешении (fx_heat_shadow): коды шаров (r) и факелов (g),
-// расстояние до мира у образца вдоль взгляда (b)
+// direct source visibility from half-resolution pass (fx_heat_shadow): ball codes (r), jet codes (g),
+// sample world distance along view (b)
 uniform sampler2D Sampler2;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
 uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
-// дымка воздуха и туман кадра (как у fx_pall_composite): ослабление, начало и конец тумана, форма
+// air haze and frame fog (as fx_pall_composite): extinction, fog start/end, shape
 uniform vec4 Haze;
-// горячий газ: столбец i — низ столба от глаза (xyz), радиус там (w; 0 — нет); длина по оси, вихрь ℓ у низа, скорость
-// газа у низа, (n₀ − 1)·доля пульсаций; ось от низа (xyz) и рост радиуса на метр оси; избыток температуры у низа, K, и
-// места по оси, за которыми избыток и скорость падают как 1/x
+// hot gas: column i — eye-relative base (xyz), base radius (w; 0 — absent); axial length, base eddy ℓ, base gas speed,
+// (n₀ − 1)·fluctuation share; axis from base (xyz), radius growth per axis meter; base temperature excess, K, and axial
+// positions beyond which excess and speed fall as 1/x
 uniform mat4 HeatHot;
 uniform mat4 HeatShape;
 uniform mat4 HeatAxis;
 uniform mat4 HeatGas;
-// перенос узора вихрей: доля цикла и номер цикла у двух слоёв (x, y и z, w)
+// eddy pattern transport: cycle fraction and cycle index for two layers (x, y and z, w)
 uniform vec4 HeatClock;
-// фронты ударной волны: столбцы 0 и 1 — середина от глаза (xyz), радиус (w; 0 — нет); 2 и 3 — скачок показателя
-// преломления на четырёх высотах ровно от синуса угла у земли до верха
+// shock fronts: columns 0 and 1 — eye-relative center (xyz), radius (w; 0 — absent); 2 and 3 — index jump at four heights
+// evenly spaced from ground-angle sine to top
 uniform mat4 HeatFront;
-// e-кратная толща сжатия за фронтом и синус угла над серединой у земли: фронта 0 (x, y) и 1 (z, w)
+// compression e-folding thickness and ground-angle sine above center: front 0 (x, y), front 1 (z, w)
 uniform vec4 HeatFrontShape;
-// 1 — обычный фронт: подача с ограничением сдвига; 0 — прежняя оптика ядерки
+// 1 — conventional front: presentation: capped shift; 0 — previous nuclear optics
 uniform vec2 HeatFrontChemical;
-// есть ли фронт (x > 0); угол пикселя, рад; есть ли свет (z > 0) и газ (w > 0)
+// front present (x > 0); pixel angle, rad; light present (z > 0), gas present (w > 0)
 uniform vec4 HeatFrame;
-// есть ли видимость из прохода тени (x > 0; нет — без теней)
+// shadow-pass visibility present (x > 0; otherwise no shadows)
 uniform vec4 HeatShadow;
 
 const float CROSS = 0.15;
-// закон дрожания — копии чисел HeatPass (сверяет HazeGlslTest)
+// haze law — HeatPass constants copied (checked by HazeGlslTest)
 const float HAZE_T_AIR = 288.15;
 const float HAZE_COOL = 20.0;
 const float HAZE_KOLMOGOROV = 5.82;
@@ -72,9 +72,9 @@ const float HAZE_EYE_S = 0.05;
 const float HAZE_SWIRL = 0.3;
 const float HAZE_CYCLE = 2.0;
 const float HAZE_CONE_FLAT = 1e-6;
-// сдвиг фронта меньше этой доли пикселя не виден: его нет (HeatPass.SHIFT_MIN)
+// front shift below this pixel fraction is invisible: omitted (HeatPass.SHIFT_MIN)
 const float FRONT_SHIFT_MIN = 0.05;
-// Подача обычного фронта: слабая рябь усилена, но суммарный сдвиг не больше трёх пикселей, и при зуме тоже.
+// presentation: conventional front's weak ripple amplified, summed shift capped at three pixels, including zoom.
 const float CHEMICAL_FRONT_GAIN = 24.0;
 const float CHEMICAL_FRONT_MAX_PX = 3.0;
 
@@ -91,7 +91,7 @@ float heatHash(vec3 p) {
     return fract((p.x + p.y) * p.z) * 2.0 - 1.0;
 }
 
-// Шум значений в [-1, 1] с гладкой выборкой между узлами решётки (СКО ~0,45)
+// Value noise in [-1, 1] with smooth grid-node interpolation (standard deviation ~0.45)
 float heatNoise(vec3 p) {
     vec3 i = floor(p), f = p - i;
     vec3 u = f * f * (3.0 - 2.0 * f);
@@ -100,28 +100,27 @@ float heatNoise(vec3 p) {
     return mix(a, b, u.z);
 }
 
-// Пульсация показателя преломления (СКО) в газе с избытком температуры excess, K; amp — (n₀ − 1)·доля пульсаций (HeatPass.dn)
+// Index fluctuation (standard deviation) in gas with temperature excess excess, K; amp is (n₀ − 1)·fluctuation share (HeatPass.dn)
 float hazeDn(float excess, float amp) {
     float t0 = HAZE_T_AIR / (HAZE_T_AIR + excess);
     return amp * t0 * (1.0 - t0);
 }
 
-// Угол прихода луча (СКО по оси), рад: путь len в газе с пульсацией dn и вихрями до eddy, пятно aperture (HeatPass.hazeAngle)
+// Ray angle of arrival (axis standard deviation), rad: path len in gas with fluctuation dn, eddies to eddy, spot aperture (HeatPass.hazeAngle)
 float hazeAngle(float dn, float len, float eddy, float aperture) {
     if (aperture < eddy) return dn * sqrt(HAZE_KOLMOGOROV * len / eddy) * pow(eddy / aperture, 1.0 / 6.0);
     return dn * sqrt(HAZE_KOLMOGOROV * len / eddy) * eddy / aperture;
 }
 
-// Доля дрожания, которую видит глаз: вихри, которые газ проносит мимо луча быстрее, чем глаз копит свет, сливаются
-// (HeatPass.hazeSeen)
+// Haze share visible to the eye: eddies carried past the ray faster than eye integration blur together (HeatPass.hazeSeen)
 float hazeSeen(float eddy, float speed) {
     float tau = eddy / max(speed, 1e-6);
     if (tau < HAZE_EYE_S) return sqrt(tau / HAZE_EYE_S);
     return 1.0;
 }
 
-// Где луч внутри столба: f(t) = a·t² − 2b·t + c < 0 на [t0, t1], один отрезок (усечённый конус выпуклый) — начало
-// (hazeIn) и конец (hazeOut); пусто — конец не дальше начала (HeatPass.coneSpan)
+// Ray inside column: f(t) = a·t² − 2b·t + c < 0 over [t0, t1], one interval (frustum is convex) — entry (hazeIn),
+// exit (hazeOut); empty if exit no farther than entry (HeatPass.coneSpan)
 float hazeInUp(float a, float b, float disc, float t0) {
     if (disc <= 0.0) return 1e30;
     return max(t0, (b - sqrt(disc)) / a);
@@ -170,9 +169,10 @@ float hazeOut(float a, float b, float c, float t0, float t1) {
     return hazeOutFlat(b, c, t1);
 }
 
-// Узор вихрей одного слоя в месте p (от низа столба, блоки): октавы от eddy втрое мельче, пока крупнее пятна aperture, вес
-// октавы — по Колмогорову (наклон фронта от вихрей размера s ∝ s^(−1/6)); газ прошёл по оси travel блоков, вихрь размера s
-// за это время сменился на долю 0,3·travel/ℓ·(ℓ/s)^(2/3); у каждого цикла — свой сдвиг узора. СКО на ось — как у heatNoise.
+// One layer's eddy pattern at p (from column base, blocks): octaves shrinking threefold from eddy while larger than
+// aperture, Kolmogorov weights (wavefront tilt from size s eddies ∝ s^(−1/6)); gas traveled travel blocks along axis,
+// size s eddy changed by 0.3·travel/ℓ·(ℓ/s)^(2/3); each cycle has its own pattern offset.
+// Axis standard deviation as heatNoise.
 vec2 hazeNoise(vec3 p, vec3 axis, float eddy, float travel, float cycle, float aperture) {
     vec2 sum = vec2(0.0);
     float norm = 0.0;
@@ -189,8 +189,8 @@ vec2 hazeNoise(vec3 p, vec3 axis, float eddy, float travel, float cycle, float a
     return sum / sqrt(norm);
 }
 
-// Сдвиг изображения за горячим газом, пиксели: отрезок луча dir до мира (dist) внутри столба i (усечённый конус вдоль оси
-// от низа на длину), сила — hazeAngle в середине отрезка, направление — узор вихрей там
+// Image shift behind hot gas, pixels: dir ray to world (dist) within column i (frustum along axis from base through
+// length), strength hazeAngle at segment midpoint, direction from local eddy pattern
 vec2 heatShift(vec3 dir, float dist) {
     vec2 shift = vec2(0.0);
     float res = min(HAZE_ACUITY, HeatFrame.y);
@@ -203,7 +203,7 @@ vec2 heatShift(vec3 dir, float dist) {
         vec4 ax = HeatAxis[i];
         vec4 g = HeatGas[i];
         vec3 a = ax.xyz;
-        // по оси — между низом и концом: место по оси точки луча t — t·c − ba
+        // along axis, between base and end: ray point t has axial position t·c − ba
         float c = dot(dir, a), ba = dot(h.xyz, a);
         float t0 = 0.0, t1 = dist;
         if (abs(c) > 1e-5) {
@@ -214,7 +214,7 @@ vec2 heatShift(vec3 dir, float dist) {
             continue;
         }
         if (t1 <= t0) continue;
-        // поперёк оси: |t·d⊥ − b⊥|² < r(t)², r(t) = r₀ + рост·(t·c − ba) — одно квадратное уравнение
+        // across axis: |t·d⊥ − b⊥|² < r(t)², r(t) = r₀ + growth·(t·c − ba), one quadratic equation
         vec3 dp = dir - a * c, bp = h.xyz - a * ba;
         float r0 = h.w - ax.w * ba, grow = ax.w * c;
         float qa = dot(dp, dp) - grow * grow, qb = dot(dp, bp) + r0 * grow, qc = dot(bp, bp) - r0 * r0;
@@ -230,25 +230,25 @@ vec2 heatShift(vec3 dir, float dist) {
         float eddy = s.y * (h.w + ax.w * u) / h.w;
         float speed = s.z * min(1.0, g.z / max(u, 1e-3));
         float aperture = max(HAZE_PUPIL, res * mid);
-        // пульсации к краю столба и к его концу гаснут (⚠ форма: (1 − ρ²/r²)² поперёк вместо гаусса, к концу — с 0,6 длины):
-        // ровным цилиндром дрожание обрывалось бы на его стенке прямой чертой
+        // fluctuations fade toward column edge and end (⚠ shape: (1 − ρ²/r²)² across instead of Gaussian, axial fade from 0.6 length):
+        // a uniform cylinder would end haze at its wall with a straight line
         float r = h.w + ax.w * u;
         vec3 off = dir * mid - h.xyz - a * u;
         float edge = clamp(1.0 - dot(off, off) / (r * r), 0.0, 1.0);
         edge = edge * edge * (1.0 - smoothstep(0.6 * s.x, s.x, u));
         float k = edge * hazeAngle(hazeDn(excess, s.w), len, eddy, aperture) * hazeSeen(eddy, speed) * (1.0 - mid / max(dist, mid + 1e-3)) / res;
-        // меньше сотой пикселя — без шума (цена)
+        // below one hundredth of a pixel, skip noise (cost)
         if (k < 0.01) continue;
         vec3 p = dir * mid - h.xyz;
         vec2 n = wa * hazeNoise(p, a, eddy, speed * HeatClock.x * HAZE_CYCLE, HeatClock.y, aperture)
                 + wb * hazeNoise(p, a, eddy, speed * HeatClock.z * HAZE_CYCLE, HeatClock.w, aperture);
-        // СКО шума ~0,45 на ось, смесь двух слоёв — /√(wa² + wb²)
+        // noise standard deviation ~0.45 per axis; two-layer mixture divided by √(wa² + wb²)
         shift += k / (0.45 * sqrt(wa * wa + wb * wb)) * n;
     }
     return shift;
 }
 
-// Функция Доусона F(x) = e^(−x²)·∫₀ˣ e^(t²) dt (ShockOptics.dawson)
+// Dawson function F(x) = e^(−x²)·∫₀ˣ e^(t²) dt (ShockOptics.dawson)
 float frontDawson(float x) {
     if (x > 10.0) return 0.5 / x * (1.0 + 0.5 / (x * x) + 0.75 / (x * x * x * x));
     float y = x * x;
@@ -257,14 +257,14 @@ float frontDawson(float x) {
     return x * p / q;
 }
 
-// Добавка оптического пути одного пересечения оболочки (ShockOptics.path): прицельное расстояние b, радиус r, толща l, скачок dn
+// Extra optical path per shell crossing (ShockOptics.path): impact parameter b, radius r, thickness l, jump dn
 float frontPath(float b, float r, float l, float dn) {
     float rl = 2.0 * r * l;
     float a2 = max((r - b) * (r + b), 0.0) / rl;
     return dn * sqrt(rl) * frontDawson(sqrt(a2));
 }
 
-// Отклонение одного пересечения к середине, среднее по пикселю шириной w, рад (ShockOptics.bend)
+// Centerward deflection per crossing, averaged over pixel width w, rad (ShockOptics.bend)
 float frontBend(float b, float r, float l, float dn, float w) {
     float lo = max(b - 0.5 * w, 0.0);
     float hi = b + 0.5 * w;
@@ -273,7 +273,7 @@ float frontBend(float b, float r, float l, float dn, float w) {
     return clamp(bend, -most, most);
 }
 
-// Скачок фронта на месте q (от середины, |q| = r): по высоте — между четырьмя узлами от синуса low у земли до верха
+// Front jump at q (from center, |q| = r): height interpolation among four nodes from ground sine low to top
 float frontJump(vec4 dn, float low, float sine) {
     float k = clamp((sine - low) / max(1.0 - low, 1e-3), 0.0, 1.0) * 3.0;
     if (k < 1.0) return mix(dn.x, dn.y, k);
@@ -281,8 +281,8 @@ float frontJump(vec4 dn, float low, float sine) {
     return mix(dn.z, dn.w, k - 2.0);
 }
 
-// Отклонение луча dir до мира (dist) фронтами, рад, вектором поперёк луча: каждое пересечение сферы перед миром — к её
-// середине, × (1 − s/D) — сдвиг того, что за ним, как его видит глаз
+// Deflection of ray dir to world (dist) by fronts, rad, across-ray vector: each sphere crossing before world bends toward
+// center, × (1 − s/D) gives the background shift seen by the eye
 vec3 frontShift(vec3 dir, float dist, out vec3 chemical) {
     vec3 bend = vec3(0.0);
     chemical = vec3(0.0);
@@ -292,7 +292,7 @@ vec3 frontShift(vec3 dir, float dist, out vec3 chemical) {
         float along = dot(f.xyz, dir);
         vec3 across = f.xyz - dir * along;
         float b = length(across);
-        // пиксель у касательной снаружи ещё задевает фронт половиной своей ширины
+        // a pixel just outside tangency still touches the front over half its width
         if (b < 1e-3 || b >= f.w + 0.5 * HeatFrame.y * max(along, 0.0)) continue;
         float chord = sqrt(max((f.w - b) * (f.w + b), 0.0));
         float l = i == 0 ? HeatFrontShape.x : HeatFrontShape.z;
@@ -311,9 +311,9 @@ vec3 frontShift(vec3 dir, float dist, out vec3 chemical) {
     return bend;
 }
 
-// Видимость источников в пикселе px с расстоянием до мира depth (вдоль взгляда): из четырёх ближних образцов прохода
-// видимости (половинное разрешение: образец t — пиксель 2t) — тот, чьё расстояние до мира ближе к этому (на краю
-// предмета видимость фона не ложится на предмет); коды: шар — 2 бита (0, ¼, ¾, 1), факел — 1 бит
+// Source visibility at pixel px with world distance depth (along view): of four nearest visibility-pass samples
+// (half-resolution: sample t is pixel 2t), choose nearest world distance (background visibility does not spill onto an
+// object edge); codes: ball 2 bits (0, ¼, ¾, 1), jet 1 bit
 const vec4 HEAT_SEEN_CODES = vec4(0.0, 0.25, 0.75, 1.0);
 
 void heatSeen(ivec2 px, float depth, out vec4 ballSeen, out vec4 jetSeen) {
@@ -350,15 +350,15 @@ void main() {
         vec3 chemical;
         vec3 bend = frontShift(dir0, dist0, chemical);
         if (dot(bend, bend) > 0.0 || dot(chemical, chemical) > 0.0) {
-            // поворот луча в пиксели: шаг луча на пиксель экрана по x и y (у пикселя — линейно)
+            // ray turn to pixels: ray step per screen pixel in x and y (linear within a pixel)
             vec2 ndc1 = (here + vec2(1.0, 0.0)) / vec2(size) * 2.0 - 1.0, ndc2 = (here + vec2(0.0, 1.0)) / vec2(size) * 2.0 - 1.0;
             vec4 f1 = InvViewProj * vec4(ndc1, 1.0, 1.0), f2 = InvViewProj * vec4(ndc2, 1.0, 1.0);
             vec3 dx = normalize(f1.xyz / f1.w) - dir0, dy = normalize(f2.xyz / f2.w) - dir0;
             float xx = dot(dx, dx), xy = dot(dx, dy), yy = dot(dy, dy), det = xx * yy - xy * xy;
             float bx = dot(bend, dx), by = dot(bend, dy);
             if (det > 0.0) front = vec2(yy * bx - xy * by, xx * by - xy * bx) / det;
-            // Ограничение после проекции: угол пикселя меняется по кадру, разрешению и полю зрения.
-            // Обычные фронты суммируются ДО ограничения; ядерный вклад не ограничивается.
+            // Limit after projection: pixel angle varies across frame, resolution and field of view.
+            // Sum conventional fronts BEFORE limiting; nuclear contribution is not limited.
             float cx = dot(chemical, dx), cy = dot(chemical, dy);
             if (det > 0.0) {
                 vec2 ordinary = vec2(yy * cx - xy * cy, xx * cy - xy * cx) / det;
@@ -366,7 +366,7 @@ void main() {
             }
         }
     }
-    // фронт идёт с каждым кадром ядерки по всему кадру: его сдвиг меньше порога — как не было
+    // front runs fullscreen on every nuclear frame: below-threshold shift leaves frame unchanged
     if (dot(front, front) >= FRONT_SHIFT_MIN * FRONT_SHIFT_MIN) shift += front;
     vec2 at = here + shift;
     vec3 world = dot(shift, shift) > 0.0 ? texture(Sampler0, at / vec2(size)).rgb : texelFetch(Sampler0, ivec2(here), 0).rgb;
@@ -375,7 +375,7 @@ void main() {
     if (HeatFrame.z > 0.0 && depth < 1e8) {
         vec3 p = sceneAt(Sampler1, InvViewProj, PallForward, px, size);
         vec3 n = sceneNormal(Sampler1, InvViewProj, PallForward, px, size, p);
-        // свет — на свете самого мира: дымка воздуха и туман Minecraft перед ним — нет
+        // light applies to world light itself, excluding air haze and Minecraft fog in front
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec3 open = PallOpenSky * faceShade(PallFaceShade, n);

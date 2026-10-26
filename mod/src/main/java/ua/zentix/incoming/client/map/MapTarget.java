@@ -12,23 +12,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Место, выбранное на карте наведения, маршрут к нему — точки, которые оператор поставил сам ({@link Waypoints}), — и
- * место пуска, если его выбрал оператор или хост (иначе пуск у стреляющего): помнятся, пока игрок в том же измерении и
- * не вышел из мира, поэтому повторный удар идёт тем же маршрутом и с того же места. Только x и z: высоту земли там
- * находит сервер ({@code Target.Ground.at}, пусковую на месте пуска ставит {@code LaunchSite}); верх по карте
- * ({@link TerrainTiles#height}) уходит с приказом только оценкой.
+ * Site selected on the targeting map, operator-placed route waypoints ({@link Waypoints}), and launch site if chosen
+ * by the operator or host (otherwise launch near the shooter): retained while the player stays in the dimension
+ * and world, so repeated strikes use the same route and site. Only x and z: server finds ground height there
+ * ({@code Target.Ground.at}; {@code LaunchSite} places the launcher at the launch site); map surface height
+ * ({@link TerrainTiles#height}) accompanies the order only as an estimate.
  */
 public final class MapTarget {
     public record Place(double x, double z) {}
 
-    /** Измерение, где выбрано место и поставлены точки; в другом их нет. */
+    /** Dimension of selected site and waypoints; absent in another dimension. */
     @Nullable
     private static ResourceKey<Level> dimension;
     @Nullable
     private static Place point;
-    /** Точки маршрута по порядку пролёта, не больше {@link Waypoints#MAX}. */
+    /** Waypoints in flight order, at most {@link Waypoints#MAX}. */
     private static final List<Place> route = new ArrayList<>();
-    /** Место пуска; null — пуск у стреляющего. */
+    /** Launch site; null means launch near the shooter. */
     @Nullable
     private static Place launch;
 
@@ -43,17 +43,17 @@ public final class MapTarget {
         return here(level) ? Optional.ofNullable(point) : Optional.empty();
     }
 
-    /** Точки маршрута в этом измерении (копия). */
+    /** Waypoints in this dimension (copy). */
     public static List<Place> route(@Nullable ClientLevel level) {
         return here(level) ? List.copyOf(route) : List.of();
     }
 
-    /** Маршрут для приказа. */
+    /** Route for the order. */
     public static Waypoints waypoints(@Nullable ClientLevel level) {
         return new Waypoints(route(level).stream().map(p -> new Vec3(p.x(), 0, p.z())).toList());
     }
 
-    /** Добавить точку в конец маршрута (перед целью); больше {@link Waypoints#MAX} — нет. */
+    /** Append a waypoint before the target; no more than {@link Waypoints#MAX}. */
     public static boolean add(ClientLevel level, Place place) {
         bind(level);
         if (route.size() >= Waypoints.MAX) return false;
@@ -61,38 +61,38 @@ public final class MapTarget {
         return true;
     }
 
-    /** Перенести точку {@code index} маршрута. */
+    /** Move route waypoint {@code index}. */
     public static void move(ClientLevel level, int index, Place place) {
         if (here(level) && index >= 0 && index < route.size()) route.set(index, place);
     }
 
-    /** Убрать точку {@code index} маршрута. */
+    /** Remove route waypoint {@code index}. */
     public static void remove(ClientLevel level, int index) {
         if (here(level) && index >= 0 && index < route.size()) route.remove(index);
     }
 
-    /** Убрать все точки маршрута: дальше — путь, который строит пуск. */
+    /** Remove all waypoints: subsequent route is built by launch logic. */
     public static void clearRoute() {
         route.clear();
     }
 
-    /** Место пуска в этом измерении; пусто — пуск у стреляющего. */
+    /** Launch site in this dimension; empty means launch near the shooter. */
     public static Optional<Place> launch(@Nullable ClientLevel level) {
         return here(level) ? Optional.ofNullable(launch) : Optional.empty();
     }
 
-    /** Место пуска для приказа (x и z). */
+    /** Launch site for the order (x and z). */
     public static Optional<Vec3> launchPoint(@Nullable ClientLevel level) {
         return launch(level).map(p -> new Vec3(p.x(), 0, p.z()));
     }
 
-    /** Пускать отсюда (выбрать или перенести место пуска). */
+    /** Launch from here (select or move the launch site). */
     public static void setLaunch(ClientLevel level, Place place) {
         bind(level);
         launch = place;
     }
 
-    /** Убрать место пуска: дальше — пуск у стреляющего. */
+    /** Remove launch site: subsequent launches near the shooter. */
     public static void clearLaunch() {
         launch = null;
     }
@@ -108,7 +108,7 @@ public final class MapTarget {
         return level != null && level.dimension().equals(dimension);
     }
 
-    /** Место, точки и место пуска другого измерения — чужие координаты: выбор в этом начинается заново. */
+    /** Site, waypoints and launch site in another dimension are foreign coordinates: start a fresh selection here. */
     private static void bind(ClientLevel level) {
         if (here(level)) return;
         reset();

@@ -8,28 +8,28 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import ua.zentix.incoming.Incoming;
 
 /**
- * Частицы эффектов. Типы нужны только команде {@code /particle incoming:smoke}: она даёт частицу по умолчанию. Сами
- * частицы с настройками (размер, цвет по времени жизни, накал, всплытие) клиент рождает в своём пуле и рисует своим
- * слоем — {@code client/fx/particle/Fx}, {@code client/fx/layer/FxLayer}; текстуры — {@code textures/fx/particle}
- * ({@code tools/gen_particles.py}) на своём листе.
+ * Effect particles. Types are only needed by {@code /particle incoming:smoke}, producing a default particle. Client
+ * spawns configured particles (size, lifetime color, incandescence, buoyancy) in its own pool and renders its own layer —
+ * {@code client/fx/particle/Fx}, {@code client/fx/layer/FxLayer}; textures in {@code textures/fx/particle}
+ * ({@code tools/gen_particles.py}) on its own atlas.
  */
 public final class ModParticles {
     public static final DeferredRegister<ParticleType<?>> REGISTER = DeferredRegister.create(Registries.PARTICLE_TYPE, Incoming.MOD_ID);
 
-    /** Клуб дыма, пыли, пара (4 клуба × 4 стадии рассеивания). */
+    /** Smoke, dust, steam billow (4 billows × 4 dissipation stages). */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SMOKE = register("smoke");
-    /** Клуб пламени. */
+    /** Flame billow. */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> FIRE = register("fire");
-    /** Искра, раскалённый осколок (тянется вдоль скорости). */
+    /** Spark, incandescent fragment (stretched along velocity). */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SPARK = register("spark");
-    /** Вспышка. */
+    /** Flash. */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> FLASH = register("flash");
-    /** Кольцо ударной волны по земле. */
+    /** Ground shock wave ring. */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> RING = register("ring");
     /**
-     * Ничего: частицы серверного ванильного взрыва ({@code Level.explode} шлёт их клиентам пакетом взрыва). Картинку
-     * взрыва рисует клиент сам ({@code client/fx/BlastEffects}), как и звук ({@code ModSounds.SILENT}); ванильные клубы
-     * TNT поверх неё читались бы белыми кольцами с тёмной серединой. Поставщик на клиенте частиц не создаёт.
+     * Nothing: server vanilla explosion particles ({@code Level.explode} sends them in the explosion packet). Client draws
+     * the explosion itself ({@code client/fx/BlastEffects}), as it does sound ({@code ModSounds.SILENT}); vanilla TNT billows
+     * on top would look like white rings with dark centers. Client provider creates no particles.
      */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> NONE = REGISTER.register("none", () -> new SimpleParticleType(false));
 

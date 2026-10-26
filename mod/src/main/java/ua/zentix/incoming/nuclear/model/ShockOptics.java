@@ -1,41 +1,40 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Свет сквозь ударную волну, без Minecraft (метры). Воздух за фронтом сжат, а показатель преломления воздуха растёт с
- * плотностью: луч, что идёт почти по касательной к сфере фронта, гнётся к её середине, и то, что за фронтом, сдвигается
- * тонким кольцом по его краю — так фронт и виден на кадрах испытаний на фоне неба и земли, и так же его ловит теневой
- * метод (Settles G. S., «Schlieren and Shadowgraph Techniques», 2001, гл. 1–2: ударная волна — скачок показателя).
+ * Light through a shock wave, without Minecraft (meters). Post-front air is compressed; its refractive index grows
+ * with density: a ray nearly tangent to the front sphere bends toward its center, shifting what lies behind the front
+ * in a thin ring along its edge — as seen against sky and ground in test footage, and detected by shadowgraphy
+ * (Settles G. S., “Schlieren and Shadowgraph Techniques”, 2001, ch. 1–2: a shock wave is an index discontinuity).
  * <ul>
- * <li><b>Скачок.</b> Сжатие за фронтом — Ренкин–Гюгонио ({@link HobBlast#densityRatio}); n − 1 ∝ плотности
- * (Гладстон–Дейл), поэтому δn = (n₀ − 1)·(ρ/ρ₀ − 1), n₀ − 1 — у воздуха до фронта.</li>
- * <li><b>Оболочка.</b> За фронтом сжатие спадает к концу положительной фазы; ⚠ приближение: экспонента с e-кратной
- * длиной {@link #DECAY_SHARE} длины фазы (Фридлендер с b = 1 падает до 1/e на 0,43 фазы; у сильной волны b больше —
- * оболочка тоньше).</li>
- * <li><b>Путь.</b> Добавка оптического пути луча с прицельным расстоянием b через тонкую оболочку (L ≪ R), на одно
- * пересечение: ∫δn·ds = δn·√(2RL)·F(a), a² = (R² − b²)/(2RL), F — функция Доусона (интеграл Абеля экспоненты в
- * приближении r² − b² ≈ R² − b² − 2R(R − r)). У касательной — как у скачка, 2δn·√(2R(R − b)) на два пересечения, вдали
- * от неё — δn·L/cos угла падения.</li>
- * <li><b>Отклонение</b> к середине — производная пути по b. У самой касательной у скачка она бесконечна, поэтому
- * берётся среднее по ширине пикселя w там, где луч пересекает фронт (то, что видит пиксель): разность путей на краях
- * пикселя, делённая на w. Не больше √(2δn) на пересечение — предельный поворот луча у скачка при скользящем падении
- * (закон Снеллиуса).</li>
+ * <li><b>Jump.</b> Post-front compression is Rankine–Hugoniot ({@link HobBlast#densityRatio}); n − 1 ∝ density
+ * (Gladstone–Dale), so δn = (n₀ − 1)·(ρ/ρ₀ − 1), with n₀ − 1 for pre-front air.</li>
+ * <li><b>Shell.</b> Compression decays behind the front toward positive-phase end; ⚠ approximation: an exponential with
+ * e-folding length {@link #DECAY_SHARE} of phase length (Friedlander with b = 1 falls to 1/e at 0.43 phase; stronger
+ * blasts have larger b and thinner shells).</li>
+ * <li><b>Path.</b> Extra optical path for a ray of impact parameter b through a thin shell (L ≪ R), per intersection:
+ * ∫δn·ds = δn·√(2RL)·F(a), a² = (R² − b²)/(2RL), F is Dawson's function (Abel integral of the exponential with
+ * r² − b² ≈ R² − b² − 2R(R − r)). Near tangency, as for a step, 2δn·√(2R(R − b)) for two intersections; away from it,
+ * δn·L/cos incidence angle.</li>
+ * <li><b>Deflection</b> toward center is the path derivative by b. At tangency a discontinuity makes it infinite, so
+ * average over pixel width w at the front intersection (what the pixel sees): edge path difference divided by w.
+ * Capped at √(2δn) per intersection — maximum ray turn at grazing incidence on the jump (Snell's law).</li>
  * </ul>
- * Копия законов в шейдере — {@code front*} в {@code fx_heat.fsh}, сверяет {@code ShockOpticsGlslTest}.
+ * Shader law copy: {@code front*} in {@code fx_heat.fsh}, checked by {@code ShockOpticsGlslTest}.
  */
 public final class ShockOptics {
-    /** e-кратная длина спада сжатия за фронтом — эта доля длины положительной фазы (⚠ оценка по Фридлендеру). */
+    /** Post-front compression e-folding length as this fraction of positive-phase length (⚠ Friedlander-based estimate). */
     public static final double DECAY_SHARE = 0.43;
 
     private ShockOptics() {}
 
-    /** Скачок показателя преломления на фронте с избыточным давлением {@code kpa}: n0 — n − 1 воздуха до фронта. */
+    /** Index jump at a front with overpressure {@code kpa}: n0 is pre-front air n − 1. */
     public static double indexJump(double kpa, double n0) {
         return n0 * (HobBlast.densityRatio(1000 * Math.max(0, kpa)) - 1);
     }
 
     /**
-     * Добавка оптического пути одного пересечения оболочки, м: прицельное расстояние b, радиус фронта r, e-кратная толща
-     * l, скачок dn. За фронтом (b ≥ r) — 0.
+     * Extra optical path per shell crossing, m: impact parameter b, front radius r, e-folding thickness l, jump dn.
+     * Beyond the front (b ≥ r) — 0.
      */
     public static double path(double b, double r, double l, double dn) {
         double rl = 2 * r * l;
@@ -44,8 +43,8 @@ public final class ShockOptics {
     }
 
     /**
-     * Отклонение луча одним пересечением, среднее по пикселю шириной {@code w} (м поперёк луча там), рад: к середине
-     * сферы — больше нуля. Не больше √(2·dn) по модулю.
+     * Ray deflection per crossing, averaged over pixel width {@code w} (m across the ray there), rad: positive toward
+     * sphere center. Magnitude capped at √(2·dn).
      */
     public static double bend(double b, double r, double l, double dn, double w) {
         double lo = Math.max(b - 0.5 * w, 0), hi = b + 0.5 * w;
@@ -55,8 +54,8 @@ public final class ShockOptics {
     }
 
     /**
-     * Наибольшее отклонение, которое фронт может дать лучу из глаза в {@code near} м от сферы (ближайшее пересечение) при
-     * пикселе {@code pixel} рад, на оба пересечения: оценка сверху (у касательной, пиксель уже оболочки).
+     * Maximum deflection of an eye ray {@code near} m from the sphere (nearest intersection), pixel {@code pixel} rad,
+     * for both intersections: upper estimate (tangent, pixel narrower than shell).
      */
     public static double most(double r, double dn, double near, double pixel) {
         double w = Math.max(pixel * Math.max(near, 1e-3), 1e-6);
@@ -64,10 +63,9 @@ public final class ShockOptics {
     }
 
     /**
-     * Функция Доусона F(x) = e^(−x²)·∫₀ˣ e^(t²) dt: рациональное приближение степени 11/12 (коэффициенты — из статьи
-     * «Dawson function» английской Википедии; против {@code scipy.special.dawsn} на 0–30 ошибка не больше 1,1·10⁻⁵, против
-     * прямого интеграла — {@code ShockOpticsTest}), дальше 10 — асимптота 1/(2x)·(1 + 1/(2x²) + 3/(4x⁴)) (ошибка там меньше
-     * 2·10⁻⁶).
+     * Dawson function F(x) = e^(−x²)·∫₀ˣ e^(t²) dt: rational approximation degree 11/12 (coefficients from English Wikipedia's
+     * “Dawson function” article; error against {@code scipy.special.dawsn} over 0–30 at most 1.1·10⁻⁵, against direct integral —
+     * {@code ShockOpticsTest}); beyond 10, asymptote 1/(2x)·(1 + 1/(2x²) + 3/(4x⁴)) (error there under 2·10⁻⁶).
      */
     public static double dawson(double x) {
         if (x > 10) return 0.5 / x * (1 + 0.5 / (x * x) + 0.75 / (x * x * x * x));

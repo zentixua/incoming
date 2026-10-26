@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Сеть измерения (сохраняется в мире): узлы и отключения. Какой квартал тёмен — функция отключений и времени
- * ({@link #dark}); чанки приводятся к ней, когда они загружены ({@link BlackoutWorld}, {@link ChunkSaves}).
+ * Dimension grid (saved in the world): nodes and outages. Which district is dark is a function of outages and time
+ * ({@link #dark}); loaded chunks are brought into line with it ({@link BlackoutWorld}, {@link ChunkSaves}).
  */
 public final class PowerGrid extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_grid";
@@ -29,11 +29,11 @@ public final class PowerGrid extends SavedData {
     private final Map<Integer, Node> nodes = new LinkedHashMap<>();
     private final List<Outage> outages = new ArrayList<>();
     /**
-     * Докуда (игровое время) каскад отключения уже выдан; {@code Long.MAX_VALUE} — пройден весь район и после
-     * перезапуска не повторяется.
+     * How far (game time) the outage cascade has been issued; {@code Long.MAX_VALUE} — whole area processed,
+     * not repeated after restart.
      */
     private final Map<Integer, Long> darkSwept = new LinkedHashMap<>();
-    /** То же для возврата света. */
+    /** The same for power restoration. */
     private final Map<Integer, Long> lightSwept = new LinkedHashMap<>();
     private int nextId = 1;
 
@@ -41,7 +41,7 @@ public final class PowerGrid extends SavedData {
         return level.getDataStorage().computeIfAbsent(new Factory<>(PowerGrid::new, PowerGrid::load, null), NAME);
     }
 
-    // ---------------------------------------------------------------- узлы
+    // ---------------------------------------------------------------- nodes
 
     public Iterable<Node> nodes() {
         return Collections.unmodifiableCollection(nodes.values());
@@ -74,12 +74,12 @@ public final class PowerGrid extends SavedData {
         return n;
     }
 
-    /** Отключение, которое вызвал выход узла из строя и в которое свет ещё не начали возвращать. */
+    /** Outage caused by a node failure whose power restoration has not started yet. */
     public Optional<Outage> downOutage(int node, long now) {
         return outages.stream().filter(o -> o.node() == node && now < o.restoreAt()).findFirst();
     }
 
-    // ---------------------------------------------------------------- отключения
+    // ---------------------------------------------------------------- outages
 
     public List<Outage> outages() {
         return Collections.unmodifiableList(outages);
@@ -92,7 +92,7 @@ public final class PowerGrid extends SavedData {
         return o;
     }
 
-    /** Заменить отключение (тот же номер) — например, назначить возврат света. */
+    /** Replace an outage (same number) — for example, assign power restoration. */
     public void replace(Outage o) {
         for (int i = 0; i < outages.size(); i++) {
             if (outages.get(i).id() == o.id()) {
@@ -104,7 +104,7 @@ public final class PowerGrid extends SavedData {
         }
     }
 
-    /** Квартал чанка должен быть тёмным в момент {@code now}. */
+    /** The chunk's district should be dark at {@code now}. */
     public boolean dark(int chunkX, int chunkZ, long now) {
         if (outages.isEmpty()) return false;
         long district = Districts.of(chunkX, chunkZ);
@@ -114,7 +114,7 @@ public final class PowerGrid extends SavedData {
         return false;
     }
 
-    /** Квартал чанка задевает хоть одно отключение (тёмен сейчас, погаснет или ещё возвращается). */
+    /** The chunk's district is affected by at least one outage (dark now, due to go dark, or still being restored). */
     public boolean covered(int chunkX, int chunkZ) {
         if (outages.isEmpty()) return false;
         long district = Districts.of(chunkX, chunkZ);
@@ -125,8 +125,8 @@ public final class PowerGrid extends SavedData {
     }
 
     /**
-     * Забыть отключения, в которые свет вернулся везде: срок вышел и каскад возврата прошёл весь район (иначе
-     * загруженные чанки, до которых он не дошёл, остались бы тёмными).
+     * Forget outages with power restored everywhere: deadline passed and restoration cascade processed the whole area
+     * (otherwise loaded chunks not reached by it would stay dark).
      */
     public void prune(long now) {
         List<Outage> over = outages.stream().filter(o -> o.over(now) && swept(o.id(), true) == Long.MAX_VALUE).toList();
@@ -149,7 +149,7 @@ public final class PowerGrid extends SavedData {
         if (prev == null || prev != upTo) setDirty();
     }
 
-    // ---------------------------------------------------------------- сохранение
+    // ---------------------------------------------------------------- persistence
 
     private static PowerGrid load(CompoundTag tag, HolderLookup.Provider registries) {
         PowerGrid g = new PowerGrid();

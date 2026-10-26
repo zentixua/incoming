@@ -6,8 +6,8 @@ import net.minecraft.sounds.SoundEvents;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Двухшаговый ядерный пуск (DESIGN-nuke §8): первое нажатие «взводит» — 3 с отсчёта на экране, повторное
- * отменяет. Никакого случайного ядерного удара от промаха пальцем. Сервер всё равно проверяет права.
+ * Two-step nuclear launch (DESIGN-nuke §8): the first press "arms" it — a 3 s countdown on screen; another press
+ * cancels it. No accidental nuclear strike from a misplaced finger. The server still checks permissions.
  */
 public final class NukeArming {
     private static final int DELAY = 60;
@@ -18,7 +18,7 @@ public final class NukeArming {
 
     private NukeArming() {}
 
-    /** Взвести (пуск через 3 с) или, если уже взведено, отменить. */
+    /** Arm (launch in 3 s), or cancel if already armed. */
     public static void toggle(Runnable launch) {
         Minecraft mc = Minecraft.getInstance();
         if (pending != null) {

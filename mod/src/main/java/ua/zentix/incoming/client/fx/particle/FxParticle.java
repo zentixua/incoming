@@ -21,20 +21,20 @@ import ua.zentix.incoming.client.fx.layer.FxQuads;
 import java.util.List;
 
 /**
- * Частица эффектов по {@link Fx.Spec}: растёт с замедлением, тормозится воздухом, всплывает (горячее) или оседает,
- * сносится ветром, крутится; цвет и прозрачность меняются за жизнь, накал (свечение огня изнутри) гаснет.
- * Дым с накалом светится сам и подсвечен оранжевым — так огненный шар «остывает» в чёрный дым. Искра — светящийся
- * штрих вдоль скорости, может оставлять дымный хвост; кольцо ударной волны лежит на земле.
+ * Effects particle configured by {@link Fx.Spec}: growth slows, air drag brakes it, hot matter rises or settles,
+ * wind carries it, it rotates; colour and opacity change over life, incandescence (internal fire glow) fades.
+ * Incandescent smoke is emissive and orange-lit — the fireball thus “cools” into black smoke. A spark is a luminous
+ * streak along velocity, optionally leaving a smoky tail; the shock ring lies on the ground.
  * <p>
- * Объект живёт в пуле ({@link FxPool}) и переиспользуется: {@link #init} копирует настройку (снимок — шаблон можно
- * менять и спаунить дальше), состояние полёта — свои поля. Движется и сталкивается как ванильная частица
- * ({@code Particle.move}: рамка 0,2 блока, упёршись по вертикали — останавливается).
+ * Object lives in a pool ({@link FxPool}) and is reused: {@link #init} copies configuration (snapshot — template may be
+ * changed and spawned again); flight state has its own fields. Moves and collides like a vanilla particle
+ * ({@code Particle.move}: 0.2-block bounds, stops on vertical collision).
  */
 public final class FxParticle {
     private static final double MAX_COLLISION_SPEED_SQR = 100 * 100;
     private static final double HALF = 0.1, HEIGHT = 0.2;
 
-    // ---------------------------------------------------------------- настройка (снимок Spec)
+    // ---------------------------------------------------------------- configuration (Spec snapshot)
     Fx.Kind kind;
     FxBudget budget;
     private float size0, size1;
@@ -45,29 +45,29 @@ public final class FxParticle {
     private float fadeFrom, glow, glowTicks, drag, rise, gravity, wind, driftX, driftZ;
     private Fx.@org.jetbrains.annotations.Nullable Thermal thermal;
     private boolean paper, prelit;
-    /** Пересвет самосветящегося ({@link Fx.Spec#hdr}). */
+    /** Emissive overexposure ({@link Fx.Spec#hdr}). */
     private float hdr;
     private boolean collide, smooth;
-    /** Цепочка клубов ({@link Fx.Spec#chain}): направление пути и шаг между клубами; шаг 0 — не цепочка. */
+    /** Billow chain ({@link Fx.Spec#chain}): path direction and billow spacing; step 0 — no chain. */
     private float chainX, chainY, chainZ, chainGap;
     private float streak;
-    /** Шаблон хвоста искры: общий у всех искр залпа, после пуска не меняется. */
+    /** Spark tail template: shared by all salvo sparks, immutable after launch. */
     private Fx.Spec trail;
     private float trailStep, trailUntil;
 
-    // ---------------------------------------------------------------- состояние
+    // ---------------------------------------------------------------- state
     double x, y, z, xo, yo, zo;
     private double xd, yd, zd;
     private int age;
     private float roll, oRoll, spin;
-    /** Номер клуба в наборе (у дыма — 4 клуба × 4 стадии рассеивания). */
+    /** Billow index in set (smoke — 4 billows × 4 dispersal stages). */
     private int variant;
     private boolean onGround, stopped;
-    /** Свет мира в месте частицы (упакованный, как у {@link LevelRenderer#getLightColor}) — раз в тик. */
+    /** World light at the particle (packed, like {@link LevelRenderer#getLightColor}) — once per tick. */
     private int worldLight;
     boolean dead;
 
-    // ---------------------------------------------------------------- вид в кадре
+    // ---------------------------------------------------------------- frame appearance
     private float quadSize, rCol, gCol, bCol, aCol;
 
     void init(Fx.Spec s, double px, double py, double pz, float sizeScale0, float sizeScale1, RandomSource random, ClientLevel level) {
@@ -125,7 +125,7 @@ public final class FxParticle {
         quadSize = size0;
     }
 
-    /** Тик: возраст, всплытие, ветер, движение со столкновениями; у искры — хвост. */
+    /** Tick: age, rise, wind, movement with collisions; spark tail. */
     void tick(ClientLevel level, FxPool pool) {
         xo = x;
         yo = y;
@@ -135,16 +135,16 @@ public final class FxParticle {
             dead = true;
             return;
         }
-        // горячее всплывает быстро, остывшее — едва
+        // hot matter rises quickly, cooled matter barely rises
         if (thermal != null) yd = thermal.lift(age) - thermal.lift(age - 1);
         else yd += rise * (0.15 + 0.85 * Math.exp(-age / 40.0)) - gravity;
-        // ветер мира: воздух тянет частицу к своей скорости (у установившейся — скорость ветра × парусность)
+        // world wind: air pulls the particle toward its velocity (steady state — wind speed × windage)
         Air air = ClientAir.now();
         double push = wind == 0 ? 0 : air.speed(y) / 20 * wind * (1 - drag) / drag;
         xd += air.wind().x() * push + driftX;
         zd += air.wind().z() * push + driftZ;
         if (kind == Fx.Kind.FLAKE && !onGround) {
-            // хлопья вьются, падая
+            // flakes swirl while falling
             xd += 0.003 * Mth.sin(age * 0.21f + variant);
             zd += 0.003 * Mth.cos(age * 0.17f + variant * 1.3f);
         }
@@ -153,7 +153,7 @@ public final class FxParticle {
         yd *= drag;
         zd *= drag;
         roll += spin;
-        // хлопья кувыркаются, пока не легли
+        // flakes tumble until settled
         if (kind != Fx.Kind.FLAKE) spin *= 0.985f;
         else if (onGround) spin = 0;
         if (onGround && collide) {
@@ -164,7 +164,7 @@ public final class FxParticle {
         if (kind == Fx.Kind.SPARK && trail != null) tail(level, pool);
     }
 
-    /** Дымный хвост искры: клубы по пути за тик, пока осколок горячий. */
+    /** Spark smoke tail: billows along one tick's path while the fragment is hot. */
     private void tail(ClientLevel level, FxPool pool) {
         float f = (float) age / life;
         if (f > trailUntil) return;
@@ -176,7 +176,7 @@ public final class FxParticle {
         }
     }
 
-    /** Как {@code Particle.move}: рамка 0,2 блока, столкновения с блоками; упёрлась по вертикали — больше не движется. */
+    /** Like {@code Particle.move}: 0.2-block bounds, block collisions; vertical collision stops all further motion. */
     private void move(ClientLevel level, double dx, double dy, double dz) {
         if (stopped) return;
         double ix = dx, iy = dy, iz = dz;
@@ -199,19 +199,19 @@ public final class FxParticle {
     private int light(ClientLevel level) {
         if (!kind.lit) return LightTexture.FULL_BRIGHT;
         BlockPos pos = BlockPos.containing(x, y, z);
-        // чанка у клиента нет (дальше прорисовки: дым залпа, от которого зритель ушёл) — открытое небо, как у ленты
-        // шлейфа ({@code FarFlightView}); у ванильной частицы там темно, и клубы на светлой ленте выходили чёрными бусинами
+        // no client chunk (beyond render distance: salvo smoke the viewer moved away from) — open sky, like the trail
+        // ribbon ({@code FarFlightView}); vanilla particles are dark there, making billows black beads on a light ribbon
         return level.getChunkSource().hasChunk(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()))
                 ? LevelRenderer.getLightColor(level, pos) : LightTexture.FULL_SKY;
     }
 
-    /** Накал 0..1: гаснет экспоненциально за {@code glowTicks}. */
+    /** Incandescence 0..1: exponential decay over {@code glowTicks}. */
     private float heat(float partial) {
         if (glow <= 0) return 0;
         return glow * (float) Math.exp(-(age + partial) / Math.max(1f, glowTicks));
     }
 
-    /** Размер, цвет и прозрачность в момент {@code age + partial}. */
+    /** Size, colour and opacity at {@code age + partial}. */
     private void update(float partial) {
         float f = Mth.clamp((age + partial) / life, 0, 1);
         float grow = 1 - (1 - f) * (1 - f) * (1 - f) * (growFast ? (1 - f) : 1);
@@ -220,7 +220,7 @@ public final class FxParticle {
         float r = Mth.lerp(cf, r0, r1), g = Mth.lerp(cf, g0, g1), b = Mth.lerp(cf, b0, b1);
         float heat = heat(partial);
         if (heat > 0 && kind.lit) {
-            // подсветка огнём изнутри
+            // internal fire lighting
             r = Math.min(1, r + heat * 1.0f);
             g = Math.min(1, g + heat * 0.45f);
             b = Math.min(1, b + heat * 0.12f);
@@ -241,35 +241,35 @@ public final class FxParticle {
     }
 
     /**
-     * Свет в месте частицы против открытого неба 0..1 (у {@link Fx.Spec#prelit}: цвет уже освещён небом): под крышей —
-     * по свету неба и блоков, кривой яркости ванили (уровень f → f / (4 − 3f)).
+     * Local particle light relative to open sky 0..1 ({@link Fx.Spec#prelit}: colour already sky-lit): under a roof —
+     * by skylight and block light, using vanilla brightness curve (level f → f / (4 − 3f)).
      */
     private float openSky() {
         float f = Math.max(LightTexture.sky(worldLight), LightTexture.block(worldLight)) / 15f;
         return f / (4 - 3 * f);
     }
 
-    /** Свет для карты освещения: мир, у дыма с накалом — не темнее свечения огня; уже освещённое — без неё. */
+    /** Lightmap input: world light, incandescent smoke no darker than fire glow; prelit matter bypasses it. */
     private int lightColor(float partial) {
         if (!kind.lit || prelit) return LightTexture.FULL_BRIGHT;
         int block = Math.max(LightTexture.block(worldLight), (int) (heat(partial) * 15));
         return LightTexture.pack(block, LightTexture.sky(worldLight));
     }
 
-    /** Наибольший радиус частицы (для отсечения по кадру): квадрат целиком, у искры — со штрихом. */
+    /** Maximum particle radius (frame culling): entire quad, including a spark's streak. */
     double reach() {
         double v = Math.sqrt(xd * xd + yd * yd + zd * zd);
         return Math.max(size0, size1) + v * (1 + streak);
     }
 
-    /** Плотная часть клуба — около 0,7 его квадрата (мягкая текстура дыма). */
+    /** Dense billow region — about 0.7 of its quad (soft smoke texture). */
     static final float DENSE = 0.7f;
 
     /**
-     * Доля непрозрачности клуба из цепочки ({@link Fx.Spec#chain}). На экране соседние клубы — через {@code gap · sin θ}
-     * (θ — угол между путём и лучом зрения; расстояние до глаза сокращается), плотная часть клуба — {@code width}.
-     * Между клубами просвет (ширина не больше шага) — клуба нет: цепочка точек; к ширине в два шага, где каждое место
-     * накрыто двумя клубами, — виден целиком.
+     * Opacity share of a chain billow ({@link Fx.Spec#chain}). Screen neighbour spacing — {@code gap · sin θ}
+     * (θ — path/view-ray angle; eye distance cancels), dense billow width — {@code width}.
+     * Gap between billows (width at most spacing) — no billow: a chain of dots; at two-step width, where every point
+     * is covered by two billows, fully visible.
      */
     static float chainShare(float width, float gap, float sin) {
         float step = gap * sin;
@@ -278,13 +278,13 @@ public final class FxParticle {
         return t * t * (3 - 2 * t);
     }
 
-    /** Свой квадрат в кадр (координаты — от камеры); прозрачный — не пишется. */
+    /** Add custom quad to the frame (camera-relative coordinates); skip transparent quads. */
     void emit(FxFrame frame, FxQuads out, float partial) {
         update(partial);
         if (aCol <= 0.004f) return;
         double px = Mth.lerp(partial, xo, x) - frame.cam.x, py = Mth.lerp(partial, yo, y) - frame.cam.y, pz = Mth.lerp(partial, zo, z) - frame.cam.z;
         double d = Math.sqrt(px * px + py * py + pz * pz);
-        // дымка воздуха — та же, что у дальней картинки; к краю прорисовки частицу сменяет дальняя картинка
+        // same air haze as distant visuals; toward the render boundary distant visuals replace the particle
         float a = aCol * frame.haze(d, py) * frame.near(d);
         if (a <= 0.004f) return;
         if (chainGap > 0) {
@@ -294,20 +294,20 @@ public final class FxParticle {
         }
         int light = lightColor(partial);
         float fog = frame.fog(px, py, pz);
-        // свет — уже умноженный на непрозрачность; искры и вспышки только светят (свет складывается)
+        // light already opacity-premultiplied; sparks and flashes only emit (additive light)
         float r = rCol * a, g = gCol * a, b = bCol * a, cover = kind.additive ? 0 : a;
         FxAtlas.Sprite sprite = sprite(partial);
-        // часть слоя (время на видеокарте по частям): дымные хвосты обломков, огонь и шар, прочие частицы
+        // layer part (GPU timing by part): smoky debris tails, fire and ball, other particles
         FxQuads.Part was = out.part(budget == FxBudget.DEBRIS ? FxQuads.Part.DEBRIS
                 : kind == Fx.Kind.FIRE || kind == Fx.Kind.FIREBALL ? FxQuads.Part.FIRE : FxQuads.Part.PARTICLES);
         out.nearestTexels(!smooth);
         out.opacity(a);
-        // самосветящееся светится (FxBloom): огонь, искры, вспышка, шар; дым, пыль, кольцо и пепел — нет
+        // emissive matter blooms (FxBloom): fire, sparks, flash, ball; smoke, dust, ring and ash do not
         out.emission(kind.lit ? 0 : hdr);
         switch (kind) {
             case SPARK -> streak(out, sprite, (float) px, (float) py, (float) pz, (float) d, r, g, b, light, fog);
             case FLAKE -> {
-                // кувыркается: одна ось квадрата то во всю ширину, то ребром
+                // tumbling: one quad axis alternates between full width and edge-on
                 float turn = Mth.lerp(partial, oRoll, roll);
                 float edge = Math.max(0.12f, Math.abs(Mth.cos(turn * 2.3f + variant)));
                 out.billboard((float) px, (float) py, (float) pz, (float) d, quadSize, quadSize * edge * (paper ? 0.7f : 1), turn, sprite, r, g, b, cover,
@@ -315,7 +315,7 @@ public final class FxParticle {
             }
             case RING -> ring(out, sprite, (float) px, (float) py, (float) pz, (float) d, r, g, b, cover, light, fog);
             default -> {
-                // огненный шар — объём: квадрат у передней половины, как и вдали (FarSprites.BALL_FRONT)
+                // fireball is a volume: quad at the front half, as at distance (FarSprites.BALL_FRONT)
                 float k = kind == Fx.Kind.FIREBALL ? (float) FarSprites.front(d, FarSprites.BALL_FRONT * quadSize / FarSprites.FIREBALL) : 1;
                 out.billboard((float) px * k, (float) py * k, (float) pz * k, (float) d, quadSize * k, Mth.lerp(partial, oRoll, roll), sprite, r, g, b, cover,
                         quadSize * FxQuads.SOFT, 1, light, fog);
@@ -327,7 +327,7 @@ public final class FxParticle {
 
     private FxAtlas.Sprite sprite(float partial) {
         return switch (kind) {
-            // стадия рассеивания: клуб «тает» во второй половине жизни
+            // dispersal stage: billow fades in the second half of life
             case SMOKE -> FxAtlas.smoke(variant * 4 + Mth.clamp((int) ((((float) age / life) - 0.35f) / 0.65f * 4), 0, 3));
             case FIRE -> FxAtlas.fire(variant);
             case SPARK -> FxAtlas.spark();
@@ -338,7 +338,7 @@ public final class FxParticle {
         };
     }
 
-    /** Искра: штрих назад на путь за {@code streak} тиков, хвост гаснет; короткий — обычный квадрат. */
+    /** Spark: backward streak over {@code streak} ticks' path, fading tail; short streak — normal quad. */
     private void streak(FxQuads out, FxAtlas.Sprite sprite, float px, float py, float pz, float d, float r, float g, float b,
                         int light, float fog) {
         Vector3f dir = new Vector3f((float) xd, (float) yd, (float) zd).mul(-streak);
@@ -355,16 +355,16 @@ public final class FxParticle {
         out.quad(d);
         out.vertex(px - side.x, py - side.y, pz - side.z, u0, v1, r, g, b, 0, w, 1, light, fog);
         out.vertex(px + side.x, py + side.y, pz + side.z, u0, v0, r, g, b, 0, w, 1, light, fog);
-        // хвост уже головы и гаснет: светящийся след
+        // tail thinner than the head and fading: luminous trail
         out.opacity(0);
         out.vertex(tx + side.x * 0.3f, ty + side.y * 0.3f, tz + side.z * 0.3f, um, v0, 0, 0, 0, 0, w, 1, light, fog);
         out.vertex(tx - side.x * 0.3f, ty - side.y * 0.3f, tz - side.z * 0.3f, um, v1, 0, 0, 0, 0, w, 1, light, fog);
     }
 
-    /** Кольцо ударной волны: плоское, лежит на земле (видно и сверху, и снизу — без отсечения граней). */
+    /** Shock ring: flat, on the ground (visible from above and below — no face culling). */
     private void ring(FxQuads out, FxAtlas.Sprite sprite, float px, float py, float pz, float d, float r, float g, float b, float cover,
                       int light, float fog) {
-        // мягкий край — тоньше высоты над землёй (0.25–0.4): сверху кольцо от земли под ним в долях блока по лучу
+        // soft edge thinner than height above ground (0.25–0.4): viewed from above, ring/ground ray separation is fractions of a block
         float s = quadSize, soft = 0.125f;
         float u0 = sprite.u0(), u1 = sprite.u1(), v0 = sprite.v0(), v1 = sprite.v1();
         out.quad(d);

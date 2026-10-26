@@ -9,44 +9,46 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Звук разрушений у слушателя — стёкла и обломки, которые волна действительно снесла рядом (без Minecraft, проверяется
- * юнит-тестом). Каждое событие — место, миг, когда до него дошёл фронт, и мощность звука по закону источника
- * ({@link #watts}: доля механической энергии сорванного); к уху звук идёт со скоростью звука, по дороге — путь
- * ISO 9613 ({@link Propagation}: разлёт, воздух, земля, тень днём). Громкость — {@link Loudness}, как у всех звуков мира.
+ * Destruction sound at the listener — glass and debris the wave actually tore off nearby (without Minecraft,
+ * covered by a unit test). Each event has a position, time the front reached it, and sound power from source law
+ * ({@link #watts}: a fraction of the torn material's mechanical energy); sound travels to the ear at sound speed,
+ * along an ISO 9613 path ({@link Propagation}: spreading, air, ground, daytime shadow). Volume uses {@link Loudness},
+ * as for all world sounds.
  * <p>
- * Разрушений у города — тысячи мест за секунды, а каналов у звукового движка — сотни. Поэтому дошедшее до уха
- * складывается по мощности (звуки разных мест некогерентны) в {@link #QUADRANTS} четвертях вокруг уха, у каждого вида
- * своё: первый звук четверти звучит сразу, что пришло за ним в {@link #HOLD} тиков, — следующим, суммой. Событие длится
- * {@code seconds} — пока падает сорванное; окно длиннее события растягивает его энергию: мощность в окне —
- * P·min(1, длительность / окно). Направление и расстояние звука — средние по силе того, что в нём.
+ * City destruction has thousands of sites over seconds, but the sound engine has hundreds of channels. So arrivals
+ * sum by power (sounds from different sites are incoherent) into {@link #QUADRANTS} quarters around the ear,
+ * separately for each kind: the quarter's first sound plays immediately; arrivals in the next {@link #HOLD} ticks
+ * play next, summed. An event lasts {@code seconds} while torn material falls; a window longer than the event
+ * spreads its energy: window power is P·min(1, duration / window). Sound direction and distance are weighted means
+ * by the strength of its contributions.
  */
 public final class Clatter {
-    /** Виды разрушений: свой звук и своя запись у каждого. */
+    /** Destruction kinds: each has its own sound and recording. */
     public static final int GLASS = 0, DEBRIS = 1, KINDS = 2;
     static final int QUADRANTS = 4;
-    /** Звук одной четверти и вида — не чаще раза в столько тиков; что пришло между, — следующим (0,5 с). */
+    /** A quarter and kind play at most once per this many ticks; intervening arrivals play next (0.5 s). */
     static final int HOLD = 10;
-    /** Дальше {@link ua.zentix.incoming.strike.Hearing#RANGE} звук клиент не несёт — и событие забывается. */
+    /** Client carries sound no farther than {@link ua.zentix.incoming.strike.Hearing#RANGE}; event is forgotten too. */
     static final double MAX_TICKS = 60 * 20;
 
     /**
-     * Событие разрушения: место, миг начала (тики часов вызывающего), уровень мощности звука L<sub>W</sub>, дБ (не A),
-     * длительность, с, вид ({@link #GLASS}, {@link #DEBRIS}).
+     * Destruction event: position, start time (caller clock ticks), sound power level L<sub>W</sub>, dB (not A),
+     * duration, s, kind ({@link #GLASS}, {@link #DEBRIS}).
      */
     public record Event(double x, double y, double z, double startTick, double lw, double seconds, int kind) {}
 
     /**
-     * Звук, который пора сыграть: вид, точка (направление и расстояние — средние по силе), A-уровень у уха, дБА, запас над
-     * фоном в лучшей октаве, дБ, сколько событий в нём.
+     * Sound due to play: kind, point (direction and distance weighted by strength), A-level at the ear, dBA,
+     * headroom above background in the best octave, dB, number of events it contains.
      */
     public record Play(int kind, double x, double y, double z, double level, double margin, int events) {}
 
-    /** Дошедшее до уха в четверти: мощность по октавам (доли, A), направление и расстояние по силе. */
+    /** Arrivals at the ear in a quarter: octave power (fractions, A), direction and distance weighted by strength. */
     private static final class Bin {
         final double[] bands = new double[Propagation.BANDS];
         double weight, dx, dy, dz, dist;
         int events;
-        /** Когда четверть звучала последний раз, тики; NaN — тихо (следующее звучит сразу). */
+        /** When the quarter last played, ticks; NaN — silent (next plays immediately). */
         double since = Double.NaN;
 
         boolean empty() {
@@ -65,24 +67,24 @@ public final class Clatter {
     private final Bin[] bins = new Bin[KINDS * QUADRANTS];
     private final double[] scratch = new double[Propagation.BANDS];
 
-    /** {@code spectra} — октавный спектр записи каждого вида ({@link ua.zentix.incoming.sound.Spectra}). */
-    /** Ускорение свободного падения, м/с². */
+    /** {@code spectra} — octave spectrum of each kind's recording ({@link ua.zentix.incoming.sound.Spectra}). */
+    /** Gravitational acceleration, m/s². */
     static final double G = 9.81;
-    /** Падение сорванного не короче, чем с полуметра: сорванное у самой земли тоже падает и бьётся. */
+    /** Torn material falls from at least half a metre: material torn near the ground still falls and strikes. */
     static final double FALL_MIN = 0.5;
 
     /**
-     * Сколько длится звук сорванного с высоты {@code height} м над землёй, с: пока оно падает, √(2h/g) (бросок напором
-     * вбок падения не удлиняет).
+     * Sound duration for material torn off {@code height} m above ground, s: while falling, √(2h/g) (a sideways
+     * pressure-driven throw does not lengthen the fall).
      */
     public static double seconds(double height) {
         return Math.sqrt(2 * Math.max(FALL_MIN, height) / G);
     }
 
     /**
-     * Мощность звука сорванного, Вт: {@code kg} вещества, брошенного напором со скоростью {@code speed} м/с и упавшего с
-     * {@code height} м, — энергия m(v²/2 + g·h), звуком — доля {@link Sources#IMPACT_EFFICIENCY} за время падения
-     * ({@link #seconds}).
+     * Sound power of torn material, W: {@code kg} thrown by pressure at {@code speed} m/s and falling from
+     * {@code height} m has energy m(v²/2 + g·h); fraction {@link Sources#IMPACT_EFFICIENCY} becomes sound over
+     * the fall time ({@link #seconds}).
      */
     public static double watts(double kg, double speed, double height) {
         double h = Math.max(FALL_MIN, height);
@@ -90,7 +92,7 @@ public final class Clatter {
     }
 
     public Clatter(Spectrum[] spectra) {
-        if (spectra.length != KINDS) throw new IllegalArgumentException("спектр — у каждого вида");
+        if (spectra.length != KINDS) throw new IllegalArgumentException("each kind needs a spectrum");
         this.spectra = spectra;
         for (int i = 0; i < bins.length; i++) bins[i] = new Bin();
     }
@@ -99,7 +101,7 @@ public final class Clatter {
         if (e.lw > Noise.SILENT) pending.add(e);
     }
 
-    /** Событий в пути к уху. */
+    /** Events travelling to the ear. */
     public int pending() {
         return pending.size();
     }
@@ -113,8 +115,8 @@ public final class Clatter {
     }
 
     /**
-     * Тик {@code now}: события, чей звук дошёл до уха (ex, ey, ez), — в свои четверти; четверти, которым пора, — в
-     * {@code out}. Слышимые — с запасом над фоном больше нуля.
+     * Tick {@code now}: events whose sound reached ear (ex, ey, ez) enter their quarters; quarters due to play
+     * enter {@code out}. Audible ones have positive headroom above background.
      */
     public void tick(double now, double ex, double ey, double ez, Propagation.Weather weather, List<Play> out) {
         for (Iterator<Event> it = pending.iterator(); it.hasNext(); ) {
@@ -124,12 +126,12 @@ public final class Clatter {
                 continue;
             }
             double dx = e.x - ex, dy = e.y - ey, dz = e.z - ez, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            // звук идёт от места с мига, когда до него дошёл фронт
+            // sound travels from the site starting when the front reached it
             if (now < e.startTick + 20 * d / Noise.SOUND) continue;
             it.remove();
             Bin b = bins[e.kind * QUADRANTS + quadrant(dx, dz)];
             Propagation.level(e.lw, spectra[e.kind], Propagation.Path.over(d, Math.max(0, e.y - ey + Propagation.EAR), weather), scratch);
-            // окно длиннее события: его энергия — на всё окно (первый звук тихой четверти — в своём тике)
+            // window longer than event: spread its energy over the whole window (quiet quarter's first sound plays in its own tick)
             double window = Double.isNaN(b.since) ? 0.05 : HOLD / 20.0;
             double share = Math.min(1, e.seconds / window);
             double w = 0;
@@ -150,7 +152,7 @@ public final class Clatter {
             Bin b = bins[i];
             boolean quiet = Double.isNaN(b.since);
             if (quiet && b.empty()) continue;
-            // тихая четверть звучит сразу; звучавшая — когда кончилось её окно
+            // silent quarter plays immediately; a previously playing one waits for its window to end
             if (!quiet && now - b.since < HOLD) continue;
             if (b.empty()) {
                 b.since = Double.NaN;
@@ -172,14 +174,14 @@ public final class Clatter {
         }
     }
 
-    /** Четверть вокруг уха по направлению на место (0 — восток, дальше против часовой по x, z). */
+    /** Quarter around the ear by direction to the site (0 — east, then counterclockwise in x, z). */
     static int quadrant(double dx, double dz) {
         double a = Math.atan2(dz, dx) + Math.PI / 4;
         int q = (int) Math.floor(a / (Math.PI / 2));
         return Math.floorMod(q, QUADRANTS);
     }
 
-    /** Громкость в игре звука {@code p} у файла громкостью {@code fileLufs}, с потолком {@code ceilingLufs} ({@link Loudness}). */
+    /** Game volume of sound {@code p} for a {@code fileLufs} file, with {@code ceilingLufs} ceiling ({@link Loudness}). */
     public static float volume(Play p, double fileLufs, double ceilingLufs) {
         return Loudness.volume(Loudness.gain(p.level, p.margin, ceilingLufs), fileLufs);
     }

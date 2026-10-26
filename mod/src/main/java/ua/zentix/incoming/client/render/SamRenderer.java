@@ -13,8 +13,8 @@ import ua.zentix.incoming.defense.SamBlock;
 import ua.zentix.incoming.defense.SamBlockEntity;
 
 /**
- * ЗРК: над блоком (кабина радара — модель блока) — пакет из четырёх вертикальных контейнеров в настоящую величину
- * ({@link WeaponModels.Mesh#SAM_PACK}), повёрнутый по {@link SamBlock#FACING}.
+ * SAM: above the block (radar cabin is the block model), four full-size vertical containers
+ * ({@link WeaponModels.Mesh#SAM_PACK}), rotated by {@link SamBlock#FACING}.
  */
 public class SamRenderer implements BlockEntityRenderer<SamBlockEntity> {
     public SamRenderer(BlockEntityRendererProvider.Context ctx) {}
@@ -23,7 +23,7 @@ public class SamRenderer implements BlockEntityRenderer<SamBlockEntity> {
     public void render(SamBlockEntity be, float partialTick, PoseStack pose, MultiBufferSource buffers, int packedLight, int packedOverlay) {
         Level level = be.getLevel();
         if (level == null) return;
-        // кабина — целый непрозрачный блок: свет внутри неё — ноль, пакет над ней освещён как место над блоком
+        // Cabin is a full opaque block: zero light inside; rack above uses light from above the block.
         int light = LevelRenderer.getLightColor(level, be.getBlockPos().above());
         pose.pushPose();
         pose.translate(0.5, 0, 0.5);
@@ -32,7 +32,7 @@ public class SamRenderer implements BlockEntityRenderer<SamBlockEntity> {
         pose.popPose();
     }
 
-    /** Пакет больше блока (контейнеры по 4.3 м, плита шире кабины): без этого его отсекало бы по кубу блока. */
+    /** Rack exceeds block (4.3 m containers, plate wider than cabin): otherwise culled by the block cube. */
     @Override
     public AABB getRenderBoundingBox(SamBlockEntity be) {
         return new AABB(be.getBlockPos()).inflate(SamBlockEntity.PACK_HALF_WIDTH - 0.5, 0, SamBlockEntity.PACK_HALF_WIDTH - 0.5)
@@ -40,15 +40,15 @@ public class SamRenderer implements BlockEntityRenderer<SamBlockEntity> {
     }
 
     /**
-     * Пакет выходит за секцию чанка блока: секцию отсекло (взгляд вверх у самого пакета, склон), а верх пакета в кадре —
-     * без этого пропал бы весь пакет. Такие рисуются отдельным списком, рамка и дальность проверяются так же.
+     * Rack extends beyond the block's chunk section: section culled (looking up beside rack, slope) while rack top
+     * is in frame would hide the entire rack. Render these from a separate list, checking bounds and distance as usual.
      */
     @Override
     public boolean shouldRenderOffScreen(SamBlockEntity be) {
         return true;
     }
 
-    /** Пакет видно издалека, как пусковую (по умолчанию блок-сущности рисуются до 64 блоков). */
+    /** Rack visible from afar, like a launcher (block entities default to a 64-block render range). */
     @Override
     public int getViewDistance() {
         return 160;

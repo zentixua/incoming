@@ -1,40 +1,40 @@
 package ua.zentix.incoming.client.nuclear;
 
 /**
- * Когда фронт подрыва встречает слушателя и тело игрока — без Minecraft (проверяется юнит-тестом). Звук слышит камера
- * (там слушатель движка), а бьёт по ушам и толкает ветер — тело: камера снаряда облетает место взрыва в 32–42 блоках,
- * а игрок стоит за километры. Камера на игроке (вид от первого и третьего лица) или рядом с ним (ближе к взрыву или
- * дальше не больше, чем фронт проходит за тик) встречает фронт с телом, по телу: звуки волны и удар по ушам — в один
- * тик (звуки волны слышно, как до неё, {@link Deafness#before}). Фронт встречает слушателя и тело, только когда прошёл
- * их в этот тик: перенесённых за фронт (камера вернулась к телу, которое фронт уже прошёл, облёт попадания после того,
- * как фронт оттуда ушёл) он не встретил. Слушатель снова впереди фронта (камера вернулась к игроку, перенос) встретит
- * его снова; тело — один раз.
+ * When the detonation front meets the listener and player body — without Minecraft (unit-tested). The camera hears sound
+ * (the engine listener is there), while the body receives the ear impact and wind push: the projectile camera orbits the blast site at 32–42 blocks,
+ * while the player stands kilometers away. A camera on the player (first- and third-person views) or nearby (closer to or farther from the blast
+ * by no more than the front travels in a tick) meets the front with the body, based on the body: wave sounds and ear impact occur in one
+ * tick (wave sounds remain audible as before it, {@link Deafness#before}). The front meets the listener and body only if it passed
+ * them this tick: it did not meet those teleported behind it (camera returning to a body the front has passed, impact orbit after
+ * the front has left there). A listener ahead of the front again (camera returned to the player, teleport) meets
+ * it again; the body only once.
  */
 final class FrontMeeting {
     /**
-     * Слушатель впереди фронта больше чем на столько блоков — встретит его снова: у самой границы (камера летит вровень
-     * с фронтом) удар не повторяется каждые несколько тиков.
+     * A listener more than this many blocks ahead of the front will meet it again: right at the boundary (camera flying alongside
+     * the front), the hit does not repeat every few ticks.
      */
     static final double AHEAD = 64;
-    /** Сдвиг дальше стольких блоков за тик — перенос, а не движение: перенесённого за фронт фронт не прошёл. */
+    /** A shift of more than this many blocks in a tick is a teleport, not movement: the front has not passed someone teleported behind it. */
     static final double JUMP = 64;
-    /** Что случилось в тик: прежняя встреча слушателя снята, фронт у слушателя, фронт у тела. */
+    /** What happened this tick: previous listener meeting cleared, front at listener, front at body. */
     static final int AGAIN = 1, HEARD = 2, HIT = 4;
 
     private boolean heard, hit;
-    /** Радиус фронта в прошлый тик; до первого — минус бесконечность (слушатель внутри шара слышит сразу). */
+    /** Front radius last tick; before the first — negative infinity (a listener inside the ball hears it immediately). */
     private double last = Double.NEGATIVE_INFINITY;
-    /** Где были слушатель и тело в прошлый тик (от подрыва); NaN — не было. */
+    /** Where the listener and body were last tick (from the detonation); NaN — absent. */
     private double lastAt = Double.NaN, lastBody = Double.NaN;
 
     /**
-     * Тик: где фронт и где слушатель с телом.
+     * Tick: front, listener and body positions.
      *
-     * @param front    радиус фронта, блоки
-     * @param ear      от подрыва до камеры, блоки
-     * @param body     от подрыва до глаз игрока, блоки; NaN — игрока нет
-     * @param attached камера на игроке
-     * @return что случилось ({@link #AGAIN}, {@link #HEARD}, {@link #HIT}), в этом порядке
+     * @param front    front radius, blocks
+     * @param ear      distance from detonation to camera, blocks
+     * @param body     distance from detonation to player eyes, blocks; NaN — no player
+     * @param attached camera is on the player
+     * @return what happened ({@link #AGAIN}, {@link #HEARD}, {@link #HIT}), in that order
      */
     int tick(double front, double ear, double body, boolean attached) {
         double step = Double.isInfinite(last) ? 0 : front - last;
@@ -59,14 +59,14 @@ final class FrontMeeting {
     }
 
     /**
-     * Фронт прошёл точку в этот тик: был до неё, где она сейчас, или она была впереди фронта и шла к взрыву (тогда она
-     * пересекает фронт между тиками). Перенос дальше {@link #JUMP} за тик — не движение.
+     * The front passed the point this tick: it was short of the point's current position, or the point was ahead of the front and moving toward the blast (so it
+     * crosses the front between ticks). A shift beyond {@link #JUMP} in a tick is not movement.
      */
     private boolean passed(double now, double before) {
         return last < now || last < before && Math.abs(now - before) <= JUMP;
     }
 
-    /** Фронт уже у слушателя. */
+    /** The front is already at the listener. */
     boolean heard() {
         return heard;
     }

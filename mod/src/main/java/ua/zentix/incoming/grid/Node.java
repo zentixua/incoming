@@ -5,10 +5,10 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 
 /**
- * Узел сети — подстанция, от которой питается район радиусом {@code radius}. Удар рядом выводит его из строя
- * ({@link Blackouts#onExplosion}): район гаснет каскадом от него.
+ * Grid node — substation supplying an area of radius {@code radius}. A nearby strike knocks it out
+ * ({@link Blackouts#onExplosion}): the area goes dark in a cascade from it.
  *
- * @param block узел — поставленный блок подстанции (иначе — отмечен командой на карте)
+ * @param block node is a placed substation block (otherwise marked on the map by command)
  */
 public record Node(int id, BlockPos pos, double radius, boolean block) {
     public static final Codec<Node> CODEC = RecordCodecBuilder.create(i -> i.group(

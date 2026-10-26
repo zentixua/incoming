@@ -23,22 +23,22 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 /**
- * Сетка из граней запечённых моделей, разобранная один раз: позиция, UV и нормаль каждой вершины — числами,
- * запечённый свет (материал {@code glow} в OBJ) — отдельно. Кадр пишет вершины одним вызовом
- * {@link VertexConsumer#addVertex(float, float, float, int, float, float, int, int, float, float, float)} на вершину,
- * как ванильный {@code ModelPart}, а не разбирает {@link BakedQuad} заново ({@code putBulkData} копирует каждую
- * вершину через {@code MemoryStack} и заводит на неё векторы). Путь — буфер слоя сущностей, поэтому свет мира,
- * контур свечения, Iris и его проход теней работают как у любой сущности.
+ * Mesh from baked model faces, decoded once: numeric position, UV and normal per vertex, baked light (OBJ
+ * {@code glow} material) separately. Frame writes vertices with one
+ * {@link VertexConsumer#addVertex(float, float, float, int, float, float, int, int, float, float, float)} call per
+ * vertex, as vanilla {@code ModelPart}, rather than decoding {@link BakedQuad} again ({@code putBulkData} copies
+ * each vertex through {@code MemoryStack} and allocates vectors for it). Uses entity render-type buffer, so world
+ * light, glowing outline, Iris and its shadow pass work as for any entity.
  */
 final class QuadMesh {
-    /** x y z, u v, нормаль x y z. */
+    /** x y z, u v, normal x y z. */
     private static final int STRIDE = 8;
     private static final int WHITE = 0xFFFFFF;
 
     private final float[] vertices;
-    /** Запечённый свет вершин (упакован как свет мира) или {@code null}, если его нет ни у одной. */
+    /** Baked vertex light (packed as world light), or {@code null} if absent on all vertices. */
     private final int[] bakedLight;
-    /** Оттенок вершин (RGB, окраска блока по {@code tintIndex}) или {@code null}, если все белые. */
+    /** Vertex tint (RGB, block tint by {@code tintIndex}), or {@code null} if all white. */
     private final int[] tint;
 
     private QuadMesh(float[] vertices, int[] bakedLight, int[] tint) {
@@ -48,9 +48,9 @@ final class QuadMesh {
     }
 
     /**
-     * Нарисовать в текущей системе координат.
+     * Draw in current coordinate system.
      *
-     * @param color ARGB: множитель текстуры, альфа — прозрачность детали
+     * @param color ARGB: texture multiplier, alpha is part opacity
      */
     void draw(PoseStack.Pose pose, VertexConsumer vc, int color, int light, int overlay) {
         Matrix4f m = pose.pose();
@@ -66,8 +66,8 @@ final class QuadMesh {
     }
 
     /**
-     * Вершины сетки как есть (без поворота, белые, свет — ярче из light и запечённого) — для буфера видеокарты,
-     * в который она ложится один раз ({@link FarModels}); {@code null} — сетка пуста.
+     * Mesh vertices as is (unrotated, white, brighter of light and baked light) for a GPU buffer uploaded once
+     * ({@link FarModels}); {@code null} for empty mesh.
      */
     @Nullable
     MeshData bake(ByteBufferBuilder bytes, int light) {
@@ -76,7 +76,7 @@ final class QuadMesh {
         return b.build();
     }
 
-    /** Байт на вершины {@link #bake}. */
+    /** Bytes for {@link #bake} vertices. */
     int bakedBytes() {
         return vertices.length / STRIDE * DefaultVertexFormat.NEW_ENTITY.getVertexSize();
     }
@@ -85,7 +85,7 @@ final class QuadMesh {
         return FastColor.ARGB32.colorFromFloat(alpha, 1, 1, 1);
     }
 
-    /** Свет вершины — ярче из света мира и запечённого, по блочному и небесному отдельно (как NeoForge в putBulkData). */
+    /** Vertex light: brighter of world and baked light, block and sky separately (as NeoForge putBulkData). */
     private static int brighter(int a, int b) {
         return Math.max(a & 0xFFFF, b & 0xFFFF) | Math.max(a >>> 16, b >>> 16) << 16;
     }
@@ -101,12 +101,12 @@ final class QuadMesh {
         private int count;
         private boolean anyLight, anyTint;
 
-        /** Грани, сдвинутые и растянутые {@code transform} (нормали — обратной транспонированной, заново единичные). */
+        /** Faces translated and scaled by {@code transform} (normals inverse-transposed, renormalized). */
         Builder add(List<BakedQuad> quads, Matrix4f transform) {
             return add(quads, transform, q -> WHITE);
         }
 
-        /** То же с оттенком грани (RGB), как окраска блока по {@code tintIndex} в {@code renderSingleBlock}. */
+        /** Same with face tint (RGB), as block tint by {@code tintIndex} in {@code renderSingleBlock}. */
         Builder add(List<BakedQuad> quads, Matrix4f transform, ToIntFunction<BakedQuad> tintOf) {
             Matrix3f normals = transform.normal(new Matrix3f());
             Vector3f p = new Vector3f(), n = new Vector3f();
@@ -118,7 +118,7 @@ final class QuadMesh {
                     transform.transformPosition(Float.intBitsToFloat(d[o + IQuadTransformer.POSITION]),
                             Float.intBitsToFloat(d[o + IQuadTransformer.POSITION + 1]),
                             Float.intBitsToFloat(d[o + IQuadTransformer.POSITION + 2]), p);
-                    // нормаль вершины (гладкие сетки OBJ), а если её нет — нормаль грани, как в putBulkData
+                    // Vertex normal (smooth OBJ meshes), or face normal if absent, as in putBulkData.
                     int packed = d[o + IQuadTransformer.NORMAL];
                     byte nx = (byte) packed, ny = (byte) (packed >> 8), nz = (byte) (packed >> 16);
                     if (nx != 0 || ny != 0 || nz != 0) n.set(nx / 127f, ny / 127f, nz / 127f);
@@ -159,8 +159,8 @@ final class QuadMesh {
     }
 
     /**
-     * Сетка (или несколько), собранная при первом рисовании и заново после каждой перезагрузки моделей (F3+T, пакет ресурсов):
-     * грани берутся из менеджера моделей, а он готов только после загрузки ресурсов.
+     * Mesh (or meshes) built on first draw and again after each model reload (F3+T, resource pack): faces come from
+     * model manager, which is ready only after resource loading.
      */
     static final class Cached<T> {
         private static int generation;
@@ -181,7 +181,7 @@ final class QuadMesh {
             return mesh;
         }
 
-        /** Модели перезапечены: все сетки соберутся заново при следующем рисовании. */
+        /** Models rebaked: all meshes rebuild on next draw. */
         static void invalidateAll() {
             generation++;
         }

@@ -7,25 +7,25 @@ import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.entity.StrikeProjectile;
 
 /**
- * Всё, что нужно модели снаряда на кадр ({@link WeaponModels}): где он, как повёрнут, фаза полёта и её время, куда
- * летит. Заполняется по сущности, пока она есть у клиента, а без неё — по пути из пакетов сервера
- * ({@code client.far.FarFlightView}): модель и её анимации — один код вблизи и вдали. Тот же шаг, что у Mojang
- * в 1.21.2 ({@code EntityRenderState}). Объект живёт между кадрами: новая поза на кадр не нужна.
+ * Everything the projectile model needs per frame ({@link WeaponModels}): position, orientation, flight phase and
+ * phase time, flight destination. Filled from entity while present on client; otherwise from the server packet
+ * track ({@code client.far.FarFlightView}): shared model and animation code nearby and at distance. Same step as
+ * Mojang's 1.21.2 ({@code EntityRenderState}). Object lives across frames: no new pose needed each frame.
  */
 public final class ProjectilePose {
-    /** Где, блоков. */
+    /** Position, blocks. */
     public double x, y, z;
-    /** Курс, тангаж и крен, градусы (как у сущности). */
+    /** Heading, pitch and roll, degrees (as on the entity). */
     public float yaw, pitch, roll;
     public FlightPhase phase = FlightPhase.READY;
-    /** Тиков в нынешней фазе и с начала полёта, с долей тика. */
+    /** Ticks in current phase and since flight start, including partial tick. */
     public float phaseAge, age;
-    /** Точка цели, блоков. */
+    /** Target point, blocks. */
     public double aimX, aimY, aimZ;
-    /** Рисовать упрощённые копии деталей ({@link WeaponModels.Mesh#lod}): модель мелкая на экране. */
+    /** Draw simplified part copies ({@link WeaponModels.Mesh#lod}): model small on screen. */
     public boolean coarse;
 
-    /** По сущности у клиента: положение и углы — между тиками, крен — последний присланный. */
+    /** From client entity: position and angles interpolated between ticks, latest received roll. */
     public ProjectilePose set(StrikeProjectile e, float partial) {
         Vec3 p = e.getPosition(partial);
         x = p.x;
@@ -45,7 +45,7 @@ public final class ProjectilePose {
         return this;
     }
 
-    /** Те же числа, что у o. */
+    /** Same values as o. */
     public ProjectilePose copy(ProjectilePose o) {
         x = o.x;
         y = o.y;
@@ -63,7 +63,7 @@ public final class ProjectilePose {
         return this;
     }
 
-    /** Поворот модели (нос по +Z) в мир: курс, тангаж, крен. */
+    /** Model (nose +Z) rotation into world: heading, pitch, roll. */
     public Quaternionf rotation(Quaternionf out) {
         return out.rotationYXZ(-yaw * Mth.DEG_TO_RAD, pitch * Mth.DEG_TO_RAD, roll * Mth.DEG_TO_RAD);
     }
