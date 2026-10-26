@@ -96,16 +96,19 @@ float frameInset(float span) {
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
 // Места кадра клуба k и следующего на листе, сдвинутые вдоль векторов движения на долю смеси m (общие у sixFrames и
 // sixAlpha)
-void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1) {
+void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1, out float lod) {
     vec2 tile = FxSix.zw;
     vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
     vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
     vec2 next = origin + vec2(tile.x, 0.0);
     if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
     vec2 local = uv - origin;
-    vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
-    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
+    // Isotropic atlas: reuse the original perspective footprint for all six-way samples.
     vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
+    // The lower bound only avoids log2(0); retain negative LOD for sampler magnification.
+    lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-20));
+    vec4 v = textureLod(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), lod);
+    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
     vec2 edge = frameInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
     uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
@@ -113,11 +116,12 @@ void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1) {
 
 void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 uv0, uv1;
-    sixPlaces(uv, dx, dy, m, uv0, uv1);
-    vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
+    float lod;
+    sixPlaces(uv, dx, dy, m, uv0, uv1, lod);
+    vec4 a0 = textureLod(Sampler0, uv0, lod), a1 = textureLod(Sampler0, uv1, lod);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) discard;
-    vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
+    vec4 b0 = textureLod(Sampler0, uv0 + vec2(0.0, FxSix.x), lod), b1 = textureLod(Sampler0, uv1 + vec2(0.0, FxSix.x), lod);
     // на листе — умноженная альфа и степень 1/2,2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
     vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
@@ -128,8 +132,9 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
 // Непрозрачность кадра клуба со смесью — те же места, что у sixFrames, без карт света: проходу свечения дым только гасит
 float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 uv0, uv1;
-    sixPlaces(uv, dx, dy, m, uv0, uv1);
-    return mix(textureGrad(Sampler0, uv0, dx, dy).a, textureGrad(Sampler0, uv1, dx, dy).a, m);
+    float lod;
+    sixPlaces(uv, dx, dy, m, uv0, uv1, lod);
+    return mix(textureLod(Sampler0, uv0, lod).a, textureLod(Sampler0, uv1, lod).a, m);
 }
 
 // Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на

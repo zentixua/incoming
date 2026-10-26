@@ -855,6 +855,10 @@ paths:
   (`SmokeGrid.RESOLVE`): в 3.5.0 облака обычного оружия шли в неё, и клетка 8–32 м размазала облако в метры в кубы и мыло
   (`SmokeGridTest.gridRefusesWhatItsCellDoesNotResolve`, `conventionalCloudsAreNotVolume`). Сетка — три каскада 64³ вокруг
   глаза (2, 8, 32 м), заполнение и ход луча — как прежде.
+- Six-way atlas filtering computes one isotropic LOD from the original perspective UV derivatives and reuses it
+  with `textureLod` for all maps; keep `frameInset` unchanged (`PuffAtlasEdgeGlslTest`). Repeated `textureGrad` on
+  world-oriented planes was the measured GPU cost: the same-VBO far replay changed one FX draw from 1.52 to 0.92 ms,
+  not the whole frame. The atlas uses anisotropy 1; affine UV gradients are not equivalent near the eye.
 - Огненный шар обычного взрыва — кадры `fx/particle/fireball` (горение из готовой симуляции — CC0 «Gasoline Explosion»
   JangaFX EmberGen, `tools/bake_fx/bake.py fireball-vdb`, рендер в Blender: сажа поглощает и излучает по Кирхгофу яркость
   чёрного тела своей температуры, ⚠ поле EmberGen без единиц: 90-я доля там, где горит, — 1800 K, по нему излучение
