@@ -85,7 +85,7 @@ class StoreBodyTest(unittest.TestCase):
             en, ru = folder / "en.md", folder / "ru.md"
             en.write_text('English "body"\n', encoding="utf-8")
             if not missing_translation:
-                ru.write_text("Русский текст\n", encoding="utf-8")
+                ru.write_text("\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442\n", encoding="utf-8")
             (folder / "store.json").write_text(json.dumps({"slug": "fixture", "gallery": []}))
             (folder / "fixture.jar").write_bytes(b"fixture jar")
             with ThreadingHTTPServer(("127.0.0.1", 0), Store) as server:
@@ -107,13 +107,13 @@ class StoreBodyTest(unittest.TestCase):
         result, writes = self.run_page(exists=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(writes), 1)
-        self.assertEqual(writes[0]["body"], 'English "body"\n\n\n---\n\nРусский текст\n')
+        self.assertEqual(writes[0]["body"], 'English "body"\n\n\n---\n\n\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442\n')
 
     def test_existing_draft_gets_both_languages(self):
         result, writes = self.run_page(exists=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(writes), 1)
-        self.assertEqual(writes[0]["body"], 'English "body"\n\n\n---\n\nРусский текст\n')
+        self.assertEqual(writes[0]["body"], 'English "body"\n\n\n---\n\n\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442\n')
 
     def test_missing_translation_prevents_page_mutation(self):
         result, writes = self.run_page(exists=True, missing_translation=True)
