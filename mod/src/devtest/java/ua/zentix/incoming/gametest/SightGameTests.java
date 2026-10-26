@@ -27,51 +27,51 @@ import ua.zentix.incoming.target.Sight;
 import java.util.Map;
 import java.util.UUID;
 
-/** Прямая видимость ({@link Sight}) и свои по командам ({@link Sides}). */
+/** Direct visibility ({@link Sight}) and your own by command ({@link Sides}). */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SightGameTests {
     private SightGameTests() {}
 
     /**
-     * Видно на открытом месте и сквозь стекло; не видно сквозь камень, невидимого (зелье), наблюдателя и в другом
-     * мире; дальность — прорисовка игрока, зажатая сервером.
+     * Visible in the open and through glass; not visible through stone, invisible (potion), observer and in another
+     *  world; range - the player's rendering, clamped by the server.
      */
     @GameTest(template = "pad", batch = "sight")
     public static void seesOnlyWhatEyesSee(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         FakePlayer viewer = player(level, "sight_viewer", Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1))));
         FakePlayer target = player(level, "sight_target", Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(6, 1, 6))));
-        h.assertTrue(Sight.sees(viewer, target), "на открытом месте не видно");
-        h.assertFalse(Sight.sees(viewer, viewer), "видит сам себя");
+        h.assertTrue(Sight.sees(viewer, target), "not visible in the open");
+        h.assertFalse(Sight.sees(viewer, viewer), "sees himself");
 
         for (int z = 0; z < 8; z++) for (int y = 1; y < 5; y++) h.setBlock(new BlockPos(4, y, z), Blocks.STONE);
-        h.assertFalse(Sight.sees(viewer, target), "видно сквозь камень");
+        h.assertFalse(Sight.sees(viewer, target), "visible through the stone");
         for (int z = 0; z < 8; z++) for (int y = 1; y < 5; y++) h.setBlock(new BlockPos(4, y, z), Blocks.GLASS);
-        h.assertTrue(Sight.sees(viewer, target), "не видно сквозь стекло");
+        h.assertTrue(Sight.sees(viewer, target), "not visible through glass");
 
         target.setInvisible(true);
-        h.assertFalse(Sight.sees(viewer, target), "видно невидимого");
+        h.assertFalse(Sight.sees(viewer, target), "the invisible is visible");
         target.setInvisible(false);
         target.setGameMode(GameType.SPECTATOR);
-        h.assertFalse(Sight.sees(viewer, target), "видно наблюдателя");
+        h.assertFalse(Sight.sees(viewer, target), "visible to the observer");
         target.setGameMode(GameType.SURVIVAL);
         ServerLevel nether = level.getServer().getLevel(Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
-        h.assertFalse(Sight.sees(viewer, player(nether, "sight_nether", target.position())), "видно в другом мире");
+        h.assertTrue(nether != null, "no Nether");
+        h.assertFalse(Sight.sees(viewer, player(nether, "sight_nether", target.position())), "visible in another world");
         target.setHealth(0);
-        h.assertFalse(Sight.sees(viewer, target), "видно убитого");
+        h.assertFalse(Sight.sees(viewer, target), "the dead man is visible");
 
         Vec3 at = viewer.position();
-        h.assertTrue(Sight.within(viewer, at.add(Sight.viewRange(viewer) - 1, 50, 0)), "точка в дальности — вне");
+        h.assertTrue(Sight.within(viewer, at.add(Sight.viewRange(viewer) - 1, 50, 0)), "point in range - out");
         h.assertFalse(Sight.within(viewer, at.add(Sight.viewRange(viewer) * 0.75, 0, Sight.viewRange(viewer) * 0.75)),
-                "точка за дальностью (по диагонали) — в ней");
+                "point beyond the range (diagonally) - in it");
         h.succeed();
     }
 
     /**
-     * Дальность — как у Minecraft: настройка клиента (у {@code FakePlayer} её нет — настоящий {@code ServerPlayer} вне
-     * списка игроков), зажатая дальностью сервера, не меньше двух чанков; у сущности — ещё и дальностью её отслеживания.
+     * Range - like Minecraft: client settings ({@code FakePlayer} does not have it - the real {@code ServerPlayer} is outside the
+     *  list of players), constrained by the server range, at least two chunks; the entity also has a tracking range.
      */
     @GameTest(template = "pad", batch = "sight_range")
     public static void rangeIsClampedLikeVanilla(GameTestHelper h) {
@@ -81,37 +81,37 @@ public final class SightGameTests {
         StrikeGameTests.afterTest(h, () -> list.setViewDistance(before));
         list.setViewDistance(16);
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(1, 1, 1)));
-        h.assertValueEqual(Sight.viewRange(viewer(level, at, 64)), 256, "настройка 64 при сервере 16");
-        h.assertValueEqual(Sight.viewRange(viewer(level, at, 5)), 80, "настройка 5 при сервере 16");
-        h.assertValueEqual(Sight.viewRange(viewer(level, at, 1)), 32, "настройка 1 — не меньше двух чанков");
+        h.assertValueEqual(Sight.viewRange(viewer(level, at, 64)), 256, "setting 64 with server 16");
+        h.assertValueEqual(Sight.viewRange(viewer(level, at, 5)), 80, "setting 5 with server 16");
+        h.assertValueEqual(Sight.viewRange(viewer(level, at, 1)), 32, "setting 1 - at least two chunks");
 
         ServerPlayer far = viewer(level, at, 64);
         Pig pig = EntityType.PIG.create(level);
-        h.assertTrue(pig != null, "нет свиньи");
-        // свинья отслеживается на 10 чанков (160 блоков) с поправкой сервера — ближе прорисовки (256); игрок — на 32
-        // чанка, т. е. до прорисовки
+        h.assertTrue(pig != null, "no pig");
+        // the pig is tracked on 10 chunks (160 blocks) with a server correction - closer to drawing (256); player - to 32
+        // chanka, i.e. before drawing
         int pigRange = level.getServer().getScaledTrackingDistance(EntityType.PIG.clientTrackingRange() * 16);
-        h.assertTrue(pigRange < 256, "дальность свиньи должна быть меньше прорисовки: " + pigRange);
-        h.assertValueEqual(Sight.range(far, pig), (double) pigRange, "дальность свиньи");
-        h.assertValueEqual(Sight.range(far, far), 256.0, "дальность игрока — не дальше прорисовки");
+        h.assertTrue(pigRange < 256, "the range of the pig should be less than the drawing: " + pigRange);
+        h.assertValueEqual(Sight.range(far, pig), (double) pigRange, "pig range");
+        h.assertValueEqual(Sight.range(far, far), 256.0, "player range is no further than drawing");
         h.succeed();
     }
 
-    /** Взгляд в неготовый чанк — «не видно», и чанк ради него не грузится. */
+    /** A glance at an unready chunk is “not visible”, and the chunk is not loaded for its sake. */
     @GameTest(template = "pad", batch = "sight")
     public static void clearNeverLoadsChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 from = Vec3.atCenterOf(h.absolutePos(new BlockPos(1, 3, 1)));
         Vec3 far = from.add(200_000, 0, 200_000);
         ChunkPos chunk = new ChunkPos(BlockPos.containing(far));
-        h.assertTrue(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null, "дальний чанк уже загружен");
-        h.assertFalse(Sight.clear(level, from, far), "видно сквозь неготовые чанки");
-        h.assertTrue(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null, "взгляд загрузил чанк");
-        h.assertTrue(Sight.clear(level, from, Vec3.atCenterOf(h.absolutePos(new BlockPos(6, 3, 6)))), "на площадке не видно");
+        h.assertTrue(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null, "the distant chunk is already loaded");
+        h.assertFalse(Sight.clear(level, from, far), "visible through unfinished chunks");
+        h.assertTrue(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null, "look loaded chunk");
+        h.assertTrue(Sight.clear(level, from, Vec3.atCenterOf(h.absolutePos(new BlockPos(6, 3, 6)))), "not visible on the site");
         h.succeed();
     }
 
-    /** Свои — тот же игрок или одна команда {@code /team}; без команды и ничьи (консоль) — чужие. */
+    /** Ours - the same player or one team {@code /team}; without a team and draws (console) - strangers. */
     @GameTest(template = "pad", batch = "sight")
     public static void sidesFollowTeams(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -124,27 +124,27 @@ public final class SightGameTests {
             board.removePlayerTeam(blue);
         });
 
-        h.assertFalse(Sides.friendly(a, b), "без команд — свои");
-        h.assertTrue(Sides.friendly(a, a), "сам себе чужой");
+        h.assertFalse(Sides.friendly(a, b), "without commands - your own");
+        h.assertTrue(Sides.friendly(a, a), "a stranger to himself");
         board.addPlayerToTeam(a.getScoreboardName(), red);
         board.addPlayerToTeam(b.getScoreboardName(), red);
         board.addPlayerToTeam(c.getScoreboardName(), blue);
-        h.assertTrue(Sides.friendly(a, b), "одна команда — чужие");
-        h.assertFalse(Sides.friendly(a, c), "разные команды — свои");
+        h.assertTrue(Sides.friendly(a, b), "one team - strangers");
+        h.assertFalse(Sides.friendly(a, c), "different teams - their own");
 
         UUID ua = a.getUUID();
-        h.assertTrue(Sides.friendly(level.getServer(), ua, ua), "тот же игрок по UUID — чужой");
-        // по UUID (владелец не в сети): имена — из кэша профилей, у сервера GameTest его нет — свои имена
+        h.assertTrue(Sides.friendly(level.getServer(), ua, ua), "the same player by UUID is a stranger");
+        // by UUID (owner is offline): names are from the profile cache, the server GameTest does not have it - their own names
         Map<UUID, String> names = Map.of(ua, a.getScoreboardName(), b.getUUID(), b.getScoreboardName(), c.getUUID(), c.getScoreboardName());
-        h.assertTrue(Sides.friendly(board, ua, b.getUUID(), names::get), "одна команда по UUID — чужие");
-        h.assertFalse(Sides.friendly(board, ua, c.getUUID(), names::get), "разные команды по UUID — свои");
-        h.assertFalse(Sides.friendly(board, ua, UUID.randomUUID(), names::get), "игрок без имени — свой");
-        h.assertValueEqual(Sides.side(board, ua, names::get), Sides.side(a), "сторона по UUID и у игрока в сети разные");
-        h.assertFalse(Sides.friendly(level.getServer(), ua, null), "ничей — свой");
-        h.assertFalse(Sides.friendly(level.getServer(), null, null), "два ничьих — свои");
-        h.assertFalse(Sides.side(level.getServer(), ua).equals(Sides.side(level.getServer(), c.getUUID())), "одна сторона у разных игроков");
-        h.assertValueEqual(Sides.side(a), Sides.side(b), "у команды разные стороны");
-        h.assertFalse(Sides.side(a).equals(Sides.side(c)), "у разных команд одна сторона");
+        h.assertTrue(Sides.friendly(board, ua, b.getUUID(), names::get), "one team for UUID - strangers");
+        h.assertFalse(Sides.friendly(board, ua, c.getUUID(), names::get), "different teams for UUID - their own");
+        h.assertFalse(Sides.friendly(board, ua, UUID.randomUUID(), names::get), "player without name");
+        h.assertValueEqual(Sides.side(board, ua, names::get), Sides.side(a), "side by UUID and the player on the network are different");
+        h.assertFalse(Sides.friendly(level.getServer(), ua, null), "no one's - yours");
+        h.assertFalse(Sides.friendly(level.getServer(), null, null), "two draws are yours");
+        h.assertFalse(Sides.side(level.getServer(), ua).equals(Sides.side(level.getServer(), c.getUUID())), "same side for different players");
+        h.assertValueEqual(Sides.side(a), Sides.side(b), "the team has different sides");
+        h.assertFalse(Sides.side(a).equals(Sides.side(c)), "different teams have the same side");
         h.succeed();
     }
 
@@ -154,10 +154,10 @@ public final class SightGameTests {
         return p;
     }
 
-    /** Настоящий игрок вне списка игроков с настройкой прорисовки {@code chunks}: {@code FakePlayer} её не принимает. */
+    /** A real player outside the list of players with the rendering setting {@code chunks}: {@code FakePlayer} does not accept it. */
     private static ServerPlayer viewer(ServerLevel level, Vec3 at, int chunks) {
         ServerPlayer p = new ServerPlayer(level.getServer(), level, new GameProfile(UUID.randomUUID(), "sight_range"), withView(chunks));
-        p.setPos(at); // moveTo у ServerPlayer зовёт connection.resetPosition, а соединения нет
+        p.setPos(at); // moveTo at ServerPlayer is calling connection.resetPosition, but there is no connection
         return p;
     }
 

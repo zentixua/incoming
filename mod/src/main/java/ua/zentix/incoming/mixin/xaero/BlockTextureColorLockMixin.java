@@ -12,13 +12,22 @@ import org.spongepowered.asm.mixin.Pseudo;
 import ua.zentix.incoming.Incoming;
 
 /**
- * Кэш цветов блоков xaerolib (Xaero's World Map и Minimap) — один объект на клиент с обычными картами без замка
- * ({@code Object2IntOpenHashMap blockTintIndices}, {@code blockColors}), а читают его и поток игры (плитки карты перед
- * выгрузкой), и фоновые задачи карты. Два потока, вставляющих в него одновременно, ломают таблицу: клиент падает
- * с {@code ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 2049} в {@code Object2IntOpenHashMap.rehash}
- * (xaerolib 1.7.3, Xaero's World Map 1.46.0), например сразу после переноса к руинам: руины — сотни новых для кэша
- * состояний, и вставки с ростом таблицы идут пачкой. −1 — место в таблице, а не номер состояния блока. Здесь обращения
- * к кэшу идут под замком самого объекта. Без Xaero миксин не применяется ({@code require = 0}, как у Sable).
+ * Narrow crash guard for concurrent access to xaerolib's shared block color cache by the game thread (map tiles
+ * before unload) and background map tasks. Its private {@code blockTintIndices} is an unsynchronized
+ * {@code Object2IntOpenHashMap}; {@code blockColors} and {@code textureColors} are ordinary {@code HashMap}s.
+ * Concurrent inserts can corrupt the table and crash the client with
+ * {@code ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 2049} in {@code Object2IntOpenHashMap.rehash}
+ * (reported with xaerolib 1.7.3 and Xaero's World Map 1.46.0, after teleporting to ruins with many uncached states).
+ * The negative index is a corrupted table slot, not a block state ID.
+ * <p>
+ * Both entry points call the original method once, with unchanged arguments and results, under the same instance
+ * monitor. Cache clearing also happens inside {@code getBlockTextureColor}. No colors, rendering rules or exceptions
+ * are replaced. There is no public hook to synchronize Xaero's own callers or replace these private caches.
+ * <p>
+ * Remove when Xaero fixes concurrent color/tint cache access, including cache clearing and the last-state shortcut;
+ * checked on xaerolib 1.7.3 bundled with World Map 1.47.0 and Minimap 26.6.0 (Minecraft 1.21.1,
+ * NeoForge 21.1.264). This is a bytecode check, not a new client crash reproduction.
+ * Without Xaero this pseudo-mixin is not applied; a missing target method is optional ({@code require = 0}).
  */
 @Pseudo
 @Mixin(targets = "xaero.lib.client.level.block.BlockTextureColorUtils", remap = false)

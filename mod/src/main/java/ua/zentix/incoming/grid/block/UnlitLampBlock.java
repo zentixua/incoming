@@ -17,9 +17,9 @@ import net.minecraft.world.phys.HitResult;
 import java.util.function.Supplier;
 
 /**
- * Двойник лампы из красного камня: хранит её «горит», чтобы свет вернулся ровно таким, каким был, но сам на
- * сигнал не отвечает. Ванильная погашенная лампа ({@code lit=false}) сама зажглась бы от первого же обновления
- * соседа, если на неё подан сигнал, и после блэкаута было бы не отличить её от лампы, которая была выключена.
+ * Redstone lamp counterpart: retains “lit” to restore light exactly as it was, but does not respond to signals itself.
+ * A vanilla unlit lamp ({@code lit=false}) would relight on the first neighbor update if powered, and after blackout
+ * would be indistinguishable from a lamp that was switched off.
  */
 public class UnlitLampBlock extends Block implements Unlit {
     private final Supplier<Block> lit;

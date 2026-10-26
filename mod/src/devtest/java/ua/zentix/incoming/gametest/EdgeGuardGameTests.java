@@ -31,20 +31,20 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Взрыв у края загрузки не грузит чанки синхронно: грунт и поверхность точки удара, кольцо огня ракеты, выбитые стёкла
- * и бревна стволов, поваленных ядерным взрывом, читают и меняют только готовые чанки. Проверка — на свежем чанке без
- * тикета: чтение неготового чанка на сервере грузит его прямо в вызове, и чанк после вызова оказался бы готов.
+ * An explosion at the edge of loading does not load chunks synchronously: the soil and surface of the impact point, the ring of fire of a rocket, broken glass
+ *  and logs of trunks felled by a nuclear explosion, read and change only ready-made chunks. Checking - on a fresh chunk without a
+ *  ticket: reading an unready chunk on the server loads it directly in the call, and the chunk would be ready after the call.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class EdgeGuardGameTests {
     private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_test_edge_guard", Comparator.comparingLong(ChunkPos::toLong));
 
-    /** Свежий чанк далеко за площадкой: его никто не грузил. */
+    /** The fresh chunk is far behind the platform: no one loaded it. */
     private static ChunkPos fresh(GameTestHelper h, int dx, int dz) {
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         ChunkPos c = new ChunkPos(base.x + dx, base.z + dz);
-        h.assertFalse(Terrain.ready(h.getLevel(), c.x, c.z), "чанк " + c + " уже загружен — проверка ничего не проверит");
+        h.assertFalse(Terrain.ready(h.getLevel(), c.x, c.z), "chunk " + c + " already loaded - the scan will not check anything");
         return c;
     }
 
@@ -52,31 +52,31 @@ public final class EdgeGuardGameTests {
         return new Vec3(c.getMiddleBlockX() + 0.5, 90, c.getMiddleBlockZ() + 0.5);
     }
 
-    /** Кольцо огня ракеты: столб в неготовом чанке не поджигается и не грузится. */
+    /** Ring of Fire Rocket: A pillar in an unfinished chunk does not ignite or load. */
     @GameTest(template = "range", batch = "edge_guard_fire")
     public static void igniteGroundAtUnreadyChunkLoadsNothing(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        h.assertTrue(IncomingConfig.SERVER.fire.get(), "огонь выключен в настройке — кольцо огня не проверить");
+        h.assertTrue(IncomingConfig.SERVER.fire.get(), "the fire is turned off in the setting - the ring of fire cannot be checked");
         ChunkPos ring = fresh(h, 45, -55);
         Warheads.igniteGround(level, middle(ring).x, middle(ring).z);
-        h.assertFalse(Terrain.ready(level, ring.x, ring.z), "поджог земли загрузил чанк " + ring);
+        h.assertFalse(Terrain.ready(level, ring.x, ring.z), "setting the earth on fire loaded the chunk " + ring);
         h.succeed();
     }
 
-    /** Грунт точки удара в неготовом чанке — гравий, чанк не грузится. */
+    /** The ground of the impact point in an unfinished chunk is gravel, the chunk will not load. */
     @GameTest(template = "range", batch = "edge_guard_ground")
     public static void groundSampleAtUnreadyChunkLoadsNothing(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ChunkPos ground = fresh(h, -55, 45);
         GroundMaterial sampled = GroundMaterial.sample(level, BlockPos.containing(middle(ground)));
-        h.assertFalse(Terrain.ready(level, ground.x, ground.z), "грунт точки удара загрузил чанк " + ground);
-        h.assertTrue(sampled == GroundMaterial.GRAVEL, "грунт неготового чанка " + sampled + ", ждём гравий");
+        h.assertFalse(Terrain.ready(level, ground.x, ground.z), "impact point ground loaded chunk " + ground);
+        h.assertTrue(sampled == GroundMaterial.GRAVEL, "unfinished chunk soil " + sampled + ", waiting for gravel");
         h.succeed();
     }
 
     /**
-     * Сам подрыв: грунт в конструкторе, ванильный взрыв — отложен до загрузки района в фоне. Потом тест догружает район
-     * сам и ждёт, пока отложенные взрывы и таймлайн подрыва закончатся: иначе они грузили бы чанки в чужих тестах.
+     * The detonation itself: soil in the constructor, vanilla explosion - postponed until the area in the background is loaded. Then the test loads the area
+     *  itself and waits until the delayed explosions and the detonation timeline are over: otherwise they would load chunks in other people’s tests.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "edge_guard_blast")
     public static void blastAtUnreadyChunkLoadsNothing(GameTestHelper h) {
@@ -86,18 +86,18 @@ public final class EdgeGuardGameTests {
     }
 
     /**
-     * Подрыв у чанка, который уже грузится (тикет есть, полной загрузки ещё нет): чтение блока из него ждало бы
-     * загрузки в {@code managedBlock} прямо в тике.
+     * Detonation a chunk that is already loading (there is a ticket, but there is no full download yet): reading a block from it would wait for
+     *  to be loaded into {@code managedBlock} directly at tick.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "edge_guard_loading")
     public static void blastAtLoadingChunkWaitsForNothing(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ChunkPos blast = fresh(h, -60, -40);
-        // уровень 33 без тика: загрузка чанка запущена (держатель с тикетом), getChunkNow — null, пока не загрузится
+        // level 33 without tick: chunk loading started (holder with ticket), getChunkNow - null until loaded
         level.getChunkSource().addRegionTicket(HOLD, blast, 0, blast);
         level.getChunkSource().chunkMap.getDistanceManager().runAllUpdates(level.getChunkSource().chunkMap);
         try {
-            h.assertFalse(Terrain.ready(level, blast.x, blast.z), "чанк " + blast + " уже загружен — проверка ничего не проверит");
+            h.assertFalse(Terrain.ready(level, blast.x, blast.z), "chunk " + blast + " already loaded - the scan will not check anything");
             detonateAndFinish(h, blast);
         } finally {
             level.getChunkSource().removeRegionTicket(HOLD, blast, 0, blast);
@@ -108,45 +108,45 @@ public final class EdgeGuardGameTests {
         ServerLevel level = h.getLevel();
         Vec3 at = middle(blast);
         Warheads.detonate(level, WeaponType.DRONE, at, null, null);
-        h.assertFalse(Terrain.ready(level, blast.x, blast.z), "подрыв загрузил чанк точки удара " + blast);
-        // район удара шахеда — до ~23 блоков от точки (лучи волны, Warheads.chargeReach): с запасом
+        h.assertFalse(Terrain.ready(level, blast.x, blast.z), "detonation loaded impact point chunk " + blast);
+        // shahed impact area - up to ~23 blocks from the point (wave rays, Warheads.chargeReach): with a margin
         double area = 32;
         h.runAfterDelay(1, () -> {
             for (int cx = Mth.floor(at.x - area) >> 4; cx <= Mth.floor(at.x + area) >> 4; cx++)
                 for (int cz = Mth.floor(at.z - area) >> 4; cz <= Mth.floor(at.z + area) >> 4; cz++) level.getChunk(cx, cz);
         });
-        // отложенный подрыв срабатывает в первом тике готового района
+        // delayed detonation is triggered in the first tick of the ready area
         h.runAfterDelay(40, h::succeed);
     }
 
     /**
-     * Стекло у неготового соседнего чанка остаётся: {@code setBlock} обновил бы форму соседа и загрузил его. Стекло
-     * внутри чанка выбивается.
+     * The glass of the unready neighboring chunk remains: {@code setBlock} would update the shape of the neighbor and load it. The glass
+     *  inside the chunk is broken.
      */
     @GameTest(template = "range", batch = "edge_guard_glass")
     public static void shatterKeepsGlassNextToUnreadyChunk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ChunkPos c = fresh(h, -45, -65);
         ChunkPos east = new ChunkPos(c.x + 1, c.z);
-        // уровень 33: чанк загружен целиком, соседи — ниже полной загрузки
+        // level 33: chunk is fully loaded, neighbors are below full load
         level.getChunkSource().addRegionTicket(HOLD, c, 0, c);
         try {
             LevelChunk chunk = level.getChunk(c.x, c.z);
-            h.assertFalse(Terrain.ready(level, east.x, east.z), "сосед " + east + " готов — проверка ничего не проверит");
-            // выше рельефа: природное стекло в объёме проверки не попадёт в счёт
+            h.assertFalse(Terrain.ready(level, east.x, east.z), "neighbor " + east + " ready - the check will not check anything");
+            // above the relief: natural glass within the scope of inspection will not be included in the bill
             int y = level.getMaxBuildHeight() - 8;
             BlockPos edge = new BlockPos(c.getMaxBlockX(), y, c.getMiddleBlockZ());
             BlockPos inner = new BlockPos(c.getMiddleBlockX(), y, c.getMiddleBlockZ());
-            // прямо в секцию: setBlock сам обновил бы соседа
+            // directly to the section: setBlock would update the neighbor itself
             LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
             section.setBlockState(edge.getX() & 15, y & 15, edge.getZ() & 15, Blocks.GLASS.defaultBlockState());
             section.setBlockState(inner.getX() & 15, y & 15, inner.getZ() & 15, Blocks.GLASS.defaultBlockState());
-            // две соединённые панели в 2 и 1 блоке от соседа: выбитая дальняя меняет форму ближней, та читает соседа
+            // two connected panels in 2 and 1 block from a neighbor: the knocked-out far one changes the shape of the near one, which reads the neighbor
             BlockPos pane = edge.offset(-1, 0, 2), paneNear = edge.offset(0, 0, 2);
             section.setBlockState(pane.getX() & 15, y & 15, pane.getZ() & 15, Blocks.GLASS_PANE.defaultBlockState().setValue(CrossCollisionBlock.EAST, true));
             section.setBlockState(paneNear.getX() & 15, y & 15, paneNear.getZ() & 15, Blocks.GLASS_PANE.defaultBlockState().setValue(CrossCollisionBlock.WEST, true));
-            // панель, дверь, доски в 3, 2 и 1 блоке от соседа: выбитая панель будит дверь, дверь проверяет сигнал
-            // редстоуна, а доски проводят его — читаются их соседи, то есть соседний чанк
+            // panel, door, boards in 3, 2 and 1 block from a neighbor: a knocked-out panel wakes up the door, the door checks the
+            // redstone signal, and the boards conduct it - their neighbors are read, that is, the neighboring chunk
             BlockPos signal = edge.offset(-2, 0, -2), door = edge.offset(-1, 0, -2), planks = edge.offset(0, 0, -2);
             section.setBlockState(signal.getX() & 15, y & 15, signal.getZ() & 15, Blocks.GLASS_PANE.defaultBlockState());
             section.setBlockState(door.getX() & 15, y & 15, door.getZ() & 15, Blocks.OAK_DOOR.defaultBlockState());
@@ -155,12 +155,12 @@ public final class EdgeGuardGameTests {
 
             int broken = Warheads.shatter(level, Vec3.atCenterOf(inner), 10, 2, 2, ModTags.SHATTERS);
 
-            h.assertFalse(Terrain.ready(level, east.x, east.z), "выбитое стекло у края загрузило соседний чанк " + east);
-            h.assertTrue(section.getBlockState(edge.getX() & 15, y & 15, edge.getZ() & 15).is(Blocks.GLASS), "стекло у неготового соседа выбито");
-            h.assertTrue(section.getBlockState(pane.getX() & 15, y & 15, pane.getZ() & 15).is(Blocks.GLASS_PANE), "панель в 2 блоках от неготового соседа выбита");
-            h.assertTrue(section.getBlockState(signal.getX() & 15, y & 15, signal.getZ() & 15).isAir(), "панель у двери не выбита");
-            h.assertTrue(section.getBlockState(inner.getX() & 15, y & 15, inner.getZ() & 15).isAir(), "стекло внутри чанка не выбито");
-            h.assertTrue(broken == 2, "выбито " + broken + " (ждём 2: стекло внутри и панель у двери)");
+            h.assertFalse(Terrain.ready(level, east.x, east.z), "broken glass at the edge loaded the neighboring chunk " + east);
+            h.assertTrue(section.getBlockState(edge.getX() & 15, y & 15, edge.getZ() & 15).is(Blocks.GLASS), "unprepared neighbor's glass broken");
+            h.assertTrue(section.getBlockState(pane.getX() & 15, y & 15, pane.getZ() & 15).is(Blocks.GLASS_PANE), "panel in 2 blocks from an unfinished neighbor is knocked out");
+            h.assertTrue(section.getBlockState(signal.getX() & 15, y & 15, signal.getZ() & 15).isAir(), "the door panel is not knocked out");
+            h.assertTrue(section.getBlockState(inner.getX() & 15, y & 15, inner.getZ() & 15).isAir(), "the glass inside the chunk is not broken");
+            h.assertTrue(broken == 2, "knocked out " + broken + " (waiting for 2: glass inside and panel by the door)");
         } finally {
             level.getChunkSource().removeRegionTicket(HOLD, c, 0, c);
         }
@@ -168,21 +168,21 @@ public final class EdgeGuardGameTests {
     }
 
     /**
-     * Бревно поваленного ствола во втором блоке от неготового соседа не ставится: на смену блока Sable читает соседей
-     * места, у твёрдых — и их соседей, и загрузил бы соседа прямо в вызове. Бревно в середине чанка ставится.
+     * The log of a fallen trunk in the second block from an unready neighbor is not placed: to replace the block Sable reads neighbors
+     *  places, for solid ones - and their neighbors, and would load the neighbor directly in the call. The log is placed in the middle of the chunk.
      */
     @GameTest(template = "range", batch = "edge_guard_log")
     public static void fallenLogNextToUnreadyChunkLoadsNothing(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         ChunkPos c = fresh(h, 65, -45);
         ChunkPos east = new ChunkPos(c.x + 1, c.z);
-        // уровень 33: чанк загружен целиком, соседи — ниже полной загрузки
+        // level 33: chunk is fully loaded, neighbors are below full load
         level.getChunkSource().addRegionTicket(HOLD, c, 0, c);
         try {
             LevelChunk chunk = level.getChunk(c.x, c.z);
-            h.assertFalse(Terrain.ready(level, east.x, east.z), "сосед " + east + " готов — проверка ничего не проверит");
-            // камень выше рельефа — опора бревна с воздухом над ней и, у края, стенка рядом с бревном: соседей твёрдого
-            // блока Sable читает, воздуха — нет. Прямо в секцию и карту высот: setBlock у края сам прочитал бы соседа
+            h.assertFalse(Terrain.ready(level, east.x, east.z), "neighbor " + east + " ready - the check will not check anything");
+            // a stone higher than the relief - a support for a log with air above it and, at the edge, a wall next to the log: the neighbors of the solid
+            //  block Sable read, but there is no air. Directly into the section and height map: setBlock at the edge I could read the neighbor myself
             int y = level.getMaxBuildHeight() - 8;
             BlockPos edge = new BlockPos(c.getMaxBlockX() - 1, y, c.getMiddleBlockZ());
             BlockPos inner = new BlockPos(c.getMiddleBlockX(), y, c.getMiddleBlockZ());
@@ -192,10 +192,10 @@ public final class EdgeGuardGameTests {
             }
             BlockState log = Blocks.OAK_LOG.defaultBlockState();
             RuinPlan.placeLog(level, edge.asLong(), log);
-            h.assertFalse(Terrain.ready(level, east.x, east.z), "бревно во втором блоке от края загрузило соседний чанк " + east);
-            h.assertTrue(chunk.getBlockState(edge.above()).isAir(), "бревно у неготового соседа поставлено");
+            h.assertFalse(Terrain.ready(level, east.x, east.z), "the log in the second block from the edge loaded the neighboring chunk " + east);
+            h.assertTrue(chunk.getBlockState(edge.above()).isAir(), "the log was delivered to an unprepared neighbor");
             RuinPlan.placeLog(level, inner.asLong(), log);
-            h.assertTrue(chunk.getBlockState(inner.above()).is(Blocks.OAK_LOG), "бревно в середине чанка не поставлено");
+            h.assertTrue(chunk.getBlockState(inner.above()).is(Blocks.OAK_LOG), "the log in the middle of the chunk is not placed");
         } finally {
             level.getChunkSource().removeRegionTicket(HOLD, c, 0, c);
         }

@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Служба incoming-claude-<S> (запускает tools/sessions/go.sh, сюда — копией): ход claude2, строка в sessions.log и —
-# если сессия закончила ход, а её задачи на ноутбуке (laptop_job.sh из её дерева mod/run/wt-<S>, wt-<S>-*) ещё идут, —
-# ждёт их конца и продолжает сессию сообщением с их кодами. В режиме -p ход кончается, когда модель «ждёт» фоновую
-# задачу, и будить её некому: 21–22.10 S5 продолжали так вручную 6 раз, S6 — 7. Не больше 10 продолжений.
+# Service incoming-claude-<S> (started by tools/sessions/go.sh, copied here): claude2 turn, sessions.log line, then,
+# if the session ends its turn while its laptop jobs (laptop_job.sh from mod/run/wt-<S>, wt-<S>-*) still run,
+# wait for them and resume the session with their exit codes. In -p mode, a turn ends when the model "waits" for a background
+# job and nobody can wake it: on 21–22.10 S5 was resumed manually 6 times, S6 7 times. At most 10 resumptions.
 set -uo pipefail
 S=$1; shift
 D=$SESSIONS_DIR; root=$REPO
 trees=${SESSION_TREES:-$root/mod/run/wt-$S}
 claude=$(command -v claude2 || echo "$HOME/.local/bin/claude2")
-live="Фоновую задачу жди в этом же ходе: tools/laptop_job.sh с run_in_background — его конец тебя разбудит; timeout фоновой команды ставь по длине задачи (по умолчанию 10 мин, предел 2 ч), иначе её остановят посреди работы; закончишь ход, пока твои задачи ноутбука идут, — тебя продолжат, когда они кончатся."
+live="Wait for a background job in the same turn: tools/laptop_job.sh with run_in_background wakes you on completion; set the background command timeout to the job duration (default 10 min, maximum 2 h), otherwise it will be stopped mid-run; if you end the turn while laptop jobs are running, you will be resumed when they finish."
 brief=$D/.context-$S.md
-{ cat "$D/context.md" 2>/dev/null; printf '\n\n## Идущая сессия\n%s\n' "$live"; } > "$brief"
+{ cat "$D/context.md" 2>/dev/null; printf '\n\n## Active session\n%s\n' "$live"; } > "$brief"
 
 if [ $# -ge 2 ]; then args=(--resume "$1" -p "$2"); n=$(ls "$D/$S".r*.json 2>/dev/null | wc -l); n=$((n + 1)); else args=(-p "$(cat "$D/$S.txt")"); n=0; fi
 
-# задачи ноутбука этой сессии: службы incoming-job-* с рабочим каталогом в её дереве
+# Laptop jobs for this session: incoming-job-* services with a working directory in its tree
 own_jobs() {
   local u wd
   for u in $(systemctl --user list-units 'incoming-job-*' --state=active,activating --no-legend --plain | awk '{print $1}'); do
@@ -39,23 +39,23 @@ except Exception:
 if not isinstance(d, dict):
     d = {}
 res = (d.get("result") or "").strip().replace("\n", " ")
-line = "%s %s ход %s: код %s, %d мин, ходов %s, $%.2f%s — %s" % (
+line = "%s %s turn %s: code %s, %d min, turns %s, $%.2f%s — %s" % (
     time.strftime("%d.%m %H:%M"), s, n, code, (time.time() - float(t0)) / 60, d.get("num_turns", "?"),
-    d.get("total_cost_usd") or 0, ", ошибка" if d.get("is_error") else "", res[-300:] or "итога нет")
+    d.get("total_cost_usd") or 0, ", error" if d.get("is_error") else "", res[-300:] or "no result")
 open(log, "a").write(line + "\n")
 print(d.get("session_id", ""))
 PY
 )
   jobs=$(own_jobs)
-  # продолжать нечего (ход закончен, задач нет) или нечем (нет id сессии), или продолжений уже 10
+  # Nothing to resume (turn ended, no jobs), no session ID, or already 10 resumptions
   [ -z "$jobs" ] || [ -z "$sid" ] || [ "$turn" = 10 ] && break
-  echo "$(date '+%d.%m %T') $S: ход кончился, идут задачи: $(echo $jobs)" | tee -a "$D/sessions.log"
+  echo "$(date '+%d.%m %T') $S: turn ended, jobs running: $(echo $jobs)" | tee -a "$D/sessions.log"
   while [ -n "$(own_jobs)" ]; do sleep 30; done
   report=""
   for u in $jobs; do
     st=$(journalctl --user -u "$u" -o cat --no-pager 2>/dev/null | grep -oE 'Main process exited, code=[a-z]+, status=[^ ]+|Deactivated successfully' | tail -1)
-    report+="${u%-*}: ${st:-конец}; "
+    report+="${u%-*}: ${st:-finished}; "
   done
-  args=(--resume "$sid" -p "Твои задачи на ноутбуке закончились: $report Продолжай с того места, где остановился.")
+  args=(--resume "$sid" -p "Your laptop jobs finished: $report Continue where you stopped.")
   n=$((n + 1))
 done

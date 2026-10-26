@@ -6,17 +6,17 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Исходный мир вокруг чанка — сам чанк и 8 соседей (48×48 столбцов), каким он был до этого подрыва: у соседа, чьи
- * руины уже стоят, — старые блоки мест его плана, а огонь и текущая вода, которых там не было, — воздух. Чего нет
- * (сосед не загружен) — сплошной неломаемый массив. Координаты окна: {@code wx, wz} от 0 до 47, y — мира.
+ * Original world around a chunk — chunk and 8 neighbors (48×48 columns), as before this burst: ruined neighbors use
+ * old blocks at plan positions; fire and flowing water absent originally count as air. Missing neighbors are solid,
+ * unbreakable mass. Window coordinates: {@code wx, wz} 0 to 47, world y.
  * <p>
- * Строится из снимков чанков ({@link ChunkShot}), в любом потоке: мир окно не читает. Помнит, по каким снимкам построено
- * ({@link #stamp}).
+ * Built from chunk snapshots ({@link ChunkShot}) on any thread: window does not read the world. Remembers source
+ * snapshots ({@link #stamp}).
  */
 final class RuinWindow {
     static final int SIDE = 48;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    /** Чего нет в окне: массив, который волна не ломает и который держит. */
+    /** Missing window data: unbreakable, supporting mass. */
     static final BlockState MASS = Blocks.BEDROCK.defaultBlockState();
 
     final ChunkPos centre;
@@ -24,14 +24,14 @@ final class RuinWindow {
     final Blast.PropsView view;
     private final Blast.Props airProps, massProps;
     private final ChunkShot[] shots;
-    /** Свойства мест по секциям чанков окна: {@code k * sections + секция} (из снимков, по мере чтения). */
+    /** Position properties by window chunk sections: {@code k * sections + section} (from snapshots, populated as read). */
     private final ChunkShot.Sec[] props;
     private final int sections;
-    /** Исходный верх столбца (верхний не-воздух) и верх опоры (как {@code MOTION_BLOCKING_NO_LEAVES} − 1); MIN — пусто. */
+    /** Original column top (highest non-air) and support top (as {@code MOTION_BLOCKING_NO_LEAVES} − 1); MIN — empty. */
     private final int[] top = new int[SIDE * SIDE], solid = new int[SIDE * SIDE];
 
     /**
-     * @param shots снимки чанка и соседей (номер {@code k = (dz + 1) * 3 + dx + 1}); null — чанка нет
+     * @param shots chunk and neighbor snapshots (index {@code k = (dz + 1) * 3 + dx + 1}); null — missing chunk
      */
     RuinWindow(ChunkPos centre, int minY, int maxY, ChunkShot[] shots, Blast.PropsView view) {
         this.centre = centre;
@@ -57,8 +57,8 @@ final class RuinWindow {
                     }
                     int t = c.surface[lz << 4 | lx], s = c.solid[lz << 4 | lx];
                     if (c.ruined) {
-                        // руины ниже исходного: верх — по старым блокам мест плана; выше исходного (огонь, завал на месте
-                        // воздуха) — вниз до исходного блока
+                        // ruins below original: top from old plan-position blocks; above original (fire, rubble in former air) — descend
+                        // to an original block
                         if (c.oldTops != null) {
                             t = Math.max(t, c.oldTops[lz << 4 | lx]);
                             s = Math.max(s, c.oldTops[256 + (lz << 4 | lx)]);
@@ -74,7 +74,7 @@ final class RuinWindow {
         }
     }
 
-    /** Исходное состояние места окна. */
+    /** Original state at window position. */
     BlockState get(int wx, int y, int wz) {
         if (y < minY || y >= maxY) return AIR;
         if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE) return MASS;
@@ -82,7 +82,7 @@ final class RuinWindow {
         return s == null ? MASS : s.get(wx & 15, y, wz & 15);
     }
 
-    /** Свойства исходного блока места окна. */
+    /** Original block properties at window position. */
     Blast.Props props(int wx, int y, int wz) {
         if (y < minY || y >= maxY) return airProps;
         if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE) return massProps;
@@ -95,12 +95,12 @@ final class RuinWindow {
         return p.get((y & 15) << 8 | (wz & 15) << 4 | wx & 15);
     }
 
-    /** Исходный блок места — воздух. */
+    /** Original block at position is air. */
     boolean air(int wx, int y, int wz) {
         return props(wx, y, wz).air();
     }
 
-    /** Может ли в секции {@code section} (номер от низа мира) чанка {@code k} окна быть состояние из {@code test}. */
+    /** Whether section {@code section} (index from world bottom) of window chunk {@code k} may contain a state matching {@code test}. */
     boolean mayHave(int k, int section, java.util.function.Predicate<BlockState> test) {
         ChunkShot s = shots[k];
         return s != null && s.mayHave(section, test);
@@ -110,28 +110,28 @@ final class RuinWindow {
         return wx >= 0 && wx < SIDE && wz >= 0 && wz < SIDE && shots[(wz >> 4) * 3 + (wx >> 4)] != null;
     }
 
-    /** Исходный верх столбца (верхний не-воздух), {@code Integer.MIN_VALUE} — пустой столбец; вне окна — до неба. */
+    /** Original column top (highest non-air), {@code Integer.MIN_VALUE} — empty column; outside window, up to sky. */
     int top(int wx, int wz) {
         if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE) return maxY - 1;
         return top[wz * SIDE + wx];
     }
 
-    /** Исходный верх опоры без листвы. */
+    /** Original support top excluding leaves. */
     int solid(int wx, int wz) {
         return solid[wz * SIDE + wx];
     }
 
-    /** Есть ли в окне чанк {@code k}. */
+    /** Whether chunk {@code k} is in the window. */
     boolean present(int k) {
         return shots[k] != null;
     }
 
-    /** По каким снимкам окно построено. */
+    /** Snapshots used to build the window. */
     Stamp stamp() {
         return Stamp.of(shots);
     }
 
-    /** По каким снимкам окна построено (разлом, план): их номера ({@link ChunkShot#serial}; 0 — чанка не было). */
+    /** Window snapshots used to build a fracture or plan: their numbers ({@link ChunkShot#serial}; 0 — chunk absent). */
     record Stamp(long[] serials) {
         static Stamp of(ChunkShot[] shots) {
             long[] serials = new long[9];
@@ -139,7 +139,7 @@ final class RuinWindow {
             return new Stamp(serials);
         }
 
-        /** Построено по тем же снимкам. */
+        /** Built from the same snapshots. */
         boolean same(Stamp o) {
             return java.util.Arrays.equals(serials, o.serials);
         }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** План, как его пишет stand.py (plan.py): все виды шагов читаются, ошибки — сразу, а не посреди прогона. */
+/** Plan as written by stand.py (plan.py): every step type parses; fail immediately, not mid-run. */
 class PlanTest {
     private static final String PLAN = """
             {"seed": 20261025, "day_time": 6000, "settle_s": 10, "limit_s": 1500,

@@ -10,17 +10,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Ожоги сетчатки игрока (data attachment): постоянные слепые пятна там, где на сетчатке был огненный шар
- * ({@link FlashEyes}). Смерть сбрасывает (не копируется), как дозу.
+ * Player retinal burns (data attachment): permanent blind spots where the fireball was imaged on the retina
+ * ({@link FlashEyes}). Reset on death (not copied), as dose is.
  */
 public record RetinaScars(List<Scar> scars) {
-    /** Больше пятен не помнится: самые старые уходят. */
+    /** Maximum scars remembered: oldest removed. */
     public static final int MAX = 8;
     public static final RetinaScars NONE = new RetinaScars(List.of());
 
     /**
-     * Пятно в поле зрения: место — тангенсы угла от направления взгляда вправо и вверх (по взгляду, без крена), радиус —
-     * тангенс углового радиуса изображения шара.
+     * Visual-field scar: position is tangent of gaze-relative angle right and up (gaze basis, no roll); radius is tangent
+     * of the ball image's angular radius.
      */
     public record Scar(float x, float y, float r) {
         public static final Codec<Scar> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -44,7 +44,7 @@ public record RetinaScars(List<Scar> scars) {
         return scars.isEmpty();
     }
 
-    /** С новым пятном; сверх {@link #MAX} самые старые уходят. */
+    /** With a new scar; oldest removed beyond {@link #MAX}. */
     public RetinaScars with(Scar scar) {
         List<Scar> next = new ArrayList<>(scars);
         next.add(scar);

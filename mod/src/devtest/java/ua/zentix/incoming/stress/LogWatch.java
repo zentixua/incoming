@@ -11,9 +11,9 @@ import java.util.Queue;
 import java.util.function.Consumer;
 
 /**
- * Все WARN/ERROR в логе (кроме строк стенда) — в счётчики; с исключением или от мода — в список проблем. Строки мода
- * любого уровня (кроме строк стенда) — ещё и в {@code modLines}: по ним режиссёр видит события снарядов, которых не
- * видно снаружи (путь вне мира дошёл до поверхности, не дождался загрузки района).
+ * All WARN/ERROR in the log (except for stand lines) are included in counters; with an exception or from a mod - to the list of problems. Mod lines
+ *  of any level (except stand lines) are also in {@code modLines}: from them the director sees the events of projectiles that are not
+ *  visible from the outside (the path outside the world reached the surface, did not wait for the area to load).
  */
 final class LogWatch {
     private LogWatch() {}

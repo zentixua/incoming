@@ -17,33 +17,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Секции чанка со светом — байтами, для LOD Voxy у игрока ({@link VoxyLods} → {@code S2C.VoxyChunk} →
- * {@code client/VoxyIngest}): то же, что Voxy берёт из чанка клиента (блоки и биомы секции, свет блоков и неба), — для
- * чанков, которых у клиента нет. Секция — в формате пакета чанка ванили ({@code LevelChunkSection.write}: число блоков,
- * палитры блоков и биомов по номерам реестров, общим у сервера и клиента), свет — слоями по 2048 байт. Все секции чанка
- * снизу вверх, и пустые: секция воздуха на месте снесённой башни стирает её из LOD.
+ * Chunk sections with light, as bytes, for a player's Voxy LODs ({@link VoxyLods} → {@code S2C.VoxyChunk} →
+ * {@code client/VoxyIngest}): the same data Voxy takes from a client chunk (section blocks and biomes, block light and
+ * skylight), for chunks the client does not have. A section uses the vanilla chunk packet format
+ * ({@code LevelChunkSection.write}: block count, block and biome palettes using registry IDs shared by server and client);
+ * light uses 2048-byte layers. All chunk sections from bottom to top, including empty ones: an air section where a tower
+ * was destroyed erases it from LODs.
  * <p>
- * Формат: номер нижней секции, число секций; у каждой — байт признаков ({@link #BLOCKS}, {@link #BLOCK_LIGHT},
- * {@link #SKY_LIGHT}, {@link #FULL_SKY}) и что они называют, по порядку.
+ * Format: lowest section index, section count; each section has a flags byte ({@link #BLOCKS}, {@link #BLOCK_LIGHT},
+ * {@link #SKY_LIGHT}, {@link #FULL_SKY}) and the data those flags specify, in order.
  */
 public final class LodSections {
-    /** В секции есть не только воздух: дальше — её блоки и биомы. */
+    /** The section contains more than air: its blocks and biomes follow. */
     static final int BLOCKS = 1;
-    /** Дальше — свет блоков (2048 байт); нет — темно. */
+    /** Block light follows (2048 bytes); absent — dark. */
     static final int BLOCK_LIGHT = 2;
-    /** Дальше — свет неба (2048 байт). */
+    /** Skylight follows (2048 bytes). */
     static final int SKY_LIGHT = 4;
-    /** Свет неба 15 везде (секция под открытым небом), слоя нет. */
+    /** Skylight 15 everywhere (section under open sky), no layer. */
     static final int FULL_SKY = 8;
 
     private LodSections() {}
 
-    /** Секция, как её отдаёт Voxy: номер по высоте, блоки (воздух — пустая), свет блоков и неба (null — темно). */
+    /** Section as supplied to Voxy: height index, blocks (empty for air), block light and skylight (null — dark). */
     public record Section(int y, LevelChunkSection blocks, @Nullable DataLayer blockLight, @Nullable DataLayer skyLight) {}
 
     /**
-     * Загруженный чанк мира — со светом движка мира, как Voxy берёт чанк клиента; поток сервера (читает живые секции:
-     * снимок — сами байты).
+     * Loaded world chunk with the world's light engine lighting, as Voxy takes a client chunk; server thread
+     * (reads live sections: the bytes themselves are the snapshot).
      */
     public static byte[] ofLoaded(ServerLevel level, ChunkAccess chunk) {
         LevelLightEngine light = level.getLightEngine();
@@ -55,17 +56,17 @@ public final class LodSections {
         for (int i = 0; i < sections.length; i++) {
             SectionPos pos = SectionPos.of(chunk.getPos(), chunk.getMinSection() + i);
             DataLayer sky = hasSky ? light.getLayerListener(LightLayer.SKY).getDataLayerData(pos) : null;
-            // у движка света нет слоя неба над верхом рельефа: там свет неба 15 (как его читает ваниль)
+            // the light engine has no skylight layer above the terrain: skylight is 15 there (as vanilla reads it)
             write(out, sections[i], light.getLayerListener(LightLayer.BLOCK).getDataLayerData(pos), sky, hasSky && sky == null);
         }
         return bytes(out);
     }
 
     /**
-     * Копия чанка не из мира (её после отдачи никто не меняет) — со светом, посчитанным по её блокам ({@link CopyLight});
-     * любой поток.
+     * Chunk copy outside the world (nobody changes it after delivery), with light computed from its blocks ({@link CopyLight});
+     * any thread.
      *
-     * @param hasSky у измерения есть небо
+     * @param hasSky whether the dimension has skylight
      */
     public static byte[] ofCopy(ChunkAccess copy, boolean hasSky) {
         LevelChunkSection[] sections = copy.getSections();
@@ -81,7 +82,7 @@ public final class LodSections {
     }
 
     private static void write(FriendlyByteBuf out, @Nullable LevelChunkSection section, @Nullable DataLayer block, @Nullable DataLayer sky, boolean fullSky) {
-        // слой, весь из 15, — без байтов; живой слой движка света не трогать (getData у однородного заполняет его сам)
+        // a layer of all 15s needs no bytes; do not touch a live light engine layer (getData fills a uniform layer itself)
         if (sky != null && sky.isDefinitelyFilledWith(15)) fullSky = true;
         if (block != null) block = block.copy();
         if (sky != null) sky = sky.copy();
@@ -101,7 +102,7 @@ public final class LodSections {
         return b;
     }
 
-    /** Секции из байтов {@link #ofLoaded}/{@link #ofCopy}; {@code biomes} — реестр биомов мира клиента. */
+    /** Sections from {@link #ofLoaded}/{@link #ofCopy} bytes; {@code biomes} is the client world's biome registry. */
     public static List<Section> read(byte[] data, Registry<Biome> biomes) {
         FriendlyByteBuf in = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
         int min = in.readVarInt(), count = in.readVarInt();

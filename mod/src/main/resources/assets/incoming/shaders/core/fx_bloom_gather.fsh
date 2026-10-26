@@ -1,8 +1,8 @@
 #version 150
 
-// Свечение (client/fx/layer/FxBloom): сбор уровней ореола first … last одним проходом в размер первого — у каждого B-сплайн
-// (кубический, 4 линейные выборки: Sigg и Hadwiger 2005), веса уровней равные. Пиксель (x, y) — точка ((x + ½)/2^i, (y + ½)/2^i)
-// уровня first + i; середина пикселя j уровня — j + ½.
+// Bloom (client/fx/layer/FxBloom): gather halo levels first … last into first-level size in one pass, each with a
+// B-spline (cubic, 4 linear samples: Sigg and Hadwiger 2005), equal level weights. Pixel (x, y) corresponds to
+// ((x + ½)/2^i, (y + ½)/2^i) at level first + i; level pixel j center is j + ½.
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D Sampler2;
@@ -10,7 +10,7 @@ uniform sampler2D Sampler3;
 uniform sampler2D Sampler4;
 uniform sampler2D Sampler5;
 uniform sampler2D Sampler6;
-// уровней в сборе (не больше 7)
+// levels gathered (at most 7)
 uniform float BloomCount;
 
 out vec4 fragColor;

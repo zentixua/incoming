@@ -11,17 +11,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Стенд сцен (tools/stand/README.md): в свежем плоском мире одиночной игры клиент без окна играет шаги плана
- * ({@code stand-plan.json} в каталоге игры — его пишет stand.py из scenes.json) и пишет в {@code stand-out/} время
- * каждого кадра на процессоре и на видеокарте по стадиям ({@link FrameClock}), тик встроенного сервера и попадания
- * ({@link ServerWatch}), кадры и строки проб. От Incoming не зависит: всё, что про него, — в плане (команды, типы
- * сущностей, имена методов проб), поэтому один стенд снимает любой jar Incoming. Без плана мод ничего не делает.
+ * Scene bench (tools/stand/README.md): windowless client executes plan steps in a fresh flat singleplayer
+ * world ({@code stand-plan.json} in game directory, written by stand.py from scenes.json), logging to
+ * {@code stand-out/}: per-frame CPU/GPU stages ({@link FrameClock}), integrated-server ticks/hits
+ * ({@link ServerWatch}), frames and probe lines. No Incoming dependency: commands, entity types and probe
+ * method names live in the plan, so one bench captures any Incoming jar. Without a plan the mod does nothing.
  */
 @Mod(value = Stand.ID, dist = Dist.CLIENT)
 public final class Stand {
     public static final String ID = "stand";
     public static final Logger LOG = LogUtils.getLogger();
-    /** Начало отсчёта всех времён стенда (System.nanoTime у клиента и у встроенного сервера — одни часы JVM). */
+    /** Origin of all bench times (client/integrated server share the JVM System.nanoTime clock). */
     public static final long T0 = System.nanoTime();
 
     public Stand() {
@@ -39,7 +39,7 @@ public final class Stand {
         }
     }
 
-    /** Миллисекунды от {@link #T0}. */
+    /** Milliseconds since {@link #T0}. */
     static double ms(long nanos) {
         return (nanos - T0) / 1e6;
     }

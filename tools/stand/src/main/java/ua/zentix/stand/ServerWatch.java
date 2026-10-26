@@ -22,25 +22,25 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Поток встроенного сервера: попадания залпов, взрывы, тик. События Minecraft — в {@link Impacts} (правило попадания
- * там): уход снаряда (тип из плана) из мира убитым или убранным, возврат в мир, начало взрыва ({@code ExplosionEvent.Start},
- * первым и отменённое тоже — попадание было, даже если взрыв отменил мод защиты). Подрыв боевой части — тип урона
- * взрыва из плана ({@code incoming:strike} у всех версий 3.4.1+); авария снаряда до взведения — ванильный взрыв
- * ({@code minecraft:explosion}), не попадание. Снаряд взрыва — его источник
- * ({@code getDirectSourceEntity}, так у Incoming после 3.7.0) или прямой источник его урона ({@code DamageSource.getDirectEntity}:
- * в 3.4.1–3.7.0 боевая часть даёт снаряд только ему, {@code Warheads.detonate(…, this, …)} → {@code ModDamageTypes.source}),
- * — одно правило для всех версий. Время попадания — миг ухода. Снаряд вне мира сущностью не бывает, поэтому «нет
- * снарядов в мире» конец залпа не значит — конец по числу попаданий ({@link Director}).
+ * Integrated-server thread: salvo hits, explosions, ticks. Minecraft events feed {@link Impacts} (hit
+ * rule there): projectile (plan type) killed/removed, rejoin, explosion start ({@code ExplosionEvent.Start},
+ * first, including cancelled events: hit occurred even if a protection mod cancelled the blast). Warhead
+ * detonation uses plan damage type ({@code incoming:strike}, all 3.4.1+); pre-arming crash is vanilla
+ * ({@code minecraft:explosion}), not a hit. Explosion projectile is source ({@code getDirectSourceEntity},
+ * Incoming after 3.7.0) or direct damage source ({@code DamageSource.getDirectEntity}: 3.4.1–3.7.0 supplies
+ * projectile only there, {@code Warheads.detonate(…, this, …)} → {@code ModDamageTypes.source}); one rule
+ * for all versions. Hit time is removal instant. Off-world projectiles are not entities, so absence of
+ * world projectiles does not end a salvo; hit count does ({@link Director}).
  */
 final class ServerWatch {
     private final Out out;
     private final Set<String> projectiles, warheads;
-    /** Только поток сервера (кроме {@link Impacts#waiting}). */
+    /** Server thread only except {@link Impacts#waiting}. */
     private final Impacts hits = new Impacts();
     private final Map<String, Integer> expected = new ConcurrentHashMap<>();
     private final Map<String, List<Long>> impacts = new ConcurrentHashMap<>();
     private final Set<UUID> alive = ConcurrentHashMap.newKeySet();
-    /** Цели, заявленные потоком клиента: сервер берёт их перед уходом снаряда (Impacts — только его поток). */
+    /** Targets registered by client thread: server consumes before projectile removal (Impacts is server-thread only). */
     private final List<Impacts.Target> declared = new ArrayList<>();
     private int ticks;
 
@@ -56,8 +56,8 @@ final class ServerWatch {
     }
 
     /**
-     * Залп ждёт {@code expect} попаданий в радиусе {@code r} от (x, z) (поток клиента: шаг залпа). Поток сервера берёт
-     * заявленные цели перед каждым уходом ({@link #takeTargets}): снаряды залпа уходят только после его команд.
+     * Salvo awaits {@code expect} hits within {@code r} of (x, z) (client salvo step). Server takes pending
+     * targets before every removal ({@link #takeTargets}); salvo projectiles leave only after its commands.
      */
     void target(String salvo, double x, double z, double r, int expect) {
         expected.put(salvo, expect);
@@ -86,7 +86,7 @@ final class ServerWatch {
         }
     }
 
-    /** Время n-го попадания залпа (1 — первое), nanoTime; −1 — ещё нет. */
+    /** Time of nth salvo hit (1 first), nanoTime; −1 if absent. */
     long impactTime(String salvo, int n) {
         List<Long> l = impacts.get(salvo);
         if (l == null) return -1;
@@ -103,12 +103,12 @@ final class ServerWatch {
         }
     }
 
-    /** Уходов залпа у цели, ждущих взрыва или возврата в мир. */
+    /** Salvo target removals awaiting explosion or rejoin. */
     int waiting(String salvo) {
         return hits.waiting(salvo);
     }
 
-    /** Снарядов в мире сейчас (вне загруженного мира — не в счёт). */
+    /** World projectiles now (off-world excluded). */
     int alive() {
         return alive.size();
     }
@@ -137,14 +137,14 @@ final class ServerWatch {
         record(hits.leave(p.getUUID(), at.x, at.y, at.z, now));
     }
 
-    /** Снаряд взрыва: источник взрыва или прямой источник его урона — если это снаряд плана. */
+    /** Explosion projectile: source or direct damage source, if a plan projectile. */
     @Nullable
     static Entity projectileOf(Explosion x) {
         Entity direct = x.getDirectSourceEntity();
         return direct != null ? direct : x.damageSource.getDirectEntity();
     }
 
-    /** Тип урона взрыва: «incoming:strike» и т. п. */
+    /** Explosion damage type, e.g. "incoming:strike". */
     static String damageType(Explosion x) {
         return x.damageSource.typeHolder().unwrapKey().map(k -> k.location().toString()).orElse("?");
     }
@@ -161,7 +161,7 @@ final class ServerWatch {
         List<Long> list = impacts.get(l.salvo());
         int n;
         synchronized (list) {
-            // подтверждения приходят не по порядку уходов: список — по времени попадания
+            // Confirmations do not follow removal order: sort by hit time
             int i = list.size();
             while (i > 0 && list.get(i - 1) > l.nanos()) i--;
             list.add(i, l.nanos());
@@ -182,8 +182,8 @@ final class ServerWatch {
     }
 
     /**
-     * Раз в секунду: средний тик сервера (последние 100 тиков, как F3), время игры, снаряды и все сущности мира, настенное
-     * время (по нему разбор сводит события с записью нагрузки машины, client.py — её часы настенные).
+     * Once a second: mean server tick (last 100 ticks, like F3), game time, projectile/all-entity counts,
+     * wall time (aligns events with machine load; client.py uses wall clock).
      */
     private void onTick(ServerTickEvent.Post e) {
         if (++ticks % 20 != 0) return;

@@ -25,27 +25,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Доля поражений ЗРК по классам целей: прогон многих налётов на модели без Minecraft, числа — как вышли, без подгонки
- * (печатаются; они же — в руководстве {@code docs/guide/defense.md}). Ракета ЗРК — тот же код, что в мире
- * ({@link Interceptor#steer}, {@link Interceptor#fuze}), дальности — паспорт {@link InterceptorSpec#SAM}, ЗРК пускает
- * по цели, как {@link SamBlockEntity}: на осмотре неба раз в {@link SamBlockEntity#SWEEP} тиков, когда цель ближе
- * дальности огня и её видно, одна ракета на цель, следующая — когда прошлая кончилась без поражения. Земля — ровная
- * (рельеф радар здесь не закрывает), направляющих сколько угодно.
+ * The share of SAM defeats by target class: running many raids on models without Minecraft, the numbers are as they came out, without adjustment
+ *  (printed; they are also in the {@code docs/guide/defense.md} manual). SAM missile - the same code as in the world
+ *  ({@link Interceptor#steer}, {@link Interceptor#fuze}), range - spec {@link InterceptorSpec#SAM}, SAM launches
+ *  at the target, like {@link SamBlockEntity}: while scanning the sky once in {@link SamBlockEntity#SWEEP} tick, when the target closer
+ *  fire range and it is visible, one missile on the target, the next one - when the last one ended without defeat. The ground is flat
+ *  (the radar does not cover the terrain here), there are as many rails as you like.
  * <p>
- * Цели: шахед и крылатая ракета — их настоящие автопилоты ({@link DroneAutopilot}, {@link MissileAutopilot}) с пике
- * и горкой; «Ланцет» — подлёт и круг над целью ({@link Orbit}, радиус {@link LoiterEntity#LOITER_RADIUS}), пике на
- * скорости пике, когда цель под крылом круче 40° после круга; B-2 — по прямой на своей высоте через точку сброса.
- * Цель — точка на земле в 0–600 блоках от ЗРК, заход — с любой стороны из-за края дальности радара.
+ * Targets: Shahed and the cruise missile are their real autopilots ({@link DroneAutopilot}, {@link MissileAutopilot}) with a dive
+ *  and slide; “Lancet” - approach and circle over the target ({@link Orbit}, radius {@link LoiterEntity#LOITER_RADIUS}), dive at
+ *  dive speed, when the target under the wing is steeper than 40° after the circle; B-2 - in a straight line at your altitude through the release point.
+ * Target - a point on the ground in 0–600 blocks from SAM, approach - from any side from beyond the edge of the radar range.
  */
 class InterceptShareTest {
     private static final InterceptorSpec SPEC = InterceptorSpec.SAM;
     private static final int RAIDS = 400;
     private static final double GROUND = 64;
-    /** Середина контейнера ракеты у ЗРК на блоке (0, 64, 0) — {@code SamBlockEntity.rail}. */
+    /** The middle of the rocket container at the SAM on the block (0, 64, 0) is {@code SamBlockEntity.rail}. */
     private static final Vec3 RAIL = new Vec3(0.5 - 0.33, GROUND + 3.25, 0.5 - 0.33);
     private static final Vec3 ANTENNA = new Vec3(0.5, GROUND + 1.5, 0.5);
 
-    /** Итог налётов одного класса. */
+    /** Result raids of the same class. */
     record Share(int raids, int downed, int missiles, int hits) {
         double downedShare() {
             return (double) downed / raids;
@@ -72,16 +72,16 @@ class InterceptShareTest {
             shares.put(w, new Share(RAIDS, downed, missiles, hits));
         }
         List<String> lines = new ArrayList<>();
-        shares.forEach((w, s) -> lines.add(String.format(Locale.ROOT, "%-8s сбито %5.1f %% налётов, поражений %5.1f %% ракет (%d ракет на %d налётов)",
+        shares.forEach((w, s) -> lines.add(String.format(Locale.ROOT, "%-8s shot down %5.1f %% raids, defeats %5.1f %% missiles (%d missiles on %d raids)",
                 w, 100 * s.downedShare(), 100 * s.hitShare(), s.missiles(), s.raids())));
         System.out.println("InterceptShareTest:\n" + String.join("\n", lines));
         assertEquals(List.of(WeaponType.DRONE, WeaponType.MISSILE, WeaponType.BUNKER, WeaponType.LOITER), List.copyOf(shares.keySet()),
-                "классы целей ЗРК");
-        // доли — не подгонка, а проверка, что модель не сломана: каждый класс ЗРК хоть иногда сбивает
-        shares.forEach((w, s) -> assertTrue(s.downed() > 0, w + ": ни одного сбитого"));
+                "sAM target classes");
+        // shares are not a fitting, but a check that the model is not broken: every SAM class at least sometimes fails
+        shares.forEach((w, s) -> assertTrue(s.downed() > 0, w + ": not a single one shot down"));
     }
 
-    /** Один налёт: {сбит (0/1), ракет пущено, из них поразили}. */
+    /** One raid: {shot down (0/1), missiles launched, of those hit}. */
     private static int[] raid(WeaponType w, SplittableRandom r) {
         WeaponSpec.Airframe a = w.spec().airframe();
         double aimFrom = Math.sqrt(r.nextDouble()) * 600, aimBearing = r.nextDouble(Math.PI * 2);
@@ -110,16 +110,16 @@ class InterceptShareTest {
             if (next.y < GROUND) f = null;
             else f.moveTo(next);
         }
-        throw new AssertionError(w + ": налёт не кончился");
+        throw new AssertionError(w + ": the raid is not over");
     }
 
-    /** ЗРК пускает по цели: ближе дальности огня и ближе, чем её видно ({@link Radar#scan}). */
+    /** SAM fires at the target: closer to the firing range and closer than it can be seen ({@link Radar#scan}). */
     private static boolean seen(WeaponSpec.Airframe a, Vec3 p) {
         double d = p.distanceTo(ANTENNA);
         return d <= SPEC.radarRange() * a.radar().visibility() && d <= SPEC.engageRange();
     }
 
-    /** Цель над ровной землёй. */
+    /** Target over level ground. */
     private static final class Target implements Craft {
         final WeaponType weapon;
         final WeaponSpec.Airframe air;
@@ -147,13 +147,13 @@ class InterceptShareTest {
             speed = air.cruiseSpeed();
             altitude.reset(y);
             if (missile != null) missile.approach(Math.sqrt(aim.subtract(pos).horizontalDistanceSqr()));
-            // B-2 идёт над точкой сброса и дальше по прямой
+            // B-2 goes above the release point and further in a straight line
             flight.set(FlightController.anglesTo(pos, new Vec3(aim.x, y, aim.z))[0], 0);
         }
 
         /**
-         * Шаг тика; false — цель дошла (попала) или B-2 ушёл за дальность радара. Бомбу B-2 сбрасывает задолго до
-         * дальности, с которой его видит радар (малозаметен), поэтому сбить его — сбить сам B-2, а не сорвать сброс.
+         * Step tick; false - the target has reached (hit) or B-2 has gone beyond the radar range. The B-2 drops the bomb long before the
+         *  range from which the radar sees it (hardly noticeable), so to shoot it down means to shoot down the B-2 itself, and not to disrupt the drop.
          */
         boolean step() {
             tick++;
@@ -171,9 +171,9 @@ class InterceptShareTest {
             return true;
         }
 
-        /** «Ланцет»: к кругу и круг на высоте круга, после круга — пике, когда цель под крылом круче 40°. */
+        /** “Lancet”: to the circle and circle at the height of the circle, after the circle - dive, when the target under the wing is steeper than 40°. */
         private void loiter() {
-            // как LoiterEntity: мотор и высота — по паспорту (Handling), к кругу и на круге — поле курсов, пике — Dive
+            // as LoiterEntity: engine and altitude - according to spec (Handling), to the circle and on the circle - course field, dive - Dive
             WeaponSpec.Handling h = air.handling();
             if (phase == FlightPhase.TERMINAL) {
                 throttle(air, air.diveSpeed());

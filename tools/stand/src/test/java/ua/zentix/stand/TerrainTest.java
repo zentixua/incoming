@@ -6,11 +6,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Какие чанки камера ждёт (Terrain.drawn): все, что Sodium возьмёт в рендер, — чанки вида сервера с соседями в виде. */
+/** Camera-required chunks (Terrain.drawn): everything Sodium renders, server-view chunks with neighbours in view. */
 class TerrainTest {
     @Test
     void edgeOfTheDrawDistanceIsAwaited() {
-        // 100/outside: глаз (800, 95, 0), дальность 12; чанк (61, 1) — земля в ~177 м из 192, круг r − 1 его пропускал
+        // 100/outside: eye (800, 95, 0), range 12; chunk (61, 1) has ground ~177 m away of 192, skipped by circle r − 1
         assertTrue(Terrain.drawn(50, 0, 12, 61, 1));
         assertTrue(Terrain.drawn(50, 0, 12, 50 + 12, 0));
     }
@@ -29,7 +29,7 @@ class TerrainTest {
                                     "r " + r + ": " + (x + dx) + " " + (z + dz));
                 }
             }
-            // ждём до края дальности, но не крайний ряд вида: у него соседа нет, Sodium его не рисует
+            // Wait to range edge, excluding outermost view row: it lacks a neighbour, Sodium does not render it
             assertTrue(far >= r, "r " + r + ": far " + far);
             assertFalse(Terrain.drawn(0, 0, r, r + 2, 0), "r " + r);
         }
@@ -37,10 +37,10 @@ class TerrainTest {
 
     @Test
     void distanceIsTheNearestPointLikeSodium() {
-        // глаз (800, 95, 0): секция (61, 4, 1) — ближняя точка (976, 64..80, 16): ~176,7 м по горизонтали, в 191
+        // Eye (800, 95, 0): section (61, 4, 1), nearest point (976, 64..80, 16), ~176,7 m horizontally, within 191
         assertTrue(Terrain.near(800, 95, 0, 61, 4, 1, 191));
         assertFalse(Terrain.near(800, 95, 0, 62, 4, 1, 191));
-        // по высоте — отдельно: секция над глазом на 200 м вне дальности 191 при любом сдвиге
+        // Vertical distance separate: section 200 m above eye exceeds 191 for every offset
         assertFalse(Terrain.near(800, 95, 0, 50, 18, 0, 191));
         assertTrue(Terrain.near(800, 95, 0, 50, 5, 0, 1));
     }

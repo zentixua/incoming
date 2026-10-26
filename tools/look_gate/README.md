@@ -1,24 +1,24 @@
-# Шлагбаум картинки и звука
+# Picture and sound look gate
 
-Только разовое сравнение с 3.4.1 (решение Артёма 23.10, `docs/dev-pipeline.md`): кадры и звук со всей сборкой под Iris
-на ноутбуке с тех же точек, одним заходом, пока сцены не дотянут до уровня 3.4.1; потом шлагбаум убирается. Условием
-влития PR он не служит: в PR — кадры и WAV dev-клиента «до и после».
+Only a one-time comparison with 3.4.1 (solution by Artem 23.10, `docs/dev-pipeline.md`): frames and sound from full modpack under Iris
+ on a laptop from the same points, in one go, until the scenes reach the level of 3.4.1; then the look gate is removed. It does not serve as a condition for
+ to join PR: in PR - frames and WAV dev client “before and after”.
 
-Сцены — `ProbeScenario` (сценарий клиента `probe`, `mod/src/devtest`): шахед в 50 и 300 блоках днём и ночью,
-залп «Града» днём и ночью, старт ракеты сзади (над струёй
-ускорителя: на оси сопла камера стоит в самой струе, и кадр — сплошь её дым) и сбоку, пролёт шахеда; у всех версий одно
-зерно, места и время. Время — и время игры: ветер мира и его класс устойчивости зависят только от него, и у
-границы классов D и E ночью ветер у земли — 1 или 5 м/с (шлейф пожара то столбом, то полосой), поэтому каждая сцена
-начинается в своё время игры эталонного прогона всех сцен (`ProbeScenario.START`; выборка сцен догоняет его
-`/tick sprint`; время идёт только вперёд, поэтому выборка идёт в порядке эталона; сцена, начатая позже (прошлая шла
-дольше), годна, пока её воздух — ветер у земли, его направление, класс устойчивости — тот же, что в эталонное время,
-иначе останавливает прогон) — кадры выборки сравнимы с полным прогоном и с compare-final. Слух без
-оглушения — всегда (`nuke_tinnitus = false` в копии; проба пишет, что видит игра, и останавливается, если слух включён). Для выпуска — тот же класс в его дереве (git worktree выпуска + копия файла и строки в
+Scenes - `ProbeScenario` (client scenario `probe`, `mod/src/devtest`): Shahed in 50 and 300 blocks day and night,
+ "Grad" salvo day and night, rocket launch from behind (above jet of the
+ accelerator: on the axis of the nozzle, the camera stands in the jet itself, and the frame is entirely its smoke) and from the side, the flight of Shahed; all versions have the same
+grain, places and times. Time - and the time of the game: the wind of the world and its stability class depend only on it, and at
+ the boundaries of the classes D and E at night the wind near the ground is 1 or 5 m/s (the fire trail is either a pillar or a strip), so each scene
+ begins at its own time of the game reference run of all scenes (`ProbeScenario.START`; the sample of scenes catches up with it
+`/tick sprint`; time goes only forward, so the sample goes in the order of the reference; a scene started later (the previous one took
+ longer) is valid as long as its air - the wind near the ground, its direction, stability class - is the same as in the reference time,
+otherwise stops the run) - sampling frames are comparable to the full run and to compare-final. hearing without
+ stunning - always (`nuke_tinnitus = false` in the copy; the test writes what the game sees and stops if hearing is enabled). For a release - the same class in its tree (git worktree release + copy of the file and line in
 `ClientScenario`).
 
-- `run.sh <имя> <дерево> [сцены] [моды]` — прогон (через `tools/laptop_job.sh --gpu`; ждёт, пока игра Артёма закрыта),
-  итог — `mod/run/look-gate/out/<имя>/`; в конце — `check.py`: прогон со слухом или со сценой не в своё время игры
-  выходит с кодом 1.
-- `check.py <latest.log>` — годен ли прогон для сравнения (тест — `test_check.py`, в CI).
-- `sheet.py <out> <сцена> <лист.png> <имя>[=подпись]…` — лист кадров: строки — версии, столбцы — моменты.
-- `analyze.py <out> <имя>…` — время кадра, звук сцен в WAV, мера гребёнки эха, тон пролёта.
+- `run.sh <name> <worktree> [scenes] [mods]` — run (via `tools/laptop_job.sh --gpu`; waits until Artem's game closes),
+  output in `mod/run/look-gate/out/<name>/`; ends with `check.py`: a run with hearing enabled or a scene at the wrong
+  game time exits with code 1.
+- `check.py <latest.log>` — is the run valid for comparison (test: `test_check.py`, in CI).
+- `sheet.py <out> <scene> <sheet.png> <name>[=caption]…` — frame sheet: version rows, moment columns.
+- `analyze.py <out> <name>…` — frame time, scene audio in WAV, echo comb measure, flyby pitch.

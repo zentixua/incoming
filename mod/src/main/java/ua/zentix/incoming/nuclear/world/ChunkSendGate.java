@@ -7,21 +7,21 @@ import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Чанк, до которого волна уже дошла, а руины ещё не встали (загружен после подрыва: за волной или игроком), игроку
- * не уходит целым: пока идёт отбор чанков для игрока ({@code PlayerChunkSender.sendNextChunks}), такие чанки убраны из
- * его очереди и возвращаются в неё сразу после ({@code mixin/net/PlayerChunkSenderMixin}). Держится не дольше
- * {@code ScarQueue.WITHHOLD_LIMIT} тиков от первой просьбы чанка после волны; ушедшие до руин считает сводка подрыва.
+ * A chunk reached by the wave but not yet ruined (loaded after detonation, by the zone or a player) is not sent intact:
+ * while selecting player chunks ({@code PlayerChunkSender.sendNextChunks}), remove such chunks from the queue and restore
+ * them immediately afterward ({@code mixin/net/PlayerChunkSenderMixin}). Held at most {@code ScarQueue.WITHHOLD_LIMIT}
+ * ticks from the first post-wave chunk request; chunks sent before ruins count in the detonation summary.
  */
 public final class ChunkSendGate {
-    /** Метка миксина: {@code PlayerChunkSender} с ним (проверка, что миксин встал). */
+    /** Mixin marker: {@code PlayerChunkSender} has it (verifies mixin application). */
     public interface Gated {}
 
     private ChunkSendGate() {}
 
     /**
-     * Убрать из очереди игрока чанки, которые нельзя отдавать (поток сервера).
+     * Remove chunks that cannot be sent from the player's queue (server thread).
      *
-     * @return убранные (вернуть в очередь после отбора); null — ничего не убрано
+     * @return removed chunks (restore after selection); null — none removed
      */
     @Nullable
     public static LongArrayList withhold(ServerLevel level, LongSet pending) {

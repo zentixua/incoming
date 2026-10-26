@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/** Пресет масштаба: только ядерная волна и радиусы ядерки; у GAME волна игровая, у REAL всё как в жизни. */
+/** Scale preset: only nuclear wave and radii of the nuke; GAME has a gaming wave, REAL has everything like in life. */
 class ScalePresetTest {
     @Test
     void presetsSetWaveAndRadii() {

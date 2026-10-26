@@ -9,19 +9,19 @@ import net.neoforged.fml.ModList;
 import org.slf4j.Logger;
 
 /**
- * Руины, записанные прямо в секции ({@code RuinPlan}), — физике аппаратов Sable. Sable 2.0.5–2.0.6 держит копию блоков мира
- * у аппаратов (секции в сцене Rapier, {@code PhysicsChunkTicketManager}: секции рядом с аппаратами, до 20 тиков после
- * того, как аппарат ушёл) и обновляет её только из {@code LevelChunk.setBlockState} (свой миксин
- * {@code plot.LevelChunkMixin} → {@code SableCommonEvents.handleBlockChange}); запись в секцию мимо него аппарат
- * не видит — он врезался бы в стоявший там дом. Поэтому места плана у аппаратов сообщаются ему тем же вызовом.
- * Вызов читает соседей места, у твёрдых — и их соседей (до 2 блоков), — план ставится, только когда соседние чанки
- * загружены.
+ * Ruins written directly into sections ({@code RuinPlan}), for Sable craft physics. Sable 2.0.5–2.0.6 keeps a copy of world
+ * blocks near craft (sections in the Rapier scene, {@code PhysicsChunkTicketManager}: sections near craft, up to 20 ticks
+ * after a craft leaves) and updates it only from {@code LevelChunk.setBlockState} (its own {@code plot.LevelChunkMixin} →
+ * {@code SableCommonEvents.handleBlockChange}); a section write bypassing it is invisible to the craft — it would collide
+ * with the house that used to be there. Plan positions near craft are therefore reported through the same call.
+ * The call reads a position's neighbors, and solid neighbors' neighbors (up to 2 blocks), so the plan is applied only
+ * when neighboring chunks are loaded.
  * <p>
- * Сам Sable — только в {@link Hook}: он грузится при первом вызове, а вызов идёт, только если Sable стоит.
+ * Sable itself is only referenced in {@link Hook}: it loads on the first call, and is called only when Sable is installed.
  */
 public final class SableTerrain {
     private static final Logger LOG = LogUtils.getLogger();
-    /** Насколько от аппарата (по габаритам) Sable может держать секции мира, блоки: с запасом на 20 тиков полёта. */
+    /** How far from a craft's bounds Sable can keep world sections, in blocks: with a margin for 20 ticks of flight. */
     private static final double NEAR = 64;
     private static Boolean present;
     private static boolean broken;
@@ -33,7 +33,7 @@ public final class SableTerrain {
         return present && !broken;
     }
 
-    /** Есть ли у чанка аппараты, чья физика может держать его секции. */
+    /** Whether the chunk has nearby craft whose physics may hold its sections. */
     public static boolean watched(ServerLevel level, LevelChunk chunk) {
         if (!present()) return false;
         var pos = chunk.getPos();
@@ -41,7 +41,7 @@ public final class SableTerrain {
         return !SubLevels.near(level, centre, 8 + NEAR + (level.getMaxBuildHeight() - level.getMinBuildHeight()) / 2.0).isEmpty();
     }
 
-    /** Место чанка сменилось мимо {@code LevelChunk.setBlockState}: Sable обновит свою копию. */
+    /** A chunk position changed outside {@code LevelChunk.setBlockState}: Sable updates its copy. */
     public static void changed(ServerLevel level, LevelChunk chunk, int x, int y, int z, BlockState old, BlockState now) {
         if (broken || old == now) return;
         try {

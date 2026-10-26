@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Правило попадания (ServerWatch → Impacts): только взрыв того же снаряда, любой порядок, без срока, возврат в мир. */
+/** Hit rule (ServerWatch → Impacts): same-projectile explosion only, either order, no deadline, rejoin. */
 class ImpactsTest {
     private final UUID a = UUID.randomUUID(), b = UUID.randomUUID();
 
@@ -44,12 +44,12 @@ class ImpactsTest {
 
     @Test
     void anotherProjectilesBlastNearbyConfirmsNothing() {
-        // A ушёл в полёт вне мира у цели, рядом взорвался B: A — не попадание
+        // A leaves for off-world flight near target; B explodes nearby: A is not a hit
         Impacts i = atC();
         assertNull(i.leave(a, 1000, 110, 0, 1));
         assertNull(i.blast(b, true));
         assertEquals(1, i.waiting("100"));
-        // B уходит позже — его собственный взрыв уже был
+        // B leaves later: its own explosion already occurred
         assertNotNull(i.leave(b, 1001, 65, 0, 2));
     }
 
@@ -64,11 +64,11 @@ class ImpactsTest {
     @Test
     void returnToTheWorldCancelsTheWaitingLeaveAndTheRealHitCountsLater() {
         Impacts i = atC();
-        assertNull(i.leave(a, 1000, 110, 0, 1));      // уход в полёт вне мира над целью
-        assertTrue(i.join(a));                        // вернулся тем же UUID
+        assertNull(i.leave(a, 1000, 110, 0, 1));      // Leaves for off-world flight over target
+        assertTrue(i.join(a));                        // Rejoins with same UUID
         assertEquals(0, i.waiting("100"));
         assertFalse(i.join(a));
-        assertNull(i.leave(a, 1005, 65, 3, 9));       // настоящее попадание
+        assertNull(i.leave(a, 1005, 65, 3, 9));       // Real hit
         Impacts.Hit h = i.blast(a, true);
         assertNotNull(h);
         assertEquals(9, h.leave().nanos());
@@ -85,7 +85,7 @@ class ImpactsTest {
 
     @Test
     void theWaitDoesNotExpire() {
-        // подрыв под нагрузкой — сколько угодно позже ухода (Incoming ждёт готовности района до 6000 тиков)
+        // Detonation under load can be arbitrarily later than removal (Incoming waits up to 6000 ticks for area readiness)
         Impacts i = atC();
         i.leave(a, 1000, 65, 0, 1);
         for (int t = 0; t < 10_000; t++) assertNull(i.blast(UUID.randomUUID(), true));
@@ -94,20 +94,20 @@ class ImpactsTest {
 
     @Test
     void aCrashNearTheTargetIsNotAHit() {
-        // разбился до взведения у цели: свой ванильный взрыв без боевой части — стенд мерил бы не удары
+        // Pre-arming crash near target: own vanilla explosion without warhead; bench must not measure crashes
         Impacts i = atC();
         assertNull(i.leave(a, 1000, 65, 0, 1));
         assertNull(i.blast(a, false));
         assertEquals(1, i.waiting("100"));
         assertNull(i.blast(b, false));
-        assertNull(i.leave(b, 1000, 65, 0, 2));     // авария до ухода — тоже не «взрыв был»
+        assertNull(i.leave(b, 1000, 65, 0, 2));     // Crash before removal also does not mean "explosion occurred"
         assertEquals(2, i.waiting("100"));
     }
 
     @Test
     void leaveFarFromEveryTargetIsForgotten() {
         Impacts i = atC();
-        assertNull(i.leave(a, 1000, 65, 400, 1));     // у точки пуска
+        assertNull(i.leave(a, 1000, 65, 400, 1));     // At launch point
         assertEquals(0, i.waiting("100"));
         assertNull(i.blast(a, true));
     }

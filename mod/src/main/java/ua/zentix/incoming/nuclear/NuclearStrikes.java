@@ -37,28 +37,28 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Пуск МБР и запланированные удары (DESIGN-nuke §7): ракета стартует у запустившего (виден разгон), уходит за
- * потолок мира, дальше полёт — таймер в {@link NuclearEvents}; тревога у тех, кто рядом с целью, отсчёт у всех.
- * Здесь же подписки на события мира, которые нужны ядерной части.
+ * ICBM launch and scheduled strikes (DESIGN-nuke §7): the missile launches near the launcher (visible boost), leaves
+ * above the world ceiling, then flight is a timer in {@link NuclearEvents}; warning for those near the target, countdown
+ * for everyone. Also subscribes to world events needed by the nuclear code.
  */
 public final class NuclearStrikes {
     private NuclearStrikes() {}
 
     /**
-     * Пуск. Если есть кто запускает — ракета видна: старт в 30 блоках позади него; иначе (консоль, командный блок)
-     * пуск «издалека» — сразу таймер.
+     * Launch. With a launching player, the missile is visible: starts 30 blocks behind them; otherwise (console, command
+     * block), launch “from afar” — timer immediately.
      */
     public static boolean launch(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable ServerPlayer owner) {
         return launch(level, target, false, yieldKt, airBurst, owner);
     }
 
-    /** @param surface цель — место на земле (с карты): подрыв на поверхности, высота {@code target} — только оценка */
+    /** @param surface target is a ground position (from the map): surface detonation, {@code target} height is only an estimate */
     public static boolean launch(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, @Nullable ServerPlayer owner) {
         return launch(level, target, surface, yieldKt, airBurst, owner, IncomingConfig.SERVER.nukeFlightTime.get());
     }
 
     /**
-     * @param flightTicks полёт от пуска до подрыва: настройка мира, у удара не оператора — не меньше 90 с тревоги
+     * @param flightTicks flight from launch to detonation: world setting; a non-operator strike gives at least 90 s warning
      *                    ({@code strike.NuclearKeys})
      */
     public static boolean launch(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, @Nullable ServerPlayer owner,
@@ -68,8 +68,8 @@ public final class NuclearStrikes {
     }
 
     /**
-     * @param launcher где стоит запустивший (ракета стартует в 30 блоках позади него по курсу {@code yaw}),
-     *                 null — пуск «издалека», сразу таймер
+     * @param launcher launching player's position (missile starts 30 blocks behind them along {@code yaw}),
+     *                 null — launch “from afar”, timer immediately
      */
     public static boolean launchFrom(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable Vec3 launcher, float yaw,
                                      @Nullable UUID owner) {
@@ -95,7 +95,7 @@ public final class NuclearStrikes {
         return true;
     }
 
-    /** Записать удар: момент подрыва = сейчас + время полёта; всем в измерении — тревога и отсчёт. */
+    /** Record a strike: detonation time = now + flight time; warning and countdown to everyone in the dimension. */
     private static void schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
                                  int flightTicks) {
         NuclearEvents events = NuclearEvents.get(level);
@@ -109,7 +109,7 @@ public final class NuclearStrikes {
         for (ServerPlayer p : level.players()) PacketDistributor.sendToPlayer(p, warning(s, p));
     }
 
-    /** Предупреждение для конкретного игрока: тревога — если он в радиусе {@code warning_radius} от цели. */
+    /** Warning for a specific player: alarm if within {@code warning_radius} of the target. */
     public static S2C.NukeWarning warning(NuclearEvents.ScheduledStrike s, ServerPlayer p) {
         double r = IncomingConfig.SERVER.nukeWarningRadius.get();
         boolean alarm = p.position().distanceToSqr(s.target()) <= r * r;
@@ -119,8 +119,8 @@ public final class NuclearStrikes {
     }
 
     /**
-     * Подрыв без полёта (команда «nuke now»). Если место не загружено — подрыв запланирован на сейчас и случится,
-     * как только чанк догрузится (без остановки сервера на генерацию), тогда вернётся null.
+     * Detonation without flight (“nuke now” command). If the position is unloaded, schedule it for now and detonate as soon
+     * as the chunk finishes loading (no server stall for generation), returning null in that case.
      */
     @Nullable
     public static Detonation detonateNow(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner) {
@@ -132,7 +132,7 @@ public final class NuclearStrikes {
         return null;
     }
 
-    /** Отбой: запланированные удары отменены, следы осадков убраны, очереди остановлены. */
+    /** Cancel: scheduled strikes canceled, fallout traces removed, queues stopped. */
     public static int clear(ServerLevel level) {
         for (NuclearEvents.ScheduledStrike s : NuclearEvents.get(level).scheduled()) holdGround(level, s, false);
         int n = NuclearEvents.get(level).clear();
@@ -142,14 +142,14 @@ public final class NuclearStrikes {
     }
 
     /**
-     * Если чанк так и не загрузился (мир без генерации?), подрыв всё равно происходит — по высоте цели. Столько же
-     * клиент показывает «подрыв задерживается» после нуля отсчёта.
+     * If the chunk never loads (world without generation?), detonate anyway at target height. The client displays
+     * “detonation delayed” for the same duration after countdown zero.
      */
     public static final int GIVE_UP_TICKS = 600;
     /**
-     * Район эпицентра, который грузится с пуска, — как район цели снаряда ({@link FlightTickets#DISTANCE}): нужны 3×3
-     * чанка (высота земли, грунт воронки, соседи для Sable), но очередь генерации идёт по уровню тикета, и с уровнем 32
-     * (радиус 1) место не догружалось бы за все 90 с полёта, пока залпы держат районы целей уровня 29.
+     * Epicenter area loaded from launch, like a projectile target area ({@link FlightTickets#DISTANCE}): 3×3 chunks are
+     * needed (ground height, crater soil, Sable neighbors), but generation is queued by ticket level; at level 32 (radius 1)
+     * the position would not finish loading during the whole 90 s flight while salvos hold level-29 target areas.
      */
     private static final int GROUND_AREA = FlightTickets.DISTANCE;
     private static final TicketType<UUID> GROUND = TicketType.create("incoming_nuclear_ground", Comparator.<UUID>naturalOrder());
@@ -159,12 +159,12 @@ public final class NuclearStrikes {
     }
 
     /**
-     * Место подрыва грузится с пуска (полёт МБР — полторы минуты), как район цели снаряда ({@link AreaLoader}): за 10 с
-     * до подрыва тикет уровня 32 стоял бы в очереди генерации за районами целей залпов, и на слабом сервере отсчёт
-     * доходил бы до нуля раньше, чем готова земля.
-     * Район только грузится, но не тикает: подрыву нужна земля, а не жизнь в ней, и полторы минуты тика 7×7 чанков
-     * вокруг цели были бы лишней работой. Ключ — номер удара (тикеты не сохраняются: после загрузки мира район
-     * берётся заново в тике).
+     * The detonation position loads from launch (ICBM flight takes a minute and a half), like a projectile target area
+     * ({@link AreaLoader}): a level-32 ticket 10 s before detonation would queue behind salvo target areas, and on a slow
+     * server the countdown would reach zero before the ground was ready.
+     * The area loads but does not tick: detonation needs the ground, not life on it; a minute and a half of ticking 7×7
+     * chunks around the target would be extra work. Key is the strike number (tickets are not saved: after world load the
+     * area is acquired again in the tick).
      */
     private static void holdGround(ServerLevel level, NuclearEvents.ScheduledStrike s, boolean hold) {
         AreaLoader.Area area = new AreaLoader.Area(GROUND, new ChunkPos(BlockPos.containing(s.target())), GROUND_AREA, new UUID(0L, s.id()), false);
@@ -172,18 +172,19 @@ public final class NuclearStrikes {
         else StrikeWorld.get(level).areas().release(level, area);
     }
 
-    // ---------------------------------------------------------------- события мира
+    // ---------------------------------------------------------------- world events
 
     /**
-     * Ядерная часть всех измерений — полоса NUCLEAR общего бюджета ({@code WorkScheduler}): после попаданий, срок —
-     * что оставили они (без доли блэкаута, пока у него есть работа); часы уже запущены. Миры — по кругу, как у полосы
-     * (первому достаётся весь срок и одна единица работы — всегда). Фоновый пул руин ({@code RuinWorkers}) — вне часов.
+     * Nuclear work in all dimensions uses the shared budget's NUCLEAR lane ({@code WorkScheduler}): after impacts, with the
+     * deadline they leave (excluding blackout's share while it has work); the clock is already running. Worlds rotate as
+     * the lane does (the first gets the full deadline and always one work unit). The background ruin pool
+     * ({@code RuinWorkers}) is outside the clock.
      */
     public static void work(List<ServerLevel> levels, WorkClock clock) {
         for (ServerLevel level : levels) tick(level, clock);
     }
 
-    /** Есть ли у очередей ядерки работа потока сервера (в любом измерении). */
+    /** Whether nuclear queues have server-thread work (in any dimension). */
     public static boolean pending(MinecraftServer server) {
         for (ServerLevel level : server.getAllLevels()) {
             if (level.hasData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD) && NuclearWorld.get(level).busy()) return true;
@@ -198,8 +199,8 @@ public final class NuclearStrikes {
         List<NuclearEvents.ScheduledStrike> due = new ArrayList<>();
         for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
             boolean loaded = groundLoaded(level, s.target());
-            // место подрыва держится с пуска (и после загрузки мира: тикеты не сохраняются): высоту земли и грунт
-            // воронки нужно знать без остановки сервера
+            // detonation position held from launch (and after world load: tickets are not saved): ground height and crater soil
+            // must be known without stalling the server
             holdGround(level, s, true);
             if (now >= s.detonateTime() && (loaded || now - s.detonateTime() > GIVE_UP_TICKS)) due.add(s);
         }
@@ -239,12 +240,12 @@ public final class NuclearStrikes {
         }
     }
 
-    /** Чанк ушёл игроку: руины, которые должны уже стоять, а не стоят, — в сводку подрыва. */
+    /** Chunk sent to a player: ruins due but not yet applied count in the detonation summary. */
     public static void onChunkSent(net.neoforged.neoforge.event.level.ChunkWatchEvent.Sent e) {
         NuclearWorld.get(e.getLevel()).onChunkSent(e.getLevel(), e.getChunk());
     }
 
-    /** Вход и смена измерения: действующие подрывы и летящие ракеты этого измерения. */
+    /** Login and dimension change: this dimension's active detonations and missiles in flight. */
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) {
             sync(p);
@@ -262,9 +263,9 @@ public final class NuclearStrikes {
     }
 
     /**
-     * После смерти доза и ожоги сетчатки сброшены (attachment не копируется) — клиенту это нужно сказать. Возрождение может быть
-     * в другом измерении (умер в Незере — встал в верхнем мире), а {@code PlayerChangedDimensionEvent} при этом
-     * не приходит: подрывы и летящие МБР — тоже заново.
+     * After death, dose and retinal burns reset (attachment not copied) — the client must be told. Respawn may be in another
+     * dimension (died in the Nether, respawned in the Overworld), without {@code PlayerChangedDimensionEvent}: resend
+     * detonations and ICBMs in flight too.
      */
     public static void onRespawn(PlayerEvent.PlayerRespawnEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) {
@@ -284,9 +285,9 @@ public final class NuclearStrikes {
         for (ServerPlayer p : level.players()) sync(p);
     }
 
-    /** Точка на поверхности в месте цели, выше она или ниже оценки (цель с карты); чанк не готов — оценка. */
+    /** Surface point at the target position, above or below the estimate (map target); chunk not ready — estimate. */
 
-    /** Точка на земле под целью (для пуска по игроку или сущности — по их позиции). */
+    /** Ground point beneath the target (for a player or entity strike — at their position). */
     public static Vec3 ground(ServerLevel level, Vec3 at) {
         Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
         return ground.known() ? new Vec3(at.x, Math.min(at.y, ground.y()), at.z) : at;

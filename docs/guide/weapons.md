@@ -14,6 +14,10 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 
 Times are for a nearby target. The world owner can change flight times.
 
+Weapon details: [Shahed](#shahed), [Lancet](#lancet), [cruise missile](#cruise-missile), [Grad](#grad),
+[B-2 bomb](#bomb-b-2), [ICBM](#nuclear-icbm). Reference sections cover [blast damage](#what-a-blast-does),
+[flight](#how-they-fly), [appearance](#what-a-blast-looks-like) and [trails](#flames-and-smoke-trails).
+
 Fuel burning in a crater produces a continuous roar and crackle from where it burns. It fades as the fuel runs out; the
 recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
 to you.
@@ -59,7 +63,7 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **The crater** follows the law for a charge on the ground: about 0.65·∛W metres across and a quarter of that deep,
   a little smaller in rock, a little larger in waterlogged ground under water; dry sand and the gravel of a rail bed dig
   like soil. A crater is only dug where the blast is at the ground. A missile crater is a pit two to three blocks across
-  and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
+  and about a block deep at this charge.
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
   with pale fresh aggregate, small material chips and an uneven scorched edge, plus nearby cracks.
@@ -88,7 +92,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on
   real blocks: about 5 blocks for the Shahed for about 2.5 minutes, about 9 blocks for the missile for about a quarter of
   an hour. The fuel falls to the first solid surface under the impact (the bottom of the crater, the floor under a
-  broken roof), runs downhill and over edges, but not uphill or through walls; on water it does not burn. On bare earth
+  broken roof). The initial spill favors lower surfaces and can splash onto an adjacent one-block step; it does not
+  pass through walls. Fuel drains down over edges and does not burn on water. On bare earth
   or stone the flames stand on top of the block, as on netherrack. The fuel keeps them alight for its whole life, rain
   included; a block placed on it or water poured over it puts that part out. If the block under the fuel burns or
   breaks away, the fuel drips down to the next surface, so fuel fire never hangs in the air. Planks, logs and anything
@@ -135,8 +140,8 @@ fragment leaves a pit of a few centimetres (not physical).
 ## How they fly
 
 Flight is the mod's own game model, not a copy of the real weapons: the same rules for every weapon, with each one's
-own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Everything at the target
-(charge, blast, damage) is real.
+own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Blast effects use the charge
+and material models, with the [scale exceptions and limits](not-physical.md).
 
 By default speeds and flight heights are game values, lower than the real ones (not physical): a block is a metre,
 but you see only a few hundred blocks, and at real speed a fast weapon crosses that in a second or two. The world
@@ -284,6 +289,18 @@ instead of drifting as one ball.
 
 Turning your head leaves the smoke clumps and ground dust anchored in the world. Their detail changes gradually as
 you approach, and distant clumps keep their own shapes instead of repeating the same outline across a raid.
+
+The light falling on the ground has an energy budget: 0.24% of the charge energy in visible light, and 30% of the
+burning fuel's energy across the whole spectrum, including the cooling glow. Both are estimates: the first extends
+[a small explosive test](https://doi.org/10.1134/S0010508214010122) to larger charges; the second uses a
+[TNO fireball estimate](https://publications.tno.nl/publication/34634119/QIKv78/TNO-2005-yellow.pdf), not a measurement of
+a crashed fuel tank. The explosive flash rises and fades within that same budget. Its time shape is one triangular
+approximation of the measured visible pulse, scaled with the cube root of charge mass; the unresolved millisecond
+peak is included in the broad pulse so it cannot vanish between frames.
+The source emits the same light by day and night. Direct illumination fades with distance squared,
+air absorption and the angle of the surface; the same flash is much easier to see against dark ground. Night adaptation,
+glare and bloom are presentation. Scattered light from an ordinary flash onto the world and shadows from distant terrain
+are not yet simulated.
 
 Near the ground the wind also depends on what stands around. Between houses and under trees it is several times weaker
 than over an open field; on a hilltop it is stronger, and in a hollow weaker. So the dust, the haze and the smoke of a

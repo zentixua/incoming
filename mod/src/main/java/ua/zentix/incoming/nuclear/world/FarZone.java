@@ -19,52 +19,50 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Зона за волной, которой нет на диске целой, — в мир ради LOD Distant Horizons вдали ({@link FarLods}). Копию с руинами
- * с диска можно собрать только для чанка с окончательными блоками и с таким же окном 5×5 вокруг (план руин читает
- * соседей): у края исследованного мира на диске лежат лишь недогенерированные чанки (кольцо 1 — до света, 2 — до пещер,
- * 3 — биомы без рельефа, дальше — начала структур, обычно без блоков) или их нет вовсе, и LOD таких мест DH строит своим
- * генератором — целыми. Чанк мира 1.17 с догенерацией под нулём для копии годится (блоки от старого дна мира
- * окончательные), а не дождавшийся плана — тоже сюда: зона за волной его не грузит. Таких чанков много: у подрыва
- * 15 кт у земли из 14323 чанков тяжёлой зоны не в памяти 6273 сами не годятся для копии, у другого из 21025 чанков
- * квадрата 7901 нет на диске и 2282 — недогенерированные без блоков. Всё это для зоны одно и то же
- * ({@link DiskStatus.State#PARTIAL}).
+ * Post-wave zone not intact on disk, loaded into the world for distant Distant Horizons LODs ({@link FarLods}). A ruined
+ * disk copy requires final chunk blocks and a matching 5×5 window (ruin plan reads neighbors): at explored-world edges,
+ * disk contains only incomplete chunks (ring 1 — through light, 2 — through caves, 3 — biomes without terrain, farther —
+ * structure starts, usually without blocks), or none, so DH generates intact LODs there. A 1.17 chunk with below-zero
+ * retrogen is suitable for copying (blocks above old world bottom are final); if its plan was not ready, it comes here
+ * too: the post-wave zone does not load it. Many such chunks: for one 15 kt surface burst, 6273 of 14323 heavy-zone chunks
+ * outside memory are themselves unsuitable for copying; another square's 21025 chunks include 7901 absent on disk and
+ * 2282 incomplete without blocks. All are the same to the zone ({@link DiskStatus.State#PARTIAL}).
  * <p>
- * Такой чанк, до которого дошла волна, берётся в мир квадратом 5×5 (те же квадраты, что у зоны за волной
- * {@link NuclearPrep}; вместе с квадратами, которые задевает его окно руин {@link RuinPlanner#REACH}: их чанки, целые
- * на диске, плана с диска не получили и подготовкой не грузятся) тикетом загрузки без тика ({@link AreaLoader},
- * {@code ticks = false}): ваниль догенерирует его в фоне, синхронно ничего не грузится. Руины встают обычным путём
- * загрузки — {@code ChunkEvent.Load}, очередь руин ({@link ScarQueue}: отметки {@code chunk_scar} нет), запись плана
- * ({@link RuinPlan#apply}) и его отметка в {@link DhUpdates}; квадрат отпускается, когда руины всех его чанков стоят
- * (или ждут только соседей — тогда их держат свои тикеты, {@link ScarQueue#holdForTile}) и DH их уже получил. Мир
- * генерируется так же, как если бы игрок дошёл туда сам, — только раньше: чанк, загруженный потом, руины уже несёт.
+ * After wave arrival, such a chunk is loaded as a 5×5 tile (same tiles as the post-wave zone {@link NuclearPrep}; also
+ * tiles touched by its ruin window {@link RuinPlanner#REACH}: their intact-on-disk chunks got no disk plan and are not
+ * loaded by preparation) with a non-ticking load ticket ({@link AreaLoader}, {@code ticks = false}): vanilla completes
+ * generation in the background, nothing loads synchronously. Ruins follow the normal load path — {@code ChunkEvent.Load},
+ * ruin queue ({@link ScarQueue}: no {@code chunk_scar} mark), plan application ({@link RuinPlan#apply}) and its mark in
+ * {@link DhUpdates}; tile releases when all chunks are ruined (or only waiting for neighbors — then held by their own
+ * tickets, {@link ScarQueue#holdForTile}) and DH has received them. World generation matches a player's visit, just
+ * earlier: a later-loaded chunk already carries ruins.
  * <p>
- * Только при DH и только у игроков (дальность DH {@link FarLods#FAR_CHUNKS}): без них LOD никто не увидит, а
- * генерировать мир незачем; настройка мира {@code nuclear.far_zone} выключает это совсем. Не больше {@link #LOADING}
- * квадратов в генерации и {@link #HELD} всего; квадрат, который не сгенерировался за {@link #LOAD_LIMIT} тиков (чанк
- * так и не стал полным) или не отпущен за {@link #HOLD_LIMIT}, отпускается без руин — зона идёт дальше. Отпускается не
- * больше {@link #RELEASE_PER_TICK} за тик (выгрузка пишет чанки на диск в тике сервера), из очереди за тик
- * просматривается не больше {@link #START_VISITS} квадратов: работа тика не зависит от размера зоны. Состояние не
- * сохраняется; остановка сервера, «Отбой», уход DH и выключенная настройка отпускают все квадраты ({@link #clear}) —
- * остановка до {@code util/StopDrain}.
+ * Only with DH and near players (DH range {@link FarLods#FAR_CHUNKS}): otherwise nobody sees LODs and generation is
+ * pointless; world setting {@code nuclear.far_zone} disables it entirely. At most {@link #LOADING} tiles generating and
+ * {@link #HELD} total; a tile not generated within {@link #LOAD_LIMIT} ticks (chunk never became full), or unreleased by
+ * {@link #HOLD_LIMIT}, releases without ruins so the zone advances. At most {@link #RELEASE_PER_TICK} released per tick
+ * (unload writes chunks to disk on the server tick), at most {@link #START_VISITS} queued tiles inspected per tick:
+ * tick work is independent of zone size. State is non-persistent; server stop, cancel, DH departure or disabled setting
+ * release all tiles ({@link #clear}) — stop before {@code util/StopDrain}.
  */
 final class FarZone {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_far_zone", Comparator.<UUID>naturalOrder());
-    /** Квадраты — как у зоны за волной ({@link NuclearPrep}): 5×5 чанков, тикет — сам квадрат. */
+    /** Tiles as in the post-wave zone ({@link NuclearPrep}): 5×5 chunks, ticket is the tile itself. */
     static final int TILE_RADIUS = 2, TILE = TILE_RADIUS * 2 + 1;
-    /** Квадратов в генерации сразу и всего взятых (в генерации и с руинами в очереди). */
+    /** Tiles generating concurrently and total held (generating and awaiting ruins). */
     static final int LOADING = 2, HELD = 4;
-    /** Сколько квадратов отпускать за тик: каждый — до 25 выгрузок чанков с записью на диск в этом тике сервера. */
+    /** Tiles released per tick: each up to 25 chunk unloads with disk writes in this server tick. */
     private static final int RELEASE_PER_TICK = 2;
-    /** Квадратов из очереди за тик просматривается, не больше (брошенные без игроков — тоже). */
+    /** Maximum queued tiles inspected per tick (including abandoned tiles without players). */
     static final int START_VISITS = 64;
-    /** Генерация квадрата — не дольше, тиков: чанк, который так и не стал полным, не держит слот. */
+    /** Maximum tile generation time, ticks: a chunk never becoming full does not hold a slot. */
     static final int LOAD_LIMIT = 2400;
-    /** Квадрат держится всего не дольше, тиков: руины, которые не встают, не держат слот вечно. */
+    /** Maximum total tile hold time, ticks: ruins failing to apply do not hold a slot forever. */
     static final int HOLD_LIMIT = 6000;
 
     private static final class Tile {
         final ChunkPos centre;
-        /** Все 25 чанков полные (генерация кончилась). */
+        /** All 25 chunks full (generation complete). */
         boolean ready;
         long heldAt;
 
@@ -77,33 +75,33 @@ final class FarZone {
         }
     }
 
-    /** Середины всех квадратов, ждущих и взятых: квадрат в очередь дважды не встаёт. */
+    /** Centers of all queued and held tiles: a tile cannot be queued twice. */
     private final LongOpenHashSet known = new LongOpenHashSet();
-    /** Ждут слота — по порядку постановки (по порядку волны). */
+    /** Waiting for a slot, in enqueue order (wave order). */
     private final ArrayDeque<Tile> waiting = new ArrayDeque<>();
-    /** Взяты: генерируются или ждут руин; не больше {@link #HELD}. */
+    /** Held: generating or awaiting ruins; at most {@link #HELD}. */
     private final List<Tile> held = new ArrayList<>(HELD);
-    /** Срок генерации (проверки ставят меньше). */
+    /** Generation deadline (checks use a shorter one). */
     private int loadLimit = LOAD_LIMIT;
-    /** Для строки в лог и проверок: квадратов взято, отпущено, отпущено по сроку, брошено (игроки ушли). */
+    /** For logging and checks: tiles acquired, released, expired, abandoned (players left). */
     private long taken, released, expired, dropped;
-    /** Тиков генерации у сгенерированных квадратов и от взятия до отпуска у отпущенных — всего (средние в строку). */
+    /** Total generation ticks of generated tiles and acquire-to-release ticks of released tiles (averages for log). */
     private long loadTicks, loaded, holdTicks;
-    /** Самое большее квадратов в генерации разом (проверки). */
+    /** Most tiles generating concurrently (checks). */
     private int loadingPeak;
 
-    /** Центр квадрата 5×5, в который входит чанк. */
+    /** Center of the 5×5 tile containing the chunk. */
     static ChunkPos tileOf(int x, int z) {
         return new ChunkPos(Math.floorDiv(x, TILE) * TILE + TILE_RADIUS, Math.floorDiv(z, TILE) * TILE + TILE_RADIUS);
     }
 
     /**
-     * Чанк зоны за волной, которого нет на диске целым: в очередь — его квадрат и квадраты, которые задевает его окно
-     * руин (их чанки, целые на диске, план с диска не получили).
+     * Post-wave zone chunk not intact on disk: queue its tile and tiles touched by its ruin window (their intact-on-disk
+     * chunks got no disk plan).
      */
     void offer(long chunk) {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
-        // окно не шире квадрата: его углы задевают все квадраты, которые задевает оно (свой — первым)
+        // window no wider than a tile: its corners touch every tile it touches (own tile first)
         add(tileOf(x, z));
         for (int dx : new int[]{-RuinPlanner.REACH, RuinPlanner.REACH}) {
             for (int dz : new int[]{-RuinPlanner.REACH, RuinPlanner.REACH}) add(tileOf(x + dx, z + dz));
@@ -122,7 +120,7 @@ final class FarZone {
         loadLimit = ticks;
     }
 
-    /** Поток сервера, после {@link FarLods} (его отметки — раньше). Работа — по взятым квадратам и не больше {@link #START_VISITS} ждущих. */
+    /** Server thread, after {@link FarLods} (its marks first). Work over held tiles and at most {@link #START_VISITS} waiting tiles. */
     void tick(ServerLevel level) {
         if (held.isEmpty() && waiting.isEmpty()) return;
         long now = level.getGameTime();
@@ -154,7 +152,7 @@ final class FarZone {
             }
             if (!t.ready) loading++;
         }
-        // новые — по порядку, пока есть слоты; квадрат, от которого ушли игроки, не нужен
+        // new tiles in order while slots remain; a tile left by players is unneeded
         for (int n = 0; n < START_VISITS && !waiting.isEmpty() && loading < LOADING && held.size() < HELD; n++) {
             Tile t = waiting.poll();
             if (!FarLods.nearPlayer(level, t.centre.toLong())) {
@@ -179,8 +177,8 @@ final class FarZone {
     }
 
     /**
-     * Руины всех чанков квадрата стоят и ушли в DH — или оставшиеся ждут только соседей (тогда их держат свои тикеты,
-     * как у квадратов зоны за волной).
+     * All tile chunks ruined and sent to DH, or remaining chunks only await neighbors (then held by their own tickets,
+     * as in post-wave zone tiles).
      */
     private static boolean finished(ServerLevel level, ScarQueue scars, Tile t) {
         int waiting = 0;
@@ -209,7 +207,7 @@ final class FarZone {
         known.remove(t.centre.toLong());
     }
 
-    /** «Отбой», DH ушёл, настройка выключена или остановка сервера: все квадраты отпущены, очередь пуста. */
+    /** Cancel, DH departure, disabled setting or server stop: all tiles released, queue empty. */
     void clear(ServerLevel level) {
         for (Tile t : held) StrikeWorld.get(level).areas().release(level, t.area());
         held.clear();
@@ -217,14 +215,14 @@ final class FarZone {
         known.clear();
     }
 
-    /** Для строки в лог: квадратов ждёт, держится, взято, отпущено, по сроку, брошено; средние тики генерации и до отпуска. */
+    /** For logging: tiles waiting, held, acquired, released, expired, abandoned; average generation and acquire-to-release ticks. */
     String summary() {
         return "tiles waiting " + waiting.size() + ", held " + held.size() + ", taken " + taken + ", released " + released + " (timed out " + expired
                 + "), dropped without players " + dropped + "; generation avg " + (loaded == 0 ? 0 : loadTicks / loaded) + " ticks, until release "
                 + (released == 0 ? 0 : holdTicks / released);
     }
 
-    /** Для проверок: ждут, держатся, взято, отпущено, по сроку, брошено, самое большее в генерации разом. */
+    /** For checks: waiting, held, acquired, released, expired, abandoned, maximum concurrent generation. */
     long[] stats() {
         return new long[] {waiting.size(), held.size(), taken, released, expired, dropped, loadingPeak};
     }

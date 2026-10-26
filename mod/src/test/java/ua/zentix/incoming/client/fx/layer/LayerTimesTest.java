@@ -7,9 +7,9 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-/** Проба времени слоя ({@link LayerTimes}): без неё меток нет; кадр слива — по просьбе; части квадратов рисуются каждая целиком и по разу. */
+/** Layer time sample ({@link LayerTimes}): without it there are no marks; drain frame - upon request; Parts of the squares are drawn each completely and once. */
 class LayerTimesTest {
-    /** Проба не идёт — таймер прохода не зовёт OpenGL вовсе (в тесте его нет: вызов упал бы) и кадр не меряет. */
+    /** The test does not work - the passage timer does not call OpenGL at all (it is not in the test: the call would fail) and does not measure the frame. */
     @Test
     void timerCostsNothingWithoutTheProbe() {
         assertEquals(false, LayerTimes.on());
@@ -22,9 +22,9 @@ class LayerTimesTest {
     }
 
     /**
-     * Кадр слива (glFinish у каждой метки, части по отдельности: 20–28 мс процессора) — только по просьбе: F3 или свойство
-     * запуска. Сценарии и стенд держат пробу включённой чтением строки, и 25.10 в look_gate этот кадр раз в 2 с был рывком в
-     * их собственном замере.
+     * Drain frame (glFinish for each label, parts separately: 20–28 ms processor) - only upon request: F3 or the launch property
+     * . The scripts and the stand keep the sample enabled by reading the line, and 25.10 in look_gate this frame once in 2 s was a jerk in
+     *  their own metering.
      */
     @Test
     void drainedFrameOnlyWhenAsked() {
@@ -37,8 +37,8 @@ class LayerTimesTest {
     }
 
     /**
-     * Отрезки частей в порядке сортировки: каждый квадрат кадра — ровно в одном отрезке своей части, отрезки одной части
-     * не соприкасаются (соседние слиты в один вызов). Сумма частей по отдельности — весь кадр, без пропусков и повторов.
+     * Segments of parts in sorting order: each square of the frame is in exactly one segment of its part, segments of one part
+     *  do not touch (adjacent ones are merged into one call). The sum of the parts individually is the entire frame, without gaps or repetitions.
      */
     @Test
     void partRunsCoverEveryQuadOnce() {
@@ -48,7 +48,7 @@ class LayerTimesTest {
             byte[] part = new byte[n];
             int[] order = new int[n];
             for (int i = 0; i < n; i++) {
-                // длинные серии одной части и частые смены — как у клубов в дыму и лент между ними
+                // long series of one part and frequent changes - like billows in smoke and ribbons between them
                 part[i] = (byte) (random.nextInt(3) == 0 ? random.nextInt(parts) : i > 0 ? part[i - 1] : 0);
                 order[i] = i;
             }
@@ -63,13 +63,13 @@ class LayerTimesTest {
                 int[] r = runs[p];
                 for (int k = 0; k < r.length; k += 2) {
                     for (int i = r[k]; i < r[k] + r[k + 1]; i++) {
-                        assertEquals(p, part[order[i]], "квадрат в отрезке своей части");
+                        assertEquals(p, part[order[i]], "square in a segment of its part");
                         seen[i]++;
                     }
-                    if (k > 0) assertNotEquals(r[k - 2] + r[k - 1], r[k], "соседние отрезки части слиты");
+                    if (k > 0) assertNotEquals(r[k - 2] + r[k - 1], r[k], "adjacent segments of the part are merged");
                 }
             }
-            for (int i = 0; i < n; i++) assertEquals(1, seen[i], "квадрат " + i + " нарисован по разу");
+            for (int i = 0; i < n; i++) assertEquals(1, seen[i], "square " + i + " drawn once");
         }
     }
 }

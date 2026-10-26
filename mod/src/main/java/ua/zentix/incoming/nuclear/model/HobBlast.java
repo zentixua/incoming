@@ -1,38 +1,40 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Ударная волна ядерного подрыва у земли — по дальности по земле и высоте подрыва над точкой, метры; мощность — килотонны.
- * Всё подобно по ∛W: одна таблица на все мощности.
+ * Ground-level nuclear blast by ground range and burst height above the point, meters; yield in kilotons.
+ * Everything scales by ∛W: one table for all yields.
  * <ul>
- * <li>Давление — уравнение 62 Броуда (H. L. Brode, «Airblast from Nuclear Bursts — Analytic Approximations», PSR 1419-3,
- * 1987, с. 60, 70–71; постоянная в f — 17.15, как в статье): кривые высоты подрыва Glasstone &amp; Dolan (рис. 3.73) оно
- * повторяет в пределах 10 %. Подгонка верна, пока давление не ниже 2 psi: дальше у воздушного подрыва она уходит в ноль
- * и ниже (у 15 кт на 592 м — за 15 км). Ниже 1 psi — стандарт DNA (Needham &amp; Crepeau 1981: свободный воздух 1 кт,
- * отражение по Маху — свободный воздух удвоенной мощности, у правильного отражения — множитель Ренкина–Гюгонио; формулы
- * — по glasstone Э. Гайста, MIT): у слабой волны давление спадает как 1/(R·√ln R). Между 2 и 1 psi — плавно в логарифме;
- * там они расходятся на 3–8 %. Ближе 2 psi DNA неверен (у воздушного подрыва у эпицентра — сотни psi вместо 28).</li>
- * <li>Точка над землёй ({@code Detonation.overpressureKpa}) — как точка земли с подрывом ниже на её высоту; выше подрыва —
- * полусфера наземного. Оценка сверху, а не данные: высоко над землёй приходит падающая волна, отражённая — позже и
- * отдельно, а вместе (стебель Маха) они идут только у земли, до тройной точки (десятки–сотни метров; её высоты в модели
- * нет). Над воздушным подрывом — выше падающей в 1.4 раза у 2–5 psi и до 1.9 раза у сотен psi; у аппарата в 300 м над
- * землёй в 1 и 1.5 км от 15 кт на 592 м — 8.3 и 4.1 psi против 4.0 и 2.3 падающей.</li>
- * <li>Приход фронта и положительная фаза на земле — подпрограмма PT Броуда (там же, прил. B, с. 179–180), начало области
- * Маха — его же XM; фаза ниже 1 psi — Кинни–Грэхем (у Броуда она выходит на постоянную, у слабой волны — растёт).</li>
- * <li>Напор вдоль земли: в области Маха воздух за фронтом идёт по земле (Ренкин–Гюгонио по давлению), у правильного
- * отражения — под углом к ней, и вдоль земли остаётся доля cos²α (α — угол на подрыв над горизонтом; так у DNA, QAIR).
- * Переход — от 0.8·XM до XM. Сверено с G&amp;D рис. 3.75 (15 кт на 592 м: 1 psi на 170 м, 2 psi на 450 м, ~4 psi у XM).</li>
+ * <li>Pressure — Brode equation 62 (H. L. Brode, “Airblast from Nuclear Bursts — Analytic Approximations”, PSR 1419-3,
+ * 1987, pp. 60, 70–71; constant in f is 17.15, as in the paper): reproduces Glasstone &amp; Dolan height-of-burst curves
+ * (fig. 3.73) within 10 %. Fit valid down to 2 psi: beyond that, an airburst tends to zero and below (15 kt at 592 m —
+ * beyond 15 km). Below 1 psi — DNA standard (Needham &amp; Crepeau 1981: 1 kt free air, Mach reflection as double-yield
+ * free air, regular reflection with Rankine–Hugoniot factor; formulas from E. Geist's glasstone, MIT): weak-wave pressure
+ * decays as 1/(R·√ln R). Smooth in log pressure between 2 and 1 psi; they differ by 3–8 % there. Closer than 2 psi, DNA is
+ * invalid (hundreds of psi instead of 28 at an airburst epicenter).</li>
+ * <li>A point above ground ({@code Detonation.overpressureKpa}) is treated as a ground point with burst height reduced
+ * by its altitude; above the burst, a surface-burst hemisphere. Upper estimate, not data: high above ground the incident
+ * wave arrives, reflection later and separately; they merge (Mach stem) only near ground below the triple point
+ * (tens–hundreds of meters; its height is not modeled). Above an airburst — 1.4 times incident at 2–5 psi, up to 1.9 times
+ * at hundreds of psi; a craft 300 m above ground at 1 and 1.5 km from 15 kt at 592 m — 8.3 and 4.1 psi versus incident
+ * 4.0 and 2.3.</li>
+ * <li>Ground front arrival and positive phase — Brode's PT subroutine (ibid., app. B, pp. 179–180), Mach region onset —
+ * his XM; phase below 1 psi — Kinney–Graham (Brode approaches a constant; a weak wave's phase grows).</li>
+ * <li>Ground-aligned dynamic pressure: in the Mach region post-front air follows the ground (Rankine–Hugoniot from
+ * pressure); in regular reflection it is inclined, leaving cos²α along the ground (α — burst elevation angle; as DNA,
+ * QAIR). Transition from 0.8·XM to XM. Checked against G&amp;D fig. 3.75 (15 kt at 592 m: 1 psi at 170 m, 2 psi at 450 m,
+ * ~4 psi at XM).</li>
  * </ul>
- * Давление считается таблицей по масштабной дальности (логарифм) и углу на подрыв ({@value #NR} × {@value #NT},
- * в логарифме давления): от точной формулы — меньше 0,6 % от 0,05 до 3000 psi.
+ * Pressure is tabulated by scaled range (logarithmic) and burst angle ({@value #NR} × {@value #NT}, log pressure):
+ * less than 0.6 % difference from the exact formula over 0.05–3000 psi.
  */
 public final class HobBlast {
-    /** Фут, м. */
+    /** Foot, m. */
     private static final double FT = 0.3048;
-    /** psi в Па. */
+    /** psi in Pa. */
     private static final double PA_PER_PSI = 1000 * BlastModel.KPA_PER_PSI;
-    /** Выше стольких psi — подгонка Броуда, ниже {@link #DNA_BELOW} — стандарт DNA. */
+    /** Above this many psi, Brode fit; below {@link #DNA_BELOW}, DNA standard. */
     static final double BRODE_ABOVE = 2, DNA_BELOW = 1;
-    /** Таблица: узлов по логарифму масштабной дальности (кфут/кт^⅓, от {@link #R_MIN} до {@link #R_MAX}) и по углу 0..90°. */
+    /** Table: nodes in log scaled range (kft/kt^⅓, {@link #R_MIN} to {@link #R_MAX}) and angle 0..90°. */
     static final int NR = 384, NT = 91;
     static final double R_MIN = 1e-3, R_MAX = 1e3;
     private static final double LN_MIN = Math.log(R_MIN), LN_SPAN = Math.log(R_MAX) - LN_MIN;
@@ -40,29 +42,29 @@ public final class HobBlast {
     private HobBlast() {
     }
 
-    /** Давление на земле, psi: дальность по земле и высота подрыва над точкой — м. */
+    /** Ground pressure, psi: ground range and burst height above the point in m. */
     public static double psi(double groundM, double heightM, double yieldKt) {
         double m = scale(yieldKt);
         return Table.psi(Math.max(0, groundM) / m, Math.max(0, heightM) / m);
     }
 
-    /** Дальность по земле, где давление падает до {@code psi} (0 — такого нет и под самым подрывом), м. */
+    /** Ground range where pressure falls to {@code psi} (0 — not reached even directly beneath the burst), m. */
     public static double rangeFor(double psi, double heightM, double yieldKt) {
         if (psi >= psi(0, heightM, yieldKt)) return 0;
         return Solve.decreasingRoot(g -> psi(g, heightM, yieldKt), psi, 1e-3, 1e8);
     }
 
-    /** Построить таблицу давления сейчас (~25 мс, один раз за запуск): первый подрыв иначе ждал бы её в своём потоке. */
+    /** Build pressure table now (~25 ms, once per run): otherwise the first detonation waits on its own thread. */
     public static void warm() {
         Table.psi(1, 1);
     }
 
-    /** Масштаб длины: кфут на кт^⅓ из метров — делить на это. */
+    /** Length scale: divide meters by this for kft per kt^⅓. */
     private static double scale(double yieldKt) {
         return 1000 * FT * Math.cbrt(Math.max(1e-9, yieldKt));
     }
 
-    /** Точное давление (без таблицы), psi, по масштабным дальности и высоте, кфут/кт^⅓. */
+    /** Exact pressure (without table), psi, from scaled range and height, kft/kt^⅓. */
     static double exact(double x, double y) {
         double b = brode(x, y);
         if (b >= BRODE_ABOVE) return b;
@@ -72,7 +74,7 @@ public final class HobBlast {
         return Math.exp(w * Math.log(b) + (1 - w) * Math.log(d));
     }
 
-    /** Уравнение 62 Броуда: давление на земле, psi; x, y — кфут/кт^⅓. */
+    /** Brode equation 62: ground pressure, psi; x, y — kft/kt^⅓. */
     static double brode(double x, double y) {
         x = Math.max(x, 1e-9);
         y = Math.max(y, 1e-9);
@@ -92,9 +94,9 @@ public final class HobBlast {
         return 10.47 / Math.pow(r, a) + b / Math.pow(r, c) + d * e / (1 + f * Math.pow(r, g)) + h + j / Math.pow(r, k);
     }
 
-    // ---------------------------------------------------------------- стандарт DNA (дальняя зона)
+    // ---------------------------------------------------------------- DNA standard (far zone)
 
-    /** Давление по стандарту DNA, psi; x, y — кфут/кт^⅓. */
+    /** DNA standard pressure, psi; x, y — kft/kt^⅓. */
     static double dna(double x, double y) {
         double sgr = Math.max(x * 1000 * FT, 1e-6), shob = y * 1000 * FT;
         double alpha = Math.atan2(shob, sgr), free = freeAirPa(Math.hypot(sgr, shob));
@@ -110,62 +112,62 @@ public final class HobBlast {
     }
 
     /**
-     * Падающая волна в свободном воздухе (стандарт DNA, подобие по ∛W), psi, на наклонной дальности {@code rangeM} м от
-     * подрыва {@code yieldKt} кт: давление фронта там, куда отражение от земли ещё не дошло.
+     * Incident free-air wave (DNA standard, ∛W scaling), psi, at slant range {@code rangeM} m from {@code yieldKt} kt burst:
+     * front pressure where ground reflection has not arrived yet.
      */
     public static double freeAirPsi(double rangeM, double yieldKt) {
         return freeAirPa(Math.max(rangeM, 1e-6) / Math.cbrt(Math.max(1e-9, yieldKt))) / PA_PER_PSI;
     }
 
-    /** Стандарт DNA для 1 кт в свободном воздухе, Па, на дальности {@code r} м. */
+    /** DNA standard for 1 kt free air, Pa, at range {@code r} m. */
     static double freeAirPa(double r) {
         double q = r / 445.42;
         return 3.04e11 / (r * r * r) + 1.13e9 / (r * r) + 7.9e6 / (r * Math.sqrt(Math.log(q + 3 * Math.exp(-Math.sqrt(q) / 3))));
     }
 
-    /** Отражение по Маху: свободный воздух удвоенной мощности на дальности по земле (1 кт), усиленный у пологого угла. */
+    /** Mach reflection: double-yield free air at ground range (1 kt), enhanced at shallow angles. */
     private static double mach(double sgr, double alpha) {
         double ln = Math.log(sgr), c = Math.max(Math.min(3.7 - 0.94 * ln, 0.7), 0.77 * ln - 3.8 - 18 / sgr);
         return freeAirPa(sgr / Math.cbrt(2)) / (1 - c * Math.sin(alpha));
     }
 
-    /** Правильное отражение: падающая волна × множитель отражения Ренкина–Гюгонио по углу. */
+    /** Regular reflection: incident wave × angle-dependent Rankine–Hugoniot reflection factor. */
     private static double regular(double free, double alpha) {
         double rn = 2 + (shockGamma(free) + 1) * (densityRatio(free) - 1) / 2;
         double f = free / 75842, f6 = Math.pow(f, 6), d = f6 * (1.2 + 0.07 * Math.sqrt(f)) / (f6 + 1);
         return free * ((rn - 2) * Math.pow(Math.sin(alpha), d) + 2);
     }
 
-    /** Показатель адиабаты воздуха за фронтом давлением {@code op} Па (диссоциация у сильных волн). */
+    /** Air adiabatic index behind a front of pressure {@code op} Pa (dissociation in strong shocks). */
     private static double shockGamma(double op) {
         double xi = op / 101325 + 1, t = 1e-12 * Math.pow(xi, 6), z = Math.log(xi) - 0.47 * t / (100 + t);
         return 1.402 - 3.4e-4 * Math.pow(z, 4) / (1 + 2.22e-5 * Math.pow(z, 6));
     }
 
     /**
-     * Сжатие воздуха за фронтом давлением {@code op} Па: Ренкин–Гюгонио с показателем адиабаты по давлению
-     * ({@link #shockGamma}; у слабой волны γ = 1,4 и ρ/ρ₀ = (7·P0 + 6P)/(7·P0 + P): 1 psi — 1,05, 5 psi — 1,23, 10 psi — 1,44).
+     * Air compression behind a front of pressure {@code op} Pa: Rankine–Hugoniot with pressure-dependent adiabatic index
+     * ({@link #shockGamma}; weak wave γ = 1.4 and ρ/ρ₀ = (7·P0 + 6P)/(7·P0 + P): 1 psi — 1.05, 5 psi — 1.23, 10 psi — 1.44).
      */
     public static double densityRatio(double op) {
         double xi = op / 101325 + 1, g = shockGamma(op), mu = (g + 1) / (g - 1);
         return (1 + mu * xi) / (5.975 + xi);
     }
 
-    // ---------------------------------------------------------------- приход, фаза, напор (Броуд, PT)
+    // ---------------------------------------------------------------- arrival, phase, dynamic pressure (Brode, PT)
 
-    /** Начало области Маха по земле, м: 694 м у 15 кт на 592 м, 0 — у наземного. */
+    /** Mach region ground onset, m: 694 m for 15 kt at 592 m, 0 for surface burst. */
     public static double machStem(double heightM, double yieldKt) {
         double m = Math.cbrt(Math.max(1e-9, yieldKt)), y = Math.max(0, heightM) / FT / m;
         return (170 * y / (1 + 60 * Math.pow(y, 0.25)) + 2.89 * Math.pow(y / 100, 2.5)) * FT * m;
     }
 
-    /** Приход фронта на землю, с: 0.79 с под подрывом 15 кт на 592 м, 2.17 с на 1 км, 27.5 с на 10 км. */
+    /** Front arrival at ground, s: 0.79 s beneath 15 kt at 592 m, 2.17 s at 1 km, 27.5 s at 10 km. */
     public static double arrivalSeconds(double groundM, double heightM, double yieldKt) {
         double m = Math.cbrt(Math.max(1e-9, yieldKt));
         return tau(Math.max(0, groundM) / FT / m, Math.max(0, heightM) / FT / m) * m / 1000;
     }
 
-    /** Броуд, PT: приход, мс/кт^⅓; X, Y — фут/кт^⅓. */
+    /** Brode, PT: arrival, ms/kt^⅓; X, Y — ft/kt^⅓. */
     private static double tau(double x, double y) {
         double r = Math.hypot(x, y) / 1000, r2 = r * r, r8 = Math.pow(r, 8);
         double u = (0.543 - 21.8 * r + 386 * r2 + 2383 * r2 * r) * r8
@@ -178,8 +180,8 @@ public final class HobBlast {
     }
 
     /**
-     * Приход фронта в свободном воздухе (DNA), с, на дальности {@code rangeM} м: под подрывом — тот же, что у Броуда на
-     * земле под ним (у 15 кт на 592 м — 0.79 с).
+     * Free-air front arrival (DNA), s, at range {@code rangeM} m: beneath the burst, same as Brode at ground below it
+     * (15 kt at 592 m — 0.79 s).
      */
     public static double freeAirArrivalSeconds(double rangeM, double yieldKt) {
         double m = Math.cbrt(Math.max(1e-9, yieldKt)), r = Math.max(0, rangeM) / m;
@@ -187,11 +189,11 @@ public final class HobBlast {
     }
 
     /**
-     * Положительная фаза на земле, с. Где давление по Броуду не ниже 2 psi — подпрограмма PT Броуда (0.45 с под подрывом
-     * 15 кт на 592 м, 0.74 с на 1 км): у слабой волны она выходит на постоянную (1.2 с), а фаза настоящей растёт с
-     * дальностью, поэтому ниже 1 psi — Кинни–Грэхем у слушателя ({@link BlastModel#positivePhaseSeconds(double, double)},
-     * сверен с таблицами Гарсеса и ANSI S2.20), между — плавно в логарифме, как давление ({@link #exact}). У 15 кт на
-     * 592 м — 0.93 с на 2 км, 1.29 с на 5 км, 1.44 с на 10 км.
+     * Ground positive phase, s. Where Brode pressure is at least 2 psi, Brode PT subroutine (0.45 s beneath 15 kt at 592 m,
+     * 0.74 s at 1 km): it tends to a constant for a weak wave (1.2 s), while a real phase grows with range, so below 1 psi
+     * use Kinney–Graham at the listener ({@link BlastModel#positivePhaseSeconds(double, double)}, checked against Garcés
+     * tables and ANSI S2.20); smooth log transition between them, as pressure ({@link #exact}). For 15 kt at 592 m:
+     * 0.93 s at 2 km, 1.29 s at 5 km, 1.44 s at 10 km.
      */
     public static double positivePhaseSeconds(double groundM, double heightM, double yieldKt) {
         double m = Math.cbrt(Math.max(1e-9, yieldKt)), x = Math.max(0, groundM) / FT / m, y = Math.max(0, heightM) / FT / m;
@@ -203,7 +205,7 @@ public final class HobBlast {
         return Math.exp(w * Math.log(near) + (1 - w) * Math.log(far));
     }
 
-    /** Положительная фаза по Броуду (PT), с на кт^⅓; x, y — фут/кт^⅓. */
+    /** Brode positive phase (PT), s per kt^⅓; x, y — ft/kt^⅓. */
     private static double brodePhase(double x, double y) {
         double t = tau(x, y), y100 = Math.pow(y / 100, 3.5);
         double s2 = 1 - 15.18 * y100 / (1 + 15.18 * y100)
@@ -216,8 +218,8 @@ public final class HobBlast {
     }
 
     /**
-     * Доля скоростного напора за фронтом, что идёт вдоль земли: 1 в области Маха, у правильного отражения — cos²α, переход
-     * — от 0.8·XM до XM. Ветер вдоль земли — ветер Ренкина–Гюгонио × корень из неё.
+     * Share of post-front dynamic pressure along the ground: 1 in the Mach region, cos²α for regular reflection,
+     * transition from 0.8·XM to XM. Ground wind is Rankine–Hugoniot wind × its square root.
      */
     public static double alongGround(double groundM, double heightM, double yieldKt) {
         double xm = machStem(heightM, yieldKt);
@@ -227,11 +229,11 @@ public final class HobBlast {
         return 1 - (1 - mach) * sin2;
     }
 
-    // ---------------------------------------------------------------- таблица
+    // ---------------------------------------------------------------- table
 
-    /** Таблица давления по масштабной дальности и углу на подрыв над горизонтом: строится при первом обращении. */
+    /** Pressure table by scaled range and burst elevation angle: built on first access. */
     private static final class Table {
-        /** Логарифм давления, psi: [дальность][угол]. */
+        /** Log pressure, psi: [range][angle]. */
         private static final double[] LN = build();
 
         private static double[] build() {
@@ -246,10 +248,10 @@ public final class HobBlast {
             return t;
         }
 
-        /** Давление, psi, по масштабным дальности по земле и высоте, кфут/кт^⅓. */
+        /** Pressure, psi, from scaled ground range and height, kft/kt^⅓. */
         static double psi(double x, double y) {
             double r = Math.hypot(x, y);
-            // дальше таблицы — как слабая волна, 1/R
+            // beyond the table — weak-wave behavior, 1/R
             double far = r > R_MAX ? R_MAX / r : 1;
             double fi = (Math.log(Math.max(Math.min(r, R_MAX), R_MIN)) - LN_MIN) / LN_SPAN * (NR - 1);
             double fj = (r <= 0 ? 0 : Math.atan2(y, x)) / (0.5 * Math.PI) * (NT - 1);

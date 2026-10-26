@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VirtualFlightsTest {
     /**
-     * Ракета РСЗО у цели (494 221 313, курс на 517 328): её чанк (30, 19) и точка в 16 блоках впереди (31, 20) тикают,
-     * а чанк между ними на углу (31, 19) — нет. Вернувшись в мир, снаряд первым же шагом ушёл бы из тикающих чанков
-     * обратно вне мира — и так каждый тик, пока не пропал бы по сроку жизни.
+     * MLRS missile at the target (494 221 313, heading to 517 328): its chunk (30, 19) and a point in 16 blocks ahead (31, 20) are ticking,
+     *  and the chunk between them on the corner (31, 19) is not. Returning to the world, the projectile’s first step would be to leave the ticking chunks
+     *  and back outside the world - and so on for each tick until the lifespan was gone.
      */
     @Test
     void cornerChunkOnTheWayKeepsProjectileOutOfWorld() {
@@ -28,7 +28,7 @@ class VirtualFlightsTest {
 
     @Test
     void unliveChunkBeyondTheCheckedStretchDoesNotMatter() {
-        // по +x: 16 блоков (или три шага) впереди — чанки 0 и 1; чанк 2 дальше не нужен
+        // by +x: 16 blocks (or three steps) ahead - chunks 0 and 1; Chunk 2 is no longer needed
         assertTrue(VirtualFlights.clearAhead(new Vec3(8, 70, 8), new Vec3(1, 0, 0), 2, (x, z) -> x < 2));
         assertFalse(VirtualFlights.clearAhead(new Vec3(8, 70, 8), new Vec3(1, 0, 0), 9, (x, z) -> x < 2));
     }

@@ -1,5 +1,5 @@
-// Разбор повторов Flashback в таблицы (README.md): клиентский мод без зависимости от Incoming — повтор старой игры
-// смотрится с jar Incoming того дня. Сборка и юнит-тесты: mod/gradlew -p tools/replayscan build
+// Analyze Flashback replays into tables (README.md): client mod without an Incoming dependency; an old game replay
+// is viewed with that day's Incoming jar. Build and unit tests: mod/gradlew -p tools/replayscan build
 plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.147'
@@ -11,7 +11,7 @@ base { archivesName = 'replayscan' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
-    // Distant Horizons API (у DH своего maven нет; Modrinth отдаёт файлы проекта как maven)
+    // Distant Horizons API (DH has no Maven repository; Modrinth serves project files through Maven)
     exclusiveContent {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
@@ -19,8 +19,8 @@ repositories {
     mavenCentral()
 }
 
-// Моды запуска (-PmodsDir=<каталог>): все jar оттуда — в run/mods. Нужны Flashback 0.39, Flashback NeoForge Fixed,
-// Sinytra Connector, Forgified Fabric API и моды записи (Incoming того дня, Create, Sable, Aeronautics…)
+// Runtime mods (-PmodsDir=<directory>): all jars there go to run/mods. Requires Flashback 0.39, Flashback NeoForge Fixed,
+// Sinytra Connector, Forgified Fabric API and recording mods (that day's Incoming, Create, Sable, Aeronautics…)
 def modsDir = project.findProperty('modsDir')
 
 neoForge {
@@ -30,26 +30,26 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
     runs {
-        // клиент без окна (xvfb-run): открывает повтор, проигрывает его (или снимает по плану -Pfilm) и выходит; свойства —
-        // -P<имя> → replayscan.<имя>
+        // windowless client (xvfb-run): opens a replay, plays it (or films the -Pfilm plan), then exits; properties:
+        // -P<name> → replayscan.<name>
         client {
             client()
             gameDirectory = project.file(project.findProperty('runDir') ?: 'run')
             ['replay', 'out', 'speed', 'viewers', 'every', 'range', 'subjects', 'ask', 'from', 'to', 'film'].each { key ->
                 def value = project.findProperty(key)
                 if (value == null) return
-                // пути — от каталога, где запущен Gradle (игра идёт в своём каталоге запуска)
+                // paths relative to the Gradle invocation directory (game runs in its own run directory)
                 if (key in ['replay', 'out', 'ask', 'film']) {
                     def f = new File(value.toString())
                     value = (f.absolute ? f : new File(gradle.startParameter.currentDir, value.toString())).absolutePath
                 }
                 systemProperty "replayscan.${key}", value.toString()
             }
-            // Connector ищет «чистый» jar клиента, как в раскладке лаунчера (установщик NeoForge: libraries/net/minecraft/client/…-srg.jar)
+            // Connector needs a clean client jar in launcher layout (NeoForge installer: libraries/net/minecraft/client/…-srg.jar)
             def clean = project.findProperty('connectorClean') ?: System.getenv('CONNECTOR_CLEAN')
             if (clean) systemProperty 'connector.clean.path', clean.toString()
             programArguments.addAll '--width', '640', '--height', '360'
-            // память клиента (-Pxmx): мир повтора со всей сборкой и долгая запись — больше 6 ГБ
+            // client memory (-Pxmx): replay world with full modpack and long recording exceeds 6 GB
             jvmArgument "-Xmx${project.findProperty('xmx') ?: '6g'}"
         }
         configureEach {
@@ -72,7 +72,7 @@ tasks.register('copyRunMods', Sync) {
 tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'copyRunMods' }
 
 dependencies {
-    // Distant Horizons: только API для компиляции — проверка глубины LOD в кадрах съёмки, если DH стоит (film/DhDepth)
+    // Distant Horizons: compile-only API for LOD depth checks in captured frames when DH is installed (film/DhDepth)
     compileOnly "maven.modrinth:distanthorizonsapi:${dh_api_version}"
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'

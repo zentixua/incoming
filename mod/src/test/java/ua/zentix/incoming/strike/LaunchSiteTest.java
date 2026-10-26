@@ -13,14 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Место пусковой в районе места пуска из приказа ({@link LaunchSite#nearest}): расчёт ставит машину на ближайшую годную
- * площадку, а не пускает без пусковой. Места, где на Newisle пусковой не было (#394, кадры VXC4): берег (годное в 7
- * блоках, между кольцом прежних мест 13–38 блоков), озеро (суша в 50), лес на склоне (поляна в 72).
+ * Place the launcher in the area of the launch site from the order ({@link LaunchSite#nearest}): the crew places the vehicle on the nearest suitable
+ *  site, and does not launch it without a launcher. Places where there was no Newisle launcher (#394, frames VXC4): shore (usable in 7
+ *  blocks, between the ring of former places 13–38 blocks), lake (land in 50), forest on the slope (clearing in 72).
  */
 class LaunchSiteTest {
     private static final int Y = 64;
 
-    /** Земля по высоте без листвы и с листвой и по воде под ногами. */
+    /** The ground in height without foliage and with foliage and in the water underfoot. */
     private record Field(IntBinaryOperator ground, IntBinaryOperator top, IntBinaryOperator water) implements LaunchSite.Ground {
         @Override
         public boolean ready(int x, int z) {
@@ -65,49 +65,49 @@ class LaunchSiteTest {
         double prev = 0;
         for (int[] o : area) {
             double d = Math.hypot(o[0], o[1]);
-            assertTrue(d >= prev && d <= LaunchSite.PLACE_AREA, "по дальности, в районе: " + d);
+            assertTrue(d >= prev && d <= LaunchSite.PLACE_AREA, "by range, in the area: " + d);
             prev = d;
         }
         double expected = Math.PI * Math.pow(LaunchSite.PLACE_AREA / LaunchSite.PLACE_STEP, 2);
-        assertEquals(expected, area.length, expected * 0.02, "мест в круге");
-        assertEquals(LaunchSite.PLACE_AREA + 9, LaunchSite.PLACE_REACH, 1e-9, "готово — район и зазор до соседней пусковой");
-        assertTrue(LaunchPlaces.DISTANCE * 16 >= LaunchSite.PLACE_REACH, "район залпа накрывает место пусковой в любой точке чанка места");
+        assertEquals(expected, area.length, expected * 0.02, "places in the circle");
+        assertEquals(LaunchSite.PLACE_AREA + 9, LaunchSite.PLACE_REACH, 1e-9, "ready - area and gap to the neighboring launcher");
+        assertTrue(LaunchPlaces.DISTANCE * 16 >= LaunchSite.PLACE_REACH, "the salvo area covers the launcher location at any point in the location chunk");
     }
 
-    /** Место в озере: суша в 50 блоках — пусковая на берегу, а не старт вне мира. */
+    /** Place in the lake: land in 50 blocks - launcher on the shore, not a launch outside the world. */
     @Test
     void lakeSendsTheCrewToTheShore() {
         Field lake = new Field((x, z) -> Y, (x, z) -> Y, (x, z) -> Math.hypot(x, z) < 50 ? 1 : 0);
         Vec3 site = LaunchSite.nearest(lake, 0, 0, new LaunchSite.Budget(), s -> true);
-        assertNotNull(site, "берег в районе");
-        // весь квадрат 5×5 — на суше: середина не ближе 2 блоков от воды
-        assertTrue(dist(site, 0, 0) >= 52 && dist(site, 0, 0) < 55, "ближайший берег: " + dist(site, 0, 0));
+        assertNotNull(site, "shore in the area");
+        // the entire square 5×5 - on land: the middle is no closer than 2 blocks from the water
+        assertTrue(dist(site, 0, 0) >= 52 && dist(site, 0, 0) < 55, "nearest shore: " + dist(site, 0, 0));
     }
 
-    /** Лес: кроны и стволы всюду, поляна 8×8 в 72 блоках — пусковая на поляне. */
+    /** Forest: crowns and trunks everywhere, clearing 8×8 in 72 blocks - launcher in the clearing. */
     @Test
     void forestSendsTheCrewToAClearing() {
         IntBinaryOperator clearing = (x, z) -> x >= 68 && x < 76 && z >= -4 && z < 4 ? 1 : 0;
-        // стволы через 3 блока: верх без листвы скачет; кроны — на 8 над землёй
+        // trunks through 3 block: top jumps without foliage; crowns - on 8 above the ground
         Field forest = new Field((x, z) -> clearing.applyAsInt(x, z) == 1 || Math.floorMod(x, 3) != 0 || Math.floorMod(z, 3) != 0 ? Y : Y + 6,
                 (x, z) -> clearing.applyAsInt(x, z) == 1 ? Y : Y + 8, (x, z) -> 0);
         Vec3 site = LaunchSite.nearest(forest, 0, 0, new LaunchSite.Budget(), s -> true);
-        assertNotNull(site, "поляна в районе");
-        assertTrue(site.x >= 70 && site.x <= 74 && Math.abs(site.z) <= 2, "на поляне: " + site);
+        assertNotNull(site, "clearing in the area");
+        assertTrue(site.x >= 70 && site.x <= 74 && Math.abs(site.z) <= 2, "in the clearing: " + site);
     }
 
-    /** Берег: годное в 7 блоках, между местами прежнего кольца (13–38 блоков) — его и берём. */
+    /** Shore: suitable in 7 blocks, between the places of the previous ring (13–38 blocks) - we take it. */
     @Test
     void shoreTakesTheNearestFlatSpot() {
         Field shore = new Field((x, z) -> x >= 5 ? Y : Y - 3 + Math.floorMod(x * 7 + z * 13, 5), (x, z) -> x >= 5 ? Y : Y + 2, (x, z) -> 0);
         Vec3 site = LaunchSite.nearest(shore, 0, 0, new LaunchSite.Budget(), s -> true);
         assertNotNull(site);
-        assertTrue(dist(site, 0, 0) < 9, "ближайшее ровное: " + dist(site, 0, 0));
+        assertTrue(dist(site, 0, 0) < 9, "nearest flat: " + dist(site, 0, 0));
     }
 
     /**
-     * Сектор закрыт — следующее место не ближе зазора к закрытому (его сектор упирается в те же деревья); место
-     * сначала не годится, потом годится — берётся первое годное.
+     * The sector is closed - the next place is no closer than the gap to the closed one (its sector abuts the same trees); place
+     *  is not suitable at first, then it is suitable - the first suitable one is taken.
      */
     @Test
     void closedSectorClosesItsNeighbours() {
@@ -120,20 +120,20 @@ class LaunchSiteTest {
         assertNotNull(site);
         assertEquals(3, tried.size());
         for (int i = 0; i < tried.size(); i++) {
-            for (int j = 0; j < i; j++) assertTrue(tried.get(i).distanceTo(tried.get(j)) >= 9, "соседи закрытого: " + tried);
+            for (int j = 0; j < i; j++) assertTrue(tried.get(i).distanceTo(tried.get(j)) >= 9, "neighbors of the closed one: " + tried);
         }
     }
 
-    /** Негде (море на весь район) — null, а цена — не больше места на проверку и не дороже предела. */
+    /** Nowhere (sea for the entire area) - null, and the price is no more than a place to check and no more than the limit. */
     @Test
     void openSeaHasNoSiteAndStaysInBudget() {
         Field sea = new Field((x, z) -> Y, (x, z) -> Y, (x, z) -> 1);
         LaunchSite.Budget budget = new LaunchSite.Budget();
         assertNull(LaunchSite.nearest(sea, 0, 0, budget, s -> true));
         assertTrue(budget.spent() <= 3 * LaunchSite.area(LaunchSite.PLACE_AREA, LaunchSite.PLACE_STEP).length && !budget.out(),
-                "цена поиска: " + budget.spent());
+                "search price: " + budget.spent());
         LaunchSite.Budget small = new LaunchSite.Budget(100);
         assertNull(LaunchSite.nearest(sea, 0, 0, small, s -> true));
-        assertTrue(small.out(), "предел вышел — поиск встал");
+        assertTrue(small.out(), "the limit has been reached - the search has stopped");
     }
 }

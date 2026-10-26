@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FalloutModelTest {
-    /** 15 кт наземный, ветер 24 км/ч на восток (+x). */
+    /** 15 kt ground, wind 24 km/h east (+x). */
     private static final FalloutModel GROUND = new FalloutModel(15, 0, 0, FalloutModel.REFERENCE_WIND);
 
-    /** Осевые контуры H+1 против ориентира NUKEMAP, допуск 25%. */
+    /** Axial contours H+1 against reference NUKEMAP, tolerance 25%. */
     @ParameterizedTest
     @CsvSource({"1000, 4000", "100, 13000", "10, 40000"})
     void contoursDownwind(double rate, double rangeM) {
@@ -21,9 +21,9 @@ class FalloutModelTest {
     @Test
     void upwindShorterThanDownwind() {
         for (double rate : new double[]{1000, 100, 10}) {
-            assertTrue(contour(GROUND, rate, Math.PI) < contour(GROUND, rate, 0) / 3, "контур " + rate);
+            assertTrue(contour(GROUND, rate, Math.PI) < contour(GROUND, rate, 0) / 3, "outline " + rate);
         }
-        // поперёк следа тоже уже, чем вдоль
+        // across the trail is also narrower than along
         assertTrue(contour(GROUND, 100, Math.PI / 2) < contour(GROUND, 100, 0) / 3);
     }
 
@@ -50,8 +50,8 @@ class FalloutModelTest {
     }
 
     /**
-     * Под облаком, против ветра и сбоку осадки не раньше, чем долетят крупные частицы: 4·Y^0.2 мин (модель Миллера),
-     * 1 Мт — 16 мин, как в «Attack Environment Manual» (1973).
+     * Under the cloud, against the wind and from the side, precipitation is not before large particles reach: 4·Y^0.2 min (Miller model),
+     * 1 Mt - 16 min, as in “Attack Environment Manual" (1973).
      */
     @Test
     void nothingFallsBeforeLargestParticles() {
@@ -75,7 +75,7 @@ class FalloutModelTest {
         assertTrue(low > 0 && low < 1);
     }
 
-    /** Дальность от эпицентра в направлении angle, где мощность в H+1 падает до rate. */
+    /** The distance from the epicenter is in the direction of angle, where the power at H+1 drops to rate. */
     private static double contour(FalloutModel m, double rate, double angle) {
         double c = Math.cos(angle), s = Math.sin(angle);
         return Solve.decreasingRoot(r -> m.doseRateAtH1(r * c, r * s), rate, 1, 1e6);

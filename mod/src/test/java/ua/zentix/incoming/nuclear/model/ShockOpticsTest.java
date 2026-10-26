@@ -5,15 +5,15 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Свет сквозь фронт ударной волны ({@link ShockOptics}): тонкая оболочка против прямого интеграла, рост с давлением, край. */
+/** Light through the shock wave front ({@link ShockOptics}): thin shell versus direct integral, growth with pressure, edge. */
 class ShockOpticsTest {
     private static final double N0 = 2.77e-4;
 
-    /** Путь одного пересечения прямым интегралом: ∫ δn·e^(−(R − r)/L) ds по половине хорды, r = √(b² + s²). */
+    /** Path of one intersection by direct integral: ∫ δn·e^(−(R − r)/L) ds along half chord, r = √(b² + s²). */
     private static double integral(double b, double r, double l, double dn) {
         if (b >= r) return 0;
         double end = Math.sqrt(r * r - b * b);
-        // оболочка — у конца хорды: шаги гуще там
+        // shell - at the end of the chord: steps are thicker there
         int n = 400_000;
         double sum = 0;
         for (int i = 0; i < n; i++) {
@@ -24,7 +24,7 @@ class ShockOpticsTest {
         return sum;
     }
 
-    /** Приближение тонкой оболочки: ошибка — порядка L/R (у r·dr взято R, у r² − b² отброшено (R − r)²). */
+    /** Approximation of a thin shell: error is of the order of L/R (from r·dr R is taken, from r² − b² (R − r)² is discarded). */
     @Test
     void thinShellPathIsTheIntegral() {
         for (double l : new double[]{5, 20, 100}) {
@@ -47,7 +47,7 @@ class ShockOpticsTest {
             }
             assertEquals(sum, ShockOptics.dawson(x), 2e-5 * Math.max(sum, 1e-3), "x = " + x);
         }
-        // за 10 — асимптота, без скачка на шве
+        // for 10 - asymptote, without a jump at the seam
         assertEquals(ShockOptics.dawson(10 - 1e-9), ShockOptics.dawson(10 + 1e-9), 1e-5 * ShockOptics.dawson(10));
     }
 
@@ -56,11 +56,11 @@ class ShockOpticsTest {
         assertEquals(1.048, HobBlast.densityRatio(1000 * BlastModel.kpa(1)), 0.001);
         assertEquals(1.232, HobBlast.densityRatio(1000 * BlastModel.kpa(5)), 0.002);
         assertEquals(1.443, HobBlast.densityRatio(1000 * BlastModel.kpa(10)), 0.003);
-        // без давления скачка нет (у γ = 1,402 таблицы HobBlast — 2·10⁻⁵ сжатия: 5·10⁻⁹ показателя)
+        // without pressure there is no jump (for γ = 1,402 table HobBlast - 2·10⁻⁵ compression: 5·10⁻⁹ indicator)
         assertEquals(0, ShockOptics.indexJump(0, N0), 1e-8);
     }
 
-    /** Сила преломления растёт с перепадом давления при той же геометрии, на любом месте у края и внутри. */
+    /** The refractive power increases with the pressure difference for the same geometry, at any place near the edge and inside. */
     @Test
     void bendGrowsWithPressure() {
         double r = 2000, l = 20;
@@ -69,7 +69,7 @@ class ShockOpticsTest {
                 double was = 0;
                 for (double kpa = 0.5; kpa < 5000; kpa *= 1.2) {
                     double bend = ShockOptics.bend(k * r, r, l, ShockOptics.indexJump(kpa, N0), w);
-                    assertTrue(Math.abs(bend) >= was - 1e-15, "b = " + k * r + ", w = " + w + ", " + kpa + " кПа");
+                    assertTrue(Math.abs(bend) >= was - 1e-15, "b = " + k * r + ", w = " + w + ", " + kpa + " kPa");
                     was = Math.abs(bend);
                 }
                 assertTrue(was > 0);
@@ -77,7 +77,7 @@ class ShockOpticsTest {
         }
     }
 
-    /** За фронтом (луч мимо сферы и пиксель целиком мимо) — ничего; у края — к середине. */
+    /** Behind the front (the ray is past the sphere and the entire pixel is past) - nothing; at the edge - towards the middle. */
     @Test
     void nothingBeyondTheFront() {
         double r = 2000, l = 20, dn = ShockOptics.indexJump(BlastModel.kpa(5), N0);
@@ -88,7 +88,7 @@ class ShockOpticsTest {
         }
     }
 
-    /** Оценка сверху {@link ShockOptics#most} не меньше отклонения любого пикселя (на два пересечения). */
+    /** The upper estimate of {@link ShockOptics#most} is not less than the deviation of any pixel (by two intersections). */
     @Test
     void mostBoundsEveryPixel() {
         double r = 3000, pixel = 1e-3;
@@ -99,18 +99,18 @@ class ShockOpticsTest {
                     double most = ShockOptics.most(r, dn, near, pixel), w = pixel * near;
                     for (double u = 0; u < 3 * l + 3 * w; u += Math.max(w, l) / 50) {
                         double bend = 2 * Math.abs(ShockOptics.bend(r - u, r, l, dn, w));
-                        assertTrue(bend <= most * (1 + 1e-9), kpa + " кПа, L " + l + ", w " + w + ", u " + u + ": " + bend + " > " + most);
+                        assertTrue(bend <= most * (1 + 1e-9), kpa + " kPa, L " + l + ", w " + w + ", u " + u + ": " + bend + " > " + most);
                     }
                 }
             }
         }
     }
 
-    /** Пример: 15 кт, фронт 5 psi в 2 км, глаз в 3 км, пиксель 1 мрад — кольцо в пиксели. */
+    /** Example: 15 kt, front 5 psi in 2 km, eye in 3 km, pixel 1 mrad - ring in pixels. */
     @Test
     void frontAtFivePsiIsSeenAsPixels() {
         double r = 2000, dn = ShockOptics.indexJump(BlastModel.kpa(5), N0), w = 1e-3 * Math.sqrt(3000 * 3000 - r * r);
         double px = 2 * ShockOptics.bend(r - 0.5 * w, r, 20, dn, w) / 1e-3;
-        assertTrue(px > 2 && px < 10, "сдвиг у края " + px + " px");
+        assertTrue(px > 2 && px < 10, "edge shift " + px + " px");
     }
 }

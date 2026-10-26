@@ -1,49 +1,49 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Что поджигает короткий световой импульс (огненный шар топлива, {@link FuelFireball}): у горючего свой порог — импульс, при
- * котором половина образцов загорается и горит дальше сама. Пороги — Glasstone &amp; Dolan, «The Effects of Nuclear
- * Weapons» (1977), таблица импульсов поджига для 1 Мт (по перепечатке у Collins, Melosh, Marcus, «Earth Impact Effects
- * Program», Meteoritics &amp; Planetary Science 40, 2005, табл. 1; arXiv 2107.05988): листва 0,25 МДж/м², газета 0,33,
- * сухая трава 0,38, одежда 1,0. Импульс 1 Мт длится секунды-десятки секунд, шар топлива — 1–3 с: короткому импульсу при
- * той же энергии поджечь легче (меньше тепла уходит вглубь), поэтому пороги здесь — оценка сверху.
+ * What a short thermal pulse ignites (fuel fireball, {@link FuelFireball}): each fuel has a threshold — fluence at which
+ * half the samples ignite and sustain burning. Thresholds from Glasstone &amp; Dolan, “The Effects of Nuclear Weapons”
+ * (1977), 1 Mt ignition fluence table (reprinted by Collins, Melosh, Marcus, “Earth Impact Effects Program”,
+ * Meteoritics &amp; Planetary Science 40, 2005, table 1; arXiv 2107.05988): foliage 0.25 MJ/m², newspaper 0.33,
+ * dry grass 0.38, clothing 1.0. A 1 Mt pulse lasts seconds to tens of seconds, fuel ball 1–3 s: for equal energy a shorter
+ * pulse ignites more easily (less heat diffuses inward), so these thresholds are upper estimates.
  * <p>
- * Толстое дерево (доски, брёвна, ступени, двери) от импульса в секунды не загорается надолго: кроме тонких материалов,
- * тепловое поражение остаётся в тонком слое поверхности (Glasstone, гл. 7), энергия поджига растёт с толщиной (DTIC
- * AD0640428). Прогретый слой за время t — √(a·t): у сосны (a ≈ 1,7·10⁻⁷ м²/с) за 3 с ~0,7 мм; поверхность вспыхивает,
- * пока светит шар, и гаснет без внешнего потока тепла (Drysdale, «An Introduction to Fire Dynamics», гл. 6: одиночная
- * доска сама не горит). Его поджигает горящее топливо, которое на нём лежит, — это не импульс, а пламя минутами.
+ * Thick wood (planks, logs, stairs, doors) does not sustain ignition from a seconds-long pulse: except for thin
+ * materials, thermal damage stays in a thin surface layer (Glasstone, ch. 7); ignition energy grows with thickness
+ * (DTIC AD0640428). Heated depth over time t is √(a·t): pine (a ≈ 1.7·10⁻⁷ m²/s) gives ~0.7 mm in 3 s; the surface flashes
+ * while the ball shines and goes out without external heat (Drysdale, “An Introduction to Fire Dynamics”, ch. 6:
+ * a single plank does not sustain burning). Burning fuel resting on it ignites it — minutes of flame, not a pulse.
  * <p>
- * Разброс вокруг порога — логнормальный, σ ln = {@value #SPREAD} (⚠ оценка: в таблице Glasstone пороги одного
- * материала по влажности и цвету расходятся в 1,5–2 раза).
+ * Threshold scatter is lognormal, σ ln = {@value #SPREAD} (⚠ estimate: Glasstone's table thresholds for one material
+ * vary by 1.5–2 times with moisture and color).
  */
 public final class PulseIgnition {
-    /** Калорий на см² в МДж/м²: 1 кал/см² = 41 868 Дж/м². */
+    /** Calories per cm² in MJ/m²: 1 cal/cm² = 41 868 J/m². */
     private static final double CAL_CM2_PER_MJ_M2 = 1e6 / 4.1868e4;
-    /** Разброс порога: σ натурального логарифма. */
+    /** Threshold spread: σ of natural logarithm. */
     public static final double SPREAD = 0.3;
     /**
-     * Импульс, ниже которого не загорается и тысячная доля самого лёгкого горючего (листвы), кал/см²: −3,1 σ от его
-     * порога. Дальше шар топлива ничего не поджигает — его обход по воздуху ({@code Craters.ignite}) там кончается.
+     * Fluence below which even a thousandth of the easiest fuel (foliage) does not ignite, cal/cm²: −3.1 σ from its threshold.
+     * Beyond it the fuel ball ignites nothing — its air traversal ({@code Craters.ignite}) ends there.
      */
     public static final double FLOOR = 0.25 * 1e6 / 4.1868e4 * Math.exp(-3.1 * SPREAD);
 
     private PulseIgnition() {}
 
-    /** Горючее по тому, как его поджигает импульс. */
+    /** Fuel by its thermal-pulse ignition response. */
     public enum Fuel {
-        /** Листва: 0,25 МДж/м² (6,0 кал/см²). */
+        /** Foliage: 0.25 MJ/m² (6.0 cal/cm²). */
         LEAVES(0.25),
-        /** Бумага, книги: газета 0,33 МДж/м² (7,9 кал/см²). */
+        /** Paper, books: newspaper 0.33 MJ/m² (7.9 cal/cm²). */
         PAPER(0.33),
-        /** Сухая трава, сено, кусты, цветы, лоза: 0,38 МДж/м² (9,1 кал/см²). */
+        /** Dry grass, hay, shrubs, flowers, vines: 0.38 MJ/m² (9.1 cal/cm²). */
         GRASS(0.38),
-        /** Ткань: шерсть, ковры, постели, знамёна — как одежда, 1,0 МДж/м² (24 кал/см²). */
+        /** Fabric: wool, carpets, beds, banners — as clothing, 1.0 MJ/m² (24 cal/cm²). */
         FABRIC(1.0),
-        /** Толстое дерево и всё прочее горючее: импульс шара его не поджигает, только горящее топливо на нём. */
+        /** Thick wood and all other combustibles: not ignited by the ball's pulse, only by burning fuel on them. */
         SOLID(Double.POSITIVE_INFINITY);
 
-        /** Порог, кал/см². */
+        /** Threshold, cal/cm². */
         public final double threshold;
 
         Fuel(double mjPerM2) {
@@ -51,13 +51,13 @@ public final class PulseIgnition {
         }
     }
 
-    /** Доля горючего {@code fuel}, что загорается от импульса {@code q} кал/см². */
+    /** Share of {@code fuel} igniting under fluence {@code q} cal/cm². */
     public static double share(double q, Fuel fuel) {
         if (!(q > 0) || Double.isInfinite(fuel.threshold)) return 0;
         return normal(Math.log(q / fuel.threshold) / SPREAD);
     }
 
-    /** Функция стандартного нормального распределения (Abramowitz, Stegun 26.2.17, ошибка &lt; 7,5·10⁻⁸). */
+    /** Standard normal distribution function (Abramowitz, Stegun 26.2.17, error &lt; 7.5·10⁻⁸). */
     static double normal(double x) {
         double t = 1 / (1 + 0.2316419 * Math.abs(x));
         double d = 0.3989422804014327 * Math.exp(-0.5 * x * x);

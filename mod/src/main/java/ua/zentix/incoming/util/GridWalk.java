@@ -1,44 +1,43 @@
 package ua.zentix.incoming.util;
 
 /**
- * Обход клеток квадратной сетки, которые пересекает отрезок на плоскости XZ (Amanatides–Woo, 2D): ни одна
- * пересечённая клетка не пропускается, даже если отрезок срезает угол. Чистый код без мира Minecraft: клетка — колонка
- * блоков (размер 1) или колонка чанков (16).
+ * Square-grid cells intersected by an XZ-plane segment (Amanatides–Woo, 2D): skips no intersected cell, even when the
+ * segment clips a corner. Pure code without Minecraft world: cell is a block column (size 1) or chunk column (16).
  */
 public final class GridWalk {
     private GridWalk() {}
 
-    /** Клетка (x, z): продолжать ли обход. */
+    /** Cell (x, z): whether to continue traversal. */
     @FunctionalInterface
     public interface Visitor {
         boolean visit(int x, int z);
     }
 
-    /** Клетка (x, z) и доли отрезка {@code t0..t1}, на которых он в ней: продолжать ли обход. */
+    /** Cell (x, z) and segment fractions {@code t0..t1} inside it: whether to continue traversal. */
     @FunctionalInterface
     public interface SpanVisitor {
         boolean visit(int x, int z, double t0, double t1);
     }
 
     /**
-     * Обходит клетки размера {@code cell} от начала отрезка к концу.
+     * Visits cells of size {@code cell} from segment start to end.
      *
-     * @return доля отрезка (0..1), на которой он входит в клетку, где {@code visitor} остановил обход; 1 — обойдены все
+     * @return segment fraction (0..1) entering the cell where {@code visitor} stopped; 1 — all visited
      */
     public static double walk(double fromX, double fromZ, double toX, double toZ, double cell, Visitor visitor) {
         return walk(fromX, fromZ, toX, toZ, cell, (SpanVisitor) (x, z, t0, t1) -> visitor.visit(x, z));
     }
 
     /**
-     * То же, что {@link #walk(double, double, double, double, double, Visitor)}, но клетке говорят, на какой доле
-     * отрезка он в ней: от входа до выхода (у последней клетки выход — 1).
+     * As {@link #walk(double, double, double, double, double, Visitor)}, but each cell receives its segment interval:
+     * entry to exit (last cell exits at 1).
      */
     public static double walk(double fromX, double fromZ, double toX, double toZ, double cell, SpanVisitor visitor) {
         double dx = toX - fromX, dz = toZ - fromZ;
         int cx = cell(fromX, cell), cz = cell(fromZ, cell);
         int endX = cell(toX, cell), endZ = cell(toZ, cell);
         int stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
-        // доля пути до следующей границы клетки по x и по z и прирост этой доли на одну клетку
+        // path fraction to next cell boundary in x and z, and its increment per cell
         double tMaxX = dx == 0 ? Double.POSITIVE_INFINITY : ((stepX > 0 ? cx + 1 : cx) * cell - fromX) / dx;
         double tMaxZ = dz == 0 ? Double.POSITIVE_INFINITY : ((stepZ > 0 ? cz + 1 : cz) * cell - fromZ) / dz;
         double tDeltaX = dx == 0 ? Double.POSITIVE_INFINITY : cell / Math.abs(dx);

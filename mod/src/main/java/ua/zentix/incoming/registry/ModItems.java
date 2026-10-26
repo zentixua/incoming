@@ -20,15 +20,15 @@ public final class ModItems {
             GeigerCounterItem::new, new Item.Properties().stacksTo(1));
     public static final DeferredItem<BlockItem> TRINITITE = REGISTER.registerSimpleBlockItem(ModBlocks.TRINITITE);
     public static final DeferredItem<BlockItem> SUBSTATION = REGISTER.registerSimpleBlockItem(ModBlocks.SUBSTATION);
-    /** ЗРК ({@link ua.zentix.incoming.defense.SamBlock}). */
+    /** SAM ({@link ua.zentix.incoming.defense.SamBlock}). */
     public static final DeferredItem<BlockItem> SAM = REGISTER.registerSimpleBlockItem(ModBlocks.SAM);
-    /** Стационарная пусковая ({@link ua.zentix.incoming.launcher.FixedLauncherBlock}). */
+    /** Fixed launcher ({@link ua.zentix.incoming.launcher.FixedLauncherBlock}). */
     public static final DeferredItem<BlockItem> FIXED_LAUNCHER = REGISTER.registerSimpleBlockItem(ModBlocks.FIXED_LAUNCHER);
-    /** Зенитная ракета: запас ЗРК (кладётся рукой, воронкой, воронкой Create). */
+    /** Surface-to-air missile: SAM stock (inserted by hand, hopper, Create funnel). */
     public static final DeferredItem<InterceptorItem> INTERCEPTOR = REGISTER.registerItem("interceptor",
             InterceptorItem::new, new Item.Properties().stacksTo(16));
 
-    // Боеприпасы: пуск снимает их из инвентаря стреляющего (strike.Munitions); какой у оружия — его паспорт (WeaponSpec.munition)
+    // Munitions: launch consumes from the shooter's inventory (strike.Munitions); weapon's munition comes from its spec (WeaponSpec.munition)
     public static final DeferredItem<MunitionItem> SHAHED = REGISTER.registerItem("shahed",
             MunitionItem::new, new Item.Properties().stacksTo(16));
     public static final DeferredItem<MunitionItem> LANCET = REGISTER.registerItem("lancet",
@@ -41,7 +41,7 @@ public final class ModItems {
             MunitionItem::new, new Item.Properties().stacksTo(16).rarity(Rarity.RARE));
     public static final DeferredItem<MunitionItem> ICBM = REGISTER.registerItem("icbm",
             MunitionItem::new, new Item.Properties().stacksTo(1).rarity(Rarity.EPIC));
-    /** Ядерная боевая часть на крылатую ракету или бомбу B-2 (у МБР она в самом боеприпасе). */
+    /** Nuclear warhead for a cruise missile or B-2 bomb (ICBM includes it in the munition). */
     public static final DeferredItem<MunitionItem> NUCLEAR_WARHEAD = REGISTER.registerItem("nuclear_warhead",
             MunitionItem::new, new Item.Properties().stacksTo(1).rarity(Rarity.EPIC));
 

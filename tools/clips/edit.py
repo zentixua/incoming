@@ -3,17 +3,18 @@
 # requires-python = ">=3.11"
 # dependencies = ["numpy>=1.26"]
 # ///
-"""Монтаж превью из снятых планов (replayscan film по планам plan.py): ролик — планы кандидата подряд, простыми
-склейками, звук игры −14 LUFS, пики не выше −1 dBTP; рядом — версия с тихой музыкой, подписи EN/RU и отчёт.
+"""Edit previews from recorded shots (replayscan film using plan.py plans): a clip joins a candidate's shots in order
+with simple cuts, game audio −14 LUFS, peaks no higher than −1 dBTP; alongside are a quiet-music version, EN/RU
+captions and a report.
 
-  uv run tools/clips/edit.py <film> [--music трек.mp3 --credit "строка автора"] [--out <film>/previews]
-                            [--clip far=<готовый ролик.mp4>]
+  uv run tools/clips/edit.py <film> [--music track.mp3 --credit "author line"] [--out <film>/previews]
+                            [--clip far=<finished clip.mp4>]
 
-<film> — каталог plan.py (runs.json, <повтор>/plan.json, <повтор>/film/best.json). Кроме проверки кадров съёмки
-(qa.jsonl, verdict.json) — ещё одна, по самим кадрам видео: вспышка каждого события видна там, где игра его рисует
-(яркость в рамке события сразу после него выше, чем до), — она ловит то, чего лучи по блокам не видят (рельеф
-Distant Horizons, дым, шейдеры). Нужен ffmpeg. `--clip far=<видео>` (или `nuke=`) — ролик, снятый не из повтора
-(живьём, со своей проверкой кадров, со звуком игры): та же громкость, версия с музыкой и подписи.
+<film> is the plan.py directory (runs.json, <replay>/plan.json, <replay>/film/best.json). In addition to filming frame
+checks (qa.jsonl, verdict.json), another check uses the video frames themselves: each event flash is visible where
+the game renders it (brightness in the event box just after exceeds that before), catching what block rays miss
+(Distant Horizons terrain, smoke, shaders). Requires ffmpeg. `--clip far=<video>` (or `nuke=`) is a clip filmed outside
+a replay (live, with its own frame checks and game audio): same loudness, music version and captions.
 """
 from __future__ import annotations
 
@@ -27,11 +28,11 @@ from pathlib import Path
 import numpy as np
 
 ORDER = ["rockets", "drones", "chaos", "far", "nuke", "pov", "fly"]
-# Длина ролика, с: превью — 20–35, «глазами игроков» — отрезок одного игрока
+# Length of the video, with: preview – 20–35, “through the eyes of the players” – segment of one player
 LENGTH = {"pov": (8, 20)}
-# Яркость (0–255) в рамке события сразу после него — на столько выше, чем до: вспышка видна
+# The brightness (0–255) in the frame of the event immediately after it is so much higher than before: the flash is visible
 FLASH = 18
-# Кадр проверки вспышки: видео уменьшается до этой ширины (оттенки серого)
+# Flash check frame: Video is reduced to this width (grayscale)
 PROBE_W = 270
 
 WEAPON = {
@@ -41,7 +42,7 @@ WEAPON = {
 }
 TAIL_EN = "Incoming mod for Minecraft Java 1.21.1, free on Modrinth and CurseForge."
 TAIL_RU = "Мод Incoming для Minecraft Java 1.21.1, бесплатно на Modrinth и CurseForge."
-# до выпуска на Modrinth и CurseForge (--soon)
+# before release on Modrinth and CurseForge (--soon)
 SOON_EN = "Incoming is a mod for Minecraft Java 1.21.1, coming soon to Modrinth and CurseForge."
 SOON_RU = "Incoming — мод для Minecraft Java 1.21.1, скоро на Modrinth и CurseForge."
 TAGS = "#minecraft #minecraftmods #moddedminecraft #майнкрафт #моды"
@@ -57,14 +58,14 @@ def duration(f: Path) -> float:
 
 
 def gray_frames(video: Path, fps: float, aspect: float) -> np.ndarray:
-    """Кадры видео в оттенках серого шириной PROBE_W (массив кадр × строка × столбец)."""
+    """Grayscale video frames of width PROBE_W (array frame × row × column)."""
     h = round(PROBE_W / aspect / 2) * 2
     raw = run(["ffmpeg", "-v", "error", "-i", str(video), "-vf", f"fps={fps},scale={PROBE_W}:{h},format=gray", "-f", "rawvideo", "-"]).stdout
     return np.frombuffer(raw, np.uint8).reshape(-1, h, PROBE_W)
 
 
 def project(cam: list[float], fov: float, aspect: float, p: list[float]) -> tuple[float, float, float] | None:
-    """Место точки в кадре (−1…1 вправо и вверх) и глубина по оси взгляда; за камерой — None. Поворот как у игрока."""
+    """The location of the point in the frame (−1...1 to the right and up) and the depth along the axis of view; behind the camera - None. Turn like a player."""
     x, y, z, yaw, pitch = cam
     yr, pr = math.radians(yaw), math.radians(pitch)
     fwd = (-math.sin(yr) * math.cos(pr), -math.sin(pr), math.cos(yr) * math.cos(pr))
@@ -79,7 +80,7 @@ def project(cam: list[float], fov: float, aspect: float, p: list[float]) -> tupl
 
 
 def flash_check(shot: dict, cand: Path, fps: float, aspect: float) -> list[dict]:
-    """Вспышка каждого события по кадрам видео: яркость в его рамке за 12 тиков после него против 20 тиков до."""
+    """Flash of each event by video frames: brightness in its frame for 12 tick after it versus 20 tick before."""
     qa = [json.loads(line) for line in (cand / "qa.jsonl").read_text().splitlines() if line.strip()]
     keys = shot["subject"].get("keys", [])
     if not qa or not keys:
@@ -88,12 +89,12 @@ def flash_check(shot: dict, cand: Path, fps: float, aspect: float) -> list[dict]
     h, w = frames.shape[1:]
     out = []
     for k in keys:
-        # событие до начала плана (продолжение другого плана) вспышкой в нём не проверить
+        # an event before the start of a plan (continuation of another plan) cannot be checked with a flash in it
         if not shot["a"] <= k["t"] <= shot["b"]:
             continue
         before, after = [], []
         for f in qa:
-            # кадр видео k — тик повтора a + k·20/fps (вывод Flashback)
+            # video frame k - replay tick a + k·20/fps (output Flashback)
             i = round((f["t"] - shot["a"]) * fps / 20)
             if not (k["t"] - 20 <= f["t"] <= k["t"] + 12) or not 0 <= i < len(frames):
                 continue
@@ -114,7 +115,7 @@ def flash_check(shot: dict, cand: Path, fps: float, aspect: float) -> list[dict]
 
 
 def loudnorm(inputs: list[str], graph: str, label: str, out: Path, extra: list[str]):
-    """Звук к −14 LUFS и −1 dBTP в два прохода (замер, потом линейно)."""
+    """Sound for −14 LUFS and −1 dBTP in two passes (measured, then linear)."""
     probe = run(["ffmpeg", "-hide_banner", *inputs, "-filter_complex", f"{graph};[{label}]loudnorm=I=-14:TP=-1:LRA=11:print_format=json[x]",
                  "-map", "[v]", "-map", "[x]", "-f", "null", "-"], text=True).stderr
     m = json.loads(probe[probe.rindex("{"):probe.rindex("}") + 1])
@@ -133,20 +134,20 @@ def assemble(videos: list[Path], out: Path, music: Path | None):
         loudnorm(inputs, graph, "g", out, [])
         return
     total = sum(duration(v) for v in videos)
-    # музыка тихо под звуком игры: на 14 дБ ниже, мягкое начало и конец
+    # music quietly under the game sound: 14 dB lower, soft start and end
     graph += (f";[{n}:a]atrim=0:{total:.3f},volume=-14dB,afade=t=in:d=1,afade=t=out:st={max(0.0, total - 2):.3f}:d=2[m]"
               ";[g][m]amix=inputs=2:normalize=0:duration=first[mix]")
     loudnorm(inputs + ["-i", str(music)], graph, "mix", out, [])
 
 
 def cap(s: str) -> str:
-    """Первая буква — заглавная, остальное как есть («Град», МБР, B-2; `str.capitalize` их портит)."""
+    """The first letter is capital, the rest is as is (“Grad”, ICBM, B-2; `str.capitalize` spoils them)."""
     i = next((j for j, ch in enumerate(s) if ch.isalpha()), len(s))
     return s[:i] + s[i:i + 1].upper() + s[i + 1:]
 
 
 def caption(preview: str, cand: dict) -> tuple[str, str]:
-    """Подпись EN/RU по данным кандидата (оружие, расстояния); без рекламных слов."""
+    """EN/RU caption from candidate data (weapon, distances), without promotional wording."""
     w = cand["weapon"].split("+")
     en = " and ".join(WEAPON.get(x, (x, x))[0] for x in w)
     ru = " и ".join(WEAPON.get(x, (x, x))[1] for x in w)
@@ -194,12 +195,12 @@ def caption(preview: str, cand: dict) -> tuple[str, str]:
 
 
 def pov_caption(en: str, ru: str, n: dict) -> tuple[str, str]:
-    """Подпись отрезка глазами игрока — по главному в нём: подрыв, сбитие, удары, пуск, пролёт."""
+    """The signature of the segment through the eyes of the player is the main thing in it: detonation, shooting down, impacts, launch, flight."""
     k, sec = n.get("ground", 0), round(n.get("seconds", 0))
     if n.get("nuke"):
         return "A nuclear strike, seen through a player's eyes.", "Ядерный удар глазами игрока."
     if n.get("nuke_off"):
-        # подрыв не в кадре игрока (в метро, в доме): как далеко
+        # explosion not in the player's frame (in the subway, in the house): how far
         d = n["nuke_off"]
         return f"A nuclear strike {d} blocks away, through a player's eyes.", f"Ядерный удар в {d} блоках: вид глазами игрока."
     if n.get("shot_down"):
@@ -213,16 +214,16 @@ def pov_caption(en: str, ru: str, n: dict) -> tuple[str, str]:
         return f"{cap(en)}: the launch, seen through a player's eyes.", f"{cap(ru)}: пуск глазами игрока."
     if n.get("flyby"):
         return f"{cap(en)} overhead, seen through a player's eyes.", f"{cap(ru)} над игроком: вид его глазами."
-    # отмеченный игроком момент, в котором данные повтора ничего из своих родов не нашли
+    # a moment marked by the player in which the replay data did not find anything of its kind
     return "Seen through a player's eyes.", "Вид глазами игрока."
 
 
 def fly_caption(en: str, ru: str, n: dict) -> tuple[str, str]:
-    """Подпись пролёта свободной камеры: удары в кадре и оружие налёта."""
+    """Signature of the flight of the free camera: blows in the frame and weapons of the raid."""
     k, sec = n.get("impacts", 0), round(n.get("seconds", 0))
     raid_en, raid_ru = (f"a raid of {en}", f"налёта ({ru})") if en and en != "fly" else ("an air raid", "налёта")
     if n.get("passes"):
-        # проходы FPV — склейка проходов мимо ударов
+        # passes FPV - gluing passes past impacts
         p = n["passes"]
         return ((f"FPV drone passes by {p} strikes during {raid_en}." if p > 1 else f"An FPV drone pass by a strike during {raid_en}."),
                 (f"Проходы FPV-дрона мимо ударов во время {raid_ru}: {p}." if p > 1 else f"Проход FPV-дрона мимо удара во время {raid_ru}."))
@@ -235,10 +236,10 @@ def fly_caption(en: str, ru: str, n: dict) -> tuple[str, str]:
 
 
 def shown(cand: dict, kept: list[dict]) -> dict:
-    """Числа кандидата для подписи — только о планах, которые вошли в ролик (план глазами одного игрока бывает слит из
-    нескольких: `drones-0-flyby+shootdown`)."""
+    """The candidate's numbers for signature are only about the plans that were included in the video (the plan through the eyes of one player can be merged from
+     of several: `drones-0-flyby+shootdown`)."""
     if cand.get("preview") in ("pov", "fly"):
-        # отрезок глазами игрока и пролёт — один план, его события все; проходы FPV — сколько их вошло
+        # the segment through the eyes of the player and the flight - one shot, all its events; passages FPV - how many of them are included
         if cand.get("numbers", {}).get("passes"):
             return {**cand, "numbers": {**cand["numbers"], "passes": len(kept)}}
         return cand
@@ -251,13 +252,13 @@ def shown(cand: dict, kept: list[dict]) -> dict:
     if not has("launch"):
         n["no_launch"] = True
     if n.get("strikes"):
-        # удары издалека — по одному на план far<i>, по порядку
+        # strikes from afar - one per plan far<i>, in order
         n["strikes"] = [x for i, x in enumerate(n["strikes"]) if has(f"far{i + 1}")]
     return {**cand, "numbers": n}
 
 
 def finish(cid: str, preview: str, cand: dict, videos: list[Path], ok: bool, lines: list[str], out: Path, a) -> list[str]:
-    """Ролик из видео планов: чистый, с музыкой, подпись; строки отчёта."""
+    """Clip from video plans: clean, with music, signature; report lines."""
     clean, tuned = out / f"{cid}.mp4", out / f"{cid}-music.mp4"
     assemble(videos, clean, None)
     if a.music:
@@ -269,17 +270,17 @@ def finish(cid: str, preview: str, cand: dict, videos: list[Path], ok: bool, lin
     if a.music and a.credit:
         text += f"Music: {a.credit}\n"
     (out / f"{cid}.txt").write_text(text)
-    # отмеченный игроком момент — такой длины, как он отметил
+    # the moment noted by the player - the length as he noted
     lo, hi = (0, math.inf) if cand.get("numbers", {}).get("mark") else LENGTH.get(preview, (20, 35))
-    return [f"## {cid} — {'годится' if ok else 'ЕСТЬ ЗАМЕЧАНИЯ'}", "", f"Файл {clean.name}, {length:.1f} с"
-            + ("" if lo - 1 / 30 <= length <= hi + 1 / 30 else f" (вне {lo}–{hi} с)") + f"; подпись — {cid}.txt.", *lines, ""]
+    return [f"## {cid} — {'good' if ok else 'HAS NOTES'}", "", f"File {clean.name}, {length:.1f} s"
+            + ("" if lo - 1 / 30 <= length <= hi + 1 / 30 else f" (outside {lo}–{hi} s)") + f"; caption: {cid}.txt.", *lines, ""]
 
 
 def clip_spec(spec: str) -> tuple[str, Path]:
-    """`<ролик>=<видео>` для --clip: подпись без чисел повтора есть только у «издалека» и ядерки."""
+    """`<clip>=<video>` for --clip: only the distant and nuke clips have captions without replay numbers."""
     name, sep, video = spec.partition("=")
     if not sep or name not in ("far", "nuke"):
-        raise argparse.ArgumentTypeError(f"{spec!r}: нужно far=<видео> или nuke=<видео>")
+        raise argparse.ArgumentTypeError(f"{spec!r}: you need far=<video> or nuke=<video>")
     return name, Path(video)
 
 
@@ -293,21 +294,21 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("film")
     p.add_argument("--out", default=None)
-    p.add_argument("--music", default=None, help="трек для версии с музыкой (CC BY и т. п.)")
-    p.add_argument("--credit", default="", help="строка автора трека для подписи")
-    p.add_argument("--soon", action="store_true", help="мод ещё не вышел: в подписи «скоро на Modrinth и CurseForge»")
+    p.add_argument("--music", default=None, help="track for the version with music (CC BY, etc.)")
+    p.add_argument("--credit", default="", help="track attribution line for caption")
+    p.add_argument("--soon", action="store_true", help="the mod has not yet been released: in the caption “soon on Modrinth and CurseForge”")
     p.add_argument("--clip", action="append", default=[], type=clip_spec,
-                   help="far=<видео> или nuke=<видео>: ролик, снятый не из повтора, со звуком игры")
+                   help="far=<video> or nuke=<video>: non-replay video with game audio")
     a = p.parse_args()
     for name, video in a.clip:
         if not video.is_file() or not has_audio(video):
-            p.error(f"--clip {name}: {video} — нет файла или звука в нём")
+            p.error(f"--clip {name}: {video} - there is no file or sound in it")
     film = Path(a.film)
     out = Path(a.out) if a.out else film / "previews"
     out.mkdir(parents=True, exist_ok=True)
     cands = {c["id"]: c for v in json.loads((film.parent / "candidates.json").read_text()).values() for c in v} \
         if (film.parent / "candidates.json").exists() else {}
-    report = ["# Превью: итог съёмки и монтажа", ""]
+    report = ["# Preview: summary of filming and editing", ""]
     for r in json.loads((film / "runs.json").read_text()):
         plan = json.loads(Path(r["plan"]).read_text())
         shots = {s["name"]: s for s in plan["shots"]}
@@ -320,11 +321,11 @@ def main():
                 b = best.get(name)
                 s = shots[name]
                 cand = Path(b["dir"]) if b and "dir" in b else None
-                why = (b.get("why") if b else "нет в best.json") if cand is None \
-                    else "снят по другому плану (тики не те)" if (b.get("a"), b.get("b")) != (s["a"], s["b"]) \
-                    else "нет видео или проверки кадров" if not (cand / "video.mkv").is_file() or not (cand / "qa.jsonl").is_file() else None
+                why = (b.get("why") if b else "not in best.json") if cand is None \
+                    else "filmed with another plan (wrong ticks)" if (b.get("a"), b.get("b")) != (s["a"], s["b"]) \
+                    else "no video or frame check" if not (cand / "video.mkv").is_file() or not (cand / "qa.jsonl").is_file() else None
                 if why:
-                    lines.append(f"- {name}: не снят — {why}")
+                    lines.append(f"- {name}: not filmed — {why}")
                     ok = False
                     continue
                 verdict = json.loads((cand / "verdict.json").read_text()) if (cand / "verdict.json").exists() else {}
@@ -334,22 +335,22 @@ def main():
                 videos.append(cand / "video.mkv")
                 names.append(name)
                 passed.append(bool(b.get("pass")))
-                lines.append(f"- {name}: камера {b.get('candidate')}, проверка кадров {'да' if b.get('pass') else 'НЕТ: ' + str(b.get('why'))}; "
-                             f"кадров {verdict.get('frames')}, объект {verdict.get('approach', 0):.0%}, событий {verdict.get('keys_ok')}/{verdict.get('keys')}, "
-                             f"громких в кадре {verdict.get('loud_on')}, за кадром {verdict.get('loud_off')}; "
-                             f"вспышка видна {len(flashes) - len(dark)}/{len(flashes)}")
+                lines.append(f"- {name}: camera {b.get('candidate')}, frame check {'yes' if b.get('pass') else 'NO: ' + str(b.get('why'))}; "
+                             f"frames {verdict.get('frames')}, object {verdict.get('approach', 0):.0%}, events {verdict.get('keys_ok')}/{verdict.get('keys')}, "
+                             f"loud in the frame {verdict.get('loud_on')}, off-screen {verdict.get('loud_off')}; "
+                             f"flash visible {len(flashes) - len(dark)}/{len(flashes)}")
             if not videos:
                 report += [f"## {cid}", "", *lines, ""]
                 continue
-            # план, не прошедший проверку кадров (объекта в кадре нет), в ролик не идёт, если в нём есть прошедшие
+            # a shot that has not passed the frame check (there is no object in the frame) does not go into the video if it contains passed
             if any(passed) and not all(passed):
                 videos = [v for v, p in zip(videos, passed) if p]
                 names = [n for n, p in zip(names, passed) if p]
-                lines.append(f"- в ролик не вошли планы без проверки кадров: {passed.count(False)}")
+                lines.append(f"- shots without frame checks excluded: {passed.count(False)}")
             report += finish(cid, preview, shown(cands.get(cid, {"weapon": "", "numbers": {}}), [shots[n] for n in names]), videos, ok, lines, out, a)
     for name, video in a.clip:
         report += finish(name, name, {"weapon": "", "numbers": {}}, [video], True,
-                         [f"- снят не из повтора: {video} (проверка кадров — его съёмки)"], out, a)
+                         [f"- filmed outside a replay: {video} (frame checks from its recording)"], out, a)
     (out / "report.md").write_text("\n".join(report))
     print(out / "report.md")
 

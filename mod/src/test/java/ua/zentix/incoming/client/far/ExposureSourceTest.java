@@ -13,16 +13,15 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Одно привыкание глаза на кадр ({@link Sight#exposure}, {@link FarView#exposure}): всё, что слой эффектов рисует светом
- * обычного оружия, — тело огня, блик и вуаль, свет на дыме, частицах и мире, струя у сущности — берёт привыкание кадра,
- * а не одно ночное по свету неба ({@link Sight#adapted}). Иначе в одном кадре два глаза: свет на мир привыкал к огню, а
- * блик факела в 8 м — нет, и ночной старт заливал кадр оранжевым (22.10). {@link Sight#adapted} — только у ядерной
- * картинки (её глаз — свой, ядерка этим не меняется), у самого {@link Sight} и у вспышки на экране ({@code FlashFalloff}:
- * в миг вспышки глаз ещё не привык — к ней он и привыкает).
+ * One eye adjustment per frame ({@link Sight#exposure}, {@link FarView#exposure}): everything that the effects layer paints with the light of
+ *  of a conventional weapon - the body of fire, flare and veil, light on smoke, particles and the world, the jet from the entity - takes the addiction of the frame,
+ *  and not just one night in the light of the sky ({@link Sight#adapted}). Otherwise, there are two eyes in one frame: the light on the world got used to the fire, but the glare of the torch in 8 m did not, and the night start filled the frame with orange (22.10). {@link Sight#adapted} - only for the nuclear
+ *  picture (her eye is her own, the nuke does not change this), for {@link Sight} itself and for the flash on the screen ({@code FlashFalloff}:
+ *  at the moment of the flash the eye is not yet used to it - it gets used to it).
  */
 class ExposureSourceTest {
     private static final Path CLIENT = Path.of("src/main/java/ua/zentix/incoming/client");
-    /** Вызов adapted(…) без адресата (статический импорт): не после буквы, цифры или точки. */
+    /** Call adapted(…) without a destination (static import): not after a letter, number or period. */
     private static final java.util.regex.Pattern ADAPTED = java.util.regex.Pattern.compile("(?<![\\w.])adapted\\(");
     private static final Set<String> ALLOWED = Set.of("far/Sight.java", "fx/FlashFalloff.java", "fx/layer/PallPass.java");
 
@@ -41,18 +40,18 @@ class ExposureSourceTest {
                 }
             }
         }
-        assertEquals(List.of(), bad, "свет обычного оружия с ночным привыканием, мимо привыкания кадра");
+        assertEquals(List.of(), bad, "light of conventional weapons with night addictive, past addictive frame");
     }
 
     /**
-     * Клубы дыма слоя светит тот же свет неба, что блоки и частицы под открытым небом ({@link FarView#sky}, карта освещения),
-     * а не {@link FarView#ambient}: с ним белый дым ночью выходил темнее освещённого луной камня рядом (ночной след ЗРК
-     * клубами, 22.10).
+     * billows of the smoke layer shines the same sky light as the blocks and particles in the open air ({@link FarView#sky}, light map),
+     *  and not {@link FarView#ambient}: with it, white smoke at night came out darker than the moonlit stone nearby (night trail of ZRK
+     *  billows, 22.10).
      */
     @Test
     void puffsTakeTheWorldsSkyLight() throws IOException {
         String text = Files.readString(CLIENT.resolve("far/SmokePuffs.java"));
-        assertEquals(false, text.contains("view.ambient()"), "SmokePuffs: свет неба клубов — FarView.sky, не ambient");
-        assertEquals(true, text.contains("view.skyLight()"), "SmokePuffs: свет неба клубов — FarView.sky");
+        assertEquals(false, text.contains("view.ambient()"), "SmokePuffs: sky light billows - FarView.sky, not ambient");
+        assertEquals(true, text.contains("view.skyLight()"), "SmokePuffs: sky light billows – FarView.sky");
     }
 }

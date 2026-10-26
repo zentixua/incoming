@@ -7,9 +7,9 @@ import net.minecraft.client.Minecraft;
 import java.lang.reflect.Field;
 
 /**
- * Часы клиента по кадрам видео: пока идёт запись, игра между кадрами продвигается ровно на шаг кадра (1/60 с видео),
- * сколько бы ни рисовался кадр. Доля тика для отрисовки ставится точно, число тиков — через «прошлое время» таймера
- * (сколько миллисекунд якобы прошло с прошлого кадра). Поля таймера закрыты — только для этой записи, отражением.
+ * Client clock by video frames: while recording is in progress, the game between frames advances exactly one frame step (1/60 s video),
+ * , no matter how many frames are drawn. The tick fraction for drawing is set exactly, the tick number is set after the “past time” of the timer
+ *  (how many milliseconds supposedly passed since the last frame). Timer fields are closed - only for this entry, by reflection.
  */
 final class FrameClock {
     private static final Field LAST_MS = field("lastMs");
@@ -31,7 +31,7 @@ final class FrameClock {
         return (DeltaTracker.Timer) Minecraft.getInstance().getTimer();
     }
 
-    /** Доля тика, с которой будет нарисован этот кадр. */
+    /** The tick fraction with which this frame will be drawn. */
     static void setPartial(float partial) {
         try {
             RESIDUAL.setFloat(timer(), partial);
@@ -40,7 +40,7 @@ final class FrameClock {
         }
     }
 
-    /** К следующему кадру игра продвинется на {@code ticks} тиков (при нынешней длине тика клиента). */
+    /** By the next frame the game will advance by {@code ticks} tick (at the current client tick length). */
     static void advanceNext(double ticks) {
         Minecraft mc = Minecraft.getInstance();
         float mspt = Math.max(50f, mc.level == null ? 50f : mc.level.tickRateManager().millisecondsPerTick());

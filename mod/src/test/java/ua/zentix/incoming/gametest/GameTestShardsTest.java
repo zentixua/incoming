@@ -13,7 +13,7 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Раскладка GameTest по машинам CI: каждая партия ровно в одной части, у всех машин одна раскладка, части ровные. */
+/** Layout of GameTest for machines CI: each batch is in exactly one part, all machines have the same layout, the parts are even. */
 class GameTestShardsTest {
     @Test
     void everyBatchInExactlyOnePart() {
@@ -21,14 +21,14 @@ class GameTestShardsTest {
         for (int count = 1; count <= 8; count++) {
             Map<String, Integer> plan = GameTestShards.assign(weights, count);
             assertEquals(weights.keySet(), plan.keySet());
-            for (int part : plan.values()) assertTrue(part >= 0 && part < count, "часть " + part + " из " + count);
+            for (int part : plan.values()) assertTrue(part >= 0 && part < count, "part " + part + " from " + count);
         }
     }
 
     @Test
     void sameOnEveryMachine() {
         Map<String, Double> weights = randomWeights(new Random(2), 100);
-        // одинаковые времена — порядок решает имя, а не порядок, в котором партии пришли
+        // equal times - the order is decided by the name, not the order in which the batch arrived
         weights.put("tie_b", 5.0);
         weights.put("tie_a", 5.0);
         List<String> shuffled = new ArrayList<>(weights.keySet());
@@ -40,7 +40,7 @@ class GameTestShardsTest {
 
     @Test
     void partsEvenWithinOneBatch() {
-        // жадная раскладка: часть, получившая последнюю партию, до неё была не больше средней
+        // greedy layout: the part that received the last batch was no more than average before it
         Map<String, Double> weights = randomWeights(new Random(4), 222);
         double total = weights.values().stream().mapToDouble(Double::doubleValue).sum();
         double largest = weights.values().stream().mapToDouble(Double::doubleValue).max().orElseThrow();
@@ -48,7 +48,7 @@ class GameTestShardsTest {
             double[] load = new double[count];
             Map<String, Integer> plan = GameTestShards.assign(weights, count);
             plan.forEach((b, part) -> load[part] += weights.get(b));
-            for (double l : load) assertTrue(l <= total / count + largest + 1e-9, "часть " + l + " с при средней " + total / count);
+            for (double l : load) assertTrue(l <= total / count + largest + 1e-9, "part " + l + " s at average " + total / count);
         }
     }
 
@@ -59,7 +59,7 @@ class GameTestShardsTest {
         assertEquals(Map.of("x", 1.0), GameTestShards.weights(List.of("x"), Map.of()));
     }
 
-    /** Как у настоящего GameTest: много коротких партий и несколько долгих. */
+    /** Like the real GameTest: many short batches and several long ones. */
     private static Map<String, Double> randomWeights(Random random, int count) {
         Map<String, Double> out = new TreeMap<>();
         for (int i = 0; i < count; i++) out.put("batch_" + i, random.nextInt(10) == 0 ? 10 + random.nextDouble() * 40 : 0.5 + random.nextDouble());

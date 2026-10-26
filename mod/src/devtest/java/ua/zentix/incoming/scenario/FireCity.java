@@ -18,20 +18,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Подробный город для замера огня клиента ({@code FireWatch}, строка {@code SCENARIO nuke-sound … watch}): с тика
- * {@code T} в каждом чанке клиента секция поверхности и {@code N − 1} под ней получают по {@link #DISTINCT} разных состояний
- * в двух нижних слоях — палитра секции глобальная, как в подробном городе, и {@code maybeHas} отвечает «да» на любой
- * вопрос. Только в копии мира у клиента: сервер её не знает, а картинка секций не перестраивается. Свойство
- * {@code incoming.scenario.city=N@T} (в облаке — переменная {@code INCOMING_CITY}). Для сравнения раз в
- * {@link #OLD_EVERY} тиков (и до тика {@code T}) — цена прежнего счёта огня ({@code PalettedContainer.count} каждой секции с огнём в палитре,
- * 16 чанков за тик): строка {@code SCENARIO city old-scan}.
+ * Detailed city for measuring the client's fire ({@code FireWatch}, line {@code SCENARIO nuke-sound … watch}): from tick
+ * {@code T} in each client chunk the surface section and {@code N − 1} below it receive {@link #DISTINCT} of different states
+ *  in the two lower layers - the section palette global, as in the detailed city, and {@code maybeHas} answers “yes” to any
+ *  question. Only in the client’s copy of the world: the server does not know it, and the picture of the sections is not rebuilt. Property
+ * {@code incoming.scenario.city=N@T} (in the cloud - variable {@code INCOMING_CITY}). For comparison, once per
+ * {@link #OLD_EVERY} tick (and before tick {@code T}) is the price of the previous fire count ({@code PalettedContainer.count} of each section with fire in the palette,
+ * 16 chunks per tick): line {@code SCENARIO city old-scan}.
  */
 final class FireCity {
-    /** Разных состояний в секции: больше 256 — глобальная палитра. */
+    /** Different states in the section: more 256 - global palette. */
     private static final int DISTINCT = 300;
-    /** Чанков за тик. */
+    /** Chunks per tick. */
     private static final int PER_TICK = 32;
-    /** Прежний счёт огня: чанков за тик и раз в сколько тиков его мерить. */
+    /** The previous count of fire: chunks per tick and times per tick to measure it. */
     private static final int OLD_CHUNKS = 16, OLD_EVERY = 20;
 
     private final int sections, from;
@@ -44,7 +44,7 @@ final class FireCity {
         this.from = from;
     }
 
-    /** Из свойства {@code N@T} (или {@code N} — с начала); null — города нет. */
+    /** From property {@code N@T} (or {@code N} - from the beginning); null - no city. */
     @Nullable
     static FireCity of(@Nullable String spec) {
         if (spec == null || spec.isBlank()) return null;
@@ -53,7 +53,7 @@ final class FireCity {
             int n = Integer.parseInt(p[0].strip()), t = p.length > 1 ? Integer.parseInt(p[1].strip()) : 0;
             return n > 0 ? new FireCity(n, t) : null;
         } catch (NumberFormatException e) {
-            Incoming.LOG.warn("SCENARIO city: «{}» пропущено — нужно N или N@тик", spec);
+            Incoming.LOG.warn("SCENARIO city: “{}” is missing - you need N or N@tick", spec);
             return null;
         }
     }
@@ -78,7 +78,7 @@ final class FireCity {
                 if (done.contains(key)) continue;
                 LevelChunk c = level.getChunkSource().getChunk(cx + dx, cz + dz, false);
                 if (c == null) continue;
-                // вниз от поверхности: воздух над ней (и зритель в нём) не тронут
+                // down from the surface: the air above it (and the viewer in it) is not touched
                 int top = c.getSectionIndex(Math.max(level.getMinBuildHeight(), c.getHeight(Heightmap.Types.MOTION_BLOCKING, 8, 8) - 1));
                 for (int i = Math.max(0, top - sections + 1); i <= top; i++) {
                     LevelChunkSection s = c.getSection(i);
@@ -94,7 +94,7 @@ final class FireCity {
         }
     }
 
-    /** Цена прежнего счёта огня (до выборки под бюджетом) на тех же чанках: 16 чанков подряд по кругу прорисовки. */
+    /** The price of the previous fire count (before sampling under the budget) on the same chunks: 16 chunks in a row in a drawing circle. */
     private void oldScan(ClientLevel level, int cx, int cz, int r) {
         int side = 2 * r + 1, all = side * side, scanned = 0, fire = 0;
         long t0 = System.nanoTime();

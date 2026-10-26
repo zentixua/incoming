@@ -12,31 +12,31 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Глаз в дыму (жалоба 24.10, финальный проход 3.7.0, сцена sam-burst: ветер несёт след ЗРК сквозь камеру). Кадр — квадраты
- * клубов и вуаль слоя ({@link SmokePuffs}, тот же отрезок трубки, что у следа, {@link FarFlightView#line}) — должен
- * повторять само вещество: пропускание по лучу из глаза через гауссову трубку. Прежде клубы трубки таяли, как только глаз
- * входил в их край (~3,7σ), а вещество шло в одну вуаль с толщей по середине экрана: весь кадр — ровная белая пелена, и над
- * трубкой, где луч её не встречает, тоже.
+ * Eye in the Smoke (complaint 24.10, final pass 3.7.0, scene sam-burst: the wind carries the SAM trail through the camera). The frame - squares
+ *  of billows and a veil of a layer ({@link SmokePuffs}, the same piece of tube as the trace, {@link FarFlightView#line}) - should
+ *  repeat the substance itself: passing a beam from the eye through a Gaussian tube. Previously, billows tubes melted as soon as the eye
+ *  entered their edge (~3,7σ), and the substance went into one veil with a thickness in the middle of the screen: the entire frame is a smooth white pall, and above the
+ *  tube, where the beam does not meet it, too.
  */
 class EyeInSmokeTest {
-    /** Трубка следа ЗРК на ~9 с: σ 5 м, толща поперёк середины 2,7 (непрозрачность 0,93, {@code TrailModel.look}). */
+    /** SAM trace tube on ~9 s: σ 5 m, thickness across the middle 2,7 (opacity 0,93, {@code TrailModel.look}). */
     static final double SIGMA = 5, TAU = 2.7, E = TAU * Math.sqrt(2 * Math.PI) * SIGMA;
-    /** Трубка вдоль z, от −LEN до LEN, кусками по STEP м. */
+    /** Tube along z, from −LEN to LEN, in pieces along STEP m. */
     static final double LEN = 150, STEP = 4;
-    /** Частей кадра по горизонтали и вертикали. */
+    /** Parts of the frame horizontally and vertically. */
     static final int COLS = 6, ROWS = 3, SAMPLES = 8;
 
     /**
-     * Трубку по ветру проносит сквозь глаз: ось — в d от глаза по горизонтали поперёк неё, от 4σ впереди до σ позади, шаг
-     * 0,1σ; два взгляда — прямо на ось и на 40° выше (трубка уходит в низ кадра, верх смотрит мимо неё в небо). Кадр — 18
-     * частей (6 × 3), пропускание части — среднее по 64 лучам.
+     * The wind carries the tube through the eye: the axis is d from the eye horizontally across it, from 4σ in front to σ behind, step
+     * 0,1σ; two glances - straight at the axis and 40° above (the tube goes to the bottom of the frame, the top looks past it into the sky). Frame - 18
+     * parts (6 × 3), transmission of the part - average over 64 rays.
      * <ul>
-     * <li>Глаз в трубке (|d| ≤ σ: её клубы растаяли, вещество — вуаль) — каждая часть не дальше 0,15 от вещества (клубы
-     * трубки гуляют на ~0,3σ — подробность, не ошибка).</li>
-     * <li>Где вещество светлее вверху кадра, чем внизу (трубка в нижней части), чем на 0,1, кадр тоже светлее вверху — не
-     * меньше половины этой разницы без 0,03: вуаль одним квадратом давала везде одно (прежде — ровная белая пелена и над
-     * трубкой).</li>
-     * <li>За шаг ни одна часть не меняется больше чем на 0,12: клубы сменяет вуаль без скачка.</li>
+     * <li>Eye in the tube (|d| ≤ σ: its billows have melted, the substance is a veil) - each part is no further than 0,15 from the substance (billows of
+     * tubes walk on ~0,3σ - detail, not error).</li>
+     * <li>Where the substance is lighter at the top of the frame than at the bottom (tube in the lower part) than on 0,1, the frame is also lighter at the top - not
+     *  less than half of this difference without 0,03: the veil with one square gave one thing everywhere (before - smooth white pall and above the
+     *  tube).</li>
+     * <li>In a step, no part changes more than on 0,12: billows changes the veil without a jump.</li>
      * </ul>
      */
     @Test
@@ -63,7 +63,7 @@ class EyeInSmokeTest {
                         }
                     }
                 }
-                String at = String.format(Locale.ROOT, "ось в %.1f м: кадр %s, вещество %s", d, row(got), row(real));
+                String at = String.format(Locale.ROOT, "axis in %.1f m: frame %s, substance %s", d, row(got), row(real));
                 for (int k = 0; k < got.length; k++) {
                     if (Math.abs(d) <= SIGMA + 1e-9 && Math.abs(got[k] - real[k]) > inside) {
                         inside = Math.abs(got[k] - real[k]);
@@ -83,7 +83,7 @@ class EyeInSmokeTest {
                 }
                 last = got;
             }
-            String report = String.format(Locale.ROOT, "взгляд на %.0f° вверх: глаз в трубке — часть против вещества до %.3f (%s); верх против низа — запас %.3f (%s); шаг до %.3f (%s)",
+            String report = String.format(Locale.ROOT, "looking up at %.0f°: eye in the tube - part against the substance up to %.3f (%s); top versus bottom - stock %.3f (%s); step to %.3f (%s)",
                     pitch, inside, insideAt, flat, flatAt, jump, jumpAt);
             System.out.println("EYE " + report);
             assertTrue(inside <= 0.15, report);
@@ -92,7 +92,7 @@ class EyeInSmokeTest {
         }
     }
 
-    /** Части кадра строками сверху вниз. */
+    /** Frame parts in rows from top to bottom. */
     private static String row(double[] parts) {
         StringBuilder b = new StringBuilder();
         for (int j = ROWS - 1; j >= 0; j--) {
@@ -102,7 +102,7 @@ class EyeInSmokeTest {
         return b.append(']').toString();
     }
 
-    /** Кадр: трубка с осью вдоль z в d м перед глазом по горизонтали поперёк неё, тем же отрезком трубки, что у следа. */
+    /** Frame: a tube with an axis along z in d m in front of the eye, horizontally across it, with the same section of the tube as the track. */
     private static SmokeFillTest.Screen frame(FarView view, double d) {
         SmokeFillTest.Screen screen = new SmokeFillTest.Screen(view);
         SmokePuffs.resetBudget();
@@ -118,7 +118,7 @@ class EyeInSmokeTest {
         return screen;
     }
 
-    /** Конец трубки в (dx, dy, dz) от глаза — как у следа ({@code FarFlightView.end}). */
+    /** The end of the tube at (dx, dy, dz) from the eye is like the mark ({@code FarFlightView.end}). */
     private static FarFlightView.Tube end(FarView view, double dx, double dy, double dz) {
         double tau = E / (Math.sqrt(2 * Math.PI) * SIGMA), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double width = TrailModel.width(tau, SIGMA);
@@ -128,9 +128,10 @@ class EyeInSmokeTest {
     }
 
     /**
-     * Пропускание самого вещества по лучу из глаза в точку экрана (u, v): трубка — бесконечный гауссов цилиндр вдоль z с осью
-     * в (d, 0) от глаза, ослабление на метр E: τ = E/(2πσ²)·e^(−r²/2σ²)·(σ/w)·√(π/2)·(1 + erf(w·t₀/(√2σ))), w — доля луча
-     * поперёк оси, t₀ — ближайшая к оси точка луча, r — расстояние до оси там.
+     * Material transmittance along a ray from the eye to screen point (u, v): tube is an infinite Gaussian cylinder along z,
+     * with axis at (d, 0) from the eye, attenuation per meter E:
+     * τ = E/(2πσ²)·e^(−r²/2σ²)·(σ/w)·√(π/2)·(1 + erf(w·t₀/(√2σ))), where w is the ray component across the axis,
+     * t₀ is the ray point closest to the axis, and r is the distance to the axis there.
      */
     static double truth(FarView view, double d, double u, double v) {
         Vector3f f = view.forward(), l = view.left(), up = view.up();

@@ -12,13 +12,13 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import java.util.function.Predicate;
 
 /**
- * Запас блока с боеприпасами (ЗРК, стационарная пусковая): ячейки под предметы, которые принимает {@code valid}.
- * Снаружи — {@link #loader} для {@link Capabilities.ItemHandler#BLOCK} с любой стороны (воронка, воронка, жёлоб и
- * механическая рука Create — через воронку): только загрузка, воронка под блоком запас не вытаскивает. Сломан блок —
- * запас выпадает ({@link #dropAll}); компаратор — по заполненности ({@link #comparator}).
+ * Block munition stock (SAM, fixed launcher): slots accepting {@code valid} items. Externally exposes {@link #loader}
+ * through {@link Capabilities.ItemHandler#BLOCK} on any side (hopper, Create funnel, chute and mechanical arm via
+ * funnel): insertion only; hopper below cannot extract. Broken block drops stock ({@link #dropAll}); comparator reads
+ * fullness ({@link #comparator}).
  * <p>
- * Запасные ячейки — после открытых, снаружи их не видно: туда ложится то, что запас сам себе отдаёт ({@link #stow}), —
- * остаток вскрытого пакета, когда воронка держит открытые ячейки полными, иначе он выпал бы на землю.
+ * Spare slots follow open slots and are hidden externally: internal returns go there ({@link #stow}) — opened-pack
+ * remainder when a hopper keeps open slots full, otherwise it would drop on the ground.
  */
 public class Magazine extends ItemStackHandler {
     private final int open;
@@ -27,15 +27,14 @@ public class Magazine extends ItemStackHandler {
     private final IItemHandler loader = new Loader();
 
     /**
-     * @param valid   что можно положить
-     * @param changed что делать при каждом изменении (обычно {@code BlockEntity::setChanged}: сохранить и обновить
-     *                компаратор)
+     * @param valid   accepted items
+     * @param changed action on every change (usually {@code BlockEntity::setChanged}: save and update comparator)
      */
     public Magazine(int slots, Predicate<ItemStack> valid, Runnable changed) {
         this(slots, 0, valid, changed);
     }
 
-    /** Запас с {@code slots} открытыми ячейками и {@code spare} запасными ({@link #stow}). */
+    /** Stock with {@code slots} open slots and {@code spare} spare slots ({@link #stow}). */
     public Magazine(int slots, int spare, Predicate<ItemStack> valid, Runnable changed) {
         super(slots + spare);
         this.open = slots;
@@ -53,34 +52,34 @@ public class Magazine extends ItemStackHandler {
         changed.run();
     }
 
-    /** Вид снаружи: только загрузка. */
+    /** External view: insertion only. */
     public IItemHandler loader() {
         return loader;
     }
 
-    /** Положить стопку в открытые ячейки (сперва к таким же); возвращает то, что не влезло. */
+    /** Insert a stack into open slots (matching stacks first); returns remainder. */
     public ItemStack load(ItemStack stack) {
         return ItemHandlerHelper.insertItemStacked(loader, stack, false);
     }
 
-    /** Положить своё (остаток вскрытого пакета, возврат): в открытые ячейки, потом в запасные; возвращает то, что не влезло. */
+    /** Stow an internal return (opened-pack remainder, refund): open slots then spare slots; returns remainder. */
     public ItemStack stow(ItemStack stack) {
         return ItemHandlerHelper.insertItemStacked(this, stack, false);
     }
 
-    /** Предметов в запасе. */
+    /** Items in stock. */
     public int count() {
         int n = 0;
         for (int i = 0; i < getSlots(); i++) n += getStackInSlot(i).getCount();
         return n;
     }
 
-    /** Сигнал компаратора — по заполненности открытых ячеек, как у сундука. */
+    /** Comparator signal from open-slot fullness, as a chest. */
     public int comparator() {
         return ItemHandlerHelper.calcRedstoneFromInventory(loader);
     }
 
-    /** Блок сломан или взорван: запас выпадает на его месте и уходит из ячеек. */
+    /** Block broken or exploded: drop stock at its position and clear slots. */
     public void dropAll(Level level, BlockPos pos) {
         for (int i = 0; i < getSlots(); i++) {
             ItemStack s = getStackInSlot(i);
@@ -89,7 +88,7 @@ public class Magazine extends ItemStackHandler {
         }
     }
 
-    /** Запас снаружи — открытые ячейки: видно, что лежит, положить можно, вынуть — нет. */
+    /** External stock exposes open slots: contents visible, insertion allowed, extraction denied. */
     private final class Loader implements IItemHandler {
         @Override
         public int getSlots() {

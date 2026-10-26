@@ -15,32 +15,32 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Живой объём кучи для руин заранее ({@link NuclearPrep}): старое поколение после сборки, которая видит его живой
- * объём. Старое поколение — пулы кучи с порогом использования ({@link MemoryPoolMXBean#isUsageThresholdSupported}):
- * «G1 Old Gen», «ZGC Old Generation», у сборщиков с одним поколением — вся куча; молодые пулы порога не имеют (JDK 21).
- * Замер — из уведомления сборщика ({@link #reading}): полная или большая сборка, сборка, после которой старое поколение
- * меньше, чем до неё (смешанная у G1), — после них в нём живое и немного несобранного; и любая сборка, после которой
- * старое поколение выше предела. После малой сборки ниже предела замера нет: старое поколение растёт продвижением, а
- * молодой пул «после сборки» у ZGC — занятое в конце цикла вместе с выделенным за цикл: в игре это 1,2–1,4 ГБ при
- * живых 56–86 МБ, а сумма пулов — 9,3–10,1 ГБ при живых 6,4–6,8 (лог сборщика).
- * Без старого поколения у пулов (чужая JVM) — запасной замер: занято после последней сборки по всем пулам кучи
- * ({@link #fallbackLive}). Один на JVM: память у неё одна на все миры.
+ * Live heap size for prebuilt ruins ({@link NuclearPrep}): old generation after a collection revealing its live size.
+ * Old generation means heap pools supporting usage thresholds ({@link MemoryPoolMXBean#isUsageThresholdSupported}):
+ * “G1 Old Gen”, “ZGC Old Generation”; single-generation collectors use the whole heap; young pools have no threshold
+ * (JDK 21). Reading comes from GC notification ({@link #reading}): full or major collection, or one leaving old generation
+ * smaller than before (G1 mixed), after which it contains live objects and some uncollected garbage; also any collection
+ * leaving old generation above the limit. No reading after a minor collection below limit: old generation grows through
+ * promotion; ZGC young pool “after collection” includes allocations during the cycle: in-game 1.2–1.4 GB versus live
+ * 56–86 MB, pool sum 9.3–10.1 GB versus live 6.4–6.8 (GC log).
+ * No old-generation pools (another JVM): fallback reading, all heap pools' usage after last collection
+ * ({@link #fallbackLive}). One per JVM: all worlds share its memory.
  */
 final class HeapWatch {
     private static final HeapWatch INSTANCE = new HeapWatch();
-    /** Доля кучи (живой объём), выше которой руины заранее больше не строятся. */
+    /** Live heap fraction above which no more ruins are prebuilt. */
     static final double LIMIT = 0.75;
     /**
-     * Сборщики, которые собирают всё старое поколение (полная сборка, большой цикл, цикл сборщика с одним поколением):
-     * после них замер, даже если старое поколение выросло (полная сборка G1 переносит туда живое из молодого).
+     * Collectors processing the whole old generation (full collection, major cycle, single-generation collector cycle):
+     * read afterward even if old generation grew (G1 full GC promotes live young objects into it).
      */
     static final Set<String> MAJOR = Set.of("G1 Old Generation", "PS MarkSweep", "MarkSweepCompact", "ZGC Major Cycles", "ZGC Cycles", "Shenandoah Cycles");
 
     private final Set<String> oldPools = new HashSet<>();
     private final long limit = (long) (Runtime.getRuntime().maxMemory() * LIMIT);
-    /** Последний замер, байты; −1 — замера ещё не было. Пишет поток уведомлений JMX, читает поток сервера. */
+    /** Last reading, bytes; −1 — none yet. Written by JMX notification thread, read by server thread. */
     private volatile long live = -1;
-    /** Номер замера: пишется после {@link #live}, поэтому прочитанный номер не новее значения. */
+    /** Reading number: written after {@link #live}, so a read number is no newer than the value. */
     private volatile long measured;
 
     private HeapWatch() {
@@ -58,8 +58,8 @@ final class HeapWatch {
     }
 
     /**
-     * Сборка, после которой пулы знают объём: молодая, смешанная, полная, цикл ZGC или Shenandoah. Не паузы внутри
-     * цикла: у G1 в JDK 21 «G1 Concurrent GC» — это Remark и Cleanup, у ZGC и Shenandoah «… Pauses» повторяют «… Cycles».
+     * Collection after which pools know their usage: young, mixed, full, ZGC or Shenandoah cycle. Not pauses within cycles:
+     * JDK 21 G1 “G1 Concurrent GC” means Remark and Cleanup; ZGC/Shenandoah “… Pauses” repeat “… Cycles”.
      */
     private static boolean collects(GarbageCollectorMXBean gc) {
         String name = gc.getName();
@@ -77,10 +77,9 @@ final class HeapWatch {
     }
 
     /**
-     * Старое поколение после сборки {@code gc}, если по ней виден его живой объём, иначе −1: сборка из {@link #MAJOR};
-     * сборка, после которой старое поколение меньше, чем до неё, хоть у одного пула; старое поколение после неё выше
-     * {@code limit} — там уже не важно, сколько в нём несобранного: без полной сборки замера не было бы вовсе, и куча
-     * дошла бы до нехватки.
+     * Old generation after {@code gc} if its live size is visible, otherwise −1: collection in {@link #MAJOR}; any collection
+     * shrinking at least one old pool; or old generation afterward above {@code limit} — uncollected garbage no longer
+     * matters there: without a full collection no reading would exist and heap would run out.
      */
     static long reading(String gc, Map<String, MemoryUsage> before, Map<String, MemoryUsage> after, Set<String> oldPools, long limit) {
         long sum = 0;
@@ -94,17 +93,17 @@ final class HeapWatch {
         return freed || MAJOR.contains(gc) || sum > limit ? sum : -1;
     }
 
-    /** Замер по старому поколению: у пулов есть старое поколение (иначе — {@link #fallbackLive}). */
+    /** Old-generation reading: pools have an old generation (otherwise {@link #fallbackLive}). */
     boolean available() {
         return !oldPools.isEmpty();
     }
 
-    /** Предел живого объёма ({@link #LIMIT} кучи), байты. */
+    /** Live size limit ({@link #LIMIT} of heap), bytes. */
     long limit() {
         return limit;
     }
 
-    /** Номер последнего замера (0 — замеров не было); без старого поколения у пулов — число сборок. */
+    /** Last reading number (0 — none); without old-generation pools, collection count. */
     long measured() {
         if (available()) return measured;
         long collections = 0;
@@ -114,14 +113,14 @@ final class HeapWatch {
         return collections;
     }
 
-    /** Живой объём по последнему замеру, байты; −1 — замера ещё не было. */
+    /** Live size from last reading, bytes; −1 — none yet. */
     long live() {
         return available() ? live : fallbackLive();
     }
 
     /**
-     * Без старого поколения у пулов: занято после последней сборки по пулам кучи, у пулов без этих данных — занято
-     * сейчас (с мусором, то есть с запасом).
+     * Without old-generation pools: all heap pools' usage after last collection; pools lacking this data use current usage
+     * (including garbage, hence conservative).
      */
     private static long fallbackLive() {
         long sum = 0;
@@ -138,20 +137,20 @@ final class HeapWatch {
         return rt.totalMemory() - rt.freeMemory();
     }
 
-    /** Подряд ли замеры выше предела: {@code strikes} — сколько их было до этого, возвращает новое число. */
+    /** Consecutive readings over limit: {@code strikes} is the prior count, returns new count. */
     static int strikes(int strikes, long live, long limit) {
         return live > limit ? strikes + 1 : 0;
     }
 
     /**
-     * Свой счёт замеров подряд выше предела (поток сервера): у каждого, кто бережёт память ({@code FlashScorch}), — свой,
-     * как у руин заранее. Один замер — ещё не нехватка: в старом поколении бывает немного несобранного.
+     * Own consecutive-over-limit count (server thread): separate for each memory-conscious user ({@code FlashScorch}),
+     * as for prebuilt ruins. One reading is not yet shortage: old generation may contain some uncollected garbage.
      */
     static final class Tracker {
         private long lastMeasured;
         private int strikes;
 
-        /** Живой объём кучи выше предела в двух замерах подряд. */
+        /** Live heap size above limit in two consecutive readings. */
         boolean tight() {
             HeapWatch watch = get();
             long measured = watch.measured();

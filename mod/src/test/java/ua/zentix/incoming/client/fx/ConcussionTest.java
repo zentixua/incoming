@@ -17,24 +17,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Контузия на экране ({@link Concussion}): включается по дозе, удары складываются, вид и сила — из настроек. */
+/** Concussion on the screen ({@link Concussion}): activated by dose, shocks add up, type and strength - from the settings. */
 class ConcussionTest {
     @AfterEach
     void clear() {
         Concussion.reset();
     }
 
-    /** Ниже порога (доза 0) экрана не трогает: ни удара, ни уровня. */
+    /** Below the threshold (dose 0) the screen does not touch: no impact, no level. */
     @Test
     void noDoseNoEffect() {
         assertEquals(0, Concussion.hit(0, 0));
         assertEquals(0, Concussion.hit(-0.3, 0));
-        for (int t = 0; t < 80; t++) assertEquals(0, Concussion.level(t), "тик " + t);
+        for (int t = 0; t < 80; t++) assertEquals(0, Concussion.level(t), "tick " + t);
     }
 
     /**
-     * Удары залпа складываются долями: вместе сильнее любого одного и не больше полного; кончились (длина отклика
-     * модели) — уровня нет.
+     * The volley blows are added up in fractions: together stronger than any one and no more than the full one; ran out (response length
+     *  model) - no level.
      */
     @Test
     void salvoAddsUpToOne() {
@@ -49,29 +49,29 @@ class ConcussionTest {
         assertEquals(0, Concussion.level(end), 1e-12);
     }
 
-    /** Фронт прошёл тело полтика назад — отклик начался полтика назад, а не в начале тика, где его заметили. */
+    /** The front passed the body half a tick ago - the response began half a tick ago, and not at the beginning of the tick, where it was noticed. */
     @Test
     void startsAtTheFrontNotAtTheTick() {
         Concussion.hit(1, 0.5);
         double early = Concussion.level(0);
         Concussion.reset();
         Concussion.hit(1, 0);
-        assertTrue(early > Concussion.level(0), "полтика назад — уже сильнее: " + early);
+        assertTrue(early > Concussion.level(0), "half a century ago - already stronger: " + early);
     }
 
-    /** Картинка: у нуля — ничего; размытие по кубу уровня уходит раньше серости и краёв; растёт с высотой кадра. */
+    /** Picture: at zero - nothing; blur along the level cube goes away before grayness and edges; increases with frame height. */
     @Test
     void lookFollowsTheLevel() {
         double[] zero = Concussion.look(0, 1080), half = Concussion.look(0.5, 1080), full = Concussion.look(1, 1080);
         for (double v : zero) assertEquals(0, v);
         assertEquals(Concussion.BLUR_PX, full[0], 1e-9);
-        assertEquals(0.125 * full[0], half[0], 1e-9, "размытие — по кубу: уходит раньше серости");
+        assertEquals(0.125 * full[0], half[0], 1e-9, "blur - cube: disappears before grayness");
         assertEquals(0.5 * full[1], half[1], 1e-9);
         assertEquals(0.5 * full[2], half[2], 1e-9);
-        assertEquals(2 * full[0], Concussion.look(1, 2160)[0], 1e-9, "в кадре вдвое выше — вдвое больше пикселей");
+        assertEquals(2 * full[0], Concussion.look(1, 2160)[0], 1e-9, "in the frame twice as high - twice as many pixels");
     }
 
-    /** Сила — настройка × ванильные «Искажения экрана»; любая из них в 0 — экрана не трогает. */
+    /** Strength - settings × vanilla “Screen distortion”; any of them in 0 does not touch the screen. */
     @Test
     void settingsScaleIt() {
         assertEquals(1, Concussion.strength(1, 1));
@@ -81,8 +81,8 @@ class ConcussionTest {
     }
 
     /**
-     * Программа прохода объявляет каждую свою {@code uniform} (необъявленную ваниль не задаёт — шейдер читал бы ноль), в
-     * JSON нет лишних; нет «++;» и вложенного «?:» — их ломает разбор GLSL Veil (client-fx.md).
+     * The pass program declares each of its {@code uniform} (it does not specify undeclared vanilla - the shader would read zero), there are no extra ones in
+     * JSON; no "++;" and nested “?:” - they are broken by parsing GLSL Veil (client-fx.md).
      */
     @Test
     void programDeclaresItsUniforms() throws Exception {
@@ -95,11 +95,11 @@ class ConcussionTest {
         Set<String> used = new HashSet<>();
         Matcher m = Pattern.compile("uniform\\s+\\w+\\s+(\\w+)\\s*;").matcher(fsh);
         while (m.find()) used.add(m.group(1));
-        // вершинная программа — ванильная «blur»: ProjMat, InSize, OutSize, BlurDir
+        // vertex program - vanilla “blur”: ProjMat, InSize, OutSize, BlurDir
         used.addAll(Set.of("ProjMat", "InSize", "OutSize", "BlurDir"));
         assertEquals(used, declared);
         assertFalse(fsh.matches("(?s).*\\+\\+\\s*;.*"), "«++;»");
-        // проход пишет кадр целиком: смешивания нет
+        // pass writes the entire frame: no blending
         JsonObject blend = program.getAsJsonObject("blend");
         assertEquals("one", blend.get("srcrgb").getAsString());
         assertEquals("zero", blend.get("dstrgb").getAsString());

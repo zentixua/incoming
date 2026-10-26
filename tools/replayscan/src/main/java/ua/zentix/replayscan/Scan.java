@@ -61,18 +61,18 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Разбор одного повтора в потоке сервера повтора: в конце каждого его тика ({@code ServerTickEvent.Post}) мир
- * повтора — уже с пакетами этого тика, а свой разбор записи ({@link Timeline}, {@link Decoder}) даёт сами события
- * тика: что записал клиент, по кодекам игры и модов, не по тому, что сервер повтора отдаёт зрителю (он отдаёт звуки,
- * частицы и сущности по расстоянию до камеры зрителя). Действия следующего тика разбираются заранее: замеры земли
- * у места взрыва — по миру до него (воронка ещё не вырыта).
+ * Analysis of one replay in the replay server stream: at the end of each tick ({@code ServerTickEvent.Post}) the world of
+ * replay is already with packets of this tick, and its own analysis of the record ({@link Timeline}, {@link Decoder}) gives the events themselves
+ * tick: what the client recorded, according to the codecs of the game and mods, not according to the replay server gives to the viewer (he gives sounds,
+ *  particles and entities according to the distance to the viewer’s camera). The actions of the next tick are sorted out in advance: measurements of the earth
+ *  at the explosion site - around the world before it (the crater has not yet been dug).
  * <p>
- * Таблицы (README.md): события ({@code events}), сущности ({@code entities}, {@code tracks}, {@code states}),
- * дальние снаряды из пакетов модов ({@code far}), блоки ({@code blocks}), время игры ({@code time}), глаза
- * зрителей ({@code viewers}) и видимость ({@code sight}).
+ * Tables (README.md): events ({@code events}), entities ({@code entities}, {@code tracks}, {@code states}),
+ *  long range projectiles from mod packs ({@code far}), blocks ({@code blocks}), game time ({@code time}), eyes
+ *  spectators ({@code viewers}) and visibility ({@code sight}).
  */
 final class Scan implements Closeable {
-    /** Пакеты состояния, которых много и которые есть в мире повтора или не нужны: в ленту событий не идут. */
+    /** State packets, of which there are many and which are in the replay world or are not needed: do not go to the event feed. */
     private static final Set<String> QUIET = Set.of("ClientboundLevelChunkWithLightPacket", "ClientboundLightUpdatePacket",
             "ClientboundForgetLevelChunkPacket", "ClientboundChunkBatchStartPacket", "ClientboundChunkBatchFinishedPacket",
             "ClientboundChunksBiomesPacket", "ClientboundSetChunkCacheCenterPacket", "ClientboundSetChunkCacheRadiusPacket",
@@ -95,21 +95,21 @@ final class Scan implements Closeable {
             "ClientboundSetObjectivePacket", "ClientboundSetScorePacket", "ClientboundResetScorePacket",
             "ClientboundSetDisplayObjectivePacket", "ClientboundSetPlayerTeamPacket", "ClientboundTabListPacket",
             "ClientboundPlayerInfoUpdatePacket", "ClientboundHurtAnimationPacket");
-    /** Пакеты модов, которые ничего не говорят о событиях: свет и дубль появления сущности (NeoForge). */
+    /** Mod packs that say nothing about events: light and entity spawn double (NeoForge). */
     private static final Set<String> QUIET_PAYLOADS = Set.of("neoforge:auxiliary_light_data", "neoforge:advanced_add_entity");
-    /** Имена полей с местом события в пакетах модов — по порядку предпочтения (вложенные записи — тоже). */
+    /** The names of the fields with the location of the event in mod packages are in order of preference (nested entries too). */
     private static final List<String> PLACE_NAMES = List.of("pos", "position", "burst", "center", "origin");
     private static final TicketType<ChunkPos> ASK_TICKET = TicketType.create("replayscan", Comparator.comparingLong(ChunkPos::toLong));
-    /** Видимость не считается дальше от оси взгляда, чем столько градусов (ни в какой кадр не войдёт). */
+    /** Visibility is not considered further from the axis of view than this much degrees (will not be included in any frame). */
     private static final double MAX_ANGLE = 75;
-    /** Замеры земли у места события: вниз до блока — не дальше, ближайший блок — в кубе такого радиуса. */
+    /** Measurements of the ground at the scene of the event: down to the block - no further, the nearest block - in a cube of the same radius. */
     private static final int CLEAR_MAX = 64, SOLID_RADIUS = 6;
     /**
-     * Луч к событию — до точки на {@code EVENT_LIFT} блоков выше места, последние {@code EVENT_STOP} блоков не
-     * смотрятся: взрыв виден огненным шаром и дымом над точкой удара, а сама точка бывает в грунте, и пологий луч к ней
-     * шёл бы по земле десятки блоков (глаз в 1,6 блока над землёй, точка на полблока в грунте за 100 блоков — луч
-     * в земле уже за 24 блока до неё). У Incoming шар — радиусом от 3,5 (РСЗО) до 11 блоков (ракета), центр — на 0,45
-     * радиуса выше точки: точка подъёма — внутри шара у шахеда, ракеты и РСЗО, отрезок без проверки — короче радиуса шара.
+     * The ray to the event is to a point {@code EVENT_LIFT} blocks above the place, the last {@code EVENT_STOP} blocks are not
+     *  visible: the explosion is visible as a fireball and smoke above the point of impact, and the point itself is in the ground, and a gentle ray to it
+     *  would go along the ground of dozens of blocks (the eye is in the 1,6 block above ground, a point half a block in the ground behind 100 blocks - ray
+     *  in the ground already 24 blocks before it). Incoming has a ball with a radius from 3,5 (MLRS) to 11 blocks (rocket), the center is 0,45
+     *  radius above the point: the lifting point is inside the ball for Shahed, rocket and MLRS, the segment without checking is shorter than the radius of the ball.
      */
     private static final double EVENT_LIFT = 3, EVENT_STOP = 3;
 
@@ -125,9 +125,9 @@ final class Scan implements Closeable {
 
     private ResourceKey<Level> dim = Level.OVERWORLD;
     private final Map<ResourceKey<Level>, LongSet> known = new HashMap<>();
-    /** Последний разобранный тик ({@code -1} — ни одного). */
+    /** Last parsed tick ({@code -1} - none). */
     private int last = -1;
-    /** События тика {@code ahead} (разобраны заранее, с замерами по миру до него). */
+    /** Events tick {@code ahead} (disassembled in advance, with measurements from the world before it). */
     private List<Event> next = new ArrayList<>();
     private int ahead = -1;
     private final List<Far> farNow = new ArrayList<>();
@@ -144,7 +144,7 @@ final class Scan implements Closeable {
 
     private final Csv events, blocks, far, tracks, entities, states, sight, viewers, time;
 
-    /** Событие с местом или без; замеры земли — до тика события ({@code pre}) или после (первый тик, перемотка). */
+    /** Event with or without location; ground measurements - before the tick event ({@code pre}) or after (first tick, rewind). */
     private static final class Event {
         final long id;
         final int tick;
@@ -175,7 +175,7 @@ final class Scan implements Closeable {
         }
     }
 
-    /** Снаряд вдали из пакета мода: список записей с UUID и местом {@code pos}. */
+    /** Shell in the distance from the mod package: list of entries with UUID and location {@code pos}. */
     private record Far(ResourceKey<Level> dim, String src, String uuid, Vec3 pos, String data) {}
 
     private static final class Tracked {
@@ -204,10 +204,10 @@ final class Scan implements Closeable {
         }
     }
 
-    /** Камера из файла {@code ask}: глаз, взгляд (не обязателен) и отрезок тиков. */
+    /** Camera from file {@code ask}: eye, gaze (optional) and tick segment. */
     private record Camera(String id, ResourceKey<Level> dim, Vec3 eye, float yaw, float pitch, boolean look, int from, int to) {}
 
-    /** Зритель тика: игрок записи, игрок или камера ({@code self} — id своей сущности, у камеры −1). */
+    /** Spectator tick: recording player, player or camera ({@code self} - id of its entity, for the camera −1). */
     private record Viewer(String id, int self, ServerLevel level, Vec3 eye, float yaw, float pitch, boolean look) {}
 
     Scan(Settings settings, FlashbackLink link, Logger log) throws IOException {
@@ -243,14 +243,14 @@ final class Scan implements Closeable {
         return file.totalTicks();
     }
 
-    /** Конец тика сервера повтора {@code t}. */
+    /** End of replay server tick {@code t}. */
     synchronized void tick(MinecraftServer server, int t) throws IOException, ReflectiveOperationException {
         if (done || closed) return;
         if (decoder == null) decoder = new Decoder(server.registryAccess());
-        // тот же тик ещё раз: сервер повтора на паузе тикает, не двигая запись
+        // the same tick again: the paused replay server ticks without moving the recording
         if (t == last) return;
         if (t < last) {
-            // назад (перемотка): запись — с начала, без таблиц до t
+            // back (rewind): recording - from the beginning, without tables to t
             notes.add("seek back from " + last + " to " + t);
             timeline = new Timeline(file);
             carry = null;
@@ -283,7 +283,7 @@ final class Scan implements Closeable {
             look(server, t, now);
         }
         last = t;
-        // события следующего тика — заранее: замеры у взрыва по миру до него
+        // events of the next tick - in advance: measurements of the explosion around the world before it
         next = new ArrayList<>();
         farNext.clear();
         read(server, t + 1, next, farNext, inRange(t + 1));
@@ -295,12 +295,12 @@ final class Scan implements Closeable {
         if (t >= end) done = true;
     }
 
-    /** Тик в отрезке разбора ({@code from}…{@code to}): только его события и строки идут в таблицы. */
+    /** tick in the parsing section ({@code from}…{@code to}): only its events and rows go to the tables. */
     private boolean inRange(int t) {
         return t >= settings.from() && (settings.to() <= 0 || t <= settings.to());
     }
 
-    /** Действия до тика {@code t} включительно; события тика {@code t} — в {@code out}, если {@code emit}. */
+    /** Actions up to and including tick {@code t}; events tick {@code t} - to {@code out} if {@code emit}. */
     private void read(MinecraftServer server, int t, List<Event> out, List<Far> farOut, boolean emit) throws IOException {
         while (true) {
             Timeline.Action a = carry != null ? carry : timeline.next();
@@ -436,7 +436,7 @@ final class Scan implements Closeable {
         String src = p.id().toString();
         if (QUIET_PAYLOADS.contains(src)) return;
         if (v instanceof ClientboundCustomSetTimePayload time) {
-            // время NeoForge (вместо ванильного пакета времени у клиента NeoForge)
+            // time NeoForge (instead of the vanilla time package for the client NeoForge)
             this.time.add(t).add(time.gameTime()).add(time.dayTime()).end();
             return;
         }
@@ -475,7 +475,7 @@ final class Scan implements Closeable {
         out.add(new Event(eventSeq++, t, dim, "payload", src, pos, Double.NaN, uuid, Json.of(v), pos != null));
     }
 
-    /** Поля записи и вложенных записей (до двух уровней) по пути {@code a.b}; {@code Optional} — его значение. */
+    /** Fields of a record and sub-records (up to two levels) along the path {@code a.b}; {@code Optional} is its value. */
     private static void flatten(Record r, String prefix, int depth, Map<String, Object> out) {
         for (RecordComponent c : r.getClass().getRecordComponents()) {
             Object value = Json.component(r, c);
@@ -493,7 +493,7 @@ final class Scan implements Closeable {
         return null;
     }
 
-    /** Список дальних снарядов в пакете мода: единственный список записей с UUID и местом {@code pos}. */
+    /** List of long-range projectiles in the mod package: the only list of entries with UUID and location {@code pos}. */
     @Nullable
     private static List<?> farList(Record r) {
         for (RecordComponent c : r.getClass().getRecordComponents()) {
@@ -527,7 +527,7 @@ final class Scan implements Closeable {
         events.add(e.data).end();
     }
 
-    /** Сущности мира повтора: время жизни, путь (за кем следим и игроки), данные (за кем следим). */
+    /** The entity of the replay world: lifetime, path (who we are following and the players), data (who we are following). */
     private void sample(MinecraftServer server, int t) {
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity e : level.getAllEntities()) {
@@ -581,8 +581,8 @@ final class Scan implements Closeable {
     }
 
     /**
-     * Глаза зрителей и что им видно: сущности — раз в {@code every} тиков, события и дальние снаряды — на каждый их
-     * пакет (пакеты дальних снарядов у мода идут раз в несколько тиков, и с {@code every} их тики могли бы не сойтись).
+     * The eyes of the audience and what they see: entities - once every {@code every} tick, events and long-range projectiles - for each of their
+     *  packages (the mod's packages of long-range projectiles come every few ticks, and with {@code every} their tick might not coincide).
      */
     private void look(MinecraftServer server, int t, List<Event> now) throws ReflectiveOperationException {
         int local = link.localPlayerId(server);
@@ -609,7 +609,7 @@ final class Scan implements Closeable {
         }
     }
 
-    /** Строка видимости: место в кадре — по {@code target}, луч — к точке на {@code lift} выше без последних {@code stop} блоков. */
+    /** Visibility line: place in the frame - along {@code target}, ray - to a point at {@code lift} above without the last {@code stop} blocks. */
     private void see(int t, Viewer v, Vec3[] axes, Rays rays, String kind, String ref, Vec3 target, double lift, double stop) {
         Vec3 d = target.subtract(v.eye);
         double dist = d.length();
@@ -625,7 +625,7 @@ final class Scan implements Closeable {
         sight.add(t).add(v.id).add(kind).add(ref).add(dist).add(v.look ? z : Double.NaN).add(cx).add(cy).add(hit.hard()).add(hit.soft()).add(hit.unknown()).end();
     }
 
-    /** Взгляд, правая и верхняя оси камеры (поворот — как у игрока: yaw 0 — юг, pitch вниз — плюс). */
+    /** Look, right and top axes of the camera (rotation - like a player's: yaw 0 - south, pitch down - plus). */
     static Vec3[] axes(float yaw, float pitch) {
         double y = Math.toRadians(yaw), p = Math.toRadians(pitch);
         Vec3 forward = new Vec3(-Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p));
@@ -652,7 +652,7 @@ final class Scan implements Closeable {
             if (level == null) continue;
             ChunkPos at = new ChunkPos(BlockPos.containing(c.eye));
             int radius = Math.min(32, (int) Math.ceil(settings.range() / 16));
-            // чанки вокруг камеры — с запасом до её начала: сервер повтора грузит их из своего сохранения не сразу
+            // chunks around the camera - with a margin before it starts: the replay server does not load them from its save immediately
             boolean hold = t >= c.from - 200 && t <= c.to;
             if (hold && ticketed.add(c.id)) level.getChunkSource().addRegionTicket(ASK_TICKET, at, radius, at);
             if (!hold && ticketed.remove(c.id)) level.getChunkSource().removeRegionTicket(ASK_TICKET, at, radius, at);
@@ -678,8 +678,8 @@ final class Scan implements Closeable {
     }
 
     /**
-     * Таблицы закрыты, {@code meta.json} — что разобрано, сколько и чем. Один раз; зовётся и при выходе JVM (падение
-     * игры): ошибка одной таблицы не мешает закрыть остальные и записать {@code meta.json}.
+     * The tables are closed, {@code meta.json} - what has been sorted, how much and with what. Once; is also called when JVM exits (the game crashes
+     * ): an error in one table does not prevent you from closing the others and writing {@code meta.json}.
      */
     @Override
     public synchronized void close() throws IOException {

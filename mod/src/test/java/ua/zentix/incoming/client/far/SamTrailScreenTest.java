@@ -22,7 +22,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Пакет дальнего ЗРК → точки маршевого следа → реальные квадраты SmokePuffs → альфа пикселей с картами из jar. */
+/** Long-range SAM package → track points → real squares SmokePuffs → alpha pixels with maps from jar. */
 class SamTrailScreenTest {
     @Test
     void distantSustainerLeavesAPixelTrailAt15Through60Seconds() throws Exception {
@@ -30,7 +30,7 @@ class SamTrailScreenTest {
         Air before = FarFlightView.air;
         Air air = new Air(new Wind(-0.733, 10.6), Stability.C, 0.5);
         try {
-            // В игре эта часть уже за клиентской сущностью. Важно пройти маршрутизацию пакета, а не только TrailModel.look.
+            // In the game, this part is already behind the client entity. It is important to route the packet, not just TrailModel.look.
             Method receive = FlightTracks.class.getDeclaredMethod("receive", S2C.FarFlight.class, long.class);
             receive.setAccessible(true);
             for (int tick = 32; tick <= 120; tick += S2C.FarFlights.FAR_PERIOD) {
@@ -45,19 +45,19 @@ class SamTrailScreenTest {
             FarFlightView.air = air;
             TrailPoints points = new TrailPoints();
             FarFlightView.sample(new FarFlightView.Far(track, 1), 120, points);
-            assertTrue(points.end() - points.first() >= 40, "маршевый участок за границей сущностей записан");
+            assertTrue(points.end() - points.first() >= 40, "the marching section beyond the entity boundary is recorded");
             FarView view = view();
             for (double seconds : new double[]{15, 30, 60}) {
                 Screen screen = new Screen(view);
                 FarFlightView.collectTrails(view, screen.sprites, 120 + 20 * seconds, points, air);
-                // клубы мест следа ждут плана кадра: кадр кончился
+                // billows trail locations waiting for frame plan: frame over
                 SmokePuffs.flush();
                 screen.raster();
                 double peak = 0;
                 int visible = 0;
                 for (double a : screen.alpha) { peak = Math.max(peak, a); if (a >= 0.02) visible++; }
                 System.out.printf("SAM pixels %.0f s: peak alpha %.3f, visible pixels %d, quads %d%n", seconds, peak, visible, screen.quads);
-                assertTrue(peak > 0.04 && visible >= 30, "маршевый след виден многими пикселями на " + seconds + " с");
+                assertTrue(peak > 0.04 && visible >= 30, "the marching trail is visible in many pixels on " + seconds + " s");
             }
         } finally {
             FlightTracks.reset();
@@ -74,7 +74,7 @@ class SamTrailScreenTest {
                 Math.toRadians(55), 1, 1, new Vector3f(1, 1, 1), 8000, 192, 192, 0, Sight.Air.at(0, 20000));
     }
 
-    /** Растр из настоящих вершин FxQuads (включая байтовую альфу), без GL и видеокарты. */
+    /** Raster of real vertices FxQuads (including byte alpha), without GL and GPU. */
     private static final class Screen {
         static final int W = 640, H = 360;
         final double[] alpha = new double[W * H];
@@ -124,7 +124,7 @@ class SamTrailScreenTest {
                         FxAtlas.Sprite t = FxAtlas.puff6(f, false);
                         if (midU >= t.u0() && midU <= t.u1() && midV >= t.v0() && midV <= t.v1()) { frame = f; break; }
                     }
-                    if (kind < 0) assertTrue(frame >= 0, "на листе найден кадр клуба");
+                    if (kind < 0) assertTrue(frame >= 0, "billows frame found on the sheet");
                     FxAtlas.Sprite tile = frame >= 0 ? FxAtlas.puff6(frame, false) : FxAtlas.glow();
                     for (int y = Math.max(0, (int) minY); y <= Math.min(H - 1, (int) maxY + 1); y++) {
                         for (int x = Math.max(0, (int) minX); x <= Math.min(W - 1, (int) maxX + 1); x++) {
@@ -156,7 +156,7 @@ class SamTrailScreenTest {
             }
         }
 
-        /** Перспективная интерполяция UV и альфы реального треугольника кадра. */
+        /** Perspective interpolation of UV and alpha of the real frame triangle. */
         private static double[] interpolate(double[] a, double[] b, double[] c, double x, double y) {
             double den = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
             if (Math.abs(den) < 1e-12) return null;

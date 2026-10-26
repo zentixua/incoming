@@ -9,8 +9,8 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.List;
 
 /**
- * Счётчик Гейгера: пока в руке, клиент щёлкает с частотой по мощности дозы и показывает её на экране
- * (client.nuclear.Geiger). Мощность считает сервер и присылает пакетом {@code Radiation}.
+ * Geiger counter: while held, the client clicks at a rate set by dose rate and displays it on screen
+ * (client.nuclear.Geiger). The server computes the rate and sends it in a {@code Radiation} packet.
  */
 public class GeigerCounterItem extends Item {
     public GeigerCounterItem(Properties properties) {

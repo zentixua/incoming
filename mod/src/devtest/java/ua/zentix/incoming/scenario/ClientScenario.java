@@ -38,9 +38,9 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Сценарий для клиента без окна (./gradlew runClientScenario в виртуальном дисплее): создаёт мир, по очереди
- * пускает шахед, ракету, бомбу и залп, снимает кадры (run/scenario/screenshots) и пишет в лог, что слышно
- * (громкость и тон моторов), затем выходит. Включается только системным свойством incoming.scenario.
+ * Scenario for a client without a window (./gradlew runClientScenario in a virtual display): creates a world, fires
+ *  in turn Shahed, a rocket, a bomb and a salvo, takes frames (run/scenario/screenshots) and writes to the log what is heard
+ *  (loudness and tone of the engines), then exits. Only turns on system property incoming.scenario.
  */
 @Mod(value = Incoming.MOD_ID, dist = Dist.CLIENT)
 public final class ClientScenario {
@@ -50,11 +50,11 @@ public final class ClientScenario {
 
     private final List<Step> steps = new ArrayList<>();
     /**
-     * Сценарий commands, {@code wait:nuke}: тик, с которого шаги ждут пакета подрыва ({@code -1} — не ждут), и сколько
-     * тиков они уже ждут; подрывы, которые клиент знал, когда шаги встали, — не тот подрыв.
+     * Scenario commands, {@code wait:nuke}: tick, from which the steps are waiting for the detonation packet ({@code -1} - they are not waiting), and how many
+     *  ticks they are already waiting for; the detonations that the client knew when the steps stood up are not the same detonations.
      */
     private int nukeGate = -1, nukeGateWaited;
-    /** {@code wait:blast}: тики, с которых шаги ждут следующего взрыва на встроенном сервере; взрывов с запуска. */
+    /** {@code wait:blast}: tick, from which steps wait for the next explosion on the embedded server; explosions from launch. */
     private final java.util.ArrayDeque<Integer> blastGates = new java.util.ArrayDeque<>();
     private final java.util.concurrent.atomic.AtomicInteger serverBlasts = new java.util.concurrent.atomic.AtomicInteger();
     private int blastGateSeen = -1, blastGateWaited;
@@ -62,45 +62,45 @@ public final class ClientScenario {
     private boolean started;
     private int tick = -1;
     private Vec3 target = Vec3.ZERO;
-    /** Сценарий {@code nuke}: место зрителя на смотровой площадке (волна потом сносит его с неё). */
+    /** Scenario {@code nuke}: the viewer’s place is on the observation deck (the wave then carries him off it). */
     private BlockPos deck = BlockPos.ZERO;
     private boolean nuke;
-    /** Сценарий {@code pall}: пелена после волны; эпицентр. */
+    /** Scenario {@code pall}: pall after the wave; epicenter */
     private boolean pall;
-    /** Сценарий {@code mushroom}: гриб объёмом издалека. */
+    /** Scenario {@code mushroom}: a mushroom with volume from afar. */
     private boolean mushroom;
     private Vec3 pallAt = Vec3.ZERO;
-    /** Сценарий firestorm ({@link #planFirestorm}): ночь или день, высоты точек съёмки, точка внутри у смерча. */
+    /** Scenario firestorm ({@link #planFirestorm}): night or day, heights of shooting points, a point inside the tornado. */
     private boolean firestorm, fsNight;
     private int fsFarY, fsRoofY;
     private Vec3 fsInside = Vec3.ZERO, fsLook = Vec3.ZERO;
     private double fsWhirlAge = 300;
-    /** Сценарий {@code debris}: дома и деревья у камеры, которые ломает волна; тик прихода фронта к ним (−1 — подрыва нет). */
+    /** Scenario {@code debris}: houses and trees near the camera that are broken by a wave; tick when the front arrives at them (−1 - there is no explosion). */
     private boolean debris;
     private volatile BlockPos debrisSite;
     private int debrisStage, debrisAt;
-    /** Сценарий {@code wall}: стена пыли проходит мимо камеры; сколько кадров её прохода уже снято. */
+    /** Scenario {@code wall}: a wall of dust passes by the camera; how many frames of her passage have already been filmed. */
     private boolean wall;
     private int wallStage;
     /**
-     * Сценарий pall-front: место камеры (в воздухе, в 400 блоках к западу от эпицентра); pall-low — камера у земли ниже
-     * земли под эпицентром ({@link #planPallFront}).
+     * Scenario pall-front: camera location (in the air, in 400 blocks west of the epicenter); pall-low - camera near the ground below the
+     *  ground below the epicenter ({@link #planPallFront}).
      */
     private boolean front, frontLow;
     private Vec3 frontAt = Vec3.ZERO;
-    /** Сценарий pall-mine: пелена днём у земли, в штольне под ней и в шахте к небу ({@link #mineShots}). */
+    /** Scenario pall-mine: pall during the day near the ground, in the adit below it and in the mine to the sky ({@link #mineShots}). */
     private boolean frontMine;
     private int detTick = -1;
-    /** Ядерный сценарий: точка в следе осадков и игровой тик, когда туда идти (−1 — не ждём). */
+    /** Nuclear scenario: a point in the sediment trail and a game tick when to go there (−1 - we’re not waiting). */
     private Vec3 falloutSpot = Vec3.ZERO;
     private long falloutGo = -1;
-    /** Сценарий эффектов: очередь ударов, текущий снаряд, тик его взрыва. */
+    /** Effects script: burst of hits, current projectile, tick of its explosion. */
     private java.util.ArrayDeque<String> fx;
-    /** Эффекты по заданным точкам ({@code incoming.fx.targets}): точка удара на каждый пункт {@link #fx}. */
+    /** Effects at specified points ({@code incoming.fx.targets}): impact point for each point {@link #fx}. */
     private java.util.ArrayDeque<double[]> fxTargets;
     /**
-     * Столб после взрыва ({@code fx-late}): через столько тиков после взрыва — кадры с половины прорисовки и из-за её края.
-     * Частиц взрыва к этому времени уже нет (дым шара живёт до 36 с), столб стоит минуты.
+     * Pillar after the explosion ({@code fx-late}): after so many ticks after the explosion - frames from half of the rendering and from behind its edge.
+     *  There are no particles of the explosion by this time (the smoke of the ball lasts until 36 s), the pillar stands for a minute.
      */
     private static final int FX_LATE = 900;
     private boolean fxLate;
@@ -109,62 +109,62 @@ public final class ClientScenario {
     private String current;
     private int flightShots;
     /**
-     * Подлёт с земли ({@code incoming.fx.approach=true}, только с {@code incoming.fx.targets}): зритель стоит в 40 блоках
-     * к востоку от цели и смотрит на север, откуда заходит снаряд, кадры подлёта — каждые 8 тиков до самого взрыва.
+     * Approach from the ground ({@code incoming.fx.approach=true}, only with {@code incoming.fx.targets}): the viewer stands in 40 blocks
+     *  east of the target and looks north, where the projectile comes from, approach frames every 8 tick until the explosion.
      */
     private final boolean approach = Boolean.getBoolean("incoming.fx.approach");
     /**
-     * Где зритель эффектов от цели ({@code incoming.fx.eye=вверх,назад}, блоки; без него — сбоку и чуть сверху): например,
-     * {@code 70,45} — сверху, как с дирижабля.
+     * Viewer position relative to the effects target ({@code incoming.fx.eye=up,back}, blocks; default is to the side
+     * and slightly above): for example, {@code 70,45} is above, as if from an airship.
      */
     private static final double[] FX_EYE = fxEye(System.getProperty("incoming.fx.eye"));
     /**
-     * Удар по заданной точке ({@link #fxTargets}): пуск от консоли встроенного сервера и взрыв своего снаряда. Снаряд у
-     * клиента ищется по UUID и заново после ухода в полёт вне мира; следующая цель — только после взрыва (или срока).
+     * Hit a given point ({@link #fxTargets}): launch from the console of the built-in server and explode your projectile. The projectile from
+     *  of the client is searched for UUID and again after leaving for flight outside the world; the next goal is only after the explosion (or deadline).
      */
     private volatile StrikeWatch strike;
-    /** Тик клиента, когда ушла команда удара ({@link #strike}), и снаряд уже был у клиента. */
+    /** tick the client when the strike command left ({@link #strike}), and the client already had the projectile. */
     private int strikeTick = -1;
     private boolean reached;
-    /** Удара нет за столько тиков после команды — «no impact», следующая цель. */
+    /** There is no strike for so many ticks after the command - “no impact”, the next goal. */
     private static final int FX_IMPACT_LIMIT = 2400;
-    /** Зритель подлёта: столько блоков над самым высоким столбом в {@link #FX_VIEW_RADIUS} от цели, и сколько ждать готовых чанков. */
+    /** Approach viewer: how many blocks are above the highest pillar in {@link #FX_VIEW_RADIUS} from the target, and how long to wait for ready chunks. */
     private static final int FX_VIEW_ABOVE = 35, FX_VIEW_RADIUS = 64, FX_VIEW_WAIT = 600;
-    /** Видео с борта: текущий вариант («dry», потом «wet»), тик пуска и снятые кадры. */
+    /** Video from the board: current version (“dry”, then “wet”), tick launch and captured footage. */
     private String onboard;
     private int onboardFired = -1, onboardFrames;
-    /** Больше всего частиц перед объективом в кадрах с прошлой строки лога (считается в кадре, с камерой этого кадра). */
+    /** The most particles in front of the lens are in the frames from the last line of the log (counted in the frame with the camera of this frame). */
     private int lensMax;
-    /** Сценарий моделей: частицы не нужны. */
+    /** Models scenario: no particles needed. */
     private boolean models;
-    /** Сценарий replay: пуск, как launch, потом проверка повтора Flashback ({@link ReplayCheck}). */
+    /** Script replay: launch as launch, then check for replay Flashback ({@link ReplayCheck}). */
     private boolean replay;
-    /** Зритель висит в воздухе (far-models): после телепорта сервер присылает способности, и полёт сбрасывается. */
+    /** The spectator hangs in the air (far-models): after the teleport, the server sends abilities, and the flight is reset. */
     private boolean hover;
-    /** Сценарий {@code mushroom}: куда от зрителя эпицентр (поворот, как у игрока), — туда, где суша. */
+    /** Scenario {@code mushroom}: where the epicenter is from the viewer (turn, like the player), - where the land is. */
     private int mushroomYaw = 180;
-    /** Сценарий {@code mushroom}: тень гриба на земле ({@code INCOMING_MUSHROOM=shadow}). */
+    /** Scenario {@code mushroom}: shadow of a mushroom on the ground ({@code INCOMING_MUSHROOM=shadow}). */
     private boolean shadowView;
-    /** Сценарий {@code mushroom}: свет шара на земле ночью ({@code INCOMING_MUSHROOM=glow}). */
+    /** Scenario {@code mushroom}: light of a ball on the ground at night ({@code INCOMING_MUSHROOM=glow}). */
     private boolean glowView;
-    /** Сценарий {@code mushroom}: вид видео хоста над Newisle ({@code INCOMING_MUSHROOM=film}). */
+    /** Scenario {@code mushroom}: Host video view over Newisle ({@code INCOMING_MUSHROOM=film}). */
     private boolean filmView;
-    /** Сценарий {@code mushroom}: свет шара на земле днём в 4 км ({@code INCOMING_MUSHROOM=flash}). */
+    /** Scenario {@code mushroom}: light of a ball on the ground during the day at 4 km ({@code INCOMING_MUSHROOM=flash}). */
     private boolean flashView;
-    /** Сценарий {@code mushroom} с {@code film}: зритель (до входа в мир — неизвестен). */
+    /** Scenario {@code mushroom} with {@code film}: spectator (unknown before entering the world). */
     private volatile Vec3 filmEye;
-    /** Сценарий {@code mushroom}: пыль с земли и пелена с разных высот ({@code INCOMING_MUSHROOM=blanket}). */
+    /** Scenario {@code mushroom}: dust from the ground and pall from different heights ({@code INCOMING_MUSHROOM=blanket}). */
     private boolean blanketView;
-    /** Раз в сколько тиков звук в лог. */
+    /** Once every tick sound is recorded in the log. */
     private int soundEvery = 10;
-    /** Ядерный подрыв у воды ({@code nuke-water}, {@code nuke-lake}): кадры от подрыва ({@link #waterEvents}). */
+    /** Nuclear explosion near the water ({@code nuke-water}, {@code nuke-lake}): footage from the explosion ({@link #waterEvents}). */
     private boolean water, lake;
-    /** Место подрыва и зрителя ({@link #planNukeWater}): выбирает сервер, шаги клиента ждут. */
+    /** Detonation location and viewer ({@link #planNukeWater}): server selects, client steps await. */
     private volatile Vec3 waterBurst, waterEye;
     private volatile int waterGround;
-    /** Тик клиента, когда зритель перенесён к найденному сервером месту съёмки (-1 — сервер ещё ищет). */
+    /** client tick when the viewer is transferred to the shooting location found by the server (-1 - the server is still searching). */
     private int waterFoundTick = -1;
-    /** Подробный город у клиента для замера огня ({@code incoming.scenario.city}), null — нет. */
+    /** The client has a detailed city for measuring fire ({@code incoming.scenario.city}), null - no. */
     @org.jetbrains.annotations.Nullable
     private final FireCity city = FireCity.of(System.getProperty("incoming.scenario.city"));
 
@@ -173,43 +173,43 @@ public final class ClientScenario {
         if (scenario == null) return;
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
-        // строки сценариев, песочницы и пробы пишут время слоя на видеокарте по частям: проба идёт всегда
+        // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
         if (scenario.startsWith("mp-")) {
-            new MultiplayerScenario("mp-a".equals(scenario)); // свой сервер, без мира сценария (tools/mp_scenario.sh)
+            new MultiplayerScenario("mp-a".equals(scenario)); // your own server, without a script world (tools/mp_scenario.sh)
             return;
         }
         if ("leak".equals(scenario)) {
-            new LeakCheck(); // заходы в мир и замеры памяти в меню — свои (LeakCheck), мир открывает он сам на каждый заход
+            new LeakCheck(); // entries into the world and memory measurements in the menu are their own (LeakCheck), the world is opened by itself on each entry
             return;
         }
         if ("sandbox".equals(scenario)) {
-            new Sandbox(); // песочница эффектов: свой плоский мир, команды /fx, горячая замена (tools/sandbox.sh)
+            new Sandbox(); // sandbox effects: your own flat world, commands /fx, hot swap (tools/sandbox.sh)
             return;
         }
         NeoForge.EVENT_BUS.addListener(this::onScreen);
         if ("trailer".equals(scenario)) {
-            new ua.zentix.incoming.scenario.trailer.Trailer(); // свой сценарий и запись (tools/trailer)
+            new ua.zentix.incoming.scenario.trailer.Trailer(); // your script and recording (tools/trailer)
             return;
         }
         if ("strike-profile".equals(scenario)) {
-            new StrikeProfile(); // шаги и замер тиков сервера — свои (StrikeProfile); мир — копия игрока (onScreen)
+            new StrikeProfile(); // steps and server tick measurement - your own (StrikeProfile); world - player copy (onScreen)
             return;
         }
         if ("probe".equals(scenario)) {
-            new ProbeScenario(); // шлагбаум картинки и звука: одни сцены в любой версии (tools/look_gate)
+            new ProbeScenario(); // look gate of pictures and sound: same scenes in any version (tools/look_gate)
             return;
         }
         if ("guide".equals(scenario)) {
-            new GuideShots(); // кадры руководства игрока (docs/guide, tools/guide_images.sh)
+            new GuideShots(); // player Guide Frames (docs/guide, tools/guide_images.sh)
             return;
         }
         if ("flash".equals(scenario)) {
-            new FlashScenario(); // вспышка вблизи: гарь, силуэты, ЭМИ, дымки (FlashScenario)
+            new FlashScenario(); // flash close up: smoke, silhouettes, EMP, haze (FlashScenario)
             return;
         }
         if (scenario.startsWith("flyby-")) {
-            new FlybySound(scenario.substring("flyby-".length())); // случаи звука по очереди, итоги в лог (FlybySound)
+            new FlybySound(scenario.substring("flyby-".length())); // sound cases one by one, results in log (FlybySound)
             return;
         }
         NeoForge.EVENT_BUS.addListener(this::onTick);
@@ -258,16 +258,16 @@ public final class ClientScenario {
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         Minecraft mc = Minecraft.getInstance();
-        // копия мира игрока (tools/prod_client.py --world): открыть её, а не создавать мир сценария
+        // player's world copy (tools/prod_client.py --world): open it instead of creating a scenario world
         String world = System.getProperty("incoming.world");
         if (world != null) {
-            mc.createWorldOpenFlows().openWorld(world, () -> Incoming.LOG.error("SCENARIO не открылся мир {}", world));
+            mc.createWorldOpenFlows().openWorld(world, () -> Incoming.LOG.error("SCENARIO world did not open {}", world));
             return;
         }
         createWorld(e.getScreen());
     }
 
-    /** Мир сценария заново (прежний удаляется); {@code parent} — экран, куда вернуться, если мир не создастся. */
+    /** The scenario world is recreated (the previous one is deleted); {@code parent} - screen where to return if the world is not created. */
     static void createWorld(Screen parent) {
         Minecraft mc = Minecraft.getInstance();
         deleteOldWorld(mc.gameDirectory.toPath().resolve("saves").resolve(WORLD));
@@ -285,7 +285,7 @@ public final class ClientScenario {
         try (Stream<Path> walk = Files.walk(dir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
         } catch (IOException ex) {
-            Incoming.LOG.warn("SCENARIO не удалось удалить старый мир сценария", ex);
+            Incoming.LOG.warn("SCENARIO failed to delete old script world", ex);
         }
     }
 
@@ -311,7 +311,7 @@ public final class ClientScenario {
         if (fx != null) fxEvents();
         smokeEvents();
         if (onboard != null) onboardEvents();
-        // модели крупным планом: дым выхлопа и шлейфы закрыли бы их
+        // close-up models: exhaust smoke and trail would cover them
         if (models) {
             mc.particleEngine.setLevel(mc.level);
             ua.zentix.incoming.client.fx.particle.FxPool.INSTANCE.clear();
@@ -320,10 +320,10 @@ public final class ClientScenario {
         if (tick % soundEvery == 0) logSound();
         if (tick % 10 == 0 && (!ua.zentix.incoming.client.hud.ClientFlights.all().isEmpty() || ua.zentix.incoming.client.cam.ProjectileCamera.isActive())) logFlights();
         if (tick % 100 == 0) {
-            // встроенный сервер делит процессор с клиентом: его тик рядом с fps — чья это просадка
+            // the embedded server shares the processor with the client: its tick is next to fps - whose drawdown is it
             var server = mc.getSingleplayerServer();
             if (server == null) Incoming.LOG.info("SCENARIO fps {}", mc.getFps());
-            else Incoming.LOG.info("SCENARIO fps {}, сервер {} мс/тик", mc.getFps(), String.format(java.util.Locale.ROOT, "%.1f", server.getAverageTickTimeNanos() / 1e6));
+            else Incoming.LOG.info("SCENARIO fps {}, server {} ms/tick", mc.getFps(), String.format(java.util.Locale.ROOT, "%.1f", server.getAverageTickTimeNanos() / 1e6));
         }
         if (tick % 20 == 0) {
             String far = FarRenderer.describe();
@@ -341,9 +341,9 @@ public final class ClientScenario {
             cmd("weather clear");
             cmd("tp @s 0 170 0 0 40");
         });
-        // цель — земля в 90 блоках по +Z; зритель — на столбике в 45 блоках от неё и в 25 над ней
+        // target - land in 90 blocks along +Z; spectator - on a column in 45 blocks from it and in 25 above it
         at(240, () -> {
-            // здесь проверяются удары, а не пуск: заход издалека и самый короткий полёт (пуск — сценарий launch)
+            // here impacts are checked, not launch: approach from afar and the shortest flight (launch - scenario launch)
             quickFlights();
             aimAhead(90);
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glass", (int) Math.floor(target.x), (int) target.y + 24,
@@ -376,9 +376,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Ядерный удар (DESIGN-nuke §12): МБР стартует у игрока и летит 90 с к цели в 2 км (наземный 15 кт),
-     * кадры старта, входа боеголовки, вспышки, шара, фронта и гриба; потом — в следе осадков, под чёрным дождём,
-     * со счётчиком Гейгера в руке.
+     * Nuclear strike (DESIGN-nuke §12): ICBM starts from the player and flies 90 s to the target in 2 km (ground 15 kt),
+     *  frames of launch, warhead entry, flash, ball, front and mushroom; then - in a trail of precipitation, under the black rain,
+     *  with a Geiger counter in hand.
      */
     private void planNuke() {
         nuke = true;
@@ -392,29 +392,29 @@ public final class ClientScenario {
             LocalPlayer p = mc.player;
             int x = (int) Math.floor(p.getX()), z = (int) Math.floor(p.getZ());
             int ground = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-            // смотровая площадка над окрестными холмами; цель — в 2 км на север (−Z)
+            // observation deck over the surrounding hills; target - 2 km to the north (−Z)
             int y = Math.max(ground, 170);
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 1, y + 29, z - 1, x + 1, y + 29, z + 1));
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 -8", x, y + 30, z));
             deck = new BlockPos(x, y + 30, z);
             cmd("give @s incoming:geiger_counter");
-            target = new Vec3(x + 0.5, 320, z - 2000 + 0.5); // высота 320 — сервер опустит на землю
+            target = new Vec3(x + 0.5, 320, z - 2000 + 0.5); // height 320 - the server will be lowered to the ground
         });
         at(260, () -> cmd(String.format(java.util.Locale.ROOT, "incoming nuke at %.1f %.1f %.1f 15 ground", target.x, target.y, target.z)));
-        // ракета стартует за спиной: оглядываемся на старт, потом снова на цель
+        // the rocket launches behind us: we look back at the launch, then back to the target
         at(262, () -> cmd("tp @s ~ ~ ~ 0 -25"));
         for (int t : new int[]{270, 300, 340, 400, 500}) shot(t, "launch");
         at(520, () -> cmd("tp @s ~ ~ ~ 180 -8"));
-        // дальше — от настоящих событий: сервер может отставать от счётчика кадров клиента
+        // further - from real events: the server may lag behind the client's frame counter
     }
 
     /**
-     * Ядерный подрыв у воды (DESIGN-nuke §6, «Вода»), 15 кт на земле, без полёта ({@code nuke now}), днём.
-     * {@code nuke-water}: зритель (наблюдатель — волна не сбрасывает его) в 20 блоках над морем в 40 блоках
-     * от берега ближайшего тёплого моря, подрыв — на море в 1,5 км: столб, кольцо
-     * тумана, тёмное кольцо фронта и стена брызг на воде у берега, потом базисная волна. {@code nuke-lake}: равнина,
-     * перед зрителем — пруд 120×140 блоков (от 30 до 170 блоков), подрыв — на суше в 1,5 км за ним: фронт идёт через пруд
-     * тёмным кольцом со стеной брызг, а пыль стены над водой не встаёт.
+     * Nuclear explosion near water (DESIGN-nuke §6, “Water”), 15 kt on the ground, without flight ({@code nuke now}), during the day.
+     * {@code nuke-water}: spectator (observer - the wave does not throw him off) in 20 blocks above the sea in 40 blocks
+     *  from the shore of the nearest warm sea, explosion - at sea at 1,5 km: a pillar, a ring of
+     *  fog, a dark ring of the front and a wall of splashes on the water near the shore, then a base wave. {@code nuke-lake}: plain,
+     *  in front of the viewer is a pond 120×140 blocks (from 30 to 170 blocks), the explosion is on land in 1,5 km behind it: the front goes through the pond
+     *  dark a ring with a wall of splashes, but the dust of the wall does not rise above the water.
      */
     private void planNukeWater(boolean lake) {
         water = true;
@@ -422,7 +422,7 @@ public final class ClientScenario {
         at(40, () -> {
             cmd("time set 6000");
             cmd("weather clear");
-            // наблюдатель: волна в 1,5 км сбросила бы зрителя с площадки посреди съёмки
+            // observer: a wave of 1,5 km would throw the viewer off the site in the middle of filming
             cmd("gamemode spectator");
             Minecraft.getInstance().options.hideGui = true;
             var server = Minecraft.getInstance().getSingleplayerServer();
@@ -434,8 +434,8 @@ public final class ClientScenario {
                     var gen = level.getChunkSource().getGenerator();
                     var random = level.getChunkSource().randomState();
                     BlockPos plains = found == null ? origin : found.getFirst(), at = plains;
-                    // место, от которого на +Z до подрыва — суша (у равнины бывает море), и без снега (в холодном лесу пруд
-                    // замёрз бы): по сетке вокруг найденной равнины; две точки суши стоят тепла
+                    // a place from which +Z to the explosion there is land (there is a sea near the plain), and without snow (in a cold forest a pond
+                    //  would freeze): along a grid around the found plain; two points of sushi cost heat
                     int best = -1, bestLand = 0;
                     boolean bestWarm = false;
                     for (int k = 0; k < 81 && best < 39; k++) {
@@ -455,13 +455,13 @@ public final class ClientScenario {
                     waterGround = gen.getBaseHeight(at.getX(), at.getZ(), Heightmap.Types.WORLD_SURFACE_WG, level, random);
                     Incoming.LOG.info("SCENARIO lake at {} ground {} ({} of 17 points on land, warm {})", at.toShortString(), waterGround, bestLand,
                             bestWarm);
-                    // чанки пруда — сразу: наблюдатель грузит их в фоне, и к заливке пруда (тик 300) их могло ещё не быть
+                    // pond chunks - immediately: the observer loads them in the background, and by the time the pond was filled (tick 300) they might not have existed yet
                     for (int cx = (at.getX() - 64) >> 4; cx <= (at.getX() + 64) >> 4; cx++)
                         for (int cz = (at.getZ() - 8) >> 4; cz <= (at.getZ() + 176) >> 4; cz++) level.getChunk(cx, cz);
                     waterEye = new Vec3(at.getX() + 0.5, 0, at.getZ() + 0.5);
                     waterBurst = new Vec3(at.getX() + 0.5, 320, at.getZ() + 1500.5);
                 } else {
-                    // тёплое море (у замёрзшего — лёд и айсберги), от него к началу мира — до берега
+                    // a warm sea (a frozen sea has ice and icebergs), from it to the beginning of the world - to the shore
                     var found = level.findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.OCEAN) || b.is(net.minecraft.world.level.biome.Biomes.LUKEWARM_OCEAN)
                             || b.is(net.minecraft.world.level.biome.Biomes.WARM_OCEAN) || b.is(net.minecraft.world.level.biome.Biomes.DEEP_LUKEWARM_OCEAN), origin, 6400, 32, 64);
                     var gen = level.getChunkSource().getGenerator();
@@ -475,8 +475,8 @@ public final class ClientScenario {
                             break;
                         }
                     }
-                    // море — в ту сторону от берега, где дно генератора ниже уровня моря на всём пути к подрыву и по бокам
-                    // от зрителя (мыс сбоку — пыль суши летит над водой у камеры)
+                    // sea - in the direction from the coast where the bottom of the generator is below sea level all the way to the explosion and on the sides
+                    //  from the viewer (the cape is on the side - land dust flies over the water near the camera)
                     double best = -1, bestAngle = 0;
                     for (int k = 0; k < 24; k++) {
                         double a = k * Math.PI * 2 / 24;
@@ -499,7 +499,7 @@ public final class ClientScenario {
                     }
                     Incoming.LOG.info("SCENARIO water shore {} sea direction {}° ({} of 25 points over water)", at.toShortString(),
                             Math.round(Math.toDegrees(bestAngle)), (int) best);
-                    // зритель — над водой в 40 блоках от берега
+                    // viewer - above the water in 40 blocks from the shore
                     waterEye = new Vec3(at.getX() + 0.5 + Math.cos(bestAngle) * 40, 0, at.getZ() + 0.5 + Math.sin(bestAngle) * 40);
                     waterBurst = new Vec3(at.getX() + 0.5 + Math.cos(bestAngle) * 1540, ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL, at.getZ() + 0.5 + Math.sin(bestAngle) * 1540);
                 }
@@ -509,7 +509,7 @@ public final class ClientScenario {
                 });
             });
         });
-        // площадка и вид — когда чанки вокруг пришли
+        // platform and view - when the chunks came around
         at(300, this::placeWaterViewer);
         at(6000, () -> {
             Incoming.LOG.info("SCENARIO water: no detonation");
@@ -518,8 +518,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Площадка зрителя, пруд и вид; подрыв — через 120 тиков. Сервер ещё ищет место (генерация чанков пруда на загруженной
-     * машине идёт десятки секунд) — снова через секунду; чанкам вокруг перенесённого зрителя — 260 тиков.
+     * Spectator's area, pond and view; detonation - via 120 tick. The server is still looking for a location (generating pond chunks on a loaded
+     *  machine takes tens of seconds) - again in a second; chunks around the transferred viewer - 260 tick.
      */
     private void placeWaterViewer() {
         if (waterFoundTick < 0) {
@@ -532,12 +532,12 @@ public final class ClientScenario {
         }
         Minecraft mc = Minecraft.getInstance();
         int x = (int) Math.floor(waterEye.x), z = (int) Math.floor(waterEye.z);
-        // у пруда — высота генератора (без деревьев; чанк клиента мог ещё не прийти)
+        // near the pond - the height of the generator (without trees; the client’s chunk might not have arrived yet)
         int ground = lake ? waterGround : mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
         int y = lake ? ground + 8 : Math.max(ground, ua.zentix.incoming.client.fx.layer.WaterDecal.SEA_LEVEL) + 20;
         if (lake) {
-            // пруд: вода в два блока под уровнем земли у зрителя; над ним и до зрителя — воздух на 40 блоков (холмы
-            // и деревья иначе закрывают пруд); fill — полосами, не больше 32768 блоков
+            // pond: two blocks of water below ground level near the viewer; above it and up to the viewer there is air on 40 blocks (hills
+            //  and trees otherwise cover the pond); fill - stripes, no more than 32768 blocks
             for (int z0 = 0; z0 <= 170; z0 += 6) {
                 int z1 = Math.min(170, z0 + 5);
                 cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x - 60, ground, z + z0, x + 60, ground + 40, z + z1));
@@ -554,15 +554,15 @@ public final class ClientScenario {
                 waterBurst.z)));
     }
 
-    /** Зритель {@link #waterEye} смотрит на точку. */
+    /** Viewer {@link #waterEye} looks at the dot. */
     private void look(double x, double y, double z) {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", waterEye.x, waterEye.y, waterEye.z, x, y, z));
     }
 
-    /** Подрыв у воды: кадры по времени от подрыва, строка воды в лог; конец — после последнего кадра. */
+    /** Explosion near water: time frames from the explosion, line of water in the log; end - after the last frame. */
     private void waterEvents() {
         if (tick % 10 == 0) Incoming.LOG.info("SCENARIO water {}", ua.zentix.incoming.client.nuclear.NukeWater.describe());
-        // пелена у воды: из чего она у камеры (брызги, базисная волна, пыль), что под ней, снос
+        // pall near the water: what is it made of near the camera (spray, base wave, dust), what is under it, demolition
         if (tick % 100 == 0 && detTick >= 0) Incoming.LOG.info("SCENARIO water pall {}", ua.zentix.incoming.client.nuclear.NukePall.describe());
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
@@ -571,8 +571,8 @@ public final class ClientScenario {
         Incoming.LOG.info("SCENARIO detonation at tick {}: ground {} at {}, eye {} blocks away", tick, String.format(java.util.Locale.ROOT, "%.1f", d.groundY()),
                 xyz(d.burst()), Math.round(Math.hypot(d.burst().x - waterEye.x, d.burst().z - waterEye.z)));
         if (!lake && "far".equals(System.getenv("INCOMING_WATER"))) {
-            // издалека: в 4 км от подрыва по линии через зрителя у берега (в ~2,5 км за берегом), на высоте 400 (~340 блоков
-            // над морем), узкий угол — столб целиком, его корона, сужение и падение, пока стена брызг не дошла до зрителя
+            // from afar: 4 km from the explosion along a line through the viewer near the shore (~2,5 km beyond the shore), at a height of 400 (~340 blocks
+            //  above the sea), a narrow corner - the entire pillar, its crown, narrowing and falling until the wall of spray reached the viewer
             double ax = waterEye.x - waterBurst.x, az = waterEye.z - waterBurst.z, l = Math.hypot(ax, az);
             waterEye = new Vec3(waterBurst.x + ax / l * 4000, 400, waterBurst.z + az / l * 4000);
             Minecraft.getInstance().options.fov().set(30);
@@ -587,7 +587,7 @@ public final class ClientScenario {
         int[] frames = {2, 8, 16, 24, 32, 44, 60, 76, 92, 104, 112, 120, 128, 136, 144, 152, 160, 176, 200, 240, 300, 400, 600, 900, 1400, 2000};
         String name = lake ? "lake" : "water";
         for (int dt : frames) shot(tick + dt, name);
-        // сбоку от подрыва: кольцо на воде и стена брызг вдоль берега
+        // on the side of the explosion: a ring on the water and a wall of splashes along the shore
         at(tick + 2040, () -> {
             double ax = waterBurst.x - waterEye.x, az = waterBurst.z - waterEye.z, l = Math.hypot(ax, az);
             look(waterEye.x - az / l * 200, waterEye.y - 20, waterEye.z + ax / l * 200);
@@ -600,11 +600,11 @@ public final class ClientScenario {
     }
 
     /**
-     * Пелена после ядерной волны (план «ядерка уровня кино», шаг 2): наземные 15 кт в полдень (эпицентр на суше,
-     * в 1,5 км к северу от точки появления). Кадры с холма в 4 км к югу (пелена встаёт за фронтом, накрывает город;
-     * подрыв — когда чанки холма уже построены), изнутри пелены в 900 м от эпицентра (над руинами, к краю, вверх —
-     * к солнцу), с высоты, в сумерки и ночью (пожары снизу). Качество пелены — {@code INCOMING_PALL} (LOW по умолчанию:
-     * программный OpenGL медленный); в лог — строки {@code SCENARIO pall}.
+     * pall after the nuclear wave (the “movie-level nuke” plan, step 2): ground 15 kt at noon (epicenter on land,
+     *  at 1,5 km north of the spawn point). Shots from a hill 4 km to the south (the pall stands behind the front, covers the city;
+     *  detonation - when the hill chunks are already built), from inside the pall at 900 m from the epicenter (above the ruins, to the edge, up -
+     *  to the sun), from a height, at dusk and at night (fires below). Pall quality - {@code INCOMING_PALL} (LOW default:
+     * software OpenGL slow); in the log - lines {@code SCENARIO pall}.
      */
     private void planPall() {
         pall = true;
@@ -619,7 +619,7 @@ public final class ClientScenario {
             Minecraft mc = Minecraft.getInstance();
             LocalPlayer p = mc.player;
             int x = (int) Math.floor(p.getX()), z = (int) Math.floor(p.getZ());
-            // холм: площадка над землёй и над всем, что впереди (к эпицентру) в прорисовке, — в 4 км к югу от эпицентра
+            // hill: a platform above the ground and above everything in front (towards the epicenter) in the drawing - 4 km south of the epicenter
             int y = Math.max(mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 64) + 40;
             for (int ahead = 8; ahead <= 160; ahead += 8) {
                 for (int side = -48; side <= 48; side += 16) y = Math.max(y, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + side, z - ahead) + 12);
@@ -632,33 +632,31 @@ public final class ClientScenario {
     }
 
     /**
-     * Гриб объёмом ({@code MushroomField}): наземные 15 кт в 10 км (к северу или в первую сторону по часовой, где там
-     * суша), зритель в воздухе в 200 блоках над землёй смотрит на эпицентр чуть вверх; кадры {@code pall_mushroom_<секунды>s}
-     * от 2 с до 4 минут — шар сворачивается в кольцо, шапка поднимается и растекается, ножка, юбка; на 22-й и 72-й секунде —
-     * ещё раз, через 2 с после 20-й и 70-й: как за это время сдвинулись и сменились клубы шапки. Ночью
-     * ({@code INCOMING_MUSHROOM=night}) — свечение по
-     * температуре; по умолчанию — утро, солнце сбоку. Качество — {@code INCOMING_PALL} (по умолчанию MEDIUM).
+     * Volumetric mushroom ({@code MushroomField}): ground 15 kt at 10 km (north, or first clockwise direction with land);
+     * viewer in the air 200 blocks above ground looks slightly upward at ground zero; frames {@code pall_mushroom_<seconds>s}
+     * from 2 s to 4 minutes show the ball rolling into a ring, cap rising and spreading, stem and skirt; repeat at seconds
+     * 22 and 72, 2 s after 20 and 70, to show how cap billows moved and changed. At night ({@code INCOMING_MUSHROOM=night}),
+     * glow follows temperature; default morning, sun from the side. Quality: {@code INCOMING_PALL} (default MEDIUM).
      * <p>
-     * Тень гриба ({@code INCOMING_MUSHROOM=shadow}): подрыв в 5 км к востоку, зритель на высоте 200 смотрит
-     * на запад и вниз — гриба в кадре нет, есть только земля, на которую ложится его тень. Через 3 минуты — кадры
-     * {@code pall_shadow_<время>} при солнце с востока на разной высоте (тень гриба вытянута к западу на высоту шапки,
-     * делённую на тангенс высоты солнца: с 1875 до 3125 она на зрителе, край проходит по нему до и после) и при солнце
-     * с запада (8000: тени нет, пелена та же).
+     * Mushroom shadow ({@code INCOMING_MUSHROOM=shadow}): detonation 5 km east, viewer at height 200 looks west and down;
+     * no mushroom in frame, only ground receiving its shadow. After 3 minutes, frames {@code pall_shadow_<time>} with
+     * eastern sun at different altitudes (shadow extends west by cap height divided by tangent of solar altitude: from
+     * 1875 to 3125 it covers the viewer, its edge crosses before and after), and western sun (8000: no shadow, same pall).
      * <p>
-     * Свет шара на земле ночью ({@code INCOMING_MUSHROOM=glow}): подрыв в 3 км к востоку, зритель на высоте 200
-     * смотрит на восток и вниз — на земле перед ним свет шара, сам шар у верха кадра; кадры {@code pall_glow_<секунды>s}
-     * от 1 до 14 с: белый, жёлтый, оранжевый свет и темнота, когда шапка свернулась.
+     * Ball light on the ground at night ({@code INCOMING_MUSHROOM=glow}): detonation 3 km east, viewer at height 200 looks
+     * east and down; ball light on the ground ahead, ball itself near the top of frame; frames {@code pall_glow_<seconds>s}
+     * from 1 to 14 s: white, yellow, orange light, then darkness when the cap rolls up.
      * <p>
-     * Вид видео хоста ({@code INCOMING_MUSHROOM=film}): воздушные 15 кт (оптимальная высота, ~590 м) в {@link #FILM_M}
-     * блоках над сушей, днём; зритель-наблюдатель (волна его не сносит) в 40 блоках над землёй смотрит на эпицентр на
-     * 20° вверх. Кадры {@code pall_film_front_<десятые>ds} с 1 по 3,5 с (фронт подходит к зрителю), {@code pall_film_<секунды>s} каждые 2 с с 4-й по 40-ю (стена пыли проходит зрителя на ~7 с, потом
-     * он в пыли: гриб, ножка и шапка должны оставаться видны), потом {@code pall_film_up_*} на 55° вверх — ножка
-     * дорастает до шапки.
+     * Host video view ({@code INCOMING_MUSHROOM=film}): airburst 15 kt (optimum height, ~590 m) at {@link #FILM_M} blocks
+     * over land by day; spectator viewer (not swept away by the wave) 40 blocks above ground looks 20° upward at ground zero.
+     * Frames {@code pall_film_front_<tenths>ds} from 1 to 3.5 s (front approaches viewer), {@code pall_film_<seconds>s} every
+     * 2 s from 4 to 40 (dust wall passes viewer at ~7 s, then viewer is in dust: mushroom, stem and cap must remain visible),
+     * then {@code pall_film_up_*} at 55° upward: stem grows up to cap.
      * <p>
-     * Свет шара днём ({@code INCOMING_MUSHROOM=flash}; жалоба 18.10: в 3–5 км «второе солнце» и резкие тени по всей карте):
-     * воздушные 15 кт в {@link #FLASH_M} блоках над сушей, утро, ясно; зритель-наблюдатель в 30 блоках над землёй смотрит
-     * поперёк направления на взрыв (шар слева за кадром) и вниз — склоны к шару и отвёрнутые от него в одном кадре.
-     * Кадры {@code pall_flash_<тики>t} до вспышки и через 2–60 тиков.
+     * Ball light by day ({@code INCOMING_MUSHROOM=flash}; complaint 18.10: "second sun" at 3–5 km and sharp shadows across
+     * the map): airburst 15 kt at {@link #FLASH_M} blocks over land, clear morning; spectator viewer 30 blocks above ground
+     * looks across the explosion direction (ball off-screen left) and down; slopes facing the ball and facing away share
+     * a frame. Frames {@code pall_flash_<ticks>t} before flash and 2–60 ticks afterward.
      */
     private void planMushroom() {
         mushroom = true;
@@ -693,10 +691,10 @@ public final class ClientScenario {
             at(40, () -> {
                 String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
                 ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
-                // как на серверах хоста: волна вдали медленнее настоящей
+                // as on the host servers: the distant wave is slower than the real one
                 ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
                 ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(System.getenv().getOrDefault("INCOMING_WAVE_SPEED", "0.2")));
-                // глаз — над рельефом первых 800 блоков к эпицентру (холм у глаза закрыл бы стену)
+                // eye - above the relief of the first 800 blocks towards the epicenter (the hill near the eye would cover the wall)
                 var level = Minecraft.getInstance().getSingleplayerServer().overworld();
                 var gen = level.getChunkSource().getGenerator();
                 double sx = -Math.sin(Math.toRadians(mushroomYaw)), sz = Math.cos(Math.toRadians(mushroomYaw));
@@ -778,20 +776,20 @@ public final class ClientScenario {
         });
     }
 
-    /** Сценарий {@code mushroom} с {@code flash}: от зрителя до эпицентра по земле, блоков. */
+    /** Scenario {@code mushroom} with {@code flash}: from the viewer to the epicenter along the ground, blocks. */
     private static final double FLASH_M = 4000;
 
-    /** Сценарий {@code mushroom} с {@code film}: от зрителя до эпицентра по земле, блоков (камера видео хоста над Newisle). */
+    /** Scenario {@code mushroom} with {@code film}: from the viewer to the epicenter along the ground, blocks (host video camera above Newisle). */
     private static final double FILM_M = 1383;
 
-    /** Сценарий {@code mushroom} с {@code blanket}: от зрителя до эпицентра по земле, блоков. */
+    /** Scenario {@code mushroom} with {@code blanket}: from the viewer to the epicenter along the ground, blocks. */
     private static final double BLANKET_M = 3000;
-    /** Сценарий {@code mushroom} с {@code blanket}: высоты зрителя над землёй, блоков (у земли, чуть над пеленой — до самолёта). */
+    /** Scenario {@code mushroom} with {@code blanket}: the height of the viewer above the ground, blocks (near the ground, just above the pall - up to the plane). */
     private static final int[] BLANKET_UP = {60, 150, 400, 1000, 2500};
 
     /**
-     * Сценарий {@code mushroom} с {@code blanket}: зритель над землёй на {@code up} блоков, в {@code back} блоках от эпицентра
-     * (на линии к прежнему месту), взгляд на землю под эпицентром, но не выше 8° вниз.
+     * Scenario {@code mushroom} with {@code blanket}: viewer above the ground at {@code up} blocks, {@code back} blocks from the epicenter
+     *  (on the line to the previous location), looking at the ground below the epicenter, but no higher than 8° down.
      */
     private void blanketLook(int up, double back) {
         double k = back / BLANKET_M;
@@ -800,19 +798,19 @@ public final class ClientScenario {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %.1f", x, filmEye.y - 20 + up, z, mushroomYaw, pitch));
     }
 
-    /** Сценарий {@code mushroom} с {@code film}: зритель на месте, взгляд на эпицентр с этим наклоном. */
+    /** Scenario {@code mushroom} with {@code film}: the viewer is in place, looking at the epicenter with this tilt. */
     private void filmLook(int pitch) {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %d %d", filmEye.x, filmEye.y, filmEye.z, mushroomYaw, pitch));
     }
 
     /**
-     * Куда от зрителя в {@code dist} блоках суша по генератору (поворот, как у игрока): первое направление от севера по
-     * часовой, где суша под эпицентром и в 600 блоках вокруг (юбка, пелена), а нет такого — где больше суши, но под
-     * эпицентром суша прежде всего.
+     * Where is the land from the viewer in {@code dist} blocks according to the generator (turn like the player): the first direction is from the north along
+     * hourly, where the land is under the epicenter and in 600 blocks around (skirt, pall), but there is no such thing - where there is more land, but under the
+     *  epicenter there is land first of all.
      */
     private int landYaw(double dist) {
-        // у зерна сценария к северу море: подрыв там водяной, и столб воды закрывал бы шар. Сразу, до телепорта: шум
-        // генератора читают и потоки генерации мира одновременно
+        // the seed scenario has a sea to the north: there is a water explosion there, and a column of water would cover the ball. Immediately, before the teleport: noise
+        //  generator is read and world generation threads simultaneously
         var level = Minecraft.getInstance().getSingleplayerServer().overworld();
         var gen = level.getChunkSource().getGenerator();
         var random = level.getChunkSource().randomState();
@@ -835,13 +833,13 @@ public final class ClientScenario {
         return bestYaw;
     }
 
-    /** Сценарий {@code mushroom}: кадры — от прихода подрыва к клиенту. */
+    /** Scenario {@code mushroom}: frames - from the arrival of the explosion to the client. */
     private void mushroomEvents() {
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
         Incoming.LOG.info("SCENARIO detonation at tick {}, burst {}", tick, xyz(ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d.burst()));
         if (shadowView) {
-            // волна прошла, шапка выше 5 км; кадр — через 3 с после смены времени (пелена копит свет по кадрам)
+            // the wave passed, cap above 5 km; frame - after 3 s after the time change (pall accumulates light over frames)
             int t = tick + 20 * 180;
             for (int time : new int[]{1500, 1625, 1750, 1875, 2500, 3125, 3250, 3375, 8000}) {
                 at(t, () -> cmd("time set " + time));
@@ -863,9 +861,9 @@ public final class ClientScenario {
             return;
         }
         if (blanketView) {
-            // пыль с земли: фронт идёт к зрителю (у 0,2 скорости звука — ~45 с до него)
+            // dust from the ground: the front moves towards the viewer (for 0,2 the speed of sound is ~45 s before it)
             for (int s = 6; s <= 54; s += 6) pallShot(tick + 20 * s, "blanket_ground_" + s + "s");
-            // пелена с высоты: через минуту и через пять; кадр — через 3 с после переноса (пелена копит свет по кадрам)
+            // pall from a height: in a minute and in five; frame - through 3 s after transfer (pall accumulates light over frames)
             int t = tick + 20 * 60;
             for (int minute : new int[]{1, 5}) {
                 if (minute == 5) t = Math.max(t, tick + 20 * 300);
@@ -893,10 +891,10 @@ public final class ClientScenario {
             return;
         }
         if (filmView) {
-            // фронт волны подходит к зрителю: кольцо преломления по его краю на фоне неба (десятые доли секунды)
+            // the wave front approaches the viewer: a ring of refraction along its edge against the sky (tenths of a second)
             for (int ds = 10; ds <= 35; ds += 5) pallShot(tick + 2 * ds, "film_front_" + ds + "ds");
             for (int s = 4; s <= 40; s += 2) pallShot(tick + 20 * s, "film_" + s + "s");
-            // шапка выше кадра: взгляд вверх, кадр — через 3 с (пелена копит свет по кадрам)
+            // cap above the frame: look up, frame - through 3 s (pall accumulates light across frames)
             at(tick + 20 * 41, () -> filmLook(-55));
             for (int s : new int[]{44, 50, 60, 90}) pallShot(tick + 20 * s, "film_up_" + s + "s");
             at(tick + 20 * 90 + 20, () -> {
@@ -912,20 +910,20 @@ public final class ClientScenario {
         });
     }
 
-    /** Сценарий {@code pall}: кадры — от прихода подрыва к клиенту. */
+    /** Scenario {@code pall}: frames - from the arrival of the explosion to the client. */
     private void pallEvents() {
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
         var d = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
         Incoming.LOG.info("SCENARIO detonation at tick {}, burst {}", tick, xyz(d.burst()));
         int ex = (int) Math.floor(d.burst().x), ez = (int) Math.floor(d.burst().z);
-        // с холма: пелена встаёт за фронтом и идёт к зрителю
+        // from the hill: pall stands behind the front and walks towards the viewer
         for (int dt : new int[]{60, 200, 400, 700, 1000, 1300}) pallShot(tick + dt, "hill");
-        // изнутри: в 900 м к юго-востоку от эпицентра, площадка в 10 блоках над руинами (видно, как они тонут в пыли)
+        // from the inside: 900 m southeast of the epicenter, a site in 10 blocks above the ruins (they can be seen sinking in the dust)
         int ix = ex + 400, iz = ez + 800;
         at(tick + 1340, () -> {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 220 %d.5 180 0", ix, iz));
-            // дальше камера в полёте до конца (каждый тик): с высоты и ночью над пожарами — кадр с того места, куда перенесли
+            // then the camera in flight to the end (each tick): from above and at night above the fires - a frame from the place where it was moved
             hover = true;
         });
         at(tick + 1480, () -> {
@@ -938,13 +936,13 @@ public final class ClientScenario {
         pallShot(tick + 1700, "inside_edge");
         at(tick + 1710, () -> cmd("tp @s ~ ~ ~ 155 -75"));
         pallShot(tick + 1800, "inside_up");
-        // с высоты: 500 блоков, в 2 км к юго-востоку, взгляд на эпицентр (в полёте — не падать)
+        // from a height: 500 blocks, 2 km to the southeast, looking at the epicenter (do not fall in flight)
         at(tick + 1820, () -> {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d 500 %d facing %d 70 %d", ex + 1500, ez + 1500, ex, ez));
         });
         pallShot(tick + 2000, "altitude");
         pallShot(tick + 2100, "altitude");
-        // ночь с холма: мгла над городом, пожары снизу
+        // night from the hill: haze over the city, fires below
         at(tick + 2120, () -> {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d 160 %d facing %d 120 %d", ex, ez + 4000, ex, ez));
             cmd("time set 13000");
@@ -963,28 +961,28 @@ public final class ClientScenario {
     }
 
     /**
-     * Эпицентр сценария firestorm: где в 1,6 км вокруг больше всего горючей суши по биомам ({@link #pickEpicentre}); в мире
-     * сценария у точки появления — лёд, снег и море, а они не горят. Деревню не ищем: ближе 1,6 км её нет, а поиск стоил
-     * минут потока сервера.
+     * Epicenter of scenario firestorm: where in 1,6 km around there is the most flammable land by biome ({@link #pickEpicentre}); in the world
+     *  scenario, the spawn point has ice, snow and sea, but they don’t burn. We are not looking for a village: there is none closer than 1,6 km, and the search cost
+     *  minutes of server flow.
      */
     private volatile int fsX = 0, fsZ = -1000;
-    /** Точки съёмки — в 2 км и 800 м к югу от эпицентра. */
+    /** The shooting points are 2 km and 800 m south of the epicenter. */
     private static final int FS_FAR = 2000, FS_ROOF = 800;
-    /** Сколько ждать готовых чанков после переноса (программный OpenGL строит секции медленно). */
+    /** How long to wait for ready chunks after transfer (software OpenGL builds sections slowly). */
     private static final int FS_LOAD = 350;
-    /** Окон замера пелены на видеокарте со штормом и без него (по очереди). */
+    /** Pall measurement windows on a GPU with and without a storm (one at a time). */
     private static final int FS_GPU_WINDOWS = 16;
 
     /**
-     * Огненный шторм (план «ядерка уровня кино», шаг 4): воздушные 15 кт над лесом и равнинами (у точки появления — лёд
-     * и море), кадры через ~1, 5 и 15 минут — с 2 км (40 блоков над землёй и над рельефом впереди), с
-     * крыши в 800 м (30 над землёй) и изнутри зоны пожаров у огненного смерча. До подрыва зритель облетает точки в 2 км и
-     * 800 м (чанки готовы). Минуты пропускаются: часы сервера — вперёд, у клиента — перемотка, как у повтора Flashback
-     * ({@code ClientNuclear.rewound}: картинка — по возрасту подрыва). Ночь ({@code INCOMING_FIRESTORM=night}, по умолчанию) —
-     * подрыв в 4000 (утро пелены — через 16,7 минуты), сразу после него — {@code time set 18000} и перемотка: утро остаётся по
-     * времени подрыва, на экране — ночь. Качество пелены — {@code INCOMING_PALL} (по умолчанию MEDIUM, как в настройке);
-     * в лог — строки {@code SCENARIO firestorm} (пелена и шторм, время на видеокарте), у крыши через 5 минут — окна по 2 с
-     * со штормом и без него по очереди (строки {@code SCENARIO firestorm gpu}).
+     * Firestorm (the “movie-level nuke” plan, step 4): air 15 kt over the forest and plains (at the spawn point there is ice
+     *  and the sea), frames after ~1, 5 and 15 minutes - from 2 km (40 blocks above the ground and above the terrain in front), from
+     *  roofs in 800 m (30 above the ground) and from inside the fire zone of the fire tornado. Before the explosion, the viewer flies around the points at 2 km and
+     * 800 m (chunks are ready). Minutes are skipped: the server's clock is forward, the client's is rewinding, like a replay Flashback
+     *  ({@code ClientNuclear.rewound}: picture - by age of detonation). Night ({@code INCOMING_FIRESTORM=night}, default) -
+     *  detonation at 4000 (morning pall - after 16,7 minutes), immediately after it - {@code time set 18000} and rewind: morning remains at
+     *  detonation time, on the screen - night. Pall quality - {@code INCOMING_PALL} (by default MEDIUM, as in the setting);
+     *  in the log - lines {@code SCENARIO firestorm} (pall and storm, time on the GPU), at the roof after 5 minutes - windows according to 2 s
+     *  with and without a storm in turn (lines {@code SCENARIO firestorm gpu}).
      */
     private void planFirestorm() {
         firestorm = true;
@@ -1009,7 +1007,7 @@ public final class ClientScenario {
         at(1250, () -> cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %d.5 320 %d.5 15 air", fsX, fsZ)));
     }
 
-    /** Самый высокий рельеф впереди (к северу, до 180 блоков, полосой 64 в стороны) у клиента. */
+    /** The highest relief is in front (to the north, up to 180 blocks, with a stripe of 64 to the sides) at the client. */
     private static int ahead(int x, int z) {
         int top = 0;
         for (int a = 16; a <= 180; a += 8) {
@@ -1018,7 +1016,7 @@ public final class ClientScenario {
         return top;
     }
 
-    /** Самый высокий рельеф у клиента в 8 блоках вокруг колонки (точка съёмки — над ним, а не в шпиле льда рядом). */
+    /** The client's highest relief is in the 8 blocks around the column (the shooting point is above it, and not in the ice spire nearby). */
     private static int around(int x, int z) {
         int top = 0;
         for (int dx = -8; dx <= 8; dx += 2) {
@@ -1028,8 +1026,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Горит ли место по биому мира (без чанков: шум биомов сервера): лес, тайга, равнины, саванна, джунгли, луга — да; море,
-     * реки, пляжи, снег и лёд, пустыни и горы — нет (шторм не жжёт воду, лёд и снег).
+     * Is the place on fire according to the biome of the world (without chunks: noise of server biomes): forest, taiga, plains, savannah, jungle, meadows - yes; sea,
+     * rivers, beaches, snow and ice, deserts and mountains - no (the storm does not burn water, ice and snow).
      */
     private static boolean burns(net.minecraft.server.level.ServerLevel level, int x, int z) {
         var source = level.getChunkSource();
@@ -1042,8 +1040,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Эпицентр: из точек через 500 блоков в 4 км от точки появления — та, у которой горит больше мест в 1,6 км (кольца через
-     * 400 блоков), и суша под точками съёмки в 800 м и 2 км к югу.
+     * Epicenter: from points through 500 blocks in 4 km from the point of appearance - the one with the most burning places in 1,6 km (rings through
+     * 400 blocks), and land under the shooting points in 800 m and 2 km to the south.
      */
     private void pickEpicentre() {
         var server = Minecraft.getInstance().getSingleplayerServer();
@@ -1076,14 +1074,14 @@ public final class ClientScenario {
         }).join();
     }
 
-    /** Верх рельефа в колонке у клиента (чанка нет — 64). */
+    /** The top of the relief in the client’s column (there is no chunk - 64). */
     private static int ground(int x, int z) {
         var level = Minecraft.getInstance().level;
         if (!level.hasChunk(x >> 4, z >> 4)) return 64;
         return Math.max(level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), 63);
     }
 
-    /** Сценарий {@code firestorm}: кадры — от прихода подрыва к клиенту. */
+    /** Scenario {@code firestorm}: frames - from the arrival of the explosion to the client. */
     private void firestormEvents() {
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
@@ -1092,7 +1090,7 @@ public final class ClientScenario {
         int t = tick;
         if (fsNight) {
             at(t + 5, () -> cmd("time set 18000"));
-            // утро пелены и шторма — снова по времени суток в миг подрыва (4000), а не по 18000
+            // morning pall and storm - again according to the time of day at the moment of detonation (4000), and not according to 18000
             at(t + 15, ua.zentix.incoming.client.nuclear.ClientNuclear::rewound);
         }
         int gy = (int) Math.round(d.groundY());
@@ -1114,7 +1112,7 @@ public final class ClientScenario {
             });
             return;
         }
-        // через минуту: с 2 км, с крыши в 800 м, изнутри у смерча, что будет идти к 5-й минуте
+        // in a minute: from 2 km, from the roof in 800 m, from inside the tornado, which will go to 5 minute
         at(t + 100, () -> fsFace("far"));
         fsShot(t + 1200, "far");
         at(t + 1210, () -> fsGo(fsX, fsRoofY, roof));
@@ -1127,7 +1125,7 @@ public final class ClientScenario {
         });
         at(in + FS_LOAD + 150, () -> fsFace("inside"));
         fsShot(in + FS_LOAD + 220, "inside");
-        // к смерчу: через 20 с после его начала
+        // to the tornado: after 20 s after its start
         int five = in + FS_LOAD + 240;
         at(five, () -> fsSkip(fsWhirlAge));
         fsShot(five + 120, "inside");
@@ -1139,8 +1137,8 @@ public final class ClientScenario {
         at(r5, () -> fsGo(fsX, fsRoofY, roof));
         at(r5 + FS_LOAD, () -> fsFace("roof"));
         fsShot(r5 + FS_LOAD + 60, "roof");
-        // та же точка: время пелены на видеокарте со штормом и без него — окнами по 2 с по очереди (машина общая: подряд
-        // по 10 с одно окно попадало бы на чужую нагрузку целиком)
+        // the same point: pall time on a GPU with and without a storm - windows by 2 s in turn (shared machine: in a row
+//  by 10 s one window would fall on someone else's load entirely)
         int gpu = r5 + FS_LOAD + 70;
         for (int k = 0; k < FS_GPU_WINDOWS; k++) {
             boolean on = k % 2 == 0;
@@ -1152,7 +1150,7 @@ public final class ClientScenario {
         at(after, () -> ua.zentix.incoming.client.nuclear.NukePall.firestorm(false));
         fsShot(after + 40, "roof_nostorm");
         at(after + 50, () -> ua.zentix.incoming.client.nuclear.NukePall.firestorm(true));
-        // через 15 минут
+        // in 15 minutes
         int fifteen = after + 60;
         at(fifteen, () -> fsSkip(900));
         fsShot(fifteen + 120, "roof");
@@ -1170,8 +1168,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Точка внутри: в 200–360 блоках сбоку (поперёк ветра, над сушей) от огненного смерча, чья середина ближе всего к
-     * 5-й минуте, — к нему на 20-й секунде его жизни; смерчей нет — в 600 м к юго-востоку от эпицентра, к эпицентру.
+     * Point inside: in 200–360 blocks to the side (across the wind, over land) from the fire tornado, whose middle is closest to the
+     * 5 minute - to it at the 20 second of its life; there are no tornadoes - in 600 m southeast of the epicenter, towards the epicenter.
      */
     private void fsPickWhirl(ua.zentix.incoming.nuclear.Detonation d, int gy) {
         var a = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast();
@@ -1185,7 +1183,7 @@ public final class ClientScenario {
             fsWhirlAge = best.startS() + 20;
             double bx = best.baseX(fsWhirlAge + 5), bz = best.baseZ(fsWhirlAge + 5);
             double px = -Math.sin(d.windDir()), pz = Math.cos(d.windDir());
-            // сторона и даль — где под камерой горит суша, а не море или лёд
+            // side and distance - where the land is burning under the camera, and not the sea or ice
             var level = Minecraft.getInstance().getSingleplayerServer().overworld();
             int bestDry = -1;
             for (int dist : new int[] {200, 280, 360}) {
@@ -1204,16 +1202,16 @@ public final class ClientScenario {
         Incoming.LOG.info("SCENARIO firestorm whirls {}, filming one at {} s from {}", a.storm.whirls(), String.format(java.util.Locale.ROOT, "%.0f", fsWhirlAge), xyz(fsInside));
     }
 
-    /** Перенос к точке съёмки (высота — по рельефу, взгляд — потом, {@link #fsFace}). */
+    /** Transfer to the shooting point (height - according to the relief, look - then, {@link #fsFace}). */
     private static void fsGo(double x, int y, double z) {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %d %.1f", x + 0.5, y, z + 0.5));
     }
 
-    /** Взгляд с точки съёмки: с 2 км и с крыши — на эпицентр над землёй, изнутри — на смерч (высота — по готовому рельефу). */
+    /** View from the shooting point: from 2 km and from the roof - at the epicenter above the ground, from the inside - at the tornado (height - according to the finished relief). */
     private void fsFace(String where) {
         var d = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
         int gy = (int) Math.round(d.groundY());
-        // чанки точки уже готовы (камера там FS_LOAD тиков): облёт до подрыва мог их не застать
+        // chunks of the point are already ready (the camera is there FS_LOAD tick): the flight before the detonation might not have caught them
         fsRoofY = Math.max(fsRoofY, around(fsX, fsZ + FS_ROOF) + 30);
         fsFarY = Math.max(fsFarY, around(fsX, fsZ + FS_FAR) + 40);
         switch (where) {
@@ -1227,8 +1225,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Пропуск времени к {@code ageSeconds} после подрыва: часы сервера — туда же (всем игрокам — пакет времени), у
-     * клиента — перемотка, как у повтора: шторм, пелена и всё ядерное — по новому возрасту подрыва.
+     * Time skip to {@code ageSeconds} after the detonation: the server clock goes there (all players get a time packet), the
+     *  client has a rewind, like a replay: storm, pall and everything nuclear - according to the new age of the detonation.
      */
     private void fsSkip(double ageSeconds) {
         var server = Minecraft.getInstance().getSingleplayerServer();
@@ -1244,7 +1242,7 @@ public final class ClientScenario {
         at(tick + 15, ua.zentix.incoming.client.nuclear.ClientNuclear::rewound);
     }
 
-    /** Кадр сценария {@code firestorm}: имя — точка, ночь или день и секунды после подрыва; строка о пелене и шторме. */
+    /** Scenario frame {@code firestorm}: name - point, night or day and seconds after the explosion; line about pall and storm. */
     private void fsShot(int t, String name) {
         at(t, () -> {
             var list = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
@@ -1257,7 +1255,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Кадр сценария {@code pall} со строкой о пелене у камеры и в кадре. */
+    /** Frame of the script {@code pall} with a line about pall at the camera and in the frame. */
     private void pallShot(int t, String name) {
         at(t, () -> Incoming.LOG.info("SCENARIO pall {} at {}: {}; layer {}; near {}", name, xyz(Minecraft.getInstance().gameRenderer.getMainCamera().getPosition()),
                 ua.zentix.incoming.client.nuclear.NukePall.describe(), ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(),
@@ -1266,12 +1264,12 @@ public final class ClientScenario {
     }
 
     /**
-     * Стена пыли у камеры: наземные 15 кт в 1,5 км к северу, зритель в воздухе в 10 блоках над лесом на холме смотрит
-     * на эпицентр; кадры — когда голова стены в 110, 60 и 20 блоках, в миг прихода и пока стена проходит мимо (пыль у
-     * камеры и сама стена в одном кадре). Ночь — {@code INCOMING_WALL=night} (по умолчанию полдень). Место — постоянное
-     * (высота площадки по рельефу зависела бы от того, какие чанки успели загрузиться, и кадры до и после правки не
-     * совпали бы), зритель в полёте (волна толкает его с площадки). Мир у прохода идёт медленно ({@code /tick rate 4}):
-     * на программном OpenGL голова за кадр ушла бы на сотню блоков.
+     * A wall of dust at the camera: ground 15 kt in 1,5 km to the north, the viewer in the air in 10 blocks above the forest on the hill looks
+     *  at the epicenter; frames - when the head of the wall is in the 110, 60 and 20 blocks, at the moment of arrival and while the wall is passing by (dust from the
+     *  camera and the wall itself in one frame). Night - {@code INCOMING_WALL=night} (default is noon). The place is permanent
+     *  (the height of the site according to the relief would depend on which chunks had time to load, and the frames before and after editing would not match
+     * ), the viewer is in flight (a wave pushes him from the site). The world at the aisle moves slowly ({@code /tick rate 4}):
+     *  on the software OpenGL the head would go a hundred blocks per frame.
      */
     private void planWall() {
         wall = true;
@@ -1289,7 +1287,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Сценарий {@code wall}: кадры — по тому, где голова стены, а не по счётчику (сервер может отставать). */
+    /** Scenario {@code wall}: frames based on where the wall head is, not based on the counter (the server may lag). */
     private void wallEvents() {
         var list = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
         if (list.isEmpty() || wallStage > 5) return;
@@ -1320,13 +1318,14 @@ public final class ClientScenario {
     }
 
     /**
-     * Обломки и пыль у камеры (N3): днём на ближайшей равнине площадка 41×41 (камень на 10 блоков вглубь — иначе часть
-     * площадки висела бы над низиной, и обрушение руин уронило бы её целиком; над ней расчищено), на ней дом из каменного
-     * кирпича со стеклянными панелями и дощатой крышей, дощатый дом со стёклами и три дуба; наземные 15 кт к северу в
-     * {@code INCOMING_DEBRIS} метрах (по умолчанию 2000). Зритель — наблюдатель (волна не сносит) в 60 блоках к югу от
-     * домов и в 15 над ними смотрит на них: фронт приходит к нему позже, чем к домам. Кадры {@code debris_<тики>t} — от
-     * прихода фронта к домам (по часам подрыва у клиента): за 10 тиков до него и через 1–200 тиков; в лог — строка
-     * {@code SCENARIO debris}: где голова стены против домов и камеры и что сорвано ({@code NukeDust.describe}).
+     * Debris and dust near the camera (N3): by day, a 41×41 pad on the nearest plain (stone 10 blocks deep, otherwise
+     * part of the pad would hang over a hollow and ruin collapse would drop it all; cleared above), with a stone-brick
+     * house with glass panes and a plank roof, a plank house with glass, and three oaks; ground 15 kt to the north at
+     * {@code INCOMING_DEBRIS} meters (default 2000). A spectator viewer (not swept away by the wave) 60 blocks south of
+     * the houses and 15 above them looks at them: the front reaches the viewer later than the houses. Frames
+     * {@code debris_<ticks>t} are relative to front arrival at the houses (client detonation clock): 10 ticks before
+     * and 1–200 ticks after; a {@code SCENARIO debris} log line gives wall head position relative to houses and camera,
+     * and what was torn off ({@code NukeDust.describe}).
      */
     private void planDebris() {
         debris = true;
@@ -1348,7 +1347,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Сценарий {@code debris}: место (сервер ищет равнину), стройка, подрыв, кадры — по приходу фронта к домам. */
+    /** Scenario {@code debris}: location (the server is looking for a plain), construction, explosion, personnel - when the front arrives at the houses. */
     private void debrisEvents() {
         BlockPos o = debrisSite;
         if (o == null) return;
@@ -1365,12 +1364,12 @@ public final class ClientScenario {
             String[] build = {
                     "fill %1$d %3$d %5$d %2$d %4$d %6$d minecraft:air".formatted(x - 20, x + 20, y, y + 17, z - 20, z + 20),
                     "fill %1$d %3$d %5$d %2$d %4$d %6$d minecraft:stone".formatted(x - 20, x + 20, y - 10, y - 1, z - 20, z + 20),
-                    // каменный дом: окна к зрителю и к взрыву, крыша из досок
+                    // stone house: windows towards the viewer and towards the explosion, roof made of boards
                     "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
                     "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
                     "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
                     "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
-                    // дощатый дом со стеклом
+                    // plank house with glass
                     "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
                     "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
                     "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3),
@@ -1419,22 +1418,22 @@ public final class ClientScenario {
         });
     }
 
-    /** Эпицентр сценария pall-front (наземный подрыв: высоту берёт земля). */
+    /** The epicenter of the scenario pall-front (ground explosion: the ground takes height). */
     private static final Vec3 FRONT_GZ = new Vec3(0.5, 320, -1499.5);
 
     /**
-     * Пелена за фронтом ночью, как кадр повтора у хоста (камера в 400 м от наземных 15 кт, на 120 м над землёй, взгляд
-     * чуть вверх, FOV 50): за эпицентром — квартал башен (их сносит волна, руины стоят). Кадры — от прихода фронта
-     * к камере: 0, 2, 5, 10, 20 и 60 с (pall_front_*), в лог — пелена у камеры. Качество — {@code INCOMING_PALL}
-     * (по умолчанию MEDIUM). {@code INCOMING_EXPORT=2560x1440} — как вывод видео Flashback: с подрыва окно сообщает
-     * размер вывода ({@code Window.getWidth/getHeight}) и кадр игры — этого размера, больше окна (Flashback делает то же
-     * своим миксином окна и {@code Minecraft.resizeDisplay}).
+     * pall behind the front at night, like a replay frame from the host (camera at 400 m from the ground 15 kt, at 120 m above the ground, looking
+     *  slightly upward, FOV 50): behind the epicenter is a block of towers (they are being demolished wave, ruins are standing). Frames - from the arrival of the front
+     *  to the camera: 0, 2, 5, 10, 20 and 60 s (pall_front_*), in the log - pall at the camera. Quality - {@code INCOMING_PALL}
+     *  (default MEDIUM). {@code INCOMING_EXPORT=2560x1440} - like the output of the video Flashback: from the explosion the window reports
+     *  the output size ({@code Window.getWidth/getHeight}) and the game frame - this size, larger than the window (Flashback does the same
+     *  with its window mixin and {@code Minecraft.resizeDisplay}).
      * <p>
-     * {@code low} (сценарий {@code pall-low}): эпицентр — на столбе в 45 блоках над землёй у камеры, камера — в 8 блоках
-     * над землёй, то есть ниже земли под эпицентром (как у кадра трейлера из долины), взгляд — на эпицентр почти по
-     * горизонту. Луч пелены, за которым нет мира (за прорисовкой и между LOD Distant Horizons), должен кончаться на
-     * рельефе, а не на плоскости земли под эпицентром: ниже неё — пустота без пелены, ровный срез по горизонту. Кадры —
-     * через 5, 20 и 60 с после фронта (pall_low_*), камера перед каждым ставится на место (волна её сносит).
+     * {@code low} (scenario {@code pall-low}): the epicenter is on a pole in 45 blocks above the ground near the camera, the camera is in 8 blocks
+     *  above the ground, that is, below the ground below the epicenter (like the trailer shot from the valley), the view is at the epicenter almost along the
+     *  horizon. The pall ray, behind which there is no world (behind the drawing and between LOD Distant Horizons), should end on the
+     *  relief, and not on the plane of the earth under the epicenter: below it there is a void without pall, an even cut along the horizon. Frames -
+     *  through 5, 20 and 60 s after the front (pall_low_*), the camera is put in place in front of each (the wave blows it away).
      */
     private void planPallFront(boolean low) {
         front = true;
@@ -1453,8 +1452,8 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f 200 %.1f -90 -3", FRONT_GZ.x - 400, FRONT_GZ.z));
             hover = true;
         });
-        // квартал башен за эпицентром: от y 40 (под любым рельефом) на 40–70 блоков над уровнем моря; дважды — вдруг чанк
-        // ещё не загрузился к первому разу
+        // block of towers behind the epicenter: from y 40 (under any terrain) to 40–70 blocks above sea level; twice - suddenly chunk
+        //  has not yet loaded the first time
         for (int when : new int[]{480, 560}) {
             at(when, () -> {
                 int k = 0;
@@ -1475,7 +1474,7 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -3", frontAt.x, frontAt.y, frontAt.z));
             Incoming.LOG.info("SCENARIO pall-front camera at {} ({} above ground {})", xyz(frontAt), above, ground);
             if (low) {
-                // эпицентр на столбе: земля под ним на 45 блоков выше земли у камеры (если там не выше и так)
+                // the epicenter is on the pillar: the ground underneath it is 45 blocks higher than the ground near the camera (if it’s not higher there anyway)
                 int gx = (int) Math.floor(FRONT_GZ.x), gz = (int) Math.floor(FRONT_GZ.z);
                 cmd(String.format(java.util.Locale.ROOT, "fill %d 40 %d %d %d %d minecraft:stone", gx - 3, gz - 3, gx + 3, ground + 45, gz + 3));
             }
@@ -1491,7 +1490,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Сценарий pall-front: кадры — от прихода фронта к камере (по модели подрыва у клиента). */
+    /** Scenario pall-front: frames - from the arrival of the front to the camera (according to the client’s explosion model). */
     private void frontEvents() {
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
@@ -1505,7 +1504,7 @@ public final class ClientScenario {
         } else if (frontLow) {
             for (int s : new int[]{5, 20, 60}) {
                 int t = tick + arrive + 20 * s;
-                // волна сносит камеру: перед кадром — снова на место
+                // the wave blows the camera away: in front of the frame - back into place
                 at(t - 4, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -3", frontAt.x, frontAt.y, frontAt.z)));
                 pallShot(t, "low_" + s + "s");
                 if (s == 60) offShot(t, "low_" + s + "s_off");
@@ -1523,18 +1522,18 @@ public final class ClientScenario {
         });
     }
 
-    /** Кадр без пелены — через столько тиков: с шейдерпаком на программном OpenGL кадр рисуется реже. */
+    /** A frame without pall takes so many ticks: with a shaderpack on software OpenGL the frame is drawn less often. */
     private static final int OFF_WAIT = System.getenv("INCOMING_SHADERS") != null ? 40 : 16;
 
     /**
-     * Сценарий pall-mine (днём, 1500 блоков от наземных 15 кт): за фронтом (через 8 с, когда волна прошла) у камеры —
-     * забор, решётки и столб в 3–5 блоках перед пеленой (тонкое перед далёким: под шейдерпаком, который сглаживает края,
-     * по контуру не должно быть каймы фона без пелены), под ней в 24 блоках — штольня 80 блоков на восток (дальше окна
-     * наружного воздуха, OpenAir) со светящимся потолком и шахта в её конце до неба.
-     * Кадры через 20 с после фронта: у земли, в штольне вдоль неё (пелены там быть не должно: под землёй пыли нет),
-     * со дна шахты вверх (шахта открыта небу — пыль в ней есть), и через 2 и 4 минуты у земли — забор и столб на фоне
-     * пелены, которая редеет и уходит по ветру;
-     * у каждого — тот же миг без пелены ({@code _off}).
+     * Scenario pall-mine (in the daytime, 1500 blocks from ground 15 kt): behind the front (through 8 s, when the wave passed) at the camera -
+     * fence, gratings and pillar in 3–5 blocks in front of the pall (thin before the distant: under the shader pack, which smoothes the edges,
+     *  along the contour there should be no background border without pall), below it in 24 blocks there is an adit 80 blocks to the east (further windows
+     *  of outside air, OpenAir) with a luminous ceiling and a shaft at its end to the sky.
+     *  Frames through 20 s after the front: near the ground, in the adit along it (there shouldn’t be a pall there: there is no dust underground),
+     *  from the bottom of the shaft up (the mine is open to the sky - there is dust in it), and after 2 and 4 minutes at the ground there is a fence and a pillar against the background of a
+     *  veil that thins and goes with the wind;
+     *  for everyone - the same moment without pall ({@code _off}).
      */
     private void mineShots(int front) {
         int x = (int) Math.floor(frontAt.x), z = (int) Math.floor(frontAt.z);
@@ -1546,14 +1545,14 @@ public final class ClientScenario {
             int g = where.ground, y = where.deep;
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone hollow", x - 2, y - 1, z - 3, x + 80, y + 4, z + 3));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:glowstone", x - 1, y + 4, z - 2, x + 79, y + 4, z + 2));
-            // шахта — до неба над её устьем (рельеф там бывает выше, чем у камеры)
+            // mine - up to the sky above its mouth (the relief there is higher than that of the camera)
             int top = Math.max(g, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x + 77, z));
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", x + 76, y, z - 1, x + 78, top + 3, z + 1));
             fences(x, g, z);
             Incoming.LOG.info("SCENARIO pall-mine ground {} tunnel floor {} shaft at x {}..{}", g, y, x + 76, x + 78);
         });
-        // этапы — через 120 тиков: переход, кадр через 60 (туман чёрного дождя у камеры в штольне тает ~1,5 с, NukeSky),
-        // кадр без пелены — после него
+        // stages - through 120 tick: transition, frame through 60 (the fog of black rain near the camera in the adit melts ~1,5 s, NukeSky),
+        //  frame without pall - after it
         int t = front + 400;
         at(t - 60, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -12", x + 0.5, where.ground + 2.6, z + 0.5)));
         pallShot(t, "mine_surface");
@@ -1564,7 +1563,7 @@ public final class ClientScenario {
         at(t + 240, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -70", x + 77.5, where.deep + 1.6, z + 0.5)));
         pallShot(t + 300, "mine_shaft");
         offShot(t + 300, "mine_shaft_off", OFF_WAIT);
-        // край блоков на фоне пелены: пелена у камеры редеет и уходит по ветру, забор и столб — на её фоне
+        // the edge of the blocks against the background of the pall: the pall near the camera thins out and goes with the wind, the fence and pillar are in its background
         at(t + 360, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f -90 -12", x + 0.5, where.ground + 2.6, z + 0.5)));
         int[] ages = {120, 240};
         for (int i = 0; i < ages.length; i++) {
@@ -1572,8 +1571,8 @@ public final class ClientScenario {
             at(at, () -> fsSkip(age));
             pallShot(at + 100, "mine_rim_" + age + "s");
             offShot(at + 100, "mine_rim_" + age + "s_off", OFF_WAIT);
-            // и взгляд в движении (накопление пелены переносит прошлое на новое место): 0,25° за тик две секунды до кадра —
-            // после кадра без пелены (выключенная пелена сбрасывает накопленное)
+            // and a look in motion (the accumulation of pall transfers the past to a new place): 0,25° tick two seconds before the frame -
+            //  after the frame without pall (turned off pall resets the accumulated)
             for (int k = 0; k <= 40; k++) {
                 float yaw = -100 + 0.25f * k;
                 at(turn + k, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f %.2f -12", x + 0.5, where.ground + 2.6, z + 0.5, yaw)));
@@ -1587,8 +1586,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Сценарий pall-mine: забор, решётки и столб в 3–5 блоках к востоку от камеры над землёй {@code g} — тонкое и край блока
-     * перед пеленой (в густой пелене видно на несколько блоков).
+     * Scenario pall-mine: fence, bars and post in 3–5 blocks east of the camera above the ground {@code g} - thin and edge of block
+     *  in front of pall (in dense pall several blocks are visible).
      */
     private void fences(int x, int g, int z) {
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_fence", x + 3, g + 1, z - 6, x + 3, g + 3, z - 1));
@@ -1597,14 +1596,14 @@ public final class ClientScenario {
     }
 
     /**
-     * Тот же кадр без пелены (качество OFF на два-три кадра; на llvmpipe тики идут пачками между кадрами — снимок через
-     * 8 тиков): что пелена делает с кадром — свет стены пыли и мира за ней.
+     * The same frame without pall (quality OFF for two or three frames; on llvmpipe ticks come in batches between frames - shot via
+     * 8 tick): what pall does with the frame - the light of the wall of dust and the world behind it.
      */
     private void offShot(int t, String name) {
         offShot(t, name, 8);
     }
 
-    /** То же, снимок — через {@code wait} тиков (с шейдерпаком на программном OpenGL кадр рисуется реже). */
+    /** The same, the picture is done using {@code wait} tick (with the shader pack on the software OpenGL the frame is drawn less often). */
     private void offShot(int t, String name, int wait) {
         var quality = ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality;
         var was = new Object() { ua.zentix.incoming.IncomingConfig.Client.DustQuality q; };
@@ -1617,9 +1616,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Кадр игры размера {@code w}×{@code h}, больше окна, — как у вывода видео Flashback: окно сообщает этот размер
-     * (поля размера кадра окна; у Flashback — миксин {@code Window.getWidth/getHeight}), и {@code resizeDisplay}
-     * ставит его кадру игры. Кадры сценария снимаются с кадра игры — этого размера.
+     * The game frame size is {@code w}×{@code h}, larger than the window - like the video output Flashback: the window reports this size
+     *  (window frame size fields; for Flashback - mixin {@code Window.getWidth/getHeight}), and {@code resizeDisplay}
+     *  sets his game frame. The script frames are shot from the game frame - this size.
      */
     private static void exportSize(int w, int h) {
         Minecraft mc = Minecraft.getInstance();
@@ -1637,13 +1636,13 @@ public final class ClientScenario {
                 mc.getMainRenderTarget().width, mc.getMainRenderTarget().height);
     }
 
-    /** Ядерный сценарий: кадры входа боеголовки и после подрыва — от момента, когда клиент получил подрыв. */
+    /** Nuclear scenario: footage of the warhead entering and after the explosion - from the moment the client received the explosion. */
     private void nukeEvents() {
         Minecraft mc = Minecraft.getInstance();
         long now = mc.level.getGameTime();
         for (var w : ua.zentix.incoming.client.nuclear.ClientNuclear.warnings()) {
             long left = w.detonateTime() - now;
-            // боеголовка приходит со стороны пуска (из-за спины) почти отвесно: на 2 с смотрим назад и вверх
+            // The warhead arrives almost vertically from the launch side (behind us): look back and up for 2 s.
             if (left == 45) cmd("tp @s ~ ~ ~ 0 -65");
             if (left == 38 || left == 30) shot(tick + 1, "reentry");
             if (left == 22) cmd("tp @s ~ ~ ~ 180 -8");
@@ -1656,12 +1655,12 @@ public final class ClientScenario {
         detTick = tick;
         Incoming.LOG.info("SCENARIO detonation at tick {}", tick);
         for (int dt : new int[]{1, 2, 4, 10, 20, 40, 70, 90, 100, 112, 118, 125, 140, 160, 200, 400}) shot(tick + dt, "nuke");
-        // фронт прошёл смотровую площадку и сбросил с неё зрителя: под ней — стена, пруд и листва (wallFrames). Бросок —
-        // тик сервера, а сервер может отставать от счётчика кадров клиента: шаг ждёт часов сервера
+        // the front passed the observation deck and threw the viewer off it: below it there was a wall, a pond and foliage (wallFrames). Throw -
+        //  server tick, and the server may lag behind the client's frame counter: the step waits for the server clock
         var nd = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
         long thrown = nd.gameTime() + (long) Math.ceil(nd.arrivalTicks(Math.sqrt(deck.distToCenterSqr(nd.burst())))) + 4;
         at(tick + 1, () -> wallFrames(thrown));
-        // гриб целиком виден издалека: 9 км к югу от эпицентра, взгляд на 30° вверх
+        // the entire mushroom is visible from afar: 9 km south of the epicenter, looking up at 30°
         at(tick + 560, () -> {
             var d = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
             int x = (int) Math.floor(d.burst().x), z = (int) Math.floor(d.burst().z + 9_000);
@@ -1669,10 +1668,9 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 230 %d.5 180 -30", x, z));
         });
         for (int dt : new int[]{600, 1200, 2400, 3600}) shot(tick + dt, "cloud");
-        // в след осадков — по ветру, недалеко от эпицентра (скорость ветра у подрыва своя); осадки там — не раньше,
-        // чем долетят из облака, и не раньше, чем снят гриб (последний кадр — через 3600 тиков), а чёрный дождь из дыма
-        // пожаров идёт там до 440 с после подрыва (8800 тиков). Срок — по игровым часам: сервер может отставать от
-        // счётчика кадров клиента
+        // in the wake of precipitation - downwind, not far from the epicenter (the wind speed at the detonation has its own); precipitation there - not before
+        //  arrives from the cloud, and not before the mushroom is removed (the last frame - through 3600 tick), and black rain from the smoke of
+        //  fires goes there until 440 s after the explosion (8800 tick). Deadline - according to the game clock: the server may lag behind the client's frame counter
         var fd = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
         double fm = Math.min(3000, fd.windSpeed() * 150) * fd.scale();
         falloutSpot = new Vec3(fd.burst().x + Math.cos(fd.windDir()) * fm, 200, fd.burst().z + Math.sin(fd.windDir()) * fm);
@@ -1680,14 +1678,14 @@ public final class ClientScenario {
     }
 
     /**
-     * Сценарий {@code nuke}, когда сервер дошёл до тика {@code thrown} (фронт прошёл смотровую площадку и сбросил с неё
-     * зрителя): под ней в воздухе — стена, бревна, трава и пруд 3×3, листва на стене, по бокам от неё крона в 30 блоках
-     * и конёк крыши в 50 — перед небом, почти по горизонту от глаза. В полосе ряби за фронтом тёмное кольцо наклейки на
-     * воду — на пруду, а не полосами по рядам блоков на боковых гранях и не точками по краю листвы и крыши перед небом
-     * (вода — только гладь, и соседние пиксели на той же высоте). Строится после фронта — руины волны её не трогают;
-     * кадры {@code nuke_wall_*} — без HUD (чат закрывал пруд) и через 2 с: на llvmpipe секции новых блоков строятся за
-     * несколько кадров. Потом зритель — снова на смотровой площадке, взгляд на гриб (кадр {@code nuke} через 20 с после
-     * подрыва).
+     * Scenario {@code nuke}, when the server reached tick {@code thrown} (the front passed the observation deck and threw the viewer
+     *  off it): below it in the air there is a wall, logs, grass and a pond 3×3, foliage on the wall, on the sides of it there is a crown in 30 blocks
+     *  and the roof ridge in 50 - in front of the sky, almost along the horizon from the eye. In the stripe of ripples behind the front, there is a dark ring of stickers on the
+     *  water - on the pond, and not in stripes along the rows of blocks on the side faces and not in dots along the edge of the foliage and roof in front of the sky
+     *  (the water is only a surface, and neighboring pixels are at the same height). It is built after the front - the ruins of the wave do not touch it;
+     *  frames {@code nuke_wall_*} - without HUD (the chat closed the pond) and through 2 s: on llvmpipe sections of new blocks are built in
+     *  several frames. Then the viewer is again on the observation deck, looking at the mushroom (frame {@code nuke} through 20 s after
+     *  of the explosion).
      */
     private void wallFrames(long thrown) {
         if (Minecraft.getInstance().getSingleplayerServer().overworld().getGameTime() < thrown) {
@@ -1704,7 +1702,7 @@ public final class ClientScenario {
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_log", x - 4, b + 1, z - 12, x - 4, b + 8, z - 12));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:birch_log", x + 3, b + 1, z - 11, x + 3, b + 8, z - 11));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]", x - 7, b + 9, z - 14, x + 7, b + 9, z - 14));
-        // справа от стены — крона в 30 блоках, слева — конёк в 50: перед небом, от горизонта глаза до 10° над ним
+        // to the right of the wall is a crown in 30 blocks, to the left is a ridge in 50: in front of the sky, from the horizon of the eye to 10° above it
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]", x + 15, y + 1, z - 32, x + 21, y + 5, z - 28));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 40, y + 2, z - 50, x - 28, y + 2, z - 50));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_brick_stairs[facing=north]", x - 40, y + 3, z - 50, x - 28, y + 3, z - 50));
@@ -1715,8 +1713,8 @@ public final class ClientScenario {
                 ua.zentix.incoming.client.nuclear.NukeDust.describe()));
         shot(tick + 41, "nuke_wall");
         shot(tick + 71, "nuke_wall");
-        // снова на смотровую площадку (её могли снести руины; целая — без строки ошибки «No blocks were filled» в кадре
-        // гриба) — гриб, как в кадрах до броска
+        // again to the observation deck (it could have been demolished by ruins; the whole one - without the error line “No blocks were filled” in the frame
+        //  mushroom) - mushroom, as in the frames before the throw
         at(tick + 72, () -> {
             Minecraft.getInstance().options.hideGui = false;
             int d = deck.getY() - 1;
@@ -1726,14 +1724,14 @@ public final class ClientScenario {
         });
     }
 
-    /** В следе осадков, пока там идёт чёрный дождь из дыма пожаров (80–440 с после подрыва), счётчик в руке. */
+    /** In the trail of precipitation, while there is black rain from the smoke of fires (80–440 s after the explosion), the counter is in hand. */
     private void falloutEvents() {
         cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f 200 %.1f 0 0", falloutSpot.x, falloutSpot.z));
         at(tick + 60, () -> {
             LocalPlayer p = Minecraft.getInstance().player;
             int x = (int) Math.floor(p.getX()), z = (int) Math.floor(p.getZ());
             int y = Minecraft.getInstance().level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-            // площадка: вдруг там вода
+            // platform: suddenly there is water
             cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 1, y, z - 1, x + 1, y, z + 1));
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 0 0", x, y + 1, z));
         });
@@ -1746,10 +1744,10 @@ public final class ClientScenario {
     }
 
     /**
-     * Эффекты крупным планом: зритель висит в воздухе в 70 блоках от цели и в 25 над ней (полёт в творческом режиме,
-     * взрыв его не сдувает), по очереди шахед, ракета, бомба; кадры — от настоящего взрыва (снаряд пропал), а не
-     * по счётчику. В конце — старт МБР в 80 блоках: факел, шлейф, облако у стола. {@code fx-night} — то же ночью.
-     * {@code fx-late} — шахед и ракета, и у каждого ещё столб после взрыва вблизи и издалека ({@link #lateFrames}).
+     * Close-up effects: the viewer hangs in the air 70 blocks from the target and 25 above it (flying in creative mode,
+     *  the explosion does not blow him away), in turn Shahed, rocket, bomb; the frames are from a real explosion (the shell disappeared), and not
+     *  according to the counter. At the end - the start of ICBM in 80 blocks: torch, trail, cloud near the table. {@code fx-night} - the same at night.
+     * {@code fx-late} - Shahed and a rocket, and each has a pillar after the explosion near and far ({@link #lateFrames}).
      */
     private void planFx(boolean night, boolean late) {
         String spec = System.getProperty("incoming.fx.targets");
@@ -1763,7 +1761,7 @@ public final class ClientScenario {
             cmd(night ? "time set 18000" : "time set 6000");
             cmd("weather clear");
             Minecraft.getInstance().options.hideGui = true;
-            // ровное место: ближайшая равнина (на холмах цель и стол МБР прячутся за склонами)
+            // level ground: the nearest plain (on hills, the target and ICBM table are hidden behind the slopes)
             var server = Minecraft.getInstance().getSingleplayerServer();
             server.execute(() -> {
                 var found = server.overworld().findClosestBiome3d(b -> b.is(net.minecraft.world.level.biome.Biomes.PLAINS),
@@ -1783,19 +1781,19 @@ public final class ClientScenario {
     }
 
     /**
-     * Дым обычных взрывов объёмом (сетка дыма, {@code client/fx/smoke}): {@code smoke-salvo} — пакет «Града» (40 снарядов
-     * с разбросом 15) по равнине в 30 блоках перед зрителем, днём; кадры {@code smoke_salvo_<секунды>s} от первого разрыва
-     * до минуты. {@code smoke-salvo-pall} — тот же залп в живой пелене наземных 15 кт в 2,5 км (худший случай для бюджета
-     * видеокарты: объём дыма и пелена в одном кадре); строки {@code SCENARIO smoke} — время прохода пелены на видеокарте
-     * (на llvmpipe — только для сравнения). {@code smoke-column} — шахед по равнине, через 30 с зритель пролетает сквозь
-     * его облако (облако — по той же модели: центр, снос ветром): кадры {@code smoke_column_*} снаружи, на входе, в
-     * середине и над ним. Раз в секунду — строка {@code SCENARIO smoke}: источники и клубы сетки, проход пелены.
+     * Volumetric smoke from ordinary explosions (smoke grid, {@code client/fx/smoke}): {@code smoke-salvo} is a Grad rack
+     * (40 projectiles with spread 15) on a plain 30 blocks in front of the viewer by day; frames {@code smoke_salvo_<seconds>s}
+     * from first burst to one minute. {@code smoke-salvo-pall} is the same salvo in a live pall of ground 15 kt at 2.5 km
+     * (worst GPU-budget case: smoke volume and pall in one frame); {@code SCENARIO smoke} lines give pall GPU pass time
+     * (on llvmpipe, for comparison only). {@code smoke-column} is a Shahed on a plain; after 30 s the viewer flies through
+     * its cloud (same cloud model: center, wind drift): {@code smoke_column_*} frames outside, entering, inside and above.
+     * Once per second, a {@code SCENARIO smoke} line gives grid sources and billows, and the pall pass.
      */
     private void planSmoke(String mode) {
         boolean fire = "smoke-fire".equals(mode);
         boolean salvo = !"smoke-column".equals(mode) && !fire, withPall = "smoke-salvo-pall".equals(mode);
         at(40, () -> {
-            // дым над горящим домом — ночью: пламя светит на дым снизу
+            // smoke above a burning house - at night: the flame shines on the smoke from below
             cmd(fire && !"day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "time set 18000" : "time set 6000");
             cmd("weather clear");
             cmd("gamerule doDaylightCycle false");
@@ -1815,7 +1813,7 @@ public final class ClientScenario {
             Minecraft.getInstance().player.getAbilities().flying = true;
             hover = true;
             if (fire) {
-                // чанки дома держит сервер: fill в незагруженном месте не делает ничего
+                // server keeps chunks at home: fill does nothing in an unloaded location
                 cmd(String.format(java.util.Locale.ROOT, "forceload add %d %d %d %d", (int) target.x - 16, (int) target.z - 16, (int) target.x + 16,
                         (int) target.z + 16));
                 cmd("gamerule doFireTick true");
@@ -1825,7 +1823,7 @@ public final class ClientScenario {
         });
         int start = fire ? 400 : 300;
         if (fire) {
-            // деревянный дом 15×7×15 на цели: шахед бьёт в его крышу, стены остаются гореть
+            // wooden house 15×7×15 on target: Shahed hits its roof, the walls remain on fire
             at(340, () -> cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks hollow", (int) target.x - 7,
                     (int) target.y, (int) target.z - 7, (int) target.x + 7, (int) target.y + 6, (int) target.z + 7)));
         }
@@ -1851,19 +1849,19 @@ public final class ClientScenario {
         smokeMode = mode;
     }
 
-    /** Кадры {@link #planSmoke} от первого взрыва у цели. */
+    /** Footage {@link #planSmoke} from the first explosion at the target. */
     private void smokeEvents() {
         if (smokeMode == null || smokeBlastTick < 0 || smokeShotsPlanned) return;
         smokeShotsPlanned = true;
         int b = smokeBlastTick;
         Incoming.LOG.info("SCENARIO smoke first blast at tick {}", b);
         if ("smoke-fire".equals(smokeMode)) {
-            // загорелось ли от удара: нет — огонь на крыше ставит сценарий (дым идёт за любым огнём; откуда он — дело сервера)
+            // did it catch fire from the impact: no - the fire on the roof sets the scenario (smoke follows any fire; where it comes from is up to the server)
             at(b + 60, () -> {
                 int seen = ua.zentix.incoming.client.fx.FireWatch.total();
                 Incoming.LOG.info("SCENARIO smoke fire after blast: {} fire blocks seen", seen);
                 if (seen < 8) {
-                    // огонь в доме: держится тот, что у досок (огонь без опоры гаснет сам)
+                    // fire in the house: the one near the boards stays on (the fire goes out on its own without support)
                     Incoming.LOG.info("SCENARIO smoke fire placed by the scenario inside the house");
                     cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:fire replace minecraft:air", (int) target.x - 6,
                             (int) target.y + 1, (int) target.z - 6, (int) target.x + 6, (int) target.y + 5, (int) target.z + 6));
@@ -1871,7 +1869,7 @@ public final class ClientScenario {
             });
             String light = "day".equals(System.getenv("INCOMING_SMOKE_FIRE")) ? "smoke_fire_day_" : "smoke_fire_";
             for (int s : new int[]{5, 15, 30, 60, 90}) shot(b + 20 * s, light + s + "s");
-            // издали: в ~200 блоках и выше (чанки там уже есть — тот же край прорисовки)
+            // from afar: in ~200 blocks and higher (chunks are already there - the same drawing edge)
             at(b + 20 * 95, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", target.x - 80,
                     target.y + 30, target.z - 180, target.x, target.y + 60, target.z)));
             shot(b + 20 * 100, light + "far_100s");
@@ -1891,7 +1889,7 @@ public final class ClientScenario {
             });
             return;
         }
-        // облако шахеда через 30 с: центр по той же модели (снос ветром, высота), зритель пролетает его по ветру
+        // cloud Shahed via 30 s: center according to the same model (wind drift, height), the viewer flies it downwind
         shot(b + 20, "smoke_column_1s");
         shot(b + 100, "smoke_column_5s");
         shot(b + 300, "smoke_column_15s");
@@ -1906,7 +1904,7 @@ public final class ClientScenario {
         String[] names = {"outside", "near", "entering", "centre", "leaving", "above"};
         for (int i = 0; i < path.length; i++) {
             Vec3 e = c.add(0, path[i][1] * r, path[i][0] * r);
-            // по 20 тиков на место: кадр на llvmpipe идёт до секунды, снимок должен застать камеру на месте
+            // by 20 tick to place: the frame on llvmpipe goes up to a second, the picture should catch the camera in place
             int when = at + 20 * i;
             at(when, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", e.x, e.y, e.z, c.x, c.y, c.z + 2 * r)));
             shot(when + 3, "smoke_column_" + names[i]);
@@ -1922,9 +1920,9 @@ public final class ClientScenario {
     private boolean smokeArmed, smokeShotsPlanned;
 
     /**
-     * Замер подрыва на копии мира игрока (tools/prod_client.py nuke-profile --world …): 15 кт в воздухе в 300 блоках
-     * от игрока, потом второй — в 600 с другой стороны. Строка подрыва в логе даёт разбивку времени; рядом — сколько
-     * чанков загружено и сущностей в мире в этот момент.
+     * Measurement of an explosion on a copy of the player's world (tools/prod_client.py nuke-profile --world ...): 15 kt in the air in 300 blocks
+     *  from the player, then the second one in 600 on the other side. The detonation line in the log gives a breakdown of the time; next - how many
+     *  chunks are loaded and entities in the world at this moment.
      */
     private void planNukeProfile() {
         for (int[] shot : new int[][]{{600, 300}, {1800, -600}}) {
@@ -1950,10 +1948,10 @@ public final class ClientScenario {
     }
 
     /**
-     * Нагрузка больших залпов на копии мира игрока (tools/prod_client.py salvo-bench --world … --prop
-     * incoming.frametimes=true): РСЗО 30 штук с разбросом 150 по точке в 500 блоках впереди, потом 30 шахедов туда же.
-     * Команды — от имени игрока с правами сервера (в мире игрока читы могут быть выключены). Раз в секунду в лог —
-     * среднее время тика сервера (mspt); время кадров — в logs/frametimes.txt.
+     * Loading large volleys onto copies of the player's world (tools/prod_client.py salvo-bench --world ... --prop
+     * incoming.frametimes=true): MLRS 30 pieces with scatter 150 at a point in 500 blocks ahead, then 30 Shahed there.
+     *  Commands - on behalf of the player with server rights (cheats can be turned off in the player’s world). Once per second in the log —
+     * average server tick time (mspt); frame time - in logs/frametimes.txt.
      */
     private void planSalvoBench() {
         String[] salvo = {"rocket", "drone"};
@@ -1973,7 +1971,7 @@ public final class ClientScenario {
             at(t, () -> {
                 var server = Minecraft.getInstance().getSingleplayerServer();
                 int fps = Minecraft.getInstance().getFps();
-                // сущности, предметы и чанки — в потоке сервера: чем занят его тик (залпы роняют блоки предметами)
+                // entities, items and chunks - in the server stream: what its tick is doing (volleys drop blocks with objects)
                 server.execute(() -> {
                     int entities = 0, items = 0, chunks = 0;
                     for (var level : server.getAllLevels()) {
@@ -1995,11 +1993,11 @@ public final class ClientScenario {
     }
 
     /**
-     * Эффекты по заданным точкам мира игрока ({@code tools/prod_client.py fx --world … --prop incoming.fx.targets=…}):
-     * пункты через «;», каждый {@code оружие@x,z} (удар в верх колонки — крышу постройки) или {@code оружие@x,y,z}.
-     * Зритель висит в 60 блоках к северу и в 25 над точкой, удар — через 200 тиков после переноса (прогрузка чанков),
-     * кадры — от настоящего взрыва, как у {@code fx}; имена кадров — {@code оружие-номер_тик.png}. С {@link #approach} —
-     * зритель на земле сбоку от цели, снаряд заходит с севера.
+     * Effects at specified points in the player's world ({@code tools/prod_client.py fx --world … --prop incoming.fx.targets=…}):
+     * semicolon-separated entries, each {@code weapon@x,z} (impact on column top: building roof) or {@code weapon@x,y,z}.
+     * Viewer hovers 60 blocks north and 25 above the point; impact is 200 ticks after teleporting (chunk loading).
+     * Frames are relative to the actual explosion, as in {@code fx}; filenames are {@code weapon-number_tick.png}.
+     * With {@link #approach}, the viewer is on the ground beside the target, and the projectile approaches from the north.
      */
     private void planFxAt(String spec, boolean night) {
         fx = new java.util.ArrayDeque<>();
@@ -2009,7 +2007,7 @@ public final class ClientScenario {
             String[] a = item.strip().split("@");
             String[] c = a.length == 2 ? a[1].split(",") : new String[0];
             if (c.length != 2 && c.length != 3) {
-                Incoming.LOG.warn("SCENARIO fx.targets: «{}» пропущено — нужно оружие@x,z или оружие@x,y,z", item);
+                Incoming.LOG.warn("SCENARIO fx.targets: “{}” is missing - you need weapon@x,z or weapon@x,y,z", item);
                 continue;
             }
             double[] p = new double[3];
@@ -2020,7 +2018,7 @@ public final class ClientScenario {
             fxTargets.add(p);
         }
         at(40, () -> {
-            // в мире игрока режим выживания: полёт клиента сервер не разрешает, и зритель падал бы к цели
+            // in the player's world, survival mode: the server does not allow the client to fly, and the viewer would fall towards the goal
             cmd("gamemode spectator");
             cmd(night ? "time set 18000" : "time set 6000");
             cmd("weather clear");
@@ -2061,7 +2059,7 @@ public final class ClientScenario {
             mc.player.getAbilities().flying = true;
             String label = current;
             current = "wait";
-            // чанки вокруг цели у клиента — через 200 тиков после переноса или позже: пробовать, пока не готовы
+            // chunks around the target at the client - via 200 tick after the transfer or later: try until you are ready
             int from = tick;
             boolean[] aimed = {false};
             for (int t = 200; t <= 200 + FX_VIEW_WAIT; t += 20) {
@@ -2072,12 +2070,12 @@ public final class ClientScenario {
             }
             return;
         }
-        // цель одна, а столб прежнего снаряда стоит минуты и виден вблизи: в кадрах каждого — только его взрыв
+        // there is only one target, but the column of the previous shell lasts for a minute and is visible up close: in each frame there is only its explosion
         FarRenderer.reset();
         mc.player.getAbilities().flying = true;
         view();
         if (current.equals("icbm")) {
-            // МБР со стола в 80 блоках сбоку от зрителя, цель далеко: улетает за потолок мира без подрыва
+            // ICBM from a table in 80 blocks to the side of the viewer, the target is far away: flies beyond the ceiling of the world without detonation
             Vec3 pad = new Vec3(eye.x + 60, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) eye.x + 60, (int) eye.z), eye.z);
             var server = mc.getSingleplayerServer();
             server.execute(() -> {
@@ -2097,14 +2095,14 @@ public final class ClientScenario {
     }
 
     /**
-     * Точка удара, зритель и пуск для пункта {@code fx.targets}. {@code false} — чанки вокруг цели у клиента ещё не
-     * готовы (повторить позже; {@code force} — последний раз: без готовых чанков пункт пропускается).
+     * Impact point, viewer and launch for point {@code fx.targets}. {@code false} - the client’s chunks around the target are not
+     *  ready yet (repeat later; {@code force} - last time: without ready chunks, the item is skipped).
      */
     private boolean fxAim(double[] p, String weapon, String label, boolean force) {
         Minecraft mc = Minecraft.getInstance();
         int cx = (int) Math.floor(p[0]), cz = (int) Math.floor(p[2]);
-        // высота без готового чанка — низ мира: зритель встал бы в постройку, цель ушла бы на дно мира (v3: ракета 1
-        // на y −64, карта высот чанка ещё пустая) — столб у дна мира тоже «не готов»
+        // height without a ready chunk - the bottom of the world: the viewer would stand in the building, the target would go to the bottom of the world (v3: rocket 1
+        //  on y −64, the height map of the chunk is still empty) - the pillar at the bottom of the world is also “not ready”
         int floor = mc.level.getMinBuildHeight() + 4;
         int top = Integer.MIN_VALUE;
         for (int x = cx - FX_VIEW_RADIUS; x <= cx + FX_VIEW_RADIUS; x += 4) {
@@ -2127,11 +2125,11 @@ public final class ClientScenario {
         target = new Vec3(cx + 0.5, y, cz + 0.5);
         String command = String.format(java.util.Locale.ROOT, "incoming %s at %.1f %.1f %.1f", weapon, target.x, target.y, target.z);
         if (approach) {
-            // над крышами и кронами в 40 блоках к востоку: в кадре и цель, и последние сотни блоков захода с севера
+            // above the roofs and crowns in 40 blocks to the east: both the target and the last hundreds of blocks of approach from the north are in the frame
             eye = new Vec3(cx + 40.5, Math.max(top, y) + FX_VIEW_ABOVE, cz + 0.5);
             cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", eye.x, eye.y, eye.z,
                     target.x, target.y + 15, target.z - 40));
-            // курс захода: yaw 0 — на юг, снаряд приходит с севера
+            // approach course: yaw 0 - to the south, the projectile comes from the north
             command = "execute rotated 0 0 run " + command;
         } else {
             eye = FX_EYE == null ? target.add(0, 25, -60) : target.add(0, FX_EYE[0], -FX_EYE[1]);
@@ -2143,7 +2141,7 @@ public final class ClientScenario {
         strike = new StrikeWatch();
         strikeTick = tick;
         reached = false;
-        // от консоли: стреляющего нет, заход — прямая с севера (fromAfar), пусковая у зрителя не ставится
+        // from the console: there is no shooter, approach is direct from the north (fromAfar), the viewer does not have a launcher
         String run = command;
         StrikeWatch w = strike;
         var server = mc.getSingleplayerServer();
@@ -2151,12 +2149,12 @@ public final class ClientScenario {
             var level = server.overworld();
             var before = StrikeWatch.projectiles(level);
             server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), run);
-            if (!w.launched(before, StrikeWatch.projectiles(level))) Incoming.LOG.warn("SCENARIO {}: пуск не найден — снарядов нового нет или несколько", label);
+            if (!w.launched(before, StrikeWatch.projectiles(level))) Incoming.LOG.warn("SCENARIO {}: launch not found - no new shells or several", label);
         });
         return true;
     }
 
-    /** Взрыв на встроенном сервере: удар снаряда {@link #strike}, если он его. */
+    /** Explosion on the embedded server: {@link #strike} projectile impact, if it is his. */
     private void onServerBlast(net.neoforged.neoforge.event.level.ExplosionEvent.Start e) {
         StrikeWatch w = strike;
         if (w == null || e.getLevel().isClientSide()) return;
@@ -2166,7 +2164,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Удар по заданной точке: снаряд по UUID, кадры подлёта, взрыв — по взрыву своего снаряда на сервере. */
+    /** Impact on a given point: a projectile on UUID, frames of approach, explosion - on the explosion of its projectile on the server. */
     private void fxTargetEvents() {
         StrikeWatch w = strike;
         if (w == null || current.equals("wait")) return;
@@ -2188,7 +2186,7 @@ public final class ClientScenario {
             at(tick + 1, this::nextFx);
             return;
         }
-        // сущность у клиента пропадает при потере отслеживания и при уходе в полёт вне мира — искать заново по UUID
+        // the client’s entity disappears when tracking is lost and when it goes on a flight outside the world - search again using UUID
         if (watched != null && (watched.isRemoved() || !watched.getUUID().equals(w.projectile()))) watched = null;
         if (watched == null && w.projectile() != null) {
             for (var e : mc.level.entitiesForRendering()) {
@@ -2196,7 +2194,7 @@ public final class ClientScenario {
             }
             if (watched != null && !reached) {
                 reached = true;
-                // время мира сервера: до удара — его тики, часы клиента их не повторяют (догоняют сервер рывками)
+                // server world time: before the strike - it ticks, the client’s clock does not repeat it (it catches up with the server in jerks)
                 Incoming.LOG.info("SCENARIO {} reached client at tick {} (server {}), {} blocks from viewer, {} from target", name, tick,
                         mc.getSingleplayerServer().overworld().getGameTime(),
                         Math.round(watched.distanceTo(mc.player)), Math.round(watched.position().distanceTo(target)));
@@ -2208,7 +2206,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Ждём снаряд, снимаем подлёт, затем взрыв — от тика, когда снаряд пропал. */
+    /** We wait for the projectile, film the approach, then the explosion - from tick, when the projectile disappears. */
     private void fxEvents() {
         if (fxTargets != null) {
             fxTargetEvents();
@@ -2220,8 +2218,8 @@ public final class ClientScenario {
             for (var e : mc.level.entitiesForRendering()) {
                 if (e instanceof StrikeProjectile p && p.isActive()) watched = p;
             }
-            // с этого тика снаряд есть у клиента (на экране он или нет — смотреть кадры): до «impact» — сколько тиков
-            // его можно увидеть
+            // from this tick the client has the projectile (whether it is on the screen or not - watch the frames): to “impact” - how many ticks
+            //  it can be seen
             if (watched != null) {
                 Incoming.LOG.info("SCENARIO {} reached client at tick {}, {} blocks from viewer, {} from target", current, tick,
                         Math.round(watched.distanceTo(mc.player)), Math.round(watched.position().distanceTo(target)));
@@ -2244,9 +2242,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Столб после взрыва ({@code fx-late}): через {@link #FX_LATE} тиков зритель по той же линии от цели — на половине
-     * прорисовки (огненный шар и частицы там рисуются вблизи, дальней картинки взрыва ещё нет) и на 1,1 прорисовки (за её
-     * краем — только дальняя); столб на обоих кадрах тот же. Сколько клубов столба в кадре — строки {@code SCENARIO far}.
+     * Column after the explosion ({@code fx-late}): through {@link #FX_LATE} tick the viewer along the same line from the target - halfway through the
+     *  rendering (the fireball and particles there are drawn close, there is no distant image of the explosion yet) and at 1,1 drawing (behind its
+     *  edge - only the distant one); The pillar is the same in both frames. How many billows of a pillar are in the frame - lines {@code SCENARIO far}.
      */
     private void lateFrames(String name, int impact) {
         double world = Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0;
@@ -2254,11 +2252,11 @@ public final class ClientScenario {
         for (double share : new double[]{0.5, 1.1}) {
             String label = String.format(java.util.Locale.ROOT, "%s_late%d", name, Math.round(share * 100));
             at(t, () -> {
-                // вдоль земли от цели к зрителю, на его высоте; взгляд — на столб, а не на воронку
+                // along the ground from the target to the viewer, at his height; look at the pillar, not at the crater
                 double dx = eye.x - target.x, dz = eye.z - target.z, len = Math.max(1e-6, Math.hypot(dx, dz)), d = share * world;
                 double x = target.x + dx / len * d, z = target.z + dz / len * d;
                 cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.1f %.1f facing %.1f %.1f %.1f", x, eye.y, z, target.x, target.y + 60, target.z));
-                Incoming.LOG.info("SCENARIO {}: зритель в {} блоках от цели ({} прорисовки)", label, Math.round(d), share);
+                Incoming.LOG.info("SCENARIO {}: spectator in {} blocks from the target ({} rendering)", label, Math.round(d), share);
             });
             shot(t + 40, label);
             t += 60;
@@ -2267,9 +2265,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Модели крупным планом: каждый снаряд — неподвижная клиентская копия в небе в нужной фазе (на пусковой с
-     * ускорителем, в полёте с раскрытыми крыльями, B-2 с открытым и закрытым бомболюком); камера облетает его и
-     * снимает с трёх сторон. Сервер о копиях не знает — они не летят и не взрываются.
+     * Close-up models: each projectile is a stationary client copy in the sky in the required phase (on a launcher with a
+     *  accelerator, in flight with open wings, B-2 with an open and closed bomb bay); The camera flies around him and
+     *  films from three sides. The server does not know about the copies - they do not fly or explode.
      */
     private void planModels() {
         record Pose(String name, java.util.function.Supplier<? extends net.minecraft.world.entity.EntityType<? extends StrikeProjectile>> type,
@@ -2309,14 +2307,14 @@ public final class ClientScenario {
                 mc.level.addEntity(e);
                 watched = e;
             });
-            // слева спереди сверху, сбоку, справа сзади снизу
+            // left front top, side, right rear bottom
             double d = pz.size();
             double[][] cams = {{-0.8, 0.35, 0.8}, {-1.0, 0.05, 0.0}, {0.7, -0.35, -0.8}};
             for (int k = 0; k < cams.length; k++) {
                 double[] c = cams[k];
                 at(start + 5 + k * 25, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
                         c[0] * d, 200 + c[1] * d - 1.62, c[2] * d, 0.0, 200.0, 0.0)));
-                // второй раз — первая телепортация после падения игрока не всегда встаёт точно
+                // the second time - the first teleportation after the player falls does not always get up exactly
                 at(start + 15 + k * 25, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
                         c[0] * d, 200 + c[1] * d - 1.62, c[2] * d, 0.0, 200.0, 0.0)));
                 at(start + 24 + k * 25, () -> Incoming.LOG.info("SCENARIO model {} at {} phase {}", pz.name(), watched.position(), watched.flightPhase()));
@@ -2324,7 +2322,7 @@ public final class ClientScenario {
             }
             t += 95;
         }
-        // пусковые с полным пакетом на площадке, рядом — житель (1.95 м) для масштаба
+        // launcher with a full package on the site, next to it is a resident (1.95 m) for scale
         at(t, () -> {
             watched.discard();
             cmd("fill -16 199 -16 16 199 16 minecraft:smooth_stone");
@@ -2352,8 +2350,8 @@ public final class ClientScenario {
         });
     }
 
-    /** Фаза и точка прицеливания у клиентской копии снаряда (синхронные поля — только через отражение). */
-    /** Клиентская пусковая с поднятым пакетом у (0, 200, 0), снаряды во всех ячейках и житель рядом. */
+    /** Phase and aiming point of the client copy of the projectile (synchronous fields - only through reflection). */
+    /** Client launcher with a raised package (0, 200, 0), shells in all cells and a resident nearby. */
     private static List<net.minecraft.world.entity.Entity> showLauncher(WeaponType w) {
         Minecraft mc = Minecraft.getInstance();
         List<net.minecraft.world.entity.Entity> out = new java.util.ArrayList<>();
@@ -2422,24 +2420,24 @@ public final class ClientScenario {
         }
     }
 
-    /** Снаряд сценария far-models: оружие, B-2 ли это, фаза, тангаж и крен (градусы), скорость (блоков за тик). */
+    /** Projectile scenario far-models: weapon, B-2 is it, phase, pitch and roll (degrees), speed (blocks per tick). */
     private record FarShow(String name, WeaponType weapon, boolean bomber, ua.zentix.incoming.entity.FlightPhase phase,
                            float pitch, float roll, double speed) {}
 
     /**
-     * Глаз зрителя far-models: висит в {@code incoming.far.eye} («x,y,z» ног; по умолчанию 0,220,0 — в мире сценария)
-     * и смотрит на север.
+     * Viewer's Eye far-models: Hangs at {@code incoming.far.eye} ("x,y,z" feet; default 0,220,0 - in the scenario world)
+     *  and looks north.
      */
     private static final Vec3 FAR_EYE = farEye(System.getProperty("incoming.far.eye", "0,220,0"));
-    /** Снаряды far-models летят на восток и к зрителю (курс −60°): видны три четверти. */
+    /** Shells far-models fly east and towards the viewer (course −60°): three quarters are visible. */
     private static final float FAR_YAW = -60;
 
     /**
-     * Модели вдали ({@code client.far.FarFlightView}, {@code client.render.FarModels}): зритель в небе смотрит на север,
-     * снаряды — пути по пакетам, как от сервера (сущностей у клиента нет). Сначала пары кадров на одной позе — сущность
-     * ({@code match_*_entity}) и путь по пакетам ({@code match_*_far}): вблизи и вдали та же модель. Потом ряд всех снарядов
-     * на 300, 800 и 1500 блоках днём и ночью ({@code far_day_*}, {@code far_night_*}) и в бинокль на 800, 1500 и 3000
-     * ({@code far_scope_*}); у каждого кадра в лог — строка {@code SCENARIO far-models}. Облака выключены: фон — чистое небо.
+     * Models in the distance ({@code client.far.FarFlightView}, {@code client.render.FarModels}): the viewer in the sky looks north,
+     *  projectiles - paths along the packets, as from the server (the client has no entities). First, pairs of frames on the same pose - entity
+     *  ({@code match_*_entity}) and a path along packets ({@code match_*_far}): the same model near and far. Then a row of all shells
+     *  on 300, 800 and 1500 blocks day and night ({@code far_day_*}, {@code far_night_*}) and in binoculars on 800, 1500 and 3000
+     * ({@code far_scope_*}); Each frame has the line {@code SCENARIO far-models} in the log. Clouds are turned off: the background is clear sky.
      */
     private void planFarModels() {
         List<FarShow> row = List.of(
@@ -2451,7 +2449,7 @@ public final class ClientScenario {
                 new FarShow("rocket", WeaponType.ROCKET, false, ua.zentix.incoming.entity.FlightPhase.BOOST, -40, 0, 6),
                 new FarShow("loiter", WeaponType.LOITER, false, ua.zentix.incoming.entity.FlightPhase.CRUISE, 0, 15, 1.6));
         at(40, () -> {
-            // мир игрока (prod_client.py --world): летать и держать бинокль может только творческий режим
+            // player world (prod_client.py --world): only creative mode can fly and hold binoculars
             cmd("gamemode creative");
             cmd("gamerule doDaylightCycle false");
             cmd("gamerule doWeatherCycle false");
@@ -2462,10 +2460,10 @@ public final class ClientScenario {
             hover = true;
         });
         int t = 300;
-        // одна поза — сущностью и путём по пакетам
+        // one pose - by entity and path by packages
         t = farMatch(t, row.get(0), 60);
         t = farMatch(t, row.get(1), 110);
-        t = farMatch(t, row.get(2), 120); // сущность видна, только если её чанк уже пришёл клиенту
+        t = farMatch(t, row.get(2), 120); // an entity is visible only if its chunk has already been received by the client
         int pass = 0;
         for (String light : new String[]{"day", "night"}) {
             String time = light.equals("day") ? "time set 6000" : "time set 18000";
@@ -2493,10 +2491,11 @@ public final class ClientScenario {
     }
 
     /**
-     * Факел на краю прорисовки ({@code flame-edge}): ракета «Града» и ракета на ускорителе ночью и днём, сбоку, на одной
-     * линии от зрителя — сущностью (клиентская копия) на 0,5, 0,85 и 0,97 прорисовки и путём по пакетам на 0,97, 1,1 и
-     * 1,4. Кадры {@code flame_<свет>_<снаряд>_<сотые прорисовки>_<entity|far>} (на 0,97 — одна поза обоими путями):
-     * факел — одна картинка по обе стороны края; строка {@code SCENARIO flame-edge} — его свет (ядро, доля, блик, вуаль).
+     * Plume at the render-distance edge ({@code flame-edge}): Grad rocket and boosted missile at night and by day,
+     * seen from the side on one line from the viewer; as entities (client copies) at 0.5, 0.85 and 0.97 render distance,
+     * and via packet paths at 0.97, 1.1 and 1.4. Frames {@code flame_<light>_<projectile>_<render-distance hundredths>_<entity|far>}
+     * (at 0.97, the same pose through both paths): plume looks the same on both sides of the boundary; the
+     * {@code SCENARIO flame-edge} line gives its light (core, fraction, glint, veil).
      */
     private void planFlameEdge() {
         List<FarShow> show = List.of(
@@ -2528,15 +2527,15 @@ public final class ClientScenario {
     }
 
     /**
-     * Кадр {@link #planFlameEdge}: снаряд s летит со скоростью s.speed по своему курсу и в тике кадра стоит прямо впереди
-     * на frac прорисовки (по горизонтали, на 4° выше глаза) — клиентской копией сущности или путём по пакетам. Возвращает
-     * тик после кадра.
+     * Frame {@link #planFlameEdge}: the projectile s flies at a speed of s.speed along its course and at the tick of the frame stands directly in front of
+     *  on frac rendering (horizontally, at 4° above the eye) - by the client copy of the entity or by the packet path. Returns
+     *  tick after frame.
      */
     private int flameShot(int t, FarShow s, String light, double frac, boolean entity, int pass) {
         String name = String.format(java.util.Locale.ROOT, "flame_%s_%s_%03d_%s", light, s.name(), Math.round(frac * 100), entity ? "entity" : "far");
         int shotAt = t + 40;
         Vec3 dir = Vec3.directionFromRotation(s.pitch(), FAR_YAW), v = dir.scale(s.speed());
-        // место в тике кадра — по дальности прорисовки, известной только в игре
+        // place in the tick of the frame - according to the drawing distance, known only in the game
         Vec3[] at = new Vec3[1];
         StrikeProjectile[] shown = new StrikeProjectile[1];
         java.util.UUID id = new java.util.UUID(0xF1AL, pass);
@@ -2574,7 +2573,7 @@ public final class ClientScenario {
         }
         at(shotAt - 1, () -> Incoming.LOG.info("SCENARIO flame-edge {}: {}", name, FarRenderer.describe()));
         shot(shotAt, name);
-        // следующий кадр — на той же линии: шлейфы этого снимаются вместе с путём
+        // the next frame is on the same line: the trail of this is shot along with the path
         at(shotAt + 4, () -> {
             if (shown[0] != null) shown[0].discard();
             ua.zentix.incoming.client.flight.FlightTracks.reset();
@@ -2584,9 +2583,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Ряд снарядов на дальности d: веером по горизонтали ±spread градусов, на elev градусов выше глаза; пакеты — раз
-     * в {@link ua.zentix.incoming.net.S2C.FarFlights#PERIOD} тика с тика start, кадр name — через 60 тиков, тогда же
-     * каждый на своём месте. После кадра полёты отбиваются: шлейфы не переходят в следующий ряд.
+     * A row of shells at a range of d: in a horizontal fan ±spread degrees, at elev degrees above the eye; packets - once
+     *  in {@link ua.zentix.incoming.net.S2C.FarFlights#PERIOD} tick with tick start, frame name - through 60 tick, then
+     *  each in its place. After the frame, the flights are repulsed: the trail does not move to the next row.
      */
     private void farRow(int start, String name, List<FarShow> row, int pass, double d, double spread, double elev) {
         int shotAt = start + 60, n = row.size();
@@ -2611,8 +2610,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Пакет снаряда s, который в тике кадра (dt = 0) стоит в at: место — по курсу {@link #FAR_YAW}, тангажу и скорости,
-     * цель — в 5 км впереди.
+     * The projectile package s, which in the frame tick (dt = 0) stands at at: place - according to the {@link #FAR_YAW} heading, pitch and speed,
+     *  target - 5 km ahead.
      */
     private static ua.zentix.incoming.net.S2C.FarFlight farFlight(java.util.UUID id, FarShow s, Vec3 at, int dt, int phaseAge) {
         Vec3 dir = Vec3.directionFromRotation(s.pitch(), FAR_YAW);
@@ -2622,8 +2621,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Пара кадров одной позы на дальности d прямо впереди: клиентская копия сущности ({@code match_<s>_entity}),
-     * потом путь по пакетам без скорости ({@code match_<s>_far}). Возвращает тик после пары.
+     * A couple of frames of one pose at a distance of d are right ahead: the client copy of the entity ({@code match_<s>_entity}),
+     * , then the path through packets without speed ({@code match_<s>_far}). Returns tick after a pair.
      */
     private int farMatch(int t, FarShow s, double d) {
         Vec3 at = FAR_EYE.add(0, d * Math.sin(Math.toRadians(4)), -d);
@@ -2665,12 +2664,12 @@ public final class ClientScenario {
         return new Vec3(Double.parseDouble(c[0].trim()), Double.parseDouble(c[1].trim()) + 1.62, Double.parseDouble(c[2].trim()));
     }
 
-    /** Зритель — на место {@link #FAR_EYE}, взгляд на север: каждый ряд заново (полёт мог чуть сдвинуть его). */
+    /** Spectator - in place {@link #FAR_EYE}, looking north: each row anew (the flight could have moved it a little). */
     private void farStand(int t) {
         at(t, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s %.1f %.2f %.1f 180 0", FAR_EYE.x, FAR_EYE.y - 1.62, FAR_EYE.z)));
     }
 
-    /** Крен у клиентской копии снаряда (синхронное поле — только через отражение). */
+    /** The roll of the client copy of the projectile (synchronous field - only through reflection). */
     private static void showRoll(StrikeProjectile e, float roll) {
         try {
             var field = StrikeProjectile.class.getDeclaredField("DATA_ROLL");
@@ -2683,7 +2682,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Короткие полёты издалека, без пусковой (для сценария ударов: снаряд приходит за ~5 с). */
+    /** Short flights from afar, without a launcher (for the strike scenario: the projectile arrives in ~5 s). */
     private static void quickFlights() {
         var c = ua.zentix.incoming.IncomingConfig.SERVER;
         c.launchNearPlayer.set(false);
@@ -2693,16 +2692,16 @@ public final class ClientScenario {
     }
 
     /**
-     * Пролёт над головой: зритель стоит на земле на пути снарядов, пущенных издалека (без пусковой рядом), — залп РСЗО
-     * из-за спины (снаряды проходят над ним к цели в 200 блоках впереди), крылатая ракета и шахед (последний прямой
-     * участок маршрута — тоже из-за спины). Снаряды долго летят вне мира и дальше дальности сущностей: звук с первых
-     * слышимых сотен блоков идёт по пакетам сервера ({@code s} в строках звука), вблизи — по сущности ({@code e}).
-     * Звук — в строках лога раз в 5 тиков и в audio.wav.
+     * Flying overhead: the viewer stands on the ground in the path of shells fired from afar (without a launcher nearby) - a salvo of
+     *  MLRS from behind (the shells pass over him to the target in 200 blocks ahead), a cruise missile and Shahed (the last direct
+     *  section of the route - also from behind). The projectiles fly for a long time outside the world and beyond the range of the entities: the sound from the first
+     *  audible hundreds of blocks goes through the server packets ({@code s} in the sound lines), near - according to the entity ({@code e}).
+     * Sound - in the log lines once in 5 tick and in audio.wav.
      */
     private void planFlyby() {
         soundEvery = 5;
-        // INCOMING_FLIGHT_SPEED=<0..1> — шкала полёта мира (пресет CUSTOM) и кадры: зритель на площадке в 30 блоках над
-        // землёй (над кронами), утром (солнце не в зените), смотрит на цель: снаряды проходят над ним и уходят к ней; «Град» издалека на шкале выше 0 летит ~80 с — облёт длиннее
+        // INCOMING_FLIGHT_SPEED=<0..1> - world flight scale (preset CUSTOM) and frames: the viewer on the site in 30 blocks above the
+        //  ground (above the crowns), in the morning (the sun is not at its zenith), looking at the target: shells are passing over them and go to her; “Grad” from afar on the scale above 0 flies ~80 s - the flight is longer
         String scale = System.getenv("INCOMING_FLIGHT_SPEED");
         boolean frames = scale != null;
         int end = frames && Double.parseDouble(scale) > 0 ? 2600 : 1750;
@@ -2733,14 +2732,14 @@ public final class ClientScenario {
         at(700, () -> cmd(String.format(java.util.Locale.ROOT, "incoming missile at %.1f %.1f %.1f", target.x, target.y, target.z)));
         at(1100, () -> cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z)));
         if (end > 1750) {
-            // на настоящей шкале — ещё B-2 на эшелоне 12 км: его цель в 12 км впереди зрителя, черта сброса — в ~10 км
-            // до неё, и над зрителем он проходит до сброса; камера смотрит на него (дальний вид: корпус и след на высоте)
+            // on the real scale - another B-2 at the cruise altitude 12 km: its target is 12 km ahead of the viewer, the drop line is ~10 km
+//  before it, and it passes over the viewer before the drop; the camera looks at him (distant view: body and footprint at height)
             at(1300, () -> cmd("incoming bunker at 0.5 12000.5"));
             for (int t = 1850; t <= 2100; t += 5) at(t, ClientScenario::lookAtBomber);
             at(2110, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s ~ ~ ~ facing %.1f %.1f %.1f", target.x, target.y, target.z)));
         }
         for (int t = 250; t <= end - 50; t += 50) at(t, ClientScenario::dumpFlights);
-        // кадры облёта
+        // flyby footage
         if (frames) for (int t = 250; t <= end - 50; t += 5) shot(t, "flyby");
         at(end, () -> {
             Incoming.LOG.info("SCENARIO done");
@@ -2749,16 +2748,16 @@ public final class ClientScenario {
     }
 
     /**
-     * Пуск с пусковой у игрока: площадка в небе (ровно и твёрдо), пусковая шахедов разворачивается позади; камера
-     * снаряда с самого пуска — план сбоку от пусковой, разгон, отделение ускорителя, борт, попадание и облёт взрыва;
-     * потом то же для крылатой ракеты. Полёты укорочены (шахед 20 с, ракета 12 с), чтобы сценарий шёл минуты.
+     * launch with the player's launcher: a platform in the sky (flat and firm), launcher Shahed turns behind; camera
+     *  of the projectile from the launch itself - side view of the launcher, acceleration, accelerator separation, side, impact and flyby of the explosion;
+     *  then the same for the cruise missile. The flights were shortened (Shahed 20 s, rocket 12 s) so that the scenario lasted minutes.
      */
     private void planLaunch() {
         at(40, () -> {
             cmd("time set 6000");
             cmd("weather clear");
             cmd("tp @s 0 200 0 0 0");
-            // площадка длиннее дальности прорисовки сценария: без этого fill иногда отвечает «не загружено»
+            // the site is longer than the script's rendering range: without this, fill sometimes responds “not loaded”
             cmd("forceload add -32 -48 32 136");
         });
         at(200, () -> {
@@ -2766,22 +2765,22 @@ public final class ClientScenario {
             c.launchNearPlayer.set(true);
             c.droneFlightTime.set(20);
             c.missileFlightTime.set(12);
-            // площадка в небе: ровная и твёрдая под пусковую, цель — на ней же в 120 блоках впереди
+            // platform in the sky: flat and solid under the launcher, the target is on it in 120 blocks ahead
             cmd("fill -30 199 -40 30 199 130 minecraft:smooth_stone");
             cmd("fill -2 200 118 2 202 122 minecraft:oak_planks");
             cmd("tp @s 0.5 200 0.5 0 5");
             target = new Vec3(0.5, 203, 120.5);
         });
-        // пуск, и сразу камера: план пуска сбоку, борт, попадание
+        // launch, and immediately the camera: launch plan from the side, side, hit
         at(230, () -> cmd(String.format(java.util.Locale.ROOT, "incoming drone at %.1f %.1f %.1f", target.x, target.y, target.z)));
-        // сервер под llvmpipe отстаёт: снаряда в списке может ещё не быть — пробуем ещё раз
+        // the server running llvmpipe is lagging behind: the projectile may not be on the list yet - try again
         for (int t = 236; t <= 266; t += 10) {
             at(t, () -> {
                 if (!ua.zentix.incoming.client.cam.ProjectileCamera.isActive()) ua.zentix.incoming.client.cam.ProjectileCamera.cycle();
             });
         }
         for (int t = 240; t <= 1000; t += 8) shot(t, "drone");
-        // повтор: ещё ядерный подрыв в записи (1 кт, за спиной в 700 блоках), его перемотку проверяет ReplayCheck
+        // repeat: another nuclear explosion in the recording (1 kt, behind the back in 700 blocks), its rewind is checked by ReplayCheck
         if (replay) at(1004, () -> cmd("incoming nuke now at 500 100 -500 1 air"));
         at(1010, () -> {
             ua.zentix.incoming.client.cam.ProjectileCamera.exit();
@@ -2792,7 +2791,7 @@ public final class ClientScenario {
         at(1510, ua.zentix.incoming.client.cam.ProjectileCamera::exit);
         at(1520, () -> {
             if (replay) {
-                new ReplayCheck(); // выход из мира, повтор Flashback сохраняется и открывается — дальше ReplayCheck
+                new ReplayCheck(); // exit from the world, replay Flashback is saved and opened - then ReplayCheck
                 return;
             }
             Incoming.LOG.info("SCENARIO done");
@@ -2801,9 +2800,9 @@ public final class ClientScenario {
     }
 
     /**
-     * HUD ударов: десять снарядов по пяти целям сразу — стойка с именем (залп из 4), зомби (3), свинья (гибнет в полёте:
-     * серый крестик), точка рядом со стойкой (крестики сливаются) и ракета в дальнюю точку. Зритель — над пусковой,
-     * смотрит на цели: метки, пунктиры, подписи (соседние не наезжают друг на друга) и список справа; потом — вблизи.
+     * HUD hits: ten shells at five targets at once - a stand with a name (a salvo from 4), a zombie (3), a pig (dies in flight:
+     *  gray cross), a point next to the stand (the crosses merge) and a rocket to a far point. The viewer is above the launcher,
+     *  looks at the targets: marks, dotted lines, signatures (neighboring ones do not overlap each other) and the list on the right; then - close.
      */
     private void planHud() {
         at(40, () -> {
@@ -2819,7 +2818,7 @@ public final class ClientScenario {
             c.missileFlightTime.set(20);
             cmd("fill -30 199 -40 30 199 130 minecraft:smooth_stone");
             cmd("tp @s 0.5 200 0.5 0 5");
-            // мирный режим убирает враждебных мобов: цели — стойка с именем, житель и свинья (метки — теги hud)
+            // peaceful mode removes hostile mobs: targets - a stand with a name, a resident and a pig (tags - tags hud)
             cmd("summon minecraft:armor_stand -11.5 200 105.5 {CustomName:'\"ENOTzRPG\"',Tags:[\"hud_named\"]}");
             cmd("summon minecraft:villager 12.5 200 112.5 {NoAI:1b,Tags:[\"hud_type\"]}");
             cmd("summon minecraft:pig 0.5 200 122.5 {NoAI:1b,Tags:[\"hud_lost\"]}");
@@ -2832,11 +2831,11 @@ public final class ClientScenario {
             cmd("incoming drone at -9.5 200 106.5");
             cmd("incoming missile at 20.5 200 128.5");
         });
-        // зритель над пусковой, за спиной у линии огня: видны и снаряды, и цели
+        // viewer above the launcher, behind the line of fire: both shells and targets are visible
         at(225, () -> cmd("tp @s 0.5 222 -14.5 0 9"));
         at(420, () -> cmd("kill @e[tag=hud_lost]"));
         for (int t = 240; t <= 900; t += 20) shot(t, "hud");
-        // вблизи целей: подписи крупнее на экране
+        // close to targets: signatures are larger on the screen
         at(905, () -> cmd("tp @s 0.5 214 70.5 0 20"));
         for (int t = 920; t <= 1100; t += 15) shot(t, "hud_near");
         at(1110, () -> {
@@ -2846,9 +2845,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Камера снаряда дальше прорисовки (12 чанков, как у Артёма): ракета на 800 блоков и три шахеда на 600 с пусковой
-     * рядом. Видео — пока снаряд близко, дальше карта по телеметрии сервера; ракета пропадает у цели — «цель поражена»
-     * на карте, потом камера переходит к шахедам.
+     * The projectile camera is further rendered (12 chunks, like Artem): a rocket on 800 blocks and three Shahed on 600 with a launcher
+     *  nearby. Video - while the projectile is close, then the map is based on server telemetry; the missile disappears at the target - “target hit”
+     *  on the map, then the camera switches to Shahed.
      */
     private void planMap() {
         at(40, () -> {
@@ -2883,38 +2882,38 @@ public final class ClientScenario {
     }
 
     /**
-     * Карта наведения: открыть с пульта, отдалить колесом, выбрать место кликом в 60 и 40 пикселей от центра (северо-восток),
-     * огонь по Enter — всё через ввод экрана, как у игрока. В лог — выбранное место и цель снаряда по данным сервера
-     * (высота — поверхность); кадры target-map_* — карта с рельефом, с меткой цели, потом снаряд на ней.
-     * Свойства: {@code incoming.mapWeapon} — оружие пульта (по умолчанию ракета), {@code incoming.mapAt=x,z} — место
-     * на карте задано точкой, а не кликом (проверка удара по известной дальней крыше), {@code incoming.mapFrom=x,y,z} —
-     * откуда бить (и в копии мира игрока).
+     * Targeting map: open from the remote control, zoom out with the wheel, select a location by clicking on 60 and 40 pixels from the center (northeast),
+     *  fire on Enter - all through screen input, like a player. In the log - the selected location and target of the projectile according to server data
+     *  (height - surface); frames target-map_* - map with relief, with a target mark, then a projectile on it.
+     * Properties: {@code incoming.mapWeapon} - remote control weapon (missile by default), {@code incoming.mapAt=x,z} - location
+     *  on the map is specified by a point, not a click (check hitting the known far roof), {@code incoming.mapFrom=x,y,z} -
+     *  from where to hit (and in a copy of the player's world).
      */
     private void planTargetMap() {
         at(40, () -> {
             cmd("time set 6000");
             cmd("weather clear");
-            // в копии мира игрока (prod_client.py --world) — там, где он стоит
+            // in a copy of the player’s world (prod_client.py --world) - where he stands
             String from = System.getProperty("incoming.mapFrom");
             if (from != null) {
-                // высота земли там заранее не известна: сверху, в творческом — без урона от падения
+                // the height of the ground there is not known in advance: from above, in creative - without damage from falling
                 cmd("gamemode creative");
                 cmd("tp @s " + from.replace(',', ' ') + " 0 30");
             }
             else if (System.getProperty("incoming.world") == null) cmd("tp @s 0.5 120 0.5 0 30");
-            // новый пульт в руке — настройки по умолчанию: одна ракета без разброса, промах меряется от точки
+            // new remote control in hand - default settings: one missile without spread, miss is measured from a point
             String weapon = System.getProperty("incoming.mapWeapon");
             cmd("item replace entity @s weapon.mainhand with incoming:strike_designator"
                     + (weapon == null ? "" : "[incoming:loadout={weapon:\"" + java.util.Objects.requireNonNull(WeaponType.parse(weapon), "incoming.mapWeapon: " + weapon).getSerializedName() + "\"}]"));
         });
-        // карту открывают, поиграв: DH к этому времени загрузил свои LOD вокруг. Пока он их грузит, чтение рельефа
-        // через его API стоит в очереди за ними (пул ввода-вывода DH ниже по приоритету, чем загрузка LOD)
+        // the map is opened after playing: DH by this time has loaded his LOD around. While he is loading them, reading the terrain
+        //  through his API is in line behind them (the I/O pool DH is lower in priority than loading LOD)
         for (int t = 300; t <= 300 + MAP_DH_WAIT; t += 20) {
             at(t, () -> {
                 if (mapOpened < 0 && (dhIdle() || tick >= 300 + MAP_DH_WAIT)) mapBegin(tick);
             });
         }
-        // попадание — первый взрыв на сервере (встроенном): где он и насколько далеко от выбранной точки
+        // hit - the first explosion on the server (built-in): where is it and how far from the selected point
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.ExplosionEvent.Detonate e) -> {
             Vec3 at = e.getExplosion().center(), aim = mapTarget;
             if (aim == null || mapImpactTick >= 0 || e.getLevel().isClientSide()) return;
@@ -2924,7 +2923,7 @@ public final class ClientScenario {
             var shooter = e.getLevel().players().isEmpty() ? null : e.getLevel().players().getFirst();
             double range = shooter == null ? 0 : Math.hypot(shooter.getX() - aim.x, shooter.getZ() - aim.z);
             double allowed = allowedMiss(weapon, range);
-            Incoming.LOG.info("SCENARIO map-target impact {} miss {} (допуск {}) — {}; земля под взрывом {} (с листвой {}), у цели {} (с листвой {})", at,
+            Incoming.LOG.info("SCENARIO map-target impact {} miss {} (approval {}) - {}; ground under explosion {} (with foliage {}), at the target {} (with foliage {})", at,
                     Math.round(miss), Math.round(allowed), miss <= allowed ? "OK" : "FAIL",
                     e.getLevel().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, hit.getX(), hit.getZ()),
                     e.getLevel().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, hit.getX(), hit.getZ()),
@@ -2935,10 +2934,10 @@ public final class ClientScenario {
     }
 
     /**
-     * Залп на карте наведения — кадры salvo-map_* (штриховые пути снарядов к целям, район разброса) и время, за которое
-     * карта открылась, в логе («Targeting map: view terrain ready in …»): в пульте шесть шахедов с разбросом 40,
-     * место кликом в ~130 блоках, огонь по Enter, карта снова открыта на весь полёт. В копии мира игрока
-     * (prod_client.py --world) — там, где он стоит; карту открывают, когда DH загрузил свои LOD (как в target-map).
+     * A salvo on the guidance map - frames salvo-map_* (dashed paths of projectiles to targets, scatter area) and the time during which the
+     *  map opened, in the log (“Targeting map: view terrain ready in ..."): in the remote there are six Shahed with a spread of 40,
+     *  place by clicking in ~130 blocks, fire on Enter, the map is again open for the entire flight. In the player's copy of the world
+     * (prod_client.py --world) - where he stands; the map is opened when DH has loaded its LOD (as in target-map).
      */
     private void planSalvoMap() {
         at(40, () -> {
@@ -2948,7 +2947,7 @@ public final class ClientScenario {
             cmd("item replace entity @s weapon.mainhand with incoming:strike_designator");
         });
         at(60, () -> {
-            // настройки пульта — как с его экрана: в предмет у клиента и на сервер
+            // remote control settings - both from its screen: to the item on the client and to the server
             var salvo = new ua.zentix.incoming.strike.Loadout(WeaponType.DRONE, 6, 40, ua.zentix.incoming.strike.TargetMode.MAP, "",
                     ua.zentix.incoming.strike.Loadout.DEFAULT.nuke());
             Minecraft.getInstance().player.getMainHandItem().set(ua.zentix.incoming.registry.ModDataComponents.LOADOUT.get(), salvo);
@@ -2988,17 +2987,17 @@ public final class ClientScenario {
     }
 
     /**
-     * Маршрут на карте наведения ({@code route-map}): пульт с шахедом ({@code incoming.mapWeapon} — другое оружие),
-     * карта отдалена, цель — кликом, три точки маршрута (Shift+клик без окна не нажать: точки ставит {@code MapTarget}
-     * так же, как клик), третья убрана ПКМ, вторая перетащена мышью; маршрут длиннее дальности оружия — огонь не даётся;
-     * огонь по Enter. Сервер: снаряд проходит точки по порядку — не дальше двух захватов паспорта и шага, как
-     * {@code Route.update}, — и попадает в цель (строка {@code SCENARIO route-map impact … OK}). Кадры route-map_*.
-     * {@code incoming.mapFrom=x,y,z} — откуда бить (и в копии мира игрока).
+     * Route on the guidance map ({@code route-map}): remote control with Shahed ({@code incoming.mapWeapon} - another weapon),
+     *  the map is distant, the target is clicked, three route points (Shift+click without a window cannot be pressed: the points are placed by {@code MapTarget}
+     *  in the same way as a click), the third is removed RMB, the second one is dragged by the mouse; the route is longer than the weapon's range - no fire is given;
+     * fire at Enter. Server: the projectile passes the points in order - no further than two spec captures and a step like
+     * {@code Route.update} - and hits the target (line {@code SCENARIO route-map impact … OK}). Frames route-map_*.
+     * {@code incoming.mapFrom=x,y,z} - where to hit (and in a copy of the player’s world).
      * <p>
-     * {@code launch-map} ({@code launch}) — то же с местом пуска с карты: кнопка места пуска и клик, значок перетащен
-     * мышью (строка {@code SCENARIO launch-map site … OK}), огонь — с него: сервер ставит там пусковую или, если места под
-     * неё нет, снаряд стартует из самого места ({@code SCENARIO launch-map start … OK}), путь — от места пуска через точки
-     * к цели. Хост встроенного сервера выбирает место пуска и без прав оператора. Кадры launch-map_*.
+     * {@code launch-map} ({@code launch}) - the same with the launch location with maps: launch place button and click, the icon is dragged
+     *  with the mouse (line {@code SCENARIO launch-map site … OK}), fire - from it: the server places a launcher there or, if there is no place under
+     * , the projectile starts from the place itself ({@code SCENARIO launch-map start … OK}), the path is from the launch place through the points
+     *  to the target. The embedded server host chooses the launch location without operator rights. Frames launch-map_*.
      */
     private void planRouteMap(boolean launch) {
         WeaponType weapon = java.util.Objects.requireNonNull(WeaponType.parse(System.getProperty("incoming.mapWeapon", "drone")),
@@ -3019,7 +3018,7 @@ public final class ClientScenario {
                 if (mapOpened < 0 && (dhIdle() || tick >= 300 + MAP_DH_WAIT)) routeMapBegin(tick, weapon, launch);
             });
         }
-        // сервер (встроенный): откуда снаряд стартовал, какие точки маршрута прошёл и где взорвался
+        // server (built-in): where the projectile started from, which route points it passed and where it exploded
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post e) -> {
             if (launch) checkLaunchSite(e.getServer().overworld(), weapon);
             ua.zentix.incoming.strike.Waypoints via = routeFired;
@@ -3042,25 +3041,25 @@ public final class ClientScenario {
             if (aim == null || via == null || mapImpactTick >= 0 || e.getLevel().isClientSide()) return;
             double miss = Math.hypot(at.x - aim.x, at.z - aim.z), allowed = allowedMiss(weapon, 0);
             boolean ok = miss <= allowed && routePassed == via.size();
-            Incoming.LOG.info("SCENARIO route-map impact {} miss {} (допуск {}), точек пройдено {} из {} — {}", xyz(at), Math.round(miss), Math.round(allowed),
+            Incoming.LOG.info("SCENARIO route-map impact {} miss {} (tolerance {}), points passed {} from {} — {}", xyz(at), Math.round(miss), Math.round(allowed),
                     routePassed, via.size(), ok ? "OK" : "FAIL");
             mapImpactTick = tick;
         });
     }
 
-    /** Маршрут, с которым ушёл приказ (сценарий route-map), и сколько его точек снаряд прошёл; их читает поток сервера. */
+    /** The route with which the order went (scenario route-map), and how many of its points the projectile passed; they are read by the server thread. */
     @org.jetbrains.annotations.Nullable
     private volatile ua.zentix.incoming.strike.Waypoints routeFired;
     private volatile int routePassed;
-    /** Место пуска приказа (сценарий launch-map) и тик сервера, к которому старт с него ещё не найден; их читает поток сервера. */
+    /** Place of launch order (scenario launch-map) and tick of the server for which the start from it has not yet been found; they are read by the server thread. */
     @org.jetbrains.annotations.Nullable
     private volatile Vec3 launchSite;
     private long launchDeadline = -1;
     private boolean launchChecked;
 
     /**
-     * Старт с места пуска (сценарий launch-map, поток сервера): пусковая на нём (на месте или на кольце площадок вокруг)
-     * со снарядом этого оружия, или снаряд стартовал из самого места вне мира (места под пусковую нет).
+     * Start from the launch site (scenario launch-map, server thread): launcher on it (in place or on a ring of sites around)
+     *  with a projectile of this weapon, or the projectile was launched from the very place outside the world (there is no place for the launcher).
      */
     private void checkLaunchSite(net.minecraft.server.level.ServerLevel level, WeaponType weapon) {
         Vec3 site = launchSite;
@@ -3069,19 +3068,19 @@ public final class ClientScenario {
         net.minecraft.world.phys.AABB around = new net.minecraft.world.phys.AABB(site.x - 48, level.getMinBuildHeight(), site.z - 48, site.x + 48, level.getMaxBuildHeight(), site.z + 48);
         for (var l : level.getEntitiesOfClass(ua.zentix.incoming.entity.LauncherEntity.class, around, ua.zentix.incoming.entity.LauncherEntity::ordered)) {
             launchChecked = true;
-            Incoming.LOG.info("SCENARIO launch-map start: пусковая на месте пуска в {} от него, {} — OK", Math.round(Math.hypot(l.getX() - site.x, l.getZ() - site.z)),
+            Incoming.LOG.info("SCENARIO launch-map start: launcher at the launch site in {} from it, {} - OK", Math.round(Math.hypot(l.getX() - site.x, l.getZ() - site.z)),
                     xyz(l.position()));
             return;
         }
         for (StrikeProjectile q : ua.zentix.incoming.strike.VirtualFlights.get(level).flights()) {
             if (q.weapon() != weapon || Math.hypot(q.getX() - site.x, q.getZ() - site.z) > 48) continue;
             launchChecked = true;
-            Incoming.LOG.info("SCENARIO launch-map start: без пусковой, из места пуска вне мира {} — OK", xyz(q.position()));
+            Incoming.LOG.info("SCENARIO launch-map start: without launcher, from an off-world launch location {} – OK", xyz(q.position()));
             return;
         }
         if (level.getGameTime() < launchDeadline) return;
         launchChecked = true;
-        Incoming.LOG.warn("SCENARIO launch-map start: ни пусковой, ни снаряда у места пуска {} — FAIL", xyz(site));
+        Incoming.LOG.warn("SCENARIO launch-map start: no launcher, no projectile at the launch site {} — FAIL", xyz(site));
     }
 
     private void routeMapBegin(int o, WeaponType weapon, boolean launch) {
@@ -3097,12 +3096,12 @@ public final class ClientScenario {
             screen.mouseReleased(x, y, 0);
             var place = ua.zentix.incoming.client.map.MapTarget.get(mc.level).orElseThrow();
             mapTarget = new Vec3(place.x(), 0, place.z());
-            // обход с запада, третья точка — лишняя (её уберёт ПКМ)
+            // bypass from the west, the third point is superfluous (it will be removed by RMB)
             Vec3 me = mc.player.position();
             ua.zentix.incoming.client.map.MapTarget.add(mc.level, new ua.zentix.incoming.client.map.MapTarget.Place(me.x - 320, me.z - 120));
             ua.zentix.incoming.client.map.MapTarget.add(mc.level, new ua.zentix.incoming.client.map.MapTarget.Place(me.x - 160, me.z - 480));
             ua.zentix.incoming.client.map.MapTarget.add(mc.level, new ua.zentix.incoming.client.map.MapTarget.Place(me.x + 200, me.z + 200));
-            logRoute("три точки", weapon);
+            logRoute("three dots", weapon);
         });
         shot(o + 60, "route-map");
         at(o + 70, () -> {
@@ -3117,8 +3116,8 @@ public final class ClientScenario {
             var edited = ua.zentix.incoming.client.map.MapTarget.route(mc.level);
             boolean ok = edited.size() == 2 && edited.get(0).equals(route.get(0)) && edited.get(1).x() > route.get(1).x() + 1
                     && edited.get(1).z() < route.get(1).z() - 1;
-            Incoming.LOG.info("SCENARIO route-map edit (ПКМ убрал третью, вторая перетащена) — {}", ok ? "OK" : "FAIL");
-            logRoute("после правки", weapon);
+            Incoming.LOG.info("SCENARIO route-map edit (RMB removed the third, the second was dragged) - {}", ok ? "OK" : "FAIL");
+            logRoute("after editing", weapon);
         });
         shot(o + 80, "route-map");
         at(o + 90, () -> {
@@ -3127,8 +3126,8 @@ public final class ClientScenario {
             ua.zentix.incoming.client.map.MapTarget.add(mc.level, new ua.zentix.incoming.client.map.MapTarget.Place(me.x + 9_500, me.z + 9_500));
             boolean blocked = !mapCanFire(mc.screen);
             mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0);
-            Incoming.LOG.info("SCENARIO route-map too long: огонь не даётся — {}", blocked && mc.screen instanceof ua.zentix.incoming.client.screen.MapScreen ? "OK" : "FAIL");
-            logRoute("длиннее дальности", weapon);
+            Incoming.LOG.info("SCENARIO route-map too long: fire is not given - {}", blocked && mc.screen instanceof ua.zentix.incoming.client.screen.MapScreen ? "OK" : "FAIL");
+            logRoute("longer range", weapon);
         });
         shot(o + 100, "route-map");
         at(o + 110, () -> {
@@ -3136,12 +3135,12 @@ public final class ClientScenario {
             ua.zentix.incoming.client.map.MapTarget.remove(mc.level, 2);
             if (launch) placeLaunchSite(mc.screen);
         });
-        // место пуска на карте: значок, путь от него, строка под маршрутом
+        // launch location on the map: icon, path from it, line under the route
         int f = launch ? o + 130 : o + 110;
         if (launch) shot(o + 120, "launch-map");
         at(f, () -> {
             routeFired = ua.zentix.incoming.client.map.MapTarget.waypoints(mc.level);
-            logRoute("огонь", weapon);
+            logRoute("fire", weapon);
             mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0);
         });
         at(f + 60, () -> {
@@ -3155,7 +3154,7 @@ public final class ClientScenario {
                 if (mapDone) return;
                 if (mapImpactTick < 0 || tick < mapImpactTick + 60) {
                     if (tick < o + MAP_FLIGHT_WAIT) return;
-                    Incoming.LOG.warn("SCENARIO route-map no impact by tick {}, точек пройдено {} — FAIL", tick, routePassed);
+                    Incoming.LOG.warn("SCENARIO route-map no impact by tick {}, points passed {} - FAIL", tick, routePassed);
                 }
                 mapDone = true;
                 Incoming.LOG.info("SCENARIO done");
@@ -3164,19 +3163,19 @@ public final class ClientScenario {
         }
     }
 
-    /** Строка маршрута на карте: точки, длина от места пуска (без него — от игрока) до цели, в дальности ли оружия и даётся ли огонь. */
+    /** Route line on the map: points, length from the launch point (without it - from the player) to the target, whether the weapon is in range and whether fire is given. */
     private void logRoute(String stage, WeaponType weapon) {
         Minecraft mc = Minecraft.getInstance();
         var via = ua.zentix.incoming.client.map.MapTarget.waypoints(mc.level);
         Vec3 aim = mapTarget, me = ua.zentix.incoming.client.map.MapTarget.launchPoint(mc.level).orElse(mc.player.position());
-        Incoming.LOG.info("SCENARIO route-map {}: точки {} длина {} в дальности {} огонь {}", stage,
+        Incoming.LOG.info("SCENARIO route-map {}: points {} length {} in range {} fire {}", stage,
                 via.points().stream().map(q -> Math.round(q.x) + " " + Math.round(q.z)).toList(),
                 aim == null ? "—" : Math.round(via.length(me, aim)), aim != null && via.within(weapon, me, aim), mapCanFire(mc.screen));
     }
 
     /**
-     * Место пуска на карте, как игрок (сценарий launch-map): кнопка места пуска и клик в 300 блоках к югу от игрока,
-     * потом значок перетащен мышью на 20 пикселей к западу.
+     * Place launch on the map as a player (scenario launch-map): launch place button and click on 300 blocks south of the player,
+     *  then drag the icon with the mouse to 20 pixels to the west.
      */
     private void placeLaunchSite(Screen screen) {
         Minecraft mc = Minecraft.getInstance();
@@ -3195,12 +3194,12 @@ public final class ClientScenario {
         screen.mouseReleased(at[0] - 20, at[1], 0);
         var moved = ua.zentix.incoming.client.map.MapTarget.launch(mc.level);
         boolean ok = placed.isPresent() && Math.abs(placed.get().z() - (me.z + 300)) < 8 && moved.isPresent() && moved.get().x() < placed.get().x() - 1;
-        Incoming.LOG.info("SCENARIO launch-map site (кнопка и клик, значок перетащен) {} → {} — {}", placed.map(p -> Math.round(p.x()) + " " + Math.round(p.z())).orElse("—"),
+        Incoming.LOG.info("SCENARIO launch-map site (button and click, icon dragged) {} → {} - {}", placed.map(p -> Math.round(p.x()) + " " + Math.round(p.z())).orElse("—"),
                 moved.map(p -> Math.round(p.x()) + " " + Math.round(p.z())).orElse("—"), ok ? "OK" : "FAIL");
         launchSite = moved.map(p -> new Vec3(p.x(), 0, p.z())).orElse(null);
     }
 
-    /** Место точки мира на карте наведения (её проекция — закрытый метод экрана: только для сценария). */
+    /** The location of the world point on the guidance map (its projection is a closed screen method: for scenario only). */
     private static int[] mapScreenAt(Screen screen, ua.zentix.incoming.client.map.MapTarget.Place place) {
         try {
             var m = ua.zentix.incoming.client.screen.MapScreen.class.getDeclaredMethod("projection");
@@ -3211,7 +3210,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Даёт ли карта наведения огонь (закрытый метод экрана: только для сценария). */
+    /** Does the targeting map give fire (closed screen method: scenario only). */
     private static boolean mapCanFire(Screen screen) {
         try {
             var m = ua.zentix.incoming.client.screen.MapScreen.class.getDeclaredMethod("canFire");
@@ -3222,7 +3221,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Карта наведения с тика {@code o}: отдалить, выбрать точку в ~700 блоках, огонь, ждать попадания. */
+    /** Targeting map with tick {@code o}: move away, select a point in ~700 blocks, fire, wait for a hit. */
     private void mapBegin(int o) {
         mapOpened = o;
         Incoming.LOG.info("SCENARIO map-target open at tick {}", o);
@@ -3231,7 +3230,7 @@ public final class ClientScenario {
         ua.zentix.incoming.IncomingConfig.SERVER.droneFlightTime.set(20);
         Minecraft.getInstance().setScreen(new ua.zentix.incoming.client.screen.MapScreen(new RemoteScreen()));
         shot(o + 40, "target-map");
-        // отдалить карту: точка далеко за дальностью прорисовки — рельеф там есть только у DH
+        // zoom out on the map: the point is far beyond the drawing range - only DH has relief there
         at(o + 60, () -> {
             var screen = Minecraft.getInstance().screen;
             screen.mouseScrolled(screen.width / 2.0, screen.height / 2.0, 0, -8);
@@ -3259,7 +3258,7 @@ public final class ClientScenario {
         });
         shot(o + 130, "target-map");
         at(o + 140, () -> {
-            // высота с карты, которую увезёт приказ (C2S.AimHint.mapSurface): плитка у места могла достроиться после выбора
+            // height from the map that the order will take away (C2S.AimHint.mapSurface): the tile at the place could be completed after choosing
             Vec3 aim = mapTarget;
             Incoming.LOG.info("SCENARIO map-target order terrain height {}", aim == null ? "—"
                     : ua.zentix.incoming.client.map.TerrainTiles.height((int) Math.floor(aim.x), (int) Math.floor(aim.z)));
@@ -3279,7 +3278,7 @@ public final class ClientScenario {
                 if (net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) logDhThreads();
             });
         }
-        // конец — через 3 с после попадания (кадры карты после удара) или по сроку
+        // end - in 3 s after the hit (map frames after the hit) or by deadline
         for (int t = o + 220; t <= o + MAP_FLIGHT_WAIT; t += 20) {
             at(t, () -> {
                 if (mapDone) return;
@@ -3297,8 +3296,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Сколько рельефа вокруг игрока знают лучи и звук ({@code TerrainTiles.height}, как {@code FarTerrain} дальше чанков):
-     * доля точек сетки 33×33 в квадрате ±r — для сравнения источников (LOD Server Support, Distant Horizons).
+     * How much terrain around the player is known by rays and sound ({@code TerrainTiles.height}, as {@code FarTerrain} further chunks):
+     * fraction of grid points 33×33 squared ±r - for comparing sources (LOD Server Support, Distant Horizons).
      */
     private void logCoverage() {
         var p = Minecraft.getInstance().player;
@@ -3317,7 +3316,7 @@ public final class ClientScenario {
         Incoming.LOG.info("SCENARIO map-target coverage (rays, sound) at tick {}:{}", tick, b);
     }
 
-    /** DH не стоит или уже загрузил свои LOD вокруг: очередь загрузки пуста. */
+    /** DH is not worth it or has already downloaded its LOD around: the download queue is empty. */
     private static boolean dhIdle() {
         if (!net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) return true;
         try {
@@ -3329,8 +3328,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Очереди потоков Distant Horizons (его внутренние классы, только для разбора в сценарии): чтение рельефа через API
-     * идёт в пул ввода-вывода DH ({@code ThreadPoolUtil.getFileHandlerExecutor}).
+     * Thread queues Distant Horizons (its internal classes, only for parsing in the script): reading the relief through API
+     *  goes to the I/O pool DH ({@code ThreadPoolUtil.getFileHandlerExecutor}).
      */
     private static void logDhThreads() {
         try {
@@ -3341,7 +3340,7 @@ public final class ClientScenario {
                 Object ex = util.getMethod(getter).invoke(null);
                 if (ex == null) continue;
                 Class<?> c = ex.getClass();
-                b.append(String.format(java.util.Locale.ROOT, "%s: очередь %s, идёт %s, сделано %s; ", getter.substring(3),
+                b.append(String.format(java.util.Locale.ROOT, "%s: queue %s, going %s, done %s; ", getter.substring(3),
                         c.getMethod("getQueueSize").invoke(ex), c.getMethod("getRunningTaskCount").invoke(ex), c.getMethod("getCompletedTaskCount").invoke(ex)));
             }
             java.lang.reflect.Field picker = util.getDeclaredField("taskPicker");
@@ -3349,29 +3348,29 @@ public final class ClientScenario {
             Object tp = picker.get(null);
             java.lang.reflect.Field occupied = tp.getClass().getDeclaredField("occupiedThreadsRef");
             occupied.setAccessible(true);
-            b.append("занято потоков ").append(occupied.get(tp));
+            b.append("busy threads ").append(occupied.get(tp));
             Incoming.LOG.info("SCENARIO map-target dh threads {}", b);
         } catch (ReflectiveOperationException | RuntimeException e) {
-            Incoming.LOG.info("SCENARIO map-target dh threads не прочитаны: {}", e.toString());
+            Incoming.LOG.info("SCENARIO map-target dh threads unread: {}", e.toString());
         }
     }
 
-    /** Сценарий target-map ждёт, пока DH загрузит свои LOD, не дольше этого (тиков), и попадания — не дольше второго. */
+    /** The script target-map waits for DH to load its LOD, no longer than that (tick), and hits no longer than the second. */
     private static final int MAP_DH_WAIT = 6000, MAP_FLIGHT_WAIT = 2100;
-    /** Оружие без промаха в паспорте: взрыв не дальше этого от выбранной точки (по горизонтали), блоков; с промахом — {@link #allowedMiss}. */
+    /** Weapon without a miss in spec: explosion no further than this from the selected point (horizontally), blocks; with a miss - {@link #allowedMiss}. */
     private static final double MAP_MAX_MISS = 2;
 
     /**
-     * Допуск промаха по карте: {@link #MAP_MAX_MISS} и три СКО промаха — рассеивания неуправляемого (РСЗО) на
-     * {@code range} блоков от стреляющего и промаха пуска из паспорта (у шахеда σ 3 блока по каждой оси: попадание в 3–4
-     * блоках от точки — его обычный разброс). Рассеивание РСЗО — {@link WeaponSpec.Ballistic#sigma}.
+     * Tolerance for a miss on the map: {@link #MAP_MAX_MISS} and three standard deviations of a miss - uncontrolled scattering (MLRS) on
+     * {@code range} blocks from the shooter and a launch miss from the spec (for Shahed σ 3 blocks on each axis: hitting 3–4
+     * blocks from the point - its usual spread). MLRS dispersion - {@link WeaponSpec.Ballistic#sigma}.
      */
     private static double allowedMiss(@org.jetbrains.annotations.Nullable WeaponType weapon, double range) {
         if (weapon == null) return MAP_MAX_MISS;
         WeaponSpec.Ballistic b = weapon.spec().striker().ballistic();
         return MAP_MAX_MISS + 3 * Math.hypot(b == null ? 0 : b.sigma(range), weapon.spec().route().error());
     }
-    /** Точка, выбранная на карте (сценарий target-map); её читает и поток сервера. */
+    /** Point selected on the map (scenario target-map); the server thread also reads it. */
     @org.jetbrains.annotations.Nullable
     private volatile Vec3 mapTarget;
     private volatile int mapImpactTick = -1;
@@ -3379,18 +3378,18 @@ public final class ClientScenario {
     private boolean mapDone;
 
     /**
-     * Команды из свойства {@code incoming.commands} (через «;», кроме «;» в скобках и кавычках — {@link ScenarioCommands}) в открытом мире — проверить, что моды сборки отвечают
-     * (например копия для съёмки: {@code /dh pregen status}, {@code /chunky}); ответы идут в чат, чат — в лог клиента.
-     * Кроме команд: {@code wait:N} — ещё N тиков (0…{@value CommandPlan#MAX_WAIT}), {@code wait:nuke} — дальше шаги
-     * отсчитываются от прихода к клиенту пакета нового подрыва (один раз за сценарий; сервер может отставать от часов
-     * клиента, и снимок «через N тиков после пуска» вышел бы до подрыва), {@code shot:имя} — снимок экрана
-     * {@code имя_тик.png}, {@code hud:off}/{@code hud:on} — скрыть и вернуть интерфейс (как F1: чат с ответами команд
-     * не закрывает кадр, а в лог клиента идёт как прежде). Шаги идут друг за другом: после команды — 40 тиков
-     * ({@code incoming.commands.gap}, от 1: счёт сущностей раз в секунду), после
-     * снимка — 20, после {@code hud:} — 1 (снимок берёт уже нарисованный кадр: в тот же тик он был бы ещё с интерфейсом),
-     * и {@code wait:N}
-     * прибавляется к ним ({@code cmd;wait:1200;shot:x} снимает через 1240 тиков после команды). Неверный {@code wait:}
-     * пишется в лог и пропускается: исключение здесь остановило бы загрузку модов, и «SCENARIO done» не пришёл бы.
+     * Commands from {@code incoming.commands} (semicolon-separated, except semicolons in brackets or quotes —
+     * {@link ScenarioCommands}) in the open world, to check modpack mods respond (e.g. a recording copy:
+     * {@code /dh pregen status}, {@code /chunky}); replies go to chat, chat to the client log.
+     * Besides commands: {@code wait:N} adds N ticks (0…{@value CommandPlan#MAX_WAIT}); {@code wait:nuke} makes later steps
+     * relative to client receipt of a new detonation packet (once per scenario; server may lag the client clock, so a
+     * "N ticks after launch" frame would precede detonation); {@code shot:name} takes a screenshot {@code name_tick.png};
+     * {@code hud:off}/{@code hud:on} hide/restore the interface (like F1: command-reply chat does not obscure the frame,
+     * but goes to the client log as before). Steps run sequentially: 40 ticks after a command ({@code incoming.commands.gap},
+     * from 1: count entities once per second), 20 after a screenshot, 1 after {@code hud:} (screenshot takes the already
+     * rendered frame; on the same tick it would still have the interface), with {@code wait:N} added to these
+     * ({@code cmd;wait:1200;shot:x} captures 1240 ticks after the command). Invalid {@code wait:} is logged and skipped:
+     * an exception here would stop mod loading and prevent "SCENARIO done".
      */
     private void planCommands() {
         CommandPlan plan = CommandPlan.parse(System.getProperty("incoming.commands", ""),
@@ -3420,17 +3419,17 @@ public final class ClientScenario {
     }
 
     /**
-     * Видео с борта ракеты (камера снаряда) с наводчиком на суше, потом — с наводчиком под водой (в стеклянном бассейне):
-     * картинка с борта не должна зависеть от того, где стоит игрок; потом — утром, как снимался план трейлера (цель
-     * к востоку). Кадры onboard-dry_*, onboard-wet_*, onboard-dawn_*; в лог — среда камеры и игрока
-     * и сколько частиц перед объективом. Мир идёт медленно (/tick rate 5): видео у цели — лишь пара десятков тиков.
+     * Video from the side of the rocket (projectile camera) with the gunner on land, then with the gunner under water (in a glass pool):
+     * The picture from the side should not depend on where the player is standing; then - in the morning, when the trailer shot was taken (target
+     *  to the east). Frames onboard-dry_*, onboard-wet_*, onboard-dawn_*; in the log - the environment of the camera and the player
+     *  and how many particles are in front of the lens. The world moves slowly (/tick rate 5): video at the target - just a couple of dozen ticks.
      */
     private void planOnboard() {
         at(40, () -> {
             cmd("time set 6000");
             cmd("weather clear");
             cmd("tp @s 0.5 150 0.5 0 20");
-            // дерево команд мода на месте: справка приходит в чат (и в лог клиента)
+            // the mod command tree is in place: help comes in the chat (and in the client log)
             cmd("incoming help");
         });
         at(200, () -> {
@@ -3491,8 +3490,8 @@ public final class ClientScenario {
     }
 
     /**
-     * РСЗО: залп из 12 по площади 12 блоков в 200 блоках впереди. Сначала камера снаряда — план у пакета на всю
-     * очередь; второй залп — глазами стреляющего: дуги дымных следов над головой и разрывы у цели.
+     * MLRS: salvo from 12 over an area of 12 blocks in 200 blocks ahead. First, the projectile camera - the package has a plan for the entire
+     *  queue; the second salvo - through the eyes of the shooter: arcs of smoky traces above the head and explosions at the target.
      */
     private void planRocket() {
         at(40, () -> {
@@ -3509,7 +3508,7 @@ public final class ClientScenario {
             target = new Vec3(0.5, 204, 200.5);
         });
         at(230, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
-        // сервер под llvmpipe отстаёт: снаряда в списке может ещё не быть — пробуем ещё раз
+        // the server running llvmpipe is lagging behind: the projectile may not be on the list yet - try again
         for (int t = 236; t <= 266; t += 10) {
             at(t, () -> {
                 if (!ua.zentix.incoming.client.cam.ProjectileCamera.isActive()) ua.zentix.incoming.client.cam.ProjectileCamera.cycle();
@@ -3518,12 +3517,12 @@ public final class ClientScenario {
         for (int t = 240; t <= 640; t += 6) shot(t, "rocket_cam");
         at(650, () -> {
             ua.zentix.incoming.client.cam.ProjectileCamera.exit();
-            // стоим сбоку от линии огня, смотрим на цель: видно и пакет, и дуги, и разрывы
+            // we stand to the side of the line of fire, look at the target: you can see the packet, the arcs, and the gaps
             cmd("tp @s 24.5 200 50.5 12 -14");
         });
         at(1500, () -> cmd(String.format(java.util.Locale.ROOT, "incoming salvo rocket 12 12 at %.1f %.1f %.1f", target.x, target.y, target.z)));
         for (int t = 1510; t <= 1900; t += 8) shot(t, "rocket_view");
-        // третий залп — сбоку от пусковой: облако старта (продукты, пока струя бьёт в землю, и поднятая пыль) и начало следов
+        // the third salvo is on the side of the launcher: the launch cloud (products while the jet hits the ground, and raised dust) and the beginning of the tracks
         at(1905, () -> {
             var mc = Minecraft.getInstance();
             var near = mc.level.getEntitiesOfClass(ua.zentix.incoming.entity.LauncherEntity.class, mc.player.getBoundingBox().inflate(200));
@@ -3540,8 +3539,8 @@ public final class ClientScenario {
     }
 
     /**
-     * Барражирующие: рой из трёх с катапульты по цели в 150 блоках (барраж 8 с). Камера первого: катапульта,
-     * подлёт, круг — «оператор» смотрит на цель; потом со стороны: круги над целью и пике по очереди.
+     * Loitering: a swarm of three from a catapult at a target in 150 blocks (barrage 8 s). Camera one: catapult,
+     *  approach, circle - the “operator” looks at the target; then from the side: circles over the target and dive in turn.
      */
     private void planLoiter() {
         at(40, () -> {
@@ -3566,7 +3565,7 @@ public final class ClientScenario {
         }
         for (int t = 240; t <= 700; t += 6) {
             at(t, () -> {
-                // оператор на круге смотрит на цель
+                // the operator on the circle looks at the target
                 Minecraft mc = Minecraft.getInstance();
                 if (mc.getCameraEntity() instanceof StrikeProjectile p && p.flightPhase() == ua.zentix.incoming.entity.FlightPhase.LOITER) {
                     Vec3 d = target.subtract(mc.gameRenderer.getMainCamera().getPosition());
@@ -3589,9 +3588,9 @@ public final class ClientScenario {
     }
 
     /**
-     * Эффекты за стеной: зритель в 40 блоках перед каменной стеной 60×14, за ней в 90 блоках — большие залпы РСЗО
-     * и ракет. Над стеной видно дым, за стеной — ничего. Потом камера водит взглядом влево-вправо: клубы у края
-     * кадра не должны пропадать. В лог — сколько частиц в движке (по слоям).
+     * Effects behind the wall: the viewer in 40 blocks in front of the stone wall 60×14, behind it in 90 blocks there are large salvoes of MLRS
+     *  and missiles. You can see smoke above the wall, nothing behind the wall. Then the camera moves its gaze left and right: the billows at the edge of the
+     *  frame should not disappear. In the log - how many particles are in the engine (by layers).
      */
     private void planOcclusion() {
         at(40, () -> {
@@ -3601,7 +3600,7 @@ public final class ClientScenario {
             Minecraft.getInstance().options.hideGui = true;
             Minecraft.getInstance().player.getAbilities().flying = true;
         });
-        // площадка выше любого рельефа (fill — не больше 32768 блоков за раз): зритель и цель на одной плоскости
+        // platform higher than any terrain (fill - no more than 32768 blocks at a time): viewer and target on the same plane
         at(200, () -> {
             cmd("fill -60 259 0 60 259 250 minecraft:smooth_stone");
             cmd("fill -30 260 80 30 273 81 minecraft:stone_bricks");
@@ -3611,7 +3610,7 @@ public final class ClientScenario {
         at(210, this::occlusionWhenReady);
     }
 
-    /** Сервер под llvmpipe отстаёт: залпы — когда зритель уже на площадке и стена построена. */
+    /** The server under llvmpipe lags behind: volleys - when the viewer is already on the site and the wall is built. */
     private void occlusionWhenReady() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player.getY() < 259 || !mc.level.getBlockState(new net.minecraft.core.BlockPos(0, 265, 80)).is(net.minecraft.world.level.block.Blocks.STONE_BRICKS)) {
@@ -3625,7 +3624,7 @@ public final class ClientScenario {
         for (int dt = 10; dt <= 1100; dt += 6) {
             int t = t0 + dt, d = dt;
             at(t, () -> {
-                // с 550-го тика после залпа — водим взглядом: ±35° за 3 с
+                // with 550-th tick after the volley - we look at: ±35° for 3 s
                 if (d >= 550) {
                     float yaw = (float) (35 * Math.sin((d - 550) / 60.0 * Math.PI));
                     cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 261 40.5 %.1f -8", yaw));
@@ -3647,7 +3646,7 @@ public final class ClientScenario {
         }
     }
 
-    /** Частицы эффектов перед объективом: ближе 12 блоков и в конусе 40° вокруг взгляда — такие закрывают собой весь кадр. */
+    /** Effect particles in front of the lens: closer to 12 blocks and in a cone 40° around the view - these cover the entire frame. */
     private static int particlesAtLens(net.minecraft.client.Camera camera) {
         var eye = camera.getPosition();
         var look = camera.getLookVector();
@@ -3655,20 +3654,20 @@ public final class ClientScenario {
     }
 
     /**
-     * Частицы: ванильные по слоям движка, частицы эффектов по группам пула — {@code cloud=живых/мест, отказано N}
-     * (сколько частиц группе не досталось места с запуска).
+     * Particles: vanilla by engine layer, effect particles by pool group; {@code cloud=live/slots, denied N}
+     * (number of particles denied a slot in the group since startup).
      */
     private static String particleLayers() {
-        StringBuilder sb = new StringBuilder("ваниль ").append(Minecraft.getInstance().particleEngine.countParticles()).append(';');
+        StringBuilder sb = new StringBuilder("vanilla ").append(Minecraft.getInstance().particleEngine.countParticles()).append(';');
         var pool = ua.zentix.incoming.client.fx.particle.FxPool.INSTANCE;
         for (var b : ua.zentix.incoming.client.fx.particle.FxBudget.values()) {
             sb.append(' ').append(b.name().toLowerCase(java.util.Locale.ROOT)).append('=').append(pool.live(b)).append('/').append(b.limit())
-                    .append(", отказано ").append(pool.refused(b)).append(';');
+                    .append(", denied ").append(pool.refused(b)).append(';');
         }
         return sb.toString();
     }
 
-    /** Пуск по точке на земле впереди и кадры каждые 10 тиков, пока летит и горит. */
+    /** launch at a point on the ground ahead and frames every 10 tick while it flies and burns. */
     private void strike(int start, String weapon, int frames) {
         at(start, () -> {
             cmd(String.format(java.util.Locale.ROOT, "incoming %s at %.1f %.1f %.1f", weapon, target.x, target.y, target.z));
@@ -3682,23 +3681,23 @@ public final class ClientScenario {
         double x = Math.floor(p.getX()) + 0.5, z = Math.floor(p.getZ() + distance) + 0.5;
         int y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(x), (int) Math.floor(z));
         if (y <= mc.level.getMinBuildHeight()) {
-            Incoming.LOG.warn("SCENARIO чанк цели ещё не загружен у клиента");
+            Incoming.LOG.warn("SCENARIO target chunk has not yet been loaded from the client");
             y = 64;
         }
         target = new Vec3(x, y, z);
     }
 
     /**
-     * {@code wait:nuke}: пока к клиенту не пришёл пакет нового подрыва, все шаги после этого тика сдвигаются на тик.
-     * Подрыва нет за {@value CommandPlan#MAX_WAIT} тиков — строка в лог, и шаги идут дальше.
+     * {@code wait:nuke}: until a packet of a new detonation has arrived to the client, all steps after this tick are shifted to tick.
+     *  There is no detonation after {@value CommandPlan#MAX_WAIT} tick - a line in the log, and the steps go further.
      */
     private void holdForNuke() {
         var known = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
         if (tick == nukeGate) known.forEach(a -> nukeGateSeen.add(a.d.id()));
         boolean arrived = known.stream().anyMatch(a -> !nukeGateSeen.contains(a.d.id()));
         if (arrived || nukeGateWaited >= CommandPlan.MAX_WAIT) {
-            if (arrived) Incoming.LOG.info("SCENARIO commands: подрыв пришёл, шаги ждали {} тиков", nukeGateWaited);
-            else Incoming.LOG.warn("SCENARIO commands: подрыва нет за {} тиков — шаги идут дальше", nukeGateWaited);
+            if (arrived) Incoming.LOG.info("SCENARIO commands: the explosion came, the steps were waiting {} tick", nukeGateWaited);
+            else Incoming.LOG.warn("SCENARIO commands: no detonation for {} tick - steps go further", nukeGateWaited);
             nukeGate = -1;
             return;
         }
@@ -3707,17 +3706,17 @@ public final class ClientScenario {
     }
 
     /**
-     * {@code wait:blast}: пока на встроенном сервере не начался новый взрыв, все шаги после этого тика (и следующие точки
-     * ожидания) сдвигаются на тик; свет взрыва доходит до клиента со следующим пакетом. Взрыва нет за
-     * {@link #BLAST_WAIT} тиков — строка в лог, и шаги идут дальше.
+     * {@code wait:blast}: Until a new explosion has started on the embedded server, all steps after this tick (and the following
+     *  waiting points) are shifted by tick; the light of the explosion reaches the client with the next package. There is no explosion for
+     * {@link #BLAST_WAIT} tick - a line in the log, and the steps move on.
      */
     private void holdForBlast() {
         int now = serverBlasts.get();
         if (blastGateSeen < 0) blastGateSeen = now;
         boolean arrived = now > blastGateSeen;
         if (arrived || blastGateWaited >= BLAST_WAIT) {
-            if (arrived) Incoming.LOG.info("SCENARIO commands: взрыв, шаги ждали {} тиков", blastGateWaited);
-            else Incoming.LOG.warn("SCENARIO commands: взрыва нет за {} тиков — шаги идут дальше", blastGateWaited);
+            if (arrived) Incoming.LOG.info("SCENARIO commands: explosion, steps were waiting {} tick", blastGateWaited);
+            else Incoming.LOG.warn("SCENARIO commands: no explosion after {} tick - steps go further", blastGateWaited);
             blastGates.removeFirst();
             blastGateSeen = -1;
             blastGateWaited = 0;
@@ -3732,7 +3731,7 @@ public final class ClientScenario {
         for (int g : rest) blastGates.add(g + 1);
     }
 
-    /** Самое долгое ожидание взрыва ({@code wait:blast}): полёт шахеда на 5 км, тиков. */
+    /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */
     private static final int BLAST_WAIT = 3600;
 
     private void at(int t, Runnable r) {
@@ -3755,7 +3754,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Повернуть взгляд на B-2 (по месту на сервере: в мире или вне его). */
+    /** Turn your gaze to B-2 (by location on the server: in the world or outside it). */
     private static void lookAtBomber() {
         var server = Minecraft.getInstance().getSingleplayerServer();
         server.execute(() -> {
@@ -3776,7 +3775,7 @@ public final class ClientScenario {
         });
     }
 
-    /** Снаряды на сервере: в мире и вне его, где, с какой скоростью, тикает ли их чанк. */
+    /** Projectiles on the server: in the world and outside it, where, at what speed, whether their chunk is ticking. */
     private static void dumpFlights() {
         var server = Minecraft.getInstance().getSingleplayerServer();
         server.execute(() -> {
@@ -3798,7 +3797,7 @@ public final class ClientScenario {
         Incoming.LOG.info("SCENARIO /{}", c);
     }
 
-    /** Полёты по данным сервера: оружие, фаза, время до удара — по ним видно, что пуск и полёт идут по плану. */
+    /** Flights according to server data: weapon, phase, time before impact - they show that the launch and flight are going according to plan. */
     private static void logFlights() {
         StringBuilder sb = new StringBuilder();
         for (var f : ua.zentix.incoming.client.hud.ClientFlights.all()) {
@@ -3816,7 +3815,7 @@ public final class ClientScenario {
         return String.format(java.util.Locale.ROOT, "%.0f %.0f %.0f", v.x, v.y, v.z);
     }
 
-    /** Что сейчас летит и насколько громко / каким тоном звучит (для проверки Доплера и задержки по логу). */
+    /** What is flying now and how loud/what tone it sounds (to check Doppler and log delay). */
     private void logSound() {
         Minecraft mc = Minecraft.getInstance();
         StringBuilder sb = new StringBuilder();

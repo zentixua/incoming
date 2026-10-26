@@ -23,6 +23,9 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
+ * Player priority is active only while Incoming holds other areas in the destination dimension. Releasing the last
+ * such area also removes arrival tickets, including queued releases; idle worlds do not track players.
+ * <p>
  * A player joining the world, changing dimension, or awaiting respawn has their location loaded before mod areas.
  * <p>
  * On their first tick, a player synchronously loads their chunk ({@code ServerPlayer.doTick →
@@ -85,8 +88,9 @@ import java.util.UUID;
  * <p>
  * Does not cover portal search ({@code PortalForcer}), which loads before the mod learns of it; respawn positions
  * replaced by another mod in {@code PlayerRespawnPositionEvent}, craft respawn, or world spawn when the bed is
- * gone. A player logging out from death screen and back in gets only an arrival ticket on the death chunk (their
- * object is there), with no respawn-site ticket: login has no death event.
+ * gone. Login from death screen initially holds the death chunk (the player object is there); dead-player ticks
+ * acquire a respawn-site ticket once that arrival ticket ends. They also acquire one if Incoming work starts
+ * after death.
  */
 public final class ArrivalTickets {
     /** Ticket level 33 − 7 = 26: below Lancet area center (27). */
@@ -100,9 +104,20 @@ public final class ArrivalTickets {
      * cannot do that (2 chunks/tick is 640 blocks/s); a teleport beyond view distance can.
      */
     public static final int JUMP = 2;
-    private static final TicketType<UUID> TYPE = TicketType.create("incoming_arrival", Comparator.<UUID>naturalOrder());
+    static final TicketType<UUID> TYPE = TicketType.create("incoming_arrival", Comparator.<UUID>naturalOrder());
 
     private ArrivalTickets() {}
+
+    /** Only active Incoming areas compete with player loading; arrival tickets cannot keep themselves alive. */
+    private static boolean needed(ServerLevel level) {
+        return level.hasData(ModAttachments.STRIKE_WORLD) && StrikeWorld.get(level).areas().hasOtherThan(TYPE);
+    }
+
+    private static void forget(ServerPlayer player) {
+        if (!player.hasData(ModAttachments.ARRIVAL.get())) return;
+        release(player.server, player.getUUID(), player.getData(ModAttachments.ARRIVAL.get()));
+        player.removeData(ModAttachments.ARRIVAL.get());
+    }
 
     /**
      * Player ticket location (non-persistent attachment). After respawn old and new player objects hold the same
@@ -142,35 +157,45 @@ public final class ArrivalTickets {
 
     /** Transfer slot to new player object (respawn, leaving the End): no serializer means no attachment copy. */
     public static void onClone(PlayerEvent.Clone e) {
-        if (e.getOriginal().hasData(ModAttachments.ARRIVAL.get())) {
-            e.getEntity().setData(ModAttachments.ARRIVAL.get(), e.getOriginal().getData(ModAttachments.ARRIVAL.get()));
+        if (!(e.getOriginal() instanceof ServerPlayer p) || !p.hasData(ModAttachments.ARRIVAL.get())) return;
+        Slot slot = p.getData(ModAttachments.ARRIVAL.get());
+        ServerLevel level = slot.dimension == null ? null : p.server.getLevel(slot.dimension);
+        if (level == null || !needed(level) || slot.held == null || !StrikeWorld.get(level).areas().holds(area(slot.held, p.getUUID()))) {
+            forget(p);
+            return;
         }
+        e.getEntity().setData(ModAttachments.ARRIVAL.get(), slot);
     }
 
     public static void onRespawn(PlayerEvent.PlayerRespawnEvent e) {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
         // Hardcore: player becomes a spectator without generation after the event.
         if (p.server.isHardcore() && !e.isEndConquered()) {
-            if (p.hasData(ModAttachments.ARRIVAL.get())) release(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
+            forget(p);
             return;
         }
         arrive(p);
     }
 
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
-        if (e.getEntity() instanceof ServerPlayer p && p.hasData(ModAttachments.ARRIVAL.get())) {
-            release(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
-        }
+        if (e.getEntity() instanceof ServerPlayer p) forget(p);
     }
 
     public static void onPlayerTick(PlayerTickEvent.Post e) {
-        if (!(e.getEntity() instanceof ServerPlayer p) || !p.hasData(ModAttachments.ARRIVAL.get())) return;
-        tick(p.server, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()), p.server.getPlayerList().getViewDistance(), p.isDeadOrDying());
+        if (!(e.getEntity() instanceof ServerPlayer p)) return;
+        boolean dead = p.isDeadOrDying();
+        if (p.hasData(ModAttachments.ARRIVAL.get())) {
+            Slot slot = p.getData(ModAttachments.ARRIVAL.get());
+            tick(p.server, p.getUUID(), slot, p.server.getPlayerList().getViewDistance(), dead);
+            if (slot.held == null && !needed(p.serverLevel())) forget(p);
+        }
+        // Incoming work may start after death, while the player is still on the death screen.
+        if (dead && (!p.hasData(ModAttachments.ARRIVAL.get()) || p.getData(ModAttachments.ARRIVAL.get()).held == null)) awaitRespawn(p);
     }
 
     /** World tick end: player jump within this world places an arrival ticket at the new site ({@link #moved}). */
     public static void onLevelTick(LevelTickEvent.Post e) {
-        if (!(e.getLevel() instanceof ServerLevel level)) return;
+        if (!(e.getLevel() instanceof ServerLevel level) || !needed(level)) return;
         int view = level.getServer().getPlayerList().getViewDistance();
         for (ServerPlayer p : level.players()) {
             if (!generates(p) || p.isDeadOrDying()) continue;
@@ -186,6 +211,11 @@ public final class ArrivalTickets {
      * @return ticket placed
      */
     public static boolean moved(ServerLevel level, ChunkPos now, UUID who, Slot slot, int viewDistance) {
+        if (!needed(level)) {
+            release(level.getServer(), who, slot);
+            slot.seenIn = null;
+            return false;
+        }
         boolean jumped = level.dimension().equals(slot.seenIn) && new ChunkPos(slot.seenAt).getChessboardDistance(now) >= JUMP;
         slot.seenIn = level.dimension();
         slot.seenAt = now.toLong();
@@ -201,8 +231,7 @@ public final class ArrivalTickets {
      * plot-grid point, or world spawn held by {@code START}.
      */
     private static void awaitRespawn(ServerPlayer p) {
-        Slot slot = p.getData(ModAttachments.ARRIVAL.get());
-        release(p.server, p.getUUID(), slot);
+        forget(p);
         if (!generates(p)) return;
         ServerLevel level = p.server.getLevel(p.getRespawnDimension());
         BlockPos pos = p.getRespawnPosition();
@@ -211,15 +240,17 @@ public final class ArrivalTickets {
             if (level.getGameRules().getInt(GameRules.RULE_SPAWN_CHUNK_RADIUS) > 0) return;
             pos = level.getSharedSpawnPos();
         }
+        if (!needed(level)) return;
         ChunkPos chunk = new ChunkPos(pos);
         // Bed on craft: Sable respawns at its own world point; plot grid must have no tickets.
         if (SubLevels.inPlotGrid(level, chunk)) return;
-        awaitRespawn(level, chunk, p.getUUID(), slot);
+        awaitRespawn(level, chunk, p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
     }
 
     /** Replace previous ticket with a {@link #LEASE}-tick respawn-site lease (also tests without a player). */
     public static void awaitRespawn(ServerLevel level, ChunkPos pos, UUID who, Slot slot) {
         release(level.getServer(), who, slot);
+        if (!needed(level)) return;
         slot.until = level.getGameTime() + LEASE;
         slot.respawn = true;
         StrikeWorld.get(level).areas().hold(level, area(pos, who), slot.until);
@@ -228,7 +259,10 @@ public final class ArrivalTickets {
     }
 
     private static void arrive(ServerPlayer p) {
-        if (!generates(p)) return;
+        if (!needed(p.serverLevel()) || !generates(p)) {
+            forget(p);
+            return;
+        }
         arrive(p.serverLevel(), p.chunkPosition(), p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
     }
 
@@ -240,6 +274,7 @@ public final class ArrivalTickets {
     /** Replace previous ticket with an arrival ticket on chunk {@code pos} (also tests without a player). */
     public static void arrive(ServerLevel level, ChunkPos pos, UUID who, Slot slot) {
         release(level.getServer(), who, slot);
+        if (!needed(level)) return;
         slot.until = level.getGameTime() + LIFESPAN;
         StrikeWorld.get(level).areas().hold(level, area(pos, who), slot.until);
         slot.dimension = level.dimension();
@@ -254,8 +289,12 @@ public final class ArrivalTickets {
     public static void tick(MinecraftServer server, UUID who, Slot slot, int viewDistance, boolean dead) {
         if (slot.held == null || slot.dimension == null) return;
         ServerLevel level = server.getLevel(slot.dimension);
+        if (level == null || !needed(level) || !StrikeWorld.get(level).areas().holds(area(slot.held, who))) {
+            release(server, who, slot);
+            return;
+        }
         if (slot.respawn) {
-            if (level == null || !dead) {
+            if (!dead) {
                 release(server, who, slot);
             } else {
                 slot.until = level.getGameTime() + LEASE;
@@ -263,7 +302,7 @@ public final class ArrivalTickets {
             }
             return;
         }
-        if (level == null || level.getGameTime() >= slot.until || coveredByPlayers(level, slot.held, Math.min(DISTANCE - 2, viewDistance))) {
+        if (level.getGameTime() >= slot.until || coveredByPlayers(level, slot.held, Math.min(DISTANCE - 2, viewDistance))) {
             release(server, who, slot);
         }
     }
@@ -280,7 +319,7 @@ public final class ArrivalTickets {
 
     /** Count player's arrival tickets (tests). */
     public static int count(ServerLevel level, UUID who) {
-        return StrikeWorld.get(level).areas().count(TYPE, who);
+        return level.hasData(ModAttachments.STRIKE_WORLD) ? StrikeWorld.get(level).areas().count(TYPE, who) : 0;
     }
 
     /** Chunk holding the slot's ticket, or null (tests). */

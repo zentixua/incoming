@@ -184,7 +184,7 @@ public final class SurfaceSupportGameTests {
             for (BlockPos rel : BlockPos.betweenClosed(new BlockPos(-5, -4, -5), new BlockPos(5, 0, 5))) {
                 BlockState left = level.getBlockState(a.offset(rel)), right = level.getBlockState(b.offset(rel));
                 h.assertTrue(left.equals(right), "same impact seed produced different craters at " + rel);
-                // в снятом может гореть топливо воронки (FuelFires): огонь — тоже яма
+                // in the removed one the fuel crater (FuelFires) can burn: fire is also a pit
                 if (left.isAir() || left.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) holes++;
             }
             h.assertTrue(holes > 0, "seed comparison did not excavate soil");

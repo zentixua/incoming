@@ -1,6 +1,8 @@
 // Свет шаров и факелов обычного оружия на мир и его тени (client/fx/layer/HeatPass) — общее у прохода видимости в
 // половинном разрешении (fx_heat_shadow: лучи тени) и прохода света во весь кадр (fx_heat: свет с этой видимостью).
-// Нужны pall.glsl (PALL_LAND) и mushroom.glsl (mushBallFace, mushBallFalloff) — до этого файла.
+// Только прямой свет: обратные квадраты, поглощение воздуха и косинус к грани. Рассеянный воздухом и отражённый
+// землёй свет обычной вспышки здесь не моделируется (приближение): тепловая кривая Glasstone для ядерки не задаёт
+// видимый угловой перенос обычного источника и давала рост света горизонтальной земли после ~0,05 дальности видимости.
 
 // шары света: столбец i — середина от глаза (xyz), радиус (w; 0 — нет); свет на белой стене лицом к шару, линейный
 // (rgb), ослабление воздуха, 1/блок (w)
@@ -29,6 +31,11 @@ const float SHADOW_SEEN = 3e-4;
 // и меньше этой доли всей освещённости грани — тоже: порог контраста глаза ~1–2 % (Blackwell, JOSA 36, 1946; ночью он
 // выше — порог с запасом) (HeatPass.WEBER)
 const float WEBER = 0.02;
+
+// Освещённость грани от ламбертова шара, на единицу яркости поверхности (HeatPass.ballGain).
+float heatBallGain(float d2, float r2, float sd, float nv) {
+    return r2 / max(d2, r2) * exp(-sd) * max(nv, 0.0);
+}
 
 // Часть [t.x, t.y] отрезка от a (от точки грани) по единичному u, что над гранью с нормалью n (HeatPass.above); пусто —
 // y <= x
@@ -135,15 +142,13 @@ vec3 heatBall(int i, vec3 p, vec3 n, out vec3 direct) {
     float d2 = dot(l, l), d = sqrt(d2);
     vec3 v = l / max(d, 1e-3);
     float sd = HeatLightColor[i].w * d, nv = dot(n, v);
-    vec3 c = HeatLightColor[i].rgb * mushBallFalloff(d2, b.w * b.w);
-    if (d > b.w) direct = c * (exp(-sd) * max(nv, 0.0));
-    return c * mushBallFace(nv, v.y, n.y, sd, PALL_LAND, 1.0, 0.0);
+    vec3 c = HeatLightColor[i].rgb * heatBallGain(d2, b.w * b.w, sd, nv);
+    if (d > b.w) direct = c;
+    return c;
 }
 
-// Факел i на грани: прямой свет (возврат: интеграл по частям над гранью), рассеянный воздухом и отражённый землёй —
-// around (как у шара в середине части), target — середина прямого света по частям над гранью (к ней луч тени)
-vec3 heatJet(int i, vec3 p, vec3 n, out vec3 around, out vec3 target) {
-    around = vec3(0.0);
+// Факел i на грани: прямой свет (интеграл по частям над гранью); target — середина этого света (к ней луч тени).
+vec3 heatJet(int i, vec3 p, vec3 n, out vec3 target) {
     target = p;
     vec4 j = HeatJet[i];
     if (j.w <= 0.0) return vec3(0.0);
@@ -167,10 +172,7 @@ vec3 heatJet(int i, vec3 p, vec3 n, out vec3 around, out vec3 target) {
         float mid = 0.5 * (t0 + t1), w = sz.y + sz.z * mid;
         vec3 l = a + u * mid;
         float d2 = max(dot(l, l), 0.25 * (t1 - t0) * (t1 - t0) + w * w), d = sqrt(d2);
-        vec3 v = l / max(length(l), 1e-3);
-        float sd = sz.w * d, nv = dot(n, v);
-        float rest = mushBallFace(nv, v.y, n.y, sd, PALL_LAND, 1.0, 0.0) - exp(-sd) * max(nv, 0.0);
-        around += q * ((t1 - t0) / d2 * rest);
+        float sd = sz.w * d;
         vec2 above = heatAbove(a, u, vec2(t0, t1), n);
         vec3 e = q * (exp(-sd) * heatSegment(a, u, above, n, w * w));
         direct += e;
@@ -192,9 +194,9 @@ vec3 heatLight(vec3 p, vec3 n, vec4 ballSeen, vec4 jetSeen) {
         sum += lit - direct * (1.0 - ballSeen[i]);
     }
     for (int i = 0; i < 4; i++) {
-        vec3 around, target;
-        vec3 direct = heatJet(i, p, n, around, target);
-        sum += direct * jetSeen[i] + around;
+        vec3 target;
+        vec3 direct = heatJet(i, p, n, target);
+        sum += direct * jetSeen[i];
     }
     return sum;
 }
@@ -211,9 +213,9 @@ void heatShadows(vec3 p, vec3 n, float prior, float pixel, out vec4 ballSeen, ou
         vec3 direct;
         total += dot(heatBall(i, p, n, direct), LUMA);
         ballLum[i] = dot(direct, LUMA);
-        vec3 around, target;
-        vec3 jet = heatJet(i, p, n, around, target);
-        total += dot(jet + around, LUMA);
+        vec3 target;
+        vec3 jet = heatJet(i, p, n, target);
+        total += dot(jet, LUMA);
         jetLum[i] = dot(jet, LUMA);
     }
     float seen = max(SHADOW_SEEN, WEBER * total);
@@ -221,8 +223,8 @@ void heatShadows(vec3 p, vec3 n, float prior, float pixel, out vec4 ballSeen, ou
     for (int i = 0; i < 4; i++) {
         if (ballLum[i] > seen) ballSeen[i] = heatBallSeen(from, HeatLights[i].xyz, HeatLights[i].w);
         if (jetLum[i] > seen) {
-            vec3 around, target;
-            heatJet(i, p, n, around, target);
+            vec3 target;
+            heatJet(i, p, n, target);
             jetSeen[i] = heatBlocked(from, target);
         }
     }

@@ -1,12 +1,10 @@
-# Страницы Modrinth и CurseForge — только ручным запуском (Actions → publish → Run workflow), по шагам:
-#   draft   — Modrinth: черновик страницы (нет проекта — создаётся) или его обновление из docs/store, иконка и
-#             галерея, какие уже есть в репозитории, jar выпуска; всё видно только команде проекта. Повторять можно.
-#   submit  — Modrinth: черновик — на проверку; CurseForge: jar выпуска (первый файл отправляет проект на проверку).
-#   release — новый выпуск после проверки: страница Modrinth из docs/store, jar — на Modrinth и CurseForge.
-# Выпуск — v<version> на GitHub (workflow build с release=true), пусто — последний. Заметки — docs/releases/<version>.md
-# с ветки запуска, нет там — тело выпуска. Без секрета MODRINTH_TOKEN Modrinth пропускается, без CURSEFORGE_TOKEN
-# или переменной CURSEFORGE_ID (проект CurseForge создаётся руками на сайте) — CurseForge. Поля и картинки —
-# docs/store/modrinth.json, листинг — docs/store/listing.md («Publishing»).
+# Manual store publishing: draft creates/updates the private Modrinth page; submit requests review;
+# release uploads a version. Pages/media use the workflow revision only when explicitly requested
+# (always for draft). The jar, changelog and environment come from the selected GitHub release tag;
+# the downloaded jar must match its GitHub SHA256 digest and embedded version.
+# A store with no credentials is disabled. Partial CurseForge configuration is an error, including
+# the separate CURSEFORGE_API_KEY used to check existing files before upload. Required page media
+# must all exist before any remote mutation. No release or publishing runs automatically.
 name: publish
 run-name: publish ${{ inputs.step }} ${{ inputs.version || '(последний выпуск)' }}
 
@@ -22,6 +20,10 @@ on:
         description: Выпуск на GitHub без «v» (3.0.0); пусто — последний
         type: string
         required: false
+      update_page:
+        description: Update the Modrinth page and media from this workflow revision (draft always does)
+        type: boolean
+        default: false
 
 # два запуска не создают проект дважды
 concurrency:
@@ -36,6 +38,9 @@ jobs:
     name: ${{ inputs.step }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: write
     env:
       HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
       HAS_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' && vars.CURSEFORGE_ID != '' }}
@@ -45,10 +50,24 @@ jobs:
         create-aeronautics(optional){modrinth:create-aeronautics}#(ignore:curseforge)
         sable(optional){modrinth:sable}{curseforge:sable}
         distanthorizons(optional){modrinth:distanthorizons}{curseforge:distant-horizons}
+        voxy(optional){modrinth:voxy}#(ignore:curseforge)
+        roxy(optional){modrinth:roxy}{curseforge:roxy}
+        lss(optional){modrinth:lod-server-support}#(ignore:curseforge)
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+
+      - name: Validate store configuration
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          STEP: ${{ inputs.step }}
+        run: python3 tools/release_checks.py stores "$STEP"
+      - name: Validate store drafts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_store*.py' -v
 
       - name: Выпуск
         id: rel
@@ -56,53 +75,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ inputs.version }}
-          STEP: ${{ inputs.step }}
         run: |
-          v=${VERSION#v}
-          [ -n "$v" ] || v=$(gh release view --json tagName -q .tagName | sed 's/^v//')
-          case $v in ''|*[!0-9A-Za-z.+-]*) echo "::error::Версия «$v» — не номер выпуска"; exit 1 ;; esac
-          mkdir -p dist
-          gh release download "v$v" --pattern "incoming-$v.jar" --dir dist
-          if [ -f "docs/releases/$v.md" ]; then
-            cp "docs/releases/$v.md" dist/changelog.md
-            notes="docs/releases/$v.md ($GITHUB_REF_NAME)"
-          else
-            gh release view "v$v" --json body -q .body > dist/changelog.md
-            notes="тело выпуска v$v"
-          fi
-          # окружение версии для Modrinth и CurseForge — из client_side/server_side страницы
-          environment=$(jq -r '[(.client_side | {required: "client", optional: "client?"}[.] // empty),
-            (.server_side | {required: "server", optional: "server?"}[.] // empty)] | join(" | ")' docs/store/modrinth.json)
-          {
-            echo "version=$v"
-            echo "jar=dist/incoming-$v.jar"
-            echo "environment=$environment"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "Incoming $v, шаг $STEP; заметки — $notes"
-            [ "$HAS_MODRINTH" = true ] || echo "- Modrinth пропущен: нет секрета MODRINTH_TOKEN"
-            [ "$STEP" = draft ] || [ "$HAS_CURSEFORGE" = true ] ||
-              echo "- CurseForge пропущен: нет секрета CURSEFORGE_TOKEN или переменной CURSEFORGE_ID"
-          } >> "$GITHUB_STEP_SUMMARY"
-          [ "$HAS_MODRINTH" = true ] || echo "::notice::Modrinth пропущен: нет секрета MODRINTH_TOKEN"
-          [ "$STEP" = draft ] || [ "$HAS_CURSEFORGE" = true ] ||
-            echo "::notice::CurseForge пропущен: нет секрета CURSEFORGE_TOKEN или переменной CURSEFORGE_ID"
+          python3 tools/prepare_publish.py
 
       - name: "Modrinth: страница"
         id: page
-        if: env.HAS_MODRINTH == 'true' && inputs.step != 'submit'
+        if: env.HAS_MODRINTH == 'true' && (inputs.step == 'draft' || (inputs.step == 'release' && inputs.update_page))
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           STEP: ${{ inputs.step }}
           JAR: ${{ steps.rel.outputs.jar }}
         run: bash .github/scripts/modrinth.sh page "$STEP" "$JAR"
 
+      - name: "Modrinth: check release jar without changing the page"
+        id: version
+        if: env.HAS_MODRINTH == 'true' && inputs.step == 'release' && !inputs.update_page
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          JAR: ${{ steps.rel.outputs.jar }}
+        run: bash .github/scripts/modrinth.sh version "$JAR"
+
       # Kira-NT/mc-publish v3.3.1, закреплён коммитом: ему отдаются токены; площадка без токена пропускается
       - name: "Modrinth: версия"
-        if: steps.page.outputs.upload == 'true'
+        if: steps.page.outputs.upload == 'true' || steps.version.outputs.upload == 'true'
         uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
         with:
-          modrinth-id: ${{ steps.page.outputs.id }}
+          modrinth-id: ${{ steps.page.outputs.id || steps.version.outputs.id }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: ${{ steps.rel.outputs.jar }}
           name: Incoming ${{ steps.rel.outputs.version }}
@@ -121,13 +119,27 @@ jobs:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: bash .github/scripts/modrinth.sh submit
 
-      # после Modrinth: его сбой останавливает запуск до CurseForge, и повтор не выкладывает файл туда дважды
+      # Check and publish each store independently, including after a failure on the other store.
+      - name: "CurseForge: check for an existing jar"
+        id: curseforge
+        if: ${{ !cancelled() && steps.rel.outcome == 'success' && env.HAS_CURSEFORGE == 'true' && inputs.step != 'draft' }}
+        env:
+          CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          JAR: ${{ steps.rel.outputs.jar }}
+          VERSION: ${{ steps.rel.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 .github/scripts/curseforge_check.py "$JAR"
+
       - name: CurseForge
-        if: env.HAS_CURSEFORGE == 'true' && inputs.step != 'draft'
+        id: curseforge_upload
+        if: ${{ !cancelled() && steps.curseforge.outputs.upload == 'true' }}
         uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
         with:
           curseforge-id: ${{ vars.CURSEFORGE_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          retry-attempts: 1
           files: ${{ steps.rel.outputs.jar }}
           name: Incoming ${{ steps.rel.outputs.version }}
           version: ${{ steps.rel.outputs.version }}
@@ -138,3 +150,12 @@ jobs:
           java: 21
           environment: ${{ steps.rel.outputs.environment }}
           dependencies: ${{ env.DEPENDENCIES }}
+
+      - name: "CurseForge: record the upload outcome"
+        if: ${{ always() && steps.curseforge.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEPLOYMENT_ID: ${{ steps.curseforge.outputs.deployment_id }}
+          OUTCOME: ${{ steps.curseforge_upload.outcome }}
+        run: python3 .github/scripts/curseforge_check.py --record "$DEPLOYMENT_ID" "$OUTCOME"

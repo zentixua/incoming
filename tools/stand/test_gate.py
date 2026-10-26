@@ -1,4 +1,4 @@
-"""Шлагбаум, разбор и план стенда без игры: python3 -m unittest discover -s tools/stand -p 'test_*.py' (CI «Стенд сцен»)."""
+"""Scene bench look gate, parsing and planning without the game: python3 -m unittest discover -s tools/stand -p 'test_*.py' (CI "Стенд сцен")."""
 import json
 import math
 import os
@@ -24,7 +24,7 @@ def window(gpu50, thread95, fps=60.0, mspt=6.5):
 
 
 def run(scale=1.0, first=40.0, growth=1.10, packs=("none", "complementary"), name="x", mspt=6.5):
-    """Прогон: окна 16/40/100 × камеры, первый удар, накопление; scale — во сколько раз дороже кадр."""
+    """Run: 16/40/100 windows × cameras, first strike, accumulation; scale is the frame-cost multiplier."""
     p = {}
     for pack in packs:
         ws = {}
@@ -37,7 +37,7 @@ def run(scale=1.0, first=40.0, growth=1.10, packs=("none", "complementary"), nam
 
 
 def pair(a1=1.0, a2=1.0, **kw):
-    """Принятый парой: A1 и A2 (scale — во сколько раз дороже кадр)."""
+    """Accepted pair: A1 and A2 (scale is the frame-cost multiplier)."""
     return [run(scale=a1, name="A1", **kw), run(scale=a2, name="A2", **kw)]
 
 
@@ -54,7 +54,7 @@ class Pair(unittest.TestCase):
 
     def test_base_is_the_worse_accepted_run(self):
         a1, a2 = pair()
-        set_gpu(a1, 10.0), set_gpu(a2, 11.0)                 # база — худший, 11; допуск 25 % → до 13,75
+        set_gpu(a1, 10.0), set_gpu(a2, 11.0)                 # Baseline is the worse value, 11; 25 % tolerance allows up to 13,75
         row = next(r for r in gate.compare(set_gpu(run(), 13.7), [a1, a2])["rows"]
                    if r["window"] == "100/edge" and r["metric"] == "gpu.p50")
         self.assertAlmostEqual(row["base"], 11.0)
@@ -67,7 +67,7 @@ class Pair(unittest.TestCase):
         self.assertFalse(gate.compare(run(scale=1.27), pair())["pass"])
 
     def test_same_jar_in_one_session_passes(self):
-        # приёмка 25.10, v3.7.0 против себя на ноутбуке: A1 / B / A2, видеокарта p50 и процессор потока p95, мс
+        # Acceptance 25.10, v3.7.0 against itself on the laptop: A1 / B / A2, GPU p50 and thread CPU p95, ms
         acc = {"none": {"100/outside": ((29.98, 31.89, 18.66), (20.91, 25.51, 23.12)),
                         "100/edge": ((26.73, 28.97, 33.25), (16.29, 18.40, 21.01)),
                         "100/inside": ((65.62, 63.59, 74.03), (18.76, 18.63, 19.08))},
@@ -88,13 +88,13 @@ class Pair(unittest.TestCase):
                     r["packs"]["none"]["windows"][win]["thread"]["p95"] = t
             v = gate.compare(runs[1], [runs[0], runs[2]])
             self.assertTrue(v["pass"], (pack, v["fails"]))
-            # регрессия в разы (3.5.0, 3.7.0 против 3.4.1 — от 2,6 раза) на тех же данных — провал
+            # A several-fold regression (3.5.0, 3.7.0 against 3.4.1: from 2,6 times) on the same data fails
             for win in wins:
                 runs[1]["packs"]["none"]["windows"][win]["gpu"]["p50"] *= 2.6
             self.assertFalse(gate.compare(runs[1], [runs[0], runs[2]])["pass"], pack)
 
     def test_drift_between_a1_and_a2_cancels(self):
-        # видеокарта грелась весь сеанс: A1 быстрее, A2 медленнее, кандидат между ними — проходит
+        # GPU warmed throughout the session: A1 faster, A2 slower, candidate between them passes
         v = gate.compare(run(scale=1.08), pair(1.0, 1.09))
         self.assertTrue(v["pass"], v["fails"])
 
@@ -103,16 +103,16 @@ class Pair(unittest.TestCase):
         self.assertEqual(v["state"], gate.FAIL)
         self.assertTrue(any("100/" in f and "gpu.p50" in f for f in v["fails"]))
         self.assertTrue(any("100/" in f and "thread.p95" in f for f in v["fails"]))
-        # настенное Pre→Post и кадр — в отчёте, не в шлагбауме: в них ожидание драйвера и вытеснение чужими задачами
+        # Wall-clock Pre→Post and frame interval are reported but do not gate: they include driver waits and preemption by other jobs
         self.assertFalse(any("cpu.p95" in f or "interval.p95" in f for f in v["fails"]))
         self.assertTrue(any(r["metric"] == "cpu.p95" and not r["gated"] for r in v["rows"]))
 
     def test_regressions_like_3_7_0_fail(self):
-        # 3.7.0 против 3.4.1: видеокарта p50 в 2,6–9,3 раза (стенд, 25.10)
+        # 3.7.0 against 3.4.1: GPU p50 is 2,6–9,3 times higher (scene bench, 25.10)
         self.assertFalse(gate.compare(run(scale=2.6), pair(1.0, 1.08))["pass"])
 
     def test_exactly_at_tolerance_passes(self):
-        # A1 = 8, A2 = 10 мс, кандидат 12,5: ровно +25 % к худшему — проход (в двоичных дробях частное может выйти больше)
+        # A1 = 8, A2 = 10 ms, candidate 12,5: exactly +25 % over the worse value passes (binary division may be slightly higher)
         (a1, a2), b = pair(), run()
         for win in ("100/outside", "100/edge", "100/inside"):
             for r, val in ((a1, 8.0), (a2, 10.0), (b, 12.5)):
@@ -123,12 +123,12 @@ class Pair(unittest.TestCase):
         self.assertEqual(gate.compare(b, [a1, a2])["state"], gate.FAIL)
 
     def test_wide_pair_judges_by_the_worse_run(self):
-        # A1 1,0 и A2 1,4 (дым снаружи то в кадре, то нет): до 1,75 — проход, выше — провал
+        # A1 1,0 and A2 1,4 (outside smoke alternately in/out of frame): up to 1,75 passes, above fails
         self.assertTrue(gate.compare(run(scale=1.7), pair(1.0, 1.4))["pass"])
         self.assertFalse(gate.compare(run(scale=1.8), pair(1.0, 1.4))["pass"])
-        # провал самого кандидата широкая пара не объясняет
+        # A wide pair does not explain an invalid candidate run
         c = run()
-        c["packs"]["none"]["checks"] = ["нет события done"]
+        c["packs"]["none"]["checks"] = ["no done event"]
         self.assertEqual(gate.compare(c, pair(1.0, 1.4))["state"], gate.FAIL)
         c = run()
         del c["packs"]["none"]["windows"]["100/edge"]
@@ -142,7 +142,7 @@ class Pair(unittest.TestCase):
 
     def test_render_thread_cpu_regression_fails(self):
         c = run()
-        c["packs"]["none"]["windows"]["100/edge"]["thread"]["p95"] *= 1.5     # кадр упирается в видеокарту, интервал прежний
+        c["packs"]["none"]["windows"]["100/edge"]["thread"]["p95"] *= 1.5     # GPU-bound frame, interval unchanged
         v = gate.compare(c, pair())
         self.assertEqual(len(v["fails"]), 1, v["fails"])
         self.assertIn("thread.p95", v["fails"][0])
@@ -169,14 +169,14 @@ class Pair(unittest.TestCase):
         c["packs"]["none"]["windows"]["100/inside"]["gpu"] = None
         v = gate.compare(c, pair())
         self.assertFalse(v["pass"])
-        self.assertIn("нет числа у кандидата", v["fails"][0])
+        self.assertIn("no number for candidate", v["fails"][0])
 
     def test_other_gpu_or_frame_size_fails(self):
         c = run()
         c["packs"]["none"]["meta"]["gl"]["height"] = 1572
         v = gate.compare(c, pair())
         self.assertFalse(v["pass"])
-        self.assertIn("A1 снят иначе, чем кандидат: height 1572 против 1600", v["fails"][0])
+        self.assertIn("A1 captured differently from candidate: height 1572 versus 1600", v["fails"][0])
 
     def test_faster_passes(self):
         self.assertTrue(gate.compare(run(scale=0.5), pair())["pass"])
@@ -186,31 +186,31 @@ class Pair(unittest.TestCase):
         del c["packs"]["none"]["windows"]["100/outside"]
         v = gate.compare(c, pair())
         self.assertFalse(v["pass"])
-        self.assertIn("нет окна у кандидата", v["fails"][0])
+        self.assertIn("no window for candidate", v["fails"][0])
         a1, a2 = pair()
         del a2["packs"]["none"]["windows"]["100/outside"]
-        self.assertIn("нет окна у принятого", gate.compare(run(), [a1, a2])["fails"][0])
+        self.assertIn("no window for accepted", gate.compare(run(), [a1, a2])["fails"][0])
 
     def test_missing_gated_number_at_the_accepted_fails(self):
         a1, a2 = pair()
         a1["packs"]["none"]["windows"]["100/edge"]["thread"] = None
         v = gate.compare(run(), [a1, a2])
         self.assertFalse(v["pass"])
-        self.assertIn("нет числа у принятого", v["fails"][0])
+        self.assertIn("no number for accepted", v["fails"][0])
 
     def test_first_strike_without_a_number_fails(self):
         c = run()
         c["packs"]["none"]["first"] = {"worst_ms": None}
         v = gate.compare(c, pair())
         self.assertFalse(v["pass"])
-        self.assertIn("первый удар: нет числа у кандидата", v["fails"][0])
+        self.assertIn("first strike: no number for candidate", v["fails"][0])
 
     def test_accumulation_without_a_number_fails(self):
         c = run()
         c["packs"]["none"]["acc"]["growth"] = None
         v = gate.compare(c, pair())
         self.assertFalse(v["pass"])
-        self.assertIn("накопление: нет числа роста у кандидата", v["fails"][0])
+        self.assertIn("accumulation: no growth number for candidate", v["fails"][0])
 
     def test_scenes_outside_the_selection_are_not_judged(self):
         c, bs = run(), pair()
@@ -225,30 +225,30 @@ class Pair(unittest.TestCase):
 
     def test_invalid_run_of_the_pair_fails(self):
         c = run()
-        c["packs"]["none"]["checks"] = ["залп 100: 40 попаданий из 60 (timeout)"]
+        c["packs"]["none"]["checks"] = ["salvo 100: 40 hits out of 60 (timeout)"]
         self.assertFalse(gate.compare(c, pair())["pass"])
         a1, a2 = pair()
-        a2["packs"]["none"]["checks"] = ["нет события done"]
+        a2["packs"]["none"]["checks"] = ["no done event"]
         v = gate.compare(run(), [a1, a2])
-        self.assertIn("прогон принятого A2 не годен", v["fails"][0])
+        self.assertIn("accepted run A2 is invalid", v["fails"][0])
 
     def test_one_accepted_run_is_noted(self):
         v = gate.compare(run(scale=1.05), [run()])
         self.assertTrue(v["pass"])
-        self.assertTrue(any("один раз" in n for n in v["notes"]))
+        self.assertTrue(any("once" in n for n in v["notes"]))
 
     def test_first_strike_needs_double_and_100_ms(self):
-        self.assertTrue(gate.compare(run(first=90), pair(first=40))["pass"])     # вдвое, но меньше 100 мс
-        self.assertTrue(gate.compare(run(first=150), pair(first=90))["pass"])    # больше 100 мс, но не вдвое
+        self.assertTrue(gate.compare(run(first=90), pair(first=40))["pass"])     # Twice as high but under 100 ms
+        self.assertTrue(gate.compare(run(first=150), pair(first=90))["pass"])    # Over 100 ms but less than twice as high
         v = gate.compare(run(first=250), pair(first=90))
         self.assertFalse(v["pass"])
-        self.assertIn("первый удар", v["fails"][0])
+        self.assertIn("first strike", v["fails"][0])
 
     def test_accumulation_growth_beyond_accepted_fails(self):
-        self.assertTrue(gate.compare(run(growth=1.60), pair(growth=1.58))["pass"])  # растёт, но как у принятого
+        self.assertTrue(gate.compare(run(growth=1.60), pair(growth=1.58))["pass"])  # Growing, but like the accepted version
         v = gate.compare(run(growth=1.80), pair(growth=1.10))
         self.assertFalse(v["pass"])
-        self.assertIn("накопление", v["fails"][0])
+        self.assertIn("accumulation", v["fails"][0])
 
 
 class Decide(unittest.TestCase):
@@ -256,7 +256,7 @@ class Decide(unittest.TestCase):
         bad, ok = gate.compare_pack("none", run(scale=1.3)["packs"]["none"], [x["packs"]["none"] for x in pair()]), \
             gate.compare_pack("none", run()["packs"]["none"], [x["packs"]["none"] for x in pair()])
         self.assertEqual(gate.decide([ok])["state"], gate.PASS)
-        # провал не повторился — проходит, первый — в отчёте
+        # Failure did not recur: pass; the first attempt stays in the report
         d = gate.decide([bad, ok])
         self.assertEqual(d["state"], gate.PASS)
         self.assertEqual(d["tries"], 2)
@@ -279,35 +279,35 @@ class Look(unittest.TestCase):
         f = gate.look_flags(c, [b])
         self.assertEqual(len(f), 2)
         self.assertIn("100_edge", f[0])
-        self.assertIn("яркость", f[1])
+        self.assertIn("brightness", f[1])
 
     def test_flag_needs_both_base_runs(self):
-        # #468, Photon 100-hit 0.2 с: A1 0,53, A2 0,83 дымных пикселей, PR 0,82 — шум принятого, не PR
+        # 468, Photon 100-hit 0.2 s: A1 0,53, A2 0,83 smoky pixels, PR 0,82; accepted-run noise, not a PR change
         c = {"photon": {"100-hit_0.2s": {"smoke": 0.821, "luma": 0.683}}}
         a1 = {"photon": {"100-hit_0.2s": {"smoke": 0.531, "luma": 0.639}}}
         a2 = {"photon": {"100-hit_0.2s": {"smoke": 0.826, "luma": 0.677}}}
         self.assertEqual(gate.look_flags(c, [a1, a2]), [])
-        # none: PR ярче обоих (0,78 против 0,61 / 0,61) — правка PR
+        # none: PR brighter than both (0,78 versus 0,61 / 0,61), a PR change
         c = {"none": {"100-hit_0.2s": {"smoke": 0.033, "luma": 0.780}}}
         a1 = {"none": {"100-hit_0.2s": {"smoke": 0.020, "luma": 0.608}}}
         a2 = {"none": {"100-hit_0.2s": {"smoke": 0.022, "luma": 0.607}}}
         f = gate.look_flags(c, [a1, a2])
-        self.assertEqual(f, ["none 100-hit_0.2s: яркость 0.78 против 0.61 / 0.61"])
+        self.assertEqual(f, ["none 100-hit_0.2s: brightness 0.78 versus 0.61 / 0.61"])
 
 
-# нагрузка окна без чужих задач (results.host_in)
+# Window load without other jobs (results.host_in)
 QUIET = {"samples": 4, "covered": 1.0, "gpu_covered": 1.0, "cpu_foreign_max": 0.3, "cpu_foreign": 0.2, "gpu_foreign": 0, "units": {}}
 
 
 def host_sample(epoch, cpu_foreign=0.2, gpu_foreign=0, dt=5.0, profile="performance", units=None):
-    """Выборка процессора (client.Host); gpu — только сводка для ожидания тишины, разбор её не читает."""
+    """CPU sample (client.Host); gpu is only a summary for waiting for quiet, ignored by parsing."""
     return {"kind": "cpu", "epoch": epoch, "dt": dt, "phase": "run", "load1": 1.0, "cpu_total": cpu_foreign + 4, "cpu_own": 4.0,
             "cpu_foreign": cpu_foreign, "units": units or {}, "gpu": {"foreign_sm": gpu_foreign, "who": [], "temp": 70, "clock": 2500},
             "profile": profile}
 
 
 def gpu_cycles(t0, t1, foreign_sm=0, own_sm=30):
-    """Циклы видеокарты по 1 с подряд с концами t0 + 1 … t1 (client.PmonCycles): own_sm None — у своего клиента числа нет."""
+    """Consecutive 1 s GPU cycles ending at t0 + 1 … t1 (client.PmonCycles): own_sm None means no measurement for our client."""
     return [{"kind": "gpu", "epoch": float(t), "dt": 1.0, "foreign_sm": foreign_sm, "who": [], "own_sm": own_sm}
             for t in range(int(t0) + 1, int(t1) + 1)]
 
@@ -328,12 +328,12 @@ class Results(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             rows = ["frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages"]
-            for i in range(200):          # 10 мс кадр, 2 с; кадр 50 — со снимком (он сам длится 500 мс), 51 — после него
+            for i in range(200):          # 10 ms frames over 2 s; frame 50 takes a screenshot (it lasts 500 ms), 51 follows it
                 shot = 1 if i == 50 else 2 if i == 51 else 0
-                prev = 500.0 if i == 51 else 30.0 if i == 100 else 10.0    # кадр 99 длится 30 мс: худший в окне 100/edge
+                prev = 500.0 if i == 51 else 30.0 if i == 100 else 10.0    # Frame 99 lasts 30 ms, the worst in window 100/edge
                 rows.append(f"{i},{1000 + 10 * i},{prev},4.0,3.0,8.0,10.0,{shot},after_level=1.5;after_level+=3.0;tail=0.5")
             (d / "frames.csv").write_text("\n".join(rows) + "\n")
-            # часы стенда: 0 мс = настенные 1 000 000 с
+            # Bench clock: 0 ms = wall-clock 1 000 000 s
             ev = [{"type": "gl", "t_ms": 900, "renderer": "x", "version": "4.6", "vendor": "n", "width": 2560, "height": 1600},
                   {"type": "window", "t_ms": 1000, "name": "100/edge", "edge": "begin"},
                   {"type": "window", "t_ms": 2000, "name": "100/edge", "edge": "end"},
@@ -351,41 +351,41 @@ class Results(unittest.TestCase):
     def test_analyze_cuts_windows_and_drops_shot_frames(self):
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
         w = r["windows"]["100/edge"]
-        self.assertEqual(w["frames"], 98)            # кадры 0–99 без снимка и следующего
-        # длительность кадра 99 (начат в окне) — из строки кадра 100, за концом окна; снимок (500 мс) не в счёт
+        self.assertEqual(w["frames"], 98)            # Frames 0–99 excluding screenshot and following frame
+        # Frame 99 starts inside the window; its duration comes from frame 100 after the window; screenshot (500 ms) excluded
         self.assertEqual(w["interval"]["max"], 30.0)
         self.assertEqual(w["gpu"]["p50"], 8.0)
         self.assertEqual(w["thread"]["p95"], 3.0)
         self.assertEqual(w["cpu"]["p95"], 4.0)
-        self.assertEqual(w["bound"], "cpu")          # видеокарта 8 мс из 10 мс кадра — меньше 85 %
+        self.assertEqual(w["bound"], "cpu")          # GPU 8 ms of a 10 ms frame is less than 85 %
         self.assertEqual(w["stages"]["after_level+"]["mean"], 3.0)
         self.assertEqual(w["mspt"]["mean"], 12.0)
         self.assertEqual(w["probes"]["FxLayer.describeTiming"], "layer 3 ms")
-        self.assertEqual(w["host"]["samples"], 1)    # выборка 1 000 000–1 000 002 с = 0–2000 мс стенда
+        self.assertEqual(w["host"]["samples"], 1)    # Sample 1 000 000–1 000 002 s equals bench 0–2000 ms
         self.assertEqual(w["host"]["gpu_covered"], 1.0)
-        # первый удар: кадр 99 начат до попадания (1990 мс) и шёл в его миг (до 2020 мс) — его 30 мс и есть худший
+        # First strike: frame 99 started before impact (1990 ms) and spans it (to 2020 ms); its 30 ms is the worst frame
         self.assertEqual(r["first"]["worst_ms"], 30.0)
-        # окна плана обязательны: 100-hit, 100/outside и 100/inside не сняты
-        self.assertEqual(r["checks"], ["окно 100-hit: не снято", "окно 100/outside: не снято", "окно 100/inside: не снято"])
+        # Plan windows are required: 100-hit, 100/outside and 100/inside were not captured
+        self.assertEqual(r["checks"], ["window 100-hit: not captured", "window 100/outside: not captured", "window 100/inside: not captured"])
 
     def test_foreign_load_in_a_gated_window_is_reported_not_invalid(self):
         r = self.analyze([host_sample(1_000_002.0, cpu_foreign=3.1, dt=2.0, units={"incoming-job-gametest": 2.9}),
                           host_sample(1_000_004.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
-        # годность нагрузка не решает (от неё защищает пара в одном сеансе) — она в отчёте
-        self.assertFalse(any("ядра" in c for c in r["checks"]), r["checks"])
+        # Load does not determine validity (the same-session pair protects against it); it is reported
+        self.assertFalse(any("cores" in c for c in r["checks"]), r["checks"])
         load = [c for c in r["load"] if "100/edge" in c]
         self.assertEqual(len(load), 1, r["load"])
-        self.assertIn("3.1 ядра", load[0])
+        self.assertIn("3.1 cores", load[0])
         self.assertIn("incoming-job-gametest", load[0])
-        # чужая задача на видеокарте — один цикл в окне (между выборками процессора): цикл её и показывает
+        # Foreign GPU job: one cycle inside the window (between CPU samples), exposed by that cycle
         cycles = gpu_cycles(1_000_000, 1_000_004)
         cycles[1]["foreign_sm"] = 37
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, dt=2.0)] + cycles)
-        self.assertTrue(any("100/edge" in c and "видеокарта у чужих процессов — 37" in c for c in r["load"]), r["load"])
+        self.assertTrue(any("100/edge" in c and "GPU used by foreign processes — 37" in c for c in r["load"]), r["load"])
 
     def test_desktop_background_on_the_gpu_passes_but_a_foreign_job_does_not(self):
-        # окно 1–2 с, циклы по 0,2 с: рабочий стол хоста — 11 % в каждом пятом цикле (прогон 25.10: до 12 %, пока рисует
-        # клиент) — годен; чужая задача 15 % всё окно — нет (среднее), один цикл 37 % — нет (худший)
+        # Window 1–2 s, 0,2 s cycles: host desktop uses 11 % in every fifth cycle (run 25.10: up to 12 % while the
+        # client renders), valid; a foreign job at 15 % throughout fails (mean), one cycle at 37 % fails (worst)
         def cycles(values):
             return [{"kind": "gpu", "epoch": 1_000_001.0 + 0.2 * (k + 1), "dt": 0.2, "foreign_sm": v, "who": [], "own_sm": 80}
                     for k, v in enumerate(values)]
@@ -398,10 +398,10 @@ class Results(unittest.TestCase):
 
     def test_load_is_reported_in_the_first_strike_window_too(self):
         r = self.analyze([host_sample(1_000_002.0, dt=2.0), host_sample(1_000_004.0, cpu_foreign=7.0, dt=2.0)] + gpu_cycles(1_000_000, 1_000_004))
-        self.assertTrue(any("окно first" in c for c in r["load"]), r["load"])
+        self.assertTrue(any("window first" in c for c in r["load"]), r["load"])
 
     def test_first_strike_frame_longer_than_its_window_still_reports_the_load(self):
-        # кадр 995–6995 мс накрыл всё окно первого удара 1000–6000: кадров, начатых в окне, нет, а нагрузка — 7 ядер
+        # Frame 995–6995 ms covers the full first-strike window 1000–6000: no frame starts inside, but load is 7 cores
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             rows = ["frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages",
@@ -414,36 +414,36 @@ class Results(unittest.TestCase):
             (d / "host.jsonl").write_text("\n".join(json.dumps(x) for x in host) + "\n")
             r = results.analyze(d, plan.load(), ["first"])
             self.assertEqual(r["first"]["worst_ms"], 6000.0)
-            self.assertTrue(any("окно first" in c and "ядра" in c for c in r["load"]), r["load"])
-            self.assertTrue(any("окно first" in c and "37 % SM" in c for c in r["load"]), r["load"])
+            self.assertTrue(any("window first" in c and "cores" in c for c in r["load"]), r["load"])
+            self.assertTrue(any("window first" in c and "37 % SM" in c for c in r["load"]), r["load"])
 
     def test_window_tail_without_samples_is_reported(self):
-        # последняя выборка кончилась на 1,1 с окна 1–2 с: хвост без записи
+        # Last sample ends at 1,1 s of window 1–2 s: tail not recorded
         r = self.analyze([host_sample(1_000_001.1, dt=1.1)])
-        self.assertTrue(any("100/edge: нагрузка машины записана на 10%" in c for c in r["load"]), r["load"])
+        self.assertTrue(any("100/edge: machine load coverage is 10%" in c for c in r["load"]), r["load"])
 
     def test_missing_gpu_telemetry_is_not_zero(self):
-        # циклов нет вовсе (nvidia-smi нет или упал) — сводка в выборке процессора замером не считается
+        # No cycles at all (nvidia-smi missing or failed): GPU summary in a CPU sample does not count as measurement
         r = self.analyze([host_sample(1_000_004.0, dt=4.0)])
-        self.assertTrue(any("100/edge: видеокарта чужими процессами записана на 0%" in c for c in r["load"]), r["load"])
-        # циклы есть, но у своего рисующего клиента числа нет — драйвер не считал по процессам: «-» у чужих не ноль
+        self.assertTrue(any("100/edge: foreign-process GPU coverage is 0%" in c for c in r["load"]), r["load"])
+        # Cycles exist, but our rendering client has no number; the driver did not measure per process: foreign "-" is not zero
         r = self.analyze([host_sample(1_000_004.0, dt=4.0)] + gpu_cycles(1_000_000, 1_000_004, own_sm=None))
-        self.assertTrue(any("100/edge: видеокарта чужими процессами записана на 0%" in c for c in r["load"]), r["load"])
+        self.assertTrue(any("100/edge: foreign-process GPU coverage is 0%" in c for c in r["load"]), r["load"])
 
     def test_cycles_after_the_client_exits_do_not_cover_its_window(self):
-        # окно 1–2 с; клиент и чужая задача вышли на 1,5 с, заключительная выборка процессора — на 4 с: её отрезок
-        # накрывает хвост окна (процессор — по накопленным счётчикам, верно), а циклы видеокарты после выхода — без числа
-        # клиента и замером хвоста не становятся
+        # Window 1–2 s; client and foreign job exit at 1,5 s, final CPU sample at 4 s: its interval
+        # covers the window tail (correct for accumulated CPU counters), but GPU cycles after exit have no
+        # client number and do not measure the tail
         cycles = [{"kind": "gpu", "epoch": 1_000_001.5, "dt": 0.5, "foreign_sm": 40, "who": ["blender:40"], "own_sm": 30}]
         cycles += gpu_cycles(1_000_001.5, 1_000_004, own_sm=None)
         r = self.analyze([host_sample(1_000_001.0, dt=1.0), host_sample(1_000_004.0, dt=3.0)] + cycles)
         bad = [c for c in r["load"] if "100/edge" in c]
-        self.assertTrue(any("видеокарта чужими процессами записана на 50%" in c for c in bad), bad)
-        self.assertTrue(any("видеокарта у чужих процессов — 40" in c for c in bad), bad)
+        self.assertTrue(any("foreign-process GPU coverage is 50%" in c for c in bad), bad)
+        self.assertTrue(any("GPU used by foreign processes — 40" in c for c in bad), bad)
 
     def test_no_load_record_is_reported(self):
         r = self.analyze(None)
-        self.assertEqual([c for c in r["load"] if "100/edge" in c], ["окно 100/edge: нет записи нагрузки машины (host.jsonl)"])
+        self.assertEqual([c for c in r["load"] if "100/edge" in c], ["window 100/edge: no machine load record (host.jsonl)"])
         self.assertFalse(any("100/edge" in c for c in r["checks"]))
 
     def test_checks_catch_a_bad_run(self):
@@ -454,8 +454,8 @@ class Results(unittest.TestCase):
         res = {"meta": {"done": None, "impacts": {"100": {"got": 40, "expect": 100, "why": "timeout", "took_s": 300}}},
                "windows": {"100/edge": {"frames": 5, "gpu": None, "thread": None, "host": QUIET}}}
         bad = results.checks(ev, res)
-        # нет done, предел, команда, залп 100 не долетел, у acc нет конца, нет строки видеокарты, окно без меток, без
-        # процессора потока и без кадров
+        # No done, timeout, command, salvo 100 incomplete, acc has no end, no GPU line, unmarked window, no
+        # thread CPU and no frames
         self.assertEqual(len(bad), 9, bad)
         self.assertTrue(any("acc" in b for b in bad))
 
@@ -467,20 +467,20 @@ class Host(unittest.TestCase):
         self.assertTrue(client.heavy(host_sample(0, gpu_foreign=37)))
 
     def test_alignment_by_wall_clock(self):
-        ev = [{"type": "srv", "t_ms": 10_000.0, "epoch_ms": 5_010_000.0}]       # 0 мс стенда = 5000 с настенных
+        ev = [{"type": "srv", "t_ms": 10_000.0, "epoch_ms": 5_010_000.0}]       # Bench 0 ms = wall-clock 5000 s
         h = results.host_in([host_sample(5015.0, cpu_foreign=2.0), host_sample(5025.0, cpu_foreign=0.0)], ev, 10_000, 20_000)
         self.assertEqual(h["samples"], 1)
         self.assertEqual(h["cpu_foreign"], 2.0)
-        self.assertEqual(h["covered"], 0.5)                                 # 10–15 с окна — до первой выборки
+        self.assertEqual(h["covered"], 0.5)                                 # Window 10–15 s is before the first sample
         h = results.host_in([host_sample(5015.0, cpu_foreign=2.0), host_sample(5020.0, cpu_foreign=0.0)], ev, 12_500, 17_500)
         self.assertEqual(h["samples"], 2)
-        self.assertAlmostEqual(h["cpu_foreign"], 1.0)                       # среднее по перекрытию — в отчёт
-        self.assertEqual(h["cpu_foreign_max"], 2.0)                         # судит худшая выборка
+        self.assertAlmostEqual(h["cpu_foreign"], 1.0)                       # Report overlap-weighted mean
+        self.assertEqual(h["cpu_foreign_max"], 2.0)                         # Judge the worst sample
         self.assertEqual(h["covered"], 1.0)
         self.assertIsNone(results.host_in([], ev, 0, 1))
 
     def test_a_short_heavy_burst_is_not_averaged_away(self):
-        # 5 с чужой нагрузки в 3 ядра и 15 с по 0,2: среднее 0,9 — меньше порога, но задача шла внутри окна
+        # 5 s of foreign load on 3 cores and 15 s at 0,2: mean 0,9 is below threshold, but a job ran in the window
         ev = [{"type": "srv", "t_ms": 0.0, "epoch_ms": 0.0}]
         h = results.host_in([host_sample(5.0, cpu_foreign=3.0)] + [host_sample(5.0 * k, cpu_foreign=0.2) for k in (2, 3, 4)], ev, 0, 20_000)
         self.assertAlmostEqual(h["cpu_foreign"], 0.9)
@@ -505,7 +505,7 @@ class Host(unittest.TestCase):
 """
     @staticmethod
     def mine(pid, name):
-        """Своя cgroup — клиент 1593313 (java) и его KWin 1593256 (client.Host.classify с подставной cgroup)."""
+        """Our cgroup: client 1593313 (java) and its KWin 1593256 (client.Host.classify with a fake cgroup)."""
         h = client.Host.__new__(client.Host)
         h.own_pid = lambda p: p in ("1593313", "1593256")
         return h.classify(pid, name)
@@ -516,23 +516,23 @@ class Host(unittest.TestCase):
 
     def test_pmon_cycles(self):
         cs = self.cycles(self.PMON)
-        # 4 законченных цикла; последний (09:09:25) — недописанный, не цикл
+        # 4 complete cycles; the last (09:09:25) is incomplete, not a cycle
         self.assertEqual(len(cs), 4)
         t20 = time.mktime(time.strptime("20261025 09:09:20", "%Y%m%d %H:%M:%S")) + 0.5
         self.assertEqual([c["epoch"] - t20 for c in cs], [0, 1, 3, 3])
-        # первый — своей длины цикла; дальше — до конца прошлого (циклы подряд); пропуск секунды (22) — тоже подряд;
-        # два цикла в одной секунде (процесс повторился) — второй своей длины
+        # First cycle has its own duration; later ones extend to the previous cycle end (consecutive cycles); a missing
+        # second (22) is also consecutive; two cycles in one second (repeated process), the second has its own duration
         self.assertEqual([c["dt"] for c in cs], [client.PMON_S, 1.0, 2.0, client.PMON_S])
-        # «-» у простаивающих чужих (композитор, plasmashell) — 0; свои (клиент и его KWin) — не чужие
+        # "-" on idle foreign processes (compositor, plasmashell) means 0; our client and its KWin are not foreign
         self.assertEqual((cs[0]["foreign_sm"], cs[0]["own_sm"]), (4, 16))
         self.assertEqual(cs[0]["who"], ["kwin_wayland:4"])
-        # чужой клиент 37 %, а у своего числа нет — цикл без замера (решает разбор), чужие 37 — видны
+        # Foreign client at 37 %, our client has no number: cycle unmeasured (parser decides), foreign 37 remains visible
         self.assertEqual((cs[1]["foreign_sm"], cs[1]["own_sm"]), (37, None))
         self.assertEqual((cs[3]["foreign_sm"], cs[3]["own_sm"]), (2, 31))
 
     def test_own_client_that_exits_before_its_cycle_closes_stays_own(self):
-        # строка клиента пришла живой, а к строке следующего цикла (она закрывает цикл) JVM уже вышла и её /proc нет:
-        # её 30 % — не чужие, и цикл — замер (тишина на всё окно)
+        # Client line arrived alive; by the next cycle line (closing this cycle), JVM exited and /proc is gone:
+        # its 30 % is not foreign, and the cycle is measured (quiet over the full window)
         alive = {"1593313", "1593256"}
         h = client.Host.__new__(client.Host)
         h.own_pid = lambda pid: pid in alive
@@ -545,7 +545,7 @@ class Host(unittest.TestCase):
                 out += [p.feed(f"{stamp}    1593256   C+G      -      -      0      0      -      -    kwin_wayland"),
                         p.feed(f"{stamp}    1593313   C+G     30      7      -      -      -      -    java")]
             if t == 39:
-                alive.clear()           # клиент и его KWin вышли сразу после своей последней строки
+                alive.clear()           # Client and its KWin exit immediately after their last line
         cs = [c for c in out if c is not None]
         self.assertEqual(len(cs), 20)
         self.assertEqual({(c["foreign_sm"], c["own_sm"]) for c in cs}, {(0, 30)})
@@ -555,17 +555,17 @@ class Host(unittest.TestCase):
         self.assertEqual(results.foreign(h_in), [])
 
     def test_only_the_drawing_client_confirms_a_cycle(self):
-        # у JVM «-», у своего KWin число (и ноль) — замера нет; JVM нет вовсе — тоже
+        # JVM has "-", our KWin has a number (even zero): unmeasured; JVM entirely absent: also unmeasured
         dash = self.PMON.replace("1593313   C+G     16      6", "1593313   C+G      -      -").replace(
             "1593256   C+G      -      -      0      0", "1593256   C+G      2      0      0      0")
         cs = self.cycles(dash)
         self.assertIsNone(cs[0]["own_sm"])
-        self.assertEqual(cs[0]["foreign_sm"], 4)          # свой KWin — не чужой
+        self.assertEqual(cs[0]["foreign_sm"], 4)          # Our KWin is not foreign
         no_jvm = "\n".join(line for line in dash.splitlines() if "1593313" not in line)
         self.assertTrue(all(c["own_sm"] is None for c in self.cycles(no_jvm)))
 
     def test_reused_pid_is_classified_again(self):
-        # pid чужого процесса после его выхода достался своему клиенту: пара (pid, имя) другая — решается заново
+        # Foreign PID reused by our client after exit: (pid, name) differs, classify again
         seen = []
 
         def classify(pid, name):
@@ -584,7 +584,7 @@ class Host(unittest.TestCase):
         self.assertEqual(self.cycles("NVIDIA-SMI has failed\n\n" + self.PMON.splitlines()[0]), [])
 
     def test_gpu_watch_end_to_end(self):
-        # сборщик с поддельным nvidia-smi (CI без видеокарты): циклы → host_in окна; чужая задача 40 % в одном цикле
+        # Collector with fake nvidia-smi (CI without GPU): cycles → window host_in; foreign job at 40 % in one cycle
         lines = self.PMON.splitlines()
         with tempfile.TemporaryDirectory() as d:
             fake = Path(d) / "nvidia-smi"
@@ -600,27 +600,27 @@ class Host(unittest.TestCase):
                 os.environ["PATH"] = old
         self.assertEqual(len(cs), 2)
         t20 = cs[0]["epoch"]
-        ev = [{"type": "srv", "t_ms": 0.0, "epoch_ms": (t20 - 1.0) * 1000}]       # 0 мс стенда — начало первого цикла
+        ev = [{"type": "srv", "t_ms": 0.0, "epoch_ms": (t20 - 1.0) * 1000}]       # Bench 0 ms is the first cycle start
         h = results.host_in([host_sample(t20 + 1.0, dt=2.0)] + cs, ev, 0, 2000)
-        self.assertEqual(h["gpu_covered"], 0.5)        # второй цикл — без числа своего клиента
+        self.assertEqual(h["gpu_covered"], 0.5)        # Second cycle lacks our client number
         self.assertEqual(h["gpu_foreign"], 37)
         self.assertIsNone(client.GpuWatch(self.mine).stop() or None)
 
 
 class Checks(unittest.TestCase):
     def test_power_profile_is_reported_in_every_verdict_window(self):
-        # профиль сменился только в первом ударе и в последней минуте накопления, в «100» — нет
+        # Profile changes only in first strike and the last accumulation minute, not in "100"
         scene, ev = self.acc_events()
         low = dict(QUIET, profiles=["low-power"])
         ok = dict(QUIET, profiles=["performance"])
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {"100/edge": {"frames": 500, "gpu": {"p50": 1}, "thread": {"p95": 1}, "host": ok}},
                "first": {"worst_ms": 30.0, "host": low},
                "acc": {"growth": {"ratio": 1.2}, "load": results.acc_load(ev, scene, 0, 240_000), "host": {"first": ok, "last": low}}}
-        bad = [b for b in results.load_notes(res, scene, "performance") if "профиль" in b]
-        self.assertEqual(bad, ["окно first: профиль питания low-power, а в начале был performance",
-                               "накопление acc, последняя минута: профиль питания low-power, а в начале был performance"])
-        self.assertEqual([b for b in results.load_notes(res, scene) if "профиль" in b], [])
-        self.assertFalse(any("профиль" in b for b in results.checks(ev + [{"type": "gl"}], res, (), scene)))
+        bad = [b for b in results.load_notes(res, scene, "performance") if "profile" in b]
+        self.assertEqual(bad, ["window first: power profile low-power, initially performance",
+                               "accumulation acc, last minute: power profile low-power, initially performance"])
+        self.assertEqual([b for b in results.load_notes(res, scene) if "profile" in b], [])
+        self.assertFalse(any("profile" in b for b in results.checks(ev + [{"type": "gl"}], res, (), scene)))
 
     def test_load_is_reported_in_the_accumulation_minutes(self):
         scene, ev = self.acc_events()
@@ -628,20 +628,20 @@ class Checks(unittest.TestCase):
         busy = dict(quiet, cpu_foreign_max=7.0, units={"incoming-job-build": 6.8})
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {},
                "acc": {"growth": {"ratio": 1.2}, "load": results.acc_load(ev, scene, 0, 240_000), "host": {"first": quiet, "last": busy}}}
-        bad = [b for b in results.load_notes(res, scene) if "ядра" in b]
+        bad = [b for b in results.load_notes(res, scene) if "cores" in b]
         self.assertEqual(len(bad), 1, bad)
-        self.assertIn("последняя минута", bad[0])
+        self.assertIn("last minute", bad[0])
 
     def acc_events(self, late_ms=100, after=0, first=30, last=30, cmds=120, ran_late_ms=0):
-        """Накопление: окно 0–240 с, попаданий first в первую минуту, last в последнюю, after — после окна; волна — 10
-        команд, пять пусковых по две очереди через 1,5 с."""
+        """Accumulation: window 0–240 s, first hits in the first minute, last in the last, after beyond the window; a wave has 10
+commands, five launchers with two rounds 1,5 s apart."""
         scene = next(s for s in plan.load()["scenes"] if s.get("waves"))
         ev = [{"type": "window", "t_ms": 0, "name": "acc", "edge": "begin"}, {"type": "window", "t_ms": 240_000, "name": "acc", "edge": "end"},
               {"type": "salvo", "t_ms": -10_000, "id": "acc", "expect": 120, "commands": 120}]
 
         def due(i):
             return 20_000 * (i // 10) + 1500 * (i % 10 // 5)
-        # сервер выполняет команду после отправки; ran_late_ms — средние волны (4–7) он выполнил позже (встал)
+        # Server executes after sending; ran_late_ms: middle waves (4–7) executed later because the server stalled
         ev += [{"type": "cmd", "t_ms": due(i), "tag": "acc", "ok": True, "cmd": "c", "sent_ms": due(i) + late_ms,
                 "ran_ms": due(i) + late_ms + 20 + (ran_late_ms if 40 <= i < 80 else 0), "due_ms": due(i)} for i in range(cmds)]
         times = [i * 2000 for i in range(first)] + [100_000 + i * 1000 for i in range(120 - first - last - after)] \
@@ -653,35 +653,35 @@ class Checks(unittest.TestCase):
         scene, ev = self.acc_events(**kw)
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {},
                "acc": {"growth": {"ratio": 1.2}, "load": results.acc_load(ev, scene, 0, 240_000)}}
-        return [b for b in results.checks(ev + [{"type": "gl"}], res, (), scene) if "накопление" in b]
+        return [b for b in results.checks(ev + [{"type": "gl"}], res, (), scene) if "accumulation" in b]
 
     def test_planned_load_passes(self):
         self.assertEqual(self.acc_checks(), [])
 
     def test_waves_after_the_window_fail(self):
         bad = self.acc_checks(after=5)
-        self.assertTrue(any("после окна" in b for b in bad), bad)
+        self.assertTrue(any("after window" in b for b in bad), bad)
 
     def test_waves_fired_in_a_burst_fail(self):
         bad = self.acc_checks(late_ms=6000)
-        self.assertTrue(any("не по расписанию" in b for b in bad), bad)
+        self.assertTrue(any("off schedule" in b for b in bad), bad)
 
     def test_waves_run_late_by_a_stalled_server_fail(self):
-        # клиент слал вовремя, а вставший сервер выполнил средние волны на минуту позже: первая и последняя минуты целы
+        # Client sent on time, stalled server executed middle waves a minute later; first and last minutes remain intact
         bad = self.acc_checks(ran_late_ms=60_000)
         self.assertEqual(len(bad), 1, bad)
-        self.assertIn("не по расписанию", bad[0])
+        self.assertIn("off schedule", bad[0])
 
     def test_missing_wave_commands_fail(self):
         bad = self.acc_checks(cmds=100)
-        self.assertTrue(any("команд волн 100 из 120" in b for b in bad), bad)
+        self.assertTrue(any("wave commands 100 out of 120" in b for b in bad), bad)
 
     def test_thin_last_minute_fails(self):
         bad = self.acc_checks(last=15)
-        self.assertTrue(any("последнюю минуту окна 15" in b for b in bad), bad)
+        self.assertTrue(any("last window minute 15" in b for b in bad), bad)
 
     def test_part_of_a_wave_across_the_minute_edge_passes(self):
-        # окно начато поздним шахедом волны 0: быстрые шахеды следующих волн ложатся до границы слота (v3.7.0: 35/25)
+        # Window starts on a late Shahed of wave 0: faster Shaheds of later waves hit before the slot boundary (v3.7.0: 35/25)
         self.assertEqual(self.acc_checks(first=35, last=25), [])
         self.assertTrue(self.acc_checks(first=41, last=19))
 
@@ -690,13 +690,13 @@ class Checks(unittest.TestCase):
             d = raw_run(Path(t) / "r") / "none"
             ev = [json.loads(x) for x in (d / "events.jsonl").read_text().splitlines()]
             (d / "events.jsonl").write_text("\n".join(json.dumps(e) for e in ev if e.get("name") != "100-hit") + "\n")
-            # снят до окна 100-hit: по нынешним сценам оно обязательно, по своему плану — нет
-            self.assertIn("окно 100-hit: не снято", results.analyze(d, plan.load(), ["100"])["checks"])
+            # Captured before 100-hit was added: required by current scenes, not by its own plan
+            self.assertIn("window 100-hit: not captured", results.analyze(d, plan.load(), ["100"])["checks"])
             old = plan.build(plan.load(), ["100"])
             old["steps"] = [x for x in old["steps"] if x["do"] != "impact_window"]
             (d / "stand-plan.json").write_text(json.dumps(old))
             self.assertEqual(results.analyze(d, plan.load(), ["100"])["checks"], [])
-            # залп пуска вблизи (без ожидания конца) — тоже по плану прогона
+            # Nearby launch salvo (without waiting for its end) also follows the run plan
             self.assertEqual(results.shot_plan(d, plan.load())[1], set())
             launch = plan.build(plan.load(), ["grad"])
             (d / "stand-plan.json").write_text(json.dumps(launch))
@@ -705,7 +705,7 @@ class Checks(unittest.TestCase):
     def test_a_few_strikes_lost_in_the_air_are_fine(self):
         def bad(got, why="quiet", expect=100):
             res = {"meta": {"done": {"x": 1}, "impacts": {"100": {"got": got, "expect": expect, "why": why, "took_s": 30}}}, "windows": {}}
-            return [b for b in results.checks([{"type": "gl"}], res) if "попаданий" in b]
+            return [b for b in results.checks([{"type": "gl"}], res) if "hits" in b]
         self.assertEqual(bad(95), [])
         self.assertEqual(bad(90), [])
         self.assertTrue(bad(89))
@@ -715,18 +715,18 @@ class Checks(unittest.TestCase):
     def test_a_late_frame_after_the_salvo_makes_the_run_invalid(self):
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
         late = {"type": "late", "salvo": "100", "s": 15, "late_s": 4.2}
-        self.assertTrue(any("позже срока" in b for b in results.checks([{"type": "gl"}, late], res)))
-        self.assertFalse(any("позже срока" in b for b in results.checks([{"type": "gl"}], res)))
+        self.assertTrue(any("past deadline" in b for b in results.checks([{"type": "gl"}, late], res)))
+        self.assertFalse(any("past deadline" in b for b in results.checks([{"type": "gl"}], res)))
 
     def test_camera_frame_is_checked_against_every_hit_of_the_run(self):
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
         hits = [{"type": "impact", "salvo": "100", "t_ms": t} for t in (1000, 5000)]
         since = {"type": "since", "salvo": "100", "s": 15, "t_ms": 20_000}
-        bad = lambda ev: [b for b in results.checks([{"type": "gl"}] + ev, res) if "не в срок" in b]
+        bad = lambda ev: [b for b in results.checks([{"type": "gl"}] + ev, res) if "late" in b]
         self.assertEqual(bad(hits + [since]), [])
-        self.assertEqual(bad(hits + [dict(since, t_ms=22_000)]), [])          # +2 с ещё в срок
-        self.assertTrue(bad(hits + [dict(since, t_ms=22_500)]))              # опоздание, которое Director не поймал
-        # попадание позже (снаряд летел вне мира после конца залпа «тишиной»): кадр ближе к свежему взрыву
+        self.assertEqual(bad(hits + [dict(since, t_ms=22_000)]), [])          # +2 s still on time
+        self.assertTrue(bad(hits + [dict(since, t_ms=22_500)]))              # Lateness not caught by Director
+        # Later impact (off-world projectile after salvo ended by silence): frame closer to a fresh explosion
         self.assertTrue(bad(hits + [since, {"type": "impact", "salvo": "100", "t_ms": 30_000}]))
         self.assertTrue(bad([since]))
 
@@ -735,12 +735,12 @@ class Checks(unittest.TestCase):
         res = {"meta": {"done": {"x": 1}, "impacts": {}},
                "windows": {"100/outside": {"frames": 500, "gpu": {"p50": 1}, "thread": {"p95": 1}, "host": QUIET}}}
         bad = results.checks(ev, res, plan.windows(plan.load(), ["first", "100"]))
-        self.assertIn("окно 100/edge: нет кадров", bad)
-        self.assertIn("окно 100/inside: не снято", bad)
-        self.assertIn("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)", bad)
+        self.assertIn("window 100/edge: no frames", bad)
+        self.assertIn("window 100/inside: not captured", bad)
+        self.assertIn("first strike: no number (no window or no frame overlapped it)", bad)
 
     def test_stalled_first_strike_is_a_number(self):
-        # кадр начался до попадания и шёл 6 с: внутри 5-секундного окна начал кадров нет, но худший кадр — 6 с
+        # Frame starts before impact and lasts 6 s: no starts inside the 5 s window, but the worst frame is 6 s
         frames = [{"frame": 0, "t": 990.0, "shot": 0, "interval": 10.0}, {"frame": 1, "t": 1000.0 - 5, "shot": 0, "interval": 6000.0},
                   {"frame": 2, "t": 6995.0, "shot": 0, "interval": None}]
         fr = results.overlapping(frames, 1000, 6000)
@@ -749,8 +749,8 @@ class Checks(unittest.TestCase):
 
 def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0", mspt=6.5, power="performance", pack="none", file=None,
             once=None):
-    """Сырые данные прогона выборки «100» (по умолчанию пак none): meta.json, <пак>/frames.csv, events.jsonl и host.jsonl —
-    как пишет стенд; once — строки Iris {метод: значение}."""
+    """Raw "100" subset data (default pack none): meta.json, <pack>/frames.csv, events.jsonl and host.jsonl
+as written by the bench; once contains Iris {method: value} lines."""
     d = Path(d)
     (d / pack).mkdir(parents=True)
     rows = ["frame,t_ms,prev_interval_ms,cpu_ms,cpu_thread_ms,gpu_ms,prev_gpu_period_ms,shot,stages"]
@@ -781,7 +781,7 @@ def raw_run(d, name="r", gpu=8.0, renderer="RTX 4060", done=True, label="v3.7.0"
 
 
 class Iris(unittest.TestCase):
-    """Пак работает — по конвейеру Iris: имя пака остаётся и тогда, когда шейдер не собрался и рисует ваниль."""
+    """Check pack activity by the Iris pipeline: its name persists even if shader compilation failed and vanilla renders."""
 
     def checks(self, once, file="photon-shader.zip", pack="photon"):
         with tempfile.TemporaryDirectory() as root:
@@ -793,21 +793,21 @@ class Iris(unittest.TestCase):
 
     def test_fallback_to_vanilla_is_not_a_run(self):
         bad = self.checks({"getCurrentPackName": "photon-shader.zip", "isPackInUseQuick": "false"})
-        self.assertIn("шейдерпак photon-shader.zip не рисует (конвейер Iris — ваниль)", bad)
+        self.assertIn("shader pack photon-shader.zip is not rendering (Iris pipeline is vanilla)", bad)
 
     def test_unconfirmed_pack_is_not_a_run(self):
         bad = self.checks({"getCurrentPackName": "photon-shader.zip"})
-        self.assertTrue(any("не рисует" in x for x in bad), bad)
+        self.assertTrue(any("not rendering" in x for x in bad), bad)
 
     def test_none_needs_no_pipeline(self):
         self.assertEqual(self.checks({"getCurrentPackName": "(off)", "isPackInUseQuick": "false"}, file=None, pack="none"), [])
 
 
 class PairRuns(unittest.TestCase):
-    """Вердикт пары — заново из сырых данных каталога (stand.judge_pair), как у stand.py gate, pr и report.py."""
+    """Rejudge the pair from raw directory data (stand.judge_pair), as stand.py gate, pr and report.py do."""
 
     def out(self, root, gpus, packs=("none",)):
-        """Каталог пары: pair.json и прогоны по ролям {каталог: видеокарта p50}."""
+        """Pair directory: pair.json and runs by role {directory: GPU p50}."""
         d = Path(root) / "p"
         d.mkdir()
         (d / "pair.json").write_text(json.dumps({"name": "p", "packs": list(packs), "cand": {"label": "PR 1"}, "base": {"label": "v3.7.0"}}))
@@ -836,14 +836,14 @@ class PairRuns(unittest.TestCase):
             self.assertEqual(v["packs"]["none"]["earlier"][0]["state"], gate.FAIL)
 
     def test_a_passing_first_pair_decides_like_play(self):
-        # вторая пара, снятая под старым правилом (первая прошла бы под нынешним), — не в счёт
+        # Second pair captured under an old rule (the first would pass the current rule) is excluded
         with tempfile.TemporaryDirectory() as root:
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.1, "A2": 8.0, "A1-2": 8.0, "B-2": 12.0, "A2-2": 8.1}))
             self.assertEqual(v["state"], gate.PASS, v["fails"])
             self.assertEqual(v["packs"]["none"]["tries"], 1)
 
     def test_every_shot_pair_counts(self):
-        # --tries 3: две пары провалились, третья прошла — решает третья
+        # --tries 3: first two pairs fail, third passes; the third decides
         with tempfile.TemporaryDirectory() as root:
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 12.0, "A2": 8.1, "A1-2": 8.0, "B-2": 12.0, "A2-2": 8.1,
                                                  "A1-3": 8.0, "B-3": 8.2, "A2-3": 8.1}))
@@ -854,13 +854,13 @@ class PairRuns(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.0}))
             self.assertEqual(v["state"], gate.FAIL)
-            self.assertIn("не снята целиком (A2)", v["fails"][0])
+            self.assertIn("not fully captured (A2)", v["fails"][0])
 
     def test_pack_never_shot_fails(self):
         with tempfile.TemporaryDirectory() as root:
             v = stand.judge_pair(self.out(root, {"A1": 8.0, "B": 8.0, "A2": 8.0}, packs=("none", "photon")))
             self.assertEqual(v["packs"]["photon"]["state"], gate.FAIL)
-            self.assertIn("photon: пара не снята", v["fails"][0])
+            self.assertIn("photon: pair not captured", v["fails"][0])
 
     def test_warmup_is_not_judged(self):
         with tempfile.TemporaryDirectory() as root:
@@ -874,28 +874,28 @@ class PairRuns(unittest.TestCase):
             raw_run(d / "A2", "A2", done=False)
             v = stand.judge_pair(d)
             self.assertEqual(v["state"], gate.FAIL)
-            self.assertIn("нет события done", v["fails"][0])
+            self.assertIn("no done event", v["fails"][0])
 
     def test_power_profile_changed_mid_run_is_reported(self):
         with tempfile.TemporaryDirectory() as root:
             d = raw_run(Path(root) / "r", power="low-power")
             r = stand.analyze(d, write=False)["packs"]["none"]
-            self.assertTrue(any("профиль питания low-power" in c for c in r["load"]), r["load"])
+            self.assertTrue(any("power profile low-power" in c for c in r["load"]), r["load"])
             self.assertEqual(r["checks"], [])
 
     def test_report_shot_order_follows_the_plan(self):
         try:
             import report
         except ImportError:
-            self.skipTest("нет Pillow (report.py — через uv)")
-        # сцены без камер (пуск вблизи) — тоже: их кадры — шаги «кадр» плана
+            self.skipTest("Pillow missing (run report.py through uv)")
+        # Scenes without cameras (nearby launch) also qualify: their frames are plan "shot" steps
         names = report.shot_order(plan.load(), None)
         self.assertIn("100-hit_0.2s", names)
         self.assertIn("grad_40s", names)
         self.assertIn("100_edge", names)
 
     def test_report_and_gate_share_one_verdict_path(self):
-        # report.py берёт вердикт у stand (judge_pair — из сырых данных), а не из сохранённых results.json
+        # report.py gets its verdict from stand (judge_pair from raw data), not saved results.json
         src = (Path(__file__).parent / "report.py").read_text()
         self.assertIn("stand.judge_pair(", src)
         self.assertNotIn("results.json\").read_text", src)
@@ -906,13 +906,13 @@ class Pr(unittest.TestCase):
         rec = [{"filename": "mod/src/main/java/ua/zentix/incoming/util/Look.java",
                 "previous_filename": "mod/src/main/java/ua/zentix/incoming/client/fx/Look.java"},
                {"filename": "docs/x.md", "previous_filename": None}]
-        self.assertFalse(facing.player_facing([rec[0]["filename"]]))     # по новому имени одному — «не нужен»
+        self.assertFalse(facing.player_facing([rec[0]["filename"]]))     # The new name alone would report "not needed"
         paths = stand.pr_paths(rec)
         self.assertEqual(len(paths), 3)
         self.assertTrue(facing.player_facing(paths))
 
     def test_rejudge_post_checks_the_shot_pair(self):
-        # пара снята выборкой (только none): --rejudge --post с полной командой статус не ставит
+        # Pair captured as a subset (only none): --rejudge --post with the full command must not post status
         head = "ab" * 20
         with tempfile.TemporaryDirectory() as root:
             out = Path(root) / f"pr1-{head[:8]}"
@@ -927,12 +927,12 @@ class Pr(unittest.TestCase):
                     mock.patch.object(stand, "post_status") as post, mock.patch.object(stand, "judge_pair") as judge:
                 with self.assertRaises(SystemExit) as e:
                     stand.cmd_pr(a)
-            self.assertIn("снятая пара: none", str(e.exception))
+            self.assertIn("captured pair: none", str(e.exception))
             post.assert_not_called()
             judge.assert_not_called()
 
     def test_extra_scenes_may_post(self):
-        # «100» и одиночный удар: вердикт тот же (окна «100»), статус можно; без «100» — нельзя
+        # "100" plus a single strike: same verdict ("100" windows), status allowed; without "100", forbidden
         head = "cd" * 20
         files = json.dumps({"filename": "mod/src/main/java/ua/zentix/incoming/client/fx/A.java", "previous_filename": None})
         gh = lambda *args, json_out=False: {"headRefOid": head, "url": "u", "number": 1} if json_out else files
@@ -955,7 +955,7 @@ class Pr(unittest.TestCase):
                             stand.cmd_pr(a)
 
     def test_main_base_needs_a_jar(self):
-        # голова main после правки только docs/: build успешен, но мод не собирался и jar нет — база прежняя
+        # main head after docs-only change: build succeeds but mod not built and no jar; retain previous baseline
         def gh(*args, json_out=False):
             if json_out:
                 return [{"databaseId": 2, "headSha": "b" * 40}, {"databaseId": 1, "headSha": "a" * 40}]
@@ -976,7 +976,7 @@ class Pr(unittest.TestCase):
                   "tools/stand/src/main/resources/META-INF/accesstransformer.cfg", "mod/gradle/wrapper/gradle-wrapper.jar",
                   "tools/nested_kwin.sh", "tools/nested_kwin_bus.conf"):
             self.assertIn(f, names)
-        self.assertNotIn("tools/stand/results.py", names)    # разбор — не съёмка: принятый разбирается заново
+        self.assertNotIn("tools/stand/results.py", names)    # Parsing is not capture: accepted version is parsed again
 
     def test_java_of_the_launch_script(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1024,10 +1024,10 @@ class Plan(unittest.TestCase):
         r = [math.dist(p, (1000, 0)) for p in pts]
         self.assertLessEqual(max(r), 120.1)
         self.assertEqual(len(set(pts)), len(pts))
-        self.assertAlmostEqual(sum(r) / len(r) / 120, 2 / 3, delta=0.03)    # равномерно по площади: средний радиус 2/3 R
-        self.assertEqual(self.p, plan.build(self.scenes))                  # одни и те же у каждого прогона и версии
+        self.assertAlmostEqual(sum(r) / len(r) / 120, 2 / 3, delta=0.03)    # Uniform by area: mean radius 2/3 R
+        self.assertEqual(self.p, plan.build(self.scenes))                  # Identical for every run and version
         sel = next(x for x in self.salvos(plan.build(self.scenes, ["first", "one", "16", "40", "100"])) if x["id"] == "100")
-        self.assertEqual(sel["cmds"], s["cmds"])                          # выборка тех же сцен — те же точки
+        self.assertEqual(sel["cmds"], s["cmds"])                          # Same scene subset gives the same points
 
     def test_launch_points_and_cadence(self):
         gap = self.scenes["launch"]["gap_s"]
@@ -1039,7 +1039,7 @@ class Plan(unittest.TestCase):
             for i, c in enumerate(s["cmds"]):
                 self.assertAlmostEqual(math.dist(words(c)["from"], (s["x"], s["z"])), 400, delta=0.2)
                 self.assertAlmostEqual(s["delays"][i], base + (i // launchers) * gap)
-            # пуски с одной точки — не чаще раза в gap: одна пусковая
+            # Launches from one point at least gap apart: one launcher
             froms = [words(c)["from"] for c in s["cmds"]]
             for f in set(froms):
                 ds = sorted(s["delays"][i] for i, x in enumerate(froms) if x == f)
@@ -1055,11 +1055,11 @@ class Plan(unittest.TestCase):
         i = next(i for i, s in enumerate(steps) if s["do"] == "impact_window")
         w = steps[i]
         self.assertEqual((w["name"], w["salvo"], w["n"], w["s"]), ("100-hit", "100", 10, 10))
-        # камера с готовой землёй — до залпа, не наперегонки с ним (#471: сервер вставал на 50 мс/тик)
+        # Camera over ready terrain before salvo, without racing it (#471: server stalled at 50 ms/tick)
         self.assertEqual((steps[i - 2]["do"], steps[i - 1]["do"]), ("tp", "salvo"))
         self.assertEqual(steps[i - 2]["eye"], plan.camera(self.scenes, "outside", (1000.0, 0.0), 120)[0])
-        self.assertEqual(steps[i + 1]["do"], "await")                     # пока залп ещё ложится: окна «100/*» — после конца
-        self.assertFalse(w["name"].startswith(gate.GATED))                # в шлагбаум не входит
+        self.assertEqual(steps[i + 1]["do"], "await")                     # While salvo still hits: "100/*" windows follow its end
+        self.assertFalse(w["name"].startswith(gate.GATED))                # Excluded from the look gate
 
     def test_launch_close_ups(self):
         launches = self.salvos(launch=True)
@@ -1069,11 +1069,11 @@ class Plan(unittest.TestCase):
             i = steps.index(s)
             site = plan._site(self.scenes, next(x["site"] for x in self.scenes["scenes"] if x["id"] == s["id"]))
             eye, look = steps[i - 1]["eye"], steps[i - 1]["look"]
-            # камера в 30 м сбоку от пусковой, на высоте глаз, смотрит на неё
+            # Camera 30 m beside the launcher, at eye height, looking at it
             self.assertAlmostEqual(math.dist((eye[0], eye[2]), site), 30)
             self.assertAlmostEqual(eye[1] - self.scenes["ground"], 1.6)
             self.assertEqual((look[0], look[2]), site)
-            # цель далеко и почти поперёк взгляда: прилёты вне кадра
+            # Target far away and nearly across the view; impacts outside the frame
             target = (s["x"], s["z"])
             self.assertGreaterEqual(math.dist(target, site), 2000)
             view = (look[0] - eye[0], look[2] - eye[2])
@@ -1082,11 +1082,11 @@ class Plan(unittest.TestCase):
             self.assertLess(cos, math.cos(math.radians(80)))
             for c in s["cmds"]:
                 self.assertIn(f"from {site[0]:g} {site[1]:g}", c)
-            # окна от команды: 0–15 с и 30–40 с
+            # Windows from command: 0–15 s and 30–40 s
             self.assertEqual([x["do"] for x in steps[i + 1:i + 8]], ["window", "shot", "wait", "wait", "window", "shot", "wait"])
             self.assertEqual((steps[i + 1]["name"], steps[i + 1]["s"]), (f"{s['id']}/start", 15))
             self.assertEqual(steps[i + 2]["name"], f"{s['id']}_15s")
-            self.assertEqual(steps[i + 3]["s"] + steps[i + 4]["s"], 15)    # второе окно — с 30 с от команды
+            self.assertEqual(steps[i + 3]["s"] + steps[i + 4]["s"], 15)    # Second window starts 30 s after command
             self.assertEqual((steps[i + 5]["name"], steps[i + 5]["s"]), (f"{s['id']}/hang", 10))
             self.assertEqual(steps[i + 6]["name"], f"{s['id']}_40s")
             self.assertFalse(any(x["do"] == "await" and x["salvo"] == s["id"] for x in steps))
@@ -1095,10 +1095,10 @@ class Plan(unittest.TestCase):
         self.assertEqual(missile["cmds"], ["incoming salvo missile 1 0 at 2500 6000 from 0 6000 via 2500 6000"])
         self.assertEqual(shahed["cmds"], ["incoming salvo drone 1 0 at 2500 9000 from 0 9000 via 2500 9000"] * 5)
         self.assertEqual(shahed["delays"], [0, 1.5, 3, 4.5, 6])
-        # последние в плане: их прилёты не попадают в окна других сцен
+        # Last in the plan: their impacts do not enter other scenes windows
         others = [i for i, x in enumerate(steps) if x["do"] == "salvo" and x["id"] not in plan.launch_ids(self.scenes)]
         self.assertLess(max(others), steps.index(grad))
-        # конца не ждут — и годность этого не требует
+        # No wait for completion; validity does not require it either
         ev = [{"type": "gl"}, {"type": "salvo", "id": "grad"}]
         res = {"meta": {"done": {"x": 1}, "impacts": {}}, "windows": {}}
         self.assertFalse(any("grad" in b for b in results.checks(ev, res, (), None, plan.launch_ids(self.scenes))))
@@ -1106,7 +1106,7 @@ class Plan(unittest.TestCase):
         self.assertEqual(plan.windows(self.scenes, ["grad"]), ["grad/start", "grad/hang"])
 
     def test_camera_frames_at_fixed_times_after_the_last_hit(self):
-        # кадр и окно каждой камеры — через одно и то же время после последнего взрыва залпа у всех прогонов (#466)
+        # Every run captures each camera frame/window the same time after the last salvo explosion (#466)
         sc = self.scenes
         for sid in ("16", "40", "100"):
             steps = plan.build(sc, [sid])["steps"]
@@ -1117,7 +1117,7 @@ class Plan(unittest.TestCase):
             for i, x in since:
                 self.assertEqual(x["salvo"], sid)
                 self.assertEqual([y["do"] for y in steps[i - 1:i + 4]], ["tp", "since", "shot", "wait", "window"])
-        # срок первой камеры — после конца залпа «тишиной» и переноса камеры
+        # First-camera deadline follows the salvo end by silence and camera move
         self.assertGreater(sc["since_last_s"], sc["quiet_s"] + sc["settle_s"])
 
     def test_gated_windows_are_20_s(self):
@@ -1135,7 +1135,7 @@ class Plan(unittest.TestCase):
     def test_waves(self):
         acc = next(s for s in self.salvos() if s["id"] == "acc")
         self.assertEqual(acc["expect"], 90)
-        # волна — 10 ударов с пяти пусковых в две очереди, каждые 20 с, 3 минуты; у каждой волны — свой поворот узора
+        # Wave: 10 strikes from five launchers in two rounds, every 20 s for 3 minutes; each wave rotates its pattern
         self.assertEqual(acc["delays"], [20 * (i // 10) + 1.5 * (i % 10 // 5) for i in range(90)])
         waves = [tuple(words(c)["at"] for c in acc["cmds"][10 * k:10 * k + 10]) for k in range(9)]
         self.assertEqual(len(set(waves)), 9)
@@ -1148,7 +1148,7 @@ class Plan(unittest.TestCase):
         self.assertEqual(steps[i + 2]["do"], "impact_window")
 
     def test_client_keeps_drawing_after_the_last_window(self):
-        # хвост: цикл видеокарты, в котором кончилось последнее окно, закрывается и доходит до стенда, пока клиент рисует
+        # Tail: GPU cycle containing the last window end closes and reaches the bench while the client still renders
         for sel in (None, ["100"]):
             last = plan.build(self.scenes, sel)["steps"][-1]
             self.assertEqual(last, {"do": "wait", "s": self.scenes["end_tail_s"]})
@@ -1157,7 +1157,7 @@ class Plan(unittest.TestCase):
     def test_far_teleport_waits_longer(self):
         tps = [s for s in self.p["steps"] if s["do"] == "tp"]
         self.assertEqual(tps[0]["settle_s"], self.scenes["settle_far_s"])
-        self.assertEqual(tps[1]["settle_s"], self.scenes["settle_far_s"])    # F → C, 1 км
+        self.assertEqual(tps[1]["settle_s"], self.scenes["settle_far_s"])    # F → C, 1 km
         self.assertEqual(tps[2]["settle_s"], self.scenes["settle_s"])
 
     def test_unknown_scene(self):

@@ -6,42 +6,42 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Прямая видимость между двумя точками над рельефом: закрывают её земля и постройки — колонка, чей верх выше прямой
- * там, где прямая над ней проходит. Знают только готовые чанки (карта высот {@link Heightmap.Types#MOTION_BLOCKING_NO_LEAVES}):
- * колонка в неготовом чанке прямую не закрывает — чанков не грузить ({@code CLAUDE.md}). Листва не закрывает: карта
- * высот без листвы. Нависающий край (арка, навес) колонка считает сплошной до верха.
+ * Line of sight between two points over terrain: blocked by ground and buildings — columns whose tops exceed the line
+ * where it crosses them. Only ready chunks known (heightmap {@link Heightmap.Types#MOTION_BLOCKING_NO_LEAVES}): a column
+ * in an unready chunk does not block — do not load chunks ({@code CLAUDE.md}). Leaves do not block: leafless heightmap.
+ * An overhang (arch, canopy) counts as solid to its top.
  */
 public final class LineOfSight {
     private LineOfSight() {}
 
-    /** Верх колонки неизвестен: чанк не готов. */
+    /** Column top unknown: chunk not ready. */
     public static final int UNKNOWN = Integer.MIN_VALUE;
 
-    /** Первый воздух над колонкой (x, z) или {@link #UNKNOWN}. */
+    /** First air above column (x, z), or {@link #UNKNOWN}. */
     @FunctionalInterface
     public interface Columns {
         int top(int x, int z);
     }
 
     /**
-     * Ничто из известного не закрывает прямую {@code from → to}: каждая колонка, которую она пересекает (по сетке, без
-     * пропусков на срезанных углах — {@link GridWalk}), ниже прямой на всём её отрезке над колонкой.
+     * No known column blocks {@code from → to}: every intersected column (grid traversal, no clipped-corner gaps —
+     * {@link GridWalk}) is below the line along the whole segment above it.
      */
     public static boolean clear(Vec3 from, Vec3 to, Columns columns) {
         double dy = to.y - from.y;
         return GridWalk.walk(from.x, from.z, to.x, to.z, 1, (GridWalk.SpanVisitor) (x, z, t0, t1) -> {
             int top = columns.top(x, z);
-            // прямая над колонкой — отрезок, ниже всего она на одном из его концов
+            // line over a column is a segment, lowest at one endpoint
             return top == UNKNOWN || Math.min(from.y + dy * t0, from.y + dy * t1) >= top;
         }) >= 1;
     }
 
-    /** {@link #clear(Vec3, Vec3, Columns)} по картам высот готовых чанков мира. */
+    /** {@link #clear(Vec3, Vec3, Columns)} using ready world chunk heightmaps. */
     public static boolean clear(ServerLevel level, Vec3 from, Vec3 to) {
         return clear(from, to, new ReadyColumns(level));
     }
 
-    /** Карты высот готовых чанков: прямая идёт по колонкам подряд, чанк ищется один раз на 16 колонок. */
+    /** Ready chunk heightmaps: line follows consecutive columns, chunk lookup once per 16 columns. */
     private static final class ReadyColumns implements Columns {
         private final ServerLevel level;
         private int cx = Integer.MIN_VALUE, cz;

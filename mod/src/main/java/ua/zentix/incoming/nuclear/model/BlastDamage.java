@@ -3,66 +3,68 @@ package ua.zentix.incoming.nuclear.model;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Что волна обычного заряда ломает: кривая равного разрушения в осях «давление — импульс» по закону Джаррета и давление
- * газов взрыва в замкнутом помещении. Заряд — кг ТНТ, давление — кПа, импульс — Па·с; взрыв на земле
+ * What a conventional charge's blast breaks: an equal-damage curve in pressure–impulse coordinates using Jarrett's law,
+ * and explosion gas pressure in an enclosed room. Charge in kg TNT, pressure in kPa, impulse in Pa·s; surface explosion
  * ({@link BlastModel#surfaceOverpressureKpa}, {@link BlastModel#chemicalImpulse}).
  *
- * <p><b>Джаррет</b> (D. E. Jarrett, «Derivation of the British explosives safety distances», Annals of the New York Academy
- * of Sciences 152, 1968): радиус уровня разрушения кирпичных домов от бомб R = K·∛W / (1 + (3175/W)²)^⅙ (W — кг ТНТ,
- * R — м; K: A — почти полный снос 3,8, B — снос 50–75 % наружных стен 5,6, Cb — непригоден для жилья 9,6, Ca — умеренные
- * 28, D — окна и черепица 56). У большого заряда разрушает давление: R = K·∛W, и K — приведённая дальность, где давление
- * волны падает до порога. У малого — импульс: волна короче, чем стена успевает ответить, и радиус растёт как W^⅔.
+ * <p><b>Jarrett</b> (D. E. Jarrett, “Derivation of the British explosives safety distances”, Annals of the New York Academy
+ * of Sciences 152, 1968): bomb damage-level radius for brick houses R = K·∛W / (1 + (3175/W)²)^⅙ (W — kg TNT, R — m;
+ * K: A — nearly complete demolition 3.8, B — demolition of 50–75 % of exterior walls 5.6, Cb — uninhabitable 9.6,
+ * Ca — moderate 28, D — windows and roof tiles 56). For a large charge, pressure causes damage: R = K·∛W, and K is the
+ * scaled range where blast pressure falls to the threshold. For a small charge, impulse dominates: the blast is shorter
+ * than the wall's response time, and radius grows as W^⅔.
  *
- * <p><b>Кривая блока.</b> Порог давления блока P_c — тот же, что у ядерной волны ({@code BlockResponse}): K = приведённая
- * дальность, где давление большого заряда на земле равно P_c (у кладки 12 psi — 3,6, у дерева 5 psi — 5,6, как A и B у
- * Джаррета). Точки (P, I) волны на радиусе Джаррета этого K для зарядов от 1 кг до 10⁷ кг и есть кривая равного
- * разрушения: блок ломается, если его точка (P, I) выше и правее кривой. Гипербола (P − P_c)(I − I_c) = k ту же
- * зависимость не держит: на зарядах 3–2400 кг её ошибка против Джаррета 30–60 %, поэтому кривая — таблица по самой
- * формуле. Приближения: Джаррет выведен по кирпичным домам и бомбам 50–1000 кг, тот же переход 3175 кг взят для всех
- * блоков, ниже 1 кг кривая не продолжается (нужен импульс не меньше, чем у 1 кг, — оценка); у ядерной волны импульс на
- * порядки выше кривой, и ответ — по одному давлению, как у руин ({@code BlockResponseTest}).
+ * <p><b>Block curve.</b> The block pressure threshold P_c is the nuclear blast threshold ({@code BlockResponse}): K is the
+ * scaled range where a large surface charge's pressure equals P_c (12 psi masonry — 3.6, 5 psi wood — 5.6, like Jarrett's
+ * A and B). Blast points (P, I) at Jarrett's radius for that K, for charges from 1 kg to 10⁷ kg, form the equal-damage
+ * curve: a block breaks if its (P, I) point lies above and right of the curve. The hyperbola (P − P_c)(I − I_c) = k does
+ * not reproduce this relation: for 3–2400 kg charges its error against Jarrett is 30–60 %, so the curve is tabulated from
+ * the formula itself. Approximations: Jarrett was derived for brick houses and 50–1000 kg bombs; the same 3175 kg
+ * transition is used for all blocks; the curve is not extended below 1 kg (requires at least the 1 kg impulse — estimate).
+ * Nuclear blast impulse is orders of magnitude above the curve, giving a pressure-only response, as for ruins
+ * ({@code BlockResponseTest}).
  *
- * <p><b>Газы в помещении</b> (UFC 3-340-02, 2008, рис. 2-152; степенная подгонка — оценка, ±30 % в середине графика):
- * P_qs ≈ 2,25·(W/V)^0,72 МПа, V — свободный объём, м³. Давление держится, пока газы не вытекут через проёмы: спад за
- * τ = V / (C_d·A·c), C_d 0,6, c — 340 м/с (оценка: истечение газа через отверстие при скорости звука); импульс газов —
- * P_qs·τ. Без проёмов τ бесконечно — стены держат одно давление.
+ * <p><b>Indoor gases</b> (UFC 3-340-02, 2008, fig. 2-152; power fit — estimate, ±30 % in the graph's middle):
+ * P_qs ≈ 2.25·(W/V)^0.72 MPa, V — free volume, m³. Pressure lasts until gases escape through openings: decay time
+ * τ = V / (C_d·A·c), C_d 0.6, c — 340 m/s (estimate: gas escaping an opening at sound speed); gas impulse is P_qs·τ.
+ * Without openings τ is infinite — walls bear pressure alone.
  */
 public final class BlastDamage {
-    /** Переход от импульса к давлению у Джаррета, кг ТНТ. */
+    /** Jarrett's impulse-to-pressure transition, kg TNT. */
     public static final double JARRETT_W = 3175;
-    /** Уровни Джаррета: K, м/кг^⅓. */
+    /** Jarrett levels: K, m/kg^⅓. */
     public static final double JARRETT_A = 3.8, JARRETT_B = 5.6, JARRETT_CB = 9.6, JARRETT_CA = 28, JARRETT_D = 56;
-    /** Сетка зарядов кривой: от 1 кг до 10⁷ кг, 20 узлов на порядок. */
+    /** Charge grid of the curve: 1 kg to 10⁷ kg, 20 nodes per decade. */
     private static final int PER_DECADE = 20, NODES = 7 * PER_DECADE + 1;
-    /** Заряд «бесконечно большой» — по нему K порога. */
+    /** “Infinitely large” charge — used to derive threshold K. */
     private static final double HUGE = 1e12;
-    /** Коэффициент истечения через проём и скорость газа в нём, м/с (оценка). */
+    /** Opening discharge coefficient and gas speed through it, m/s (est.). */
     private static final double VENT_CD = 0.6, VENT_SPEED = 340;
 
     private static final ConcurrentHashMap<Double, Curve> CURVES = new ConcurrentHashMap<>();
 
     private BlastDamage() {}
 
-    /** Радиус уровня разрушения Джаррета, м. */
+    /** Jarrett damage-level radius, m. */
     public static double jarrett(double k, double tntKg) {
         if (tntKg <= 0) return 0;
         double x = JARRETT_W / tntKg;
         return k * Math.cbrt(tntKg) / Math.pow(1 + x * x, 1 / 6.0);
     }
 
-    /** Приведённая дальность, м/кг^⅓, где давление большого наземного заряда падает до {@code pcKpa}. */
+    /** Scaled range, m/kg^⅓, where a large surface charge's pressure falls to {@code pcKpa}. */
     public static double scaledRange(double pcKpa) {
         return BlastModel.rangeForSurfaceOverpressure(pcKpa, HUGE) / Math.cbrt(HUGE);
     }
 
-    /** Радиус, где блок с порогом {@code pcKpa} ломается от заряда {@code tntKg} в открытом поле, м (Джаррет). */
+    /** Radius where charge {@code tntKg} breaks a block of threshold {@code pcKpa} in an open field, m (Jarrett). */
     public static double breakRange(double pcKpa, double tntKg) {
         return jarrett(scaledRange(pcKpa), tntKg);
     }
 
     /**
-     * Импульс, Па·с, при котором волна давления {@code pKpa} ломает блок с порогом {@code pcKpa}; бесконечность — давление
-     * ниже порога (сколько ни держи — не сломает).
+     * Impulse, Pa·s, at which a blast of pressure {@code pKpa} breaks a block of threshold {@code pcKpa}; infinity — pressure
+     * below threshold (will not break it however long it lasts).
      */
     public static double impulseToBreak(double pKpa, double pcKpa) {
         if (pKpa <= pcKpa) return Double.POSITIVE_INFINITY;
@@ -81,33 +83,33 @@ public final class BlastDamage {
         return Math.exp(Math.log(i[lo]) + u * (Math.log(i[hi]) - Math.log(i[lo])));
     }
 
-    /** Ломает ли волна (давление {@code pKpa}, импульс {@code iPas}) блок с порогом {@code pcKpa}. */
+    /** Whether the blast (pressure {@code pKpa}, impulse {@code iPas}) breaks a block of threshold {@code pcKpa}. */
     public static boolean breaks(double pKpa, double iPas, double pcKpa) {
         return iPas >= impulseToBreak(pKpa, pcKpa);
     }
 
     /**
-     * Какая доля волны проходит дальше через сломанный блок: импульс, ушедший на разрушение (тот, что лежит на кривой при
-     * этом давлении), волна теряет, остальное идёт дальше. Блок на самом пороге гасит её целиком, блок глубоко в зоне —
-     * почти не мешает. Оценка: дифракции и отражения от обломков нет.
+     * Share of the blast passing through a broken block: the blast loses the impulse spent breaking it (on the curve at
+     * this pressure); the rest passes through. A block exactly at threshold absorbs it entirely; one deep in the zone barely
+     * impedes it. Estimate: no diffraction or reflection from debris.
      */
     public static double passes(double pKpa, double iPas, double pcKpa) {
         double need = impulseToBreak(pKpa, pcKpa);
         return need >= iPas ? 0 : 1 - need / iPas;
     }
 
-    /** Давление газов взрыва {@code tntKg} в замкнутом объёме {@code volumeM3}, кПа (UFC 3-340-02, подгонка — оценка). */
+    /** Explosion gas pressure for {@code tntKg} in enclosed volume {@code volumeM3}, kPa (UFC 3-340-02, fit — estimate). */
     public static double quasiStaticKpa(double tntKg, double volumeM3) {
         if (tntKg <= 0 || volumeM3 <= 0) return 0;
         return 2250 * Math.pow(tntKg / volumeM3, 0.72);
     }
 
-    /** Сколько держится давление газов в объёме {@code volumeM3} с проёмами {@code ventM2}, с (бесконечность — без проёмов). */
+    /** Gas pressure duration in volume {@code volumeM3} with openings {@code ventM2}, s (infinity — no openings). */
     public static double ventSeconds(double volumeM3, double ventM2) {
         return ventM2 <= 0 ? Double.POSITIVE_INFINITY : volumeM3 / (VENT_CD * ventM2 * VENT_SPEED);
     }
 
-    /** Кривая равного разрушения порога P_c: давление убывает, импульс растёт с зарядом. */
+    /** Equal-damage curve for threshold P_c: pressure decreases, impulse increases with charge. */
     private static final class Curve {
         final double[] p = new double[NODES], i = new double[NODES];
 

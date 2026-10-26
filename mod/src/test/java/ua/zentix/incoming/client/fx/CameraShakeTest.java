@@ -16,8 +16,8 @@ class CameraShakeTest {
     private static final int STEP = BodySway.RATE / 20;
 
     /**
-     * Волна на земле, где давление {@code psi}, от воздушного подрыва {@code kt} на лучшей высоте: {скоростной напор вдоль
-     * земли, Па; положительная фаза, с; давление фронта, Па}.
+     * Wave on the ground, where the pressure is {@code psi}, from the air blast {@code kt} at the best height: {velocity pressure along the
+     *  ground, Pa; positive phase, s; front pressure, Pa}.
      */
     private static double[] wave(double psi, double kt) {
         double h = Yield.optimalBurstHeight(kt), g = HobBlast.rangeFor(psi, h, kt);
@@ -25,32 +25,32 @@ class CameraShakeTest {
                 1000 * BlastModel.kpa(psi)};
     }
 
-    /** Волна {@code psi} от {@code kt} качнула игрока, что смотрит по курсу 0 (на +z); {@code away} — от взрыва к нему. */
+    /** Wave {@code psi} from {@code kt} shook the player who is looking at the rate 0 (at +z); {@code away} - from the explosion to him. */
     private static double[] sway(double psi, double kt, Vec3 away) {
         double[] w = wave(psi, kt);
         return CameraShake.sway(w[2], w[0], 1, w[1], 0, away, 0);
     }
 
     /**
-     * Ядерная волна наклоняет камеру по ветру от взрыва: взрыв впереди — запрокидывает, позади — клонит вниз, справа —
-     * наклоняет влево, на наклон тела. Ветер дует вдоль земли от эпицентра: высота взрыва над игроком направление не
-     * меняет (долю напора вдоль земли даёт сама волна, {@code Detonation.dynamicPressureKpa}).
+     * The nuclear wave tilts the camera in the wind from the explosion: the explosion in front - tilts, behind - tilts down, on the right -
+     *  tilts to the left, tilting the body. The wind blows along the ground from the epicenter: the height of the explosion above the player does not change the direction
+     *  (the share of the pressure along the ground is given by the wave itself, {@code Detonation.dynamicPressureKpa}).
      */
     @Test
     void nukeWindLeansAwayFromTheBurst() {
         CameraShake.reset();
         double peak = Math.toDegrees(BodySway.peak(sway(0.6, 2, new Vec3(0, 0, -1)), 0));
         assertTrue(peak > 0.5 && peak < Math.toDegrees(BodySway.BACK), "0,6 psi: " + peak);
-        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, 0, -1), 1)[0], 1e-6, "взрыв впереди — назад");
-        assertEquals(peak, extreme(0.6, 2, new Vec3(0, 0, 1), 1)[1], 1e-6, "взрыв позади — вниз");
-        assertEquals(-peak, extreme(0.6, 2, new Vec3(1, 0, 0), 1)[2], 1e-6, "взрыв справа — влево");
-        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, -1, -1), 1)[0], 1e-6, "над головой впереди — тоже назад");
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, 0, -1), 1)[0], 1e-6, "explosion ahead - back");
+        assertEquals(peak, extreme(0.6, 2, new Vec3(0, 0, 1), 1)[1], 1e-6, "explosion behind - down");
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(1, 0, 0), 1)[2], 1e-6, "explosion right - left");
+        assertEquals(-peak, extreme(0.6, 2, new Vec3(0, -1, -1), 1)[0], 1e-6, "above your head in front - also back");
     }
 
     /**
-     * Наклон тела поворачивает камеру вокруг горизонтали мира поперёк наклона, как есть, при любом взгляде: курс, тангаж и
-     * крен, которые отдаёт тряска, у {@code Camera.setRotation} дают ровно этот поворот. Глядя прямо вниз, наклон вбок
-     * уводит взгляд вбок (голова — в одну сторону, взгляд вдоль тела — в другую), а не вертит картинку.
+     * The tilt of the body turns the camera around the horizontal of the world across the tilt, as it is, in any view: the heading, pitch and
+     *  roll, which are given by shaking, in {@code Camera.setRotation} give exactly this rotation. Looking straight down, tilting to the side
+     *  takes the gaze to the side (the head in one direction, looking along the body in the other), rather than rotating the picture.
      */
     @Test
     void viewTurnsWithTheBody() {
@@ -67,14 +67,14 @@ class CameraShakeTest {
                         Vector3d[] got = camera(yaw + o[0], pitch + o[1], roll + o[2]), was = camera(yaw, pitch, roll);
                         double flat = Math.hypot(away.x, away.z);
                         Quaterniond lean = new Quaterniond().rotationAxis(t[top], away.z / flat, 0, -away.x / flat);
-                        String what = "от взрыва " + away + ", курс " + yaw + ", тангаж " + pitch + ", крен " + roll;
-                        assertEquals(0, angle(got[0], was[0].rotate(lean)), 1e-6, what + ": взгляд");
-                        assertEquals(0, angle(got[1], was[1].rotate(lean)), 1e-6, what + ": верх");
+                        String what = "from the explosion " + away + ", course " + yaw + ", pitch " + pitch + ", roll " + roll;
+                        assertEquals(0, angle(got[0], was[0].rotate(lean)), 1e-6, what + ": look");
+                        assertEquals(0, angle(got[1], was[1].rotate(lean)), 1e-6, what + ": top");
                     }
                 }
             }
         }
-        // прямо вниз, взрыв справа: голову уносит влево, и взгляд вдоль тела уходит вправо (−x при курсе 0) на наклон тела
+        // straight down, explosion to the right: the head is carried to the left, and the gaze along the body goes to the right (−x with a heading of 0) to the tilt of the body
         CameraShake.reset();
         double[] t = sway(1, 2, new Vec3(1, 0, 0));
         int top = 0;
@@ -83,15 +83,15 @@ class CameraShakeTest {
         double[] o = CameraShake.offsets((top % STEP) / (double) STEP, 0, 90, 0, 0, 1);
         Vector3d look = camera(o[0], 90 + o[1], o[2])[0];
         assertEquals(Math.toDegrees(t[top]), angle(look, new Vector3d(0, -1, 0)), 1e-6);
-        assertTrue(look.x < 0, "взгляд вниз уходит вправо: " + look);
+        assertTrue(look.x < 0, "looking down to the right: " + look);
         CameraShake.reset();
     }
 
     /**
-     * Дальше границы устойчивости камера не уходит: лицом к сильной волне — не больше 4,5° назад, спиной — не больше 8°
-     * вперёд, боком — 8°, наискось — по эллипсу между ними; и до неё доходит. Две волны вместе — тоже не дальше. С края
-     * тело выпрямляется, а не валится на другой край: у 3 psi назад к взрыву — меньше 2° (обратный ветер разрежения).
-     * Тряска слабее в настройках — слабее наклон.
+     * The camera does not go further than the stability limit: facing a strong wave - no more than 4,5° back, back - no more than 8°
+     *  forward, sideways - 8°, obliquely - along the ellipse between them; and it gets to her. Two waves together - no further either. From the edge of
+     *  the body straightens, and does not fall to the other edge: with 3 psi back to the explosion - less 2° (reverse wind of rarefaction).
+     * Shaking is weaker in the settings - the tilt is weaker.
      */
     @Test
     void nukeWindStopsAtTheBalanceLimit() {
@@ -100,8 +100,8 @@ class CameraShakeTest {
         assertEquals(-Math.toDegrees(BodySway.SIDE), extreme(5, 15, new Vec3(1, 0, 0), 1)[2], 1e-6);
         double[] behind = extreme(3, 15, new Vec3(0, 0, 1), 1);
         assertEquals(Math.toDegrees(BodySway.FORWARD), behind[1], 1e-6);
-        assertTrue(behind[0] > -2, "3 psi: назад " + behind[0]);
-        // взрыв позади справа: наклон вперёд и влево — на эллипсе; две волны — тоже на нём
+        assertTrue(behind[0] > -2, "3 psi: back " + behind[0]);
+        // explosion behind on the right: tilt forward and left - on an ellipse; two waves - also on it
         for (int waves = 1; waves <= 2; waves++) {
             CameraShake.reset();
             Vec3 away = new Vec3(1, 0, 1);
@@ -112,17 +112,17 @@ class CameraShakeTest {
                 most = Math.max(most, angle(camera(o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)) / edge);
                 CameraShake.tick(true);
             }
-            assertEquals(1, most, 1e-9, waves + " волн: наискось — до эллипса и не дальше");
+            assertEquals(1, most, 1e-9, waves + " waves: obliquely - up to the ellipse and no further");
         }
-        // половина силы в настройках — половина наклона
+        // half force in settings - half incline
         assertEquals(-0.5 * Math.toDegrees(BodySway.BACK), extreme(5, 15, new Vec3(0, 0, -1), 0.5)[0], 1e-6);
         assertEquals(0.5 * extreme(1, 2, new Vec3(0, 0, -1), 1)[0], extreme(1, 2, new Vec3(0, 0, -1), 0.5)[0], 1e-6);
     }
 
     /**
-     * Без рывков: до 2 psi (у 15 кт — уже граница) при любом курсе, и глядя почти отвесно, за кадр в 1/10 тика камера
-     * поворачивается меньше чем на полградуса, а у 1 psi — не быстрее 30°/с (тело качается за секунды); после того как
-     * тело выпрямилось, поворота нет. Сильнее напор швыряет тело к границе за сотые доли секунды — так и камеру.
+     * Without jerks: up to 2 psi (for 15 kt is already the limit) at any heading, and looking almost vertically, behind the frame in 1/10 tick the camera
+     *  rotates by less than half a degree, and in 1 psi - no faster than 30°/s (the body swings in seconds); after
+     *  the body has straightened, there is no turning. The stronger the pressure throws the body towards the border in hundredths of a second - and so does the camera.
      */
     @Test
     void nukeWindDoesNotJerkAndEnds() {
@@ -143,11 +143,11 @@ class CameraShakeTest {
                             }
                             CameraShake.tick(true);
                         }
-                        String what = kt + " кт, " + psi + " psi, курс " + yaw + ", тангаж " + pitch;
-                        assertTrue(most < 0.5, what + ": " + most + "° за кадр");
-                        if (psi == 1) assertTrue(most * 200 < 30, what + ": " + most * 200 + " °/с");
+                        String what = kt + " kt, " + psi + " psi, course " + yaw + ", pitch " + pitch;
+                        assertTrue(most < 0.5, what + ": " + most + "° per frame");
+                        if (psi == 1) assertTrue(most * 200 < 30, what + ": " + most * 200 + " °/s");
                         double[] o = CameraShake.offsets(0.5, yaw, pitch, 0, yaw, 1);
-                        assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, what + ": тело выпрямилось, а камера нет");
+                        assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, what + ": the body is straightened, but the camera is not");
                     }
                 }
             }
@@ -156,8 +156,8 @@ class CameraShakeTest {
     }
 
     /**
-     * Наклон — тела игрока: камера не на нём (камера снаряда) наклона не показывает; граница устойчивости — по тому, куда
-     * смотрит тело, а не камера: вид спереди от третьего лица смотрит назад, а спиной к взрыву тело клонится вперёд до 8°.
+     * Tilt - the player’s body: the camera not on him (the projectile camera) does not show the tilt; the limit of stability is based on where
+     *  the body is looking, not the camera: the third-person front view is looking back, and with its back to the explosion the body is leaning forward to 8°.
      */
     @Test
     void leanIsTheBodys() {
@@ -166,16 +166,16 @@ class CameraShakeTest {
         double front = 0;
         for (int tick = 0; tick < 20 * 20; tick++) {
             double[] o = CameraShake.offsets(0.5, 0, 0, 0, Double.NaN, 1);
-            assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, "камера не на игроке");
+            assertEquals(0, Math.abs(o[0]) + Math.abs(o[1]) + Math.abs(o[2]), 1e-12, "camera is not on the player");
             o = CameraShake.offsets(0.5, 180, 0, 0, 0, 1);
             front = Math.max(front, angle(camera(180 + o[0], o[1], o[2])[1], new Vector3d(0, 1, 0)));
             CameraShake.tick(true);
         }
-        assertEquals(Math.toDegrees(BodySway.FORWARD), front, 1e-6, "вид спереди: граница — тела");
+        assertEquals(Math.toDegrees(BodySway.FORWARD), front, 1e-6, "front view: border - bodies");
         CameraShake.reset();
     }
 
-    /** Вторая волна ложится поверх того, что осталось от первой: без скачка в миг прихода, дальше наклоны складываются. */
+    /** The second wave falls on top of what remains of the first: without a jump at the moment of arrival, then the slopes add up. */
     @Test
     void wavesAdd() {
         CameraShake.reset();
@@ -183,15 +183,15 @@ class CameraShakeTest {
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
         double before = CameraShake.offsets(0, 0, 0, 0, 0, 1)[1];
         double[] second = sway(0.5, 2, new Vec3(0, 0, 1));
-        assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "в миг прихода");
+        assertEquals(before, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "at the moment of arrival");
         for (int i = 0; i < 10; i++) CameraShake.tick(true);
         assertEquals(Math.toDegrees(first[20 * STEP] + second[10 * STEP]), CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
         CameraShake.reset();
     }
 
     /**
-     * Удар — с прихода фронта к телу, а не с тика, в котором его заметили: фронт прошёл тело полтика назад — в первом
-     * кадре этого тика тело уже клонится на полтика наклона; с прихода — с самого начала (не с 0, не позже).
+     * The impact is from the arrival of the front to the body, and not from the tick in which it was noticed: the front passed the body half a point ago - in the first
+     *  frame of this tick the body is already tilting half a point; from arrival - from the very beginning (not from 0, not later).
      */
     @Test
     void swayStartsWhenTheFrontPassed() {
@@ -199,11 +199,11 @@ class CameraShakeTest {
         double[] w = wave(1, 2), t = CameraShake.sway(w[2], w[0], 1, w[1], 0.5, new Vec3(0, 0, 1), 0);
         double half = Math.toDegrees(t[STEP / 2] + (t[STEP / 2 + 1] - t[STEP / 2]) * (STEP / 2.0 - STEP / 2));
         assertEquals(half, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9);
-        assertTrue(half > 0, "полтика удара — уже наклон");
+        assertTrue(half > 0, "half a blow is already a tilt");
         CameraShake.reset();
     }
 
-    /** В воздухе (прыжок) тело на ноги не опирается: наклон сходит за четверть секунды и возвращается, когда встал. */
+    /** Airborne (jumping), the body has no foot support: tilt fades in a quarter second and returns on landing. */
     @Test
     void noLeanInTheAir() {
         CameraShake.reset();
@@ -218,8 +218,8 @@ class CameraShakeTest {
     }
 
     /**
-     * Волна {@code psi} от {@code kt} с силой тряски {@code k}: наименьший и наибольший тангаж и наименьший крен, пока
-     * тело качается, при курсе 0 (на +z): {мин. тангаж, макс. тангаж, мин. крен}.
+     * A {@code psi} wave from {@code kt} with shake strength {@code k}: minimum and maximum pitch and minimum roll
+     * while the body rocks, heading 0 (toward +z): {min pitch, max pitch, min roll}.
      */
     private static double[] extreme(double psi, double kt, Vec3 away, double k) {
         CameraShake.reset();
@@ -238,29 +238,29 @@ class CameraShakeTest {
     }
 
     /**
-     * Поворот камеры, как его строит {@code Camera.setRotation}, — в double: во float у JOML курс около 0 (половина угла
-     * около 90°, косинус — из синуса) сам по себе ошибается до трёх сотых градуса.
+     * The camera rotation, as {@code Camera.setRotation} builds it, is in double: in float the course of JOML is about 0 (half the angle
+     *  is about 90°, the cosine is from the sine) itself is mistaken up to three hundredths of a degrees.
      */
     private static Quaterniond rotation(double yaw, double pitch, double roll) {
         return new Quaterniond().rotationYXZ(Math.PI - Math.toRadians(yaw), -Math.toRadians(pitch), -Math.toRadians(roll));
     }
 
-    /** Камера: {вперёд, вверх}. */
+    /** Camera: {forward, up}. */
     private static Vector3d[] camera(double yaw, double pitch, double roll) {
         Quaterniond q = rotation(yaw, pitch, roll);
         return new Vector3d[]{new Vector3d(0, 0, -1).rotate(q), new Vector3d(0, 1, 0).rotate(q)};
     }
 
-    /** Угол между направлениями, °. */
+    /** Angle between directions, °. */
     private static double angle(Vector3d a, Vector3d b) {
         return Math.toDegrees(Math.atan2(new Vector3d(a).cross(b).length(), a.dot(b)));
     }
 
     /**
-     * Обычный взрыв (жалоба 23.10: «камера не качается, её разве что немного ударяет и сбивает»): шахед в 100 м за
-     * спиной — камера дрожит, качается головой на шее (несколько размахов вперёд-назад), возвращается к нулю с затуханием и между
-     * кадрами (по 1/6 тика) не прыгает больше, чем позволяет скорость удара. Ядерная волна шеи не берёт (её картинку этот
-     * шаг не менял).
+     * Regular explosion (complaint 23.10: “the camera doesn’t swing, it just gets hit a little and knocked down”): Shahed in 100 m behind
+     *  back - the camera shakes, shakes its head on its neck (several swings back and forth), returns to zero with attenuation and between
+     *  frames (by 1/6 tick) does not jump more than the hit speed allows. The nuclear wave does not hit the neck (this
+     *  step did not change its picture).
      */
     @Test
     void conventionalBlastRocksTheCameraAndItSettles() {
@@ -269,14 +269,14 @@ class CameraShakeTest {
         BodySway.Motion motion = CameraShake.sway(pa, 1000 * BlastModel.dynamicPressureKpa(pa / 1000), 1, tp, tp, 0, new Vec3(0, 0, 1), 0, true);
         double strength = CameraShake.tremor(pa, BlastModel.chemicalImpulse(m, kg, true), 0, 3);
         assertTrue(motion.neck().length == motion.body().length && motion.body().length > 20 && strength > 0);
-        // за 1/120 с камера сдвигается не больше, чем дают удар по шее и самая быстрая дрожь
+        // Over 1/120 s the camera moves no more than the neck impulse and fastest tremor allow.
         double kick = Math.toDegrees(Math.abs(motion.body()[1] + motion.neck()[1])) * BodySway.RATE / 120
                 + 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_PITCH * strength / 120, last = 0, most = 0;
         int turns = 0, sign = 0;
         for (int tick = 0; tick < 20 * 6; tick++) {
             for (int k = 0; k < 6; k++) {
                 double pitch = CameraShake.offsets(k / 6.0, 0, 0, 0, 0, 1)[1];
-                assertTrue(Math.abs(pitch - last) <= 1.05 * kick + 1e-9, "скачок в тике " + tick + ": " + last + " → " + pitch);
+                assertTrue(Math.abs(pitch - last) <= 1.05 * kick + 1e-9, "jump in tick " + tick + ": " + last + " → " + pitch);
                 int s2 = (int) Math.signum(pitch);
                 if (s2 != 0 && s2 != sign) {
                     if (sign != 0) turns++;
@@ -287,18 +287,18 @@ class CameraShakeTest {
             }
             CameraShake.tick(true);
         }
-        assertTrue(turns >= 2, "качается: смен знака " + turns);
-        assertTrue(most > 1, "размах " + most);
-        assertEquals(0, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "вернулась");
+        assertTrue(turns >= 2, "swings: sign changes " + turns);
+        assertTrue(most > 1, "scope " + most);
+        assertEquals(0, CameraShake.offsets(0, 0, 0, 0, 0, 1)[1], 1e-9, "came back");
         CameraShake.reset();
         double[] w = wave(1, 2);
-        assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "ядерка — без шеи");
+        assertEquals(null, CameraShake.sway(w[2], w[0], 1, w[1], w[1], 0, new Vec3(0, 0, 1), 0, false).neck(), "the nuke - no neck");
     }
 
     /**
-     * Дрожь удара (подача, жалоба 23.10: «камера только толкается»): нет ниже 140 дБ, полная с 5 psi; шахед в 20/50/100 м
-     * дрожит сильнее ближе, длиннее у сильного импульса — и не слабее 3.4.1 (в 50 и 100 м там было 1,5° курса); начинается
-     * с нуля, гаснет к нулю, без рывка между кадрами.
+     * Shock jitter (presentation, complaint 23.10: “the camera only pushes”): none below 140 dB, full with 5 psi; Shahed in 20/50/100 m
+     *  trembles stronger closer, longer for a strong impulse - and no weaker than 3.4.1 (in 50 and 100 m there was 1,5° course); starts
+     *  from zero, fades to zero, without a jerk between frames.
      */
     @Test
     void blastTremorFollowsThePressure() {
@@ -311,39 +311,39 @@ class CameraShakeTest {
             CameraShake.reset();
             double pa = 1000 * BlastModel.surfaceOverpressureKpa(m, kg), impulse = BlastModel.chemicalImpulse(m, kg, true);
             double s = CameraShake.tremor(pa, impulse, 0, 7);
-            assertTrue(s < last, m + " м: " + s);
+            assertTrue(s < last, m + " m: " + s);
             last = s;
             double seconds = CameraShake.tremorSeconds(impulse), prev = 0, most = 0, step = 1.0 / 120;
             assertTrue(seconds >= CameraShake.TREMOR_SHORT && seconds <= CameraShake.TREMOR_LONG);
             for (double t = 0; t <= seconds + 0.1; t += step) {
                 double yaw = CameraShake.tremorAt(20 * t)[0];
                 assertTrue(Math.abs(yaw - prev) <= 2 * Math.PI * 1.73 * CameraShake.TREMOR_HZ_WEAK * 1.1 * CameraShake.TREMOR_YAW * s * step + 1e-9,
-                        m + " м, " + t + " с: рывок");
+                        m + " m, " + t + " s: jerk");
                 most = Math.max(most, Math.abs(yaw));
                 prev = yaw;
             }
-            assertEquals(0, CameraShake.tremorAt(0)[0], 1e-12, "с нуля");
-            assertEquals(0, CameraShake.tremorAt(20 * (seconds + 0.01))[0], 1e-12, "погасла");
+            assertEquals(0, CameraShake.tremorAt(0)[0], 1e-12, "from scratch");
+            assertEquals(0, CameraShake.tremorAt(20 * (seconds + 0.01))[0], 1e-12, "went out");
             peaks[k++] = most;
         }
         assertTrue(peaks[0] > peaks[1] && peaks[1] > peaks[2], java.util.Arrays.toString(peaks));
-        assertTrue(peaks[1] >= 1.5 && peaks[2] >= 1.2, "50 м: " + peaks[1] + "°, 100 м: " + peaks[2] + "° (3.4.1 — 1,5°)");
+        assertTrue(peaks[1] >= 1.5 && peaks[2] >= 1.2, "50 m: " + peaks[1] + "°, 100 m: " + peaks[2] + "° (3.4.1 — 1,5°)");
         assertTrue(CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 450, true)) > CameraShake.tremorSeconds(BlastModel.chemicalImpulse(100, 30, true)));
         CameraShake.reset();
     }
 
-    /** Тряска слушает ванильные «Искажения экрана» (доступность): в 0 камеру не качает при любой своей настройке. */
+    /** Shaking listens to vanilla “Screen distortion” (availability): in 0 the camera does not shake at any of its settings. */
     @Test
     void distortionEffectsScaleTheShake() {
         assertEquals(1, CameraShake.strength(1, 1));
         assertEquals(0, CameraShake.strength(2, 0));
         assertEquals(1, CameraShake.strength(2, 0.5), 1e-12);
-        assertEquals(1, CameraShake.strength(1, 1.5), 1e-12, "больше полного ваниль не даёт");
+        assertEquals(1, CameraShake.strength(1, 1.5), 1e-12, "vanilla doesn't give more than that");
     }
 
     /**
-     * Толчок грунта: с нуля и к нулю без скачков, вверх-вниз (кивок) сильнее, чем вбок, слабее — меньше; камере снаряда
-     * его нет (как и дрожи удара).
+     * Ground push: from zero to zero without jumps, up and down (nod) stronger than sideways, weaker - less; There is no shock in the
+     *  projectile camera (as well as impact vibration).
      */
     @Test
     void groundJoltNodsWithoutSteps() {
@@ -360,17 +360,17 @@ class CameraShakeTest {
             steepest = Math.max(steepest, Math.abs(g[1] - before));
             before = g[1];
         }
-        assertTrue(pitch > yaw, "кивок " + pitch + " против качания вбок " + yaw);
+        assertTrue(pitch > yaw, "nod " + pitch + " against sideways swing " + yaw);
         assertTrue(pitch <= CameraShake.GROUND_PITCH + 1e-9);
-        // скорость кивка — не больше 2π·f·A (за 0,05 тика — 1/400 с)
-        assertTrue(steepest <= 2 * Math.PI * 1.1 * CameraShake.GROUND_HZ * CameraShake.GROUND_PITCH / 400 * 1.05, "рывок " + steepest);
-        assertEquals(0, CameraShake.groundAt(40)[1], 1e-12, "к концу — ноль");
+        // nod speed - no more than 2π·f·A (per 0,05 tick - 1/400 s)
+        assertTrue(steepest <= 2 * Math.PI * 1.1 * CameraShake.GROUND_HZ * CameraShake.GROUND_PITCH / 400 * 1.05, "jerk " + steepest);
+        assertEquals(0, CameraShake.groundAt(40)[1], 1e-12, "towards the end - zero");
         CameraShake.reset();
         CameraShake.ground(0.3, 2, 0, 7);
         double weak = 0;
         for (double t = 0; t <= 40; t += 0.05) weak = Math.max(weak, Math.abs(CameraShake.groundAt(t)[1]));
-        assertTrue(weak < pitch, weak + " против " + pitch);
-        assertEquals(0, CameraShake.offsets(5, 0, 0, 0, Double.NaN, 1)[1], 1e-12, "камера снаряда не кивает");
+        assertTrue(weak < pitch, weak + " against " + pitch);
+        assertEquals(0, CameraShake.offsets(5, 0, 0, 0, Double.NaN, 1)[1], 1e-12, "the projectile camera does not nod");
         CameraShake.reset();
     }
 }

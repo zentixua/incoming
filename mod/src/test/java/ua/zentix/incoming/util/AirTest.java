@@ -5,24 +5,24 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Воздух мира: класс устойчивости по солнцу, ветру и облачности, влажность по погоде, плотность и звук по ISO 2533. */
+/** Air of the world: stability class for sun, wind and cloudiness, humidity for weather, density and sound according to ISO 2533. */
 class AirTest {
-    /** Полдень ясного дня — сутки игры с 6000-го тика: солнце в зените. */
+    /** Noon on a clear day - a day of play with 6000-th tick: the sun is at its zenith. */
     private static final long NOON = 6000;
 
     @Test
     void stabilityFollowsSunAndCloud() {
         Air day = Air.of(NOON, 1, 0, 0), night = Air.of(NOON + 12_000, -1, 0, 0), rain = Air.of(NOON, 1, 1, 0);
-        assertTrue(day.stability() <= Stability.C, "ясный полдень неустойчив: " + day.stability());
-        assertTrue(night.stability() >= Stability.D, "ясная ночь устойчива: " + night.stability());
-        assertTrue(rain.stability() > day.stability(), "облачность тянет к нейтральному D");
+        assertTrue(day.stability() <= Stability.C, "clear noon is unstable: " + day.stability());
+        assertTrue(night.stability() >= Stability.D, "clear night is stable: " + night.stability());
+        assertTrue(rain.stability() > day.stability(), "cloudiness tends to neutral D");
         assertEquals(0.5, day.humidity(), 1e-12);
         assertEquals(1, rain.humidity(), 1e-12);
-        // у земли (звук): ясно — опорные 70 %, в дождь насыщен, как и наверху
+        // near the ground (sound): clear - reference 70%, in the rain it is saturated, as at the top
         assertEquals(Air.SURFACE_CLEAR, day.surfaceHumidity(), 1e-12);
         assertEquals(1, rain.surfaceHumidity(), 1e-12);
         assertEquals(Air.SURFACE_CLEAR + (1 - Air.SURFACE_CLEAR) / 2, Air.of(NOON, 1, 0.5, 0).surfaceHumidity(), 1e-12);
-        assertTrue(night.brunt() >= day.brunt(), "ночь не менее устойчива (в сильный ветер — нейтрально)");
+        assertTrue(night.brunt() >= day.brunt(), "the night is no less stable (neutral in strong winds)");
     }
 
     @Test
@@ -41,9 +41,9 @@ class AirTest {
     }
 
     /**
-     * Шлагбаум картинки и звука ({@code ProbeScenario.air}, сценарий клиента) читает воздух мира отражением — класс пробы
-     * один и в дереве 3.4.1, где воздуха нет. Переименование здесь сломало бы ему сравнение воздуха сцены с эталоном:
-     * имена держит этот тест.
+     * The picture and sound look gate ({@code ProbeScenario.air}, client scenario) reads world air by reflection:
+     * the probe class is shared with the 3.4.1 worktree, where air is absent. Renaming here would break its comparison
+     * of scene air against the reference: this test holds the names stable.
      */
     @Test
     void probeReadsTheAirByTheseNames() throws ReflectiveOperationException {

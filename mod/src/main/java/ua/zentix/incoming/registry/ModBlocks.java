@@ -28,14 +28,14 @@ import java.util.function.Supplier;
 public final class ModBlocks {
     public static final DeferredRegister.Blocks REGISTER = DeferredRegister.createBlocks(Incoming.MOD_ID);
 
-    /** Тринитит: песок, сплавленный огненным шаром наземного ядерного взрыва в зеленоватое стекло. */
+    /** Trinitite: sand fused by a surface nuclear fireball into greenish glass. */
     public static final DeferredBlock<Block> TRINITITE = REGISTER.registerSimpleBlock("trinitite", BlockBehaviour.Properties.of()
             .mapColor(MapColor.COLOR_GREEN)
             .strength(1.5f, 6.0f)
             .requiresCorrectToolForDrops()
             .sound(SoundType.GLASS));
 
-    /** Трансформаторная подстанция: узел сети; удар по ней обесточивает район вокруг ({@link ua.zentix.incoming.grid.Blackouts}). */
+    /** Transformer substation: grid node; a strike cuts power to its surrounding area ({@link ua.zentix.incoming.grid.Blackouts}). */
     public static final DeferredBlock<SubstationBlock> SUBSTATION = REGISTER.register("substation", () -> new SubstationBlock(
             BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_GRAY)
@@ -45,8 +45,8 @@ public final class ModBlocks {
                     .noOcclusion()));
 
     /**
-     * ЗРК: кабина радара под пакетом контейнеров ({@link SamBlock}). Прочность — как у подстанции: взрыв шахеда рядом его
-     * разносит.
+     * SAM: radar cabin beneath a canister rack ({@link SamBlock}). Strength as for a substation: a nearby Shahed explosion
+     * destroys it.
      */
     public static final DeferredBlock<SamBlock> SAM = REGISTER.register("sam", () -> new SamBlock(
             BlockBehaviour.Properties.of()
@@ -56,8 +56,7 @@ public final class ModBlocks {
                     .sound(SoundType.METAL)));
 
     /**
-     * Стационарная пусковая установка ({@link FixedLauncherBlock}): пуск по задаче от сигнала редстоуна. Прочность —
-     * как у ЗРК.
+     * Fixed launcher ({@link FixedLauncherBlock}): redstone signal fires the mission. Strength as for the SAM.
      */
     public static final DeferredBlock<FixedLauncherBlock> FIXED_LAUNCHER = REGISTER.register("fixed_launcher", () -> new FixedLauncherBlock(
             BlockBehaviour.Properties.of()
@@ -66,11 +65,11 @@ public final class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)));
 
-    /** Лампа сети и её обесточенный двойник. */
+    /** Grid lamp and its unpowered counterpart. */
     public record UnlitPair(Supplier<Block> lit, DeferredBlock<? extends Block> unlit) {}
 
     private static final List<UnlitPair> UNLIT_PAIRS = new ArrayList<>();
-    /** Все пары «лампа — двойник» ({@link ua.zentix.incoming.grid.GridLights}); факелы, свечи, костры и печи — не от сети. */
+    /** All lamp/counterpart pairs ({@link ua.zentix.incoming.grid.GridLights}); torches, candles, campfires and furnaces are off-grid. */
     public static final List<UnlitPair> UNLIT = Collections.unmodifiableList(UNLIT_PAIRS);
 
     static {
@@ -98,9 +97,9 @@ public final class ModBlocks {
     private ModBlocks() {}
 
     /**
-     * Двойник — полная копия свойств лампы (прочность, звук, карта), только без света; добыча — таблица лампы
-     * ({@code ofFullCopy} таблицу по имени блока не переносит: без {@code lootFrom} у двойника была бы своя, пустая).
-     * Свойства берутся при регистрации: ванильные блоки к этому времени уже есть.
+     * Counterpart fully copies lamp properties (strength, sound, map color), except light; drops use the lamp's loot table
+     * ({@code ofFullCopy} does not copy the table by block name: without {@code lootFrom} the counterpart would have its own,
+     * empty one). Properties read at registration: vanilla blocks already exist then.
      */
     private static void unlit(String name, Supplier<Block> lit, BiFunction<BlockBehaviour.Properties, Supplier<Block>, Block> factory) {
         DeferredBlock<Block> unlit = REGISTER.register("unlit_" + name,

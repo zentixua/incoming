@@ -18,33 +18,32 @@ import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Мгновенная генерация на время сценариев: в конце каждого тика сервера всё, что тикеты требуют загрузить полностью
- * (уровень ≤ 33), догружается сразу ({@code level.getChunk}).
+ * Instant generation for the duration of scenarios: at the end of each server tick, everything that tickets require to be downloaded in full
+ *  (level ≤ 33) is downloaded immediately ({@code level.getChunk}).
  * <p>
- * Зачем. Районы мода ({@code AreaLoader}: свой чанк и чанк впереди снаряда, район цели) начинают тикать, когда готов
- * квадрат вокруг, а фоновая генерация готовит его за разное число тиков — от прогона к прогону и от машины к машине.
- * Снаряд у края тикающих чанков уходит из мира или остаётся в нём по тому, успел ли сосед, и траектория расходится
- * с эталоном. С мгновенной генерацией готовность — функция тикетов, а тикеты — функция полёта: полёт повторяется точно.
+ * Why. Mod areas ({@code AreaLoader}: your chunk and the chunk in front of the projectile, the target area) begin to tick when the
+ *  square around is ready, and the background generation prepares it for a different number of ticks - from run to run and from car to car.
+ *  A projectile at the edge of ticking chunks leaves the world or remains in it depending on whether the neighbor has time, and the trajectory diverges
+ *  from the reference. With instant generation, readiness is a function of ticket, and ticket is a function of flight: the flight is repeated exactly.
  * <p>
- * Место в тике одно ({@link ServerTickEvent.Post} — после уровней и тестов GameTest): порядок тестов в партии на него
- * не влияет. Чтение неготовых чанков мода при этом видно по-прежнему ({@link SyncLoadWatch}): чанк, которого тикеты
- * не просили, сам не появится.
+ *  There is one place in tick ({@link ServerTickEvent.Post} - after the levels and tests GameTest): the order of tests in batch does not affect it. Reading unready chunks of the mod is still visible ({@link SyncLoadWatch}): the chunk that tickets
+ *  did not ask for will not appear on its own.
  * <p>
- * Слепые пятна: загрузка здесь идеальная. {@link SyncLoadWatch} ловит только чтение чанков, которых не просил ни один
- * тикет; чанк, который тикет просил, но фоновая генерация ещё не дала, к чтению уже готов — синхронное ожидание
- * такого чанка здесь не видно. Ожидание района мода (снаряд ждёт загрузки цели, {@code AREA_WAIT_LIMIT}), уход из мира
- * на краю тикающих чанков из-за медленной генерации и возврат в мир тоже не проходят. Это проверяет прогон
- * с настоящей загрузкой ({@code -PscenarioRealChunks}, {@link ScenarioMode}): свойства те же, без эталона.
+ * Blind spots: loading here is perfect. {@link SyncLoadWatch} only catches reading chunks that were not requested by any
+ *  ticket; The chunk that the ticket requested, but the background generation has not yet given, is already ready for reading - synchronous waiting
+ * such a chunk is not visible here. Waiting for the mod area (the projectile is waiting for the target to load, {@code AREA_WAIT_LIMIT}), leaving the world
+ *  on the edge of ticking chunks due to slow generation, and returning to the world also do not work. This checks the run of
+ *  with a real load ({@code -PscenarioRealChunks}, {@link ScenarioMode}): the properties are the same, without a reference.
  * <p>
- * Запись чанков на диск. Выгруженный чанк уходит в фоновую очередь {@link IOWorker} готовым NBT, а в ней чтения
- * (генерация сначала ищет чанк на диске) идут вперёд записей: сервер GameTest тикает без пауз, и за партией сценариев
- * очередь не успевает — с Lithium до 27,5 тыс. ждущих записи чанков, 3 млн {@code CompoundTag} и 2,5 ГБ живой
- * кучи при 11 тыс. чанков в памяти, CI (куча 4 ГБ) падает {@code OutOfMemoryError}. Поэтому раз в {@link #WRITE_PERIOD}
- * тиков сервер ждёт, пока очередь допишет: игровой сервер это успевает между тиками.
+ * Write chunks to disk. The unloaded chunk goes into the background queue {@link IOWorker} ready NBT, and in it the reads
+ *  (the generation first looks for the chunk on disk) go ahead of the writes: the server GameTest ticks without pauses, and the queue cannot keep up with the batch scripts
+ *  - from Lithium to 27,5 thousand chunks waiting to be written, 3 million {@code CompoundTag} and 2,5 GB live
+ *  heaps with 11 thousand chunks in memory, CI (heap 4 GB) is falling {@code OutOfMemoryError}. Therefore, once every {@link #WRITE_PERIOD}
+ *  tick the server waits until the queue finishes: the game server manages this between ticks.
  */
 final class InstantChunks {
     private static final int FULL = ChunkLevel.byStatus(FullChunkStatus.FULL);
-    /** Раз во сколько тиков дождаться записи выгруженных чанков. */
+    /** How many times tick to wait for the uploaded chunks to be recorded. */
     private static final int WRITE_PERIOD = 100;
 
     private static int users;
@@ -52,7 +51,7 @@ final class InstantChunks {
 
     private InstantChunks() {}
 
-    /** Сценарий начался: генерация мгновенная, пока идёт хоть один. */
+    /** The scenario has begun: instantaneous generation as long as there is at least one. */
     static synchronized void acquire() {
         if (!registered) {
             registered = true;
@@ -70,31 +69,31 @@ final class InstantChunks {
         boolean write = e.getServer().getTickCount() % WRITE_PERIOD == 0;
         for (ServerLevel level : e.getServer().getAllLevels()) {
             settle(level);
-            // съёмка рельефа без загрузки (диск, генератор в фоне) — тоже к концу тика заказа, а не когда успеет диск
+            // relief shooting without loading (disk, generator in the background) - also at the end of the order tick, and not when the disk has time
             ua.zentix.incoming.util.TerrainSurvey.settle(level);
             if (write) awaitWrites(level);
         }
     }
 
-    /** Дождаться, пока фоновая очередь допишет выгруженные чанки (без сброса файлов на диск). */
+    /** Wait until the background queue completes the uploaded chunks (without flushing files to disk). */
     private static void awaitWrites(ServerLevel level) {
         long t0 = System.nanoTime();
         ((IOWorker) level.getChunkSource().chunkMap.chunkScanner()).synchronize(false).join();
         long ms = (System.nanoTime() - t0) / 1_000_000;
-        if (ms >= 1000) Incoming.LOG.info("SCENARIO запись чанков ({}) дождалась за {} мс", level.dimension().location(), ms);
+        if (ms >= 1000) Incoming.LOG.info("SCENARIO recording chunks ({}) waited for {} ms", level.dimension().location(), ms);
     }
 
     /**
-     * Догрузить всё, что тикеты требуют полностью, и довести до тика сущностей всё, чему они его дают. Тик — тоже
-     * функция тикетов: ваниль переводит готовый чанк в «тикает сущностями» задачей потока сервера, когда готов квадрат 5×5
-     * вокруг ({@code ChunkMap.prepareEntityTickingChunk}), а дойдёт ли до этой задачи очередь к следующему тику, решают
-     * потоки и чужие пересчёты уровней. Снаряд уходит из мира, когда шаг ведёт в чанк без тика сущностей, и возвращается,
-     * когда путь впереди тикает, — без этого «Ланцет» сценария {@code loiter_rail.player} уходил из мира или нет
-     * по тому, кто в тике пересчитал уровни ({@link ChunkChurn}).
+     * Load everything that the ticket requires in full, and bring everything to the tick of entities that they give it to. tick - also the
+     *  ticket function: vanilla transfers the ready chunk to the “tick entities” task of the server thread when the square 5×5
+     *  around ({@code ChunkMap.prepareEntityTickingChunk}) is ready, and will the queue reach this task by the next tick, solve
+     *  streams and other people's level recalculations. The projectile leaves the world when a step leads to a chunk without ticking entities, and returns
+     *  when the path ahead is ticking - without this “Lancet” script, {@code loiter_rail.player} left the world or not
+     *  according to who recalculated the levels in tick ({@link ChunkChurn}).
      */
     static void settle(ServerLevel level) {
         ServerChunkCache cache = level.getChunkSource();
-        // тикеты, взятые в этом тике, — в уровни чанков сейчас (открыт AT)
+        // tickets taken in this tick - to chunk levels now (opened AT)
         cache.runDistanceManagerUpdates();
         List<ChunkPos> pending = new ArrayList<>();
         for (ChunkHolder holder : cache.chunkMap.getChunks()) {
@@ -104,13 +103,13 @@ final class InstantChunks {
         awaitEntityTicking(level, cache);
     }
 
-    /** Предел ожидания тика сущностей, мс: дольше — не ожидание, а ошибка (чанк, которому не дождаться соседей). */
+    /** Waiting limit for tick entities, ms: longer is not a wait, but an error (a chunk that cannot wait for its neighbors). */
     private static final long TICKING_WAIT_MS = 10_000;
 
     /**
-     * Выполнять задачи потока сервера, пока каждый чанк, которому тикеты дают тик сущностей, не тикает ими. Тик блоков
-     * не ждём: ему нужны и загруженные сущности чанка, а их загрузку ваниль доводит только в тике мира, — и полёт от
-     * тика блоков не зависит.
+     * Execute server thread tasks until each chunk that is ticketed with tick entities is ticking them. We don’t expect tick blocks
+     * : it also needs the loaded entities of the chunk, and vanilla loads them only in the tick world - and the flight does not depend on the tick of
+     *  blocks.
      */
     private static void awaitEntityTicking(ServerLevel level, ServerChunkCache cache) {
         DistanceManager tickets = cache.chunkMap.getDistanceManager();
@@ -122,7 +121,7 @@ final class InstantChunks {
         long deadline = System.nanoTime() + TICKING_WAIT_MS * 1_000_000;
         while (!late.isEmpty()) {
             if (System.nanoTime() > deadline) {
-                throw new IllegalStateException("SCENARIO: чанки не затикали сущностями за " + TICKING_WAIT_MS + " мс: " + late.subList(0, Math.min(8, late.size())));
+                throw new IllegalStateException("SCENARIO: chunks did not tick with entities behind " + TICKING_WAIT_MS + " ms: " + late.subList(0, Math.min(8, late.size())));
             }
             if (!cache.pollTask()) LockSupport.parkNanos(100_000);
             late.removeIf(c -> level.isPositionEntityTicking(c.getWorldPosition()));

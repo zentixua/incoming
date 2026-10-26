@@ -4,31 +4,31 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Пыль в ножке гриба — та, что подсос у эпицентра забрал из слоя пыли волны ({@link DustModel}: доля
- * {@link DustModel.Column#stem}, с {@link DustModel.Column#stemFrom}, e-кратно за {@link DustModel#STEM_S} с). Ножку
- * питает только пыль, поднятая с земли ветром за фронтом и нагретым слоем (NRC 1985, «The Effects on the Atmosphere of
- * a Major Nuclear Exchange», гл. 4, с. 22: «sweep-up and thermal dust»); нисходящий поток шара у оси первые секунды
- * подсос глушит (Rosenblatt 1981, рис. 13e) — отсюда начало подсоса не раньше {@code stemFrom}. Сколько пыли ушло из
- * слоя, столько вошло в ножку: одна масса на оба места, без своей кривой у ножки.
+ * Mushroom stem dust is drawn near the epicenter from the blast dust layer ({@link DustModel}: share
+ * {@link DustModel.Column#stem}, from {@link DustModel.Column#stemFrom}, e-folding over {@link DustModel#STEM_S} s).
+ * Only dust lofted from ground by post-front wind and the heated layer feeds the stem (NRC 1985, “The Effects on the
+ * Atmosphere of a Major Nuclear Exchange”, ch. 4, p. 22: “sweep-up and thermal dust”); axial ball downdraft suppresses
+ * inflow in the first seconds (Rosenblatt 1981, fig. 13e), hence onset no earlier than {@code stemFrom}. Dust leaving
+ * the layer equals dust entering the stem: one mass for both, no independent stem curve.
  * <p>
- * В ножке пыль идёт вверх с её воздухом ({@link MushroomModel#stemRise}): выброс, вошедший в t', в момент t — на высоте
- * stemRise(t) − stemRise(t'); выше низа шапки — уже в шапке. Поэтому у воздушного подрыва, где подсос начинается
- * позже, а облако уходит быстро, пыльная ножка может не догнать шапку (NRC, с. 22: у 10 кт на 450 м «dusty stems that
- * did not merge with the ring vortex»), а у наземного шар касается земли и пыль уходит вверх за ним сразу. Толща
- * ножки — ослабление пыли в ней на метр высоты, Λ = Σk·m (м²/м), поперёк круга радиуса r через середину — 2Λ/(πr).
- * Шар, коснувшийся земли (наземный и низкий подрыв), — свой след: пыль из-под него идёт по всей ножке до шапки сразу
- * (поток в следе шара не измерен — ⚠ оценка), и Λ — вся вошедшая пыль на высоту до низа шапки.
- * Оседание крупной пыли в ножке не считается: её несёт поток вверх.
+ * In the stem, dust rises with its air ({@link MushroomModel#stemRise}): a release entering at t' reaches height
+ * stemRise(t) − stemRise(t') at t; above cap bottom, it is in the cap. Thus an airburst's dusty stem may not catch the
+ * fast-rising cap after delayed inflow (NRC, p. 22: 10 kt at 450 m, “dusty stems that did not merge with the ring vortex”);
+ * a surface burst touches ground and carries dust upward behind it immediately. Stem depth is dust extinction per
+ * meter height, Λ = Σk·m (m²/m), giving 2Λ/(πr) across the center of a circle of radius r. A ground-touching ball
+ * (surface and low burst) has its own wake: dust beneath it fills the stem to the cap immediately (ball wake flow not
+ * measured — ⚠ estimate), with Λ equal to all entered dust divided by height to cap bottom.
+ * Coarse dust settling in the stem is ignored: upflow carries it.
  * <p>
- * Таблица — шаг {@link #STEP} с до {@link #SPAN} стабилизаций облака; кольца подсоса — {@link #RINGS} до края подсоса
- * ({@code STEM_M}·∛(Y/15)). Одна на подрыв (кэш по мощности, высоте, виду подрыва и видимости).
+ * Table step {@link #STEP} s, up to {@link #SPAN} cloud stabilizations; inflow rings {@link #RINGS} to the inflow edge
+ * ({@code STEM_M}·∛(Y/15)). One per burst (cached by yield, height, burst type and visibility).
  */
 public final class StemDust {
-    /** Шаг таблицы, с; колец подсоса; на сколько стабилизаций облака таблица. */
+    /** Table step, s; inflow rings; cloud stabilizations covered by the table. */
     static final double STEP = 1;
     static final int RINGS = 24;
     static final double SPAN = 1.5;
-    /** Видимость по умолчанию (ясно), м — для проверок без подрыва. */
+    /** Default visibility (clear), m — for checks without a detonation. */
     public static final double CLEAR = 20_000;
 
     private static final Map<String, StemDust> CACHE = new LinkedHashMap<>(16, 0.75f, true) {
@@ -40,7 +40,7 @@ public final class StemDust {
 
     private final double yieldKt, hob;
     private final boolean surface;
-    /** Ослабление пыли в ножке на метр высоты (м²/м) и верх пыли в ножке над землёй (м), по шагам. */
+    /** Stem dust extinction per meter height (m²/m) and dust top above ground (m), by step. */
     private final double[] lambda, top;
 
     private StemDust(double yieldKt, double hobM, boolean surface, double visibilityM) {
@@ -66,7 +66,7 @@ public final class StemDust {
             for (int i = 0; i < RINGS; i++) {
                 DustModel.Column c = col[i];
                 double age = t - arrival[i];
-                // подсос берёт из слоя долю stem/STEM_S его толщи в секунду — тот же член, что убывает в DustModel.Column.left
+                // inflow takes stem/STEM_S of layer optical depth per second — the same term removed by DustModel.Column.left
                 if (age > c.stemFrom()) flux += area[i] * c.stem() / DustModel.STEM_S * c.depth(age);
             }
             inflow[k] = flux * STEP;
@@ -82,18 +82,18 @@ public final class StemDust {
                 oldest = Math.max(oldest, z);
             }
             if (wake) {
-                // шар на земле: ножка — его след, пыль из-под него идёт по всей ножке до шапки
+                // ball on ground: stem is its wake, dust beneath it fills the stem to the cap
                 top[k] = capBot;
                 lambda[k] = held / Math.max(capBot, 1);
             } else {
                 top[k] = oldest;
-                // свежий выброс — уже на пути воздуха за шаг: первый шаг подсоса не делится на нулевую высоту
+                // fresh release already follows the air over the step: first inflow step does not divide by zero height
                 lambda[k] = held / Math.max(Math.max(oldest, k > 0 ? rise[k] - rise[k - 1] : 0), 1);
             }
         }
     }
 
-    /** Пыль ножки подрыва (из кэша; нет — считается сейчас). */
+    /** Burst stem dust (cached; if absent, computed now). */
     public static StemDust of(double yieldKt, double hobM, boolean surface, double visibilityM) {
         String key = key(yieldKt, hobM, surface, visibilityM);
         synchronized (CACHE) {
@@ -107,12 +107,12 @@ public final class StemDust {
         return d;
     }
 
-    /** Ключи, что уже считаются в фоне, и те, чей расчёт упал. */
+    /** Keys already computing in the background and keys whose computation failed. */
     private static final java.util.Set<String> PENDING = new java.util.HashSet<>(), FAILED = new java.util.HashSet<>();
 
     /**
-     * Пыль ножки, если таблица готова; нет — начинает считать её в фоне (десятки мс — не в кадре) и отдаёт null: ножка
-     * первые кадры подрыва без пыли (подсос всё равно начинается через секунды).
+     * Stem dust if table is ready; otherwise starts background computation (tens of ms, outside the frame) and returns null:
+     * stem has no dust for the first burst frames (inflow starts seconds later anyway).
      */
     @org.jetbrains.annotations.Nullable
     public static StemDust ready(double yieldKt, double hobM, boolean surface, double visibilityM) {
@@ -125,7 +125,7 @@ public final class StemDust {
             try {
                 of(yieldKt, hobM, surface, visibilityM);
             } catch (RuntimeException e) {
-                // ошибка — в лог один раз; ножка остаётся без пыли (ключ — среди упавших, заново не считается)
+                // log error once; stem stays dust-free (key among failures, no retry)
                 org.slf4j.LoggerFactory.getLogger(StemDust.class).error("Stem dust table failed for {}", key, e);
                 synchronized (CACHE) {
                     FAILED.add(key);
@@ -151,17 +151,17 @@ public final class StemDust {
         return a[i] + (a[i + 1] - a[i]) * f;
     }
 
-    /** Ослабление пыли в ножке на метр высоты в момент t, м²/м (за таблицей — последнее). */
+    /** Stem dust extinction per meter height at t, m²/m (beyond table, last value). */
     public double lambda(double t) {
         return at(lambda, t);
     }
 
-    /** Докуда поднялась пыль в ножке в момент t, м над землёй (не выше низа шапки). */
+    /** Dust top in the stem at t, m above ground (no higher than cap bottom). */
     public double top(double t) {
         return at(top, t);
     }
 
-    /** Толща ножки поперёк через середину в момент t при радиусе r, м: 2Λ/(πr). */
+    /** Cross-stem center optical depth at t and radius r, m: 2Λ/(πr). */
     public double tau(double t, double r) {
         return 2 * lambda(t) / (Math.PI * Math.max(r, 1));
     }

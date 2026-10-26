@@ -10,15 +10,15 @@ displayName = "${mod_name}"
 authors = "${mod_authors}"
 displayURL = "${mod_url}"
 logoFile = "incoming.png"
-credits = "Sounds: Freesound recordings by juskiddink, KVV_Audio, Nanashi, Romaner66, Spennnyyy and tim.kahn (CC BY 4.0) and by CC0 authors; full list in assets/incoming/sounds/credits.txt. Bundled: sable-companion (MIT)."
+credits = "Sound authors, sources and licenses: assets/incoming/sounds/credits.txt. Bundled: FastNoiseLite and sable-companion (MIT; license notices included). Minecraft-derived assets: META-INF/ASSET-NOTICES.txt."
 description = '''${mod_description}'''
 
-# открывает Channel.source, SoundManager.soundEngine и SoundEngine.instanceToChannel (фильтр OpenAL: воздух,
-# преграды, оглушение) и ChunkMap.getChunks (все загруженные чанки)
+# Opens Channel.source, SoundManager.soundEngine and SoundEngine.instanceToChannel (OpenAL filtering: air,
+# obstacles, deafness), and ChunkMap.getChunks (all loaded chunks).
 [[accessTransformers]]
 file = "META-INF/accesstransformer.cfg"
 
-# защита от краша Sable при дроблении аппарата (compat/SplitGuard); без Sable не применяется
+# Mixin configuration, including the Sable craft-splitting crash guard; that guard is inactive without Sable.
 [[mixins]]
 config = "incoming.mixins.json"
 
@@ -36,7 +36,7 @@ versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
-# Sable и Create Aeronautics — не обязательны: без них аппаратов просто нет
+# Sable and Create Aeronautics are optional: without them, there are no craft.
 [[dependencies.${mod_id}]]
 modId = "sable"
 type = "optional"
@@ -44,8 +44,8 @@ versionRange = "[${sable_version},)"
 ordering = "AFTER"
 side = "BOTH"
 
-# Distant Horizons — не обязателен: с ним карта наведения берёт дальний рельеф из его API (собрано под API 7;
-# другая мажорная версия API — рельеф только из чанков, см. client/map/DistantHorizonsTerrain)
+# Distant Horizons is optional: the targeting map reads far terrain through its API (built against API 7;
+# another API major version limits terrain to chunks, see client/map/DistantHorizonsTerrain).
 [[dependencies.${mod_id}]]
 modId = "distanthorizons"
 type = "optional"
@@ -54,8 +54,8 @@ versionRange = "${dh_version_range}"
 ordering = "NONE"
 side = "CLIENT"
 
-# LOD Server Support (сервер раздаёт LOD): необязателен; рельеф вдали для карты, лучей и звука через его клиентское API.
-# Версия любая: другое API — слой LSS выключается одной строкой в лог (client/map/LssTerrain)
+# LOD Server Support is optional: its client API supplies far terrain for the map, rays and sound.
+# Any version: an incompatible API disables the LSS layer with one log message (client/map/LssTerrain).
 [[dependencies.${mod_id}]]
 modId = "lss"
 type = "optional"

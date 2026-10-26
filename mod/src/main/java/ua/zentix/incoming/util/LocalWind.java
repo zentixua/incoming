@@ -1,69 +1,68 @@
 package ua.zentix.incoming.util;
 
 /**
- * Ветер у земли в месте: поправка к ветру мира ({@link Wind}, {@link Air}) от того, что стоит вокруг, — доля
- * {@link #factor} скорости на высоте над землёй против той же высоты над ровным полем. Ветер мира — погода над слоем у
- * земли и остаётся одним; поправка — только ниже высоты смешения застройки и у холмов, по карте высот вокруг места, один
- * раз на место: сервер и клиент по тем же картам считают одинаково, пакета нет.
+ * Local ground wind: correction to world wind ({@link Wind}, {@link Air}) from surroundings — {@link #factor} of speed
+ * at height above ground relative to the same height over flat field. World wind is weather above the surface layer
+ * and remains shared; correction applies only below urban blending height and near hills, using surrounding heightmaps,
+ * once per position: server and client compute identically from the same maps, no packet.
  * <ul>
- *   <li><b>Земля и постройки.</b> Карта высот ({@code MOTION_BLOCKING}: дома, кроны, столбы) делится на землю и то, что
- *   на ней стоит, морфологическим открытием окном {@value #GROUND_WINDOW} м — фильтр земли лидара (Zhang K. et al.,
- *   IEEE TGRS 41:872, 2003): всё уже окна (дом, дерево) снимается, склон остаётся склоном. ⚠ Хребет уже окна теряет
- *   макушку — на гребне выходит низкая «застройка».</li>
- *   <li><b>Шероховатость.</b> Доля площади под постройками λp, их средняя высота H и доля фронтальной площади против
- *   ветра λf дают высоту вытеснения d и шероховатость z₀ (морфометрия Macdonald, Griffiths, Hall 1998, Atmos. Environ.
- *   32:1857: A = 4,43, C_D = 1,2, β = 1). Выше H — логарифмический профиль над d, до высоты смешения
- *   {@value #BLEND}·H (Grimmond, Oke 1999, J. Appl. Meteor. 38:1262: 2–5 H), где он сходится с полем (z₀ травы
- *   {@value #OPEN_Z0} м, класс «открытое место» Davenport/WMO). Ниже H, в улице, — экспонента
- *   u(z) = u(H)·exp(a(z/H − 1)), a = 9,6·λf (Macdonald 2000, Bound.-Layer Meteor. 97:25; подгонка до λf 0,33 — дальше
- *   не продолжается). ⚠ Castro 2017 (BLM 162:207) показывает, что в плотной застройке средний профиль не всегда
- *   экспонента; направление в улице (вдоль неё) не меняется.</li>
- *   <li><b>Холм.</b> Над вершиной высоты H с полушириной L (на половине высоты) ветер разгоняется на ΔS = B·H/L,
- *   B = {@value #HILL_B} (трёхмерный холм), и разгон убывает с высотой как exp(−{@value #HILL_A}·z/L); в низине —
- *   наоборот (линейная теория Jackson, Hunt 1975; руководство Taylor, Lee 1984, Bound.-Layer Meteor. 30:415). Круче
- *   H/L = {@value #HILL_SLOPE} поток отрывается — разгон дальше не растёт. ⚠ L — по кольцу вокруг места, где земля
- *   ниже всего относительно вершины; затишье за гребнем не моделируется.</li>
+ *   <li><b>Ground and buildings.</b> Heightmap ({@code MOTION_BLOCKING}: houses, crowns, posts) separates ground from
+ *   objects by morphological opening over a {@value #GROUND_WINDOW} m window — lidar ground filtering (Zhang K. et al.,
+ *   IEEE TGRS 41:872, 2003): anything narrower than the window (house, tree) is removed, slope remains slope.
+ *   ⚠ A narrow ridge loses its top — low “buildings” appear on the crest.</li>
+ *   <li><b>Roughness.</b> Plan area fraction λp, mean building height H and wind-facing frontal area fraction λf give
+ *   displacement height d and roughness z₀ (Macdonald, Griffiths, Hall 1998 morphometry, Atmos. Environ. 32:1857:
+ *   A = 4.43, C_D = 1.2, β = 1). Above H, logarithmic profile over d up to blending height {@value #BLEND}·H
+ *   (Grimmond, Oke 1999, J. Appl. Meteor. 38:1262: 2–5 H), matching field wind there (grass z₀ {@value #OPEN_Z0} m,
+ *   Davenport/WMO “open terrain” class). Below H, in streets, exponential u(z) = u(H)·exp(a(z/H − 1)), a = 9.6·λf
+ *   (Macdonald 2000, Bound.-Layer Meteor. 97:25; fit only to λf 0.33, no extrapolation). ⚠ Castro 2017 (BLM 162:207)
+ *   shows dense urban mean profiles are not always exponential; street direction (along it) is unchanged.</li>
+ *   <li><b>Hill.</b> Above a summit of height H and half-width L (at half-height), speed-up ΔS = B·H/L,
+ *   B = {@value #HILL_B} (3D hill), decaying with height as exp(−{@value #HILL_A}·z/L); opposite in a hollow
+ *   (Jackson, Hunt 1975 linear theory; Taylor, Lee 1984 guidance, Bound.-Layer Meteor. 30:415). Beyond slope
+ *   H/L = {@value #HILL_SLOPE}, separation stops further speed-up. ⚠ L uses the surrounding ring with ground lowest
+ *   relative to the summit; lee-side shelter is not modeled.</li>
  * </ul>
  *
- * @param ground       земля под местом, y мира ({@link Double#NaN} — неизвестна: высота берётся над уровнем моря)
- * @param base         высота поверхности, от которой меряет вызывающий (крыша под взрывом), над землёй, м
- * @param canopy       средняя высота построек и крон H, м (0 — поле)
- * @param displacement высота вытеснения d, м
- * @param roughness    шероховатость z₀, м
- * @param attenuation  показатель a профиля в застройке
- * @param hill         разгон у земли ΔS (меньше нуля — в низине)
- * @param hillLength   полуширина холма L, м
+ * @param ground       local ground, world y ({@link Double#NaN} — unknown: use height above sea level)
+ * @param base         caller's reference surface height (roof under blast), above ground, m
+ * @param canopy       mean building and crown height H, m (0 — field)
+ * @param displacement displacement height d, m
+ * @param roughness    roughness z₀, m
+ * @param attenuation  urban profile exponent a
+ * @param hill         ground speed-up ΔS (negative — hollow)
+ * @param hillLength   hill half-width L, m
  */
 public record LocalWind(double ground, double base, double canopy, double displacement, double roughness, double attenuation,
                         double hill, double hillLength) {
-    /** Шероховатость открытого места (короткая трава), м: к ней приведён ветер мира у земли. */
+    /** Open-terrain roughness (short grass), m: reference for world surface wind. */
     public static final double OPEN_Z0 = 0.03;
-    /** Ровное поле: поправки нет. */
+    /** Flat field: no correction. */
     public static final LocalWind OPEN = new LocalWind(Double.NaN, 0, 0, 0, OPEN_Z0, 0, 0, 1);
-    /** Шаг выборки карты высот и полуразмер квадрата застройки, м. */
+    /** Heightmap sample spacing and urban square half-size, m. */
     static final int STEP = 2, RADIUS = 32;
-    /** Окно фильтра земли (сторона квадрата), м: дома и кроны уже него снимаются. */
+    /** Ground filter window (square side), m: narrower houses and crowns are removed. */
     static final int GROUND_WINDOW = 25;
-    /** Ниже этого над землёй — не постройка (забор, куст, ступень рельефа), м. */
+    /** Below this ground-relative height, not a building (fence, shrub, terrain step), m. */
     static final double OBSTACLE = 2;
-    /** Высота смешения в H. */
+    /** Blending height in H. */
     static final double BLEND = 3;
-    /** Морфометрия Macdonald 1998 и экспонента Macdonald 2000. */
+    /** Macdonald 1998 morphometry and Macdonald 2000 exponential profile. */
     static final double A = 4.43, CD = 1.2, KAPPA = 0.4, ATTENUATION = 9.6, FRONTAL_MAX = 0.33;
-    /** Холм: кольца поиска подножия, м, лучей на кольцо; Taylor, Lee 1984. */
+    /** Hill: foot-search rings, m, rays per ring; Taylor, Lee 1984. */
     static final double[] HILL_RINGS = {16, 32, 64, 128};
     static final int SPOKES = 16;
     static final double HILL_B = 1.6, HILL_A = 4, HILL_SLOPE = 0.5, HILL_LOW = -0.5;
 
-    /** Верх колонки (первый воздух над картой высот), y мира; {@link Double#NaN} — неизвестен. */
+    /** Column top (first air above heightmap), world y; {@link Double#NaN} — unknown. */
     @FunctionalInterface
     public interface Heights {
         double at(int x, int z);
     }
 
     /**
-     * Ветер у земли в (x, z) при ветре мира в сторону (ux, uz) (единичный: от него — фронтальная площадь построек).
-     * Поверхность, от которой меряет вызывающий ({@link #base}), — верх колонки в самом месте.
+     * Ground wind at (x, z) with world wind unit direction (ux, uz), which sets building frontal area.
+     * Caller reference surface ({@link #base}) is the column top at that position.
      */
     public static LocalWind of(Heights heights, double x, double z, double ux, double uz) {
         int cx = (int) Math.floor(x), cz = (int) Math.floor(z);
@@ -74,7 +73,7 @@ public record LocalWind(double ground, double base, double canopy, double displa
         int c = m / 2;
         double g0 = ground[c][c];
         if (Double.isNaN(g0)) return OPEN;
-        // застройка в квадрате места: доля под постройками, их высота и ступени против ветра
+        // buildings in the local square: plan area fraction, height and upwind steps
         int di = (int) Math.round(ux), dj = (int) Math.round(uz);
         int known = 0, built = 0;
         double sum = 0, frontal = 0;
@@ -105,7 +104,7 @@ public record LocalWind(double ground, double base, double canopy, double displa
         }
         double here = top[c][c];
         double base = Double.isNaN(here) ? 0 : Math.max(0, here - g0);
-        // холм: земля на кольцах против земли места (то же грубое минимальное окно, чтобы сдвиг склона был одним)
+        // hill: ground on rings relative to local ground (same coarse minimum window for consistent slope displacement)
         double g = coarse(heights, cx, cz), hill = 0, length = 1, best = 0;
         if (!Double.isNaN(g)) {
             for (double ring : HILL_RINGS) {
@@ -130,7 +129,7 @@ public record LocalWind(double ground, double base, double canopy, double displa
         return new LocalWind(g0, base, canopy, d, z0, a, hill, length);
     }
 
-    /** Высота постройки над землёй в ячейке, м: ниже {@link #OBSTACLE} — 0; неизвестно — NaN. */
+    /** Cell building height above ground, m: below {@link #OBSTACLE} — 0; unknown — NaN. */
     private static double obstacle(double[][] top, double[][] ground, int i, int j) {
         if (i < 0 || j < 0 || i >= top.length || j >= top.length) return Double.NaN;
         double o = top[i][j] - ground[i][j];
@@ -138,7 +137,7 @@ public record LocalWind(double ground, double base, double canopy, double displa
         return o >= OBSTACLE ? o : 0;
     }
 
-    /** Морфологическое открытие квадратом (2w+1)²: минимум, потом максимум; неизвестное не в счёт. */
+    /** Morphological opening by square (2w+1)²: minimum, then maximum; unknowns excluded. */
     static double[][] opening(double[][] v, int w) {
         return filter(filter(v, w, true), w, false);
     }
@@ -159,8 +158,8 @@ public record LocalWind(double ground, double base, double canopy, double displa
     }
 
     /**
-     * Минимум (максимум) в окне ±w по строке за постоянное время на точку (van Herk 1992, Gil, Werman 1993): накопленные
-     * слева и справа в блоках по 2w + 1. Неизвестное — не в счёт; окно без известного — NaN.
+     * Minimum (maximum) in row window ±w in constant time per point (van Herk 1992, Gil, Werman 1993): left/right prefix
+     * accumulations in blocks of 2w + 1. Unknowns excluded; no known value in window — NaN.
      */
     static void run(double[] v, double[] out, int w, boolean min) {
         int m = v.length, k = 2 * w + 1;
@@ -176,8 +175,8 @@ public record LocalWind(double ground, double base, double canopy, double displa
         }
         for (int i = 0; i < m; i++) {
             int lo = Math.max(0, i - w), hi = Math.min(m - 1, i + w);
-            // окно в двух соседних блоках — правое накопленное от lo и левое до hi; в одном (у краёв строки окно короче) —
-            // накопленное от его начала блока или до конца строки
+            // window in two neighboring blocks: right accumulation from lo and left to hi; in one (shorter window at row edges),
+            // accumulation from block start or to row end
             double r;
             if (lo / k != hi / k) r = min ? Math.min(right[lo], left[hi]) : Math.max(right[lo], left[hi]);
             else r = lo % k == 0 ? left[hi] : right[lo];
@@ -185,7 +184,7 @@ public record LocalWind(double ground, double base, double canopy, double displa
         }
     }
 
-    /** Земля для холма: низ из пяти колонок крестом ±4 м (дом или дерево в самой точке не поднимает её). */
+    /** Hill ground: minimum of five columns in a ±4 m cross (house or tree at the exact point does not raise it). */
     private static double coarse(Heights h, int x, int z) {
         double r = Double.NaN;
         int[][] cross = {{0, 0}, {4, 0}, {-4, 0}, {0, 4}, {0, -4}};
@@ -197,21 +196,21 @@ public record LocalWind(double ground, double base, double canopy, double displa
     }
 
     /**
-     * Доля ветра на высоте z м над поверхностью вызывающего ({@link #base} над землёй) против той же высоты над полем: 1 —
-     * выше высоты смешения у земли и вдали от холма; над крышей — ещё и выше над землёй.
+     * Wind fraction at z m above caller surface ({@link #base} above ground) relative to the same height above field:
+     * 1 above surface blending height and far from a hill; over a roof, also higher above ground.
      */
     public double factor(double z) {
         return factor(z, base);
     }
 
-    /** Доля ветра на высоте h м над землёй места против той же высоты над полем. */
+    /** Wind fraction at h m above local ground relative to the same height over field. */
     public double overGround(double h) {
         return factor(h, 0);
     }
 
     private double factor(double z, double base) {
         double zz = Math.max(Wind.FLOOR, z), h = Math.max(Wind.FLOOR, z + base);
-        // скорости в долях ветра поля на высоте смешения (у поля — логарифм над z₀ травы)
+        // speeds relative to field wind at blending height (field uses logarithm over grass z₀)
         double here = Math.log(h / OPEN_Z0), zb = BLEND * canopy;
         if (canopy > 0 && h < zb) {
             double above = Math.max(h, canopy);
@@ -224,20 +223,20 @@ public record LocalWind(double ground, double base, double canopy, double displa
     }
 
     /**
-     * То же место, мерить от высоты y мира ({@link #base} — её высота над землёй места): поверхность под взрывом, а не верх
-     * колонки (крона над ним, крыша соседа по ячейке кэша).
+     * Same position, measured from world y ({@link #base} is its height above local ground): surface beneath a blast,
+     * not column top (crown above it, neighboring roof in cache cell).
      */
     public LocalWind from(double y) {
         return new LocalWind(ground, Double.isNaN(ground) ? 0 : Math.max(0, y - ground), canopy, displacement, roughness, attenuation,
                 hill, hillLength);
     }
 
-    /** Высота точки y мира над землёй места, м (земля неизвестна — над уровнем моря, как у ветра мира). */
+    /** Height of world y above local ground, m (unknown ground — above sea level, as world wind). */
     public double above(double y) {
         return y - (Double.isNaN(ground) ? Air.SEA : ground);
     }
 
-    /** Ключ кэша облаков: поправка с точностью до 2 % на высотах слоя у земли. */
+    /** Cloud cache key: correction to 2 % precision at surface-layer heights. */
     public String key() {
         return Math.round(50 * factor(2)) + ":" + Math.round(50 * factor(10)) + ":" + Math.round(50 * factor(40));
     }

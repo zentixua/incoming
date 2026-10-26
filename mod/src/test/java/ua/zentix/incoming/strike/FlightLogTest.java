@@ -13,8 +13,8 @@ class FlightLogTest {
     private static final String DRONE = "entity.incoming.drone";
 
     /**
-     * Залп из 30 шахедов по игроку с разбросом теряет цель в одном тике: у каждого своя последняя точка (разброс залпа),
-     * а в лог — одна строка с серединой и разбросом, а не 30.
+     * A volley from 30 Shahed at a player with a spread loses the target in one tick: each has its own last point (the spread of the volley),
+     *  and in the log there is one line with a middle and a spread, and not 30.
      */
     @Test
     void salvoWithSpreadIsOneLine() {
@@ -28,10 +28,10 @@ class FlightLogTest {
         String text = lines.getFirst().text();
         assertTrue(text.startsWith("Projectiles: 30 × " + DRONE + " lost the target (gone)"), text);
         assertTrue(text.endsWith(" -271 70 85 (±29), endurance ≤ 12 s"), text);
-        assertTrue(log.drain().isEmpty(), "строки за тик не забыты");
+        assertTrue(log.drain().isEmpty(), "lines behind tick are not forgotten");
     }
 
-    /** Разные события и виды — разные строки; одна точка — без разброса. */
+    /** Different events and types - different lines; one point - no scatter. */
     @Test
     void eventsAndWeaponsAreSeparate() {
         FlightLog log = new FlightLog();
@@ -45,7 +45,7 @@ class FlightLogTest {
         assertTrue(lines.get(1).text().endsWith(" 10 64 10 (lost)"), lines.get(1).text());
     }
 
-    /** Разбились до взведения: WARN с местом (середина и разброс), счёт по событию не сбрасывается строками тика. */
+    /** Crashed before cocking: WARN with space (middle and spread), the event score is not reset by tick lines. */
     @Test
     void crashedIsWarnedWithPlace() {
         FlightLog log = new FlightLog();
@@ -58,7 +58,7 @@ class FlightLogTest {
         assertEquals(30, log.total(FlightLog.Event.CRASHED));
     }
 
-    /** Сбиты до взведения: строка на тип урона. */
+    /** Knocked down before cocking: line for damage type. */
     @Test
     void shotDownSplitsByDamage() {
         FlightLog log = new FlightLog();
@@ -72,7 +72,7 @@ class FlightLogTest {
         assertEquals(Level.WARN, lines.get(1).level());
     }
 
-    /** Сбиты зенитной ракетой: штатный исход (INFO), в строке — какой ЗРК. */
+    /** Shot down by an anti-aircraft missile: standard outcome (INFO), in the line - which SAM. */
     @Test
     void interceptedNamesLauncher() {
         FlightLog log = new FlightLog();

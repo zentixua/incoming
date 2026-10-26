@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AirAlertTest {
-    /** Стороны света в тревоге: север Minecraft — −Z, восток — +X; восемь секторов по 45° вокруг каждой. */
+    /** The cardinal directions are in alarm: north Minecraft - −Z, east - +X; eight sectors of 45° around each. */
     @Test
     void compassFollowsMinecraftAxes() {
         assertEquals("n", AirAlert.compass(0, -100));
@@ -16,7 +16,7 @@ class AirAlertTest {
         assertEquals("se", AirAlert.compass(70, 70));
         assertEquals("sw", AirAlert.compass(-70, 70));
         assertEquals("nw", AirAlert.compass(-70, -70));
-        // граница сектора — 22,5° от оси
+        // sector boundary - 22,5° from the axis
         assertEquals("n", AirAlert.compass(Math.tan(Math.toRadians(22)), -1));
         assertEquals("ne", AirAlert.compass(Math.tan(Math.toRadians(23)), -1));
         assertEquals("n", AirAlert.compass(-Math.tan(Math.toRadians(22)), -1));

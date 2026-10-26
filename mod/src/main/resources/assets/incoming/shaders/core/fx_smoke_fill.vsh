@@ -1,7 +1,7 @@
 #version 150
 
-// Сетка дыма (client/fx/layer/SmokePass): прямоугольник клеток одного клуба в слое текстуры — x, y в NDC слоя, z —
-// номер клуба в таблице.
+// Smoke grid (client/fx/layer/SmokePass): rectangle of one billow's cells in a texture layer — x, y in layer NDC,
+// z is billow table index.
 in vec3 Position;
 
 out float blob;

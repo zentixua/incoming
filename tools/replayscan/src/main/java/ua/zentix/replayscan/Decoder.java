@@ -29,10 +29,10 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 
 /**
- * Действия повтора — в пакеты игры и пакеты модов, теми же кодеками, что у клиента: пакеты игры — протоколом игры
- * ({@code GameProtocols}, как {@code ReplayReader}), пакеты модов из действий Flashback NeoForge Fixed — кодеком,
- * который мод зарегистрировал у NeoForge (тело действия: varint протокола, id, байты пакета, как их получил клиент).
- * Реестры — сервера повтора (Flashback собрал их из записи). Чанки не разбираются целиком: нужно только место.
+ * Replay actions - into game packages and mod packages, with the same codecs as the client: game packages - with the game protocol
+ *  ({@code GameProtocols}, like {@code ReplayReader}), mod packages from actions Flashback NeoForge Fixed - with the codec
+ * , which the mod registered with NeoForge (action body: varint protocol, id, packet bytes as the client received them).
+ * Registers - replay servers (Flashback collected them from the record). Chunks are not completely disassembled: only space is needed.
  */
 final class Decoder {
     static final String GAME_PACKET = "flashback:action/game_packet";
@@ -43,26 +43,26 @@ final class Decoder {
             "flashback_neoforge_fixed:action/forwarded_modded_payload_optional",
             "flashback_neoforge_fixed:action/modded_snapshot_payload_v3_optional");
 
-    /** Что вышло из действия. */
+    /** What came out of the action. */
     sealed interface Item {}
 
-    /** Пакет игры; {@code forwarded} — Flashback NeoForge Fixed отдаёт его зрителю, не применяя к миру повтора (участки Sable). */
+    /** Game package; {@code forwarded} - Flashback NeoForge Fixed gives it to the viewer without applying replay to the world (sections Sable). */
     record GamePacket(Packet<?> packet, boolean forwarded) implements Item {}
 
-    /** Чанк пришёл клиенту (место; сам чанк сервер повтора ставит в мир). */
+    /** The chunk has arrived to the client (place; the chunk itself is replayed by the server into the world). */
     record Chunk(int x, int z, boolean forwarded) implements Item {}
 
-    /** Чанк из кэша чанков повтора по номеру. */
+    /** Chunk from the replay chunk cache by number. */
     record CachedChunk(int index) implements Item {}
 
     record Payload(ResourceLocation id, CustomPacketPayload value) implements Item {}
 
-    /** Пакет мода без кодека (мод не стоит) или с ошибкой разбора. */
+    /** A mod package without a codec (the mod is not worth it) or with a parsing error. */
     record RawPayload(ResourceLocation id, int bytes, String error) implements Item {}
 
     private final RegistryAccess access;
     private final StreamCodec<ByteBuf, Packet<? super ClientGamePacketListener>> game;
-    /** id пакетов чанка и света: их тела не разбираются (узнаются по первому разобранному). */
+    /** id chunk and light packages: their bodies cannot be disassembled (they are recognized by the first one that is disassembled). */
     private int chunkId = -1;
     private final IntSet lightIds = new IntOpenHashSet();
     final Map<String, long[]> actions = new TreeMap<>();
@@ -75,7 +75,7 @@ final class Decoder {
         this.game = GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(access, ConnectionType.NEOFORGE)).codec();
     }
 
-    /** Разбор действия: всё, что в нём, — в {@code out}; {@code payloads} — разбирать ли пакеты модов. */
+    /** Analysis of the action: everything in it is in {@code out}; {@code payloads} - whether to disassemble mod packages. */
     void decode(Action a, boolean withPayloads, Consumer<Item> out) {
         count(actions, a.name());
         try {

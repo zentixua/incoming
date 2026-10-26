@@ -7,21 +7,21 @@
 #     "scipy>=1.11",
 # ]
 # ///
-"""Иконка мода из кадров плана «icon» трейлера (шахед крупно на фоне неба).
+"""Mod icon from frames of the trailer "icon" shot (Shahed close-up against the sky).
 
     uv run tools/trailer/icon_from_frames.py mod/run/scenario/trailer-icon/frames/icon dist/icon
 
-План «icon» снимается сценарием трейлера (INCOMING_TRAILER_SHOTS=icon); готовая иконка в мод не входит.
+The "icon" shot is recorded by the trailer scenario (INCOMING_TRAILER_SHOTS=icon); the finished icon is not included in the mod.
 
-Сам выбирает кадр (кроме первых 10 %, пока камера заходит за шахед): самый крупный силуэт снаряда (всё, что заметно отличается от неба), целиком в кадре и ближе
-к центру. Пишет:
-  incoming-icon.png         512×512: кадр с запасом вокруг силуэта, скруглённые углы, тёплая рамка и тёмный
-                             контур снаружи (видно и на тёмной, и на светлой теме Modrinth);
-  incoming-icon-small.png   512×512 для мелких размеров: кадр теснее, небо размыто, силуэт резкий и контрастный;
-  incoming-icon-96.png, -64.png — уменьшенный малый вариант;
-  preview.png                оба варианта в 128/64/32 px на тёмном и светлом фоне;
-  source.txt                 какой кадр взят.
-Зависимости — в блоке script выше (PEP 723): uv run ставит их сам.
+Chooses a frame automatically (excluding the first 10%, while the camera moves behind the Shahed): the largest projectile silhouette
+(anything visibly different from the sky), fully in frame and closer to the center. Writes:
+  incoming-icon.png         512×512: frame with a margin around the silhouette, rounded corners, warm border and dark
+                             outer outline (visible in both dark and light Modrinth themes);
+  incoming-icon-small.png   512×512 for small sizes: tighter crop, blurred sky, sharp high-contrast silhouette;
+  incoming-icon-96.png, -64.png — downscaled small variant;
+  preview.png                both variants at 128/64/32 px on dark and light backgrounds;
+  source.txt                 selected frame.
+Dependencies are in the script block above (PEP 723): uv run installs them.
 """
 import os
 import sys
@@ -32,22 +32,22 @@ from scipy import ndimage
 
 N = 512
 RIM, OUTLINE = (255, 138, 42), (20, 16, 14)
-SETTLE = 10  # первая 1/SETTLE кадров плана не берётся
+SETTLE = 10  # exclude the first 1/SETTLE of the shot frames
 
 
 def subject(img):
-    """Маска силуэта: отличие от цвета неба (медиана верхней трети), крупнейшая связная область не у края."""
+    """Silhouette mask: difference from sky color (median of the top third), largest connected region away from the edge."""
     a = np.asarray(img.convert("RGB"), np.float32)
     h, w = a.shape[:2]
     sky = np.median(a[: h // 3].reshape(-1, 3), axis=0)
     diff = np.linalg.norm(a - sky, axis=2)
-    # снаряд тёмный на фоне неба; огонь и дым светлее — не в счёт
+    # projectile is dark against the sky; fire and smoke are lighter and do not count
     mask = ndimage.binary_opening((diff > 55) & (a.mean(axis=2) < 90), iterations=2)
     lab, n = ndimage.label(mask)
     if n == 0:
         return None
     sizes = ndimage.sum(mask, lab, range(1, n + 1))
-    # земля и облака у края кадра — не снаряд
+    # ground and clouds at the frame edge are not the projectile
     edge = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
     for e in edge:
         sizes[e - 1] = 0
@@ -65,7 +65,7 @@ def score(img):
     mask, (x0, y0, x1, y1), area = s
     h, w = mask.shape
     pad = 0.04 * min(w, h)
-    if x0 < pad or y0 < pad or x1 > w - pad or y1 > h - pad:  # обрезан краем кадра
+    if x0 < pad or y0 < pad or x1 > w - pad or y1 > h - pad:  # cropped by the frame edge
         return -1, None
     cx, cy = (x0 + x1) / 2 / w - 0.5, (y0 + y1) / 2 / h - 0.5
     return area * (1 - 1.2 * (cx * cx + cy * cy) ** 0.5), s
@@ -82,7 +82,7 @@ def square(img, box, margin):
 
 
 def framed(img):
-    """Скруглённые углы, тёплая рамка, тёмный контур снаружи рамки."""
+    """Rounded corners, warm border, dark outline outside the border."""
     img = img.convert("RGBA")
     r = int(N * 0.14)
     ring = Image.new("RGBA", (N, N), (0, 0, 0, 0))
@@ -101,7 +101,7 @@ def main(frames, out):
     os.makedirs(out, exist_ok=True)
     names = sorted(f for f in os.listdir(frames) if f.endswith(".png"))
     best, best_s, best_name = -1, None, None
-    # первые 10 % плана — камера ещё догоняет шахед (он сбоку, «обычная ракета в профиль»); дальше каждый шаг сетки
+    # first 10% of the shot: camera still catching up with the Shahed (off to the side, "ordinary missile in profile"); then every grid step
     step = max(1, len(names) // 60)
     for f in [f for i, f in enumerate(names) if i % step == 0 and i >= len(names) // SETTLE]:
         img = Image.open(os.path.join(frames, f))
@@ -109,7 +109,7 @@ def main(frames, out):
         if sc > best:
             best, best_s, best_name = sc, s, f
     if best_s is None:
-        raise SystemExit("в кадрах не нашёлся силуэт целиком — нужен другой план")
+        raise SystemExit("no complete silhouette found in the frames — another shot is needed")
     img = Image.open(os.path.join(frames, best_name)).convert("RGB")
     mask, box, _ = best_s
 
@@ -117,9 +117,9 @@ def main(frames, out):
     big = ImageEnhance.Contrast(ImageEnhance.Color(big).enhance(1.15)).enhance(1.1)
     framed(big).save(os.path.join(out, "incoming-icon.png"), optimize=True)
 
-    # малый: небо размыто и светлее, силуэт резкий, темнее и с тёмной обводкой — читается на 32 px
+    # small: sky blurred and lighter, silhouette sharp, darker and darkly outlined — readable at 32 px
     sil = Image.fromarray((ndimage.binary_dilation(mask, iterations=2) * 255).astype(np.uint8))
-    # фон без снаряда: силуэт закрашен цветом неба, иначе размытие даёт вокруг него тёмный ореол
+    # background without projectile: silhouette filled with sky color, otherwise blur gives it a dark halo
     arr = np.asarray(img, np.float32).copy()
     arr[ndimage.binary_dilation(mask, iterations=6)] = np.median(arr[: arr.shape[0] // 3].reshape(-1, 3), axis=0)
     bg = Image.fromarray(arr.astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=img.width / 60))
@@ -149,7 +149,7 @@ def main(frames, out):
     prev.save(os.path.join(out, "preview.png"))
     with open(os.path.join(out, "source.txt"), "w") as f:
         f.write(f"{os.path.join(frames, best_name)}\n")
-    print("кадр:", best_name, "→", out)
+    print("frame:", best_name, "→", out)
 
 
 if __name__ == "__main__":

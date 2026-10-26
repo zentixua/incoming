@@ -46,8 +46,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Руины в фоне ({@code RuinWorkers}): фоновый план тот же, что в потоке сервера; решатели не зовут мир и свойства
- * блоков мимо снимков; чанк, до которого дошла волна, не уходит игроку до своих руин.
+ * Ruins in the background ({@code RuinWorkers}): the background is the same as in the server thread; solvers do not call the world and properties of
+ *  blocks past snapshots; The chunk that the wave has reached does not go to the player until it reaches its ruins.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -55,14 +55,14 @@ public final class RuinBackgroundGameTests {
     private RuinBackgroundGameTests() {}
 
     /**
-     * Плотный город (как в замере цены) и блок Create с блок-сущностью в нём: план каждого внутреннего чанка фоновыми
-     * потоками — место в место такой же, как в потоке сервера.
+     * A dense city (as in the price measurement) and a block Create with a block entity in it: the plan of each internal chunk with background
+     *  threads - place to place is the same as in the server flow.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_background", skyAccess = true)
     public static void backgroundPlanMatchesServerPlan(GameTestHelper h) {
         RuinCostGameTests.city(h);
         ServerLevel level = h.getLevel();
-        // блок Create (если он в сборке): вал с блок-сущностью в стене дома
+        // block Create (if it is in the assembly): a shaft with a block entity in the wall of the house
         Block shaft = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "shaft"));
         if (shaft != Blocks.AIR) h.setBlock(new BlockPos(24, 6, 18), shaft);
         Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 32), true, new BlockPos(32, 1, 32), 12);
@@ -76,35 +76,35 @@ public final class RuinBackgroundGameTests {
                 LevelChunk chunk = level.getChunk(c.x, c.z);
                 RuinPlan server = RuinPlanner.planFresh(level, d, chunk, false), background = RuinPlanner.planFresh(level, d, chunk, true);
                 String diff = server.differs(background);
-                h.assertTrue(diff == null, "фоновый план чанка " + c + " не такой, как в потоке сервера:" + diff);
+                h.assertTrue(diff == null, "chunk background " + c + " not the same as in the server thread:" + diff);
                 diff = flashDiffers(server, background);
-                h.assertTrue(diff == null, "гарь вспышки фонового плана чанка " + c + " не та, что в потоке сервера:" + diff);
+                h.assertTrue(diff == null, "fumes flash background chunk " + c + " not the one in the server stream:" + diff);
                 compared++;
                 cells += server.changedBlocks();
                 charred += server.flash().length;
             }
         }
-        h.assertTrue(cells > 0, "город не разрушен: сравнивать нечего");
-        h.assertTrue(charred > 0, "гари вспышки в городе нет: сравнивать нечего");
-        Incoming.LOG.info("Руины в фоне: {} планов совпали, {} мест, {} обугленных граней", compared, cells, charred);
+        h.assertTrue(cells > 0, "the city is not destroyed: there is nothing to compare");
+        h.assertTrue(charred > 0, "there are no burning flashes in the city: there is nothing to compare");
+        Incoming.LOG.info("Ruins in the background: {} plans coincided, {} places, {} charred edges", compared, cells, charred);
         h.succeed();
     }
 
     /**
-     * Всё, что идёт в фоновых потоках руин, не зовёт мир, чанк, настройки и методы состояний блоков, кроме чтения
-     * свойств ({@code getBlock}, {@code getValue}, {@code hasProperty}, {@code getFluidState}, {@code setValue},
-     * {@code isAir}): остальное — из таблицы свойств, заполненной в потоке сервера. Обход — по графу вызовов от корней
-     * фоновых задач (план: {@code Collapse.solve}, {@code Blast.solve}, {@code RuinPlanner.finish}, лямбды задач
-     * {@code RuinContext}; след без руин и слой вспышки: {@code RuinPlanner.scorch}, {@code RuinPlanner.flash}; разбор
-     * чанка с диска: {@code DiskShots.parse}) через все классы мода, с телами лямбд. Чтение
-     * изменяемого статического поля мода и запись в статическое поле вне {@code <clinit>} — тоже ошибка. Вызов через
-     * {@code Blast.PropsView} не обходится: в фоне это опубликованная таблица ({@code Blast.publish}), а его реализация
-     * для потока сервера ({@code Blast.SERVER}) сама ловится правилом «{@code Blast.props} — только в потоке сервера».
+     * Everything that goes in the background threads of the ruins does not call the world, chunk, settings and block state methods, except for reading
+     *  properties ({@code getBlock}, {@code getValue}, {@code hasProperty}, {@code getFluidState}, {@code setValue},
+     * {@code isAir}): the rest is from the property table filled in the server stream. Traversal - according to the call graph from the roots of
+     *  background tasks (plan: {@code Collapse.solve}, {@code Blast.solve}, {@code RuinPlanner.finish}, task lambdas
+     * {@code RuinContext}; trace without ruins and flash layer: {@code RuinPlanner.scorch}, {@code RuinPlanner.flash}; parsing
+     *  chunk from disk: {@code DiskShots.parse}) through all classes of the mod, with lambda bodies. Reading
+     *  from a mutable static field of a mod and writing to a static field outside of {@code <clinit>} is also an error. The call via
+     * {@code Blast.PropsView} is not bypassed: in the background it is a published table ({@code Blast.publish}), and its implementation of
+     *  for the server thread ({@code Blast.SERVER}) is itself caught by the rule “{@code Blast.props} - only in the server thread”.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_background_calls", skyAccess = true)
     public static void backgroundSolversCallNoWorld(GameTestHelper h) {
         String pkg = "ua/zentix/incoming/nuclear/world/";
-        // корни: класс, метод, описание (null — все перегрузки); DiskShots.parse(ServerLevel, …) — для проверок, в потоке сервера
+        // roots: class, method, description (null - all overloads); DiskShots.parse(ServerLevel, ...) - for checks, in the server thread
         String[][] roots = {{"Collapse", "solve", null}, {"Blast", "solve", null}, {"RuinPlanner", "finish", null}, {"RuinPlanner", "scorch", null},
                 {"RuinPlanner", "flash", null}, {"DiskShots", "parse", "(L" + pkg + "DiskShots$Format;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)L" + pkg + "DiskShots$Read;"}};
         Set<String> forbiddenOwners = Set.of("net/minecraft/world/level/Level", "net/minecraft/server/level/ServerLevel",
@@ -131,7 +131,7 @@ public final class RuinBackgroundGameTests {
             String[] superName = {null};
             byte[] bytes = classBytes(owner);
             if (bytes == null) {
-                bad.add(path + ": класс " + owner + " не найден");
+                bad.add(path + ": class " + owner + " not found");
                 continue;
             }
             walked++;
@@ -176,23 +176,23 @@ public final class RuinBackgroundGameTests {
                         public void visitFieldInsn(int op, String o, String field, String fd) {
                             if (!o.startsWith("ua/zentix/incoming/") || op != Opcodes.GETSTATIC && op != Opcodes.PUTSTATIC) return;
                             if (op == Opcodes.PUTSTATIC && !method.equals("<clinit>")) {
-                                bad.add(path + " → " + here + " пишет статическое поле " + o.substring(o.lastIndexOf('/') + 1) + "." + field);
+                                bad.add(path + " → " + here + " writes a static field " + o.substring(o.lastIndexOf('/') + 1) + "." + field);
                                 return;
                             }
                             Integer access = fieldAccess.computeIfAbsent(o, RuinBackgroundGameTests::fields).get(field);
                             if (access != null && (access & Opcodes.ACC_FINAL) == 0 && !method.equals("<clinit>")) {
-                                bad.add(path + " → " + here + " читает изменяемое статическое поле " + o.substring(o.lastIndexOf('/') + 1) + "." + field);
+                                bad.add(path + " → " + here + " reads a mutable static field " + o.substring(o.lastIndexOf('/') + 1) + "." + field);
                             }
                         }
                     };
                 }
             }, ClassReader.SKIP_DEBUG);
-            // унаследованный метод — ищем у предка (только классы мода)
+            // inherited method - look for the ancestor (mod classes only)
             if (!found[0] && superName[0] != null && superName[0].startsWith("ua/zentix/incoming/")) todo.add(new String[]{superName[0], name, desc, path});
         }
-        h.assertTrue(walked > 20, "обход графа вызовов нашёл только " + walked + " методов: корни не найдены?");
-        h.assertTrue(bad.isEmpty(), "фоновые задачи руин зовут мир или свойства мимо таблицы: " + bad.size() + ": " + String.join("; ", new java.util.LinkedHashSet<>(bad).stream().limit(40).toList()));
-        Incoming.LOG.info("Фоновые задачи руин: обойдено {} методов, мира не зовут", walked);
+        h.assertTrue(walked > 20, "bypassing the call graph only found " + walked + " methods: roots not found?");
+        h.assertTrue(bad.isEmpty(), "ruins background tasks call the world or properties past the table: " + bad.size() + ": " + String.join("; ", new java.util.LinkedHashSet<>(bad).stream().limit(40).toList()));
+        Incoming.LOG.info("Background tasks of ruins: bypassed {} methods, the world is not called", walked);
         h.succeed();
     }
 
@@ -204,7 +204,7 @@ public final class RuinBackgroundGameTests {
         }
     }
 
-    /** Статические поля класса и их флаги. */
+    /** Static class fields and their flags. */
     private static java.util.Map<String, Integer> fields(String owner) {
         java.util.Map<String, Integer> out = new java.util.HashMap<>();
         byte[] bytes = classBytes(owner);
@@ -220,9 +220,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * План по чанкам, прочитанным с диска (фаза 2: записаны, как их записал бы мир, и разобраны как чанки не в памяти),
-     * — место в место такой же, как план по чанкам в памяти. Так же — у чанков, какими их оставляет обновление мира 1.17,
-     * и у чанков без карт высот на диске (карты из редакторов).
+     * The plan for chunks read from the disk (phase 2: written as the world would write them, and parsed as chunks not in memory),
+     * —place to place is the same as the plan for chunks in memory. The same applies to chunks, as the world update 1.17,
+     *  leaves them, and to chunks without height maps on disk (maps from editors).
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_background_disk", skyAccess = true)
     public static void diskPlanMatchesMemoryPlan(GameTestHelper h) {
@@ -239,32 +239,32 @@ public final class RuinBackgroundGameTests {
                 LevelChunk chunk = level.getChunk(c.x, c.z);
                 RuinPlan memory = RuinPlanner.planFresh(level, d, chunk, true), disk = RuinPlanner.planFromDisk(level, d, chunk);
                 String diff = memory.differs(disk);
-                h.assertTrue(diff == null, "план чанка " + c + " с диска не такой, как по чанку в памяти:" + diff);
+                h.assertTrue(diff == null, "chunk plan " + c + " from disk is not the same as from a chunk in memory:" + diff);
                 diff = flashDiffers(memory, disk);
-                h.assertTrue(diff == null, "гарь вспышки плана чанка " + c + " с диска не та, что по чанку в памяти:" + diff);
-                // мир 1.17 после обновления: блоки на месте, низ мира догенерируется при загрузке — план тот же
+                h.assertTrue(diff == null, "fumes flash plan chunk " + c + " from the disk is not the same as from the chunk in memory:" + diff);
+                // the world of 1.17 after the update: the blocks are in place, the bottom of the world is generated upon loading - the same plan
                 RuinPlan retrogen = RuinPlanner.planFromDisk(level, d, chunk, RuinBackgroundGameTests::asRetrogen);
                 diff = memory.differs(retrogen);
                 if (diff == null) diff = flashDiffers(memory, retrogen);
-                h.assertTrue(diff == null, "план чанка " + c + " с догенерацией под нулём не такой, как по чанку в памяти:" + diff);
-                // карта из редактора: карт высот на диске нет — досчитываются по блокам, как у ванили при загрузке
+                h.assertTrue(diff == null, "chunk plan " + c + " s additional generation under zero is not the same as for a chunk in memory:" + diff);
+                // map from the editor: there are no height maps on disk - they are counted in blocks, like vanilla when loading
                 RuinPlan noHeights = RuinPlanner.planFromDisk(level, d, chunk, tag -> {
                     tag.remove("Heightmaps");
                     return tag;
                 });
                 diff = memory.differs(noHeights);
                 if (diff == null) diff = flashDiffers(memory, noHeights);
-                h.assertTrue(diff == null, "план чанка " + c + " без карт высот на диске не такой, как по чанку в памяти:" + diff);
+                h.assertTrue(diff == null, "chunk plan " + c + " without height maps on disk it is not the same as in a chunk in memory:" + diff);
                 compared++;
                 cells += memory.changedBlocks();
                 charred += memory.flash().length;
             }
         }
-        h.assertTrue(cells > 0, "город не разрушен: сравнивать нечего");
-        h.assertTrue(charred > 0, "гари вспышки в городе нет: сравнивать нечего");
-        // слой вспышки стоит, а руин подрыва в памяти нет (перезапуск, руины забыты после простоя): огонь слоя на крышах
-        // в чанке и у соседей его окна, отметка слоя — в чанке и в его данных на диске; огонь в снимке — воздух обоими
-        // путями, иначе крыша с огнём поднимала бы поверхность мира на блок только в снимке с диска
+        h.assertTrue(cells > 0, "the city is not destroyed: there is nothing to compare");
+        h.assertTrue(charred > 0, "there are no burning flashes in the city: there is nothing to compare");
+        // the flash layer is on, but the ruins of the explosion are not in memory (restart, the ruins are forgotten after idle time): the fire of the layer is on the roofs of
+        //  in the chunk and in its neighbors' windows, the mark of the layer is in the chunk and in its data on the disk; fire in the picture - air in both
+        //  ways, otherwise the roof with fire would raise the surface of the world by a block only in the picture from the disk
         List<LevelChunk> pad = padChunks(h);
         int[] marked = flashOverCity(h, d, pad);
         int layerCompared = 0, ruinFires = 0;
@@ -273,11 +273,11 @@ public final class RuinBackgroundGameTests {
                 for (int rz : new int[]{24, 40}) {
                     ChunkPos c = new ChunkPos(h.absolutePos(new BlockPos(rx, 1, rz)));
                     LevelChunk chunk = level.getChunk(c.x, c.z);
-                    h.assertTrue(FlashScorch.marked(chunk, d.id()), "у чанка " + c + " нет отметки слоя вспышки: случай не тот");
+                    h.assertTrue(FlashScorch.marked(chunk, d.id()), "at the chunk " + c + " no flash layer mark: not the case");
                     RuinPlan memory = RuinPlanner.planFresh(level, d, chunk, true), disk = RuinPlanner.planFromDisk(level, d, chunk);
                     String diff = memory.differs(disk);
                     if (diff == null) diff = flashDiffers(memory, disk);
-                    h.assertTrue(diff == null, "план чанка " + c + " с огнём слоя вспышки (отметка, плана слоя нет) с диска не такой, как по чанку в памяти:" + diff);
+                    h.assertTrue(diff == null, "chunk plan " + c + " with fire of the flash layer (mark, no layer plan) from the disk is not the same as from the chunk in memory:" + diff);
                     layerCompared++;
                     ruinFires += memory.fireCount();
                 }
@@ -285,13 +285,13 @@ public final class RuinBackgroundGameTests {
         } finally {
             unflashCity(level, d, pad);
         }
-        h.assertTrue(ruinFires > 0, "у руин поверх огня слоя своих пожаров нет: сравнивать нечего");
-        Incoming.LOG.info("Руины с диска: {} планов совпали, {} мест, {} обугленных граней; поверх слоя вспышки по отметке — {} планов совпали "
-                + "({} чанков с отметкой, {} пожаров слоя; пожаров руин {})", compared, cells, charred, layerCompared, marked[0], marked[1], ruinFires);
+        h.assertTrue(ruinFires > 0, "the ruins do not have a layer of their own fires on top of the fire: there is nothing to compare");
+        Incoming.LOG.info("Ruins from the disk: {} plans coincided, {} places, {} charred edges; on top of the flash layer at the mark - {} plans coincided "
+                + "({} chunks with mark, {} layer fires; ruins fires {})", compared, cells, charred, layerCompared, marked[0], marked[1], ruinFires);
         h.succeed();
     }
 
-    /** Чанки площадки (в памяти: квартал на ней строится через мир). */
+    /** Chunks of the site (in memory: a block on it is being built across the world). */
     private static List<LevelChunk> padChunks(GameTestHelper h) {
         BlockPos a = h.absolutePos(BlockPos.ZERO), b = h.absolutePos(new BlockPos(63, 0, 63));
         List<LevelChunk> out = new ArrayList<>();
@@ -302,9 +302,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Слой вспышки над кварталом {@code RuinCostGameTests.city}: доски на крышах (огню есть на чём встать), слой — во всех
-     * чанках площадки, потом руины подрыва забыты — в чанках остаются огонь и отметка слоя. [0] — чанков с отметкой,
-     * [1] — пожаров слоя.
+     * A flash layer over the {@code RuinCostGameTests.city} block: boards on the roofs (there is something for fire to stand on), a layer in all
+     *  chunks of the site, then the ruins of the explosion are forgotten - the fire and the mark of the layer remain in the chunks. [0] - chunks with a mark,
+     * [1] - layer fires.
      */
     private static int[] flashOverCity(GameTestHelper h, Detonation d, List<LevelChunk> pad) {
         ServerLevel level = h.getLevel();
@@ -327,18 +327,18 @@ public final class RuinBackgroundGameTests {
             done = flash.work(level, d.gameTime() + 10_000, clock);
             if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
         }
-        h.assertTrue(done, "слой вспышки над кварталом не кончился");
+        h.assertTrue(done, "the flash layer over the block did not end");
         NuclearWorld.get(level).forgetRuinsForTest(d.id());
         int[] out = new int[2];
         for (LevelChunk c : pad) {
             if (FlashScorch.marked(c, d.id())) out[0]++;
             out[1] += fires(c, null);
         }
-        h.assertTrue(out[1] > 0, "слой вспышки не зажёг крыш: случай не тот");
+        h.assertTrue(out[1] > 0, "the flash layer did not light the roofs: this was not the case");
         return out;
     }
 
-    /** Огонь слоя и отметки — прочь (доски остаются: квартал свой у партии), руины подрыва — забыты. */
+    /** The fire of the layer and the mark are gone (the boards remain: the batch has its own quarter), the ruins of the explosion are forgotten. */
     private static void unflashCity(ServerLevel level, Detonation d, List<LevelChunk> pad) {
         NuclearWorld.get(level).forgetRuinsForTest(d.id());
         for (LevelChunk c : pad) {
@@ -347,7 +347,7 @@ public final class RuinBackgroundGameTests {
         }
     }
 
-    /** Блоков огня в чанке; с {@code level} — и гасит их (через мир, без обновлений соседей). */
+    /** Fire blocks in the chunk; with {@code level} - and extinguishes them (through the world, without updating neighbors). */
     private static int fires(LevelChunk chunk, @org.jetbrains.annotations.Nullable ServerLevel level) {
         var sections = chunk.getSections();
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
@@ -366,8 +366,8 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Чанк, каким его оставляет обновление мира 1.17 (ваниль {@code ChunkHeightAndBiomeFix}, затем переименование
-     * статусов): статус «пусто», догенерация под нулём до полной генерации 1.17 ({@code heightmaps} → {@code spawn}).
+     * Chunk, as the world update 1.17 leaves it (vanilla {@code ChunkHeightAndBiomeFix}, then renaming
+     *  statuses): status “empty”, additional generation from zero to full generation of 1.17 ({@code heightmaps} → {@code spawn}).
      */
     private static net.minecraft.nbt.CompoundTag asRetrogen(net.minecraft.nbt.CompoundTag tag) {
         net.minecraft.nbt.CompoundTag retrogen = new net.minecraft.nbt.CompoundTag();
@@ -379,9 +379,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Остановка сервера посреди зоны за волной (выход из мира после ядерки): вся работа руин бросается — тикеты
-     * подготовки, зоны и держащие чанки отпущены, очереди пусты, фоновые потоки остановились за свой срок
-     * ({@code RuinWorkers.shutdown}: ждёт не дольше 3 с). Настенное время не меряется: срок — у самого пула.
+     * Server stop in the middle of a zone behind a wave (exit from the world after the nuke): all the work of the ruins is abandoned - preparation tickets
+     * , zones and holding chunks are released, queues are empty, background threads stopped within their time limit
+     *  ({@code RuinWorkers.shutdown}: waits no longer than 3 s). Wall time is not measured: the deadline is at the pool itself.
      */
     @GameTest(template = "range", timeoutTicks = 900, batch = "nuke_stop", skyAccess = true)
     public static void stopMidZoneLeavesNoWork(GameTestHelper h) {
@@ -401,7 +401,7 @@ public final class RuinBackgroundGameTests {
                 if (level.getGameTime() > now + 850) {
                     ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
                     NuclearStrikes.clear(level);
-                    throw new net.minecraft.gametest.framework.GameTestAssertException("зона за волной так и не началась: подрыв " + detonated);
+                    throw new net.minecraft.gametest.framework.GameTestAssertException("the zone behind the wave never started: detonation " + detonated);
                 }
                 return;
             }
@@ -409,21 +409,21 @@ public final class RuinBackgroundGameTests {
             ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
             int held = ruinTickets(level);
             long threads = ruinThreadsLeft();
-            String left = "квадратов " + w.prepTiles() + ", в подготовке " + w.plannedChunks() + ", в очереди " + w.queuedChunks()
-                    + ", тикетов руин " + held + ", потоков руин " + threads;
+            String left = "squares " + w.prepTiles() + ", in preparation " + w.plannedChunks() + ", in line " + w.queuedChunks()
+                    + ", ticket ruins " + held + ", streams of ruins " + threads;
             NuclearStrikes.clear(level);
-            h.assertTrue(stopped, "фоновые потоки не остановились за срок; " + left);
-            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.stopped() && threads == 0, "остались потоки руин; " + left);
-            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held == 0, "после остановки осталась работа: " + left);
+            h.assertTrue(stopped, "background threads did not stop within the time limit; " + left);
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.stopped() && threads == 0, "streams of ruins remained; " + left);
+            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held == 0, "after stopping there is still work left: " + left);
             h.succeed();
         });
     }
 
     /**
-     * Живые потоки руин после остановки пула. Пул объявляет остановку, когда счёт его потоков дошёл до нуля, а поток,
-     * уже вышедший из цикла пула, ещё доходит до конца {@code run()}: «потоков руин 1» бывает в той же
-     * миллисекунде, что строка «background threads stopped». Поэтому каждый ждётся, не дольше секунды: зависший так
-     * и остаётся в счёте.
+     * Living streams of ruins after the pool stops. The pool announces a stop when the count of its threads has reached zero, and the thread,
+     * , which has already exited the pool loop, still reaches the end of {@code run()}: “ruin threads 1” happens in the same
+     *  millisecond as the line “background threads stopped". Therefore, everyone waits, no longer than a second: the one who hangs like this
+     *  remains in the count.
      */
     private static long ruinThreadsLeft() {
         long n = 0;
@@ -439,7 +439,7 @@ public final class RuinBackgroundGameTests {
         return n;
     }
 
-    /** Тикеты ядерки на карте расстояний мира: свои и загрузки районов, чей район — ядерный (подготовка, зона). */
+    /** ticket the nuke on the world distance map: yours and downloads of areas whose area is nuclear (preparation, zone). */
     private static int ruinTickets(ServerLevel level) {
         try {
             java.lang.reflect.Field f = net.minecraft.server.level.DistanceManager.class.getDeclaredField("tickets");
@@ -465,22 +465,22 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Выход из мира доходит до конца, когда тикет мода начал генерацию, а она держит держатель, уже поставленный на
-     * выгрузку (иначе выгрузка без конца). В Незере на свежем месте: чанк A загружен и снят
-     * (он в очереди выгрузки), тикет загрузки на B рядом — генерация B берёт A обратно. Дальше — как при выходе:
-     * {@code ServerStoppingEvent} — мод снимает тикет и ждёт генерацию ({@link ua.zentix.incoming.util.StopDrain#drain});
-     * после этого ни один держатель Незера не занят генерацией, и ванильный цикл остановки как есть
-     * ({@code removeTicketsOnClosing}, {@code ServerChunkCache.tick(() -> true, false)}, задачи сервера со сроком тика
-     * через 1 мс, как {@code waitUntilNextTick}) кончается: карта Незера пустеет ({@code hasWork()} ложно, тикетов нет).
-     * Без ожидания ванильный вызов {@code tick} на этом держателе не возвращается, пока генерацию не кончит чужой поток:
-     * задача выгрузки A кладёт себя в очередь обратно, а слоям генерации нужен поток сервера. Настенное время — только
-     * пределы против зависания (вызов дольше 10 с — тест красный), не мера скорости.
+     * The exit from the world reaches the end when the ticket mode has started generating, and it holds the holder already placed on
+     *  unloading (otherwise unloading without end). In Nether, in a fresh place: chunk A is loaded and removed
+     *  (it is in the unloading queue), ticket loading on B is nearby - generation B takes A back. Then - as when exiting:
+     * {@code ServerStoppingEvent} - the mod removes the ticket and waits for generation ({@link ua.zentix.incoming.util.StopDrain#drain});
+     *  after that, not a single Nether holder is busy generating, and the vanilla stop cycle is as is
+     *  ({@code removeTicketsOnClosing}, {@code ServerChunkCache.tick(() -> true, false)}, server tasks with tick deadline
+     * through 1 ms, like {@code waitUntilNextTick}) ends: Nether map empties ({@code hasWork()} false, no ticket).
+     * Without waiting, vanilla call {@code tick} on this holder is not returned until someone else’s thread will not finish the generation:
+     *  The unloading task A puts itself back in the queue, and the generation layers need a server thread. Wall time is only
+     *  limits against freezing (call longer than 10 s - test red), not a measure of speed.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "stop_drain", skyAccess = true)
     public static void stopDrainLetsVanillaUnloadFinish(GameTestHelper h) {
         net.minecraft.server.MinecraftServer server = h.getLevel().getServer();
         ServerLevel nether = server.getLevel(net.minecraft.world.level.Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
+        h.assertTrue(nether != null, "no Nether");
         var cache = nether.getChunkSource();
         var map = cache.chunkMap;
         ChunkPos a = new ChunkPos(20_000 + h.getLevel().random.nextInt(4000), 20_000 + h.getLevel().random.nextInt(4000));
@@ -501,42 +501,42 @@ public final class RuinBackgroundGameTests {
             var unloadQueue = (java.util.Queue<?>) unloadF.get(map);
             nether.noSave = false;
             try {
-                // A — полный чанк; его тикет UNKNOWN истекает, и A уходит в очередь выгрузки — когда его отпустит
-                // генерация соседей (processUnloads пропускает держатель с generationRefCount > 0): задачи чанков и
-                // потоки генерации, до 10 с
+                // A - full chunk; his ticket UNKNOWN expires, and A goes to the unloading queue - when it is released by
+                //  generation of neighbors (processUnloads skips the holder with generationRefCount > 0): chunk tasks and
+                //  generation threads, up to 10 s
                 nether.getChunk(a.x, a.z);
                 long setup = System.nanoTime() + 10_000_000_000L;
                 while (!pending.containsKey(a.toLong()) && System.nanoTime() < setup) {
                     cache.tick(() -> false, false);
                     while (cache.pollTask()) {
-                        // задачи чанков потока сервера: шаги генерации соседей
+                        // server thread chunk tasks: neighbor generation steps
                     }
                     java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
                 }
-                h.assertTrue(pending.containsKey(a.toLong()) && !unloadQueue.isEmpty(), "A не встал в очередь выгрузки");
-                // тикет загрузки на B рядом, как у районов мода: A возвращается в работу, генерация B его держит
+                h.assertTrue(pending.containsKey(a.toLong()) && !unloadQueue.isEmpty(), "A did not join the upload queue");
+                // ticket loading on B nearby, like the mod districts: A returns to work, generation B holds it
                 ChunkPos b = new ChunkPos(a.x + 2, a.z);
                 net.minecraft.server.level.TicketType<ChunkPos> type = net.minecraft.server.level.TicketType.create("incoming_test_stop",
                         java.util.Comparator.comparingLong(ChunkPos::toLong));
                 cache.addRegionTicket(type, b, 0, b);
                 cache.tick(() -> false, false);
                 h.assertTrue(updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g && g.getGenerationRefCount() > 0,
-                        "генерация B не держит A — случай не воспроизведён");
-                // ServerStoppingEvent: мод снимает свой тикет и ждёт генерацию, начатую до выхода
+                        "generation B does not hold A - the case is not reproduced");
+                // ServerStoppingEvent: the mod removes its ticket and waits for the generation started before release
                 cache.removeRegionTicket(type, b, 0, b);
                 boolean drained = ua.zentix.incoming.util.StopDrain.drain(java.util.List.of(nether),
                         System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
                 int busy = ua.zentix.incoming.util.StopDrain.inFlight(nether);
-                h.assertTrue(drained && busy == 0, "генерация не кончилась за предел ожидания: держателей занято " + busy);
+                h.assertTrue(drained && busy == 0, "generation has not ended beyond the waiting limit: holders are occupied " + busy);
                 h.assertTrue(!(updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g) || g.getGenerationRefCount() == 0,
-                        "A всё ещё держит генерация");
-                // ванильный цикл остановки как есть: каждый вызов tick возвращается, карта пустеет
+                        "A is still generating");
+                // vanilla stop loop as is: each call to tick returns, the map is empty
                 long deadline = System.nanoTime() + 60_000_000_000L;
                 int rounds = 0;
                 while (map.hasWork()) {
                     if (System.nanoTime() > deadline) {
-                        throw new net.minecraft.gametest.framework.GameTestAssertException("выход не кончился за " + rounds + " кругов: очередь выгрузки "
-                                + unloadQueue.size() + ", тикеты " + (map.getDistanceManager().hasTickets() ? "есть" : "нет"));
+                        throw new net.minecraft.gametest.framework.GameTestAssertException("the exit is not over " + rounds + " circles: unloading queue "
+                                + unloadQueue.size() + ", ticket " + (map.getDistanceManager().hasTickets() ? "yes" : "no"));
                     }
                     next.setLong(server, net.minecraft.Util.getNanos() + 1_000_000L);
                     cache.removeTicketsOnClosing();
@@ -547,17 +547,17 @@ public final class RuinBackgroundGameTests {
                             return true;
                         }, false);
                     } catch (VanillaSpin e) {
-                        throw new net.minecraft.gametest.framework.GameTestAssertException("ванильный круг выгрузки не вернулся за 10 с (круг " + rounds
-                                + "): держатель A занят генерацией — " + (updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g
+                        throw new net.minecraft.gametest.framework.GameTestAssertException("vanilla unloading circle did not return for 10 s (circle " + rounds
+                                + "): holder A is busy generating - " + (updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g
                                 ? g.getGenerationRefCount() : -1));
                     }
                     while (server.pollTask()) {
-                        // задачи сервера, как waitUntilNextTick: задачи чанков — только пока срок не прошёл
+                        // server tasks, like waitUntilNextTick: chunk tasks - only until the deadline has passed
                     }
                     java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
                     rounds++;
                 }
-                h.assertFalse(map.getDistanceManager().hasTickets(), "после выхода остались тикеты");
+                h.assertFalse(map.getDistanceManager().hasTickets(), "tickets left after leaving");
             } finally {
                 nether.noSave = noSave;
                 next.setLong(server, nextTick);
@@ -569,31 +569,31 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Остановка после залпа: районы мода (здесь — район цели радиуса 8 в свежем Незере, чанки не готовы) отпускаются
-     * ({@code StrikeWorld.releaseAreas}) до ожидания генерации, и {@code StopDrain} ждёт только начатое — без этого он
-     * применил бы тикеты районов и ждал генерацию всего залпа дольше своего предела. Настенное время — только предел
+     * Stopping after a salvo: mod areas (here is a target area of radius 8 in fresh Nether, chunks are not ready) are released
+     * ({@code StrikeWorld.releaseAreas}) before waiting for generation, and {@code StopDrain} waits only for what has been started - without this he would have
+     *  applied the district ticket and waited longer for the generation of the entire salvo its limit. Wall time is only the limit
      * {@code StopDrain.LIMIT_NANOS}.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "stop_drain_areas", skyAccess = true)
     public static void stopReleasesAreasBeforeDrain(GameTestHelper h) {
         ServerLevel nether = h.getLevel().getServer().getLevel(net.minecraft.world.level.Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
+        h.assertTrue(nether != null, "no Nether");
         ChunkPos c = new ChunkPos(-30_000 - h.getLevel().random.nextInt(4000), 20_000 + h.getLevel().random.nextInt(4000));
         java.util.UUID flight = java.util.UUID.randomUUID();
         ua.zentix.incoming.strike.FlightTickets.hold(nether, c, 8, flight, true);
         nether.getChunkSource().tick(() -> false, false);
-        h.assertTrue(ua.zentix.incoming.util.StopDrain.inFlight(nether) > 0, "район не запустил генерацию — случай не воспроизведён");
+        h.assertTrue(ua.zentix.incoming.util.StopDrain.inFlight(nether) > 0, "the district did not start generation - the case was not reproduced");
         ua.zentix.incoming.strike.StrikeWorld.releaseAreas(nether);
-        h.assertTrue(ua.zentix.incoming.strike.StrikeWorld.get(nether).areas().size() == 0, "районы не отпущены");
+        h.assertTrue(ua.zentix.incoming.strike.StrikeWorld.get(nether).areas().size() == 0, "areas not released");
         boolean drained = ua.zentix.incoming.util.StopDrain.drain(java.util.List.of(nether),
                 System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
         int busy = ua.zentix.incoming.util.StopDrain.inFlight(nether);
-        h.assertTrue(drained && busy == 0, "генерация не кончилась за предел ожидания: держателей занято " + busy);
-        h.assertTrue(ua.zentix.incoming.strike.FlightTickets.held(nether, flight) == 0, "тикет района остался");
+        h.assertTrue(drained && busy == 0, "generation has not ended beyond the waiting limit: holders are occupied " + busy);
+        h.assertTrue(ua.zentix.incoming.strike.FlightTickets.held(nether, flight) == 0, "the area ticket remains");
         h.succeed();
     }
 
-    /** Выход из ванильного круга выгрузки, если он не вернулся ({@link #stopDrainLetsVanillaUnloadFinish}). */
+    /** Quit the vanilla unload circle if it doesn't return ({@link #stopDrainLetsVanillaUnloadFinish}). */
     private static final class VanillaSpin extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
@@ -603,12 +603,12 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Чанк на краю загруженного мира (тикет радиуса 0, соседи не загружены) с постройкой во весь чанк: его фоновый план
-     * строится, как у очереди руин, — окно с диска, соседей нет на диске (не сохранены) — сплошной массив, и ничего не
-     * ждёт ({@link #windowWithoutNeighboursOnDisk}). Готовый план без мест через мир у края ставится без соседей: и соседи
-     * при этом не грузятся, и блоки чанка — секция в секцию те же, что при загруженных соседях (тот же план второй раз
-     * после возврата блоков). Второй случай: чанку у аппарата Sable подмена по-прежнему ждёт соседей радиуса 1
-     * ({@code RuinPlan.needsNeighbours}: Sable на каждое место читает 6 соседей), дальнему чанку — нет.
+     * A chunk is on the edge of a loaded world (ticket of radius 0, neighbors are not loaded) with a building in the entire chunk: its background plan
+     *  is built like a queue of ruins - a window from the disk, neighbors are not on the disk (not saved) - a solid array, and nothing is waiting for
+     *  ({@link #windowWithoutNeighboursOnDisk}). A ready-made plan without places across the world at the edge is placed without neighbors: the neighbors
+     *  are not loaded, and the blocks of the chunk - section to section are the same as with loaded neighbors (the same plan a second time
+     *  after returning the blocks). Second case: for a chunk of craft Sable the substitution is still waiting for neighbors with a radius of 1
+     *  ({@code RuinPlan.needsNeighbours}: Sable reads 6 neighbors for each place), but not for the distant chunk.
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "nuke_edge_apply", skyAccess = true)
     public static void readyPlanSameWithoutNeighbours(GameTestHelper h) {
@@ -626,18 +626,18 @@ public final class RuinBackgroundGameTests {
             ua.zentix.incoming.IncomingConfig.SERVER.nukeFires.set(fires);
             NuclearStrikes.clear(level);
         };
-        // и после провала по сроку: тикеты, пожары в настройке, очереди
+        // and after failure by deadline: ticket, fires in setup, queues
         StrikeGameTests.afterTest(h, done);
-        // X — сразу (сервер GameTest тикает быстрее фоновой генерации), тикет держит его полным, соседей — нет
+        // X - immediately (server GameTest ticks faster than background generation), ticket keeps it full, no neighbors
         chunks.addRegionTicket(NuclearGameTests.HOLD, x, 0, x);
         level.getChunk(x.x, x.z);
         h.startSequence()
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
-                    h.assertTrue(chunk != null, "X не загружен");
+                    h.assertTrue(chunk != null, "X not loaded");
                     BlockPos base = new BlockPos(x.getMinBlockX(), 200, x.getMinBlockZ());
-                    // этажи во весь чанк на столбах, стены у края (места плана в блоке от границы чанка; на самой
-                    // границе setBlock не годится: Sable читает соседей места и загрузил бы соседний чанк)
+                    // floors in the entire chunk on pillars, walls at the edge (places of the plan are a block from the border of the chunk; on the very
+                    //  border setBlock is not suitable: Sable reads the neighbors of the place and would load the neighboring chunk)
                     for (int ly = 0; ly < 16; ly++) {
                         for (int lx = 1; lx < 15; lx++) {
                             for (int lz = 1; lz < 15; lz++) {
@@ -653,72 +653,72 @@ public final class RuinBackgroundGameTests {
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dz = -1; dz <= 1; dz++) {
                             if ((dx != 0 || dz != 0) && chunks.getChunkNow(x.x + dx, x.z + dz) != null) {
-                                throw new net.minecraft.gametest.framework.GameTestAssertException("сосед X загружен до подмены — случай не воспроизведён");
+                                throw new net.minecraft.gametest.framework.GameTestAssertException("neighbor X loaded before replacement - case not reproduced");
                             }
                         }
                     }
                     int[] window = new int[2];
                     plan[0] = RuinPlanner.planWithWindow(level, d, chunk, window);
-                    h.assertTrue(plan[0].changedBlocks() > 0, "постройка не разрушена: сравнивать нечего");
-                    h.assertFalse(plan[0].needsNeighbours(level, chunk), "плану X нужны соседи — случай не тот");
-                    h.assertTrue(plan[0].waitsNeighbours(level, chunk) == 0, "очередь ждала бы соседей X");
+                    h.assertTrue(plan[0].changedBlocks() > 0, "the building is not destroyed: there is nothing to compare");
+                    h.assertFalse(plan[0].needsNeighbours(level, chunk), "plan X needs neighbors - this is not the case");
+                    h.assertTrue(plan[0].waitsNeighbours(level, chunk) == 0, "the queue would be waiting for neighbors X");
                     before[0] = blocks(chunk);
-                    h.assertTrue(plan[0].apply(level, chunk, d, new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "план X устарел");
+                    h.assertTrue(plan[0].apply(level, chunk, d, new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "plan X is outdated");
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dz = -1; dz <= 1; dz++) {
                             if ((dx != 0 || dz != 0) && chunks.getChunkNow(x.x + dx, x.z + dz) != null) {
-                                throw new net.minecraft.gametest.framework.GameTestAssertException("подмена загрузила соседа " + (x.x + dx) + ", " + (x.z + dz));
+                                throw new net.minecraft.gametest.framework.GameTestAssertException("substitution loaded the neighbor " + (x.x + dx) + ", " + (x.z + dz));
                             }
                         }
                     }
                     afterAlone[0] = blocks(chunk);
-                    // вернуть блоки, как до руин, и загрузить соседей
+                    // return the blocks as before the ruins and load the neighbors
                     restore(level, chunk, before[0]);
-                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "блоки X не вернулись");
-                    // соседи — сразу, тикет держит их полными
+                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "blocks X did not return");
+                    // neighbors - immediately, ticket keeps them full
                     chunks.addRegionTicket(NuclearGameTests.HOLD, x, 1, x);
                     for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.getChunk(x.x + dx, x.z + dz);
                 })
-                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(level, x, 1), "соседи X не полные"))
+                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(level, x, 1), "neighbors X are not complete"))
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
-                    h.assertTrue(plan[0].apply(level, chunk, boom[0], new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "план X устарел во второй раз");
+                    h.assertTrue(plan[0].apply(level, chunk, boom[0], new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "plan X is out of date for the second time");
                     String diff = firstDifference(chunk, afterAlone[0], blocks(chunk));
-                    h.assertTrue(diff == null, "руины X без соседей и с соседями разные: " + diff);
-                    Incoming.LOG.info("Руины у края: {} мест, без соседей и с соседями — одно и то же", plan[0].changedBlocks());
+                    h.assertTrue(diff == null, "ruins X without neighbors and with neighbors are different: " + diff);
+                    Incoming.LOG.info("Ruins at the edge: {} places, without neighbors and with neighbors - the same thing", plan[0].changedBlocks());
                 })
                 .thenExecute(() -> assembleCraft(h))
-                .thenWaitUntil(() -> h.assertFalse(!sable() || ua.zentix.incoming.compat.SubLevels.near(level, craftCentre(h), 8).isEmpty(), "аппарат собирается"))
+                .thenWaitUntil(() -> h.assertFalse(!sable() || ua.zentix.incoming.compat.SubLevels.near(level, craftCentre(h), 8).isEmpty(), "craft going"))
                 .thenExecute(() -> craftChunkWaits(h, x, plan[0]))
                 .thenSucceed();
     }
 
     /**
-     * Блок-сущность не из ванили в середине чанка (подставка Create): её {@code onRemove} ходит цепочкой через соседние
-     * блоки (лента Create — до 20 блоков), поэтому подмена ждёт соседей радиуса {@code RuinPlanner.REACH}, а не 1 и не 0,
-     * как у сундука там же. Оба блока — в огненном шаре: план их снимает.
+     * The block entity is not from vanilla in the middle of the chunk (stand Create): its {@code onRemove} moves in a chain through neighboring
+     *  blocks (tape Create - up to 20 blocks), so the substitution waits for neighbors of radius {@code RuinPlanner.REACH}, and not 1 and not 0,
+     *  like the chest in the same place. Both blocks are in a fireball: the plan removes them.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_be_reach", skyAccess = true)
     public static void moddedBlockEntityWaitsReach(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         StrikeGameTests.afterTest(h, () -> NuclearStrikes.clear(level));
         Block depot = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "depot"));
-        h.assertTrue(depot != Blocks.AIR, "нет create:depot — Create не загружен");
+        h.assertTrue(depot != Blocks.AIR, "no create:depot — Create not loaded");
         BlockPos centre = h.absolutePos(NuclearGameTests.CENTER);
         ChunkPos c = new ChunkPos(centre);
         BlockPos spot = new BlockPos(c.getMinBlockX() + 8, centre.getY() + 1, c.getMinBlockZ() + 8);
         LevelChunk chunk = level.getChunkAt(spot);
         Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.05f);
         level.setBlock(spot, depot.defaultBlockState(), 3);
-        h.assertTrue(level.getBlockState(spot).hasBlockEntity(), "у подставки нет блок-сущности");
+        h.assertTrue(level.getBlockState(spot).hasBlockEntity(), "the stand has no block entity");
         RuinPlan withDepot = RuinPlanner.planWithWindow(level, d, chunk, new int[2]);
         h.assertTrue(withDepot.neighbourRadius(level, chunk) == RuinPlanner.REACH,
-                "подставка Create в середине чанка: подмена ждёт соседей радиуса " + withDepot.neighbourRadius(level, chunk) + ", а не " + RuinPlanner.REACH);
+                "stand Create in the middle of the chunk: replacement awaits neighbors of the radius " + withDepot.neighbourRadius(level, chunk) + ", not " + RuinPlanner.REACH);
         level.setBlock(spot, Blocks.CHEST.defaultBlockState(), 3);
         RuinPlan withChest = RuinPlanner.planWithWindow(level, d, chunk, new int[2]);
-        h.assertTrue(withChest.neighbourRadius(level, chunk) == 0, "сундук в середине чанка: подмена ждёт соседей радиуса " + withChest.neighbourRadius(level, chunk));
-        h.assertTrue(withChest.apply(level, chunk, d, new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "план устарел");
-        h.assertFalse(level.getBlockState(spot).is(Blocks.CHEST), "сундук не снят: случай не тот");
+        h.assertTrue(withChest.neighbourRadius(level, chunk) == 0, "chest in the middle of the chunk: replacement awaits radius neighbors " + withChest.neighbourRadius(level, chunk));
+        h.assertTrue(withChest.apply(level, chunk, d, new ua.zentix.incoming.nuclear.world.ColumnScar.Budget(false)), "the plan is outdated");
+        h.assertFalse(level.getBlockState(spot).is(Blocks.CHEST), "the chest has not been removed: this is not the case");
         h.succeed();
     }
 
@@ -730,13 +730,12 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Тупик зоны за волной: чанк P загружен под тикетом с соседями чанка Q (свой тикет он не
-     * берёт), квадрат зоны держит P, а подмена P ждёт соседа R, которого никто не грузит, — и квадрат ждёт P. Здесь Q
-     * и P держат тикеты-«квадраты» радиуса 0, сундуки у восточного края Q и P требуют соседей радиуса 1. Пока Q не
-     * отпустил свой тикет, P ждёт; после — ждёт и дальше (200 тиков, R не грузится), а {@code holdForTile} даёт P свой
-     * тикет: R грузится, руины P встают. В тот же тик сундук P заменяется блок-сущностью Create: план P устаревает,
-     * новый ждёт соседей радиуса 2 — свой тикет P (взятый за квадрат, P загружен под чужим) должен расшириться до r2,
-     * иначе P ждал бы вечно и держал удержание квадрата.
+     * The dead end of the zone behind the wave: the chunk P is loaded under a ticket with the neighbors of the chunk Q (it does not take its ticket
+     * ), the square of the zone is held by P, and the replacement P is waiting for the neighbor R, whom no one is loading, - and the square is waiting P. Here Q
+     *  and P hold ticket “squares” of radius 0, chests at the eastern edge Q and P require neighbors of radius 1. While Q has not released his ticket, P is waiting; after that it waits and continues (200 tick, R does not load), and {@code holdForTile} gives P its
+     *  ticket: R loads, the ruins of P rise. At the same tick, the chest P is replaced by the block entity Create: the plan P becomes obsolete,
+     *  a new one awaits neighbors of the radius 2 - your ticket P (taken as a square, P is loaded under someone else’s) must expand to r2,
+     * , otherwise P would wait forever and hold the square hold.
      */
     @GameTest(template = "range", timeoutTicks = 1600, batch = "nuke_tile_hold", skyAccess = true)
     public static void tileReleaseHoldsWaitingNeighbours(GameTestHelper h) {
@@ -745,9 +744,9 @@ public final class RuinBackgroundGameTests {
         ChunkPos q = new ChunkPos(pad.x + 40, pad.z), p = new ChunkPos(q.x + 1, q.z), r = new ChunkPos(q.x + 2, q.z);
         var areas = ua.zentix.incoming.strike.StrikeWorld.get(level).areas();
         var scars = NuclearWorld.get(level).scars();
-        // наземный подрыв у западного края P без воронки: воронка держит свои чанки с соседями (NuclearTickets) и
-        // загрузила бы R сразу после подрыва — руины P встали бы, не дождавшись тупика, смотря что раньше: план P или
-        // выгрузка R после воронки
+        // ground explosion at the western edge of P without a crater: the crater holds its chunks with its neighbors (NuclearTickets) and
+        //  would have loaded R immediately after the explosion - the ruins of P would have stood up without waiting for a dead end, depending on what came first: plan P or
+        // uploading R after crater
         boolean crater = ua.zentix.incoming.IncomingConfig.SERVER.nukeCrater.get();
         ua.zentix.incoming.IncomingConfig.SERVER.nukeCrater.set(false);
         StrikeGameTests.afterTest(h, () -> {
@@ -756,7 +755,7 @@ public final class RuinBackgroundGameTests {
             areas.release(level, tile(p));
             NuclearStrikes.clear(level);
         });
-        // всё вокруг — на диске целым; сундуки у восточного края Q и P (места через мир у края — соседи радиуса 1)
+        // everything around is intact on the disk; chests at the eastern edge Q and P (places across the world at the edge are neighbors of radius 1)
         BlockPos[] chests = new BlockPos[2];
         for (int x = q.x - 2; x <= r.x + 2; x++) {
             for (int z = q.z - 2; z <= q.z + 2; z++) level.getChunk(x, z);
@@ -775,15 +774,15 @@ public final class RuinBackgroundGameTests {
         Detonation[] det = {null};
         long[] tickAt = {0};
         h.onEachTick(() -> {
-            // после подготовки — в темпе игры: ожидания ниже в тиках, а загрузка чанков и фоновые планы идут по часам
+            // after preparation - at the pace of the game: expectations are lower in tick, and loading of chunks and background plans proceeds by the hour
             if (stage[0] > 0) gamePace(tickAt);
             long now = level.getGameTime();
             switch (stage[0]) {
                 case 0 -> {
-                    // ждём, пока сгенерированное выгрузится: Q, P и R загрузит только сам сценарий. Выгрузится совсем, а не
-                    // только уйдёт из видимой карты: чанк, ждущий выгрузки, подрыв ставит в очередь сразу, и P, ещё не
-                    // под тикетом Q, брал бы свой тикет с соседями — R загружался, руины P вставали без тупика. Пока
-                    // без темпа игры: отстающий сервер ждущие выгрузки не выгружает (ваниль — только пока есть время в тике)
+                    // we wait until the generated one is unloaded: Q, P and R will only load the script itself. It will unload completely, and not
+                    //  will just leave the visible map: the chunk waiting to be unloaded is put in a queue right away, and P, not yet
+                    //  under ticket Q, would take its ticket with its neighbors - R would load, the ruins of P would get up without dead end While
+                    // without game tempo: the lagging server does not unload pending uploads (vanilla - only while there is time in the tick)
                     if (!unloaded(level, List.of(q, p, r))) return;
                     areas.hold(level, tile(q));
                     tickAt[0] = System.nanoTime();
@@ -796,9 +795,9 @@ public final class RuinBackgroundGameTests {
                     stage[0] = 2;
                 }
                 case 2 -> {
-                    // Q ждёт соседей своим тикетом — он грузит P; P встаёт в очередь под чужим тикетом
+                    // Q is waiting for its neighbors with its ticket - it loads P; P gets in line under someone else's ticket
                     if (!scars.queued(p.toLong())) {
-                        if (now - since[0] > 600) h.fail("P не встал в очередь: Q " + (scars.queued(q.toLong()) ? "в очереди" : "готов") + " — тикета с соседями у Q не было");
+                        if (now - since[0] > 600) h.fail("P did not join the queue: Q " + (scars.queued(q.toLong()) ? "in line" : "ready") + " — Q did not have a ticket with neighbors");
                         return;
                     }
                     areas.hold(level, tile(p));
@@ -806,47 +805,47 @@ public final class RuinBackgroundGameTests {
                 }
                 case 3 -> {
                     if (scars.queued(q.toLong())) return;
-                    h.assertFalse(level.getBlockState(chests[0]).is(Blocks.CHEST), "сундук в Q цел: случай не тот");
+                    h.assertFalse(level.getBlockState(chests[0]).is(Blocks.CHEST), "the chest in Q is intact: this is not the case");
                     since[0] = now;
                     stage[0] = 4;
                 }
                 case 4 -> {
-                    // тикет Q отпущен: P ждёт R, а R никто не грузит (тупик, в котором стоят квадраты зоны)
-                    h.assertTrue(scars.queued(p.toLong()), "руины P встали без соседа R: тупика нет, случай не тот");
-                    h.assertTrue(level.getChunkSource().getChunkNow(r.x, r.z) == null, "R загружен");
+                    // ticket Q released: P is waiting for R, and no one is loading R (a dead end in which there are zone squares)
+                    h.assertTrue(scars.queued(p.toLong()), "the ruins of P stood without a neighbor R: there is no dead end, this is not the case");
+                    h.assertTrue(level.getChunkSource().getChunkNow(r.x, r.z) == null, "R loaded");
                     if (now - since[0] < 200) return;
                     waited[0] = scars.diagState(p.toLong(), now);
-                    h.assertTrue(scars.waitsNeighbours(p.toLong()), "P ждёт не соседей: " + waited[0]);
-                    h.assertTrue(scars.holdForTile(level, p.toLong()), "P не взял тикет с соседями");
-                    // сундук — место плана; блок-сущность не из ванили вместо него: старые состояния не те, план заново,
-                    // и новый ждёт соседей r2
-                    h.assertTrue(depot.isPresent(), "нет create:depot (Create не загружен)");
+                    h.assertTrue(scars.waitsNeighbours(p.toLong()), "P is not waiting for neighbors: " + waited[0]);
+                    h.assertTrue(scars.holdForTile(level, p.toLong()), "P did not take a ticket with neighbors");
+                    // chest - place of the plan; a block entity not from vanilla instead: the old states are not the same, the plan is new,
+                    //  and a new one is waiting for neighbors r2
+                    h.assertTrue(depot.isPresent(), "no create:depot (Create not loaded)");
                     level.setBlock(chests[1], depot.get().defaultBlockState(), 3);
                     areas.release(level, tile(p));
                     since[0] = now;
                     stage[0] = 5;
                 }
                 case 5 -> {
-                    // квадрат отпущен: P держит себя сам, пока его руины не встали (иначе он выгрузился бы без руин)
+                    // the square is released: P holds itself until its ruins stand up (otherwise it would unload without the ruins)
                     if (scars.queued(p.toLong())) {
                         if (scars.diagState(p.toLong(), now).contains("ticket r2")) {
                             widened[0] = true;
-                            // расширенный тикет за квадрат — всё ещё в счёте удержаний
-                            h.assertTrue(scars.tileHoldsLeft() == 63, "тикет P r2 вне счёта удержаний: свободно " + scars.tileHoldsLeft());
+                            // extended ticket per square - still included in deductions
+                            h.assertTrue(scars.tileHoldsLeft() == 63, "ticket P r2 outside the deduction account: free " + scars.tileHoldsLeft());
                         }
-                        h.assertTrue(level.getChunkSource().getChunkNow(p.x, p.z) != null, "P выгрузился без руин после отпуска квадрата");
-                        if (now - since[0] > 600) h.fail("руины P не встали за 600 тиков после своего тикета с соседями");
+                        h.assertTrue(level.getChunkSource().getChunkNow(p.x, p.z) != null, "P unloaded without ruins after releasing the square");
+                        if (now - since[0] > 600) h.fail("ruins P did not stand up for 600 tick after his ticket with neighbors");
                         return;
                     }
-                    // работа P кончилась руинами, а не выгрузкой: отметка подрыва у P. Отпустив свой тикет, P выгружается
-                    // в том же тике сервера, что и руины, — тогда он читается с диска (здесь можно: проверка)
+                    // the work of P ended in ruins, and not unloading: the mark of explosion at P. By releasing your ticket, P is unloaded
+                    // in the same server tick as the ruins - then it is read from disk (here you can: check)
                     boolean wasLoaded = level.getChunkSource().getChunkNow(p.x, p.z) != null;
                     LevelChunk pc = level.getChunk(p.x, p.z);
-                    h.assertTrue(pc != null && pc.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "руины P не встали (P в памяти " + wasLoaded
-                            + ", отметка подрыва " + (pc == null ? "?" : pc.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0)) + " при подрыве " + det[0].id()
-                            + "); P ждал: " + waited[0] + "; давление у блока " + String.format(java.util.Locale.ROOT, "%.0f", det[0].psi(Vec3.atCenterOf(chests[1]))) + " psi");
-                    h.assertTrue(widened[0], "P не ждал соседей r2 своим тикетом: план с блоком Create не потребовал r2, случай не тот");
-                    h.assertTrue(scars.tileHoldsLeft() == 64, "тикет P не отпущен после руин: свободно " + scars.tileHoldsLeft());
+                    h.assertTrue(pc != null && pc.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "the ruins of P did not rise (P in memory " + wasLoaded
+                            + ", explosion mark " + (pc == null ? "?" : pc.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0)) + " when detonated " + det[0].id()
+                            + "); P was waiting: " + waited[0] + "; block pressure " + String.format(java.util.Locale.ROOT, "%.0f", det[0].psi(Vec3.atCenterOf(chests[1]))) + " psi");
+                    h.assertTrue(widened[0], "P did not wait for neighbors r2 with its ticket: the plan with block Create did not require r2, this is not the case");
+                    h.assertTrue(scars.tileHoldsLeft() == 64, "ticket P not released after the ruins: free " + scars.tileHoldsLeft());
                     h.succeed();
                 }
                 default -> {
@@ -865,7 +864,7 @@ public final class RuinBackgroundGameTests {
         return Vec3.atCenterOf(h.absolutePos(CRAFT_FROM.offset(1, 0, 1)));
     }
 
-    /** Аппарат из досок над площадкой (как у {@code aircraftBlast}). Без Sable — ничего. */
+    /** craft from boards above the platform (like {@code aircraftBlast}). Without Sable - nothing. */
     private static void assembleCraft(GameTestHelper h) {
         if (!sable()) return;
         ServerLevel level = h.getLevel();
@@ -878,25 +877,25 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Чанку у аппарата подмене нужны соседи, дальнему (X) — нет: тот же план (его места не через мир), разница — только
-     * аппарат. Без Sable — нечего проверять.
+     * The craft replacement chunk needs neighbors, the distant one (X) does not: the same plan (its places are not across the world), the only difference is the
+     *  device. Without Sable there is nothing to check.
      */
     private static void craftChunkWaits(GameTestHelper h, ChunkPos far, RuinPlan plan) {
         if (!sable()) return;
         ServerLevel level = h.getLevel();
         LevelChunk under = level.getChunkAt(BlockPos.containing(craftCentre(h)));
-        h.assertTrue(plan.needsNeighbours(level, under), "чанку у аппарата подмена не ждёт соседей: Sable прочитал бы их синхронно");
+        h.assertTrue(plan.needsNeighbours(level, under), "for a craft chunk, substitution does not wait for neighbors: Sable would read them synchronously");
         LevelChunk x = level.getChunk(far.x, far.z);
-        h.assertFalse(plan.needsNeighbours(level, x), "дальнему чанку без аппаратов подмена ждёт соседей");
+        h.assertFalse(plan.needsNeighbours(level, x), "for a distant chunk without craft, a replacement awaits neighbors");
     }
 
     /**
-     * Слой вспышки у аппарата Sable: Sable на каждое место читает соседей (до 2 блоков), а слою вспышки самому соседи не
-     * нужны — у чанка, чьи соседи не в памяти, слой не встаёт (его принесут руины, когда соседи будут), блоки чанка те
-     * же, соседи не загружены. Без аппарата тот же чанк слой получает и без соседей. X — край загруженного мира (тикет
-     * радиуса 0) в 12 чанках к +Z от площадки (там пусто: следующие ряды площадок ставятся позже): в досягаемости физики
-     * аппарата над площадкой ({@code SableTerrain.watched}), но не в его чанках. Чужой аппарат рядом (прежние партии) —
-     * X уже у аппарата, и проверяется только он. Без Sable — только первая половина.
+     * The flash layer of craft Sable: Sable reads neighbors for each place (up to 2 blocks), and the flash layer itself does not need
+     *  neighbors - for a chunk whose neighbors are not in memory, the layer does not rise (ruins will bring it when there are neighbors), blocks of the chunk same
+     * , the neighbors are not loaded. Without craft, the layer receives the same chunk without neighbors. X - the edge of the loaded world (ticket
+     *  of radius 0) in 12 chunks to +Z from the site (it is empty: the next rows of sites are placed later): within reach of the physics
+     *  device above the site ({@code SableTerrain.watched}), but not in its chunks. Someone else's craft is nearby (former batch) -
+     * X is already with the craft, and only it is checked. Without Sable - only the first half.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_flash_edge", skyAccess = true)
     public static void flashLayerWaitsNeighboursAtCraft(GameTestHelper h) {
@@ -906,12 +905,12 @@ public final class RuinBackgroundGameTests {
         ChunkPos x = new ChunkPos(pad.x, pad.z + 12);
         BlockPos base = new BlockPos(x.getMinBlockX(), 200, x.getMinBlockZ());
         StrikeGameTests.afterTest(h, () -> {
-            // поле — прочь: оно затеняло бы площадки следующих рядов
+            // field - away: it would shade the areas of the next rows
             if (chunks.getChunkNow(x.x, x.z) != null) field(level, base, false);
             chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 0, x);
             NuclearStrikes.clear(level);
         });
-        // X — сразу (сервер GameTest тикает быстрее фоновой генерации), тикет держит его полным, соседей — нет
+        // X - immediately (server GameTest ticks faster than background generation), ticket keeps it full, no neighbors
         chunks.addRegionTicket(NuclearGameTests.HOLD, x, 0, x);
         level.getChunk(x.x, x.z);
         int[][] before = new int[1][];
@@ -919,54 +918,54 @@ public final class RuinBackgroundGameTests {
         h.startSequence()
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
-                    h.assertTrue(chunk != null, "X не загружен");
+                    h.assertTrue(chunk != null, "X not loaded");
                     field(level, base, true);
-                    neighboursUnloaded(chunks, x, "до слоя");
+                    neighboursUnloaded(chunks, x, "to layer");
                     before[0] = blocks(chunk);
                     foreign[0] = ua.zentix.incoming.compat.SableTerrain.watched(level, chunk);
                     FlashScorch f = flashOver(h, base, x);
                     if (foreign[0]) {
-                        h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "слой у чужого аппарата без соседей: встал в " + f.appliedChunks()
-                                + ", ждали " + f.waitingChunks());
-                        h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "слой у чужого аппарата без соседей поменял блоки: "
+                        h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "layer of someone else's craft without neighbors: stood in " + f.appliedChunks()
+                                + ", waited " + f.waitingChunks());
+                        h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "a layer on someone else's craft without neighbors changed blocks: "
                                 + firstDifference(chunk, before[0], blocks(chunk)));
                     } else {
-                        h.assertTrue(f.appliedChunks() == 1, "без аппарата слой у края не встал (ждали соседей: " + f.waitingChunks() + ")");
+                        h.assertTrue(f.appliedChunks() == 1, "without craft, the layer at the edge did not stand up (we were waiting for neighbors: " + f.waitingChunks() + ")");
                         if (java.util.Arrays.equals(blocks(chunk), before[0])) {
                             Vec3 at = Vec3.atCenterOf(base.offset(8, 2, 8));
-                            h.fail(String.format(java.util.Locale.ROOT, "слой ничего не выжег: случай не тот (свет у поля %.0f кал/см², %.1f psi, шар на %.1f блока выше; след без руин — %d мест)",
+                            h.fail(String.format(java.util.Locale.ROOT, "the layer did not burn anything: the case is not the same (light near the field %.0f cal/cm², %.1f psi, the ball is on the %.1f block above; trace without ruins - %d places)",
                                     f.detonation().fluence(at), f.detonation().psi(at), f.detonation().burst().y - at.y,
                                     RuinPlanner.testScorch(level, f.detonation(), chunk).changedBlocks()));
                         }
                         restore(level, chunk, before[0]);
                     }
-                    neighboursUnloaded(chunks, x, "после слоя");
+                    neighboursUnloaded(chunks, x, "after layer");
                 })
                 .thenExecute(() -> {
                     if (!foreign[0]) assembleCraft(h);
                 })
                 .thenWaitUntil(() -> h.assertFalse(sable() && !foreign[0] && ua.zentix.incoming.compat.SubLevels.near(level, craftCentre(h), 8).isEmpty(),
-                        "аппарат собирается"))
+                        "craft going"))
                 .thenExecute(() -> {
                     if (!sable() || foreign[0]) return;
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
-                    h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunk), "X вне досягаемости аппарата: случай не тот");
-                    neighboursUnloaded(chunks, x, "у аппарата до слоя");
+                    h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunk), "X out of reach craft: not the case");
+                    neighboursUnloaded(chunks, x, "at craft to layer");
                     FlashScorch f = flashOver(h, base, x);
-                    h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "слой у аппарата без соседей: встал в " + f.appliedChunks() + ", ждали " + f.waitingChunks());
-                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "слой у аппарата без соседей поменял блоки: "
+                    h.assertTrue(f.appliedChunks() == 0 && f.waitingChunks() == 1, "craft layer without neighbors: placed in " + f.appliedChunks() + ", waited " + f.waitingChunks());
+                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "craft's layer without neighbors changed blocks: "
                             + firstDifference(chunk, before[0], blocks(chunk)));
-                    neighboursUnloaded(chunks, x, "у аппарата после слоя");
-                    Incoming.LOG.info("Слой вспышки у аппарата Sable ждёт соседей: без аппарата встал, у аппарата — нет");
+                    neighboursUnloaded(chunks, x, "at craft after layer");
+                    Incoming.LOG.info("The flash layer of craft Sable is waiting for its neighbors: without craft it works, but with craft it doesn’t");
                 })
                 .thenSucceed();
     }
 
     /**
-     * Слой вспышки у аппарата Sable, чьи соседи были в памяти, когда слой ушёл в фон, и ушли из неё, пока он строился:
-     * запись проверяет соседей снова ({@code RuinPlan.waitsNeighbours} перед записью) и не встаёт — блоки чанка те же,
-     * соседи не загружены. Проверка до фона пройдена (соседи были), поэтому ждал он только записи. X — как у
-     * {@link #flashLayerWaitsNeighboursAtCraft}, у своего аппарата или чужого. Без Sable — нечего проверять.
+     * The flash layer of craft Sable, whose neighbors were in memory when the layer went into the background, and left it while it was being built:
+     *  the record checks the neighbors again ({@code RuinPlan.waitsNeighbours} before the record) and does not get up - the chunk blocks are the same,
+     *  neighbors are not loaded. The background check was passed (there were neighbors), so he was only waiting for the recording. X - like
+     * {@link #flashLayerWaitsNeighboursAtCraft}, from your craft or someone else's. Without Sable there is nothing to check.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_flash_edge_write", skyAccess = true)
     public static void flashLayerRechecksNeighboursBeforeWrite(GameTestHelper h) {
@@ -993,45 +992,45 @@ public final class RuinBackgroundGameTests {
         h.startSequence()
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
-                    h.assertTrue(chunk != null, "X не загружен");
+                    h.assertTrue(chunk != null, "X not loaded");
                     field(level, base, true);
                     if (!ua.zentix.incoming.compat.SableTerrain.watched(level, chunk)) assembleCraft(h);
                 })
-                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunks.getChunkNow(x.x, x.z)), "аппарат собирается"))
+                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.compat.SableTerrain.watched(level, chunks.getChunkNow(x.x, x.z)), "craft going"))
                 .thenExecute(() -> {
-                    // соседи X — в памяти: проверка до фона пройдена, слой строится
+                    // neighbors X - in memory: background check passed, layer is being built
                     chunks.addRegionTicket(NuclearGameTests.HOLD, x, 1, x);
                     for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.getChunk(x.x + dx, x.z + dz);
-                    h.assertTrue(ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(level, x, 1), "соседи X не в памяти до слоя");
+                    h.assertTrue(ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(level, x, 1), "neighbors X are not in memory until the layer");
                     before[0] = blocks(chunks.getChunkNow(x.x, x.z));
                     Detonation d = flashDetonation(h, base);
                     flash[0] = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
                     now[0] = d.gameTime() + 1_000;
                     WorkClock clock = WorkClock.counting(1_000_000L);
                     clock.start(10_000_000_000L);
-                    h.assertFalse(flash[0].work(level, now[0], clock), "слой не ушёл в фон");
-                    h.assertTrue(flash[0].waitingChunks() == 0, "слой ждал соседей до фона, хотя они в памяти");
+                    h.assertFalse(flash[0].work(level, now[0], clock), "the layer did not go into the background");
+                    h.assertTrue(flash[0].waitingChunks() == 0, "layer waited for the neighbors to the background, although they are in memory");
                     RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-                    // соседи уходят из памяти, пока слой готов, но ещё не записан
+                    // neighbors go out of memory while the layer is ready but not yet written
                     chunks.removeRegionTicket(NuclearGameTests.HOLD, x, 1, x);
                 })
-                .thenWaitUntil(() -> neighboursUnloaded(chunks, x, "после отпуска их тикета"))
+                .thenWaitUntil(() -> neighboursUnloaded(chunks, x, "after leaving their ticket"))
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(x.x, x.z);
                     WorkClock clock = WorkClock.counting(1_000_000L);
                     clock.start(10_000_000_000L);
-                    h.assertTrue(flash[0].work(level, now[0], clock), "слой не кончился");
-                    h.assertTrue(flash[0].appliedChunks() == 0 && flash[0].waitingChunks() == 1, "запись слоя у аппарата без соседей: встал в "
-                            + flash[0].appliedChunks() + ", ждали " + flash[0].waitingChunks());
-                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "запись слоя у аппарата без соседей поменяла блоки: "
+                    h.assertTrue(flash[0].work(level, now[0], clock), "the layer is not finished");
+                    h.assertTrue(flash[0].appliedChunks() == 0 && flash[0].waitingChunks() == 1, "recording a layer for craft without neighbors: stood in "
+                            + flash[0].appliedChunks() + ", waited " + flash[0].waitingChunks());
+                    h.assertTrue(java.util.Arrays.equals(blocks(chunk), before[0]), "recording a layer for craft without neighbors changed blocks: "
                             + firstDifference(chunk, before[0], blocks(chunk)));
-                    neighboursUnloaded(chunks, x, "после записи слоя");
-                    Incoming.LOG.info("Слой вспышки у аппарата Sable: соседи ушли, пока он строился, — запись его не поставила");
+                    neighboursUnloaded(chunks, x, "after recording the layer");
+                    Incoming.LOG.info("The flash layer of craft Sable: the neighbors left while it was being built - the recording did not put it on");
                 })
                 .thenSucceed();
     }
 
-    /** Поле травы в воздухе над X: камень, дёрн, трава — в двух блоках от края (Sable читает соседей смены); или прочь. */
+    /** A field of grass in the air above X: stone, turf, grass - two blocks from the edge (Sable reads shift neighbors); or away. */
     private static void field(ServerLevel level, BlockPos base, boolean grow) {
         BlockState air = Blocks.AIR.defaultBlockState();
         for (int lx = 2; lx <= 13; lx++) {
@@ -1043,18 +1042,18 @@ public final class RuinBackgroundGameTests {
         }
     }
 
-    /** Ни один сосед X не загружен целиком: иначе случай не воспроизведён (или слой их загрузил). */
+    /** Not a single neighbor of X is loaded entirely: otherwise the case is not reproduced (or the layer loaded them). */
     private static void neighboursUnloaded(net.minecraft.server.level.ServerChunkCache chunks, ChunkPos x, String when) {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if ((dx != 0 || dz != 0) && chunks.getChunkNow(x.x + dx, x.z + dz) != null) {
-                    throw new net.minecraft.gametest.framework.GameTestAssertException("сосед X " + (x.x + dx) + ", " + (x.z + dz) + " загружен " + when);
+                    throw new net.minecraft.gametest.framework.GameTestAssertException("neighbor X " + (x.x + dx) + ", " + (x.z + dz) + " loaded " + when);
                 }
             }
         }
     }
 
-    /** Слой вспышки одного чанка {@code x} от подрыва низко над полем (свет выжигает траву), до конца. */
+    /** A flash layer of one {@code x} chunk from the explosion low above the field (the light burns the grass) to the end. */
     private static FlashScorch flashOver(GameTestHelper h, BlockPos base, ChunkPos x) {
         Detonation d = flashDetonation(h, base);
         FlashScorch f = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
@@ -1065,20 +1064,20 @@ public final class RuinBackgroundGameTests {
             done = f.work(h.getLevel(), d.gameTime() + 1_000, clock);
             if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
         }
-        h.assertTrue(done, "слой вспышки не кончился");
+        h.assertTrue(done, "the flash layer is not finished");
         return f;
     }
 
-    /** Подрыв низко над полем в {@code base} (свет выжигает траву), по месту в мире. */
+    /** Detonation low over the field in {@code base} (the light burns the grass), according to the location in the world. */
     private static Detonation flashDetonation(GameTestHelper h, BlockPos base) {
-        // по месту в мире, без relativePos: у GameTestHelper relativePos и absolutePos — не обратные друг другу
+        // by place in the world, without relativePos: for GameTestHelper relativePos and absolutePos are not inverse to each other
         double scale = 0.0182;
         BlockPos g = base.offset(8, 2, 8);
         return new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + Yield.optimalBurstHeight(15) * scale, g.getZ() + 0.5),
                 g.getY(), 15, false, h.getLevel().getGameTime(), 0, 0, 20_000, 7, (float) scale, false, Detonation.OLD_WAVE);
     }
 
-    /** Все места чанка (номера состояний), снизу вверх по секциям. */
+    /** All chunk locations (state numbers), from bottom to top in sections. */
     private static int[] blocks(LevelChunk chunk) {
         var sections = chunk.getSections();
         int[] out = new int[sections.length * 4096];
@@ -1088,7 +1087,7 @@ public final class RuinBackgroundGameTests {
         return out;
     }
 
-    /** Вернуть чанку блоки снимка (через мир, без обновлений соседей). */
+    /** Return snapshot blocks to the chunk (through the world, without neighbor updates). */
     private static void restore(ServerLevel level, LevelChunk chunk, int[] was) {
         int[] now = blocks(chunk);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
@@ -1108,16 +1107,15 @@ public final class RuinBackgroundGameTests {
             if (a[k] == b[k]) continue;
             if (n++ == 0) {
                 int i = k >> 12, c = k & 4095;
-                first = "секция " + i + " место " + (c & 15) + "," + (c >> 8) + "," + ((c >> 4) & 15) + ": " + Block.stateById(a[k]) + " против " + Block.stateById(b[k]);
+                first = "section " + i + " place " + (c & 15) + "," + (c >> 8) + "," + ((c >> 4) & 15) + ": " + Block.stateById(a[k]) + " against " + Block.stateById(b[k]);
             }
         }
-        return n == 0 ? null : n + " мест, первое — " + first;
+        return n == 0 ? null : n + " places, first - " + first;
     }
 
     /**
-     * Сосед окна, которого нет на диске (не сгенерирован до конца или не сохранён): окно фонового плана не ждёт его
-     * загрузки — {@code RuinContext.requestWindow} читает соседей с диска, а не найденного считает сплошным массивом,
-     * как край мира. План такой же, как в потоке сервера с теми же соседями вне памяти (там их снимков тоже нет).
+     * A neighbor of a window that is not on the disk (not fully generated or not saved): the background window does not wait for it to load. {@code RuinContext.requestWindow} reads its neighbors from the disk, and considers the one not found as a solid array,
+     *  as the edge of the world. The plan is the same as in the server stream with the same neighbors out of memory (there are no snapshots of them either).
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_window_absent", skyAccess = true)
     public static void windowWithoutNeighboursOnDisk(GameTestHelper h) {
@@ -1129,15 +1127,15 @@ public final class RuinBackgroundGameTests {
             chunks.removeRegionTicket(NuclearGameTests.HOLD, y, 0, y);
             NuclearStrikes.clear(level);
         });
-        // Y — сразу (сервер GameTest тикает быстрее фоновой генерации), тикет держит его полным, соседей — нет
+        // Y - immediately (server GameTest ticks faster than background generation), ticket keeps it full, no neighbors
         chunks.addRegionTicket(NuclearGameTests.HOLD, y, 0, y);
         level.getChunk(y.x, y.z);
         h.startSequence()
                 .thenExecute(() -> {
                     LevelChunk chunk = chunks.getChunkNow(y.x, y.z);
-                    h.assertTrue(chunk != null, "Y не загружен");
+                    h.assertTrue(chunk != null, "Y not loaded");
                     BlockPos base = new BlockPos(y.getMinBlockX(), 200, y.getMinBlockZ());
-                    // не на границе чанка: Sable на setBlock читает соседей места и загрузил бы соседний чанк
+                    // not on the chunk boundary: Sable on setBlock reads the neighbors of the place and would load the neighboring chunk
                     for (int ly = 0; ly < 8; ly++) {
                         for (int lx = 1; lx < 15; lx++) {
                             for (int lz = 1; lz < 15; lz++) {
@@ -1156,29 +1154,28 @@ public final class RuinBackgroundGameTests {
                         }
                     }
                     int side = 2 * RuinPlanner.REACH + 1;
-                    h.assertTrue(window[0] == side * side - 1 - inMemory, "соседей окна прочитано с диска " + window[0] + ", а не в памяти "
+                    h.assertTrue(window[0] == side * side - 1 - inMemory, "window neighbors read from disk " + window[0] + ", not in memory "
                             + (side * side - 1 - inMemory));
-                    h.assertTrue(window[1] > 0, "все соседи окна нашлись на диске — случай не воспроизведён");
+                    h.assertTrue(window[1] > 0, "all neighbors of the window were found on the disk - the case was not reproduced");
                     RuinPlan server = RuinPlanner.planFresh(level, d, chunk, false);
-                    h.assertTrue(disk.changedBlocks() > 0, "постройка не разрушена: сравнивать нечего");
+                    h.assertTrue(disk.changedBlocks() > 0, "the building is not destroyed: there is nothing to compare");
                     String diff = disk.differs(server);
                     if (diff == null) diff = flashDiffers(disk, server);
-                    h.assertTrue(diff == null, "план с окном с диска не такой, как в потоке сервера:" + diff);
-                    Incoming.LOG.info("Окно без соседей на диске: прочитано {}, нет на диске {}, план — {} мест", window[0], window[1], disk.changedBlocks());
+                    h.assertTrue(diff == null, "the plan with a window from disk is not the same as in the server stream:" + diff);
+                    Incoming.LOG.info("Window without neighbors on the disk: read {}, no disk space {}, plan - {} places", window[0], window[1], disk.changedBlocks());
                 })
                 .thenSucceed();
     }
 
-    /** Миксин на отправку чанков игроку встал. */
+    /** The mixin for sending chunks to the player is up. */
     @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_send_gate", skyAccess = true)
     public static void chunkSendGateApplied(GameTestHelper h) {
-        h.assertTrue(new PlayerChunkSender(false) instanceof ChunkSendGate.Gated, "PlayerChunkSenderMixin не встал: чанки уйдут игроку до руин");
+        h.assertTrue(new PlayerChunkSender(false) instanceof ChunkSendGate.Gated, "PlayerChunkSenderMixin did not get up: chunks will go to the player before the ruins");
         h.succeed();
     }
 
     /**
-     * Чанк, до которого дошла волна, пока его руины строятся (фоновый план — не раньше следующего тика), игроку не
-     * отдаётся: из очереди отправки он убран; когда руины встали — отдаётся.
+     * The chunk that the wave reached while its ruins are being built (background - not earlier than the next tick) is not given to the player: it is removed from the sending queue; when the ruins stand up, it gives away.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_send_hold", skyAccess = true)
     public static void chunkWithheldUntilRuins(GameTestHelper h) {
@@ -1196,21 +1193,21 @@ public final class RuinBackgroundGameTests {
             var out = ChunkSendGate.withhold(level, pending);
             if (!scarred) {
                 if (w.withholds(level, chunk)) {
-                    h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "чанк без руин остался в очереди отправки");
+                    h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "chunk without ruins remained in the sending queue");
                     held[0] = true;
                 }
-                h.fail("руины ещё не встали");
+                h.fail("the ruins have not yet risen");
             }
-            h.assertTrue(out == null && pending.contains(chunk), "чанк с руинами не отдаётся игроку");
-            h.assertTrue(held[0], "чанк ни разу не ждал руин: не проверено");
+            h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
+            h.assertTrue(held[0], "chunk never waited for ruins: not verified");
             NuclearStrikes.clear(level);
         });
     }
 
     /**
-     * Срок удержания чанка без руин считается от первой просьбы игрока, а не от волны: чанк, загруженный через тысячи
-     * тиков после волны (зона за волной до него не дошла, игрок перенёсся), сперва ждёт руин, а не уходит сразу
-     * (gate 5: 587 чанков ушло игроку до руин).
+     * The retention period for a chunk without ruins is counted from the first request of the player, and not from the wave: a chunk loaded thousands of
+     *  ticks after the wave (the zone behind the wave did not reach it, the player was transferred), first waits for ruins, and does not leave immediately
+     * (gate 5: 587 chunks went to the player before the ruins).
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_send_ask", skyAccess = true)
     public static void withholdCountsFromFirstAsk(GameTestHelper h) {
@@ -1221,18 +1218,18 @@ public final class RuinBackgroundGameTests {
         ScarQueue q = new ScarQueue();
         q.offer(chunk, d);
         long late = d.gameTime() + 100_000;
-        h.assertTrue(q.withholds(key, late), "чанк, впервые попросившийся к игроку долго после волны, ушёл без руин сразу");
-        h.assertTrue(q.withholds(key, late + 199), "удержание кончилось раньше срока от первой просьбы");
-        h.assertFalse(q.withholds(key, late + 200), "удержание не кончилось через срок от первой просьбы");
+        h.assertTrue(q.withholds(key, late), "the chunk, which first asked the player long after the wave, left immediately without ruins");
+        h.assertTrue(q.withholds(key, late + 199), "the retention ended prematurely from the first request");
+        h.assertFalse(q.withholds(key, late + 200), "the retention did not end within the period from the first request");
         NuclearStrikes.clear(level);
         h.succeed();
     }
 
     /**
-     * Чанк, чей срок пришёл, когда его никто не видел, стоит в очереди невидимых — за чанками зоны и LOD вдали. Игрок
-     * перенёсся к нему и ждёт его руин: первая просьба переводит чанк к видимым (иначе после телепорта руины чанков
-     * у игрока идут за невидимыми, и чанки уходят к нему до руин). Бюджета — на одну единицу:
-     * второй чанк остаётся в очереди.
+     * The chunk, whose deadline came when no one had seen it, stands in the invisible queue - behind the zone chunks and LOD in the distance. The player
+     *  was transported to him and is waiting for his ruins: the first request transfers the chunk to the visible ones (otherwise, after the teleport, the ruins of the player's
+     *  chunks go after the invisible ones, and the chunks go to him to the ruins). Budget - for one unit:
+     *  The second chunk remains in the queue.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_send_promote", skyAccess = true)
     public static void askedChunkGoesAheadOfUnseen(GameTestHelper h) {
@@ -1250,19 +1247,20 @@ public final class RuinBackgroundGameTests {
         clock.start(0);
         q.work(level, late, clock);
         List<Long> left = keys.stream().filter(k -> "in the ready queue".equals(q.diagState(k, late))).toList();
-        h.assertTrue(left.size() == 1, "в очереди невидимых не один чанк: " + keys.stream().map(k -> q.diagState(k, late)).toList());
+        h.assertTrue(left.size() == 1, "there is more than one chunk in the invisible queue: " + keys.stream().map(k -> q.diagState(k, late)).toList());
         q.withholds(left.get(0), late);
-        h.assertTrue("in the ready queue, visible".equals(q.diagState(left.get(0), late)), "попросившийся чанк остался среди невидимых: " + q.diagState(left.get(0), late));
+        h.assertTrue("in the ready queue, visible".equals(q.diagState(left.get(0), late)), "the requested chunk remained among the invisible: " + q.diagState(left.get(0), late));
         NuclearStrikes.clear(level);
         h.succeed();
     }
 
     /**
-     * Чанк, который видит игрок, с готовым планом, устаревшим за полёт МБР (игрок заменил стекло): незадолго до волны
-     * очередь сверяет план с чанком и строит новый в фоне, первым в пуле руин, — в срок руины встают сразу. Чанк,
-     * которого никто не видит, с таким же планом узнаёт об этом только в срок: его план на месте только отдан в фон.
-     * Время очереди — своё ({@code work} с заданным «сейчас»: всё в одном тике), видимость — подменой (у мок-игрока
-     * GameTest обзора нет).
+     * A player-visible chunk has a ready plan that became stale during ICBM flight (the player replaced glass):
+     * shortly before the wave, the queue checks the plan against the chunk and rebuilds it in the background,
+     * first in the ruin pool, so the ruins appear immediately when due. An unseen chunk with the same plan only
+     * finds out when due: its plan has only just been submitted to the background pool then. The queue has its own
+     * time ({@code work} with an explicit "now": everything in one tick); visibility is stubbed (the GameTest mock
+     * player has no view distance).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_look_ahead", skyAccess = true)
     public static void staleSeenPlanReplannedBeforeWave(GameTestHelper h) {
@@ -1273,7 +1271,7 @@ public final class RuinBackgroundGameTests {
         Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
         LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass)), unseen = level.getChunkAt(h.absolutePos(unseenGlass));
         long seenKey = seen.getPos().toLong(), unseenKey = unseen.getPos().toLong();
-        // окна руин — в памяти сразу: за краем площадки чанки грузятся в фоне, а окно с диска читалось бы тиками
+        // the windows of the ruins are immediately in memory: beyond the edge of the site, the chunks are loaded in the background, and the window from the disk would read tick
         for (LevelChunk c : List.of(seen, unseen)) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
@@ -1282,7 +1280,7 @@ public final class RuinBackgroundGameTests {
         var plans = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<RuinPlan>();
         plans.put(seenKey, RuinPlanner.plan(level, d, seen));
         plans.put(unseenKey, RuinPlanner.plan(level, d, unseen));
-        // игрок заменил стёкла уже после планов
+        // the player replaced the glass after the plans
         h.setBlock(seenGlass, Blocks.WHITE_STAINED_GLASS);
         h.setBlock(unseenGlass, Blocks.WHITE_STAINED_GLASS);
         ScarQueue q = new ScarQueue();
@@ -1291,25 +1289,25 @@ public final class RuinBackgroundGameTests {
             q.scanLoaded(d, plans, new long[]{seenKey, unseenKey});
             long seenWave = ScarQueue.due(d, seen.getPos()), last = Math.max(seenWave, ScarQueue.due(d, unseen.getPos()));
             ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
-            // все чанки в очереди, волна ещё далеко
+            // all the chunks are in the queue, the wave is still far away
             clock.start(10_000_000_000L);
             q.work(level, seenWave - 60, clock);
-            h.assertTrue(q.pendingPlan(d.id(), seenKey) && q.pendingPlan(d.id(), unseenKey), "готовые планы сняты до проверки заранее");
-            // незадолго до волны: видимый проверен, его план устарел — новый в фоне
+            h.assertTrue(q.pendingPlan(d.id(), seenKey) && q.pendingPlan(d.id(), unseenKey), "finished plans are removed before checking in advance");
+            // shortly before the wave: visible is checked, its plan is outdated - new in the background
             clock.start(10_000_000_000L);
             q.work(level, seenWave - 20, clock);
-            h.assertFalse(q.pendingPlan(d.id(), seenKey), "устаревший план видимого чанка не снят до волны");
-            h.assertTrue(q.pendingPlan(d.id(), unseenKey), "план чанка, которого никто не видит, проверен заранее");
-            h.assertTrue(q.ruinStats()[2] == 1, "устаревших планов " + q.ruinStats()[2] + " вместо одного");
+            h.assertFalse(q.pendingPlan(d.id(), seenKey), "outdated visible chunk plan not removed before wave");
+            h.assertTrue(q.pendingPlan(d.id(), unseenKey), "the plan for a chunk that no one sees is checked in advance");
+            h.assertTrue(q.ruinStats()[2] == 1, "outdated plans " + q.ruinStats()[2] + " instead of one");
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.SEEN, 60_000),
-                    "фоновый план видимого чанка не готов за минуту");
-            // волна: видимый — руины сразу, второй только узнал, что план устарел
+                    "the background plan of the visible chunk is not ready in a minute");
+            // wave: visible - ruins immediately, the second only found out that the plan was outdated
             clock.start(10_000_000_000L);
             q.work(level, last - 1, clock);
-            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "руин видимого чанка нет в срок");
+            h.assertTrue(seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ruins visible chunk not on time");
             h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, seenGlass);
-            h.assertTrue(q.ruinStats()[2] == 2, "план чанка, которого никто не видит, не проверен в срок: устаревших " + q.ruinStats()[2]);
-            h.assertTrue(unseen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(), "руины невидимого чанка встали без плана на месте — проверка ни о чём");
+            h.assertTrue(q.ruinStats()[2] == 2, "chunk plan that no one sees, not checked on time: outdated " + q.ruinStats()[2]);
+            h.assertTrue(unseen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(), "the ruins of an invisible chunk stood in place without a plan - the check means nothing");
             h.assertBlockPresent(Blocks.WHITE_STAINED_GLASS, unseenGlass);
         } finally {
             ScarQueue.seenForTest(null);
@@ -1319,9 +1317,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Фоновый план, который устарел, пока строился (игрок заменил стекло между снимками и подменой), не ставится и не
-     * засчитывается: чанк получает план в потоке сервера по себе как есть, в той же очереди. Раньше подмена молча не
-     * шла, а чанк получал отметку руин и оставался целым.
+     * The background plan, which became outdated while it was being built (the player replaced the glass between snapshots and replacement), is not placed and is not
+     *  counted: the chunk receives the plan in the server thread on its own, as is, in the same queue. Previously, the replacement did not silently
+     * , and the chunk received the mark of ruins and remained intact.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_background", skyAccess = true)
     public static void staleBackgroundPlanRebuiltOnServer(GameTestHelper h) {
@@ -1341,18 +1339,18 @@ public final class RuinBackgroundGameTests {
             ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
             clock.start(10_000_000_000L);
             q.work(level, wave - 1, clock);
-            h.assertTrue("plan in the background".equals(q.diagState(pos.toLong(), wave)), "план не отдан в фон: " + q.diagState(pos.toLong(), wave));
+            h.assertTrue("plan in the background".equals(q.diagState(pos.toLong(), wave)), "the plan is not sent to the background: " + q.diagState(pos.toLong(), wave));
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.NEAR, 60_000),
-                    "фоновый план не готов за минуту");
-            // игрок заменил стекло, пока план строился
+                    "the background is not ready in a minute");
+            // the player replaced the glass while the plan was being built
             h.setBlock(glass, Blocks.WHITE_STAINED_GLASS);
             for (long now = wave; now < wave + 10 && chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(); now++) {
                 clock.start(10_000_000_000L);
                 q.work(level, now, clock);
             }
-            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "руин нет: " + q.diagState(pos.toLong(), wave + 10));
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "no ruins: " + q.diagState(pos.toLong(), wave + 10));
             h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, glass);
-            h.assertTrue(q.ruinStats()[2] == 1, "устаревших планов " + q.ruinStats()[2] + " вместо одного");
+            h.assertTrue(q.ruinStats()[2] == 1, "outdated plans " + q.ruinStats()[2] + " instead of one");
         } finally {
             q.clear(level);
         }
@@ -1360,10 +1358,10 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Задача пула, которая ждёт в очереди на дальней ступени (план, отданный подготовкой руин заранее), переносится на
-     * ступень чанка у волны и идёт раньше всех дальних, что стоят перед ней; начатая и уже важная — не переносятся.
-     * Потоки заняты задачами, которые ждут защёлку; задачи очереди за ними ждут вторую: без переноса освободившиеся
-     * потоки взяли бы их и дальняя задача не началась бы, пока держится вторая защёлка.
+     * The pool task, which is waiting in line on the far stage (the plan given by the preparation of the ruins in advance), is transferred to the
+     *  chunk stage at the wave and goes before all the distant ones that stand in front of it; started and already important - are not transferred.
+     *  Threads are busy with tasks that are waiting for a latch; the queue tasks behind them are waiting for the second one: without the transfer, the released
+     *  threads would take them and the distant task would not start while the second latch is held.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "ruin_pool_promote", skyAccess = true)
     public static void queuedFarTaskPromoted(GameTestHelper h) {
@@ -1374,29 +1372,29 @@ public final class RuinBackgroundGameTests {
         java.util.concurrent.atomic.AtomicInteger started = new java.util.concurrent.atomic.AtomicInteger();
         java.util.concurrent.Callable<Boolean> filler = () -> (started.getAndIncrement() < threads ? running : queued).await(30, java.util.concurrent.TimeUnit.SECONDS);
         List<java.util.concurrent.Future<Boolean>> fillers = new ArrayList<>();
-        // задачи прежних партий (кольцо следа, руины заранее) заняли бы потоки
-        h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(far, 30_000), "пул руин не освободился от прежних задач");
+        // the tasks of the previous batch (trace ring, ruins in advance) would occupy the threads
+        h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(far, 30_000), "the pool of ruins has not been freed from previous tasks");
         try {
             for (int i = 0; i < 3 * threads; i++) fillers.add(ua.zentix.incoming.nuclear.world.RuinWorkers.submitForTest(filler, far));
             java.util.concurrent.Future<String> task = ua.zentix.incoming.nuclear.world.RuinWorkers.submitForTest(() -> "plan", far);
-            // все потоки заняты: задача ещё в очереди
+            // all threads are busy: the task is still in queue
             long until = System.nanoTime() + 10_000_000_000L;
             while (started.get() < threads && System.nanoTime() < until) java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
-            h.assertTrue(started.get() == threads, "потоки пула не заняты: начато " + started.get() + " из " + threads);
-            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.promoteForTest(fillers.get(0), seen) == null, "начатая задача перенесена");
+            h.assertTrue(started.get() == threads, "pool threads not busy: started " + started.get() + " from " + threads);
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.promoteForTest(fillers.get(0), seen) == null, "the started task has been moved");
             java.util.concurrent.Future<String> moved = ua.zentix.incoming.nuclear.world.RuinWorkers.promoteForTest(task, seen);
-            h.assertTrue(moved != null, "задача в очереди не перенесена");
-            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.promoteForTest(moved, seen) == null, "задача перенесена на свою же ступень");
+            h.assertTrue(moved != null, "the task in the queue has not been moved");
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.promoteForTest(moved, seen) == null, "the task has been moved to its own level");
             running.countDown();
             String result = moved.get(10, java.util.concurrent.TimeUnit.SECONDS);
-            h.assertTrue("plan".equals(result), "перенесённая задача дала " + result);
-            h.assertFalse(task.isDone(), "прежняя задача тоже выполнилась");
-            h.assertTrue(started.get() <= 2 * threads, "перенесённая задача шла за дальними: начато задач очереди " + (started.get() - threads));
+            h.assertTrue("plan".equals(result), "the transferred task gave " + result);
+            h.assertFalse(task.isDone(), "the previous task was also completed");
+            h.assertTrue(started.get() <= 2 * threads, "the transferred task followed the distant ones: queue tasks started " + (started.get() - threads));
         } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
-            throw new net.minecraft.gametest.framework.GameTestAssertException("перенесённая задача не выполнилась за 10 с, пока задачи очереди ждут: " + e);
+            throw new net.minecraft.gametest.framework.GameTestAssertException("the transferred task did not complete in 10 s while the queue tasks are waiting: " + e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new net.minecraft.gametest.framework.GameTestAssertException("прервано");
+            throw new net.minecraft.gametest.framework.GameTestAssertException("interrupted");
         } finally {
             running.countDown();
             queued.countDown();
@@ -1406,20 +1404,20 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Зона за волной у края исследованного мира: чанк, чьё окно руин целое на диске, получает план с диска, и квадрат
-     * зоны, где хоть один чанк окон его чанков не целый, не пропускается целиком (иначе план ждёт до конца зоны и
-     * пропадает, руин на диске нет: «unplaced … chunks»). Здесь место удара (9×9 вокруг цели,
-     * его держит район подрыва с пуска) и полоса B к востоку (6×7 чанков) сгенерированы и выгружены, вокруг — только
-     * недогенерированное кольцо. Чанки B с целым окном, которых нет в памяти, получают план с диска и руины на диске,
-     * подготовка кончается без единого оставшегося плана, а мир не догенерируется: поле {@code Status} чанков округи до
-     * и после — то же (зона не берёт чанк, который ваниль стала бы генерировать).
+     * Zone behind the wave at the edge of the explored world: a chunk whose window of ruins is intact on the disk receives a plan from the disk, and the square
+     *  of the zone where at least one chunk of the windows of its chunks is not intact is not skipped entirely (otherwise the plan waits until the end of the zone and
+     *  disappears, there are no ruins on the disk: “unplaced ... chunks"). Here the impact site (9×9 around the target,
+     *  is held by the detonation area with launch) and the B strip to the east (6×7 chunks) are generated and unloaded, around - only
+     * undergenerated ring. Chunks B with a whole window, which are not in memory, receive a plan from the disk and ruins on the disk,
+     *  preparation ends without a single remaining plan, and the world is not generated: the field {@code Status} of chunks around before
+     *  and after - the same (the zone does not take the chunk that vanilla would generate).
      */
     @GameTest(template = "range", timeoutTicks = 6000, batch = "nuke_zone_edge", skyAccess = true)
     public static void zoneLoadsEveryChunkWithPlan(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         var chunks = level.getChunkSource();
         ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
-        // дальше радиуса руин от площадки: её чанки в памяти, и их руины держали бы подготовку
+        // further than the radius of the ruins from the site: its chunks are in memory, and their ruins would keep preparation
         ChunkPos t = new ChunkPos(pad.x + 80, pad.z);
         LongOpenHashSet whole = new LongOpenHashSet();
         for (int dx = -4; dx <= 4; dx++) {
@@ -1431,12 +1429,12 @@ public final class RuinBackgroundGameTests {
         for (long c : whole) level.getChunk(ChunkPos.getX(c), ChunkPos.getZ(c));
         Vec3 target = new Vec3(t.getMiddleBlockX() + 0.5,
                 level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, t.getMiddleBlockX(), t.getMiddleBlockZ()), t.getMiddleBlockZ() + 0.5);
-        // чанки B с целым окном руин за районом подрыва: план им — только с диска
+        // chunks of B with a whole window of ruins behind the explosion area: their plan is only from the disk
         List<ChunkPos> far = new ArrayList<>();
         for (int dx = 5; dx <= 6; dx++) {
             for (int dz = -1; dz <= 1; dz++) far.add(new ChunkPos(t.x + dx, t.z + dz));
         }
-        // округа, где зона могла бы что-то загрузить: поле Status до и после
+        // districts where the zone could load something: field Status before and after
         List<ChunkPos> around = new ArrayList<>();
         for (int x = t.x - 12; x <= t.x + 14; x++) {
             for (int z = t.z - 12; z <= t.z + 12; z++) around.add(new ChunkPos(x, z));
@@ -1464,14 +1462,14 @@ public final class RuinBackgroundGameTests {
             long now = level.getGameTime();
             switch (stage[0]) {
                 case 0 -> {
-                    // сгенерированное выгрузилось и записано: заголовки с диска — те, что останутся
+                    // generated was downloaded and written: the titles from the disk are those that remain
                     if (!unloaded(level, around)) return;
                     for (ChunkPos c : around) readStatus(level, c, before);
                     stage[0] = 1;
                 }
                 case 1 -> {
                     if (before.size() < around.size()) return;
-                    for (long c : whole) h.assertTrue("minecraft:full".equals(before.get(c)), "чанк " + new ChunkPos(c) + " не целый на диске: " + before.get(c));
+                    for (long c : whole) h.assertTrue("minecraft:full".equals(before.get(c)), "chunk " + new ChunkPos(c) + " not whole on disk: " + before.get(c));
                     ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(0.25);
                     events.schedule(new ua.zentix.incoming.nuclear.NuclearEvents.ScheduledStrike(events.nextId(), target, 1, false, now, now + 1200, target,
                             java.util.Optional.empty(), true));
@@ -1482,38 +1480,38 @@ public final class RuinBackgroundGameTests {
                     if (det[0] == null) {
                         det[0] = events.detonations().stream().filter(x -> x.burst().distanceTo(target) < 20).findFirst().orElse(null);
                         if (det[0] == null) {
-                            if (now - since[0] > 1500) h.fail("подрыва нет");
-                            // планы с диска строят фоновые потоки по настенным часам: полёт — в темпе игры, пока они не готовы
+                            if (now - since[0] > 1500) h.fail("no explosion");
+                            // plans from the disk build background flows according to the wall clock: flight - at the pace of the game, until they are ready
                             if (!prepared[0]) gamePace(tickAt);
                             return;
                         }
-                        h.assertTrue(prepared[0], "руины заранее не готовы к подрыву за 60 с полёта");
-                        for (ChunkPos c : far) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "чанк " + c + " в памяти при подрыве: план не с диска, случай не тот");
+                        h.assertTrue(prepared[0], "the ruins are not prepared in advance for detonation for 60 s the flight");
+                        for (ChunkPos c : far) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "chunk " + c + " in memory when detonated: the plan is not from the disk, the case is not the same");
                         since[0] = now;
                     }
                     for (ChunkPos c : far) if (w.scars().pendingPlan(det[0].id(), c.toLong())) planned.add(c.toLong());
                     if (w.plannedChunks() > 0 || w.prepTiles() > 0) {
-                        // заголовки с диска, загрузка чанков и планы — по настенным часам: зона за волной — в темпе игры
-                        // (сервер GameTest на CI тикает без пауз, ~2000 тиков/с, и срок кончается раньше чтения с диска)
+                        // titles from the disk, loading chunks and plans - according to the wall clock: zone by wave - at the pace of the game
+                        //  (server GameTest on CI ticks without pauses, ~2000 tick/s, and the deadline ends before reading from the disk)
                         gamePace(tickAt);
                         if (now - since[0] > 2400) {
                             StringBuilder left = new StringBuilder();
                             for (ChunkPos c : far) {
-                                left.append(' ').append(c).append(w.scars().pendingPlan(det[0].id(), c.toLong()) ? " план ждёт" : "")
-                                        .append(chunks.getChunkNow(c.x, c.z) != null ? " в памяти" : "").append(w.scars().ruined(det[0].id(), c.toLong()) ? " руины" : "");
+                                left.append(' ').append(c).append(w.scars().pendingPlan(det[0].id(), c.toLong()) ? " the plan is waiting" : "")
+                                        .append(chunks.getChunkNow(c.x, c.z) != null ? " in memory" : "").append(w.scars().ruined(det[0].id(), c.toLong()) ? " ruins" : "");
                             }
-                            h.fail("подготовка не кончилась за 2400 тиков после подрыва: планов " + w.plannedChunks() + ", квадратов " + w.prepTiles() + ";" + left);
+                            h.fail("preparation did not end for 2400 tick after the explosion: plans " + w.plannedChunks() + ", squares " + w.prepTiles() + ";" + left);
                         }
                         return;
                     }
-                    h.assertTrue(planned.size() == far.size(), "план с диска построен не у всех чанков B с целым окном: " + planned.size() + " из " + far.size());
+                    h.assertTrue(planned.size() == far.size(), "not all B chunks with a whole window have a plan from disk: " + planned.size() + " from " + far.size());
                     for (ChunkPos c : far) {
                         LevelChunk chunk = level.getChunk(c.x, c.z);
-                        h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "у чанка " + c + " руин нет: зона его не грузила");
+                        h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "at the chunk " + c + " there are no ruins: the zone did not load him");
                     }
                     for (String line : waited) {
-                        // строка «unplaced N chunks (in the zone behind the wave M, …)» — только если план остался
-                        h.assertFalse(line.startsWith("Ruins for detonation #" + det[0].id() + ": unplaced") && !line.contains("in the zone behind the wave 0,"), "планы зоны пропали: " + line);
+                        // line “unplaced N chunks (in the zone behind the wave M, ...)” - only if the plan remains
+                        h.assertFalse(line.startsWith("Ruins for detonation #" + det[0].id() + ": unplaced") && !line.contains("in the zone behind the wave 0,"), "zone plans are gone: " + line);
                     }
                     stage[0] = 3;
                 }
@@ -1525,7 +1523,7 @@ public final class RuinBackgroundGameTests {
                 case 4 -> {
                     if (after.size() < around.size()) return;
                     for (ChunkPos c : around) {
-                        h.assertTrue(before.get(c.toLong()).equals(after.get(c.toLong())), "чанк " + c + " догенерирован: " + before.get(c.toLong()) + " → " + after.get(c.toLong()));
+                        h.assertTrue(before.get(c.toLong()).equals(after.get(c.toLong())), "chunk " + c + " pre-generated: " + before.get(c.toLong()) + " → " + after.get(c.toLong()));
                     }
                     h.succeed();
                 }
@@ -1536,19 +1534,19 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Остановка по куче (живой объём кучи после сборок выше предела): руины заранее больше не строятся, но готовые планы
-     * не пропадают — зона за волной грузит их чанки (иначе готовые планы остаются «unplaced»). Чанк без плана зона
-     * не грузит: полоса C к западу
-     * становится целой только после остановки, плана ей нет, и её чанки так и не загружаются полностью (полную загрузку
-     * на два чанка вокруг себя дают только тикеты очереди руин у загруженных чанков, C — дальше).
+     * Stopping on the heap (the live volume of the heap after assemblies is above the limit): ruins are no longer built in advance, but the ready-made plans
+     *  do not disappear - zone after wave loads their chunks (otherwise the ready-made plans remain “unplaced”). A chunk without a plan zone
+     *  does not load: the lane C to the west
+     *  becomes whole only after stopping, it has no plan, and its chunks are never fully loaded (
+     *  for two chunks around itself is only fully loaded by ticket queues of ruins at loaded chunks, C - further).
      */
     @GameTest(template = "range", timeoutTicks = 8000, batch = "nuke_zone_heap", skyAccess = true)
     public static void heapStopZoneLoadsOnlyPlanned(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         var chunks = level.getChunkSource();
-        // своё место вдали, куда не ходит ни одна проверка: партии GameTest идут на одних и тех же местах площадок, и чанки
-        // в 120 чанках от площадки загружали полностью прошлые партии полного прогона — окна полосы C бывали целыми на
-        // диске до подготовки (места вдали других проверок — до 6000 блоков по диагонали и 12000 по осям)
+        // its own place far away, where no check goes: batch GameTest go on the same places of the platforms, and chunks
+        //  in 120 chunks from the platform loaded completely the previous batch of the full run - the windows of the strip C were intact on the
+        //  disk before preparation (places far from other checks - until 6000 blocks diagonally and 12000 blocks along axes)
         ChunkPos t = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER).offset(-9000, 0, -9000));
         LongOpenHashSet whole = new LongOpenHashSet();
         for (int dx = -4; dx <= 4; dx++) {
@@ -1560,14 +1558,14 @@ public final class RuinBackgroundGameTests {
         for (long c : whole) level.getChunk(ChunkPos.getX(c), ChunkPos.getZ(c));
         Vec3 target = new Vec3(t.getMiddleBlockX() + 0.5,
                 level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, t.getMiddleBlockX(), t.getMiddleBlockZ()), t.getMiddleBlockZ() + 0.5);
-        // B: окно целое на диске до подготовки — план с диска
+        // B: the window is intact on disk before preparation - plan from disk
         List<ChunkPos> far = new ArrayList<>();
         for (int dx = 5; dx <= 6; dx++) {
             for (int dz = -1; dz <= 1; dz++) far.add(new ChunkPos(t.x + dx, t.z + dz));
         }
-        // C: окно станет целым после остановки (генерируется полоса G). Полная загрузка без зоны — не дальше 6 чанков
-        // от цели (место подрыва 9×9 и тикеты очереди руин с соседями радиуса 2), поэтому чанки G от 7 и дальше
-        // загружаются полностью, только если их берёт зона
+        // C: the window will become whole after stopping (the G stripe is generated). Full loading without a zone - no further than 6 chunks
+        //  from the target (detonation site 9×9 and ticket queue of ruins with neighbors of radius 2), so chunks G from 7 and further
+        //  are loaded completely only if the zone takes them
         List<ChunkPos> west = new ArrayList<>(), strip = new ArrayList<>(), never = new ArrayList<>();
         for (int dx = -8; dx <= -7; dx++) {
             for (int dz = -1; dz <= 1; dz++) west.add(new ChunkPos(t.x + dx, t.z + dz));
@@ -1610,13 +1608,13 @@ public final class RuinBackgroundGameTests {
                 }
                 case 1 -> {
                     if (before.size() < around.size()) return;
-                    for (long c : whole) h.assertTrue("minecraft:full".equals(before.get(c)), "чанк " + new ChunkPos(c) + " не целый на диске: " + before.get(c));
+                    for (long c : whole) h.assertTrue("minecraft:full".equals(before.get(c)), "chunk " + new ChunkPos(c) + " not whole on disk: " + before.get(c));
                     for (ChunkPos c : west) {
                         boolean partial = false;
                         for (int dx = -2; dx <= 2; dx++) {
                             for (int dz = -2; dz <= 2; dz++) partial |= !"minecraft:full".equals(before.get(ChunkPos.asLong(c.x + dx, c.z + dz)));
                         }
-                        h.assertTrue(partial, "окно чанка C " + c + " целое на диске до подготовки: план ему будет, случай не тот");
+                        h.assertTrue(partial, "chunk window C " + c + " whole on disk before preparation: he will have a plan, the case is not the same");
                     }
                     ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(0.25);
                     events.schedule(new ua.zentix.incoming.nuclear.NuclearEvents.ScheduledStrike(events.nextId(), target, 1, false, now, now + 2400, target,
@@ -1625,21 +1623,21 @@ public final class RuinBackgroundGameTests {
                     stage[0] = 2;
                 }
                 case 2 -> {
-                    if (now - since[0] > 2300) h.fail("руины заранее не готовы за 2300 тиков полёта");
-                    // планы с диска строят фоновые потоки по настенным часам: полёт — в темпе игры, пока они не готовы
+                    if (now - since[0] > 2300) h.fail("the ruins are not ready in advance for 2300 flight tick");
+                    // plans from the disk build background flows according to the wall clock: flight - at the pace of the game, until they are ready
                     if (!prepared[0]) {
                         gamePace(tickAt);
                         return;
                     }
-                    h.assertTrue(w.plannedChunks() > 0, "руины заранее готовы, а планов нет");
+                    h.assertTrue(w.plannedChunks() > 0, "the ruins are ready in advance, but there are no plans");
                     w.stopPrepForHeap();
                     for (ChunkPos c : strip) level.getChunk(c.x, c.z);
                     stage[0] = 3;
                 }
                 case 3 -> {
-                    // полоса G сгенерирована и больше не загружена полностью (до подрыва её держит ниже полной загрузки
-                    // район места подрыва): зона видит окна C целыми, но грузить их может только сама
-                    if (events.detonations().stream().anyMatch(x -> x.burst().distanceTo(target) < 20)) h.fail("подрыв раньше, чем полоса G опустилась ниже полной загрузки");
+                    // lane G is generated and is no longer fully loaded (before detonation it is kept below full load
+                    //  area of the detonation): the zone sees the windows C intact, but can only load them
+                    if (events.detonations().stream().anyMatch(x -> x.burst().distanceTo(target) < 20)) h.fail("detonation before the G strip dropped below full load");
                     for (ChunkPos c : strip) if (chunks.getChunkNow(c.x, c.z) != null) return;
                     stage[0] = 4;
                 }
@@ -1647,34 +1645,34 @@ public final class RuinBackgroundGameTests {
                     if (det[0] == null) {
                         det[0] = events.detonations().stream().filter(x -> x.burst().distanceTo(target) < 20).findFirst().orElse(null);
                         if (det[0] == null) {
-                            if (now - since[0] > 2700) h.fail("подрыва нет");
+                            if (now - since[0] > 2700) h.fail("no explosion");
                             return;
                         }
-                        h.assertTrue(stopped[0], "остановки по куче нет в логе");
-                        for (ChunkPos c : far) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "чанк " + c + " в памяти при подрыве: план не с диска, случай не тот");
+                        h.assertTrue(stopped[0], "there is no stop on the heap in the log");
+                        for (ChunkPos c : far) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "chunk " + c + " in memory when detonated: the plan is not from the disk, the case is not the same");
                         since[0] = now;
                     }
-                    for (ChunkPos c : never) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "зона загрузила чанк " + c + " без плана после остановки по куче");
+                    for (ChunkPos c : never) h.assertTrue(chunks.getChunkNow(c.x, c.z) == null, "zone loaded chunk " + c + " without a plan after stopping on a heap");
                     for (ChunkPos c : far) if (w.scars().pendingPlan(det[0].id(), c.toLong())) planned.add(c.toLong());
                     if (w.plannedChunks() > 0 || w.prepTiles() > 0) {
                         gamePace(tickAt);
                         if (now - since[0] > 2400) {
                             StringBuilder left = new StringBuilder();
                             for (ChunkPos c : far) {
-                                left.append(' ').append(c).append(w.scars().pendingPlan(det[0].id(), c.toLong()) ? " план ждёт" : "")
-                                        .append(chunks.getChunkNow(c.x, c.z) != null ? " в памяти" : "").append(w.scars().ruined(det[0].id(), c.toLong()) ? " руины" : "");
+                                left.append(' ').append(c).append(w.scars().pendingPlan(det[0].id(), c.toLong()) ? " the plan is waiting" : "")
+                                        .append(chunks.getChunkNow(c.x, c.z) != null ? " in memory" : "").append(w.scars().ruined(det[0].id(), c.toLong()) ? " ruins" : "");
                             }
-                            h.fail("после остановки по куче готовые планы не дождались зоны за 2400 тиков: планов " + w.plannedChunks() + ", квадратов " + w.prepTiles() + ";" + left);
+                            h.fail("after stopping on the heap, ready plans did not wait for the zone beyond 2400 tick: plans " + w.plannedChunks() + ", squares " + w.prepTiles() + ";" + left);
                         }
                         return;
                     }
-                    h.assertTrue(planned.size() == far.size(), "план с диска построен не у всех чанков B: " + planned.size() + " из " + far.size());
+                    h.assertTrue(planned.size() == far.size(), "not all B chunks have a plan from disk: " + planned.size() + " from " + far.size());
                     for (ChunkPos c : far) {
                         LevelChunk chunk = level.getChunk(c.x, c.z);
-                        h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "у чанка " + c + " с планом руин нет: зона его не грузила");
+                        h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == det[0].id(), "at the chunk " + c + " with the plan there are no ruins: the zone did not load it");
                     }
                     for (String line : waited) {
-                        h.assertFalse(line.startsWith("Ruins for detonation #" + det[0].id() + ": unplaced") && !line.contains("in the zone behind the wave 0,"), "планы зоны пропали: " + line);
+                        h.assertFalse(line.startsWith("Ruins for detonation #" + det[0].id() + ": unplaced") && !line.contains("in the zone behind the wave 0,"), "zone plans are gone: " + line);
                     }
                     h.succeed();
                 }
@@ -1684,7 +1682,7 @@ public final class RuinBackgroundGameTests {
         });
     }
 
-    /** Тик не короче 50 мс, как в игре: {@code tickAt} — когда кончился прошлый такой тик. */
+    /** tick is no shorter than 50 ms, as in the game: {@code tickAt} - when the last such tick ended. */
     static void gamePace(long[] tickAt) {
         long deadline = tickAt[0] + 50_000_000L, left;
         while ((left = deadline - System.nanoTime()) > 0) java.util.concurrent.locks.LockSupport.parkNanos(left);
@@ -1692,8 +1690,8 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * Гарь вспышки двух планов ({@link RuinPlan#flash}: метки граней — место, сторона, ступень, хеш блока) — одна и та же,
-     * в любом порядке меток; null — та же, иначе — сколько и какие расходятся.
+     * Burn flashes of two plans ({@link RuinPlan#flash}: edge labels - place, side, step, block hash) - the same,
+     *  in any order of labels; null - the same, otherwise - how many and which ones differ.
      */
     static String flashDiffers(RuinPlan a, RuinPlan b) {
         int[] x = a.flash().clone(), y = b.flash().clone();
@@ -1725,29 +1723,29 @@ public final class RuinBackgroundGameTests {
         return out.toString();
     }
 
-    /** Ни одного чанка из списка нет в памяти (и в очереди выгрузки): записанное ими уже видно чтению с диска. */
+    /** Not a single chunk from the list is in memory (or in the upload queue): what they wrote down is already visible for reading from disk. */
     private static boolean unloaded(ServerLevel level, List<ChunkPos> list) {
         var map = level.getChunkSource().chunkMap;
         for (ChunkPos c : list) if (map.getVisibleChunkIfPresent(c.toLong()) != null || map.pendingUnloads.containsKey(c.toLong())) return false;
         return true;
     }
 
-    /** Поле {@code Status} чанка с диска (в потоке ввода-вывода чанков); «нет» — чанка на диске нет. */
+    /** Field {@code Status} of a chunk from disk (in the chunk I/O stream); “no” - there is no chunk on the disk. */
     private static void readStatus(ServerLevel level, ChunkPos c, java.util.Map<Long, String> out) {
         net.minecraft.nbt.visitors.CollectFields f = new net.minecraft.nbt.visitors.CollectFields(
                 new net.minecraft.nbt.visitors.FieldSelector(net.minecraft.nbt.StringTag.TYPE, "Status"));
         level.getChunkSource().chunkMap.chunkScanner().scanChunk(c, f).whenComplete((v, e) -> out.put(c.toLong(),
-                e != null ? "ошибка " + e : f.getResult() instanceof net.minecraft.nbt.CompoundTag tag ? tag.getString("Status") : "нет"));
+                e != null ? "error " + e : f.getResult() instanceof net.minecraft.nbt.CompoundTag tag ? tag.getString("Status") : "no"));
     }
 
     /**
-     * Квадрат зоны за волной пропускается, только если все его чанки полностью загружены сейчас: чанк в памяти, опущенный
-     * ниже полной загрузки (край загруженного мира), квадрат не закрывает (gate 6: ряд из 11 чанков у края остался без руин).
+     * The square of the zone behind the wave is skipped only if all its chunks are fully loaded now: a chunk in memory lowered
+     *  below full loading (the edge of the loaded world) does not cover the square (gate 6: a row of 11 chunks at the edge was left without ruins).
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_tile_full", skyAccess = true)
     public static void tileWithDemotedChunkIsNotFull(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // квадрат на +40 чанков генерируется в фоне: тест — в темпе игры (иначе срок кончается раньше генерации на CI)
+        // a square for +40 chunks is generated in the background: test - at the pace of the game (otherwise the period ends before the generation for CI)
         StrikeGameTests.gameSpeed(h);
         var chunks = level.getChunkSource();
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
@@ -1761,19 +1759,19 @@ public final class RuinBackgroundGameTests {
         int[] stage = {0};
         h.onEachTick(() -> {
             if (stage[0] == 0 && NuclearPrep.tileFull(level, centre)) {
-                // край квадрата опускается ниже полной загрузки, но остаётся в памяти
+                // the edge of the square drops below full load, but remains in memory
                 chunks.addRegionTicket(TicketType.FORCED, centre, 1, centre);
                 chunks.removeRegionTicket(TicketType.FORCED, centre, 2, centre);
                 stage[0] = 1;
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(stage[0] == 1, "квадрат ещё не загрузился полностью");
-            h.assertTrue(chunks.getChunkNow(ring.x, ring.z) == null, "край квадрата ещё полностью загружен");
+            h.assertTrue(stage[0] == 1, "the square has not loaded completely yet");
+            h.assertTrue(chunks.getChunkNow(ring.x, ring.z) == null, "the edge of the square is still fully loaded");
             var holder = chunks.chunkMap.getVisibleChunkIfPresent(ring.toLong());
             h.assertTrue(holder != null && holder.getChunkIfPresentUnchecked(ChunkStatus.FULL) instanceof LevelChunk,
-                    "край квадрата выгружен, а не опущен: не проверено");
-            h.assertFalse(NuclearPrep.tileFull(level, centre), "квадрат с опущенным ниже полной загрузки чанком считается полным");
+                    "the edge of the square is unloaded, not lowered: not checked");
+            h.assertFalse(NuclearPrep.tileFull(level, centre), "a square with a chunk lower than full loading is considered full");
         });
     }
 }

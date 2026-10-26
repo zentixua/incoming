@@ -12,7 +12,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Модель горящего города: где и сколько горит, когда разгорается и гаснет, вторичные взрывы, тишина животных. */
+/** Model of a burning city: where and how long it burns, when it flares up and goes out, secondary explosions, the silence of animals. */
 class FireFieldTest {
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 0, 20_000, 7, 1, false, 1);
     private static final Detonation AIR = new Detonation(2, new Vec3(0, 64 + 500, 0), 64, 15, false, 0, 0, 0, 20_000, 9, 1, false, 1);
@@ -22,28 +22,28 @@ class FireFieldTest {
         for (Detonation d : List.of(GROUND, AIR)) {
             FireField f = new FireField(d);
             double lit = Arrays.stream(f.lit).sum();
-            assertTrue(f.total > 1000 && f.total <= lit + 1e-6 && f.total <= FireField.MAX_FIRES + 1e-6, "пожаров " + f.total + " из " + lit);
+            assertTrue(f.total > 1000 && f.total <= lit + 1e-6 && f.total <= FireField.MAX_FIRES + 1e-6, "fires " + f.total + " from " + lit);
             int first = 0;
             while (f.fires[first] == 0) first++;
-            if (d.surface()) assertTrue(FireField.radius(first) >= d.fireballRadius() * 0.8 - FireField.RING, "в шаре не горит");
+            if (d.surface()) assertTrue(FireField.radius(first) >= d.fireballRadius() * 0.8 - FireField.RING, "the ball doesn't light up");
             double last = 0;
             for (int i = 0; i < f.fires.length; i++) {
                 assertTrue(f.fires[i] >= 0 && f.fires[i] <= f.lit[i] + 1e-9);
                 assertTrue(f.keep[i] == 1 || f.keep[i] == FireField.BLOWN_KEEP);
                 if (f.lit[i] == 0) continue;
-                assertTrue(f.ignite[i] >= last - 1e-9 && f.ignite[i] <= d.pulseTicks() + 1e-9, "вспышка зажигает изнутри наружу за импульс: " + f.ignite[i]);
+                assertTrue(f.ignite[i] >= last - 1e-9 && f.ignite[i] <= d.pulseTicks() + 1e-9, "the flash lights from the inside out per impulse: " + f.ignite[i]);
                 last = f.ignite[i];
             }
-            for (int i = 1; i < f.arrival.length; i++) assertTrue(f.arrival[i] >= f.arrival[i - 1], "волна идёт изнутри наружу");
+            for (int i = 1; i < f.arrival.length; i++) assertTrue(f.arrival[i] >= f.arrival[i - 1], "the wave comes from inside to outside");
         }
     }
 
     /**
-     * Предел пожаров — счётом сервера ({@code RuinPlan.write}): слой вспышки идёт от эпицентра место за местом, зажигает,
-     * пока несбиваемых волной меньше предела, сбиваемые — без счёта. Модель после волны держит столько же и до того же
-     * кольца, а до волны горит и сбиваемое. У воздушного подрыва 15 кт у эпицентра всё — от 2 psi и в полном свете:
-     * после волны 20 000, со вспышкой 40 000, огонь — до кольца 128–160 блоков (по счёту всех зажжённых было бы 10 000,
-     * 20 000 и 96–128).
+     * The limit of fires is by server count ({@code RuinPlan.write}): a layer of flare goes from the epicenter place by place, ignites,
+     *  until those unbeaten by the wave are less than the limit, those knocked down - without counting. The model after the wave holds the same amount before the same
+     * rings, and before the wave the knocked down one burns. The air blast 15 kt at the epicenter has everything - from 2 psi and in full light:
+     * after the wave 20 000, with a flash 40 000, fire - to the ring 128–160 blocks (according to the count of all lit blocks there would be 10 000,
+     * 20 000 and 96–128).
      */
     @Test
     void capCountsWhatTheWaveLeavesAsTheServerDoes() {
@@ -58,7 +58,7 @@ class FireFieldTest {
                 long blown = 0;
                 for (long j = 0; j < places; j++) {
                     if (counted >= FireField.MAX_FIRES) break rings;
-                    // сбиваемые — вперемешку с остальными, в своей доле (у сервера у каждого места свой бросок)
+                    // knocked down - mixed with the rest, in their share (the server has its own throw for each place)
                     boolean isBlown = Math.floor((j + 1) * (1 - keep) + 1e-9) > blown;
                     if (isBlown) blown++;
                     lit++;
@@ -67,23 +67,23 @@ class FireFieldTest {
                     last = i;
                 }
             }
-            // места кольца у сервера — целые: на кольцо до одного места разницы
+            // the server's ring spaces are whole: there is a difference of up to one space per ring
             double lastLit = 0;
             int modelLast = -1;
             for (int i = 0; i < f.lit.length; i++) {
                 if (f.lit[i] > 0) modelLast = i;
                 lastLit += f.lit[i];
             }
-            assertEquals(counted, f.total, rings + 1, "после волны: сервер " + counted + ", модель " + f.total);
-            assertEquals(lit, lastLit, 2 * (rings + 1), "со вспышкой: сервер " + lit + ", модель " + lastLit);
-            assertEquals(last, modelLast, "последнее кольцо с огнём");
+            assertEquals(counted, f.total, rings + 1, "after the wave: server " + counted + ", model " + f.total);
+            assertEquals(lit, lastLit, 2 * (rings + 1), "with flash: server " + lit + ", model " + lastLit);
+            assertEquals(last, modelLast, "the last fire ring");
         }
         FireField air = new FireField(AIR);
-        assertEquals(FireField.MAX_FIRES, air.total, 1e-6, "после волны");
-        assertEquals(2 * FireField.MAX_FIRES, Arrays.stream(air.lit).sum(), 1e-6, "со вспышкой: волна от 2 psi сбивает половину");
+        assertEquals(FireField.MAX_FIRES, air.total, 1e-6, "after the wave");
+        assertEquals(2 * FireField.MAX_FIRES, Arrays.stream(air.lit).sum(), 1e-6, "with flash: the wave from 2 psi knocks down half");
         int last = air.lit.length - 1;
         while (air.lit[last] == 0) last--;
-        assertEquals(4, last, "огонь — до кольца 128–160 блоков");
+        assertEquals(4, last, "fire - up to the ring 128–160 blocks");
     }
 
     @Test
@@ -94,12 +94,12 @@ class FireFieldTest {
         assertEquals(Math.exp(-1), FireField.envelope(FireField.RISE + FireField.TAU), 1e-9);
         for (Detonation d : List.of(GROUND, AIR)) {
             FireField f = new FireField(d);
-            assertEquals(0, f.burning(0), 1e-9, "до вспышки не горит");
+            assertEquals(0, f.burning(0), 1e-9, "does not light up before the flash");
             double peak = f.burning(f.lastIgnition() + FireField.RISE);
-            assertTrue(peak > 0.5 * f.total, "разгорелось: " + peak);
-            assertTrue(f.burning(f.endTicks()) < 0.03 * f.total, "к концу почти погасло");
+            assertTrue(peak > 0.5 * f.total, "flared up: " + peak);
+            assertTrue(f.burning(f.endTicks()) < 0.03 * f.total, "almost went out towards the end");
         }
-        // у воздушного подрыва свет зажигает землю раньше, чем до неё дойдёт волна, а волна от 2 psi сбивает половину
+        // in an air blast, the light lights up the ground before the wave reaches it, and the wave from 2 psi knocks down half
         FireField f = new FireField(AIR);
         int rings = 0, before = 0, blown = 0;
         for (int i = 0; i < f.lit.length; i++) {
@@ -108,27 +108,27 @@ class FireFieldTest {
             if (f.ignite[i] + 1 < f.arrival[i]) {
                 before++;
                 assertEquals(f.lit[i] * FireField.envelope(f.arrival[i] - 1 - f.ignite[i]), f.burning(i, f.arrival[i] - 1), 1e-9);
-                assertTrue(f.burning(i, f.arrival[i] - 1) > 0, "горит до волны: кольцо " + i);
+                assertTrue(f.burning(i, f.arrival[i] - 1) > 0, "burns to wave: ring " + i);
             }
             if (f.keep[i] < 1) {
                 blown++;
-                assertEquals(f.keep[i] * f.lit[i] * FireField.envelope(f.arrival[i] - f.ignite[i]), f.burning(i, f.arrival[i]), 1e-9, "волна сбила долю");
+                assertEquals(f.keep[i] * f.lit[i] * FireField.envelope(f.arrival[i] - f.ignite[i]), f.burning(i, f.arrival[i]), 1e-9, "the wave knocked down the share");
             }
         }
-        assertTrue(rings > 0 && before == rings && blown > 0, "колец с огнём: " + rings + ", горящих до волны: " + before + ", сбитых: " + blown);
+        assertTrue(rings > 0 && before == rings && blown > 0, "fire rings: " + rings + ", burning to the wave: " + before + ", shot down: " + blown);
     }
 
-    /** Место набирает порог поджига за световой импульс: чем ярче, тем раньше; на пороге и ниже — к концу импульса. */
+    /** The place reaches the ignition threshold per light pulse: the brighter, the sooner; at the threshold and below - towards the end of the impulse. */
     @Test
     void lightReachesTheThresholdWithinThePulse() {
         double pulse = AIR.pulseTicks();
         assertEquals(20 * FireballModel.pulseSeconds(15), pulse, 1e-9);
-        assertEquals(pulse, AIR.flashTicks(ThermalModel.IGNITE, ThermalModel.IGNITE), 1e-9, "на пороге — к концу импульса");
-        assertEquals(pulse, AIR.flashTicks(1, ThermalModel.IGNITE), 1e-9, "ниже порога — к концу импульса");
+        assertEquals(pulse, AIR.flashTicks(ThermalModel.IGNITE, ThermalModel.IGNITE), 1e-9, "on the threshold - towards the end of the impulse");
+        assertEquals(pulse, AIR.flashTicks(1, ThermalModel.IGNITE), 1e-9, "below the threshold - towards the end of the impulse");
         double last = pulse;
         for (double q = ThermalModel.IGNITE * 1.1; q < 1e4; q *= 1.5) {
             double t = AIR.flashTicks(q, ThermalModel.IGNITE);
-            assertTrue(t < last && t > 0, "чем ярче, тем раньше: " + q + " — " + t);
+            assertTrue(t < last && t > 0, "the brighter, the sooner: " + q + " — " + t);
             last = t;
         }
     }
@@ -137,20 +137,20 @@ class FireFieldTest {
     void secondaryBlastsAreDeterministicSpreadOverTimeAndInsideTheFire() {
         FireField f = new FireField(GROUND);
         List<FireField.Secondary> a = f.secondaries(), b = new FireField(GROUND).secondaries();
-        assertEquals(a, b, "из зерна подрыва — одни и те же");
-        assertTrue(a.size() >= 4 && a.size() <= 24, "взрывов " + a.size());
+        assertEquals(a, b, "from the seed detonation - the same");
+        assertTrue(a.size() >= 4 && a.size() <= 24, "explosions " + a.size());
         double reach = 0;
         for (int i = 0; i < f.fires.length; i++) if (f.fires[i] > 0) reach = (i + 1) * FireField.RING;
         double last = 0;
         for (FireField.Secondary s : a) {
-            assertTrue(s.ticks() >= last, "по времени");
+            assertTrue(s.ticks() >= last, "by time");
             last = s.ticks();
             assertTrue(s.ticks() >= FireField.SECONDARY_AFTER && s.ticks() <= f.arrival[f.arrival.length - 1] + FireField.SECONDARY_AFTER + FireField.SECONDARY_END,
-                    "время " + s.ticks());
-            assertTrue(Math.hypot(s.x(), s.z()) <= reach + 1e-6, "там, где горит: " + Math.hypot(s.x(), s.z()));
+                    "time " + s.ticks());
+            assertTrue(Math.hypot(s.x(), s.z()) <= reach + 1e-6, "where it burns: " + Math.hypot(s.x(), s.z()));
         }
-        assertTrue(a.get(a.size() - 1).ticks() - a.get(0).ticks() > 60 * 20, "не разом, а минутами");
-        assertTrue(!new FireField(AIR).secondaries().equals(a), "у другого подрыва — другие");
+        assertTrue(a.get(a.size() - 1).ticks() - a.get(0).ticks() > 60 * 20, "not all at once, but in minutes");
+        assertTrue(!new FireField(AIR).secondaries().equals(a), "at another explosion - others");
     }
 
     @Test

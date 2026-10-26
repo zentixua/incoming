@@ -29,7 +29,7 @@ public final class FlashFalloff {
     static final float OCCLUDED = 0.35f;
     /**
      * Сила засветки экрана днём против полной (в темноте): днём засветки почти нет. Подача: свет шара на мир считают
-     * {@code CloudModel.shownLight} и {@code HeatPass}, а прежнее «4–11 % от солнца» этим числом не выводится.
+     * {@code CloudModel.emittedLight} и {@code HeatPass}, а прежнее «4–11 % от солнца» этим числом не выводится.
      */
     static final double DAYLIGHT = 0.08;
 

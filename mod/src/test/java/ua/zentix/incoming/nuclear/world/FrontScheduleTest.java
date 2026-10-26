@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FrontScheduleTest {
-    /** Как {@code ChunkPos.asLong}. */
+    /** Like {@code ChunkPos.asLong}. */
     private static long chunk(int x, int z) {
         return (long) x & 0xFFFFFFFFL | ((long) z & 0xFFFFFFFFL) << 32;
     }
@@ -20,7 +20,7 @@ class FrontScheduleTest {
         return out;
     }
 
-    /** Секция DH — 4×4 чанка от кратного 4, и по отрицательным координатам тоже; середина — в блоках. */
+    /** Section DH - 4×4 chunk from a multiple of 4, and along negative coordinates too; the middle is in blocks. */
     @Test
     void sectionsAreFourByFourChunks() {
         assertEquals(chunk(0, 0), FrontSchedule.section(chunk(3, 0)));
@@ -32,7 +32,7 @@ class FrontScheduleTest {
         assertEquals(96.0, FrontSchedule.middle(1));
     }
 
-    /** Секции — по сроку; чанки секции — вместе; до срока — ничего. */
+    /** Sections - by deadline; chunks of sections - together; before the deadline - nothing. */
     @Test
     void sectionsGoWholeInOrderOfTheirTime() {
         FrontSchedule s = new FrontSchedule();
@@ -53,7 +53,7 @@ class FrontScheduleTest {
         assertEquals(0, s.size());
     }
 
-    /** Секции с одним сроком (у 2 кт — вся зона в тике подрыва) — в порядке постановки: ближние к эпицентру первыми. */
+    /** Sections with one term (for 2 kt - the entire zone in the tick of detonation) - in the order of placement: those closest to the epicenter first. */
     @Test
     void sameTimeKeepsOrder() {
         FrontSchedule s = new FrontSchedule();
@@ -67,7 +67,7 @@ class FrontScheduleTest {
         assertEquals(chunk(-8, 0), s.head(5).getLong(0));
     }
 
-    /** Копия, собранная после отдачи своей секции, уходит сразу — в новой пачке с тем же (прошедшим) сроком. */
+    /** The copy, collected after giving its section, leaves immediately - in a new pack with the same (past) date. */
     @Test
     void lateChunkOfReleasedSectionGoesAtOnce() {
         FrontSchedule s = new FrontSchedule();
@@ -80,7 +80,7 @@ class FrontScheduleTest {
         assertEquals(chunk(1, 1), head.getLong(0));
     }
 
-    /** Снятый чанк (загружен, вытеснен) не уходит; пустая секция пропускается. */
+    /** A removed chunk (loaded, evicted) does not go away; the empty section is skipped. */
     @Test
     void removedChunksAreSkipped() {
         FrontSchedule s = new FrontSchedule();

@@ -1284,7 +1284,7 @@ def write_credits():
         fh.write("\n".join(md) + "\n")
     txt = ["Incoming sounds are built from the recordings below (cut, mixed, filtered, resampled)",
            "plus synthesis. CC0 = public domain; CC BY = used with attribution, modified.", ""]
-    txt += [f"{a} - \"{t}\" - {lic} - {u}" for a, t, lic, u in rows]
+    txt += [f"{a} - \"{t}\" - {lic} - {u} - {lic_url[lic]}" for a, t, lic, u in rows]
     with open(os.path.join(OUT, "credits.txt"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(txt) + "\n")
 

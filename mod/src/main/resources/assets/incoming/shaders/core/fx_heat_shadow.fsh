@@ -5,20 +5,20 @@
 #moj_import <incoming:scene.glsl>
 #moj_import <incoming:heat.glsl>
 
-// Видимость прямого света шаров и факелов обычного оружия (client/fx/layer/HeatPass) — в половинном разрешении: образец t
-// — пиксель кадра 2t. Лучи тени — по клеткам окна блоков (heatShadows, heat.glsl); проход света во весь кадр (fx_heat)
-// берёт у пикселя образец с ближним расстоянием до мира. Выход: r — коды шаров (2 бита: 0, ¼, ¾, 1), g — коды факелов
-// (1 бит), b — расстояние до мира у образца вдоль взгляда. Лучи тени — основная цена прохода света: в половинном
-// разрешении их вчетверо меньше, а резкость тени — в пиксель кадра вдвое крупнее.
+// Conventional ball/jet direct-light visibility (client/fx/layer/HeatPass), half-resolution: sample t is frame pixel 2t.
+// Shadow rays traverse the block window (heatShadows, heat.glsl); fullscreen light pass (fx_heat) chooses a sample with
+// nearest world distance. Output: r ball codes (2 bits: 0, ¼, ¾, 1), g jet codes (1 bit), b sample world distance along
+// view. Shadow rays dominate light-pass cost: half-resolution gives four times fewer rays, with shadow sharpness twice
+// the frame pixel size.
 
-// расстояние до мира за пикселем (SceneDepth)
+// world distance behind pixel (SceneDepth)
 uniform sampler2D Sampler1;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
 uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
-// не занято; угол пикселя, рад; есть ли свет (z > 0); не занято
+// unused; pixel angle, rad; light present (z > 0); unused
 uniform vec4 HeatFrame;
 
 out vec4 fragColor;

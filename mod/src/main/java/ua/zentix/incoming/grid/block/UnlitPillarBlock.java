@@ -15,7 +15,7 @@ import net.minecraft.world.phys.HitResult;
 
 import java.util.function.Supplier;
 
-/** Двойник лампы-столба (ось): лягушачьи огни. */
+/** Pillar lamp counterpart (axis): froglights. */
 public class UnlitPillarBlock extends RotatedPillarBlock implements Unlit {
     private final Supplier<Block> lit;
 

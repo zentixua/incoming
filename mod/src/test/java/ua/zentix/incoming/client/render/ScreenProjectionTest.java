@@ -10,18 +10,18 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Рамка цели — угловой размер цели в кадре (жалоба 23.10: при зуме Ok Zoomer метки «плывут» и велики относительно цели).
- * Ok Zoomer меняет поле зрения на выходе {@code GameRenderer.getFov}, из него строится матрица кадра — она же у меток.
+ * Target frame - angular size of the target in the frame (complaint 23.10: when zooming Ok Zoomer marks “float” and are large relative to the target).
+ * Ok Zoomer changes the field of view at the output {@code GameRenderer.getFov}, from which it is built the frame matrix is the same as the markers.
  */
 class ScreenProjectionTest {
-    /** Матрица кадра: перспектива с полем зрения fov по вертикали (16:9), глаз в 0 смотрит вдоль −z. */
+    /** Frame matrix: perspective with a field of view fov vertically (16:9), the eye in 0 looks along −z. */
     private static Matrix4f frame(double fovDeg) {
         return new Matrix4f().perspective((float) Math.toRadians(fovDeg), 16f / 9, 0.05f, 1000);
     }
 
     /**
-     * Игрок (0,6 × 1,8 м) в 200 м: высота рамки — его угловая высота в долях экрана, 1,8/200 / (2·tg(fov/2)); при поле
-     * зрения в k раз уже (зум ×k: tg(fov/2) меньше в k раз) рамка в k раз выше — тот же угловой размер, что у цели.
+     * Player (0,6 × 1,8 m) in 200 m: the height of the frame is its angular height in fractions of the screen, 1,8/200 / (2·tg(fov/2)); at field
+     *  of vision is k times narrower (zoom ×k: tg (fov/2) smaller by k times) frame is k times higher - the same angular size as at the target.
      */
     @Test
     void frameHasTheTargetsAngularSizeAtAnyZoom() {
@@ -32,15 +32,15 @@ class ScreenProjectionTest {
             float[] r = ScreenProjection.rect(frame(fov), Vec3.ZERO, player);
             assertNotNull(r);
             double tall = r[3] - r[1], expected = 1.8 / 199.7 / (2 * tan70 / k);
-            assertEquals(expected, tall, expected * 0.01, "зум ×" + k);
-            // середина рамки — середина цели: в середине кадра
-            assertEquals(0.5, 0.5 * (r[1] + r[3]), 1e-4, "зум ×" + k);
+            assertEquals(expected, tall, expected * 0.01, "zoom ×" + k);
+            // middle of frame - middle of target: in the middle of frame
+            assertEquals(0.5, 0.5 * (r[1] + r[3]), 1e-4, "zoom ×" + k);
         }
     }
 
     /**
-     * Шахед (наибольший размер 3,6 м) в 700 м — шар радиуса 1,8: поперечник рамки — его угловой поперечник 3,6/700 в долях
-     * высоты кадра; при поле зрения в k раз уже — ровно в k раз больше; середина — его середина.
+     * Shahed (largest size 3,6 m) in 700 m - a ball of radius 1,8: frame diameter - its angular diameter 3,6/700 in fractions of
+     *  frame height; with a field of view k times narrower - exactly k times larger; the middle is its middle.
      */
     @Test
     void bodyFrameHasTheBodysAngularSizeAtAnyZoom() {
@@ -52,16 +52,16 @@ class ScreenProjectionTest {
             float[] r = ScreenProjection.rect(proj, new Matrix4f(), Vec3.ZERO, shahed, 1.8);
             assertNotNull(r);
             double tall = r[3] - r[1], expected = 3.6 / 700 / (2 * tan70 / k);
-            assertEquals(expected, tall, expected * 1e-3, "зум ×" + k);
+            assertEquals(expected, tall, expected * 1e-3, "zoom ×" + k);
             float[] c = ScreenProjection.rect(proj, Vec3.ZERO, new net.minecraft.world.phys.AABB(shahed, shahed));
             assertNotNull(c);
-            assertEquals(c[0], 0.5 * (r[0] + r[2]), 1e-5, "зум ×" + k);
-            assertEquals(c[1], 0.5 * (r[1] + r[3]), 1e-5, "зум ×" + k);
+            assertEquals(c[0], 0.5 * (r[0] + r[2]), 1e-5, "zoom ×" + k);
+            assertEquals(c[1], 0.5 * (r[1] + r[3]), 1e-5, "zoom ×" + k);
         }
-        assertNull(ScreenProjection.rect(frame(70), new Matrix4f(), Vec3.ZERO, new Vec3(0, 0, 50), 1.8), "за спиной");
+        assertNull(ScreenProjection.rect(frame(70), new Matrix4f(), Vec3.ZERO, new Vec3(0, 0, 50), 1.8), "behind my back");
     }
 
-    /** Угол коробки за спиной — рамки нет. */
+    /** The corner of the box is behind the back - there is no frame. */
     @Test
     void behindTheEyeNoFrame() {
         assertNull(ScreenProjection.rect(frame(70), Vec3.ZERO, new AABB(-1, -1, -1, 1, 1, 5)));
