@@ -18,30 +18,30 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Проба: время слоя эффектов на видеокарте по частям — чтобы причину цены кадра называло число, а не модель.
+ * Probe: GPU effects layer time by part — so a number identifies the cause of frame cost, rather than the model.
  * <ul>
- * <li>Проходы слоя ({@link Pass}: атлас моделей, глубина сцены, наклейка на воду, пелена с дымом объёмом, свет и дрожание
- * огня, пробы источников, квадраты, свечение) — метки времени (glQueryCounter) на их границах в каждом кадре, по кольцу
- * из {@link #RING} кадров: читаются через 2–3 кадра, когда готовы, без ожидания (как {@link GpuTimer}). Метка между
- * соседними проходами «протекает»: видеокарта ставит её, не дождавшись хвоста прошлой работы, и он попадает в следующий
- * проход (замер HB2, #442). Среднее таких кадров — для слежки; сумма верна, доли — примерно.</li>
- * <li>Поэтому, пока его просят ({@link #drains}: открыт F3 или свойство {@code incoming.fx.drain}), раз в
- * {@link #DRAIN_EVERY_NS} кадр слива: перед каждой меткой glFinish — работа до неё вся кончилась, и
- * проходы на нём точны. Квадраты — один отсортированный вызов, и части внутри него перемешаны по глубине: такой кадр
- * после общего вызова рисует каждую часть ({@link FxQuads.Part}) ещё раз отдельно, тоже со сливом до и после (число
- * пикселей — запросом GL_SAMPLES_PASSED), а кадр перед этим копируется и потом возвращается: на экране — тот же кадр.
- * Кадр слива стоит ещё одни квадраты, две копии кадра и простои видеокарты между проходами — 20–28 мс процессора (look_gate
- * 25.10, раз в 2 с): рывок, который сам попадал в замер сцен; поэтому сценарии и стенд, что лишь читают строку, его не
- * делают, и в среднее проходов он не идёт.</li>
+ * <li>Layer passes ({@link Pass}: model atlas, scene depth, water decal, pall with volumetric smoke, fire light and
+ * shimmer, source probes, quads, bloom) — timestamps (glQueryCounter) at their boundaries every frame, in a ring
+ * of {@link #RING} frames: read after 2–3 frames once ready, without waiting (like {@link GpuTimer}). A timestamp between
+ * neighbouring passes “leaks”: the GPU records it before the tail of previous work finishes, charging that tail to the next
+ * pass (measurement HB2, #442). Such frame averages serve monitoring; the sum is correct, shares approximate.</li>
+ * <li>So while requested ({@link #drains}: F3 open or {@code incoming.fx.drain} property), once every
+ * {@link #DRAIN_EVERY_NS} a drain frame runs: glFinish before every timestamp finishes all preceding work, and
+ * its pass timings are exact. Quads are one sorted call with parts interleaved by depth: after the combined call, this frame
+ * draws each part ({@link FxQuads.Part}) separately again, with a drain before and after (pixel
+ * count via GL_SAMPLES_PASSED); the frame is copied first and restored afterwards: same image on screen.
+ * A drain frame costs another quad draw, two frame copies and GPU stalls between passes — 20–28 ms CPU (look_gate
+ * 25.10, every 2 s): a hitch counted in scene measurements themselves; scenarios and the bench that only read the line therefore
+ * skip it, and it is excluded from pass averages.</li>
  * </ul>
- * Проба идёт, только пока её читают: открыт F3, строку {@link #describe} спрашивали за последние {@link #READ_NS} (стенд,
- * сценарии) или её держат включённой ({@link #always}). Иначе меток нет вовсе (и у {@link GpuTimer} тоже), копии кадра нет.
+ * Probe active only while read: F3 open, {@link #describe} line requested within {@link #READ_NS} (bench,
+ * scenarios), or held on ({@link #always}). Otherwise no timestamps at all (including {@link GpuTimer}), no frame copy.
  */
 public final class LayerTimes {
     /**
-     * Проходы слоя в порядке кадра; время прохода — от прошлой метки до его. {@link #PROBE} — работа самой пробы на кадре
-     * слива (копия кадра, части, кадр назад); в других кадрах его метка — сразу за квадратами, и протёкший в неё хвост
-     * квадратов идёт им.
+     * Layer passes in frame order; pass time — from previous timestamp to its own. {@link #PROBE} — probe work on a drain
+     * frame (frame copy, parts, frame restore); on other frames its timestamp immediately follows quads, and any leaked quad
+     * tail is charged to them.
      */
     enum Pass {
         MODELS, DEPTH, WATER, PALL, HEAT, PROBES, QUADS, PROBE, BLOOM;
@@ -50,48 +50,48 @@ public final class LayerTimes {
     }
 
     private static final int RING = 4, MARKS = Pass.values().length + 1, PASSES = Pass.values().length, PARTS = FxQuads.Part.values().length;
-    /** Кадр слива — не чаще. */
+    /** Minimum drain frame interval. */
     static final long DRAIN_EVERY_NS = 2_000_000_000L;
-    /** Кадр слива попросили запуском (разбор по частям на стенде или в песочнице): {@code -Dincoming.fx.drain=true}. */
+    /** Drain frames requested at launch (part analysis on the bench or in the sandbox): {@code -Dincoming.fx.drain=true}. */
     private static final boolean DRAIN_ASKED = Boolean.getBoolean("incoming.fx.drain");
-    /** Проба идёт столько после последнего чтения строки. */
+    /** Probe remains active this long after the last line read. */
     static final long READ_NS = 5_000_000_000L;
 
     private static boolean always, on;
-    /** Когда строку читали и когда был кадр слива (0 — не было). */
+    /** Last line read and drain frame times (0 — never). */
     private static long lastRead, lastDrain;
-    /** Метки времени: 0 — не проверяли, 1 — есть, −1 — нет. */
+    /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported. */
     private static int timer;
     private static final int[][] MARK = new int[RING][MARKS];
     private static final boolean[] ISSUED = new boolean[RING], DRAINED = new boolean[RING];
-    /** У кадра слива — место меток его частей в {@link PartClock} (−1 — частей нет). */
+    /** Drain frame's part timestamp slot in {@link PartClock} (−1 — no parts). */
     private static final int[] PART_SLOT = new int[RING];
     private static int ring, slot = -1;
     private static final double[] SUM = new double[PASSES], MEAN = new double[PASSES], EXACT = new double[PASSES];
     private static int frames, lastFrames;
-    /** Последний прочитанный кадр слива: когда; почему без частей (null — с частями). */
+    /** Last read drain frame: time; reason for missing parts (null — parts present). */
     private static long exactAt;
     private static String partsMissing = "no drained frame yet";
 
     private static final PartClock CLOCK = new PartClock();
-    /** Копия кадра для кадра слива: текстура и её буфер кадра, размер. */
+    /** Drain frame copy: texture, framebuffer and size. */
     private static int copy = -1, copyFbo = -1, copyW, copyH;
 
     private LayerTimes() {}
 
-    /** Пробу держит включённой сам клиент (сценарии и песочница: их строки читают время слоя каждый раз). */
+    /** Client holds the probe on (scenarios and sandbox: their lines read layer time each time). */
     public static void always() {
         always = true;
     }
 
-    /** Идёт ли проба в этом кадре (её решает {@link #begin}). */
+    /** Whether the probe is active this frame (decided by {@link #begin}). */
     static boolean on() {
         return on;
     }
 
     /**
-     * Начало кадра слоя (до атласа моделей): решить, идёт ли проба, прочитать готовые метки, поставить первую. true — кадр
-     * слива: квадраты ещё и по частям ({@link #parts}).
+     * Layer frame start (before model atlas): decide whether to probe, read ready timestamps, set the first. true — drain
+     * frame: draw quads by part too ({@link #parts}).
      */
     static boolean begin() {
         slot = -1;
@@ -111,7 +111,7 @@ public final class LayerTimes {
         PART_SLOT[slot] = -1;
         if (drain) {
             lastDrain = now;
-            // мир кадра — до первой метки: его хвост не в атласе моделей
+            // drain the frame world before the first timestamp: its tail is excluded from model atlas time
             GL11.glFinish();
         }
         GL33.glQueryCounter(MARK[slot][0], GL33.GL_TIMESTAMP);
@@ -119,22 +119,22 @@ public final class LayerTimes {
     }
 
     /**
-     * Будет ли этот кадр кадром слива: только когда его просят — открыт F3 (человек смотрит части) или свойство запуска
-     * ({@link #DRAIN_ASKED}), — и не чаще {@link #DRAIN_EVERY_NS}. Строку пробы читают и сценарии со стендом (метки проходов
-     * им нужны каждый кадр), но рывок слива на их кадрах был бы в их же замере.
+     * Whether this is a drain frame: only when requested — F3 open (a person inspecting parts) or launch property
+     * ({@link #DRAIN_ASKED}) — and no more often than {@link #DRAIN_EVERY_NS}. Scenarios and bench also read the probe line (needing pass
+     * timestamps every frame), but a drain hitch in their frames would contaminate their own measurement.
      */
     static boolean drains(boolean f3, boolean asked, long lastDrain, long now) {
         return (f3 || asked) && (lastDrain == 0 || now - lastDrain >= DRAIN_EVERY_NS);
     }
 
-    /** Конец прохода p (на кадре слива — когда его работа вся кончилась). */
+    /** End pass p (on a drain frame — after all its work finishes). */
     static void mark(Pass p) {
         if (slot < 0) return;
         if (DRAINED[slot]) GL11.glFinish();
         GL33.glQueryCounter(MARK[slot][p.ordinal() + 1], GL33.GL_TIMESTAMP);
     }
 
-    /** Кадр слоя дошёл до конца: метки — в полёт. */
+    /** Layer frame ended: timestamps pending. */
     static void end() {
         if (slot < 0) return;
         ISSUED[slot] = true;
@@ -143,8 +143,8 @@ public final class LayerTimes {
     }
 
     /**
-     * Кадр слива, после общего вызова квадратов и его метки: копия кадра, каждая часть отдельно, кадр назад. Буфер кадра с
-     * несколькими отсчётами на пиксель, с ножницами или с несколькими целями копией не вернуть — тогда частей нет.
+     * Drain frame after the combined quad call and its timestamp: copy frame, draw each part separately, restore frame. A multisampled,
+     * scissored or multi-target framebuffer cannot be restored by copying — no parts then.
      */
     static void parts(FxQuads quads, net.minecraft.client.renderer.ShaderInstance s) {
         if (slot < 0 || !DRAINED[slot]) return;
@@ -170,7 +170,7 @@ public final class LayerTimes {
         GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
     }
 
-    /** Раз в секунду: среднее проходов. */
+    /** Once per second: pass averages. */
     static void second() {
         for (int i = 0; i < PASSES; i++) {
             MEAN[i] = frames > 0 ? SUM[i] / frames : 0;
@@ -180,7 +180,7 @@ public final class LayerTimes {
         frames = 0;
     }
 
-    /** Выход из мира или смена измерения. */
+    /** World exit or dimension change. */
     static void reset() {
         Arrays.fill(SUM, 0);
         Arrays.fill(MEAN, 0);
@@ -192,9 +192,9 @@ public final class LayerTimes {
     }
 
     /**
-     * Строка пробы (её чтение держит пробу включённой): проходы — среднее за прошлую секунду и точные последнего кадра
-     * слива; части квадратов того же кадра — мс на видеокарте, доля экрана, которую часть залила (пиксели после теста
-     * глубины, в экранах кадра), квадраты и отрезки в порядке сортировки.
+     * Probe line (reading keeps it active): passes — previous-second averages and exact last drain frame timings;
+     * quad parts from that frame — GPU ms, filled screen fraction (pixels after depth
+     * testing, in frame screens), quads and spans in sorted order.
      */
     static String describe() {
         lastRead = System.nanoTime();
@@ -212,7 +212,7 @@ public final class LayerTimes {
         return b.toString();
     }
 
-    /** Проходы без работы самой пробы и их сумма. */
+    /** Passes excluding probe work, and their sum. */
     private static void passes(StringBuilder b, double[] ms) {
         double sum = 0;
         for (Pass p : Pass.values()) {
@@ -223,7 +223,7 @@ public final class LayerTimes {
         b.append(String.format(Locale.ROOT, " (sum %.2f)", sum));
     }
 
-    /** Строки F3 (справа): проходы (среднее за секунду) и части квадратов (кадр слива). */
+    /** F3 lines (right side): passes (one-second average) and quad parts (drain frame). */
     static void debugLines(List<String> out) {
         if (!on || lastFrames == 0) return;
         out.add("");
@@ -241,14 +241,14 @@ public final class LayerTimes {
         if (exactAt != 0 && partsMissing == null) CLOCK.debugLines(out, EXACT[Pass.QUADS.ordinal()]);
     }
 
-    /** Строка F3 не шире ~45 знаков: длинная — в вывод, дальше с начала. */
+    /** F3 line at most ~45 characters: long text goes to output, then continues from the start. */
     private static void wrap(List<String> out, StringBuilder b) {
         if (b.length() <= 40) return;
         out.add(b.toString().trim());
         b.setLength(0);
     }
 
-    /** Есть ли метки времени OpenGL (GL 3.3 или ARB_timer_query, и счётчик не пустой); запросы заводятся при первой проверке. */
+    /** OpenGL timestamps supported (GL 3.3 or ARB_timer_query, nonempty counter); queries created on first check. */
     private static boolean timer() {
         if (timer == 0) {
             GLCapabilities caps = GL.getCapabilities();
@@ -263,8 +263,8 @@ public final class LayerTimes {
     }
 
     /**
-     * Готовые кадры меток: обычный — в сумму проходов (метка пробы — квадратам: в ней только протёкший хвост квадратов),
-     * кадр слива — в точные проходы, с ним его части: их метки стоят раньше последней метки кадра и уже готовы.
+     * Ready timestamp frames: ordinary — into pass sums (probe timestamp charged to quads: only their leaked tail),
+     * drain frame — exact passes and its parts: part timestamps precede its final timestamp and are already ready.
      */
     private static void poll(long now) {
         for (int k = 0; k < RING; k++) {
@@ -290,7 +290,7 @@ public final class LayerTimes {
         }
     }
 
-    /** Копия кадра w×h (RGBA16F: 8-битный, 10-битный и половинный кадр в ней и обратно — те же числа); false — не завести. */
+    /** Frame copy w×h (RGBA16F: preserves 8-bit, 10-bit and half-float frame values in both directions); false — creation failed. */
     private static boolean copy(int w, int h) {
         if (copyFbo >= 0 && copyW == w && copyH == h) return true;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -316,7 +316,7 @@ public final class LayerTimes {
         return ok;
     }
 
-    /** Проба выключена: копии кадра нет (32 МБ видеопамяти у 2560×1600). */
+    /** Probe off: no frame copy (32 MB VRAM at 2560×1600). */
     private static void free() {
         if (copyFbo >= 0) GlStateManager._glDeleteFramebuffers(copyFbo);
         if (copy >= 0) GlStateManager._deleteTexture(copy);
@@ -325,10 +325,10 @@ public final class LayerTimes {
     }
 
     /**
-     * Метки частей квадратов на кадре слива ({@link FxQuads#drawParts}): перед первой и после каждой — glFinish, время части
-     * — между метками, пиксели — запрос GL_SAMPLES_PASSED вокруг неё (фрагменты, отброшенные в шейдере, в них не входят,
-     * хоть время и стоили). Кольцо из двух мест: кадры слива идут раз в {@link #DRAIN_EVERY_NS}, их метки готовы задолго
-     * до следующего; читаются вместе с метками проходов своего кадра.
+     * Quad part timestamps on a drain frame ({@link FxQuads#drawParts}): glFinish before the first and after each; part time
+     * between timestamps; pixel count via GL_SAMPLES_PASSED around it (shader-discarded fragments are excluded,
+     * although they cost time). Ring of two slots: drain frames run every {@link #DRAIN_EVERY_NS}, their timestamps are ready long
+     * before the next; read with the pass timestamps from their frame.
      */
     static final class PartClock {
         private static final int SLOTS = 2;
@@ -338,7 +338,7 @@ public final class LayerTimes {
         private final double[] slotPixels = new double[SLOTS];
         private int at;
         double pixels;
-        /** Последний прочитанный кадр: мс, экраны, квадраты, отрезки. */
+        /** Last read frame: ms, screens, quads, spans. */
         private final double[] ms = new double[PARTS], screens = new double[PARTS];
         private final int[] lastQuads = new int[PARTS], lastRuns = new int[PARTS];
         private boolean any;
@@ -371,7 +371,7 @@ public final class LayerTimes {
             runs[at][part] = runCount;
         }
 
-        /** Части кадра нарисованы: метки — в полёт; ответ — их место для {@link #read}. */
+        /** Frame parts drawn: timestamps pending; returns their slot for {@link #read}. */
         int issue() {
             int s = at;
             slotPixels[s] = pixels;
@@ -380,7 +380,7 @@ public final class LayerTimes {
             return s;
         }
 
-        /** Метки места s готовы: последняя метка их кадра прочитана. */
+        /** Slot s timestamps ready: their frame's final timestamp has been read. */
         void read(int s) {
             if (!issued[s]) return;
             long prev = GL33.glGetQueryObjecti64(marks[s][0], GL15.GL_QUERY_RESULT);
@@ -400,7 +400,7 @@ public final class LayerTimes {
             any = false;
         }
 
-        /** Части; together — общий вызов квадратов того же кадра, мс. */
+        /** Parts; together — combined quad call from the same frame, ms. */
         String describe(double together) {
             if (!any) return "quads by part: none yet";
             double alone = 0;

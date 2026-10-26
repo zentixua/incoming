@@ -24,26 +24,26 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.Predicate;
 
 /**
- * Верх колонок из чанков, которые прислал сервер LOD Server Support (см. {@link LssTerrain}): то же, что слой чанков
- * клиента ({@link LoadedChunksTerrain}) берёт из своего мира, — первый блок карты высот {@code MOTION_BLOCKING} (с кронами
- * и постройками), ниже — первый блок с цветом ванильной карты, глубина воды под ним. Без API LSS: считается и хранится
- * здесь, поэтому проверяется юнит-тестами.
+ * Column tops from chunks sent by the LOD Server Support server (see {@link LssTerrain}): the same data the client
+ * chunk layer ({@link LoadedChunksTerrain}) takes from its world: first {@code MOTION_BLOCKING} heightmap block
+ * (with canopies and buildings), then first vanilla map-coloured block below, and water depth beneath it. No LSS API:
+ * computed and stored here, so covered by unit tests.
  * <p>
- * Колонка упакована в {@code int}: высота + 2048 (12 бит), номер {@link MapColor} (6 бит), глубина воды 0–16 (5 бит),
- * бит «есть»; 0 — о колонке ничего не известно.
+ * Column packed in an {@code int}: height + 2048 (12 bits), {@link MapColor} ID (6 bits), water depth 0–16 (5 bits),
+ * presence bit; 0 means nothing known about the column.
  */
 final class LssColumns {
-    /** Глубже этого вода на карте одинаково тёмная (как у {@link LoadedChunksTerrain}). */
+    /** Water deeper than this has the same map darkness (as in {@link LoadedChunksTerrain}). */
     static final int MAX_WATER_DEPTH = 16;
-    /** Сколько блоков ниже верха карты высот искать блок с цветом под прозрачными (стекло, свет). */
+    /** Blocks to search below the heightmap top for a coloured block under transparent ones (glass, light). */
     static final int MAX_COLORLESS = 8;
-    /** Колонок чанка подробно: каждая. */
+    /** Detailed chunk columns: every column. */
     static final int FULL = 256;
-    /** Колонок чанка грубо: середина каждой клетки 4×4 блока — те же колонки, что у плитки уровня 2. */
+    /** Coarse chunk columns: centre of each 4×4 block cell, the same columns as a level 2 tile. */
     static final int COARSE = 16;
     private static final int PRESENT = 1 << 23;
     private static final int HEIGHT_BIAS = 2048;
-    /** Блоки карты высот {@code MOTION_BLOCKING}: преграждают движение или с жидкостью. */
+    /** {@code MOTION_BLOCKING} heightmap blocks: block movement or contain fluid. */
     private static final Predicate<BlockState> MOTION_BLOCKING = Heightmap.Types.MOTION_BLOCKING.isOpaque();
 
     private LssColumns() {}
@@ -74,17 +74,17 @@ final class LssColumns {
         return present(packed) ? new TerrainSource.Column(height(packed), MapColor.byId(color(packed)), waterDepth(packed)) : null;
     }
 
-    /** Секция чанка: блоки 16³ по локальным координатам. */
+    /** Chunk section: 16³ blocks at local coordinates. */
     interface Section {
-        /** Только воздух: блоки можно не смотреть. */
+        /** Air only: no need to inspect blocks. */
         boolean empty();
 
         BlockState block(int x, int y, int z);
     }
 
     /**
-     * Верх всех 256 колонок чанка (индекс {@code z·16 + x}). {@code sections[i]} — секция {@code minSection + i}
-     * (номер секции = y >> 4); null — секции нет, в ней только воздух (LSS шлёт лишь непустые).
+     * Tops of all 256 chunk columns (index {@code z·16 + x}). {@code sections[i]} is section {@code minSection + i}
+     * (section number = y >> 4); null means absent, all air (LSS sends only nonempty sections).
      */
     static int[] summarize(int minSection, @Nullable Section[] sections) {
         int[] out = new int[FULL];
@@ -98,10 +98,10 @@ final class LssColumns {
         return out;
     }
 
-    /** Колонка (x, z) сверху вниз от {@code top} (индекс блока от низа первой секции). */
+    /** Column (x, z) top-down from {@code top} (block index from the first section's bottom). */
     private static int column(@Nullable Section[] sections, int top, int minY, int x, int z) {
         int y = top;
-        // верх карты высот MOTION_BLOCKING: пустые секции проходятся целиком
+        // MOTION_BLOCKING heightmap top: skip empty sections as a whole.
         for (; y >= 0; y--) {
             Section s = sections[y >> 4];
             if (s == null || s.empty()) {
@@ -111,7 +111,7 @@ final class LssColumns {
             if (MOTION_BLOCKING.test(s.block(x, y & 15, z))) break;
         }
         if (y < 0) return 0;
-        // ниже — первый блок с цветом карты, как у слоя чанков клиента
+        // First map-coloured block below, as in the client chunk layer.
         for (int bottom = Math.max(0, y + 1 - MAX_COLORLESS); y >= bottom; y--) {
             BlockState state = block(sections, x, y, z);
             MapColor color = state == null ? MapColor.NONE : state.getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
@@ -141,7 +141,7 @@ final class LssColumns {
         return depth;
     }
 
-    /** Грубая копия подробного чанка: середина каждой клетки 4×4 (колонки 2, 6, 10, 14 по каждой оси). */
+    /** Coarse copy of a detailed chunk: centre of each 4×4 cell (columns 2, 6, 10, 14 on each axis). */
     static int[] coarse(int[] full) {
         int[] out = new int[COARSE];
         for (int j = 0; j < 4; j++) {
@@ -150,16 +150,16 @@ final class LssColumns {
         return out;
     }
 
-    /** Колонка (x, z) мира из колонок её чанка (подробных или грубых). */
+    /** World column (x, z) from its chunk columns (detailed or coarse). */
     static int at(int[] chunk, int x, int z) {
         return chunk.length == FULL ? chunk[(z & 15) * 16 + (x & 15)] : chunk[((z & 15) >> 2) * 4 + ((x & 15) >> 2)];
     }
 
     /**
-     * Колонки одного мира: чанки по областям 32×32 (у чанка только заголовок массива, а не запись в карте). Массив
-     * чанка не меняется, его заменяют целиком: пишет поток LSS ({@link #put}), понижает до грубого фоновый поток
-     * ({@link #coarsen}), читают все. Подробных чанков не больше предела ({@link #coarsen}): дальние от игрока —
-     * грубыми, по 64 байта.
+     * Columns of one world: chunks in 32×32 regions (only array header per chunk, rather than a map entry). Chunk array
+     * is immutable and replaced as a whole: LSS thread writes ({@link #put}), background thread coarsens
+     * ({@link #coarsen}), all threads read. Detailed chunks stay within the limit ({@link #coarsen});
+     * far from the player, coarse at 64 bytes each.
      */
     static final class Store {
         private static final int FORMAT = 1;
@@ -175,13 +175,13 @@ final class LssColumns {
             return (chunkZ & 31) << 5 | chunkX & 31;
         }
 
-        /** Колонки чанка пришли с сервера: заменяют прежние. */
+        /** Chunk columns received from the server replace the previous ones. */
         void put(int chunkX, int chunkZ, int[] columns) {
             int[] old = regions.computeIfAbsent(region(chunkX, chunkZ), r -> new AtomicReferenceArray<>(1024)).getAndSet(slot(chunkX, chunkZ), columns);
             count(old, columns);
         }
 
-        /** Только если чанка ещё нет (чтение с диска не затирает пришедшее с сервера). */
+        /** Only if the chunk is absent (disk read does not overwrite data received from the server). */
         boolean putIfAbsent(int chunkX, int chunkZ, int[] columns) {
             boolean set = regions.computeIfAbsent(region(chunkX, chunkZ), r -> new AtomicReferenceArray<>(1024)).compareAndSet(slot(chunkX, chunkZ), null, columns);
             if (set) count(null, columns);
@@ -199,7 +199,7 @@ final class LssColumns {
             return r == null ? null : r.get(slot(chunkX, chunkZ));
         }
 
-        /** Колонка (x, z) упакованной ({@link LssColumns#pack}); 0 — не знаем. */
+        /** Column (x, z) packed ({@link LssColumns#pack}); 0 if unknown. */
         int get(int x, int z) {
             int[] c = chunk(x >> 4, z >> 4);
             return c == null ? 0 : at(c, x, z);
@@ -214,8 +214,8 @@ final class LssColumns {
         }
 
         /**
-         * Подробных чанков больше {@code limit} — самые дальние от (x, z) блоков становятся грубыми, пока подробных не
-         * останется {@code keep}. Чанк, который за это время пришёл снова, не трогается. Возвращает, сколько понижено.
+         * More than {@code limit} detailed chunks: coarsen farthest from block (x, z) until {@code keep} remain detailed.
+         * Leave chunks received again in the meantime untouched. Returns number coarsened.
          */
         int coarsen(double x, double z, int limit, int keep) {
             if (full.get() <= limit) return 0;
@@ -249,8 +249,8 @@ final class LssColumns {
         }
 
         /**
-         * Чанков больше {@code limit} — самые дальние от (x, z) блоков уходят, пока не останется {@code keep}. Возвращает,
-         * сколько ушло.
+         * More than {@code limit} chunks: remove farthest from block (x, z) until {@code keep} remain.
+         * Returns number removed.
          */
         int trim(double x, double z, int limit, int keep) {
             if (chunks.get() <= limit) return 0;
@@ -281,7 +281,7 @@ final class LssColumns {
             return done;
         }
 
-        /** Всё на диск: чанки по одному, конец — {@code false}. */
+        /** Everything to disk: chunks one at a time, terminated by {@code false}. */
         void write(DataOutputStream out) throws IOException {
             out.writeInt(MAGIC);
             out.writeInt(FORMAT);
@@ -301,7 +301,7 @@ final class LssColumns {
             out.writeBoolean(false);
         }
 
-        /** Чтение того, что записал {@link #write}: чанки, которых ещё нет; сколько прочитано. */
+        /** Read what {@link #write} wrote: only absent chunks; number read. */
         int read(DataInputStream in) throws IOException {
             if (in.readInt() != MAGIC) throw new IOException("not an Incoming LSS terrain file");
             int format = in.readInt();

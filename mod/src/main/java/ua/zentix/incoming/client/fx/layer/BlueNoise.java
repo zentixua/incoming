@@ -3,20 +3,20 @@ package ua.zentix.incoming.client.fx.layer;
 import java.util.Random;
 
 /**
- * Синий шум для сдвига шагов луча пелены ({@link PallPass}): у соседних пикселей сдвиги разные и ровно распределены,
- * без сгустков, как у белого шума, — после накопления по кадрам зерно уходит быстрее, а то, что осталось, — мелкое и
- * без пятен. Пустота-и-скопление Улични (1993) на торе: у каждого пикселя — свой ранг 0..N−1 (равномерно), бóльшие
- * ранги ставятся в самые большие пустоты.
+ * Blue noise for shifting pall ray steps ({@link PallPass}): neighbouring pixels have distinct uniformly distributed offsets,
+ * without white-noise clusters — temporal accumulation removes grain sooner, and the residual is fine and
+ * blotch-free. Ulichney's void-and-cluster (1993) on a torus: each pixel has a distinct rank 0..N−1 (uniform), with higher
+ * ranks placed in the largest voids.
  */
 public final class BlueNoise {
-    /** Сторона плитки. */
+    /** Tile side. */
     public static final int SIZE = 64;
-    /** Ширина гауссова «отталкивания», пикселей (Улични — 1,5). */
+    /** Gaussian repulsion width, pixels (Ulichney — 1.5). */
     private static final double SIGMA = 1.5;
 
     private BlueNoise() {}
 
-    /** Плитка {@code size}×{@code size}: байт на пиксель, ранг × 256 / size² (каждое значение — одинаково часто). */
+    /** Tile {@code size}×{@code size}: byte per pixel, rank × 256 / size² (each value equally frequent). */
     public static byte[] generate(int size, long seed) {
         int n = size * size;
         double[] kernel = new double[n];
@@ -30,7 +30,7 @@ public final class BlueNoise {
         double[] energy = new double[n];
         Random random = new Random(seed);
         int ones = 0;
-        // начальный узор: десятая часть пикселей — случайно, потом скопления переносятся в пустоты, пока узор не устоится
+        // initial pattern: one tenth of pixels random, then move clusters into voids until the pattern stabilizes
         while (ones < n / 10) {
             int p = random.nextInt(n);
             if (on[p]) continue;
@@ -48,7 +48,7 @@ public final class BlueNoise {
             if (voidAt == cluster) break;
         }
         int[] rank = new int[n];
-        // ранги начального узора: снимать самые тесные скопления, ранг — сколько осталось
+        // initial pattern ranks: remove the tightest clusters; rank is the remaining count
         boolean[] work = on.clone();
         double[] e = energy.clone();
         for (int r = ones - 1; r >= 0; r--) {
@@ -57,7 +57,7 @@ public final class BlueNoise {
             splat(e, kernel, size, cluster, -1);
             rank[cluster] = r;
         }
-        // дальше — в самые большие пустоты (самая тесная пустота среди нулей — то же, что наибольшая пустота среди единиц)
+        // then into the largest voids (the tightest zero cluster is the largest void among ones)
         for (int r = ones; r < n; r++) {
             int voidAt = extreme(energy, on, false, false);
             on[voidAt] = true;
@@ -69,7 +69,7 @@ public final class BlueNoise {
         return out;
     }
 
-    /** Прибавить ядро с центром в p (со знаком) ко всей карте энергии, на торе. */
+    /** Add a kernel centred at p (signed) to the entire energy map, on a torus. */
     private static void splat(double[] energy, double[] kernel, int size, int p, int sign) {
         int px = p % size, py = p / size;
         for (int y = 0; y < size; y++) {
@@ -78,7 +78,7 @@ public final class BlueNoise {
         }
     }
 
-    /** Пиксель с наибольшей (max) или наименьшей энергией среди тех, у кого {@code on[i] == state}. */
+    /** Pixel with highest (max) or lowest energy among those with {@code on[i] == state}. */
     private static int extreme(double[] energy, boolean[] on, boolean state, boolean max) {
         int best = -1;
         for (int i = 0; i < energy.length; i++) {

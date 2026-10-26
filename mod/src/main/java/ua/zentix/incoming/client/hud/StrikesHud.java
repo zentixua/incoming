@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Свои снаряды в полёте — у того, кто пустил: справа сверху список (что, фаза полёта, время до удара), а в мире —
- * метки: рамка вокруг снаряда с номером и временем и рамка вокруг его цели. Время знает сервер (маршрут в обход и полёт
- * вне загруженного мира), клиент лишь досчитывает его между пакетами.
+ * Own projectiles in flight for their launcher: top-right list (weapon, flight phase, impact ETA) and world markers:
+ * frame around the projectile with number and time, and frame around its target. Server knows the ETA (detour route
+ * and flight outside the loaded world); client only counts it down between packets.
  */
 public final class StrikesHud {
     private static final int MAX_LINES = 6;
@@ -37,7 +37,7 @@ public final class StrikesHud {
         if (mc.options.hideGui || mc.level == null || mc.player == null || !IncomingConfig.CLIENT.hud.get()) return;
         List<ClientFlights.Tracked> flights = ClientFlights.all();
         if (flights.isEmpty()) return;
-        // в камере снаряда справа вверху — её телеметрия (и время до удара): список поверх неё слипался бы в кашу
+        // Projectile camera has telemetry (including impact ETA) at top right: a list over it would become unreadable.
         if (ProjectileCamera.isActive()) return;
         float pt = delta.getGameTimeDeltaPartialTick(false);
         markers(g, mc.font, flights, pt);
@@ -62,7 +62,7 @@ public final class StrikesHud {
         g.drawString(font, hint, x - font.width(hint), y + 2, 0xFFFFFFFF);
     }
 
-    /** «Шахед №2 · маршрут · 0:41». */
+    /** "Shahed No. 2 · route · 0:41". */
     static Component line(ClientFlights.Tracked f, float pt) {
         MutableComponent name = Component.translatable("incoming.hud.flight", f.weapon().displayName(), f.number);
         if (f.nuclear()) name = Component.literal("☢ ").withStyle(ChatFormatting.YELLOW).append(name);
@@ -78,7 +78,7 @@ public final class StrikesHud {
         return line;
     }
 
-    /** Подпись цели: кто или что, «цель потеряна», если она пропала. Для точки — null. */
+    /** Target label: who or what, "target lost" if gone. Null for a point. */
     static Component targetText(ClientFlights.Tracked f) {
         if (f.targetLost()) return Component.translatable("incoming.hud.target_lost").withStyle(ChatFormatting.GRAY);
         return f.targetLabel();
@@ -90,14 +90,14 @@ public final class StrikesHud {
     }
 
     /**
-     * Метки в мире — рамки-уголки по угловому размеру тела в этом кадре (матрица кадра, с зумом): у снаряда — шар его
-     * корпуса там, где клиент его рисует, с номером и временем над рамкой; у цели — её коробка, с номерами снарядов,
-     * которые на неё идут, и подписью, кто это, под рамкой; от рамки снаряда к рамке цели — пунктир. С зумом рамка растёт
-     * ровно с телом, а подпись и наименьшая рамка ({@link #MIN_FRAME}) — пиксели интерфейса при любом поле зрения, и
-     * подпись всегда вне рамки: тело она не закрывает (жалобы 23.10: метки велики при зуме, подпись «#1 0:16» сидела
-     * поверх шахеда). Сущность цели, которую клиент видит, — по её сглаженному месту (точка из пакета сервера — раз в
-     * 5 тиков и отстаёт); точка и блок — коробкой блока вокруг точки. Цели ближе 4 блоков друг к другу — одна рамка
-     * (залп по игроку не рисует десять одинаковых). Потерянная цель — серая. За спиной — не рисуются.
+     * World markers are corner frames sized by the body's angular size in this frame (frame matrix, including zoom):
+     * projectile's body sphere where the client draws it, number and time above; target's box, incoming projectile
+     * numbers and identity label below; dotted line from projectile frame to target frame. Zoom scales the frame
+     * exactly with the body, while label and minimum frame ({@link #MIN_FRAME}) use GUI pixels at any field of view.
+     * Label always stays outside the frame, clear of the body (complaints 23.10: markers too large with zoom,
+     * "#1 0:16" label over the Shahed). Visible target entity uses its smoothed position (server point every 5 ticks
+     * lags); point and block use a block box around the point. Targets within 4 blocks share one frame (a salvo at
+     * a player does not draw ten identical ones). Lost target is grey. Nothing drawn behind the viewer.
      */
     private static void markers(GuiGraphics g, Font font, List<ClientFlights.Tracked> flights, float pt) {
         int w = g.guiWidth(), h = g.guiHeight();
@@ -122,7 +122,7 @@ public final class StrikesHud {
         }
         for (TargetMark m : marks) {
             float[] r = ScreenProjection.rect(m.box);
-            // угол коробки за глазом (цель вплотную, глаз в ней) — наименьшая рамка у середины
+            // Box corner behind the eye (target very close, eye inside): minimum frame at the centre.
             if (r == null) r = point(ScreenProjection.project(m.pos));
             m.frame = r == null ? null : frame(r, w, h);
         }
@@ -147,8 +147,8 @@ public final class StrikesHud {
             g.drawString(font, label, Math.round(0.5f * (fr[0] + fr[2])) - font.width(label) / 2, labelAbove(fr), c);
         }
         List<int[]> placed = new ArrayList<>();
-        // подписи раскладываются по номерам снарядов, а не по месту на экране: порядок не меняется, когда метки движутся
-        // (при зуме и повороте подписи не перескакивают со строки на строку)
+        // Arrange labels by projectile number, not screen position: stable order as markers move.
+        // (Zooming and turning do not make labels jump between rows.)
         marks.sort(Comparator.comparingInt((TargetMark m) -> m.numbers.getFirst()));
         for (TargetMark m : marks) {
             float[] fr = m.frame;
@@ -164,14 +164,14 @@ public final class StrikesHud {
         }
     }
 
-    /** Наименьшая рамка на экране, пикселей интерфейса: цель вдали меньше пикселя, а рамку должно быть видно. */
+    /** Minimum on-screen frame, GUI pixels: distant target is smaller than a pixel, but its frame must remain visible. */
     static final int MIN_FRAME = 7;
-    /** Зазор между рамкой и подписью и высота строки подписи, пикселей интерфейса (шрифт Minecraft — 9 на строку). */
+    /** Frame-to-label gap and label line height, GUI pixels (Minecraft font is 9 per line). */
     static final int LABEL_GAP = 3, LABEL_LINE = 9;
 
     /**
-     * Рамка тела в пикселях интерфейса шириной {@code w} и высотой {@code h} по прямоугольнику {@code r} в долях экрана
-     * ({@link ScreenProjection#rect}): сам угловой размер тела, не меньше {@link #MIN_FRAME} вокруг его середины.
+     * Body frame in GUI pixels of width {@code w} and height {@code h}, from screen-fraction rectangle {@code r}
+     * ({@link ScreenProjection#rect}): actual body angular size, at least {@link #MIN_FRAME} around its centre.
      */
     static float[] frame(float[] r, int w, int h) {
         float x0 = r[0] * w, y0 = r[1] * h, x1 = r[2] * w, y1 = r[3] * h;
@@ -179,17 +179,17 @@ public final class StrikesHud {
         return new float[]{Math.min(x0, cx - half), Math.min(y0, cy - half), Math.max(x1, cx + half), Math.max(y1, cy + half)};
     }
 
-    /** Строка подписи над рамкой {@code fr} (снаряд): низ строки — над верхом рамки, тело подпись не закрывает. */
+    /** Label line above frame {@code fr} (projectile): line bottom above frame top, clear of the body. */
     static int labelAbove(float[] fr) {
         return (int) Math.floor(fr[1]) - LABEL_GAP - LABEL_LINE;
     }
 
-    /** Строка подписи под рамкой {@code fr} (цель). */
+    /** Label line below frame {@code fr} (target). */
     static int labelBelow(float[] fr) {
         return (int) Math.ceil(fr[3]) + LABEL_GAP;
     }
 
-    /** Точка на экране (доли) — прямоугольник нулевого размера, из него {@link #frame} делает наименьшую рамку. */
+    /** On-screen point (fractions): zero-size rectangle, expanded by {@link #frame} to the minimum frame. */
     @Nullable
     private static float[] point(@Nullable float[] c) {
         return c == null ? null : new float[]{c[0], c[1], c[0], c[1]};
@@ -200,8 +200,8 @@ public final class StrikesHud {
     }
 
     /**
-     * Где прямая от середины рамки {@code fr} к точке ({@code tx}, {@code ty}) выходит из рамки: пунктир от снаряда к цели
-     * идёт между рамками и тел не перечёркивает. Null — точка внутри рамки (рамки слились, пунктира нет).
+     * Where the line from frame {@code fr}'s centre to point ({@code tx}, {@code ty}) exits the frame: dotted projectile-
+     * to-target line runs between frames, clear of bodies. Null if the point is inside (frames merged, no dotted line).
      */
     @Nullable
     static float[] edge(float[] fr, float tx, float ty) {
@@ -212,8 +212,8 @@ public final class StrikesHud {
     }
 
     /**
-     * Коробка цели в мире в долю тика {@code pt}: видимая клиенту сущность — её коробка на её сглаженном месте; иначе —
-     * блок вокруг точки цели.
+     * Target box in the world at partial tick {@code pt}: visible entity uses its box at its smoothed position;
+     * otherwise a block around the target point.
      */
     static AABB targetBox(ClientFlights.Tracked f, float pt) {
         net.minecraft.world.entity.Entity e = f.targetEntity();
@@ -221,7 +221,7 @@ public final class StrikesHud {
         return AABB.ofSize(f.target(), 1, 1, 1);
     }
 
-    /** Строка подписи шириной {@code width} от {@code x}: первая с {@code y} вниз, где она ни на что не наезжает. */
+    /** Label line of width {@code width} from {@code x}: first position downward from {@code y} without overlaps. */
     static int labelY(List<int[]> placed, int x, int width, int y) {
         for (int n = 0; n < 32; n++) {
             boolean free = true;
@@ -237,7 +237,7 @@ public final class StrikesHud {
         return y;
     }
 
-    /** Рамка цели: середина и коробка цели в мире, потеряна ли она, подпись и номера снарядов. */
+    /** Target frame: world centre and box, whether lost, label and projectile numbers. */
     private static final class TargetMark {
         final Vec3 pos;
         final AABB box;
@@ -245,7 +245,7 @@ public final class StrikesHud {
         @Nullable
         final Component label;
         final List<Integer> numbers = new ArrayList<>();
-        /** Рамка в этом кадре, пикселей интерфейса; null — цель за спиной. */
+        /** Frame for this render frame, GUI pixels; null if target is behind the viewer. */
         @Nullable
         float[] frame;
 
@@ -257,7 +257,7 @@ public final class StrikesHud {
         }
     }
 
-    /** «1–3, 5»: номера по возрастанию, подряд идущие — диапазоном (знак номера — у строки {@code incoming.hud.number}). */
+    /** "1–3, 5": ascending numbers, consecutive ones as a range (number sign from {@code incoming.hud.number}). */
     static String numbers(List<Integer> list) {
         List<Integer> n = new ArrayList<>(list);
         Collections.sort(n);

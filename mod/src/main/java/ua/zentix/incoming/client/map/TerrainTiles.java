@@ -42,56 +42,56 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Подложка карты: рельеф плитками 64×64 пикселя, как у веб-карт. Плитка уровня {@code L} покрывает
- * {@code 64·2^L} блоков, пиксель — колонку в середине клетки {@code 2^L} блоков; уровень выбирается по масштабу,
- * чтобы на пиксель экрана приходилось не больше пикселя плитки. Цвета — ванильной карты ({@link MapColor}) с тенью
- * склонов с севера, как у карты в руке.
+ * Map base: terrain in 64×64-pixel tiles, as in web maps. A level {@code L} tile covers {@code 64·2^L} blocks,
+ * a pixel is the column at the centre of a {@code 2^L}-block cell; scale selects the level so each screen pixel
+ * contains no more than one tile pixel. Vanilla map colours ({@link MapColor}), with north-facing slope shading
+ * as on a held map.
  * <p>
- * Два слоя: снизу — дальний (километры вокруг, строится в фоновых потоках), сверху — чанки клиента (строятся в кадре,
- * понемногу). Дальний — первый работающий из тех, что стоят: LOD Server Support (сервер раздаёт рельеф,
- * {@link LssTerrain}), иначе Distant Horizons ({@link DistantHorizonsTerrain}); нет ни одного — только чанки. Клетка
- * без данных прозрачна, поэтому вблизи видны точные и свежие чанки (воронки), дальше — дальний рельеф. Чтение DH может
- * ждать его очередей сколько угодно (данных ещё нет, генерация
- * стоит, DH грузит свои LOD): ждут только наши фоновые потоки, а слой чанков от них не зависит. Пока карты нет на
- * экране, их не больше {@link #PREFETCH_JOBS}; пока она на экране (пульт или камера снаряда без видео) — столько, сколько
- * потоков у источника ({@link TerrainSource#parallelism}): мир за картой не виден, и вид, от центра, получает всю скорость
- * чтения. Готовые плитки загружаются в текстуры в потоке игры.
+ * Two layers: distant terrain below (kilometres around, built on background threads), client chunks above (built
+ * gradually within frames). Distant source is the first installed and operating one: LOD Server Support (server
+ * distributes terrain, {@link LssTerrain}), otherwise Distant Horizons ({@link DistantHorizonsTerrain}); neither
+ * means chunks only. Cells without data are transparent: nearby chunks are accurate and current (craters), distant
+ * areas use distant terrain. DH reads may wait indefinitely in its queues (no data yet, generation stalled, DH
+ * loading LODs): only our background threads wait, independently of the chunk layer. At most {@link #PREFETCH_JOBS}
+ * threads while no map is shown; while shown (remote or projectile camera without video), as many as the source's
+ * threads ({@link TerrainSource#parallelism}): the world behind the map is hidden, and the view receives the full
+ * read throughput starting at its centre. Ready tiles upload to textures on the game thread.
  * <p>
- * Каждое чтение DH — участок его базы 64×64 блока (распаковка, в очереди его потоков файлов), поэтому рельеф из DH
- * читается по возможности один раз: плитка крупнее собирается из четырёх готовых плиток уровнем ниже ({@link #compose}),
- * подробные плитки вокруг игрока строятся заранее, пока карта закрыта ({@link #tick}): из DH — в фоне, из чанков
- * клиента — в тике по частям под сроком {@link #PREFETCH_TICK_NS}, — карта открывается на игроке сразу; готовая
- * плитка DH перестраивается по его событию изменения чанка, а не по часам, и перестроенная мелкая плитка сразу
- * копируется в свою четверть крупных. Плитки живут, пока открыт мир, самые давние по показу вытесняются.
+ * Each DH read is a 64×64-block database region (unpacking in its file-thread queue), so read DH terrain once where
+ * possible: larger tiles compose four ready tiles one level below ({@link #compose}); detailed tiles around the
+ * player are prefetched while the map is closed ({@link #tick}): DH in the background, client chunks in partial ticks
+ * within {@link #PREFETCH_TICK_NS}, so the map opens on the player immediately. Ready DH tiles rebuild on chunk change
+ * events rather than a timer, and a rebuilt finer tile immediately copies into its quarter of larger tiles.
+ * Tiles live while the world is open; least recently displayed are evicted.
  */
 public final class TerrainTiles {
     static final int SIZE = 64;
-    /** Самая крупная плитка — 1024 блока (16 блоков на пиксель). */
+    /** Largest tile: 1024 blocks (16 blocks per pixel). */
     public static final int MAX_LEVEL = 4;
-    /** Плиток в слое не меньше этого, какой бы маленькой ни была карта ({@link #capacity}). */
+    /** At least this many tiles per layer, however small the map ({@link #capacity}). */
     private static final int MIN_TILES = 768;
-    /** Сколько плиток строится в фоне одновременно, пока карты нет на экране: DH читает свою базу, не забираем у игры больше. */
+    /** Concurrent background tile builds while no map is shown: DH reads its database; do not take more from the game. */
     static final int PREFETCH_JOBS = 2;
-    /** Карту рисовали не раньше этого — она на экране (при низком fps между кадрами проходит несколько тиков). */
+    /** Map drawn this recently counts as on screen (at low FPS, several ticks pass between frames). */
     private static final long SHOWN_NS = 500_000_000L;
-    /** Плитку с рельефом не везде (DH ещё досчитывает даль, чанк не пришёл) спрашиваем раз в столько. */
+    /** Query tiles with incomplete terrain this often (DH still computing distance, chunk not received). */
     private static final long PARTIAL_REFRESH_NS = 30_000_000_000L;
-    /** Плитку без данных — чаще. */
+    /** Tiles without data are queried more often. */
     private static final long EMPTY_REFRESH_NS = 5_000_000_000L;
-    /** Дольше этого чтение DH — в лог (один раз за мир): рельеф вдали не появится, пока DH не ответит. */
+    /** Log a DH read longer than this (once per world): distant terrain cannot appear until DH replies. */
     private static final long STALL_NS = 30_000_000_000L;
-    /** Сколько кадр строит плитки сам: из чанков клиента и из плиток уровнем ниже. */
+    /** Frame time spent building tiles itself: client chunks and tiles one level below. */
     private static final long FRAME_BUDGET_NS = 3_000_000L;
-    /** Заранее строятся подробные плитки фонового слоя в квадрате ±7 плиток вокруг игрока (≈ 900 блоков). */
+    /** Prefetch detailed background-layer tiles in a ±7-tile square around the player (≈ 900 blocks). */
     static final int PREFETCH_RADIUS = 7;
-    /** Раз в столько тиков — какие плитки нужны заранее (игрок сместился). */
+    /** Reconsider prefetch tiles every this many ticks (player moved). */
     private static final int PREFETCH_PERIOD = 10;
     /**
-     * Сколько тик клиента строит заранее плитки слоя, который читается только в потоке игры (чанки клиента), — по
-     * часам, плитка читается частями между тиками ({@link Partial}): срок проверяется перед каждой колонкой.
+     * Client tick time for prefetching a game-thread-only layer (client chunks), measured by clock; read tiles in
+     * parts across ticks ({@link Partial}): check deadline before every column.
      */
     static final long PREFETCH_TICK_NS = 2_000_000L;
-    /** Нет данных о высоте (северная соседка вне плитки и без оценки). */
+    /** No height data (northern neighbour outside the tile and no estimate). */
     private static final int NO_HEIGHT = Integer.MIN_VALUE;
 
     record Key(int level, int tx, int tz) {
@@ -105,15 +105,15 @@ public final class TerrainTiles {
     }
 
     /**
-     * Верх колонок плитки: высота, цвет ванильной карты (номер {@link MapColor#id}) и глубина воды — то, из чего
-     * рисуются пиксели ({@link #paint}) и собираются крупные плитки. 16 КБ на плитку.
+     * Tile column tops: height, vanilla map colour ({@link MapColor#id}) and water depth; inputs to pixel painting
+     * ({@link #paint}) and larger tile composition. 16 KB per tile.
      */
     static final class Columns {
         static final short NONE = Short.MIN_VALUE;
         final short[] height = new short[SIZE * SIZE];
         final byte[] color = new byte[SIZE * SIZE];
         final byte[] depth = new byte[SIZE * SIZE];
-        /** Колонок с данными. */
+        /** Columns with data. */
         int filled;
 
         Columns() {
@@ -131,7 +131,7 @@ public final class TerrainTiles {
             filled++;
         }
 
-        /** Клетка {@code i} — как клетка {@code j} плитки {@code from}; без данных там — и здесь без данных. */
+        /** Cell {@code i} copies cell {@code j} of tile {@code from}; no data there means no data here. */
         void copy(int i, Columns from, int j) {
             if (has(i)) filled--;
             height[i] = from.height[j];
@@ -141,8 +141,8 @@ public final class TerrainTiles {
         }
 
         /**
-         * Четверть плитки ({@code q}: 0 — северо-запад, 1 — северо-восток, 2 — юго-запад, 3 — юго-восток) — из плитки
-         * уровнем ниже на её месте: пиксель — клетка ребёнка у середины своей клетки.
+         * Tile quarter ({@code q}: 0 northwest, 1 northeast, 2 southwest, 3 southeast) from the tile one level below
+         * at its position: pixel uses the child cell near its own cell centre.
          */
         void putQuarter(int q, Columns kid) {
             int half = SIZE / 2, x0 = (q & 1) * half, z0 = (q >> 1) * half;
@@ -166,18 +166,18 @@ public final class TerrainTiles {
         DynamicTexture texture;
         @Nullable
         ResourceLocation id;
-        /** Данные последней постройки; null — ещё не было (или постройка не удалась). */
+        /** Latest build data; null if never built (or build failed). */
         @Nullable
         Columns columns;
         long builtAt;
-        /** Кадр, в котором плитку последний раз рисовали: видимые сейчас не вытесняются. */
+        /** Last frame displaying the tile: currently visible tiles are not evicted. */
         long drawnFrame;
-        /** Когда начата фоновая постройка; 0 — не строится. */
+        /** Background build start time; 0 if not building. */
         long buildingSince;
         /**
-         * Источник сообщил, что рельеф под плиткой изменился, — перестроить раньше обычного. Снимается, когда постройка
-         * начата: изменение во время постройки её снова ставит. Перестроенная плитка уровнем ниже её не ставит — она
-         * сразу копируется в свою четверть ({@link #propagate}).
+         * Source reported terrain below this tile changed: rebuild earlier than usual. Clear when build starts;
+         * changes during the build set it again. Rebuilt child tiles do not set it: they immediately copy into their
+         * quarter ({@link #propagate}).
          */
         boolean stale;
 
@@ -187,8 +187,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Готовая плитка: колонки (null — не построена, её спросят снова, как пустую), сколько строилась. Пиксели рисует
-     * поток игры: первому ряду нужна плитка к северу.
+     * Ready tile: columns (null if not built, queried again as empty), build duration. Game thread paints pixels:
+     * first row needs the tile to the north.
      */
     record Built(Key key, int generation, @Nullable Columns columns, long nanos) {
         static Built failed(Key key, int generation) {
@@ -196,30 +196,30 @@ public final class TerrainTiles {
         }
     }
 
-    /** Дети крупной плитки: все свежие — собрать из них; кто-то строится или пора обновить — подождать; кого-то нет — читать источник. */
+    /** Larger tile's children: all fresh, compose; any building or due for refresh, wait; any absent, read the source. */
     enum Kids { READY, REFRESHING, ABSENT }
 
-    /** Плитки одного источника рельефа. */
+    /** Tiles of one terrain source. */
     static final class Layer {
         final String name;
         final TerrainSource source;
-        /** Порядок доступа: первая — давно не показанная. */
+        /** Access order: least recently displayed first. */
         final Map<Key, Tile> tiles = new LinkedHashMap<>(256, 0.75f, true);
         final Queue<Built> done = new ConcurrentLinkedQueue<>();
-        /** Плитки, которые строятся заранее вокруг игрока: не вытесняются. */
+        /** Tiles prefetched around the player: not evicted. */
         Set<Key> prefetch = Set.of();
-        /** Они же, ближние первыми. */
+        /** The same tiles, nearest first. */
         List<Key> prefetchOrder = List.of();
-        /** Плитка, которую слой в потоке игры строит заранее по частям; null — сейчас никакая. */
+        /** Tile the game-thread layer is prefetching in parts; null if none. */
         @Nullable
         Partial partial;
         int jobs;
         boolean stallLogged, firstLogged;
-        /** Источник сломался (другая версия API DH): слой больше не строится до смены мира. Пишет фоновый поток. */
+        /** Source broken (different DH API version): stop building layer until world change. Written by background thread. */
         volatile boolean broken;
-        /** Дальний слой (из дальних работает один — см. {@code pickFar}), а не чанки клиента. */
+        /** Distant layer (one distant source operates, see {@code pickFar}), rather than client chunks. */
         final boolean far;
-        /** Для лога: построено из источника, из них с рельефом, время их постройки; собрано из плиток уровнем ниже. */
+        /** For logs: source builds, builds with terrain, build time; compositions from tiles one level below. */
         int built, withData, composed;
         long buildNanos;
 
@@ -235,8 +235,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Сколько плиток нужного масштаба видно и сколько из них уже построено — для лога времени открытия карты;
-     * {@code layers} — то же по слоям («dh 32/32, chunks 0/32»): видно, какой слой отстаёт.
+     * Visible tiles at the required scale and number ready, for map opening time logs;
+     * {@code layers} gives the same per layer ("dh 32/32, chunks 0/32"), showing which layer lags.
      */
     public record Progress(int visible, int ready, String layers) {
         public boolean done() {
@@ -248,43 +248,43 @@ public final class TerrainTiles {
     private static ExecutorService executor;
     @Nullable
     private static ClientLevel level;
-    /** Снизу вверх: дальние по возрастанию предпочтения (DH, LSS — какие стоят), потом чанки клиента. */
+    /** Bottom to top: distant layers by increasing preference (DH, LSS, if installed), then client chunks. */
     private static List<Layer> layers = List.of();
-    /** Дальний слой, который работает сейчас ({@link #pickFar}); null — рельеф только из чанков. */
+    /** Currently active distant layer ({@link #pickFar}); null means terrain only from chunks. */
     @Nullable
     private static Layer far;
     /**
-     * Меняется при смене мира: плитки, начатые для старого, выбрасываются, а фоновая постройка останавливается между
-     * колонками (поток её читает — {@code volatile}).
+     * Changes with the world: discard tiles started for the old one; background builds stop between columns
+     * ({@code volatile}, read by their thread).
      */
     private static volatile int generation;
-    /** DH стоит, и его API совместимо ({@link #init}). */
+    /** DH installed with compatible API ({@link #init}). */
     private static boolean distantHorizons;
-    /** LOD Server Support стоит, и его API совместимо ({@link #init}). */
+    /** LOD Server Support installed with compatible API ({@link #init}). */
     private static boolean lodServerSupport;
-    /** Voxy стоит, и его классы — те, что мод читает ({@link #init}). */
+    /** Voxy installed with the classes this mod reads ({@link #init}). */
     private static boolean voxy;
-    /** Счётчик кадров карты (для вытеснения только невидимых плиток). */
+    /** Map frame counter (evict invisible tiles only). */
     private static long frame;
     private static int ticks;
     private static Progress progress = new Progress(0, 0, "");
-    /** Рельеф вокруг игрока строится заранее ({@link #prefetchWanted}); проверяется раз в {@link #PREFETCH_PERIOD}. */
+    /** Prefetch terrain around the player ({@link #prefetchWanted}); checked every {@link #PREFETCH_PERIOD}. */
     private static boolean prefetching;
-    /** Карту в этом мире уже открывали: рельеф вокруг игрока строится заранее и без пульта в руках. */
+    /** Map opened in this world before: prefetch around the player even without holding the remote. */
     private static boolean opened;
-    /** Когда карту последний раз рисовали ({@link #render}); 0 — в этом мире не рисовали. */
+    /** Last map draw time ({@link #render}); 0 if never drawn in this world. */
     private static long shownAt;
-    /** Предел плиток в слое — по размеру карты, на которой их последний раз рисовали ({@link #capacity}). */
+    /** Layer tile limit from the map size at the last draw ({@link #capacity}). */
     private static int capacity = MIN_TILES;
 
     private TerrainTiles() {}
 
-    /** Уровень плиток для масштаба {@code k} пикселей на блок. */
+    /** Tile level for scale {@code k} pixels per block. */
     static int levelFor(double k) {
         return Mth.clamp(Mth.floor(Math.log(1 / k) / Math.log(2)), 0, MAX_LEVEL);
     }
 
-    /** Нарисовать рельеф в прямоугольнике экрана и заказать недостающие плитки — ближние к центру первыми. */
+    /** Draw terrain in the screen rectangle and request missing tiles, nearest to centre first. */
     public static void render(GuiGraphics g, MapProjection map, int left, int top, int right, int bottom) {
         ClientLevel current = Minecraft.getInstance().level;
         if (current == null) return;
@@ -292,7 +292,7 @@ public final class TerrainTiles {
         frame++;
         shownAt = System.nanoTime();
         int want = levelFor(map.k());
-        // мельче самых крупных плиток не строим (и не заводим): на такую карту ушли бы тысячи участков DH
+        // Do not build (or create) below the largest tiles' scale: such a map would cost thousands of DH regions.
         boolean build = map.k() * (2 << MAX_LEVEL) >= 1;
         double cx = map.worldX((left + right) / 2.0), cz = map.worldZ((top + bottom) / 2.0);
         capacity = capacity(right - left, bottom - top);
@@ -304,12 +304,12 @@ public final class TerrainTiles {
             collect(layer);
             if (!live(layer)) continue;
             if (!build) {
-                // клеток кадра на такой карте — сотни тысяч, а нового ничего не заводится: рисуются готовые плитки
-                // самого крупного уровня, перебором плиток слоя (их не больше предела слоя)
+                // Hundreds of thousands of frame cells on such a map; create nothing new: draw ready tiles
+                // at the largest level, iterating layer tiles (bounded by the layer limit).
                 draw(g, map, layer, ready(layer, map, left, top, right, bottom), false);
                 continue;
             }
-            // сначала крупные плитки, что уже есть, — подложка, пока строятся нужные (при приближении карта не пустеет)
+            // Existing larger tiles first, as a base while required tiles build (zooming in does not empty the map).
             for (int l = MAX_LEVEL; l > want; l--) draw(g, map, layer, visible(map, l, left, top, right, bottom), false);
             List<Key> keys = visible(map, want, left, top, right, bottom);
             if (!layer.source.offThread()) keys.removeIf(k -> !nearPlayer(k));
@@ -332,7 +332,7 @@ public final class TerrainTiles {
         progress = new Progress(visible, ready, byLayer.toString());
     }
 
-    /** Раз в тик клиента: плитки из фона — в текстуры, изменения рельефа от источников, заранее — плитки вокруг игрока. */
+    /** Once per client tick: background tiles to textures, source terrain changes, prefetch tiles around the player. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel current = mc.level;
@@ -363,17 +363,17 @@ public final class TerrainTiles {
                     continue;
                 }
                 List<Key> keys = around(player.getX(), player.getZ());
-                // слой чанков — только там, где у клиента есть чанки
+                // Chunk layer only where the client has chunks.
                 if (!layer.source.offThread()) keys.removeIf(k -> !nearPlayer(k));
                 layer.prefetch = new HashSet<>(keys);
                 layer.prefetchOrder = keys;
                 for (Key k : keys) layer.tiles.computeIfAbsent(k, Tile::new);
                 evict(layer);
-                // пока карта на экране, фоновые чтения — её виду, от его центра: вокруг игрока он читает сам, если видит
+                // While map is shown, background reads serve its view from the centre; it reads around the player itself if visible.
                 if (layer.source.offThread() && !shown) request(current, layer, keys, true);
             }
         }
-        // слой чанков читается только в потоке игры: каждый тик, частями, под сроком по часам; без пульта и карты — ничего
+        // Chunk layer is game-thread-only: partial reads each tick under a clock deadline; no remote or map means no work.
         if (!prefetching) return;
         long deadline = System.nanoTime() + PREFETCH_TICK_NS;
         for (Layer layer : layers) {
@@ -383,18 +383,18 @@ public final class TerrainTiles {
     }
 
     /**
-     * Рельеф заранее — только тем, кому карта нужна: включено в настройках клиента, и пульт в инвентаре или карту
-     * в этом мире уже открывали. Иначе DH читал бы свою базу у каждого игрока со сборкой всю игру, а тик клиента
-     * строил бы плитки чанков. Инвентарь смотрится, только если первые два условия не решили.
+     * Prefetch only for those needing the map: enabled in client settings, and remote in inventory or map opened
+     * before in this world. Otherwise DH would read its database for every pack player throughout the game, and
+     * client tick would build chunk tiles. Inspect inventory only if the first two conditions did not decide.
      */
     static boolean prefetchWanted(boolean enabled, boolean opened, BooleanSupplier hasDesignator) {
         return enabled && (opened || hasDesignator.getAsBoolean());
     }
 
     /**
-     * Плитка слоя, который читается только в потоке игры, построенная заранее не целиком: колонки до {@code next}
-     * (по рядам) прочитаны. Дочитывается в следующих тиках; пока она начата, у плитки стоит {@code buildingSince},
-     * и карта в кадре её не строит второй раз.
+     * Incomplete prefetch tile of a game-thread-only layer: columns before {@code next} (row order) are read.
+     * Continue in later ticks; while started, tile has {@code buildingSince} set, so the map does not build it again
+     * within the frame.
      */
     static final class Partial {
         final Key key;
@@ -410,11 +410,10 @@ public final class TerrainTiles {
     }
 
     /**
-     * Заранее, в потоке игры, — плитки слоя из {@link Layer#prefetchOrder} (ближние первыми), которых нет, которые
-     * устарели или неполны по их часам, по одной колонке, пока часы {@code clock} не дошли до {@code deadline}: начатая
-     * плитка продолжается со следующего тика, готовая уходит в {@code sink}; начатая плитка, которая больше не нужна
-     * заранее (игрок ушёл, телепорт), бросается не дочитанной. Не нужно ({@code wanted} false) — начатая бросается,
-     * а источник и часы не трогаются.
+     * Prefetch on the game thread from {@link Layer#prefetchOrder} (nearest first): absent, stale or timed-incomplete
+     * tiles, one column at a time until {@code clock} reaches {@code deadline}. Continue started tiles next tick;
+     * ready ones go to {@code sink}; abandon incomplete tiles no longer needed for prefetch (player moved, teleport).
+     * If not needed ({@code wanted} false), abandon the started tile without touching source or clock.
      */
     static void prefetchInGameThread(Layer layer, boolean wanted, Supplier<TerrainSource.Reader> open, LongSupplier clock, long deadline,
                                      Consumer<Built> sink) {
@@ -430,7 +429,7 @@ public final class TerrainTiles {
             while (layer.partial != null) {
                 Partial p = layer.partial;
                 long start = clock.getAsLong();
-                // подробная плитка: колонка — каждый блок
+                // Detailed tile: one column per block.
                 int x0 = p.key.tx * SIZE, z0 = p.key.tz * SIZE;
                 boolean late = false;
                 while (p.next < SIZE * SIZE) {
@@ -448,14 +447,14 @@ public final class TerrainTiles {
                 if (late) return;
                 Tile t = layer.tiles.get(p.key);
                 dropPartial(layer);
-                // за это время плитку построили иначе (или её вытеснили) — эта уже не новее
+                // Tile built another way (or evicted) in the meantime: this one is no longer newer.
                 if (t != null && t.builtAt <= p.started) sink.accept(new Built(p.key, generation, p.columns, p.nanos));
                 if (now >= deadline || (layer.partial = nextPartial(layer, now)) == null) return;
             }
         }
     }
 
-    /** Следующая плитка, которую слой строит заранее: как {@link #request} с {@code prefetch}; отмечена «строится». */
+    /** Next layer prefetch tile: like {@link #request} with {@code prefetch}; marked as building. */
     @Nullable
     private static Partial nextPartial(Layer layer, long now) {
         for (Key key : layer.prefetchOrder) {
@@ -471,7 +470,7 @@ public final class TerrainTiles {
         return null;
     }
 
-    /** Начатая заранее плитка больше не строится: снять с неё отметку «строится». */
+    /** Started prefetch tile no longer building: clear its building flag. */
     private static void dropPartial(Layer layer) {
         Partial p = layer.partial;
         if (p == null) return;
@@ -480,24 +479,24 @@ public final class TerrainTiles {
         if (t != null && t.buildingSince == p.started) t.buildingSince = 0;
     }
 
-    /** Карта наведения открыта: дальше рельеф вокруг игрока строится заранее до выхода из мира. */
+    /** Targeting map opened: prefetch terrain around the player until world exit. */
     public static void opened() {
         opened = true;
     }
 
-    /** Что построено из плиток, которые рисовались в последнем кадре карты. */
+    /** Ready tiles among those displayed in the latest map frame. */
     public static Progress progress() {
         return progress;
     }
 
-    /** Рельеф вдали есть (LOD Server Support или Distant Horizons), а не только в загруженных чанках. */
+    /** Distant terrain available (LOD Server Support or Distant Horizons), beyond loaded chunks. */
     public static boolean farTerrain() {
         return far != null;
     }
 
     /**
-     * Надпись на карте, пока дальний источник ничего не отдал: ждёт своих данных или ещё не ответил на чтения (DH занят
-     * своей загрузкой); null — не ждёт.
+     * Map label while distant source has supplied nothing: waiting for its data or read replies (DH busy loading);
+     * null if not waiting.
      */
     @Nullable
     public static String farPendingNote() {
@@ -506,8 +505,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Дальний слой, который сейчас работает: первый по предпочтению (последний в списке слоёв), чей источник работает в
-     * этом мире ({@link TerrainSource#active}: LSS — когда сервер раздаёт рельеф).
+     * Active distant layer: first by preference (last in the layer list) whose source operates in this world
+     * ({@link TerrainSource#active}: LSS when the server distributes terrain).
      */
     private static void pickFar() {
         far = pickFar(layers);
@@ -522,17 +521,17 @@ public final class TerrainTiles {
         return picked;
     }
 
-    /** Слой рисуется, строится и отвечает на вопросы о высоте: чанки клиента — всегда, из дальних — только работающий. */
+    /** Layer draws, builds and answers height queries: client chunks always, only the active distant layer. */
     private static boolean live(Layer layer) {
         return !layer.far || layer == far;
     }
 
-    /** Высота земли в колонке: по самой подробной готовой плитке, чанки клиента первыми. */
+    /** Ground height in a column: most detailed ready tile, client chunks first. */
     public static OptionalInt height(int x, int z) {
         return column(x, z, false);
     }
 
-    /** Глубина воды над дном в колонке (0 — суша, до 16 — глубже не различается), как {@link #height}. */
+    /** Water depth above bottom in a column (0 land, capped at 16), as {@link #height}. */
     public static OptionalInt waterDepth(int x, int z) {
         return column(x, z, true);
     }
@@ -557,8 +556,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Не горит ли поверхность колонки (огненный шторм ядерки): по самой подробной готовой плитке, чанки клиента первыми;
-     * −1 — не знаем, 1 — вода, лёд или снег, 0 — другое.
+     * Whether column surface cannot burn (nuclear firestorm): most detailed ready tile, client chunks first;
+     * −1 unknown, 1 water, ice or snow, 0 other.
      */
     public static int wet(int x, int z) {
         for (int i = layers.size() - 1; i >= 0; i--) {
@@ -584,7 +583,7 @@ public final class TerrainTiles {
         return waterDepth > 0 || color == MapColor.WATER.id || color == MapColor.ICE.id || color == MapColor.SNOW.id ? 1 : 0;
     }
 
-    /** Для лога и сценария: по слоям — сколько плиток построено и с рельефом, сколько строится, что отдал источник. */
+    /** For logs and scenarios: per layer, ready tiles, tiles with terrain, builds in progress, source output. */
     public static String stats() {
         StringBuilder b = new StringBuilder();
         long now = System.nanoTime();
@@ -604,11 +603,11 @@ public final class TerrainTiles {
     }
 
     /**
-     * Выход из мира или смена измерения: текстуры освобождены, фоновые плитки для него больше не нужны. Потоки —
-     * новые: чтение DH для старого мира может ждать сколько угодно, и новый мир стоял бы за ним в очереди. Старые
-     * потоки не прерываются: прерывание посреди чтения DH он пишет в лог ошибкой ({@code InterruptedException} в
-     * {@code getTerrainDataColumnArray}). Их постройка видит новое поколение и
-     * останавливается перед следующей колонкой, задачи из очереди кончаются сразу; потоки — демоны.
+     * World exit or dimension change: textures released, background tiles no longer needed. Create new threads:
+     * old-world DH reads may wait indefinitely, which would queue the new world behind them. Do not interrupt old
+     * threads: DH logs interruption during a read as an error ({@code InterruptedException} in
+     * {@code getTerrainDataColumnArray}). Their builds see the new generation and stop before the next column;
+     * queued tasks finish immediately; threads are daemons.
      */
     public static void reset() {
         for (Layer layer : layers) {
@@ -623,9 +622,9 @@ public final class TerrainTiles {
         opened = false;
         shownAt = 0;
         prefetching = false;
-        // очередь событий DH держала бы обёртки мира, из которого вышли
+        // DH event queue would retain wrappers of the world we left.
         if (distantHorizons) DistantHorizonsTerrain.clearChanges();
-        // присланное LSS — на диск: при новом входе он пришлёт только изменённое
+        // LSS data to disk: next login receives only changes.
         if (lodServerSupport) LssTerrain.flush();
         LoadedChunksTerrain.clearArrivals();
         if (executor != null) {
@@ -635,22 +634,22 @@ public final class TerrainTiles {
     }
 
     /**
-     * При запуске клиента: подписка на приход чанков клиенту (слой чанков), есть ли LSS и DH с нашей версией API, и
-     * подписка на их колонки и события. Классы их источников трогаем, только если мод стоит: без него ссылки на API не
-     * разрешатся.
+     * At client startup: subscribe to client chunk arrivals (chunk layer), check LSS and DH with our API version,
+     * subscribe to their columns and events. Touch source classes only when their mod is installed: otherwise
+     * API references cannot resolve.
      */
     public static void init(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener(LoadedChunksTerrain::onChunkLoad);
-        // подписка на LSS — после конструкторов всех модов: его API трогает его же сетевые классы
+        // Subscribe to LSS after all mod constructors: its API touches its own network classes.
         if (ModList.get().isLoaded("lss")) modBus.addListener((FMLClientSetupEvent e) -> subscribeLss());
-        // классы Voxy (через Roxy) — тоже после загрузки всех модов
+        // Voxy classes (via Roxy) also after all mods load.
         if (ModList.get().isLoaded("voxy")) modBus.addListener((FMLClientSetupEvent e) -> voxy = VoxyTerrain.init());
         if (!ModList.get().isLoaded("distanthorizons")) return;
         try {
             distantHorizons = DistantHorizonsTerrain.supported();
             if (distantHorizons) DistantHorizonsTerrain.subscribe();
         } catch (LinkageError e) {
-            // API DH без нужных классов или методов (DH новее, чем мод знает): игра грузится, рельеф — из чанков
+            // DH API lacks required classes or methods (newer DH than known): game loads, terrain comes from chunks.
             Incoming.LOG.warn("Distant Horizons: API differs from the one the mod was built for — far terrain on the map is off", e);
             distantHorizons = false;
         }
@@ -661,7 +660,7 @@ public final class TerrainTiles {
             LssTerrain.subscribe();
             lodServerSupport = true;
         } catch (LinkageError e) {
-            // API LSS без нужных классов или методов (LSS новее, чем мод знает): игра грузится, рельеф — из другого
+            // LSS API lacks required classes or methods (newer LSS than known): game loads, terrain comes from elsewhere.
             Incoming.LOG.warn("LOD Server Support: API differs from the one the mod was built for — far terrain from it is off ({})", e.toString());
         }
     }
@@ -675,10 +674,10 @@ public final class TerrainTiles {
     }
 
     /**
-     * Слои снизу вверх; дальние — по возрастанию предпочтения ({@link #pickFar} берёт последний работающий): DH, база
-     * Voxy, LSS. LSS — рельеф всей карты с сервера, когда тот его раздаёт; база Voxy — всё, что Voxy видел или
-     * импортировал, читается по уровням плиток и работает и в одиночной игре; DH — только через его API блочными
-     * участками. Классы источников трогаются, только если их мод стоит: null — нет.
+     * Layers bottom to top; distant by increasing preference ({@link #pickFar} takes the last active): DH, Voxy database,
+     * LSS. LSS supplies server terrain for the entire map while distributed; Voxy database holds everything seen or
+     * imported, read at tile levels and working in singleplayer too; DH only via API in block-detail regions.
+     * Touch source classes only with their mod installed: null if absent.
      */
     static List<Layer> stack(@Nullable TerrainSource dh, @Nullable TerrainSource voxy, @Nullable TerrainSource lss, TerrainSource chunks) {
         List<Layer> list = new ArrayList<>(4);
@@ -689,7 +688,7 @@ public final class TerrainTiles {
         return List.copyOf(list);
     }
 
-    /** Плитка задевает дальность прорисовки клиента: дальше чанков у него нет. */
+    /** Tile intersects client render distance: no client chunks beyond it. */
     private static boolean nearPlayer(Key key) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return false;
@@ -699,7 +698,7 @@ public final class TerrainTiles {
         return x0 < px + r && x0 + span > px - r && z0 < pz + r && z0 + span > pz - r;
     }
 
-    /** Подробные плитки в квадрате {@link #PREFETCH_RADIUS} вокруг точки, ближние первыми. */
+    /** Detailed tiles in a {@link #PREFETCH_RADIUS} square around the point, nearest first. */
     static List<Key> around(double x, double z) {
         int cx = Math.floorDiv(Mth.floor(x), SIZE), cz = Math.floorDiv(Mth.floor(z), SIZE), r = PREFETCH_RADIUS;
         List<Key> keys = new ArrayList<>((2 * r + 1) * (2 * r + 1));
@@ -711,11 +710,11 @@ public final class TerrainTiles {
     }
 
     /**
-     * Предел плиток в слое для карты {@code width × height} пикселей: вид шире всех возможных на ней дважды (тот, что на
-     * экране, с подложкой крупных, и прежний, к которому вернутся) и квадрат заранее вокруг игрока, но не меньше
-     * {@link #MIN_TILES}. Плитка на экране не меньше 32 пикселей (уровень выбирается так, чтобы пиксель плитки был не
-     * мельче пикселя экрана, а мельче самых крупных плиток карта их не строит), а отрезок длиной в {@code s} плиток
-     * задевает не больше {@code ceil(s) + 1} из них.
+     * Layer tile limit for a {@code width × height}-pixel map: twice the widest possible view (current screen with
+     * larger tile base, plus previous view to return to), and prefetch square around the player, at least
+     * {@link #MIN_TILES}. A tile on screen is at least 32 pixels (level chosen so tile pixels are no smaller than
+     * screen pixels, and map builds no tiles below the largest tiles' scale); a segment {@code s} tiles long
+     * intersects at most {@code ceil(s) + 1} tiles.
      */
     static int capacity(int width, int height) {
         int widest = (Mth.ceil(width / 32.0) + 1) * (Mth.ceil(height / 32.0) + 1);
@@ -723,9 +722,9 @@ public final class TerrainTiles {
     }
 
     /**
-     * Сколько плиток слоя строится в фоне одновременно: заранее ({@code prefetch}, карты нет на экране) —
-     * {@link #PREFETCH_JOBS}; для карты на экране — столько, сколько у источника потоков на чтение ({@code parallelism}):
-     * каждое наше чтение держит один из них, а лишние ждали бы в его же очереди.
+     * Concurrent background builds in a layer: prefetch ({@code prefetch}, no map shown) uses {@link #PREFETCH_JOBS};
+     * visible map uses as many as the source's read threads ({@code parallelism}): each of our reads holds one,
+     * and extra reads would wait in its own queue.
      */
     static int jobLimit(boolean prefetch, int parallelism) {
         return prefetch ? PREFETCH_JOBS : Math.max(PREFETCH_JOBS, parallelism);
@@ -742,7 +741,7 @@ public final class TerrainTiles {
         return keys;
     }
 
-    /** Готовые плитки самого крупного уровня, задевающие прямоугольник экрана. */
+    /** Ready largest-level tiles intersecting the screen rectangle. */
     private static List<Key> ready(Layer layer, MapProjection map, int left, int top, int right, int bottom) {
         double x0 = map.worldX(left), x1 = map.worldX(right), z0 = map.worldZ(top), z1 = map.worldZ(bottom);
         List<Key> keys = new ArrayList<>();
@@ -755,7 +754,7 @@ public final class TerrainTiles {
         return keys;
     }
 
-    /** @param create завести плитку, если её нет (иначе рисуются только готовые) */
+    /** @param create create a tile if absent (otherwise draw ready tiles only) */
     private static void draw(GuiGraphics g, MapProjection map, Layer layer, List<Key> keys, boolean create) {
         for (Key key : keys) {
             Tile t = create ? layer.tiles.computeIfAbsent(key, Tile::new) : layer.tiles.get(key);
@@ -775,9 +774,9 @@ public final class TerrainTiles {
     }
 
     /**
-     * Нужна ли плитке постройка: 0 — сейчас (ещё не строилась, рельеф под ней изменился), 1 — пора обновить
-     * (пустую — через {@link #EMPTY_REFRESH_NS}, неполную — через {@link #PARTIAL_REFRESH_NS}, полную — как велит
-     * источник), −1 — не нужна или уже строится.
+     * Whether tile needs building: 0 now (never built, underlying terrain changed), 1 due for refresh (empty after
+     * {@link #EMPTY_REFRESH_NS}, incomplete after {@link #PARTIAL_REFRESH_NS}, complete as source specifies),
+     * −1 unnecessary or already building.
      */
     static int urgency(boolean building, long builtAt, boolean stale, @Nullable Columns columns, long refreshNanos, long now) {
         if (building) return -1;
@@ -787,11 +786,11 @@ public final class TerrainTiles {
     }
 
     /**
-     * Построить нужные из {@code keys} (ближние первыми): сначала те, которых нет, потом устаревшие. Крупную плитку —
-     * из четырёх свежих уровнем ниже ({@link #kids}); если из них какие-то строятся или устарели — сперва они, а она
-     * ждёт; если каких-то нет — из источника: в фоне (сразу — {@link #jobLimit}) или в кадре под {@link #FRAME_BUDGET_NS}.
-     * {@code prefetch} — заранее, пока карту не смотрят: недостающие, устаревшие и неполные по их часам (полные
-     * перечитываются по событию источника или когда их смотрят).
+     * Build needed tiles from {@code keys} (nearest first): absent before stale. Larger tile from four fresh tiles
+     * one level below ({@link #kids}); any building or stale children go first, parent waits; any absent means read
+     * source, in background (concurrent limit {@link #jobLimit}) or in frame under {@link #FRAME_BUDGET_NS}.
+     * {@code prefetch} runs while map is not viewed: missing, stale and timed-incomplete tiles (complete tiles
+     * reread on source event or when viewed).
      */
     private static void request(ClientLevel current, Layer layer, List<Key> keys, boolean prefetch) {
         TerrainSource src = layer.source;
@@ -816,7 +815,7 @@ public final class TerrainTiles {
         for (Tile t : todo) queued.add(t.key);
         TerrainSource.Reader inFrame = null;
         try {
-            // список растёт: детям крупной плитки, которых пора обновить, — место в конце
+            // List grows: append children of larger tiles that are due for refresh.
             for (int n = 0; n < todo.size(); n++) {
                 Tile t = todo.get(n);
                 if (System.nanoTime() > deadline) return;
@@ -862,7 +861,7 @@ public final class TerrainTiles {
         }
     }
 
-    /** Четыре плитки уровнем ниже (северо-запад, северо-восток, юго-запад, юго-восток); у подробной — нет. */
+    /** Four tiles one level below (northwest, northeast, southwest, southeast); none for a detailed tile. */
     @Nullable
     private static Tile[] kidsOf(Layer layer, Key key) {
         if (key.level == 0) return null;
@@ -872,13 +871,12 @@ public final class TerrainTiles {
     }
 
     /**
-     * Можно ли собрать крупную плитку из детей. Рельеф, прочитанный из источника раз, служит всем масштабам, а плитка
-     * из источника стоит столько же участков DH, сколько её четыре ребёнка вместе, — поэтому собирается из детей, когда
-     * они все свежи: не устарели по событию и не пора их обновить по часам (неполного — {@link #PARTIAL_REFRESH_NS},
-     * пустого — {@link #EMPTY_REFRESH_NS}: только что переспрошенный неполный ребёнок так же свеж, как источник, и
-     * прочитанная заново крупная плитка была бы с теми же дырами). Строится или устарел кто-то из них — ждать его
-     * (крупная плитка из источника прочла бы те же участки второй раз). Кого-то нет (или его постройка не удалась) —
-     * {@link Kids#ABSENT}: читать источник.
+     * Whether a larger tile can compose its children. Terrain read once serves all scales, and reading a tile from
+     * the source costs the same DH regions as all four children; compose when all are fresh: neither event-stale nor
+     * timed for refresh (incomplete {@link #PARTIAL_REFRESH_NS}, empty {@link #EMPTY_REFRESH_NS}: a just-requeried
+     * incomplete child is as fresh as the source, and a reread parent would have the same holes). Wait for any building
+     * or stale child (reading the parent would read the same regions twice). Any absent child (or failed build)
+     * means {@link Kids#ABSENT}: read source.
      */
     static Kids kids(@Nullable Tile[] kids, long refreshNanos, long now) {
         if (kids == null) return Kids.ABSENT;
@@ -895,7 +893,7 @@ public final class TerrainTiles {
         return waiting ? Kids.REFRESHING : Kids.READY;
     }
 
-    /** Сборка из детей в порядке: северо-запад, северо-восток, юго-запад, юго-восток. */
+    /** Compose children in order: northwest, northeast, southwest, southeast. */
     static Columns compose(Columns[] kids) {
         Columns c = new Columns();
         for (int q = 0; q < 4; q++) c.putQuarter(q, kids[q]);
@@ -903,10 +901,10 @@ public final class TerrainTiles {
     }
 
     /**
-     * Постройка плитки в фоновом потоке. Плитка возвращается в слой при любом исходе, и при {@link Error} (оно летит
-     * дальше): иначе задача слоя и отметка «строится» у плитки остались бы навсегда, а с ними — и слой.
+     * Background tile build. Return tile to the layer for every outcome, including {@link Error} (rethrow it): otherwise
+     * layer task and tile's building flag would remain forever, retaining the layer too.
      *
-     * @param cancelled плитка больше не нужна (сменился мир): постройка кончается перед следующей колонкой
+     * @param cancelled tile no longer needed (world changed): stop build before next column
      */
     static void buildOffThread(Layer layer, Key key, int gen, TerrainSource.Reader reader, BooleanSupplier cancelled) {
         Built result = Built.failed(key, gen);
@@ -915,7 +913,7 @@ public final class TerrainTiles {
         } catch (RuntimeException e) {
             Incoming.LOG.warn("Map: tile {} ({}) not built", key, layer.name, e);
         } catch (LinkageError e) {
-            // другая версия API DH, чем при сборке: источник выключается до смены мира
+            // DH API version differs from build: disable source until world change.
             Incoming.LOG.error("Map: source {} is incompatible, terrain from it is off", layer.name, e);
             layer.broken = true;
         } finally {
@@ -930,7 +928,7 @@ public final class TerrainTiles {
                 layer.name, t.key, STALL_NS / 1_000_000_000L, stats());
     }
 
-    /** Забрать плитки, построенные в фоне, и загрузить их в текстуры. */
+    /** Collect background-built tiles and upload to textures. */
     private static void collect(Layer layer) {
         for (Built b; (b = layer.done.poll()) != null; ) {
             if (b.generation != generation) continue;
@@ -939,7 +937,7 @@ public final class TerrainTiles {
         }
     }
 
-    /** Источник сообщил об изменении чанка: плитки над ним на всех уровнях перестроятся, когда понадобятся. */
+    /** Source reported a changed chunk: rebuild overlying tiles at every level when needed. */
     static void changed(Layer layer, int chunkX, int chunkZ) {
         for (int l = 0; l <= MAX_LEVEL; l++) {
             int span = SIZE << l;
@@ -949,9 +947,9 @@ public final class TerrainTiles {
     }
 
     /**
-     * Источник прислал данные чанка, которых не было (чанк пришёл клиенту): перестроятся только плитки над ним с дырами
-     * — у полной этот чанк уже был — и строящиеся сейчас (их колонки до прихода чанка уже прочитаны пустыми; отметку
-     * готовая постройка не снимает).
+     * Source supplied previously absent chunk data (chunk arrived on client): rebuild only overlying tiles with
+     * holes (complete ones already had it) and those currently building (earlier columns already read as empty;
+     * completing the build does not clear the flag).
      */
     static void arrived(Layer layer, int chunkX, int chunkZ) {
         for (int l = 0; l <= MAX_LEVEL; l++) {
@@ -962,7 +960,7 @@ public final class TerrainTiles {
         }
     }
 
-    /** @param fromSource плитка прочитана из источника (для лога; собранные из мелких считаются отдельно) */
+    /** @param fromSource tile read from source (for logs; compositions from finer tiles counted separately) */
     private static void apply(Layer layer, Built b, boolean fromSource) {
         Tile t = layer.tiles.get(b.key);
         if (t == null) return;
@@ -985,8 +983,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Перестроенная плитка — в свою четверть плиток крупнее, что уже есть (до самой крупной): они не перечитывают
-     * источник ради изменения, которое уже прочитано. Плитка крупнее, что строится из источника, получит своё.
+     * Rebuilt tile into its quarter of existing larger tiles, up to the largest: no source reread for an already
+     * read change. A larger tile building from source will receive its own data.
      */
     private static void propagate(Layer layer, Tile t) {
         for (Tile kid = t; kid.key.level < MAX_LEVEL; ) {
@@ -998,7 +996,7 @@ public final class TerrainTiles {
         }
     }
 
-    /** Пиксели плитки и её южной соседки: у той первый ряд тенится по последнему ряду этой. */
+    /** Pixels of tile and its southern neighbour: neighbour's first row shaded using this tile's last row. */
     private static void repaint(Layer layer, Tile t) {
         upload(layer, t);
         Tile south = layer.tiles.get(new Key(t.key.level, t.key.tx, t.key.tz + 1));
@@ -1022,7 +1020,7 @@ public final class TerrainTiles {
         t.texture.upload();
     }
 
-    /** Сверх предела — самые давние по показу, кроме видимых в этом кадре, нужных заранее и строящихся. */
+    /** Above limit, evict least recently displayed, except visible this frame, needed for prefetch, or building. */
     private static void evict(Layer layer) {
         Iterator<Tile> it = layer.tiles.values().iterator();
         while (layer.tiles.size() > capacity && it.hasNext()) {
@@ -1040,8 +1038,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Потоки фоновой постройки. Задач в нём не больше {@link #jobLimit} (его держит счёт задач слоя), а потоков источника
-     * не больше, чем ядер ({@code threadCount} DH), поэтому пул — по числу ядер; простаивающие потоки уходят.
+     * Background build threads. At most {@link #jobLimit} tasks (enforced by layer task count), and source threads
+     * no more than cores (DH {@code threadCount}), so pool sized by cores; idle threads retire.
      */
     private static ExecutorService executor() {
         if (executor == null) {
@@ -1054,7 +1052,7 @@ public final class TerrainTiles {
         return executor;
     }
 
-    /** Плитка из источника: колонка в середине каждой клетки; отменённая — без колонок. */
+    /** Tile from source: column at each cell centre; cancelled tile has no columns. */
     private static Built build(Key key, int gen, TerrainSource.Reader reader, BooleanSupplier cancelled) {
         long start = System.nanoTime();
         int step = 1 << key.level, span = key.span(), off = step / 2;
@@ -1071,10 +1069,10 @@ public final class TerrainTiles {
     }
 
     /**
-     * Пиксели плитки (ABGR, как у {@link NativeImage}); без данных — прозрачный. Тень как у ванильной карты
-     * ({@code MapItem.update}) — по перепаду с северной соседкой; у первого ряда соседка — последний ряд плитки
-     * {@code north} к северу, если она в памяти (придёт позже — эту перерисуют), иначе её высота оценивается по склону
-     * к южной (читать соседнюю плитку ради одного ряда стоило бы ещё участка источника на каждую плитку).
+     * Tile pixels (ABGR, as in {@link NativeImage}); transparent without data. Vanilla map shading
+     * ({@code MapItem.update}): height difference from northern neighbour; first row uses last row of tile
+     * {@code north} if in memory (redraw this one when it arrives later), otherwise estimate height from slope
+     * toward the southern neighbour (reading a neighbouring tile for one row would cost another source region per tile).
      */
     static int[] paint(Columns c, int level, @Nullable Columns north) {
         int step = 1 << level;
@@ -1094,8 +1092,8 @@ public final class TerrainTiles {
     }
 
     /**
-     * Яркость клетки: у воды — по глубине, у суши — по перепаду высоты с северной соседкой (на крупной плитке
-     * перепад делится на размер клетки). {@code parity} — шахматный узор ванильной карты, чтобы ровное не сливалось.
+     * Cell brightness: water by depth, land by height difference from northern neighbour (divide by cell size on a
+     * coarse tile). {@code parity} is vanilla map's checker pattern to keep flat areas distinct.
      */
     static MapColor.Brightness shade(int height, int waterDepth, int northHeight, int step, int parity) {
         double dither = (parity & 1);

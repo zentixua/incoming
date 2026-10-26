@@ -19,83 +19,83 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Слух игрока после ударной волны — ядерной и обычного взрыва (DESIGN-nuke §5, законы — {@link HearingModel}): сдвиг
- * порога по энергии слышимого у уха, восстановление по игровым часам (час — 1000 тиков), разрыв перепонок. Все звуки игры глуше — фильтр
- * нижних частот OpenAL EFX ({@link ua.zentix.incoming.client.sound.SoundFilters}, свои источники —
- * {@link ua.zentix.incoming.client.sound.OwnSources}): низы — на потерю громкости в улитке и кондуктивную, верха —
- * сверх того на разницу верхов и низов. Пока сдвиг есть, звенит в ушах. Громкость категорий игрока не трогается.
+ * Player hearing after a nuclear or conventional blast wave (DESIGN-nuke §5, laws in {@link HearingModel}): threshold
+ * shift from audible energy at the ear, recovery by game time (one hour — 1000 ticks), eardrum rupture. All game sounds are muffled by an OpenAL EFX
+ * low-pass filter ({@link ua.zentix.incoming.client.sound.SoundFilters}; own sources —
+ * {@link ua.zentix.incoming.client.sound.OwnSources}): lows lose volume through cochlear and conductive loss, highs lose
+ * the high–low difference on top of that. Ears ring while the shift remains. The player's category volumes are unchanged.
  * <p>
- * Часы слуха — тики клиента без паузы и прыжки времени суток вперёд (сон, {@code /time add}): за ночь сна слух
- * восстанавливается, как за ночь. Прыжок — только когда игровое время шло как обычно (сон и {@code /time} его не
- * двигают): новый мир клиента (портал) начинается с нулевых часов до пакета времени, и его первый пакет иначе
- * засчитывался бы сном. Слух — тела: смерть (возрождение) его возвращает, выход из мира — тоже (состояние только у
- * клиента).
+ * Hearing time follows unpaused client ticks and forward time-of-day jumps (sleep, {@code /time add}): a night of sleep restores
+ * hearing as a full night would. A jump counts only when game time advanced normally (sleep and {@code /time} do not
+ * move it): a new client world (portal) starts with a zero clock until the time packet, so its first packet would otherwise
+ * count as sleep. Hearing belongs to the body: death (respawn) restores it, as does leaving the world (state is client
+ * only).
  */
 public final class Deafness {
-    /** Тиков в часе игры. */
+    /** Ticks per game hour. */
     private static final double HOUR_TICKS = 1000;
-    /** Скачок времени суток больше этого — время прошло (сон), меньше — поправка часов сервером. */
+    /** A larger time-of-day jump means elapsed time (sleep); a smaller one is a server clock correction. */
     private static final long DAY_JUMP = 20;
-    /** Громкость звона при сдвиге {@link #RINGING_SHIFT} дБ и больше (громкость звона — не из модели, приближение). */
+    /** Ringing volume at a shift of {@link #RINGING_SHIFT} dB or more (ringing volume is an approximation, not from the model). */
     private static final float RINGING = 0.75f;
     private static final double RINGING_SHIFT = 50;
-    /** Тише — звон не звучит. */
+    /** Below this, ringing is inaudible. */
     private static final float RINGING_QUIET = 0.01f;
 
-    /** Волны, что дошли до уха. */
+    /** Waves that reached the ear. */
     private static final HearingModel.Ear EAR = new HearingModel.Ear();
-    /** Когда порвались перепонки (часы слуха); −1 — целы. */
+    /** When the eardrums ruptured (hearing clock); −1 — intact. */
     private static long rupturedAt = -1;
     private static long clock;
-    /** Время суток и игровое время прошлого тика и чей это мир клиента. */
+    /** Time of day, game time and client world from the previous tick. */
     private static long lastDay, lastGame;
     private static WeakReference<ClientLevel> lastLevel = new WeakReference<>(null);
-    /** Фильтр сейчас: громкость и верха (его читает и поток звука). */
+    /** Current filter: volume and highs (also read by the sound thread). */
     private static volatile float gain = 1, highs = 1;
-    /** Сдвиг верхов сейчас, дБ (для звона и строки сценария). */
+    /** Current high-frequency shift, dB (for ringing and the scenario line). */
     private static double shiftNow;
     @Nullable
     private static Ringing ringing;
     /**
-     * Звуки самой волны (удар, хлопки, стёкла): их слышит ухо, каким оно было до неё. Иначе решал бы случай: запись без
-     * preload в первый раз за игру стартует в потоке звука позже, чем волна бьёт по ушам, и удар глох бы от себя самого,
-     * а со второго раза — нет. Ключи слабые; читает и поток звука.
+     * Sounds of the wave itself (impact, cracks, glass): heard with the hearing that preceded it. Otherwise chance would decide: on its first play
+     * in the game, a recording without preload starts on the sound thread after the wave hits the ears, muting the impact by its own effect,
+     * while later plays would not. Weak keys; also read by the sound thread.
      */
     private static final Map<SoundInstance, float[]> BEFORE = Collections.synchronizedMap(new WeakHashMap<>());
 
     private Deafness() {}
 
     /**
-     * Волна дошла до уха: {@code exposure} — энергия её слышимого, дБ·с ({@link HearingModel#exposure(double, double)}, за
-     * вычетом того, что съел путь), {@code kpa} — давление у уха, {@code seed} — зерно взрыва (перепонки рвутся одинаково
-     * при повторе того же взрыва).
+     * The wave reached the ear: {@code exposure} — its audible energy, dB·s ({@link HearingModel#exposure(double, double)}, minus
+     * path losses), {@code kpa} — ear pressure, {@code seed} — blast seed (eardrums rupture identically
+     * on replaying the same blast).
      */
     public static void blast(double exposure, double kpa, long seed) {
         EAR.blast(exposure, clock / HOUR_TICKS);
-        // порванные и ещё не зажившие рвутся снова — заживать с начала
+        // ruptured eardrums that have not healed rupture again — restart healing
         Minecraft mc = Minecraft.getInstance();
         long who = mc.player == null ? 0 : mc.player.getUUID().getLeastSignificantBits();
         if (RandomSource.create(seed ^ who ^ 0x7E3D_7E3DL).nextDouble() < HearingModel.ruptureProbability(kpa)) rupturedAt = clock;
         update();
     }
 
-    /** Звук волны, которая сейчас дойдёт до уха: его слышно, как до неё ({@link #BEFORE}). Звать до {@link #blast}. */
+    /** Sound of a wave about to reach the ear: heard as before it ({@link #BEFORE}). Call before {@link #blast}. */
     public static void before(SoundInstance sound) {
         BEFORE.put(sound, new float[]{gain, highs});
     }
 
-    /** Тик клиента: часы слуха, фильтр, звон. */
+    /** Client tick: hearing clock, filter, ringing. */
     static void tick(ClientLevel level) {
         Minecraft mc = Minecraft.getInstance();
         long day = level.getDayTime(), game = level.getGameTime(), jump = 0;
-        // время суток ушло вперёд сверх игрового, а игровое шло как обычно, — прошло время (сон, /time add)
+        // time of day advanced beyond game time while game time ran normally — time elapsed (sleep, /time add)
         if (lastLevel.get() == level && Math.abs(game - lastGame - 1) <= DAY_JUMP) jump = day - lastDay - (game - lastGame);
         if (lastLevel.get() != level) lastLevel = new WeakReference<>(level);
         lastDay = day;
         lastGame = game;
         if (!mc.isPaused()) clock += 1 + (jump > DAY_JUMP ? jump : 0);
         if (!EAR.any() && rupturedAt < 0) return;
-        // повреждение слуха выключили в настройках — слух сразу как был
+        // hearing damage disabled in settings — immediately restore hearing
         if (!IncomingConfig.CLIENT.nukeTinnitus.get()) {
             reset();
             return;
@@ -116,7 +116,7 @@ public final class Deafness {
         highs = (float) Math.pow(10, -Math.max(0, lossHigh - lossLow) / 20);
     }
 
-    /** Звон в ушах: петля в голове, громкость — по сдвигу порога. */
+    /** Ringing in the ears: loop in the head, volume based on threshold shift. */
     private static void ring(Minecraft mc) {
         float v = (float) Math.min(RINGING, RINGING * shiftNow / RINGING_SHIFT);
         if (ringing != null && !ringing.playing()) ringing = null;
@@ -135,7 +135,7 @@ public final class Deafness {
         ringing.level(v);
     }
 
-    /** Слух — снова как был: выход из мира, перемотка повтора, возрождение. */
+    /** Restore hearing: leaving the world, replay seek, respawn. */
     static void reset() {
         if (gain < 1 || highs < 1) SoundFilters.restoreLoops();
         EAR.clear();
@@ -147,48 +147,48 @@ public final class Deafness {
     }
 
     private static boolean deaf(SoundInstance sound) {
-        // музыку, пластинки и сам звон в ушах не трогаем
+        // leave music, records and the ringing itself unchanged
         return sound.getSource() != SoundSource.MUSIC && sound.getSource() != SoundSource.RECORDS && !(sound instanceof Ringing);
     }
 
-    /** Громкость этого звука сейчас (низы), 1 — слышно как обычно. Зовут из звукового потока. */
+    /** Current volume of this sound (lows), 1 — heard normally. Called from the sound thread. */
     public static float gain(SoundInstance sound) {
         if (!deaf(sound)) return 1;
         float[] b = BEFORE.get(sound);
         return b == null ? gain : b[0];
     }
 
-    /** Доля верхов против низов этого звука сейчас. Зовут из звукового потока. */
+    /** Current high-to-low share of this sound. Called from the sound thread. */
     public static float highs(SoundInstance sound) {
         if (!deaf(sound)) return 1;
         float[] b = BEFORE.get(sound);
         return b == null ? highs : b[1];
     }
 
-    /** Громкость звука мира сейчас — и своих источников OpenAL ({@link ua.zentix.incoming.client.sound.OwnSources}). */
+    /** Current world-sound volume — including own OpenAL sources ({@link ua.zentix.incoming.client.sound.OwnSources}). */
     public static float gain() {
         return gain;
     }
 
-    /** Доля верхов звука мира сейчас. */
+    /** Current high-frequency share of world sound. */
     public static float highs() {
         return highs;
     }
 
-    /** Строка {@code SCENARIO}: сдвиг порога, перепонки, фильтр, звон. */
+    /** {@code SCENARIO} line: threshold shift, eardrums, filter, ringing. */
     static String describe() {
         return String.format(Locale.ROOT, "hearing shift %.1fdB torn %s gain %.2f highs %.2f ringing %s", shiftNow,
                 rupturedAt >= 0, gain, highs, ringing != null);
     }
 
     /**
-     * Звон — в голове: петля без места (у слушателя, где бы он ни был и как бы быстро ни летел), мимо фильтров пути,
-     * пелены и Sound Physics. Место у уха в мире отставало бы от слушателя на тик: тон гулял бы по сторонам при ходьбе.
+     * Ringing is in the head: an unpositioned loop (at the listener regardless of position or speed), bypassing path,
+     * pall and Sound Physics filters. A world-space position at the ear would lag the listener by a tick: the tone would move side to side while walking.
      */
     private static final class Ringing extends AbstractTickableSoundInstance {
-        /** На столько громкость подходит к цели за тик. */
+        /** Volume approaches its target by this much per tick. */
         private static final float SLEW = 0.05f;
-        /** Хозяин молчит столько тиков — звон уходит. */
+        /** If the owner stays silent this many ticks, the ringing fades. */
         private static final int ORPHAN = 10;
         private float target;
         private int quiet;
@@ -214,7 +214,7 @@ public final class Deafness {
             target = 0;
         }
 
-        /** Звучит ли (как {@link ua.zentix.incoming.client.sound.AmbientLoop#playing}). */
+        /** Whether it is playing (like {@link ua.zentix.incoming.client.sound.AmbientLoop#playing}). */
         boolean playing() {
             return !isStopped() && Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.containsKey(this);
         }

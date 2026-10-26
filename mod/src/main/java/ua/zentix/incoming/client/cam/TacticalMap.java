@@ -18,37 +18,38 @@ import ua.zentix.incoming.registry.ModEntities;
 import java.util.Locale;
 
 /**
- * Карта оператора — что показывает камера, пока снаряда нет на клиенте. Сервер присылает игроку сущность, только
- * если она ближе {@code min(clientTrackingRange, дальность прорисовки)} по горизонтали и её чанк отслеживается игроком
- * ({@code ChunkMap.TrackedEntity.updatePlayer}); снаряд вне тикающих чанков летит вне мира ({@code VirtualFlights})
- * и не присылается вовсе.
- * Смотреть издалека в ванили можно только камерой наблюдателя, которая переносит к цели самого игрока, — поэтому
- * вместо картинки здесь то, что есть: телеметрия {@code FlightStatus} (где снаряд, куда, фаза, время до удара).
- * Как у наземной станции управления БПЛА без видеоканала: карта «север вверх» с рельефом ({@link TerrainTiles}), путь,
- * курс, цель, оператор и граница, за которой появится видео. Масштаб и центр плавно следуют за снарядом, целью и оператором.
+ * Operator map: the camera display while the client has no projectile. The server sends the entity to the player
+ * only within {@code min(clientTrackingRange, render distance)} horizontally and while its chunk is tracked by
+ * the player ({@code ChunkMap.TrackedEntity.updatePlayer}); a projectile outside entity-ticking chunks flies outside
+ * the world ({@code VirtualFlights}) and is never sent.
+ * Vanilla allows distant viewing only through a spectator camera, which moves the player to the target, so this
+ * shows what is available instead of video: {@code FlightStatus} telemetry (position, destination, phase, impact ETA).
+ * Like a UAV ground control station without video: a north-up map with terrain ({@link TerrainTiles}), track,
+ * heading, target, operator and the boundary where video becomes available. Scale and centre smoothly follow the
+ * projectile, target and operator.
  */
 final class TacticalMap {
-    /** Доля перехода к новому масштабу и центру за тик. */
+    /** Fraction of the transition to the new scale and centre per tick. */
     private static final double FOLLOW = 0.15;
 
     private static final int BG = 0xF00A1410, GRID = 0x2860FF90, GRID_TEXT = 0x9060FF90, INK = 0xFFD8F0E0;
     private static final int TRAIL = 0xF060C8FF, ROUTE = 0xF0FF8040, TARGET = 0xFFFF3030, CRAFT = 0xFFFFD040, OTHER = 0xA0A0B0A8;
     private static final int OPERATOR = 0xFFFFFFFF, VIDEO_RING = 0x8080FFA0;
-    /** Рельеф под картой приглушён: поверх него читаются путь, цель и телеметрия. */
+    /** Dim terrain under the map so track, target and telemetry remain readable over it. */
     private static final int TERRAIN_DIM = 0x900A1410;
 
-    /** Вид карты: центр (x, z мира) и пикселей на блок — сейчас и тиком раньше (для плавности между тиками). */
+    /** Map view: centre (world x, z) and pixels per block, current and previous tick (for smooth partial ticks). */
     private static double cx, cz, scale, cxO, czO, scaleO;
     private static boolean placed;
 
     private TacticalMap() {}
 
-    /** Карта снова открывается — без наезда из старого вида. */
+    /** Map opens again without zooming in from the old view. */
     static void reset() {
         placed = false;
     }
 
-    /** Раз в тик: куда смотреть карте — чтобы в кадре были снаряд, цель и оператор. */
+    /** Once per tick: map view that keeps projectile, target and operator in frame. */
     static void tick(ClientFlights.Tracked f) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
@@ -56,7 +57,7 @@ final class TacticalMap {
         double minX = Math.min(craft.x, Math.min(target.x, me.x)), maxX = Math.max(craft.x, Math.max(target.x, me.x));
         double minZ = Math.min(craft.z, Math.min(target.z, me.z)), maxZ = Math.max(craft.z, Math.max(target.z, me.z));
         double w = mc.getWindow().getGuiScaledWidth(), h = mc.getWindow().getGuiScaledHeight();
-        // поля: сверху телеметрия, снизу подсказки
+        // Margins: telemetry above, hints below.
         double wantScale = Math.min((w - 80) / Math.max(60, maxX - minX), (h - 120) / Math.max(60, maxZ - minZ));
         double wantX = (minX + maxX) / 2, wantZ = (minZ + maxZ) / 2;
         cxO = cx;
@@ -71,15 +72,15 @@ final class TacticalMap {
         }
         cx += (wantX - cx) * FOLLOW;
         cz += (wantZ - cz) * FOLLOW;
-        // масштаб — в логарифме: приближение и отдаление одинаково плавные
+        // Logarithmic scale: zooming in and out are equally smooth.
         scale = Math.exp(Mth.lerp(FOLLOW, Math.log(scale), Math.log(wantScale)));
     }
 
     /**
-     * Дальность видео, блоков. Снаряд в мире только в чанках, где тикают сущности (дальность симуляции сервера,
-     * иначе он летит в {@code VirtualFlights}), а игроку сервер присылает его не дальше дальности прорисовки и
-     * дальности отслеживания типа. Последняя на встроенном сервере умножается на «Дальность прорисовки сущностей»
-     * ({@code IntegratedServer.getScaledTrackingDistance}); у выделенного сервера — как есть.
+     * Video range, blocks. Projectile is in the world only in entity-ticking chunks (server simulation distance;
+     * otherwise it flies in {@code VirtualFlights}), and the server sends it within render distance and its type's
+     * tracking range. The integrated server scales the latter by Entity Distance
+     * ({@code IntegratedServer.getScaledTrackingDistance}); the dedicated server uses it as is.
      */
     static int videoRange(ClientFlights.Tracked f) {
         Minecraft mc = Minecraft.getInstance();
@@ -121,7 +122,7 @@ final class TacticalMap {
         Vec3 craft = f.position(pt);
         int[] c = map.at(craft);
         int[] t = map.at(f.target());
-        // пройденный путь — сплошной, оставшийся — штрихами; толстые и с обводкой, чтобы читались на пёстром рельефе
+        // Travelled track is solid, remaining track dashed; thick and outlined to remain readable over varied terrain.
         int[] prev = null;
         for (Vec3 p : f.trail()) {
             int[] q = map.at(p);
@@ -150,7 +151,7 @@ final class TacticalMap {
         g.drawString(font, "N ↑", w / 2 - font.width("N ↑") / 2, 26, GRID_TEXT);
     }
 
-    /** Слева сверху: что это за экран и снаряд, фаза, высота, скорость, дальность до цели, время до удара. */
+    /** Top left: screen and projectile identity, phase, altitude, speed, target range, impact ETA. */
     private static void telemetry(GuiGraphics g, Font font, ClientFlights.Tracked f, Vec3 craft, Vec3 v, float pt) {
         int x = 10, y = 8;
         g.drawString(font, Component.translatable("incoming.camera.no_link").withStyle(ChatFormatting.BOLD), x, y, 0xFFFFC040);
@@ -174,7 +175,7 @@ final class TacticalMap {
         }
     }
 
-    /** Внизу: когда будет видео. */
+    /** Bottom: when video will be available. */
     private static void status(GuiGraphics g, Font font, ClientFlights.Tracked f, Vec3 craft, Vec3 me, int range, int w, int h) {
         double dx = craft.x - me.x, dz = craft.z - me.z;
         int away = (int) Math.sqrt(dx * dx + dz * dz);

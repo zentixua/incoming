@@ -17,50 +17,50 @@ import ua.zentix.incoming.client.render.FarDraw;
 import java.util.Arrays;
 
 /**
- * Снаряды и взрывы вдали: дальше прорисовки частиц и сущностей нет, а под шейдерами Iris виден только этап после мира.
- * Кадр: что видно из {@link FarBlasts} и {@link FarFlightView}, собирается в {@link FarSprites} — квадратами в общий
- * проход слоя эффектов ({@link FxLayer}), вместе с ближними частицами; модели снарядов рисуются в свой атлас
- * ({@code FarModels}), их плитки — квадратами того же прохода.
+ * Distant projectiles and blasts: no particles or entities beyond render distance, and under Iris shaders only
+ * the after-world stage is visible. Frame: visible {@link FarBlasts} and {@link FarFlightView} collected into
+ * {@link FarSprites} as quads in shared effects-layer pass ({@link FxLayer}) with near particles; projectile
+ * models render into their own atlas ({@code FarModels}), tiles as quads in the same pass.
  */
 public final class FarRenderer {
     private static final FarSprites SPRITES = new FarSprites();
-    /** Сколько клубов, точек, света, лент и моделей было в последнем кадре (для строки сценария). */
+    /** Billows, dots, lights, ribbons and models in last frame (scenario line). */
     private static final int[] LAST_FRAME = new int[6];
 
     private FarRenderer() {}
 
-    /** Тик клиента (не на паузе). */
+    /** Client tick (unpaused). */
     public static void tick() {
         FarBlasts.tick();
         FarFlightView.tick();
     }
 
     /**
-     * Дальнее в кадр слоя эффектов; огненные шары — ещё и светом частиц кадра ({@code lights}), яркие источники —
-     * пробами видимости для своего блика и вуали ({@code probes}).
+     * Distant objects into effects-layer frame; fireballs also light frame particles ({@code lights}); bright
+     * sources get visibility probes for their glare and veil ({@code probes}).
      */
     public static void collect(FarView view, FxQuads out, FxLights lights, SourceProbes probes) {
         SPRITES.begin(view, out, probes);
-        // бюджет клубов трубок дыма — общий у следов снарядов и шлейфов пожаров
+        // smoke-tube billow budget shared by projectile trails and fire plumes
         FarFlightView.budget();
-        // облака (взрывов, старта, пожаров) — запечёнными клубами, вблизи и вдали
+        // clouds (blast, launch, fire) use baked billows near and far
         SmokePuffs.collect(view, SPRITES);
         if (!FarBlasts.isEmpty() || !FarFlightView.isEmpty()) {
             FarBlasts.collect(view, SPRITES, lights);
             FarFlightView.collect(view, SPRITES, lights);
         }
-        // клубы облаков, кучки трубок и вуали кадра — одним бюджетом, после следов снарядов
+        // cloud billows, tube clusters and frame veils share one budget, after projectile trails
         SmokePuffs.flush();
-        // пламя очагов топлива вдали, где его языков-частиц уже нет
+        // distant fuel-fire flames where flame particles are already absent
         ua.zentix.incoming.client.fx.FireSmoke.far(view, SPRITES);
-        // струи факелов сущностей кадра: после мира, а не путём сущностей — иначе их перекрашивает шейдерпак
+        // frame entity plume jets: after world, not through entity pipeline, or shader pack recolours them
         ua.zentix.incoming.client.render.PlumeRenderer.collect(view, SPRITES);
         NukeRenderer.fireballs(view, SPRITES, lights);
         SPRITES.counts(LAST_FRAME);
     }
 
     /**
-     * Модели кадра — в атлас; после {@link #collect}, до отрисовки квадратов. Текстура атласа (0 — атласа ещё нет).
+     * Frame models into atlas, after {@link #collect}, before quad drawing. Atlas texture (0 — no atlas yet).
      */
     public static int renderModels() {
         SPRITES.models.render();
@@ -68,18 +68,18 @@ public final class FarRenderer {
     }
 
     /**
-     * Первый кадр в мире (и после перезагрузки ресурсов): атлас моделей, их сетки в видеопамяти и по одной отрисовке
-     * каждой — до первого снаряда вдали ({@code FarModels#warmup}).
+     * First frame in world (and after resource reload): model atlas, meshes in GPU memory and one render each
+     * before first distant projectile ({@code FarModels#warmup}).
      */
     public static void warmup() {
         SPRITES.models.warmup();
     }
 
-    /** Что нужно на кадр всем дальним картинкам и слою эффектов. */
+    /** Frame data needed by all distant visuals and effects layer. */
     public static FarView view(RenderLevelStageEvent e, Minecraft mc, ClientLevel level) {
         Camera camera = e.getCamera();
         float partial = e.getPartialTick().getGameTimeDeltaPartialTick(false);
-        // проекция: m11 = 1 / tan(fovY / 2) — угол пикселя по вертикали
+        // projection: m11 = 1 / tan(fovY / 2) — vertical pixel angle
         double pixel = 2 / (e.getProjectionMatrix().m11() * Math.max(1, mc.getWindow().getHeight()));
         double edge = Math.atan(0.5 * pixel * Math.hypot(mc.getWindow().getWidth(), mc.getWindow().getHeight()));
         float ambient = FarView.ambient(level, partial);
@@ -92,8 +92,8 @@ public final class FarRenderer {
     }
 
     /**
-     * Что сейчас вдали — одной строкой (сценарии клиента пишут её в лог): взрывы и их звук, снаряды, спрайты последнего
-     * нарисованного кадра и время кадра всего слоя эффектов. Пусто — вдали ничего нет.
+     * Current distant state in one line (client scenarios log it): blasts and sound, projectiles, last rendered
+     * frame's sprites and entire effects-layer frame time. Empty — nothing distant.
      */
     public static String describe() {
         if (FarBlasts.isEmpty() && FarFlightView.isEmpty()) return "";
@@ -102,17 +102,17 @@ public final class FarRenderer {
                 + FxLayer.describeTiming();
     }
 
-    /** Факелы снарядов кадра светят на мир ({@link HeatPass}): воздух air, 1/блок. */
+    /** Frame projectile plumes light world ({@link HeatPass}): air air, 1/block. */
     public static void heat(HeatPass.Frame heat, double air) {
         FarFlightView.heat(heat, air);
     }
 
-    /** Свет факелов снарядов у глаза в прошлом кадре ({@link HeatPass.Frame#eye}). */
+    /** Projectile plume light at eye in previous frame ({@link HeatPass.Frame#eye}). */
     public static double flamesAtEye() {
         return FarFlightView.flamesAtEye();
     }
 
-    /** Выход из мира или смена измерения. */
+    /** World exit or dimension change. */
     public static void reset() {
         HeatPass.forget();
         FarBlasts.reset();
@@ -123,8 +123,8 @@ public final class FarRenderer {
     }
 
     /**
-     * Заливка кадра квадратами облаков и трубок (экранов, с перекрытием), её пол до и после слияния и вуали, доля кучки, уровень
-     * слияния разных источников, гауссов вуали и кучек ({@link SmokePuffs#FILL_BUDGET}).
+     * Frame fill by cloud and tube quads (screens, with overlap), floor before and after merging and veil, cluster
+     * share, cross-source merge level, veil Gaussians and clusters ({@link SmokePuffs#FILL_BUDGET}).
      */
     public static String describeSmoke() {
         return String.format(java.util.Locale.ROOT,

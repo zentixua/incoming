@@ -14,7 +14,7 @@ import ua.zentix.incoming.client.fx.plume.NozzleGlow;
 import ua.zentix.incoming.client.ClientWeaponSpec;
 import ua.zentix.incoming.entity.SpentBoosterEntity;
 
-/** Отработавший ускоритель кувыркается в падении; на земле лежит на боку. */
+/** Spent booster tumbles while falling; lies on its side on the ground. */
 public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
     public SpentBoosterRenderer(EntityRendererProvider.Context ctx) {
         super(ctx);
@@ -31,7 +31,7 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
             pose.translate(0, spent.lift(), 0);
             float tumble = e.landed() ? 90 : e.getXRot() + t * e.spin;
             pose.mulPose(new Quaternionf().rotationYXZ(-e.getYRot() * Mth.DEG_TO_RAD, tumble * Mth.DEG_TO_RAD, 0));
-            // сетка ускорителя — в системе снаряда: сдвинуть её середину в начало
+            // Booster mesh in projectile axes: move its centre to origin.
             pose.translate(0, spent.dy(), spent.dz());
             spent.mesh().get().draw(pose, buffers.getBuffer(visibility < 1 ? WeaponModels.TRANSLUCENT : WeaponModels.SOLID),
                     packedLight, visibility, false);
@@ -43,7 +43,7 @@ public class SpentBoosterRenderer extends EntityRenderer<SpentBoosterEntity> {
     }
 
     /**
-     * Горячее сопло: стенки остывают с конца работы ({@link NozzleGlow#spent}); срез — там же, где у сетки (та же поза).
+     * Hot nozzle: walls cool from burnout ({@link NozzleGlow#spent}); exit at the mesh's location (same pose).
      */
     private static void glow(SpentBoosterEntity e, ClientWeaponSpec.SpentBooster spent, float tumble, float age, float visibility) {
         NozzleGlow g = ClientWeaponSpec.nozzleGlow(e.weapon());

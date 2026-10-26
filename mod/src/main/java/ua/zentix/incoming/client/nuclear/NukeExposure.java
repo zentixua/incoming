@@ -1,59 +1,59 @@
 package ua.zentix.incoming.client.nuclear;
 
 /**
- * Экспозиция огненного шара ядерки и кадра во вспышку — подача, а не физика: яркость шара (чёрное тело его температуры),
- * его размер, время, световой импульс и его энергия — модели ({@code FireballModel}, {@code MushroomModel}); здесь —
- * только то, как кадр их показывает.
+ * Nuclear fireball exposure and frame exposure during the flash — presentation, not physics: ball brightness (black body at its temperature),
+ * size, time, light pulse and energy belong to the models ({@code FireballModel}, {@code MushroomModel}); this only controls
+ * how the frame shows them.
  *
- * <p><b>Шар — как обычный</b> ({@code tools/bake_fx/pack.py}: {@code film_exposure}, {@code film}; #426): экспозиция по
- * огню и плёночная кривая по каналам. В мере белой стены шар в сотни и тысячи раз ярче белого (у 15 кт через 3 с ядро
- * ~300, через секунду ~5 000), и кадр срезал его в ровный диск без складок и узора. У обычного шара огонь — один кадр
- * экспозиции на всё горение; у ядерки яркость ядра за 0,5–10 с падает в ~4 000 раз, и одна экспозиция дала бы белый диск
- * в начале или чёрный в конце. Поэтому камера выставлена по огню и следует за ним не вполне ({@link #gain}): видимая
- * поверхность шара (температура края шапки) яркостью L (полуденных белых стен, без привыкания глаза) — на кривой K·L^β
- * ({@link #KEY}, {@link #FOLLOW}): у 15 кт ~1,4 во втором максимуме, ~1 через 0,5 с, ~0,8 через секунду, ~0,55 через
- * 3 с, ~0,4 через 5 с — горячее светлее и белее, остывая — оранжевее и темнее, а перепад температуры по поверхности
- * (узор шара, языки клубов) виден; днём и ночью — одинаково: камера выставлена по огню, а не по небу. Свечение
- * тусклее этого — в мере кадра с привыканием глаза к небу, как было; между ними — плавно (x = E·(1 + (E/(K·L^β))²)^−½,
- * E = L × привыкание глаза). Мерило — поверхность, а не ядро внутри: свернувшись в кольцо (у 15 кт с ~3 с), шапка
- * снаружи остывает смешением с воздухом, кадр возвращается к экспозиции сцены, и горячее нутро в просветах клубов горит,
- * как прежде (ночью красное свечение шапки держится дольше). Кривая — та же, что у обычного шара: ACES по каналам
- * (приближение Narkowicz 2016, CC0), выше белого — связь каналов ({@link #WHITE}). K и β подобраны по кадрам песочницы,
- * не выведены.
+ * <p><b>Ball like a conventional one</b> ({@code tools/bake_fx/pack.py}: {@code film_exposure}, {@code film}; #426): fire-based
+ * exposure and a per-channel film curve. Relative to a white wall, the ball is hundreds or thousands of times brighter than white (15 kt core
+ * ~300 at 3 s, ~5 000 at 1 s), so the frame clipped it to a uniform disk without folds or pattern. A conventional ball uses one fire
+ * exposure for its entire burn; a nuclear core dims by ~4 000 times over 0.5–10 s, so one exposure would produce a white disk
+ * at the start or a black one at the end. Thus the camera is set for fire and follows it partially ({@link #gain}): the visible
+ * ball surface (cap-edge temperature) of brightness L (noon white walls, without eye adaptation) lies on the curve K·L^β
+ * ({@link #KEY}, {@link #FOLLOW}): for 15 kt ~1.4 at the second maximum, ~1 at 0.5 s, ~0.8 at 1 s, ~0.55 at
+ * 3 s, ~0.4 at 5 s — hotter is brighter and whiter; cooling makes it more orange and darker, while the surface temperature variation
+ * (ball pattern, billow tongues) remains visible; identical by day and night: the camera is set for fire, not the sky. Dimmer
+ * glow remains in frame units with eye adaptation to the sky, as before; smooth between them (x = E·(1 + (E/(K·L^β))²)^−½,
+ * E = L × eye adaptation). Reference is the surface, not the inner core: as the cap rolls into a ring (from ~3 s for 15 kt),
+ * its outside cools by mixing with air, the frame returns to scene exposure, and the hot interior between billows glows
+ * as before (the cap's red glow lasts longer at night). Same curve as a conventional ball: per-channel ACES
+ * (Narkowicz 2016 approximation, CC0), with channel coupling above white ({@link #WHITE}). K and β were tuned from sandbox frames,
+ * not derived.
  *
- * <p><b>Свет шара вокруг</b> (ножка, пыль, пелена, мир, частицы) — по-прежнему чёрное тело модели в мере кадра: мгла и
- * стена пыли в его свете, ночью — во всю силу, как были. Не ярче шара на экране ({@link #cap}, как у обычного шара:
- * {@code FxAtlas.fireLightAt}) — только то, что его обнимает и без этого сливалось бы с ним в один белый диск: оболочка
- * облака Вильсона ({@code wilsonLight} в {@code fx_pall}) и блик с вуалью ({@code NukeRenderer.fireballs}).
+ * <p><b>Ball light around it</b> (stem, dust, pall, world, particles) remains the model black body in frame units: haze and
+ * dust wall in its light stay at full strength at night, as before. The on-screen ball brightness cap ({@link #cap}, as for a conventional ball:
+ * {@code FxAtlas.fireLightAt}) applies only to what wraps around it and would otherwise merge with it into a single white disk: Wilson-cloud
+ * shell ({@code wilsonLight} in {@code fx_pall}) and glare with veiling light ({@code NukeRenderer.fireballs}).
  *
- * <p><b>Кадр во вспышку</b> ({@link #overexposure}): камера выставлена на то, что видела до вспышки, и догоняет свет
- * вспышки у себя постоянной {@link #ADAPT_S} (в логарифме яркости, как автоэкспозиция). Пересвет кадра против
- * выставленного — X = K^(e^(−u/τ)), K — во сколько раз свет вспышки у камеры во втором максимуме ярче того, на что
- * выставлен кадр, u — время после максимума: до максимума и в нём кадр белый, через ~0,25 с у 15 кт в 1,4 км — пересвет
- * ~50 (проступают тёмные силуэты), через 0,5 с — ~3, через 0,75 с — ~1,4, через секунду — как был. Прежде белый экран стоял весь импульс (1,2 с у
- * 15 кт) и гас ещё 2–4 с. Засветка глаз игрока ({@code NukeFlash}: вуаль, ожоги сетчатки, послеобраз) — физика глаза и
- * от этого не меняется.
+ * <p><b>Frame during the flash</b> ({@link #overexposure}): the camera is set for what it saw before the flash and catches up with local
+ * flash light using constant {@link #ADAPT_S} (in log brightness, like auto-exposure). Frame overexposure relative to the
+ * set exposure is X = K^(e^(−u/τ)); K is the ratio of flash light at the camera at the second maximum to the light the frame
+ * is set for; u is time after maximum: before and at maximum the frame is white; after ~0.25 s for 15 kt at 1.4 km, overexposure is
+ * ~50 (dark silhouettes emerge), after 0.5 s ~3, after 0.75 s ~1.4, after 1 s as before. Previously the screen stayed white for the full pulse (1.2 s for
+ * 15 kt), then faded for another 2–4 s. Player eye glare ({@code NukeFlash}: veil, retinal burns, afterimage) follows eye physics and
+ * is unaffected.
  */
 public final class NukeExposure {
-    /** Поверхность шара яркостью в одну полуденную белую стену — на кривой K (камера выставлена по огню). */
+    /** A ball surface as bright as one noon white wall maps to K on the curve (camera set for fire). */
     public static final double KEY = 0.233;
-    /** Насколько вход кривой у яркого шара следует за его яркостью (в логарифме): 0 — шар всегда одной яркости, 1 — по белой стене. */
+    /** How much curve input for a bright ball follows its brightness (in log space): 0 — constant ball brightness; 1 — relative to a white wall. */
     public static final double FOLLOW = 0.15;
-    /** Пересвет выше белого: доля связи каналов, как у обычного шара ({@code pack.py}: white). */
+    /** Overexposure above white: channel-coupling share, as for a conventional ball ({@code pack.py}: white). */
     public static final double WHITE = 0.35;
-    /** Постоянная, с которой экспозиция кадра догоняет вспышку, с (подача: автоэкспозиция камеры). */
+    /** Time constant for frame exposure catching up with the flash, s (presentation: camera auto-exposure). */
     public static final double ADAPT_S = 0.2;
     /**
-     * Доли кольца ({@code MushroomModel.rollUp}), на которых свечение уходит с плёночной кривой на прежний путь ({@link #filmShare};
-     * у 15 кт — с ~5 до ~7 с, у 1 кт — с ~2,5 до ~3,7 с).
+     * Ring fractions ({@code MushroomModel.rollUp}) over which glow moves from the film curve to the previous path ({@link #filmShare};
+     * ~5 to ~7 s for 15 kt, ~2.5 to ~3.7 s for 1 kt).
      */
     public static final double ROLL_FROM = 0.15, ROLL_TO = 0.45;
 
     private NukeExposure() {}
 
     /**
-     * Во сколько раз экспозиция шара темнее кадра, когда его поверхность светит {@code key} (линейный, белая стена — 1, с
-     * привыканием глаза к небу {@code adapt}: днём 1, ночью ~1 200).
+     * How many times darker ball exposure is than the frame when its surface emits {@code key} (linear, white wall = 1, with
+     * eye adaptation to the sky {@code adapt}: 1 by day, ~1 200 at night).
      */
     public static double gain(double key, double adapt) {
         double r = Math.pow(Math.max(key, 0), 1 - FOLLOW) * Math.pow(Math.max(adapt, 1e-9), FOLLOW) / KEY;
@@ -61,29 +61,29 @@ public final class NukeExposure {
     }
 
     /**
-     * Доля свечения гриба на плёночной кривой при доле кольца {@code roll} ({@code mushFilmShare}): пока шар — шар, вся;
-     * свернувшаяся шапка — прежним путём, с пеленой (пересвет — в долю пикселя одним оттенком, {@link #pixel}): кривая по
-     * каналам белила её оранжевое нутро ночью и меняла его сквозь мглу (ревью #441), а гриб на 7–10 с — прежний.
+     * Share of mushroom glow on the film curve at ring fraction {@code roll} ({@code mushFilmShare}): all of it while the ball is a ball;
+     * rolled cap follows the previous path, with the pall (overexposure into pixel coverage in one hue, {@link #pixel}): the per-channel
+     * curve whitened its orange interior at night and changed it through haze (review #441); the mushroom at 7–10 s stays as before.
      */
     public static double filmShare(double roll) {
         double u = Math.max(0, Math.min(1, (roll - ROLL_FROM) / (ROLL_TO - ROLL_FROM)));
         return 1 - u * u * (3 - 2 * u);
     }
 
-    /** Плёночная кривая по каналу (ACES, приближение Narkowicz 2016): вход — свет с экспозицией, выход — линейный 0..1. */
+    /** Per-channel film curve (ACES, Narkowicz 2016 approximation): input is exposed light, output linear 0..1. */
     public static double film(double x) {
         double v = Math.max(x, 0);
         return Math.min(1, v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14));
     }
 
-    /** Связь каналов выше белого: доля к белому у пикселя, чей ярчайший канал с экспозицией — {@code top}. */
+    /** Channel coupling above white: share toward white for a pixel whose brightest exposed channel is {@code top}. */
     public static double white(double top) {
         return WHITE * (1 - Math.exp(-Math.max(top - 1, 0)));
     }
 
     /**
-     * Свет {@code rgb} (линейный, белая стена — 1, с привыканием глаза) на экране при экспозиции шара {@code gain}:
-     * линейный 0..1 по каналам — в {@code out}.
+     * Light {@code rgb} (linear, white wall = 1, with eye adaptation) on screen at ball exposure {@code gain}:
+     * linear 0..1 per channel, into {@code out}.
      */
     public static void screen(double r, double g, double b, double gain, double[] out) {
         double xr = r * gain, xg = g * gain, xb = b * gain, w = white(Math.max(xr, Math.max(xg, xb)));
@@ -93,15 +93,15 @@ public final class NukeExposure {
     }
 
     /**
-     * Шар на экране и предел его света на том, что его обнимает ({@code mushBallCap} в {@code mushroom.glsl}): поверхность
-     * шара светом {@code rgb} (с привыканием глаза {@code adapt}) при экспозиции по ней же — линейный, по каналам, в
+     * On-screen ball and its light cap on what wraps around it ({@code mushBallCap} in {@code mushroom.glsl}): the ball
+     * surface with light {@code rgb} (eye adaptation {@code adapt}) at exposure set by that surface — linear, per channel, into
      * {@code out}.
      */
     public static void cap(double r, double g, double b, double adapt, double[] out) {
         screen(r, g, b, gain(0.2126 * r + 0.7152 * g + 0.0722 * b, adapt), out);
     }
 
-    /** {@link #cap} на экране — доля белого (мера экрана, степень 1/2,2), как огонь обычного шара ({@code FxAtlas.fireLightAt}). */
+    /** {@link #cap} on screen — fraction of white (screen units, power 1/2.2), like conventional ball fire ({@code FxAtlas.fireLightAt}). */
     public static double capShown(double r, double g, double b, double adapt) {
         double[] c = new double[3];
         cap(r, g, b, adapt, c);
@@ -109,12 +109,12 @@ public final class NukeExposure {
     }
 
     /**
-     * Пиксель пелены на экране — копия конца {@code main} в {@code fx_pall}: {@code light} — рассеянный свет (линейный, сумма
-     * по лучу с ослаблением), {@code heat} — свечение грибов как есть, {@code emitted} — оно же с экспозицией шара (с тем же
-     * ослаблением), {@code film} — доля плёночной кривой ({@link #filmShare}), {@code cover} — доля пикселя, закрытая
-     * веществом (не дымкой); в {@code out} — цвет на экране с умноженной долей (rgb). Прежний путь — свечение со светом
-     * ({@link #shown}); кривая — свечение с экспозицией плёночной кривой поверх света, в линейном; между ними — смесь
-     * готовых картинок.
+     * On-screen pall pixel — copy of the end of {@code main} in {@code fx_pall}: {@code light} is scattered light (linear, sum
+     * along the ray with attenuation); {@code heat} is raw mushroom glow; {@code emitted} is the same at ball exposure (with the same
+     * attenuation); {@code film} is the film-curve share ({@link #filmShare}); {@code cover} is pixel coverage by
+     * matter (not haze); {@code out} receives screen color premultiplied by coverage (rgb). Previous path — glow with light
+     * ({@link #shown}); curve — glow at film-curve exposure over light, in linear space; between them — blend
+     * the finished images.
      */
     static void pixel(double[] light, double[] heat, double[] emitted, double film, double cover, double[] out) {
         double[] sum = new double[3];
@@ -131,8 +131,8 @@ public final class NukeExposure {
     }
 
     /**
-     * Прежний путь ({@code pallShown} в {@code fx_pall}): свет как вещество (свет / cover), ярче белого — в долю пикселя тем
-     * же оттенком, к белому долей {@code CROSS}, экран, плечо выше 0,6 по ярчайшему каналу; × доля пикселя.
+     * Previous path ({@code pallShown} in {@code fx_pall}): light as matter (light / cover), above-white light goes into pixel coverage in the
+     * same hue, toward white by {@code CROSS}, screen, shoulder above 0.6 in the brightest channel; × pixel coverage.
      */
     static void shown(double[] light, double cover, double[] out) {
         double shownCover = cover;
@@ -151,8 +151,8 @@ public final class NukeExposure {
     }
 
     /**
-     * Пересвет кадра против выставленного (≥ 1): {@code peak} — во сколько раз свет вспышки у камеры во втором максимуме
-     * ярче того, на что выставлен кадр (≥ 1), {@code after} — секунды игры после максимума (до него — меньше нуля).
+     * Frame overexposure relative to the set exposure (≥ 1): {@code peak} is the ratio of camera flash light at the second maximum
+     * to the light the frame is set for (≥ 1); {@code after} is game seconds after maximum (negative before it).
      */
     public static double overexposure(double peak, double after) {
         double k = Math.max(peak, 1);
@@ -160,7 +160,7 @@ public final class NukeExposure {
         return Math.pow(k, Math.exp(-after / ADAPT_S));
     }
 
-    /** Через сколько секунд после максимума пересвет кадра {@link #overexposure} опускается до {@code x} (> 1). */
+    /** Seconds after maximum until frame overexposure {@link #overexposure} falls to {@code x} (> 1). */
     public static double settled(double peak, double x) {
         if (peak <= x) return 0;
         return ADAPT_S * Math.log(Math.log(peak) / Math.log(x));

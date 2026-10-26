@@ -9,25 +9,25 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Сирена гражданской обороны на месте в мире — петля, пока идёт тревога. Тон сирены — скорость её ротора: включённая,
- * она раскручивается (тон и громкость растут), выключенная ({@link #off}) — сбегает и смолкает сама; мощность звука —
- * как у ротора на полной скорости ({@link Sources#NUKE_ALARM}) × квадрат доли скорости. Громкость у уха — закон
- * источника ({@link Sources#volume}: путь ISO 9613 и фон), каждый тик: ваниль берёт дальность затухания из громкости
- * один раз при запуске, а у раскручивающейся сирены громкость растёт с нуля. Воздух и преграды между сиреной и ухом —
- * каждый тик ({@link SoundFilters}), как у мотора снаряда: тревога длится весь полёт МБР, и слушатель за это время
- * выходит из дома и заходит обратно.
+ * Civil-defense siren at a fixed world position — loops during alarm. Siren pitch is rotor speed: when switched
+ * on it spins up (pitch and volume rise), when off ({@link #off}) it coasts down and falls silent itself; sound
+ * power is full-speed rotor power ({@link Sources#NUKE_ALARM}) × squared speed fraction. Volume at ear follows
+ * source law ({@link Sources#volume}: ISO 9613 path and background) each tick: vanilla takes attenuation range
+ * from volume only once at start, but a spinning-up siren's volume rises from zero. Air and barriers between
+ * siren and ear update each tick ({@link SoundFilters}), like a projectile engine: alarm lasts the whole ICBM
+ * flight, while listener leaves and re-enters a house.
  */
 public final class SirenSound extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
-    /** Доля пути скорости ротора к полной за тик: раскрутка — ~3 с. */
+    /** Fraction of remaining rotor-speed path to full per tick: spin-up ~3 s. */
     static final float SPIN_UP = 0.05f;
-    /** Доля скорости, которую ротор теряет за тик на выбеге: смолкает за ~4 с. */
+    /** Speed fraction lost per tick while coasting: falls silent in ~4 s. */
     static final float SPIN_DOWN = 0.035f;
 
     private final Vec3 at;
-    /** Тон на полной скорости: у соседних сирен он чуть разный, и вместе они «плывут», как на улице. */
+    /** Full-speed pitch: neighbouring sirens differ slightly and “drift” together, as outdoors. */
     private final float tone;
     private final Occlusion occlusion = new Occlusion();
-    /** Скорость ротора, доля полной. */
+    /** Rotor speed, fraction of full. */
     private float speed;
     private boolean on = true;
     private float filterGain = 1, filterHighs = 1;
@@ -47,17 +47,17 @@ public final class SirenSound extends AbstractTickableSoundInstance implements S
         this.pitch = 0.5f * tone;
     }
 
-    /** Тревога кончилась: ротор сбегает, звук смолкает сам. */
+    /** Alarm ended: rotor coasts down, sound fades itself. */
     public void off() {
         on = false;
     }
 
-    /** Замолчать сразу (выход из мира, движок снял канал). */
+    /** Silence immediately (world exit, engine removed channel). */
     public void kill() {
         stop();
     }
 
-    /** Звучит с нуля: раскрутка начинается с тишины. */
+    /** Plays from zero: spin-up begins in silence. */
     @Override
     public boolean canStartSilent() {
         return true;
@@ -74,8 +74,8 @@ public final class SirenSound extends AbstractTickableSoundInstance implements S
     }
 
     /**
-     * Движок держит канал сирены. Не {@code SoundManager.isActive}: ползунок категории в 0 снимает канал
-     * ({@code SoundEngine.tickNonPaused}), а {@code isActive} по записи о запуске и дальше отвечает «звучит».
+     * Engine holds siren channel. Not {@code SoundManager.isActive}: category slider at 0 removes channel
+     * ({@code SoundEngine.tickNonPaused}), but {@code isActive} still reports “playing” from start record.
      */
     public boolean playing() {
         return Minecraft.getInstance().getSoundManager().soundEngine.instanceToChannel.containsKey(this);
@@ -83,8 +83,8 @@ public final class SirenSound extends AbstractTickableSoundInstance implements S
 
     @Override
     public void tick() {
-        // движок тикает и остановленный звук, пока не снимет его, а тот, чей канал снял ползунок категории, — до остановки
-        // всех звуков (выход из мира, смена измерения)
+        // engine ticks even a stopped sound until removed, and one whose channel the category slider removed until
+        // all sounds stop (world exit, dimension change)
         if (isStopped()) return;
         speed = on ? speed + (1 - speed) * SPIN_UP : speed * (1 - SPIN_DOWN);
         float power = speed * speed;
@@ -95,7 +95,7 @@ public final class SirenSound extends AbstractTickableSoundInstance implements S
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double d = ear.distanceTo(at);
         this.volume = power <= 0 ? 0 : Sources.volume(Sources.NUKE_ALARM.power(Sources.NUKE_ALARM.lwA() + 10 * Math.log10(power)), at);
-        // ваниль не играет ниже половины тона: на нём ротор и смолкает
+        // vanilla cannot play below half pitch: rotor falls silent there
         this.pitch = tone * (0.5f + 0.5f * speed);
         if (volume > VoiceBudget.AUDIBLE) {
             float open = occlusion.open(ClientSounds.now(), ear, at);

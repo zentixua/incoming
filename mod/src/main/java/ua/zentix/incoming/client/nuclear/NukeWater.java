@@ -22,50 +22,50 @@ import java.util.Locale;
 import java.util.OptionalInt;
 
 /**
- * Ядерная волна на воде (DESIGN-nuke §6, «Вода»): тёмное кольцо фронта на воде — рябь под ветром за фронтом, с пеной
- * у эпицентра (наклейка на воду в слое эффектов, {@link WaterDecal}: профиль кольца по модели считается здесь, на кадр);
- * капли с гребней за фронтом у камеры (частицы, {@link FxBudget#SPRAY}; водяную пыль там рисует голова стены в пелене,
- * {@link #front}); подрыв на воде — столб воды с короной в объёме
- * гриба ({@link MushroomField}) и базисная волна в пелене ({@link PallField#water}). Пыль у земли над водой не встаёт:
- * голова стены там — брызги и водяная пыль ({@link BlastWall}, вода — по карте под пеленой, {@link PallGround}), частицы
- * пыли у камеры — только над сушей ({@link NukeDust#front}).
+ * Nuclear wave on water (DESIGN-nuke §6, "Water"): dark front ring on water — ripples in the wind behind the front, with foam
+ * near ground zero (water decal in the effects layer, {@link WaterDecal}: model ring profile evaluated here per frame);
+ * drops from wave crests behind the front near the camera (particles, {@link FxBudget#SPRAY}; the pall wall head renders mist there,
+ * {@link #front}); a burst on water produces a crowned water column in the mushroom
+ * volume ({@link MushroomField}) and a base surge in the pall ({@link PallField#water}). Ground dust does not rise over water:
+ * the wall head there is spray and mist ({@link BlastWall}, water from the map beneath the pall, {@link PallGround}); camera dust
+ * particles appear over land only ({@link NukeDust#front}).
  * <p>
- * Вода ли где-то — только из того, что у клиента уже есть: чанки клиента, плитки рельефа карты ({@link FarTerrain#water}).
- * Вода под эпицентром далеко за прорисовкой (ни чанка, ни плитки) — по высоте: земля ровно на уровне моря — море.
+ * Water is known only from what the client already has: client chunks and terrain-map tiles ({@link FarTerrain#water}).
+ * Water beneath ground zero far beyond render distance (no chunk or tile) is inferred from height: level ground exactly at sea level means sea.
  */
 public final class NukeWater {
     private static final RandomSource RANDOM = RandomSource.create();
     /**
-     * Полоса ряби у самого фронта, тиков: воздух за фронтом дует столько, сколько идёт положительная фаза (у 15 кт
-     * в километрах — около секунды), дальше вода неспокойна ещё {@link #CALM} тиков и гладнеет.
+     * Ripple strip right at the front, ticks: air behind the front blows for the positive phase (about a second at kilometer distances
+     * for 15 kt); water then remains rough for another {@link #CALM} ticks before smoothing out.
      */
     static final double BAND = 25, CALM = 600;
-    /** Шаг мест брызг вдоль дуги фронта у камеры, блоков; мест за тик — не больше. */
+    /** Spray-location spacing along the front arc near the camera, blocks; maximum locations per tick. */
     private static final double STEP = 4;
     private static final int MAX_SPOTS = 64;
-    /** Брызги у фронта не быстрее, блоков за тик (как пыль, {@code NukeDust}). */
+    /** Maximum front-spray speed, blocks per tick (like dust, {@code NukeDust}). */
     private static final double SPRAY_SPEED = 4;
     /**
-     * Вода под эпицентром по догадке (ни чанка, ни плитки) решается заново, пока подрыв на этом клиенте моложе стольких
-     * своих тиков ({@link ClientNuclear.Active#age()}: от прихода пакета или перемотки повтора, а не от самого подрыва):
-     * у своего подрыва — полторы секунды, у пришедшего прошлым (вход в мир посреди подрыва, повтор) — пять: чанки вокруг
-     * вошедшего игрока приходят за секунды.
+     * Guessed water beneath ground zero (no chunk or tile) is resolved again while the detonation on this client is younger than this many
+     * local ticks ({@link ClientNuclear.Active#age()}: since packet arrival or replay seek, not the detonation itself):
+     * one and a half seconds for a live detonation; five for one received as past (world entry during a detonation, replay): chunks around
+     * the joining player take seconds to arrive.
      */
     static final long GUESS_TICKS = 30, GUESS_TICKS_PAST = 100;
-    /** Цвет брызг: светлее у гребня, белее в воздухе. */
+    /** Spray color: brighter near the crest, whiter in the air. */
     private static final int SPRAY_DARK = 0xC9D2D8, SPRAY_LIGHT = 0xF2F5F7;
 
-    /** Профиль кольца в кадре (поток отрисовки; {@link WaterDecal#ring} сразу копирует его в текстуру). */
+    /** Frame ring profile (render thread; {@link WaterDecal#ring} immediately copies it to the texture). */
     private static final float[] DARK = new float[WaterDecal.SAMPLES], FOAM = new float[WaterDecal.SAMPLES];
-    /** Для строки сценария: мест брызг за последний тик. */
+    /** For the scenario line: spray locations last tick. */
     private static int lastSpots;
 
     private NukeWater() {}
 
-    /** Откуда известно, есть ли вода под эпицентром. */
+    /** Source of knowledge about water beneath ground zero. */
     enum Source { CHUNK, TILES, SEA_LEVEL, NONE }
 
-    /** Вода под эпицентром 0..1 и откуда это известно. */
+    /** Water beneath ground zero 0..1 and its source of knowledge. */
     record Under(double water, Source source) {
         boolean sure() {
             return source == Source.CHUNK || source == Source.TILES;
@@ -73,9 +73,9 @@ public final class NukeWater {
     }
 
     /**
-     * Вода под эпицентром: загруженный чанк клиента (вода в блоке поверхности, {@link #surfaceBlock}), иначе
-     * плитка рельефа карты, иначе догадка по высоте: у ровной земли на уровне моря ({@code groundY} = уровень моря —
-     * первый воздух над водой моря) — море. Под потолком (Незер) воды нет.
+     * Water beneath ground zero: loaded client chunk (water in the surface block, {@link #surfaceBlock}), otherwise
+     * a terrain-map tile, otherwise a height guess: level ground at sea level ({@code groundY} = sea level —
+     * first air above sea water) means sea. No water under a ceiling (Nether).
      */
     static Under under(@Nullable ClientLevel level, Detonation d) {
         if (level == null || level.dimensionType().hasCeiling()) return new Under(0, Source.NONE);
@@ -88,40 +88,40 @@ public final class NukeWater {
     }
 
     /**
-     * Догадка без данных: первый воздух над землёй ровно на уровне моря — над морем (берег на этой высоте — узкая полоса).
-     * Высота земли — как у {@link #surfaceBlock}: у моря с прицела — 62,889.
+     * Guess without data: first air above ground exactly at sea level means sea (shore at this height is a narrow strip).
+     * Ground height follows {@link #surfaceBlock}: 62.889 for sea under the crosshair.
      */
     static double guess(double groundY, int seaLevel) {
         return Mth.ceil(groundY) == seaLevel ? 1 : 0;
     }
 
     /**
-     * Блок поверхности под эпицентром по {@code groundY}: у суши и карты высот это первый воздух над землёй (целое), а
-     * у прицела, бинокля, ракеты и B-2 по лучу с жидкостью — сама гладь: верх стоячей воды на 8/9 блока, 62,889 у моря.
-     * Блок, в котором эта высота (верхний, если она на его грани), — вода или земля.
+     * Surface block beneath ground zero from {@code groundY}: land and heightmaps give the first air above ground (integer), while
+     * crosshair, binoculars, missile and B-2 rays including fluids give the surface itself: still water tops out at 8/9 block, 62.889 for sea.
+     * The block containing this height (the upper one if on its face) is water or ground.
      */
     static int surfaceBlock(double groundY) {
         return Mth.ceil(groundY) - 1;
     }
 
     /**
-     * Вода под эпицентром решена и дальше не меняется: известна наверняка (чанк, плитка) или догадка держится дольше
-     * срока — {@code age} своих тиков подрыва на этом клиенте ({@link ClientNuclear.Active#age()}), {@code live} — свой
-     * подрыв, не пришедший прошлым.
+     * Water beneath ground zero is resolved and fixed: known for certain (chunk, tile), or the guess has lasted longer than
+     * the deadline — {@code age} local detonation ticks on this client ({@link ClientNuclear.Active#age()}); {@code live} means a live
+     * detonation, not one received as past.
      */
     static boolean settles(Under u, long age, boolean live) {
         return u.sure() || age > (live ? GUESS_TICKS : GUESS_TICKS_PAST);
     }
 
-    /** Тик подрыва после {@link #resolve}: брызги у камеры. */
+    /** Detonation tick after {@link #resolve}: camera spray. */
     static void tick(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
         front(a, level, eye);
     }
 
     /**
-     * Вода под эпицентром, пока не известна наверняка и подрыв молод, — заново: пелене (базисная волна, вода там, где её карта
-     * ничего не знает), грибу (пар и брызги) и брызгам. Зовётся и при создании подрыва до его карты под пеленой: иначе вошедший в разгар подрыва в море первые
-     * тики видел бы над морем бурую пыль (до решения под эпицентром — суша).
+     * Re-resolve water beneath ground zero while uncertain and the detonation is young: for pall (base surge, water where its map
+     * knows nothing), mushroom (steam and spray) and spray. Also called when creating a detonation, before its pall ground map: otherwise someone joining mid-burst at sea would see brown dust
+     * over the sea for the first ticks (land until ground-zero resolution).
      */
     static void resolve(ClientNuclear.Active a, @Nullable ClientLevel level) {
         BurstWater w = a.water;
@@ -132,15 +132,15 @@ public final class NukeWater {
         if (settles(u, a.age(), a.live)) w.settle(u.source());
     }
 
-    /** Вода ли сверху колонки загруженного чанка (верхний блок карты высот {@code MOTION_BLOCKING} — вода). */
+    /** Whether the top of a loaded chunk column is water (top block of the {@code MOTION_BLOCKING} heightmap is water). */
     static boolean water(LevelChunk chunk, int x, int z, BlockPos.MutableBlockPos pos) {
         int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) - 1;
         return top >= chunk.getMinBuildHeight() && chunk.getFluidState(pos.set(x, top, z)).is(FluidTags.WATER);
     }
 
     /**
-     * Вокруг места больше воды, чем суши (середина и четыре точки в 8 блоках; загруженные чанки): игрок на площадке
-     * или в лодке посреди озера — над водой.
+     * More water than land around a location (center and four points 8 blocks away; loaded chunks): a player on a platform
+     * or in a boat in the middle of a lake is over water.
      */
     static boolean waterAround(ClientLevel level, double x, double z) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -153,17 +153,17 @@ public final class NukeWater {
         return wet >= 3;
     }
 
-    /** Ветер за фронтом вдоль земли на наклонной дальности {@code slant} блоков, м/с. */
+    /** Wind behind the front along the ground at slant range {@code slant} blocks, m/s. */
     private static double wind(Detonation d, double slant) {
         return d.groundWind(d.groundOf(slant));
     }
 
     /**
-     * Брызги у камеры: пока фронт по воде ближе {@link NukeDust#NEAR} к камере — по его дуге над водой (загруженные
-     * чанки) с гребней летят капли; гуще, где ветер сильнее. Саму водяную пыль на высоту, на которую ветер за фронтом
-     * срывает гребни ({@link WaterModel#sprayHeight}), рисует пелена объёмом — голова стены над водой
-     * ({@link NukePall#drawsHead}), как и пыль у камеры над сушей ({@link NukeDust}); клубы — только запасные, когда
-     * пелена её не рисует, и гладкие: клуб шире экрана у глаза ближайшим пикселем — лесенка квадратов на весь кадр.
+     * Camera spray: while the water front is within {@link NukeDust#NEAR} of the camera, drops fly from crests along its arc over water (loaded
+     * chunks), denser in stronger wind. The pall volume renders the mist itself up to the height at which wind behind the front
+     * tears off crests ({@link WaterModel#sprayHeight}) — the wall head over water
+     * ({@link NukePall#drawsHead}), just as for camera dust over land ({@link NukeDust}); billows are only a fallback when
+     * the pall does not render it, and are smooth: a billow wider than the screen at the eye, sampled by nearest pixel, makes a staircase of squares across the frame.
      */
     private static void front(ClientNuclear.Active a, ClientLevel level, Vec3 eye) {
         lastSpots = 0;
@@ -180,8 +180,8 @@ public final class NukeWater {
         double half = l < 1 ? Math.PI : Math.acos(Mth.clamp((l * l + r * r - NukeDust.NEAR * NukeDust.NEAR) / (2 * l * r), -1, 1));
         double toward = Math.atan2(ez, ex);
         double speed = Math.min(SPRAY_SPEED, d.frontRadius(ticks + 1) - slant);
-        // брызги встают позади тёмного кольца там же, где их рисует голова стены (BlastWall.slot): позади края пыли (самого
-        // фронта) на путь головы за время подъёма брызг (WaterModel.SPRAY_LAG)
+        // spray begins behind the dark ring, at the same position as the wall head draws it (BlastWall.slot): behind the dust edge (the
+        // front itself) by the head travel during spray rise time (WaterModel.SPRAY_LAG)
         double back = WaterModel.SPRAY_LAG * 20 * d.scale();
         double lag = Math.max(0, slant - d.frontRadius(Math.max(0, ticks - back)));
         int n = Math.min(MAX_SPOTS, (int) Math.round(2 * half * r / STEP * spray * Fx.density(eye)));
@@ -198,8 +198,8 @@ public final class NukeWater {
             if (chunk == null || !water(chunk, bx, bz, pos)) continue;
             double surface = pos.getY() + 0.9;
             lastSpots++;
-            // водяная пыль: пелена у самой воды (клубы прозрачные и крупные — сливаются, а не висят шарами), выше —
-            // реже и крупнее, катится с фронтом медленнее его
+            // mist: a pall right above water (large transparent billows merge rather than hang as balls), higher up —
+            // sparser and larger, rolling with the front more slowly than it
             double up = Math.pow(RANDOM.nextDouble(), 2.2), h = height * 0.85 * up;
             if (puffs) {
                 double v = speed * (0.35 + 0.45 * RANDOM.nextDouble());
@@ -208,7 +208,7 @@ public final class NukeWater {
                         .life(40 + RANDOM.nextInt(50)).color(SPRAY_DARK, SPRAY_LIGHT).alpha((float) (0.22 + 0.25 * spray)).drag(0.94f)
                         .smooth().wind(0).fadeIn(6).fadeFrom(0.3f).budget(FxBudget.SPRAY).spawn(level, x, surface + 0.3 + h, z);
             }
-            // капли с гребней: летят с ветром и падают
+            // crest drops: carried by wind and falling
             if (RANDOM.nextDouble() < 0.4 + 0.6 * spray) {
                 for (int k = 0; k < 2; k++) {
                     double u = Math.min(SPRAY_SPEED, 0.6 + speed) * (0.4 + 0.6 * RANDOM.nextDouble());
@@ -220,15 +220,15 @@ public final class NukeWater {
         }
     }
 
-    /** Кольца всех подрывов на воде в кадр ({@link #decal}); после {@code WaterDecal.begin}. */
+    /** Water rings from all detonations into the frame ({@link #decal}); after {@code WaterDecal.begin}. */
     public static void decals(float partial) {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) decal(a, partial);
     }
 
     /**
-     * Кольцо подрыва на воде в кадр ({@link WaterDecal}): радиус фронта по воде и профиль за ним — темнота ряби
-     * ({@link WaterModel#darkness}) и пена ({@link WaterModel#whitecaps}) по тому, сколько тиков назад фронт прошёл
-     * это место и какой ветер был за ним.
+     * Water detonation ring into the frame ({@link WaterDecal}): water-front radius and profile behind it — ripple darkness
+     * ({@link WaterModel#darkness}) and foam ({@link WaterModel#whitecaps}), based on how many ticks ago the front passed
+     * this location and the wind behind it.
      */
     static void decal(ClientNuclear.Active a, float partial) {
         if (!WaterDecal.wanted()) return;
@@ -241,14 +241,14 @@ public final class NukeWater {
     }
 
     /**
-     * Профиль кольца радиуса {@code r} блоков по воде в момент {@code ticks}: выборки за фронтом на
-     * {@link WaterDecal#sampleAt} блоков. False — кольца не видно (вода всюду спокойна).
+     * Profile of a water ring of radius {@code r} blocks at {@code ticks}: samples behind the front at
+     * {@link WaterDecal#sampleAt} blocks. False — no visible ring (water is calm everywhere).
      */
     static boolean profile(Detonation d, double ticks, double r, double hob, float[] dark, float[] foam) {
         float most = 0;
         for (int i = 0; i < dark.length; i++) {
             double behind = WaterDecal.sampleAt(i, r), ground = Math.max(0, r - behind), slant = Math.hypot(ground, hob);
-            // выборки — за фронтом или на нём: округление таблицы прихода не выносит их вперёд
+            // samples are at or behind the front: arrival-table rounding cannot place them ahead
             double since = Math.max(0, ticks - d.arrivalTicks(slant)), wind = wind(d, slant);
             dark[i] = (float) WaterModel.darkness(wind, since, BAND, CALM);
             foam[i] = (float) WaterModel.whitecaps(wind, since, CALM);
@@ -258,8 +258,8 @@ public final class NukeWater {
     }
 
     /**
-     * Строка сценария: наклейка на воду, мест брызг за тик, частиц брызг и пыли у земли; по подрывам — вода под ним, столб
-     * (верх, наружный радиус, доля воды, что ещё не упала; м модели), базисная волна, голова стены.
+     * Scenario line: water decal, spray locations per tick, spray and ground-mist particles; per detonation — water beneath it, column
+     * (top, outer radius, water fraction not yet fallen; model m), base surge, wall head.
      */
     public static String describe() {
         StringBuilder sb = new StringBuilder();

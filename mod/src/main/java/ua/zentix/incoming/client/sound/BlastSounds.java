@@ -34,76 +34,78 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Что слышно от взрыва на разном расстоянии — картинку рисует {@code client.fx.BlastEffects}, звук весь здесь.
- * Всё приходит со фронтом, громкость задаём сами, а не ванильным затуханием; заряд — из паспорта оружия
- * ({@link BlastSource}).
+ * What a blast sounds like at different distances — {@code client.fx.BlastEffects} draws the visuals; all sound is here.
+ * Everything arrives with the front; we set volume ourselves instead of vanilla attenuation; charge comes from the
+ * weapon spec ({@link BlastSource}).
  * <ul>
- * <li>ближе {@link Outdoor#NEAR} блоков — ракурсы одной записи по давлению и воздуху у уха, тон и длина — по заряду
- * ({@link BlastMix}), с «ударом в грудь» снизу; удар у уха там, где ближний ракурс уходит, — дорожка из модели своим
- * источником ({@link BlastPulse}); эхо от рельефа — {@link BlastEchoes}; воздух и преграды глушат верха
- * ({@link SoundFilters});</li>
- * <li>дальше — дальний ракурс по модели распространения {@link Outdoor} ({@link #far}), докуда слышно — по заряду
- * ({@link HearingModel#audibleRangeM}).</li>
+ * <li>closer than {@link Outdoor#NEAR} blocks — perspectives of one recording based on pressure and air at the ear,
+ * pitch and duration from charge ({@link BlastMix}), with a low “chest hit”; the impact at the ear where near fades
+ * is a model track on our own source ({@link BlastPulse}); terrain echoes are {@link BlastEchoes}; air and barriers
+ * muffle highs ({@link SoundFilters});</li>
+ * <li>farther — the far perspective via the {@link Outdoor} propagation model ({@link #far}); audible range comes
+ * from charge ({@link HearingModel#audibleRangeM}).</li>
  * </ul>
- * Вариант записи выбирает зерно взрыва (пакет {@code S2C.Blast}): каждый взрыв звучит по-своему, а его ракурсы — одна
- * запись. Моторы снарядов под громкий взрыв уходят вниз ({@link Ducking}). Все звуки взрывов (ракурсы, удар в грудь, удар у
- * уха, эхо, звуки бомбы) — в одной смеси ({@link Mix}): потолок громкости — у суммы, а не у каждого, доля каждого взрыва —
- * его доля в жизни. Разовые звуки взрывов держат каналы движка не больше своего потолка ({@link BlastVoices}): места нет —
- * тихие звучат гулом в четырёх петлях вокруг уха ({@link Rumble}) с той же мощностью.
+ * The blast seed selects the recording variant ({@code S2C.Blast} packet): each blast sounds different, while its
+ * perspectives are one recording. Projectile engines dip under a loud blast ({@link Ducking}). All blast sounds
+ * (perspectives, chest hit, impact at the ear, echoes, bomb sounds) share one mix ({@link Mix}): the ceiling applies
+ * to the sum, not each sound, and each blast's share is its real-life share. Blast one-shots hold no more engine
+ * channels than their ceiling ({@link BlastVoices}); when slots run out, quiet ones play as rumble in four loops
+ * around the ear ({@link Rumble}) with the same power.
  */
 public final class BlastSounds {
     /**
-     * Громкость записей бомбы, LUFS (наибольшая мгновенная, окно 0,4 с; замер файлов, собранных
-     * {@code tools/build_sounds.py}, {@code bunker()}): играются по давлению у уха, как ракурсы взрывов ({@link BlastMix}).
-     * У подземного взрыва — громкий из двух вариантов: тише нужного он не играет.
+     * Bomb recording loudness, LUFS (maximum momentary, 0.4 s window; measurement of files built by
+     * {@code tools/build_sounds.py}, {@code bunker()}): played by pressure at the ear, like blast perspectives
+     * ({@link BlastMix}). For an underground blast, use the louder of two variants: it never plays quieter than required.
      */
     static final double IMPACT_LUFS = -6.4, DEEP_LUFS = -7.7, VENT_LUFS = -11.2, CAVE_LUFS = -9.3, QUAKE_LUFS = -7.7;
-    /** Соль зерна «удара в грудь»: его вариантов меньше, они не привязаны к варианту ракурсов. */
+    /** Salt for the “chest hit” seed: it has fewer variants, unrelated to the perspective variant. */
     private static final long SUB_SALT = 0x5DEECE66DL;
     /**
-     * Своих источников на эхо: набор эха — {@link EchoMix#SECTORS} дорожек; новый набор — когда на него есть места
-     * сверх уже начатых и сверх остатка {@link OwnSources#MAX} по наборам (его держат удары у уха, {@link BlastPulse}).
+     * Our own sources for echoes: a set has {@link EchoMix#SECTORS} tracks; admit a new set only when slots exist
+     * beyond those already started and beyond the remainder of {@link OwnSources#MAX} divided into sets
+     * (reserved for impacts at the ear, {@link BlastPulse}).
      */
     static final int PULSE_RESERVE = OwnSources.MAX % EchoMix.SECTORS;
-    /** Эхо, которое ещё ищет склоны или сводит дорожки. */
+    /** Echoes still searching for slopes or mixing tracks. */
     private static final List<BlastEchoes> ECHOES = new ArrayList<>();
-    /** Тише — слой не запускать (подача: −46 дБ против файла, не порог слуха). */
+    /** Do not start a quieter layer (presentation: −46 dB relative to file, not a hearing threshold). */
     private static final float AUDIBLE = 0.005f;
     /**
-     * Тики клиента: часы взрывов, по которым эхо и удар у уха ждут начала прямого звука. Свои, а не возраст эффекта
-     * взрыва: эффект кончается, а голоса эха, что встают позже, ждут этих часов — с остановленными они не зазвучали
-     * бы никогда и держали свои источники.
+     * Client ticks: blast clock by which echoes and impacts at the ear await the direct sound's start. Separate from
+     * blast effect age: the effect ends, but echo voices that start later await this clock; if stopped, they would
+     * never play and would hold their sources.
      */
     private static long ticks;
-    /** Смесь взрывов у уха: громкость в игре — половина децибел суммарного уровня, потолок — у суммы ({@link Mix}). */
+    /** Blast mix at the ear: game loudness is half the total level's decibels, ceiling on the sum ({@link Mix}). */
     private static final Mix MIX = new Mix();
-    /** Гул взрывов без голоса ({@link Rumble}) и кто держит голоса ({@link BlastVoices}). */
+    /** Rumble of blasts without voices ({@link Rumble}) and who holds voices ({@link BlastVoices}). */
     private static final Rumble RUMBLE = new Rumble();
     private static final BlastVoices VOICES = new BlastVoices(RUMBLE);
     /**
-     * Громкость петли гула, LUFS (наибольшая мгновенная) — {@code RUMBLE_LUFS} в {@code build_sounds.py}: на потолке, чтобы
-     * громкость петли не упёрлась в 1 раньше, чем гул дойдёт до потолка суммы.
+     * Rumble-loop loudness, LUFS (maximum momentary) — {@code RUMBLE_LUFS} in {@code build_sounds.py}: at the ceiling
+     * so loop volume does not reach 1 before the rumble reaches the sum's ceiling.
      */
     static final double RUMBLE_LUFS = Loudness.CEILING_LUFS;
-    /** Петли гула по четвертям; null — молчит. */
+    /** Rumble loops by quarter; null — silent. */
     private static final RumbleLoop[] LOOPS = new RumbleLoop[Rumble.QUADRANTS];
     private static final int[] LOOP_RETRY = new int[Rumble.QUADRANTS];
-    /** Статических каналов движка, которые даст OpenAL рядом со своими источниками ({@link BlastVoices#reach}). */
+    /** Static engine channels OpenAL can provide alongside our own sources ({@link BlastVoices#reach}). */
     private static int reach = BlastVoices.reach(BlastVoices.MONO, BlastVoices.STEREO);
-    /** Взрывы, чей звук ещё не начался на деле: смесь сдвинется к настоящему началу ({@link OwnSources.Anchor}). */
+    /** Blasts whose sound has not actually started: shift the mix to the actual start ({@link OwnSources.Anchor}). */
     private static final List<Late> LATE = new ArrayList<>();
-    /** Зерно звуков без своего зерна (бомба). */
+    /** Seed for sounds without their own seed (bomb). */
     private static final RandomSource SEEDS = RandomSource.create();
 
     private record Late(Mix.Blast blast, OwnSources.Anchor anchor) {}
     private static final List<CraterFire> FIRES = new ArrayList<>();
-    /** Гул пожаров в воронках — суммой по четвертям вокруг уха ({@link Quarters}), по петле на четверть, а не на пожар. */
+    /** Crater-fire roar summed by quarters around the ear ({@link Quarters}), one loop per quarter, not per fire. */
     private static final Quarters FIRE = new Quarters();
-    /** Лучи преграды к пожарам — по бюджету тика, не к каждому в каждом тике ({@link FireRays}). */
+    /** Fire barrier rays follow a tick budget, not every fire every tick ({@link FireRays}). */
     private static final FireRays FIRE_RAYS = new FireRays();
     private static final AmbientLoop[] FIRE_LOOPS = new AmbientLoop[Quarters.N];
     private static final int[] FIRE_RETRY = new int[Quarters.N], FIRE_QUIET = new int[Quarters.N];
-    /** Последний обычный взрыв у уха и последнее эхо (строка сценария клиента). */
+    /** Last conventional blast at the ear and last echoes (client scenario line). */
     private static String last = "";
     @Nullable
     private static BlastEchoes lastEchoes;
@@ -111,25 +113,25 @@ public final class BlastSounds {
     private BlastSounds() {}
 
     /**
-     * Докуда слышно взрыв в обычных условиях (R0 у {@link Outdoor}), блоков: по заряду, но не дальше, чем сервер
-     * шлёт взрывы ({@link IncomingConfig#FAR_RANGE_MAX}).
+     * Audible blast range under normal conditions (R0 in {@link Outdoor}), blocks: from charge, but no farther than
+     * the server sends blasts ({@link IncomingConfig#FAR_RANGE_MAX}).
      */
     public static double range(BlastSource s) {
         return Math.min(IncomingConfig.FAR_RANGE_MAX, HearingModel.audibleRangeM(s.chargeKg()));
     }
 
     /**
-     * Взрыв дальше {@link Outdoor#NEAR}: дальний ракурс с той громкостью, что у ближней модели на её краю
-     * ({@link BlastMix#v640}), тоном по заряду, у бомбы — глухой удар из-под земли. Громкость и верха — {@link Outdoor}:
-     * что между (кромка по лучу рельефа {@code z}), земля у взрыва и у слушателя, день или ночь, дождь.
+     * Blast beyond {@link Outdoor#NEAR}: far perspective at the near model's edge volume ({@link BlastMix#v640}),
+     * charge-based pitch; for a bomb, a dull thud from underground. Volume and highs use {@link Outdoor}: what lies
+     * between (edge from terrain ray {@code z}), ground at blast and listener, day or night, rain.
      *
-     * @param s      что взорвалось
-     * @param hs     высота источника над землёй, блоков
-     * @param ground грунт у взрыва
-     * @param d      до уха, блоков
-     * @param z      разность хода через кромку рельефа, блоков (0 — прямая видимость)
-     * @param seed   зерно взрыва
-     * @return что дошло (для лога); {@code null} — мира нет
+     * @param s      what exploded
+     * @param hs     source height above ground, blocks
+     * @param ground ground at the blast
+     * @param d      distance to the ear, blocks
+     * @param z      path difference over the terrain edge, blocks (0 — line of sight)
+     * @param seed   blast seed
+     * @return what arrived (for the log); {@code null} — no world
      */
     public static Outdoor.@Nullable Heard far(BlastSource s, Vec3 pos, double hs, GroundMaterial ground, double d, double z, long seed) {
         Outdoor.Path path = path(d, z, hs, ground.porosity);
@@ -146,14 +148,14 @@ public final class BlastSounds {
     }
 
     /**
-     * Путь звука от взрыва до уха для {@link Outdoor}: земля у слушателя — верх колонки под ухом (чанк под камерой у
-     * клиента всегда есть), день или ночь, дождь и гроза сейчас.
+     * Blast-to-ear sound path for {@link Outdoor}: listener ground is the column top below the ear (the client
+     * always has the chunk under the camera), current day or night, rain and thunder.
      *
-     * @param d  до уха, блоков
-     * @param z  разность хода через кромку рельефа, блоков (0 — прямая видимость)
-     * @param hs высота источника над землёй, блоков
-     * @param gs пористость земли у источника
-     * @return {@code null} — мира нет
+     * @param d  distance to the ear, blocks
+     * @param z  path difference over the terrain edge, blocks (0 — line of sight)
+     * @param hs source height above ground, blocks
+     * @param gs ground porosity at the source
+     * @return {@code null} — no world
      */
     public static Outdoor.@Nullable Path path(double d, double z, double hs, double gs) {
         Minecraft mc = Minecraft.getInstance();
@@ -163,27 +165,27 @@ public final class BlastSounds {
         int x = Mth.floor(ear.x), zz = Mth.floor(ear.z);
         int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, zz);
         GroundMaterial under = GroundMaterial.of(level.getBlockState(new BlockPos(x, top - 1, zz)));
-        // зона тени — по устойчивости воздуха мира: днём земля греет воздух, звук загибает вверх; инверсия ночью — нет
+        // shadow zone follows world air stability: daytime ground heats air, bending sound upward; nighttime inversion does not
         return new Outdoor.Path(d, z, hs, Math.max(1.5, ear.y - top), gs, under == null ? 0.5 : under.porosity,
                 level.dimensionType().hasSkyLight() ? Propagation.refraction(ClientAir.now().stability()) : 0,
                 level.getRainLevel(1), level.getThunderLevel(1));
     }
 
-    /** Доля верхов записи раската по пути {@link Outdoor} и воздуху; путь звука выключен настройкой — 1. */
+    /** Rumble recording's high fraction from the {@link Outdoor} path and air; sound path disabled in settings — 1. */
     public static float highs(Outdoor.Path path) {
         return SoundFilters.pathEffects() ? Outdoor.highs(path) * ClientSounds.farAir(path.d()) : 1;
     }
 
     /**
-     * Эхо от рельефа этого взрыва ({@link BlastEchoes}: лучи ищут склоны, пока фронт идёт) — если на него есть свои
-     * источники ({@link #PULSE_RESERVE}); иначе null: залп РСЗО — десятки разрывов, эхо слышно у тех, кому хватило мест.
-     * Зерно — вариант дальнего ракурса этого взрыва; часы — часы взрыва у клиента.
+     * Terrain echoes of this blast ({@link BlastEchoes}: rays search slopes while the front travels), if our own
+     * sources are available ({@link #PULSE_RESERVE}); otherwise null: an MLRS salvo has dozens of bursts, echoes play
+     * for those with slots. Seed selects this blast's far-perspective variant; clock is the client's blast clock.
      */
     public static @Nullable BlastEchoes echoes(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock) {
         ECHOES.removeIf(BlastEchoes::settled);
         if (OwnSources.free() - EchoMix.SECTORS * ECHOES.size() < EchoMix.SECTORS + PULSE_RESERVE) return null;
         double kg = s.chargeKg();
-        // путь отражения — тот же фронт, что у прямого звука ({@link FarBlasts#arrivalTicks}): вблизи быстрее звука
+        // reflection path uses the same front as direct sound ({@link FarBlasts#arrivalTicks}): faster than sound nearby
         ChemicalFront front = kg > 0 ? ChemicalFront.cached(kg, s.surface()) : null;
         BlastEchoes e = new BlastEchoes(clock, pos, new TerrainEcho.Blast() {
             @Override
@@ -201,10 +203,10 @@ public final class BlastSounds {
     }
 
     /**
-     * Обычный взрыв (на земле или в воздухе) — фронт дошёл до уха сейчас (часы взрыва — {@link #clock}): ракурсы записи и
-     * «удар в грудь» ({@link BlastMix}), удар у уха из модели своим источником ({@link BlastPulse}), эхо от рельефа
-     * ({@code echoes}, null — без него) — от настоящего начала самого громкого ракурса. Звуки самой волны слышит ухо,
-     * каким оно было до неё ({@link Deafness#before}): слух, если волна его бьёт, — после.
+     * Conventional blast (ground or air) — front reached the ear now (blast clock: {@link #clock}): recording
+     * perspectives and “chest hit” ({@link BlastMix}), model impact at the ear on our own source ({@link BlastPulse}),
+     * terrain echoes ({@code echoes}, null — none) from the actual start of the loudest perspective. The wave's
+     * sounds are heard by the ear as it was before the wave ({@link Deafness#before}); any wave-induced hearing loss comes after.
      */
     public static void arrive(BlastSource s, Vec3 pos, long seed, OwnSources.Clock clock, @Nullable BlastEchoes echoes) {
         double tick = clock.ticks(0);
@@ -218,7 +220,7 @@ public final class BlastSounds {
         float most = 0;
         float[] volumes = {l.near(), l.mid(), l.far()};
         SoundEvent[] events = {ModSounds.BLAST_NEAR.get(), ModSounds.BLAST_MID.get(), ModSounds.BLAST_FAR.get()};
-        // слои — в смесь до того, как зазвучат: громкость первого же тика — уже с этим взрывом
+        // add layers to the mix before they play: the very first tick's volume already includes this blast
         Mix.Blast blast = MIX.blast(ticks);
         for (int i = 0; i < 3; i++) {
             if (volumes[i] < AUDIBLE) continue;
@@ -232,13 +234,13 @@ public final class BlastSounds {
             }
         }
         if (l.sub() >= AUDIBLE) {
-            // удар в грудь — своя запись (низ других подрывов и синтез): с ракурсами — по мощности
+            // chest hit is its own recording (low end of other detonations and synthesis): power sum with perspectives
             SoundEvent sub = ModSounds.BLAST_SUB.get();
             Mix.Layer layer = new Mix.Layer(Envelopes.of(sub.getLocation()), Envelopes.energy(sub, seed ^ SUB_SALT), pitch, l.sub(), Mix.Kind.APART, 0);
             blast.add(layer);
             shots.add(ClientSounds.blastShot(sub, pos, l.sub(), pitch, seed ^ SUB_SALT, blast::factor, life(layer)));
         }
-        // эхо и удар у уха ждут настоящего начала прямого звука: ожидание — до play; смесь — тоже от него
+        // echoes and impact at the ear await the direct sound's actual start: set waiting before play; mix starts there too
         if (echoes != null) {
             echoes.bus(blast);
             echoes.expect(tick, loudest);
@@ -249,12 +251,12 @@ public final class BlastSounds {
         boolean pulse = false;
         if (l.pulse() >= AUDIBLE) {
             short[] track = BlastPulse.render(pa, BlastMix.phase(s, d), 1);
-            // удар у уха — дорожка из модели своим источником: в смеси своей огибающей, по мощности
+            // impact at the ear is a model track on our own source: its own envelope in the mix, summed by power
             float[] x = new float[track.length];
             for (int i = 0; i < x.length; i++) x[i] = track[i] / 32768f;
             pulse = OwnSources.play(owner, start, 0, Math.atan2(pos.z - ear.z, pos.x - ear.x), l.pulse(), track, BlastPulse.RATE, true, true,
                     blast::factor);
-            // своих источников не нашлось — удара нет и в смеси
+            // no sources available — no impact in the mix either
             if (pulse) blast.add(Mix.Layer.own(Envelope.of(x, BlastPulse.RATE), Envelope.energy(x, BlastPulse.RATE), l.pulse(), 0));
         }
         last = String.format(Locale.ROOT, "%s %.0f kg d %.0f p %.0f Pa (%.1f dB) phase %.1f ms loud %.1f LUFS pitch %.2f near %.2f mid %.2f far %.2f sub %.2f pulse %.2f %s echo %s",
@@ -266,16 +268,16 @@ public final class BlastSounds {
     }
 
     /**
-     * Разовые звуки взрыва {@code blast} (его слои уже в смеси) — голосами движка, если на них есть место ({@link BlastVoices}),
-     * иначе взрыв звучит в гуле ({@link Rumble}); звуки, которых движок не взял, — тоже в гул, сразу. {@code before} — звуки
-     * самой волны: их слышит ухо, каким оно было до неё ({@link Deafness#before}).
+     * One-shots for {@code blast} (its layers already in the mix) use engine voices if slots exist ({@link BlastVoices});
+     * otherwise the blast plays in the rumble ({@link Rumble}); sounds refused by the engine also join rumble immediately.
+     * {@code before} marks the wave's own sounds: heard by the ear as it was before the wave ({@link Deafness#before}).
      */
     private static void voice(Mix.Blast blast, List<ClientSounds.MixedShot> shots, Vec3 pos, float pitch, boolean before) {
         if (shots.isEmpty()) return;
         Vec3 ear = ear();
         ClientSounds.MixedShot loud = shots.get(0);
         for (ClientSounds.MixedShot s : shots) if (s.volume0() > loud.volume0()) loud = s;
-        // за преградой гул так же глух, как голос: громкость фильтра — в мощности, верха — в фильтре петли
+        // behind a barrier, rumble is as muffled as a voice: filter gain enters power, highs enter the loop filter
         float open = loud.lowpassGain();
         int now = soundTick(), yielded = VOICES.yielded;
         BlastVoices.Voice v = VOICES.admit(blast, shots, now, Math.atan2(pos.z - ear.z, pos.x - ear.x), pitch, open * open, loud.lowpassHighs(), free());
@@ -289,13 +291,13 @@ public final class BlastSounds {
             }
             VOICES.started(v, took, now);
         }
-        // гул изменился: петли встают сейчас, а взрыв без голоса (весь или невзятые звуки) слышен в них сразу, не с тика движка
+        // rumble changed: loops start now; a blast without a voice (all or refused sounds) is heard immediately, not at engine tick
         if (v == null || v.fading() || VOICES.yielded != yielded) rumble(true);
     }
 
     /**
-     * Свободных статических каналов у движка сейчас: из тех, что даст OpenAL ({@link #reach}), минус каналы, которые он
-     * держит (остановленный звук — пока звуковой поток не вернул его пулу, {@code ChannelHandle.isStopped}).
+     * Free static engine channels now: what OpenAL provides ({@link #reach}) minus channels it holds (a stopped sound
+     * holds its channel until the sound thread returns it to the pool, {@code ChannelHandle.isStopped}).
      */
     private static int free() {
         int held = 0;
@@ -307,12 +309,12 @@ public final class BlastSounds {
         return reach - held;
     }
 
-    /** Тик звукового движка: часы, по которым голос взрыва стихает и гул растёт ({@link BlastVoices}, {@link Rumble}). */
+    /** Sound-engine tick: clock for blast-voice fade and rumble rise ({@link BlastVoices}, {@link Rumble}). */
     private static int soundTick() {
         return Minecraft.getInstance().getSoundManager().soundEngine.tickCount;
     }
 
-    /** Строка {@code SCENARIO blast-sound}: последний обычный взрыв у уха и его эхо; пусто — взрывов не было. */
+    /** {@code SCENARIO blast-sound} line: last conventional blast at the ear and its echoes; empty — no blasts yet. */
     public static String describe() {
         if (last.isEmpty()) return "";
         BlastEchoes e = lastEchoes;
@@ -320,8 +322,8 @@ public final class BlastSounds {
     }
 
     /**
-     * Голоса взрывов и гул: сколько каналов держат (звучащие/все, потолок), сколько голосов просили у движка, сколько он
-     * взял и отказал, сколько взрывов ушло в гул сразу и уступило место; громкость петель гула по четвертям.
+     * Blast voices and rumble: channels held (playing/all, ceiling), voices requested from the engine, accepted and
+     * refused, blasts sent straight to rumble and those that yielded slots; quarter rumble-loop volumes.
      */
     static String voices() {
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "voices %d/%d cap %d requested %d started %d refused %d rumble %d yielded %d loops",
@@ -330,13 +332,13 @@ public final class BlastSounds {
         return sb.toString();
     }
 
-    /** Часы взрыва, родившегося сейчас: тики с этого мига, с долей. */
+    /** Clock for a blast born now: ticks since this instant, with a fraction. */
     public static OwnSources.Clock clock() {
         long born = ticks;
         return partial -> ticks - born + partial;
     }
 
-    /** Тик клиента. */
+    /** Client tick. */
     static void tick() {
         ticks++;
         FIRE.clear();
@@ -344,24 +346,24 @@ public final class BlastSounds {
         FIRE_RAYS.tick(FIRES, ear(), SoundFilters.WORLD, FIRE);
         fireLoops();
         MIX.at(ticks);
-        // звук начался на деле позже своего тика — смесь взрыва от настоящего начала, как его эхо и удар у уха
+        // sound actually started after its tick — mix starts at the actual start, like its echoes and impact at the ear
         LATE.removeIf(l -> {
             if (Double.isNaN(l.anchor().zero())) return false;
             l.blast().late(20 * l.anchor().lateSeconds());
             return true;
         });
         VOICES.prune(soundTick());
-        // запас свободных каналов на ближний: мир его съел — заранее уступают самые тихие свои (их каналы вернутся за тики)
+        // free-channel reserve for near impact: world used it — quietest own voices yield early (channels return after ticks)
         if (VOICES.reserve(soundTick(), free()) > 0) rumble(true);
         rumble(false);
     }
 
     /**
-     * Петли гула пожаров по четвертям, раз в тик: громкость — корень суммы мощностей пожаров четверти, верха — средние по
-     * мощности; играют все четверти с долей слышной суммы ({@link Quarters#plays}: порог — у суммы, не у петли); петлю,
-     * которой движок не держит, — заново (раз в {@code 20} тиков); не играет секунду — отпустить; ползунок «Окружение» в
-     * нуле — не запускать. У каждой четверти свой вариант `blast.fire` — звуки петель некогерентны, и их мощности
-     * складываются, как считает {@link Quarters}.
+     * Quarter fire-roar loops, once per tick: volume is the square root of summed quarter fire powers, highs are
+     * power-weighted means; all quarters with a share of the audible sum play ({@link Quarters#plays}: threshold on
+     * the sum, not the loop); restart a loop the engine does not hold (every {@code 20} ticks); release after one
+     * second without playing; do not start while the “Ambient” slider is zero. Each quarter has its own `blast.fire`
+     * variant — loop sounds are incoherent and their powers add as {@link Quarters} computes.
      */
     private static void fireLoops() {
         Minecraft mc = Minecraft.getInstance();
@@ -391,12 +393,12 @@ public final class BlastSounds {
     }
 
     /**
-     * Петли гула по четвертям ({@link Rumble}), раз в тик клиента ({@code now} — сразу, когда гул изменился): встают, когда
-     * их члены слышны (по мощности, когда голоса стихнут: петля должна звучать раньше, чем стихающий голос отдаст ей
-     * долю), с громкостью этого мига; петлю, которой движок не держит, — заново; не играет {@link Rumble#HOLD} тиков —
-     * отпустить; ползунок «Окружение» в нуле — не запускать. Слышно ли — решает весь гул ({@link Rumble#plays}), а не
-     * каждая петля. Громкость, тон и верха петля дальше берёт сама, в своём тике движка ({@link RumbleLoop}). Вариант записи
-     * у каждой четверти свой — шум разных четвертей не согласован.
+     * Quarter rumble loops ({@link Rumble}), once per client tick ({@code now} — immediately when rumble changed):
+     * start when their members are audible (with power after the voices fade: the loop must play before a fading
+     * voice hands it a share), at the volume of that instant; restart a loop the engine does not hold; release after
+     * {@link Rumble#HOLD} ticks without playing; do not start while the “Ambient” slider is zero. Audibility is decided
+     * by all rumble ({@link Rumble#plays}), not each loop. The loop then takes volume, pitch and highs itself in its
+     * engine tick ({@link RumbleLoop}). Each quarter has its own recording variant — different quarters' noise is incoherent.
      */
     private static void rumble(boolean now) {
         Minecraft mc = Minecraft.getInstance();
@@ -424,13 +426,13 @@ public final class BlastSounds {
     }
 
     /**
-     * Петля гула четверти: громкость, тон и верха берёт в своём тике звукового движка — в том же, где голоса взрывов
-     * стихают (голос — {@code MixedShot.tick}, гул — здесь, одни часы): посчитанная в тике клиента после него, она
-     * отставала бы на тик, и переход голос → гул терял бы до 3,5 дБ.
+     * Quarter rumble loop: takes volume, pitch and highs in its own sound-engine tick, the same tick in which blast
+     * voices fade (voice — {@code MixedShot.tick}, rumble — here, same clock). If computed in the client tick after
+     * it, it would lag by a tick and the voice → rumble transition would lose up to 3.5 dB.
      */
     private static final class RumbleLoop extends AmbientLoop {
         private final int q;
-        /** Хозяин отпустил её: стихает и уходит, громкость гула больше не берёт. */
+        /** Owner released it: fade and go away, no longer taking rumble volume. */
         private boolean released;
 
         RumbleLoop(int q) {
@@ -438,7 +440,7 @@ public final class BlastSounds {
             this.q = q;
         }
 
-        /** Громкость, тон и верха — по гулу сейчас. */
+        /** Volume, pitch and highs from the rumble now. */
         void aim() {
             Vec3 ear = ear();
             double az = Rumble.azimuth(q);
@@ -461,8 +463,8 @@ public final class BlastSounds {
         }
 
         /**
-         * Громкость — в канал сейчас, не дожидаясь тика движка: взрыв, у которого голоса нет вовсе, звучит в гуле с того же
-         * мига, с какого звучал бы голос (так же, как движок ставит громкость в тике: × ползунок категории).
+         * Set channel volume now without waiting for the engine tick: a blast with no voice at all plays in the
+         * rumble from the instant its voice would have played (as the engine sets volume in its tick: × category slider).
          */
         void now() {
             aim();
@@ -474,13 +476,13 @@ public final class BlastSounds {
         }
     }
 
-    /** Зерно, которым петля четверти {@code q} берёт свой вариант записи {@code event} (гул взрывов, гул пожаров). */
+    /** Seed with which quarter {@code q}'s loop selects its own {@code event} variant (blast rumble, fire roar). */
     private static long variant(SoundEvent event, int q) {
         WeighedSoundEvents w = Minecraft.getInstance().getSoundManager().getSoundEvent(event.getLocation());
         return Quarters.seed(w == null ? 1 : w.getWeight(), q);
     }
 
-    /** Движок звука загружен заново: потолок голосов — по источникам устройства; прежние каналы ушли с ним. */
+    /** Sound engine reloaded: voice ceiling follows device sources; old channels went away with it. */
     static void engineLoaded() {
         java.util.Arrays.fill(LOOPS, null);
         java.util.Arrays.fill(FIRE_LOOPS, null);
@@ -493,7 +495,7 @@ public final class BlastSounds {
                 VOICES.cap());
     }
 
-    /** Разовый звук взрыва целиком (одна запись — один взрыв, вариант по зерну {@code seed}) — в смесь, до того как зазвучит. */
+    /** Entire blast one-shot (one recording — one blast, variant from {@code seed}) joins the mix before playing. */
     private static Mix.Blast mixed(SoundEvent event, float volume, float pitch, long seed) {
         Mix.Blast b = MIX.blast(ticks);
         b.add(new Mix.Layer(Envelopes.of(event.getLocation()), Envelopes.energy(event, seed), pitch, volume, Mix.Kind.APART, 0));
@@ -501,19 +503,19 @@ public final class BlastSounds {
     }
 
     /**
-     * Срок звука слоя, тиков: запись с её тоном и запас. Звук смеси тикает, а тикающий звук, чей канал движок снял без
-     * {@code stop} (ползунок «Окружение» в нуле), так и остался бы в его списке.
+     * Layer sound lifetime, ticks: recording at its pitch plus margin. Mix sounds tick, and a ticking sound whose
+     * channel the engine removed without {@code stop} (“Ambient” slider zero) would otherwise stay in its list.
      */
     private static int life(Mix.Layer layer) {
         return (int) Math.ceil(layer.ticks()) + 20;
     }
 
-    /** Срок звука взрыва из одной записи ({@link #mixed}), тиков. */
+    /** Blast sound lifetime for one recording ({@link #mixed}), ticks. */
     private static int life(Mix.Blast blast) {
         return life(blast.layers.get(0));
     }
 
-    /** Отбой, перемотка повтора, выход из мира: эхо, что ещё готовилось, забыть (его голоса снимает {@link OwnSources#reset}). */
+    /** All-clear, replay rewind, world exit: forget pending echoes ({@link OwnSources#reset} removes their voices). */
     static void reset() {
         ECHOES.forEach(BlastEchoes::stop);
         ECHOES.clear();
@@ -536,11 +538,12 @@ public final class BlastSounds {
     }
 
     /**
-     * Бомба взорвалась под землёй и наружу не прорвалась: над землёй слышна та доля заряда, что вышла в воздух
-     * ({@code s.chargeKg()}, {@code warhead.BuriedBlast#airShare}), — глухим ударом (запись без верхов: их съел грунт),
-     * громкость — по её давлению у уха. Слушатель под землёй — гул в толще, той же громкости.
+     * Bomb exploded underground without breaking through: above ground, the charge fraction that escaped into air
+     * ({@code s.chargeKg()}, {@code warhead.BuriedBlast#airShare}) is heard as a dull thud (recording without highs:
+     * ground absorbed them), volume from its pressure at the ear. For an underground listener, a rumble within the
+     * ground at the same volume.
      *
-     * @param underground слушатель сам под землёй
+     * @param underground listener is underground too
      */
     public static void buried(BlastSource s, Vec3 pos, boolean underground) {
         double pa = BlastMix.pressure(s, ear().distanceTo(pos));
@@ -552,35 +555,36 @@ public final class BlastSounds {
     }
 
     /**
-     * Бомба вошла в грунт ({@code tntKg} — энергия удара, кг ТНТ, {@code warhead.BunkerImpact}): тупой удар — громкость по
-     * давлению той доли энергии, что ушла в воздух. Хлопка нет: N-волну сверхзвуковой бомбы играет её полёт ({@link Booms}).
+     * Bomb entered ground ({@code tntKg} — impact energy, kg TNT, {@code warhead.BunkerImpact}): dull impact with volume
+     * from the pressure of the energy fraction sent into air. No crack: the supersonic bomb's N-wave plays during
+     * flight ({@link Booms}).
      */
     public static void bunkerImpact(Vec3 pos, double tntKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), IMPACT_LUFS);
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_IMPACT.get(), pos, v, 1);
     }
 
-    /** Газы взрыва вырвались по скважине: рёв выброса, громкость — по давлению доли заряда {@code airKg}, что вышла в воздух. */
+    /** Blast gases escaped through the borehole: vent roar, volume from pressure of charge fraction {@code airKg} released into air. */
     public static void vent(Vec3 pos, double airKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(airKg), ear().distanceTo(pos)), VENT_LUFS);
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_VENT.get(), pos, v, 1);
     }
 
     /**
-     * Свод над полостью обрушился ({@code tntKg} — энергия падения породы, кг ТНТ): гул обвала — громкость по давлению
-     * доли, что ушла в воздух (как у удара бомбы о землю, {@link BunkerImpact#airTnt}).
+     * Roof above a cavity collapsed ({@code tntKg} — falling rock energy, kg TNT): collapse rumble, volume from the
+     * pressure of the fraction sent into air (as for bomb ground impact, {@link BunkerImpact#airTnt}).
      */
     public static void collapse(Vec3 pos, double tntKg) {
         float v = byPressure(BlastMix.pressure(BlastSource.air(BunkerImpact.airTnt(tntKg)), ear().distanceTo(pos)), QUAKE_LUFS);
         if (v >= AUDIBLE) bomb(ModSounds.BOMB_QUAKE.get(), pos, v, 0.8f);
     }
 
-    /** Громкость записи громкостью {@code fileLufs} для давления {@code pa} у уха ({@link BlastMix#loudness}). */
+    /** Playback volume of a {@code fileLufs} recording for pressure {@code pa} at the ear ({@link BlastMix#loudness}). */
     static float byPressure(double pa, double fileLufs) {
         return BlastMix.gain(BlastMix.loudness(pa) - fileLufs);
     }
 
-    /** Громкость записи громкостью {@code fileLufs} у взрыва {@code s} на краю ближней модели ({@link Outdoor#NEAR}). */
+    /** Playback volume of a {@code fileLufs} recording for blast {@code s} at the near model's edge ({@link Outdoor#NEAR}). */
     static float atNear(BlastSource s, double fileLufs) {
         return byPressure(BlastMix.pressure(s, Outdoor.NEAR), fileLufs);
     }
@@ -589,22 +593,22 @@ public final class BlastSounds {
         return Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
     }
 
-    /** Толчок земли у слушателя по прежнему пакету без источника (старые записи повтора Flashback): в полную силу. */
+    /** Ground jolt at the listener from the old sourceless packet (old Flashback recordings): full strength. */
     public static void quake() {
         Vec3 ear = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), 1, 1);
     }
 
     /**
-     * Удельное акустическое сопротивление воздуха ρ₀c₀, Па·с/м (1,204 кг/м³ × 343 м/с при 20 °C, 413 по таблице): плоская
-     * поверхность, что ходит со скоростью v, излучает давление ρ₀c₀·v.
+     * Specific acoustic impedance of air ρ₀c₀, Pa·s/m (1.204 kg/m³ × 343 m/s at 20 °C, table value 413): a flat
+     * surface moving at speed v radiates pressure ρ₀c₀·v.
      */
     static final double AIR_IMPEDANCE = ua.zentix.incoming.sound.Air.DENSITY * BlastModel.SOUND_SPEED;
 
     /**
-     * Гул земли, когда до ног дошла волна грунта с пиковой скоростью {@code ppvMps}, м/с: давление — ρ₀c₀·v у земли под
-     * ухом (вся округа ходит одной фазой — излучатель много больше длины волны; ⚠ оценка: коэффициент излучения 1, у
-     * волны в десятки метров длиной на мягком грунте он меньше), громкость — как у взрывов по давлению у уха.
+     * Ground rumble when a ground wave with peak velocity {@code ppvMps}, m/s, reaches the feet: pressure ρ₀c₀·v at
+     * the ground under the ear (the surroundings move in phase — radiator much larger than wavelength; (est.)
+     * radiation coefficient 1, lower for a tens-of-metres wave on soft ground), volume from pressure at the ear as for blasts.
      */
     public static void quake(double ppvMps) {
         float v = byPressure(rumblePa(ppvMps), QUAKE_LUFS);
@@ -613,12 +617,12 @@ public final class BlastSounds {
         bomb(ModSounds.BOMB_QUAKE.get(), ear.add(0, -4, 0), v, 1);
     }
 
-    /** Давление гула земли, Па, у скорости грунта {@code ppvMps}, м/с. */
+    /** Ground-rumble pressure, Pa, for ground velocity {@code ppvMps}, m/s. */
     static double rumblePa(double ppvMps) {
         return AIR_IMPEDANCE * Math.max(0, ppvMps);
     }
 
-    /** Звук бомбы — в смеси взрывов, своим взрывом в ней (каждый приход — свой). */
+    /** Bomb sound joins the blast mix as its own blast (each arrival is separate). */
     private static void bomb(SoundEvent event, Vec3 pos, float volume, float pitch) {
         long seed = SEEDS.nextLong();
         Mix.Blast blast = mixed(event, volume, pitch, seed);
@@ -626,8 +630,8 @@ public final class BlastSounds {
     }
 
     /**
-     * Выброс воронки падает обратно: {@code kg} грунта с высоты {@code height} м — мощность звука осыпи по энергии
-     * падения ({@link Sources#fall}), докуда слышно — путь до уха ({@link Sources}).
+     * Crater ejecta falls back: {@code kg} of ground from {@code height} m — fall sound power from falling energy
+     * ({@link Sources#fall}), audible range from the path to the ear ({@link Sources}).
      */
     public static void debris(Vec3 pos, double kg, double height, float pitch) {
         Sources.play(ModSounds.DEBRIS_FALL.get(), pos, Sources.EJECTA.power(Sources.fall(kg, height, EJECTA_FALL_S, Spectra.DEBRIS_FALL)), pitch,
@@ -635,9 +639,10 @@ public final class BlastSounds {
     }
 
     /**
-     * Разовый звук взрыва, дошедший до уха с громкостью {@code volume} (осыпь выброса: громкость — по закону источника,
-     * {@link Sources}), — в смесь взрывов своим взрывом и голосом через бюджет ({@link BlastVoices}): в налёте осыпь каждой
-     * воронки — свой звук на 2–9 с, и мимо бюджета 300 шахедов держали ею ~150 каналов, пока ближний не находил ни одного.
+     * Blast one-shot arriving at the ear with {@code volume} (ejecta fall: volume from source law, {@link Sources})
+     * joins the blast mix as its own blast with a budgeted voice ({@link BlastVoices}): in a raid each crater's fall
+     * is a separate 2–9 s sound, and bypassing the budget, 300 Shaheds held ~150 channels with it, leaving none for
+     * the near impact.
      */
     private static void oneShot(SoundEvent event, Vec3 at, float volume, float pitch) {
         long seed = SEEDS.nextLong();
@@ -645,12 +650,12 @@ public final class BlastSounds {
         voice(blast, List.of(ClientSounds.blastShot(event, at, volume, pitch, seed, blast::factor, life(blast))), at, pitch, false);
     }
 
-    /** Окно, за которое падает выброс, с: средняя мощность осыпи — mgh за это время (⚠ оценка: выброс падает за 1–3 с). */
+    /** Ejecta fall window, s: mean fall power is mgh over this time (est.) (ejecta falls over 1–3 s). */
     static final double EJECTA_FALL_S = 2;
 
     /**
-     * Пожар топлива в воронке (огонь на блоках сервера, с удара прошло {@code age} тиков): запись петлёй в своей скорости,
-     * тепловыделение, длительность и место — у топлива {@code burn} (стекло, засыпало — гул идёт за ним).
+     * Fuel fire in a crater (fire on server blocks, {@code age} ticks since impact): recording loops at native speed;
+     * heat release, duration and position come from fuel {@code burn} (flowed or buried — the roar follows it).
      */
     public static void fire(ua.zentix.incoming.client.fx.FuelBurn burn, int age) {
         ClientLevel world = Minecraft.getInstance().level;

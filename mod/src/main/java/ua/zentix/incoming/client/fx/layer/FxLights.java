@@ -6,25 +6,25 @@ import org.joml.Vector4f;
 import java.util.Arrays;
 
 /**
- * Огненные шары кадра как источники света для частиц и лент шлейфов: шейдер слоя ({@code fx.vsh}) добавляет их свет
- * к карте освещения. Без него пыль и дым у шара ночью освещала бы только луна, синим, и полупрозрачные клубы поверх
- * жёлтого шара выходили бы лиловыми. Ламбертов шар яркости b (против белого днём) освещает свою поверхность как b солнц,
- * дальше — как (r/d)²; на экране освещённое им не ярче его огня на экране ({@link FxAtlas#fireLightAt}): ночью свет ×1200
- * держал бы пыль под уже чёрным от сажи шаром оранжевым кольцом. Шаров — не больше {@link #MAX}, самые заметные: свет шара
- * на экране на квадрат расстояния до глаза.
- * Светящееся (шар, искры, вспышки, своё — {@code FULL_BRIGHT}) света шаров не берёт.
+ * Frame fireballs as light sources for particles and trail ribbons: layer shader ({@code fx.vsh}) adds their light
+ * to the lightmap. Otherwise nearby dust and smoke at night would have only blue moonlight, and translucent billows over
+ * a yellow fireball would appear lilac. A Lambertian sphere of brightness b (relative to daytime white) lights its surface like b suns,
+ * farther away as (r/d)²; lit screen matter is no brighter than its screen fire ({@link FxAtlas#fireLightAt}): nighttime light ×1200
+ * would keep dust below an already soot-black fireball as an orange ring. At most {@link #MAX} balls, the most prominent: screen fireball
+ * light divided by squared distance to the eye.
+ * Emissive matter (fireball, sparks, flashes, custom — {@code FULL_BRIGHT}) receives no fireball light.
  */
 public final class FxLights {
-    /** Источников на частицы не больше (бюджет: четыре столбца матрицы — до четырёх расчётов света на фрагмент). */
+    /** Maximum particle light sources (budget: four matrix columns — up to four light calculations per fragment). */
     public static final int MAX = 4;
-    /** Столбец i: центр шара i от камеры (xyz), радиус (w; 0 — шара нет). */
+    /** Column i: camera-relative centre of ball i (xyz), radius (w; 0 — no ball). */
     final Matrix4f balls = new Matrix4f().zero();
-    /** Столбец i: освещённость у поверхности шара i против света вокруг глаза, с цветом (rgb); его огонь на экране (w). */
+    /** Column i: light at ball i surface relative to light around the eye, coloured (rgb); its screen fire (w). */
     final Matrix4f light = new Matrix4f().zero();
     private final double[] weight = new double[MAX];
     private final Vector4f column = new Vector4f();
 
-    /** Новый кадр: шаров нет. */
+    /** New frame: no balls. */
     void begin() {
         balls.zero();
         light.zero();
@@ -32,8 +32,8 @@ public final class FxLights {
     }
 
     /**
-     * Шар с центром (x, y, z) от камеры, радиуса r, яркости b против белого экрана днём с привыканием глаза
-     * ({@code Sight#adapted}), с огнём на экране fire (доля белого), цвета (cr, cg, cb).
+     * Ball at camera-relative (x, y, z), radius r, brightness b relative to daytime screen white with eye adaptation
+     * ({@code Sight#adapted}), screen fire value fire (white fraction), colour (cr, cg, cb).
      */
     public void add(double x, double y, double z, double r, double b, double fire, float cr, float cg, float cb) {
         if (r <= 0 || b <= 0 || fire <= 0) return;
@@ -46,7 +46,7 @@ public final class FxLights {
         light.setColumn(slot, column.set((float) (b * cr), (float) (b * cg), (float) (b * cb), (float) fire));
     }
 
-    /** Радиус шара в столбце i (0 — пусто), для проверок. */
+    /** Ball radius in column i (0 — empty), for checks. */
     float radius(int i) {
         return balls.getColumn(i, column).w;
     }

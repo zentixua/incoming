@@ -3,58 +3,58 @@ package ua.zentix.incoming.client.fx.smoke;
 import ua.zentix.incoming.util.Stability;
 
 /**
- * Дым над пожаром — непрерывный источник тепла и сажи, шлейф Бриггса, без Minecraft. Метры, секунды, ватты.
+ * Smoke above fire: continuous heat and soot source, Briggs plume, without Minecraft. Metres, seconds, watts.
  * <ul>
- * <li><b>Источник.</b> Блок огня — горящая грань ~1 м²: ⚠ оценка {@value #BLOCK_WATTS} Вт (пик тепловыделения древесины
- * 100–250 кВт/м², Babrauskas, SFPE Handbook, 5-е изд., гл. 26 — середина). Конвекцией уходит {@value #CONVECTIVE}
- * (излучает 0,3 — доля излучения пламени древесины, там же; ⚠ по памяти). Сажа — выход 0,015 кг на кг сгоревшего при
- * эффективной теплоте 12,4 МДж/кг (красный дуб, таблица Тьюарсона в SFPE Handbook; ⚠ по памяти).</li>
- * <li><b>Подъём</b> — Бриггс (Briggs G. A., «Plume Rise Predictions», 1975; формулы — как в EPA ISC3, т. 2, §1.1.4;
- * ⚠ сверить): поток плавучести F = g·Q_c/(π·c_p·ρ·T); путь подъёма Δh(x) = 1,6·F^⅓·x^⅔/u до конечного: в нейтральном и
- * неустойчивом воздухе 21,425·F^¾/u (F &lt; 55) или 38,71·F^⅗/u, в устойчивом — 2,6·(F/(u·s))^⅓, s = N², а в штиль —
- * 5,0·F^¼·s^(−⅜) (MTT; меньшее из двух). Между классами D и E — плавно.</li>
- * <li><b>Расплывание</b> — Паскуилл–Гиффорд по пути ветра ({@link Stability}) и подъёмом (σ = Δh/3,5, Pasquill 1976) и
- * размер очага, в квадратуре.</li>
- * <li><b>Масса</b> — сажа на метр пути по ветру ṁ/u. Шлейф виден, пока толща через середину больше порога Кошмидера
- * (0,02).</li>
- * <li><b>Температура</b> у очага — избыток на оси по Хескестаду, ΔT = 9,1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3) (SFPE
- * Handbook, гл. 13; ⚠ по памяти), не выше пламени ({@link #FLAME_K}: поверхностная излучаемая мощность малых пожаров 50–100 кВт/м², середина; ⚠ оценка);
- * видимый свет пламени — светящейся сажи ({@link #flameLight}).</li>
+ * <li><b>Source.</b> Fire block is a burning ~1 m² face: (est.) {@value #BLOCK_WATTS} W (wood peak heat release
+ * 100–250 kW/m², Babrauskas, SFPE Handbook, 5th ed., ch. 26, midpoint). Convection carries {@value #CONVECTIVE}
+ * (radiation 0.3, wood flame radiative fraction, same source; (est.) from memory). Soot yield 0.015 kg per kg burned at
+ * effective heat 12.4 MJ/kg (red oak, Tewarson's SFPE Handbook table; (est.) from memory).</li>
+ * <li><b>Rise</b>: Briggs (Briggs G. A., "Plume Rise Predictions", 1975; formulas as EPA ISC3, vol. 2, §1.1.4;
+ * (est.) verify): buoyancy flux F = g·Q_c/(π·c_p·ρ·T); rise path Δh(x) = 1.6·F^⅓·x^⅔/u until final rise: neutral and unstable
+ * air 21.425·F^¾/u (F &lt; 55) or 38.71·F^⅗/u, stable air 2.6·(F/(u·s))^⅓, s = N², calm air 5.0·F^¼·s^(−⅜)
+ * (MTT; smaller of the two). Smooth between classes D and E.</li>
+ * <li><b>Spread</b>: Pasquill–Gifford along wind path ({@link Stability}), rise (σ = Δh/3.5, Pasquill 1976), and source
+ * size, in quadrature.</li>
+ * <li><b>Mass</b>: soot per metre of wind path ṁ/u. Plume visible while centre chord optical depth exceeds Koschmieder
+ * threshold (0.02).</li>
+ * <li><b>Temperature</b> near source: Heskestad axis excess, ΔT = 9.1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3) (SFPE Handbook,
+ * ch. 13; (est.) from memory), capped at flame ({@link #FLAME_K}: surface emissive power of small fires 50–100 kW/m²,
+ * midpoint) (est.); visible flame light comes from luminous soot ({@link #flameLight}).</li>
  * </ul>
- * Ветер слабее {@value #CALM} м/с формулы шлейфа не держат — берётся он (как у следа).
+ * Below wind {@value #CALM} m/s, plume formulas fail: use that value (as for trails).
  */
 public final class FirePlume {
-    /** Тепловыделение одного блока огня, Вт (⚠ оценка). */
+    /** Heat release per fire block, W (est.). */
     public static final double BLOCK_WATTS = 175e3;
-    /** Доля тепла, что уходит конвекцией. */
+    /** Heat fraction carried by convection. */
     public static final double CONVECTIVE = 0.7;
-    /** Сажи на джоуль тепла: 0,015 кг/кг / 12,4 МДж/кг. */
+    /** Soot per joule of heat: 0.015 kg/kg / 12.4 MJ/kg. */
     public static final double SOOT_PER_JOULE = 0.015 / 12.4e6;
-    /** Пламя — чёрное тело с σT⁴ = 75 кВт/м² (поток излучения, нагрев газа над очагом), K. */
+    /** Flame is black body with σT⁴ = 75 kW/m² (radiative flux, gas heating above source), K. */
     public static final double FLAME_K = Math.pow(75e3 / 5.670374e-8, 0.25);
     /**
-     * Светящаяся часть пламени углеводородов: 140 кВт/м² (Mudan, Croce, SFPE Handbook, «Fire hazard calculations for large
-     * open hydrocarbon fires»: E = 140·e^(−0,12D) + 20·(1 − e^(−0,12D)) кВт/м²; 20 — дым поверх пламени, в среднем
-     * {@link #FLAME_K} он и даёт) — σT⁴ при ~1250 K, K.
+     * Luminous hydrocarbon flame: 140 kW/m² (Mudan, Croce, SFPE Handbook, "Fire hazard calculations for large open
+     * hydrocarbon fires": E = 140·e^(−0.12D) + 20·(1 − e^(−0.12D)) kW/m²; 20 is smoke over flame, producing average
+     * {@link #FLAME_K}), σT⁴ at ~1250 K, K.
      */
     public static final double LUMINOUS_K = Math.pow(140e3 / 5.670374e-8, 0.25);
     /**
-     * Пульсации температуры в светящемся пламени, K (⚠ по памяти: в пламени лужи JP-8 — 200–300 K, Gritzo и др., 1998).
-     * В видимом яркость растёт с T круто (по Вину ∝ e^(−c₂/λT)), и средняя яркость пламени — яркость его горячих мест.
+     * Luminous flame temperature fluctuations, K (est.) (from memory: JP-8 pool flame 200–300 K, Gritzo et al., 1998).
+     * Visible brightness rises steeply with T (Wien ∝ e^(−c₂/λT)), so mean flame brightness is that of its hot regions.
      */
     public static final double FLUCTUATION_K = 200;
     /**
-     * Свет пламени в видимом (r, g, b линейные, яркость Y; белая стена в полдень — 1, как {@code BlackBody.light}): среднее
-     * чёрного тела по пульсациям {@link #FLUCTUATION_K} вокруг {@link #LUMINOUS_K} — как у чёрного тела ~1450 K, ~0,1 белой
-     * стены (~3·10³ кд/м²; ⚠ оценка: у свечи ~10⁴). По одному {@link #FLAME_K} пламя днём выходило чёрным (3·10⁻⁴ стены),
-     * а ночью в 300 м — тёмно-красной точкой.
+     * Visible flame light (linear r, g, b, luminance Y; noon white wall 1, as {@code BlackBody.light}): black-body mean
+     * over {@link #FLUCTUATION_K} fluctuations about {@link #LUMINOUS_K}, like black body ~1450 K, ~0.1 white wall
+     * (~3·10³ cd/m²; (est.) candle ~10⁴). Using only {@link #FLAME_K} made daytime flame black (3·10⁻⁴ wall),
+     * and at night 300 m away a dark red point.
      */
     private static final double[] FLAME_LIGHT = visibleFlame();
-    /** Яркость видимого пламени (белая стена в полдень — 1) и его цвет (sRGB, наибольший канал — 255). */
+    /** Visible flame luminance (noon white wall 1) and colour (sRGB, largest channel 255). */
     public static final double FLAME_LUMINANCE = FLAME_LIGHT[3];
     public static final int FLAME_COLOR = pack(FLAME_LIGHT);
 
-    /** Свет видимого пламени ({@link #FLAME_LIGHT}) в out: r, g, b, Y. */
+    /** Visible flame light ({@link #FLAME_LIGHT}) into out: r, g, b, Y. */
     public static void flameLight(double[] out) {
         System.arraycopy(FLAME_LIGHT, 0, out, 0, 4);
     }
@@ -78,28 +78,27 @@ public final class FirePlume {
         for (int i = 0; i < 3; i++) out = out << 8 | (int) Math.round(255 * ua.zentix.incoming.client.fx.plume.FlameModel.srgb(rgb[i] / max));
         return out;
     }
-    /** Слабее этого ветра формулы шлейфа не держат, м/с. */
+    /** Minimum wind for plume formulas, m/s. */
     public static final double CALM = 1;
-    /** Порог видимости толщи. */
+    /** Optical depth visibility threshold. */
     static final double SEEN = CloudModel.SEEN;
 
-    /** Тепло, Вт; поток плавучести, м⁴/с³; ветер, м/с; класс устойчивости; N², 1/с²; полуразмер очага, м; сажи на Дж. */
+    /** Heat W; buoyancy flux m⁴/s³; wind m/s; stability class; N² 1/s²; source half-size m; soot per J. */
     public final double watts, flux, wind, stability, s, size, sootPerJoule;
-    /** Конечный подъём, м, и путь по ветру до него, м. */
+    /** Final rise, m, and wind path to it, m. */
     public final double finalRise, finalX;
 
     /**
-     * Шлейф над очагом из blocks блоков огня в ветре wind (м/с на высоте очага), классе устойчивости stability (0 — A … 5 —
-     * F).
+     * Plume above blocks fire blocks in wind wind (m/s at source height), stability class stability (0 A … 5 F).
      */
     public FirePlume(double blocks, double wind, double stability) {
-        // площадь очага ~ блоков м²: радиус √(N/π)
+        // Source area ~ blocks m²: radius √(N/π).
         this(blocks * BLOCK_WATTS, Math.sqrt(blocks / Math.PI), SOOT_PER_JOULE, wind, stability);
     }
 
     /**
-     * Шлейф над очагом радиуса radius (м) с тепловыделением watts (Вт), сажи на джоуль sootPerJoule (выход сажи топлива на
-     * его теплоту сгорания) — лужа топлива в воронке ({@code CloudModel#poolWatts}).
+     * Plume above source of radius radius (m), heat release watts (W), soot per joule sootPerJoule (fuel soot yield
+     * divided by heat of combustion): crater fuel pool ({@code CloudModel#poolWatts}).
      */
     public FirePlume(double watts, double radius, double sootPerJoule, double wind, double stability) {
         this.watts = watts;
@@ -109,13 +108,13 @@ public final class FirePlume {
         this.stability = stability;
         double n = Stability.brunt(stability);
         s = n * n;
-        // σ очага — половина радиуса
+        // Source σ is half its radius.
         size = 0.5 * radius;
         finalRise = finalRise(flux, this.wind, stability, s);
         finalX = Math.pow(finalRise * this.wind / (1.6 * Math.cbrt(flux)), 1.5);
     }
 
-    /** Конечный подъём Бриггса, м. */
+    /** Briggs final rise, m. */
     static double finalRise(double f, double u, double stability, double s) {
         double neutral = f < 55 ? 21.425 * Math.pow(f, 0.75) / u : 38.71 * Math.pow(f, 0.6) / u;
         double stable = Math.min(2.6 * Math.cbrt(f / (u * s)), 5.0 * Math.pow(f, 0.25) * Math.pow(s, -0.375));
@@ -123,41 +122,41 @@ public final class FirePlume {
         return neutral + (stable - neutral) * k;
     }
 
-    /** Подъём оси на пути x по ветру, м. */
+    /** Axis rise at wind path x, m. */
     public double rise(double x) {
         if (x >= finalX) return finalRise;
         return 1.6 * Math.cbrt(flux) * Math.pow(Math.max(0, x), 2.0 / 3) / wind;
     }
 
-    /** Скорость подъёма оси на пути x, м/с (u·dΔh/dx). */
+    /** Axis rise speed at path x, m/s (u·dΔh/dx). */
     public double riseSpeed(double x) {
         if (x >= finalX || x <= 0) return 0;
         return (2.0 / 3) * 1.6 * Math.cbrt(flux) * Math.pow(x, -1.0 / 3);
     }
 
-    /** σ поперёк ветра по горизонтали на пути x, м. */
+    /** Horizontal crosswind σ at path x, m. */
     public double sigmaY(double x) {
         double b = rise(x) / 3.5, p = Stability.sigmaY(stability, x);
         return Math.sqrt(p * p + b * b + size * size);
     }
 
-    /** σ по вертикали на пути x, м. */
+    /** Vertical σ at path x, m. */
     public double sigmaZ(double x) {
         double b = rise(x) / 3.5, p = Stability.sigmaZ(stability, x);
         return Math.sqrt(p * p + b * b + size * size);
     }
 
-    /** Сажи на метр пути по ветру, кг/м. */
+    /** Soot per metre of wind path, kg/m. */
     public double sootPerMetre() {
         return watts * sootPerJoule / wind;
     }
 
-    /** Толща через середину шлейфа на пути x: σ_m·λ/(√(2π)·√(σ_y·σ_z)). */
+    /** Optical depth across plume centre at path x: σ_m·λ/(√(2π)·√(σ_y·σ_z)). */
     public double tau(double x) {
         return CloudModel.SOOT_K * sootPerMetre() / (Math.sqrt(2 * Math.PI) * Math.sqrt(sigmaY(x) * sigmaZ(x)));
     }
 
-    /** Докуда по ветру шлейф виден, м (не дальше limit). */
+    /** Visible downwind plume reach, m (at most limit). */
     public double visible(double limit) {
         if (tau(limit) >= SEEN) return limit;
         double lo = 0, hi = limit;
@@ -169,7 +168,7 @@ public final class FirePlume {
         return lo;
     }
 
-    /** Избыток температуры на оси на высоте z над очагом по Хескестаду, K (не выше пламени). */
+    /** Heskestad axis temperature excess at height z above source, K (capped at flame). */
     public double excess(double z) {
         double c = 9.1 * Math.cbrt(CloudModel.T_AIR / (CloudModel.G * CloudModel.CP * CloudModel.CP * CloudModel.RHO * CloudModel.RHO));
         double dt = c * Math.pow(CONVECTIVE * watts, 2.0 / 3) * Math.pow(Math.max(z, 0.1), -5.0 / 3);
@@ -177,15 +176,15 @@ public final class FirePlume {
     }
 
     /**
-     * Скорость газа на оси на высоте z над очагом по Хескестаду, м/с: u = 3,4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓) (SFPE Handbook,
-     * гл. 13; ⚠ по памяти, как {@link #excess}).
+     * Heskestad axis gas speed at height z above source, m/s: u = 3.4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓) (SFPE Handbook,
+     * ch. 13; (est.) from memory, as {@link #excess}).
      */
     public double axisSpeed(double z) {
         double c = 3.4 * Math.cbrt(CloudModel.G / (CloudModel.CP * CloudModel.RHO * CloudModel.T_AIR));
         return c * Math.cbrt(CONVECTIVE * watts) * Math.pow(Math.max(z, 0.1), -1.0 / 3);
     }
 
-    /** Высота пламени по Хескестаду, м: L = 0,235·Q^⅖ − 1,02·D (Q — кВт, D — диаметр очага); не меньше полуметра. */
+    /** Heskestad flame height, m: L = 0.235·Q^⅖ − 1.02·D (Q kW, D source diameter); at least half a metre. */
     public double flameHeight() {
         return Math.max(0.5, 0.235 * Math.pow(watts / 1e3, 0.4) - 1.02 * 4 * size);
     }

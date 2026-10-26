@@ -7,40 +7,42 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Гул взрывов без голоса движка (без Minecraft, проверяется юнит-тестом): что уступило место ({@link BlastVoices}) или не
- * получило его, звучит не своим разовым звуком, а суммой в {@link #QUADRANTS} петлях вокруг уха — как гул пожаров
- * ({@link FireRoar}) и разрушения ядерки ({@link Clatter}). Взрывы разных мест некогерентны, поэтому мощности
- * складываются; петля — шум со спектром хвостов дальнего ракурса ({@code blast.rumble}, {@code build_sounds.py rumble}),
- * громкость — корень суммы членов в каждом тике звукового движка:
+ * Rumble of blasts without engine voices (without Minecraft, covered by a unit test): those yielding slots
+ * ({@link BlastVoices}) or never admitted play as a sum in {@link #QUADRANTS} loops around the ear, rather than
+ * their own one-shots — like fire roar ({@link FireRoar}) and nuclear destruction ({@link Clatter}). Blasts at
+ * different sites are incoherent, so powers add; loop is noise with far-perspective tail spectrum
+ * ({@code blast.rumble}, {@code build_sounds.py rumble}), gain is square root of summed members each engine tick:
  * <ul>
- * <li>член — взрыв в смеси ({@link Mix}): его доля в слышимом k_b² × энергия его голосов по профилю звучащих записей
- * ({@link Mix.Blast#voiced}, {@link Envelope#energy}: мгновенная громкость той записи, что выбрало зерно, с её настоящим
- * сроком, без заглядывания вперёд и без максимума по вариантам — огибающая потолка подняла бы гул до удара члена и дала
- * бы ему хвост самого долгого варианта); в смесь гул не идёт снова — мощность взрыва там уже есть;</li>
- * <li>голоса, что ещё звучат и стихают, свою долю несут сами: член — всё, что взрыв дал бы голосами, минус f² × то, что
- * играют они (f — их громкость, {@link #voice}); слой, которого движок не взял, — в гуле сразу и весь;</li>
- * <li>направление — cos²/sin² между двумя соседними петлями (сумма весов 1), петли — на востоке, юге, западе и севере;</li>
- * <li>тон петли — средний по мощности в ней тон её членов (Сакс: у «Града» запись быстрее, у ракеты медленнее), верха —
- * средние так же верха их пути: голос, который ещё звучит, тембр гула не трогает; гула ещё нет (петля встаёт заранее) —
- * тембр тех, кто в него придёт.</li>
+ * <li>member is a blast in the mix ({@link Mix}): its audible share k_b² × its voices' energy from playing
+ * recordings' profiles ({@link Mix.Blast#voiced}, {@link Envelope#energy}: momentary loudness of the seed-selected
+ * recording over its actual duration, without lookahead or variant maximum — ceiling envelope would raise
+ * rumble before member impact and give it the longest variant's tail); rumble is not mixed again — blast
+ * power is already there;</li>
+ * <li>voices still playing and fading carry their share themselves: member is all the blast would play with
+ * voices, minus f² × what they play (f is their gain, {@link #voice}); engine-refused layers join rumble
+ * immediately and entirely;</li>
+ * <li>direction is cos²/sin² between two neighbouring loops (weights sum to 1); loops are east, south, west, north;</li>
+ * <li>loop pitch is power-weighted member pitch (Sachs: Grad recording faster, missile slower), highs likewise
+ * power-weighted path highs: a still-playing voice does not affect rumble timbre; no rumble yet (loop starts
+ * early) — timbre from those that will enter it.</li>
  * </ul>
- * Часы стихания — тики звукового движка: в них же движок берёт громкость голоса ({@code SoundEngine.tickNonPaused}), и
- * петля считает свою громкость в своём тике, а не в тике клиента после него (тогда гул отставал бы от голоса на тик и
- * переход терял бы до 3,5 дБ).
+ * Fade clock is sound-engine ticks: engine reads voice gain there ({@code SoundEngine.tickNonPaused}), and loop
+ * computes its gain in its own tick, not the client tick afterward (rumble would lag voice by a tick, losing
+ * up to 3.5 dB in transition).
  * <p>
- * Приближение: тембр всех членов — один спектр хвостов раската; атаки в гуле не слышны (огибающая — окна 400 мс), редкие
- * члены гул оставляют неровным — ровна только петля.
+ * Approximation: all members share one rumble-tail spectrum; attacks are inaudible in rumble (envelope uses
+ * 400 ms windows), sparse members leave rumble uneven — only the loop is steady.
  */
 final class Rumble {
-    /** Четвертей вокруг уха (бюджет, как у {@link Quarters#N}). */
+    /** Quarters around ear (budget, like {@link Quarters#N}). */
     static final int QUADRANTS = 4;
-    /** Петля без членов столько тиков — отпустить канал (бюджет). */
+    /** Loop without members for this many ticks releases its channel (budget). */
     static final int HOLD = 20;
 
     /**
-     * Взрыв в гуле: откуда, тон, доля мощности за преградой у уха и верха его голосов; {@code voiced} — какие из его
-     * голосов движка (по порядку слоёв, {@link Mix.Blast#voiced}) ещё звучат и стихают с тика {@code from} за
-     * {@code fade} тиков (null — голосов нет: весь взрыв в гуле).
+     * Blast in rumble: direction, pitch, power fraction behind ear barrier and its voices' highs; {@code voiced}
+     * says which engine voices (layer order, {@link Mix.Blast#voiced}) still play and fade from {@code from} over
+     * {@code fade} ticks (null — no voices: whole blast in rumble).
      */
     static final class Member {
         final Mix.Blast blast;
@@ -62,8 +64,8 @@ final class Rumble {
         }
 
         /**
-         * Мощность члена в гуле в тик движка {@code sound} при смеси на её тике, против потолка: всё, что взрыв дал бы
-         * голосами, минус f² × что ещё играют его стихающие голоса.
+         * Member power in rumble at engine tick {@code sound}, mix at its own tick, relative to ceiling: everything
+         * blast would play through voices, minus f² × what its fading voices still play.
          */
         double power(double sound) {
             double k = blast.factor(), all = blast.voiced(blast.now(), null);
@@ -74,7 +76,7 @@ final class Rumble {
             return gain * k * k * Math.max(0, all);
         }
 
-        /** Мощность, когда голоса стихнут совсем: по ней петля встаёт заранее и уходит. */
+        /** Power after voices fully fade: loop uses it to start early and leave. */
         double potential() {
             double k = blast.factor();
             return gain * k * k * blast.voiced(blast.now(), null);
@@ -82,8 +84,8 @@ final class Rumble {
     }
 
     /**
-     * Громкость (амплитуда) голоса, уступившего в тик движка {@code from}, в тик {@code now}: первый тик после уступки — ещё
-     * полная (петля, которой ещё нет, встаёт в следующем тике клиента), потом к нулю за {@code fade} тиков.
+     * Gain (amplitude) at {@code now} of a voice yielded at engine tick {@code from}: first tick after yielding
+     * stays full (loop not yet present starts next client tick), then fades to zero over {@code fade} ticks.
      */
     static double voice(double now, double from, int fade) {
         if (fade <= 0) return 0;
@@ -95,12 +97,12 @@ final class Rumble {
             highs = new double[QUADRANTS], soonPitch = new double[QUADRANTS], soonHighs = new double[QUADRANTS];
     private final int[] quiet = new int[QUADRANTS];
 
-    /** Взрыв {@code blast} (в смеси) — в гул целиком: с азимута {@code azimuth} от уха (atan2(dz, dx)). */
+    /** Entire {@code blast} (in mix) enters rumble, from {@code azimuth} relative to ear (atan2(dz, dx)). */
     Member add(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, double now, int fade) {
         return add(blast, azimuth, pitch, gain, highs, null, now, fade);
     }
 
-    /** Взрыв — в гул, его голоса {@code voiced} стихают с тика движка {@code now} за {@code fade} тиков. */
+    /** Blast enters rumble, its {@code voiced} voices fading from engine tick {@code now} over {@code fade} ticks. */
     Member add(Mix.Blast blast, double azimuth, float pitch, float gain, float highs, boolean @Nullable [] voiced, double now, int fade) {
         Member m = new Member(blast, azimuth, pitch, gain, highs, voiced, now, fade);
         members.add(m);
@@ -108,7 +110,7 @@ final class Rumble {
     }
 
     /**
-     * Тик движка {@code sound} (смесь — на своём тике, {@link Mix#at}): кончившиеся — прочь, мощность, тон и верха петель.
+     * Engine tick {@code sound} (mix at its own tick, {@link Mix#at}): remove finished members, loop powers, pitches and highs.
      */
     void tick(double sound) {
         members.removeIf(m -> m.blast.ended(m.blast.now()));
@@ -128,8 +130,8 @@ final class Rumble {
             put(q0, e * c * c, full * c * c, m);
             put(q1, e * s * s, full * s * s, m);
         }
-        // тембр звучащего гула — по тому, что в нём звучит; голос, который только уступил и ещё полный, его не трогает.
-        // Гула ещё нет, а члены есть (петля встаёт заранее) — тембр тех, кто в него придёт
+        // playing rumble timbre follows what plays in it; a just-yielded, still-full voice does not affect it.
+        // No rumble yet but members exist (loop starts early) — timbre from those that will enter it
         for (int q = 0; q < QUADRANTS; q++) {
             if (power[q] > 0) {
                 pitch[q] /= power[q];
@@ -153,36 +155,37 @@ final class Rumble {
         soonHighs[q] += full * m.highs;
     }
 
-    /** Мощность петли {@code q} в игре после {@link #tick}, против потолка (как {@link Mix.Blast#heard}). */
+    /** Game power of loop {@code q} after {@link #tick}, relative to ceiling (like {@link Mix.Blast#heard}). */
     double power(int q) {
         return power[q];
     }
 
-    /** Мощность петли {@code q}, когда стихнут голоса её членов. */
+    /** Loop {@code q} power when its members' voices fade. */
     double potential(int q) {
         return potential[q];
     }
 
     /**
-     * Играть ли петлю {@code q}: в гуле есть что играть — громкость всей суммы {@code total} (по {@link #potential} всех
-     * четвертей, {@link #potentialTotal}) больше нуля — и в четверти есть его доля. Члены гула — взрывы, слышные у уха
-     * (это решает их звук, {@link BlastSounds}); порога в громкости файла петли здесь нет: она меняется с пересведением
-     * файла (ревью R11). Порог у каждой петли отдельно убрал бы член между двумя петлями — смотря по азимуту (ревью R9).
+     * Play loop {@code q}: rumble has something to play — whole sum {@code total} gain (from all quarters'
+     * {@link #potential}, {@link #potentialTotal}) is positive — and quarter has a share. Rumble members are blasts
+     * audible at ear (decided by their sound, {@link BlastSounds}); no loop file-volume threshold here: remixing
+     * changes it (review R11). Per-loop thresholds would remove a member between two loops depending on azimuth
+     * (review R9).
      */
     boolean plays(int q, float total) {
         return potential[q] > 0 && total > 0;
     }
 
     /**
-     * Держать ли петлю {@code q} (раз в тик клиента): она играет ({@link #plays}: гул слышен целиком, когда стихнут голоса,
-     * и в четверти есть его доля) — или тишина ещё не дольше {@link #HOLD} тиков.
+     * Hold loop {@code q} (once per client tick): playing ({@link #plays}: entire rumble audible once voices fade,
+     * quarter has a share), or silent for no more than {@link #HOLD} ticks.
      */
     boolean keep(int q, float total) {
         quiet[q] = plays(q, total) ? 0 : quiet[q] + 1;
         return quiet[q] <= HOLD;
     }
 
-    /** Направление петли {@code q} от уха: азимут atan2(dz, dx). */
+    /** Loop {@code q} direction from ear: azimuth atan2(dz, dx). */
     static double azimuth(int q) {
         return 2 * Math.PI * q / QUADRANTS;
     }
@@ -195,19 +198,19 @@ final class Rumble {
         return (float) highs[q];
     }
 
-    /** Громкость петли (0..1) у файла громкостью {@code fileLufs}, чтобы она звучала мощностью {@code power} против потолка. */
+    /** Loop gain (0..1) for a {@code fileLufs} file to play at {@code power} relative to ceiling. */
     static float volume(double power, double fileLufs) {
         return (float) Math.min(1, Math.sqrt(Math.max(0, power) * Mix.CEILING / Envelope.meanSquare(fileLufs)));
     }
 
-    /** Мощность всего гула, когда стихнут голоса его членов. */
+    /** All-rumble power once its members' voices fade. */
     double potentialTotal() {
         double s = 0;
         for (double p : potential) s += p;
         return s;
     }
 
-    /** Мощность всего гула, против потолка. */
+    /** All-rumble power relative to ceiling. */
     double total() {
         double s = 0;
         for (double p : power) s += p;

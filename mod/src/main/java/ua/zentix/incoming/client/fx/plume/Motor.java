@@ -3,98 +3,98 @@ package ua.zentix.incoming.client.fx.plume;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Двигатель как источник огня и дыма — данные паспорта ({@code ClientWeaponSpec}), из которых {@link FlameModel}
- * выводит факел, а {@link TrailModel} — след. Скорость полёта здесь не хранится: её дают сущность или путь снаряда.
- * Единицы СИ. Сопла одинаковые, у многосопловой ступени струи сливаются в одну (их рисуют одной струёй той же площади).
+ * Engine as a fire/smoke source — spec data ({@code ClientWeaponSpec}) used by {@link FlameModel} for the
+ * plume and {@link TrailModel} for the trail. Flight speed is not stored here: supplied by entity or projectile track.
+ * SI units. Identical nozzles; multi-nozzle stage jets merge into one (drawn as one jet with the same area).
  *
- * @param name        имя для строк сценария и тестов
- * @param nozzles     сопел
- * @param exhaust     расход через все сопла, кг/с (у ракеты — топливо, у воздушно-реактивного и поршня — воздух с топливом)
- * @param fuel        сжигаемое топливо, кг/с: из него дым, вода и тепло
- * @param velocity    скорость истечения на срезе, м/с (у ракеты — эффективная: удельный импульс × g₀)
- * @param temperature полная температура газа (у ракеты — в камере), K
- * @param gamma       показатель адиабаты продуктов (у РДТТ с алюминием — эффективный двухфазный)
- * @param molarMass   молярная масса газа, кг/моль
- * @param exitRadius  радиус среза одного сопла, м
- * @param smoke       конденсированные продукты; null — их нет
- * @param smokeIndex  их масса на килограмм топлива
- * @param monoxide    доля CO в продуктах на срезе (догорает в воздухе)
- * @param hydrogen    доля H₂ в продуктах на срезе (догорает в воздухе)
- * @param water       водяной пар на килограмм топлива (для инверсионного следа)
- * @param heat        тепло сгорания килограмма топлива, Дж
- * @param efficiency  доля тепла, что уходит в работу тяги, а не в след (полный КПД η у Шмидта–Эпплмана)
+ * @param name        name for scenario lines and tests
+ * @param nozzles     nozzle count
+ * @param exhaust     flow through all nozzles, kg/s (rocket — propellant, air-breathing/piston — air and fuel)
+ * @param fuel        fuel burn rate, kg/s: source of smoke, water and heat
+ * @param velocity    exit exhaust velocity, m/s (rocket — effective: specific impulse × g₀)
+ * @param temperature gas stagnation temperature (rocket — chamber), K
+ * @param gamma       product heat-capacity ratio (aluminized solid rocket — effective two-phase)
+ * @param molarMass   gas molar mass, kg/mol
+ * @param exitRadius  exit radius of one nozzle, m
+ * @param smoke       condensed products; null — none
+ * @param smokeIndex  their mass per kilogram of fuel
+ * @param monoxide    CO fraction in exit products (afterburns in air)
+ * @param hydrogen    H₂ fraction in exit products (afterburns in air)
+ * @param water       water vapour per kilogram of fuel (for contrails)
+ * @param heat        heat of combustion per kilogram of fuel, J
+ * @param efficiency  heat fraction converted to thrust work rather than the trail (overall η in Schmidt–Appleman)
  */
 public record Motor(String name, int nozzles, double exhaust, double fuel, double velocity, double temperature, double gamma, double molarMass,
                     double exitRadius, @Nullable Smoke smoke, double smokeIndex, double monoxide, double hydrogen, double water, double heat,
                     double efficiency) {
-    /** Универсальная газовая постоянная, Дж/(моль·K). */
+    /** Universal gas constant, J/(mol·K). */
     public static final double R = 8.31446;
-    /** g₀, м/с². */
+    /** g₀, m/s². */
     public static final double G0 = 9.80665;
 
-    /** Удельная теплоёмкость газа при постоянном давлении, Дж/(кг·K). */
+    /** Gas specific heat at constant pressure, J/(kg·K). */
     public double cp() {
         return gamma * R / ((gamma - 1) * molarMass);
     }
 
-    /** Температура на срезе: полная минус кинетическая, K. */
+    /** Exit temperature: stagnation minus kinetic, K. */
     public double exitTemperature() {
         return Math.max(1, temperature - velocity * velocity / (2 * cp()));
     }
 
-    /** Площадь среза всех сопел, м². */
+    /** Total nozzle exit area, m². */
     public double exitArea() {
         return nozzles * Math.PI * exitRadius * exitRadius;
     }
 
-    /** Плотность газа на срезе, кг/м³. */
+    /** Exit gas density, kg/m³. */
     public double exitDensity() {
         return exhaust / (velocity * exitArea());
     }
 
-    /** Давление на срезе, Па. */
+    /** Exit pressure, Pa. */
     public double exitPressure() {
         return exitDensity() * R / molarMass * exitTemperature();
     }
 
-    /** Давление в камере (изоэнтропа от среза к полной температуре), Па: проверка данных на правдоподобие. */
+    /** Chamber pressure (isentropic from exit to stagnation temperature), Pa: data plausibility check. */
     public double chamberPressure() {
         return exitPressure() * Math.pow(temperature / exitTemperature(), gamma / (gamma - 1));
     }
 
-    /** Тяга при расчётном давлении на срезе, Н. */
+    /** Thrust at design exit pressure, N. */
     public double thrust() {
         return exhaust * velocity;
     }
 
-    /** Масса конденсированных продуктов в секунду, кг/с. */
+    /** Condensed product mass rate, kg/s. */
     public double smokeFlow() {
         return smoke == null ? 0 : fuel * smokeIndex;
     }
 
-    /** Водяной пар в секунду, кг/с. */
+    /** Water vapour mass rate, kg/s. */
     public double waterFlow() {
         return fuel * water;
     }
 
     /**
-     * Тот же двигатель на доле share расхода полки — РДТТ на спаде тяги ({@code strike.ThrustCurve}): сопло в критике,
-     * расход ∝ давлению в камере; температура в камере и скорость истечения те же (⚠ при падении давления сопло
-     * перерасширено, и истечение немного падает), срез тот же — давление на нём и в камере падает с расходом.
+     * Same motor at fraction share of plateau flow — solid rocket thrust decay ({@code strike.ThrustCurve}): nozzle choked,
+     * flow ∝ chamber pressure; chamber temperature and exhaust velocity unchanged (⚠ falling pressure overexpands the nozzle,
+     * reducing exhaust velocity slightly); same exit — exit and chamber pressures fall with flow.
      */
     public Motor throttled(double share) {
         return new Motor(name, nozzles, exhaust * share, fuel * share, velocity, temperature, gamma, molarMass, exitRadius, smoke, smokeIndex,
                 monoxide, hydrogen, water, heat, efficiency);
     }
 
-    /** Тепло, которое двигатель оставляет в воздухе за секунду, Вт. */
+    /** Heat the engine leaves in the air per second, W. */
     public double heatFlow() {
         return fuel * heat * (1 - efficiency);
     }
 
     /**
-     * Радиус среза сопла, на котором струя при этих расходе, скорости и температурах выходит с давлением p
-     * (расчётный режим — сопло рассчитано на высоту с этим давлением).
+     * Nozzle exit radius yielding pressure p at these flow, velocity and temperatures
+     * (design condition — nozzle designed for altitude at this pressure).
      */
     public static double matchedRadius(int nozzles, double exhaust, double velocity, double temperature, double gamma, double molarMass, double p) {
         double cp = gamma * R / ((gamma - 1) * molarMass), te = temperature - velocity * velocity / (2 * cp);

@@ -15,26 +15,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Метки карты наведения: свои игроки и замеченное своей стороной (чужие игроки, аппараты, снаряды). Что заметили,
- * знает только сервер, поэтому карта и список игроков пульта, пока открыты, спрашивают его раз в полсекунды
- * ({@link C2S.MapPlayers}). Своего и чужого, которого видят сейчас, карта ведёт по его сущности, если клиент её
- * знает, — плавно между ответами; давно не виденного — там, где его видели.
+ * Targeting map markers: friendly players and friendly sightings (hostile players, craft, projectiles). Only the
+ * server knows sightings, so the map and remote player list request them every half second while open
+ * ({@link C2S.MapPlayers}). For friendly and currently seen hostile entities known to the client, map follows the
+ * entity smoothly between replies; older sightings stay at their last seen position.
  */
 public final class MapPlayers {
     /**
-     * Метка: имя (у игрока — ник, им пульт и целится), где он, что это, свой ли и сколько секунд назад видели (0 — сейчас).
+     * Marker: name (player username, also the remote target), position, type, friendly flag and seconds since seen (0 now).
      */
     public record Mark(String name, double x, double z, Sightings.Kind kind, boolean friendly, int age) {
-        /** По метке можно ударить: чужой игрок (по нику). */
+        /** Marker is a valid strike target: hostile player (by username). */
         public boolean target() {
             return kind == Sightings.Kind.PLAYER && !friendly;
         }
     }
 
     private static List<S2C.MapPlayer> players = List.of();
-    /** Карта рисует метки ({@code map_players}); иначе они только цели пульта. */
+    /** Map draws markers ({@code map_players}); otherwise they are only remote targets. */
     private static boolean shown;
-    /** Измерение, в котором пришёл список: после смены измерения старый список — чужие координаты. */
+    /** Dimension where the list arrived: after dimension change the old list's coordinates belong elsewhere. */
     @Nullable
     private static ResourceKey<Level> dimension;
 
@@ -52,7 +52,7 @@ public final class MapPlayers {
         dimension = level.dimension();
     }
 
-    /** Метки карты в измерении {@code level} на момент кадра {@code partialTick} (выключены в настройках мира — пусто). */
+    /** Map markers in dimension {@code level} at frame time {@code partialTick} (empty if world settings disable them). */
     public static List<Mark> marks(@Nullable ClientLevel level, float partialTick) {
         if (level == null || !shown || !level.dimension().equals(dimension)) return List.of();
         List<Mark> marks = new ArrayList<>(players.size());
@@ -65,7 +65,7 @@ public final class MapPlayers {
         return marks;
     }
 
-    /** Ники чужих игроков, по которым можно ударить (замечены своей стороной), по алфавиту. */
+    /** Alphabetical usernames of hostile players eligible for a strike (sighted by friendlies). */
     public static List<String> targets(@Nullable ClientLevel level) {
         if (level == null || !level.dimension().equals(dimension)) return List.of();
         List<String> names = new ArrayList<>();

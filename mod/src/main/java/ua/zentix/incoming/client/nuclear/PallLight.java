@@ -1,82 +1,82 @@
 package ua.zentix.incoming.client.nuclear;
 
 /**
- * Свет в пелене (план «ядерка уровня кино», шаг 7): как пыль, мгла и водяная пыль рассеивают солнце, небо, отсвет шара и
- * пожары. Шейдер ({@code fx_pall.glsl}, функции {@code pallDiffuse}, {@code pallK} в {@code pall.glsl}) считает то же,
- * что здесь (PallGlslTest сверяет), — эта копия для тестов и для света кадра ({@link NukePall}).
+ * Light in the pall ("cinema-level nuke" plan, step 7): how dust, haze and mist scatter sunlight, sky light, ball glow and
+ * fire light. The shader ({@code fx_pall.glsl}, functions {@code pallDiffuse}, {@code pallK} in {@code pall.glsl}) computes the same
+ * as this code (checked by PallGlslTest); this copy serves tests and frame light ({@link NukePall}).
  * <p>
- * <b>Вещество.</b> Частица рассеивает долю ω света, что на неё попал (альбедо однократного рассеяния), с фазой
- * Хеньи–Гринстейна с асимметрией g. Острый пик вперёд (пыль g ≈ 0,6, капли ≈ 0,85) по дельта-Эддингтону (Joseph,
- * Wiscombe, Weinman, 1976) — доля f = g² — считается непрорассеянным светом: ослабление σ' = (1 − ωf)σ, альбедо
- * ω' = (1 − f)ω / (1 − ωf), остаток фазы g' = g / (1 + g). Ослабление таблицы пелены ({@link PallField}: по видимости,
- * которую видит глаз) и есть σ': луч зрения и свет к точке идут по одной толще, а рассеяние — с ω' и g' (никакой своей
- * «переносной» толщи у водяной пыли). ω' — из цвета толстого слоя R (цвет стены пыли и брызг, {@link CloudPuffs}, в
- * линейном): отражение полубесконечного слоя в двух потоках R∞ = (1 − u)/(1 + u), u = 2k/(3q), обратно — {@link #albedo}.
- * Пыль цвета стены (0,6, 0,53, 0,45 на экране) выходит с ω' 0,87–0,73 (до дельта-Эддингтона ω ≈ 0,91–0,81 — как у
- * пыли пустынь, в синем темнее), водяная пыль — 0,995–0,997, дым над пожарами — около 0,5: у него k > 1.
+ * <b>Matter.</b> A particle scatters fraction ω of incident light (single-scattering albedo), with a Henyey–Greenstein
+ * phase function of asymmetry g. The sharp forward peak (dust g ≈ 0.6, drops ≈ 0.85) under delta-Eddington (Joseph,
+ * Wiscombe, Weinman, 1976) — fraction f = g² — is treated as unscattered light: extinction σ' = (1 − ωf)σ, albedo
+ * ω' = (1 − f)ω / (1 − ωf), residual phase g' = g / (1 + g). Pall table extinction ({@link PallField}, based on visibility
+ * seen by the eye) is σ': the view ray and light reaching the point use one optical depth, while scattering uses ω' and g' (no separate
+ * "transport" optical depth for mist). ω' comes from thick-layer color R (dust-wall and spray color, {@link CloudPuffs}, in
+ * linear space): two-stream reflectance of a semi-infinite layer R∞ = (1 − u)/(1 + u), u = 2k/(3q); inverse — {@link #albedo}.
+ * Wall-colored dust (0.6, 0.53, 0.45 on screen) yields ω' 0.87–0.73 (before delta-Eddington ω ≈ 0.91–0.81, like
+ * desert dust, darker in blue); mist — 0.995–0.997; smoke above fires — about 0.5, with k > 1.
  * <p>
- * <b>Поле света</b> — два потока Эддингтона в плоском слое (Shettle, Weinman, 1970; Meador, Weaver, 1980): излучение
- * I(τ, μ) = I₀(τ) + μ·I₁(τ) (μ — косинус к вертикали, вверх — плюс), τ — толща от верха вниз, у всего слоя — τc.
- * Источники: два параллельных пучка сверху (солнце и отсвет шара: сила F — что отражает белая стена к
- * пучку, косинус μ к вертикали), рассеянный свет неба сверху и свет пожаров снизу (их излучение вверх), земля с альбедо
- * A под слоем. Решение — в затухающих экспонентах ({@code e^(−kτ)} и {@code e^(−k(τc − τ))}), k² = 3(1 − ω)(1 − ωg):
- * в густой пыли свет гаснет как e^(−kτ), а не e^(−τ) — бурые сумерки, а в непоглощающем тумане — светлая мгла, а не
- * белая стена: тонкий слой светится по толще (рассеивает то, что на него падает), толстый — не ярче своего цвета.
- * Свет, что точка рассеивает к глазу (на единицу ослабления): {@code ω'·(F/4·p(Θ)·e^(−τ/μ) + I₀ + g'·μv·I₁)}, μv —
- * косинус пути к глазу.
+ * <b>Light field</b> — Eddington two-stream approximation in a plane layer (Shettle, Weinman, 1970; Meador, Weaver, 1980): radiance
+ * I(τ, μ) = I₀(τ) + μ·I₁(τ) (μ — cosine to vertical, positive upward), τ — optical depth downward from the top, τc for the whole layer.
+ * Sources: two parallel beams from above (sun and ball glow: strength F is what a white wall facing the beam
+ * reflects, cosine μ to vertical), diffuse sky light from above and fire light from below (upward radiance), ground of albedo
+ * A beneath the layer. Solution uses decaying exponentials ({@code e^(−kτ)} and {@code e^(−k(τc − τ))}), k² = 3(1 − ω)(1 − ωg):
+ * in dense dust light decays as e^(−kτ), not e^(−τ) — brown twilight; nonabsorbing fog gives bright haze, not a
+ * white wall: a thin layer glows according to optical depth (scatters incident light), a thick one is no brighter than its own color.
+ * Light scattered from a point toward the eye (per unit extinction): {@code ω'·(F/4·p(Θ)·e^(−τ/μ) + I₀ + g'·μv·I₁)}, μv is
+ * the cosine of the path to the eye.
  * <p>
- * <b>Свет и экран.</b> Перенос линеен по излучению: всё выше — в линейных долях (белая горизонтальная стена под полуденным
- * солнцем и небом — 1). Кадр Minecraft — значения экрана (текстуры, карта освещения и небо — в sRGB, без перевода):
- * пелена переводит в них свой цвет ({@link #display}, γ = {@value #GAMMA}), а цвета экрана — цвет стены пыли и брызг,
- * небо — в линейные ({@link #linear}). Без этого середина тонов выходила темнее (0,3 линейного на экране — 0,58),
- * тонкий туман — грязно-серым, а сумерки в густой пыли — чернотой без клубов. Чистая степень, а не кусочная кривая sRGB:
- * перевод произведения — произведение переводов, и поток от толстого слоя цвета R в свете L на экране — ровно R·L
- * экрана (к глазу под скользящим углом толстый слой светлее, как настоящее облако).
- * Отсвет пожаров на пыли, заданный на экране поверх света неба ({@link CloudPuffs#glowOnSmoke}), в линейном — разность
- * переводов ({@link #lift}); свет огня — не ярче самого пламени ({@link #flame}). Свет шара — уже линейный: чёрное тело
+ * <b>Light and screen.</b> Radiative transfer is linear in radiance: all the above uses linear fractions (a white horizontal wall under noon
+ * sun and sky = 1). The Minecraft frame uses screen values (textures, lightmap and sky are sRGB, without conversion):
+ * the pall converts its color to these ({@link #display}, γ = {@value #GAMMA}), and converts screen colors — dust-wall and spray color,
+ * sky — to linear ({@link #linear}). Without this, midtones were darker (0.3 linear is 0.58 on screen),
+ * thin fog was dirty gray, and twilight in dense dust was black without billows. Pure power rather than the piecewise sRGB curve:
+ * converting a product equals the product of conversions; on-screen flux from a thick layer of color R in light L is exactly screen R·L
+ * (a thick layer is brighter at a grazing angle to the eye, like a real cloud).
+ * Fire glow on dust specified on screen above sky light ({@link CloudPuffs#glowOnSmoke}) becomes a difference of conversions
+ * in linear space ({@link #lift}); fire light is capped at the flame itself ({@link #flame}). Ball light is already linear: black body
  * ({@link CloudPuffs#ball}).
  * <p>
- * <b>Слой и клубы</b> (только в шейдере). Пол слоя — рельеф под точкой (карта {@link PallGround}): в долине пелена над ней
- * — тоже слой, и пожары с землёй — на дне, а не на уровне земли под эпицентром (там точка в долине всегда была «на дне»,
- * в полном свете пожаров, без перепада по высоте). Тень клубов — отклонение толщи к свету от средней, сумма по масштабам
- * каскада шума: крупных клубов (по плитке) и мелких (по её четверти) — в густой пыли крупные клубы дают перепад в
- * несколько единиц толщи: светлые и тёмные массы, видные в десятках блоков.
+ * <b>Layer and billows</b> (shader only). The layer floor follows terrain below the point ({@link PallGround} map): in a valley the pall above it
+ * is also a layer, with fires and ground at its bottom, rather than at ground-zero elevation (a valley point used to be always "at the bottom",
+ * in full fire light, with no height variation). Billow shadow is the deviation of optical depth toward light from the mean, summed over noise-cascade
+ * scales: large billows (per tile) and small ones (per quarter tile); in dense dust, large billows vary optical depth by
+ * several units: bright and dark masses visible tens of blocks away.
  */
 public final class PallLight {
-    /** Асимметрия рассеяния пыли и мглы (частицы в микроны) и капель водяной пыли (десятки микрон), сажи. */
+    /** Scattering asymmetry of dust and haze (micron-scale particles), mist drops (tens of microns), soot. */
     static final double DUST_G = 0.6, MIST_G = 0.85, SOOT_G = 0.5;
-    /** Альбедо земли под пеленой: суша (трава, камень, крыши) и вода. */
+    /** Ground albedo beneath the pall: land (grass, stone, roofs) and water. */
     static final double LAND = 0.2, SEA = 0.06;
     /**
-     * Свет неба на пелене — такая доля линейного цвета неба, каким его рисует Minecraft: в полдень (небо 0,48, 0,64, 1 на
-     * экране) он около пятой части дневного света, как рассеянный свет ясного неба. Солнце — остальное до белого
-     * ({@code NukePall.light}): синее неба взято из его пучка рассеянием, вместе они — белый дневной свет, которым светятся
-     * блоки (верх белого блока днём — 1).
+     * Sky light on the pall is this fraction of the linear sky color drawn by Minecraft: at noon (sky 0.48, 0.64, 1 on
+     * screen), about a fifth of daylight, like clear-sky diffuse light. Sun supplies the rest up to white
+     * ({@code NukePall.light}): scattering removes sky blue from its beam; together they make white daylight that lights
+     * blocks (top of a white block by day = 1).
      */
     static final double SKY = 0.5;
-    /** Степень экрана: значение экрана v — линейное v^γ ({@link #linear}, {@link #display}). */
+    /** Screen exponent: screen value v is linear v^γ ({@link #linear}, {@link #display}). */
     static final double GAMMA = 2.2;
-    /** Полоса около kμ = 1, где пучок в частном решении сдвинут ({@link #beamMu}). */
+    /** Band around kμ = 1 where the particular-solution beam is shifted ({@link #beamMu}). */
     static final double BEAM_BAND = 0.05;
-    /** Ярче белого — к белому: доля яркости сверх 1, что прибавляется ко всем каналам ({@code CROSS} в {@code fx_pall}). */
+    /** Brighter than white moves toward white: fraction of brightness above 1 added to every channel ({@code CROSS} in {@code fx_pall}). */
     static final double CROSS = 0.15;
 
     private PallLight() {}
 
-    /** Значение экрана → линейное ({@code pow(v, 2.2)}). */
+    /** Screen value → linear ({@code pow(v, 2.2)}). */
     static double linear(double display) {
         return Math.pow(Math.max(display, 0), GAMMA);
     }
 
-    /** Линейное → значение экрана ({@code pallDisplay}). */
+    /** Linear → screen value ({@code pallDisplay}). */
     static double display(double linear) {
         return Math.pow(Math.max(linear, 0), 1 / GAMMA);
     }
 
     /**
-     * Свет непрозрачного вещества {@code linear} (r, g, b) на экране — в {@code into}, как его выводит пелена ({@code fx_pall},
-     * конец {@code main}): ярче белого — к белому ({@link #CROSS}: раскалённое бело-жёлтое, не насыщенно-оранжевое), в
-     * значения экрана ({@link #display}), ярче 0,6 — плечом по самому яркому каналу ({@code shoulder}).
+     * Light of opaque matter {@code linear} (r, g, b) on screen, into {@code into}, as output by the pall ({@code fx_pall},
+     * end of {@code main}): brighter than white moves toward white ({@link #CROSS}: incandescent white-yellow, not saturated orange), then to
+     * screen values ({@link #display}), with a shoulder above 0.6 based on the brightest channel ({@code shoulder}).
      */
     static void screen(double[] linear, float[] into) {
         double lum = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2], white = CROSS * Math.max(lum - 1, 0);
@@ -87,54 +87,54 @@ public final class PallLight {
     }
 
     /**
-     * Свет, что на экране прибавляет к белой стене {@code x} поверх света неба {@code base} (тоже на экране), — в линейном
-     * ({@code pallLift}): (base + x)^γ − base^γ. Так отсвет стены пыли и зарево пожаров, заданные на экране (там они
-     * складываются со светом неба), светят пелену линейным светом, и её толстый слой на экране — того же цвета.
+     * Light that adds {@code x} to a white wall on screen above sky light {@code base} (also on screen), in linear space
+     * ({@code pallLift}): (base + x)^γ − base^γ. Thus wall-dust reflection and fire glow specified on screen (where they add
+     * to sky light) illuminate the pall with linear light, and its thick layer has the same screen color.
      */
     static double lift(double base, double x) {
         return linear(base + x) - linear(base);
     }
 
     /**
-     * Свет огня (пожары, шторм, смерч), что на экране прибавляет к белой стене {@code x} поверх света неба {@code base}, — в
-     * линейном ({@code pallFlame}): {@link #lift}, но не ярче самого пламени, цвет которого на экране {@code flame}
-     * (излучение — {@link #linear}{@code (flame)}). Рассеивающее вещество не ярче своего источника, по каждому каналу:
-     * белая стена, вся в огне, — цвета огня. Отсвет, что на экране уже дошёл до цвета пламени (клубы стены пыли над
-     * пожарами ночью), обращением через цвет пыли давал свет втрое ярче огня, и пыль у земли выходила на экране ярче 1 —
-     * ровной.
+     * Fire light (fires, storm, whirl) that adds {@code x} to a white wall on screen above sky light {@code base}, in
+     * linear space ({@code pallFlame}): {@link #lift}, capped at the flame itself, whose screen color is {@code flame}
+     * (radiance — {@link #linear}{@code (flame)}). Scattering matter is no brighter than its source, per channel:
+     * a white wall completely on fire has the fire color. Glow that already reached the flame color on screen (dust-wall billows above
+     * fires at night), inverted through dust color, yielded light three times brighter than fire, making ground-level dust brighter than 1 on screen —
+     * uniform.
      */
     static double flame(double base, double x, double flame) {
         return Math.min(lift(base, x), linear(flame));
     }
 
-    /** Асимметрия после дельта-Эддингтона: пик вперёд f = g² — в непрорассеянный свет, остаток g' = (g − f)/(1 − f). */
+    /** Asymmetry after delta-Eddington: forward peak f = g² becomes unscattered light, residual g' = (g − f)/(1 − f). */
     static double truncated(double g) {
         return g / (1 + g);
     }
 
-    /** Альбедо однократного рассеяния ω' по линейному цвету толстого слоя R (0..1) при асимметрии g' — обращение R∞ двух потоков. */
+    /** Single-scattering albedo ω' from linear thick-layer color R (0..1) at asymmetry g' — inverse two-stream R∞. */
     static double albedo(double r, double g) {
         double u = (1 - r) / (1 + r), v = 0.75 * u * u;
         return (1 - v) / (1 - g * v);
     }
 
-    /** Затухание рассеянного света с толщей, k² = 3(1 − ω)(1 − ωg) ({@code pallK}); у непоглощающего — не меньше 10⁻³. */
+    /** Diffuse-light decay with optical depth, k² = 3(1 − ω)(1 − ωg) ({@code pallK}); at least 10⁻³ for a nonabsorbing medium. */
     static double k(double w, double g) {
         return Math.sqrt(Math.max(3 * (1 - w) * (1 - w * g), 1e-6));
     }
 
-    /** Отражение полубесконечного слоя в рассеянном свете, R∞ — цвет толстой пелены. */
+    /** Semi-infinite-layer reflectance in diffuse light, R∞ — thick pall color. */
     static double reflectance(double w, double g) {
         double u = 2 * k(w, g) / (3 * (1 - w * g));
         return (1 - u) / (1 + u);
     }
 
     /**
-     * Косинус пучка в частном решении ({@code pallBeamMu}): у пучка, что гаснет так же, как рассеянный свет (kμ = 1),
-     * знаменатель частного решения k²μ² − 1 обнуляется. В полосе |k²μ² − 1| &lt; {@value #BEAM_BAND} пучок сдвинут
-     * к её краю — весь: в частном решении, в своём пропускании и на земле. Решение остаётся решением уравнения, косинус
-     * — в пределах 2,5%; зажатый знаменатель при прежнем μ решением не был: у дыма (k &gt; 1) около полудня свет в слое
-     * выходил в разы не тот.
+     * Beam cosine in the particular solution ({@code pallBeamMu}): for a beam decaying like diffuse light (kμ = 1),
+     * the particular-solution denominator k²μ² − 1 vanishes. Within |k²μ² − 1| &lt; {@value #BEAM_BAND}, the entire beam is shifted
+     * to the band edge: in the particular solution, its own transmittance and at ground. The solution still solves the equation, with cosine
+     * within 2.5%; clamping the denominator with unchanged μ was not a solution: near noon in smoke (k &gt; 1), layer light
+     * was wrong by multiples.
      */
     static double beamMu(double k, double mu) {
         double d = k * k * mu * mu - 1;
@@ -143,16 +143,16 @@ public final class PallLight {
     }
 
     /**
-     * Рассеянный свет в слое ({@code pallDiffuse}): I₀ + c·I₁ на глубине {@code tau} слоя толщи {@code tc}. c = g'·μv —
-     * рассеянное к глазу (без ω'), c = ±2/3 — поток вверх или вниз, делённый на π (на белой стене — её свет).
+     * Diffuse light in the layer ({@code pallDiffuse}): I₀ + c·I₁ at depth {@code tau} of a layer with optical depth {@code tc}. c = g'·μv is
+     * scattering toward the eye (without ω'); c = ±2/3 is upward or downward flux divided by π (on a white wall, its light).
      *
-     * @param w      альбедо ω'
-     * @param g      асимметрия g'
-     * @param ground альбедо земли под слоем
-     * @param mu1    косинус первого пучка к вертикали (сверху), f1 — его сила
-     * @param mu2    второго, f2 — его сила
-     * @param top    свет неба сверху (излучение вниз)
-     * @param bottom свет снизу (излучение вверх от земли, сверх отражённого)
+     * @param w      albedo ω'
+     * @param g      asymmetry g'
+     * @param ground ground albedo beneath the layer
+     * @param mu1    first beam cosine to vertical (from above), f1 is its strength
+     * @param mu2    second beam cosine, f2 is its strength
+     * @param top    sky light from above (downward radiance)
+     * @param bottom light from below (upward radiance from ground, beyond reflection)
      */
     static double diffuse(double w, double g, double tau, double tc, double ground, double mu1, double f1, double mu2, double f2,
                           double top, double bottom, double c) {
@@ -160,7 +160,7 @@ public final class PallLight {
         double k = k(w, g);
         double p = 2.0 / 3 * k / q;
         double e = Math.exp(-k * tc);
-        // пучок, что гаснет как рассеянный свет (kμ = 1), — со сдвинутым косинусом (beamMu)
+        // a beam decaying like diffuse light (kμ = 1) uses a shifted cosine (beamMu)
         double m1 = beamMu(k, mu1), m2 = beamMu(k, mu2);
         double a1 = 0.75 * w * m1 * m1 * f1 * (1 + g * (1 - w)) / (k * k * m1 * m1 - 1);
         double b1 = 0.75 * w * m1 * f1 - 3 * m1 * (1 - w) * a1;
@@ -181,9 +181,9 @@ public final class PallLight {
     }
 
     /**
-     * Свет, что тонкая пелена рассеивает к глазу в среднем по направлениям (на единицу ослабления): пучок солнца — с фазой
-     * в среднем 1 (¼ силы), небо сверху и солнце с небом от земли — по половине. Его берут квадраты слоя эффектов, перед
-     * которыми пелены почти нет ({@code PallAmbient}).
+     * Light scattered toward the eye by thin pall, averaged over directions (per unit extinction): sun beam with mean phase
+     * 1 (¼ strength), sky from above and sun plus sky from the ground at one half each. Used by effects-layer quads with
+     * almost no pall in front of them ({@code PallAmbient}).
      */
     static double thin(double w, double sun, double sky, double mu, double ground) {
         return w * (0.25 * sun + 0.5 * sky + 0.5 * ground * (mu * sun + sky));

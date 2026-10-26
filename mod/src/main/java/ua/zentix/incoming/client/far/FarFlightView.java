@@ -55,131 +55,132 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Шлейфы всех снарядов и снаряды вдали, которых у клиента нет (сущность дальше прорисовки или летит вне мира): путь —
- * по сущности или по пакетам сервера ({@link FlightTracks}), вид — из клиентского паспорта ({@link FarLook}).
+ * Trails of all projectiles and distant projectiles absent on client (entity beyond render distance or flying
+ * outside world): path from entity or server packets ({@link FlightTracks}), look from client spec ({@link FarLook}).
  * <ul>
- * <li>Корпус — настоящая модель ({@link FarModels}: та же, что у сущности вблизи, с теми же анимациями, по позе из пути),
- * пока она на экране длиннее {@link FarModels#MODEL_FROM} пикселей; мельче — круг той же площади, что силуэт, настоящего
- * углового размера, а мельче пятна {@link Sight#MIN_PIXELS} — пятно, бледнее во столько же раз ({@link Sight#body}):
- * закрыто то же небо; между — плавный переход. Свой цвет при свете неба, дымка — в непрозрачности ({@link Sight}).</li>
- * <li>Факел — свет ({@link Sight#light}) позади корпуса: днём — искра, ночью глаз привык к темноте — блик и вуаль на
- * километры. Маршевый турбовентиляторный двигатель ракеты и мотор шахеда ночью не светят — у них факела почти нет.
- * Факел один вблизи и вдали ({@link Flame} из {@link FlameModel}): и у сущности блик и вуаль — здесь, а ядро света с 0,8
- * прорисовки сменяет её струю ({@link #flameCore}): иначе на краю прорисовки, где сущность появляется, факел вдали гас
- * бы целиком, а струя там — в тумане и без блика. Он же светит на дым и ленты вокруг ({@link FxLights}).</li>
- * <li>Шлейф — лента через точки пути от сопел ({@link TrailPoints}), одна вблизи и вдали, от пуска до конца следа (там
- * сходит на нет): ширина, густота, всплытие и срок — по закону следа ({@link TrailModel}) от скорости, с которой снаряд
- * клал точку, и воздуха (ветер мира, устойчивость); сносится ветром мира и висит и после того, как снаряд пролетел или
- * взорвался. Мест частиц она не занимает: залп в сотни ракет не рвёт следы. Свет — карта освещения мира в точке
- * (вне загруженного мира — открытое небо). Объёма у следа нет: клетка сетки дыма (2–32 м) тонкий след не разрешает.
- * Пока струя ускорителя бьёт в землю ({@link LaunchCloud#impinges}), продукты двигателя — облако старта
- * ({@link LaunchCloud}, запечённые клубы слоя): точки ленты тех тиков несут только столб самой струи между соплом и
- * землёй ({@link LaunchCloud#column}), а когда струя землю отпустила, этот столб остаётся следом.</li>
- * <li>За рельефом дальше прорисовки (ближе закрывает глубина) — луч {@link Sightline} раз в {@link #SIGHT_PERIOD}
- * тика: корпус и факел плавно гаснут.</li>
+ * <li>Body is the actual model ({@link FarModels}: same as nearby entity, same animations, pose from path) while
+ * longer than {@link FarModels#MODEL_FROM} pixels onscreen; smaller becomes a circle of silhouette area at real
+ * angular size, below {@link Sight#MIN_PIXELS} spot size a proportionally fainter spot ({@link Sight#body}): same
+ * sky coverage; smooth transition between. Own colour under skylight, haze in opacity ({@link Sight}).</li>
+ * <li>Plume is light ({@link Sight#light}) behind body: daytime spark, nighttime dark-adapted eye glare and veil
+ * over kilometres. Missile cruise turbofan and Shahed engine do not glow at night — almost no plume. One plume
+ * near and far ({@link Flame} from {@link FlameModel}): entity glare and veil are here too, while light core from
+ * 0.8 render distance replaces its jet ({@link #flameCore}); otherwise at render edge where entity appears, far
+ * plume would vanish entirely while jet there is fogged and lacks glare. Also lights surrounding smoke and
+ * ribbons ({@link FxLights}).</li>
+ * <li>Trail is a ribbon through nozzle path points ({@link TrailPoints}), shared near and far from launch to
+ * trail end (tapers there): width, density, buoyancy and lifetime follow trail law ({@link TrailModel}) from
+ * projectile speed when laying the point and air (world wind, stability); drifts with world wind and persists
+ * after projectile passes or explodes. Occupies no particle slots: hundreds of salvo missiles do not tear trails.
+ * Light uses world light map at point (outside loaded world, open sky). No trail volume: smoke grid cell
+ * (2–32 m) cannot resolve a thin trail. While booster jet strikes ground ({@link LaunchCloud#impinges}), engine
+ * products form launch cloud ({@link LaunchCloud}, baked layer billows): those ticks' ribbon points carry only
+ * jet column between nozzle and ground ({@link LaunchCloud#column}); after jet leaves ground, column remains as trail.</li>
+ * <li>Behind terrain beyond render distance (depth handles nearer occlusion), {@link Sightline} ray every
+ * {@link #SIGHT_PERIOD} ticks smoothly fades body and plume.</li>
  * </ul>
- * Кадр — O(снарядов + точек шлейфов), без выделений.
+ * Frame is O(projectiles + trail points), allocation-free.
  */
 public final class FarFlightView {
-    /** Луч по рельефу у каждого снаряда — раз в столько тиков. */
+    /** Terrain ray per projectile every this many ticks. */
     static final int SIGHT_PERIOD = 4;
-    /** Рельеф закрывает источник: видимое с глаза начинается выше него на столько блоков. */
+    /** Terrain occludes source: eye-visible region starts this many blocks above it. */
     static final double HIDDEN = 0.5;
-    /** Видимость за рельефом меняется за тик не больше, чем на столько. */
+    /** Maximum per-tick visibility change behind terrain. */
     private static final float FADE = 0.25f;
     /**
-     * Тон ленты против её цвета: клуб дыма вблизи ({@code fx/particle/smoke_*}) светит в среднем 0,76 своего цвета —
-     * в картинке тень внутри клуба, — а середина ореола ленты — 1. С тем же тоном клубы объёма лежат на ленте как её
-     * неровности, а не тёмными бусинами ({@code FarFlightViewTest}).
+     * Ribbon tone relative to colour: near smoke billow ({@code fx/particle/smoke_*}) averages 0.76 of its colour
+     * due to shading inside its image, while ribbon halo centre is 1. With the same tone, volume billows lie on
+     * ribbon as its irregularities, not dark beads ({@code FarFlightViewTest}).
      */
     static final float TONE = 0.76f;
-    /** Сопел со шлейфом у сущности полёта, не больше (у B-2 — четыре). */
+    /** Maximum trail nozzles per flight entity (B-2 has four). */
     static final int MAX_NOZZLES = 4;
-    /** Места концов лент у сопел в кэше кадра (после мест точек). */
+    /** Nozzle ribbon-end positions in frame cache (after point positions). */
     private static final int HEAD = TrailPoints.CAPACITY;
     /**
-     * Отставание сноса точки от ветра, тиков: продукты выходят из струи без скорости ветра и набирают её за 0,9/(1 − 0,9)
-     * тиков (⚠ оценка: время разгона частиц дыма с сопротивлением 0,9 за тик; лента и её объём идут одинаково).
+     * Point wind-drift lag, ticks: products leave jet without wind velocity and acquire it over 0.9/(1 − 0.9)
+     * ticks (est.) (smoke-particle acceleration time with 0.9 drag per tick; ribbon and its volume move alike).
      */
     static final double LAG = 0.9 / (1 - 0.9);
-    /** Воздух для новых точек и кадра (тик берёт его у {@link ClientAir}; юнит-тесты задают свой). */
+    /** Air for new points and frame (tick takes it from {@link ClientAir}; unit tests supply their own). */
     static Air air = Air.CALM;
-    /** Свет точки вне загруженного мира — открытое небо. */
+    /** Point light outside loaded world is open sky. */
     private static final Light SKY = (x, y, z) -> LightTexture.FULL_SKY;
 
     private static final List<Far> FARS = new ArrayList<>();
     private static final Map<FlightTrack, Far> BY_TRACK = new IdentityHashMap<>();
-    /** Путь по номеру хозяина точек ({@link TrailPoints#owner}). */
+    /** Path by point-owner number ({@link TrailPoints#owner}). */
     private static final Int2ObjectMap<Far> BY_OWNER = new Int2ObjectOpenHashMap<>();
     private static final TrailPoints POINTS = new TrailPoints();
     private static int owners;
-    /** Тик обхода путей (чей путь не встретился — забыт). */
+    /** Path traversal tick (unseen paths are forgotten). */
     private static long pass;
-    /** Снарядов в полёте (вдали — корпус и факел, вблизи у сущности — свет факела). */
+    /** Projectiles in flight (far: body and plume; near entity: plume light). */
     private static int active;
     @Nullable
     private static ClientLevel level;
     @Nullable
     private static Sightline.Heights heights;
 
-    // ---------------------------------------------------------------- кадр: числа живут между кадрами
+    // ---------------------------------------------------------------- frame: numbers persist between frames
     private static final double[] POS = new double[3], NOZZLE = new double[3], BACK = new double[3], NOSE = new double[3], OUT = new double[2], LIGHT = new double[5],
             AIM = new double[3], BIRTH = new double[2], LOOK = new double[TrailModel.LOOK], BEND = new double[3];
-    /** Зерно изгибов следа (с номером хозяина точек — у каждого следа свои). */
+    /** Trail-bend seed (with point-owner number, unique to each trail). */
     private static final long BENDS = 0x3C6EF372FE94F82AL;
     private static final float[] ANGLES = new float[3];
     private static final ProjectilePose POSE = new ProjectilePose();
     private static final BlockPos.MutableBlockPos PROBE = new BlockPos.MutableBlockPos();
     /**
-     * Концы лент в кадре: где (от камеры), полуширина, непрозрачность, цвет, свет мира; поперёк ленты (общий у стыка
-     * отрезков); номера кадра, в котором посчитаны конец и поперечник.
+     * Ribbon ends in frame: position (camera-relative), half-width, opacity, colour, world light; ribbon cross
+     * vector (shared at segment joints); frame numbers in which end and cross vector were computed.
      */
     private static final int ENDS = HEAD + MAX_NOZZLES;
     private static final double[] EX = new double[ENDS], EY = new double[ENDS], EZ = new double[ENDS], EH = new double[ENDS];
     private static final float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
     private static final float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
     private static final int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
-    /** Трубка у конца: ширина на половине непрозрачности середины и σ сечения, м; ослабление на метр, м; альбедо; зерно клубов. */
+    /** Tube at end: width at half centre opacity and cross-section σ, m; extinction per metre, m; albedo; billow seed. */
     private static final double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
     private static final long[] ESEED = new long[ENDS];
-    /** Снаряд точки: трубка его следа (места одной трубки между собой не сливаются, {@code SmokePuffs.Draw#mergeLevel}). */
+    /** Point's projectile: its trail tube (places in same tube never merge, {@code SmokePuffs.Draw#mergeLevel}). */
     private static final int[] EOWNER = new int[ENDS];
-    /** Вид кадра — у отрезков ({@link #segment}). */
+    /** Frame look belongs to segments ({@link #segment}). */
     @Nullable
     private static FarView seen;
     /**
-     * Трубка шире стольких пикселей на экране (на половине непрозрачности середины) — клубами, как облака
-     * ({@link SmokePuffs#tube}), уже — лентой, между — плавно. Лента — плоскость лицом к камере с одним цветом поперёк:
-     * это вид трубки, пока её сечение уже пикселя; шире — полоса с прямыми краями и без тени (у глаза — плоскость через
-     * кадр). Клубы — то же вещество гауссами с шестисторонним светом: круглая трубка с освещённой и теневой стороной,
-     * глаз в ней — вуаль по пути взгляда. Свет поперёк различим, когда σ сечения — пиксель и больше: ширина на
-     * половине — 2,355σ, с 2,4 px; с 4,8 px (σ — два пикселя) — только клубы. С порогом в 6–12 px (F2b) залп «Града» за
-     * 1,7 км (трубки 3–11 м — 2–7 px) весь шёл лентами: двенадцать лент, легших друг на друга, — плоская полоса с прямыми
-     * краями (кадры VXC4, 22.10).
+     * Tube wider than this many screen pixels (at half centre opacity) uses billows like clouds
+     * ({@link SmokePuffs#tube}), narrower uses ribbon, smooth between. Ribbon is a camera-facing plane with one
+     * colour across: tube appearance while cross-section is subpixel; wider becomes straight-edged, unshaded
+     * strip (at eye, a plane through frame). Billows are same matter as Gaussians with six-way light: round tube
+     * with lit and shaded sides, eye inside gets a veil along sight path. Crosswise light is resolved when
+     * cross-section σ is a pixel or more: half-opacity width is 2.355σ, from 2.4 px; from 4.8 px (σ two pixels),
+     * billows only. With 6–12 px threshold (F2b), a Grad salvo at 1.7 km (3–11 m tubes, 2–7 px) was all ribbons:
+     * twelve overlaid ribbons formed a flat straight-edged strip (VXC4 frames, 22.10).
      */
     static final double PUFFS_FROM = 2.4, PUFFS_FULL = 4.8;
     /**
-     * Мест клубов трубок и их вуалей у глаза в кадре — не больше этого в среднем (производительность, не физика): больше —
-     * шаг мест на следующем кадре растёт ({@link #stride}: во столько раз, во сколько мест просили больше, и не меньше ×1,1),
-     * все трубки остаются клубами, только реже (⚠ шаг шире диска клуба — у бледной трубки просветы между клубами); меньше
-     * половины — шаг плавно возвращается (/1,02 за кадр). Доли клубов и ленты от бюджета не зависят ({@link #line}): прежде
-     * рос порог ширины, и в налёте стенда из 100 шлейфы в 90–180 px шли лентами — светлые прямые полосы через кадр (RenderDoc
-     * 25.10). Залп «Града» вблизи или трубки в бинокль иначе давали бы десятки тысяч квадратов.
-     * Каждое место ждёт плана кадра ({@code SmokePuffs.flush}: ~0,5 мкс процессора), а сверх бюджета заливки показать их
-     * порознь нельзя: в налёте из 100 ударов при 6000 — 8 мс процессора на дым, при 3000 — 6,5 ({@code SmokeRaidTest}).
+     * Average maximum tube-billow and eye-veil places per frame (performance, not physics): above this, next
+     * frame's place spacing grows ({@link #stride}: ratio of requested places to budget, at least ×1.1); all
+     * tubes stay billows, only sparser (⚠ spacing wider than billow disk leaves gaps in faint tubes); below half,
+     * spacing smoothly returns (/1.02 per frame). Billow/ribbon shares ignore budget ({@link #line}): formerly
+     * width threshold grew; in the 100-strike bench raid, 90–180 px trails became ribbons — bright straight strips
+     * across frame (RenderDoc 25.10). A near Grad salvo or binocular tubes would otherwise yield tens of thousands
+     * of quads. Each place awaits frame plan ({@code SmokePuffs.flush}: ~0.5 µs CPU); beyond fill budget they cannot
+     * be shown separately: 100-strike raid at 6000 took 8 ms CPU for smoke, at 3000, 6.5 ({@code SmokeRaidTest}).
      */
     static final int CLUB_BUDGET = 3000;
     /**
-     * Шаг мест клубов трубок — во столько раз шире закона ({@code SmokePuffs.tubeStep}; 1 — по закону, не больше 2^7: тогда у
-     * каждого отрезка одно место) и мест, что трубки просили в этом кадре.
+     * Tube-billow place spacing as multiple of law ({@code SmokePuffs.tubeStep}; 1 — law, at most 2^7: one place
+     * per segment then), and places requested by tubes this frame.
      */
     private static double stride = 1;
     private static int clubs;
     private static final float[] JOINT = new float[3];
     private static int frame;
 
-    // ---------------------------------------------------------------- сводка последнего кадра (describe)
-    /** Место B-2 в счёте по оружию (у его бомбы — своё оружие). */
+    // ---------------------------------------------------------------- last-frame summary (describe)
+    /** B-2 slot in weapon counts (its bomb has its own weapon). */
     private static final int B2 = WeaponType.values().length, SAM = B2 + 1;
     private static final int[] COUNT = new int[SAM + 1];
     private static int flights, points;
@@ -187,7 +188,7 @@ public final class FarFlightView {
     private static Far nearest;
     private static double nearD, nearT, nearBody, nearBodyAlpha, nearFlame, nearFlameAlpha, nearModel;
     private static boolean nearCoarse;
-    /** Факелов в кадре (и у сущностей); ближний: дальность, доля ядра, ядро в пикселях и его непрозрачность, блик, вуаль. */
+    /** Plumes in frame (including entities); nearest: range, core share, core pixels and opacity, glare, veil. */
     private static int flames;
     @Nullable
     private static Far flameOf;
@@ -195,63 +196,63 @@ public final class FarFlightView {
 
     private FarFlightView() {}
 
-    /** Свет мира в точке, упакованный ({@code LevelRenderer#getLightColor}). */
+    /** Packed world light at point ({@code LevelRenderer#getLightColor}). */
     @FunctionalInterface
     interface Light {
         int at(double x, double y, double z);
     }
 
-    /** Один путь снаряда: точки его шлейфов, видимость за рельефом. */
+    /** One projectile path: its trail points, terrain visibility. */
     static final class Far {
         final FlightTrack track;
         final ClientAirframe airframe;
         final FarLook look;
-        /** Тяга ускорителя во времени ({@code Airframe.thrust}); null — двигатели горят ровно. */
+        /** Booster thrust over time ({@code Airframe.thrust}); null — steady-burning engines. */
         @Nullable
         final ThrustCurve thrust;
         final WeaponModels.Look model;
-        /** Чьи точки в {@link TrailPoints}. */
+        /** Point owner in {@link TrailPoints}. */
         final int owner;
         long seen;
-        /** До какого тика пути точки уже поставлены. */
+        /** Path tick up to which points have been laid. */
         long cursor = -1;
-        /** Нынешние ленты начаты (у каждого сопла — своя); их последние точки, тик последних точек и вид. */
+        /** Current ribbons started (one per nozzle); last points, last-point tick and look. */
         boolean started;
         final long[] chain = new long[MAX_NOZZLES];
         long chainTick;
         @Nullable
         Trail style;
-        /** Сопла нынешних лент; от ускорителя ли они. */
+        /** Current ribbons' nozzles; whether from booster. */
         List<At> nozzles = List.of();
         boolean booster;
-        /** Не закрыт рельефом: 1 — виден; прошлый тик, нынешний и куда идёт. */
+        /** Unoccluded by terrain: 1 — visible; previous tick, current and target. */
         float visPrev = 1, vis = 1, visTarget = 1;
         /**
-         * В прорисовке не закрыт блоками (луч по блокам от глаза): корпус и факел там закрывает глубина, а блик у глаза
-         * ({@link FarSprites#light}) — нет; дальше прорисовки — 1.
+         * Unoccluded by blocks within render distance (block ray from eye): depth hides body and plume there, but
+         * not glare at eye ({@link FarSprites#light}); beyond render distance — 1.
          */
         float openPrev = 1, open = 1, openTarget = 1;
         boolean sighted;
-        /** Модель — упрощёнными копиями деталей (мелкая на экране; с запасом против дрожания на границе). */
+        /** Model uses simplified detail copies (small onscreen; hysteresis prevents threshold flutter). */
         boolean coarse = true;
-        /** Облако старта: струя била в землю (null — не била); бьёт ли она в этом тике пути (тогда точек ленты нет). */
+        /** Launch cloud: jet struck ground (null — did not); whether it does this path tick (then no ribbon points). */
         @Nullable
         LaunchCloud cloud;
         boolean impinging;
-        /** Двигатель, чья струя бьёт в землю ({@link LaunchCloud#column}). */
+        /** Engine whose jet strikes ground ({@link LaunchCloud#column}). */
         @Nullable
         Motor cloudMotor;
         /**
-         * Путь снаряда по его пути от начала до тика {@link #cursor}, м, и длина его яркого пламени там (ядро и догорание,
-         * {@link Flame#flame}; нет пламени — 0):
-         * докуда точки следа ещё в факеле ({@link TrailModel#emerged}); в кадре — путь до мига кадра.
+         * Projectile path length from start to {@link #cursor} tick, m, and bright flame length there (core and
+         * afterburning, {@link Flame#flame}; no flame — 0): how far trail points remain in plume
+         * ({@link TrailModel#emerged}); in frame, path length up to frame instant.
          */
         double path, flame, framePath;
 
         Far(FlightTrack track, int owner) {
             this.track = track;
             this.owner = owner;
-            // путь без оружия — зенитная ракета ЗРК
+            // path without weapon is SAM missile
             this.airframe = track.weapon == null ? ClientWeaponSpec.INTERCEPTOR : ClientWeaponSpec.of(track.weapon).airframe(!track.bomber);
             this.look = airframe.far();
             this.thrust = track.weapon == null ? null : track.weapon.spec().airframe().thrust();
@@ -259,14 +260,14 @@ public final class FarFlightView {
             Arrays.fill(chain, TrailPoints.NONE);
         }
 
-        /** Ленты кончились: следующая точка начнёт новые. */
+        /** Ribbons ended: next point starts new ones. */
         void restart() {
             started = false;
             Arrays.fill(chain, TrailPoints.NONE);
         }
     }
 
-    /** Раз в тик клиента после {@code FlightTracks.tick}: новые пути, точки шлейфов, лучи по рельефу, забытые пути. */
+    /** Once per client tick after {@code FlightTracks.tick}: new paths, trail points, terrain rays, forgotten paths. */
     static void tick() {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel lv = mc.level;
@@ -283,17 +284,17 @@ public final class FarFlightView {
         air = ClientAir.now();
         pass++;
         for (FlightTrack track : FlightTracks.all()) see(track);
-        // зенитные ракеты ЗРК: шлейф и облако старта — тем же законом, что у снарядов
+        // SAM missiles: trail and launch cloud follow same law as projectiles
         for (FlightTrack track : FlightTracks.interceptors()) see(track);
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         double world = mc.options.getEffectiveRenderDistance() * 16.0;
-        // мир заморожен: снаряды стоят, шлейфы не растут и не стареют (точки того же места не нужны)
+        // world frozen: projectiles stand still, trails neither grow nor age (same-place points unnecessary)
         boolean frozen = frozen();
         active = 0;
         for (int i = FARS.size() - 1; i >= 0; i--) {
             Far f = FARS.get(i);
             if (f.seen != pass) {
-                // путь забыт: после взрыва шлейф тает сам, после отбоя (полёт кончился без взрыва) пропадает сразу
+                // path forgotten: after explosion trail fades itself; after all-clear (flight ended without explosion) vanishes immediately
                 if (!f.track.isDead()) POINTS.kill(f.owner);
                 BY_TRACK.remove(f.track);
                 BY_OWNER.remove(f.owner);
@@ -314,7 +315,7 @@ public final class FarFlightView {
         else POINTS.expire(now - 1);
     }
 
-    /** Путь есть в этом тике: его вид (новый — с этого тика). */
+    /** Path exists this tick: its look (new path starts this tick). */
     private static void see(FlightTrack track) {
         Far f = BY_TRACK.get(track);
         if (f == null) {
@@ -326,33 +327,33 @@ public final class FarFlightView {
         f.seen = pass;
     }
 
-    /** Имя снаряда пути в строке сценария. */
+    /** Path projectile name in scenario line. */
     private static String name(FlightTrack track) {
         return track.weapon == null ? "sam" : track.bomber ? "b2" : track.weapon.getSerializedName();
     }
 
-    /** Мир заморожен ({@code /tick freeze}): сущности и частицы стоят. */
+    /** World frozen ({@code /tick freeze}): entities and particles stand still. */
     private static boolean frozen() {
         ClientLevel lv = level;
         return lv != null && !lv.tickRateManager().runsNormally();
     }
 
-    /** Точки шлейфов без света мира (юнит-тесты): открытое небо. */
+    /** Trail points without world light (unit tests): open sky. */
     static void sample(Far f, long horizon, TrailPoints points) {
         sample(f, horizon, points, SKY, null);
     }
 
-    /** Облако старта в тике пути t (null у юнит-тестов: мира нет). */
+    /** Launch cloud at path tick t (null in unit tests: no world). */
     @FunctionalInterface
     interface Launch {
         void at(Far f, long t, ClientWeaponSpec.Stage stage);
     }
 
     /**
-     * Точки шлейфов по пути до тика horizon включительно (дальше путь ещё может поправить пакет этого тика), по сущности
-     * и по пакетам сервера одинаково: у каждого сопла своей фазы ({@link ClientAirframe#trailNozzles}) — раз в шаг вида
-     * шлейфа. Вид или сопла сменились (ускоритель догорел) — ленты кончаются точками в тике смены, новые начинаются там
-     * же; разрыв в пути (история начата заново) — ленты рвутся.
+     * Trail points along path through horizon tick inclusive (this tick's packet may still correct later path),
+     * identically for entity and server packets: each nozzle of its phase ({@link ClientAirframe#trailNozzles})
+     * every trail-look step. Look or nozzles changed (booster burnt out): ribbons end with points at change tick,
+     * new ones start there too; path discontinuity (history restarted) breaks ribbons.
      */
     static void sample(Far f, long horizon, TrailPoints points, Light light, @Nullable Launch launch) {
         FlightTrack track = f.track;
@@ -364,7 +365,7 @@ public final class FarFlightView {
         for (; t <= horizon; t++) {
             FlightPhase phase = FlightPhase.byId(track.phase(t));
             ClientWeaponSpec.Stage stage = f.look.stage(phase, track.phaseAge(t), f.thrust);
-            // путь снаряда и его факел в этом тике: докуда точки следа ещё в огне
+            // projectile path and plume this tick: how far trail points remain in fire
             if (track.covers(t)) {
                 track.at(t, POS);
                 if (t - 1 >= track.start() && track.covers(t - 1)) {
@@ -375,7 +376,7 @@ public final class FarFlightView {
                 f.flame = flame == null ? 0 : flame.flame();
             }
             f.impinging = false;
-            // облако старта — только на старте (горит ускоритель): струя маршевого у склона — не старт
+            // launch cloud only during launch (booster burning): cruise jet at a slope is not launch
             if (launch != null && stage.motor() != null && phase.boosterLit()) launch.at(f, t, stage);
             Trail style = laying(stage.trail(), f.style, f.path);
             boolean booster = phase.boosterLit() && f.airframe.boosterNozzle() != null;
@@ -395,9 +396,9 @@ public final class FarFlightView {
     }
 
     /**
-     * След, который кладёт снаряд с путём path от начала: фазы (phase) или, если у прежнего (laid) он идёт по настоящему
-     * пути выгорания ({@link Trail#reach}), — прежний, пока путь меньше этого участка (на игровой скорости фаза с факелом
-     * кончается раньше — дальше дым без огня, не по физике); на настоящей скорости — до конца участка, не дальше.
+     * Trail laid by projectile at path length path from start: phase trail (phase), or if previous (laid) follows
+     * real burn path ({@link Trail#reach}), retain it while path is shorter than that section (at game speed plume
+     * phase ends earlier — smoke without fire afterward, not physical); at real speed, to section end, no farther.
      */
     static Trail laying(@Nullable Trail phase, @Nullable Trail laid, double path) {
         if (phase == null && laid != null && laid.reach() > 0) phase = laid;
@@ -405,8 +406,8 @@ public final class FarFlightView {
     }
 
     /**
-     * Путь кончился (снаряд взорвался или ушёл из вида) — ленты доходят до последней его точки и там сходят на нет:
-     * иначе конец следа отскакивал бы назад на шаг точек (у B-2 — на 48 блоков). Путь продолжится — продолжатся и ленты.
+     * Path ended (projectile exploded or left view): ribbons reach its last point and taper there, otherwise
+     * trail end would jump back a point step (B-2: 48 blocks). If path resumes, ribbons resume too.
      */
     private static void close(Far f, long now) {
         FlightTrack track = f.track;
@@ -416,63 +417,65 @@ public final class FarFlightView {
         finish(f, POINTS);
     }
 
-    /** Нынешние ленты кончаются своими последними точками. */
+    /** Current ribbons end at their last points. */
     private static void finish(Far f, TrailPoints points) {
         for (long c : f.chain) points.finish(c);
     }
 
     /**
-     * Облако старта в тике пути t (горит ускоритель): струя двигателя фазы бьёт в землю раньше своей длины Мортона —
-     * продукты за тик идут в облако ({@link LaunchCloud#feed}), а точки ленты этого тика — его ({@code TrailPoints.cloud}).
-     * Земля — по чанку сервера из пакетов ({@link FlightTrack#launchGround}: вдали у клиента чанка нет, а рельеф мода
-     * LOD бывает не у всех), иначе карта высот чанка клиента, вне чанков — рельеф дальней картинки; неизвестна — облака нет. Сопло — фазы (ускоритель или маршевое), струя — назад по оси.
+     * Launch cloud at path tick t (booster burning): phase engine jet hits ground before its Morton length;
+     * products per tick enter cloud ({@link LaunchCloud#feed}), that tick's ribbon points belong to it
+     * ({@code TrailPoints.cloud}). Ground from server chunk in packets ({@link FlightTrack#launchGround}: client
+     * lacks distant chunk and not everyone has LOD terrain), otherwise client chunk height map, outside chunks
+     * far-view terrain; unknown — no cloud. Nozzle from phase (booster or cruise), jet backward along axis.
      */
     private static void launch(Far f, long t, ClientWeaponSpec.Stage stage) {
         ClientLevel lv = level;
         if (lv == null || !f.track.covers(t)) return;
         f.track.at(t, NOZZLE);
         f.track.offset(t, f.airframe.nozzle(stage), NOZZLE);
-        // земля по чанку сервера (пусковая стоит на ровном, под соплом та же), иначе своя
+        // ground from server chunk (launcher on level ground, same under nozzle), otherwise own terrain
         double ground = f.track.launchGround();
         if (Double.isNaN(ground)) ground = ground(lv, NOZZLE[0], NOZZLE[2]);
         if (Double.isNaN(ground)) return;
         Vec3 fwd = f.track.forward(t);
-        // расход — на доле тяги сейчас (выход на режим, спад к отделению)
+        // flow at current thrust share (ramp-up, decay to separation)
         Motor motor = stage.flow();
         if (motor == null || !LaunchCloud.impinges(motor, NOZZLE[1] - ground, -fwd.y)) return;
         if (f.cloud == null || f.cloud.ended()) {
-            // верхний блок под соплом: грунт — его рыхлость и цвет; не грунт (бетон, гладкий камень, блоки модов) — пыли нет
+            // top block under nozzle: soil gives looseness and colour; non-soil (concrete, smooth stone, mod blocks) — no dust
             BlockPos at = BlockPos.containing(NOZZLE[0], ground - 0.5, NOZZLE[2]);
             GroundMaterial known = GroundMaterial.of(lv.getBlockState(at));
             GroundMaterial mat = known != null ? known : GroundMaterial.STONE;
             Vec3 pos = new Vec3(NOZZLE[0], ground, NOZZLE[2]);
-            // часы сетки на тике t пути: путь отстаёт от часов клиента на (now − t) тиков
+            // grid clock at path tick t: path lags client clock by (now − t) ticks
             double seconds = SmokeGrid.seconds(0) - Math.max(0, FlightTracks.now() - t) / 20.0;
             f.cloud = new LaunchCloud(FarBlasts.air(lv, pos), ground, mat.porosity, mat.r, mat.g, mat.b, seconds);
             CLOUDS.removeIf(LaunchCloud::ended);
             CLOUDS.add(f.cloud);
             SmokeGrid.add(f.cloud);
         }
-        // миг подачи — тик t пути по часам сетки (как начало облака): по нему — история импульса затяжки
+        // feed instant is path tick t on grid clock (like cloud start): drives puff impulse history
         double at = SmokeGrid.seconds(0) - Math.max(0, FlightTracks.now() - t) / 20.0;
         f.impinging = f.cloud.feed(motor, 1 / 20.0, at, NOZZLE[0], NOZZLE[1], NOZZLE[2], -fwd.x, -fwd.y, -fwd.z);
         f.cloudMotor = motor;
     }
 
-    /** Облака старта (снять при сбросе). */
+    /** Launch clouds (remove on reset). */
     private static final List<LaunchCloud> CLOUDS = new ArrayList<>();
 
-    /** Высота земли (первый воздух) под (x, z): чанк клиента, иначе плитки карты ({@link FarTerrain}); NaN — неизвестна. */
+    /** Ground height (first air) under (x, z): client chunk, otherwise map tiles ({@link FarTerrain}); NaN — unknown. */
     private static double ground(ClientLevel lv, double x, double z) {
         return heights == null ? Double.NaN : heights.at(Mth.floor(x), Mth.floor(z));
     }
 
     /**
-     * Точки лент у всех сопел в тике t: что им даёт закон следа — по скорости снаряда в этом тике и воздуху. Невидимая точка (след на этой скорости и высоте не виден) ленту обрывает: следующая видимая начнёт новую.
+     * Ribbon points at all nozzles at tick t: trail-law values from projectile speed this tick and air. Invisible
+     * point (trail invisible at this speed and height) breaks ribbon: next visible point starts a new one.
      */
     private static void put(Far f, TrailPoints points, long t, Trail style, Light light) {
-        // скорость снаряда — его путь за прошлый тик (у сущности и по пакетам одинаково); пути до t нет — скорость
-        // из сущности или пакета
+        // projectile speed is path length last tick (same for entity and packets); no path up to t — velocity
+        // from entity or packet
         double speed;
         if (t - 1 >= f.track.start() && f.track.covers(t - 1)) {
             f.track.at(t, POS);
@@ -497,7 +500,7 @@ public final class FarFlightView {
             f.chain[k] = points.add(POS[0], POS[1], POS[2], t, style, light.at(POS[0], POS[1], POS[2]), f.owner, f.chain[k], (float) inv,
                     (float) (BIRTH[0] * 20), (float) (BIRTH[1] * 20), (float) u, (float) TrailModel.excess(POS[1], air),
                     (float) TrailModel.riseScale(style, inv, brunt), (float) brunt, (float) air.stability());
-            // струя бьёт в землю: вещество точки — облака старта, лента — только столб струи у сопла
+            // jet strikes ground: point matter belongs to launch cloud, ribbon only carries nozzle jet column
             int at = TrailPoints.index(f.chain[k]);
             points.cloud[at] = f.impinging ? f.cloud : null;
             points.column[at] = f.impinging && f.cloudMotor != null ? (float) LaunchCloud.column(f.cloudMotor, 0, inv) : 0;
@@ -511,9 +514,9 @@ public final class FarFlightView {
     }
 
     /**
-     * Свет мира в точке: чанк есть у клиента — как у частицы, нет — открытое небо. Точка у сопла на старте бывает
-     * в верхнем блоке земли (сопло МБР на пусковой — на блок ниже её верха): внутри твёрдого блока света нет, и низ
-     * столба был бы почти чёрным — свет берётся над ним.
+     * World light at point: client has chunk — like a particle; otherwise open sky. Launch nozzle point may lie
+     * in top ground block (ICBM nozzle on launcher one block below its top): inside solid block there is no
+     * light, making column base nearly black — take light above it.
      */
     private static int light(double x, double y, double z) {
         ClientLevel lv = level;
@@ -527,15 +530,15 @@ public final class FarFlightView {
     }
 
     /**
-     * Закрыт ли снаряд: луч раз в {@link #SIGHT_PERIOD} тика — дальше прорисовки по рельефу, в ней по блокам (для блика);
-     * видимость — плавно.
+     * Projectile occlusion: ray every {@link #SIGHT_PERIOD} ticks, terrain beyond render distance, blocks within
+     * (for glare); smooth visibility.
      */
     private static void sight(Far f, long now, Vec3 eye, double world) {
         f.visPrev = f.vis;
         f.openPrev = f.open;
         FlightTrack track = f.track;
         if (track.isDead()) return;
-        // у сущности луч нужен только блику факела: без огня в этой фазе — не тратить его
+        // entity needs ray only for plume glare: no fire in this phase — skip it
         if (!track.fromServer() && !hasFlame(f, now - 1)) {
             f.sighted = false;
             return;
@@ -559,13 +562,13 @@ public final class FarFlightView {
         f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
     }
 
-    /** Горит ли у снаряда видимый факел в тике t (на его высоте). */
+    /** Whether projectile has visible burning plume at tick t (at its altitude). */
     private static boolean hasFlame(Far f, long t) {
         f.track.at(t, POS);
         return f.look.stage(FlightPhase.byId(f.track.phase(t)), f.track.phaseAge(t), f.thrust).flame(POS[1]) != null;
     }
 
-    /** Блоки мира клиента закрывают точку от глаза (луч до первого блока с формой для взгляда). */
+    /** Client-world blocks occlude point from eye (ray to first block with a visual shape). */
     static boolean blocked(Vec3 eye, double x, double y, double z) {
         ClientLevel level = Minecraft.getInstance().level;
         return level != null && level.clip(new ClipContext(eye, new Vec3(x, y, z), ClipContext.Block.VISUAL, ClipContext.Fluid.NONE,
@@ -573,8 +576,8 @@ public final class FarFlightView {
     }
 
     /**
-     * Где корпус снаряда {@code id} в кадре с долей тика {@code partial} — там, где его рисует дальняя картинка
-     * ({@link #collect}: по пути, а не по последнему пакету); false — пути нет или на этот миг данных нет.
+     * Body position of projectile {@code id} at tick fraction {@code partial}, where far view draws it
+     * ({@link #collect}: path, not latest packet); false — no path or no data for this instant.
      */
     public static boolean drawnAt(java.util.UUID id, float partial, double[] out) {
         FlightTrack track = FlightTracks.get(id);
@@ -583,12 +586,12 @@ public final class FarFlightView {
         return !(track.isDead() && t >= track.deathTick()) && track.predict(t, out);
     }
 
-    /** Время кадра у путей: тик пути и доля (как у {@link #collect}). */
+    /** Frame time for paths: path tick plus fraction (as in {@link #collect}). */
     private static double frameTime(float partial) {
         return FlightTracks.now() - 1 + (frozen() ? 0 : partial);
     }
 
-    /** Шлейфы, корпуса и факелы в кадр; факелы — ещё и светом дыма и лент кадра (lights). */
+    /** Collect trails, bodies and plumes for frame; plumes also light frame smoke and ribbons (lights). */
     static void collect(FarView view, FarSprites out, FxLights lights) {
         lit = 0;
         litEye = 0;
@@ -600,7 +603,7 @@ public final class FarFlightView {
         Arrays.fill(COUNT, 0);
         double t = frameTime(view.partial());
         Vec3 cam = view.camera();
-        // путь каждого снаряда до мига кадра: докуда его точки ещё в факеле
+        // each projectile's path to frame instant: how far its points remain in plume
         for (int k = 0, n = FARS.size(); k < n; k++) {
             Far f = FARS.get(k);
             f.framePath = f.path;
@@ -615,44 +618,44 @@ public final class FarFlightView {
             FlightTrack track = f.track;
             if (track.isDead() && t >= track.deathTick() || track.drilling() || !track.predict(t, POS)) continue;
             ClientWeaponSpec.Stage stage = f.look.stage(FlightPhase.byId(track.phase(t)), track.phaseAge(t), f.thrust);
-            // след по настоящему пути выгорания идёт и после фазы с факелом — лента и тогда доходит до сопла
+            // trail along real burn path continues after plume phase — ribbon still reaches nozzle
             Trail trail = laying(stage.trail(), f.style, f.path);
             if (trail != null && trail == f.style && f.started) {
-                // ленты доходят до сопел: там они ещё не проявились
+                // ribbons reach nozzles: not yet visible there
                 for (int j = 0, m = Math.min(MAX_NOZZLES, f.nozzles.size()); j < m; j++) {
                     long c = f.chain[j];
                     if (!POINTS.holds(c) || DRAWN[TrailPoints.index(c)] != frame || POINTS.last[TrailPoints.index(c)]) continue;
                     System.arraycopy(POS, 0, NOZZLE, 0, 3);
                     track.offset(t, f.nozzles.get(j), NOZZLE);
                     int ci = TrailPoints.index(c);
-                    // у сопла вещество следа — ещё факел (у снаряда без факела — уже дым)
+                    // trail matter at nozzle is still plume (projectile without plume: already smoke)
                     TrailModel.look(trail, 0, POINTS.inverse[ci], POINTS.ice[ci] / 20, POINTS.wind[ci], POINTS.excess[ci], POINTS.rise[ci],
                             POINTS.brunt[ci], POINTS.stability[ci], TrailModel.emerged(0, f.flame), LOOK);
                     end(LOOK, NOZZLE[0] - cam.x, NOZZLE[1] - cam.y, NOZZLE[2] - cam.z, POINTS.light[ci], view, HEAD + j);
                     segment(out, TrailPoints.index(c), HEAD + j, trail);
                 }
             }
-            // есть сущность — корпус рисует её модель, струю факела — PlumeRenderer; свет факела — здесь
+            // entity present: its model draws body, PlumeRenderer plume jet; plume light here
             boolean entity = !track.fromServer();
             double dx = POS[0] - cam.x, dy = POS[1] - cam.y, dz = POS[2] - cam.z;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             double tr = view.air(d, dy);
             float vis = Mth.lerp(view.partial(), f.visPrev, f.vis);
-            // с борта своего двигателя не видно: сущность камеры не рисуется, и струи нет — нет и света
+            // own engine invisible onboard: camera entity not drawn, no jet — no light either
             Flame flame = entity && onboard(track) ? null : stage.flame(POS[1]);
             double flamePx = 0, flameAlpha = 0;
             if (flame != null && vis > 0) {
                 flameAt(track, t, -f.airframe.nozzle(stage).z() + flame.middle(), dx, dy, dz, OUT);
-                // доля ядра — по дальности корпуса, как струя у рендерера сущности: вместе ровно один факел
+                // core share from body range, like entity renderer jet: together exactly one plume
                 double bd = OUT[0], ft = view.air(bd, BACK[1]), core = flameCore(entity, view, d);
                 int fc = flame.lightColor();
                 float open = Mth.lerp(view.partial(), f.openPrev, f.open);
                 double seen = flame.brightness() * view.exposure();
                 out.light(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen * ft, ft, view.pixel(),
                         channel(fc, 0), channel(fc, 1), channel(fc, 2), vis * core, vis * open, LIGHT);
-                // факел светит на дым и ленты вокруг, как огненный шар, — виден он глазу или нет
+                // plume lights surrounding smoke and ribbons like a fireball, whether eye sees it or not
                 lights.add(BACK[0], BACK[1], BACK[2], flame.lightRadius(), seen, Math.min(1, seen), channel(fc, 0), channel(fc, 1), channel(fc, 2));
-                // и на мир, и в глаз (HeatPass): без воздуха до глаза — его ослабление считает проход
+                // also world and eye (HeatPass): no air attenuation to eye — pass computes it
                 lit(BACK[0], BACK[1], BACK[2], -NOSE[0], -NOSE[1], -NOSE[2], flame, view.camera(), track.phaseAge(t) / 20,
                         flown(track, t, track.phaseAge(t)));
                 flamePx = 2 * LIGHT[0] / (bd * view.pixel());
@@ -668,7 +671,7 @@ public final class FarFlightView {
                     flameVeilPx = 2 * LIGHT[4] / (bd * view.pixel());
                 }
             }
-            // корпус сущности рисует её модель, пока она не дальше, чем модель сущности рисуется сама
+            // entity body drawn by its model while within its own model render range
             if (entity && d < FarView.entityReach(view.far())) continue;
             double length = f.look.size() / (d * view.pixel());
             double model = modelShare(length);
@@ -685,7 +688,7 @@ public final class FarFlightView {
             out.disc(dx, dy, dz, OUT[0], channel(c, 0) * lit, channel(c, 1) * lit, channel(c, 2) * lit, a);
             double bodyPx = 2 * OUT[0] / (d * view.pixel());
             flights++;
-            // У ЗРК тоже есть дальний путь: её маршевый след продолжается за краем сущностей.
+            // SAM also has distant path: sustain trail continues beyond entity range.
             COUNT[track.weapon == null ? SAM : track.bomber ? B2 : track.weapon.ordinal()]++;
             if (nearest == null || d < nearD) {
                 nearest = f;
@@ -701,7 +704,7 @@ public final class FarFlightView {
         }
     }
 
-    /** Полный проход точек следов в квадраты кадра; без OpenGL, тот же вход у проверки экрана. */
+    /** Full trail-point pass into frame quads; without OpenGL, same entry used by screen check. */
     static void collectTrails(FarView view, SmokePuffs.Out out, double t, TrailPoints trail, Air air) {
         frame++;
         seen = view;
@@ -713,11 +716,11 @@ public final class FarFlightView {
             if (style == null) continue;
             double age = Math.max(0, t - trail.birth[i]);
             if (age >= trail.life[i]) continue;
-            // точка ещё в факеле — её вещество светится в нём
+            // point still in plume — its matter glows in it
             Far owner = BY_OWNER.get(trail.owner[i]);
             double smoke = owner == null || owner.track.isDead() ? 1 : TrailModel.emerged(owner.framePath - trail.path[i], owner.flame);
-            // точка в облаке старта — её вещество рисует облако (запечённые клубы), а пока струя бьёт в землю, между соплом и
-            // землёй — столб самой струи (по нынешнему месту сопла); струя землю отпустила — столб остаётся каким был
+            // point in launch cloud: cloud draws its matter (baked billows); while jet strikes ground, nozzle-to-ground
+            // column is jet itself (from current nozzle position); once jet leaves ground, column stays as it was
             LaunchCloud cloud = trail.cloud[i];
             if (cloud != null && owner != null && owner.cloud == cloud && owner.impinging && owner.cloudMotor != null)
                 trail.column[i] = (float) LaunchCloud.column(owner.cloudMotor, owner.framePath - trail.path[i], trail.inverse[i]);
@@ -725,13 +728,13 @@ public final class FarFlightView {
             TrailModel.look(style, age / 20, trail.inverse[i], trail.ice[i] / 20, trail.wind[i], trail.excess[i], trail.rise[i],
                     trail.brunt[i], trail.stability[i], mass * smoke, LOOK);
             double drift = trail.wind[i] * Math.max(0, age - LAG) / 20;
-            // ось следа гнут вихри крупнее его: усреднённый шлейф Бриггса — это расплывание следа плюс мотание оси; точка
-            // облака старта стоит в своём облаке (его сносит ветер, вихри следа его не гнут)
+            // vortices larger than trail bend its axis: averaged Briggs plume is trail spreading plus axis wandering;
+            // launch-cloud point stays in its cloud (wind drifts it, trail vortices do not bend it)
             if (cloud != null) BEND[0] = BEND[1] = BEND[2] = 0;
             else bend(trail, i, style, age);
             end(LOOK, trail.x[i] + air.wind().x() * drift + BEND[0] - cam.x, trail.y[i] + LOOK[2] + BEND[1] - cam.y,
                     trail.z[i] + air.wind().z() * drift + BEND[2] - cam.z, trail.light[i], view, i);
-            // зерно клубов — номер записи точки: тик рождения в заморозке мира сдвигается (TrailPoints.hold), и клубы мигали бы
+            // billow seed uses point record number: birth tick shifts during world freeze (TrailPoints.hold), causing flicker
             ESEED[i] = s * 0x2545F4914F6CDD1DL + 0x632BE59BD9B4E019L;
             EOWNER[i] = trail.owner[i];
             if (trail.last[i]) {
@@ -744,14 +747,14 @@ public final class FarFlightView {
         }
     }
 
-    /** Камера — на этом снаряде, с его борта (вид от первого лица). */
+    /** Camera onboard this projectile (first-person view). */
     private static boolean onboard(FlightTrack track) {
         Minecraft mc = Minecraft.getInstance();
         Entity camera = mc.getCameraEntity();
         return camera != null && mc.options.getCameraType().isFirstPerson() && camera.getUUID().equals(track.id);
     }
 
-    /** Поза модели в момент t по пути (место — уже в {@link #POS}). */
+    /** Model pose at t from path (position already in {@link #POS}). */
     private static void pose(FlightTrack track, double t, boolean coarse) {
         ProjectilePose p = POSE;
         p.x = POS[0];
@@ -772,19 +775,20 @@ public final class FarFlightView {
     }
 
     /**
-     * Факелы кадра для света на мир ({@link #heat}): середина от глаза, ось струи, высота середины над землёй, путь по оси
-     * от среза до земли, сколько секунд горит, путь снаряда по прямой от места поджига; сам факел.
+     * Frame plumes for world light ({@link #heat}): eye-relative centre, jet axis, centre height above ground,
+     * axial path from nozzle exit to ground, seconds burning, straight-line projectile distance from ignition;
+     * plume itself.
      */
     private static final int LIT_MAX = 16, LIT_STRIDE = 10;
     private static final double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
     private static final Flame[] LIT_FLAME = new Flame[LIT_MAX];
     private static int lit;
-    /** Свет всех факелов кадра у глаза. */
+    /** Light of all frame plumes at eye. */
     private static double litEye;
 
     /**
-     * Путь снаряда по прямой от места, где горела нынешняя фаза полёта age тиков назад, до места в t, блоки; места нет в
-     * памяти пути — бесконечность (горячий газ струи тогда не короче её закона).
+     * Straight-line projectile distance from where current flight phase burned age ticks ago to position at t,
+     * blocks; position absent from path memory — infinity (hot jet gas then no shorter than its law).
      */
     private static double flown(FlightTrack track, double t, double age) {
         double from = t - age;
@@ -797,12 +801,12 @@ public final class FarFlightView {
     private static final double[] FLOWN_AT = new double[3];
 
     /**
-     * Факел flame с серединой (x, y, z) от глаза cam и осью струи от сопла (jx, jy, jz) — в свет кадра на мир; горит burn
-     * секунд, снаряд с поджига пролетел flown блоков.
+     * Plume flame centred at (x, y, z) relative to eye cam, with nozzle jet axis (jx, jy, jz), enters frame world
+     * light; burning burn seconds, projectile travelled flown blocks since ignition.
      */
     static void lit(double x, double y, double z, double jx, double jy, double jz, Flame flame, Vec3 cam, double burn, double flown) {
         double lr = flame.lightRadius(), w = flame.brightness() * lr * lr / Math.max(x * x + y * y + z * z, lr * lr);
-        // в глаз — все факелы, на мир — самые заметные у глаза (проход берёт из них четыре)
+        // eye gets all plumes; world gets most noticeable at eye (pass takes four)
         litEye += w;
         int slot = lit;
         if (lit >= LIT_MAX) {
@@ -823,12 +827,12 @@ public final class FarFlightView {
         LIT[o + 4] = jy;
         LIT[o + 5] = jz;
         LIT[o + 6] = Double.isNaN(ground) ? lr : Math.max(lr, y + cam.y - ground);
-        // где ось струи уходит в землю: первый блок под срезом сопла, что держит струю (как карта высот MOTION_BLOCKING:
-        // твёрдое или жидкость), — по блокам вниз от сопла, а не по карте высот: под кроной или крышей она выше сопла
+        // where jet axis enters ground: first block below nozzle exit that holds jet (like MOTION_BLOCKING height map:
+        // solid or fluid), from blocks down from nozzle, not height map: under canopy or roof it is above nozzle
         double mid = flame.middle(), nx = x - jx * mid + cam.x, ny = y - jy * mid + cam.y, nz = z - jz * mid + cam.z;
         double under = lv == null || jy > -1e-6 ? Double.NaN : floorBelow(lv, nx, ny, nz);
-        // глубже — карта высот у сопла (струю горячего газа в сотни метров ведёт вниз и с высоты; ⚠ земля под соплом, а не
-        // там, где наклонная ось её встретит)
+        // deeper uses height map at nozzle (hundreds-of-metres hot-gas jet directed downward even from altitude;
+        // ⚠ ground under nozzle, not where inclined axis meets it)
         if (Double.isNaN(under) && lv != null && jy <= -1e-6) under = ground(lv, nx, nz);
         LIT[o + 7] = Double.isNaN(under) ? Double.POSITIVE_INFINITY : Math.max(0, ny - under) / -jy;
         LIT[o + 8] = burn;
@@ -836,13 +840,13 @@ public final class FarFlightView {
         LIT_FLAME[slot] = flame;
     }
 
-    /** Сколько блоков вниз от сопла искать землю под струёй. */
+    /** Blocks to search down from nozzle for ground under jet. */
     static final int FLOOR_DEPTH = 64;
     private static final BlockPos.MutableBlockPos FLOOR = new BlockPos.MutableBlockPos();
 
     /**
-     * Верх первого блока под (x, y, z) мира, что держит струю (твёрдое или жидкость); NaN — нет в {@link #FLOOR_DEPTH}
-     * блоках или чанка нет. Блок самого сопла не в счёт: на поджиге сопло бывает в блоке пусковой.
+     * Top of first world block under (x, y, z) that holds jet (solid or fluid); NaN — none within
+     * {@link #FLOOR_DEPTH} blocks or no chunk. Nozzle block itself excluded: on ignition nozzle may lie in launcher block.
      */
     static double floorBelow(ClientLevel lv, double x, double y, double z) {
         int bx = Mth.floor(x), by = Mth.floor(y), bz = Mth.floor(z);
@@ -855,13 +859,13 @@ public final class FarFlightView {
     }
 
     /**
-     * Свет факелов кадра на мир ({@link HeatPass.Frame#jet}: струя от сопла до точки Дрейпера по частям) и в глаз следующего
-     * кадра ({@link #flamesAtEye}), горячий газ их струй — дрожанием ({@link HeatPass.Frame#exhaust}); воздух air, 1/блок.
+     * Frame plume light on world ({@link HeatPass.Frame#jet}: nozzle-to-Draper-point jet parts) and at next frame's
+     * eye ({@link #flamesAtEye}), hot jet gas as shimmer ({@link HeatPass.Frame#exhaust}); air air, 1/block.
      */
     static void heat(HeatPass.Frame heat, double air) {
         for (int i = 0; i < lit; i++) {
             int o = LIT_STRIDE * i;
-            // в глаз этого кадра факелы уже вошли — прошлым кадром ({@link #flamesAtEye})
+            // plumes already entered this frame's eye through previous frame ({@link #flamesAtEye})
             heat.jet(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], air, LIT[o + 6], LIT[o + 7]);
             heat.exhaust(LIT[o], LIT[o + 1], LIT[o + 2], LIT[o + 3], LIT[o + 4], LIT[o + 5], LIT_FLAME[i], LIT[o + 7], LIT[o + 8], LIT[o + 9]);
             LIT_FLAME[i] = null;
@@ -871,14 +875,14 @@ public final class FarFlightView {
         litEye = 0;
     }
 
-    /** Свет факелов у глаза в последнем собранном кадре (линейный, белая стена в полдень — 1). */
+    /** Plume light at eye in last collected frame (linear, white wall at noon — 1). */
     private static double flamesAtEye;
 
     static double flamesAtEye() {
         return flamesAtEye;
     }
 
-    /** Шар радиуса r с центром (dx, dy, dz) на дальности d хоть краем в кадре (конус до угла экрана). */
+    /** Sphere radius r centred at (dx, dy, dz), distance d, at least partly in frame (cone to screen corner). */
     static boolean inFrame(FarView view, double dx, double dy, double dz, double d, double r) {
         double angle = view.edge() + Math.asin(Math.min(1, r / d));
         if (angle >= Math.PI) return true;
@@ -887,18 +891,18 @@ public final class FarFlightView {
     }
 
     /**
-     * Доля ядра света факела на дальности d: путь по пакетам — всё (струи нет), у сущности — с 0,8 прорисовки
-     * ({@link FarView#farShare}), а ближе ядро — её струя ({@code PlumeRenderer} тает той же долей). Блик и вуаль — на
-     * любой дальности: на краю прорисовки факел один.
+     * Plume light-core share at distance d: packet path uses all (no jet), entity uses from 0.8 render distance
+     * ({@link FarView#farShare}); nearer, core is its jet ({@code PlumeRenderer} fades by same share). Glare and
+     * veil at any range: exactly one plume at render edge.
      */
     static double flameCore(boolean entity, FarView view, double d) {
         return entity ? view.farShare(d) : 1;
     }
 
     /**
-     * Середина факела back блоков позади корпуса по оси носа ({@link #BACK}, от камеры); out[0] — её дальность. Ось — по
-     * курсу и тангажу пути, как у модели и струи вблизи ({@code ProjectilePose#rotation}), а не по ходу: на поджиге
-     * снаряд ещё стоит, и свет лёг бы на середину корпуса.
+     * Plume centre back blocks behind body along nose axis ({@link #BACK}, camera-relative); out[0] its range.
+     * Axis follows path yaw and pitch, like nearby model and jet ({@code ProjectilePose#rotation}), not motion:
+     * on ignition projectile still stands, so light would lie in body centre.
      */
     private static void flameAt(FlightTrack track, double t, double back, double dx, double dy, double dz, double[] out) {
         track.angles(t, ANGLES);
@@ -914,8 +918,8 @@ public final class FarFlightView {
     }
 
     /**
-     * Конец ленты в кэш кадра под номером slot: где (от камеры), полуширина с полом в пиксель, непрозрачность с дымкой,
-     * цвет, свет мира.
+     * Ribbon end into frame cache slot: position (camera-relative), half-width with pixel floor, opacity with
+     * haze, colour, world light.
      */
     private static void end(double[] look, double dx, double dy, double dz, int light, FarView view, int slot) {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -939,9 +943,9 @@ public final class FarFlightView {
     }
 
     /**
-     * Изгиб оси следа у точки i в возрасте age тиков — в {@link #BEND}: между изгибами целых возрастов, которые точка
-     * считает раз в тик ({@link TrailPoints#bend}): {@link TrailModel#wander} — самое дорогое у точки в кадре, а за тик ось
-     * сдвигается на доли метра (TrailModelTest.bendsMoveSmoothly).
+     * Trail axis bend at point i aged age ticks into {@link #BEND}: interpolate whole-age bends computed once
+     * per tick by point ({@link TrailPoints#bend}). {@link TrailModel#wander} is point's most expensive frame
+     * calculation, while axis moves fractions of a metre per tick (TrailModelTest.bendsMoveSmoothly).
      */
     private static void bend(TrailPoints trail, int i, Trail style, double age) {
         int k = (int) Math.floor(age), o = 6 * i;
@@ -967,13 +971,13 @@ public final class FarFlightView {
         BEND[2] = b[o + 2] + (b[o + 5] - b[o + 2]) * f;
     }
 
-    /** {@link TrailModel#wander} точки i в возрасте age тиков — в {@link #BEND}. */
+    /** Point i's {@link TrailModel#wander} at age ticks into {@link #BEND}. */
     private static void wanderAt(TrailPoints trail, int i, Trail style, int age) {
         TrailModel.wander(BENDS ^ trail.owner[i] * 0x9E3779B97F4A7C15L, trail.path[i], age / 20.0, trail.stability[i], trail.wind[i],
                 spacing(trail, i, style), trail.clearance[i], BEND);
     }
 
-    /** Шаг точек ленты у точки i, м: до предыдущей точки той же ленты, без неё — по скорости, с которой её клали. */
+    /** Ribbon point spacing at point i, m: to previous point in same ribbon; absent — from laying speed. */
     private static double spacing(TrailPoints trail, int i, Trail style) {
         long p = trail.prev[i];
         if (!trail.holds(p)) return style.step() / (20.0 * trail.inverse[i]);
@@ -981,12 +985,12 @@ public final class FarFlightView {
         return Math.sqrt(sq(trail.x[i] - trail.x[j]) + sq(trail.y[i] - trail.y[j]) + sq(trail.z[i] - trail.z[j]));
     }
 
-    /** Концы отрезка трубки следа ({@link #segment}). */
+    /** Trail tube segment ends ({@link #segment}). */
     private static final Tube TA = new Tube(), TB = new Tube();
 
     /**
-     * Отрезок ленты между концами a и b из кэша кадра; цвет — середина между их цветами. Поперёк у конца a — тот же, что
-     * у прошлого отрезка этой ленты (стык без щели на изгибе), у b — запоминается для следующего.
+     * Ribbon segment between frame-cache ends a and b; colour midway between theirs. Cross vector at a matches
+     * previous segment in ribbon (gapless bend joint); b's is saved for next segment.
      */
     private static void segment(SmokePuffs.Out out, int a, int b, Trail style) {
         FarView view = seen;
@@ -1009,14 +1013,14 @@ public final class FarFlightView {
     }
 
     /**
-     * Конец отрезка трубки дыма (след снаряда, шлейф пожара) от камеры: σ сечения, м; ослабление на метр, м; ширина на
-     * половине непрозрачности середины, м; ленты — полуширина и непрозрачность (уже с полом в пиксель и дымкой), свет мира.
+     * Smoke tube segment end (projectile trail, fire plume), camera-relative: cross-section σ, m; extinction per
+     * metre, m; half-centre-opacity width, m; ribbon half-width and opacity (pixel floor and haze included), world light.
      */
     static final class Tube {
         double x, y, z, sigma, e, width, half;
         float alpha;
         int light;
-        /** Доля непрозрачности, что рисуется дымом (у тела огня — {@code SmokePuffs.smokeShare}); {@link #set} — 1. */
+        /** Opacity fraction drawn as smoke (fire body uses {@code SmokePuffs.smokeShare}); {@link #set} sets 1. */
         double shown = 1;
 
         Tube set(double x, double y, double z, double sigma, double e, double width, double half, float alpha, int light) {
@@ -1034,63 +1038,63 @@ public final class FarFlightView {
         }
     }
 
-    /** Итог {@link #line}: трубку нарисовали одни клубы; лента не легла (бледна); лента легла (поперёк у b — в joint). */
+    /** {@link #line} result: tube drawn only by billows; ribbon not laid (faint); ribbon laid (b cross vector in joint). */
     static final int CLUBS = 0, NONE = 1, RIBBON = 2;
 
     /**
-     * Отрезок трубки дыма между концами a и b — одна для следов снарядов и шлейфов пожаров: крупная на экране — клубами
-     * ({@link SmokePuffs#tube}: цвет толстого слоя (cr, cg, cb), степень тени shade), узкая — лентой цвета (r, g, b), между — плавно
-     * ({@link #puffShare}, по настоящей ширине у каждого места и конца ленты: доли клубов и ленты в сумме — 1); клубы — в общий
-     * бюджет кадра ({@link #CLUB_BUDGET}: от него зависит только шаг мест, не доли), их места ждут плана кадра
-     * ({@code SmokePuffs.flush}); tube — трубка (след снаряда, шлейф источника). joint — поперёк ленты у a (NaN — нет, начало
-     * ленты), на выходе — у b. Лента — только там, где трубка уже {@link #PUFFS_FULL} ({@link #ribbonPart}): шире она — полоса с
-     * прямыми краями, одним цветом поперёк и без тени.
+     * Smoke tube segment between ends a and b — shared by projectile trails and fire plumes: large onscreen uses
+     * billows ({@link SmokePuffs#tube}: thick-layer colour (cr, cg, cb), shade exponent shade); narrow uses ribbon
+     * colour (r, g, b); smooth between ({@link #puffShare}, actual width at each place and ribbon end: billow and
+     * ribbon shares sum to 1). Billows share frame budget ({@link #CLUB_BUDGET}: affects spacing only, not shares),
+     * their places await frame plan ({@code SmokePuffs.flush}); tube identifies tube (projectile trail, source
+     * plume). joint is ribbon cross vector at a (NaN — absent, ribbon start), b on return. Ribbon only where tube
+     * narrower than {@link #PUFFS_FULL} ({@link #ribbonPart}): wider gives a straight-edged strip, one colour across, no shade.
      */
     static int line(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float cr, float cg, float cb, double shade,
                     double sigma0, long seed, long tube, float[] joint) {
         double tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z;
         double gap = FarSprites.distance(a.x, a.y, a.z, tx, ty, tz);
-        // доля клубов у самой широкой на экране точки отрезка: ноль — у отрезка одна лента
+        // billow share at segment's widest onscreen point: zero — only ribbon for segment
         double puffs = puffShare(Math.max(a.width, b.width), gap, view.pixel());
-        // клубы — только у отрезка в кадре (шар отрезка с квадратами его клубов: до ~9σ от оси) или у глаза (глаз в этом шаре:
-        // его вещество — вуаль, а середина отрезка бывает за спиной)
+        // billows only for segment in frame (segment sphere including billow quads: up to ~9σ from axis) or at eye
+        // (eye in sphere: matter forms veil, while segment centre may be behind)
         double reach = 0.5 * Math.sqrt(tx * tx + ty * ty + tz * tz) + 9 * Math.max(a.sigma, b.sigma);
         double mx = a.x + 0.5 * tx, my = a.y + 0.5 * ty, mz = a.z + 0.5 * tz, md = Math.sqrt(mx * mx + my * my + mz * mz);
         if (puffs > 0 && (md <= reach || inFrame(view, mx, my, mz, md, reach))) {
             int held = SmokePuffs.tube(view, out, a.x, a.y, a.z, a.sigma, a.e, a.width, b.x, b.y, b.z, b.sigma, b.e, b.width, cr, cg, cb, shade,
                     sigma0, seed, stride, 0.5 * (a.shown + b.shown), tube);
-            // мест кадра нет ({@code SmokePuffs.PLACES}): мест у отрезка в этом кадре нет, просил он их — в бюджет
+            // no frame places ({@code SmokePuffs.PLACES}): segment has no places this frame, requested places count toward budget
             clubs += held < 0 ? -held - 1 : held;
         }
-        // уже {@link #PUFFS_FROM} весь — одна полоса без клубов
+        // wholly narrower than {@link #PUFFS_FROM}: one strip without billows
         int drawn = puffs <= 0 ? strip(view, out, a, b, r, g, bl, joint) : ribbonPart(view, out, a, b, r, g, bl, joint);
         return drawn == NONE && puffs >= 1 ? CLUBS : drawn;
     }
 
-    /** Расстояние от глаза до точки u (0 — a, 1 — b) отрезка a–b. */
+    /** Eye distance to point u (0 — a, 1 — b) on segment a–b. */
     private static double distanceAt(Tube a, Tube b, double u) {
         double x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u, z = a.z + (b.z - a.z) * u;
         return Math.sqrt(x * x + y * y + z * z);
     }
 
-    /** Ширина трубки на экране в точке u отрезка a–b, пикселей (ширина — линейно между концами). */
+    /** Tube screen width at point u on segment a–b, pixels (width linear between ends). */
     private static double pixelsAt(Tube a, Tube b, double u, double pixel) {
         return (a.width + (b.width - a.width) * u) / Math.max(distanceAt(a, b, u) * pixel, 1e-9);
     }
 
     /**
-     * Лента отрезка a–b — только там, где трубка на экране уже {@link #PUFFS_FULL} (по настоящей ширине): у отрезка с узким и
-     * широким концом (или с широкой серединой у глаза) полоса через широкую часть была бы шириной в сотни пикселей
-     * ({@code SmokeRaidTest.mixedRibbonEndsAreCut}); кусок кончается там, где его доля ленты сходит на нет (на самом
-     * {@link #PUFFS_FULL} — ноль: разреза по непрозрачности нет). Доля ленты вдоль полосы — по прямой между вершинами, у каждой
-     * вершины — по её ширине ({@link #knots}): одна полоса по концам держала широкую середину до порога и роняла её за порогом
-     * с 0,39 до 0,01 (ревью #466), а с вершиной только в самой широкой точке место разреза, отъезжая от неё как √Δw, меняло долю
-     * в четверти отрезка на 0,016 за 0,005 px ({@code SmokeRaidTest.ribbonShareIsContinuous}). Возвращает {@link #RIBBON}, если
-     * лента дошла до b (joint — поперёк у b), иначе {@link #NONE}.
+     * Segment a–b ribbon only where tube screen width is narrower than {@link #PUFFS_FULL} (actual width): for
+     * narrow/wide ends (or wide middle near eye), strip across wide part would be hundreds of pixels wide
+     * ({@code SmokeRaidTest.mixedRibbonEndsAreCut}); piece ends where ribbon share vanishes (zero exactly at
+     * {@link #PUFFS_FULL}: no opacity cut). Ribbon share along strip is linear between vertices, each from its
+     * width ({@link #knots}): one end-to-end strip held wide middle to threshold then dropped from 0.39 to 0.01
+     * beyond it (review #466); with a vertex only at widest point, cut moving away as √Δw changed share a quarter
+     * along segment by 0.016 over 0.005 px ({@code SmokeRaidTest.ribbonShareIsContinuous}). Returns {@link #RIBBON}
+     * if ribbon reached b (joint is b cross vector), otherwise {@link #NONE}.
      */
     private static int ribbonPart(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float[] joint) {
         double pixel = view.pixel();
-        // самое узкое место отрезка — один из концов (ширина на экране квазивогнута, {@link #knots}): оба шире PUFFS_FULL — весь шире
+        // narrowest segment point is an end (screen width quasiconcave, {@link #knots}): both wider than PUFFS_FULL — all wider
         if (pixelsAt(a, b, 0, pixel) >= PUFFS_FULL && pixelsAt(a, b, 1, pixel) >= PUFFS_FULL) return NONE;
         int n = knots(a, b, pixel), drawn = NONE;
         Tube prev = null;
@@ -1100,7 +1104,7 @@ public final class FarFlightView {
             if (i > 0 && (prev != null || here != null)) {
                 double was = KNOT_U[i - 1];
                 if (prev == null) {
-                    // из широкого в узкое: полоса — с места, где трубка уже PUFFS_FULL
+                    // wide to narrow: strip starts where tube becomes narrower than PUFFS_FULL
                     joint[0] = Float.NaN;
                     prev = cut(a, b, crossing(a, b, u, was, pixel), pixel, KNOT_TUBES[KNOT_TUBES.length - 1]);
                 }
@@ -1113,9 +1117,9 @@ public final class FarFlightView {
         return prev != null ? drawn : NONE;
     }
 
-    /** Вершин ленты отрезка — не больше: концы, самая широкая точка и по три с каждой её стороны. */
+    /** Maximum segment ribbon vertices: ends, widest point and three on each side. */
     private static final int KNOTS = 9;
-    /** Вершины ленты от самой широкой точки — на столько её расстояний от глаза ({@link #knots}). */
+    /** Ribbon vertices this many eye-distances from widest point ({@link #knots}). */
     private static final double[] KNOT_STEPS = {0.3, 0.9, 2};
     private static final double[] KNOT_U = new double[KNOTS], KNOT_P = new double[KNOTS];
     private static final Tube[] KNOT_TUBES = new Tube[KNOTS + 1];
@@ -1126,12 +1130,13 @@ public final class FarFlightView {
     }
 
     /**
-     * Вершины ленты отрезка a–b — в {@link #KNOT_U} (доли отрезка по возрастанию) и {@link #KNOT_P} (ширина там, пикселей);
-     * возвращает их число. Ширина на экране w/d квазивогнута (w по отрезку линейна, d выпукло: {w ≥ k·d} — отрезок), у неё
-     * одна самая широкая точка — её находит золотое сечение. Около неё ширина меняется квадратично, и место, где трубка
-     * становится шире {@link #PUFFS_FULL}, отъезжает от неё как √Δw: вершины на 0,3, 0,9 и 2 её расстояния от глаза вдоль
-     * отрезка ({@link #KNOT_STEPS}) держат долю ленты там, где оно идёт (у ближней ширина ниже наибольшей на 4 %, доля ленты в
-     * ней, когда та доходит до порога, — 0,02). Короткому отрезку вдали они не нужны: ширина по нему почти одна.
+     * Segment a–b ribbon vertices into {@link #KNOT_U} (ascending segment fractions) and {@link #KNOT_P} (screen
+     * width there, pixels); returns count. Screen width w/d is quasiconcave (w linear along segment, d convex:
+     * {w ≥ k·d} is an interval), with one widest point found by golden-section search. Near it, width changes
+     * quadratically; point where tube becomes wider than {@link #PUFFS_FULL} moves away as √Δw: vertices at
+     * 0.3, 0.9 and 2 times its eye distance along segment ({@link #KNOT_STEPS}) hold ribbon share where it moves
+     * (nearest has width 4 % below maximum, ribbon share there when maximum reaches threshold is 0.02). Short
+     * distant segment needs none: width nearly constant along it.
      */
     private static int knots(Tube a, Tube b, double pixel) {
         double lo = 0, hi = 1, g = (Math.sqrt(5) - 1) / 2;
@@ -1164,7 +1169,7 @@ public final class FarFlightView {
         return n;
     }
 
-    /** Вершина u — после n прежних, если она внутри отрезка и не у прежней (ближе {@link #KNOT_GAP} — одна). */
+    /** Vertex u after n previous ones if inside segment and not near an existing one (within {@link #KNOT_GAP} — one). */
     private static int knot(int n, double u) {
         if (u <= KNOT_U[n - 1] + KNOT_GAP || u > 1) return n;
         if (u > 1 - KNOT_GAP) u = 1;
@@ -1172,15 +1177,15 @@ public final class FarFlightView {
         return n + 1;
     }
 
-    /** Вершины ленты ближе этой доли отрезка — одна. */
+    /** Ribbon vertices closer than this segment fraction count as one. */
     private static final double KNOT_GAP = 1e-4;
 
-    /** Вершина ленты u отрезка a–b: конец — сам он, иначе точка отрезка ({@link #cut}) в своём месте пула. */
+    /** Ribbon vertex u on a–b: end itself, otherwise segment point ({@link #cut}) in its pool slot. */
     private static Tube knot(Tube a, Tube b, double u, double pixel, int i) {
         return u <= 0 ? a : u >= 1 ? b : cut(a, b, u, pixel, KNOT_TUBES[i]);
     }
 
-    /** Место между узкой точкой from и широкой wide отрезка a–b, где трубка на экране — {@link #PUFFS_FULL} (деление пополам). */
+    /** Point between narrow from and wide wide on a–b where screen tube width is {@link #PUFFS_FULL} (bisection). */
     private static double crossing(Tube a, Tube b, double from, double wide, double pixel) {
         double lo = from, hi = wide;
         for (int i = 0; i < 20; i++) {
@@ -1191,7 +1196,7 @@ public final class FarFlightView {
         return lo;
     }
 
-    /** Точка u отрезка a–b концом ленты — в out: место, σ, ослабление, ширина и непрозрачность — по прямой между концами. */
+    /** Segment a–b point u as ribbon end in out: position, σ, extinction, width, opacity linearly between ends. */
     private static Tube cut(Tube a, Tube b, double u, double pixel, Tube out) {
         double x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u, z = a.z + (b.z - a.z) * u, w = a.width + (b.width - a.width) * u;
         ribbon(w, Math.sqrt(x * x + y * y + z * z), pixel, CUT_HALF);
@@ -1200,31 +1205,31 @@ public final class FarFlightView {
         return out;
     }
 
-    /** Лента от конца a до конца b с долей ленты у каждого по настоящей ширине ({@link #puffShare}). */
+    /** Ribbon from a to b, each end's ribbon share from actual width ({@link #puffShare}). */
     private static int strip(FarView view, SmokePuffs.Out out, Tube a, Tube b, float r, float g, float bl, float[] joint) {
         double pixel = view.pixel();
         double keepA = 1 - puffShare(a.width, Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z), pixel);
         double keepB = 1 - puffShare(b.width, Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z), pixel);
         if (keepA <= 0 && keepB <= 0) return NONE;
-        // лента — в план кадра, как клубы: её заливка — в бюджете ({@code SmokePuffs.ribbon})
+        // ribbon enters frame plan like billows: fill within budget ({@code SmokePuffs.ribbon})
         return SmokePuffs.ribbon(view, out, a.x, a.y, a.z, a.half, a.alpha * (float) keepA, a.light, b.x, b.y, b.z, b.half,
                 b.alpha * (float) keepB, b.light, r, g, bl, joint) ? RIBBON : NONE;
     }
 
-    /** Бюджет клубов трубок по прошлому кадру — в начале кадра, до всех, кто рисует трубки ({@code FarRenderer}). */
+    /** Tube-billow budget from previous frame, at frame start before any tube drawing ({@code FarRenderer}). */
     static void budget() {
-        // мест на отрезок — ~1/шаг: сколько просили сверх бюджета, во столько и реже (сразу, иначе первые кадры налёта у части
-        // отрезков без клубов); не реже одного места на отрезок
+        // places per segment ~1/spacing: requested/budget ratio thins by same factor (immediately, or first raid frames
+        // leave some segments without billows); at least one place per segment
         if (clubs > CLUB_BUDGET) stride = Math.min(stride * Math.max(1.1, (double) clubs / CLUB_BUDGET), 1 << SmokePuffs.TUBE_LEVELS);
         else if (clubs < CLUB_BUDGET / 2) stride = Math.max(1, stride / 1.02);
         clubs = 0;
     }
 
-    // ---------------------------------------------------------------- чистая геометрия видимости (юнит-тесты)
+    // ---------------------------------------------------------------- pure visibility geometry (unit tests)
 
     /**
-     * Доля модели в виде корпуса при длине length пикселей: до {@link FarModels#DOT_BELOW} — 0 (точка), от
-     * {@link FarModels#MODEL_FROM} — 1 (модель), между — плавно; остальное — точка.
+     * Model share in body look at length pixels: 0 below {@link FarModels#DOT_BELOW} (dot), 1 from
+     * {@link FarModels#MODEL_FROM} (model), smooth between; remainder is dot.
      */
     static double modelShare(double length) {
         double k = (length - FarModels.DOT_BELOW) / (FarModels.MODEL_FROM - FarModels.DOT_BELOW);
@@ -1233,16 +1238,16 @@ public final class FarFlightView {
     }
 
     /**
-     * Корпус на дальности d: радиус круга и его непрозрачность ({@link Sight#body}) — круг той же площади, что средний
-     * силуэт {@code area}.
+     * Body at range d: circle radius and opacity ({@link Sight#body}) — circle matching mean silhouette
+     * {@code area}.
      */
     static void body(double area, double d, double pixel, double[] out) {
         Sight.body(Math.sqrt(area / Math.PI), d, pixel, out);
     }
 
     /**
-     * Доля отрезка трубки шириной width (на половине непрозрачности середины, м), что рисуют клубы, когда ближняя его точка
-     * в gap блоках от глаза ({@link #PUFFS_FROM}, {@link #PUFFS_FULL}); pixel — угол пикселя, рад.
+     * Share of tube segment width width (at half centre opacity, m) drawn by billows when nearest point is
+     * gap blocks from eye ({@link #PUFFS_FROM}, {@link #PUFFS_FULL}); pixel is pixel angle, rad.
      */
     static double puffShare(double width, double gap, double pixel) {
         double px = width / Math.max(gap * pixel, 1e-9);
@@ -1251,9 +1256,8 @@ public final class FarFlightView {
     }
 
     /**
-     * Лента шириной width на дальности d: полуширина для {@link FarSprites#ribbon} и доля непрозрачности. Уже пикселя
-     * она не пропадает, а рисуется в полтора пикселя, бледнее во столько же раз: сколько неба закрывает след, столько
-     * и лента.
+     * Ribbon width width at range d: half-width for {@link FarSprites#ribbon} and opacity fraction. Below a pixel
+     * it remains, drawn at one and a half pixels proportionally fainter: ribbon covers as much sky as trail.
      */
     static void ribbon(double width, double d, double pixel, double[] out) {
         double half = width / 2, floor = 0.5 * Sight.MIN_PIXELS * pixel * d;
@@ -1269,17 +1273,17 @@ public final class FarFlightView {
         return ((rgb >> (16 - 8 * channel)) & 255) / 255f;
     }
 
-    // ---------------------------------------------------------------- состояние
+    // ---------------------------------------------------------------- state
 
     static boolean isEmpty() {
         return active == 0 && POINTS.isEmpty();
     }
 
     /**
-     * Сводка для лога сценария (раз в секунду): сколько снарядов рисуется вдали и каких, у ближнего — дальность,
-     * прозрачность воздуха, корпус (точка) и факел в пикселях с непрозрачностью, модель — её длина в пикселях и копия,
-     * закрыт ли рельефом; точек шлейфов в кадре.
-     * Пусто — вдали ничего нет.
+     * Scenario log summary (once per second): distant projectile count and kinds; nearest one's range, air
+     * transmittance, body (dot) and plume in pixels with opacity, model pixel length and detail copy, terrain
+     * occlusion; trail points in frame.
+     * Empty — nothing distant.
      */
     public static String describe() {
         if (isEmpty() || flights == 0 && points == 0 && flames == 0) return "";
@@ -1327,7 +1331,7 @@ public final class FarFlightView {
                 .append(", sustain axis in view cone ").append(sustainInCone).append(String.format(Locale.ROOT, ", alpha max %.3f)", sustainAlpha)).toString();
     }
 
-    /** Выход из мира или смена измерения. */
+    /** World exit or dimension change. */
     static void reset() {
         flamesAtEye = 0;
         lit = 0;

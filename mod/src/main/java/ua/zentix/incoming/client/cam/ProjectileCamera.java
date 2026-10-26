@@ -38,25 +38,25 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Камера снаряда: картинка с его стабилизированной камеры (как у барражирующих боеприпасов). Клавиша камеры —
- * к ближайшему по времени снаряду, ещё раз — к следующему, после последнего — обратно к себе; Shift — выход.
- * Смотреть можно мышью (камера на подвесе), ЛКМ — перенацелить снаряд на то, что в перекрестии. Замеченную цель
- * (игрок, моб, аппарат по приказу с пульта) шахед и «Ланцет» ведут, только пока она в кадре: куда смотрит камера, клиент
- * шлёт серверу каждый тик ({@link C2S.CameraView}), а что выходит, показывает строка над подсказкой.
- * <p>Как в кино, три плана. <b>Пуск</b>: пока снаряд на пусковой и на ускорителе, камера стоит сбоку от пусковой
- * и ведёт его длинным фокусом. <b>Борт</b>: после отделения ускорителя — вид с борта. <b>Попадание</b>: в момент
- * удара — полсекунды помех, затем камера со стороны захода медленно облетает взрыв несколько секунд; дальше
- * следующий снаряд залпа или возврат к себе. Пока снаряда нет на клиенте (дальше прорисовки или вне загруженного
- * мира) — {@link TacticalMap}: карта по телеметрии сервера; видео включается само, как только сервер пришлёт
- * сущность. F5 на борту — вид со стороны. Игрок в это время стоит на месте.
- * Съёмочная камера — клиентская сущность-маркер, её нет в мире.
+ * Projectile camera: view from its stabilized camera (as on loitering munitions). Camera key goes to the projectile
+ * nearest by time, then the next; after the last, back to self; Shift exits. Mouse looks around (gimballed camera),
+ * LMB retargets the projectile to the crosshair. Shahed and Lancet track a sighted target (player, mob, craft ordered
+ * from the remote) only while in frame: each tick the client sends the viewing direction ({@link C2S.CameraView}),
+ * and a line above the hint shows the result.
+ * <p>Three shots, as in cinema. <b>Launch</b>: while on the launcher and booster, the camera stands beside the launcher
+ * and tracks with a long lens. <b>Onboard</b>: after booster separation, the onboard view. <b>Impact</b>: half a second
+ * of interference at impact, then the camera slowly orbits the explosion for a few seconds from the approach side;
+ * then the next salvo projectile or back to self. While the client has no projectile (beyond render distance or
+ * outside the loaded world), {@link TacticalMap} shows a map using server telemetry; video resumes automatically
+ * when the server sends the entity. F5 onboard gives an external view. The player stays in place.
+ * The filming camera is a client marker entity absent from the world.
  */
 public final class ProjectileCamera {
-    /** Сколько тиков держатся помехи после потери связи. */
+    /** Ticks of interference after losing the link. */
     private static final int LOST_TICKS = 30;
-    /** Попадание: помехи, потом облёт взрыва (тиков). */
+    /** Impact: interference, then orbit the explosion (ticks). */
     private static final int IMPACT_STATIC = 8, IMPACT_TICKS = 110;
-    /** Снаряд пропал ближе этого к цели или в пике — это попадание, а не уход из зоны связи. */
+    /** Projectile lost nearer than this to the target or during a dive means impact, rather than loss of link range. */
     private static final double IMPACT_RANGE = 40;
 
     private enum Shot { ONBOARD, LAUNCH, IMPACT, WAIT }
@@ -69,20 +69,20 @@ public final class ProjectileCamera {
     private static float savedYaw, savedPitch;
     private static CameraType savedCamera = CameraType.FIRST_PERSON;
     private static boolean shiftWasDown;
-    /** Куда перенацелили (для метки), тиков показа. */
+    /** Retargeted location (for the marker), display ticks. */
     @Nullable
     private static Vec3 newTarget;
     private static int newTargetTicks;
 
     private static Shot shot = Shot.WAIT;
-    /** Съёмочная камера (пуск и попадание). */
+    /** Filming camera (launch and impact). */
     @Nullable
     private static Marker rig;
-    /** Где снаряд стоял на пусковой — отсюда снимаем пуск. */
+    /** Projectile position on the launcher: film the launch from here. */
     @Nullable
     private static Vec3 pad;
     private static float padYaw;
-    /** Последнее, что видели: положение, курс, фаза — чтобы понять, что это было попадание, и снять его. */
+    /** Last seen position, heading, phase: to identify and film an impact. */
     @Nullable
     private static Vec3 lastPos, lastDir;
     private static boolean lastTerminal;
@@ -90,10 +90,10 @@ public final class ProjectileCamera {
     @Nullable
     private static Vec3 impactAt;
     private static float orbit;
-    /** Снаряд, который сейчас на карте (видео нет): если он пропадёт, карта покажет, где и чем кончилось. */
+    /** Projectile currently on the map (no video): if it disappears, the map shows where and how it ended. */
     @Nullable
     private static ClientFlights.Tracked mapped;
-    /** Снаряды, уже виденные (для автокамеры: новый снаряд — сразу на пуск). */
+    /** Projectiles already seen (auto-camera: go straight to a new projectile's launch). */
     private static final java.util.Set<UUID> SEEN = new java.util.HashSet<>();
 
     private ProjectileCamera() {}
@@ -102,18 +102,18 @@ public final class ProjectileCamera {
         return active;
     }
 
-    /** Камера сейчас смотрит глазами снаряда (а не ждёт связи и не снимает со стороны). */
+    /** Camera currently looks through the projectile's eyes (rather than waiting for a link or filming externally). */
     public static boolean isViewing() {
         Minecraft mc = Minecraft.getInstance();
         return active && mc.getCameraEntity() instanceof StrikeProjectile;
     }
 
-    /** Камера снимает со стороны: пуск или попадание. */
+    /** Camera filming externally: launch or impact. */
     public static boolean isFilming() {
         return active && (shot == Shot.LAUNCH || shot == Shot.IMPACT && impactTick >= IMPACT_STATIC);
     }
 
-    /** Клавиша камеры: к ближайшему снаряду, к следующему, после последнего — к себе. */
+    /** Camera key: nearest projectile, next, back to self after the last. */
     public static void cycle() {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
@@ -146,7 +146,7 @@ public final class ProjectileCamera {
             savedPitch = player.getXRot();
             savedCamera = mc.options.getCameraType();
             mc.options.setCameraType(CameraType.FIRST_PERSON);
-            // выход — новым нажатием: Shift, зажатый, когда камера открылась (автокамера на пуске), её не закрывает
+            // Exit requires a new press: Shift held when the camera opened (auto-camera at launch) does not close it.
             shiftWasDown = mc.options.keyShift.isDown();
         }
         active = true;
@@ -164,7 +164,7 @@ public final class ProjectileCamera {
         mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.6f, 0.4f));
     }
 
-    /** Взгляд — по курсу снаряда, дальше мышь водит камеру на подвесе. */
+    /** View follows projectile heading, then the mouse moves the gimballed camera. */
     private static void aimAlong(LocalPlayer player, StrikeProjectile p) {
         player.setYRot(p.getYRot());
         player.setXRot(Mth.clamp(p.getXRot() + 8, -89, 89));
@@ -218,18 +218,18 @@ public final class ProjectileCamera {
         ClientFlights.Tracked f = following == null ? null : ClientFlights.find(following);
         StrikeProjectile p = f == null ? null : f.entity();
         if (p == null && lastPos != null && (lastTerminal || f == null || lastPos.distanceTo(f.target()) < IMPACT_RANGE)) {
-            // снаряд пропал у цели или в пике: попадание
+            // Projectile disappeared at the target or in a dive: impact.
             startImpact(mc, f == null ? lastPos : nearer(lastPos, f.target()));
             return;
         }
         if (f == null) {
-            // ушёл без попадания (сбит, отбой): помехи, потом следующий снаряд залпа или к себе
+            // Gone without impact (shot down, abort): interference, then next salvo projectile or self.
             if (lostTicks == 0) mc.setCameraEntity(mc.player);
             shot = Shot.WAIT;
             if (++lostTicks >= LOST_TICKS) next(mc);
             return;
         }
-        // на пусковой снаряд ещё спрятан в контейнере, пока её разворачивают, — но пусковую уже снимаем
+        // Projectile is still hidden in its container while the launcher turns, but already film the launcher.
         if (p != null && (p.isActive() || p.flightPhase().onLauncher())) {
             mapped = null;
             if (p.isActive()) {
@@ -246,7 +246,7 @@ public final class ProjectileCamera {
             if (launch) {
                 if (shot != Shot.LAUNCH) {
                     shot = Shot.LAUNCH;
-                    // сбоку от пусковой, чуть впереди и выше: пакет, факел и сход — в одном кадре, пакет не заслоняет
+                    // Beside the launcher, slightly ahead and above: rack, plume and launch rail exit in one frame, rack not occluding.
                     film(mc, Local.at(pad, padYaw, 0, 24, 5, 2), 0);
                     lookAt(pad, 1);
                 }
@@ -257,11 +257,11 @@ public final class ProjectileCamera {
                     shot = Shot.ONBOARD;
                 }
                 if (mc.getCameraEntity() != p) mc.setCameraEntity(p);
-                // сервер ведёт замеченную цель, только пока она в кадре: куда смотрит камера, знает лишь клиент
+                // Server tracks a sighted target only while in frame: only the client knows the camera's viewing direction.
                 PacketDistributor.sendToServer(new C2S.CameraView(p.getUUID(), mc.player.getYRot(), mc.player.getXRot()));
             }
         } else {
-            // вне зоны видео: что видели раньше, уже не место попадания; пока — карта
+            // Outside video range: the last sighting is no longer the impact site; map for now.
             shot = Shot.WAIT;
             lastPos = null;
             if (mc.getCameraEntity() != mc.player) mc.setCameraEntity(mc.player);
@@ -270,7 +270,7 @@ public final class ProjectileCamera {
         }
     }
 
-    /** Автокамера (настройка клиента): новый свой снаряд — сразу к нему, начиная с пуска. */
+    /** Auto-camera (client setting): go straight to a new owned projectile, starting with its launch. */
     private static void autoFollow(Minecraft mc) {
         List<ClientFlights.Tracked> all = ClientFlights.all();
         if (all.isEmpty()) {
@@ -287,7 +287,7 @@ public final class ProjectileCamera {
         }
     }
 
-    /** Следующий снаряд залпа или к себе. */
+    /** Next salvo projectile or self. */
     private static void next(Minecraft mc) {
         List<ClientFlights.Tracked> rest = ClientFlights.all();
         if (rest.isEmpty()) {
@@ -299,11 +299,11 @@ public final class ProjectileCamera {
     }
 
     private static Vec3 nearer(Vec3 last, Vec3 target) {
-        // снаряд виден с опозданием на тик-два: если цель рядом, взрыв — у неё
+        // Projectile view lags a tick or two: if the target is nearby, the explosion is there.
         return last.distanceTo(target) < IMPACT_RANGE ? last.lerp(target, 0.5) : last;
     }
 
-    /** Попадание: помехи, потом облёт со стороны захода. */
+    /** Impact: interference, then orbit from the approach side. */
     private static void startImpact(Minecraft mc, Vec3 at) {
         shot = Shot.IMPACT;
         impactTick = 0;
@@ -313,7 +313,7 @@ public final class ProjectileCamera {
         if (mc.player != null) mc.setCameraEntity(mc.player);
     }
 
-    /** Облёт взрыва: радиус 42→32 блока, 14–18 над точкой (не ниже рельефа), медленно наезжая. */
+    /** Explosion orbit: radius 42→32 blocks, 14–18 above the point (at least terrain height), slowly closing in. */
     private static void orbitImpact(Minecraft mc) {
         if (rig == null || impactAt == null || mc.level == null) return;
         float t = (impactTick - IMPACT_STATIC) / (float) IMPACT_TICKS;
@@ -330,7 +330,7 @@ public final class ProjectileCamera {
         lookAt(impactAt.add(0, 6, 0), 0.5f);
     }
 
-    /** Поставить съёмочную камеру и сделать её камерой клиента. */
+    /** Position the filming camera and make it the client camera. */
     private static void film(Minecraft mc, @Nullable Vec3 at, float yaw) {
         if (mc.level == null || mc.player == null || at == null) return;
         if (rig == null || rig.level() != mc.level) rig = EntityType.MARKER.create(mc.level);
@@ -346,15 +346,15 @@ public final class ProjectileCamera {
         rig.setPos(at);
     }
 
-    /** Съёмочная камера смотрит на точку (поворот плавный: камера на штативе, а не прибита к цели). */
+    /** Filming camera looks at a point (smooth rotation: camera on a tripod, not fixed to the target). */
     private static void trackRig(Vec3 target) {
         if (rig == null) return;
         rig.setOldPosAndRot();
-        // жёстко: ракета после ускорителя проходит по 10 блоков за тик
+        // Hard tracking: after its booster, the missile travels 10 blocks per tick.
         lookAt(target, 0.8f);
     }
 
-    /** Повернуть камеру к точке, за тик — долю {@code k} оставшегося угла. */
+    /** Turn camera toward a point, covering fraction {@code k} of the remaining angle per tick. */
     private static void lookAt(Vec3 target, float k) {
         if (rig == null) return;
         Vec3 d = target.subtract(rig.position());
@@ -364,7 +364,7 @@ public final class ProjectileCamera {
         rig.setXRot(Mth.lerp(k, rig.getXRot(), pitch));
     }
 
-    /** Камера на подвесе: направление — взгляд игрока, крен — половина крена снаряда; съёмочная — куда смотрит она. */
+    /** Gimballed camera: player viewing direction, half the projectile's roll; filming camera: its own viewing direction. */
     public static void angles(ViewportEvent.ComputeCameraAngles e) {
         Minecraft mc = Minecraft.getInstance();
         if (!active || mc.player == null) return;
@@ -382,14 +382,14 @@ public final class ProjectileCamera {
         e.setRoll(p.roll() * 0.5f);
     }
 
-    /** Узкий угол зрения — как у камеры с зумом; пуск — длинный фокус, облёт взрыва — наезд. */
+    /** Narrow field of view as with a zoom camera; long lens at launch, closing in while orbiting the explosion. */
     public static void fov(ViewportEvent.ComputeFov e) {
         if (isViewing()) e.setFOV(e.getFOV() * 0.75);
         else if (active && shot == Shot.LAUNCH) e.setFOV(e.getFOV() * 0.7);
         else if (isFilming()) e.setFOV(e.getFOV() * (0.8 - 0.15 * Math.min(1, (impactTick - IMPACT_STATIC) / (double) IMPACT_TICKS)));
     }
 
-    /** Игрок стоит, пока смотрит в камеру. */
+    /** Player stands still while watching the camera. */
     public static void movement(MovementInputUpdateEvent e) {
         if (!active) return;
         var in = e.getInput();
@@ -402,7 +402,7 @@ public final class ProjectileCamera {
         if (active) e.setCanceled(true);
     }
 
-    /** ЛКМ в камере — новая цель; прочие действия руками отключены. */
+    /** LMB in camera sets a new target; other hand actions disabled. */
     public static void click(InputEvent.InteractionKeyMappingTriggered e) {
         if (!active) return;
         e.setCanceled(true);
@@ -434,7 +434,7 @@ public final class ProjectileCamera {
         mc.getSoundManager().play(SimpleSoundInstance.forUI(ua.zentix.incoming.registry.ModSounds.DESIGNATOR_LOCK.get(), 1.0f, 0.8f));
     }
 
-    /** Мир клиента уходит (смена измерения): съёмочная камера в нём больше не нужна и не должна его держать. */
+    /** Client world is leaving (dimension change): filming camera is no longer needed and must not retain it. */
     public static void onLevelUnload(LevelEvent.Unload e) {
         if (rig != null && rig.level() == e.getLevel()) rig = null;
     }
@@ -445,8 +445,8 @@ public final class ProjectileCamera {
     }
 
     /**
-     * Обычный отбой: камера закрывается, только если её снаряд отменён. Увиденные снаряды помнятся: оставшийся
-     * ядерный не должен снова открыть автокамеру.
+     * Ordinary abort: close the camera only if its projectile was cancelled. Remember seen projectiles:
+     * a remaining nuclear projectile must not open the auto-camera again.
      */
     public static void cancelled(Collection<UUID> projectiles) {
         if (following != null && projectiles.contains(following)) close();
@@ -460,9 +460,9 @@ public final class ProjectileCamera {
         rig = null;
     }
 
-    // ---------------------------------------------------------------- картинка
+    // ---------------------------------------------------------------- visuals
 
-    /** Видеоканал: рамка, перекрестие, телеметрия, шум; нет видео — карта, удар — помехи на весь экран. */
+    /** Video feed: frame, crosshair, telemetry, noise; no video means map, impact means full-screen interference. */
     public static void render(GuiGraphics g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
         if (!active || mc.player == null) return;
@@ -473,7 +473,7 @@ public final class ProjectileCamera {
 
         if (shot == Shot.IMPACT) {
             if (impactTick < IMPACT_STATIC) {
-                // удар: сигнал срывается — помехи на чёрном, мир за ними не виден (камера уже не на снаряде)
+                // Impact: signal drops into interference on black, hiding the world (camera is already off the projectile).
                 g.fill(0, 0, w, h, 0xFF000000);
                 staticNoise(g, w, h, 1.0f);
                 big(g, font, Component.translatable("incoming.camera.lost").withStyle(ChatFormatting.RED, ChatFormatting.BOLD), cx, cy - 6, 2f);
@@ -491,7 +491,7 @@ public final class ProjectileCamera {
             return;
         }
         if (f == null && mapped != null) {
-            // пропал с карты: у цели — попадание, иначе (сбит, отбой) — связь потеряна
+            // Gone from the map: at the target means impact; otherwise (shot down, abort), link lost.
             TacticalMap.render(g, font, mapped, pt);
             boolean hit = mapped.phase() == FlightPhase.TERMINAL || mapped.phase() == FlightPhase.DRILL
                     || mapped.position(pt).distanceTo(mapped.target()) < IMPACT_RANGE;
@@ -507,7 +507,7 @@ public final class ProjectileCamera {
             return;
         }
         if (!(mc.getCameraEntity() instanceof StrikeProjectile p)) {
-            // снаряда нет на клиенте (дальше прорисовки или вне загруженного мира): карта по телеметрии сервера
+            // Client has no projectile (beyond render distance or outside the loaded world): map from server telemetry.
             TacticalMap.render(g, font, f, pt);
             hint(g, font, w, h);
             return;
@@ -515,14 +515,14 @@ public final class ProjectileCamera {
 
         int c = 0xE0E8E8E8;
         int m = 16, l = 18;
-        // F5 — вид со стороны: без «видеоканала», только телеметрия и прицел
+        // F5 gives an external view: no video feed, only telemetry and crosshair.
         boolean feed = mc.options.getCameraType().isFirstPerson();
         if (feed) {
-            // лёгкие помехи и строчная развёртка, как у аналогового видеоканала
+            // Light interference and scan lines, as with analogue video.
             staticNoise(g, w, h, 0.05f);
             for (int y = 0; y < h; y += 3) g.fill(0, y, w, y + 1, 0x14000000);
         }
-        // уголки кадра
+        // Frame corners.
         g.fill(m, m, m + l, m + 1, c);
         g.fill(m, m, m + 1, m + l, c);
         g.fill(w - m - l, m, w - m, m + 1, c);
@@ -531,18 +531,18 @@ public final class ProjectileCamera {
         g.fill(m, h - m - l, m + 1, h - m, c);
         g.fill(w - m - l, h - m - 1, w - m, h - m, c);
         g.fill(w - m - 1, h - m - l, w - m, h - m, c);
-        // перекрестие с разрывом
+        // Gapped crosshair.
         g.fill(cx - 22, cy, cx - 5, cy + 1, c);
         g.fill(cx + 5, cy, cx + 22, cy + 1, c);
         g.fill(cx, cy - 22, cx + 1, cy - 5, c);
         g.fill(cx, cy + 5, cx + 1, cy + 22, c);
         g.fill(cx - 1, cy - 1, cx + 2, cy + 2, 0xFFFF4030);
 
-        // метка цели
+        // Target marker.
         target(g, f.target(), w, h, 0xFFFF3030);
         if (newTarget != null && newTargetTicks > 0 && (newTargetTicks / 4) % 2 == 0) target(g, newTarget, w, h, 0xFF30FF60);
 
-        // телеметрия
+        // Telemetry.
         double alt = p.getY() - ua.zentix.incoming.entity.StrikeProjectile.surfaceY(mc.level, p.getX(), p.getZ());
         double kmh = ClientFlights.kmh(p.speed());
         double dist = p.position().distanceTo(f.target());
@@ -563,21 +563,21 @@ public final class ProjectileCamera {
         }
         if (f.nuclear()) g.drawString(font, "☢", cx - font.width("☢") / 2, m + 6, 0xFFFFD020);
         if (p.pursuit() != StrikeProjectile.Pursuit.NONE) {
-            // замеченная цель: снаряд идёт за ней, только пока она в кадре
+            // Sighted target: projectile tracks it only while in frame.
             boolean held = p.pursuit() == StrikeProjectile.Pursuit.HELD;
             Component pursuit = Component.translatable(held ? "incoming.camera.pursuit.held" : "incoming.camera.pursuit.waiting")
                     .withStyle(held ? ChatFormatting.GREEN : ChatFormatting.GOLD, ChatFormatting.BOLD);
             g.drawString(font, pursuit, cx - font.width(pursuit) / 2, h - 60, 0xFFFFFFFF);
         }
         if (f.phase() == FlightPhase.LOITER && rec) {
-            // барражирующий кружит: оператор ищет цель в кадре
+            // Loitering munition circles: operator searches for a target in frame.
             Component loiter = Component.translatable("incoming.camera.loiter").withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
             g.drawString(font, loiter, cx - font.width(loiter) / 2, h - 48, 0xFFFFFFFF);
         }
         hint(g, font, w, h);
     }
 
-    /** Кинокадр 2.39:1 — чёрные полосы сверху и снизу. */
+    /** Cinema frame 2.39:1: black bars above and below. */
     private static void letterbox(GuiGraphics g, int w, int h) {
         int bar = Math.max(0, (h - (int) (w / 2.39)) / 2);
         g.fill(0, 0, w, bar, 0xFF000000);
@@ -611,7 +611,7 @@ public final class ProjectileCamera {
         g.pose().popPose();
     }
 
-    /** Помехи: случайные серые штрихи, {@code amount} — доля экрана. */
+    /** Interference: random grey strokes; {@code amount} is the screen fraction. */
     private static void staticNoise(GuiGraphics g, int w, int h, float amount) {
         int n = (int) (w * h / 40 * amount);
         for (int i = 0; i < n; i++) {

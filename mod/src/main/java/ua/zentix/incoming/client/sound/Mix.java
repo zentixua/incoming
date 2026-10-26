@@ -6,66 +6,66 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Смесь взрывов у уха: громкость в игре — половина децибел <b>суммарного</b> уровня, потолок — у суммы, а доля каждого
- * взрыва в ней — его доля мощности в жизни (без Minecraft, проверяется юнит-тестом).
+ * Blast mix at the ear: game loudness is half the <b>total</b> level's decibels, ceiling on the sum, and each
+ * blast's share is its real-life power share (without Minecraft, covered by a unit test).
  * <p>
- * Каждый взрыв звучит громкостью по своему давлению у уха — половина децибел давления, до потолка с 1 psi
- * ({@link BlastMix#loudness}, {@link Loudness#CEILING_LUFS}). Это перенос в колонки, а не закон: снаружи от тихой ночи до
- * ближнего взрыва ~110 дБ, у колонок дома ~60. Но перенос был у каждого звука отдельно, а звуки в колонках складываются
- * по мощности: два взрыва разом — +3 дБ в игре, хотя в жизни их уровень вырос на 3 дБ, а в переносе — на 1,5; залп
- * «Града» из 40 разрывов в 30 блоках шёл на 4–5 дБ выше потолка (−8,6 LUFS при потолке −13,5) и упирался в полную шкалу
- * (срезы на 0 dBFS в прогоне RV1, у 3.4.1 — 0–1). Поэтому перенос — у суммы, а внутри суммы — раздел:
+ * Each blast's volume follows pressure at the ear — half the pressure decibels, ceiling from 1 psi
+ * ({@link BlastMix#loudness}, {@link Loudness#CEILING_LUFS}). This maps to speakers, not a law: outside has ~110 dB
+ * from quiet night to near blast, home speakers ~60. But mapping was per sound, while speaker sounds sum by power:
+ * two simultaneous blasts give +3 dB in game though real level rose 3 dB, mapped to 1.5; a Grad salvo of 40 bursts
+ * at 30 blocks ran 4–5 dB above ceiling (−8.6 LUFS vs −13.5 ceiling), hitting full scale (0 dBFS clipping in RV1,
+ * 3.4.1 had 0–1). So map the sum and divide within it:
  * <ul>
- * <li>взрыв — одна волна: ракурсы одной записи складываются по амплитуде, свои записи (удар в грудь, удар у уха из
- * модели, эхо от рельефа) — по мощности; p_b — мощность в игре против потолка, до раздела;</li>
- * <li>сумма в игре — половина децибел суммы: G = min(1, (Σ p_b²)^½), не громче потолка;</li>
- * <li>доля взрыва b в ней — Q_b = G·p_b² / Σ p², его множитель мощности k_b² = Q_b / p_b = G·p_b / Σ p². Один взрыв не
- * громче потолка звучит как прежде (k = 1); N равных — k² = 1/√N, громче потолка — 1/(N·p); ближний с p = 1 и сто
- * дальних по 0,01 — ближний на 0,04 дБ тише, чем один, каждый дальний на 40 дБ, а все вместе — на 20 дБ ниже его (у
- * общего множителя k² = G/Σp было бы −3 дБ и вровень); ΣQ_b = G.</li>
+ * <li>a blast is one wave: perspectives of one recording sum by amplitude, separate recordings (chest hit, model
+ * impact at ear, terrain echoes) by power; p_b is game power relative to ceiling before allocation;</li>
+ * <li>game sum is half the sum's decibels: G = min(1, (Σ p_b²)^½), no louder than ceiling;</li>
+ * <li>blast b's share is Q_b = G·p_b² / Σ p², its power factor k_b² = Q_b / p_b = G·p_b / Σ p². One blast below
+ * ceiling plays as before (k = 1); N equal blasts: k² = 1/√N, above ceiling: 1/(N·p); near at p = 1 plus a hundred
+ * distant at 0.01: near is 0.04 dB quieter than alone, each distant 40 dB below it, all together 20 dB below
+ * (a common k² = G/Σp would give −3 dB and equal loudness); ΣQ_b = G.</li>
  * </ul>
- * Так держат громкость в играх с «окном громкости» (HDR-звук: Wwise, Frostbite — Clerwall, GDC 2009): сумма слышимого
- * задаёт верх окна, отношения между звуками внутри сохраняются. Это подача, а не восстановление жизни: p_b — мощность
- * после переноса половиной децибел по наибольшему окну 400 мс ({@link Envelope#of}), и квадрат её — физическая мощность
- * лишь приближённо (в жизни — средний квадрат давления, без окна и без максимума по вариантам); маскировка — только
- * громкостью, без полос и без временной маскировки.
+ * Games with a “loudness window” maintain volume this way (HDR audio: Wwise, Frostbite — Clerwall, GDC 2009): the
+ * audible sum sets the window top; ratios inside are preserved. Presentation, not a reconstruction of life: p_b
+ * is power after half-decibel mapping over the largest 400 ms window ({@link Envelope#of}); its square is only
+ * approximately physical power (real life uses mean-square pressure, no window or variant maximum); masking is
+ * by loudness only, without bands or temporal masking.
  * <p>
- * Что звучит сейчас — по огибающей самой записи ({@link Envelope}: мгновенная громкость на 400 мс вперёд с каждого тика,
- * с тоном — быстрее или медленнее), так хвост раннего взрыва убавляет поздний ровно настолько, насколько он ещё звучит,
- * а дальние возвращаются, когда ближний стих. Взрыв без голоса движка (уступил место, {@link BlastVoices}) остаётся в
- * смеси с той же мощностью — его играет гул ({@link Rumble}); гул сам в смесь не идёт, иначе сумма зависела бы от числа
- * каналов.
+ * Current sound follows the recording's own envelope ({@link Envelope}: momentary loudness looking 400 ms ahead
+ * from each tick, faster or slower with pitch), so an early blast's tail reduces a later one only as much as it
+ * still sounds, and distant blasts return as near fades. A blast without an engine voice (yielded its slot,
+ * {@link BlastVoices}) stays in the mix with the same power, played by rumble ({@link Rumble}); rumble itself is
+ * not mixed again, or the sum would depend on channel count.
  */
 final class Mix {
-    /** Средний квадрат мгновенной громкости потолка ({@link Loudness#CEILING_LUFS}). */
+    /** Ceiling momentary-loudness mean square ({@link Loudness#CEILING_LUFS}). */
     static final double CEILING = Envelope.meanSquare(Loudness.CEILING_LUFS);
 
-    /** Чем звучит слой. */
+    /** What plays a layer. */
     enum Kind {
-        /** Ракурс общей записи взрыва — голос движка; с другими ракурсами — по амплитуде. */
+        /** Perspective of the shared blast recording — engine voice; amplitude sum with other perspectives. */
         VIEW,
-        /** Своя запись голосом движка (удар в грудь, звуки бомбы): по мощности. */
+        /** Separate recording on an engine voice (chest hit, bomb sounds): power sum. */
         APART,
-        /** Своя дорожка своим источником OpenAL (удар у уха, эхо): по мощности; в гул не уходит — не голос движка. */
+        /** Own track on our own OpenAL source (impact at ear, echoes): power sum; never goes to rumble — not an engine voice. */
         OWN
     }
 
     /**
-     * Один слой: огибающая записи для потолка ({@link Envelope#of}, средний квадрат по тикам при громкости 1), энергия той
-     * записи, что звучит ({@link Envelope#energy}: по ней гул), тон, громкость, чем звучит и через сколько тиков после
-     * начала взрыва начинается (эхо — после прямого удара).
+     * One layer: recording envelope for ceiling ({@link Envelope#of}, tickwise mean square at volume 1), energy of
+     * the playing recording ({@link Envelope#energy}: used by rumble), pitch, volume, what plays it and ticks after
+     * blast start before it begins (echoes after direct impact).
      */
     record Layer(float[] envelope, float[] energy, double pitch, double volume, Kind kind, double delay) {
         Layer(float[] envelope, double pitch, double volume) {
             this(envelope, envelope, pitch, volume, Kind.VIEW, 0);
         }
 
-        /** {@code apart} — своя запись, не ракурс общей: с ракурсами она не согласована и складывается по мощности. */
+        /** {@code apart} is a separate recording, not a shared perspective: incoherent with perspectives, summed by power. */
         Layer(float[] envelope, double pitch, double volume, boolean apart) {
             this(envelope, envelope, pitch, volume, apart ? Kind.APART : Kind.VIEW, 0);
         }
 
-        /** Своя дорожка своим источником ({@link OwnSources}) через {@code delay} тиков после начала взрыва. */
+        /** Own track on our own source ({@link OwnSources}), {@code delay} ticks after blast start. */
         static Layer own(float[] envelope, float[] energy, double volume, double delay) {
             return new Layer(envelope, energy, 1, volume, Kind.OWN, delay);
         }
@@ -74,20 +74,20 @@ final class Mix {
             return kind != Kind.VIEW;
         }
 
-        /** Мощность слоя через {@code age} тиков после начала взрыва, против потолка (огибающая — верхняя оценка). */
+        /** Layer power {@code age} ticks after blast start, relative to ceiling (envelope is an upper bound). */
         double power(double age) {
             return volume * volume * at(envelope, age) / CEILING;
         }
 
-        /** Энергия звучащей записи через {@code age} тиков, против потолка. */
+        /** Playing recording energy after {@code age} ticks, relative to ceiling. */
         double energy(double age) {
             return volume * volume * at(energy, age) / CEILING;
         }
 
         private double at(float[] e, double age) {
             double at = (age - delay) * pitch;
-            // за тик до начала — уже первый: голос, который ведёт кадр или поток звука, начинается с долей тика раньше
-            // счёта тиков смеси, а громкость его первого кадра — уже по этому слою
+            // already use first sample a tick before start: a frame- or sound-thread-driven voice starts a fraction of a tick
+            // before mix tick counting, and its first frame's volume already follows this layer
             if (at < 0 && at >= -pitch) at = 0;
             if (at < 0 || e.length == 0) return 0;
             int i = (int) Math.floor(at);
@@ -96,20 +96,20 @@ final class Mix {
             return i + 1 < e.length ? e[i] + (e[i + 1] - e[i]) * f : e[i] * (1 - f);
         }
 
-        /** Тиков от начала взрыва до конца слоя: и огибающей потолка, и энергии (её окно хвоста — после записи). */
+        /** Ticks from blast start to layer end: both ceiling envelope and energy (its tail window follows recording). */
         double ticks() {
             return delay + Math.max(envelope.length, energy.length) / Math.max(pitch, 1e-6) + 1;
         }
     }
 
-    /** Взрыв: тик начала и его слои; множитель — у смеси ({@link #factor}). */
+    /** Blast: start tick and layers; factor comes from mix ({@link #factor}). */
     final class Blast {
         double start;
         final List<Layer> layers = new ArrayList<>(5);
         double end;
-        /** Мощность до раздела и множитель громкости в тик {@link Mix#now}. */
+        /** Power before allocation and volume factor at {@link Mix#now} tick. */
         private double p, k = 1;
-        /** В смеси (не кончился). */
+        /** In the mix (not ended). */
         private boolean live = true;
 
         Blast(double start) {
@@ -117,7 +117,7 @@ final class Mix {
             this.end = start;
         }
 
-        /** Слой — в смесь; взрыв, у которого прежние слои кончились (эхо готово позже прямого удара), — снова в ней. */
+        /** Add layer to mix; blast whose previous layers ended (echo ready after direct impact) rejoins it. */
         void add(Layer l) {
             layers.add(l);
             end = Math.max(end, start + l.ticks());
@@ -129,8 +129,8 @@ final class Mix {
         }
 
         /**
-         * Звук на деле начался на {@code ticks} позже тика, в который его попросили ({@link OwnSources.Anchor}): все слои
-         * взрыва — от настоящего начала, как их голоса.
+         * Sound actually started {@code ticks} after the tick it was requested ({@link OwnSources.Anchor}): all blast
+         * layers start from the actual start, like their voices.
          */
         void late(double ticks) {
             if (!(ticks > 0)) return;
@@ -140,9 +140,10 @@ final class Mix {
         }
 
         /**
-         * Мощность взрыва в тик {@code tick}, против потолка: ракурсы — по амплитуде (одна запись, сведены по амплитуде,
-         * {@link BlastMix}; сумма мощностей занизила бы их до 3 дБ), свои записи ({@link Layer#apart}: удар в грудь, удар
-         * у уха, эхо) — по мощности (по амплитуде они завышали бы взрыв от 1 psi вдвое, и он звучал бы на 3 дБ ниже потолка).
+         * Blast power at {@code tick}, relative to ceiling: perspectives sum by amplitude (one recording, amplitude
+         * mixed, {@link BlastMix}; power sum would underestimate by up to 3 dB), separate recordings
+         * ({@link Layer#apart}: chest hit, impact at ear, echoes) by power (amplitude sum would double a blast
+         * from 1 psi, making it play 3 dB below ceiling).
          */
         double power(double tick) {
             double a = 0, apart = 0;
@@ -155,17 +156,17 @@ final class Mix {
         }
 
         /**
-         * Энергия голосов движка этого взрыва в тик {@code tick} (ракурсы и свои записи, без своих источников), против
-         * потолка, до множителя — так же сложенная, как {@link #power}, но по энергии звучащих записей: её и берёт гул,
-         * когда голосов нет.
+         * This blast's engine-voice energy at {@code tick} (perspectives and separate recordings, excluding our
+         * own sources), relative to ceiling, before factor: summed like {@link #power} but from playing recordings'
+         * energy, used by rumble when voices are absent.
          */
         double voiced(double tick) {
             return voiced(tick, null);
         }
 
         /**
-         * Как {@link #voiced(double)}, но только голоса {@code voices}: i-й — i-й слой взрыва, что звучит голосом движка
-         * (не {@link Kind#OWN}), в порядке слоёв; null — все.
+         * Like {@link #voiced(double)}, but only {@code voices}: i-th is i-th blast layer played by an engine voice
+         * (not {@link Kind#OWN}), in layer order; null — all.
          */
         double voiced(double tick, boolean @Nullable [] voices) {
             double a = 0, apart = 0;
@@ -182,18 +183,18 @@ final class Mix {
             return a * a + apart;
         }
 
-        /** Тик смеси, на который посчитаны множители. */
+        /** Mix tick for which factors were computed. */
         double now() {
             return now;
         }
 
-        /** Множитель громкости звуков этого взрыва сейчас (0..1): k_b = (G·p_b / Σ p²)^½. */
+        /** Current volume factor for this blast's sounds (0..1): k_b = (G·p_b / Σ p²)^½. */
         double factor() {
             update();
             return k;
         }
 
-        /** Доля взрыва в слышимом сейчас, против потолка: Q_b = k_b²·p_b. */
+        /** Blast share in currently audible sound, relative to ceiling: Q_b = k_b²·p_b. */
         double heard() {
             update();
             return k * k * p;
@@ -205,11 +206,11 @@ final class Mix {
     }
 
     private final List<Blast> blasts = new ArrayList<>();
-    /** Тик, на который посчитаны множители. */
+    /** Tick for which factors were computed. */
     private double now = Double.NaN;
     private boolean dirty = true;
 
-    /** Взрыв, который зазвучит в тик {@code tick}: слои — {@link Blast#add}. */
+    /** Blast starting at {@code tick}: add layers with {@link Blast#add}. */
     Blast blast(double tick) {
         at(tick);
         Blast b = new Blast(tick);
@@ -218,7 +219,7 @@ final class Mix {
         return b;
     }
 
-    /** Тик смеси: кончившиеся взрывы — прочь, множители — на этот тик. */
+    /** Mix tick: remove ended blasts, compute factors for this tick. */
     void at(double tick) {
         if (tick != now) {
             now = tick;
@@ -240,17 +241,17 @@ final class Mix {
             sq += b.p * b.p;
         }
         double g = Math.min(1, Math.sqrt(sq));
-        // тишина — множитель 1: звук, которого огибающая ещё не знает, не глушится
+        // silence — factor 1: sound unknown to the envelope is not attenuated
         for (Blast b : blasts) b.k = sq > 0 ? Math.sqrt(Math.min(1, g * b.p / sq)) : 1;
     }
 
-    /** Мощность смеси в игре в тик {@code tick}, против потолка: Σ Q_b = G (сверка в тестах). */
+    /** Game mix power at {@code tick}, relative to ceiling: Σ Q_b = G (checked in tests). */
     double heard(double tick) {
         at(tick);
         return heard();
     }
 
-    /** Мощность смеси в игре сейчас, против потолка. */
+    /** Current game mix power, relative to ceiling. */
     double heard() {
         update();
         double sum = 0;

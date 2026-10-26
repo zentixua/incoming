@@ -12,12 +12,12 @@ import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import ua.zentix.incoming.registry.ModParticles;
 
 /**
- * Частицы эффектов: {@code Fx.smoke().at(…).vel(…).size(2, 9).life(200).color(…).spawn(level, x, y, z)}.
- * Настройка — {@link Spec} (его можно спаунить много раз и менять между пусками: частица берёт снимок); частица
- * рождается в своём пуле ({@link FxPool}), без пакетов и без ванильного ограничения «не дальше 32 блоков».
+ * Effects particles: {@code Fx.smoke().at(…).vel(…).size(2, 9).life(200).color(…).spawn(level, x, y, z)}.
+ * Configuration — {@link Spec} (spawn repeatedly and modify between launches: each particle takes a snapshot); particle
+ * spawns in a custom pool ({@link FxPool}), without packets or vanilla's 32-block distance limit.
  */
 public final class Fx {
-    /** Подъём клуба следа к возрасту в тиках, блоков ({@code TrailModel.rise}). */
+    /** Trail billow rise at age in ticks, blocks ({@code TrailModel.rise}). */
     public interface Thermal {
         double lift(double ticks);
     }
@@ -27,14 +27,14 @@ public final class Fx {
     public enum Kind {
         SMOKE(true, false, FxBudget.CLOUD), FIRE(false, false, FxBudget.CLOUD), SPARK(false, true, FxBudget.SPARK),
         FLASH(false, true, FxBudget.FLASH), RING(true, false, FxBudget.GROUND), FIREBALL(false, false, FxBudget.CLOUD),
-        /** Хлопья пепла и клочки бумаги: плоские, кувыркаются (сжатая ось), освещаются миром. */
+        /** Ash flakes and paper scraps: flat, tumbling (compressed axis), lit by the world. */
         FLAKE(true, false, FxBudget.ASH);
 
-        /** Освещается миром (дым, пыль) или светится сам (огонь, искры, вспышка, шар — им и свечение {@code FxBloom}). */
+        /** World-lit (smoke, dust), or emissive (fire, sparks, flash, ball — also receive {@code FxBloom}). */
         final boolean lit;
-        /** Свет складывается (искры, вспышка). */
+        /** Additive light (sparks, flash). */
         final boolean additive;
-        /** Группа по умолчанию. */
+        /** Default budget group. */
         final FxBudget budget;
 
         Kind(boolean lit, boolean additive, FxBudget budget) {
@@ -65,22 +65,22 @@ public final class Fx {
     }
 
     /**
-     * Огненный шар: кадры анимации за жизнь частицы, от вспышки до сажи ({@code FxAtlas#fireball}); цвет — в кадрах,
-     * размер — полуразмер кадра (шар — 0,7 его). Тает со второй половины жизни: дым дальше — клубы, освещённые миром.
+     * Fireball: animation frames over particle life, from flash to soot ({@code FxAtlas#fireball}); colour in the frames,
+     * size — frame half-size (ball — 0.7 of it). Fades from midlife: subsequent smoke uses world-lit billows.
      */
     public static Spec fireball() {
         return new Spec(Kind.FIREBALL).alpha(1).fadeIn(0).fadeFrom(0.55f).drag(0.94f).wind(0.3f).spin(0.006f);
     }
 
     /**
-     * Хлопья пепла и клочки бумаги ({@code paper}): падают медленно, вьются, кувыркаются; снос — {@link Spec#drift}.
+     * Ash flakes and paper scraps ({@code paper}): fall slowly, swirl and tumble; drift — {@link Spec#drift}.
      */
     public static Spec flake(boolean paper) {
         return new Spec(Kind.FLAKE).paper(paper).alpha(1).fadeIn(4).fadeFrom(0.85f).drag(0.9f).gravity(0.004f).wind(0).spin(0.12f).collide();
     }
 
     /**
-     * Доля частиц по настройке «Частицы» и расстоянию до камеры: вдали мелочь не видна, её можно не рождать.
+     * Particle share by Particles setting and camera distance: distant details are invisible and need not spawn.
      */
     public static float density(Vec3 at) {
         Minecraft mc = Minecraft.getInstance();
@@ -90,14 +90,14 @@ public final class Fx {
         return k;
     }
 
-    /** Сколько частиц из {@code n} рождать в точке (не меньше одной, если n > 0). */
+    /** Particle count to spawn from {@code n} at a point (at least one if n > 0). */
     public static int count(int n, Vec3 at) {
         return n <= 0 ? 0 : Math.max(1, Math.round(n * density(at)));
     }
 
-    // ---------------------------------------------------------------- регистрация
+    // ---------------------------------------------------------------- registration
 
-    /** Шина мода: команда {@code /particle incoming:smoke} рождает частицу с настройками по умолчанию в пуле. */
+    /** Mod bus: {@code /particle incoming:smoke} spawns a default-configured particle in the pool. */
     public static void registerProviders(RegisterParticleProvidersEvent e) {
         e.registerSpecial(ModParticles.SMOKE.get(), provider(Kind.SMOKE));
         e.registerSpecial(ModParticles.FIRE.get(), provider(Kind.FIRE));
@@ -119,14 +119,14 @@ public final class Fx {
                 case FLAKE -> flake(false).size(0.06f, 0.06f).life(200);
             };
             s.vel(dx, dy, dz).spawn(level, x, y, z);
-            // в ванильный движок ничего не добавляется
+            // nothing added to the vanilla engine
             return null;
         };
     }
 
-    // ---------------------------------------------------------------- настройка частицы
+    // ---------------------------------------------------------------- particle configuration
 
-    /** Настройка частицы. Методы меняют этот же объект; {@link #copy()} — для вариаций одного шаблона. */
+    /** Particle configuration. Methods mutate this object; {@link #copy()} for template variations. */
     public static final class Spec implements Cloneable {
         final Kind kind;
         double vx, vy, vz;
@@ -141,15 +141,15 @@ public final class Fx {
         float glow, glowTicks = 10;
         float drag = 0.96f;
         float rise, gravity, wind = 1, spin = 0.03f;
-        /** Свой постоянный снос (блоки/тик²): ветер подрыва, а не общий ветер частиц. */
+        /** Custom constant drift (blocks/tick²): blast wind, rather than shared particle wind. */
         float driftX, driftZ;
-        /** Всплытие тёплого следа по его закону (вместо {@link #rise}); null — нет. */
+        /** Warm trail rise by its law (instead of {@link #rise}); null — none. */
         @Nullable Thermal thermal;
-        /** Хлопья: клочок бумаги (светлый прямоугольник), а не пепел. */
+        /** Flakes: paper scrap (light rectangle), rather than ash. */
         boolean paper;
-        /** Цвет уже освещён ({@link #prelit}): карта освещения его не темнит. */
+        /** Colour already lit ({@link #prelit}): lightmap does not darken it. */
         boolean prelit;
-        /** Пересвет самосветящегося ({@link #hdr}): во сколько раз его свет ярче показанного цветом. */
+        /** Emissive overexposure ({@link #hdr}): light brightness relative to the displayed colour. */
         float hdr = 1;
         boolean collide, smooth;
         float chainX, chainY, chainZ, chainGap;
@@ -182,14 +182,14 @@ public final class Fx {
             return vel(v.x, v.y, v.z);
         }
 
-        /** Полуразмер в блоках: в начале и в конце жизни. */
+        /** Half-size in blocks: at birth and end of life. */
         public Spec size(float from, float to) {
             size0 = from;
             size1 = to;
             return this;
         }
 
-        /** Вырастает почти сразу (клуб взрыва), а не плавно (дым из трубы). */
+        /** Grows almost instantly (blast billow), rather than gradually (chimney smoke). */
         public Spec growFast() {
             growFast = true;
             return this;
@@ -217,7 +217,7 @@ public final class Fx {
             return this;
         }
 
-        /** Цвет от {@code from} к {@code to} (r, g, b в 0..1). */
+        /** Colour from {@code from} to {@code to} (r, g, b in 0..1). */
         public Spec color(float[] from, float[] to) {
             r0 = from[0];
             g0 = from[1];
@@ -229,9 +229,9 @@ public final class Fx {
         }
 
         /**
-         * Цвет уже со светом под открытым небом (пыль у камеры — светом своей стены пыли, {@code NukePall.dustColor}):
-         * карта освещения его не темнит, и свет огненных шаров кадра к нему не прибавляется — он уже в цвете. Под крышей
-         * он темнее по свету неба и блоков в своём месте, как карта освещения против открытого неба.
+         * Colour already includes open-sky light (camera dust — its dust wall light, {@code NukePall.dustColor}):
+         * lightmap does not darken it; frame fireball light is not added — already in the colour. Under a roof,
+         * darkens by local skylight and block light, like the lightmap relative to open sky.
          */
         public Spec prelit() {
             prelit = true;
@@ -239,15 +239,15 @@ public final class Fx {
         }
 
         /**
-         * Самосветящееся (огонь, искры) ярче белого экрана в {@code k} раз, а цвет показан со срезом ({@code Sight.onScreen}):
-         * свечение ({@code FxBloom}) берёт срезанное. 1 — свет как показан.
+         * Emissive matter (fire, sparks) is {@code k} times brighter than screen white; displayed colour is clipped ({@code Sight.onScreen}):
+         * bloom ({@code FxBloom}) takes the clipped part. 1 — light as displayed.
          */
         public Spec hdr(double k) {
             hdr = (float) Math.max(1, k);
             return this;
         }
 
-        /** Цвет меняется по {@code f^curve} от доли жизни: > 1 — дольше держится начальный. */
+        /** Colour changes by {@code f^curve} over life fraction: > 1 keeps the initial colour longer. */
         public Spec colorCurve(float curve) {
             colorCurve = curve;
             return this;
@@ -264,33 +264,33 @@ public final class Fx {
             return this;
         }
 
-        /** Не виден первые {@code after} тиков, потом проступает за {@code ticks} (дым, что проступает из огненного шара). */
+        /** Invisible for the first {@code after} ticks, then appears over {@code ticks} (smoke emerging from the fireball). */
         public Spec fadeIn(int ticks, int after) {
             fadeIn = ticks;
             fadeAfter = Math.max(0, after);
             return this;
         }
 
-        /** С какой доли жизни начинает таять. */
+        /** Life fraction where fading starts. */
         public Spec fadeFrom(float f) {
             fadeFrom = Math.min(f, 0.99f);
             return this;
         }
 
-        /** Накал: свечение огня изнутри (0..1), гаснет за {@code ticks}. */
+        /** Incandescence: internal fire glow (0..1), fading over {@code ticks}. */
         public Spec glow(float g, float ticks) {
             glow = g;
             glowTicks = ticks;
             return this;
         }
 
-        /** Доля скорости, что остаётся за тик (сопротивление воздуха). */
+        /** Velocity fraction retained per tick (air drag). */
         public Spec drag(float d) {
             drag = d;
             return this;
         }
 
-        /** Всплытие горячего (блоки/тик²), постепенно слабеет. */
+        /** Hot-gas rise (blocks/tick²), gradually weakening. */
         public Spec rise(float r) {
             rise = r;
             return this;
@@ -301,7 +301,7 @@ public final class Fx {
             return this;
         }
 
-        /** Клуб всплывает вместе со своим следом ({@link Thermal}). */
+        /** Billow rises with its trail ({@link Thermal}). */
         public Spec thermal(@Nullable Thermal t) {
             thermal = t;
             return this;
@@ -317,29 +317,29 @@ public final class Fx {
             return this;
         }
 
-        /** Постоянное ускорение по горизонтали (блоки/тик²): с сопротивлением {@link #drag} — снос со скоростью a·d/(1 − d). */
+        /** Constant horizontal acceleration (blocks/tick²): with {@link #drag}, drift speed a·d/(1 − d). */
         public Spec drift(double ax, double az) {
             driftX = (float) ax;
             driftZ = (float) az;
             return this;
         }
 
-        /** Хлопья — клочок бумаги, а не пепел ({@link Fx#flake}). */
+        /** Flakes are paper scraps, rather than ash ({@link Fx#flake}). */
         public Spec paper(boolean p) {
             paper = p;
             return this;
         }
 
-        /** Сталкивается с блоками (стелется по земле, не проходит сквозь стены). */
+        /** Collides with blocks (hugs ground, does not pass through walls). */
         public Spec collide() {
             collide = true;
             return this;
         }
 
         /**
-         * Вблизи тоже гладко и без бледного края: клуб — часть гладкой ленты шлейфа, а не отдельное облако. Ближайшим
-         * пикселем со срезом бледнее 0,1 от бледного клуба оставалась бы яркая середина с жёстким краем — белые хлопья
-         * на ленте.
+         * Smooth even nearby, without a faint rim: billow belongs to a smooth trail ribbon, rather than a separate cloud. Nearest-texel
+         * sampling with a 0.1 cutoff would leave only a bright, hard-edged centre of a faint billow — white flakes
+         * on the ribbon.
          */
         public Spec smooth() {
             smooth = true;
@@ -347,10 +347,10 @@ public final class Fx {
         }
 
         /**
-         * Клуб из цепочки клубов через {@code gap} блоков вдоль пути {@code (dx, dy, dz)} (клубы объёма шлейфа: клуб на путь
-         * сопла за тик). Виден, только когда на экране перекрывает соседей — когда смотришь вдоль следа; сбоку между
-         * клубами на экране просвет, клуб тает, и остаётся одна лента ({@link FxParticle#chainShare}). Иначе молодые клубы,
-         * мельче пути за тик, читались бы на тонкой ленте цепочкой светлых точек. Шаг 0 — правило выключено.
+         * Billow from a chain spaced by {@code gap} blocks along path {@code (dx, dy, dz)} (trail volume billows: one per nozzle
+         * path per tick). Visible only when overlapping neighbours on screen — looking along the trail; from the side, a screen gap
+         * between billows makes it fade, leaving only the ribbon ({@link FxParticle#chainShare}). Otherwise young billows,
+         * smaller than one tick's path, would form a chain of light dots on a thin ribbon. Step 0 disables the rule.
          */
         public Spec chain(double dx, double dy, double dz, double gap) {
             double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -365,21 +365,21 @@ public final class Fx {
             return this;
         }
 
-        /** Чьё место занимает частица ({@link FxBudget}). */
+        /** Particle's slot group ({@link FxBudget}). */
         public Spec budget(FxBudget b) {
             budget = b;
             return this;
         }
 
-        /** Искра: длина штриха — путь за столько тиков. */
+        /** Spark: streak length equals the path over this many ticks. */
         public Spec streak(float ticks) {
             streak = ticks;
             return this;
         }
 
         /**
-         * Искра оставляет дымный хвост из таких клубов через {@code step} блоков, пока не прожила {@code until} жизни.
-         * Шаблон хвоста искры берут как есть (без снимка): после пуска его не менять.
+         * Spark leaves a smoky tail of these billows every {@code step} blocks until life fraction {@code until}.
+         * Spark tail template used as is (no snapshot): do not modify after launch.
          */
         public Spec trail(Spec puff, float step, float until) {
             trail = puff;

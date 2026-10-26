@@ -7,41 +7,40 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Глубина рельефа мода дальней прорисовки (LOD) в этом кадре — для того, что рисуется после мира (слой эффектов:
- * снаряды, вспышки и дым вдали, {@code fx/layer/SceneDepth}): аппаратная проверка глубины Minecraft LOD не видит
- * (Distant Horizons рисует их в свою текстуру глубины, Voxy — в свою, а в глубину Minecraft кладёт их прижатыми к её
- * дальней плоскости). Источник — тот мод, что рисовал в этом кадре: {@link DhDepth} (публичное API DH) или
- * {@link VoxyDepth} (Voxy через Roxy: API нет, только чтение его полей отражением). Оба могут стоять сразу — берётся
- * первый, кто рисовал. Без мода LOD или с незнакомой его версией источника нет, и после мира виден только рельеф
- * Minecraft.
+ * This frame's terrain depth from a distant rendering mod (LOD), for rendering after the world (effects layer:
+ * distant projectiles, flashes and smoke, {@code fx/layer/SceneDepth}): Minecraft hardware depth testing cannot see
+ * LODs (Distant Horizons renders into its own depth texture, Voxy into its own, pinning LODs in Minecraft depth at
+ * its far plane). Source is the mod that rendered this frame: {@link DhDepth} (public DH API) or {@link VoxyDepth}
+ * (Voxy via Roxy: no API, read fields by reflection only). Both may be installed: take first that rendered.
+ * Without a LOD mod or with an unknown version, no source; only Minecraft terrain is visible after the world.
  */
 public final class LodDepth {
     private static final List<Source> SOURCES = new ArrayList<>();
 
     private LodDepth() {}
 
-    /** Глубина LOD в кадре: текстура, обратная проекция, как читать значение. */
+    /** Frame LOD depth: texture, inverse projection, value decoding. */
     public static final class View {
-        /** Текстура глубины OpenGL. */
+        /** OpenGL depth texture. */
         public int texture;
-        /** Глубина → координаты вида (обратная проекция, которой записана глубина). */
+        /** Depth → view coordinates (inverse of the projection that wrote depth). */
         public final Matrix4f inverseProjection = new Matrix4f();
-        /** Глубина в [0, 1] — это NDC от −1 до 1 (обычный OpenGL), иначе NDC от 0 до 1. */
+        /** Depth in [0, 1] maps NDC −1 to 1 (ordinary OpenGL), otherwise NDC 0 to 1. */
         public boolean negativeOneToOne;
-        /** Глубина пикселя без LOD (очищенная). */
+        /** Depth of pixel without LOD (cleared). */
         public float empty;
         /**
-         * Глубина, которой мод метит пиксель, где рисовал Minecraft, а LOD нет (Voxy: ближняя плоскость — так он
-         * не рисует LOD поверх мира); −1 — такой метки нет. Расстояние такого пикселя — глубина Minecraft, а не LOD
-         * у ближней плоскости в 8–16 блоках, которая закрыла бы всё дальше.
+         * Depth used to mark pixels where Minecraft drew and no LOD exists (Voxy: near plane, preventing LOD over
+         * the world); −1 if no such marker. Pixel distance comes from Minecraft depth, rather than LOD at the near
+         * plane 8–16 blocks away, which would hide everything farther away.
          */
         public float world = -1;
         /**
-         * Мод кладёт LOD и в глубину Minecraft, прижимая дальние к её дальней плоскости (Voxy без шейдерпака): пиксель
-         * мира на дальней плоскости — это LOD, а не стена в сотнях блоков; его расстояние — по глубине LOD.
+         * Mod also writes LODs to Minecraft depth, pinning distant ones to its far plane (Voxy without shader pack):
+         * a world pixel at the far plane is a LOD, rather than a wall hundreds of blocks away; distance from LOD depth.
          */
         public boolean pinsWorldDepth;
-        /** Чья глубина и как читается — для строки сценария. */
+        /** Depth source and decoding, for the scenario line. */
         String source = "", how = "";
 
         public String describe() {
@@ -49,16 +48,16 @@ public final class LodDepth {
         }
     }
 
-    /** Мод LOD, который умеет отдать глубину кадра. */
+    /** LOD mod able to provide frame depth. */
     interface Source {
-        /** Глубина этого кадра в out; false — мод в этом кадре не рисовал. */
+        /** This frame's depth into out; false if the mod did not render this frame. */
         boolean current(View out);
 
-        /** Конец кадра: следующий кадр мод должен нарисовать заново, иначе его глубина — не этого кадра. */
+        /** End of frame: mod must render again next frame, otherwise its depth is from another frame. */
         void endFrame();
     }
 
-    /** При запуске клиента: какие моды LOD стоят и отдают глубину. */
+    /** At client startup: installed LOD mods providing depth. */
     public static void init() {
         Source dh = DhDepth.init();
         if (dh != null) SOURCES.add(dh);
@@ -66,7 +65,7 @@ public final class LodDepth {
         if (voxy != null) SOURCES.add(voxy);
     }
 
-    /** Глубина LOD этого кадра в out — первого источника, который рисовал; false — ни один. */
+    /** This frame's LOD depth into out, from the first source that rendered; false if none. */
     public static boolean current(View out) {
         for (Source s : SOURCES) {
             out.pinsWorldDepth = false;
@@ -80,7 +79,7 @@ public final class LodDepth {
         for (Source s : SOURCES) s.endFrame();
     }
 
-    /** Строка «как читается» для источника. */
+    /** Source depth decoding description. */
     static String describe(boolean forward, boolean negativeOneToOne, float empty, float nearest, String more) {
         return String.format(Locale.ROOT, "%s Z, NDC %s, empty %.1f, nearest LOD %.1f blocks%s",
                 forward ? "forward" : "reverse", negativeOneToOne ? "-1..1" : "0..1", empty, nearest, more);

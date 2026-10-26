@@ -22,61 +22,61 @@ import java.util.Locale;
 import java.util.function.Supplier;
 
 /**
- * Непрерывный звук снаряда: движок каждый тик получает от нас положение, громкость и тон.
- * Положение и скорость берутся в «запаздывающий» момент (звук идёт к уху со скоростью 343 м/с, {@link Emission}),
- * отсюда Доплер и задержка. Громкость — от мощности звука шумящей части снаряда (паспорт {@link Noise}: мотор,
- * ускоритель, обтекание, бурение — по его скорости и оборотам) и пути до уха ({@link Propagation}: разлёт, воздух,
- * земля, тень днём; фон), в игре — {@link Loudness}; холм или дом между снарядом и ухом глушит, а верха съедает путь
- * ({@link SoundFilters}).
+ * Continuous projectile sound: engine receives position, volume and pitch from us each tick.
+ * Position and velocity come from the “retarded” instant (sound travels to the ear at 343 m/s, {@link Emission}),
+ * giving Doppler and delay. Volume follows sound power of the projectile's noisy part ({@link Noise} spec: engine,
+ * booster, airflow, drilling — from its speed and RPM) and path to the ear ({@link Propagation}: spreading, air,
+ * ground, daytime shadow; background), mapped to the game by {@link Loudness}; a hill or house between projectile
+ * and ear muffles, and the path absorbs highs ({@link SoundFilters}).
  * <p>
- * Слой звучит (держит канал OpenAL), только пока его слышно: запускает и отпускает его {@link ClientSounds}
- * по {@link VoiceBudget}; отпущенный слой стихает и останавливается сам. Возвращаясь, слой — новый звук,
- * он нарастает с нуля тем же сглаживанием, без щелчка.
+ * A layer plays (holds an OpenAL channel) only while audible: {@link ClientSounds} starts and releases it according
+ * to {@link VoiceBudget}; a released layer fades and stops itself. A returning layer is a new sound, rising from
+ * zero with the same smoothing, without a click.
  */
 public final class EngineSound extends AbstractTickableSoundInstance implements SoundFilters.Muffled {
     /**
-     * Дальние записи — ближние, прошедшие столько метров воздуха ({@code tools/build_sounds.py}: {@code FAR_M}):
-     * дальше ближняя запись с фильтром EFX уже не похожа на дальний звук (EFX глушит верха одной полкой, а воздух —
-     * по октавам), поэтому ближняя уступает дальней между половиной этого расстояния и им самим.
+     * Distant recordings are near recordings after this many metres of air ({@code tools/build_sounds.py}:
+     * {@code FAR_M}): beyond this, a near recording with EFX no longer resembles distant sound (EFX muffles highs
+     * with one shelf, air by octave), so near yields to far between half this distance and the full distance.
      */
     static final double FAR_AIR = 500;
 
     /**
-     * Слои звука: какая запись, какую часть шума снаряда она играет ({@link Noise.Part}) и как делит её с соседними
-     * записями той же части — ближняя и дальняя, спереди и сзади (доли по мощности, {@link #share}).
+     * Sound layers: recording, which projectile noise part it plays ({@link Noise.Part}) and how it shares that
+     * part with other recordings — near/far, front/rear (power shares, {@link #share}).
      */
     public enum Layer {
         DRONE_NEAR(() -> ModSounds.DRONE_ENGINE.get(), Noise.Part.ENGINE, 0),
         DRONE_FAR(() -> ModSounds.DRONE_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
-        /** Крылатая ракета вблизи: спереди — свист вентилятора, сзади — рёв струи, в пике — пронзительный свист. */
+        /** Cruise missile nearby: fan whistle in front, jet roar behind, piercing whistle in a dive. */
         MISSILE_FRONT(() -> ModSounds.MISSILE_ENGINE.get(), Noise.Part.ENGINE, 0),
         MISSILE_REAR(() -> ModSounds.MISSILE_ENGINE_REAR.get(), Noise.Part.ENGINE, 0),
         MISSILE_DIVE(() -> ModSounds.MISSILE_DIVE.get(), Noise.Part.ENGINE, 0),
-        /** Вдали сбоку и сзади — гул струи. */
+        /** Far sideways and behind — jet rumble. */
         MISSILE_FAR(() -> ModSounds.MISSILE_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
-        /** Вдали впереди — вой вентилятора: его уносит вперёд, на подлёте его слышно издалека. */
+        /** Far ahead — fan whine: projects forward, audible from afar on approach. */
         MISSILE_WHISTLE(() -> ModSounds.MISSILE_WHISTLE.get(), Noise.Part.ENGINE, 0),
         BOMBER_NEAR(() -> ModSounds.BOMBER_ENGINE.get(), Noise.Part.ENGINE, 0),
         BOMBER_FAR(() -> ModSounds.BOMBER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
         BOMB_NEAR(() -> ModSounds.BOMB_FALL.get(), Noise.Part.BODY, 0),
         BOMB_FAR(() -> ModSounds.BOMB_FALL_FAR.get(), Noise.Part.BODY, FAR_AIR),
         BOMB_DRILL(() -> ModSounds.BOMB_DRILL.get(), Noise.Part.DRILL, 0),
-        /** Стартовый ускоритель шахеда и ракеты, двигатель МБР и снаряда РСЗО; этот же слой отмечает поджиг и отделение. */
+        /** Shahed and missile launch boosters, ICBM and MLRS rocket engines; same layer also marks ignition and separation. */
         BOOSTER(() -> ModSounds.BOOSTER_ENGINE.get(), Noise.Part.MOTOR, 0),
-        /** Снаряд РСЗО: вой рассекаемого воздуха (пока горит двигатель — под его рёвом, после — один). */
+        /** MLRS rocket: airflow howl (under engine roar while burning, alone afterward). */
         ROCKET_AIR(() -> ModSounds.ROCKET_INCOMING.get(), Noise.Part.BODY, 0),
-        /** Барражирующий боеприпас: электромотор с винтом вблизи и вдали, рассекаемый воздух (громче мотора — в пике). */
+        /** Loitering munition: electric motor and propeller near and far, airflow (louder than motor in a dive). */
         LOITER_NEAR(() -> ModSounds.LOITER_ENGINE.get(), Noise.Part.ENGINE, 0),
         LOITER_FAR(() -> ModSounds.LOITER_ENGINE_FAR.get(), Noise.Part.ENGINE, FAR_AIR),
         LOITER_DIVE(() -> ModSounds.LOITER_DIVE.get(), Noise.Part.BODY, 0),
-        /** Мотор зенитной ракеты ЗРК: оружия у неё нет, закон — по паспорту ЗРК ({@link InterceptorSound}). */
+        /** SAM missile engine: no weapon assigned, law from SAM spec ({@link InterceptorSound}). */
         SAM(() -> ModSounds.BOOSTER_ENGINE.get(), Noise.Part.MOTOR, 0);
 
-        /** Звук из реестра берётся, только когда слой запускают: громкость и тон считаются и без реестров (юнит-тесты). */
+        /** Registry sound is fetched only when a layer starts: volume and pitch also compute without registries (unit tests). */
         final Supplier<SoundEvent> event;
-        /** Какую часть шума играет. */
+        /** Which noise part it plays. */
         final Noise.Part part;
-        /** Сколько метров воздуха уже в записи ({@link #FAR_AIR} у дальних, 0 у ближних). */
+        /** Metres of air already in the recording ({@link #FAR_AIR} for far, 0 for near). */
         final double air;
 
         Layer(Supplier<SoundEvent> event, Noise.Part part, double air) {
@@ -85,7 +85,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             this.air = air;
         }
 
-        /** Громкость и тон слоя для того, что слушатель слышит сейчас (до сглаживания). */
+        /** Layer volume and pitch for what the listener hears now (before smoothing). */
         Tone tone(FlightTrack track, Emission e) {
             if (this == SAM) return InterceptorSound.tone(e);
             Noise noise = noise(track);
@@ -94,7 +94,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
             if (heard.level() == Noise.SILENT) return Tone.SILENT;
             FlightPhase ph = FlightPhase.byId(e.phase());
             double d = e.distance(), age = e.phaseAge(), v = e.velocity().length();
-            // направленность — по мощности до перевода в громкость: обтекание и вентилятор уносит вперёд
+            // directivity applies to power before volume conversion: airflow and fan noise project forward
             double level = heard.level();
             double share = 1;
             double pitch = e.doppler();
@@ -131,7 +131,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                 }
                 case BOMB_DRILL -> pitch = 0.85;
                 case BOOSTER -> pitch *= switch (ClientWeaponSpec.of(track.weapon).booster()) {
-                    // голос записи: одна запись на все твердотопливные двигатели, тон — по их величине
+                    // recording voice: one recording for all solid rocket motors, pitch from their size
                     case ICBM -> 0.7;
                     case ROCKET -> 1.3;
                     case SOLID_LOW -> 0.9;
@@ -139,33 +139,33 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
                 };
             }
             double gain = Loudness.gain(level, heard.margin() + level - heard.level(), ceiling(track)) * share;
-            // дальняя запись уже прошла FAR_AIR воздуха: фильтр — только сверх него
+            // distant recording already passed through FAR_AIR of air: filter only the excess
             double highs = this.air > 0 ? Math.min(1, heard.highs() / e.heardAt(noise, part, drilling, this.air)) : heard.highs();
-            // камера снаряда: слушатель сидит на нём самом — мотор в упор, но не оглушающе (не физика: камера —
-            // взгляд оператора, а не уши на корпусе)
+            // projectile camera: listener sits on it — engine at point-blank range, but not deafening (not physical: camera
+            // is operator's view, not ears on the body)
             if (e.onboard()) gain *= 0.5;
-            // предел тона у Minecraft — 0,5…2 (SoundEngine): дальше тон не уходит
+            // Minecraft pitch limit is 0.5…2 (SoundEngine): pitch cannot go beyond it
             return new Tone(gain, Math.max(0.5, Math.min(2.0, pitch)), highs);
         }
     }
 
     /**
-     * Потолок громкости снаряда, LUFS: у всех — {@link Loudness#CEILING_LUFS}, у МБР — прежний {@link Loudness#ENGINE_LUFS}
-     * (ядерный удар не меняется; по тому же закону её старт у стола звучал бы до 5,5 дБ громче).
+     * Projectile loudness ceiling, LUFS: {@link Loudness#CEILING_LUFS} for all, old {@link Loudness#ENGINE_LUFS} for
+     * ICBM (nuclear strike unchanged; under the same law its launch near the pad would be up to 5.5 dB louder).
      */
     static double ceiling(FlightTrack track) {
         return track.weapon == WeaponType.NUKE ? Loudness.ENGINE_LUFS : Loudness.CEILING_LUFS;
     }
 
-    /** Шум снаряда этого пути: паспорт его аппарата (у B-2 — самолёт, у его бомбы — бомба). */
+    /** Noise of this path's projectile: craft spec (B-2 uses aircraft, its bomb uses bomb). */
     static Noise noise(FlightTrack track) {
         WeaponSpec spec = track.weapon.spec();
         return !track.bomber && spec.payload() != null ? spec.payload().noise() : spec.airframe().noise();
     }
 
     /**
-     * Направленность шума обтекания, дБ: на подлёте громче всего, вслед — 0,3 по мощности (шум уносит вперёд; доля —
-     * оценка, у вихрей за кормой).
+     * Airflow-noise directivity, dB: loudest on approach, trailing at 0.3 power (noise projects forward; fraction is
+     * an estimate for wake vortices).
      */
     static double airflow(Emission e) {
         double v = e.velocity().length();
@@ -174,7 +174,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         return 10 * Math.log10(0.3 + 0.7 * front * front);
     }
 
-    /** Громкость, тон и доля верхов слоя в этот тик. */
+    /** Layer volume, pitch and high fraction this tick. */
     record Tone(double gain, double pitch, double highs) {
         static final Tone SILENT = new Tone(0, 1, 1);
     }
@@ -184,10 +184,10 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
     private final Layer layer;
     private float smoothVolume;
     private float filterGain = 1, filterHighs = 1;
-    /** Что слышно в этот тик ({@code null} — данных о снаряде на этот момент нет) и громкость с тоном слоя. */
+    /** What is heard this tick ({@code null} — no projectile data at this time) and layer volume and pitch. */
     private Emission heard;
     private Tone tone;
-    /** Отпущен ({@link VoiceBudget}): стихает и останавливается. */
+    /** Released ({@link VoiceBudget}): fades and stops. */
     private boolean released;
 
     EngineSound(FlightTrack track, Occlusion occlusion, Layer layer) {
@@ -204,30 +204,30 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
     }
 
     /**
-     * Громкость слоя против мерки {@link Loudness#ENGINE_LUFS} ({@link Loudness#gain}, сглаженная): ей сравнивают с порогом
-     * {@link VoiceBudget#AUDIBLE}; громкость для Minecraft ({@code getVolume}) — она же, приведённая к громкости файла.
+     * Layer gain relative to {@link Loudness#ENGINE_LUFS} ({@link Loudness#gain}, smoothed): compared against
+     * {@link VoiceBudget#AUDIBLE}; Minecraft volume ({@code getVolume}) is the same adjusted for file loudness.
      */
     public double loudness() {
         return smoothVolume;
     }
 
     String describe() {
-        // фильтр у источника: громкость и доля верхов за преградой и воздухом (1 — открыто)
+        // source filter: gain and high fraction behind barrier and air (1 — open)
         return String.format(Locale.ROOT, "%s[f %.2f/%.2f]", layer.name().toLowerCase(Locale.ROOT), filterGain, filterHighs);
     }
 
-    /** Что слушатель слышит в этот тик: {@code heard} — {@code null}, если данных о снаряде на этот момент нет. */
+    /** What listener hears this tick: {@code heard} is {@code null} if no projectile data exists for this time. */
     void aim(Emission heard, Tone tone) {
         this.heard = heard;
         this.tone = tone;
     }
 
-    /** Отпустить канал: слой стихает и останавливается сам. */
+    /** Release channel: layer fades and stops itself. */
     void release() {
         released = true;
     }
 
-    /** Снова нужен, пока ещё не смолк: не останавливать. */
+    /** Needed again before fully silent: do not stop. */
     void keep() {
         released = false;
     }
@@ -248,15 +248,15 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
 
     @Override
     public void tick() {
-        // остановленный звук без канала ваниль тикает и дальше: ползунок категории в нуле снимает канал, не убирая звук
-        // из tickingSounds (SoundEngine.tickNonPaused) — ни громкости, ни преград ему уже не считать
+        // vanilla keeps ticking a stopped sound without a channel: zero category slider removes channel but leaves sound
+        // in tickingSounds (SoundEngine.tickNonPaused) — no more volume or barrier calculations needed for it
         if (isStopped()) return;
         if (heard == null) {
-            // данных о снаряде на этот момент нет (взорвался или ушёл из слуха): стихнуть, не дёргая источник
+            // no projectile data at this time (exploded or left hearing range): fade without moving source abruptly
             smoothVolume *= 0.5f;
             this.volume = Loudness.motor(smoothVolume);
         } else {
-            // сглаживание: смена слоёв и ракурса, запуск и отпускание слоя, приглушение под взрыв — без щелчков
+            // smoothing: layer and perspective changes, layer start and release, ducking under blasts — no clicks
             double gain = released ? 0 : tone.gain() * ClientSounds.duck();
             smoothVolume += (float) ((gain - smoothVolume) * 0.35);
             this.volume = Loudness.motor(smoothVolume);
@@ -276,11 +276,11 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
     }
 
     /**
-     * Разовые звуки старта в момент, когда их фронт дошёл до уха: поджиг ускорителя (удар и рёв у пусковой)
-     * и отделение (хлопок пиропатронов и лязг замков), у РСЗО — сход каждого снаряда с трубы, у барражирующего —
-     * катапульта. Громкость — от мощности звука события (ускоритель на полной тяге, катапульта и отстрел — из паспорта
-     * {@link Noise}) и пути до уха. Зовётся, когда слушатель услышал смену фазы: {@code prev} — прошлая услышанная, −1 —
-     * ещё никакой. У МБР свой звук пуска ({@code NukeSounds}).
+     * Launch one-shots when their front reaches the ear: booster ignition (impact and roar at launcher) and
+     * separation (squib bang and lock clank), MLRS — each rocket's tube exit, loitering munition — catapult. Volume
+     * follows event sound power (booster at full thrust, catapult and separation from {@link Noise} spec) and path
+     * to ear. Called when listener hears a phase change: {@code prev} is previously heard phase, −1 — none yet.
+     * ICBM has its own launch sound ({@code NukeSounds}).
      */
     static void launchEvents(FlightTrack track, Emission e, int prev) {
         ClientWeaponSpec spec = ClientWeaponSpec.of(track.weapon);
@@ -289,17 +289,17 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         FlightPhase ph = FlightPhase.byId(e.phase());
         double age = e.phaseAge();
         Vec3 at = e.position();
-        // поджиг: при смене фазы или если снаряд попал в поле зрения уже на поджиге
+        // ignition: phase change or projectile entered view already igniting
         if (ph == FlightPhase.IGNITION && (prev >= 0 || age < 5)) {
             double motor = noise.motor() == null ? Noise.SILENT : noise.motor().power(FlightPhase.BOOST, 0);
             switch (spec.launch()) {
                 case ROCKET_TUBE -> {
-                    // сход реактивного снаряда: резкое «фш-ш» с треском; очередь по полсекунды сливается в рёв залпа
+                    // rocket rail exit: sharp “fsh-sh” with crackle; half-second cadence merges into salvo roar
                     double v = shot(motor, Spectra.ROCKET_LAUNCH, e);
                     if (v > 0.01) ClientSounds.atEar(ModSounds.ROCKET_LAUNCH.get(), at, Loudness.volume(v, Loudness.ROCKET_LAUNCH_LUFS), 0.94f + (float) Math.random() * 0.12f);
                 }
                 case CATAPULT -> {
-                    // катапульта барражирующего: удар поршня и свист направляющей
+                    // loitering munition catapult: piston impact and guide whistle
                     double v = shot(noise.catapult() - Spectra.LOITER_LAUNCH.aWeighting(), Spectra.LOITER_LAUNCH, e);
                     if (v > 0.01) ClientSounds.atEar(ModSounds.LOITER_LAUNCH.get(), at, Loudness.volume(v, Loudness.ENGINE_LUFS), 0.95f + (float) Math.random() * 0.1f);
                 }
@@ -315,7 +315,7 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         }
     }
 
-    /** Громкость ({@link Loudness#gain}) разового звука мощностью {@code lw} (без взвешивания) со спектром его записи у этого уха. */
+    /** Gain ({@link Loudness#gain}) of a one-shot with power {@code lw} (unweighted), recording spectrum, at this ear. */
     private static double shot(double lw, Spectrum spectrum, Emission e) {
         if (Double.isNaN(lw) || lw == Noise.SILENT) return 0;
         double[] bands = new double[Propagation.BANDS];
@@ -324,16 +324,16 @@ public final class EngineSound extends AbstractTickableSoundInstance implements 
         return e.onboard() ? v * 0.5 : v;
     }
 
-    /** Вес ближней записи: 1 ближе половины {@link #FAR_AIR}, 0 с самого {@link #FAR_AIR}. */
+    /** Near recording weight: 1 closer than half {@link #FAR_AIR}, 0 from {@link #FAR_AIR} itself. */
     static double near(double d) {
         return 1 - Acoustics.smoothstep(FAR_AIR / 2, FAR_AIR, d);
     }
 
     /**
-     * Доля слоя в переходе между разными записями (ближняя и дальняя, спереди и сзади): доли {@code w} и {@code 1 − w}
-     * складываются по мощности (корень), а не по амплитуде. Записи разные и не коррелированы, поэтому при весах
-     * 0,5 и 0,5 сумма по амплитуде тише на 3 дБ: ракета проседала бы на пролёте прямо над головой и на смене ближнего
-     * гула дальним, становясь тише, хотя приближается.
+     * Layer share in transitions between different recordings (near/far, front/rear): shares {@code w} and
+     * {@code 1 − w} sum by power (square root), not amplitude. Recordings differ and are uncorrelated, so amplitude
+     * weights 0.5 and 0.5 make the sum 3 dB quieter: a missile would dip on an overhead pass and at the near-to-far
+     * rumble transition, becoming quieter while approaching.
      */
     static double share(double w) {
         return Math.sqrt(Math.max(0, w));

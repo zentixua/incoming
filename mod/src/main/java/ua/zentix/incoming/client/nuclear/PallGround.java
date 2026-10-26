@@ -12,57 +12,57 @@ import java.util.Comparator;
 import java.util.stream.IntStream;
 
 /**
- * Рельеф под пеленой подрыва — грубая карта высот для луча пелены, за которым нет мира ({@code pallFloor} в
- * {@code pall.glsl}): за дальностью прорисовки без Distant Horizons, за краем его LOD и между ними луч иначе не знал бы,
- * где кончается. Плоскость земли под эпицентром тут не годится: камера в долине ниже неё смотрит вниз сквозь пустоту,
- * и луч кончался бы у самого глаза — под горизонтом ровный срез без пелены. Второй канал — доля воды в клетке: из чего
- * пелена ({@link PallField}: над сушей пыль, над водой брызги; шейдер берёт её там, откуда вещество подняло).
+ * Terrain beneath a detonation pall — a coarse heightmap for pall rays with no world geometry behind them ({@code pallFloor} in
+ * {@code pall.glsl}): beyond render distance without Distant Horizons, beyond its LOD edge and between them, the ray would otherwise not know
+ * where to end. A ground-zero plane is unsuitable: a camera in a valley below it looks downward through empty space,
+ * ending the ray right at the eye — a straight cutoff below the horizon without pall. The second channel is cell water fraction: what
+ * the pall consists of ({@link PallField}: dust over land, spray over water; the shader samples where the material was lofted).
  * <p>
- * Квадрат {@link #SIDE}² клеток вокруг эпицентра на пелену у её источника ({@link PallField#sourceExtent}: таблица,
- * шлейф мглы, базисная волна), голову стены пыли и камеру с запасом {@link #AROUND_EYE_M} (растёт — карта
- * перекладывается на крупнее, известное остаётся), но не шире всей рамки пелены ({@link PallField#extent}). Снос за час
- * уносит пыль на десятки километров: карта на весь снос огрубела бы до полукилометра в клетке и у камеры, а дальше её
- * края рельеф — как у края (пол слоя, конец луча), вещество — по месту, откуда пыль подняло (оно у источника, на
- * карте). Тик клиента замеряет {@link #PER_TICK} клеток по кругу, от эпицентра наружу, — по четырём колонкам в клетке,
- * тем, что знает клиент ({@code heights}, {@code water}: свои чанки, плитки карты рельефа — с Distant Horizons и
- * вдали); раз увиденная клетка остаётся такой, какой её видели (ушёл игрок — чанки выгрузились). Что под эпицентром, известно всегда (землю знает сервер, воду — {@code NukeWater.under}: чанк, плитка карты
- * или уровень моря). Неизвестное заполняется по известному — каждый канал по своей природе:
+ * A square of {@link #SIDE}² cells around ground zero covers pall at its source ({@link PallField#sourceExtent}: table,
+ * haze plume, base surge), dust-wall head and camera with {@link #AROUND_EYE_M} margin (as it grows, the map
+ * is remapped more coarsely, retaining known data), but no wider than the full pall bounds ({@link PallField#extent}). An hour of drift
+ * carries dust tens of kilometers: a map of the entire drift would coarsen to half-kilometer cells even at the camera; beyond its
+ * edge, terrain is clamped to the edge (layer floor, ray end), while material follows the location where dust was lofted (at the source, on
+ * the map). Each client tick samples {@link #PER_TICK} cells radially outward from ground zero, four columns per cell,
+ * using client knowledge ({@code heights}, {@code water}: local chunks, terrain-map tiles — with Distant Horizons and
+ * at distance); a cell once seen retains what was seen (player leaves, chunks unload). Ground zero is always known (ground from server, water from {@code NukeWater.under}: chunk, map tile
+ * or sea level). Unknown areas are filled from known data, each channel according to its nature:
  * <ul>
- * <li>высота — поле сплошное: средним известного вокруг (pull-push, {@link #pullPush}: средние по уменьшенным копиям,
- * сверху вниз — мягко), под эпицентром — его земля весом одной клетки; вдали — средний уровень увиденного;</li>
- * <li>вода — признак клетки (суша или вода), и он тянется: берег продолжается, открытое море остаётся морем. Средним
- * известного он стал бы «полуводой», которой нигде нет (камера у пруда — бледная пыль на всю неизвестную сушу, у берега —
- * полпыли над морем вокруг подрыва), поэтому — ближайшим известным ({@link #nearest}), и эпицентр в нём — известная
- * точка наравне с увиденными клетками.</li>
+ * <li>height is a continuous field: average surrounding known data (pull-push, {@link #pullPush}: averages in smaller copies,
+ * smoothly top-down); ground-zero elevation has weight one cell; far away — the mean observed elevation;</li>
+ * <li>water is a cell property (land or water), extended outward: shore continues, open sea remains sea. Averaging
+ * known data would produce nonexistent "half-water" (camera by a pond — pale dust over all unknown land; near a shore —
+ * half-dust over sea around the detonation), so use the nearest known value ({@link #nearest}), treating ground zero as a known
+ * point equal to observed cells.</li>
  * </ul>
- * Не знаем ничего — вся карта как под эпицентром: на его высоте, и подрыв в море — над морем (как у огненного шторма,
- * {@link FireStorm#survey}). Карта заполняется заново не чаще раза в секунду и только если что-то узнали (вода под
- * эпицентром решилась иначе — сразу); в видеопамять — по {@link #version} ({@code PallPass}, RG16F: высота и вода). Цена на
- * кадр — выборки карты по лучам в пустоту и выборка воды на шаг луча пелены там, где под ней есть вода; на тик — до 1024
- * колонок.
+ * If nothing is known, the whole map follows ground zero: its elevation, and a sea burst is over sea (as for the firestorm,
+ * {@link FireStorm#survey}). Refill the map at most once per second and only after learning something (changed water resolution beneath
+ * ground zero — immediately); upload by {@link #version} ({@code PallPass}, RG16F: height and water). Per-frame cost:
+ * map samples along rays into empty space and a water sample per pall ray step where water exists below; per-tick cost — up to 1024
+ * columns.
  */
 public final class PallGround {
-    /** Клеток по стороне карты. */
+    /** Cells per map side. */
     static final int SIDE = 128;
-    /** Клетка — не мельче стольких блоков (у малого подрыва карта меньше, а не подробнее). */
+    /** Minimum cell width in blocks (a small detonation uses a smaller map, not a finer one). */
     static final double MIN_CELL = 16;
-    /** Клеток за тик: вся карта — за 6,4 с. */
+    /** Cells per tick: the full map in 6.4 s. */
     static final int PER_TICK = 128;
-    /** Заполнять карту заново — не чаще раза в столько тиков. */
+    /** Refill the map at most once per this many ticks. */
     static final int FILL_TICKS = 20;
-    /** Рамка пелены выросла за карту — новая карта с этим запасом. */
+    /** Pall bounds outgrew the map — new map with this margin. */
     static final double GROW = 1.25;
-    /** Рельеф вокруг камеры на карте — на столько метров (× масштаб удара): там пол слоя и конец луча видны вблизи. */
+    /** Mapped terrain around the camera extends this many meters (× strike scale): layer floor and ray end are visible up close there. */
     static final double AROUND_EYE_M = 2000;
-    /** Воды или суши меньше этой доли во всей карте — её под пеленой нет ({@link #hasWater}, {@link #hasLand}). */
+    /** Water or land below this fraction of the whole map is considered absent beneath the pall ({@link #hasWater}, {@link #hasLand}). */
     static final float TRACE = 1e-3f;
     private static final int LEVELS = Integer.numberOfTrailingZeros(SIDE) + 1;
-    /** Клетки по удалению от середины карты: замеры идут от эпицентра наружу. */
+    /** Cells by distance from map center: sampling moves outward from ground zero. */
     private static final int[] ORDER = IntStream.range(0, SIDE * SIDE).boxed()
             .sorted(Comparator.comparingDouble(i -> Mth.square(i % SIDE + 0.5 - SIDE / 2.0) + Mth.square(i / SIDE + 0.5 - SIDE / 2.0)))
             .mapToInt(Integer::intValue).toArray();
 
-    /** Что знает клиент о колонке: число или {@link Double#NaN} — не знает. */
+    /** Client knowledge about a column: a number, or {@link Double#NaN} if unknown. */
     @FunctionalInterface
     private interface Column {
         double at(int x, int z);
@@ -71,39 +71,39 @@ public final class PallGround {
     private final PallField pall;
     private final Detonation d;
     private final double cx, cz, groundY;
-    /** Полсторона карты и клетка, блоки. */
+    /** Map half-side and cell width, blocks. */
     private double half, cell;
     /**
-     * Высота клеток над землёй под эпицентром, блоки, и доля воды в них 0..1; {@link Float#NaN} — не знаем (высоту и воду
-     * клиент знает порознь: плитка карты бывает без глубины воды).
+     * Cell heights above ground zero, blocks, and water fractions 0..1; {@link Float#NaN} — unknown (the client knows height and water
+     * separately: a map tile can lack water depth).
      */
     private float[] known = new float[SIDE * SIDE], knownWet = new float[SIDE * SIDE];
-    /** Заполненная карта (для шейдера): по клеткам, x быстрее, — высота над землёй под эпицентром (блоки) и доля воды. */
+    /** Filled map (for the shader): per cell, x fastest, height above ground zero (blocks) and water fraction. */
     private final float[] map = new float[2 * SIDE * SIDE];
-    /** Низ и верх заполненной карты, блоки над землёй под эпицентром. */
+    /** Filled-map bottom and top, blocks above ground zero. */
     private float lo, hi;
-    /** Вода под эпицентром, с которой карта заполнена ({@link PallField#under}). */
+    /** Water beneath ground zero used to fill the map ({@link PallField#under}). */
     private float filledUnder;
-    /** Есть ли в заполненной карте вода и суша. */
+    /** Whether the filled map contains water and land. */
     private boolean water, land;
     private int next, version, sinceFill;
     private boolean dirty;
-    /** Уменьшенные копии для {@link #fill} (общие: карты заполняет один поток — тик клиента). */
+    /** Smaller copies for {@link #fill} (shared: one thread fills maps — the client tick). */
     private static final float[][] V = new float[LEVELS][], W = new float[LEVELS][];
     /**
-     * Для {@link #nearest}: источник ближайшего известного по клеткам (индекс клетки или {@link #EPICENTRE}) и квадрат
-     * расстояния до него, клетки (общие, как {@link #V}).
+     * For {@link #nearest}: nearest known source per cell (cell index or {@link #EPICENTRE}) and squared
+     * distance to it, cells (shared like {@link #V}).
      */
     private static final int[] SOURCE = new int[SIDE * SIDE];
     private static final float[] DIST = new float[SIDE * SIDE];
-    /** Источник «эпицентр» — середина карты ({@link #nearest}). */
+    /** "Ground zero" source — map center ({@link #nearest}). */
     private static final int EPICENTRE = SIDE * SIDE;
 
     PallGround(Detonation d, PallField pall) {
         this(d, pall, 0);
     }
 
-    /** Карта полстороны {@code half} блоков (0 — по рамке пелены): проверки заполнения — на карте своих клеток. */
+    /** Map with half-side {@code half} blocks (0 — from pall bounds): fill checks use a map of their own cells. */
     PallGround(Detonation d, PallField pall, double half) {
         this.pall = pall;
         this.d = d;
@@ -116,37 +116,37 @@ public final class PallGround {
         fill();
     }
 
-    /** Полсторона карты, блоки. */
+    /** Map half-side, blocks. */
     double half() {
         return half;
     }
 
-    /** Заполнение карты: меняется, когда карта заполнена заново или переложена. */
+    /** Map fill version: changes when refilled or remapped. */
     int version() {
         return version;
     }
 
-    /** Есть ли под пеленой вода (хоть где-то в заполненной карте): иначе шейдер воду не читает. */
+    /** Whether water exists beneath the pall (anywhere in the filled map): otherwise the shader does not sample water. */
     boolean hasWater() {
         return water;
     }
 
-    /** Есть ли под пеленой суша: иначе пыли и мглы нет (подрыв посреди моря). */
+    /** Whether land exists beneath the pall: otherwise no dust or haze (detonation at open sea). */
     boolean hasLand() {
         return land;
     }
 
     /**
-     * Тик клиента: пелена у источника к {@code ticks} (тики после подрыва), голова стены пыли ({@code wall} — докуда она,
-     * блоки, {@link BlastWall#reach}: её тающий край идёт до 0,3 psi, вдвое дальше пыли пелены) или камера с запасом
-     * ({@code eye} — до неё от эпицентра по земле, блоки; не дальше всей рамки пелены) вышли за карту — переложить;
-     * следующие клетки —
-     * по {@code heights} и {@code water} (null — не знать: измерение с потолком; карта остаётся как есть); узнали новое —
-     * заполнить заново, но не чаще раза в {@link #FILL_TICKS} тиков; вода под эпицентром решилась иначе — сразу.
+     * Client tick: remap if source pall at {@code ticks} (ticks since detonation), dust-wall head ({@code wall} — reach,
+     * blocks, {@link BlastWall#reach}: its fading edge reaches 0.3 psi, twice the pall dust reach), or camera plus margin
+     * ({@code eye} — ground distance from ground zero, blocks; capped at full pall bounds) has left the map;
+     * sample the next cells
+     * using {@code heights} and {@code water} (null — unknown: ceiling dimension; map stays as is); after new data,
+     * refill at most once per {@link #FILL_TICKS} ticks; changed water resolution beneath ground zero — immediately.
      */
     void survey(double ticks, double wall, double eye, @Nullable Sightline.Heights heights, @Nullable FarTerrain.Water water) {
         double extent = Math.max(wall, Math.min(pall.extent(ticks), Math.max(pall.sourceExtent(ticks), eye + d.blocks(AROUND_EYE_M))));
-        // карта и её полсторона уходят в кадр вместе: переложенная — сразу заполнена
+        // map and half-side enter the frame together: a remapped map is immediately filled
         boolean grew = extent > half;
         if (grew) resize(extent * GROW);
         if (heights != null || water != null) {
@@ -166,14 +166,14 @@ public final class PallGround {
         if (grew || (float) pall.under() != filledUnder || ++sinceFill >= FILL_TICKS && dirty) fill();
     }
 
-    /** Клетка i теперь {@code v}: новое (не знали или разница больше {@code tolerance}) — true. */
+    /** Cell i is now {@code v}: true for new data (previously unknown or difference exceeds {@code tolerance}). */
     private static boolean learn(float[] cells, int i, float v, float tolerance) {
         if (!Float.isNaN(cells[i]) && Math.abs(cells[i] - v) <= tolerance) return false;
         cells[i] = v;
         return true;
     }
 
-    /** Среднее известного в клетке i из четырёх колонок (по четвертям); NaN — ни одной не знаем. */
+    /** Mean known value in cell i from four columns (one per quarter); NaN — none known. */
     private double measure(int i, Column column) {
         double x0 = cx - half + (i % SIDE + 0.25) * cell, z0 = cz - half + (i / SIDE + 0.25) * cell;
         double sum = 0;
@@ -187,7 +187,7 @@ public final class PallGround {
         return n == 0 ? Double.NaN : sum / n;
     }
 
-    /** Карта на полсторону {@code to} (не меньше {@link #MIN_CELL} в клетке): известное — в клетки новой карты по их середине. */
+    /** Map with half-side {@code to} (at least {@link #MIN_CELL} per cell): map known data to new cells by their centers. */
     private void resize(double to) {
         double h = Math.max(to, MIN_CELL * SIDE / 2), c = 2 * h / SIDE;
         if (half > 0) {
@@ -199,7 +199,7 @@ public final class PallGround {
         cell = c;
     }
 
-    /** Известное {@code was} — на карту с полстороной {@code h} и клеткой {@code c}. */
+    /** Known {@code was} onto a map with half-side {@code h} and cell width {@code c}. */
     private float[] moved(float[] was, double h, double c) {
         float[] now = new float[SIDE * SIDE];
         for (int j = 0; j < SIDE; j++) {
@@ -212,8 +212,8 @@ public final class PallGround {
     }
 
     /**
-     * Заполнить карту: высоты — средним известного вокруг ({@link #pullPush}; под эпицентром — его земля, 0), воду —
-     * ближайшим известным ({@link #nearest}; эпицентр — {@link PallField#under}).
+     * Fill the map: heights use the average of surrounding known data ({@link #pullPush}; ground zero — its ground, 0); water uses
+     * nearest known data ({@link #nearest}; ground zero — {@link PallField#under}).
      */
     void fill() {
         float under = (float) pall.under();
@@ -244,10 +244,10 @@ public final class PallGround {
     }
 
     /**
-     * Заполнить {@code cells} (NaN — неизвестно) в {@code V[0]} (pull-push): уменьшенные копии — средние известного по
-     * числу клеток (вес копии — сколько известного под ней), потом сверху вниз — неизвестное и полуизвестное (вес меньше 1)
-     * берёт копию крупнее (билинейно, без ступенек). Под эпицентром известно всегда — {@code centre} в четырёх клетках
-     * вокруг него весом одной клетки; не знаем ничего — всюду {@code centre}.
+     * Fill {@code cells} (NaN — unknown) into {@code V[0]} (pull-push): smaller copies average known data by cell
+     * count (copy weight is the known data beneath it), then top-down unknown and partly known areas (weight below 1)
+     * take a coarser copy (bilinear, no steps). Ground zero is always known — {@code centre} in its four surrounding cells
+     * with weight one cell; if nothing is known, {@code centre} everywhere.
      */
     private static void pullPush(float[] cells, float centre) {
         int levels = LEVELS;
@@ -287,7 +287,7 @@ public final class PallGround {
                 }
             }
         }
-        // сверху вниз: v[l] становится заполненной копией
+        // top-down: v[l] becomes a filled copy
         for (int l = levels - 2; l >= 0; l--) {
             int n = SIDE >> l;
             for (int j = 0; j < n; j++) {
@@ -303,12 +303,12 @@ public final class PallGround {
     }
 
     /**
-     * Заполнить {@code cells} (NaN — неизвестно) в канал воды карты ближайшим известным: известная клетка — как есть,
-     * неизвестная — как ближайшая к ней известная или эпицентр (точка в середине карты, {@code centre}), что ближе, — по
-     * расстоянию между серединами клеток. Два прохода с переносом источника (8SSEDT, Danielsson 1980; Leymarie &amp; Levine
-     * 1992): клетка берёт источник соседа, если он к ней ближе её собственного, — расстояния почти евклидовы, 16 тысяч клеток
-     * — доли миллисекунды раз в секунду. Граница между источниками разной воды — посередине между ними (на ней карта
-     * переходит за клетку: билинейно в шейдере).
+     * Fill {@code cells} (NaN — unknown) into the map water channel from nearest known data: known cells stay unchanged,
+     * unknown cells take the nearest known cell or ground zero (a point at map center, {@code centre}), whichever is closer, by
+     * cell-center distance. Two passes propagating sources (8SSEDT, Danielsson 1980; Leymarie &amp; Levine
+     * 1992): a cell takes a neighbor's source if closer than its own; distances are nearly Euclidean, 16 thousand cells
+     * cost fractions of a millisecond once per second. Boundary between sources with different water is midway between them (the map
+     * transitions over one cell there: bilinear in the shader).
      */
     private void nearest(float[] cells, float centre) {
         int n = SIDE * SIDE;
@@ -319,7 +319,7 @@ public final class PallGround {
             src[i] = has ? i : EPICENTRE;
             dist[i] = has ? 0 : distance(i, EPICENTRE);
         }
-        // вперёд: строка слева направо (соседи слева и сверху), потом справа налево (сосед справа); назад — зеркально
+        // forward: row left to right (left and upper neighbors), then right to left (right neighbor); backward — mirrored
         for (int j = 0; j < SIDE; j++) {
             for (int i = 0; i < SIDE; i++) {
                 int c = j * SIDE + i;
@@ -347,7 +347,7 @@ public final class PallGround {
         for (int i = 0; i < n; i++) map[2 * i + 1] = src[i] == EPICENTRE ? centre : cells[src[i]];
     }
 
-    /** Клетка c берёт источник соседа {@code from}, если он ей ближе её собственного ({@link #nearest}). */
+    /** Cell c takes neighbor {@code from}'s source if closer than its own ({@link #nearest}). */
     private static void take(int c, int from) {
         int s = SOURCE[from];
         if (s == SOURCE[c]) return;
@@ -358,7 +358,7 @@ public final class PallGround {
         }
     }
 
-    /** Квадрат расстояния от середины клетки c до источника s (клетки или эпицентра — середины карты), в клетках. */
+    /** Squared distance from cell c center to source s (cell or ground zero — map center), in cells. */
     private static float distance(int c, int s) {
         float x = c % SIDE + 0.5f, y = c / SIDE + 0.5f;
         float sx = s == EPICENTRE ? SIDE / 2f : s % SIDE + 0.5f, sy = s == EPICENTRE ? SIDE / 2f : s / SIDE + 0.5f;
@@ -366,8 +366,8 @@ public final class PallGround {
     }
 
     /**
-     * Копия n × n в точке (x, y) в её клетках (середина клетки 0 — 0), края — как у края; клетка — {@code stride} чисел,
-     * берётся {@code offset}-е.
+     * An n × n copy at (x, y) in its cell coordinates (cell 0 center = 0), edges clamped; each cell has {@code stride} numbers,
+     * taking the {@code offset}-th.
      */
     private static float bilinear(float[] t, int n, int stride, int offset, float x, float y) {
         if (n == 1) return t[offset];
@@ -382,24 +382,24 @@ public final class PallGround {
         return a + (b - a) * fy;
     }
 
-    /** Высота заполненной карты над землёй под эпицентром в точке (x, z) мира, блоки — как в шейдере (билинейно, края — как у края). */
+    /** Filled-map height above ground zero at world (x, z), blocks, as in the shader (bilinear, edges clamped). */
     double at(double x, double z) {
         return bilinear(map, SIDE, 2, 0, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
     }
 
-    /** Доля воды в заполненной карте в точке (x, z) мира 0..1 — как в шейдере ({@code pallWater}). */
+    /** Filled-map water fraction at world (x, z) 0..1, as in the shader ({@code pallWater}). */
     double water(double x, double z) {
         return bilinear(map, SIDE, 2, 1, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
     }
 
-    /** Средняя доля воды в заполненной карте (для строки сценария). */
+    /** Mean water fraction in the filled map (for the scenario line). */
     double waterShare() {
         double sum = 0;
         for (int i = 0; i < SIDE * SIDE; i++) sum += map[2 * i + 1];
         return sum / (SIDE * SIDE);
     }
 
-    /** Низ и верх карты над землёй под эпицентром, блоки (как в шейдере). */
+    /** Map bottom and top above ground zero, blocks (as in the shader). */
     float low() {
         return lo;
     }
@@ -408,7 +408,7 @@ public final class PallGround {
         return hi;
     }
 
-    /** Для слоя эффектов: карта и её числа ({@code pall.glsl}: полсторона, низ, верх, клетка). */
+    /** For the effects layer: map and its parameters ({@code pall.glsl}: half-side, bottom, top, cell width). */
     void frame(PallPass.Ground out) {
         out.params.set((float) half, lo, hi, (float) cell);
         out.map = map;

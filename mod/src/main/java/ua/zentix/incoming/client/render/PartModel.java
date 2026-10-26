@@ -22,11 +22,11 @@ import java.util.Map;
 import java.util.function.ToIntFunction;
 
 /**
- * Модель из блоков: каждая деталь — блок в кубе [0, 1]³, сдвинутый и растянутый до своих размеров (в блоках).
- * Ось +Z модели — нос, +Y — верх, +X — левый борт. Свет — мира в точке сущности, как у остальных её деталей.
- * Грани всех деталей собираются в {@link QuadMesh} по слоям (заново после перезагрузки моделей) и рисуются так же,
- * как их нарисовал бы {@code renderSingleBlock}: тот же слой сущности на слой блока, та же окраска блока, — но без
- * прохода по блоку за раз в каждом кадре.
+ * Model built from blocks: each part is a block in cube [0, 1]³, translated and scaled to its dimensions (blocks).
+ * Model +Z is nose, +Y up, +X port side. World light at entity position, as for its other parts.
+ * All part faces combine into {@link QuadMesh} by render type (again after model reload) and draw as
+ * {@code renderSingleBlock} would: same entity render type for each block render type, same block tint,
+ * without processing one block at a time every frame.
  */
 public final class PartModel {
     private final List<Part> parts;
@@ -46,8 +46,8 @@ public final class PartModel {
     }
 
     /**
-     * Грани блока — те же, что берёт {@code renderSingleBlock}: все слои модели (слой сущности для каждого —
-     * {@link RenderTypeHelper#getEntityRenderType}), каждая сторона и общие грани с сидом 42, окраска — по {@code tintIndex}.
+     * Block faces as used by {@code renderSingleBlock}: all model render types (entity render type for each:
+     * {@link RenderTypeHelper#getEntityRenderType}), each side and general faces with seed 42, tint by {@code tintIndex}.
      */
     private Map<RenderType, QuadMesh> compile() {
         Minecraft mc = Minecraft.getInstance();
@@ -79,7 +79,7 @@ public final class PartModel {
     public static final class Builder {
         private final List<Part> parts = new ArrayList<>();
 
-        /** Деталь: блок, сдвиг его угла и размеры. */
+        /** Part: block, corner offset and dimensions. */
         public Builder block(Block block, float tx, float ty, float tz, float sx, float sy, float sz) {
             parts.add(new Part(block.defaultBlockState(), tx, ty, tz, sx, sy, sz));
             return this;

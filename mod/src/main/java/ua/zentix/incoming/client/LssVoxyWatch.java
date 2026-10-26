@@ -9,10 +9,10 @@ import net.minecraft.world.level.Level;
 import ua.zentix.incoming.Incoming;
 
 /**
- * Какие чанки LOD Server Support кладёт в Voxy: тот, что прислал мод, он переписал бы чанком с диска сервера (руин
- * вдали там нет) — {@link VoxyIngest#overwritten}. Только открытое API LSS ({@code LSSApi.registerColumnConsumer}, MIT);
- * класс грузится, только если LSS стоит, и подписывается, только если мод кладёт чанки в Voxy (подписчик без Voxy
- * заставил бы LSS качать LOD для одного нас).
+ * Chunks LOD Server Support writes to Voxy: it would overwrite one sent by the mod with the server's disk chunk
+ * (no distant ruins there), {@link VoxyIngest#overwritten}. Only the public LSS API
+ * ({@code LSSApi.registerColumnConsumer}, MIT); class loads only with LSS installed and subscribes only when the
+ * mod writes chunks to Voxy (a subscriber without Voxy would make LSS download LODs just for us).
  */
 final class LssVoxyWatch {
     private LssVoxyWatch() {}

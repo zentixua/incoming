@@ -1,43 +1,43 @@
 package ua.zentix.incoming.client.fx.plume;
 
 /**
- * Факел двигателя на одной высоте — выход {@link FlameModel}: одна запись на струю вблизи ({@code PlumeRenderer}) и свет
- * вдали ({@code FarFlightView}), поэтому на краю прорисовки факел один. Метры (= блоки) от среза сопла назад по оси.
- * Три части: ядро (сверхзвуковая середина), пламя догорания (до места, где смесь на оси становится стехиометрической) и
- * остывающий хвост (до точки Дрейпера). Ширина струи растёт линейно: у среза {@link #width}, к концу ядра — вдвое.
- * Яркость — в единицах кадра: белая стена в полдень — 1 (как у {@code BlackBody}); цвет — цветность чёрного тела в
- * sRGB, наибольший канал — 255.
+ * Engine plume at one altitude — {@link FlameModel} output: one record for the nearby jet ({@code PlumeRenderer}) and distant
+ * light ({@code FarFlightView}), so the same plume spans the render boundary. Metres (= blocks) aft along the axis from the nozzle exit.
+ * Three parts: core (supersonic centre), afterburning flame (until the axial mixture becomes stoichiometric),
+ * cooling tail (to the Draper point). Jet width grows linearly: {@link #width} at the exit, twice that at the core end.
+ * Luminance in frame units: white wall at noon — 1 (like {@code BlackBody}); colour — black-body chromaticity in
+ * sRGB, maximum channel 255.
  *
- * @param core            длина ядра
- * @param flame           длина пламени догорания (без догорания — ядро)
- * @param length          видимая длина струи
- * @param width           полуширина струи у среза (полностью расширенная струя, сопла вместе)
- * @param diamonds        скачки уплотнения («алмазы»): давление на срезе заметно отличается от давления воздуха
- * @param coreLuminance   яркость ядра
- * @param flameLuminance  яркость пламени догорания
- * @param tailLuminance   яркость остывающего хвоста (его середины)
- * @param coreColor       цвет ядра
- * @param flameColor      цвет пламени
- * @param tailColor       цвет хвоста
- * @param temperature     температура газа в ядре, K
- * @param flameTemperature температура пламени догорания, K
- * @param emissivity      степень черноты ядра поперёк струи
- * @param sheath          оболочка струи вдоль оси (пламя догорания и хвост): яркость и цвет в местах от среза — тот же
- *                        закон, по которому {@link FlameModel} считает средние яркости частей
- * @param middle          середина света струи позади среза сопла, м: центр её светового потока (ядро, пламя и хвост
- *                        по закону вдоль оси) — отсюда светит факел вдали, на дым и на мир
- * @param tailMiddle      центр светового потока хвоста позади среза, м: свет хвоста на мир — ровным отрезком той же
- *                        середины ({@link #tailEnd})
- * @param speed           скорость газа на срезе (полностью расширенная струя), м/с; за ядром на оси — как ядро/x (Pope)
+ * @param core            core length
+ * @param flame           afterburning flame length (core if no afterburning)
+ * @param length          visible jet length
+ * @param width           jet half-width at exit (fully expanded jet, all nozzles together)
+ * @param diamonds        shock diamonds: exit pressure differs significantly from ambient air
+ * @param coreLuminance   core luminance
+ * @param flameLuminance  afterburning flame luminance
+ * @param tailLuminance   cooling tail luminance (at its midpoint)
+ * @param coreColor       core colour
+ * @param flameColor      flame colour
+ * @param tailColor       tail colour
+ * @param temperature     core gas temperature, K
+ * @param flameTemperature afterburning flame temperature, K
+ * @param emissivity      core emissivity across the jet
+ * @param sheath          axial jet sheath (afterburning flame and tail): luminance and colour at positions from the exit — same
+ *                        law used by {@link FlameModel} for mean part luminance
+ * @param middle          light centre aft of the nozzle exit, m: luminous flux centroid (core, flame and tail
+ *                        by the axial law) — source of distant plume light, smoke and world light
+ * @param tailMiddle      tail luminous flux centroid aft of exit, m: tail world light uses a uniform segment with this
+ *                        midpoint ({@link #tailEnd})
+ * @param speed           exit gas speed (fully expanded jet), m/s; axial speed beyond core scales as core/x (Pope)
  */
 public record Flame(double core, double flame, double length, double width, boolean diamonds, double coreLuminance, double flameLuminance,
                     double tailLuminance, int coreColor, int flameColor, int tailColor, double temperature, double flameTemperature,
                     double emissivity, Sheath sheath, double middle, double tailMiddle, double speed) {
     /**
-     * Оболочка струи вдоль оси — пламя догорания вокруг ядра и остывающий хвост за ним: в местах {@code x} (метры от среза
-     * сопла, по возрастанию, от 0 до {@link #length}) яркость сбоку (в единицах кадра, как у частей) и цвет (sRGB,
-     * наибольший канал — 255). Между местами — по прямой. Струя на экране сужается к концу не текстурой, а светом
-     * модели: белое пламя, за ним жёлтый и оранжевый хвост, который гаснет к точке Дрейпера.
+     * Axial jet sheath — afterburning flame around the core, cooling tail behind it: at {@code x} positions (metres from nozzle
+     * exit, increasing from 0 to {@link #length}), side luminance (frame units, like parts) and colour (sRGB,
+     * maximum channel 255). Linear between positions. Screen jet narrows toward its end through model
+     * light rather than texture: white flame, then a yellow and orange tail fading toward the Draper point.
      */
     public record Sheath(double[] x, double[] luminance, int[] color) {
         static final Sheath NONE = new Sheath(new double[0], new double[0], new int[0]);
@@ -47,7 +47,7 @@ public record Flame(double core, double flame, double length, double width, bool
         }
     }
 
-    /** Тот же факел, светящий в k раз слабее (струя той же формы, частиц в ней в k раз меньше; оптически тонкая). */
+    /** Same plume, light reduced by factor k (same jet shape, k times fewer particles; optically thin). */
     public Flame dimmed(double k) {
         double[] lum = sheath.luminance().clone();
         for (int i = 0; i < lum.length; i++) lum[i] *= k;
@@ -57,9 +57,9 @@ public record Flame(double core, double flame, double length, double width, bool
     }
 
     /**
-     * Докуда за seconds секунд с поджига дошёл газ струи от среза, м: в ядре — со скоростью среза, за ним скорость на оси
-     * speed·core/x (Pope), и x² растёт линейно со временем. ⚠ Голова начинающейся струи идёт медленнее установившейся
-     * оси (порядка вдвое) — это оценка сверху.
+     * Jet gas distance from the exit after seconds seconds since ignition, m: exit speed in the core; axial speed beyond it
+     * speed·core/x (Pope), so x² grows linearly with time. (est.) Starting jet head travels slower than the established
+     * axis (about half speed) — an upper estimate.
      */
     public double gasReach(double seconds) {
         if (speed <= 0 || core <= 0) return 0;
@@ -67,54 +67,54 @@ public record Flame(double core, double flame, double length, double width, bool
         return t <= inCore ? speed * t : Math.sqrt(core * core + 2 * speed * core * (t - inCore));
     }
 
-    /** Полуширина струи в x метрах от среза. */
+    /** Jet half-width at x metres from exit. */
     public double widthAt(double x) {
         return width * (1 + x / core);
     }
 
     /**
-     * Конец отрезка света хвоста позади среза, м: ровный отрезок от конца пламени с той же серединой потока, что у хвоста
-     * ({@link #tailMiddle}), не дальше видимой струи. До точки Дрейпера свет хвоста ложился бы вчетверо дальше пламени, а
-     * светит в основном его начало.
+     * Tail light segment end aft of exit, m: uniform segment from the flame end with the same flux midpoint as the tail
+     * ({@link #tailMiddle}), capped by visible jet length. Extending to the Draper point would place tail light four times beyond the flame,
+     * although its start emits most of the light.
      */
     public double tailEnd() {
         double fl = Math.max(flame, core);
         return Math.min(length, Math.max(fl, 2 * tailMiddle - fl));
     }
 
-    /** Полуширина в конце видимой струи. */
+    /** Half-width at visible jet end. */
     public double spread() {
         return widthAt(length);
     }
 
-    /** Площадь сбоку от среза до x (трапеция), м². */
+    /** Side area from exit to x (trapezoid), m². */
     public double areaTo(double x) {
         return x * (width + widthAt(x));
     }
 
-    /** Площадь светящейся струи сбоку, м². */
+    /** Luminous jet side area, m². */
     public double area() {
         return areaTo(length);
     }
 
-    /** Радиус круга той же площади, что струя сбоку: свет вдали и источник света для дыма, м. */
+    /** Radius of a disc matching jet side area: distant light and smoke light source, m. */
     public double lightRadius() {
         return Math.sqrt(area() / Math.PI);
     }
 
-    /** Площади частей сбоку, м²: ядро (его конус), пламя без ядра (обнимает ядро), хвост. */
+    /** Part side areas, m²: core (its cone), flame excluding core (surrounds core), tail. */
     public double[] partAreas() {
         double c = core * width, f = Math.max(0, areaTo(flame) - c), t = Math.max(0, area() - areaTo(flame));
         return new double[]{c, f, t};
     }
 
-    /** Средняя яркость струи сбоку: каждая часть на своей площади. */
+    /** Mean jet side luminance: each part over its own area. */
     public double brightness() {
         double[] a = partAreas();
         return (coreLuminance * a[0] + flameLuminance * a[1] + tailLuminance * a[2]) / (a[0] + a[1] + a[2]);
     }
 
-    /** Цвет света струи: части по их потокам света (линейно), снова к наибольшему каналу 255. */
+    /** Jet light colour: parts weighted by their light flux (linear), renormalized to maximum channel 255. */
     public int lightColor() {
         double[] a = partAreas(), w = {coreLuminance * a[0], flameLuminance * a[1], tailLuminance * a[2]};
         int[] colors = {coreColor, flameColor, tailColor};

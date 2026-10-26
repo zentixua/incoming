@@ -17,56 +17,54 @@ import ua.zentix.incoming.strike.WeaponType;
 import java.util.UUID;
 
 /**
- * История полёта снаряда на клиенте (по тикам) — одна на звук и на картинку вдали. Звук берёт из неё «запаздывающее»
- * положение и скорость, картинка вдали ({@code client.far.FarFlightView}) — нынешнее положение, поворот модели и путь
- * для шлейфа.
- * Скорость — та, что сообщил сервер ({@link StrikeProjectile#velocity()}), а не разность положений по тикам клиента:
- * пакеты одного тика сервера доходят то в один тик клиента, то в соседний, и такая разность то падает до нуля, то
- * удваивается. Пишется по сущности, пока она есть у клиента, а без неё — по пакетам сервера ({@link S2C.FarFlights};
- * промежуточные тики — по прямой между ними). Живёт дольше сущности: после взрыва дальние слушатели ещё какое-то время
- * слышат мотор, а шлейф висит.
+ * Client projectile flight history (by tick), shared by sound and distant visuals. Sound takes “retarded”
+ * position and velocity; far view ({@code client.far.FarFlightView}) takes current position, model rotation and
+ * trail path. Velocity is server-reported ({@link StrikeProjectile#velocity()}), not position difference by
+ * client ticks: one server tick's packets arrive in the same or neighbouring client ticks, making that
+ * difference alternate between zero and double. Recorded from entity while client has it, otherwise server
+ * packets ({@link S2C.FarFlights}; intermediate ticks linearly between). Outlives entity: after explosion distant
+ * listeners still hear engine for a while, and trail persists.
  */
 public final class FlightTrack implements Acoustics.Path {
     /**
-     * Тиков истории: звук идёт до уха не дольше {@link Hearing#MAX_DELAY} (дальше {@link Hearing#RANGE} сервер путь не
-     * шлёт), и ещё запас на пакеты, которые доходят неровно.
+     * History ticks: sound travels to ear for at most {@link Hearing#MAX_DELAY} (server sends no path beyond
+     * {@link Hearing#RANGE}), plus margin for uneven packet arrival.
      */
     private static final int CAPACITY = Hearing.MAX_DELAY + 64;
-    /** Разрыв в данных длиннее — это уже другой полёт в поле слуха: история начинается заново. */
+    /** Longer data gap means another flight in hearing range: restart history. */
     private static final int MAX_GAP = 8;
 
     public final UUID id;
-    /** Оружие; null — зенитная ракета ЗРК ({@link #interceptor}): её путь живёт отдельно ({@link FlightTracks#interceptors}). */
+    /** Weapon; null — SAM missile ({@link #interceptor}): separate path registry ({@link FlightTracks#interceptors}). */
     @Nullable
     public final WeaponType weapon;
-    /** B-2 (у его бомбы то же оружие, звук и вид другие). */
+    /** B-2 (its bomb has same weapon, different sound and appearance). */
     public final boolean bomber;
     private final double[] xs = new double[CAPACITY], ys = new double[CAPACITY], zs = new double[CAPACITY];
     private final double[] vxs = new double[CAPACITY], vys = new double[CAPACITY], vzs = new double[CAPACITY];
     private final int[] phases = new int[CAPACITY], phaseAges = new int[CAPACITY];
     private final double[] axs = new double[CAPACITY], ays = new double[CAPACITY], azs = new double[CAPACITY];
     private final float[] yaws = new float[CAPACITY], pitches = new float[CAPACITY], rolls = new float[CAPACITY];
-    /** Точка записана по пакетам сервера (сущности у клиента не было): шлейф вдали рисуется только по таким. */
+    /** Point from server packets (client had no entity): distant trail drawn only from these. */
     private final boolean[] servers = new boolean[CAPACITY];
     private long first = -1, last = -1;
-    /** Точка пути перед последней (от неё строится прямая до последней). */
+    /** Path point before last (line to last built from it). */
     private long previous = -1;
     private long death = Long.MAX_VALUE;
-    /** Сервер подтвердил конец: запоздалый вид сущности уже не может оживить этот UUID. */
+    /** Server confirmed end: a delayed entity view cannot revive this UUID. */
     private boolean confirmedEnd;
-    /** Быстрее этого снаряд за всю историю не двигался, блоков/тик: по скорости и по сдвигу между тиками. */
+    /** Maximum speed in entire history, blocks/tick: from velocity and between-tick displacement. */
     private double maxSpeed;
     /**
-     * На сколько тиков после последней записи звук ещё можно тянуть с неё: по сущности запись каждый тик, так что 1;
-     * по пакетам — до следующего пакета (и тик на неровную доставку). Дальше данных нет (взорвался или ушёл из слуха) —
-     * слой молчит.
+     * Ticks after last sample for which sound may extrapolate: entity sampled every tick, so 1; packets until
+     * next packet (plus a tick for uneven delivery). Beyond, no data (exploded or left hearing range): layer silent.
      */
     private int slack = 1;
-    /** Последняя запись — по сущности. */
+    /** Last sample from entity. */
     private boolean fromEntity;
-    /** Бомба бурит. */
+    /** Bomb is drilling. */
     private boolean drilling;
-    /** Земля под снарядом на старте по чанку сервера (последний пакет, где она была, {@link S2C.FarFlight#ground}); NaN — не было. */
+    /** Launch ground under projectile from server chunk (last packet containing it, {@link S2C.FarFlight#ground}); NaN — none. */
     private double launchGround = Double.NaN;
 
     public FlightTrack(UUID id, @Nullable WeaponType weapon, boolean bomber) {
@@ -75,15 +73,15 @@ public final class FlightTrack implements Acoustics.Path {
         this.bomber = bomber;
     }
 
-    /** Путь зенитной ракеты ЗРК: оружия у неё нет, вид и звук — по паспорту ЗРК. */
+    /** SAM missile path: no weapon assigned, look and sound from SAM spec. */
     public static FlightTrack interceptor(UUID id) {
         return new FlightTrack(id, null, false);
     }
 
     /**
-     * Запись по виду зенитной ракеты у клиента: сдвиг за тик — от прошлого места, фаза — разгон, пока горит двигатель
-     * разгона ({@link InterceptorSpec#boostTicks}), дальше — маршевый режим. Точки цели у неё нет: впереди путь не
-     * обрывается.
+     * Sample from client's SAM missile view: displacement per tick from previous position, boost phase while
+     * boost engine burns ({@link InterceptorSpec#boostTicks}), sustain afterward. No target point: path is not
+     * cut short ahead.
      */
     public void record(long tick, InterceptorEntity e) {
         Vec3 v = e.position().subtract(e.xo, e.yo, e.zo);
@@ -95,7 +93,7 @@ public final class FlightTrack implements Acoustics.Path {
         slack = 1;
     }
 
-    /** Запись по сущности у клиента. */
+    /** Sample from client entity. */
     public void record(long tick, StrikeProjectile p) {
         append(tick, new Sample(p.position(), p.velocity(), p.getYRot(), p.getXRot(), p.roll(), p.flightPhase().ordinal(), p.phaseAge(),
                 p.aimPoint(), false));
@@ -105,8 +103,8 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Запись по пакету сервера. Два пакета в один тик (сеть прислала пачкой) — верен последний; на тик, записанный
-     * по сущности, пакет не нужен.
+     * Sample from server packet. Two packets in one tick (network batch): latest wins; a tick recorded from
+     * entity does not need a packet.
      */
     public void record(long tick, S2C.FarFlight f) {
         if (tick < last || tick == last && fromEntity) return;
@@ -118,16 +116,16 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Земля под снарядом на старте по чанку сервера (первый воздух), из пакетов; NaN — сервер её не присылал (снаряд был
-     * у клиента сущностью или чанк места пуска у сервера не готов).
+     * Launch ground under projectile from server chunk (first air), from packets; NaN — server did not send it
+     * (projectile was client entity or server launch-site chunk not ready).
      */
     public double launchGround() {
         return launchGround;
     }
 
     /**
-     * Новая точка пути; пропущенные тики до неё — по прямой (углы — по кратчайшему повороту), долгий разрыв — история
-     * заново. Точка того же тика поправляет последнюю: прямая строится заново от предыдущей.
+     * New path point; missing ticks before it interpolate linearly (angles by shortest turn), long gap restarts
+     * history. Same-tick point corrects last: rebuild line from previous point.
      */
     private void append(long tick, Sample s) {
         if (tick < last) return;
@@ -150,7 +148,7 @@ public final class FlightTrack implements Acoustics.Path {
 
     private void put(long tick, Sample s) {
         if (first < 0) first = tick;
-        // сдвиг от прошлой точки (у поправки того же тика — от точки перед ней), блоков за тик
+        // displacement from previous point (same-tick correction: from point before it), blocks per tick
         long from = tick > last ? last : previous;
         if (from >= 0 && from >= first && tick > from) {
             int j = (int) (from % CAPACITY);
@@ -177,30 +175,30 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Звук из момента t ещё есть чем вести: данные дошли не позже, чем на {@link #slack} тиков раньше; у кончившегося
-     * полёта — до его конца ({@link #impact}).
+     * Sound at time t still has data to drive it: data arrived at most {@link #slack} ticks earlier; ended
+     * flight up to its end ({@link #impact}).
      */
     public boolean covers(double t) {
         return t <= (isDead() ? Math.min(death, last + MAX_GAP) : last + slack);
     }
 
     /**
-     * Снаряд взорвался: пакет взрыва пришёл в тик {@code tick}, и полёт кончился тогда же. Пакеты о дальнем снаряде идут
-     * раз в 2–4 тика и доходят неровно, так что последняя запись бывает на несколько тиков раньше взрыва: до взрыва путь
-     * тянется с неё ({@link #at}), и мотор стихает, когда до уха доходит фронт самого взрыва, а не раньше — с паузой
-     * тишины перед ним.
+     * Projectile exploded: blast packet arrived at {@code tick}, flight ended then too. Distant projectile
+     * packets arrive every 2–4 ticks, unevenly, so last sample can precede explosion by several ticks: until
+     * explosion, extrapolate path from it ({@link #at}); engine fades when blast front itself reaches ear,
+     * not earlier with a silent gap before it.
      */
     public void impact(long tick) {
         confirmedEnd = true;
         if (last >= 0 && !isDead()) death = Math.max(last, tick);
     }
 
-    /** Путь сейчас идёт по пакетам сервера (сущности у клиента нет). */
+    /** Path currently follows server packets (client has no entity). */
     public boolean fromServer() {
         return !fromEntity;
     }
 
-    /** Бомба бурит. */
+    /** Bomb is drilling. */
     public boolean drilling() {
         return drilling;
     }
@@ -239,7 +237,7 @@ public final class FlightTrack implements Acoustics.Path {
         return Math.max(first, last - CAPACITY + 1);
     }
 
-    /** Где снаряд в момент t: между записями — по прямой, после последней — по её скорости, не мимо цели. */
+    /** Projectile at t: linear between samples, last velocity beyond last sample, never past target. */
     @Override
     public void at(double t, double[] out) {
         if (last >= 0 && t > last) {
@@ -257,9 +255,9 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Где снаряд в момент t, который может быть позже последней записи (следующий пакет ещё в пути): от последней точки
-     * по её скорости ({@link #at}), пока есть данные ({@link #covers}), и не мимо цели — снаряд, который в этот тик
-     * попал, сквозь неё не летит. False — данных на этот момент нет.
+     * Projectile at t, possibly after last sample (next packet still in transit): last point plus its velocity
+     * ({@link #at}) while data covers time ({@link #covers}), never past target — projectile hitting this tick
+     * does not fly through it. False — no data for this time.
      */
     public boolean predict(double t, double[] out) {
         if (last < 0 || !covers(t)) return false;
@@ -267,13 +265,13 @@ public final class FlightTrack implements Acoustics.Path {
         return true;
     }
 
-    /** От последней записи по её скорости на dt тиков (не дальше {@link #MAX_GAP}), но не мимо цели. */
+    /** Last sample extrapolated by its velocity for dt ticks (at most {@link #MAX_GAP}), never past target. */
     private void ahead(double dt, double[] out) {
         int i = (int) (last % CAPACITY);
         double vx = vxs[i], vy = vys[i], vz = vzs[i], ahead = Math.min(dt, MAX_GAP);
         double v2 = vx * vx + vy * vy + vz * vz;
         if (v2 > 1e-9) {
-            // ближе всего к цели на этой прямой снаряд через dot(aim − p, v)/|v|² тиков: дальше не тянуть
+            // closest target approach on this line occurs after dot(aim − p, v)/|v|² ticks: do not extrapolate farther
             double toAim = ((axs[i] - xs[i]) * vx + (ays[i] - ys[i]) * vy + (azs[i] - zs[i]) * vz) / v2;
             if (toAim >= 0) ahead = Math.min(ahead, toAim);
         }
@@ -282,12 +280,12 @@ public final class FlightTrack implements Acoustics.Path {
         out[2] = zs[i] + vz * ahead;
     }
 
-    /** Точка момента t (целый тик в пределах истории) записана по пакетам сервера, а не по сущности. */
+    /** Point at t (whole tick within history) was recorded from server packets, not entity. */
     public boolean fromServer(long t) {
         return t >= start() && t <= last && servers[(int) (t % CAPACITY)];
     }
 
-    /** Скорость в момент t, блоков/тик (между тиками — по прямой). */
+    /** Velocity at t, blocks/tick (linear between ticks). */
     public Vec3 velocity(double t) {
         double s = Math.max(start(), Math.min(last, t));
         long a = (long) Math.floor(s);
@@ -302,13 +300,13 @@ public final class FlightTrack implements Acoustics.Path {
         return phases[(int) (a % CAPACITY)];
     }
 
-    /** Куда снаряд летел в момент t (точка цели; перенацеливание — с того тика, как о нём стало известно). */
+    /** Where projectile was headed at t (target point; retargeting from tick when learned). */
     public Vec3 aim(double t) {
         int i = (int) ((long) Math.max(start(), Math.min(last, Math.floor(t))) % CAPACITY);
         return new Vec3(axs[i], ays[i], azs[i]);
     }
 
-    /** То же в out (x, y, z) — без выделения памяти, для кадра. */
+    /** Same into out (x, y, z), allocation-free for frame. */
     public void aim(double t, double[] out) {
         int i = (int) ((long) Math.max(start(), Math.min(last, Math.floor(t))) % CAPACITY);
         out[0] = axs[i];
@@ -317,8 +315,7 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Курс, тангаж и крен в момент t (градусы, в out): между тиками — по кратчайшему повороту, за последней записью —
-     * последние.
+     * Yaw, pitch and roll at t (degrees, into out): shortest turn between ticks, last values beyond last sample.
      */
     public void angles(double t, float[] out) {
         double s = Math.max(start(), Math.min(last, t));
@@ -331,12 +328,12 @@ public final class FlightTrack implements Acoustics.Path {
         out[2] = Mth.rotLerp(f, rolls[ia], rolls[ib]);
     }
 
-    /** Сколько тиков снаряд в этой истории к моменту t (для вращения винта и снаряда у модели вдали). */
+    /** Projectile ticks in this history by t (for propeller and rocket spin on distant model). */
     public double age(double t) {
         return Math.max(0, t - first);
     }
 
-    /** Сколько тиков шла фаза полёта к моменту t (дробно — для плавной раскрутки мотора). */
+    /** Flight phase ticks by t (fractional for smooth motor spin-up). */
     public double phaseAge(double t) {
         double s = Math.max(start(), Math.min(last, t));
         long a = (long) Math.floor(s);
@@ -344,8 +341,8 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Прибавить к out точку в осях снаряда (вправо-влево, вверх, вдоль; нос по +Z) с поворотом носа в момент t — как
-     * {@code Local.offset}, без выделений: сопло от центра корпуса.
+     * Add projectile-axis point (right/left, up, along; nose +Z) to out with nose rotation at t, like
+     * {@code Local.offset}, allocation-free: nozzle offset from body centre.
      */
     public void offset(double t, ClientWeaponSpec.At p, double[] out) {
         int i = (int) ((long) Math.max(start(), Math.min(last, Math.floor(t))) % CAPACITY);
@@ -354,14 +351,14 @@ public final class FlightTrack implements Acoustics.Path {
         double f2 = Mth.cos(-pitch * Mth.DEG_TO_RAD), f3 = Mth.sin(-pitch * Mth.DEG_TO_RAD);
         double f4 = Mth.cos((-pitch + 90) * Mth.DEG_TO_RAD), f5 = Mth.sin((-pitch + 90) * Mth.DEG_TO_RAD);
         double fx = f * f2, fy = f3, fz = f1 * f2, ux = f * f4, uy = f5, uz = f1 * f4;
-        // влево — минус (вперёд × вверх)
+        // left is minus (forward × up)
         double lx = fz * uy - fy * uz, ly = fx * uz - fz * ux, lz = fy * ux - fx * uy;
         out[0] += fx * p.z() + ux * p.y() + lx * p.x();
         out[1] += fy * p.z() + uy * p.y() + ly * p.x();
         out[2] += fz * p.z() + uz * p.y() + lz * p.x();
     }
 
-    /** Направление носа в момент t (для «спереди свист, сзади рёв»). */
+    /** Nose direction at t (for “whistle in front, roar behind”). */
     public Vec3 forward(double t) {
         long a = (long) Math.max(start(), Math.min(last, Math.floor(t)));
         int i = (int) (a % CAPACITY);
@@ -369,8 +366,8 @@ public final class FlightTrack implements Acoustics.Path {
     }
 
     /**
-     * Одна запись пути: где снаряд, его сдвиг за тик, нос и крен, фаза и сколько она идёт, куда он летит, по пакету
-     * ли сервера она.
+     * One path sample: projectile position, displacement per tick, nose and roll, phase and elapsed phase time,
+     * target, whether from server packet.
      */
     private record Sample(Vec3 pos, Vec3 vel, float yaw, float pitch, float roll, int phase, int phaseAge, Vec3 aim, boolean server) {}
 }

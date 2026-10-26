@@ -5,17 +5,17 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
 import java.util.Locale;
 
 /**
- * Вода под подрывом ({@link NukeWater#resolve}): есть ли она под эпицентром и насколько подрыв «водяной»
- * ({@link WaterModel#wetBurst}), пока не решено — заново каждый тик, потом не меняется: столб воды не появляется и не
- * пропадает посреди подрыва. Столб с короной — в объёме гриба ({@link MushroomField}), базисная волна — в пелене
+ * Water beneath the detonation ({@link NukeWater#resolve}): whether ground zero is over water and how much of a "water burst" it is
+ * ({@link WaterModel#wetBurst}); while unresolved, check each tick, then keep it fixed: the water column does not appear or
+ * disappear midway through the detonation. The crowned column is in the mushroom volume ({@link MushroomField}), the base surge in the pall
  * ({@link PallField#water}).
  */
 final class BurstWater {
-    /** Вода под эпицентром 0..1. */
+    /** Water beneath ground zero 0..1. */
     private double under;
-    /** Насколько подрыв «водяной» 0..1 ({@link WaterModel#wetBurst} × вода под эпицентром). */
+    /** How much of a "water burst" it is, 0..1 ({@link WaterModel#wetBurst} × water beneath ground zero). */
     private double wet;
-    /** Откуда известна вода под эпицентром; null — ещё решается. */
+    /** Source of knowledge about water beneath ground zero; null — still resolving. */
     private NukeWater.Source source;
 
     void set(double under, double wet) {
@@ -31,7 +31,7 @@ final class BurstWater {
         return wet;
     }
 
-    /** Вода под эпицентром решена: дальше не меняется. */
+    /** Water beneath ground zero is resolved: it stays fixed from now on. */
     void settle(NukeWater.Source source) {
         this.source = source;
     }
@@ -40,7 +40,7 @@ final class BurstWater {
         return source != null;
     }
 
-    /** Откуда известна вода под эпицентром (для строки сценария); «?» — ещё решается. */
+    /** Source of knowledge about water beneath ground zero (for the scenario line); "?" — still resolving. */
     String source() {
         return source == null ? "?" : source.name().toLowerCase(Locale.ROOT);
     }

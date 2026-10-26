@@ -43,29 +43,29 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Двигатели в полёте: факел (его рисует {@link ua.zentix.incoming.client.render.StrikeProjectileRenderer} по
- * {@link #plume}), огонь и вспышки поджига и схода, искры. Дым двигателей частицами не рисуется: шлейф — лента по точкам
- * пути и объём сетки дыма у глаза ({@code client.far.FarFlightView}, закон — {@link TrailModel}), облако старта — объём
- * ({@code fx/smoke/LaunchCloud}: продукты, пока струя бьёт в землю, и поднятая ею пыль).
+ * Engines in flight: plume (drawn by {@link ua.zentix.incoming.client.render.StrikeProjectileRenderer} from
+ * {@link #plume}), fire and flashes on ignition and launch rail exit, sparks. Engine smoke is not drawn as particles: the trail is a ribbon along path
+ * points and smoke grid volume near the eye ({@code client.far.FarFlightView}, law — {@link TrailModel}); the launch cloud is a volume
+ * ({@code fx/smoke/LaunchCloud}: products while the jet strikes the ground, and dust it lifts).
  */
 public final class Exhaust {
     /**
-     * Факел в системе снаряда: срез сопла в (0, {@code y}, {@code z}) (нос по +Z), факел на высоте снаряда и доля струи
-     * {@code near} (с 0,8 прорисовки струю сменяет свет того же факела вдали). Привыкание глаза — у слоя эффектов,
-     * который её рисует ({@code PlumeRenderer}): то же, что у света факела вдали.
+     * Plume in projectile coordinates: nozzle exit at (0, {@code y}, {@code z}) (nose along +Z), plume at projectile altitude, jet fraction
+     * {@code near} (from 0.8 render distance, distant light from the same plume replaces the jet). Eye adaptation belongs to the effects layer
+     * that draws it ({@code PlumeRenderer}): the same as for distant plume light.
      */
     public record Plume(float y, float z, Flame flame, float near) {
-        /** Та же струя, тусклее в k раз (на краю прорисовки её сменяет свет факела вдали). */
+        /** Same jet, dimmed by factor k (distant plume light replaces it at the render boundary). */
         public Plume dimmed(float k) {
             return new Plume(y, z, flame, near * k);
         }
     }
 
     private static final class State {
-        /** Камера игрока — на этом снаряде (видео с борта). */
+        /** Player camera is on this projectile (on-board video). */
         boolean onboard;
         Vec3 pad;
-        /** Передний срез трубы РСЗО, из которой сошёл снаряд. */
+        /** Front end of the MLRS tube the rocket exited. */
         Vec3 muzzle;
     }
 
@@ -73,7 +73,7 @@ public final class Exhaust {
 
     private Exhaust() {}
 
-    /** Раз в тик на клиенте для каждого летящего снаряда. */
+    /** Once per client tick for each flying projectile. */
     public static void tick(StrikeProjectile e) {
         if (!(e.level() instanceof ClientLevel level)) return;
         State s = STATES.computeIfAbsent(e, k -> new State());
@@ -89,14 +89,14 @@ public final class Exhaust {
     }
 
     /**
-     * Факел двигателя сейчас или null — не горит: факел фазы из паспорта по законам ({@link FlameModel}: тот же, что свет
-     * факела вдали) на высоте снаряда. Пульсаций нет: турбулентность струи — тысячи герц, за кадр она усредняется.
+     * Current engine plume, or null — unlit: spec phase plume by the laws ({@link FlameModel}: same as distant plume
+     * light) at projectile altitude. No pulsation: jet turbulence is thousands of hertz and averages over a frame.
      */
     @Nullable
     public static Plume plume(StrikeProjectile e, float partial) {
         if (!e.isActive() || !(e.level() instanceof ClientLevel level)) return null;
         ClientWeaponSpec.ClientAirframe a = nozzles(e);
-        // доля тяги ускорителя — по кривой (выход на режим, спад к отделению), с долей тика: факел гаснет без ступенек
+        // booster thrust share follows the curve (rise, decay toward separation), with fractional ticks: plume fades without steps
         ClientWeaponSpec.Stage stage = a.far().stage(e.flightPhase(), e.phaseAge() + partial, e.airframe().thrust());
         Flame f = stage.flame(e.getY());
         if (f == null) return null;
@@ -104,12 +104,12 @@ public final class Exhaust {
         return new Plume((float) n.y(), (float) n.z(), f, 1);
     }
 
-    /** Горячее сопло ускорителя на снаряде: вид в этот миг и срез в системе снаряда (нос по +Z). */
+    /** Hot booster nozzle on the projectile: appearance at this instant and exit in projectile coordinates (nose along +Z). */
     public record Hot(NozzleGlow.Shine shine, ClientWeaponSpec.At at) {}
 
     /**
-     * Горячее сопло стартового ускорителя, пока он на снаряде ({@link NozzleGlow}: время — настоящее, полка игрового
-     * разгона сжата в настоящую); null — ускорителя нет, он отделился или сопло ещё не посчитано.
+     * Hot launch-booster nozzle while attached to the projectile ({@link NozzleGlow}: real time, the in-game acceleration plateau
+     * compressed into the real one); null — no booster, separated, or nozzle not yet computed.
      */
     @Nullable
     public static Hot hot(StrikeProjectile e, float partial) {
@@ -120,29 +120,29 @@ public final class Exhaust {
         return new Hot(g.at(g.seconds(e.flightPhase(), e.phaseAge() + partial)), at);
     }
 
-    /** Сопла сущности из клиентского паспорта (у B-2 и его бомбы — свои). */
+    /** Entity nozzles from the client spec (B-2 and its bomb have their own). */
     private static ClientWeaponSpec.ClientAirframe nozzles(StrikeProjectile e) {
         return ClientWeaponSpec.of(e.weapon()).airframe(!(e instanceof BomberEntity));
     }
 
-    /** Точка в осях снаряда — в мир. */
+    /** Point in projectile axes to world coordinates. */
     private static Vec3 at(StrikeProjectile e, ClientWeaponSpec.At p) {
         return Local.at(e.position(), e.getYRot(), e.getXRot(), p.x(), p.y(), p.z());
     }
 
-    // ---------------------------------------------------------------- шахед
+    // ---------------------------------------------------------------- Shahed
 
-    /** Старт на ускорителе; дальше тонкий сизый выхлоп поршневого мотора — только лентой. */
+    /** Booster launch; afterwards, thin bluish piston-engine exhaust as a ribbon only. */
     private static void drone(ClientLevel level, DroneEntity e, State s) {
         booster(level, e, s);
     }
 
-    // ---------------------------------------------------------------- РСЗО
+    // ---------------------------------------------------------------- MLRS
 
     /**
-     * Реактивный снаряд «Града». Поджиг в трубе (3 тика): струя бьёт назад из заднего среза трубы — огонь и вспышка (дым
-     * и пыль, что она бьёт в землю под пакетом, — облако старта). Сход: вспышка и искры у переднего среза. След —
-     * лентой и объёмом ({@code FarFlightView}).
+     * Grad rocket. Tube ignition (3 ticks): jet exits the rear of the tube — fire and flash (smoke
+     * and dust from its ground impingement below the pack form the launch cloud). Launch rail exit: flash and sparks at the front end. Trail —
+     * ribbon and volume ({@code FarFlightView}).
      */
     private static void rocket(ClientLevel level, RocketEntity e, State s) {
         FlightPhase ph = e.flightPhase();
@@ -151,12 +151,12 @@ public final class Exhaust {
         float yaw = e.getYRot(), pitch = e.getXRot();
         Vec3 back = Local.offset(yaw, pitch, 0, 0, -1);
         if (s.pad == null) {
-            // первый тик поджига: снаряд ещё в трубе, его центр — середина трубы
+            // first ignition tick: rocket still in the tube, its centre at the tube midpoint
             s.pad = e.position().add(back.scale(LauncherEntity.TUBE_LENGTH / 2));
             s.muzzle = e.position().subtract(back.scale(LauncherEntity.TUBE_LENGTH / 2));
         }
         if (ph == FlightPhase.IGNITION) {
-            // струя из заднего среза трубы
+            // jet from the tube's rear end
             for (int i = 0; i < 4; i++) {
                 Fx.fire().vel(back.scale(0.5 + r.nextDouble() * 0.7).add(r.nextGaussian() * 0.08, r.nextGaussian() * 0.08, r.nextGaussian() * 0.08))
                         .size(0.4f, 1.5f).life(4 + r.nextInt(4)).alpha(0.9f).drag(0.75f).spawn(level, s.pad);
@@ -166,7 +166,7 @@ public final class Exhaust {
         }
         int age = e.phaseAge();
         if (age < 2) {
-            // сход: огонь вырывается из переднего среза вслед за снарядом, искры
+            // launch rail exit: fire bursts from the front end behind the rocket, sparks
             Fx.flash().size(2, 3).life(2).alpha(0.6f).spawn(level, s.muzzle);
             for (int i = 0; i < 6; i++) {
                 Fx.spark().vel(back.scale(-0.3 - r.nextDouble() * 0.5).add(r.nextGaussian() * 0.2, r.nextGaussian() * 0.2, r.nextGaussian() * 0.2))
@@ -175,13 +175,13 @@ public final class Exhaust {
         }
     }
 
-    // ---------------------------------------------------------------- крылатая ракета
+    // ---------------------------------------------------------------- cruise missile
 
-    /** ТРДД огня и дыма не даёт (его след — по закону, {@code TrailModel}); в пике — пар на корпусе (конденсация на околозвуке). */
+    /** Turbofan produces no fire or smoke (its trail follows the law, {@code TrailModel}); in a dive — body vapour (transonic condensation). */
     private static void missile(ClientLevel level, CruiseMissileEntity e, State s) {
         if (!e.isActive() || booster(level, e, s)) return;
         RandomSource r = level.random;
-        // «воротник» пара вокруг корпуса виден только снаружи; с борта он у самого объектива
+        // the vapour collar around the body is visible only externally; on board it is right at the lens
         if (e.flightPhase() == FlightPhase.TERMINAL && !s.onboard) {
             for (int i = 0; i < 3; i++) {
                 double a = r.nextDouble() * Mth.TWO_PI;
@@ -192,11 +192,11 @@ public final class Exhaust {
         }
     }
 
-    // ---------------------------------------------------------------- старт с пусковой
+    // ---------------------------------------------------------------- launcher launch
 
     /**
-     * Шахед и ракета на пусковой и на ускорителе: на направляющей — ничего; поджиг — вспышки у сопла ускорителя (облако
-     * у пусковой и белый след ускорителя — объёмом, {@code FarFlightView}). После отделения — обычный выхлоп (вернёт
+     * Shahed and missile on the launcher and booster: nothing on the rail; ignition — flashes at the booster nozzle (launcher
+     * cloud and white booster trail as a volume, {@code FarFlightView}). After separation — normal exhaust (returns
      * false).
      */
     private static boolean booster(ClientLevel level, StrikeProjectile e, State s) {
@@ -211,11 +211,11 @@ public final class Exhaust {
         return true;
     }
 
-    // ---------------------------------------------------------------- МБР
+    // ---------------------------------------------------------------- ICBM
 
     /**
-     * Твердотопливная первая ступень: на старте из шахты — огонь у оголовка и вспышки (облако старта и белый шлейф —
-     * объёмом, {@code FarFlightView}).
+     * Solid-fuel first stage: on launch from the silo — fire at the silo head and flashes (launch cloud and white trail —
+     * as a volume, {@code FarFlightView}).
      */
     private static void icbm(ClientLevel level, IcbmEntity e, State s) {
         RandomSource r = level.random;
@@ -231,18 +231,18 @@ public final class Exhaust {
         }
     }
 
-    // ---------------------------------------------------------------- бомба (инверсионные следы B-2 — лентой)
+    // ---------------------------------------------------------------- bomb (B-2 contrails as ribbons)
 
     /**
-     * Бомба: срыв потока с хвоста (лентой); около скорости звука во влажном воздухе — «воротник» пара ({@link VapourCollar});
-     * пыль входа в грунт — облако модели ({@link BlastEffects#bunkerImpact}).
+     * Bomb: flow separation at the tail (ribbon); near sound speed in humid air — vapour collar ({@link VapourCollar});
+     * ground entry dust — model cloud ({@link BlastEffects#bunkerImpact}).
      */
     private static void bomb(ClientLevel level, BunkerBusterEntity e, State s) {
         RandomSource r = level.random;
-        // в грунте — ничего: пыль выброса из входа — облако модели (BlastEffects.bunkerImpact)
+        // underground — nothing: entry ejecta dust is the model cloud (BlastEffects.bunkerImpact)
         if (e.isDrilling()) return;
         Vec3 at = e.position();
-        // влажность — атмосфера мира (погода), как у следов и облаков
+        // humidity from the world atmosphere (weather), as for trails and clouds
         double mach = VapourCollar.mach(e.speed() * 20, at.y - ua.zentix.incoming.util.Air.SEA);
         if (VapourCollar.forms(mach, ua.zentix.incoming.util.Air.of(level).humidity())) {
             for (int i = 0; i < 4; i++) {
@@ -254,11 +254,11 @@ public final class Exhaust {
         }
     }
 
-    // ---------------------------------------------------------------- зенитная ракета
+    // ---------------------------------------------------------------- anti-aircraft missile
 
     /**
-     * Зенитная ракета: вспышка поджига у пакета и огонь у сопла. Дым — по закону, как у снарядов: облако старта, пока
-     * струя бьёт в землю, и след лентой ({@code FarFlightView} по пути ракеты, {@code ClientWeaponSpec.INTERCEPTOR}).
+     * Anti-aircraft missile: ignition flash at the pack and fire at the nozzle. Smoke follows the law, as for projectiles: launch cloud while
+     * the jet strikes the ground, and ribbon trail ({@code FarFlightView} along the missile path, {@code ClientWeaponSpec.INTERCEPTOR}).
      */
     public static void interceptor(InterceptorEntity e) {
         if (!(e.level() instanceof ClientLevel level)) return;
@@ -272,16 +272,16 @@ public final class Exhaust {
         }
     }
 
-    // ---------------------------------------------------------------- обломки
+    // ---------------------------------------------------------------- debris
 
     private static final Map<DebrisEntity, Vec3> DEBRIS = new WeakHashMap<>();
-    /** Дым горящих обломков — выбросами модели облака ({@link Puffs}), по обломку. */
+    /** Burning debris smoke as cloud model emissions ({@link Puffs}), per fragment. */
     private static final Map<DebrisEntity, Burning> BURNING = new WeakHashMap<>();
 
     /**
-     * Горящий обломок: дерево горит гранью ~1 м² ({@link FirePlume#BLOCK_WATTS}, как блок огня у дыма пожаров), за каждые
-     * {@link #PUFF_S} с полёта — выброс тепла и сажи древесины ({@link FirePlume#SOOT_PER_JOULE}) термиком с места обломка.
-     * Газ над пламенем — избыток на оси по Хескестаду у вершины пламени ({@link FirePlume#excess}).
+     * Burning fragment: wood burns with a face of ~1 m² ({@link FirePlume#BLOCK_WATTS}, like a fire block for fire smoke); every
+     * {@link #PUFF_S} s of flight — wood heat and soot emission ({@link FirePlume#SOOT_PER_JOULE}) as a thermal from the fragment's position.
+     * Gas above the flame — Heskestad axial excess at the flame tip ({@link FirePlume#excess}).
      */
     private static final class Burning {
         final Puffs smoke;
@@ -297,8 +297,8 @@ public final class Exhaust {
     private static final double[] BB = new double[4];
 
     /**
-     * Пламя горящих обломков светит на дым, частицы и ленты вокруг ({@link FxLights}): шар видимого пламени
-     * ({@link FirePlume#flameLight}) радиусом в полвысоты пламени по Хескестаду, с привыканием глаза кадра.
+     * Burning debris flame lights surrounding smoke, particles and ribbons ({@link FxLights}): visible flame sphere
+     * ({@link FirePlume#flameLight}) with radius half the Heskestad flame height, using frame eye adaptation.
      */
     public static void lights(FarView view, FxLights lights) {
         if (BURNING.isEmpty()) return;
@@ -313,7 +313,7 @@ public final class Exhaust {
         }
     }
 
-    /** Пламя горящих обломков светит на мир кадра ({@code HeatPass}): тот же шар пламени, что у {@link #lights}. */
+    /** Burning debris flame lights the frame world ({@code HeatPass}): the same flame sphere as {@link #lights}. */
     public static void heat(Vec3 eye, double seconds, ua.zentix.incoming.client.fx.layer.HeatPass.Frame f, double air) {
         if (BURNING.isEmpty()) return;
         double r = 0.5 * DEBRIS_FLAME.flameHeight();
@@ -324,16 +324,16 @@ public final class Exhaust {
         }
     }
 
-    /** Выброс дыма горящего обломка — раз в столько секунд пути (клуб у обломка — ~0,5 м, на скорости обломка ~10 м/с — через ~σ). */
+    /** Burning fragment smoke emission every this many flight seconds (puff at the fragment ~0.5 m, at ~10 m/s — about every σ). */
     static final double PUFF_S = 0.1;
-    /** Пламя обломка: грань дерева, очаг ~1 м² ({@link FirePlume}). */
+    /** Fragment flame: wood face, source ~1 m² ({@link FirePlume}). */
     static final FirePlume DEBRIS_FLAME = new FirePlume(1, FirePlume.CALM, 3);
 
     /**
-     * Горящий обломок: языки огня частицами (светящееся тело) и дым — выбросами модели облака ({@link Burning}), свет пламени —
-     * на дым и частицы вокруг ({@link #lights}); холодный ком рыхлого грунта (что копают лопатой: земля, песок, гравий) —
-     * пыльный след, пока летит: его осыпает встречный поток. Холодный кусок корпуса, бетона или камня следа не оставляет:
-     * отделяемой пыли у него нет, а дым — только от горения (BLASTSEQ D12).
+     * Burning fragment: flame tongues as particles (luminous body) and smoke as cloud model emissions ({@link Burning}), flame light —
+     * on surrounding smoke and particles ({@link #lights}); cold clod of loose soil (shovel-diggable: dirt, sand, gravel) —
+     * dusty trail while flying, shed by the oncoming flow. A cold casing, concrete or stone fragment leaves no trail:
+     * no detachable dust, and smoke comes only from combustion (BLASTSEQ D12).
      */
     public static void debris(DebrisEntity e) {
         if (!(e.level() instanceof ClientLevel level)) return;
@@ -351,7 +351,7 @@ public final class Exhaust {
                 SmokeGrid.add(b.smoke);
             }
             b.at = p;
-            // обломок мог уходить из отслеживания клиента: выброс — не больше двух шагов огня, а не всё пропущенное разом
+            // debris may have left client tracking: emit at most two fire steps, rather than all missed emissions at once
             double dt = Math.min(now - b.fed, 2 * PUFF_S);
             if (dt >= PUFF_S) {
                 double watts = FirePlume.BLOCK_WATTS * dt, top = DEBRIS_FLAME.flameHeight();
@@ -364,15 +364,15 @@ public final class Exhaust {
         }
     }
 
-    /** Прошлое место отработавшего ускорителя: дым — по отрезку пути. */
+    /** Previous position of a spent booster: smoke along the path segment. */
     private static final Map<SpentBoosterEntity, Vec3> SPENT = new WeakHashMap<>();
-    /** Ускоритель дымит столько тиков падения (как прежде). */
+    /** Booster smokes for this many falling ticks (as before). */
     static final int SPENT_SMOKE_TICKS = 70;
 
     /**
-     * Отработавший ускоритель в падении: жидкий дымок — тлеет горячая теплозащита у сопла (⚠ сколько — не считается: прежний
-     * вид, первые 3,5 с падения), слоем эффектов, а не ванильными частицами: ванильные пишут глубину, и горячее сопло
-     * ({@code NozzleGlow}) за дымком пропадало целиком. Огня нет: тяга кончилась спадом до отделения ({@code ThrustCurve}).
+     * Falling spent booster: thin smoke from hot nozzle insulation smouldering (est.) (quantity is not computed: previous
+     * appearance, first 3.5 s of falling), via the effects layer rather than vanilla particles: vanilla writes depth, so the hot nozzle
+     * ({@code NozzleGlow}) behind the smoke vanished completely. No fire: thrust decayed to zero before separation ({@code ThrustCurve}).
      */
     public static void spent(SpentBoosterEntity e) {
         if (!(e.level() instanceof ClientLevel level)) return;
@@ -383,13 +383,13 @@ public final class Exhaust {
                 level.random);
     }
 
-    // ---------------------------------------------------------------- общее
+    // ---------------------------------------------------------------- shared
 
-    /** Клубы по отрезку от прошлого положения сопла до нынешнего через {@code step} блоков (со случайным сдвигом). */
+    /** Billows along the segment from the previous nozzle position to the current one every {@code step} blocks (with random offset). */
     private static Vec3 segment(ClientLevel level, @Nullable Vec3 from, Vec3 to, Fx.Spec puff, double step, RandomSource r) {
         if (from == null || from.distanceToSqr(to) > 80 * 80) from = to;
         double len = from.distanceTo(to);
-        // шлейф не прореживаем даже вдали: дырявый след заметнее, чем лишние клубы
+        // do not thin the trail even at distance: gaps are more noticeable than extra billows
         int n = Math.max(1, (int) Math.round(len / step));
         for (int i = 0; i < n; i++) {
             double k = (i + r.nextDouble()) / n;

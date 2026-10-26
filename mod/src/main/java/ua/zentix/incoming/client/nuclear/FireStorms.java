@@ -20,47 +20,47 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Огненный шторм кадра для слоя эффектов ({@link FireStorm} → {@link PallPass.Frame}): у слотов пелены ({@link NukePall})
- * — слот огня (карта и числа для {@code pall.glsl}), рамка шторма, до четырёх смерчей в кадре. Своего пакета нет:
- * всё — по возрасту подрыва, а гаснет шторм там, где сервер не жжёт (доверие {@link FireStorm#trust}).
+ * Frame firestorm for the effects layer ({@link FireStorm} → {@link PallPass.Frame}): pall slots ({@link NukePall}) have
+ * a fire slot (map and parameters for {@code pall.glsl}), storm bounds, and up to four fire whirls per frame. No separate packet:
+ * everything follows detonation age; the storm fades where the server is not burning (trust, {@link FireStorm#trust}).
  */
 final class FireStorms {
     /**
-     * Цвет огня на экране (пламя с сажей), подобран на глаз: это не чёрное тело — зелёный как у него при ~1 500 K, синий
-     * — при ~2 000 K ({@code BlackBody}); у чёрного тела 1 100 K на экране было бы 1, 0,26, 0. Цвета огня в пелене
-     * ({@code FIRE} в {@code fx_pall.glsl} и {@code NukePall.FIRE}, ~2 100 K), у смерча ({@code WHIRL_FIRE}) и зарева
-     * пожаров под мглой ({@code fireLight} в {@code NukePall.light}) — свои.
+     * On-screen fire color (sooty flame), tuned by eye: not a black body — green as at ~1 500 K, blue
+     * as at ~2 000 K ({@code BlackBody}); a 1 100 K black body on screen would be 1, 0.26, 0. Fire colors in the pall
+     * ({@code FIRE} in {@code fx_pall.glsl} and {@code NukePall.FIRE}, ~2 100 K), the whirl ({@code WHIRL_FIRE}) and fire glow
+     * beneath haze ({@code fireLight} in {@code NukePall.light}) are separate.
      */
     static final float FIRE_R = 1.0f, FIRE_G = 0.42f, FIRE_B = 0.11f;
     /**
-     * Пламя на поверхностях города на экране ночью и днём: днём глаз привык к свету, и то же пламя на кадре тусклее
-     * (как зарево пелены, {@code NukePall.light}).
+     * Flame on city surfaces on screen at night and by day: by day the eye adapts to light, so the same flame is dimmer in the frame
+     * (like pall glow, {@code NukePall.light}).
      */
     static final double FLAME_NIGHT = 1.0, FLAME_DAY = 0.6;
     /**
-     * Зарево снизу на дыме и пелене ночью (на среднее пламя под точкой, у земли: выше его гасит дым — {@code storm} в
-     * {@code fx_pall.glsl}; у сплошного пожара низ дыма — рыжий, исподняя сторона пелены — тускло-красная, над слабыми
-     * районами — темнее); днём — доля {@link #GLOW_DAY} (против неба его почти не видно).
+     * Glow from below on smoke and pall at night (per mean flame beneath the point, at ground level: smoke attenuates it above — {@code storm} in
+     * {@code fx_pall.glsl}; over continuous fire the smoke bottom is orange, the pall underside dim red, darker over weakly burning
+     * districts); by day use {@link #GLOW_DAY} of it (barely visible against the sky).
      */
     static final double GLOW_NIGHT = 3, GLOW_DAY = 0.12;
     /**
-     * Ослабление дыма при подаче 1 (сильная клетка в разгаре), 1/м, вширь по клетке: видно метров на 70; в столбе у
-     * земли — гуще во столько, во сколько столб уже клетки.
+     * Smoke extinction at emission 1 (a strong cell at its peak), 1/m, across the cell: visibility about 70 meters; the column near
+     * the ground is denser by the ratio of cell width to column width.
      */
     static final double SMOKE_SIGMA_M = 0.07;
     /**
-     * Пламя на поверхностях — дальше стольких блоков от глаза (проступает до полутора): ближе пятно краски на блоках видно,
-     * а там горит настоящий огонь ванили, если сервер его зажёг.
+     * Surface flame begins this many blocks from the eye (fades in by one and a half times): closer, the paint patch on blocks is visible,
+     * while real vanilla fire burns there if the server ignited it.
      */
     static final float FLAME_NEAR = 96;
-    /** Смерч наклонён по ветру: доля сноса столба на высоте. */
+    /** Whirl leans downwind: fraction of column drift at height. */
     static final double WHIRL_LEAN = 0.3;
-    /** Доверие к модели огня меняется плавно: доля разницы за тик (около секунды). */
+    /** Fire-model trust changes smoothly: fraction of the difference per tick (about a second). */
     static final double GATE_RATE = 0.05;
-    /** Смерчей в кадре — не больше (по столбцу матриц). */
+    /** Maximum whirls per frame (one per matrix column). */
     static final int WHIRLS = 4;
 
-    /** Плоскости пирамиды видимости, по которым отсекаются смерчи: все, кроме дальней (как у пелены). */
+    /** Frustum planes used to cull whirls: all except the far plane (as for the pall). */
     private static final int SIDES_AND_NEAR = FrustumIntersection.PLANE_MASK_NX | FrustumIntersection.PLANE_MASK_PX
             | FrustumIntersection.PLANE_MASK_NY | FrustumIntersection.PLANE_MASK_PY | FrustumIntersection.PLANE_MASK_NZ;
     private static final Vector3f LO = new Vector3f(), HI = new Vector3f();
@@ -68,16 +68,16 @@ final class FireStorms {
     private static final double[] DIST = new double[CANDIDATES];
     private static final int[] SLOT = new int[CANDIDATES], INDEX = new int[CANDIDATES];
     private static final float[][] POS = new float[CANDIDATES][4], SHAPE = new float[CANDIDATES][4], LEAN = new float[CANDIDATES][4];
-    /** Смерчей в прошлом кадре (для строки сценария). */
+    /** Whirls in the previous frame (for the scenario line). */
     private static int lastWhirls;
-    /** Шторм рисуется: в игре — всегда; сценарий клиента меряет пелену с ним и без ({@link NukePall#firestorm}). */
+    /** Storm rendering: always on in the game; the client scenario measures pall with and without it ({@link NukePall#firestorm}). */
     static volatile boolean enabled = true;
 
     private FireStorms() {}
 
     /**
-     * Тик клиента: доверие модели огня — к сверке с огнём в своих чанках; что из зоны пожаров — вода, лёд или снег (по
-     * своим чанкам и плиткам карты рельефа, где не знаем — как под эпицентром, {@link FireStorm#survey}).
+     * Client tick: fire-model trust approaches comparison with fire in local chunks; which parts of the fire zone are water, ice or snow (from
+     * local chunks and terrain-map tiles; unknown areas follow ground zero, {@link FireStorm#survey}).
      */
     static void tick(List<ClientNuclear.Active> all) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -90,7 +90,7 @@ final class FireStorms {
 
     private static final BlockPos.MutableBlockPos AT = new BlockPos.MutableBlockPos();
 
-    /** Поверхность колонки у клиента: верхний блок своего чанка, иначе плитка карты рельефа ({@link TerrainTiles#wet}). */
+    /** Client column surface: top block in a local chunk, otherwise a terrain-map tile ({@link TerrainTiles#wet}). */
     static FireStorm.Surface surface(ClientLevel level) {
         return (x, z) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
@@ -103,8 +103,8 @@ final class FireStorms {
     }
 
     /**
-     * Шторм кадра: слоты огня у {@code k} слотов пелены ({@code slotted}, после света кадра — {@code f.sun}), рамка и
-     * смерчи. Рамка пелены растёт до рамки шторма: столбы со сносом и смерчи — внутри неё.
+     * Frame storm: fire slots for {@code k} pall slots ({@code slotted}, after frame light — {@code f.sun}), bounds and
+     * whirls. Pall bounds grow to contain the storm: drifting columns and whirls are inside them.
      */
     static void frame(ClientNuclear.Active[] slotted, int k, Vec3 eye, float partial, FrustumIntersection frustum, float clouds, PallPass.Frame f) {
         f.fire0.clear();
@@ -123,16 +123,16 @@ final class FireStorms {
     }
 
     /**
-     * Зарево пожаров снизу на единицу среднего пламени под точкой, у земли (на экране, {@link #GLOW_NIGHT}): доверие
-     * модели огня {@code gate}, ночь {@code night} 0..1. Пелене ({@code storm}) и грибам ({@code MushroomField#fire}).
+     * Fire glow from below per unit mean flame beneath the point, at ground level (on screen, {@link #GLOW_NIGHT}): fire-model
+     * trust {@code gate}, night {@code night} 0..1. For pall ({@code storm}) and mushrooms ({@code MushroomField#fire}).
      */
     static double glow(double gate, double night) {
         return gate * GLOW_NIGHT * (GLOW_DAY + (1 - GLOW_DAY) * night);
     }
 
     /**
-     * Слот огня {@code k}: числа шторма подрыва ({@code pall.glsl}), карта огня, рамка. {@code clouds} — облака Minecraft
-     * от глаза по y (их нет — очень высоко): пламя на поверхностях ниже них — облака в расстоянии до мира тоже есть.
+     * Fire slot {@code k}: detonation storm parameters ({@code pall.glsl}), fire map, bounds. {@code clouds} is Minecraft cloud
+     * y relative to the eye (very high if absent): surface flame stays below them — clouds also appear in world distance.
      */
     private static void slot(ClientNuclear.Active a, int k, Vec3 eye, float partial, float clouds, PallPass.Frame f) {
         FireStorm s = a.storm;
@@ -142,7 +142,7 @@ final class FireStorms {
         if (s.half() <= 0 || s.version() == 0 || gate < 0.01) return;
         Detonation d = a.d;
         double night = 1 - f.sun.w;
-        // снос столба: ветер против подъёма дыма
+        // column drift: wind relative to smoke rise
         double u = d.blocks(d.windSpeed()), w = d.blocks(FireStorm.UPDRAFT_MS);
         double bx = Math.cos(d.windDir()) * u / w, bz = Math.sin(d.windDir()) * u / w;
         double top = a.pall.hazeTop(), hb = d.blocks(FireStorm.BEND_HEIGHT), half = s.half(), cell = s.cell();
@@ -157,10 +157,10 @@ final class FireStorms {
         fire.side = s.side();
         fire.source = s;
         fire.version = s.version();
-        // зарево мглы по таблице (ровное по кольцам) уступает зареву по карте огня: строка мглы слота, канал b
+        // table haze glow (uniform in rings) gives way to fire-map glow: slot haze row, channel b
         int base = (2 * k + 1) * PallPass.WIDTH * 4;
         for (int i = 0; i < PallPass.WIDTH; i++) f.table[base + 4 * i + 2] *= (float) (1 - gate);
-        // рамка: карта, столбы со сносом по ветру, низины под эпицентром
+        // bounds: map, downwind columns, lowlands below ground zero
         double bend = FireStorm.bend(top, hb), r = half + FireStorm.width(top, cell);
         float cx = (float) (d.burst().x - eye.x), cz = (float) (d.burst().z - eye.z), ground = (float) (d.groundY() - eye.y);
         float ox = (float) (bx * bend), oz = (float) (bz * bend);
@@ -169,7 +169,7 @@ final class FireStorms {
         grow(f, LO, HI);
     }
 
-    /** Смерчи кадра: идущие, в пирамиде видимости, ближайшие к глазу — до {@link #WHIRLS}; сколько вышло. */
+    /** Frame whirls: active, in the frustum, nearest to the eye — up to {@link #WHIRLS}; returns their count. */
     private static int whirls(ClientNuclear.Active[] slotted, int k, Vec3 eye, float partial, FrustumIntersection frustum, PallPass.Frame f) {
         int n = 0;
         for (int j = 0; j < k; j++) {
@@ -189,7 +189,7 @@ final class FireStorms {
                 HI.set(x + reach + Math.max(0, leanX * h), y + h, z + reach + Math.max(0, leanZ * h));
                 if (frustum.intersectAab(LO, HI, SIDES_AND_NEAR) >= 0) continue;
                 double dist = Math.hypot(x, z);
-                // место среди CANDIDATES ближайших (вставкой), дальнее выпадает; в кадр — первые WHIRLS
+                // insert among the nearest CANDIDATES, dropping the farthest; first WHIRLS enter the frame
                 int at = Math.min(n, CANDIDATES - 1);
                 if (n == CANDIDATES && dist >= DIST[at]) continue;
                 while (at > 0 && DIST[at - 1] > dist) {
@@ -240,7 +240,7 @@ final class FireStorms {
         }
     }
 
-    /** Рамка шторма и пелены — до {@code lo..hi}. */
+    /** Expand storm and pall bounds to {@code lo..hi}. */
     private static void grow(PallPass.Frame f, Vector3f lo, Vector3f hi) {
         f.fireMin.min(lo);
         f.fireMax.max(hi);
@@ -248,7 +248,7 @@ final class FireStorms {
         f.max.max(hi);
     }
 
-    /** Строка сценария: шторм первого подрыва, где он есть. */
+    /** Scenario line: storm of the first detonation that has one. */
     static String describe() {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             FireStorm s = a.storm;

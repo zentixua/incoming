@@ -22,33 +22,33 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Все текстуры слоя эффектов на одном листе 1024×8448 с уменьшенными копиями (mip-уровнями): клубы дыма и пламени,
- * искра, вспышка, кольцо, кадры огненного шара (256×256) и их векторы движения (128×128), запечённые клубы дыма, брызг,
- * выброса грунта, пыли дробления и разрыва в воздухе ({@link #puff6}, {@link #club}: по 16 кадров в три карты),
- * дальние круг, ореол и клубы. Один лист — одна текстура на весь отсортированный проход слоя
- * (частицы и дальнее вперемешку); уменьшенные копии — чтобы клуб в десяток пикселей вдали не рябил. Цвет на листе
- * умножен на непрозрачность, как и смешивание слоя.
+ * All effects layer textures on one 1024×8448 sheet with smaller copies (mip levels): smoke and flame billows,
+ * spark, flash, ring, fireball frames (256×256) and their motion vectors (128×128), baked billows of smoke, spray,
+ * soil ejecta, crushing dust and airbursts ({@link #puff6}, {@link #club}: 16 frames each with three maps),
+ * distant disc, halo and billows. One sheet — one texture for the entire sorted layer pass
+ * (particles mixed with distant visuals); smaller copies prevent a distant ten-pixel billow from shimmering. Sheet colour
+ * is premultiplied by opacity, matching layer blending.
  * <p>
- * Каждая картинка — в своём размере (клубы 64×64): частицы вблизи рисуются ближайшим пикселем, как из атласа Minecraft
- * ({@link FxQuads#nearestTexels}), и пиксель листа должен быть пикселем картинки. Копии — средние четырёх пикселей
- * с умноженной альфой: край тает без тёмной каймы. Не атлас Minecraft и не его {@code MipmapGenerator}: тот обнуляет
- * в копиях прозрачность ниже 96 из 255 (для листвы), а у клуба дыма она почти вся такая — с ним дым за стеной
- * в сотне блоков пропадал бы целиком. Места на листе постоянные и кратны 16 — копии соседних мест не смешиваются;
- * картинку другого размера (пакет ресурсов) лист подгоняет под место.
+ * Each image retains its own size (billows 64×64): nearby particles use nearest texels, like the Minecraft atlas
+ * ({@link FxQuads#nearestTexels}), and a sheet pixel must be an image pixel. Copies average four pixels
+ * with premultiplied alpha: edges fade without dark rims. Neither the Minecraft atlas nor its {@code MipmapGenerator}: that clears
+ * alpha below 96 out of 255 in mip levels (for foliage), which covers most of a smoke billow — smoke behind a wall
+ * a hundred blocks away would vanish entirely. Sheet slots are fixed and multiples of 16 — neighbouring slot mips do not mix;
+ * the sheet resizes differently sized images (resource packs) to the slot.
  */
 public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]> {
     public static final FxAtlas INSTANCE = new FxAtlas();
 
     private static final int CELL = 64, COLS = 16, ROWS = 132;
-    /** Размер листа, пикселей. */
+    /** Sheet size, pixels. */
     static final int WIDTH = COLS * CELL, HEIGHT = ROWS * CELL;
     /**
-     * Кадров огненного шара ({@code fx/particle/fireball_00…47}, 256×256): {@value #FIREBALL_BURN} — горение, остальные —
-     * остывание в сажу. Между кадрами — смесь вдоль векторов движения ({@code fireballv_00…47}): огонь течёт, а не
-     * проступает двойным; 10 кадров на 2–3 с горения стояли силуэтом (ревью #426).
+     * Fireball frames ({@code fx/particle/fireball_00…47}, 256×256): {@value #FIREBALL_BURN} burning, the remainder —
+     * cooling into soot. Frames blend along motion vectors ({@code fireballv_00…47}): fire flows instead of
+     * appearing doubled; 10 frames over 2–3 s of burning left the silhouette static (review #426).
      */
     public static final int FIREBALL_FRAMES = 48, FIREBALL_BURN = 32;
-    /** Прежний процедурный шар ({@link #ball}) и его таблица света — 16 кадров. */
+    /** Previous procedural ball ({@link #ball}) and its light table — 16 frames. */
     public static final int BALL_FRAMES = 16;
     public static final int FIREBALL_SIZE = 4 * CELL;
     private static final int PUFF_SIZE = 2 * CELL, FIREBALL_ROW = 36, FIREBALL_FLOW_ROW = FIREBALL_ROW + 12 * 4;
@@ -56,22 +56,22 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     public static final float FIREBALL_U = (float) FIREBALL_SIZE / WIDTH, FIREBALL_V = (float) FIREBALL_SIZE / HEIGHT,
             FIREBALL_TOP = (float) (FIREBALL_ROW * CELL) / HEIGHT;
     /**
-     * Векторы движения кадра шара к следующему: карта 128×128 ({@value #FIREBALL_FLOW_COLUMNS} в ряду с
-     * {@link #FIREBALL_FLOW_TOP}), r и g — смещение ±{@link #FIREBALL_FLOW} пикселей кадра 256 (так пишет
+     * Motion vectors from each fireball frame to the next: 128×128 map ({@value #FIREBALL_FLOW_COLUMNS} per row from
+     * {@link #FIREBALL_FLOW_TOP}), r and g — displacement ±{@link #FIREBALL_FLOW} pixels of a 256 frame (written by
      * {@code tools/bake_fx/pack.py}).
      */
     public static final int FIREBALL_FLOW_COLUMNS = 8, FIREBALL_FLOW_SIZE = 2 * CELL;
     public static final float FIREBALL_FLOW = 16, FIREBALL_FLOW_U = (float) FIREBALL_FLOW_SIZE / WIDTH,
             FIREBALL_FLOW_V = (float) FIREBALL_FLOW_SIZE / HEIGHT, FIREBALL_FLOW_TOP = (float) (FIREBALL_FLOW_ROW * CELL) / HEIGHT;
     /**
-     * Уменьшенных копий: клуб 64 → 4 пикселя (все места кратны 16 — копии соседних мест не смешивают). Выборка у края места
-     * отступает на полтекселя той копии, что читает (`frameInset` в {@code fx.fsh}, там же {@code FRAME_LEVELS}).
+     * Mip levels: billow 64 → 4 pixels (all slots are multiples of 16 — neighbouring slots do not mix). Sampling near a slot edge
+     * insets by half a texel of the sampled mip (`frameInset` in {@code fx.fsh}, with {@code FRAME_LEVELS} there too).
      */
     public static final int MIPS = 4;
 
-    /** Место текстуры на листе (доли листа). */
+    /** Texture slot on the sheet (sheet fractions). */
     public record Sprite(float u0, float v0, float u1, float v1) {
-        /** Середина по вертикали (лента — средняя строка ореола). */
+        /** Vertical midpoint (ribbon — halo middle row). */
         public float vMid() {
             return (v0 + v1) * 0.5f;
         }
@@ -84,42 +84,42 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             FIREBALL_MIRRORED = new Sprite[FIREBALL_FRAMES];
     private static final Sprite RING, FLASH, GLOW, DISC, SPARK, FLAKE, PAPER;
     /**
-     * Запечённый клуб дыма ({@code tools/bake_fx}: газ Mantaflow в Blender), {@value #PUFF6_FRAMES} кадров раскрытия, у кадра
-     * три карты 128×128 одна под другой на {@link #PUFF6_STEP} листа: A — свет солнца справа, сверху, сзади (r, g, b) и
-     * непрозрачность; B — слева, снизу, спереди и та же непрозрачность; V — смещение кадра к следующему (векторы движения,
-     * r и g; ±{@link #PUFF6_FLOW} пикселей кадра). Кадр i — в ряду i / 8, столбце i % 8, ряды — с {@link #PUFF6_TOP}.
+     * Baked smoke billow ({@code tools/bake_fx}: Blender Mantaflow gas), {@value #PUFF6_FRAMES} expansion frames, each with
+     * three 128×128 maps stacked vertically at sheet step {@link #PUFF6_STEP}: A — sunlight from right, top, back (r, g, b) and
+     * opacity; B — left, bottom, front and the same opacity; V — displacement to the next frame (motion vectors,
+     * r and g; ±{@link #PUFF6_FLOW} frame pixels). Frame i at row i / 8, column i % 8, rows start at {@link #PUFF6_TOP}.
      */
     public static final int PUFF6_FRAMES = 16;
-    /** Кадров в ряду, начало кадров на листе (доля высоты), шаг карт (доля высоты), размер кадра (доли листа). */
+    /** Frames per row, sheet frame start (height fraction), map step (height fraction), frame size (sheet fractions). */
     public static final int PUFF6_COLUMNS = 8;
     public static final float PUFF6_TOP = (float) (8 * CELL) / HEIGHT, PUFF6_STEP = (float) (4 * CELL) / HEIGHT,
             PUFF6_U = (float) (2 * CELL) / WIDTH, PUFF6_V = (float) (2 * CELL) / HEIGHT;
-    /** Наибольшее смещение карты V, пикселей кадра 128 (так её пишет {@code tools/bake_fx/pack.py}). */
+    /** Maximum V-map displacement, pixels of a 128 frame (as written by {@code tools/bake_fx/pack.py}). */
     public static final float PUFF6_FLOW = 32;
     private static final Sprite[] PUFF6 = new Sprite[PUFF6_FRAMES], PUFF6_MIRRORED = new Sprite[PUFF6_FRAMES];
     /**
-     * Прежний процедурный огненный шар ({@code fx/particle/ball_00…15}, {@code tools/gen_particles.py}: растёт и остывает в
-     * своих кадрах по доле жизни) — у частиц шара ({@code Fx.fireball}: разрыв зенитной ракеты).
+     * Previous procedural fireball ({@code fx/particle/ball_00…15}, {@code tools/gen_particles.py}: grows and cools in
+     * its frames by life fraction) — used by fireball particles ({@code Fx.fireball}: anti-aircraft missile burst).
      */
     private static final Sprite[] BALL = new Sprite[BALL_FRAMES];
     private static final ResourceLocation BALL_LIGHT = Incoming.id("textures/fx/particle/ball.json");
     private static volatile float[] ballShown = linear(1, 1);
     private static final ResourceLocation FIREBALL_LIGHT = Incoming.id("textures/fx/particle/fireball.json"),
             PUFF6_DATA = Incoming.id("textures/fx/particle/puff6.json");
-    /** Кадры шара: огонь на экране ({@link #fireLightAt}), время в долях горения и температура; пока не прочитаны — запасные. */
+    /** Fireball frames: screen fire ({@link #fireLightAt}), time in burn fractions and temperature; fallbacks until loaded. */
     private static volatile Fireball fireball = Fireball.FALLBACK;
-    /** Рост клуба в кадрах (во сколько раз край вещества больше, чем в первом); пока не прочитан — запасной. */
+    /** Billow growth per frame (matter edge size relative to the first); fallback until loaded. */
     private static volatile float[] puffGrowth = linear(1, 3);
     /**
-     * Свет карт клуба ({@code puff6.json}): наибольшее смещение векторов движения (доля кадра), свет густого места
-     * спереди и средний по шести сторонам (линейный) — к ним шейдер нормирует карты.
+     * Billow map light ({@code puff6.json}): maximum motion-vector displacement (frame fraction), dense-region light
+     * from the front and six-side mean (linear) — shader normalizes maps to these.
      */
     private static volatile float[] puffLight = {PUFF6_FLOW / 128f, 0.79f, 0.5f};
 
     /**
-     * Кадры огненного шара ({@code tools/bake_fx/pack.py} → {@code fireball.json}): огонь кадра на экране (доля белого),
-     * время кадра в долях горения симуляции, цветовая температура его пламени, K (у потухшего — 0), и полуразмер кадра в
-     * радиусах шара (кадр вмещает всё вещество: остывающая сажа не обрезается кругом).
+     * Fireball frames ({@code tools/bake_fx/pack.py} → {@code fireball.json}): screen frame fire (white fraction),
+     * frame time in simulation burn fractions, flame colour temperature, K (0 when extinguished), frame half-size in
+     * fireball radii (frame holds all matter: cooling soot is not clipped to a circle).
      */
     record Fireball(float[] fire, float[] burn, float[] kelvin, float[] half) {
         static final Fireball FALLBACK = new Fireball(linear(1, 1, FIREBALL_FRAMES), linear(0, 2, FIREBALL_FRAMES),
@@ -134,10 +134,10 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         GLOW = slot("far/glow", x + CELL, CELL, CELL, CELL);
         DISC = slot("far/disc", x + 2 * CELL, CELL, 32, 32);
         SPARK = slot("fx/particle/spark", x + 2 * CELL + 32, CELL, 16, 16);
-        // пепел и клочок бумаги (ядерная пелена)
+        // ash and paper scrap (nuclear pall)
         FLAKE = slot("fx/particle/flake", x + 3 * CELL, CELL, 16, 16);
         PAPER = slot("fx/particle/paper", x + 3 * CELL + 16, CELL, 16, 16);
-        // клубы дальнего дыма: 4×2 кадра на одной картинке
+        // distant smoke billows: 4×2 frames in one image
         Sprite puffs = slot("nuke/puffs", 0, 2 * CELL, 4 * CELL, 2 * CELL);
         float du = (puffs.u1 - puffs.u0) / 4, dv = (puffs.v1 - puffs.v0) / 2;
         for (int i = 0; i < PUFFS.length; i++) {
@@ -145,8 +145,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
             PUFFS[i] = new Sprite(u, v, u + du, v + dv);
         }
         RING = slot("fx/particle/ring", 4 * CELL, 2 * CELL, 2 * CELL, 2 * CELL);
-        // Огненный шар: 12 рядов по четыре кадра 256² (по 4 клетки в высоту) ниже остальных карт, под ними — их векторы
-        // движения 128², по 8 в ряду
+        // fireball: 12 rows of four 256² frames (4 cells high each) below the other maps, followed by their 128² motion
+        // vectors, 8 per row
         for (int i = 0; i < FIREBALL_FRAMES; i++) {
             FIREBALL[i] = slot(String.format(Locale.ROOT, "fx/particle/fireball_%02d", i), i % FIREBALL_COLUMNS * FIREBALL_SIZE,
                     FIREBALL_ROW * CELL + i / FIREBALL_COLUMNS * FIREBALL_SIZE, FIREBALL_SIZE, FIREBALL_SIZE);
@@ -168,18 +168,18 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Кадр i запечённого клуба (карта A, {@link #PUFF6_FRAMES}); {@code mirror} — отражён по горизонтали: правая и левая
-     * карты меняются местами в шейдере ({@code fx.fsh} — по знаку производной u).
+     * Baked billow frame i (map A, {@link #PUFF6_FRAMES}); {@code mirror} — horizontal reflection: right and left
+     * maps swap in the shader ({@code fx.fsh} — by the sign of the u derivative).
      */
     public static Sprite puff6(int i, boolean mirror) {
         return (mirror ? PUFF6_MIRRORED : PUFF6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
     }
 
     /**
-     * Запечённый клуб брызг ({@code tools/bake_fx}: тяжёлый газ капель, брошенный вверх, падает обратно; альбедо 0,99,
-     * асимметрия капель 0,85) — те же 16 кадров по три карты и те же шаги листа, что у дыма, с ряда {@link #SPRAY6_ROW}:
-     * шейдер шестистороннего света ({@code fx.fsh}: {@code sixFrames}) берёт их без своих чисел, карты — в мере дыма
-     * ({@code pack.py}: «diffuse» дыма).
+     * Baked spray billow ({@code tools/bake_fx}: heavy droplet gas thrown upward falls back; albedo 0.99,
+     * droplet asymmetry 0.85) — same 16 frames with three maps and same sheet steps as smoke, from row {@link #SPRAY6_ROW}:
+     * six-way lighting shader ({@code fx.fsh}: {@code sixFrames}) reads them without its own numbers; maps use smoke normalization
+     * ({@code pack.py}: smoke “diffuse”).
      */
     public static final int SPRAY6_ROW = 24;
     private static final Sprite[] SPRAY6 = new Sprite[PUFF6_FRAMES], SPRAY6_MIRRORED = new Sprite[PUFF6_FRAMES];
@@ -196,17 +196,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         }
     }
 
-    /** Кадр i запечённого клуба брызг ({@link #puff6}). */
+    /** Baked spray billow frame i ({@link #puff6}). */
     public static Sprite spray6(int i, boolean mirror) {
         return (mirror ? SPRAY6_MIRRORED : SPRAY6)[Math.clamp(i, 0, PUFF6_FRAMES - 1)];
     }
 
     /**
-     * Клубы других готовых симуляций ({@code tools/bake_fx/bake.py clubs-vdb}, {@code SOURCES.md}) — те же 16 кадров по три
-     * карты и те же шаги листа, что у дыма, каждый набор — 12 рядов клеток с {@link Clubs#row}: шейдер шестистороннего
-     * света берёт их без своих чисел (места кадров — от {@link #PUFF6_TOP} шагом кадра), карты — в мере дыма
-     * ({@code pack.py}: «diffuse» дыма). Кадр — доля жизни своего явления ({@code <имя>6.json} «life»: доля жизни симуляции у
-     * кадра), не дальше последнего клубящегося («detail»).
+     * Billows from other ready-made simulations ({@code tools/bake_fx/bake.py clubs-vdb}, {@code SOURCES.md}) — same 16 frames with three
+     * maps and same sheet steps as smoke; each set spans 12 cell rows from {@link Clubs#row}: the six-way lighting
+     * shader reads them without its own numbers (frame slots from {@link #PUFF6_TOP} at frame steps); maps use smoke normalization
+     * ({@code pack.py}: smoke “diffuse”). Frame follows its phenomenon's life fraction ({@code <name>6.json} “life”: simulation life fraction at
+     * the frame), no later than the last turbulent frame (“detail”).
      */
     static final class Clubs {
         final String prefix;
@@ -230,7 +230,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         }
     }
 
-    /** Выброс грунта (Grenade Dust Impact сверху), пыль дробления (Building Implosion сверху), разрыв в воздухе (Mid-Air сбоку). */
+    /** Soil ejecta (Grenade Dust Impact from above), crushing dust (Building Implosion from above), airburst (Mid-Air from the side). */
     static final Clubs EJECT = new Clubs("eject", 96), CRUSH = new Clubs("crush", 108), AIR = new Clubs("air", 120);
 
     private static Clubs clubs(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look) {
@@ -242,7 +242,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         };
     }
 
-    /** Кадр i запечённого клуба вида {@code look} ({@link #puff6} у дыма). */
+    /** Baked billow frame i for {@code look} ({@link #puff6} for smoke). */
     public static Sprite club(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, int i, boolean mirror) {
         Clubs c = clubs(look);
         if (c == null) return puff6(i, mirror);
@@ -250,10 +250,10 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Кадр (с дробью) клуба вида {@code look} на доле жизни {@code life} (0..1) своего явления — по доле жизни симуляции у
-     * кадров ({@code <имя>6.json} «life»). Все кадры: у явления со своей жизнью (завеса выброса: комья вокруг клуба пыли,
-     * потом пыль) смена мелкой структуры — само явление, а не рассеивание конечного клуба симуляции, как у облака, что
-     * растёт ({@link #growthFrame}).
+     * Fractional frame of billow kind {@code look} at life fraction {@code life} (0..1) of its phenomenon — by simulation life fraction at
+     * frames ({@code <name>6.json} “life”). All frames: for a phenomenon with its own lifespan (ejecta curtain: clods around a dust billow,
+     * then dust), changing fine structure is the phenomenon itself, rather than dispersal of a finite simulated puff, as for a growing
+     * cloud ({@link #growthFrame}).
      */
     public static double lifeFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, double life) {
         Clubs c = clubs(look);
@@ -262,8 +262,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Кадр (с дробью) клуба вида {@code look}, где край вещества вырос во столько раз с первого кадра ({@code <имя>6.json}
-     * «growth»), — облако, что растёт, как облако дыма ({@link #puffFrame}); не дальше последнего клубящегося.
+     * Fractional frame of billow kind {@code look} whose matter edge grew by this factor from the first frame ({@code <name>6.json}
+     * “growth”) — a growing cloud, like smoke ({@link #puffFrame}); no later than the last turbulent frame.
      */
     public static double growthFrame(ua.zentix.incoming.client.fx.smoke.SmokeGrid.Look look, double growth) {
         Clubs c = clubs(look);
@@ -271,17 +271,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return Math.min(at(c.growth, growth, 0, PUFF6_FRAMES - 1), c.last);
     }
 
-    /** Доля жизни симуляции у кадров набора из {@code <имя>6.json}: {@code "life"} (16 чисел, не убывают). */
+    /** Frame simulation life fractions from a set's {@code <name>6.json}: {@code "life"} (16 nondecreasing numbers). */
     static float[] parseLife(Reader in) {
         return numbers(JsonParser.parseReader(in).getAsJsonObject().getAsJsonArray("life"), PUFF6_FRAMES);
     }
 
-    /** Кадр клуба брызг (с дробью), где край вещества вырос во столько раз с первого кадра, — до последнего клубящегося. */
+    /** Fractional spray billow frame whose matter edge grew by this factor from the first frame — up to the last turbulent one. */
     public static double sprayFrame(double growth) {
         return Math.min(at(sprayGrowth, growth, 0, PUFF6_FRAMES - 1), sprayLast);
     }
 
-    /** Последний клубящийся кадр брызг ({@link #turbulentLast}). */
+    /** Last turbulent spray frame ({@link #turbulentLast}). */
     private static volatile int sprayLast = PUFF6_FRAMES - 1;
 
     static {
@@ -291,12 +291,12 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         }
     }
 
-    /** Кадр прежнего шара ({@link #BALL}) на доле жизни f (0..1): шар растёт в кадре от 0,3 до 0,7 полуразмера. */
+    /** Previous ball frame ({@link #BALL}) at life fraction f (0..1): ball grows in the frame from 0.3 to 0.7 half-size. */
     public static Sprite ball(float f) {
         return BALL[Math.clamp((int) (f * BALL_FRAMES), 0, BALL_FRAMES - 1)];
     }
 
-    /** Огонь прежнего шара на экране в кадре доли жизни f ({@code ball.json}). */
+    /** Previous ball screen fire at life fraction f ({@code ball.json}). */
     public static float ballLight(float f) {
         return ballShown[Math.clamp((int) (f * BALL_FRAMES), 0, BALL_FRAMES - 1)];
     }
@@ -310,7 +310,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return new Sprite((float) x / WIDTH, (float) y / HEIGHT, (float) (x + w) / WIDTH, (float) (y + h) / HEIGHT);
     }
 
-    /** Клуб дыма: 4 клуба × 4 стадии рассеивания. */
+    /** Smoke billow: 4 billows × 4 dispersal stages. */
     public static Sprite smoke(int i) {
         return SMOKE[i];
     }
@@ -323,12 +323,12 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return SPARK;
     }
 
-    /** Хлопья пепла. */
+    /** Ash flakes. */
     public static Sprite flake() {
         return FLAKE;
     }
 
-    /** Клочок обгоревшей бумаги. */
+    /** Charred paper scrap. */
     public static Sprite paper() {
         return PAPER;
     }
@@ -342,21 +342,21 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Кадр огненного шара (с дробью) по состоянию шара модели: пока горит (burn — доля времени горения меньше 1) — кадр
-     * того же времени горения симуляции; остывая — кадр той же доли остывания: температура шара модели от его конца
-     * горения ({@code endKelvin}) к точке Дрейпера — как пламя кадров от конца горения симуляции к ней. По самой
-     * температуре кадр стоял бы на конце горения, пока шар модели (1484–1500 K) не остынет до пламени симуляции в её конец
-     * (~1360 K): у ракеты и бомбы — ~0,35 с стоп-кадра.
+     * Fractional fireball frame by model fireball state: while burning (burn — burn time fraction below 1), frame at the
+     * same simulation burn time; while cooling — frame at the same cooling fraction: model ball temperature from its burn
+     * end ({@code endKelvin}) to the Draper point matches frame flame cooling from simulation burn end to that point. Direct
+     * temperature matching would freeze the frame at burn end until the model ball (1484–1500 K) cooled to simulation flame at burn end
+     * (~1360 K): ~0.35 s freeze for missile and bomb.
      */
     public static double fireballFrame(double burn, double kelvin, double endKelvin) {
         return fireballFrameOf(fireball, burn, kelvin, endKelvin);
     }
 
-    /** То же для своих кадров (юнит-тест). */
+    /** Same with custom frames (unit test). */
     static double fireballFrameOf(Fireball f, double burn, double kelvin, double endKelvin) {
         int n = FIREBALL_FRAMES;
-        // конец горения — кадр (с дробью), где время симуляции — её конец горения, и температура пламени там: остывая, кадр
-        // идёт от него к кадрам остывания той же доли остывания, без скачка
+        // burn end — fractional frame at the simulation burn end, and its flame temperature: cooling moves from
+        // that frame toward cooling frames at the same cooling fraction, without a jump
         double end = at(f.burn, 1, 0, n - 1);
         if (burn < 1) return Math.min(at(f.burn, burn, 0, n - 1), end);
         int from = (int) Math.floor(end);
@@ -370,47 +370,47 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return Math.min(n - 1, next - 1 + (f.kelvin[next - 1] - kelvin) / Math.max(f.kelvin[next - 1] - f.kelvin[next], 1e-6));
     }
 
-    /** Нижний кадр смеси: верх всегда вверх; разнообразие — только отражением по горизонтали. */
+    /** Lower blended frame: top always up; variation only by horizontal reflection. */
     public static Sprite fireballAt(double frame, boolean mirror) {
         return (mirror ? FIREBALL_MIRRORED : FIREBALL)[Math.clamp((int) frame, 0, FIREBALL_FRAMES - 1)];
     }
 
-    /** Вес следующего кадра; последний кадр не смешивается с началом или соседним слотом листа. */
+    /** Next-frame weight; last frame never blends with the start or a neighbouring sheet slot. */
     public static float fireballMix(double frame) {
         double f = Math.clamp(frame, 0, FIREBALL_FRAMES - 1);
         return (float) (f - Math.floor(f));
     }
 
-    /** Огонь шара на экране в кадре {@code frame} ({@link #fireLightAt}), между кадрами — плавно. */
+    /** Screen fireball fire at {@code frame} ({@link #fireLightAt}), smooth between frames. */
     public static float fireLightAt(double frame) {
         return (float) at(fireball.fire, frame);
     }
 
-    /** Полуразмер кадра {@code frame} (с дробью) в радиусах шара: кадр вмещает всё вещество, без круга по краю. */
+    /** Fractional {@code frame} half-size in fireball radii: holds all matter without an edge circle. */
     public static double fireballHalf(double frame) {
         return at(fireball.half, frame);
     }
 
     /**
-     * Кадр запечённого клуба (с дробью), где край вещества вырос во столько раз с первого кадра, — не дальше последнего
-     * клубящегося ({@link #turbulentLast}): дальше облако растёт, а кадр стоит.
+     * Fractional baked billow frame whose matter edge grew by this factor from the first — no later than the last
+     * turbulent frame ({@link #turbulentLast}): after that the cloud grows but the frame stays fixed.
      */
     public static double puffFrame(double growth) {
         return Math.min(at(puffGrowth, growth, 0, PUFF6_FRAMES - 1), puffLast);
     }
 
     /**
-     * Мелкой структуры кадра (puff6.json «detail», {@code tools/bake_fx/pack.py}) у клубящегося — не меньше этой доли
-     * её наибольшей (⚠ оценка: дальше кадры глазом — ровный размытый шар).
+     * Fine frame structure (puff6.json “detail”, {@code tools/bake_fx/pack.py}) in a turbulent frame is at least this fraction
+     * of its maximum (est.) (later frames look like a smooth blurry ball).
      */
     static final double TURBULENT = 2.0 / 3;
 
     /**
-     * Последний клубящийся кадр: симуляция — конечный клуб, к концу он рассеивается и теряет мелкую структуру (у puff6 к
-     * 15-му кадру — 0,42 наибольшей), а настоящее облако, пока растёт, остаётся турбулентным — термик подобен себе, клубы
-     * растут вместе с ним (Scorer 1957; Morton, Taylor, Turner 1956). Облака на 150–300 м в 10–30 с брали поздние кадры по
-     * росту — ровные размытые шары без клубов (шлагбаум RV2). Последний кадр после наибольшей структуры, где её ещё не
-     * меньше {@link #TURBULENT}; нет данных — все кадры.
+     * Last turbulent frame: the simulation is a finite puff that disperses and loses fine structure toward its end (puff6 frame
+     * 15 has 0.42 of maximum), while a real growing cloud remains turbulent — the thermal is self-similar, billows
+     * grow with it (Scorer 1957; Morton, Taylor, Turner 1956). Clouds at 150–300 m in 10–30 s used late frames by
+     * growth — smooth blurry balls without billows (look gate RV2). Last frame after peak structure that retains at least
+     * {@link #TURBULENT}; no data — all frames.
      */
     static int turbulentLast(float[] detail) {
         if (detail == null || detail.length == 0) return PUFF6_FRAMES - 1;
@@ -420,17 +420,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return detail.length - 1;
     }
 
-    /** Последний кадр клуба, что берёт {@link #puffFrame}. */
+    /** Last billow frame used by {@link #puffFrame}. */
     private static volatile int puffLast = PUFF6_FRAMES - 1;
 
-    /** Значение таблицы a в номере x (с дробью, за краями — край). */
+    /** Table a value at fractional index x (edge value outside bounds). */
     private static double at(float[] a, double x) {
         double c = Math.max(0, Math.min(a.length - 1, x));
         int i = Math.min(a.length - 2, (int) c);
         return a[i] + (a[i + 1] - a[i]) * (c - i);
     }
 
-    /** Номер (с дробью) по возрастающей таблице a, где она равна v (за краями — lo или hi). */
+    /** Fractional index in increasing table a where it equals v (lo or hi outside bounds). */
     private static double at(float[] a, double v, int lo, int hi) {
         if (v <= a[0]) return lo;
         for (int i = 0; i < a.length - 1; i++) {
@@ -440,8 +440,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Кадры шара из {@code fireball.json}: {@code "fire"}, {@code "burn"}, {@code "kelvin"}, {@code "half"} по
-     * {@value #FIREBALL_FRAMES} чисел; предел векторов движения {@code "flow"} — тот, что ждёт шейдер.
+     * Fireball frames from {@code fireball.json}: {@code "fire"}, {@code "burn"}, {@code "kelvin"}, {@code "half"}, each with
+     * {@value #FIREBALL_FRAMES} numbers; motion-vector bound {@code "flow"} matches the shader expectation.
      */
     static Fireball parseFire(Reader in) {
         var o = JsonParser.parseReader(in).getAsJsonObject();
@@ -450,24 +450,24 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
                 numbers(o.getAsJsonArray("kelvin"), FIREBALL_FRAMES), numbers(o.getAsJsonArray("half"), FIREBALL_FRAMES));
     }
 
-    /** Мелкая структура кадров из {@code puff6.json}: {@code "detail"}; нет — null. */
+    /** Fine frame structure from {@code puff6.json}: {@code "detail"}; null if absent. */
     static float[] parseDetail(Reader in) {
         var o = JsonParser.parseReader(in).getAsJsonObject();
         return o.has("detail") ? numbers(o.getAsJsonArray("detail"), PUFF6_FRAMES) : null;
     }
 
-    /** Рост клуба из {@code puff6.json}: {@code {"growth": [16 чисел]}}. */
+    /** Billow growth from {@code puff6.json}: {@code {"growth": [16 numbers]}}. */
     static float[] parseGrowth(Reader in) {
         return numbers(JsonParser.parseReader(in).getAsJsonObject().getAsJsonArray("growth"), PUFF6_FRAMES);
     }
 
-    /** Свет карт клуба из {@code puff6.json}: {@code "flow"} (пикселей кадра {@code "tile"}), {@code "front"}, {@code "diffuse"}. */
+    /** Billow map light from {@code puff6.json}: {@code "flow"} (pixels of frame {@code "tile"}), {@code "front"}, {@code "diffuse"}. */
     static float[] parseLight(Reader in) {
         var o = JsonParser.parseReader(in).getAsJsonObject();
         return new float[]{o.get("flow").getAsFloat() / o.get("tile").getAsFloat(), o.get("front").getAsFloat(), o.get("diffuse").getAsFloat()};
     }
 
-    /** Свет карт клуба: смещение векторов движения (доля кадра), свет густого спереди и средний по сторонам (линейные). */
+    /** Billow map light: motion-vector displacement (frame fraction), dense front light and side mean (linear). */
     public static float[] puff6Light() {
         return puffLight;
     }
@@ -479,7 +479,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return out;
     }
 
-    /** 16 чисел от a до b. */
+    /** 16 numbers from a to b. */
     private static float[] linear(float a, float b) {
         return linear(a, b, BALL_FRAMES);
     }
@@ -490,17 +490,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return out;
     }
 
-    /** Кадр дальнего клуба (4×2, {@code nuke/puffs}). */
+    /** Distant billow frame (4×2, {@code nuke/puffs}). */
     public static Sprite puff(int i) {
         return PUFFS[i];
     }
 
-    /** Сплошной круг с мягким краем (корпус, огненный шар, ядро вспышки вдали). */
+    /** Solid disc with a soft edge (body, fireball, distant flash core). */
     public static Sprite disc() {
         return DISC;
     }
 
-    /** Ровная белая середина круга {@code far/disc} (вуаль облака вокруг глаза): два пикселя вокруг его середины. */
+    /** Flat white centre of {@code far/disc} (cloud veil around the eye): two pixels around its centre. */
     public static Sprite white() {
         return WHITE;
     }
@@ -508,17 +508,17 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     private static final Sprite WHITE = new Sprite((DISC.u0 + DISC.u1) / 2 - 1f / WIDTH, (DISC.v0 + DISC.v1) / 2 - 1f / HEIGHT,
             (DISC.u0 + DISC.u1) / 2 + 1f / WIDTH, (DISC.v0 + DISC.v1) / 2 + 1f / HEIGHT);
 
-    /** Гауссов ореол без ядра (блик, вуаль, зарево; лентой — шлейф). */
+    /** Gaussian halo without a core (glare, veil, glow; ribbon — trail). */
     public static Sprite glow() {
         return GLOW;
     }
 
-    /** Текстура OpenGL листа; −1 — ещё не загружен. */
+    /** OpenGL sheet texture; −1 — not loaded yet. */
     public int id() {
         return id;
     }
 
-    /** Фоновый поток: картинки на места со своими уменьшенными копиями, умноженная альфа. */
+    /** Background thread: images into slots with their own mip levels, premultiplied alpha. */
     @Override
     protected NativeImage[] prepare(ResourceManager resources, ProfilerFiller profiler) {
         int[][] sheets = new int[MIPS + 1][];
@@ -544,10 +544,10 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
     }
 
     /**
-     * Средние по месту листа для свечения мелкого светящегося ({@code FxQuads}: пятно вместо квадрата мельче пикселя прохода
-     * свечения несёт его энергию): суммы по клеткам {@value #CELL4}×{@value #CELL4} пикселей с накоплением вдоль строки, на клетку
-     * {@value #MEANS} чисел — у частиц и кадров огня (цвет с умноженной альфой) a·lin(rgb/a), у остального lin(rgb), и a;
-     * lin — степень 2,2, как в {@code fx.fsh}.
+     * Sheet slot means for small-emitter bloom ({@code FxQuads}: a spot replacing a quad smaller than a bloom pass pixel
+     * carries its energy): sums over {@value #CELL4}×{@value #CELL4}-pixel cells accumulated along rows; {@value #MEANS}
+     * numbers per cell — particles and fire frames (premultiplied colour) a·lin(rgb/a), others lin(rgb), and a;
+     * lin — power 2.2, as in {@code fx.fsh}.
      */
     private static volatile float[] emission;
     static final int CELL4 = 4, MEANS = 7;
@@ -572,8 +572,8 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
                 cells[c + 6] += af;
             }
         }
-        // накопление вдоль строки клеток: row[(y·(TW + 1) + x)·MEANS + k] — сумма клеток строки y левее x (по всему листу
-        // float потерял бы точность: суммы до миллионов против клетки в единицы)
+        // cumulative cell rows: row[(y·(TW + 1) + x)·MEANS + k] is the sum of cells in row y left of x (across the entire sheet,
+        // float would lose precision: sums reach millions versus single-digit cell values)
         float[] row = new float[TH * (TW + 1) * MEANS];
         for (int y = 0; y < TH; y++) {
             for (int x = 0; x < TW; x++) {
@@ -584,14 +584,14 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return row;
     }
 
-    /** Средние для свечения по готовому листу base ({@link #emissionTable}) — без загрузки ресурсов (проверки). */
+    /** Bloom means from the prepared sheet base ({@link #emissionTable}) — no resource loading (checks). */
     static void emissionFrom(int[] base) {
         emission = emissionTable(base);
     }
 
     /**
-     * Средние по месту (u0, v0)–(u1, v1) листа ({@link #emissionTable}): клетками по 4 пикселя, не меньше одной (строка ленты —
-     * клеткой вокруг неё); в out — {@value #MEANS} чисел на пиксель места. Лист ещё не прочитан — false.
+     * Means over sheet slot (u0, v0)–(u1, v1) ({@link #emissionTable}): 4-pixel cells, at least one (ribbon row —
+     * cell around it); out receives {@value #MEANS} numbers per slot pixel. Sheet not loaded yet — false.
      */
     public static boolean means(float u0, float v0, float u1, float v1, float[] out) {
         float[] sat = emission;
@@ -607,7 +607,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return true;
     }
 
-    /** Поток отрисовки: в видеопамять (та же текстура при перезагрузке ресурсов). */
+    /** Render thread: upload to VRAM (same texture on resource reload). */
     @Override
     protected void apply(NativeImage[] levels, ResourceManager resources, ProfilerFiller profiler) {
         if (id < 0) id = TextureUtil.generateTextureId();
@@ -632,7 +632,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return fallback;
     }
 
-    /** Картинка и её копии на свои места листа (цвет, умноженный на непрозрачность); другой размер — подгоняется. */
+    /** Image and its mip levels into their sheet slots (opacity-premultiplied colour); resize if dimensions differ. */
     private static void place(ResourceManager resources, Slot s, int[][] sheets) {
         Optional<Resource> res = resources.getResource(s.texture);
         if (res.isEmpty()) {
@@ -656,7 +656,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         }
     }
 
-    /** Пиксели картинки (ABGR, цвет умножен на непрозрачность) в размере места: другой размер — билинейно. */
+    /** Image pixels (ABGR, opacity-premultiplied colour) at slot size: bilinear if resized. */
     private static int[] fit(NativeImage img, int w, int h) {
         int sw = img.getWidth(), sh = img.getHeight();
         int[] src = new int[sw * sh];
@@ -671,20 +671,20 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return out;
     }
 
-    /** Копия уровня l места s на лист этого уровня (ширина листа — sheetW). */
+    /** Level l copy of slot s into that level's sheet (sheet width — sheetW). */
     private static void put(int[] sheet, int sheetW, Slot s, int l, int[] px) {
         int w = Math.max(1, s.w >> l), h = Math.max(1, s.h >> l), x0 = s.x >> l, y0 = s.y >> l;
         for (int y = 0; y < h; y++) System.arraycopy(px, y * w, sheet, (y0 + y) * sheetW + x0, w);
     }
 
-    /** ABGR → ABGR с цветом, умноженным на непрозрачность. */
+    /** ABGR → ABGR with opacity-premultiplied colour. */
     private static int premultiply(int abgr) {
         int a = abgr >>> 24;
         int r = (abgr & 0xFF) * a / 255, g = (abgr >> 8 & 0xFF) * a / 255, b = (abgr >> 16 & 0xFF) * a / 255;
         return a << 24 | b << 16 | g << 8 | r;
     }
 
-    /** Значение между пикселями (билинейно, по каналам с умноженной альфой), за краем — край. */
+    /** Interpolate pixels (bilinear, premultiplied-alpha channels), clamp to edge outside bounds. */
     private static int sample(int[] src, int w, int h, float fx, float fy) {
         int x0 = (int) Math.floor(fx), y0 = (int) Math.floor(fy);
         float tx = fx - x0, ty = fy - y0;
@@ -702,7 +702,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
         return src[Math.clamp(y, 0, h - 1) * w + Math.clamp(x, 0, w - 1)];
     }
 
-    /** Копия вдвое меньше: среднее четырёх пикселей по каждому каналу. */
+    /** Half-size copy: four-pixel average per channel. */
     private static int[] half(int[] src, int w, int h) {
         int hw = w >> 1, hh = h >> 1;
         int[] out = new int[hw * hh];

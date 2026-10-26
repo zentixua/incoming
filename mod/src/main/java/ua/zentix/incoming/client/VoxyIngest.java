@@ -24,24 +24,24 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Чанки, которых у клиента нет, — в LOD Voxy ({@link S2C.VoxyChunk} от {@code compat/VoxyLods}: руины, воронки, след
- * подрыва, лампы квартала вдали). API у Voxy нет: секции кладутся его статическим методом
- * {@code VoxelIngestService.rawIngest(WorldIdentifier, LevelChunkSection, x, y, z, blockLight, skyLight)} — тем же, через
- * который чанки с сервера кладёт в Voxy LOD Server Support ({@code compat/VoxyCompat}, MIT) и сам Voxy свои; по
- * {@link MethodHandle}, без миксинов. Мир — {@code WorldIdentifier.of(Level)}. Не нашлись — одна строка в лог, серверу
- * говорится «Voxy нет», и пакеты не приходят. Voxy 0.2.16 (через Roxy) принимает секции из любого потока: разбор и
- * отдача — в потоке сети.
+ * Chunks absent on the client go into Voxy LODs ({@link S2C.VoxyChunk} from {@code compat/VoxyLods}: distant ruins,
+ * craters, detonation marks, district lamps). Voxy has no API: sections use its static
+ * {@code VoxelIngestService.rawIngest(WorldIdentifier, LevelChunkSection, x, y, z, blockLight, skyLight)}, the same
+ * method LOD Server Support ({@code compat/VoxyCompat}, MIT) uses for server chunks and Voxy for its own; via
+ * {@link MethodHandle}, without mixins. World is {@code WorldIdentifier.of(Level)}. If unavailable, log one line,
+ * tell the server Voxy is absent, and receive no packets. Voxy 0.2.16 (via Roxy) accepts sections from any thread:
+ * decoding and ingestion run on the network thread.
  * <p>
- * Какие чанки клиент получил от мода в этом мире, помнится ({@link #ours}): если потом LOD Server Support положит в
- * Voxy тот же чанк с диска сервера (его первая сверка; руин вдали на диске нет), клиент называет его серверу
- * ({@link C2S.VoxyStale}, {@link #tick}), и тот шлёт копию заново.
+ * Remember which chunks the client received from the mod in this world ({@link #ours}): if LOD Server Support later
+ * writes the same chunk from the server's disk to Voxy (its first check; no distant ruins on disk), the client names
+ * it to the server ({@link C2S.VoxyStale}, {@link #tick}), which sends the copy again.
  */
 public final class VoxyIngest {
     @Nullable
     private static MethodHandle worldOf, rawIngest;
-    /** Чанки ({@code ChunkPos.toLong}), которые мод положил в Voxy в этом мире. */
+    /** Chunks ({@code ChunkPos.toLong}) the mod wrote to Voxy in this world. */
     private static final Set<Long> OURS = ConcurrentHashMap.newKeySet();
-    /** Из них переписанные LSS — назвать серверу ({@link #tick}). */
+    /** Those overwritten by LSS: report to the server ({@link #tick}). */
     private static final Set<Long> STALE = ConcurrentHashMap.newKeySet();
     private static volatile boolean broken;
     @Nullable
@@ -49,7 +49,7 @@ public final class VoxyIngest {
 
     private VoxyIngest() {}
 
-    /** При запуске клиента: стоит ли Voxy и нашлись ли его методы. */
+    /** At client startup: whether Voxy is installed and its methods were found. */
     static void init() {
         if (!ModList.get().isLoaded("voxy")) return;
         try {
@@ -69,23 +69,23 @@ public final class VoxyIngest {
         }
     }
 
-    /** Мод кладёт чанки в Voxy. */
+    /** The mod writes chunks to Voxy. */
     public static boolean available() {
         return rawIngest != null && !broken;
     }
 
-    /** Вход в мир: сказать серверу, слать ли чанки. */
+    /** World login: tell the server whether to send chunks. */
     static void login() {
         OURS.clear();
         STALE.clear();
         if (available()) PacketDistributor.sendToServer(new C2S.LodMods(true));
     }
 
-    /** Чанк от сервера — в Voxy; поток сети. */
+    /** Server chunk into Voxy; network thread. */
     static void accept(S2C.VoxyChunk p) {
         MethodHandle of = worldOf, raw = rawIngest;
         ClientLevel level = Minecraft.getInstance().level;
-        // повтор Flashback: Voxy в нём показывает свою живую базу — прошлым чанкам записи там не место
+        // Flashback replay: Voxy shows its live database there; past chunks from the recording do not belong in it.
         if (of == null || raw == null || broken || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
         if (ingested != level) {
             ingested = level;
@@ -112,8 +112,8 @@ public final class VoxyIngest {
     }
 
     /**
-     * LOD Server Support положил в Voxy чанк мира {@code level} (поток LSS): если его прислал мод — серверу, чтобы
-     * прислал заново (LSS шлёт чанк не из мира с диска, без руин).
+     * LOD Server Support wrote a chunk of world {@code level} to Voxy (LSS thread): if sent by the mod, notify the server
+     * to resend it (LSS sends an unloaded chunk from disk, without ruins).
      */
     static void overwritten(ClientLevel level, int x, int z) {
         if (level != ingested) return;
@@ -121,7 +121,7 @@ public final class VoxyIngest {
         if (OURS.remove(chunk)) STALE.add(chunk);
     }
 
-    /** Тик клиента: переписанные LSS чанки — серверу, не больше {@link C2S.VoxyStale#PER_TICK} за тик (предел сервера). */
+    /** Client tick: report LSS-overwritten chunks to the server, at most {@link C2S.VoxyStale#PER_TICK} per tick (server limit). */
     static void tick() {
         if (STALE.isEmpty() || Minecraft.getInstance().getConnection() == null) return;
         LongArrayList batch = new LongArrayList();

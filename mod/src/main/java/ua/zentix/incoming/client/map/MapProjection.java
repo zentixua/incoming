@@ -8,11 +8,11 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Locale;
 
 /**
- * Карта «север вверх»: мир (x, z) → экран. Север (−Z) вверх, восток (+X) вправо; {@code (ox, oy)} — точка экрана,
- * где центр вида {@code (cx, cz)}; {@code k} — пикселей на блок.
+ * North-up map: world (x, z) → screen. North (−Z) up, east (+X) right; {@code (ox, oy)} is the screen point
+ * for view centre {@code (cx, cz)}; {@code k} is pixels per block.
  */
 public record MapProjection(double ox, double oy, double cx, double cz, double k) {
-    /** Сетка — не мельче этого, пикселей. */
+    /** Grid spacing no smaller than this, pixels. */
     private static final int GRID_MIN_PX = 40;
     private static final double[] GRID_STEPS = {10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000};
 
@@ -40,7 +40,7 @@ public record MapProjection(double ox, double oy, double cx, double cz, double k
         return cz + (screenY - oy) / k;
     }
 
-    /** Сетка с шагом не мельче {@link #GRID_MIN_PX} в прямоугольнике экрана и подпись шага внизу слева. */
+    /** Grid with spacing at least {@link #GRID_MIN_PX} in the screen rectangle, spacing label at bottom left. */
     public void drawGrid(GuiGraphics g, Font font, int left, int top, int right, int bottom, int lineColor, int textColor) {
         double step = GRID_STEPS[GRID_STEPS.length - 1];
         for (double s : GRID_STEPS) {

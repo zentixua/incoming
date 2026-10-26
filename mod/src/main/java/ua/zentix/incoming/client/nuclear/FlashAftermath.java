@@ -36,51 +36,51 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Что вспышка делает с округой в первые секунды, до волны (только вживую — из перемотки повтора не рождается):
+ * What the flash does to its surroundings in the first seconds, before the wave (live only — never spawned from a replay seek):
  * <ul>
- *     <li>ЭМИ — фонари и лампы сети (те, что гасит блэкаут, {@link GridLights}) в кварталах, которые гасит удар (радиус
- *     с сервера: по настройкам сети), коротят: голубая дуга, ломаная разряда и искры, вразнобой, чаще сразу, до прихода
- *     волны к лампе и не позже {@link #ARC_WINDOW} тиков; дуга трещит — 2–4 разряда через 1–3 тика, у части ламп потом
- *     ещё раз. Клиент сам ищет их в своих чанках по палитрам секций, не больше {@link #SECTIONS_PER_TICK} секций за тик,
- *     ближние первыми; дуг — не больше {@link #MAX_ARCS}. Подстанции здесь нет: удар выбивает их на сервере
- *     ({@code Blackouts.nuke}), и у каждой — своя дуга выхода из строя ({@code GridEffects.failure}), вторая была бы
- *     лишней;</li>
- *     <li>дымки с того, что свет прогрел: крыши, земля с травой, листва и деревянные стены лицом к шару курятся дымом
- *     пиролиза, пока до них не дойдёт волна ({@link Smoke}). Места — точки перед камерой (до {@link #SMOKE_RANGE}
- *     блоков), свет — как у гари ({@link FlashChar}): импульс × угол × тень по картам высот клиента; дым — выбросы модели
- *     облака ({@link Puffs}).</li>
+ *     <li>EMP — grid streetlights and lamps (those affected by blackout, {@link GridLights}) in districts blacked out by the strike (radius
+ *     from the server, from grid settings) short out: blue arc, jagged discharge and sparks, staggered, mostly at once, until wave
+ *     arrival at the lamp and no later than {@link #ARC_WINDOW} ticks; the arc crackles — 2–4 discharges spaced 1–3 ticks, with some lamps
+ *     repeating later. The client finds them in local chunks through section palettes, up to {@link #SECTIONS_PER_TICK} sections per tick,
+ *     nearest first; arcs capped at {@link #MAX_ARCS}. Substations are excluded: the strike disables them on the server
+ *     ({@code Blackouts.nuke}), and each has its own failure arc ({@code GridEffects.failure}); a second would be
+ *     redundant;</li>
+ *     <li>smoke wisps from flash-heated surfaces: roofs, grassy ground, foliage and wooden walls facing the ball emit pyrolysis
+ *     smoke until the wave reaches them ({@link Smoke}). Locations are points in front of the camera (out to {@link #SMOKE_RANGE}
+ *     blocks); light follows char ({@link FlashChar}): pulse × angle × shadow from client heightmaps; smoke uses cloud-model emissions
+ *     ({@link Puffs}).</li>
  * </ul>
  */
 public final class FlashAftermath {
-    /** Дуг ЭМИ, не больше (ближние к камере). */
+    /** Maximum EMP arcs (nearest to the camera). */
     static final int MAX_ARCS = 48;
-    /** Секций, просмотренных за тик в поисках ламп. */
+    /** Sections inspected per tick for lamps. */
     static final int SECTIONS_PER_TICK = 48;
-    /** Дольше этого (тики) после вспышки лампы не коротят. */
+    /** Lamps no longer short out after this many ticks from the flash. */
     static final int ARC_WINDOW = 50;
-    /** Голубовато-белый свет дуги и его синий край — как у подстанции ({@code GridEffects}). */
+    /** Bluish-white arc light and blue edge — as for the substation ({@code GridEffects}). */
     private static final int ARC = 0xDCE8FF, ARC_EDGE = 0x5A7CFF;
-    /** Звеньев ломаной разряда и точек на звено. */
+    /** Jagged discharge segments and points per segment. */
     private static final int BOLT_SEGMENTS = 5, BOLT_DOTS = 3;
-    /** Докуда от камеры ищутся дымки, блоки. */
+    /** Camera search range for smoke wisps, blocks. */
     static final double SMOKE_RANGE = 128;
-    /** Медиана и разброс света, от которого поверхность курится, кал/см². */
+    /** Median and spread of light exposure that makes a surface smoke, cal/cm². */
     static final double SMOKE_Q = 5, SMOKE_BETA = 0.6;
 
-    /** Дуг у последнего подрыва и выбросов дыма пиролиза (строка сценария клиента). */
+    /** Arcs in the latest detonation and pyrolysis smoke emissions (client scenario line). */
     private static volatile int lastArcs = -1;
     private static volatile int puffs;
 
     private FlashAftermath() {}
 
-    /** Строка {@code SCENARIO}: сколько дуг ЭМИ нашлось у последнего подрыва и сколько мест у дымков. */
+    /** {@code SCENARIO} line: EMP arcs found for the latest detonation and smoke-wisp locations. */
     public static String describe() {
         return "emp arcs " + lastArcs + ", scorch smoke " + puffs + " puffs";
     }
 
     /**
-     * Живой подрыв: ЭМИ и дымки. {@code blackout} — радиус, где сервер гасит сеть ({@code Blackouts.nukeRadius}); 0 —
-     * не гасит (блэкаут выключен настройкой), и лампы не коротят: иначе они «сгорали» бы и оставались гореть.
+     * Live detonation: EMP and smoke wisps. {@code blackout} is the radius in which the server blacks out the grid ({@code Blackouts.nukeRadius}); 0 —
+     * no blackout (disabled in settings), so lamps do not short out: otherwise they would "burn out" yet stay lit.
      */
     static void detonation(Detonation d, double blackout) {
         ClientLevel level = Minecraft.getInstance().level;
@@ -91,12 +91,12 @@ public final class FlashAftermath {
         Effects.add(new Smoke(d));
     }
 
-    // ---------------------------------------------------------------- ЭМИ
+    // ---------------------------------------------------------------- EMP
 
     /**
-     * Поиск ламп по секциям у камеры, ближние первыми, и дуги: найденная лампа сразу получает свои разряды. Поиск по
-     * всей прорисовке идёт дольше волны (глобальная палитра секции на «есть ли лампа» отвечает «может быть» всегда), и
-     * лампа, найденная, когда волна у неё уже прошла или вышло {@link #ARC_WINDOW}, не коротит.
+     * Search sections near the camera for lamps, nearest first, and arcs: each found lamp gets its discharges immediately. Searching the
+     * entire render distance takes longer than the wave (a global section palette always answers "maybe" to "is there a lamp"), so
+     * a lamp found after its wave has passed or {@link #ARC_WINDOW} has elapsed does not short out.
      */
     private static final class Emp implements Effects.Effect {
         private final Detonation d;
@@ -108,7 +108,7 @@ public final class FlashAftermath {
         Emp(Detonation d, double radius, ClientLevel level) {
             this.d = d;
             this.rnd = RandomSource.create(d.seed() ^ 0x5EED);
-            // секции у камеры в кварталах, которые гасит сервер (квартал — по чанку, как у блэкаута): ближние первыми
+            // sections near the camera in districts blacked out by the server (one district per chunk, as for blackout): nearest first
             Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
             int view = Minecraft.getInstance().options.getEffectiveRenderDistance();
             int ccx = Mth.floor(cam.x) >> 4, ccz = Mth.floor(cam.z) >> 4;
@@ -134,7 +134,7 @@ public final class FlashAftermath {
             boolean left = searching;
             for (Arc a : arcs) {
                 for (int i = 0; i < a.strikes.length; i++) {
-                    // лампа ещё на месте (горит или уже погашена блэкаутом — это её и выбило), а не снесена
+                    // lamp still present (lit or already blacked out — that is what disabled it), not demolished
                     if (a.strikes[i] == t && lamp(level.getBlockState(a.pos))) arc(level, a, a.strength[i]);
                     if (a.strikes[i] > t) left = true;
                 }
@@ -142,7 +142,7 @@ public final class FlashAftermath {
             return left;
         }
 
-        /** Секции за тик: горящие лампы в них — дуги, ближние к камере первыми, не больше {@link #MAX_ARCS} всего. */
+        /** Sections per tick: arcs at their lit lamps, nearest to the camera first, up to {@link #MAX_ARCS} total. */
         private void scan(ClientLevel level, int t) {
             List<BlockPos> found = new ArrayList<>();
             for (int n = 0; n < SECTIONS_PER_TICK && next < sections.size(); n++) {
@@ -150,7 +150,7 @@ public final class FlashAftermath {
                 LevelChunk chunk = level.getChunkSource().getChunkNow((int) s[0], (int) s[2]);
                 if (chunk == null) continue;
                 LevelChunkSection sec = chunk.getSections()[(int) s[1]];
-                // точный подсчёт по палитре дешевле прохода по местам: без ламп секция дальше не смотрится
+                // exact palette count is cheaper than scanning positions: a lampless section is skipped
                 if (!Palettes.contains(sec.getStates(), FlashAftermath::lit)) continue;
                 int y0 = chunk.getMinBuildHeight() + ((int) s[1] << 4);
                 for (int y = 0; y < 16; y++) {
@@ -172,10 +172,10 @@ public final class FlashAftermath {
         }
 
         /**
-         * Разряды лампы, найденной в тик {@code t}. Короткое замыкание — вразнобой, чаще сразу, до прихода волны к лампе
-         * (после неё лампа в пыли и обломках) и не позже {@link #ARC_WINDOW}; в малом масштабе удара волна — за тики, и
-         * лампе достаётся меньше разрядов или ни одного. Дуга не гаснет сразу: разряд проскакивает снова, пока цепь не
-         * разомкнётся (2–4 раза через 1–3 тика); у части ламп замыкание повторяется позже, слабее. Null — уже поздно.
+         * Discharges of a lamp found at tick {@code t}. Shorts are staggered, mostly at once, until wave arrival at the lamp
+         * (afterward it is in dust and debris) and no later than {@link #ARC_WINDOW}; at small strike scale the wave arrives in ticks, so
+         * the lamp gets fewer discharges or none. The arc does not stop immediately: discharge repeats until the circuit
+         * opens (2–4 times spaced 1–3 ticks); some lamps short again later, more weakly. Null — already too late.
          */
         @Nullable
         private Arc schedule(BlockPos pos, int t) {
@@ -201,12 +201,12 @@ public final class FlashAftermath {
 
         private void arc(ClientLevel level, Arc a, float strength) {
             Vec3 at = Vec3.atCenterOf(a.pos).add(rnd.nextGaussian() * 0.15, 0.2 + rnd.nextGaussian() * 0.1, rnd.nextGaussian() * 0.15);
-            // свечение — гладко: ближайшим пикселем крупная вспышка распадается на квадраты пикселей картинки
+            // smooth glow: nearest-pixel sampling breaks a large flash into texture-pixel squares
             Fx.flash().smooth().color(ARC, ARC_EDGE).size(1.4f * strength, 2.6f * strength).life(2 + rnd.nextInt(2)).spawn(level, at);
             Fx.flash().smooth().color(0xFFFFFF, ARC).size(0.5f, 0.9f).life(2).spawn(level, at);
-            // сам разряд — ломаная из искр-звёздочек от лампы в сторону и вниз: светлое пятно на земле, которую вспышка
-            // и так залила светом, днём почти не видно, мягкие точки — тоже, а звёздочки искр видны. Вниз по самому
-            // столбу ломаную закрывали бы фонарь и столб
+            // the discharge itself is a jagged line of star-shaped sparks out and down from the lamp: a light patch on ground already lit by the flash
+            // is barely visible by day, as are soft dots; star-shaped sparks remain visible. Directly down the
+            // pole, the lamp and pole would hide the jagged line
             double dir = rnd.nextDouble() * Math.PI * 2, ox = Math.cos(dir) * 0.24, oz = Math.sin(dir) * 0.24;
             Vec3 p = at;
             for (int seg = 0; seg < BOLT_SEGMENTS; seg++) {
@@ -224,7 +224,7 @@ public final class FlashAftermath {
         }
     }
 
-    /** Лампа сети: тики разрядов дуги и их сила. */
+    /** Grid lamp: arc discharge ticks and strengths. */
     private static final class Arc {
         final BlockPos pos;
         final int[] strikes;
@@ -237,42 +237,42 @@ public final class FlashAftermath {
         }
     }
 
-    /** Горящая видимая лампа сети: её ЭМИ замыкает. */
+    /** Lit visible grid lamp: EMP shorts it out. */
     private static boolean lit(BlockState st) {
         return GridLights.isLit(st) && st.getRenderShape() == RenderShape.MODEL;
     }
 
-    /** Видимая лампа сети, горящая или погашенная блэкаутом (её двойник): на месте, не снесена. */
+    /** Visible grid lamp, lit or blacked out (its twin): still present, not demolished. */
     private static boolean lamp(BlockState st) {
         return (GridLights.isLit(st) || GridLights.isUnlit(st)) && st.getRenderShape() == RenderShape.MODEL;
     }
 
-    // ---------------------------------------------------------------- дымки
+    // ---------------------------------------------------------------- smoke wisps
 
     /**
-     * Дымки вспышки — не горение, а пиролиз: свет выше порога обугливания ({@link #SMOKE_Q}, разброс {@link #SMOKE_BETA}
-     * по {@link Fragility}) прогревает поверхность дерева, листвы и травы, и она выделяет летучие — белёсый дым смол,
-     * которым курились дома в опытах в Неваде до прихода волны (Glasstone и Dolan 1977, §7.40–7.45). Без пламени: огонь
-     * ставит сервер (слой вспышки). Пробы — {@link #SMOKE_PROBES} мест, равных по площади, в секторе перед камерой до
-     * {@link #SMOKE_RANGE} блоков; у мест, что дымят, — выброс модели облака ({@link Puffs}):
+     * Flash smoke wisps come from pyrolysis, not combustion: light above the charring threshold ({@link #SMOKE_Q}, spread {@link #SMOKE_BETA}
+     * per {@link Fragility}) heats wood, foliage and grass surfaces, releasing volatiles — whitish tar smoke
+     * seen rising from houses in Nevada tests before wave arrival (Glasstone and Dolan 1977, §7.40–7.45). No flame: the server
+     * places fire (flash layer). Probes — {@link #SMOKE_PROBES} equal-area locations in a sector ahead of the camera out to
+     * {@link #SMOKE_RANGE} blocks; smoking locations emit through the cloud model ({@link Puffs}):
      * <ul>
-     * <li>летучих — α·(q − q₀)·S / L<sub>г</sub>: поглощение α = {@value #ABSORB} (О: дерево и листва 0,6–0,9), свет сверх
-     * порога q₀ = {@link #SMOKE_Q} кал/см², S — площадь, которую представляет проба, теплота газификации древесины
-     * L<sub>г</sub> = {@value #GASIFY} Дж/кг (Tewarson, SFPE Handbook, табл. 3-4.x: 1,8 МДж/кг у дугласовой пихты; ⚠ по памяти);</li>
-     * <li>дыма из них — {@value #SMOKE_YIELD} кг на кг (О: выход аэрозоля тления древесины 0,01–0,1), ослабление
-     * {@value #SMOKE_K} м²/кг (у дыма тления ~4,4 м²/г, Mulholland, SFPE Handbook; ⚠ по памяти), цвет — серо-бурый;</li>
-     * <li>тепло в воздух — {@value #TO_AIR} поглощённого (О), газ ~{@value #SMOKE_K_GAS} K (пиролиз дерева 500–700 K).</li>
+     * <li>volatiles — α·(q − q₀)·S / L<sub>g</sub>: absorption α = {@value #ABSORB} (est.) (wood and foliage 0.6–0.9), light above
+     * threshold q₀ = {@link #SMOKE_Q} cal/cm², S — area represented by the probe, heat of wood gasification
+     * L<sub>g</sub> = {@value #GASIFY} J/kg (Tewarson, SFPE Handbook, table 3-4.x: 1.8 MJ/kg for Douglas fir; (est.) from memory);</li>
+     * <li>smoke from them — {@value #SMOKE_YIELD} kg per kg (est.) (smoldering wood aerosol yield 0.01–0.1), extinction
+     * {@value #SMOKE_K} m²/kg (~4.4 m²/g for smoldering smoke, Mulholland, SFPE Handbook; (est.) from memory), gray-brown color;</li>
+     * <li>heat into air — {@value #TO_AIR} of absorbed heat (est.), gas ~{@value #SMOKE_K_GAS} K (wood pyrolysis 500–700 K).</li>
      * </ul>
-     * Дымок виден, пока до места не дошла волна (её стена пыли сметает его).
+     * A wisp remains visible until the wave reaches the location (its dust wall sweeps it away).
      */
     static final int SMOKE_PROBES = 384;
-    /** Проб за тик: вся раскладка — за первые {@link #SMOKE_PROBES} / столько тиков вспышки. */
+    /** Probes per tick: the full distribution is covered in the first {@link #SMOKE_PROBES} / this many flash ticks. */
     static final int SMOKE_PER_TICK = 24;
     static final double ABSORB = 0.7, GASIFY = 1.8e6, SMOKE_YIELD = 0.05, SMOKE_K = 4.4e3, TO_AIR = 0.1, SMOKE_K_GAS = 600;
-    /** Джоулей на квадратный метр в одной калории на квадратный сантиметр. */
+    /** Joules per square meter in one calorie per square centimeter. */
     static final double CAL_CM2 = 41_868;
 
-    /** Пробы мест перед камерой: где свет прогрел поверхность сверх порога и волны ещё нет — выброс дыма пиролиза. */
+    /** Probes ahead of the camera: emit pyrolysis smoke where light heated a surface above threshold and the wave has not arrived. */
     private static final class Smoke implements Effects.Effect {
         private final Detonation d;
         private final RandomSource rnd;
@@ -305,7 +305,7 @@ public final class FlashAftermath {
                 SmokeGrid.add(smoke);
             }
             double yaw = Math.toRadians(camera.getYRot()), sector = Math.toRadians(120), r0 = 4, r1 = r0 + SMOKE_RANGE;
-            // проба — равная доля площади сектора
+            // probe represents an equal share of sector area
             double area = 0.5 * sector * (r1 * r1 - r0 * r0) / SMOKE_PROBES;
             double now = SmokeGrid.seconds(0);
             BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
@@ -319,7 +319,7 @@ public final class FlashAftermath {
                 if (top <= level.getMinBuildHeight()) continue;
                 Direction face = Direction.UP;
                 int y = top;
-                // половина проб — стена к шару под крышей
+                // half the probes: wall facing the ball under a roof
                 if (rnd.nextBoolean()) {
                     face = Direction.getNearest(d.burst().x - x - 0.5, 0, d.burst().z - z - 0.5);
                     y = top - rnd.nextInt(8);
