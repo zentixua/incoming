@@ -236,7 +236,7 @@ final class NukeAfter {
     private void roar() {
         Sources.Source src = Sources.NUKE_FIRE;
         ClientLevel level = Minecraft.getInstance().level;
-        fire.finish(src.spectrum(), level == null ? Propagation.Weather.NIGHT : Propagation.Weather.of(level));
+        fire.finish(src.spectrum(), level == null ? Propagation.Weather.NIGHT : ua.zentix.incoming.util.Air.weather(level));
         for (int q = 0; q < QUADRANTS; q++) {
             roarVolume[q] = fire.volume(q, src.fileLufs(), src.ceilingLufs());
             roarDistance[q] = fire.distance(q);

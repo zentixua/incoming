@@ -28,7 +28,7 @@ import java.util.UUID;
  * only ground wind (stronger wind aloft drifts the salvo downwind), and each rocket uses the launch rail exit
  * dispersion from its spec. Without firing data (tests), the launch rail exit is exact and uses the full wind
  * profile. Thus, a 500-block shot takes ~10 s, rises a hundred blocks, descends more steeply than it rose, and
- * the salvo lands with dispersion and wind drift. The engine burns for the first {@link #BURN_TICKS} (plume and
+ * the salvo lands with dispersion and wind drift. The engine burns for the first {@link WeaponSpec.RocketFlight#burnTicks()} (plume and
  * dense smoke; launch rail exit speed is immediate, not physical: acceleration in the tube and first meters is
  * not calculated), then coasts; descending flight is the attack phase.
  * <p>
@@ -42,37 +42,13 @@ import java.util.UUID;
  * in time ({@link #stretch}) so the rocket does not freeze in the air near the target.
  */
 public class RocketEntity extends StrikeProjectile {
-    /** Engine burns for this many ticks after launch rail exit. */
-    public static final int BURN_TICKS = 40;
-    /** Ignition in the tube before launch rail exit. */
-    public static final int IGNITION_TICKS = 3;
-    /** Do not fire with shorter flight time: raise tubes more steeply (mortar trajectory). */
-    public static final int MIN_FLIGHT = 50;
-    /**
-     * The number of final trajectory ticks slowed while the rocket is outside the loaded world and the target
-     * area is unready (5 s, longer than area loading).
-     */
-    public static final double STRETCH_TICKS = 100;
-    /** Virtual flight rate changes no faster than this per tick. */
-    private static final double RATE_SLEW = 0.05;
-    /**
-     * Stretched flight stays this far from an unready target area: closer, the virtual projectile would wait
-     * motionless (StrikeProjectile.advanceVirtual waits at 48 blocks plus a step).
-     */
-    private static final double HOLD_OFF = 64;
-    /** Range beyond the trajectory arc, ticks at cruise speed: a rocket missing its point continues downward. */
-    private static final int OVERSHOOT_TICKS = 200;
-
-    /** The spec for unpowered flight provides the launch rail exit dispersion. */
     private static final WeaponSpec.Ballistic FLIGHT = WeaponSpec.ROCKET.airframe().ballistic();
+    private static final WeaponSpec.RocketFlight ROCKET = FLIGHT.rocket();
 
     /** 9M22U drag on the world flight scale ({@link WeaponSpec.Airframe#drag()}): game at 0, real with f(M) at 1. */
     private static Ballistics.Drag drag() {
         return WeaponSpec.ROCKET.airframe().drag();
     }
-
-    /** Calculate the path this many blocks below impact height: a miss into a ravine, continuing downward. */
-    private static final double BELOW_IMPACT = 64;
 
     /** Impact point: where aimed at launch. */
     @Nullable
@@ -103,7 +79,7 @@ public class RocketEntity extends StrikeProjectile {
     /** World time accumulated beyond trajectory time (stretching); whole ticks count toward area waiting. */
     private double stretched;
     /**
-     * Trajectory time after which the rocket is within {@link #HOLD_OFF} of target: stretching only approaches
+     * Trajectory time after which the rocket is within {@link WeaponSpec.RocketFlight#holdOff} of target: stretching only approaches
      * it.
      */
     private double holdAt;
@@ -186,8 +162,8 @@ public class RocketEntity extends StrikeProjectile {
     @Override
     protected int launchTicksLeft() {
         return switch (flightPhase()) {
-            case READY -> Math.max(0, readyTicks() - phaseAge()) + IGNITION_TICKS;
-            case IGNITION -> Math.max(0, IGNITION_TICKS - phaseAge());
+            case READY -> Math.max(0, readyTicks() - phaseAge()) + ROCKET.ignitionTicks();
+            case IGNITION -> Math.max(0, ROCKET.ignitionTicks() - phaseAge());
             default -> 0;
         };
     }
@@ -197,7 +173,7 @@ public class RocketEntity extends StrikeProjectile {
         if (start == null) {
             // Still in tube: flight time starts there.
             Vec3 aim = impactAt != null ? impactAt : aimPoint();
-            return launchTicksLeft() + Ballistics.ticksFor(position(), aim, elevation, MIN_FLIGHT);
+            return launchTicksLeft() + Ballistics.ticksFor(position(), aim, elevation, ROCKET.minFlight());
         }
         return (int) Math.ceil(Math.max(0, flightTicks - t));
     }
@@ -214,7 +190,7 @@ public class RocketEntity extends StrikeProjectile {
         }
         if (ph == FlightPhase.IGNITION) {
             speed = 0;
-            if (phaseAge() >= IGNITION_TICKS) {
+            if (phaseAge() >= ROCKET.ignitionTicks()) {
                 solve(position(), impactAt);
                 setPhase(FlightPhase.BOOST);
             }
@@ -232,7 +208,7 @@ public class RocketEntity extends StrikeProjectile {
             resolve(position(), impactAt);
         }
 
-        if (ph == FlightPhase.BOOST && phaseAge() >= BURN_TICKS) setPhase(FlightPhase.CRUISE);
+        if (ph == FlightPhase.BOOST && phaseAge() >= ROCKET.burnTicks()) setPhase(FlightPhase.CRUISE);
         // In the world the rocket is visible: time must match world time.
         double step = isVirtual() ? stretch(level) : (rate = 1);
         if (isRemoved()) return;
@@ -277,16 +253,16 @@ public class RocketEntity extends StrikeProjectile {
     }
 
     /**
-     * Virtual flight rate. If impact area is unready, smoothly slow the last {@link #STRETCH_TICKS} trajectory
-     * ticks until {@link #HOLD_OFF} blocks from target (rate = time remaining to that boundary / STRETCH_TICKS,
-     * changing by at most {@link #RATE_SLEW} per tick): approach that line ever more slowly without freezing;
+     * Virtual flight rate. If impact area is unready, smoothly slow the last {@link WeaponSpec.RocketFlight#stretchTicks} trajectory
+     * ticks until {@link WeaponSpec.RocketFlight#holdOff} blocks from target (rate = time remaining to that boundary / stretchTicks,
+     * changing by at most {@link WeaponSpec.RocketFlight#rateSlew} per tick): approach that line ever more slowly without freezing;
      * once ready, smoothly return rate to 1. Nobody sees the virtual rocket, only hears its distant path.
      * Stretched time counts as area waiting: the rocket travels more slowly without spending range on it; waiting
      * shares the limit used at the target.
      */
     private double stretch(ServerLevel level) {
-        double want = aimAreaReady(level, landing()) ? 1 : Math.min(1, Math.max(0, holdAt - t) / STRETCH_TICKS);
-        rate += Math.max(-RATE_SLEW, Math.min(RATE_SLEW, want - rate));
+        double want = aimAreaReady(level, landing()) ? 1 : Math.min(1, Math.max(0, holdAt - t) / ROCKET.stretchTicks());
+        rate += Math.max(-ROCKET.rateSlew(), Math.min(ROCKET.rateSlew(), want - rate));
         stretched += 1 - rate;
         while (stretched >= 1 && !isRemoved()) {
             stretched -= 1;
@@ -354,21 +330,21 @@ public class RocketEntity extends StrikeProjectile {
         return path;
     }
 
-    /** Last trajectory tick when still farther than {@link #HOLD_OFF} from impact (0 means already closer). */
+    /** Last trajectory tick when still farther than {@link WeaponSpec.RocketFlight#holdOff} from impact (0 means already closer). */
     private double holdPoint(Vec3 impact) {
         for (int k = flightTicks; k > 0; k--) {
-            if (at(k).distanceTo(impact) > HOLD_OFF) return k;
+            if (at(k).distanceTo(impact) > ROCKET.holdOff()) return k;
         }
         return 0;
     }
 
     /**
      * Launch rail exit from {@code from} toward {@code to}: rack elevation (if too shallow for {@link
-     * #MIN_FLIGHT}, steepen up to 80°); fire solution for speed and heading in ground wind, then spec launch rail
+     * WeaponSpec.RocketFlight#minFlight()}, steepen up to 80°); fire solution for speed and heading in ground wind, then spec launch rail
      * exit dispersion.
      */
     private void solve(Vec3 from, Vec3 to) {
-        float el = Ballistics.elevationFor(from, to, elevation, MIN_FLIGHT);
+        float el = Ballistics.elevationFor(from, to, elevation, ROCKET.minFlight());
         restart(from, to, scatter(Ballistics.aim(from, to, el, drag(), known())));
     }
 
@@ -423,9 +399,9 @@ public class RocketEntity extends StrikeProjectile {
         return arc;
     }
 
-    /** Range for remaining trajectory from {@link #t}: arc to impact plus {@link #OVERSHOOT_TICKS} overshoot. */
+    /** Range for remaining trajectory from {@link #t}: arc to impact plus {@link WeaponSpec.RocketFlight#overshootTicks} overshoot. */
     private Mission missionLeft() {
-        return Mission.of(arcFrom(t) + OVERSHOOT_TICKS * cruiseSpeed());
+        return Mission.of(arcFrom(t) + ROCKET.overshootTicks() * cruiseSpeed());
     }
 
     /** New trajectory from {@code from} with velocity {@code v} toward {@code to}. */
@@ -440,12 +416,12 @@ public class RocketEntity extends StrikeProjectile {
 
     /**
      * Path from {@link #start} with {@link #v0} in current world wind, to {@code to}'s height on descent plus
-     * {@link #OVERSHOOT_TICKS} or {@link #BELOW_IMPACT} below; gives flight time and arrival point.
+     * {@link WeaponSpec.RocketFlight#overshootTicks} or {@link WeaponSpec.RocketFlight#belowImpact} below; gives flight time and arrival point.
      */
     private void fly(Vec3 to) {
         double h = Math.max(0.05, v0.horizontalDistance()), d = Math.sqrt(to.subtract(start).horizontalDistanceSqr());
-        int ticks = (int) Math.min(6000, 3 * d / h + 400) + OVERSHOOT_TICKS;
-        path = Ballistics.fly(start, v0, drag(), Ballistics.Wind.of(air()), to.y - BELOW_IMPACT, ticks);
+        int ticks = (int) Math.min(6000, 3 * d / h + 400) + ROCKET.overshootTicks();
+        path = Ballistics.fly(start, v0, drag(), Ballistics.Wind.of(air()), to.y - ROCKET.belowImpact(), ticks);
         double k = path.arrival(start, to);
         flightTicks = Double.isNaN(k) ? Math.max(1, path.ticks()) : Math.max(1, (int) Math.ceil(k));
         landing = Double.isNaN(k) ? to : path.at(k);

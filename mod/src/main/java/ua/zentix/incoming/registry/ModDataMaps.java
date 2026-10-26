@@ -11,6 +11,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.warhead.BreachModel;
 import ua.zentix.incoming.warhead.Penetration;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -26,10 +27,24 @@ public final class ModDataMaps {
     public static final DataMapType<Block, Penetrability> PENETRATION = DataMapType.builder(Incoming.id("penetration"), Registries.BLOCK,
             Penetrability.CODEC).build();
 
+    /** Ordered debris slots per block: repeated slots preserve piece counts and random-number order. */
+    public static final DataMapType<Block, List<Integer>> DEBRIS_DRONE = debris("debris_drone");
+    public static final DataMapType<Block, List<Integer>> DEBRIS_MISSILE = debris("debris_missile");
+    public static final DataMapType<Block, List<Integer>> DEBRIS_EMBERS = debris("debris_embers");
+    public static final DataMapType<Block, List<Integer>> DEBRIS_ASH = debris("debris_ash");
+
+    private static DataMapType<Block, List<Integer>> debris(String name) {
+        return DataMapType.builder(Incoming.id(name), Registries.BLOCK, Codec.intRange(0, Integer.MAX_VALUE).listOf()).build();
+    }
+
     private ModDataMaps() {}
 
     public static void register(RegisterDataMapTypesEvent event) {
         event.register(PENETRATION);
+        event.register(DEBRIS_DRONE);
+        event.register(DEBRIS_MISSILE);
+        event.register(DEBRIS_EMBERS);
+        event.register(DEBRIS_ASH);
     }
 
     /**

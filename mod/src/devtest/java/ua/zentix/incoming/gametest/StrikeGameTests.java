@@ -1874,7 +1874,7 @@ public final class StrikeGameTests {
             var flights = FarFlights.flights(level);
             h.assertTrue(flights.stream().anyMatch(f -> f.getUUID().equals(r.getUUID()) && f.isVirtual()), "снаряда нет среди летящих вне мира");
             Vec3 at = r.position();
-            Propagation.Weather weather = Propagation.Weather.of(level);
+            Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(level);
             double heard = Hearing.range(r, 0, weather);
             h.assertTrue(heard > 50 && heard < 0.5 * FarFlights.range(), "по инерции слышно до " + heard);
             // только свой снаряд: в партии и в части CI летят и снаряды других проверок (порядок партий зависит от деления)
@@ -2003,11 +2003,11 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Запас хода «Ланцета» на самый долгий круг (барраж из настроек +20 %): план — путь до цели × 1.5, круг на маршевой
-     * и пике на своей скорости ({@code LoiterEntity.extraRange}) — покрывает весь полёт, резерв сверх плана
-     * ({@link Mission#RESERVE_TICKS}) остаётся нетронутым к подрыву. Пике быстрее круга (4 блока/тик против 1.6):
-     * в тиках плана на маршевой его не хватало бы — это проверяется по самому пике, без слабины пути до круга: пике
-     * расходует больше {@code DIVE_TICKS} × маршевая и не больше {@code DIVE_TICKS} × скорость пике, заложенных в план.
+     * Lancet range covers the longest configured orbit (+20%): approach distance times 1.5, orbit at cruise speed,
+     * and dive at its own speed ({@code LoiterEntity.extraRange}), leaving {@link Mission#RESERVE_TICKS} untouched.
+     * The dive is faster than the orbit (4 versus 1.6 blocks/tick), so cruise-speed range for those ticks would be
+     * insufficient. Check the dive alone, excluding approach slack: it consumes more than the planned
+     * {@link WeaponSpec.Loiter#diveTicks()} times cruise speed and no more than those ticks times dive speed.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "loiter_range", skyAccess = true)
     public static void loiterFullCircleWithinRange(GameTestHelper h) {
@@ -2046,10 +2046,10 @@ public final class StrikeGameTests {
             h.assertTrue(left[0] >= reserve, "план не покрыл полёт: к подрыву осталось " + Math.round(left[0]) + " блоков из резерва " + Math.round(reserve));
             WeaponSpec.Airframe air = WeaponSpec.LOITER.airframe();
             double dive = beforeDive[0] - left[0];
-            h.assertTrue(dive > LoiterEntity.DIVE_TICKS * air.cruiseSpeed(),
+            h.assertTrue(dive > WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.cruiseSpeed(),
                     "пике " + Math.round(dive) + " блоков укладывается в тики на маршевой — тест не отличает план пике от плана круга");
-            h.assertTrue(dive <= LoiterEntity.DIVE_TICKS * air.diveSpeed(),
-                    "пике " + Math.round(dive) + " блоков больше заложенных " + Math.round(LoiterEntity.DIVE_TICKS * air.diveSpeed()));
+            h.assertTrue(dive <= WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.diveSpeed(),
+                    "пике " + Math.round(dive) + " блоков больше заложенных " + Math.round(WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.diveSpeed()));
         });
     }
 
@@ -3951,12 +3951,12 @@ public final class StrikeGameTests {
             h.assertFalse(flying, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
             // замер для PR: задержка схода и растяжение полёта вне мира (тики сверх расчётного времени полёта)
             if (!reported[0]) Incoming.LOG.info("Замер РСЗО {} блоков: сход на тике {} (готов к {}), полёт {} тиков при расчётных {}, растяжение {}, район цели готов на тике {}, {} мс",
-                    distance, leftTube[0], ready + RocketEntity.IGNITION_TICKS, lastSeen[0] - leftTube[0], eta[0],
+                    distance, leftTube[0], ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks(), lastSeen[0] - leftTube[0], eta[0],
                     lastSeen[0] - leftTube[0] - eta[0], areaReadyAt[0],
                     (System.nanoTime() - orderedAt) / 1_000_000);
             reported[0] = true;
-            h.assertTrue(leftTube[0] > 0 && leftTube[0] <= ready + RocketEntity.IGNITION_TICKS + 2,
-                    "снаряд сошёл с пакета на тике " + leftTube[0] + ", а готов к " + (ready + RocketEntity.IGNITION_TICKS));
+            h.assertTrue(leftTube[0] > 0 && leftTube[0] <= ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks() + 2,
+                    "снаряд сошёл с пакета на тике " + leftTube[0] + ", а готов к " + (ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks()));
             h.assertTrue(stalls[0] == 0, "снаряд стоял в воздухе " + stalls[0] + " тиков");
             if (withhold > 0) h.assertTrue(areaReadyAt[0] >= withhold, "район цели загрузился раньше, чем тест его отпустил");
             h.assertTrue(last[0].distanceTo(aim) < 16, "снаряд пропал не у цели: " + last[0].subtract(aim));

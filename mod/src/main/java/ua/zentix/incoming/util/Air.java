@@ -2,6 +2,7 @@ package ua.zentix.incoming.util;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import ua.zentix.incoming.sound.Propagation;
 
 /**
  * Current world air shared by server and client: world wind ({@link Wind}, same as nuclear), stability class
@@ -18,7 +19,7 @@ public record Air(Wind wind, double stability, double humidity) {
      * Clear-weather surface humidity, 0..1: mean relative humidity near land surface is 70–75 % (HadISDH, Willett et al. 2014,
      * ⚠ verify); 70 % is also the ISO 9613-1 reference condition used to build distant sound recordings ({@code sound.Air}).
      */
-    public static final double SURFACE_CLEAR = 0.7;
+    public static final double SURFACE_CLEAR = ua.zentix.incoming.sound.Air.HUMIDITY / 100;
     /** World sea level, blocks (as {@code WaterDecal.SEA_LEVEL}): air heights measured above it. */
     public static final int SEA = 63;
     /** Surface wind height in the Pasquill table, m. */
@@ -40,6 +41,13 @@ public record Air(Wind wind, double stability, double humidity) {
     /** Current air in world {@code level}: game time, sun, rain and thunderstorm (identical on server and client). */
     public static Air of(Level level) {
         return of(level.getGameTime(), sun(level), level.getRainLevel(1), level.getThunderLevel(1));
+    }
+
+    /** Sound weather from the same world air as flight and smoke; skyless dimensions have no shadow zone. */
+    public static Propagation.Weather weather(Level level) {
+        Air air = of(level);
+        return new Propagation.Weather(Propagation.day(sun(level)), level.getRainLevel(1), level.getThunderLevel(1),
+                level.dimensionType().hasSkyLight() ? Propagation.refraction(air.stability()) : 0, air.surfaceHumidity());
     }
 
     /**

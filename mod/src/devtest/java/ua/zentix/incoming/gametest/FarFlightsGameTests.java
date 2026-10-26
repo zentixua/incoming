@@ -92,7 +92,7 @@ public final class FarFlightsGameTests {
         Missile visible = new Missile(level, eye.add(6000, 0, 0));
         Missile tracked = new Missile(level, eye.add(21, 0, 0));
         List<StrikeProjectile> own = List.of(audible, visible, tracked);
-        var weather = Propagation.Weather.of(level);
+        var weather = ua.zentix.incoming.util.Air.weather(level);
         h.assertTrue(Hearing.audible(audible, eye, weather) && !Hearing.audible(visible, eye, weather), "unexpected hearing conditions");
         var map = level.getChunkSource().chunkMap;
         var entry = map.new TrackedEntity(tracked, 64, 1, true);
@@ -143,7 +143,7 @@ public final class FarFlightsGameTests {
                     map.entityMap.put(p.getId(), tracked);
                 }
             }
-            Propagation.Weather weather = Propagation.Weather.of(level);
+            Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(level);
             h.assertTrue(S2C.FarFlights.PERIOD == 2 && S2C.FarFlights.FAR_PERIOD == 4, "packet periods changed");
             for (boolean noPlayer : new boolean[]{false, true}) {
                 for (boolean silent : new boolean[]{false, true}) {

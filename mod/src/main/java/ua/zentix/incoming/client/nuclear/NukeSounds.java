@@ -321,7 +321,7 @@ public final class NukeSounds {
                 clatter(level, r.packet);
             }
             plays.clear();
-            clatter.tick(a.ticks(0), ear.x, ear.y, ear.z, Propagation.Weather.of(level), plays);
+            clatter.tick(a.ticks(0), ear.x, ear.y, ear.z, ua.zentix.incoming.util.Air.weather(level), plays);
             for (Clatter.Play play : plays) {
                 Sources.Source s = play.kind() == Clatter.GLASS ? Sources.RUIN_GLASS : Sources.RUIN_CLATTER;
                 float v = Clatter.volume(play, s.fileLufs(), s.ceilingLufs());
