@@ -102,17 +102,31 @@ It uses the fields/icon/gallery in [modrinth.json](modrinth.json). The page scri
 body files in that order. CurseForge's description is pasted into its Markdown editor separately; the workflow
 uploads version files, not that description.
 
-Repository settings used by an authorized publishing run:
+The publishing job uses the `store-publish` GitHub environment. Before publishing, restrict that environment to the
+`main` branch and move the store tokens out of repository secrets into environment secrets. Dispatch the workflow
+from `main`: an older branch runs its older checks, so a condition in the current workflow alone cannot protect
+repository-level tokens. Removing the repository copies prevents old workflows without this environment from
+obtaining the upload credentials.
 
-- `MODRINTH_TOKEN`: secret with project read/write/create and version read/create scopes.
-- `CURSEFORGE_TOKEN`: secret for CurseForge file uploads.
+Settings used by an authorized publishing run:
+
+- `MODRINTH_TOKEN`: environment secret with project read/write/create and version read/create scopes.
+- `CURSEFORGE_TOKEN`: environment secret for CurseForge file uploads.
 - `CURSEFORGE_ID`: repository variable containing the existing project's ID.
-- `CURSEFORGE_API_KEY`: separate read API key used to check existing files before uploading.
+- `CURSEFORGE_API_KEY`: separate environment secret for the read API used to check existing files before uploading.
 
-A store with no configuration is disabled; a partially configured store fails before mutations. The version input
-selects an existing GitHub release without `v`; empty means latest. The jar must match its GitHub SHA256 digest
-and embedded version. Changelog and client/server environment come from that release tag, rather than the current
-workflow revision.
+Without `CURSEFORGE_ID`, CurseForge is disabled with a warning in the job summary, even if its token or read API key
+already exists. A configured ID requires both credentials; missing either fails before mutations. Modrinth is
+disabled without its token; `draft` requires Modrinth, and every mode requires at least one configured store.
+
+The version input selects an existing GitHub release without `v`; empty means latest. The release and jar uploader
+must be GitHub Actions, and the resolved tag commit must match the release's pinned target SHA. A completed,
+successful `build.yml` release dispatch for that exact commit must have successful `Итог` and `Релиз` jobs. The
+publication and asset-upload timestamps must fall within that release job. The downloaded jar must match its release
+SHA256 digest, embedded version and the jar inside that run's `incoming-jar` artifact; the artifact archive digest
+and run/commit association are also checked. Hand-made releases, replaced jars, moved tags, and missing or expired
+CI artifacts stop publishing. Changelog and client/server environment come from the verified tag commit, rather
+than the current workflow revision.
 
 - `draft`: creates or updates a hidden Modrinth project, its bilingual text, icon, gallery and jar. It skips an already uploaded jar.
 - `submit`: sends the Modrinth draft for review and uploads the jar to CurseForge, where a first file can trigger review.

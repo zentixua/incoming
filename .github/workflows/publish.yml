@@ -1,8 +1,8 @@
 # Manual store publishing: draft creates/updates the private Modrinth page; submit requests review;
 # release uploads a version. Pages/media use the workflow revision only when explicitly requested
 # (always for draft). The jar, changelog and environment come from the selected GitHub release tag;
-# the downloaded jar must match its GitHub SHA256 digest and embedded version.
-# A store with no credentials is disabled. Partial CurseForge configuration is an error, including
+# The jar must also match the artifact of a successful release build for that exact tag commit.
+# No CURSEFORGE_ID disables CurseForge with a warning. A set ID requires both the upload token and
 # the separate CURSEFORGE_API_KEY used to check existing files before upload. Required page media
 # must all exist before any remote mutation. No release or publishing runs automatically.
 name: publish
@@ -36,10 +36,12 @@ permissions:
 jobs:
   publish:
     name: ${{ inputs.step }}
+    environment: store-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
       deployments: write
     env:
       HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
