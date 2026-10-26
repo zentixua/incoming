@@ -14,21 +14,21 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 
 /**
- * Сервер повтора Flashback — встроенный сервер, который читает запись и отдаёт её пакеты зрителю. Пакеты модов он
- * отдаёт, как прочёл ({@code ReplayServer.handleGamePacket}), а перематывая, в одном своём тике ставит снимок куска
- * записи (Flashback NeoForge Fixed кладёт в него последний пакет каждого вида) и читает пакеты от его начала до нужного
- * места, последние 20 тиков — по тику, с поднятым {@code fastForwarding}. Каждое чтение кончается тиком сервера
- * ({@code runUpdates} → {@code tickServer}), поэтому в его конце мод шлёт зрителям метку {@link S2C.ReplayTick}: место
- * в записи и перематывает ли сервер — по {@code doClientRendering}: в этом чтении был снимок или идёт досмотр по тику.
- * При выводе видео Flashback не снимает отметку снимка до конца вывода — там перемотка только {@code fastForwarding},
- * а скачок места клиент видит сам. Пакеты одного соединения клиент разбирает по порядку, так что всё, что пришло
- * до метки, прочитано не позже этого тика сервера; Flashback NeoForge Fixed с начала снимка копит пакеты и отдаёт
- * их в конце тика сервера повтора, после меток всех его чтений, — клиент поэтому ждёт ещё одну метку (решает, живое
- * ли событие, {@code client.replay.Replay}).
+ * Flashback replay server: integrated server reading a recording and sending its packets to viewers. Mod packets
+ * are sent as read ({@code ReplayServer.handleGamePacket}); while seeking, one server tick applies a recording-chunk
+ * snapshot (Flashback NeoForge Fixed stores the last packet of each type) and reads packets from its start to the
+ * destination, the last 20 ticks one at a time with {@code fastForwarding} set. Each read ends with a server tick
+ * ({@code runUpdates} → {@code tickServer}), so at its end the mod sends viewers a {@link S2C.ReplayTick} marker: recording
+ * position and whether the server is seeking, from {@code doClientRendering}: snapshot applied or tick-by-tick catch-up.
+ * During video export Flashback retains the snapshot flag until export ends — seeking there uses only {@code fastForwarding},
+ * and the client detects position jumps itself. The client processes one connection's packets in order, so everything
+ * arriving before the marker was read no later than that server tick; Flashback NeoForge Fixed accumulates packets from
+ * snapshot start and sends them at replay-server tick end, after all read markers — so the client awaits another marker
+ * (deciding whether an event is live, {@code client.replay.Replay}).
  * <p>
- * API для модов у Flashback нет, мод необязательный и только клиентский: открытые методы и поле сервера повтора —
- * через отражение; сервер и клиент повтора — в одной JVM и смотрят одни и те же поля. Без Flashback или без этих
- * членов — меток нет, и клиент принимает события сразу.
+ * Flashback has no mod API and is optional and client-only: access public replay-server methods and field through
+ * reflection; replay server and client share a JVM and see the same fields. Without Flashback or those
+ * members there are no markers, and the client accepts events immediately.
  */
 public final class FlashbackReplay {
     private static boolean looked;
@@ -41,7 +41,7 @@ public final class FlashbackReplay {
 
     private FlashbackReplay() {}
 
-    /** {@code s} — сервер повтора Flashback и мод его понимает. */
+    /** {@code s} is a Flashback replay server understood by the mod. */
     public static boolean isReplay(@Nullable MinecraftServer s) {
         if (s == null) return false;
         if (!looked) find();
@@ -49,7 +49,7 @@ public final class FlashbackReplay {
         return c != null && c.isInstance(s);
     }
 
-    /** Конец тика сервера повтора (и каждого чтения перемотки): зрителям — метка с местом в записи. */
+    /** End of replay-server tick (and each seek read): send viewers a recording-position marker. */
     public static void onServerTick(ServerTickEvent.Post e) {
         MinecraftServer s = e.getServer();
         if (!isReplay(s)) return;
@@ -65,8 +65,8 @@ public final class FlashbackReplay {
     }
 
     /**
-     * Flashback выводит видео ({@code Flashback.EXPORT_JOB}): кадры идут не в реальном времени, и то, что держит
-     * бюджет кадра (подробность пелены ядерного удара), не должно снижать качество. Без Flashback — false.
+     * Flashback exports video ({@code Flashback.EXPORT_JOB}): frames are not real-time, so frame-budget controls
+     * (nuclear pall detail) must not reduce quality. Without Flashback: false.
      */
     public static boolean exporting() {
         if (!looked) find();
@@ -83,7 +83,7 @@ public final class FlashbackReplay {
         if (looked) return;
         try {
             if (!ModList.get().isLoaded("flashback")) return;
-            // без инициализации класса: в обычной игре сервера повтора нет
+            // Without class initialization: ordinary gameplay has no replay server.
             Class<?> c = Class.forName("com.moulberry.flashback.playback.ReplayServer", false, FlashbackReplay.class.getClassLoader());
             place = c.getMethod("getReplayTick");
             rendering = c.getMethod("doClientRendering");

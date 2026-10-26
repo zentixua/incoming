@@ -5,13 +5,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FireWatchTest {
-    /** Подрыв за кругом прорисовки — обхода нет: прежде клиент каждый тик проходил все чанки круга мимо (ревью #482). */
+    /** A burst beyond the render-distance disc needs no scan: previously the client visited every chunk in the disc each tick (review #482). */
     @Test
     void farBurstHasNoFrame() {
         assertNull(FireWatch.box(new double[]{5000}, new double[]{0}, new double[]{600}, 0, 0, 32));
     }
 
-    /** Рамка — круг подрыва в чанках, урезанный квадратом прорисовки, и все чанки, что задевают круг, — в ней. */
+    /** The bounds are the burst disc in chunks, clipped by the render-distance square, and contain every chunk touching the disc. */
     @Test
     void frameHoldsDiscWithinSquare() {
         double[] bx = {100}, bz = {-40}, reach = {300};
@@ -26,7 +26,7 @@ class FireWatchTest {
         }
     }
 
-    /** Два подрыва — одна рамка на оба; чанк между ними, вне кругов, — мимо. */
+    /** Two bursts share one bounding box; a chunk between them, outside both discs, is skipped. */
     @Test
     void twoBurstsShareFrame() {
         double[] bx = {-800, 800}, bz = {0, 0}, reach = {100, 100};

@@ -4,33 +4,33 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 
-// Пелена: накопление по кадрам (client/fx/layer/PallPass). Луч этого кадра сдвинут синим шумом — зерно; с прошлыми
-// кадрами в том же месте мира (перенос по глубине мира за пикселем, не дальше рамки пелены) оно сглаживается. Прошлое
-// зажато в пределы соседей этого кадра на том же расстоянии до мира (pallAlike): где пелена на экране сдвинулась (её
-// край за домом), след не тянется. Соседи за краем предмета — другое место (небо за стеной, стена перед небом): с ними в
-// пределах прошлое на краю предмета при движении взгляда брало пелену фона (выборка прошлого — между пикселями), и по
-// контуру блоков на фоне пелены оставалась её кайма в пиксель кадра пелены (2–4 пикселя экрана). Негодное
-// (NaN, бесконечность — и луч, который fx_pall пометил негодным, альфа −1) в накопленное не попадает: негодный луч
-// этого кадра — пиксель берёт прошлое, негодное прошлое — пиксель начинает заново с этого кадра. Иначе одна точка NaN
-// расползалась бы по накопленному через соседей и выборку прошлого, и пелена за секунды становилась чёрной. Гриб на луче
-// перед миром — перенос по его расстоянию (середине его отрезка): облако за километры, перенесённое по ближнему месту,
-// при движении глаза тянуло бы след. Дым взрывов (smoke.glsl) — по середине своей рамки на луче, как гриб.
+// Pall temporal accumulation (client/fx/layer/PallPass). Current ray has blue-noise offset, producing grain; previous
+// frames at same world position (reprojected by pixel world depth, no farther than pall bounds) smooth it. History
+// clamps to current neighbors at same world distance (pallAlike): where pall shifted on screen (edge behind
+// house), no trail. Neighbors beyond object edge are another place (sky behind wall, wall before sky): including them in
+// bounds let history at moving object edges take background pall (history sampled between pixels), leaving a one-pall-pixel
+// rim (2–4 screen pixels) around blocks against pall. Invalid data
+// (NaN/infinity, including rays marked invalid by fx_pall with alpha −1) never enters history: invalid current ray
+// uses history; invalid history restarts pixel from current frame. Otherwise one NaN would spread through history via
+// neighbors/history sampling and turn pall black within seconds. Mushroom ahead of world on ray
+// reprojects by own distance (segment midpoint): a cloud kilometers away reprojected by nearby position would
+// trail during eye motion. Explosion smoke (smoke.glsl) uses its ray-bounds midpoint, like mushroom.
 
-// этот кадр (fx_pall)
+// current frame (fx_pall)
 uniform sampler2D Sampler0;
-// накопленное (прошлый кадр этого прохода)
+// history (previous frame of this pass)
 uniform sampler2D Sampler1;
-// расстояние до мира за пикселем по оси взгляда (полное разрешение)
+// pixel world distance along view axis (full resolution)
 uniform sampler2D Sampler2;
-// грибы кадра (mushroom.glsl)
+// frame mushrooms (mushroom.glsl)
 uniform sampler2D Sampler3;
 
 uniform mat4 InvViewProj;
 uniform mat4 PrevViewProj;
 uniform vec3 PallForward;
-// xyz: глаз этого кадра от глаза прошлого; w: 1 — прошлое есть
+// xyz: current eye relative to previous eye; w: 1 if history exists
 uniform vec4 PallReproject;
-// z: во сколько раз кадр мельче полного; w: дальше стольких блоков перенос не считает
+// z: frame downsample factor; w: maximum reprojection distance in blocks
 uniform vec4 PallFrame;
 
 out vec4 fragColor;
@@ -47,9 +47,9 @@ void main() {
     ivec2 fullSize = textureSize(Sampler2, 0);
     ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
     float depth = pallScene(texelFetch(Sampler2, full, 0).r);
-    // пределы прошлого — по годным соседям этого кадра там же, где этот пиксель (на его поверхности по расстоянию до мира,
-    // pallAhead; сам — всегда); нет ни одного годного там же — по всем годным (как без края: этот кадр негоден, а
-    // прошлое есть)
+    // history bounds use valid current neighbors at same place as this pixel (its surface by world distance,
+    // pallAhead; self always); no valid neighbor there means all valid neighbors (as without an edge: current ray invalid,
+    // history exists)
     vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
     vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
     for (int y = -1; y <= 1; y++) {
@@ -81,7 +81,7 @@ void main() {
         sp.y = min(sp.y, scene);
         if (sp.y > sp.x) near = min(near, 0.5 * (sp.x + sp.y));
     }
-    // дым взрывов на луче — так же, по середине его рамки (облако в сотнях блоков перед небом)
+    // explosion smoke on ray: likewise its bounds midpoint (cloud hundreds of blocks away against sky)
     if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
         ss.y = min(ss.y, scene);
@@ -90,11 +90,11 @@ void main() {
     if (near < 1e8) t = near;
     vec4 prev = PrevViewProj * vec4(dir * t + PallReproject.xyz, 1.0);
     vec2 uv = prev.xy / prev.w * 0.5 + 0.5;
-    // прошлого в этом месте нет (за глазом, вне кадра) — или оно негодно: пиксель начинает заново
+    // no history here (behind eye, outside frame), or invalid: restart pixel
     bool seen = prev.w > 0.0 && all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-    // луч пикселя кадра пелены идёт через середину пикселя кадра full (fx_pall), а не через середину своего пикселя:
-    // прошлое — в той же решётке лучей (pallLattice), иначе и при неподвижном взгляде выборка шла бы между пикселями, и
-    // прошлое каждый кадр размывалось бы с соседями
+    // pall-frame pixel ray passes through full-frame pixel center (fx_pall), not own pixel center;
+    // history uses same ray lattice (pallLattice), otherwise even a still view samples between pixels and
+    // blurs history with neighbors each frame
     vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
     vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(size)) : vec4(0.0);
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));

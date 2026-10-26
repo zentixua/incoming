@@ -6,35 +6,35 @@ import ua.zentix.incoming.util.Relief;
 import java.util.Arrays;
 
 /**
- * Общие поведения управляемого полёта — один раз для всех законов ({@link DroneAutopilot}, {@link MissileAutopilot},
- * B-2): точка внутри круга разворота и уход на повторный заход, курс на точку маршрута. Чистый код без мира Minecraft.
+ * Shared guided-flight behaviors, defined once for all laws ({@link DroneAutopilot}, {@link MissileAutopilot},
+ * B-2): point inside the turn circle, reapproach, waypoint heading. Pure code without a Minecraft world.
  */
 public final class Autopilot {
     private Autopilot() {}
 
     /**
-     * Разворот по курсу на участке полёта.
+     * Heading turn for a flight phase.
      *
-     * @param gain   усиление поворота к курсу на точку
-     * @param rate   предельная угловая скорость, °/тик (паспорт)
-     * @param accel  предельное угловое ускорение, °/тик²
-     * @param settle угловое ускорение, с которым гасится поворот при уходе на повторный заход
+     * @param gain   gain for turning toward point bearing
+     * @param rate   angular-speed limit, °/tick (spec)
+     * @param accel  angular-acceleration limit, °/tick²
+     * @param settle angular acceleration damping the turn during reapproach
      */
     public record Turn(double gain, double rate, double accel, double settle) {
-        /** Разворот с усилением {@code gain} и пределами участка полёта из паспорта: гасится так же быстро, как набирается. */
+        /** Turn with {@code gain} and spec phase limits: damping as fast as acceleration. */
         public static Turn of(double gain, WeaponSpec.Agility a) {
             return new Turn(gain, a.turnRate(), a.turnAccel(), a.turnAccel());
         }
     }
 
-    /** Ближе этого по горизонтали курс на точку не трогаем: над самой точкой он скачет. */
+    /** Keep heading inside this horizontal point distance: directly overhead the bearing jumps. */
     private static final double HOLD_COURSE = 8;
 
     /**
-     * Точка внутри круга разворота: с предельной угловой скоростью {@code maxRateDeg} °/тик снаряд до неё не довернёт
-     * и кружил бы вокруг неё, пока не кончится запас хода (крылатая ракета на 4 блоках/тик и 3°/тик разворачивается
-     * по кругу радиусом ~80 блоков: цель, сместившаяся вбок на атаке, остаётся внутри). Такой снаряд сначала уходит
-     * прямо, пока точка не выйдет из круга, и заходит снова. С запасом на разгон угловой скорости — {@link WeaponSpec#TURN_MARGIN}.
+     * Point inside the turn circle: at maximum angular speed {@code maxRateDeg} °/tick the projectile cannot turn to it
+     * and would circle until range ran out (cruise missile at 4 blocks/tick and 3°/tick has a turn
+     * radius of ~80 blocks: a target moving sideways during attack remains inside). Such a projectile first flies
+     * straight until the point leaves the circle, then reapproaches. Angular-speed acceleration margin: {@link WeaponSpec#TURN_MARGIN}.
      */
     public static boolean insideTurn(Vec3 pos, Vec3 forward, double speed, Vec3 point, double maxRateDeg) {
         double fl = Math.sqrt(forward.x * forward.x + forward.z * forward.z);
@@ -42,7 +42,7 @@ public final class Autopilot {
         double fx = forward.x / fl, fz = forward.z / fl;
         double dx = point.x - pos.x, dz = point.z - pos.z;
         double r = WeaponSpec.turnRadius(speed * fl, maxRateDeg) * WeaponSpec.TURN_MARGIN;
-        // центр разворота — сбоку, в сторону точки
+        // Turn center lies to the side, toward the point.
         double nx = -fz, nz = fx;
         if (nx * dx + nz * dz < 0) {
             nx = -nx;
@@ -53,20 +53,20 @@ public final class Autopilot {
     }
 
     /**
-     * Точка маршрута {@code nav} внутри круга разворота (промах в пике, цель ушла вбок, точка в воздухе, где цель
-     * пропала): до неё не довернуть — атака отменяется, снаряд уходит прямо и заходит снова. Ближе {@code reattackMin}
-     * по горизонтали — нет: небольшой промах добирает неконтактный взрыватель, а пролетев, снаряд зайдёт снова.
+     * Waypoint {@code nav} is inside the turn circle (dive miss, target moved sideways, airborne point where target
+     * disappeared): cannot turn to it — cancel attack, fly straight and reapproach. Not within {@code reattackMin}
+     * horizontally: proximity fuze covers small misses; after passing, projectile reapproaches.
      */
     public static boolean outOfTurn(Craft c, Vec3 nav, Bearing toNav, double reattackMin, double rate) {
         return outOfTurn(c.position(), c.flight().forward(), c.speed(), nav, toNav, reattackMin, rate);
     }
 
-    /** То же для места {@code pos}, носа {@code forward} и скорости {@code speed} (проигрыш пути вперёд, {@link #track}). */
+    /** Same for {@code pos}, nose {@code forward}, speed {@code speed} (forward path prediction, {@link #track}). */
     static boolean outOfTurn(Vec3 pos, Vec3 forward, double speed, Vec3 nav, Bearing toNav, double reattackMin, double rate) {
         return toNav.horizontal() > reattackMin && insideTurn(pos, forward, speed, nav, rate);
     }
 
-    /** Курс: на повторном заходе — прямо, гася поворот; иначе — на точку маршрута (над самой точкой курс не трогаем). */
+    /** Heading: straight while damping the turn on reapproach; otherwise toward waypoint (unchanged directly overhead). */
     public static void steer(Craft c, boolean outOfTurn, Bearing toNav, Turn turn) {
         steer(c.flight(), outOfTurn, toNav, turn);
     }
@@ -79,27 +79,27 @@ public final class Autopilot {
         }
     }
 
-    // ---------------------------------------------------------------- прямая до цели на заходе
+    // ---------------------------------------------------------------- straight target approach
 
     /**
-     * Запас пути на доворот носа к цели (игровое число, не по физике): с закрытой прямой (цель под крышей, высотка или
-     * гребень вплотную к цели) снаряд всё равно входит в атаку, когда до цели осталось столько путей доворота
-     * ({@link #turnDistance}), — позже нос не успел бы к цели, и снаряд пролетал бы её. Пока путь длиннее, он в атаку
-     * не идёт ({@link Sightline}).
+     * Path margin to turn nose toward target (game number, not physical): with an obstructed straight line (roofed target,
+     * high-rise or ridge right beside it), projectile still attacks once this many nose-turn paths remain
+     * ({@link #turnDistance}); later its nose could not reach the target and it would overshoot. While farther away,
+     * it does not attack ({@link Sightline}).
      */
     static final double DIVE_MARGIN = 1.5;
     /**
-     * Закрытую прямую до цели проверять снова через столько тиков: луч по клеткам блоков — до сотен блоков, у залпа —
-     * у каждого снаряда. За паузу шахед пролетает ~8 блоков, ракета ~16: это покрывает {@link #DIVE_MARGIN}.
+     * Recheck obstructed target line after this many ticks: block-cell ray spans hundreds of blocks, for every projectile
+     * in a salvo. During the pause Shahed travels ~8 blocks, missile ~16: covered by {@link #DIVE_MARGIN}.
      */
     static final int SIGHT_RECHECK = 4;
 
     /**
-     * Путь, за который нос доворачивает от нынешнего тангажа до линии на цель {@code aim} с предельной угловой
-     * скоростью тангажа {@code rate} °/тик и её ускорением {@code accel} °/тик²: разгон угловой скорости и торможение,
-     * при большом угле — с полкой на пределе. Цель позади (за плоскостью поперёк курса) — линия за отвесом:
-     * 180° − угол под горизонтом. Иначе набирающая высоту ракета проходила бы над целью, а доворот считался бы не больше
-     * чем до отвесного пике, и атака не начиналась бы вовсе.
+     * Path needed for nose to turn from current pitch to target line {@code aim}, with pitch angular-speed limit
+     * {@code rate} °/tick and acceleration {@code accel} °/tick²: angular acceleration and braking,
+     * with a plateau at the limit for large angles. A target behind (beyond the plane across heading) has a line past vertical:
+     * 180° − angle below horizon. Otherwise a climbing missile would pass overhead while computed turn stayed no greater
+     * than to a vertical dive, and attack would never start.
      */
     public static double turnDistance(Craft c, Vec3 aim, Bearing toAim, double rate, double accel) {
         Vec3 pos = c.position(), f = c.flight().forward();
@@ -113,28 +113,28 @@ public final class Autopilot {
     }
 
     /**
-     * Игровое правило захода (одно у шахеда и ракеты, без упреждения по идущей цели): если прямая от снаряда к цели
-     * закрыта блоками ({@link Craft#clearAlong} — только готовые чанки), снаряд в атаку не идёт, пока прямая не
-     * откроется. Ракета при этом набирает высоту горкой, а закрылась прямая в пике (цель зашла за склон) — выходит
-     * в горку снова ({@link MissileAutopilot}); шахед идёт дальше на высоте крейсера ({@link DroneAutopilot}: набор
-     * ему вредит). Не дольше, чем нос успевает довернуть к цели ({@link #DIVE_MARGIN}): ближе снаряд атакует как есть —
-     * высотку вплотную к цели и цель под крышей правило не обходит.
+     * Game approach rule (shared by Shahed and missile, without moving-target lead): when blocks obstruct the straight line
+     * to target ({@link Craft#clearAlong} — ready chunks only), do not attack until it
+     * opens. Missile climbs in a pop-up; if line closes during dive (target behind a slope), return
+     * to pop-up ({@link MissileAutopilot}); Shahed continues at cruise altitude ({@link DroneAutopilot}: climbing
+     * hurts its approach). Only while nose can still turn toward target ({@link #DIVE_MARGIN}): closer in, attack as is —
+     * this rule does not bypass a high-rise right beside target or a roofed target.
      */
     public static final class Sightline {
         private boolean blocked;
         /**
-         * Атака уже вынужденная ({@link #DIVE_MARGIN}): до конца захода прямую не мерить — иначе снаряд, довернув нос,
-         * вернулся бы в набор. Не сохраняется: после загрузки посреди такого пике ракета несколько тиков тянет в горку,
-         * пока путь доворота снова не станет вынужденным.
+         * Attack already forced ({@link #DIVE_MARGIN}): do not measure the line until approach ends, otherwise after turning
+         * its nose the projectile would resume climbing. Not saved: loading mid-dive makes missile pull into pop-up for a few
+         * ticks until the nose-turn path forces attack again.
          */
         private boolean committed;
-        /** Сколько тиков не мерить прямую заново (не сохраняется: после загрузки — замер сразу). */
+        /** Ticks before remeasuring the line (unsaved: measure immediately after load). */
         private int wait;
 
         /**
-         * Прямая до {@code aim} закрыта, кроме последних {@code margin} блоков у цели (их достаёт взрыватель), и до
-         * цели дальше {@link #DIVE_MARGIN} путей доворота носа с пределами атаки {@code rate},
-         * {@code accel}: в атаку не идти. Замер — раз в {@link #SIGHT_RECHECK} тиков.
+         * Straight line to {@code aim} is blocked except for last {@code margin} blocks at target (fuze reaches them), and
+         * target is farther than {@link #DIVE_MARGIN} nose-turn paths with attack limits {@code rate},
+         * {@code accel}: do not attack. Measure once per {@link #SIGHT_RECHECK} ticks.
          */
         public boolean masked(Craft c, Vec3 aim, Bearing toAim, double margin, double rate, double accel) {
             if (committed) return false;
@@ -151,12 +151,12 @@ public final class Autopilot {
             return blocked;
         }
 
-        /** Атака вынужденная, а прямая при последнем замере была закрыта: в атаку идти сейчас же. */
+        /** Attack forced and line obstructed at last measurement: attack immediately. */
         public boolean forced() {
             return committed && blocked;
         }
 
-        /** Вне захода или новая цель: следующий заход меряет прямую сразу. */
+        /** Outside approach or new target: next approach measures the line immediately. */
         public void forget() {
             wait = 0;
             blocked = false;
@@ -164,71 +164,71 @@ public final class Autopilot {
         }
     }
 
-    // ---------------------------------------------------------------- рельеф впереди
+    // ---------------------------------------------------------------- terrain ahead
 
     /**
-     * Полуширина полосы рельефа над путём, блоков: корпус (размах шахеда ~2,5 блока) и снос на развороте; тонкая
-     * колонка (забор, мачта) в полосе не пропускается ({@link Corridor}).
+     * Terrain corridor half-width over path, blocks: body (Shahed span ~2.5 blocks) and turn drift; thin
+     * columns (fence, mast) within the corridor are not missed ({@link Corridor}).
      */
     static final double CORRIDOR_HALF_WIDTH = 1.5;
-    /** Путь вперёд проигрывается поворотами не дальше стольких тиков, дальше — прямо по последнему курсу. */
+    /** Predict turns along path for at most this many ticks, then continue straight on last heading. */
     static final int TRACK_TICKS = 64;
-    /** Точка пути — раз в столько тиков проигрыша: хорда дуги разворота (3°/тик) отходит от неё меньше чем на полблока. */
+    /** Path point every this many predicted ticks: turn-arc chord (3°/tick) deviates by less than half a block. */
     private static final int TRACK_STEP = 4;
-    /** Доля наибольшего угла набора ({@link WeaponSpec.Handling#climbAngle}) в {@link #gradient}. */
+    /** Share of maximum climb angle ({@link WeaponSpec.Handling#climbAngle}) used in {@link #gradient}. */
     static final double CLIMB_SHARE = 0.5;
 
     /**
-     * Наклон набора перед препятствием впереди: тангенс доли {@link #CLIMB_SHARE} наибольшего угла набора {@code climbAngle};
-     * остальное — запас на то, что снаряд держит высоту фильтром и П-регулятором тангажа, а не по прямой.
+     * Climb gradient before an obstacle ahead: tangent of {@link #CLIMB_SHARE} of maximum climb angle {@code climbAngle};
+     * the remainder allows for filtered altitude and proportional pitch control rather than a straight line.
      */
     static double gradient(double climbAngle) {
         return Math.tan(Math.toRadians(climbAngle * CLIMB_SHARE));
     }
     /**
-     * Сколько тиков пути снаряд только выходит на набор: фильтр заданной высоты ({@link AltitudeHold}, 1/5 за тик)
-     * и тангаж с ограничением угловой скорости и ускорения. На этом пути набора нет — рельеф на нём учитывается целиком
-     * (у ракеты — 120 блоков, у шахеда — 63). С меньшим запасом ракета, перенацеленная внутри круга разворота над
-     * холмами, шла бы на атаку слишком низко и задевала бы склон (свойства полёта, {@code AutopilotPropertiesTest}).
+     * Ticks of travel just establishing climb: altitude setpoint filter ({@link AltitudeHold}, 1/5 per tick)
+     * and pitch with bounded angular speed/acceleration. No climb assumed along this path — terrain counts in full
+     * (missile: 120 blocks, Shahed: 63). With less margin, a missile retargeted inside its turn circle over
+     * hills would attack too low and hit the slope (flight properties, {@code AutopilotPropertiesTest}).
      */
     static final int REACTION_TICKS = 30;
 
     /**
-     * Какую высоту рельефа надо иметь в виду сейчас: наибольшее по полосе ({@link #CORRIDOR_HALF_WIDTH}) над путём на
-     * {@link WeaponSpec.Airframe#reliefLookahead} блоков вперёд ({@link #track}) за вычетом высоты, которую снаряд
-     * успеет набрать до колонки ({@link #climb}). Без вычета длинная полоса держала бы ракету над самым высоким на
-     * сотни блоков вперёд, и бреющего полёта не было бы. Три точки по курсу вместо полосы пропускали бы мачту из забора
-     * и узкий дом между ними, а фильтр высоты сглаживал бы короткий пик: ракета на бреющем и шахеды залпа бились бы в них.
+     * Terrain height to account for now: maximum across the corridor ({@link #CORRIDOR_HALF_WIDTH}) over the path for
+     * {@link WeaponSpec.Airframe#reliefLookahead} blocks ahead ({@link #track}), minus height the projectile
+     * can gain before the column ({@link #climb}). Without subtraction a long corridor would hold the missile above the
+     * highest terrain hundreds of blocks ahead, preventing low flight. Three heading points instead of a corridor would miss a fence
+     * mast or narrow house between them; altitude filtering would smooth the short peak: low-flying missile and salvo Shaheds would hit them.
      */
     public static double reliefAhead(Craft c, Vec3 nav, Turn turn, WeaponSpec.Airframe air) {
         return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c.reliefSurvey());
     }
 
     /**
-     * Высота, с которой снаряд на скорости {@code speed}, набирая высоту по {@link #climb}, пройдёт над рельефом полосы
-     * ({@link #CORRIDOR_HALF_WIDTH}) над путём {@code track} — то же, что {@link #reliefAhead}, по заданному пути: место
-     * пусковой ({@code LaunchSite}) проверяет им, что подъём после взведения автопилоту по силам.
+     * Altitude from which projectile at {@code speed}, climbing by {@link #climb}, clears corridor terrain
+     * ({@link #CORRIDOR_HALF_WIDTH}) over {@code track}: same as {@link #reliefAhead} for a supplied path. Launcher location
+     * ({@code LaunchSite}) uses it to check the autopilot can climb after fuze arming.
      */
     public static double climbOver(double[] track, double speed, double climbAngle, Relief relief) {
         return Corridor.highest(track, CORRIDOR_HALF_WIDTH, climb(speed, climbAngle), relief);
     }
 
     /**
-     * Набор высоты снаряда на скорости {@code speed} с наибольшим углом набора {@code climbAngle}: {@link #REACTION_TICKS}
-     * тиков пути без набора, потом {@link #gradient}.
+     * Projectile climb at {@code speed} with maximum climb angle {@code climbAngle}: {@link #REACTION_TICKS}
+     * ticks of travel without climb, then {@link #gradient}.
      */
     static Corridor.Climb climb(double speed, double climbAngle) {
         return new Corridor.Climb(REACTION_TICKS * speed, gradient(climbAngle));
     }
 
-    /** Полоса рельефа впереди считается заново раз в столько тиков ({@link ReliefSensor}). */
+    /** Recompute terrain corridor ahead every this many ticks ({@link ReliefSensor}). */
     static final int REFRESH_TICKS = 4;
 
     /**
-     * Датчик рельефа впереди одного снаряда ({@link #reliefAhead}) с замером раз в {@link #REFRESH_TICKS} тиков: полоса —
-     * сотни колонок, а за паузу меняется мало. Между замерами ответ растёт на {@link #gradient} × путь с замера:
-     * колонки впереди стали ближе, и набрать до них снаряд успеет меньше (оценка сверху — у ближних колонок, где набора
-     * нет, это лишний запас не больше наклона × пути за паузу). Не сохраняется: после загрузки — замер сразу.
+     * One projectile's forward-terrain sensor ({@link #reliefAhead}), measuring every {@link #REFRESH_TICKS} ticks: corridor spans
+     * hundreds of columns, changing little during the pause. Between measurements, answer grows by {@link #gradient} × distance since measurement:
+     * columns ahead are closer, leaving less time to climb (upper bound — for nearby columns without climb,
+     * extra margin is at most gradient × pause travel). Unsaved: measure immediately after load.
      */
     public static final class ReliefSensor {
         private double value;
@@ -247,16 +247,16 @@ public final class Autopilot {
         }
     }
 
-    /** Наибольшая высота рельефа под полосой над путём {@code track} — без наклона (возврат в мир, «Ланцет»). */
+    /** Maximum terrain height beneath corridor over {@code track}, without gradient (world reentry, Lancet). */
     public static double reliefAlong(double[] track, Relief relief) {
         return Corridor.highest(track, CORRIDOR_HALF_WIDTH, Corridor.Climb.NONE, relief);
     }
 
     /**
-     * Путь по земле на {@code lookahead} блоков вперёд (x0, z0, x1, z1, …): повороты к {@code nav} проигрываются копией
-     * органов управления ({@link FlightController#copy}) с тем же законом курса ({@link #steer}, повторный заход —
-     * {@link #outOfTurn}) не дальше {@link #TRACK_TICKS} тиков, остаток — прямо. Скорость — нынешняя, по горизонтали:
-     * с запасом на наборе и снижении.
+     * Ground path for {@code lookahead} blocks ahead (x0, z0, x1, z1, …): turns toward {@code nav} are simulated using copied
+     * controls ({@link FlightController#copy}) with the same heading law ({@link #steer}, reapproach via
+     * {@link #outOfTurn}) for at most {@link #TRACK_TICKS} ticks, then straight. Current horizontal speed:
+     * conservative during climb/descent.
      */
     static double[] track(Craft c, Vec3 nav, Turn turn, double reattackMin, double lookahead) {
         Vec3 pos = c.position();

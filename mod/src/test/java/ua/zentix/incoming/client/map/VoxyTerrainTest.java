@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Reading the Voxy database by reflection - on fakes of its classes of the same names ({@code src/test/java/me/cortex/voxy}). */
@@ -84,6 +86,16 @@ class VoxyTerrainTest {
         assertEquals(VoxyColumns.height(4, 64), t.peek(100, 100).height(), "only rough is known");
         t.open(null, 0).column(100, 100);
         assertEquals(71, t.peek(100, 100).height(), "detailed - first");
+    }
+
+    @Test
+    void fatalReadFailurePropagatesAndReleasesTheEngine() {
+        VoxyTerrain terrain = new VoxyTerrain(null, -64, 320);
+        assertTrue(terrain.active());
+        Error failure = new OutOfMemoryError("injected adapter failure");
+        engine.readFailure = failure;
+        assertSame(failure, assertThrows(OutOfMemoryError.class, () -> terrain.open(null, 0).column(0, 0)));
+        assertEquals(0, engine.refs, "engine reference released even when the VM fails");
     }
 
     @Test

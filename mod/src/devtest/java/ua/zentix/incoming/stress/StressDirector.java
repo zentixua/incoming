@@ -84,6 +84,8 @@ import java.util.function.Consumer;
  */
 @Mod(Incoming.MOD_ID)
 public final class StressDirector {
+    /** Preserve the fixture height formerly returned by Level.getSeaLevel(), even in flat worlds. */
+    private static final int REFERENCE_SEA_LEVEL = 63;
     private static final String MODE = System.getProperty("incoming.stress");
     private static final int PLAYERS = Integer.getInteger("incoming.stress.players", 2);
     /** MLRS sample salvoes for fresh areas ({@link #probe}); {@code false} - without them (measuring A/B server stops). */
@@ -780,7 +782,7 @@ public final class StressDirector {
         ServerLevel level = s.overworld();
         Vec3 behind = null;
         for (int i = 0; i < count; i++) {
-            Vec3 from = new Vec3(x + 48 * i + 0.5, level.getSeaLevel() + 200, z + 0.5);
+            Vec3 from = new Vec3(x + 48 * i + 0.5, REFERENCE_SEA_LEVEL + 200, z + 0.5);
             Vec3 aim = from.add(0, -150, -300);
             if (behind == null) behind = aim;
             BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
@@ -825,7 +827,7 @@ public final class StressDirector {
      */
     private void groundRising(MinecraftServer s, String name, int x, int z) {
         ServerLevel level = s.overworld();
-        GroundProbe pr = new GroundProbe(name, "combat launch from afar (dispatch) on the rack", new Vec3(x + 0.5, level.getSeaLevel(), z + 0.5), RISING_SHOTS, true, false);
+        GroundProbe pr = new GroundProbe(name, "combat launch from afar (dispatch) on the rack", new Vec3(x + 0.5, REFERENCE_SEA_LEVEL, z + 0.5), RISING_SHOTS, true, false);
         pr.forced = new ChunkPos(x >> 4, z >> 4);
         pr.setupTick = tick;
         // ticket in the background, like the target area: setChunkForced loads a fresh chunk immediately (tick to 8 s)
@@ -877,7 +879,7 @@ public final class StressDirector {
             if (pr.raised) {
                 // half a flight outside the world: sea level above unfinished chunks, but not below the target by 16 blocks
                 for (Watch w : watched.values())
-                    if (w.ground == pr && w.virtual && w.pos.y < Math.min(level.getSeaLevel(), w.aim.y - 16)) pr.underFloor = true;
+                    if (w.ground == pr && w.virtual && w.pos.y < Math.min(REFERENCE_SEA_LEVEL, w.aim.y - 16)) pr.underFloor = true;
                 continue;
             }
             for (Watch w : watched.values()) {

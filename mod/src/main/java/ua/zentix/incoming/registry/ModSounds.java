@@ -6,11 +6,11 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import ua.zentix.incoming.Incoming;
 
-/** Звуки мода. Файлы и sounds.json собирает tools/build_sounds.py (записи — SOUND-CREDITS.md, остальное — синтез). */
+/** Mod sounds. Files and sounds.json are built by tools/build_sounds.py (recordings: SOUND-CREDITS.md; the rest is synthesized). */
 public final class ModSounds {
     public static final DeferredRegister<SoundEvent> REGISTER = DeferredRegister.create(Registries.SOUND_EVENT, Incoming.MOD_ID);
 
-    // зацикленные: громкость, тон и положение каждый тик выставляет клиент (Доплер, задержка звука)
+    // Loops: client sets volume, pitch and position each tick (Doppler, sound delay).
     public static final DeferredHolder<SoundEvent, SoundEvent> DRONE_ENGINE = register("drone.engine");
     public static final DeferredHolder<SoundEvent, SoundEvent> DRONE_ENGINE_FAR = register("drone.engine.far");
     public static final DeferredHolder<SoundEvent, SoundEvent> MISSILE_ENGINE = register("missile.engine");
@@ -26,12 +26,12 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> BOOSTER_ENGINE = register("booster.engine");
     public static final DeferredHolder<SoundEvent, SoundEvent> SIREN = register("siren");
 
-    // разовые (у взрывов по несколько вариантов в sounds.json — игра выбирает случайно)
+    // One-shots (explosions have multiple sounds.json variants; the game chooses randomly).
     public static final DeferredHolder<SoundEvent, SoundEvent> LAUNCH_BOOSTER = register("launch.booster");
     public static final DeferredHolder<SoundEvent, SoundEvent> BOOSTER_SEPARATE = register("booster.separate");
     public static final DeferredHolder<SoundEvent, SoundEvent> ROCKET_LAUNCH = register("rocket.launch");
     public static final DeferredHolder<SoundEvent, SoundEvent> ROCKET_INCOMING = register("rocket.incoming");
-    /** N-волна сверхзвукового снаряда: короткая (сухой треск) и долгая (двойной удар). */
+    /** Supersonic projectile N-wave: short (dry crack) and long (double boom). */
     public static final DeferredHolder<SoundEvent, SoundEvent> SONIC_CRACK = register("sonic.crack");
     public static final DeferredHolder<SoundEvent, SoundEvent> SONIC_BOOM = register("sonic.boom");
     public static final DeferredHolder<SoundEvent, SoundEvent> LOITER_ENGINE = register("loiter.engine");
@@ -51,10 +51,10 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_VENT = register("bomb.vent");
     public static final DeferredHolder<SoundEvent, SoundEvent> BOMB_CAVE = register("bomb.cave");
     public static final DeferredHolder<SoundEvent, SoundEvent> DESIGNATOR_LOCK = register("designator.lock");
-    /** Пустое событие: ванильный взрыв не должен звучать — свой звук с задержкой по расстоянию играет клиент. */
+    /** Empty event: vanilla explosion must be silent — client plays our sound with distance delay. */
     public static final DeferredHolder<SoundEvent, SoundEvent> SILENT = register("silent");
 
-    // ядерный удар: громкость и тембр по давлению у слушателя ставит клиент, по времени прихода фронта
+    // Nuclear strike: client sets volume and timbre from listener pressure at front arrival.
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_ALARM = register("nuke.alarm");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_LAUNCH = register("nuke.launch");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_CRACK = register("nuke.crack");
@@ -63,14 +63,14 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_GLASS = register("nuke.glass");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_TINNITUS = register("nuke.tinnitus");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_RAIN = register("nuke.rain");
-    // после удара: хлопок вдали, гул горящего города, ветер в огонь, обрушения руин
+    // Aftermath: distant crack, burning-city rumble, wind into the fire, ruin collapses.
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_CRACK_FAR = register("nuke.crack_far");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_FIRE = register("nuke.fire");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_FIRE_WIND = register("nuke.fire_wind");
     public static final DeferredHolder<SoundEvent, SoundEvent> NUKE_COLLAPSE = register("nuke.collapse");
     public static final DeferredHolder<SoundEvent, SoundEvent> GEIGER_CLICK = register("geiger.click");
 
-    // блэкаут: выход подстанции (хлопок, дуга, затихающий гул), квартал гаснет и загорается, гул и искры подстанции
+    // Blackout: substation failure (bang, arc, fading hum), district lights off/on, substation hum and sparks.
     public static final DeferredHolder<SoundEvent, SoundEvent> GRID_FAIL = register("grid.fail");
     public static final DeferredHolder<SoundEvent, SoundEvent> GRID_POWER_DOWN = register("grid.power_down");
     public static final DeferredHolder<SoundEvent, SoundEvent> GRID_POWER_UP = register("grid.power_up");

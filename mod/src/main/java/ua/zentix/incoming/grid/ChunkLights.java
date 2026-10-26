@@ -20,15 +20,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Перевод ламп чанка к состоянию сети: погасить (лампы → двойники) или зажечь (двойники → лампы). Секции без
- * нужных блоков пропускаются по палитре, а глобальная палитра — по точному подсчёту ({@link Palettes#contains}): без
- * него каждая загрузка и сохранение городского чанка проходили бы все блоки таких секций в потоке сервера и ставили
- * чанк в очередь блэкаута, хотя ни ламп сети, ни отключений в нём нет.
+ * Align chunk lamps to grid state: extinguish (lamps → twins) or relight (twins → lamps). Skip sections without
+ * relevant blocks by palette, and global palettes by exact count ({@link Palettes#contains}): otherwise every city
+ * chunk load/save would scan all blocks of such sections on the server thread and enqueue the chunk for blackout
+ * despite having neither grid lamps nor outages.
  */
 public final class ChunkLights {
     /**
-     * Без обновлений соседей и их форм: у двойника та же форма, что у лампы, и соседям знать не о чем (лампа из
-     * красного камня от обновления зажглась бы снова). Клиентам — да, свет пересчитывает сам мир.
+     * No neighbor or neighbor-shape updates: a twin has the lamp's shape, so neighbors need no notification (a redstone
+     * lamp would relight on update). Notify clients; the world itself recalculates light.
      */
     static final int FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
@@ -37,11 +37,11 @@ public final class ChunkLights {
     private ChunkLights() {}
 
     /**
-     * Проход по чанку с лимитом: сколько ламп переведено, пройден ли чанк до конца и откуда продолжать ({@code next}:
-     * номер секции × 4096 + номер блока в ней — место первой лампы сверх лимита). По палитре конец не виден (она помнит
-     * и переведённые состояния), поэтому проход останавливается на первой лампе сверх лимита, а не на последней
-     * в лимите: чанк ровно с {@code limit} лампами кончается этим же проходом, без второго холостого. Следующий проход
-     * начинается с {@code next}, а не с начала чанка: иначе здание в тысячи ламп проходилось бы заново десятки раз.
+     * Bounded chunk pass: number of lamps converted, whether chunk end was reached, and resume location ({@code next}:
+     * section number × 4096 + block index — first lamp beyond the limit). Palette cannot reveal the end (it remembers
+     * converted states too), so the pass stops at the first lamp beyond the limit rather than the last lamp
+     * within it: a chunk with exactly {@code limit} lamps finishes in this pass, without an empty second one. Next pass
+     * starts at {@code next}, not chunk start; otherwise a building with thousands of lamps would be rescanned dozens of times.
      */
     public record Pass(int changed, boolean done, int next, int reverted) {
         public static final Pass NONE = new Pass(0, true, 0, 0);
@@ -52,12 +52,12 @@ public final class ChunkLights {
         void accept(int x, int y, int z, BlockState to);
     }
 
-    /** Есть ли в секции, что переводить ({@link Palettes#contains}). */
+    /** Section has blocks to convert ({@link Palettes#contains}). */
     static boolean needs(LevelChunkSection section, boolean dark) {
         return !section.hasOnlyAir() && Palettes.contains(section.getStates(), s -> GridLights.needs(s, dark));
     }
 
-    /** Есть ли в чанке, что переводить (по палитрам секций). */
+    /** Chunk has blocks to convert (by section palettes). */
     static boolean needs(LevelChunk chunk, boolean dark) {
         for (LevelChunkSection section : chunk.getSections()) {
             if (needs(section, dark)) return true;
@@ -77,22 +77,22 @@ public final class ChunkLights {
     }
 
     /**
-     * Чанк мира: блоки меняются через мир (свет, клиенты, Sable). Соседние чанки должны быть загружены — это
-     * проверяет вызывающий. Возвращает, сколько ламп переведено.
+     * World chunk: changes through the world (light, clients, Sable). Neighboring chunks must be loaded — checked
+     * by caller. Returns number of lamps converted.
      * <p>
-     * Лампы от сигнала (из красного камня, медные) после возврата света сверяются с сигналом, как от обновления
-     * соседа: сигнал, пропавший или появившийся в темноте, лампа замечает, как только снова есть ток.
+     * Signal lamps (redstone, copper) reconcile with the signal after power restoration, as on neighbor
+     * update: a signal lost or gained while dark is noticed as soon as power returns.
      */
     public static int apply(ServerLevel level, LevelChunk chunk, boolean dark) {
         return apply(level, chunk, dark, Integer.MAX_VALUE).changed();
     }
 
-    /** То же, не больше {@code limit} ламп (единица работы под бюджетом): остальные — следующим вызовом. */
+    /** Same, at most {@code limit} lamps (one budgeted work unit): the rest on the next call. */
     public static Pass apply(ServerLevel level, LevelChunk chunk, boolean dark, int limit) {
         return apply(level, chunk, dark, limit, 0);
     }
 
-    /** То же с места {@code from} ({@link Pass#next} прошлого прохода). */
+    /** Same, starting at {@code from} ({@link Pass#next} from the previous pass). */
     public static Pass apply(ServerLevel level, LevelChunk chunk, boolean dark, int limit, int from) {
         LevelChunkSection[] sections = chunk.getSections();
         int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
@@ -118,7 +118,7 @@ public final class ChunkLights {
                 changed++;
                 BlockState now = section.getBlockState(x, y, z);
                 if (now != to) {
-                    // другой мод вернул или заменил блок: место пройдено (дальше — с места продолжения), не зацикливаемся
+                    // Another mod restored/replaced the block: position visited (continue from resume point), do not loop.
                     reverted++;
                     if (!revertLogged) {
                         revertLogged = true;
@@ -134,16 +134,16 @@ public final class ChunkLights {
     }
 
     /**
-     * Блоки меняются прямо в палитре секции: для мира лампа и двойник — один блок, кроме света
-     * ({@link GridLights#inPlace}), и {@code setBlock} с обновлениями соседей, картами высот и Sable (≈10 мкс на лампу
-     * со сборкой хоста) не нужен; а на краю загруженного мира (чанк в памяти, соседи не загружены) он и вреден — Sable
-     * и соседи прочли бы соседний чанк и загрузили его сразу. Свет — {@code checkBlock} по месту (снижение и рост
-     * расходятся и в соседние чанки), клиентам — изменение блока (тем, кому чанк выдан). Не больше {@code limit} ламп.
+     * Change blocks directly in the section palette: to the world a lamp and its twin are the same block except for light
+     * ({@link GridLights#inPlace}), so {@code setBlock} with neighbor updates, heightmaps and Sable (≈10 µs per lamp
+     * in the host's pack) is unnecessary; at the loaded-world edge (chunk in memory, neighbors unloaded) it is harmful — Sable
+     * and neighbors would read and synchronously load a neighboring chunk. Light: {@code checkBlock} at position (decrease and increase
+     * propagate to neighboring chunks too); clients: block change (to chunk recipients). At most {@code limit} lamps.
      * <p>
-     * Лампы от сигнала, зажжённые здесь, сверяются с сигналом отдельно ({@link #resignal}): их места — в
-     * {@code signalled}. Начинает с места {@code from} ({@link Pass#next} прошлого прохода). Пару, которую в палитре
-     * менять нельзя (у ламп сети таких нет — GameTest), при загруженных соседях ({@code neighbours}) переводит мир,
-     * без них — пропускает до загрузки соседей.
+     * Signal lamps relit here reconcile separately ({@link #resignal}): their positions go to
+     * {@code signalled}. Starts at {@code from} ({@link Pass#next} from previous pass). A pair that cannot change in the palette
+     * (none among grid lamps — GameTest) converts through the world if neighbors are loaded ({@code neighbours});
+     * otherwise skips until neighbors load.
      */
     public static Pass applyInPlace(ServerLevel level, LevelChunk chunk, boolean dark, int limit, int from,
                                     boolean neighbours, LongArrayList signalled) {
@@ -172,7 +172,7 @@ public final class ChunkLights {
                     light.checkBlock(p);
                     level.getChunkSource().blockChanged(p);
                 } else if (!neighbours || !level.setBlock(p, to, FLAGS)) {
-                    // на краю такая пара ждёт следующего повода (загрузка, каскад); у ламп сети таких пар нет (GameTest)
+                    // At the edge, such a pair waits for the next trigger (load, cascade); grid lamps have no such pairs (GameTest).
                     continue;
                 }
                 if (!dark && signal(to)) signalled.add(p.asLong());
@@ -184,10 +184,10 @@ public final class ChunkLights {
     }
 
     /**
-     * Лампы копии чанка не из мира (LOD Distant Horizons вдали) — к состоянию сети: {@code dark} — погасить, иначе
-     * зажечь. Прямо в секциях копии, без света и соседей. Поток сервера.
+     * Align lamps of an outside-world chunk copy (distant Distant Horizons LOD) to grid state: {@code dark} — extinguish,
+     * otherwise relight. Directly in copy sections, without light or neighbors. Server thread.
      *
-     * @return сколько ламп переведено
+     * @return number of lamps converted
      */
     public static int applyToCopy(LevelChunkSection[] sections, boolean dark) {
         int changed = 0;
@@ -205,8 +205,8 @@ public final class ChunkLights {
     }
 
     /**
-     * Горящие лампы сети в копии чанка не из мира (любой поток): места {@code номер секции << 12 | номер блока в ней} —
-     * погасить потом ({@link #darken}) без прохода по секциям.
+     * Lit grid lamps in an outside-world chunk copy (any thread): positions {@code section index << 12 | block index} —
+     * extinguish later ({@link #darken}) without section scans.
      */
     public static int[] litLamps(LevelChunkSection[] sections) {
         IntArrayList out = new IntArrayList();
@@ -220,7 +220,7 @@ public final class ChunkLights {
         return out.toIntArray();
     }
 
-    /** Погасить лампы копии на местах из {@link #litLamps} (прямо в секциях, без света и соседей); сколько погашено. */
+    /** Extinguish copy lamps at positions from {@link #litLamps} (directly in sections, no light or neighbors); number extinguished. */
     public static int darken(LevelChunkSection[] sections, int[] lamps) {
         int changed = 0;
         for (int at : lamps) {
@@ -234,28 +234,28 @@ public final class ChunkLights {
         return changed;
     }
 
-    /** Один двойник — снова лампа (тиком двойника: поршень, аппарат). */
+    /** Convert one twin back to a lamp (twin tick: piston, craft). */
     public static void relight(ServerLevel level, BlockPos pos, BlockState twin) {
         BlockState lit = GridLights.lit(twin);
         if (lit == null || !level.setBlock(pos, lit, FLAGS)) return;
         if (signal(lit)) resignal(level, pos);
     }
 
-    /** Лампа, которая горит от сигнала (из красного камня, медная). */
+    /** A signal-driven lamp (redstone, copper). */
     static boolean signal(BlockState state) {
         return state.getBlock() instanceof RedstoneLampBlock || state.getBlock() instanceof CopperBulbBlock;
     }
 
     /**
-     * Лампа от сигнала сверяется с сигналом, как от обновления соседа (медная — и переключается по нему, как при
-     * установке). Другой блок на этом месте (лампу сломали, квартал снова погас) не трогается.
+     * Signal lamp reconciles with the signal as on neighbor update (copper also toggles from it, as on
+     * placement). Leave any other block at this position alone (lamp broken, district dark again).
      */
     static void resignal(ServerLevel level, BlockPos pos) {
         BlockState s = level.getBlockState(pos);
         if (signal(s)) s.handleNeighborChanged(level, pos, s.getBlock(), pos, false);
     }
 
-    /** В секциях есть погашенные лампы (по палитрам). */
+    /** Sections contain extinguished lamps (by palettes). */
     static boolean anyUnlit(LevelChunkSection[] sections) {
         for (LevelChunkSection section : sections) {
             if (section != null && !section.hasOnlyAir() && Palettes.contains(section.getStates(), GridLights::isUnlit)) return true;
@@ -263,7 +263,7 @@ public final class ChunkLights {
         return false;
     }
 
-    /** Блоки секции вне чанка (копия для сохранения): меняются прямо в палитре. Возвращает, сколько ламп переведено. */
+    /** Section blocks outside a chunk (save copy): change directly in palette. Returns number of lamps converted. */
     static int apply(PalettedContainer<BlockState> states, boolean dark) {
         if (!Palettes.contains(states, s -> GridLights.needs(s, dark))) return 0;
         int changed = 0;

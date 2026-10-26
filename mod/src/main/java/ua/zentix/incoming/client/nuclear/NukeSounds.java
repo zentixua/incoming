@@ -45,25 +45,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Звук ядерного удара (DESIGN-nuke §5). Свет приходит сразу, звук — с фронтом ударной волны: каждый тик клиент
- * сравнивает радиус фронта ({@link Detonation#frontRadius}) со своим расстоянием до эпицентра, и когда фронт
- * дошёл — удар, ветер за фронтом, звон стёкол, потом эхо от рельефа. Громкость и тембр — от давления у слушателя и
- * пути звука, а не от ванильного затухания; направление честное (точка в 3 блоках от уха в сторону эпицентра).
+ * Nuclear strike sound (DESIGN-nuke §5). Light arrives immediately, sound with the shock front: each client tick
+ * compares front radius ({@link Detonation#frontRadius}) with its epicenter distance; when front
+ * arrives, hit, post-front wind, glass, then terrain echo. Volume/timbre follow listener pressure and
+ * sound path rather than vanilla attenuation; true direction (point 3 blocks from ear toward epicenter).
  */
 public final class NukeSounds {
-    /** Вход боеголовки виден последние 3 с — беззвучно: на 7 км/с её звук придёт уже после взрыва. */
+    /** Warhead entry visible for last 3 s, silent: at 7 km/s its sound arrives after the explosion. */
     static final int REENTRY_TICKS = 60;
-    /** Сирены по разные стороны от места, где слушателя застала тревога, — как на улицах города, и их тон на полной скорости. */
+    /** Sirens on different sides of the listener's alarm-start position, like city streets, at native pitch. */
     private static final Vec3[] SIREN_AT = {new Vec3(140, 25, -90), new Vec3(-120, 25, 130)};
     private static final float[] SIREN_TONE = {1.0f, 0.98f};
-    /** Движок не дал сирене канал (звука нет, каналы заняты): через столько тиков попробовать снова. */
+    /** Engine refused a siren channel (silent, channels occupied): retry after this many ticks. */
     private static final int SIREN_RETRY = 20;
 
     @Nullable
     private static RainLoop rainLoop;
-    /** Сирены, пока у слушателя тревога; {@code null} — эта не звучит (выключенные сбегают сами). */
+    /** Sirens while listener has an alarm; {@code null} means this one is silent (disabled ones fade themselves). */
     private static final SirenSound[] SIRENS = new SirenSound[SIREN_AT.length];
-    /** Где слушателя застала тревога, в каком мире; {@code null} — тревоги нет. */
+    /** Listener position/world when alarm began; {@code null} means no alarm. */
     @Nullable
     private static Vec3 sirenOrigin;
     @Nullable
@@ -72,13 +72,13 @@ public final class NukeSounds {
 
     private NukeSounds() {}
 
-    /** Пуск МБР: у запустившего — рёв двигателя со стола. Сирена гражданской обороны — {@link #sirens}. */
+    /** ICBM launch: engine roar from the pad for the launcher player. Civil-defense siren: {@link #sirens}. */
     static void warning(S2C.NukeWarning w) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         long now = mc.level.getGameTime();
         if (w.mine() && now - w.launchTime() < 40) {
-            // мощность — закон РДТТ первой ступени из паспорта звука МБР, запись — старт со стола
+            // power from first-stage solid-rocket law in ICBM sound spec, recording is pad launch
             Noise.Rocket motor = WeaponSpec.NUKE.airframe().noise().motor();
             Sources.Source s = Sources.NUKE_LAUNCH;
             if (motor != null) {
@@ -88,8 +88,8 @@ public final class NukeSounds {
     }
 
     /**
-     * Петля чёрного дождя — после {@link NukeSky#tick}, который решает, идёт ли он у камеры; сирены. Огонь у подрывов в своих
-     * чанках ({@link FireWatch}) смотрит тик клиента.
+     * Black-rain loop after {@link NukeSky#tick}, which determines camera-local rain; sirens. Client tick inspects fire near
+     * detonations in local chunks ({@link FireWatch}).
      */
     static void tick() {
         Minecraft mc = Minecraft.getInstance();
@@ -100,7 +100,7 @@ public final class NukeSounds {
         sirens();
     }
 
-    /** Строка {@code SCENARIO}: эхо и горящий город каждого подрыва; пусто — подрывов нет. */
+    /** {@code SCENARIO} line: each detonation's echo/burning city; empty if no detonations. */
     public static String describe() {
         StringBuilder sb = new StringBuilder();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
@@ -113,10 +113,10 @@ public final class NukeSounds {
     }
 
     /**
-     * Сирены гражданской обороны воют, пока летит хоть одна МБР, о которой слушателю объявлена тревога: до подрыва
-     * (пакет подрыва снимает предупреждение), отбоя (сервер присылает предупреждения заново) или конца ожидания места
-     * удара; потом сбегают. Сирену, которую движок не держит (перезапуск звука, смена измерения, ползунок «Окружение»
-     * был в нуле), — запустить снова на её месте; пока ползунок в нуле — не запускать: снятый им звук движок не убирает.
+     * Civil-defense sirens wail while any ICBM for which listener was warned is flying: until detonation
+     * (detonation packet removes warning), cancel (server resends warnings), or impact-location
+     * wait deadline, then fade. Restart a siren not held by engine (sound restart, dimension change, Ambient slider
+     * was zero) at its position; do not start with slider zero: the engine does not remove the sound it rejected.
      */
     private static void sirens() {
         Minecraft mc = Minecraft.getInstance();
@@ -160,23 +160,23 @@ public final class NukeSounds {
         ua.zentix.incoming.client.sound.OwnSources.reset();
     }
 
-    /** Звуки одного подрыва у этого слушателя. */
+    /** One detonation's sounds at this listener. */
     static final class Schedule {
         /**
-         * С какого давления у уха прямой удар — в полную громкость, Па: 1 psi, как у обычных взрывов
-         * ({@link ua.zentix.incoming.client.sound.BlastMix#FULL_PA}). Громче динамики не сыграют — дальше
-         * громкость не растёт (кроме удара фронта вблизи, он и так перегружен).
+         * Ear pressure for full-volume direct hit, Pa: 1 psi, like conventional explosions
+         * ({@link ua.zentix.incoming.client.sound.BlastMix#FULL_PA}). Speakers cannot play louder; volume
+         * does not increase beyond this (except near-front hit, already overloaded).
          */
         static final double FULL_PA = 1000 * BlastModel.kpa(1);
-        /** Ветер, при котором петля урагана звучит в полную громкость, м/с: её запись — ураган (12 баллов Бофорта, от 33 м/с). */
+        /** Wind for full-volume hurricane loop, m/s: recorded hurricane (Beaufort 12, starting at 33 m/s). */
         static final double WIND_FULL = 33;
-        /** Петля ветра уходит, когда прошло столько положительных фаз: обратный ветер в разрежении стих. */
+        /** Wind loop ends after this many positive phases: reverse wind in rarefaction has died. */
         static final double WIND_PHASES = 5;
-        /** Тише — звук не запускать. */
+        /** Do not start quieter sounds. */
         private static final float AUDIBLE = 0.005f;
         /**
-         * Тон записей удара фронта: записи — в своей скорости, сдвиг не больше ±25 % ({@code SHIFT_MAX} сборки звуков,
-         * {@code NukeTonesTest}); три удара вблизи — разным тоном, чтобы копии одной записи не складывались в гребёнку.
+         * Front-hit recording pitch: native speed, shift no greater than ±25 % ({@code SHIFT_MAX} in sound build,
+         * {@code NukeTonesTest}); three nearby hits use different pitches so one recording's copies do not form a comb.
          */
         static final float BOOM_TONE = 1;
         static final float[] CRACK_TONES = {1, 0.92f, 0.85f};
@@ -184,37 +184,37 @@ public final class NukeSounds {
         private final ClientNuclear.Active a;
         private final Detonation d;
         private final boolean live;
-        /** Где фронт встретил слушателя и тело игрока. */
+        /** Where front met listener/player body. */
         private final FrontMeeting meeting = new FrontMeeting();
         private long arrivalTick;
-        /** Давление фронта у слушателя и у тела, psi. */
+        /** Front pressure at listener/body, psi. */
         private double psi, bodyPsi = -1;
-        /** Положительная фаза у слушателя, тики игры. */
+        /** Positive phase at listener, game ticks. */
         private double phaseTicks;
-        /** Наибольший ветер за фронтом у слушателя, м/с. */
+        /** Maximum post-front wind at listener, m/s. */
         private double windPeak;
         @Nullable
         private AmbientLoop wind;
-        /** Что дошло прямым ударом (для строки сценария): громкость, нарастание фронта, удар — своим источником или записью. */
+        /** Direct hit received (scenario line): volume, front rise, hit from own source or recording. */
         private float heard;
         private double riseMs;
         private boolean pulse;
-        /** Наибольший наклон тела ветром волны, °, и доля лучей к взрыву без стены (для строки сценария). */
+        /** Maximum wave-wind body lean, °, and unobstructed ray share toward explosion (scenario line). */
         private double swayPeak, swayOpen = -1;
-        /** Скорость наклона сразу за фронтом — удар фронта, °/с (для строки сценария). */
+        /** Immediate post-front lean rate, front jolt, °/s (scenario line). */
         private double swayRate;
-        /** Звуки волны у слушателя: он снова впереди фронта — они прочь ({@link #again}). */
+        /** Wave sounds at listener: removed if listener is ahead of front again ({@link #again}). */
         private final List<SoundInstance> shots = new ArrayList<>();
-        /** Стёкла и обломки, что снесла волна у слушателя, — к уху ({@link #clatter}); сыгранные — для строки сценария. */
+        /** Wave-removed glass/debris near listener, to ear ({@link #clatter}); played events for scenario line. */
         private final List<Ruins> ruinPackets = new ArrayList<>();
         private final Clatter clatter = new Clatter(new ua.zentix.incoming.sound.Spectrum[]{Sources.RUIN_GLASS.spectrum(), Sources.RUIN_CLATTER.spectrum()});
         private final List<Clatter.Play> plays = new ArrayList<>();
         private final int[] heardClatter = new int[Clatter.KINDS];
         private final double[] loudestClatter = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
-        /** Эхо от рельефа — только вживую. */
+        /** Terrain echo, live only. */
         @Nullable
         NukeEchoes echoes;
-        /** Горящий город — в любом возрасте подрыва. */
+        /** Burning city at any detonation age. */
         final NukeAfter after;
 
         Schedule(ClientNuclear.Active a) {
@@ -225,7 +225,7 @@ public final class NukeSounds {
             this.after = new NukeAfter(a);
         }
 
-        /** Подрыв убран (смена измерения, возрождение, перемотка повтора, срок): удар, эхо, ветер и петли горящего города — прочь. */
+        /** Detonation removed (dimension change, respawn, replay seek, expiry): remove hit, echo, wind and burning-city loops. */
         void stop() {
             clatter.clear();
             ruinPackets.clear();
@@ -237,33 +237,33 @@ public final class NukeSounds {
         }
 
         /**
-         * Сервер снёс блоки в чанке рядом: места руин — для поздних обрушений; стёкла и обломки — звуком, когда до места
-         * дойдёт фронт ({@link #clatter}).
+         * Server removed nearby chunk blocks: ruin positions for late collapses; glass/debris sound when front
+         * reaches their position ({@link #clatter}).
          */
         void debris(S2C.NukeDebris p) {
             after.ruins(p.pieces());
             if (live && !p.pieces().isEmpty()) ruinPackets.add(new Ruins(p, a.ticks(0)));
         }
 
-        /** Пакет обломков, пришедший в тик {@code at} (часы подрыва): звук считается, когда руины чанка дошли до клиента. */
+        /** Debris packet received at tick {@code at} (detonation clock): sound calculated when chunk ruins reach client. */
         private record Ruins(S2C.NukeDebris packet, double at) {}
 
         /**
-         * Сколько тиков после пакета обломков ждать руин чанка у клиента: сервер шлёт пакет в тике подмены, а сами руины
-         * (изменения секций) уходят игроку в следующем тике сервера — до них мир клиента у этих мест ещё прежний, и куда
-         * упадёт сорванное, по нему не узнать.
+         * Ticks after debris packet to wait for chunk ruins on client: server sends packet on replacement tick, ruins themselves
+         * (section changes) go to player next server tick; until then client world at those positions is unchanged, so it cannot
+         * tell where dislodged matter will land.
          */
         static final int RUINS_SETTLE = 2;
-        /** Ниже места сорванное ищет, куда упасть, не дальше стольких блоков (дальше — земля под эпицентром). */
+        /** Maximum blocks searched below dislodged position for landing (beyond: ground under epicenter). */
         static final int FALL_SCAN = 256;
 
         /**
-         * Звук разрушения чанка ({@link Clatter}): каждый снесённый блок — масса его вещества (блок — метр,
-         * {@link Shielding#density}: стекло — окно, 25 кг), брошенная напором со скоростью {@link Detonation#throwSpeed} и
-         * упавшая до первого блока под своим местом в мире после руин ({@link #landing}), — {@link Clatter#watts}. Места
-         * пакета — выборка из всех снесённых ({@link S2C.NukeDebris#weight}); окна ({@link Shielding#window}) и прочее — по
-         * отдельности, каждое — одним событием в середине по энергии, с прихода фронта туда. Руины позже фронта больше чем
-         * на секунду ({@link NukeDust#DEBRIS_LATE}) — без звука, как и без кусков.
+         * Chunk destruction sound ({@link Clatter}): each removed block is its material mass (block = meter,
+         * {@link Shielding#density}: glass is a 25 kg window), thrown by dynamic pressure at {@link Detonation#throwSpeed} and
+         * falling to first block beneath its position in the post-ruin world ({@link #landing}), giving {@link Clatter#watts}. Packet
+         * positions sample all removals ({@link S2C.NukeDebris#weight}); windows ({@link Shielding#window}) and others are separate,
+         * each one event at the energy-weighted center from front arrival there. Ruins more than one second after front
+         * ({@link NukeDust#DEBRIS_LATE}) have no sound, just as no pieces.
          */
         private void clatter(ClientLevel level, S2C.NukeDebris p) {
             double weight = p.weight(), now = a.ticks(0);
@@ -276,7 +276,7 @@ public final class NukeSounds {
                 int kind = Shielding.window(level, pos, piece.state()) ? Clatter.GLASS : Clatter.DEBRIS;
                 Vec3 c = Vec3.atCenterOf(pos);
                 double h = c.y - landing(level, pos), fall = Clatter.seconds(h);
-                // мощность — энергия за время падения; место и время — по мощности
+                // power is energy over fall time; position/time weighted by power
                 double w = weight * Clatter.watts(kg, 20 * Detonation.throwSpeed(d.dynamicPressureKpa(c)), h);
                 watts[kind] += w;
                 seconds[kind] += w * fall;
@@ -294,9 +294,9 @@ public final class NukeSounds {
         }
 
         /**
-         * Куда падает сорванное с места {@code pos}: верх первого блока под ним в мире клиента после руин (окно — на
-         * подоконник своего этажа, кладка рухнувшего дома — на завал или землю). Чанка нет или под местом пусто на
-         * {@link #FALL_SCAN} блоков — земля под эпицентром.
+         * Landing for matter dislodged at {@code pos}: top of first block below in client post-ruin world (window lands on its
+         * floor's sill, collapsed masonry on rubble/ground). No chunk or empty below for
+         * {@link #FALL_SCAN} blocks: ground under epicenter.
          */
         private double landing(ClientLevel level, BlockPos pos) {
             LevelChunk chunk = level.getChunkSource().getChunk(pos.getX() >> 4, pos.getZ() >> 4, false);
@@ -308,7 +308,7 @@ public final class NukeSounds {
             return d.groundY();
         }
 
-        /** Стёкла и обломки, чей звук дошёл до уха, — в игру ({@link Clatter}): запись вида, громкость — по уровню у уха. */
+        /** Glass/debris whose sound reached ear enters the game ({@link Clatter}): kind recording, volume from ear level. */
         private void clatterTick(Vec3 ear) {
             if (clatter.pending() == 0 && plays.isEmpty() && ruinPackets.isEmpty()) return;
             ClientLevel level = Minecraft.getInstance().level;
@@ -335,8 +335,8 @@ public final class NukeSounds {
         }
 
         /**
-         * Звук волны — у слушателя (камера), удар по ушам и ветер — у тела игрока ({@link FrontMeeting}): в камере
-         * снаряда, которая облетает место взрыва, ухо камеры получало удар вплотную у игрока за километры.
+         * Wave sound at listener (camera), ear hit/wind at player body ({@link FrontMeeting}): in a projectile
+         * camera orbiting the explosion, camera ear used to receive a close hit while player was kilometers away.
          */
         void tick() {
             after.tick();
@@ -345,7 +345,7 @@ public final class NukeSounds {
             LocalPlayer p = mc.player;
             Vec3 ear = mc.gameRenderer.getMainCamera().getPosition(), b = d.burst();
             clatterTick(ear);
-            // наблюдатель тела не имеет: глазами другой сущности игрок у клиента стоит, где начал смотреть, — тело у камеры
+            // spectator body is camera: client player viewing through another entity stays where viewing began
             Vec3 body = p == null ? null : p.isSpectator() ? ear : p.getEyePosition();
             long now = (long) a.ticks(0);
             int met = meeting.tick(d.frontRadius(now), ear.distanceTo(b), body == null ? Double.NaN : body.distanceTo(b),
@@ -363,12 +363,12 @@ public final class NukeSounds {
             }
             if ((met & FrontMeeting.HEARD) != 0) return;
             if (echoes != null) echoes.tick();
-            // стена пыли проходит мимо игрока секунды три
+            // dust wall passes player for about three seconds
             if (now - arrivalTick < 60 && psi >= 0.5) NukeDust.gust(a, ear, psi, (int) (now - arrivalTick));
             wind(ear, now - arrivalTick);
         }
 
-        /** Строка {@code SCENARIO}: что дошло прямым ударом; пусто — фронт ещё не дошёл. */
+        /** {@code SCENARIO} line: direct hit received; empty before front arrival. */
         String describe() {
             String ruins = String.format(java.util.Locale.ROOT, "clatter glass %d (%.0f dBA) debris %d (%.0f dBA) pending %d; ",
                     heardClatter[Clatter.GLASS], loudestClatter[Clatter.GLASS], heardClatter[Clatter.DEBRIS], loudestClatter[Clatter.DEBRIS], clatter.pending());
@@ -378,14 +378,14 @@ public final class NukeSounds {
         }
 
         /**
-         * Слушатель снова впереди фронта (камера вернулась к игроку, перенос): звуки волны у прежнего места, ветер и эхо —
-         * прочь, фронт он встретит снова.
+         * Listener ahead of front again (camera returned to player, teleport): remove old-position wave sounds, wind/echo;
+         * listener will meet front again.
          */
         private void again() {
             SoundManager sounds = Minecraft.getInstance().getSoundManager();
             for (SoundInstance s : shots) sounds.stop(s);
             shots.clear();
-            // здесь фронта не было: пыль у глаза — с новой встречей
+            // front has not been here: eye-local dust waits for new meeting
             psi = 0;
             OwnSources.stop(this);
             if (wind != null) wind.end();
@@ -396,7 +396,7 @@ public final class NukeSounds {
             }
         }
 
-        /** Звук самой волны у слушателя; бьёт она в тот же тик и по ушам игрока ({@code hit}) — его слышно, как до неё. */
+        /** Wave sound at listener; if player ears are hit this tick too ({@code hit}), heard as before the wave. */
         private SoundInstance wave(SoundInstance sound, boolean hit) {
             if (hit) Deafness.before(sound);
             shots.add(sound);
@@ -404,14 +404,14 @@ public final class NukeSounds {
         }
 
         /**
-         * Фронт у слушателя. Громкость — по пиковому давлению у уха и пути звука, как у обычных взрывов
-         * ({@link Outdoor#pressureVolume}: холм между, зона тени днём, дождь), всё по «Общей громкости». Вдали (меньше
-         * 1 psi) удар фронта — дорожка из модели ({@link BlastPulse}: один скачок, его крутизна по давлению,
-         * положительная фаза модели, {@link Detonation#positivePhaseSeconds}) своим источником с начала прямого удара, и запись далёкого огромного
-         * взрыва ({@code nuke.boom_far}) — раскат; эхо от рельефа повторяет её ({@link NukeEchoes}). Вблизи — оглушающий
-         * удар (несколько источников вместе — одному OpenAL не даёт громче единицы). Шум ветра за фронтом, стёкла (пыль у
-         * глаза — по голове стены, {@link NukeDust#veil}). Слух и наклон — у тела ({@link #hit}); {@code hit} — фронт в этот
-         * тик и у тела: звуки волны слышно, как до неё.
+         * Front at listener. Volume follows ear peak pressure and sound path, like conventional explosions
+         * ({@link Outdoor#pressureVolume}: intervening hill, daytime shadow, rain), all under Master volume. Far away (below
+         * 1 psi), front hit is a model track ({@link BlastPulse}: one shock, pressure-dependent rise,
+         * model positive phase, {@link Detonation#positivePhaseSeconds}) on own source from direct-hit onset, while a distant huge
+         * explosion recording ({@code nuke.boom_far}) supplies roll; terrain echo repeats it ({@link NukeEchoes}). Nearby: deafening
+         * hit (several sources together; OpenAL limits one to unity). Post-front wind noise, glass (eye-local
+         * dust follows wall head, {@link NukeDust#veil}). Hearing/lean belong to body ({@link #hit}); {@code hit} means front reaches
+         * body this tick too: wave sounds heard as before it.
          */
         private void arrive(Vec3 ear, boolean hit) {
             Minecraft mc = Minecraft.getInstance();
@@ -424,28 +424,28 @@ public final class NukeSounds {
             float highs = path == null ? 1 : BlastSounds.highs(path);
             heard = v;
             long boom = echoes == null ? d.seed() : echoes.seed;
-            // эхо и удар фронта ждут настоящего начала прямого удара: ожидание — до play (с готовым буфером звук стартует сразу)
+            // echo/front hit wait for actual direct-hit onset: anchor before play (ready buffer starts sound immediately)
             SoundInstance direct = ClientSounds.loudShot(ModSounds.NUKE_BOOM_FAR.get(), b, v, BOOM_TONE, boom, 1, highs);
-            // звуки самой волны слышит ухо, каким оно было до неё (слух — после, hurtEars)
+            // wave sounds heard with pre-wave hearing (hearing damage afterward, hurtEars)
             wave(direct, hit);
             if (echoes != null) echoes.expect(arrivalTick, direct);
             if (v >= AUDIBLE) {
                 OwnSources.Anchor start = OwnSources.anchor(this, direct, a::ticks, arrivalTick);
-                // сам скачок с положительной фазой модели — на любой дальности: величину удара даёт закон, а не замедленная
-                // запись. Холм и зона тени срезают верха и у скачка; воздух — нет: крутизну скачка держит сама волна
+                // shock itself with model positive phase at any distance: law supplies hit magnitude, not a slowed
+                // recording. Hills/shadow cut shock highs too; air does not, since wave itself sustains shock rise
                 float front = path == null || !IncomingConfig.CLIENT.soundMuffling.get() ? 1 : Outdoor.highs(path);
                 riseMs = 1000 * BlastPulse.riseSeconds(pa);
                 pulse = OwnSources.play(this, start, 0, Math.atan2(b.z - ear.z, b.x - ear.x), v,
                         BlastPulse.render(pa, phaseTicks / 20, front), BlastPulse.RATE, true, hit);
                 if (psi >= 1) {
-                    // вблизи — удар фронта записями: лязг и грохот в упор с трёх сторон (несколько источников вместе —
-                    // одному OpenAL не даёт громче единицы)
+                    // nearby front hit from recordings: point-blank clang/crash from three sides (several sources together;
+                    // OpenAL limits one to unity)
                     Vec3 side = new Vec3(b.z - ear.z, 0, ear.x - b.x).normalize().scale(40);
                     wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b, v, CRACK_TONES[0]), hit);
                     wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.add(side), v, CRACK_TONES[1]), hit);
                     wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK.get(), b.subtract(side), v, CRACK_TONES[2]), hit);
                 } else if (!pulse) {
-                    // своих источников нет (заняты, OpenAL не готов) — запись удара
+                    // no own sources (occupied, OpenAL not ready): recorded hit
                     wave(ClientSounds.atEarLoud(ModSounds.NUKE_CRACK_FAR.get(), b, v, 1, boom), hit);
                 }
                 ClientSounds.start(direct);
@@ -459,8 +459,8 @@ public final class NukeSounds {
         }
 
         /**
-         * Фронт у тела игрока: слух ({@link #hurtEars}) и наклон ({@link #sway}) — по месту игрока, его давлению, пути к
-         * нему и его фазе, а не по камере.
+         * Front at player body: hearing ({@link #hurtEars})/lean ({@link #sway}) use player position, pressure, path
+         * and phase rather than camera.
          */
         private void hit(LocalPlayer p, Vec3 body) {
             bodyPsi = d.psi(body);
@@ -469,11 +469,11 @@ public final class NukeSounds {
         }
 
         /**
-         * Слух: энергия слышимого у уха игрока ({@link HearingModel#exposure(double, double)}: волна с положительной фазой
-         * модели {@code tPlus}, с; у фазы в доли секунды и больше — энергия скачка) — за вычетом того, что съел путь: холм и зона
-         * тени гасят давление и сильнее верха, а A-энергия фронта — на 1–3 кГц, поэтому на потерю низов и долю верхов
-         * ({@link Outdoor#pressureHighs}: без земли — у волны отражение от неё уже в давлении). Перепонки — по давлению с
-         * потерей пути. В доме — как снаружи: окна давно выбиты (0,34 psi), волна входит в дом.
+         * Hearing: audible energy at player ear ({@link HearingModel#exposure(double, double)}: wave with model positive phase
+         * {@code tPlus}, s; phase fractions of a second or longer uses shock energy), minus path loss: hill/shadow
+         * attenuate pressure and highs more strongly; front A-energy is at 1–3 kHz, so use low loss plus high share
+         * ({@link Outdoor#pressureHighs}: excluding ground, whose reflection is already in wave pressure). Eardrums use pressure with
+         * path loss. Indoors same as outdoors: windows broke long ago (0.34 psi), wave enters house.
          */
         private void hurtEars(double pa, double tPlus, Outdoor.@Nullable Path path) {
             double lost = path == null ? 0 : Outdoor.pressureLoss(path), highs = path == null ? 1 : Outdoor.pressureHighs(path);
@@ -481,20 +481,20 @@ public final class NukeSounds {
         }
 
         /**
-         * Фронт бьёт стоящего, ветер за ним толкает: тело отклоняется по ветру и выпрямляется ({@link BodySway}), камера —
-         * с ним ({@link CameraShake#sway}); удар — с прихода фронта к телу, а не с тика, в котором его заметили. Давление —
-         * фронта у тела, напор — скоростной напор за фронтом вдоль земли у тела
-         * ({@link Detonation#dynamicPressureKpa}: под воздушным подрывом — только его доля вдоль земли), {@code phase} —
-         * положительная фаза у тела, тики. За стеной, домом или холмом в сторону взрыва (лучи {@link SoundFilters#openRays})
-         * — в её ветровой тени: удар и ветер — по доле открытых лучей (оценка: фронт огибает преграду, но толкает уже не
-         * вдоль земли). Кого ветер несёт целиком (верхом, вплавь, в полёте), того
-         * не качает — бросок считает сервер; в прыжке наклона нет, пока игрок не встанет ({@link CameraShake#standing}).
+         * Front hits standing player, post-front wind pushes: body leans downwind then straightens ({@link BodySway}), camera follows
+         * ({@link CameraShake#sway}); jolt begins at body front arrival, not the tick detecting it. Pressure is
+         * front pressure at body; dynamic pressure is post-front along-ground dynamic pressure at body
+         * ({@link Detonation#dynamicPressureKpa}: only along-ground share beneath airburst); {@code phase} is
+         * body positive phase, ticks. Behind a wall/house/hill toward explosion (rays {@link SoundFilters#openRays}),
+         * in its wind shadow: jolt/wind scale by open-ray share (est.: front bends around obstruction but no longer pushes
+         * along ground). Bodies carried entirely by wind (riding, swimming, flying)
+         * do not sway; server computes throw. No lean while jumping until standing ({@link CameraShake#standing}).
          */
         private void sway(LocalPlayer p, Vec3 body, double phase) {
             if (CameraShake.carried(p)) return;
             Vec3 b = d.burst();
             swayOpen = SoundFilters.openRays(body, Math.atan2(b.z - body.z, b.x - body.x));
-            // фронт прошёл тело между прошлым тиком и этим: удар — с его прихода
+            // front crossed body between previous/current tick: jolt starts at arrival
             double late = a.ticks(0) - d.arrivalTicks(body.distanceTo(b));
             double[] tilt = CameraShake.sway(1000 * d.overpressureKpa(body), 1000 * d.dynamicPressureKpa(body), swayOpen, phase / 20,
                     d.positivePhaseSeconds(body), late, body.subtract(b), p.getYRot(), false).body();
@@ -503,10 +503,10 @@ public final class NukeSounds {
         }
 
         /**
-         * Ветер за фронтом у уха. Воздух за слабой волной идёт за давлением (u = p/ρc): порыв со фронтом, спад за
-         * положительную фазу и слабый обратный ветер в разрежении. Шум ветра у уха — по скоростному напору (давление
-         * шума ∝ ρu², Strasberg 1988, JASA 83), в игре — половина его децибел, громкость ∝ u. Ветер — у самого уха:
-         * без затухания по дороге.
+         * Post-front wind at ear. Air behind a weak wave follows pressure (u = p/ρc): gust with front, decay over
+         * positive phase and weak reverse wind in rarefaction. Ear wind noise follows dynamic pressure (noise
+         * pressure ∝ ρu², Strasberg 1988, JASA 83), in game half its decibels, volume ∝ u. Wind is at the ear:
+         * no path attenuation.
          */
         private void wind(Vec3 ear, long ticks) {
             if (wind == null) return;
@@ -520,9 +520,9 @@ public final class NukeSounds {
         }
 
         /**
-         * Путь звука от подрыва до уха ({@link Outdoor}): кромка рельефа на прямой от источника, источник — точка
-         * подрыва, у наземного — над землёй на 0,4 радиуса шара (как у обычных взрывов в {@code FarBlasts}); земля под
-         * эпицентром — вода или грунт поверхности, если клиент знает чанк.
+         * Sound path from detonation to ear ({@link Outdoor}): terrain edge along source line; source is detonation
+         * position, for surface bursts 0.4 sphere radii above ground (like conventional explosions in {@code FarBlasts}); ground under
+         * epicenter is water or surface soil if client knows chunk.
          */
         @Nullable
         private Outdoor.Path path(Vec3 ear, double dist) {
@@ -543,7 +543,7 @@ public final class NukeSounds {
         }
     }
 
-    /** Шум чёрного дождя: пока игрок под ним, гаснет плавно. */
+    /** Black-rain noise: while player is beneath it, fades smoothly. */
     private static final class RainLoop extends AbstractTickableSoundInstance {
         RainLoop() {
             super(ModSounds.NUKE_RAIN.get(), SoundSource.WEATHER, SoundInstance.createUnseededRandom());

@@ -14,6 +14,7 @@ public class WorldEngine {
     public boolean live = true;
     /** Living world, but the section is not readable (storage failure). */
     public boolean broken;
+    public Error readFailure;
     public int refs, acquired, released;
 
     public static String key(int lvl, int x, int y, int z) {
@@ -22,6 +23,7 @@ public class WorldEngine {
 
     public WorldSection acquireIfExists(int lvl, int x, int y, int z) {
         if (!live) throw new IllegalStateException("World is not live");
+        if (readFailure != null) throw readFailure;
         if (broken) throw new IllegalStateException("storage failure");
         long[] data = sections.get(key(lvl, x, y, z));
         if (data == null) return null;

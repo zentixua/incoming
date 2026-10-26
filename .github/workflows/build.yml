@@ -1,15 +1,15 @@
-# Сборка, юнит-тесты и GameTest (сервер с Create, Sable, Aeronautics с Modrinth); jar — в артефактах запуска.
-# Проверяется то, что изменилось: правка только инструментов (tools/, кроме модов для GameTest) и текстов (docs/, *.md)
-# мод не собирает и GameTest не гоняет (разбор повторов tools/replayscan и стенд сцен tools/stand — своя сборка и
-# юнит-тесты); правка мода,
-# модов GameTest или самого CI — проверка целиком. GameTest идёт
-# частями на шести машинах сразу (devtest GameTestShards), сборка и юнит-тесты — рядом. Итог всех проверок — «Итог».
-# Сборка «Open Skies» и мост ведущего Almighty — в своих репозиториях (zentixua/open-skies, zentixua/almighty).
-# Ручной запуск на main (или на ветке claude/release-*, чтобы выпустить ровно проверенный коммит) с release=true:
-# проверка целиком, после неё — релиз v<mod_version> на GitHub с этим jar и заметками из docs/releases/<mod_version>.md.
+# Build, unit tests and GameTest (server with Create, Sable, Aeronautics from Modrinth); jar in run artifacts.
+# Check changed areas: tools-only (tools/, except GameTest mods) and text-only (docs/, *.md) edits
+# skip mod build/GameTest (tools/replayscan replay analysis and tools/stand scene bench have their own build and
+# unit tests); changes to mod,
+# GameTest mods or CI run full checks. GameTest runs
+# in shards on six machines alongside build/unit tests (devtest GameTestShards). Combined result: “Итог”.
+# Open Skies pack and Almighty game-master bridge have separate repositories (zentixua/open-skies, zentixua/almighty).
+# Manual run on main (or claude/release-* to release exactly a tested commit) with release=true:
+# full checks, then GitHub release v<mod_version> with this jar and docs/releases/<mod_version>.md notes.
 name: build
 
-# Каждый коммит проверяется один раз: ветки — запуском pull_request (он и решает слияние), main — push.
+# Each commit checked once: branches via pull_request (decides merge), main via push.
 on:
   push:
     branches: [main]
@@ -17,24 +17,24 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Выпустить релиз v<mod_version> (только с main или claude/release-*)
+        description: Publish release v<mod_version> (only main or claude/release-*)
         type: boolean
         default: false
-      # повтор нестабильного теста на GitHub, а не на ноутбуке: каждая из шести машин гоняет подходящие партии
-      # gametest_repeat раз, каждый раз в новом мире (tools/ci_repeat.sh запускает и сводит итог)
+      # Repeat flaky test on GitHub, not laptop: each of six machines runs matching batches
+      # gametest_repeat times, each in a new world (tools/ci_repeat.sh runs and summarizes).
       gametest_only:
-        description: Только партии GameTest, чьё имя целиком подходит под регулярное выражение (повтор флака), пусто — все
+        description: Only GameTest batches whose full name matches regex (flake rerun); empty — all
         type: string
         default: ''
       gametest_repeat:
-        description: Сколько раз прогнать эти партии на каждой из шести машин
+        description: Number of runs for these batches on each of six machines
         type: number
         default: 1
 
-# пуш отменяет прежнюю сборку той же ветки; ручной запуск (релиз) — в своей группе, пуш в main его не отменит.
-# Пуш в main — тоже в своей группе: следующий пуш (часто только tools/ или docs/, мод он не собирает) отменял бы сборку
-# прошлого, и у коммита main с правкой мода не оставалось бы jar (база стенда сцен — последний jar main: 25.10 так
-# отменились сборки #466, #468 и #469, и стенд сравнивал с main без них)
+# Push cancels previous build on same branch; manual release has its own group, unaffected by main push.
+# Main pushes have separate groups too: next push (often tools/docs only, no mod build) would cancel previous
+# build, leaving mod-changing main commit without a jar (scene bench base is latest main jar: on 25.10 this
+# canceled builds #466, #468 and #469, making bench compare against main without them).
 concurrency:
   group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.run_id) || github.ref == 'refs/heads/main' && format('main-{0}', github.sha) || format('build-{0}', github.ref) }}
   cancel-in-progress: true
@@ -43,8 +43,8 @@ permissions:
   contents: read
 
 jobs:
-  # Что изменил коммит: PR — против базы (у слияния PR, которое проверяет CI, первый родитель — база), push в main —
-  # против прежнего main. Ручной запуск и неизвестная база — проверка целиком; незнакомый путь — тоже.
+  # Commit changes: PR against base (first parent of CI-tested merge is base), main push
+  # against previous main. Manual run or unknown base: full checks; unknown paths too.
   changes:
     name: Что изменилось
     runs-on: ubuntu-latest
@@ -64,7 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/release_checks.py preflight
-      - name: Что изменилось
+      - name: Changed paths
         id: diff
         env:
           BEFORE: ${{ github.event.before }}
@@ -76,22 +76,22 @@ jobs:
           esac
           if [ -z "$base" ]; then
             mod=true; rig=true; replayscan=true; lookgate=true; stand=true
-            echo "Проверка целиком ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Full checks ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
             mod=false; rig=false; replayscan=false; lookgate=false; stand=false
-            # --no-renames: перенос из mod/ — это и удаление в mod/
+            # --no-renames: moving out of mod/ is also deletion within mod/.
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
               case "$f" in
                 '') ;;
                 mod/gradlew|mod/gradle/*) mod=true; replayscan=true; stand=true ;;
-                # строки лога пробы читает tools/look_gate/check.py
+                # Probe log lines parsed by tools/look_gate/check.py.
                 mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
                 tools/release_checks.py|tools/prepare_publish.py|tools/test_release_checks.py) mod=true; rig=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
-                # копию инстанса для клиентов шлагбаума готовит prod_client.py (без простоя Dynamic FPS — тест там же)
+                # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/prod_client.py) lookgate=true ;;
                 tools/stand/*) stand=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true ;;
@@ -99,7 +99,7 @@ jobs:
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Мод (сборка, юнит-тесты, GameTest): $mod; остановка проверок: $rig; разбор повторов: $replayscan; шлагбаум: $lookgate; стенд: $stand"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
@@ -124,15 +124,15 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      # кэш Gradle на main пишет только эта задача (части GameTest его читают): шесть копий по ~1,3 ГБ вытесняли бы
-      # друг друга из кэша репозитория
+      # Only this job writes main's Gradle cache (GameTest shards read it): six ~1.3 GB copies would
+      # evict each other from repository cache.
       - uses: gradle/actions/setup-gradle@v5
 
-      # запуск GameTest (classpath сервера, ассеты) готовится и здесь: что задача не тронула, setup-gradle из кэша убирает
+      # Prepare GameTest launch (server classpath, assets) here too: setup-gradle removes untouched task files from cache.
       - name: Store draft regression checks
         run: python3 -m unittest discover -s ../.github/scripts -p 'test_store*.py' -v
 
-      - name: Сборка и юнит-тесты
+      - name: Build and unit tests
         run: ./gradlew build prepareGameTestServerRun --console=plain
 
       - uses: actions/upload-artifact@v6
@@ -141,7 +141,7 @@ jobs:
           path: mod/build/libs/*.jar
           if-no-files-found: error
 
-      - name: Отчёты при падении
+      - name: Failure reports
         if: failure()
         uses: actions/upload-artifact@v6
         with:
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.gametest_only != '' && 120 || 25 }}
     strategy:
-      # упавшая часть не обрывает остальные: все падения — за один прогон
+      # Failed shard does not stop others: all failures in one run.
       fail-fast: false
       matrix:
         part: [1, 2, 3, 4, 5, 6]
@@ -213,7 +213,7 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Моды для GameTest
+      - name: GameTest mods
         uses: actions/cache@v5
         with:
           path: mod/run/ci-mods
@@ -231,8 +231,8 @@ jobs:
             grep -E 'All [0-9]+ required tests passed' run/gametest/logs/latest.log
             exit
           fi
-          # повтор: все подходящие партии на этой машине, REPEAT раз, каждый в новом мире; падение не обрывает повторы;
-          # выражение, под которое не подошла ни одна партия, — тоже падение («All 0 required tests passed» не считается)
+          # Repeat: all matching batches on this machine, REPEAT times, each in a new world; failures do not stop repeats;
+          # regex matching no batches also fails (“All 0 required tests passed” does not count).
           passed=0
           for i in $(seq "$REPEAT"); do
             if ./gradlew runGameTestServer -PmcModsDir=run/ci-mods "-PgametestOnly=$ONLY" --console=plain --quiet \
@@ -246,7 +246,7 @@ jobs:
           echo "GameTest repeat: «$ONLY» passed $passed of $REPEAT (part $SHARD)" | tee -a "$GITHUB_STEP_SUMMARY"
           [ "$passed" = "$REPEAT" ]
 
-      - name: Логи при падении
+      - name: Failure logs
         if: failure()
         uses: actions/upload-artifact@v6
         with:
@@ -254,9 +254,9 @@ jobs:
           path: mod/run/gametest/logs/
           if-no-files-found: ignore
 
-  # процессы стенда и мультиплеера гасятся целиком, без сирот (tools/rig_procs.sh), ~4 с; видеокарта — у одной сессии,
-  # ждущие — по очереди (tools/gpu_lease.sh); песочница — время до эффекта, моды режима (tools/test_sandbox.sh); без Java
-  # и модов
+  # Rig/multiplayer processes stop entirely without orphans (tools/rig_procs.sh), ~4 s; GPU belongs to one session,
+  # waiters in order (tools/gpu_lease.sh); sandbox effect latency/mode mods (tools/test_sandbox.sh); no Java
+  # or mods.
   rig:
     name: Остановка проверок
     needs: changes
@@ -265,19 +265,19 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - name: Остановка проверок
+      - name: Rig shutdown
         timeout-minutes: 2
         run: tools/test_rig_procs.sh
-      - name: Аренда видеокарты
+      - name: GPU lease
         timeout-minutes: 2
         run: tools/test_gpu_lease.sh
-      - name: Песочница без клиента
+      - name: Sandbox without client
         timeout-minutes: 1
         run: tools/test_sandbox.sh
       - name: Release workflow regression checks
         run: python3 -m unittest discover -s tools -p 'test_release_checks.py' -v
 
-  # разбор повторов Flashback (tools/replayscan): сборка мода разбора и юнит-тесты, без игры
+  # Flashback replay analysis (tools/replayscan): analysis-mod build and unit tests, no game.
   replayscan:
     name: Разбор повторов
     needs: changes
@@ -290,15 +290,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      # кэш Gradle пишет только сборка мода (те же NeoForge и Minecraft)
+      # Only mod build writes Gradle cache (same NeoForge and Minecraft).
       - uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
-      - name: Сборка и юнит-тесты
+      - name: Build and unit tests
         run: mod/gradlew -p tools/replayscan build --console=plain
 
-  # прогон шлагбаума картинки и звука годен, только если слух без оглушения и сцены — во времени игры эталона
-  # (tools/look_gate/check.py, по логу клиента); без Java и игры, секунды
+  # Visual/audio look-gate run valid only with undeafened hearing and scenes at reference game time
+  # (tools/look_gate/check.py, from client log); no Java/game, seconds.
   lookgate:
     name: Шлагбаум
     needs: changes
@@ -307,11 +307,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - name: Годность прогона шлагбаума
+      - name: Look-gate run validity
         run: python3 -m unittest discover -s tools/look_gate -p 'test_*.py' -v
 
-  # стенд сцен (tools/stand): сборка мода-обвязки и её юнит-тесты, разбор, план и шлагбаум (test_gate.py) — без игры;
-  # сам стенд снимается на ноутбуке (stand.py pr), его вердикт — статус коммита «Стенд сцен», не эта задача
+  # Scene bench (tools/stand): harness-mod build/unit tests, parsing, planning and gate (test_gate.py), no game;
+  # bench itself captured on laptop (stand.py pr), verdict is “Стенд сцен” commit status, not this job.
   stand:
     name: "Стенд: сборка и шлагбаум"
     needs: changes
@@ -324,28 +324,28 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      # кэш Gradle пишет только сборка мода (те же NeoForge и Minecraft)
+      # Only mod build writes Gradle cache (same NeoForge and Minecraft).
       - uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
-      - name: Сборка обвязки и её юнит-тесты
+      - name: Harness build and unit tests
         run: mod/gradlew -p tools/stand build --console=plain
-      - name: Разбор, план и шлагбаум
+      - name: Parsing, planning and look gate
         run: python3 -m unittest discover -s tools/stand -p 'test_*.py' -v
 
-  # одна отметка на коммит: всё, что изменение требовало, прошло; ненужное пропущено
+  # One status per commit: everything required passed; unnecessary checks skipped.
   ci:
     name: Итог
     needs: [changes, build, gametest, clean_install, rig, replayscan, lookgate, stand]
-    # и после упавших, пропущенных и отменённых: пропущенная задача засчитывается успехом, и «Итог», пропущенный
-    # в отменённом прогоне, был бы зелёным без сборки и GameTest — поэтому в отменённом прогоне он идёт и падает
+    # Runs after failed/skipped/canceled jobs too: skipped jobs count as success, so “Итог” skipped
+    # in a canceled run would be green without build/GameTest — instead it runs and fails in canceled runs.
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Нужные проверки прошли
+      - name: Required checks passed
         run: |
-          echo 'что изменилось: ${{ needs.changes.result }}; сборка: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; остановка проверок: ${{ needs.rig.result }}; разбор повторов: ${{ needs.replayscan.result }}; шлагбаум: ${{ needs.lookgate.result }}; стенд: ${{ needs.stand.result }}'
+          echo 'changes: ${{ needs.changes.result }}; build: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
             [ '${{ contains(needs.*.result, 'skipped') }}' = false ]
@@ -365,7 +365,7 @@ jobs:
         with:
           name: incoming-jar
           path: mod/build/libs
-      - name: Релиз
+      - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -44,6 +44,7 @@ public final class DhChunks {
 
     /** Запуск сервера (в одиночной игре — каждый мир): проверить DH заново, ошибки прошлого мира не в счёт. */
     public static void onServerStarting(ServerStartingEvent e) {
+        DhUpdates.resetWaiting();
         state = 0;
         logged = false;
         refused = false;
@@ -61,7 +62,7 @@ public final class DhChunks {
      * в следующем мире — мод туда не лезет.
      */
     public static void onServerStopped(ServerStoppedEvent e) {
-        DhUpdates.forgetLevels();
+        DhUpdates.resetWaiting();
         if (!available()) return;
         try {
             Api.forgetGenerators();

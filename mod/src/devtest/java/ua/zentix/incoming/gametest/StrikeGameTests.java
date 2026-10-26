@@ -120,6 +120,8 @@ import java.util.concurrent.locks.LockSupport;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StrikeGameTests {
+    /** Preserve the fixture height formerly returned by Level.getSeaLevel(), even in flat worlds. */
+    private static final int REFERENCE_SEA_LEVEL = 63;
     /** Цель на полосе: дёрн в 200 блоках от начала (дальше рельеф «видит» стену полигона). */
     private static final BlockPos RUNWAY_TARGET = new BlockPos(16, 3, 200);
     /**
@@ -3287,7 +3289,7 @@ public final class StrikeGameTests {
         gameSpeed(h);
         // далеко за площадкой: вокруг ничего не загружено, бомба сразу летит вне мира
         BlockPos origin = FarSite.MISS_BELOW_GROUND.at(h);
-        Vec3 from = new Vec3(origin.getX() + 0.5, level.getSeaLevel() + 200, origin.getZ() + 0.5);
+        Vec3 from = new Vec3(origin.getX() + 0.5, REFERENCE_SEA_LEVEL + 200, origin.getZ() + 0.5);
         Vec3 behind = from.add(0, -150, -300);
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
         bomb.drop(from, BomberEntity.levelVelocity(0), behind, null, null);
@@ -3330,7 +3332,7 @@ public final class StrikeGameTests {
         // место падения грузится в фоне, пока бомба ждёт: время ожидания — игровое
         gameSpeed(h);
         BlockPos origin = FarSite.BOMB_RISEN_SURFACE.at(h);
-        Vec3 from = new Vec3(origin.getX() + 0.5, level.getSeaLevel() + 200, origin.getZ() + 0.5);
+        Vec3 from = new Vec3(origin.getX() + 0.5, REFERENCE_SEA_LEVEL + 200, origin.getZ() + 0.5);
         Vec3 behind = from.add(0, -150, -300);
         int sea = level.getChunkSource().getGenerator().getSeaLevel();
         // «рельеф», которого вне мира не видно: плита на 80 блоков выше моря генератора
@@ -3629,7 +3631,7 @@ public final class StrikeGameTests {
         // пауз) идёт дольше срока теста — снаряд ждал бы района у цели («ещё летит, до цели 65»); соседи — готовые,
         // но не тикающие
         generateNow(level, chunk);
-        Vec3 aim = new Vec3(chunk.getMiddleBlockX() + 0.5, level.getSeaLevel() + 140, chunk.getMiddleBlockZ() + 0.5);
+        Vec3 aim = new Vec3(chunk.getMiddleBlockX() + 0.5, REFERENCE_SEA_LEVEL + 140, chunk.getMiddleBlockZ() + 0.5);
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
         rocket.launchFrom(aim.add(-300, -140, 0), new Target.Point(aim), aim, null);
         VirtualFlights.launch(level, rocket);
@@ -3776,7 +3778,7 @@ public final class StrikeGameTests {
         ServerLevel level = h.getLevel();
         Vec3 rail = Vec3.atCenterOf(h.absolutePos(RUNWAY_TARGET)).add(0, 3, 0);
         ChunkPos aimChunk = new ChunkPos(BlockPos.containing(rail).offset(250, 0, 0));
-        Vec3 aim = new Vec3(aimChunk.getMiddleBlockX() + 0.5, level.getSeaLevel() + 60, aimChunk.getMiddleBlockZ() + 0.5);
+        Vec3 aim = new Vec3(aimChunk.getMiddleBlockX() + 0.5, REFERENCE_SEA_LEVEL + 60, aimChunk.getMiddleBlockZ() + 0.5);
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
         rocket.placeInTube(rail, -90, LauncherEntity.elevation(WeaponType.ROCKET), 5, 0, new Target.Point(aim), aim, null);
         level.addFreshEntity(rocket);
@@ -3907,7 +3909,7 @@ public final class StrikeGameTests {
         ServerLevel level = h.getLevel();
         Vec3 rail = Vec3.atCenterOf(h.absolutePos(RUNWAY_TARGET)).add(0, 3, 0);
         ChunkPos aimChunk = new ChunkPos(BlockPos.containing(rail).offset(distance, 0, 0));
-        Vec3 aim = new Vec3(aimChunk.getMiddleBlockX() + 0.5, level.getSeaLevel() + 60, aimChunk.getMiddleBlockZ() + 0.5);
+        Vec3 aim = new Vec3(aimChunk.getMiddleBlockX() + 0.5, REFERENCE_SEA_LEVEL + 60, aimChunk.getMiddleBlockZ() + 0.5);
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
         int ready = 5;
         rocket.placeInTube(rail, -90, LauncherEntity.elevation(WeaponType.ROCKET), ready, 0, new Target.Point(aim), aim, null);

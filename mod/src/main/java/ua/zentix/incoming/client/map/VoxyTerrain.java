@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.fml.ModList;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.compat.HandleFailures;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -206,8 +207,10 @@ final class VoxyTerrain implements TerrainSource {
             Engine was = engine;
             if (e == null) engine = null;
             else if (was == null || was.engine != e) engine = new Engine(e, (Object) a.mapper.invokeExact(e));
-        } catch (Throwable t) {
+        } catch (Exception | LinkageError t) {
             fail(t, null);
+        } catch (Throwable t) {
+            throw HandleFailures.propagate(t);
         }
         return engine;
     }
@@ -222,7 +225,6 @@ final class VoxyTerrain implements TerrainSource {
             disable(t);
             return;
         }
-        if (t instanceof Error err) throw err;
         if (t instanceof IllegalStateException && in != null && !live(in)) {
             if (engine == in) engine = null;
             return;
@@ -239,9 +241,10 @@ final class VoxyTerrain implements TerrainSource {
         if (a == null) return false;
         try {
             return (boolean) a.isLive.invokeExact(e.engine);
-        } catch (Throwable t) {
-            if (t instanceof Error err && !(t instanceof LinkageError)) throw err;
+        } catch (Exception | LinkageError t) {
             return false;
+        } catch (Throwable t) {
+            throw HandleFailures.propagate(t);
         }
     }
 
@@ -258,8 +261,7 @@ final class VoxyTerrain implements TerrainSource {
             // Voxy block list grows on its thread without a lock: an ID not yet visible is air; ask later.
             return 0;
         } catch (Throwable ex) {
-            if (ex instanceof Error err) throw err;
-            throw new java.lang.reflect.UndeclaredThrowableException(ex);
+            throw HandleFailures.propagate(ex);
         }
         synchronized (e) {
             t = e.infos;
@@ -302,9 +304,11 @@ final class VoxyTerrain implements TerrainSource {
             } finally {
                 a.releaseRef.invokeExact(e.engine);
             }
-        } catch (Throwable t) {
+        } catch (Exception | LinkageError t) {
             fail(t, e);
             return null;
+        } catch (Throwable t) {
+            throw HandleFailures.propagate(t);
         }
         int[] columns = s.finish();
         boolean any = false;
@@ -331,7 +335,7 @@ final class VoxyTerrain implements TerrainSource {
         } catch (RuntimeException | Error t) {
             throw t;
         } catch (Throwable t) {
-            throw new java.lang.reflect.UndeclaredThrowableException(t);
+            throw HandleFailures.propagate(t);
         }
     }
 

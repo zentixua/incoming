@@ -18,48 +18,48 @@ import ua.zentix.incoming.util.StreamCodecs;
 import ua.zentix.incoming.util.Terrain;
 
 /**
- * Один ядерный подрыв — всё, из чего сервер и каждый клиент по одной и той же модели выводят волну, свет,
- * шар, гриб и осадки. Хранится в мире ({@link NuclearEvents}) и уходит клиентам одним пакетом.
+ * One nuclear detonation: everything from which server and each client derive wave, light,
+ * fireball, mushroom and fallout using the same model. Stored in the world ({@link NuclearEvents}) and sent to clients in one packet.
  * <p>
- * Масштаб {@code scale}: 1 блок = 1/scale метра (1.0 — как в жизни). Расстояния модели делятся на него,
- * время фронта умножается. Фронт в игре вдали идёт медленнее модели — видимой стеной со скоростью {@code wave}, за ней
- * звук со скоростью звука ({@link FrontProfile}): {@link #arrivalTicks}, {@link #frontRadius}.
+ * Scale {@code scale}: 1 block = 1/scale meters (1.0 is real life). Model distances are divided by it,
+ * front time multiplied. Distant in-game front travels slower than model as a visible wall at speed {@code wave}, followed by
+ * sound at sound speed ({@link FrontProfile}): {@link #arrivalTicks}, {@link #frontRadius}.
  *
- * @param id        номер подрыва в мире (растёт)
- * @param burst     точка подрыва
- * @param groundY   высота земли под эпицентром
- * @param yieldKt   мощность, кт
- * @param surface   наземный подрыв (шар касается земли): воронка и осадки
- * @param gameTime  игровое время подрыва, тики
- * @param windDir   направление ветра, рад (дует в сторону (cos, sin) в плоскости x–z)
- * @param windSpeed скорость ветра, м/с
- * @param visibility видимость, м (ясно 20 км, дождь 5, гроза 1) — ослабление света
- * @param seed      сид случайных деталей (одинаковый у всех клиентов)
- * @param fallout   осадки включены (настройка {@code nuclear.fallout} в миг подрыва): след наземного подрыва и
- *                  радиоактивность чёрного дождя; у подрыва из сохранения прежней сборки — только у наземного
- * @param wave      скорость стены пыли вдали от шара, доля скорости звука (настройка {@code nuclear.wave_speed} в момент подрыва)
- * @param dayTime   время суток мира в миг подрыва (тики, как {@code Level.getDayTime}): у него мгла над пожарами ждёт
- *                  утра; {@link #NO_DAY_TIME} — неизвестно (подрыв из сохранения или повтора прежней сборки)
- * @param fires     сервер поджигает пожары от этого подрыва (настройки {@code nuclear.fires} и {@code fires_per_detonation}
- *                  в момент подрыва): без них огненного шторма и гула пожаров у клиента нет; у подрыва из сохранения или
- *                  повтора прежней сборки — да, как было
+ * @param id        detonation number in world (increasing)
+ * @param burst     detonation point
+ * @param groundY   ground height beneath epicenter
+ * @param yieldKt   yield, kt
+ * @param surface   surface burst (fireball touches ground): crater and fallout
+ * @param gameTime  detonation game time, ticks
+ * @param windDir   wind direction, rad (blows toward (cos, sin) in x–z plane)
+ * @param windSpeed wind speed, m/s
+ * @param visibility visibility, m (clear 20 km, rain 5, thunderstorm 1), for light attenuation
+ * @param seed      random-detail seed (identical for all clients)
+ * @param fallout   fallout enabled ({@code nuclear.fallout} at detonation): surface-burst plume and
+ *                   black-rain radioactivity; old-version saved detonations only for surface bursts
+ * @param wave      dust-wall speed far from fireball, fraction of sound speed ({@code nuclear.wave_speed} at detonation)
+ * @param dayTime   world time of day at detonation (ticks, as in {@code Level.getDayTime}): fire haze waits for
+ *                   morning; {@link #NO_DAY_TIME} means unknown (detonation saved or replayed from an older version)
+ * @param fires     server ignites fires for this detonation ({@code nuclear.fires} and {@code fires_per_detonation}
+ *                   at detonation): without them client has no firestorm or fire roar; old-version saved or
+ *                   replayed detonations default to yes, as before
  */
 public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
                          float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
                          long dayTime, boolean fires) {
 
-    /** Скорость стены вдали у подрывов, сохранённых до настройки {@code wave_speed}: 3 блока за тик. */
+    /** Distant wall speed for detonations saved before {@code wave_speed}: 3 blocks per tick. */
     public static final float OLD_WAVE = (float) (3 / FrontProfile.SOUND_SPEED);
-    /** Время суток подрыва неизвестно: сохранён или записан в повтор до этого поля. */
+    /** Unknown detonation time of day: saved or recorded in a replay before this field existed. */
     public static final long NO_DAY_TIME = Long.MIN_VALUE;
 
-    /** Подрыв без времени суток: место подрыва заранее ({@code NuclearWarhead.geometry}) и проверки. */
+    /** Detonation without time of day: advance detonation geometry ({@code NuclearWarhead.geometry}) and tests. */
     public Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
                       float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave) {
         this(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, NO_DAY_TIME);
     }
 
-    /** Подрыв с пожарами. */
+    /** Detonation with fires. */
     public Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
                       float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
                       long dayTime) {
@@ -85,9 +85,9 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     ).apply(i, Detonation::new));
 
     /**
-     * Подрыв в пакете — поля выпуска 3.1.0, без {@code wave} ({@link #OLD_WAVE}) и времени суток. Формат заморожен:
-     * повторы Flashback хранят пакеты байтами (replay.md), поэтому новое поле подрыва пакет дописывает в свой конец
-     * ({@code S2C.NukeDetonation}, {@code S2C.NukeSync}), а не сюда — в {@code NukeSync} за подрывом идут другие.
+     * Packet detonation uses release 3.1.0 fields, without {@code wave} ({@link #OLD_WAVE}) or time of day. Format is frozen:
+     * Flashback replays store raw packet bytes (replay.md), so a packet appends new detonation fields at its own end
+     * ({@code S2C.NukeDetonation}, {@code S2C.NukeSync}), not here: {@code NukeSync} has other detonations following this one.
      */
     public static final StreamCodec<ByteBuf, Detonation> STREAM_CODEC = new StreamCodec<>() {
         @Override
@@ -125,24 +125,24 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires);
     }
 
-    /** Время суток подрыва известно ({@link #dayTime}). */
+    /** Whether detonation time of day is known ({@link #dayTime}). */
     public boolean hasDayTime() {
         return dayTime != NO_DAY_TIME;
     }
 
-    /** Порог дальней зоны: 0.5 psi (стёкла). */
+    /** Far-zone threshold: 0.5 psi (glass). */
     public static final double FAR_KPA = BlastModel.kpa(0.5);
     /**
-     * Край руин: стекло (порог 0.8 psi, разброс от 0.85) лопается от отражённого давления на грани к взрыву — от 0.68 psi
-     * отражённого, то есть от ~0.34 psi падающего (у слабой волны отражённое — вдвое больше).
+     * Ruin edge: glass (0.8 psi threshold, variation from 0.85) breaks from reflected pressure on the blast-facing face, starting at 0.68 psi
+     * reflected, i.e. ~0.34 psi incident (weak-wave reflected pressure is twice incident).
      */
     public static final double RUIN_EDGE_KPA = BlastModel.kpa(0.34);
-    /** Слабее этого волна не бьёт и не пугает ({@code BlastFront}) и не поднимает пыль (край стены пыли): 0.3 psi. */
+    /** Below this, wave neither hits nor scares ({@code BlastFront}) nor lofts dust (dust-wall edge): 0.3 psi. */
     public static final double HIT_KPA = BlastModel.kpa(0.3);
 
-    // ---------------------------------------------------------------- масштаб
+    // ---------------------------------------------------------------- scale
 
-    /** Метры модели по блокам мира. */
+    /** Model meters from world blocks. */
     public double metres(double blocks) {
         return blocks / scale;
     }
@@ -151,16 +151,16 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return metres * scale;
     }
 
-    /** Высота подрыва над землёй, м. */
+    /** Burst height above ground, m. */
     public double hobMetres() {
         return metres(burst.y - groundY);
     }
 
-    // ---------------------------------------------------------------- волна
+    // ---------------------------------------------------------------- wave
 
     /**
-     * Давление волны в точке, кПа — по высоте подрыва над ней ({@link HobBlast}): дальность по земле — от оси подрыва,
-     * высота — подрыв над точкой. Точка выше подрыва — как у земли на наклонной дальности (полусфера наземного).
+     * Wave pressure at a point, kPa, by burst height above it ({@link HobBlast}): ground range from burst axis,
+     * height is burst above point. Above burst, treat as ground at slant range (surface-burst hemisphere).
      */
     public double overpressureKpa(Vec3 p) {
         double h = heightAbove(p), s = metres(p.distanceTo(burst));
@@ -171,65 +171,65 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return BlastModel.psi(overpressureKpa(p));
     }
 
-    /** Давление на земле эпицентра в {@code groundBlocks} блоках по земле от него, кПа. */
+    /** Pressure on epicenter ground at {@code groundBlocks} blocks ground range, kPa. */
     public double groundOverpressureKpa(double groundBlocks) {
         return BlastModel.kpa(HobBlast.psi(metres(groundBlocks), groundHob(), yieldKt));
     }
 
-    /** Дальность по земле эпицентра, где давление падает до {@code kpa}, блоки (0 — такого нет и под подрывом). */
+    /** Ground range on epicenter ground where pressure falls to {@code kpa}, blocks (0 if absent even beneath burst). */
     public double groundRange(double kpa) {
         return blocks(HobBlast.rangeFor(BlastModel.psi(kpa), groundHob(), yieldKt));
     }
 
-    /** Наклонная дальность до точки земли эпицентра в {@code groundBlocks} блоках по земле от него, блоки. */
+    /** Slant range to epicenter ground at {@code groundBlocks} blocks ground range, blocks. */
     public double slantOf(double groundBlocks) {
         return Math.hypot(groundBlocks, blocks(groundHob()));
     }
 
-    /** Дальность по земле эпицентра до точки на наклонной дальности {@code slantBlocks}, блоки (ближе высоты подрыва — 0). */
+    /** Ground range on epicenter ground for slant range {@code slantBlocks}, blocks (0 below burst height). */
     public double groundOf(double slantBlocks) {
         double h = blocks(groundHob());
         return Math.sqrt(Math.max(0, slantBlocks * slantBlocks - h * h));
     }
 
     /**
-     * Скоростной напор за фронтом вдоль земли в точке, кПа: по давлению (Ренкин–Гюгонио), у правильного отражения под
-     * подрывом — только его доля вдоль земли ({@link HobBlast#alongGround}).
+     * Post-front along-ground dynamic pressure at a point, kPa: from pressure (Rankine–Hugoniot); for regular reflection beneath
+     * burst, only its along-ground share ({@link HobBlast#alongGround}).
      */
     public double dynamicPressureKpa(Vec3 p) {
         return BlastModel.dynamicPressureKpa(overpressureKpa(p)) * along(p);
     }
 
-    /** Ветер сразу за фронтом вдоль земли в точке, м/с. */
+    /** Along-ground wind immediately behind front at a point, m/s. */
     public double blastWind(Vec3 p) {
         return BlastModel.windSpeed(overpressureKpa(p)) * Math.sqrt(along(p));
     }
 
-    /** Ветер сразу за фронтом вдоль земли эпицентра в {@code groundBlocks} блоках по земле от него, м/с. */
+    /** Along-ground wind immediately behind front on epicenter ground at {@code groundBlocks} blocks ground range, m/s. */
     public double groundWind(double groundBlocks) {
         double g = metres(groundBlocks);
         return BlastModel.windSpeed(groundOverpressureKpa(groundBlocks)) * Math.sqrt(HobBlast.alongGround(g, groundHob(), yieldKt));
     }
 
-    /** Положительная фаза в точке, с модели: от 2 psi — по Броуду, ниже 1 psi — Кинни–Грэхем у слушателя, между — смесь. */
+    /** Positive phase at a point, model s: Brode from 2 psi, Kinney–Graham at listener below 1 psi, blended between. */
     public double positivePhaseSeconds(Vec3 p) {
         double h = heightAbove(p), s = metres(p.distanceTo(burst));
         return HobBlast.positivePhaseSeconds(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt);
     }
 
-    /** Положительная фаза на земле эпицентра в {@code groundBlocks} блоках по земле от него, с модели. */
+    /** Positive phase on epicenter ground at {@code groundBlocks} blocks ground range, model s. */
     public double groundPositivePhaseSeconds(double groundBlocks) {
         return HobBlast.positivePhaseSeconds(metres(groundBlocks), groundHob(), yieldKt);
     }
 
-    /** Положительная фаза на земле на наклонной дальности {@code slantBlocks} от подрыва, тики игры. */
+    /** Positive phase on ground at slant range {@code slantBlocks} from burst, game ticks. */
     public double positivePhaseTicks(double slantBlocks) {
         return groundPositivePhaseSeconds(groundOf(slantBlocks)) * 20 * scale;
     }
 
     /**
-     * Докуда (наклонная дальность, блоки) через {@code ticks} после подрыва уже прошла положительная фаза: где приход
-     * фронта и фаза за ним вместе — не позже {@code ticks}.
+     * Range (slant, blocks) where positive phase has ended by {@code ticks} after burst: front arrival
+     * plus following phase no later than {@code ticks}.
      */
     public double phaseEndRadius(double ticks) {
         double lo = 0, hi = frontRadius(ticks);
@@ -247,115 +247,115 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return HobBlast.alongGround(Math.sqrt(Math.max(0, s * s - h * h)), h, yieldKt);
     }
 
-    /** Высота подрыва над точкой, м (не меньше 0). */
+    /** Burst height above point, m (at least 0). */
     private double heightAbove(Vec3 p) {
         return Math.max(0, metres(burst.y - p.y));
     }
 
-    /** Высота подрыва над землёй эпицентра, м (не меньше 0). */
+    /** Burst height above epicenter ground, m (at least 0). */
     private double groundHob() {
         return Math.max(0, hobMetres());
     }
 
     /**
-     * С какой скоростью волна скоростным напором {@code qKpa} бросает сорванный обломок (куски снесённого у клиента),
-     * блоков за тик, не больше 6. Тела бросает {@code BlastBody} по сопротивлению тела.
+     * Speed at which wave dynamic pressure {@code qKpa} throws a detached fragment (client removed pieces),
+     * blocks per tick, at most 6. {@code BlastBody} throws bodies by body drag.
      */
     public static double throwSpeed(double qKpa) {
         return Math.min(6.0, 0.8 * Math.sqrt(qKpa));
     }
 
-    /** Таблица прихода фронта (кэш на подрыв). */
+    /** Front-arrival table (per-detonation cache). */
     public ArrivalTable arrival() {
         return Caches.arrival(this);
     }
 
-    /** Приход фронта в игре (кэш на подрыв): у эпицентра как у модели, дальше — со скоростью {@code wave} ({@link FrontProfile}). */
+    /** In-game front arrival (per-detonation cache): model near epicenter, then speed {@code wave} ({@link FrontProfile}). */
     public FrontProfile front() {
         return Caches.front(this);
     }
 
-    /** Через сколько тиков после подрыва фронт дойдёт до точки на расстоянии {@code blocks}. */
+    /** Ticks after burst until front reaches a point at distance {@code blocks}. */
     public double arrivalTicks(double blocks) {
         return front().arrivalTicks(blocks);
     }
 
-    /** Световой импульс в игре, тиков после подрыва ({@link FireballModel#pulseSeconds} в масштабе удара, как у вспышки клиента). */
+    /** In-game light pulse, ticks after burst ({@link FireballModel#pulseSeconds} at strike scale, like client flash). */
     public double pulseTicks() {
         return FireballModel.pulseSeconds(yieldKt) * 20 * scale;
     }
 
     /**
-     * Когда место, куда за весь импульс приходит {@code q} кал/см², набирает {@code need}, тиков после подрыва: по
-     * излученной доле импульса ({@link FireballModel#thermalFraction}). Не набирает за весь импульс — к его концу.
-     * По нему встаёт след света на земле и пожары у сервера ({@code FlashScorch}) и их начало у клиента.
+     * When a place receiving {@code q} cal/cm² over full pulse accumulates {@code need}, ticks after burst: from
+     * emitted pulse fraction ({@link FireballModel#thermalFraction}). If not reached over full pulse, use pulse end.
+     * Controls server ground light trace and fires ({@code FlashScorch}) and their client start.
      */
     public double flashTicks(double q, double need) {
         return FireballModel.thermalTau(q <= need ? 1 : need / q) / 10 * pulseTicks();
     }
 
-    /** Радиус фронта (блоки) через {@code ticks} после подрыва. */
+    /** Front radius (blocks) at {@code ticks} after burst. */
     public double frontRadius(double ticks) {
         return front().radiusAt(ticks);
     }
 
-    /** Докуда по земле что-то вообще меняется (блоки): стёкла или ожоги 1-й степени — что дальше. */
+    /** Ground reach of any change (blocks): glass or 1st-degree burns, whichever reaches farther. */
     public double radiusMax() {
         return Caches.radiusMax(this);
     }
 
     /**
-     * Докуда волна ещё бьёт ({@link #HIT_KPA}) — наклонная дальность, блоки: у земли и над ней. Точка над землёй — точка
-     * земли с подрывом ниже ({@link #overpressureKpa}), поэтому наибольшая дальность — по высотам от земли до подрыва:
-     * у высокого подрыва давление над землёй доходит дальше, чем на ней, а под ним на земле его может не быть вовсе.
+     * Reach where wave still hits ({@link #HIT_KPA}), slant range, blocks: on ground and above. An elevated point is a ground
+     * point with lowered burst ({@link #overpressureKpa}), so maximum reach spans heights from ground to burst:
+     * for high bursts, pressure above ground reaches farther than at ground, where it may be absent even directly beneath burst.
      */
     public double blastReach() {
         return Caches.blastReach(this);
     }
 
     /**
-     * Докуда по земле идут руины (блоки): до {@link #RUIN_EDGE_KPA}, где отражённое давление ещё бьёт стекло, и не ближе
-     * {@link #radiusMax}. Не дальше 1.5 {@link #radiusMax} (0.34 psi против 0.5) — докуда посчитан приход фронта.
+     * Ground ruin reach (blocks): to {@link #RUIN_EDGE_KPA}, where reflected pressure still breaks glass, no closer than
+     * {@link #radiusMax}. At most 1.5 {@link #radiusMax} (0.34 psi versus 0.5), the front-arrival table range.
      */
     public double ruinRadius() {
         return Caches.ruinRadius(this);
     }
 
-    // ---------------------------------------------------------------- свет и шар
+    // ---------------------------------------------------------------- light and fireball
 
-    /** Световой импульс в точке, кал/см² (без учёта тени — её проверяет вызывающий). */
+    /** Light pulse at point, cal/cm² (without shadow, checked by caller). */
     public double fluence(Vec3 p) {
         return ThermalModel.fluenceCalPerCm2(Math.max(1, metres(p.distanceTo(burst))), yieldKt, surface, visibility);
     }
 
-    /** Наибольший радиус огненного шара, блоки. */
+    /** Maximum fireball radius, blocks. */
     public double fireballRadius() {
         return blocks(FireballModel.maxRadius(yieldKt, surface));
     }
 
-    // ---------------------------------------------------------------- осадки
+    // ---------------------------------------------------------------- fallout
 
     public FalloutModel falloutModel() {
         return new FalloutModel(yieldKt, hobMetres(), windDir, windSpeed);
     }
 
-    /** Чёрный дождь от пожаров этого подрыва (без пожаров — без дождя). */
+    /** Black rain from this detonation's fires (no fires, no rain). */
     public BlackRainModel blackRainModel() {
         return Caches.blackRain(this);
     }
 
     /**
-     * Есть ли у подрыва радиоактивные осадки (включены в миг подрыва): след наземного или то, что вымыл на землю
-     * чёрный дождь.
+     * Whether detonation has radioactive fallout (enabled at detonation): surface-burst plume or matter washed to ground by
+     * black rain.
      */
     public boolean hasFallout() {
         return fallout && (falloutModel().surfaceFraction() > 0 || blackRainModel().fireRadiusM() > 0);
     }
 
     /**
-     * Мощность дозы осадков в точке, Р/ч: след наземного подрыва и вымытое чёрным дождём; всё по игровым часам.
+     * Fallout dose rate at point, R/h: surface-burst plume and black-rain washout, all by game clock.
      *
-     * @param ticksSince игровые тики после подрыва (1000 тиков = 1 час)
+     * @param ticksSince game ticks after burst (1000 ticks = 1 hour)
      */
     public double falloutRate(double x, double z, long ticksSince) {
         if (!hasFallout()) return 0;
@@ -365,38 +365,38 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return falloutModel().doseRate(mx, mz, hours) + rain * decay;
     }
 
-    /** Через сколько игровых тиков после подрыва след наземного подрыва ложится в точку. */
+    /** Game ticks after burst until surface-burst plume deposits at point. */
     public double falloutArrivalTicks(double x, double z) {
         return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 1000;
     }
 
-    /** Идёт ли в точке чёрный дождь (одинаково на сервере и клиенте): часы — огненного шторма, секунды тиков. */
+    /** Whether black rain falls at point (same on server and client): firestorm clock, tick seconds. */
     public boolean blackRain(double x, double z, long ticksSince) {
         return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), ticksSince / 20.0);
     }
 
-    /** Через сколько игровых тиков после подрыва чёрный дождь кончается везде. */
+    /** Game ticks after burst until black rain ends everywhere. */
     public double blackRainEndTicks() {
         return blackRainModel().endSeconds() * 20;
     }
 
     /**
-     * Под открытым небом ли точка (на неё падает дождь): над ней нет ничего, что держит движение, — ни крыши,
-     * ни листвы, ни воды. Карта высот есть и на сервере, и на клиенте, поэтому ответ у них одинаковый.
+     * Whether point is open to sky (receives rain): nothing motion-blocking above it, neither roof,
+     * foliage nor water. Heightmap exists on both server and client, so they give the same answer.
      */
     public static boolean underOpenSky(net.minecraft.world.level.Level level, Vec3 pos) {
         return Terrain.height(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
                 net.minecraft.util.Mth.floor(pos.x), net.minecraft.util.Mth.floor(pos.z)) <= pos.y;
     }
 
-    /** Кэши, которые дорого считать на каждый вызов (таблица прихода, наибольший радиус). */
+    /** Caches expensive to compute per call (arrival table, maximum radius). */
     private static final class Caches {
         private static final java.util.Map<Detonation, ArrivalTable> ARRIVAL = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, FrontProfile> FRONT = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RADIUS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> RUINS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
         private static final java.util.Map<Detonation, Double> REACH = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
-        /** Высот между землёй и подрывом в {@link #blastReach}. */
+        /** Height samples between ground and burst for {@link #blastReach}. */
         private static final int REACH_HEIGHTS = 32;
         private static final java.util.Map<Detonation, BlackRainModel> RAIN = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
@@ -409,12 +409,12 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         }
 
         static FrontProfile front(Detonation d) {
-            // у эпицентра — как у модели: вспышка и шар не меняются; за стеной пыли (0.3 psi) — только звук
+            // model near epicenter: flash and fireball unchanged; beyond dust wall (0.3 psi), only sound
             return FRONT.computeIfAbsent(d, x -> FrontProfile.of(x.arrival(), x.scale, FrontProfile.slowFrom(x.fireballRadius()),
                     x.slantOf(x.groundRange(HIT_KPA)), tableRange(x), x.wave * FrontProfile.SOUND_SPEED));
         }
 
-        /** Докуда таблицы прихода фронта, блоки: руины (до 1.5 {@link #radiusMax}) и всё, что волна ещё бьёт. */
+        /** Front-arrival table range, blocks: ruins (to 1.5 {@link #radiusMax}) and everything the wave still hits. */
         private static double tableRange(Detonation d) {
             return Math.max(d.radiusMax() * 1.5, d.blastReach());
         }
@@ -432,7 +432,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
 
         static BlackRainModel blackRain(Detonation d) {
             return RAIN.computeIfAbsent(d, x -> {
-                // зона пожаров — где свет поджигает (как у руин и огненного шторма клиента); сервер не поджигает — её нет
+                // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires
                 double hob = Math.max(0, x.hobMetres());
                 double slant = ThermalModel.rangeForFluence(ThermalModel.IGNITE, x.yieldKt, x.surface, x.visibility);
                 double fire = x.fires ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;

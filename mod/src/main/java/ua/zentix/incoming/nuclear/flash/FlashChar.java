@@ -13,53 +13,53 @@ import ua.zentix.incoming.nuclear.model.WorldNoise;
 import ua.zentix.incoming.registry.ModTags;
 
 /**
- * Обугленная вспышкой грань блока (DESIGN-nuke §3.5): степень гари от света на грани — импульса с тенью, умноженного
- * на косинус угла между лучом от шара и нормалью грани, — по материалу. Дерево, шерсть, сено (тег
- * {@code incoming:nuke_chars}) обугливаются до черноты; кладка и бетон ({@code incoming:nuke_soots}) только темнеют —
- * копоть и опалённая побелка. Природный грунт и камень не трогаются: землю выжигает план руин (дёрн, гарь, биомы).
+ * Flash-charred block face (DESIGN-nuke §3.5): scorch tier by face light, shadowed pulse multiplied
+ * by cosine between fireball ray and face normal, according to material. Wood, wool, hay (tag
+ * {@code incoming:nuke_chars}) char to black; masonry and concrete ({@code incoming:nuke_soots}) only darken:
+ * soot and scorched whitewash. Natural ground and stone untouched: ruin plan burns ground (turf, scorch, biomes).
  * <p>
- * Степень — кривая поражения ({@link Fragility}) от света со случайностью места (шум мира и хеш грани), ступенями
- * 1–{@link #LEVELS}; 0 — грань чистая. Одна функция у плана руин (фоном), силуэтов (поток сервера) и клиента
- * (сглаживание по соседним граням).
+ * Tier follows damage curve ({@link Fragility}) by light and local randomness (world noise and face hash), steps
+ * 1–{@link #LEVELS}; 0 means clean face. Same function for ruin plan (background), silhouettes (server thread) and client
+ * (smoothing by neighboring faces).
  * <p>
- * Грань в метке — ключ: место в чанке и сторона ({@link #key}), ступень и короткий хеш блока ({@link #hash}): блок
- * сменился — метка не его (руины, игрок построил своё), и клиент её не рисует.
+ * Marked face key: chunk position and side ({@link #key}), tier and short block hash ({@link #hash}). If block
+ * changes (ruins, player construction), mark no longer belongs there and client does not draw it.
  */
 public final class FlashChar {
-    /** Ступеней гари: 1 — чуть опалено, {@code LEVELS} — черно. */
+    /** Scorch tiers: 1 lightly scorched, {@code LEVELS} black. */
     public static final int LEVELS = 7;
-    /** Материал грани: не обугливается, дерево и ткань, кладка и бетон. */
+    /** Face material: non-charring, wood and fabric, masonry and concrete. */
     public static final int NONE = 0, CHARS = 1, SOOTS = 2;
     /**
-     * Медиана (кал/см²) и разброс кривой: тёмное дерево обугливается от ~10 кал/см² (Glasstone, табл. 7.40); кладка
-     * и бетон не горят — темнеют краска, побелка и пыль на них, по порядку величины от того же света, но слабее
-     * ({@link #SOOT_MAX}): у 15 кт стена, которая волну выдержала (меньше ~4 psi), видит не больше ~20 кал/см².
+     * Curve median (cal/cm²) and spread: dark wood chars from ~10 cal/cm² (Glasstone, table 7.40); masonry
+     * and concrete do not burn; their paint, whitewash and dust darken under light of the same order, but less
+     * ({@link #SOOT_MAX}): for 15 kt, a wall surviving wave (below ~4 psi) receives at most ~20 cal/cm².
      */
     static final double CHAR_MEDIAN = 10, CHAR_BETA = 0.5, SOOT_MEDIAN = 12, SOOT_BETA = 0.5;
-    /** Сильнее всего темнеет кладка: доля от черноты дерева. */
+    /** Maximum masonry darkening as fraction of wood blackness. */
     static final double SOOT_MAX = 0.45;
-    /** Случайность грани: шум мира (пятна) и хеш грани (зерно); сумма квадратов весов — 1. */
+    /** Face randomness: world noise (patches) and face hash (grain); squared weights sum to 1. */
     public static final double SMOOTH = 0.85, GRAIN = 0.53;
 
     private FlashChar() {}
 
-    /** Материал состояния для гари (поток сервера или клиента: теги). Только полный непрозрачный куб — у него целые грани. */
+    /** State scorch material (server or client thread: tags). Only full opaque cubes have complete faces. */
     public static int material(BlockState st) {
         if (st.isAir() || !st.canOcclude()) return NONE;
         boolean chars = st.is(ModTags.NUKE_CHARS), soots = !chars && st.is(ModTags.NUKE_SOOTS);
         if (!chars && !soots) return NONE;
-        // из кэша состояния: материал читает и снятие меток на каждом оповещении соседей и отправке чанка
+        // from state cache: material also read when removing marks at every neighbor notification and chunk send
         if (!st.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) return NONE;
         return chars ? CHARS : SOOTS;
     }
 
     /**
-     * Ступень гари грани (любой поток).
+     * Face scorch tier (any thread).
      *
-     * @param q        свет на грани, кал/см² (импульс с тенью × косинус угла падения)
-     * @param material {@link #CHARS} или {@link #SOOTS}
-     * @param z        случайность грани ~N(0, 1) (шум мира и хеш), усечена до ±{@link Fragility#TAIL}
-     * @return 0 — чистая, 1–{@link #LEVELS}
+     * @param q        face light, cal/cm² (shadowed pulse × incidence cosine)
+     * @param material {@link #CHARS} or {@link #SOOTS}
+     * @param z        face randomness ~N(0, 1) (world noise and hash), truncated at ±{@link Fragility#TAIL}
+     * @return 0 clean, 1–{@link #LEVELS}
      */
     public static int level(double q, int material, double z) {
         if (q <= 0 || material == NONE) return 0;
@@ -69,22 +69,22 @@ public final class FlashChar {
         return Math.min(LEVELS, (int) Math.round(degree * LEVELS));
     }
 
-    /** Может ли грань с таким светом потемнеть хоть на ступень при самой большой случайности: нет — шум не нужен. */
+    /** Can face darken by at least one tier at this light and maximum randomness? If not, no noise needed. */
     public static boolean possible(double q, int material) {
         return q > 0 && material != NONE && level(q, material, Fragility.TAIL) > 0;
     }
 
-    /** Ступень при любой случайности одна и та же (свет так силён, что всё черно): шум не нужен. */
+    /** Same tier at any randomness (light so strong everything is black): no noise needed. */
     public static boolean saturated(double q, int material) {
         return level(q, material, -Fragility.TAIL) == level(q, material, Fragility.TAIL);
     }
 
-    /** Слой шума мира для пятен гари (у плана руин слои 1–5). */
+    /** World-noise layer for scorch patches (ruin plan uses layers 1–5). */
     public static final int LAYER = 6;
 
     /**
-     * Случайность грани ~N(0, 1) (любой поток): шум мира в объёме у центра грани — пятна в несколько блоков — и хеш
-     * грани — зерно. Одна и та же у плана руин, силуэтов и клиента.
+     * Face randomness ~N(0, 1) (any thread): volume world noise at face center gives patches several blocks across, face hash
+     * gives grain. Identical for ruin plan, silhouettes and client.
      */
     public static double chance(WorldNoise noise, int x, int y, int z, Direction face) {
         double smooth = noise.at(x + 0.5 + 0.5 * face.getStepX(), y + 0.5 + 0.5 * face.getStepY(), z + 0.5 + 0.5 * face.getStepZ(), LAYER);
@@ -93,8 +93,8 @@ public final class FlashChar {
     }
 
     /**
-     * Косинус угла между нормалью грани и направлением на точку {@code burst} от центра грани; 0 — грань к ней спиной
-     * или боком.
+     * Cosine between face normal and direction from face center to {@code burst}; 0 if face points away
+     * or sideways.
      */
     public static double incidence(Vec3 burst, int x, int y, int z, Direction face) {
         double rx = burst.x - (x + 0.5 + 0.5 * face.getStepX()), ry = burst.y - (y + 0.5 + 0.5 * face.getStepY()),
@@ -104,23 +104,23 @@ public final class FlashChar {
         return Math.max(0, (rx * face.getStepX() + ry * face.getStepY() + rz * face.getStepZ()) / len);
     }
 
-    /** Точка у грани для тени и света: центр грани чуть впереди неё. */
+    /** Face point for shadow and light: face center slightly ahead of it. */
     public static Vec3 front(int x, int y, int z, Direction face) {
         return new Vec3(x + 0.5 + 0.55 * face.getStepX(), y + 0.5 + 0.55 * face.getStepY(), z + 0.5 + 0.55 * face.getStepZ());
     }
 
-    // ---------------------------------------------------------------- упаковка
+    // ---------------------------------------------------------------- packing
 
-    /** Ключ грани в чанке: x, z (по 4 бита), y + 2048 (12 бит), сторона (3 бита) — 23 бита. */
+    /** Chunk face key: x, z (4 bits each), y + 2048 (12 bits), side (3 bits), 23 bits total. */
     public static int key(int lx, int y, int lz, Direction face) {
         return lx & 15 | (lz & 15) << 4 | (y + 2048 & 0xFFF) << 8 | face.get3DDataValue() << 20;
     }
 
     public static final int KEY_MASK = (1 << 23) - 1;
-    /** Место грани в ключе — без стороны: x, z и y (20 бит). */
+    /** Face position in key without side: x, z and y (20 bits). */
     public static final int PLACE_MASK = (1 << 20) - 1;
 
-    /** Метка: ключ, ступень (3 бита) и хеш блока (6 бит). */
+    /** Mark: key, tier (3 bits) and block hash (6 bits). */
     public static int mark(int key, int level, int hash) {
         return key & KEY_MASK | (level & 7) << 23 | (hash & 63) << 26;
     }
@@ -149,20 +149,20 @@ public final class FlashChar {
         return mark >>> 26 & 63;
     }
 
-    /** Короткий хеш блока (не состояния: дверь открыли — метка её): по имени в реестре, одинаковый на сервере и клиенте. */
+    /** Short block hash (not state: opening a door preserves mark), by registry name, identical server/client. */
     public static int hash(Block block) {
         return Mth.murmurHash3Mixer(BuiltInRegistries.BLOCK.getKey(block).hashCode()) >>> 7 & 63;
     }
 
     /**
-     * На месте метки всё ещё её блок: материал гари (полный куб с тегом — иначе блок сломан или сменился на другой) и тот
-     * же хеш блока.
+     * Mark still belongs to block at position: scorch material (tagged full cube, otherwise block broken or replaced) and same
+     * block hash.
      */
     public static boolean holds(BlockState st, int mark) {
         return material(st) != NONE && hash(st.getBlock()) == hashOf(mark);
     }
 
-    /** Место грани в мире по метке чанка {@code cx, cz}. */
+    /** Face world position from chunk mark {@code cx, cz}. */
     public static BlockPos pos(int mark, int cx, int cz) {
         return new BlockPos(cx << 4 | lx(mark), y(mark), cz << 4 | lz(mark));
     }

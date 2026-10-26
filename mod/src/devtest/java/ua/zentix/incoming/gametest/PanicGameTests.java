@@ -57,7 +57,7 @@ public final class PanicGameTests {
             for (int i = 0; i < 64; i++) {
                 BlockPos p = MobPanic.awayPlace(pm, from);
                 h.assertTrue(p != null, type.toShortString() + ": there is no place of escape (search " + i + ")");
-                h.assertTrue(level.getBlockState(p).isAir() && level.getBlockState(p.below()).isSolid(),
+                h.assertTrue(level.getBlockState(p).isAir() && level.getBlockState(p.below()).isFaceSturdy(level, p.below(), net.minecraft.core.Direction.UP),
                         type.toShortString() + ": place " + h.relativePos(p) + " not above the support: " + level.getBlockState(p) + " on " + level.getBlockState(p.below()));
                 double gone = Math.hypot(p.getX() + 0.5 - from.x, p.getZ() + 0.5 - from.z) - here;
                 h.assertTrue(gone >= 8 * Math.cos(Math.PI / 4) - 1, String.format(Locale.ROOT, "%s: place closer to the epicenter - further to %.1f", type.toShortString(), gone));

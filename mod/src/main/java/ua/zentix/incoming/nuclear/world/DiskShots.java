@@ -37,32 +37,32 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Чанки, которых нет в памяти, — прямо из файлов региона, мимо загрузки в мир (фаза 2 подготовки руин,
- * {@link NuclearPrep}): чтение — поток ввода-вывода чанков ({@code ChunkStorage.read}, тот же, что у загрузки мира:
- * несохранённые изменения он отдаёт из своей очереди записи), обновление старой версии данных и разбор — фоновые потоки
- * руин ({@link RuinWorkers#executor}), как и у ванили (она обновляет и разбирает чанки в фоновых потоках). В потоке
- * сервера остаётся только {@link ChunkShot#fromDisk}: состояния палитр — в таблицу свойств.
+ * Chunks outside memory read directly from region files without world loading (ruin preparation phase 2,
+ * {@link NuclearPrep}): reads on chunk I/O thread ({@code ChunkStorage.read}, same as world loading:
+ * unsaved changes supplied from its write queue), data upgrades and parsing on background ruin
+ * threads ({@link RuinWorkers#executor}), like vanilla (upgrades/parses chunks in background). Server
+ * thread only runs {@link ChunkShot#fromDisk}: palette states into property table.
  * <p>
- * Берётся только чанк с окончательными блоками ({@link DiskStatus.State#blocksFinal}: и чанк мира 1.17 с догенерацией
- * под нулём); остальное пропускается с причиной ({@link Read#skip}) — его руины строятся после волны. Карты
- * высот {@link RuinPlan#HEIGHTMAP_TYPES}, которых на диске нет или они не того размера (карты из редакторов: не все
- * карты у Greenfield — у 295855 чанков из 295936, у Newisle — у 23595 из 23644 целых), досчитываются по блокам, как при
- * загрузке у ванили ({@link Read#primed}).
+ * Only final-block chunks accepted ({@link DiskStatus.State#blocksFinal}, including 1.17 chunks with below-zero
+ * retrogen); others skipped with reason ({@link Read#skip}), their ruins built after wave. Heightmaps
+ * {@link RuinPlan#HEIGHTMAP_TYPES} absent or wrong-sized on disk (editor maps: incomplete
+ * maps in Greenfield for 295855 of 295936 chunks, Newisle 23595 of 23644 whole chunks) primed from blocks as
+ * vanilla does on load ({@link Read#primed}).
  */
 final class DiskShots {
     private static final Codec<PalettedContainer<BlockState>> BLOCK_STATE_CODEC = PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY,
             BlockState.CODEC, PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
-    /** Цена чанка без карт высот на диске для окна ({@link Read#cost}): не больше 4 досчётов за один {@link RuinContext#requestWindow}. */
+    /** Window cost of chunk without disk heightmaps ({@link Read#cost}): at most 4 primings per {@link RuinContext#requestWindow}. */
     static final int PRIME_COST = 6;
 
     private DiskShots() {}
 
     /**
-     * Прочитанный чанк: секции (null — воздух), первый свободный по картам {@link RuinPlan#HEIGHTMAP_TYPES}
-     * ({@code вид * 256 + столбец}); {@code unprimed} — карты, которых на диске не было (бит {@code 1 << вид}: их значения
-     * ещё не посчитаны, {@link #primed}); {@code skip} — почему не годится (тогда остальное пусто); {@code flashLayer} —
-     * отметка слоя вспышки в данных чанка ({@code FLASH_LAYER}: номер подрыва, чей огонь слоя стоит без руин; 0 — нет):
-     * снимок для руин этого подрыва читает огонь воздухом, как снимок чанка в памяти ({@link ChunkShot#fromDisk}).
+     * Read chunk: sections (null air), first free height by {@link RuinPlan#HEIGHTMAP_TYPES}
+     * ({@code kind * 256 + column}); {@code unprimed} maps absent on disk (bit {@code 1 << kind}, values
+     * not yet computed, {@link #primed}); {@code skip} reason invalid (rest empty then); {@code flashLayer}
+     * flash-layer mark in chunk data ({@code FLASH_LAYER}: detonation ID whose layer fire stands without ruins; 0 absent):
+     * snapshot for that detonation reads fire as air, like in-memory chunk snapshot ({@link ChunkShot#fromDisk}).
      */
     record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
         static Read skipped(ChunkPos pos, String why) {
@@ -70,17 +70,17 @@ final class DiskShots {
         }
 
         /**
-         * Карты высот, которых не было на диске, — по блокам, как их досчитывает ваниль при загрузке
-         * ({@code Heightmap.primeHeightmaps}: сверху вниз до первого непрозрачного для карты блока; нет такого — низ мира).
-         * Поток сервера: свойства состояний — из таблицы руин ({@code props}). Цена — в среднем 0,6 мс (до 1,4 мс) на чанк,
-         * где все секции до верха мира непустые, а столбцы почти все воздух (замер: столб стекла до 319
-         * над плоским миром), обычно десятки микросекунд; сколько таких чанков берёт поток сервера за раз — {@link #cost}.
+         * Heightmaps absent on disk computed from blocks, as vanilla primes them on load
+         * ({@code Heightmap.primeHeightmaps}: downward to first map-opaque block, world bottom if none).
+         * Server thread: state properties from ruin table ({@code props}). Cost averages 0.6 ms (up to 1.4 ms) per chunk
+         * with all sections nonempty to world top but columns mostly air (measured: glass pillar to 319
+         * above flat world), usually tens of microseconds; {@link #cost} limits how many server thread takes at once.
          */
         Read primed(Blast.PropsView props) {
             if (unprimed == 0) return this;
             int[] out = heights.clone();
             int types = RuinPlan.HEIGHTMAP_TYPES.length;
-            // подряд в столбце почти всегда одно и то же состояние (воздух, вода): его карты — без поиска в таблице
+            // consecutive column blocks nearly always same state (air, water): map flags without table lookup
             BlockState last = null;
             int opaque = 0;
             for (int c = 0; c < 256; c++) {
@@ -107,15 +107,15 @@ final class DiskShots {
         }
 
         /**
-         * Сколько поток сервера платит за этот чанк в {@link RuinContext#requestWindow}, в чанках с картами высот на диске:
-         * досчёт карт ({@link #primed}) в худшем случае в десятки раз дороже снимка: 25 таких за раз — десятки миллисекунд
-         * в одном тике, по 4 — до 4,3 мс.
+         * Server-thread cost of this chunk in {@link RuinContext#requestWindow}, in chunks with disk heightmaps:
+         * worst-case heightmap priming ({@link #primed}) tens of times more expensive than snapshot: 25 at once means tens of milliseconds
+         * in one tick, 4 at once up to 4.3 ms.
          */
         int cost() {
             return unprimed == 0 ? 1 : PRIME_COST;
         }
 
-        /** Первый воздух над {@code MOTION_BLOCKING} — для тени светового импульса ({@link RuinContext#putHeights}). */
+        /** First air above {@code MOTION_BLOCKING}, for light-pulse shadow ({@link RuinContext#putHeights}). */
         int[] motion() {
             int t = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
             return java.util.Arrays.copyOfRange(heights, t * 256, t * 256 + 256);
@@ -127,7 +127,7 @@ final class DiskShots {
         }
     }
 
-    /** Что нужно разбору чанка из мира (снимается в потоке сервера: сам разбор мира не читает). */
+    /** World data needed for chunk parsing (captured on server thread; parsing itself reads no world). */
     record Format(ChunkMap storage, ResourceKey<Level> dimension, Optional<ResourceKey<MapCodec<? extends ChunkGenerator>>> generator,
                   int minSection, int sections, int minY, int height, Registry<Biome> biomes, String flashLayerKey) {
         static Format of(ServerLevel level) {
@@ -139,8 +139,8 @@ final class DiskShots {
     }
 
     /**
-     * Прочитать и разобрать чанк (поток сервера отдаёт, ответ — в фоновом потоке руин): чтение — поток ввода-вывода,
-     * разбор — {@link RuinWorkers} на ступени {@code priority}. Чанка нет на диске — {@code skip}.
+     * Read and parse chunk (server thread submits, result on background ruin thread): I/O-thread read,
+     * {@link RuinWorkers} parsing at {@code priority}. No chunk on disk: {@code skip}.
      */
     static CompletableFuture<Read> read(Format f, ChunkPos pos, RuinWorkers.Priority priority) {
         long diag = NukeDiag.readStart();
@@ -148,7 +148,7 @@ final class DiskShots {
                 RuinWorkers.executor(priority)).exceptionally(e -> Read.skipped(pos, "read error: " + e));
     }
 
-    /** Разобрать данные чанка (любой поток). */
+    /** Parse chunk data (any thread). */
     static Read parse(ServerLevel level, ChunkPos pos, CompoundTag tag) {
         return parse(Format.of(level), pos, tag);
     }
@@ -172,7 +172,7 @@ final class DiskShots {
         return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag));
     }
 
-    /** Отметка слоя вспышки в данных чанка (attachment, как его пишет NeoForge: {@code neoforge:attachments}); 0 — нет. */
+    /** Flash-layer mark in chunk data (attachment, as NeoForge writes {@code neoforge:attachments}); 0 absent. */
     private static int flashLayer(Format f, CompoundTag tag) {
         return tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt(f.flashLayerKey);
     }
@@ -183,10 +183,10 @@ final class DiskShots {
     }
 
     /**
-     * Карты высот: все виды плана, в формате самой карты (биты на значение — по высоте мира), в {@code out}; нет карты
-     * или она не того размера — посчитается по блокам ({@link Read#primed}), как у ванили при загрузке.
+     * Heightmaps: all plan types in native map format (bits per value by world height), into {@code out}; absent
+     * or wrong-sized map primed from blocks ({@link Read#primed}), like vanilla on load.
      *
-     * @return карты, которых нет ({@link Read#unprimed})
+     * @return absent maps ({@link Read#unprimed})
      */
     private static int heights(Format f, CompoundTag tag, int[] out) {
         CompoundTag maps = tag.getCompound("Heightmaps");
@@ -198,7 +198,7 @@ final class DiskShots {
                 try {
                     data = new SimpleBitStorage(bits, 256, maps.getLongArray(key));
                 } catch (SimpleBitStorage.InitializationException e) {
-                    // не того размера: ваниль так же отбрасывает её и считает по блокам
+                    // wrong size: vanilla also discards map and computes it from blocks
                 }
             }
             if (data == null) {
@@ -210,11 +210,11 @@ final class DiskShots {
         return unprimed;
     }
 
-    /** Данные чанка, обновлённые до текущей версии, или почему чанк не годится ({@code skip}). */
+    /** Chunk data upgraded to current version, or why chunk invalid ({@code skip}). */
     private record Checked(CompoundTag tag, @Nullable String skip) {}
 
     private static Checked check(Format f, CompoundTag tag) {
-        // как на диске, до обновления версии: то же правило, что у заголовка (DiskStatus.scan)
+        // as on disk before version upgrade: same rule as header (DiskStatus.scan)
         if (!DiskStatus.of(tag).blocksFinal()) return new Checked(tag, "not fully generated on disk");
         int version = ChunkStorage.getVersion(tag);
         if (version != SharedConstants.getCurrentVersion().getDataVersion().getVersion()) {
@@ -228,9 +228,9 @@ final class DiskShots {
     }
 
     /**
-     * Чанк целиком — секции с блоками и биомами, как их разбирает ваниль ({@code ChunkSerializer.read}), но без мира:
-     * без POI, света и карт высот. Для копии чанка с руинами в LOD Distant Horizons ({@link FarLods}). Чтение — поток
-     * ввода-вывода, разбор — {@link RuinWorkers}; {@code skip} — почему чанк не годится.
+     * Whole chunk: block/biome sections parsed like vanilla ({@code ChunkSerializer.read}) without world:
+     * no POI, light or heightmaps. For ruined chunk copies in Distant Horizons LODs ({@link FarLods}). I/O-thread
+     * read, {@link RuinWorkers} parsing; {@code skip} explains invalid chunk.
      */
     record Sections(ChunkPos pos, LevelChunkSection[] sections, @Nullable String skip) {}
 
@@ -245,7 +245,7 @@ final class DiskShots {
         return sections(f, pos, checked.tag);
     }
 
-    /** Секции чанка из данных, уже обновлённых до текущей версии ({@link #check}). */
+    /** Chunk sections from data already upgraded to current version ({@link #check}). */
     private static Sections sections(Format f, ChunkPos pos, CompoundTag tag) {
         Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec = PalettedContainer.codecRO(f.biomes.asHolderIdMap(), f.biomes.holderByNameCodec(),
                 PalettedContainer.Strategy.SECTION_BIOMES, f.biomes.getHolderOrThrow(Biomes.PLAINS));
@@ -273,15 +273,15 @@ final class DiskShots {
             }
             sections[index] = new LevelChunkSection(states, biomes);
         }
-        // секций, которых нет в данных, нет и в мире: воздух с биомом по умолчанию, как у ванили
+        // sections absent from data absent in world: air with default biome, like vanilla
         for (int i = 0; i < sections.length; i++) if (sections[i] == null) sections[i] = new LevelChunkSection(f.biomes);
         return new Sections(pos, sections, null);
     }
 
     /**
-     * Чанк для следа подрыва без руин в LOD вдали ({@link FarLods}): секции копии и снимок по тем же палитрам — одно
-     * чтение и один разбор. Снимок читает палитры копии: план следа ({@link RuinPlanner#scorch}) строится до того, как
-     * в копию лягут его места. {@code read.skip} — почему чанк не годится (тогда и секций нет).
+     * Chunk for distant LOD detonation trace without ruins ({@link FarLods}): copy sections and snapshot share palettes, one
+     * read and parse. Snapshot reads copy palettes: trace plan ({@link RuinPlanner#scorch}) built before its positions
+     * are written into copy. {@code read.skip} explains invalid chunk (sections then absent too).
      */
     record Scorch(Sections sections, Read read) {}
 

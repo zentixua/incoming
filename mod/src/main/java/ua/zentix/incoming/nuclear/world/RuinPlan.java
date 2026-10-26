@@ -40,127 +40,127 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.List;
 
 /**
- * Руины одного чанка, построенные заранее ({@link RuinPlanner}), и их подмена в мире одним махом, когда до чанка дошла
- * волна: не блок за блоком ({@code setBlock} с картами высот, светом, соседями и Sable — ≈10 мкс на блок, в городе
- * тысячи блоков на чанк), а записью мест плана прямо в секции чанка и работой {@code setBlock} один раз на чанк.
+ * One chunk's prebuilt ruins ({@link RuinPlanner}), applied to world at once when wave reaches
+ * chunk: not block-by-block ({@code setBlock} with heightmaps, light, neighbors, Sable costs ≈10 µs/block, thousands
+ * per city chunk), but plan positions directly into sections and {@code setBlock} work once per chunk.
  * <p>
- * План — только разница: изменённые места (по 4 байта: место в секции, секция, новое состояние из палитры плана,
- * «проверить свет», «через мир»), пожары, карты высот и нижние источники неба изменённых столбцов (значение до и после)
- * и места проверок света. Своих копий секций план не держит. Всё остальное в секции остаётся как есть к приходу волны —
- * лампы, которые погасил блэкаут (он меняет их прямо в палитре), блоки, поставленные после плана.
+ * Plan stores delta only: changed positions (4 bytes each: section position, section, new plan-palette state,
+ * “check light”, “through world”), fires, changed-column heightmaps/lower sky sources (before/after)
+ * and light-check positions. No section copies retained. All other section blocks remain as at wave arrival,
+ * including blackout-darkened lamps (changed directly in palette) and blocks placed after plan.
  * <p>
- * План устаревает, если места плана после него меняли (игрок, взрыв, другой мод): у каждой изменённой секции — хеш
- * старых состояний в местах плана (лампа и её погашенный двойник — одно и то же). Не совпал — план строится заново
- * по чанку как есть. Блоки вне мест плана план сверяет с чанком при подмене сам — по отпечаткам секций снимка, по
- * которому построен ({@link #sameBlocks}): изменения чанка мод не подслушивает.
+ * Plan stale if its positions changed afterward (player, explosion, other mod): each changed section stores hash
+ * of old states at plan positions (lamp/darkened twin identical). Mismatch rebuilds plan
+ * from current chunk. Other blocks checked at replacement against snapshot section fingerprints
+ * ({@link #sameBlocks}); mod does not listen for chunk changes.
  * <p>
- * Подмена повторяет то, что делает {@code LevelChunk.setBlockState} для каждого блока, один раз на чанк: места — в
- * секции на месте (как и у {@code setBlock}; секцию не заменяют чтением в неё — см. подводные камни), карты высот и
- * источники неба столбцов — из плана (значение «до» в чанке уже другое — столбец меняли после плана — весь чанк
- * заново), пустота секций — движку света, проверки света (верхняя изменённая точка столбца, новые и убранные блоки под
- * уцелевшим верхом, убранные и новые источники света) — одной задачей движку света. Игроки, которые видят чанк,
- * получают изменения в том же тике пакетами секций ({@code ChunkHolder.blockChanged}, как при {@code setBlock}), LOD
- * Distant Horizons — в том же тике в очередь ({@link DhUpdates}). Блоки с блок-сущностью и места POI так не меняются: после подмены их
- * меняет мир ({@link ColumnScar#replace}: {@code onRemove} с его последствиями, содержимое не высыпается, отложенные
- * данные снимаются). Стволы, упавшие в соседний чанк, кладёт очередь после руин соседа. Пожары ставятся вместе
- * с руинами (без {@code setBlock}: огонь у стен и деревьев не будит соседей), им только назначается тик огня.
+ * Replacement repeats {@code LevelChunk.setBlockState} work once per chunk instead of per block: positions into
+ * sections in place (like {@code setBlock}; never replace by reading into section, see pitfalls); column heightmaps and
+ * sky sources from plan (different live “before” value means column changed since plan: rescan entire chunk),
+ * section emptiness to light engine; light checks (highest changed column point, new/removed blocks beneath
+ * surviving top, new/removed light sources) in one light-engine task. Chunk viewers
+ * receive same-tick section packets ({@code ChunkHolder.blockChanged}, like {@code setBlock}); Distant Horizons
+ * LODs queued same tick ({@link DhUpdates}). Block entities/POIs not changed this way: world
+ * changes them afterward ({@link ColumnScar#replace}: {@code onRemove} and consequences, no inventory drops, deferred
+ * data removed). Queue places trunks in neighboring chunks after their ruins. Fires applied with
+ * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {
-    /** Карты высот чанка на сервере; номер в этом массиве — вид карты в {@link #heights}. */
+    /** Server chunk heightmaps; index is map type in {@link #heights}. */
     public static final Heightmap.Types[] HEIGHTMAP_TYPES = {Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
             Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE};
-    /** Вид в {@link #heights}: нижний источник неба столбца. */
+    /** Type in {@link #heights}: column lower sky source. */
     static final int SKY = HEIGHTMAP_TYPES.length;
 
-    /** Упаковка места: 12 бит — место в секции (y, z, x), 8 бит — номер секции, 10 бит — состояние в палитре, флаги. */
+    /** Position packing: 12 bits section position (y, z, x), 8 section index, 10 palette state, flags. */
     static final int SECTION_SHIFT = 12, STATE_SHIFT = 20, STATE_MASK = 0x3FF;
-    /** Флаг места: после подмены проверить свет. */
+    /** Position flag: check light after replacement. */
     static final int LIGHT = 1 << 30;
-    /** Флаг места: блок-сущность или POI — меняется через мир. */
+    /** Position flag: block entity/POI, changed through world. */
     static final int SLOW = 1 << 31;
-    /** Сколько разных состояний вмещает палитра плана. */
+    /** Distinct states fitting plan palette. */
     static final int MAX_STATES = STATE_MASK + 1;
 
-    /** Тиков жидкости за секунду на чанк (остальные — в следующие секунды). */
+    /** Fluid ticks per second per chunk (rest in later seconds). */
     private static final int FLUID_TICKS = 64;
     private static final int[] NONE = new int[0];
     private static final long[] NO_LONGS = new long[0];
     private static final BlockState[] NO_STATES = new BlockState[0];
 
-    /** План без изменений: чанк, где волне нечего менять (поле, вода, чанк у края зоны). */
+    /** Unchanged plan: wave has nothing to change (field, water, zone-edge chunk). */
     static final RuinPlan EMPTY = new RuinPlan(NONE, NO_LONGS, NO_STATES, NO_STATES, NONE, NONE, NO_LONGS, null, null, null, null, null, NO_LONGS, null);
 
     /**
-     * Блоков менять нечего, но руины чанка «стоят»: соседи читают его исходным (он и есть исходный), счётчики — на
-     * подмене; {@code biomes} — свет всё же опалил его биом.
+     * No blocks change, but chunk ruins “applied”: neighbors read original chunk (already original), counters at
+     * replacement; {@code biomes} means light still singed biome.
      */
     static RuinPlan nothing(@Nullable RuinContext ctx, @Nullable ScorchedBiomes.Cells biomes) {
         return ctx == null && biomes == null ? EMPTY : new RuinPlan(NONE, NO_LONGS, NO_STATES, NO_STATES, NONE, NONE, NO_LONGS, null, null, null, null, ctx, NO_LONGS, biomes);
     }
 
     /**
-     * Для строки в лог: время подмен по частям, нс — проверка плана, места и пожары в секциях (и пустота секций
-     * движку света), карты высот и источники неба, свет и пакеты игрокам, блок-сущности через мир.
+     * Log: replacement-stage times, ns, plan check, positions/fires in sections (plus section emptiness to light
+     * engine), heightmaps/sky sources, light/player packets, world-path block entities.
      */
     static final long[] PHASES = new long[5];
-    /** Для строки в лог: самая долгая часть «через мир» — время (нс), чанк, сколько мест через мир (с прошлой строки). */
+    /** Log: longest world-path part, time (ns), chunk, world-path position count (since previous line). */
     static long slowestWorldNanos, slowestWorldChunk;
     static int slowestWorldCells;
-    /** В этом чанке: самый долгий блок через мир (его замена), и вызов LOD Distant Horizons, нс. */
+    /** This chunk: longest world-path block replacement and Distant Horizons LOD call, ns. */
     @Nullable
     static BlockState slowestWorldBlock;
     static long slowestWorldBlockNanos, slowestWorldDhNanos;
 
     /**
-     * Карты высот и источники неба изменённых столбцов, посчитанные по плану: тройки (столбец {@code << 3} | вид —
-     * номер в {@link #HEIGHTMAP_TYPES} или {@link #SKY}; значение до руин; значение после). Только те, что меняются.
+     * Planned heightmaps/sky sources of changed columns: triples (column {@code << 3} | type,
+     * index in {@link #HEIGHTMAP_TYPES} or {@link #SKY}; pre-ruin value; post-ruin value). Changed values only.
      */
     private final int[] heights;
-    /** Места с проверкой света (кроме мест «через мир»: их свет проверяет мир), как {@link BlockPos#asLong}. */
+    /** Light-check positions (except world-path, whose light world checks), as {@link BlockPos#asLong}. */
     private final long[] lightAt;
     /**
-     * Отпечатки секций снимка, по которому построен план: как есть ({@link ChunkShot#rawPrint}) и с точностью до
-     * погашенных ламп ({@link ChunkShot#normalPrint}); null — сверять не с чем (план без мест).
+     * Plan snapshot section fingerprints: raw ({@link ChunkShot#rawPrint}) and normalized for
+     * darkened lamps ({@link ChunkShot#normalPrint}); null without comparison data (no-position plan).
      */
     @Nullable
     private final long[] prints, normals;
-    /** Места плана по секциям (по возрастанию номера секции). */
+    /** Plan positions by section (ascending section index). */
     private final int[] cells;
-    /** По номеру секции: хеш старых состояний в её местах (секции без мест — 0, не проверяются). */
+    /** Per section: hash of old states at its positions (no positions means 0, unchecked). */
     private final long[] oldHashes;
     private final BlockState[] states;
-    /** Старые состояния мест плана (по порядку {@link #cells}): соседи читают по ним исходный чанк, пока его руины стоят. */
+    /** Old plan-position states ({@link #cells} order): neighbors read original chunk while these ruins stand. */
     private final BlockState[] olds;
-    /** Руины подрыва по всем чанкам (подмена отмечается там: её старые блоки — исходный мир соседей); null — вне подрыва. */
+    /** All-chunk detonation ruins (records replacement: old blocks are neighbors' original world); null outside detonation. */
     @Nullable
     private final RuinContext ctx;
-    /** Жидкость у изменённых мест: место ({@link BlockPos#asLong}) — ей тик, чтобы она затекла в пролом или стекла. */
+    /** Fluid beside changes: position ({@link BlockPos#asLong}) to tick, flowing into breach or draining. */
     private final long[] fluidTicks;
-    /** Пожары: место (как в {@link #cells}) и состояние огня из палитры. */
+    /** Fires: position (as {@link #cells}) and fire state from palette. */
     private final int[] fires;
-    /** Брёвна поваленных деревьев в соседних чанках: место (высота — по поверхности при подмене) и состояние. */
+    /** Toppled-tree logs in neighboring chunks: position (height by surface at replacement), state. */
     private final LongArrayList outside;
     private final List<BlockState> outsideState;
-    /** Ступени опалённого биома по клеткам чанка ({@link ScorchedBiomes}); null — биом не меняется. */
+    /** Scorched-biome tiers per chunk cell ({@link ScorchedBiomes}); null unchanged. */
     @Nullable
     private final ScorchedBiomes.Cells biomes;
     /**
-     * Обугленные вспышкой грани уцелевших блоков чанка ({@link ua.zentix.incoming.nuclear.flash.FlashChar#mark}): ставятся
-     * в отметки чанка с руинами ({@link ua.zentix.incoming.nuclear.flash.FlashSync#chars}); null — не считались.
+     * Flash-charred faces of surviving chunk blocks ({@link ua.zentix.incoming.nuclear.flash.FlashChar#mark}): applied
+     * to chunk marks with ruins ({@link ua.zentix.incoming.nuclear.flash.FlashSync#chars}); null uncomputed.
      */
     @Nullable
     private int[] flash;
     /**
-     * Слой вспышки ({@link RuinPlanner#flash}): пожары, которые собьёт волна (места, как в {@link #fires}, без состояния,
-     * по возрастанию), — в счёт пожаров подрыва не идут: гаснут с руинами чанка до своего первого тика ({@link #write});
-     * null — таких нет.
+     * Flash layer ({@link RuinPlanner#flash}): fires wave will extinguish (positions as {@link #fires}, no state,
+     * ascending) excluded from detonation fire count: extinguished with chunk ruins before first tick ({@link #write});
+     * null if none.
      */
     @Nullable
     private int[] blown;
-    /** Места пожаров по возрастанию (без состояния), для поиска; считаются по первому запросу. */
+    /** Sorted fire positions (no state), for lookup; computed on first request. */
     @Nullable
     private int[] fireKeys;
-    /** Секции, где у плана места или пожары (бит на секцию); считаются по первому запросу (поток сервера). */
+    /** Sections with plan positions/fires (bit per section); computed on first request (server thread). */
     @Nullable
     private long[] sectionBits;
 
@@ -183,28 +183,28 @@ public final class RuinPlan {
         this.outsideState = outsideState;
     }
 
-    /** Гарь вспышки плана (тот поток, что строит план, до того как план отдан). */
+    /** Plan flash scorch (plan-building thread, before handoff). */
     void flash(int[] marks) {
         this.flash = marks;
     }
 
-    /** Гарь вспышки плана: метки граней; пусто — не считались или ничего не обуглено. */
+    /** Plan flash scorch: face marks; empty if uncomputed or no charring. */
     public int[] flash() {
         return flash == null ? NONE : flash;
     }
 
-    /** Пожары слоя вспышки, которые собьёт волна (тот поток, что строит план). */
+    /** Wave-blown flash-layer fires (plan-building thread). */
     void blown(int[] cells) {
         java.util.Arrays.sort(cells);
         this.blown = cells;
     }
 
-    /** Пожар слоя вспышки на месте {@code key} собьёт волна: его нет в счёте пожаров подрыва. */
+    /** Wave extinguishes flash-layer fire at {@code key}: excluded from detonation fire count. */
     boolean isBlown(int key) {
         return blown != null && java.util.Arrays.binarySearch(blown, key) >= 0;
     }
 
-    /** Место (без состояния) — среди пожаров плана. */
+    /** Position (without state) among plan fires. */
     boolean hasFire(int key) {
         int[] keys = fireKeys;
         if (keys == null) {
@@ -216,7 +216,7 @@ public final class RuinPlan {
         return java.util.Arrays.binarySearch(keys, key) >= 0;
     }
 
-    /** Место плана (без состояния и флагов): номер в {@link #cells}, иначе отрицательное. */
+    /** Plan position (without state/flags): index in {@link #cells}, otherwise negative. */
     private int find(int key) {
         int lo = 0, hi = cells.length - 1;
         while (lo <= hi) {
@@ -228,12 +228,12 @@ public final class RuinPlan {
         return -1;
     }
 
-    /** Место в секции и номер секции — без состояния и флагов. */
+    /** Section position/index without state/flags. */
     static final int KEY_MASK = (1 << STATE_SHIFT) - 1;
 
     /**
-     * Состояние места до вспышки по состоянию {@code live} в чанке, где стоит этот слой вспышки: его огонь — воздух, его
-     * новое состояние места — старое; иначе — как есть (место после вспышки меняли — план руин по нему устареет).
+     * Pre-flash state from {@code live} in chunk bearing this layer: layer fire is air, layer
+     * new state restores old; otherwise unchanged (post-flash edits stale ruin plan there).
      */
     BlockState beforeFlash(int key, BlockState live) {
         if (live.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock && hasFire(key)) live = Blocks.AIR.defaultBlockState();
@@ -241,7 +241,7 @@ public final class RuinPlan {
         return k >= 0 && live == states[(cells[k] >>> STATE_SHIFT) & STATE_MASK] ? olds[k] : live;
     }
 
-    /** Есть ли у слоя места или пожары в секции {@code i} (поток сервера). */
+    /** Whether layer has positions/fires in section {@code i} (server thread). */
     boolean touches(int i) {
         long[] bits = sectionBits;
         if (bits == null) {
@@ -257,11 +257,11 @@ public final class RuinPlan {
     }
 
     /**
-     * Мир до вспышки в копии чанка (снимок для руин, {@link ChunkShot}): огонь слоя — воздух, места слоя с его новым
-     * состоянием — старое; карты высот и источники неба столбцов слоя — заново по копии ({@link #rescanCopy}): значения
-     * «после» в плане слоя не знают его пожаров (огонь поднимает поверхность мира на блок) и не годятся, если чанк меняли
-     * после снимка слоя. Секции, которых касается слой ({@link #touches}), — свои копии ({@link #copyStates}); null —
-     * секция из воздуха. Поток сервера.
+     * Pre-flash world in chunk copy (ruin snapshot, {@link ChunkShot}): layer fire becomes air, positions matching layer's new
+     * state restore old; layer-column heightmaps/sky sources rescanned from copy ({@link #rescanCopy}): layer plan's
+     * “after” values omit its fires (fire raises world surface a block), invalid if chunk edited
+     * since layer snapshot. Touched sections ({@link #touches}) get own copies ({@link #copyStates}); null
+     * means air section. Server thread.
      */
     void unflash(PalettedContainer<BlockState>[] sections, int minY, int[] shotHeights, @Nullable int[] sky) {
         BlockState air = Blocks.AIR.defaultBlockState();
@@ -291,11 +291,11 @@ public final class RuinPlan {
     }
 
     /**
-     * Слой вспышки подрыва стоит в чанке ({@link FlashScorch#marked}), а его плана в памяти нет (руины подрыва забыты,
-     * перезапуск сервера): огонь в своих копиях секций ({@code own}) — воздух, карты высот столбцов с огнём — по копии.
-     * Поток сервера.
+     * Detonation flash layer present ({@link FlashScorch#marked}) but plan absent from memory (ruins forgotten,
+     * server restart): fire in owned section copies ({@code own}) becomes air, fire-column heightmaps rescanned from copy.
+     * Server thread.
      *
-     * @return были ли в копиях огонь
+     * @return whether copies contained fire
      */
     static boolean unfire(PalettedContainer<BlockState>[] sections, boolean[] own, int minY, int[] heights, @Nullable int[] sky) {
         BlockState air = Blocks.AIR.defaultBlockState();
@@ -318,10 +318,10 @@ public final class RuinPlan {
     }
 
     /**
-     * Карты высот ({@code вид * 256 + столбец}: первый свободный) и нижние источники неба столбцов копии секций после её
-     * правки — по блокам копии, тем же правилом, что у плана ({@code RuinPlanner.Sections.heights}): {@code top} — верхнее
-     * правленое место столбца ({@code Integer.MIN_VALUE} — столбец не правили). Выше него копия та же, поэтому значение,
-     * которое над ним, остаётся, а остальные ищутся от него вниз. Свойства — таблица потока сервера ({@link Blast#SERVER}).
+     * Heightmaps ({@code type * 256 + column}: first free) and lower sky sources of edited section-copy columns
+     * computed from copy blocks, same rule as plan ({@code RuinPlanner.Sections.heights}): {@code top} is highest
+     * edited column position ({@code Integer.MIN_VALUE} unedited). Copy unchanged above, so values
+     * above remain, others searched downward from it. Server-thread property table ({@link Blast#SERVER}).
      */
     private static void rescanCopy(PalettedContainer<BlockState>[] sections, int minY, int[] heights, @Nullable int[] sky, int[] top) {
         for (int column = 0; column < 256; column++) {
@@ -351,30 +351,30 @@ public final class RuinPlan {
         }
     }
 
-    /** Состояние места копии секций (y — мира); вне высоты мира — воздух. */
+    /** Section-copy position state (world y); air outside world height. */
     private static BlockState copyState(PalettedContainer<BlockState>[] sections, int minY, int lx, int y, int lz) {
         int i = (y - minY) >> 4;
         if (y < minY || i >= sections.length || sections[i] == null) return Blocks.AIR.defaultBlockState();
         return sections[i].get(lx, y & 15, lz);
     }
 
-    /** Состояние для сравнения со старым: погашенная блэкаутом лампа — та же лампа. */
+    /** State normalized for old-state comparison: blackout-darkened lamp is same lamp. */
     static BlockState normal(BlockState s) {
         BlockState lit = GridLights.lit(s);
         return lit != null ? lit : s;
     }
 
-    /** Добавить старое состояние места к хешу секции (порядок мест — как в плане). */
+    /** Add old position state to section hash (plan position order). */
     static long mix(long h, BlockState old) {
         return mixNormal(h, normal(old));
     }
 
-    /** То же по уже приведённому состоянию ({@link Blast.Props#normal}: фоновый план не зовёт {@code GridLights}). */
+    /** Same with normalized state ({@link Blast.Props#normal}: background plan never calls {@code GridLights}). */
     static long mixNormal(long h, BlockState normal) {
         return (h ^ System.identityHashCode(normal)) * 0x9E3779B97F4A7C15L + 1;
     }
 
-    /** Для проверок: чем план отличается от другого (те же места, новые и старые состояния, пожары); null — ничем. */
+    /** For tests: differences from another plan (same positions, new/old states, fires); null if none. */
     @Nullable
     public String differs(RuinPlan o) {
         int mask = (1 << STATE_SHIFT) - 1;
@@ -390,7 +390,7 @@ public final class RuinPlan {
             if (n++ < 4) out.append(" [x ").append(c & 15).append(" y ").append((section(c) << 4) + ((c >> 8) & 15)).append(" z ").append((c >> 4) & 15)
                     .append(": ").append(a.get(c)).append(" | ").append(b.get(c)).append(']');
         }
-        // пожары — по местам: тень светового импульса у соседа, чьи руины уже стоят, — та же, что до них
+        // fires by position: light-pulse shadow from ruined neighbor same as before ruins
         java.util.TreeSet<Integer> fa = new java.util.TreeSet<>(), fb = new java.util.TreeSet<>();
         for (int c : fires) fa.add(c & mask);
         for (int c : o.fires) fb.add(c & mask);
@@ -401,7 +401,7 @@ public final class RuinPlan {
             out.append(" fires ").append(fa.size()).append(" | ").append(fb.size()).append(", only left ").append(onlyA.size())
                     .append(", only right ").append(onlyB.size());
         }
-        // карты высот и нижние источники неба изменённых столбцов (у снимка с диска источники неба посчитаны по блокам)
+        // heightmaps/lower sky sources for changed columns (disk-snapshot sky sources computed from blocks)
         boolean heightsDiffer = !java.util.Arrays.equals(heights, o.heights);
         if (heightsDiffer) out.append(" heightmaps differ (").append(heights.length).append(" | ").append(o.heights.length).append(')');
         boolean biomesDiffer = biomes == null ? o.biomes != null : !biomes.same(o.biomes);
@@ -410,14 +410,14 @@ public final class RuinPlan {
     }
 
     /**
-     * Какие соседи нужны подмене загруженными (0 — хватает самого чанка). Радиус 1 — когда она меняет через мир
-     * блок-сущность или место POI ({@code SLOW}) у края чанка: {@code onRemove} сундука, компаратора смотрит соседние
-     * блоки ({@link #EDGE} от края; Sable на смену блока — {@link NuclearTickets#SABLE_REACH}), — или когда у чанка
-     * аппараты Sable ({@code SableTerrain}: на каждое место он читает соседей). Радиус {@link RuinPlanner#REACH} —
-     * когда через мир снимается блок-сущность не из ванили, где бы она ни стояла: её {@code onRemove} ходит цепочкой
-     * (лента Create снимает сегменты до 20 блоков через {@code getBlockState}, сеть валов обходится через
-     * {@code getBlockEntity}) и грузила бы соседа синхронно.
-     * Остальное пишется в свои секции; тики жидкости в незагруженных соседях не ставятся ({@link #write}).
+     * Neighbors replacement requires loaded (0 chunk alone). Radius 1 when changing block entity/POI
+     * through world ({@code SLOW}) near chunk edge: chest/comparator {@code onRemove} reads neighbors
+     * ({@link #EDGE} from edge; Sable block change {@link NuclearTickets#SABLE_REACH}), or chunk has
+     * Sable craft ({@code SableTerrain}: neighbors read per position). Radius {@link RuinPlanner#REACH}
+     * for any non-vanilla block entity removed through world: {@code onRemove} follows chains
+     * (Create belt removes up to 20 blocks via {@code getBlockState}, shaft network traversed via
+     * {@code getBlockEntity}), which would synchronously load neighbor.
+     * Other positions written in own sections; no fluid ticks scheduled in unloaded neighbors ({@link #write}).
      */
     public int neighbourRadius(ServerLevel level, LevelChunk chunk) {
         int r = 0;
@@ -435,26 +435,26 @@ public final class RuinPlan {
         return r > 0 || SableTerrain.watched(level, chunk) ? 1 : 0;
     }
 
-    /** Подмене нужны соседи ({@link #neighbourRadius}). */
+    /** Replacement needs neighbors ({@link #neighbourRadius}). */
     public boolean needsNeighbours(ServerLevel level, LevelChunk chunk) {
         return neighbourRadius(level, chunk) > 0;
     }
 
-    /** Подмене нужны соседи ({@link #neighbourRadius}), а они не загружены: радиус, которого очередь руин ждёт, иначе 0. */
+    /** Replacement needs unloaded neighbors ({@link #neighbourRadius}): awaited radius, otherwise 0. */
     public int waitsNeighbours(ServerLevel level, LevelChunk chunk) {
         int r = neighbourRadius(level, chunk);
         return r > 0 && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), r) ? r : 0;
     }
 
-    /** Сколько блоков от края чанка {@code onRemove} блок-сущности может читать соседей (компаратор — через блок). */
+    /** Block-entity {@code onRemove} neighbor-read reach from chunk edge (comparator reads through block). */
     static final int EDGE = 2;
 
-    /** Сколько тиков жидкости ставит план. */
+    /** Fluid ticks scheduled by plan. */
     public int fluidTickCount() {
         return fluidTicks.length;
     }
 
-    /** Больше всего тиков жидкости плана за одну секунду его расписания (проверки): не больше {@link #FLUID_TICKS}. */
+    /** Maximum fluid ticks in any scheduled second (tests): at most {@link #FLUID_TICKS}. */
     public int maxFluidTicksPerSecond() {
         it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap at = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
         int most = 0;
@@ -466,49 +466,49 @@ public final class RuinPlan {
         return most;
     }
 
-    /** Первый тик жидкости — через столько тиков после подмены. */
+    /** First fluid-tick delay after replacement, ticks. */
     private static final int FLUID_DELAY = 5;
 
     /**
-     * Через сколько тиков тик жидкости {@code k} плана: по {@link #FLUID_TICKS} на секунду по порядку, внутри секунды —
-     * вразнобой по хешу места.
+     * Delay to plan fluid tick {@code k}: {@link #FLUID_TICKS} per second in order, within second
+     * staggered by position hash.
      */
     private static int fluidDelay(int k, int x, int y, int z) {
         return FLUID_DELAY + 20 * (k / FLUID_TICKS) + (int) (RuinPlanner.hash(x, y, z, 37) * 20);
     }
 
-    /** Сколько пожаров ставит план (проверки). */
+    /** Plan fire count (tests). */
     public int fireCount() {
         return fires.length;
     }
 
-    /** Сколько блоков меняет план (без пожаров). */
+    /** Plan changed-block count (excluding fires). */
     public int changedBlocks() {
         return cells.length;
     }
 
-    /** Опаляет ли план биом чанка (проверки). */
+    /** Whether plan singes chunk biome (tests). */
     public boolean recolours() {
         return biomes != null;
     }
 
     /**
-     * До {@code max} мест, где волна снесла блок целиком (был блок с моделью, стал воздух), — с блоком, который там был:
-     * их куски разлетаются у игроков, которые видят чанк ({@code S2C.NukeDebris}). Места выбраны по хешу места (самые
-     * малые), а не по порядку плана: разбросаны по чанку, и тот же план даёт те же места. Места, которые уже сменил слой
-     * вспышки (растения сгорели со вспышкой), не разлетаются. Поток сервера, проход по всем местам плана — на место только
-     * сравнения и перемешивание числа.
+     * Up to {@code max} positions fully removed by wave (modeled block became air), with original block:
+     * their pieces scatter for chunk viewers ({@code S2C.NukeDebris}). Chosen by smallest position hashes,
+     * not plan order: spread throughout chunk, same positions for same plan. Positions already changed by flash
+     * layer (flash-burned plants) do not scatter. Server thread, scans all plan positions, per position only
+     * comparisons and integer mixing.
      */
     public List<S2C.NukeDebris.Piece> thrown(LevelChunk chunk, int max) {
         return debris(chunk, max).pieces();
     }
 
-    /** Места снесённого ({@link #thrown}) и сколько их всего в чанке — из них места выбраны. */
+    /** Removed positions ({@link #thrown}) and total chunk count sampled from. */
     public record Debris(List<S2C.NukeDebris.Piece> pieces, int removed) {
         static final Debris NONE = new Debris(List.of(), 0);
     }
 
-    /** {@link #thrown} со счётом всех мест, где волна снесла блок целиком: места — выборка из них. */
+    /** {@link #thrown} with total fully wave-removed positions; returned positions sample these. */
     public Debris debris(LevelChunk chunk, int max) {
         if (cells.length == 0 || max <= 0) return Debris.NONE;
         ChunkPos pos = chunk.getPos();
@@ -516,7 +516,7 @@ public final class RuinPlan {
         long salt = pos.toLong() * 0x9E3779B97F4A7C15L;
         int local = (1 << STATE_SHIFT) - 1;
         RuinPlan flash = flashOf(chunk);
-        // лучшие по возрастанию хеша: номер места в плане и хеш
+        // best ascending hashes: plan position index and hash
         int[] best = new int[max];
         long[] keys = new long[max];
         int n = 0, removed = 0;
@@ -542,7 +542,7 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
-    /** Примерный размер плана в памяти, байты (для строки в лог). */
+    /** Approximate plan memory, bytes (for log). */
     public long bytes() {
         if (this == EMPTY) return 0;
         return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
@@ -555,17 +555,17 @@ public final class RuinPlan {
     }
 
     /**
-     * Места плана руин подрыва {@code d} в секциях чанка всё те же, что при построении плана. План строится по миру до
-     * вспышки: где в чанке стоит слой вспышки подрыва ({@link RuinContext#flashed}), места сверяются по миру до него
-     * ({@link #beforeFlash}); слой стоит, а его плана в памяти нет ({@link FlashScorch#marked}), — огонь читается
-     * воздухом, как в снимке такого чанка ({@link #unfire}).
+     * Detonation {@code d} plan positions still same as at planning. Plan uses pre-flash world:
+     * where detonation flash layer present ({@link RuinContext#flashed}), compare pre-layer world
+     * ({@link #beforeFlash}); layer marked without memory plan ({@link FlashScorch#marked}) means fire read
+     * as air, like snapshot of such chunk ({@link #unfire}).
      */
     boolean current(LevelChunk chunk, Detonation d) {
         RuinPlan flash = flashOf(chunk);
         return current(chunk, flash, flash == null && FlashScorch.marked(chunk, d.id()));
     }
 
-    /** Слой вспышки чанка, по которому сверяется этот план руин (у самого слоя — null). */
+    /** Chunk flash layer for checking this ruin plan (null for layer itself). */
     @Nullable
     private RuinPlan flashOf(LevelChunk chunk) {
         RuinPlan f = ctx == null ? null : ctx.flashed(chunk.getPos().toLong());
@@ -597,14 +597,14 @@ public final class RuinPlan {
     }
 
     /**
-     * Руины в копии чанка не из мира — с диска, для LOD Distant Horizons вдали ({@link FarLods}): все места плана (и
-     * «через мир» — копии нечего будить) и, если {@code fires}, пожары без счётчика пожаров подрыва — копия его не
-     * тратит. Любой поток: зовёт
-     * только секции копии. На диске двойников ламп не бывает ({@code ChunkSaves}), поэтому хеш старых состояний —
-     * по состояниям как есть.
+     * Ruins in outside-world disk chunk copy for distant Distant Horizons LODs ({@link FarLods}): all plan positions
+     * (including world-path, copy has nothing to wake), optional {@code fires}, without detonation fire counter; copy
+     * does not consume it. Any thread, calling
+     * only copy sections. No darkened lamp twins on disk ({@code ChunkSaves}), so old-state hash uses
+     * raw states.
      *
-     * @return сколько клеток биома поменялось ({@link ScorchedBiomes#write}); −1 — места плана в копии уже не те (чанк
-     *         меняли после плана): копия не годится
+     * @return biome cells changed ({@link ScorchedBiomes#write}); −1 if plan positions differ (chunk
+     *          edited since plan), copy invalid
      */
     int applyToCopy(LevelChunkSection[] sections, boolean fires, net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> biomeRegistry,
                         int minSection) {
@@ -631,8 +631,8 @@ public final class RuinPlan {
     }
 
     /**
-     * Для проверок: секции чанка (копии, с биомами), какими их сделал бы один этот план — все места и пожары там, где
-     * воздух, без счётчика пожаров ({@link #applyToCopy}).
+     * For tests: chunk section copies (with biomes) as this plan alone would produce, all positions/fires where
+     * air, without fire counter ({@link #applyToCopy}).
      */
     public LevelChunkSection[] testAppliedCopy(ServerLevel level, LevelChunk chunk) {
         LevelChunkSection[] live = chunk.getSections(), out = new LevelChunkSection[live.length];
@@ -644,9 +644,9 @@ public final class RuinPlan {
     }
 
     /**
-     * Все блоки чанка те же, что в снимке плана (поток сервера): секция за секцией — отпечаток как есть, а где он
-     * разошёлся (перестроенная палитра, лампа, погашенная блэкаутом), — по местам с точностью до погашенных ламп. Тогда
-     * карты высот и источники неба из плана верны; нет — столбцы плана считаются по чанку ({@link #rescanColumns}).
+     * All chunk blocks match plan snapshot (server thread): per section compare raw fingerprint; where
+     * different (rebuilt palette, blackout-darkened lamp), compare positions allowing darkened lamps. If true,
+     * plan heightmaps/sky sources valid; otherwise rescan plan columns from chunk ({@link #rescanColumns}).
      */
     public boolean sameBlocks(LevelChunk chunk) {
         if (prints == null || normals == null) return false;
@@ -659,8 +659,8 @@ public final class RuinPlan {
     }
 
     /**
-     * Старое состояние места чанка до этих руин (y — мира) или null, если место не из плана. Для соседей, которые
-     * строят свои планы по исходному миру, пока руины этого чанка уже стоят.
+     * Old chunk state before these ruins (world y), null outside plan. For neighbors planning
+     * from original world while this chunk's ruins stand.
      */
     @Nullable
     BlockState oldState(int lx, int y, int lz, int minY) {
@@ -677,19 +677,19 @@ public final class RuinPlan {
         return null;
     }
 
-    /** Каждое старое состояние мест плана (с повторами). */
+    /** Each old plan-position state (with duplicates). */
     void forEachOld(java.util.function.Consumer<BlockState> each) {
         for (BlockState o : olds) each.accept(o);
     }
 
-    /** Есть ли среди старых состояний мест секции {@code section} такое, что {@code test}. */
+    /** Whether old states of {@code section} plan positions include one satisfying {@code test}. */
     boolean anyOld(int section, java.util.function.Predicate<BlockState> test) {
         if (section < 0 || section >= oldHashes.length || oldHashes[section] == 0) return false;
         for (int k = 0; k < cells.length; k++) if (section(cells[k]) == section && test.test(olds[k])) return true;
         return false;
     }
 
-    /** Верх столбцов по старым блокам мест плана: [0..255] — не-воздух, [256..511] — опора без листвы (или жидкость); MIN — нет. */
+    /** Column tops from old plan blocks: [0..255] non-air, [256..511] support without leaves (or liquid); MIN absent. */
     int[] oldTops(int minY) {
         int[] t = oldTops;
         if (t != null) return t;
@@ -708,19 +708,19 @@ public final class RuinPlan {
     private int[] oldTops;
 
     /**
-     * Поставить руины в чанк (он и соседи загружены целиком — проверяет вызывающий). Устаревший план не ставится. Где
-     * стоит слой вспышки подрыва ({@link FlashScorch}), руины — поверх него ({@link #write}): огонь слоя, которого нет
-     * среди пожаров руин (сбит волной, место завалено, снесено то, на чём он стоял), гаснет, остальной горит дальше и
-     * только теперь получает первый тик; отметка слоя на чанке снимается.
+     * Apply ruins (chunk/neighbors fully loaded, caller checks). Stale plan not applied. Where detonation
+     * flash layer present ({@link FlashScorch}), overwrite with ruins ({@link #write}): layer fire absent
+     * from ruin fires (wave-blown, buried, support removed) extinguished, remainder continues and
+     * receives first tick only now; chunk layer mark cleared.
      *
-     * @param d подрыв, чьи это руины: гарь вспышки встаёт его слоем. Не {@code ctx.d}: руины, подготовленные заранее,
-     *          строятся по месту подрыва без номера и времени ({@code NuclearWarhead.geometry}), а слой гари должен быть
-     *          тем же, что у силуэтов подрыва, и со временем вспышки
-     * @return false — план устарел, ничего не изменено
+     * @param d detonation owning ruins: flash scorch uses its layer. Not {@code ctx.d}: prebuilt ruins
+     *           use geometry without ID/time ({@code NuclearWarhead.geometry}), while scorch layer must match
+     *           detonation silhouettes and flash time
+     * @return false if stale, nothing changed
      */
     public boolean apply(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
         if (this == EMPTY) {
-            // руины ничего не меняют, а слой вспышки зажёг огонь: волна сбила весь — гаснет (иначе стоял бы без тиков)
+            // ruins change no blocks, layer ignited fire: wave extinguishes all (otherwise remains unticked)
             if (FlashScorch.marked(chunk, d.id())) {
                 RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
                 RuinPlan flash = kept == null ? null : kept.flashed(chunk.getPos().toLong());
@@ -735,36 +735,36 @@ public final class RuinPlan {
         if (!current(chunk, flash, marked)) return false;
         short[] motion = new short[256];
         for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
-        // биом — до блоков: LOD Distant Horizons после записи мест читает чанк уже с ним
+        // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
         if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
-            // блоки вне мест плана — до записи мест: после неё чанк уже другой. Со слоем вспышки чанк не тот, что в
-            // снимке плана (снят до вспышки), и столбцы плана — заново по чанку
+            // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
+            // from pre-flash plan snapshot, so rescan plan columns from chunk
             write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
         } else if (recoloured) {
             DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
         }
         if (ctx != null) ctx.applied(chunk, this, motion);
         FlashScorch.unmark(chunk, d.id());
-        // гарь вспышки — с руинами (слой вспышки её уже поставил: заменяется на гарь уцелевшего); следы прежних вспышек
-        // на сменившихся блоках уходят
+        // flash scorch with ruins (layer already applied: replace with surviving scorch); old flash traces
+        // on changed blocks removed
         if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
         return true;
     }
 
     /**
-     * Поставить слой вспышки ({@link RuinPlanner#flash}) в чанк — в миг вспышки, до волны ({@link FlashScorch}; поток
-     * сервера, чанк загружен целиком, у аппаратов Sable — и соседи): места и пожары прямо в секции, как руины, игрокам —
-     * пакетами секций в том же тике, LOD Distant Horizons, гарь на гранях — слоем подрыва {@code d}. Тиков огню слой не
-     * ставит: до руин чанка огонь не растёт, не перекидывается и не гаснет, и места плана руин по миру до вспышки
-     * остаются теми же, когда бы руины ни встали; тик тому, что горит дальше, даёт {@link #apply}. В счёт пожаров
-     * подрыва — только те, что волна не собьёт ({@link #blown}): сбитые гаснут до первого тика. Слой отмечается в руинах
-     * подрыва ({@link RuinContext#flashed}): по нему план руин сверяет чанк, а снимки чанка для руин — мир до вспышки; если
-     * он зажёг огонь — и на самом чанке ({@link FlashScorch#mark}): руины, построенные без плана слоя (после
-     * перезапуска), знают, что огонь в чанке — слоя.
+     * Apply flash layer ({@link RuinPlanner#flash}) at flash, before wave ({@link FlashScorch}; server
+     * thread, chunk fully loaded, neighbors too near Sable craft): positions/fires directly into sections like ruins; players
+     * get same-tick section packets, Distant Horizons LODs updated, face scorch in {@code d} layer. No fire ticks
+     * scheduled: before ruins fire neither grows, spreads nor dies, so pre-flash ruin-plan positions
+     * remain valid whenever ruins applied; {@link #apply} schedules continuing fire. Only wave-surviving fires enter
+     * detonation count ({@link #blown}); wave-blown ones extinguished before first tick. Layer recorded in detonation
+     * ruins ({@link RuinContext#flashed}) for chunk validation/pre-flash snapshots; if
+     * fire ignited, also chunk mark ({@link FlashScorch#mark}): ruins built without layer plan (after
+     * restart) know chunk fire belongs to layer.
      *
-     * @return сколько зажжено пожаров (и сбиваемых волной); −1 — слой устарел (места сменились после снимка): ничего
-     *         не изменено
+     * @return fires ignited (including wave-blown); −1 stale layer (positions changed since snapshot): nothing
+     *          changed
      */
     int applyFlash(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
         if (this == EMPTY || ctx == null) return 0;
@@ -785,11 +785,11 @@ public final class RuinPlan {
     }
 
     /**
-     * @param untouched блоки чанка те же, что в снимке плана ({@link #sameBlocks})
-     * @param flash     слой вспышки, что стоит в чанке (план руин поверх него), иначе null
-     * @param marked    слой вспышки стоит, а его плана в памяти нет ({@link FlashScorch#marked}): огонь чанка — его огонь
-     * @param layer     пишется сам слой вспышки: огню без тиков, в счёт пожаров — только несбиваемые
-     * @return сколько пожаров зажжено
+     * @param untouched chunk blocks same as plan snapshot ({@link #sameBlocks})
+     * @param flash     applied chunk flash layer (ruins over it), otherwise null
+     * @param marked    layer marked without memory plan ({@link FlashScorch#marked}): chunk fire belongs to it
+     * @param layer     writing flash layer itself: no fire ticks, only wave-surviving fires counted
+     * @return fires ignited
      */
     private int write(ServerLevel level, LevelChunk chunk, ColumnScar.Budget budget, long t, boolean untouched, @Nullable RuinPlan flash,
                       boolean marked, boolean layer) {
@@ -799,23 +799,23 @@ public final class RuinPlan {
         int x0 = pos.getMinBlockX(), z0 = pos.getMinBlockZ(), minY = chunk.getMinBuildHeight();
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         BlockState air = Blocks.AIR.defaultBlockState();
-        // места плана — прямо в секциях чанка, как setBlock (он тоже меняет секцию на месте, пока поток света читает
-        // чанк), но без его работы на каждый блок; блок-сущности и POI — через мир после подмены (их onRemove:
-        // содержимое, половинки сундука, конвейеры Create)
+        // plan positions directly in sections like setBlock (also changes section in place while light thread reads
+        // chunk), without per-block overhead; block entities/POIs through world afterward (onRemove:
+        // contents, chest halves, Create belts)
         LevelChunkSection[] now = chunk.getSections();
-        // изменённые секции и какие из них были пустыми (по биту на секцию: секций бывает и больше 64)
+        // changed sections and previous emptiness (bit per section, can exceed 64 sections)
         long[] touched = new long[(now.length + 63) >> 6], wasEmpty = new long[touched.length];
-        // руины поверх слоя вспышки: огонь слоя — среди мест плана и пожаров руин или гаснет
+        // ruins over flash layer: layer fire present in plan positions/ruin fires or extinguished
         boolean over = flash != null || marked;
         boolean ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
         int maxFires = IncomingConfig.SERVER.nukeMaxFires.get();
-        // Sable — смена с того, что стояло на месте перед записью (поверх слоя — не мир до вспышки из плана)
+        // Sable sees state immediately before write (over layer, not plan's pre-flash world)
         boolean sable = SableTerrain.present() && SableTerrain.watched(level, chunk);
         BlockState[] was = sable ? new BlockState[cells.length] : null;
-        // где погас огонь слоя (завал, пролом, сбит волной): проверка света — огонь светит
+        // extinguished layer fire (rubble, breach, wave-blown) needs light check, since fire emits light
         LongArrayList quenched = null;
-        // руины поверх слоя без его плана не знают, какой огонь чанка в счёте пожаров: весь, что взял счётчик, уходит, а
-        // входит тот, что горит дальше (счётчик после перезапуска — новый: он слоя чанка не брал). С планом слоя — по месту
+        // ruins over layer without plan cannot identify counted chunk fires: return all layer counter took,
+        // then count continuing fire (fresh post-restart counter took none). With layer plan, per position
         int layerCounted = budget.layer.remove(pos.toLong());
         if (marked) budget.fires = Math.max(0, budget.fires - layerCounted);
         for (int k = 0; k < cells.length; k++) {
@@ -826,7 +826,7 @@ public final class RuinPlan {
             BlockState state = states[(c >>> STATE_SHIFT) & STATE_MASK];
             BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
             if (over && fire(live)) {
-                // огонь слоя там, где по плану воздух с огнём руин (сгоревшая трава), горит дальше — его ведут пожары ниже
+                // layer fire where plan says air with ruin fire (burned grass) continues, handled by fires below
                 if (state.isAir() && ignites && hasFire(c & KEY_MASK)) continue;
                 if (quenched == null) quenched = new LongArrayList();
                 quenched.add(at(m, c, x0, z0, minY).asLong());
@@ -836,8 +836,8 @@ public final class RuinPlan {
             s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, state, false);
             if (was != null) was[k] = live;
         }
-        // пожары — там, где по плану воздух, пока не кончился счётчик пожаров подрыва; огонь слоя на месте пожара руин
-        // горит дальше (вид — как у руин: грани к горючим соседям после волны)
+        // fires where plan says air, until detonation fire counter exhausted; layer fire on ruin-fire position
+        // continues (ruin type: faces toward post-wave flammable neighbors)
         int lit = 0, n = 0;
         int[] burning = fires.length == 0 || !ignites ? NONE : new int[fires.length];
         BlockState[] fireWas = burning.length == 0 ? NO_STATES : new BlockState[burning.length];
@@ -849,8 +849,8 @@ public final class RuinPlan {
             BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
             if (!live.isAir()) {
                 if (!over || !fire(live)) continue;
-                // огонь слоя, которого нет в счёте пожаров подрыва (по слою его собьёт волна; или слой без плана), а руины
-                // его оставили: теперь — в счёте
+                // layer fire excluded from detonation count (layer predicts wave-blown, or no plan) but retained by ruins
+                // now enters count
                 if (flash == null || !flash.counted(c & KEY_MASK)) budget.fires++;
                 if (live != fire) {
                     touch(touched, wasEmpty, now, i);
@@ -870,7 +870,7 @@ public final class RuinPlan {
             burning[n++] = c;
         }
         if (layer && layerCounted > 0) budget.layer.put(pos.toLong(), layerCounted);
-        // огонь слоя, которого нет ни среди мест плана, ни среди пожаров руин (сбит волной, стоял на снесённом), гаснет
+        // layer fire absent from both plan positions and ruin fires (wave-blown, support removed) extinguished
         LongArrayList out = null;
         List<BlockState> outWas = null;
         if (over) {
@@ -884,7 +884,7 @@ public final class RuinPlan {
                 touch(touched, wasEmpty, now, i);
                 s.setBlockState(f & 15, (f >> 8) & 15, (f >> 4) & 15, air, false);
                 at(m, f, x0, z0, minY);
-                // огонь не держит движение и не закрывает небо: из карт высот он меняет только поверхность мира
+                // fire blocks neither motion nor sky: only world-surface heightmap changes
                 surface.update(f & 15, m.getY(), (f >> 4) & 15, air);
                 if (quenched == null) quenched = new LongArrayList();
                 quenched.add(m.asLong());
@@ -897,7 +897,7 @@ public final class RuinPlan {
                 if (flash != null && flash.counted(key)) budget.fires = Math.max(0, budget.fires - 1);
             }
         }
-        // Sable держит копию блоков мира у аппаратов и видит только LevelChunk.setBlockState: у аппаратов — сообщить
+        // Sable keeps world-block copies near craft, observes only LevelChunk.setBlockState: notify near craft
         if (sable) {
             for (int k = 0; k < cells.length; k++) {
                 if (was[k] == null) continue;
@@ -922,11 +922,11 @@ public final class RuinPlan {
         }
         PHASES[1] += System.nanoTime() - t;
         t = System.nanoTime();
-        // карты высот и источники неба — из плана; чанк меняли после плана вне мест плана (блок внутри дома) или
-        // значение «до» в столбце не то — все столбцы плана заново по чанку
+        // heightmaps/sky sources from plan; chunk edited since plan outside plan positions (block inside house), or
+        // column “before” value differs, so rescan all plan columns from chunk
         if (!untouched || !setHeights(chunk)) rescanColumns(chunk);
         if (lit > 0) {
-            // огонь не воздух, но не держит движение и не закрывает небо: из карт высот он меняет только поверхность мира
+            // fire is not air but blocks neither motion nor sky: only world-surface heightmap changes
             Heightmap surface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE);
             for (int k = 0; k < n; k++) {
                 if (!fireWas[k].isAir()) continue;
@@ -936,7 +936,7 @@ public final class RuinPlan {
         }
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
-        // кто видит чанк, получает изменения в этом же тике — пакетами секций (как setBlock), а не очередью чанков
+        // chunk viewers get changes same tick via section packets (like setBlock), not chunk queue
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
         List<ServerPlayer> players = holder == null ? List.of() : level.getChunkSource().chunkMap.getPlayers(pos, false);
         boolean watched = !players.isEmpty();
@@ -955,16 +955,16 @@ public final class RuinPlan {
             at(m, c, x0, z0, minY);
             if (fireWas[k].isAir()) checks[checked++] = m.asLong();
             if (sections && fireWas[k] != fire) holder.blockChanged(m);
-            // тик огня, как у поставленного огня (FireBlock.onPlace): 30–39 тиков; у слоя вспышки — с руинами
+            // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
             if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
         }
         checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
-        // жидкость у пролома (и у соседей): тик, как дал бы ей setBlock соседа, — вразнобой по хешу места и не больше
-        // FLUID_TICKS за секунду: подмена не будит соседей, без тика вода стояла бы стеной
+        // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
+        // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall
         for (int k = 0; k < fluidTicks.length; k++) {
             m.set(fluidTicks[k]);
-            // сосед не загружен (готовому плану соседи не нужны): тика нет — загрузка чанка его не ставит, и вода там
-            // стоит, пока её не тронет обновление блока рядом
+            // neighbor unloaded (ready plan needs no neighbors): no tick; chunk load does not schedule one, so water
+            // stands until nearby block update
             if (!Terrain.ready(level, m)) continue;
             BlockState st = level.getBlockState(m);
             if (st.getFluidState().isEmpty()) continue;
@@ -973,8 +973,8 @@ public final class RuinPlan {
         PHASES[3] += System.nanoTime() - t;
         t = System.nanoTime();
         chunk.setUnsaved(true);
-        // самый долгий блок чанка — в строку лога: onRemove бывает дорогим (сеть валов Create обходится целиком,
-        // конвейер снимает всю цепочку)
+        // log chunk's longest block: onRemove may be costly (entire Create shaft network traversed,
+        // belt removes whole chain)
         BlockState slowBlock = null;
         long slowBlockNanos = 0;
         for (int c : cells) {
@@ -989,11 +989,11 @@ public final class RuinPlan {
                 slowBlock = old;
             }
         }
-        // видит, но чанк не тикает (край прорисовки): чанк целиком ванильной отправкой
+        // viewed but non-ticking chunk (view edge): send full chunk via vanilla
         if (watched && !sections) {
             for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
         }
-        // LOD Distant Horizons: руины вместе с волной, а не при следующем сохранении чанка
+        // Distant Horizons LOD: ruins with wave, not next chunk save
         long dh = System.nanoTime();
         DhUpdates.mark(level, pos, level.getGameTime());
         long took = System.nanoTime() - t;
@@ -1012,19 +1012,19 @@ public final class RuinPlan {
         return lit;
     }
 
-    /** Секция {@code i} меняется: отметить её и была ли она пустой (до записи). */
+    /** Section {@code i} changes: mark it and pre-write emptiness. */
     private static void touch(long[] touched, long[] wasEmpty, LevelChunkSection[] now, int i) {
         if (bit(touched, i)) return;
         set(touched, i);
         if (now[i].hasOnlyAir()) set(wasEmpty, i);
     }
 
-    /** Пожар слоя вспышки на месте {@code key} в счёте пожаров подрыва: слой его зажёг, и волна его не сбивает. */
+    /** Layer fire at {@code key} counted toward detonation fires: layer ignited it, wave does not extinguish it. */
     private boolean counted(int key) {
         return hasFire(key) && !isBlown(key);
     }
 
-    /** Места огня в секциях чанка (как в {@link #fires}, без состояния): огонь слоя, чей план забыт. Поток сервера. */
+    /** Chunk-section fire positions (like {@link #fires}, no state): layer fire with forgotten plan. Server thread. */
     private static int[] fireCells(LevelChunkSection[] sections) {
         it.unimi.dsi.fastutil.ints.IntArrayList out = new it.unimi.dsi.fastutil.ints.IntArrayList();
         for (int i = 0; i < sections.length; i++) {
@@ -1036,13 +1036,13 @@ public final class RuinPlan {
     }
 
     /**
-     * Проверки света чанка — одной задачей движка света (как {@code LevelLightEngine.checkBlock} в его потоке), а не
-     * задачей с почтой на каждое место: сотни мест на чанк, тысячи чанков за пару секунд. Движок света не ванильный
-     * (другой мод) — по одному через его {@code checkBlock}.
+     * Chunk light checks in one light-engine task (like {@code LevelLightEngine.checkBlock} on its thread), not
+     * one mailbox task per position: hundreds per chunk, thousands of chunks within seconds. Non-vanilla light engine
+     * (another mod) uses individual {@code checkBlock} calls.
      */
     private static void checkLight(LevelLightEngine light, ChunkPos pos, long[] at) {
         if (at.length == 0) return;
-        // движок блоков есть всегда; нет — свет считает другой мод (Starlight, ScalableLux): задача была бы пустой
+        // block engine always present; absent means another mod computes light (Starlight, ScalableLux): task would be empty
         if (light instanceof ThreadedLevelLightEngine threaded && light.blockEngine != null && vanilla(light.blockEngine, BlockLightEngine.class)
                 && vanilla(light.skyEngine, SkyLightEngine.class)) {
             var block = light.blockEngine;
@@ -1062,8 +1062,8 @@ public final class RuinPlan {
     }
 
     /**
-     * Карты высот и источники неба столбцов из плана. Значение до руин в чанке уже не то (столбец меняли после плана) —
-     * false, ничего не изменено: вызывающий пересчитает столбцы плана по чанку.
+     * Column heightmaps/sky sources from plan. Live pre-ruin value differs (column edited since plan):
+     * false, nothing changed; caller rescans plan columns from chunk.
      */
     private boolean setHeights(LevelChunk chunk) {
         ChunkSkyLightSources sky = chunk.getSkyLightSources();
@@ -1081,12 +1081,12 @@ public final class RuinPlan {
     }
 
     /**
-     * Карты высот и нижние источники неба всех столбцов с местами плана — по чанку после записи мест плана, как
-     * {@code Heightmap.primeHeightmaps} и {@code ChunkSkyLightSources.fillFrom}, но одним проходом по столбцу для всех
-     * карт и неба и только от верхнего места плана вниз: выше него подмена ничего не меняла, и значение, которое там
-     * держит мир, верно. Чанк меняли после плана (крышу над выпотрошенным домом сломали — высота встала на этаж,
-     * который план сносит), и значения из плана могли устареть. Столбцы без мест плана подмена не трогает — их вёл
-     * сам мир; блок-сущности и POI ставятся через мир после этого.
+     * Heightmaps/lower sky sources of all plan-position columns from chunk after writes, like
+     * {@code Heightmap.primeHeightmaps} and {@code ChunkSkyLightSources.fillFrom}, one pass per column for all
+     * maps/sky, only downward from highest plan position: replacement changed nothing above, live world value
+     * there valid. Chunk edited since plan (roof above gutted house broken, lowering height to a floor
+     * removed by plan), so plan values may be stale. Columns without plan positions untouched, world
+     * maintained them; world-path block entities/POIs changed afterward.
      */
     private void rescanColumns(LevelChunk chunk) {
         int minY = chunk.getMinBuildHeight();
@@ -1106,7 +1106,7 @@ public final class RuinPlan {
             int t = top[column];
             if (t == Integer.MIN_VALUE) continue;
             int lx = column & 15, lz = column >> 4, x = x0 + lx, z = z0 + lz;
-            // что искать: значение не выше верхнего места плана (выше — блок над планом, он не менялся)
+            // search values at/below highest plan position (above belongs to unchanged block over plan)
             int open = 0;
             for (int i = 0; i < maps.length; i++) if (maps[i].getFirstAvailable(lx, lz) <= t + 1) open |= 1 << i;
             boolean skyOpen = sky.get(column) <= t + 1;
@@ -1138,7 +1138,7 @@ public final class RuinPlan {
         return engine == null || engine.getClass() == type;
     }
 
-    /** Стволы, упавшие в соседние чанки: сколько. */
+    /** Trunks toppled into neighboring chunks: count. */
     public int outsideCount() {
         return outside == null ? 0 : outside.size();
     }
@@ -1151,7 +1151,7 @@ public final class RuinPlan {
         return outsideState.get(k);
     }
 
-    /** Бревно поваленного ствола — на поверхность соседнего чанка (после его руин), если там не стоит постройка. */
+    /** Toppled-trunk log on neighboring chunk surface (after its ruins), unless structure there. */
     public static void placeLog(ServerLevel level, long at, BlockState log) {
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos().set(at);
         if (!Terrain.ready(level, m) || !NuclearTickets.aroundLoaded(level, m)) return;
@@ -1163,16 +1163,16 @@ public final class RuinPlan {
     private static final ThreadLocal<FriendlyByteBuf> COPY_BUFFER = ThreadLocal.withInitial(() -> new FriendlyByteBuf(Unpooled.buffer(16384)));
 
     /**
-     * Независимая копия секции. Не {@code PalettedContainer.copy()}: у её палитры остаётся обработчик роста палитры
-     * старого контейнера (а одноцветная палитра — вовсе тот же объект), и новое состояние в копии перестраивает данные
-     * старой секции мира, а в копию пишет чужой номер («The value 1 is not in the specified inclusive range of 0 to 0»).
-     * Запись и чтение через буфер собирают палитру заново, со своим обработчиком.
+     * Independent section copy. Not {@code PalettedContainer.copy()}: palette retains old container's resize
+     * handler (single-color palette even same object), so a new copy state rebuilds old world-section
+     * data while writing foreign ID into copy (“The value 1 is not in the specified inclusive range of 0 to 0”).
+     * Buffer write/read rebuilds palette with own handler.
      */
     static LevelChunkSection copyOf(LevelChunkSection section) {
         return new LevelChunkSection(copyStates(section.getStates()), section.getBiomes());
     }
 
-    /** Независимая копия блоков секции, которую можно править ({@link #copyOf}). */
+    /** Independent editable section-block copy ({@link #copyOf}). */
     static PalettedContainer<BlockState> copyStates(PalettedContainer<BlockState> source) {
         FriendlyByteBuf buf = COPY_BUFFER.get();
         buf.clear();

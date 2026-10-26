@@ -1,30 +1,30 @@
 #version 150
 
-// Наклейка на воду (client/fx/layer/WaterDecal): тёмное кольцо фронта ядерной волны — рябь под ветром за фронтом — и пена
-// барашками у эпицентра. Место за пикселем — по расстоянию до мира по оси взгляда (Sampler0, SceneDepth) и матрицам
-// кадра; вода ли там — гладь (поверхность за пикселем горизонтальна, и соседние пиксели на той же высоте: стены, стволы,
-// трава, мобы, склоны и края предметов перед небом на той же высоте в блоке — не вода) на высоте верха стоячей воды —
-// 8/9 блока (у шейдерпака — ниже, на его волны), а дальше прорисовки (LOD DH) — гладь на высоте моря или место ниже
-// моря, тогда — пересечение луча с гладью. Профили колец — Sampler1: строка — кольцо, по x — корень доли пути от фронта
-// к центру; r — темнота, g — пена, b — кружево обычного взрыва (у ядерки 0). Шум — у каждого кольца свой, от его центра (у далёких координат мира
-// в float нет дробной части, а центр подрыва стоит на месте).
+// Water decal (client/fx/layer/WaterDecal): dark nuclear-wave front ring, post-front wind ripples, and whitecap foam
+// near epicenter. Pixel position from view-axis world distance (Sampler0, SceneDepth) and frame
+// matrices; water means horizontal surface with neighboring pixels at same height (walls, trunks,
+// grass, mobs, slopes and object edges against sky at same within-block height are not water), at standing-water top,
+// 8/9 block (lower under shaderpack, for its waves); beyond render distance (DH LOD), sea-level surface or below-sea
+// position, then ray/surface intersection. Ring profiles in Sampler1: one ring per row, x is square root of front-to-center
+// path fraction; r darkness, g foam, b conventional-explosion lace (0 for nuke). Each ring has own noise from center (distant world
+// coordinates lack float fractional precision; detonation center stays fixed).
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 
 uniform mat4 InvProj;
 uniform mat4 InvView;
-// высота камеры, блоки
+// camera height, blocks
 uniform float CamY;
-// x — докуда по горизонтали чанки прорисовки (дальше — LOD DH); y — гладь моря от камеры по высоте; z — колец; w — свет неба
+// x: horizontal render-chunk reach (beyond: DH LOD); y: sea surface height relative to camera; z: ring count; w: skylight
 uniform vec4 WaterParams;
-// x — 3.912 / дальность видимости, 1/блок; y, z — начало и конец тумана Minecraft; w — 1, если туман цилиндром
+// x: 3.912 / visibility range, 1/block; y/z: Minecraft fog start/end; w: 1 for cylindrical fog
 uniform vec4 Haze;
-// угол пикселя, рад
+// pixel angle, rad
 uniform float Pixel;
-// шейдерпак (без него — 0): x — на сколько блоков ниже 8/9 его волны опускают гладь; y — перепад его глади от вершины
-// к соседней, блоков; z — дрожание кадра для TAA, пикселей
+// shaderpack (0 without): x: how far waves lower surface below 8/9, blocks; y: surface height difference from vertex
+// to neighbor, blocks; z: frame TAA jitter, pixels
 uniform vec3 Pack;
-// кольца: x, z центра от камеры; радиус фронта по воде; длина профиля за ним, блоков
+// rings: eye-relative center x/z; water-front radius; trailing profile length, blocks
 uniform vec4 Ring0;
 uniform vec4 Ring1;
 uniform vec4 Ring2;
@@ -50,11 +50,11 @@ vec3 unproject(vec2 ndc, float z) {
     return v.xyz / v.w;
 }
 
-// место мира за пикселем от позиции камеры (у неба — точка далеко на луче: разности с ней — числа); o — начало луча
+// world position behind pixel relative to camera (sky: far ray point, allowing numeric differences); o is ray origin
 vec3 scene(ivec2 px, ivec2 size, out vec3 o) {
     float dist = texelFetch(Sampler0, px, 0).r;
     vec2 ndc = (vec2(px) + 0.5) / vec2(size) * 2.0 - 1.0;
-    // точка луча на расстоянии dist по оси взгляда (вид), потом — от позиции камеры
+    // ray point at view-axis distance dist, then relative to camera position
     vec3 n = unproject(ndc, -1.0);
     vec3 f = unproject(ndc, 1.0);
     float d = min(dist, 1e6);
@@ -62,8 +62,8 @@ vec3 scene(ivec2 px, ivec2 size, out vec3 o) {
     return (InvView * vec4(n + (f - n) * ((d + n.z) / (n.z - f.z)), 1.0)).xyz;
 }
 
-// шаг к соседнему пикселю по оси экрана: из двух соседей — тот, что ближе по высоте (за краем предмета второй — уже фон
-// или небо, у берега — суша); за краем кадра соседа нет
+// screen-axis step to neighbor pixel: choose height-nearest of two (beyond object edge the other is background
+// or sky, at shore land); no neighbor outside frame
 vec3 neighbour(ivec2 px, ivec2 axis, vec3 p, ivec2 size) {
     ivec2 a = px + axis;
     ivec2 b = px - axis;
@@ -86,26 +86,26 @@ vec4 ring(int i) {
 
 const float PI = 3.14159265;
 
-// барашки: x — вдоль ветра, y — поперёк, блоки
+// whitecaps: x along wind, y across, blocks
 float whitecaps(vec2 q) {
     return noise(q / vec2(3.5, 1.2)) * 0.55 + noise(q / vec2(12.0, 4.0)) * 0.45;
 }
 
-// секторов угла у пены: в своём секторе дуга от его оси почти не скошена
+// foam angle sectors: within each, arc from its axis is nearly unskewed
 const float SECTORS = 24.0;
 
-// барашки сектора k (ось — угол k·2π/24 − π от оси x мира) на радиусе r и угле a: вдоль ветра — радиус, поперёк — дуга
-// от оси (у оси сектора — расстояние поперёк радиуса); сектор 24 — это сектор 0
+// whitecaps in sector k (axis angle k·2π/24 − π from world x) at radius r/angle a: radius along wind, arc across
+// from axis (at sector axis, cross-radius distance); sector 24 is sector 0
 float sectorCaps(float r, float a, float k) {
     float s = mod(k, SECTORS);
     return whitecaps(vec2(r, r * (a - (k * (2.0 * PI / SECTORS) - PI))) + vec2(s * 17.0, s * 31.0));
 }
 
-// пена барашками от центра кольца (rel — место от него): ветер за фронтом дует от центра, поэтому полосы — в полярных
-// координатах (место от центра, повёрнутое по ветру от того же центра, — это радиус и ноль: пена шла бы кругами). Угол —
-// от осей мира, а не от камеры (иначе узор ехал бы вбок, когда камера обходит подрыв), дуга — от оси своего сектора:
-// дуга от одной оси на весь круг скашивала бы полосы вдали от неё (вдоль радиуса растёт и дуга). Соседние сектора
-// сходятся плавно, с той же силой шума
+// whitecap foam from ring center (rel relative to it): post-front wind blows from center, so strips use polar
+// coordinates (center-relative position rotated along wind from same center is radius and zero: foam would form circles). Angle
+// from world axes, not camera (otherwise pattern drifts sideways as camera orbits burst), arc from own sector axis:
+// one-axis arc for whole circle would skew strips away from it (arc grows along radius too). Adjacent sectors
+// blend smoothly at same noise strength
 float caps(vec2 rel) {
     float r = length(rel);
     float a = atan(rel.y, rel.x);
@@ -116,8 +116,8 @@ float caps(vec2 rel) {
     return 0.5 + (c - 0.5) * inversesqrt(1.0 - 2.0 * w * (1.0 - w));
 }
 
-// Подача обычной пены: пятна и мелкое кружево в координатах самого кольца. Доля модели не превращается в сплошной
-// белый слой: даже в густом пятне вода и отражения видны сквозь пену. Ядерные барашки остаются у caps.
+// presentation: conventional foam patches and fine lace in ring coordinates. Model share does not become a solid
+// white layer: water/reflections show through even dense patches. Nuclear whitecaps remain in caps.
 float foamLace(vec2 rel, float foot) {
     vec2 warp = vec2(noise(rel / 6.0), noise(rel / 6.0 + vec2(19.0, 37.0))) - 0.5;
     vec2 q = rel + 3.0 * warp;
@@ -127,7 +127,7 @@ float foamLace(vec2 rel, float foot) {
     return patches * (0.25 + 0.75 * lace);
 }
 
-// верх стоячей воды над низом блока
+// standing-water top above block bottom
 const float SURFACE = 8.0 / 9.0;
 
 void main() {
@@ -138,25 +138,25 @@ void main() {
     vec3 p = scene(px, size, o);
     vec3 ray = p - o;
     float len = max(length(ray), 1e-3);
-    // наклон поверхности за пикселем — по соседним пикселям; у каждой оси — сосед на той же поверхности
+    // surface slope from neighbor pixels; each axis chooses neighbor on same surface
     vec3 across = neighbour(px, ivec2(1, 0), p, size);
     vec3 along = neighbour(px, ivec2(0, 1), p, size);
     vec3 face = cross(across, along);
     float area = length(face);
-    // шаг пикселя по глади вдоль луча, блоков
+    // pixel step on surface along ray, blocks
     float reach = len * Pixel / max(abs(ray.y) / len, 0.002);
-    // высота по глубине тем грубее, чем дальше и круче вниз луч (глубина 24 бита: ошибка ~ d² у ближней плоскости 0,05);
-    // вблизи допуск уже 1/72 блока — верх блоков в 14/16 (сундук, 7 слоёв снега) не вода
+    // depth-derived height gets coarser with distance and steeper downward ray (24-bit depth: error ~d² for 0.05 near plane);
+    // near tolerance narrower than 1/72 block: 14/16-high blocks (chest, 7 snow layers) are not water
     float tol = clamp(0.01 + 2.4e-6 * len * abs(ray.y), 0.01, 0.037);
-    // нормаль не круче 20° от вертикали, соседи — на той же высоте, шаг к ним — не скачок к фону за предметом. Перепад
-    // к соседу на глади — шум глубины (и волны пака), на стене — шаг пикселя по высоте (len·Pixel), у пикселя боковой
-    // грани под краем верха блока вдали — 1/9 блока до соседа на верхе, а у скачка вдоль почти горизонтального луча
-    // (край листа, травы, конька крыши перед дальним фоном) — тем больше, чем дальше скачок от шага пикселя по глади:
-    // шаг вбок и такой скачок дают горизонталь, но не ту высоту
+    // normal within 20° of vertical, neighbors at same height, step is not a jump behind object. Surface neighbor
+    // height difference is depth noise (and pack waves); wall difference is pixel height step (len·Pixel); a distant side-face
+    // pixel below block-top edge is 1/9 block from top neighbor, while jump along nearly horizontal ray
+    // (leaf/grass/roof-ridge edge against distant background) grows with jump distance from surface pixel step:
+    // side step plus such jump gives horizontal, but wrong height
     float rise = max(abs(across.y), abs(along.y));
     bool level = area > 0.0 && abs(face.y) > 0.94 * area && max(length(across), length(along)) < 3.0 * reach + 0.5
             && rise < 0.002 + 0.1 * len * Pixel + (tol - 0.01) + Pack.y * min(1.0, reach);
-    // дрожание кадра шейдерпака сдвигает луч, по которому записана глубина: высота места ошибается на сдвиг × расстояние
+    // shaderpack frame jitter shifts depth ray: position-height error is shift × distance
     float jitter = Pack.z * Pixel * length(ray.xz);
     float h = fract(CamY + p.y) - SURFACE;
     bool water = level && h > -(tol + jitter + Pack.x) && h < tol + jitter;
@@ -165,7 +165,7 @@ void main() {
         if (level && p.y > sea - 1.2 && p.y < sea + 0.15) {
             water = true;
         } else if (p.y < sea && o.y > sea) {
-            // ниже моря вдали: LOD без глубины воды показывает дно — вода над ним, на глади
+            // distant below-sea terrain: LOD lacking water depth shows bed; water above it at surface
             p = o + (p - o) * ((sea - o.y) / (p.y - o.y));
             water = true;
         }
@@ -174,7 +174,7 @@ void main() {
 
     ray = p - o;
     len = max(length(ray), 1e-3);
-    // след пикселя на воде, блоков: у пологого луча вдоль луча длиннее
+    // water pixel footprint, blocks: longer along shallow ray
     float foot = max(0.2, len * Pixel / max(abs(ray.y) / len, 0.02));
     float dark = 0.0;
     float foam = 0.0;
@@ -190,14 +190,14 @@ void main() {
         vec3 profile = textureLod(Sampler1, vec2((u * 63.0 + 0.5) / 64.0, (float(i) + 0.5) / 4.0), 0.0).rgb;
         vec2 prof = profile.rg * edge;
         if (prof.r > 0.002) {
-            // кошачьи лапы: пятна ряби разной густоты; мельче пикселя — к среднему
+            // cat's paws: ripple patches of varying density; subpixel tends to mean
             float paws = noise(rel / 23.0) * 0.6 + noise(rel / 7.0) * 0.4;
             paws = mix(paws, 0.5, clamp(foot / 7.0, 0.0, 1.0));
             dark = 1.0 - (1.0 - dark) * (1.0 - clamp(prof.r * (0.65 + 0.7 * paws), 0.0, 1.0));
         }
         if (prof.g > 0.002) {
-            // пена барашками: мелкие пятна, вытянутые по ветру полосами, доля которых — пена профиля; мельче пикселя —
-            // сама доля
+            // whitecap foam: fine patches stretched into wind-aligned strips, their share is profile foam; subpixel uses
+            // share itself
             float f = prof.g;
             if (profile.b > 0.5) f = 0.6 * f * foamLace(rel, foot);
             else if (foot < 1.5) f = mix(smoothstep(1.0 - f, 1.12 - f, caps(rel)), f, foot / 1.5);
@@ -206,13 +206,13 @@ void main() {
     }
     if (dark <= 0.002 && foam <= 0.002) discard;
 
-    // дымка воздуха и туман Minecraft гасят наклейку, как частицы
+    // air haze/Minecraft fog attenuate decal like particles
     float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
     float seenAir = exp(-Haze.x * len) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
     float k = dark * seenAir;
     float fo = clamp(foam, 0.0, 1.0) * seenAir;
     float sky = WaterParams.w;
-    // рябь отражает меньше неба: вода темнее, с синевой глубины; пена — белая, в свете неба
+    // ripples reflect less sky: darker water with depth blue; foam white in skylight
     vec3 tint = vec3(0.02, 0.035, 0.05) * sky;
     vec3 white = vec3(0.86, 0.9, 0.93) * (0.1 + 0.9 * sky);
     fragColor = vec4(tint * k * (1.0 - fo) + white * fo, k + fo - k * fo);

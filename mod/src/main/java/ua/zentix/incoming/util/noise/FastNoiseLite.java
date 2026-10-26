@@ -54,9 +54,9 @@
 
 package ua.zentix.incoming.util.noise;
 
-// Копия FastNoiseLite 1.1.1 без изменений, кроме пакета и входа double (замена /*FNLfloat*/ по всему файлу, как
-// советует автор выше): координаты мира до 30 млн блоков во float теряли бы точность. После замены часть приведений
-// типов в коде автора лишние — предупреждения о них выключены, чтобы копия оставалась как у автора.
+// FastNoiseLite 1.1.1 copy unchanged except package and double input (replace /*FNLfloat*/ throughout, as
+// author advises above): float would lose precision at world coordinates up to 30 million blocks. Replacement makes some
+// upstream casts redundant; suppress their warnings to keep the copy as authored.
 @SuppressWarnings("cast")
 public class FastNoiseLite
 {

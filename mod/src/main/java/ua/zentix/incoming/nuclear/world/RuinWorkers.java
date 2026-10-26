@@ -18,93 +18,93 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Фоновые потоки планов руин: разломы, обрушение и достройка по снимкам чанков ({@link ChunkShot}) — то, что стоит
- * десятки мс на чанк в городе, — и разбор чанков, прочитанных с диска ({@link DiskShots}), идут мимо тика сервера. Свой
- * пул, а не общий {@code Util.backgroundExecutor} (им грузятся и генерируются чанки).
+ * Background ruin-plan threads: fractures, collapse and completion from chunk snapshots ({@link ChunkShot}), costing
+ * tens of ms per city chunk, plus parsing disk-read chunks ({@link DiskShots}), outside server tick. Own
+ * pool instead of shared {@code Util.backgroundExecutor} (also loads/generates chunks).
  * <p>
- * Сколько потоков: {@code ruin_threads}, 0 — сами: все ядра, кроме занятых игрой, — {@code ядра − 1 (поток сервера)
- * − 1 (своей игре: поток отрисовки клиента, если сервер встроенный) − 1 (ваниль: ввод-вывод чанков, генерация, сборщик
- * мусора)}, не меньше одного. Потолка нет: чем больше ядер, тем быстрее встают дальние кольца. Приоритет потоков Java
- * на Linux не действует, поэтому место игре оставляет только это число и подстройка под тик: раз в секунду чужое время
- * тика за последнюю секунду (тик без полос мода) — выше предела ({@link #MARGIN_MS}), и потоков в работе становится на
- * четверть меньше (не меньше одного), ниже — на один больше (не больше числа потоков). Выбранное число и каждое
- * снижение и возврат — в лог.
+ * Thread count: {@code ruin_threads}, 0 automatic: all cores except game reserve, {@code cores − 1 (server thread)
+ * − 1 (own game: client render thread for integrated server) − 1 (vanilla: chunk I/O, generation, garbage
+ * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
+ * effect on Linux, so only count and tick adaptation leave room for game: once per second, external tick
+ * time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
+ * a quarter (at least one), below adds one (at most pool thread count). Chosen count and every
+ * reduction/recovery logged.
  * <p>
- * Задач в пуле (в работе и в очереди) не больше {@link #capacity}: очередь — чтобы потоки не простаивали между тиками
- * (задача — 10–50 мс, тик — 50 мс). Поток сервера отдаёт задачи и забирает готовые, мир в фоне не читается.
+ * At most {@link #capacity} tasks in pool (running and queued): queue keeps threads busy between ticks
+ * (task 10–50 ms, tick 50 ms). Server thread submits tasks and collects results; background reads no world.
  * <p>
- * Очередь — по важности ({@link Priority}): руины чанков, которые видит игрок, потом остальные руины у волны, потом
- * дальнее (руины заранее с диска, LOD вдали). Счёт {@link #capacity} — свой у каждой ступени вместе с более важными:
- * дальние задачи держат пул полным, пока идёт волна (кольцо следа подрыва 15 кт — 200 тыс. чанков), и в общем счёте
- * план чанка у игрока (готовый устарел, плана не было) ждал бы места, пока дальние не освободят его, а потом стоял бы
- * за ними в очереди.
+ * Queue ordered by importance ({@link Priority}): player-visible chunk ruins, other wave ruins, then
+ * distant work (prebuilt disk ruins, distant LODs). {@link #capacity} counts each priority plus higher priorities separately:
+ * distant tasks keep pool full while wave travels (15 kt trace ring ~200 thousand chunks); a shared count would
+ * make player-chunk plan (stale ready plan or none) await distant tasks freeing slots, then stand
+ * behind them in queue.
  * <p>
- * Память: у каждого потока свои буферы решателей ({@code ThreadLocal}: {@code Collapse.Buffers} — {@code before},
- * {@code after}, {@code ring}; {@code Blast.Buffers} — {@code sky}, {@code gone}), по окну 48×48 на всю высоту мира —
- * {@link #bufferBytes} считает их к пределу памяти подготовки руин.
+ * Memory: each thread has solver buffers ({@code ThreadLocal}: {@code Collapse.Buffers} contains {@code before},
+ * {@code after}, {@code ring}; {@code Blast.Buffers} contains {@code sky}, {@code gone}), 48×48 window through full world height;
+ * {@link #bufferBytes} counts them toward ruin-preparation memory cap.
  * <p>
- * Остановка сервера или мира: пул закрывается ({@code shutdownNow}), начатые задачи дорабатывают в пустоту, их
- * результаты никто не берёт. Потоки — демоны: выход из игры их не ждёт.
+ * Server/world stop closes pool ({@code shutdownNow}); running tasks finish into void, nobody collects
+ * results. Daemon threads: game exit does not await them.
  */
 public final class RuinWorkers {
     /**
-     * Чужое время тика (тик сервера без полос мода, {@link WorkScheduler#ownNanos}) выше {@code 50 − work_ms_per_tick +}
-     * {@link #MARGIN_MS} — потоков в работе меньше: сервер не держит 20 тиков в секунду, даже если полосы мода берут
-     * ровно свой бюджет; ниже {@code 50 − work_ms_per_tick −} {@link #MARGIN_MS} — больше. Свои полосы в счёт не
-     * идут: они в своём бюджете по замыслу, а весь тик (41–49 мс, из них до 30 — ядерка) снижал бы потоки до одного,
-     * пока полосе ядерки есть что делать, и планы вставали бы на месте.
+     * External tick time (server tick minus mod lanes, {@link WorkScheduler#ownNanos}) above {@code 50 − work_ms_per_tick +}
+     * {@link #MARGIN_MS} reduces active threads: server cannot hold 20 TPS even with mod lanes
+     * using exactly their budget; below {@code 50 − work_ms_per_tick −} {@link #MARGIN_MS} increases them. Own lanes do not
+     * count: budgeted by design; full tick (41–49 ms, up to 30 nuke) would reduce pool to one thread
+     * while nuclear lane has work, forcing on-site plans.
      */
     static final double MARGIN_MS = 5;
     private static final double TICK_MS = 50;
-    /** Раз в сколько тиков подстраиваться. */
+    /** Adapt every this many ticks. */
     private static final int ADAPT_EVERY = 20;
-    /** Задач в пуле на поток в работе: очередь на тик вперёд. */
+    /** Pool tasks per active thread: queue one tick ahead. */
     private static final int QUEUE_PER_THREAD = 4;
 
-    /** Ступени очереди пула: раньше — важнее. */
+    /** Pool queue priorities: earlier means more important. */
     public enum Priority {
-        /** Руины чанков, которые видит игрок (очередь руин): фоновый план и разбор соседей окна с диска. */
+        /** Player-visible chunk ruins (ruin queue): background plan and disk parsing of window neighbors. */
         SEEN,
-        /** Остальные руины очереди и руины заранее чанков в памяти. */
+        /** Other queued ruins and prebuilt ruins for in-memory chunks. */
         NEAR,
-        /** Руины заранее с диска (тяжёлая зона не в памяти), копии для LOD вдали ({@link FarLods}). */
+        /** Prebuilt disk ruins (heavy zone outside memory), distant LOD copies ({@link FarLods}). */
         FAR
     }
 
     private static final AtomicInteger NUMBER = new AtomicInteger();
-    /** Порядок задач одной ступени — по постановке. */
+    /** Same-priority task order follows submission. */
     private static final AtomicLong SEQUENCE = new AtomicLong();
     /**
-     * Задач каждой ступени в пуле (в работе и в очереди). Свой у каждого запуска пула до остановки ({@link #shutdown}):
-     * задача, которая не заметила остановку, считается в счёте своего запуска, а не следующего мира.
+     * Pool tasks per priority (running/queued). Separate per pool lifetime until {@link #shutdown}:
+     * task missing shutdown counts toward its own pool lifetime, not next world.
      */
     private static volatile AtomicIntegerArray IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
     @Nullable
     private static ThreadPoolExecutor pool;
-    /** Потоков по настройке (или по ядрам) и сколько сейчас в работе (подстройка под тик). */
+    /** Configured (or core-derived) thread count and currently active count (tick adaptation). */
     private static int size, active;
-    /** Сколько времени потоки заняты с запуска пула, нс (загрузка потоков в сводке). */
+    /** Thread busy time since pool start, ns (thread utilization in summary). */
     private static final AtomicLong BUSY = new AtomicLong();
     private static long startedAt;
     private static long lastAdapt = -ADAPT_EVERY;
-    /** Снижений и возвратов с запуска пула; зависших задач. */
+    /** Reductions/recoveries since pool start; stuck tasks. */
     private static int lowered, raised, expired;
 
     private RuinWorkers() {}
 
-    /** Сколько ядер оставить игре: поток сервера, отрисовка клиента на встроенном сервере, ваниль. */
+    /** Cores reserved for game: server thread, integrated-server client rendering, vanilla. */
     static int reserve(boolean integrated) {
         return 1 + (integrated ? 1 : 0) + 1;
     }
 
-    /** Сколько потоков по настройке: 0 — все ядра, кроме оставленных игре ({@link #reserve}). */
+    /** Configured thread count: 0 all cores minus game reserve ({@link #reserve}). */
     static int threads(boolean integrated) {
         int n = IncomingConfig.SERVER.nukeRuinThreads.get();
         if (n > 0) return n;
         return Math.max(1, Runtime.getRuntime().availableProcessors() - reserve(integrated));
     }
 
-    /** Игра с клиентом (одиночная, мир по LAN): его отрисовке — своё ядро. Сервер GameTest и выделенный — без клиента. */
+    /** Game with client (single-player, LAN world): own core for rendering. GameTest/dedicated server have no client. */
     private static boolean integrated() {
         return net.neoforged.fml.loading.FMLEnvironment.dist.isClient();
     }
@@ -131,21 +131,21 @@ public final class RuinWorkers {
         return pool;
     }
 
-    /** Сколько задач держать в пуле сразу (в работе и в очереди). */
+    /** Tasks held in pool at once (running/queued). */
     static int capacity() {
         if (pool == null) pool();
         return Math.max(2, active * QUEUE_PER_THREAD);
     }
 
     /**
-     * Можно ли отдать ещё задачу ступени {@code priority}: задач её и более важных в пуле меньше {@link #capacity}.
-     * Менее важные в счёт не идут — очередь пустит эту задачу раньше них.
+     * Whether another {@code priority} task admitted: pool tasks at its priority and higher below {@link #capacity}.
+     * Lower priorities excluded from count: queue puts this task before them.
      */
     static boolean admit(Priority priority) {
         return inFlight(priority) < capacity();
     }
 
-    /** Задач ступени {@code priority} и более важных в пуле (в работе и в очереди). */
+    /** Pool tasks at {@code priority} and higher (running/queued). */
     static int inFlight(Priority priority) {
         AtomicIntegerArray counts = IN_FLIGHT;
         int n = 0;
@@ -153,14 +153,14 @@ public final class RuinWorkers {
         return n;
     }
 
-    /** Всех задач в пуле (в работе и в очереди). */
+    /** Total pool tasks (running/queued). */
     static int inFlight() {
         return inFlight(Priority.FAR);
     }
 
     /**
-     * Для проверок: занять пул задачами ступени {@code priority}, которые ждут {@code release}, пока он не перестанет
-     * брать задачи этой ступени ({@link #admit}).
+     * For tests: fill pool with {@code priority} tasks waiting on {@code release} until it no longer
+     * admits that priority ({@link #admit}).
      */
     public static void fillForTest(java.util.concurrent.CountDownLatch release, Priority priority) {
         while (admit(priority)) {
@@ -172,10 +172,10 @@ public final class RuinWorkers {
     }
 
     /**
-     * Для проверок: дождаться (поток сервера стоит, не дольше {@code millis}), пока в пуле нет задач ступени
-     * {@code priority} и более важных.
+     * For tests: wait (blocking server thread, at most {@code millis}) until no pool tasks at
+     * {@code priority} or higher.
      *
-     * @return дождались
+     * @return wait succeeded
      */
     public static boolean awaitForTest(Priority priority, long millis) {
         long until = System.nanoTime() + millis * 1_000_000L;
@@ -186,24 +186,24 @@ public final class RuinWorkers {
         return true;
     }
 
-    /** Для проверок: задача в пул на ступень {@code priority} ({@link #submit}). */
+    /** For tests: submit task at {@code priority} ({@link #submit}). */
     public static <T> Future<T> submitForTest(Callable<T> task, Priority priority) {
         return submit(task, priority);
     }
 
-    /** Для проверок: {@link #promote}. */
+    /** For tests: {@link #promote}. */
     @Nullable
     public static <T> Future<T> promoteForTest(Future<T> task, Priority priority) {
         return promote(task, priority);
     }
 
-    /** Для проверок: потоков пула в работе. */
+    /** For tests: active pool threads. */
     public static int threadsForTest() {
         if (pool == null) pool();
         return active;
     }
 
-    /** Задача в пул (поток сервера) на ступень {@code priority}. */
+    /** Submit task at {@code priority} (server thread). */
     static <T> Future<T> submit(Callable<T> task, Priority priority) {
         Task<T> t = new Task<>(task, priority);
         execute(pool(), t);
@@ -211,8 +211,8 @@ public final class RuinWorkers {
     }
 
     /**
-     * Исполнитель ступени {@code priority}: разбор чанков с диска (задача из потока ввода-вывода — в пул), копии LOD вдали.
-     * Пул — нынешний (поток сервера): задача, пришедшая после остановки, отказана, а не заводит новый пул из чужого потока.
+     * Executor at {@code priority}: disk-chunk parsing (I/O thread submits into pool), distant LOD copies.
+     * Current pool (server thread): task arriving after shutdown rejected, never starts new pool from external thread.
      */
     static Executor executor(Priority priority) {
         ThreadPoolExecutor p = pool();
@@ -223,44 +223,44 @@ public final class RuinWorkers {
         try {
             p.execute(t);
         } catch (java.util.concurrent.RejectedExecutionException e) {
-            // пул закрыт (остановка): задачи нет — и в счёте её нет
+            // pool closed (shutdown): task absent, so not counted
             t.uncount();
             throw e;
         }
     }
 
     /**
-     * Задачу, которая ещё ждёт в очереди, — на более важную ступень (поток сервера): та же работа на новом месте
-     * в очереди. Иначе чанк, чей план подготовка руин отдала дальней ступенью, ждал бы его за всеми задачами чанков
-     * у игроков, когда до чанка дойдёт волна.
+     * Promote still-queued task to higher priority (server thread): same work at new queue
+     * position. Otherwise a chunk whose preparation submitted its plan at far priority would await all player-chunk
+     * tasks when wave reaches it.
      *
-     * @return задача на новой ступени; null — начатая, уже на этой ступени или важнее, или не этого пула: как есть
+     * @return task at new priority; null if started, already at least that priority, or not from this pool: unchanged
      */
     @Nullable
     static <T> Future<T> promote(Future<T> future, Priority priority) {
         ThreadPoolExecutor p = pool;
         if (p == null || !(future instanceof Task<T> t) || t.priority <= priority.ordinal() || !p.remove(t)) return null;
-        // из очереди снята до начала: её run не позовут
+        // removed before start: run will not be called
         t.uncount();
         Task<T> moved = new Task<>(t.callable, priority);
         try {
             execute(p, moved);
         } catch (java.util.concurrent.RejectedExecutionException e) {
-            // остановка: брошена, как и задачи в очереди
+            // shutdown: abandoned like queued tasks
             t.cancel(false);
             return null;
         }
         return moved;
     }
 
-    /** Задача пула уже начата (или не задача пула): срок фонового плана считается от начала работы. */
+    /** Pool task already started (or not a pool task): background-plan deadline measured from work start. */
     static boolean started(Future<?> future) {
         return !(future instanceof Task<?> t) || t.started;
     }
 
     /**
-     * Задача пула: место в очереди — по ступени, внутри ступени — по постановке; счёт задач ступени — от постановки до
-     * конца (и у брошенной: пул всё равно зовёт {@code run}, который сразу выходит).
+     * Pool task: queue by priority, within priority by submission; priority count from submission to
+     * completion (also abandoned tasks: pool still calls {@code run}, which exits immediately).
      */
     static final class Task<T> extends FutureTask<T> implements Comparable<Task<?>> {
         private final Callable<T> callable;
@@ -301,10 +301,10 @@ public final class RuinWorkers {
     }
 
     /**
-     * Подстройка под тик (поток сервера, каждый тик; работает раз в {@link #ADAPT_EVERY}): среднее чужое время тика
-     * за последнюю секунду (тик сервера без полос мода) выше {@code 50 − work_ms_per_tick +} {@link #MARGIN_MS} —
-     * потоков в работе на четверть меньше, ниже {@code 50 − work_ms_per_tick −} {@link #MARGIN_MS} — на один больше.
-     * Пока пул не нужен — ничего.
+     * Tick adaptation (server thread, each tick; active once per {@link #ADAPT_EVERY}): average external tick time
+     * over last second (server tick minus mod lanes) above {@code 50 − work_ms_per_tick +} {@link #MARGIN_MS}
+     * reduces active threads by quarter; below {@code 50 − work_ms_per_tick −} {@link #MARGIN_MS} adds one.
+     * No action while pool unused.
      */
     public static void adapt(MinecraftServer server) {
         ThreadPoolExecutor p = pool;
@@ -338,37 +338,37 @@ public final class RuinWorkers {
         Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
     }
 
-    /** Фоновый план брошен: не готов за срок ({@link RuinContext#TASK_AGE_LIMIT}). */
+    /** Background plan abandoned: not ready by deadline ({@link RuinContext#TASK_AGE_LIMIT}). */
     static void expired() {
         expired++;
     }
 
-    /** Для строки «ready»: потоков, в работе, снижений, возвратов, брошенных задач. */
+    /** For “ready” line: threads, active, reductions, recoveries, abandoned tasks. */
     static String summary() {
         return size + " (working " + active + ", lowered " + lowered + ", raised " + raised + ", tasks abandoned " + expired + ")";
     }
 
-    /** Буферы решателей всех потоков пула, байт (оценка по окну 48×48 на высоту мира: 7 байт на место). */
+    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 7 bytes per position). */
     static long bufferBytes(int height) {
         return (long) size * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
     }
 
-    /** Доля времени, которую потоки заняты с запуска пула (для строки «ready»). */
+    /** Fraction of thread time busy since pool start (for “ready” line). */
     static double utilisation() {
         if (pool == null) return 0;
         long wall = System.nanoTime() - startedAt;
         return wall <= 0 ? 0 : Math.min(1, BUSY.get() / (double) wall / size);
     }
 
-    /** Сколько ждать, пока начатые задачи заметят остановку (задача проверяет её между частями плана — десятки мс). */
+    /** Wait for running tasks to notice shutdown (task checks between plan stages, tens of ms). */
     private static final long JOIN_MS = 3000;
 
     /**
-     * Остановка сервера (и проверки): задачи в очереди бросаются, начатые прерываются ({@code shutdownNow}: задача
-     * проверяет прерывание между частями плана — {@link #checkStop}), поток сервера ждёт их не дольше {@link #JOIN_MS};
-     * не успели — строка в лог (потоки — демоны: выход из игры их всё равно не ждёт).
+     * Server stop (and tests): abandon queued tasks, interrupt running ones ({@code shutdownNow}: task
+     * checks interruption between plan stages, {@link #checkStop}); server thread waits at most {@link #JOIN_MS};
+     * log if unfinished (daemon threads, so game exit still does not await them).
      *
-     * @return потоков не осталось (или пула не было)
+     * @return no threads remain (or no pool existed)
      */
     public static boolean shutdown() {
         ThreadPoolExecutor p = pool;
@@ -376,7 +376,7 @@ public final class RuinWorkers {
         lastAdapt = -ADAPT_EVERY;
         if (p == null) return true;
         java.util.List<Runnable> queued = p.shutdownNow();
-        // их run уже не позовут: из счёта ступеней
+        // run will not be called: remove from priority counts
         for (Runnable r : queued) if (r instanceof Task<?> t) t.uncount();
         IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
         int dropped = queued.size();
@@ -392,12 +392,12 @@ public final class RuinWorkers {
         return done;
     }
 
-    /** Пул закрыт и ни одного потока в нём не осталось (проверки). */
+    /** Pool closed and all its threads gone (tests). */
     public static boolean stopped() {
         return pool == null;
     }
 
-    /** Остановка или брошенная задача (прерывание): план дальше не строится. */
+    /** Shutdown or abandoned task (interruption): stop building plan. */
     static void checkStop() {
         if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException("ruins: stopping");
     }

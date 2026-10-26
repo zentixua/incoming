@@ -13,8 +13,10 @@ import net.minecraft.world.level.ChunkPos;
 import ua.zentix.incoming.util.Terrain;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -109,6 +111,8 @@ public final class AreaLoader {
     /** Released areas still held by release tickets (release number as value), in release order. */
     private final Map<Area, Long> releasing = new LinkedHashMap<>();
     private long released;
+    /** Generation retained by our released tickets; owned by the world's existing StrikeWorld attachment. */
+    private final Set<ChunkHolder> releasedLoads = new HashSet<>();
     /**
      * Additional holders the queue returns to vanilla this tick beyond unloading space ({@link #drainReleases}):
      * add {@link #UNLOAD_PER_TICK} each tick, capped at that value; below zero means debt for an area larger than
@@ -156,12 +160,16 @@ public final class AreaLoader {
         expiring.remove(area);
         Integer taken = requests.remove(area);
         if (taken == null) return;
-        if (level.getServer().isRunning() && (area.ticks() ? taken == area.distance() : ready(level, area.centre(), area.distance()))) {
+        boolean queued = level.getServer().isRunning()
+                && (area.ticks() ? taken == area.distance() : ready(level, area.centre(), area.distance()));
+        if (queued) {
             // Release ticket first, then area tickets: chunk loading levels stay unchanged until the queue reaches it.
             long release = released++;
             distances(level).addTicket(RELEASE, area.centre(), area.level(), release);
             releasing.put(area, release);
         }
+        // A same-level RELEASE ticket preserves loading; no generation is canceled on this path.
+        if (!queued) retainGenerating(level, area);
         removeTickets(level, area, taken);
         if (!hasOtherThan(ArrivalTickets.TYPE)) releaseAll(level, ArrivalTickets.TYPE);
         apply(level);
@@ -180,6 +188,7 @@ public final class AreaLoader {
             var entry = held.next();
             Area area = entry.getKey();
             if (area.type() != type) continue;
+            retainGenerating(level, area);
             removeTickets(level, area, entry.getValue());
             expiring.remove(area);
             held.remove();
@@ -215,14 +224,17 @@ public final class AreaLoader {
      * stop would launch generation awaited by {@code util/StopDrain}. Owners reacquire areas after startup.
      */
     public void releaseAll(ServerLevel level) {
-        requests.forEach((area, taken) -> removeTickets(level, area, taken));
+        requests.forEach((area, taken) -> {
+            retainGenerating(level, area);
+            removeTickets(level, area, taken);
+        });
         requests.clear();
         expiring.clear();
         releasing.forEach((area, release) -> distances(level).removeTicket(RELEASE, area.centre(), area.level(), release));
         releasing.clear();
     }
 
-    private static void removeTickets(ServerLevel level, Area area, int taken) {
+    private void removeTickets(ServerLevel level, Area area, int taken) {
         if (taken >= 0) level.getChunkSource().removeRegionTicket(area.type(), area.centre(), taken, area.key());
         if (taken < area.distance()) distances(level).removeTicket(LOAD, area.centre(), area.level(), area);
     }
@@ -270,7 +282,26 @@ public final class AreaLoader {
         return (int) requests.keySet().stream().filter(a -> a.type() == type && a.key().equals(key) && a.ticks() == ticks).count();
     }
 
+    /** Busy holders in our ticket footprints, including generation already canceled by a release. */
+    public int inFlight(ServerLevel level) {
+        for (Area area : requests.keySet()) retainGenerating(level, area);
+        releasedLoads.removeIf(holder -> holder.getGenerationRefCount() == 0);
+        return releasedLoads.size();
+    }
+
+    private void retainGenerating(ServerLevel level, Area area) {
+        ChunkMap map = level.getChunkSource().chunkMap;
+        int radius = area.distance() + ChunkLevel.RADIUS_AROUND_FULL_CHUNK;
+        for (int x = area.centre().x - radius; x <= area.centre().x + radius; x++) {
+            for (int z = area.centre().z - radius; z <= area.centre().z + radius; z++) {
+                ChunkHolder holder = map.getUpdatingChunkIfPresent(ChunkPos.asLong(x, z));
+                if (holder != null && holder.getGenerationRefCount() > 0) releasedLoads.add(holder);
+            }
+        }
+    }
+
     void tick(ServerLevel level) {
+        releasedLoads.removeIf(holder -> holder.getGenerationRefCount() == 0);
         long now = level.getGameTime();
         if (!expiring.isEmpty()) {
             for (Area area : expiring.entrySet().stream().filter(e -> e.getValue() <= now).map(Map.Entry::getKey).toList()) release(level, area);

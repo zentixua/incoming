@@ -25,68 +25,68 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Что ударная волна сломала в одном чанке — первый из двух физических процессов руин (второй — {@link Collapse}):
- * <b>перепад давления ломает тонкое</b>. Считается по исходным блокам окна чанка ({@link RuinWindow}) и больше ни от чего
- * не зависит, поэтому разлом чанка один и тот же, кто бы и когда его ни посчитал (кэш — {@link RuinContext}).
+ * What shock wave breaks in one chunk, first of two ruin physics processes (second {@link Collapse}):
+ * <b>pressure differences break thin elements</b>. Uses only original chunk-window blocks ({@link RuinWindow}), nothing else,
+ * so chunk fracture is identical whoever computes it and whenever (cache {@link RuinContext}).
  * <ul>
- * <li>Давление приходит только к граням у воздуха, связанного с небом: над верхом столбцов и не глубже
- * {@link #SKY_DEPTH} блоков внутрь через проёмы, а за проломами (раунды 2 и 3) — во весь связанный с ними воздух окна:
- * волна затекает по этажам до ядра. Бункер, пещера без выхода, подвал не трогаются.</li>
- * <li>На гранях к взрыву — отражённое давление {@code P = max(p, Pr·cos θ)}, {@code Pr = 2p(7p₀+4p)/(7p₀+p)}; у стен
- * угол — в горизонтальной плоскости (волна у земли идёт стеблем Маха), у крыш — по вертикали.</li>
- * <li>Блок в элементе толщиной {@code t} ≤ 3 (ряд полных кубов с открытыми концами по наименьшей оси) ломается при
- * {@code P ≥ T·k(t)·jitter}, {@code k = 1, 2, 3.5}; пробитый с лица элемент ломается на всю толщину. Грунт — только
- * с небом с обеих сторон (гребень, стенка, навес).</li>
- * <li>Опрокидывание: высокое и узкое (гибкость {@code H/t ≥ 4}, {@code t} ≤ {@link #MAX_TOPPLE} по направлению от
- * взрыва, сзади небо) ломается по всему сечению при {@code Pr·cos θ·H/t ≥ T·k(3)·jitter}. {@code H} — высота над местом,
- * пока сзади воздух: перекрытие за простенком кончает плечо на этаже. Так падают стены в два кирпича и ядра высоток,
- * а горы, скалы, мезы (толще) стоят.</li>
- * <li>Два раунда: второй видит проломы первого (и воздух за ними: там опрокидывается только столб не шире
- * {@link #MAX_TOPPLE} поперёк). Третий — по проломам всех соседей ({@link #remnants}). Деревья валятся
- * до волны по блокам, стволом целиком.</li>
- * <li>Неразрушимое (прочность &lt; 0 или ≥ 50: коренная порода, обсидиан, барьер, свет) не ломается, не падает
- * и держит, как земля ({@link Props#fixed}).</li>
+ * <li>Pressure reaches only faces beside sky-connected air: above column tops and no deeper than
+ * {@link #SKY_DEPTH} blocks through openings; beyond breaches (rounds 2 and 3), all window air connected to them:
+ * wave flows through floors to core. Bunkers, sealed caves and basements untouched.</li>
+ * <li>Blast-facing faces get reflected pressure {@code P = max(p, Pr·cos θ)}, {@code Pr = 2p(7p₀+4p)/(7p₀+p)}; wall
+ * angle is horizontal (near-ground wave travels as Mach stem), roof angle vertical.</li>
+ * <li>Block in element of thickness {@code t} ≤ 3 (row of full cubes with open ends along shortest axis) breaks at
+ * {@code P ≥ T·k(t)·jitter}, {@code k = 1, 2, 3.5}; face-breached element fails through full thickness. Ground only
+ * with sky on both sides (ridge, wall, overhang).</li>
+ * <li>Toppling: tall narrow elements (slenderness {@code H/t ≥ 4}, {@code t} ≤ {@link #MAX_TOPPLE} away from
+ * blast, sky behind) fail through full cross-section at {@code Pr·cos θ·H/t ≥ T·k(3)·jitter}. {@code H} is height above position
+ * while air remains behind: floor behind wall pier ends lever arm at that story. Two-brick walls and tower cores fall,
+ * while thicker mountains, cliffs and mesas stand.</li>
+ * <li>Two rounds: second sees first-round breaches (and air behind; only columns at most
+ * {@link #MAX_TOPPLE} wide across topple there). Third uses all neighbors' breaches ({@link #remnants}). Trees topple
+ * as whole trunks before per-block wave processing.</li>
+ * <li>Indestructible blocks (strength &lt; 0 or ≥ 50: bedrock, obsidian, barrier, light) neither break nor fall,
+ * and support like ground ({@link Props#fixed}).</li>
  * </ul>
- * Охват: решение о блоке читает не дальше 16 блоков — ширины соседнего чанка в окне.
+ * Reach: each block decision reads at most 16 blocks away, neighboring-chunk width in window.
  */
 record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees, List<BlockState> treeLogs) {
-    /** Насколько глубоко внутрь от проёма доходит давление, блоки. */
+    /** Pressure penetration depth through opening, blocks. */
     static final int SKY_DEPTH = 4;
     /**
-     * Сколько столбцов вокруг чанка решает первый раунд: второй раунд чанка читает проломы на 5 блоков вокруг и воздух,
-     * открытый ими, ещё на {@link #SKY_DEPTH} — так он тот же, что посчитал бы любой сосед.
+     * Columns around chunk solved in first round: chunk's second round reads breaches 5 blocks around and air
+     * opened by them another {@link #SKY_DEPTH}, making result identical to any neighbor's calculation.
      */
     private static final int ROUND_ONE = 9;
-    /** Атмосферное давление, psi. */
+    /** Atmospheric pressure, psi. */
     private static final double P0 = 14.7;
-    /** Во сколько раз элемент толщиной 1, 2, 3 прочнее тонкого. */
+    /** Strength factors for thickness 1, 2, 3 relative to thin element. */
     static final double[] K = {0, 1, 2, 3.5};
-    /** Гибкость, с которой элемент опрокидывается, и наибольшая его толщина. */
+    /** Toppling slenderness threshold and maximum thickness. */
     private static final int SLENDER = 4, MAX_TOPPLE = 6;
     /**
-     * Наибольшая толщина опрокидывания у грунта: природные столбы и мезы толще 4 стоят (ядро высотки из кальцита
-     * или терракоты 4×4 ещё падает).
+     * Maximum ground toppling thickness: natural pillars/mesas thicker than 4 stand (4×4 calcite or
+     * terracotta tower core still falls).
      */
     private static final int GROUND_TOPPLE = 4;
     private static final int SIDE = RuinWindow.SIDE, LO = 16, HI = 32;
 
-    // ---------------------------------------------------------------- свойства состояний
+    // ---------------------------------------------------------------- state properties
 
     /**
-     * Как блок ведёт себя в физике руин. {@code rubble} — даёт завал, когда рушится (прочность от 1: не трава, не
-     * стекло), {@code wood} — завал из дерева (рубится топором). {@code flash} — гарь вспышки на гранях: материал
-     * ({@link ua.zentix.incoming.nuclear.flash.FlashChar#material}) и хеш блока выше двух бит ({@link #flashMaterial},
+     * Block behavior in ruin physics. {@code rubble} creates debris on collapse (strength from 1: not grass or
+     * glass), {@code wood} creates wooden rubble (axe). {@code flash} is face flash scorch: material
+     * ({@link ua.zentix.incoming.nuclear.flash.FlashChar#material}) and block hash above two bits ({@link #flashMaterial},
      * {@link #flashHash}).
      */
     record Props(BlockResponse response, boolean air, boolean full, boolean bearing, int span, boolean fluid, boolean waterlogged, boolean leaves,
                  boolean log, boolean fixed, boolean rubble, boolean wood, int flags, int lightBlock, int emission, VoxelShape occludeUp,
                  VoxelShape occludeDown, BlockState normal, int flash) {
-        /** Непрозрачно для карты высот {@code RuinPlan.HEIGHTMAP_TYPES[i]}: бит {@code 1 << i}. */
+        /** Opaque to heightmap {@code RuinPlan.HEIGHTMAP_TYPES[i]}: bit {@code 1 << i}. */
         static final int OPAQUE = 1;
         static final int STURDY_UP = 1 << 4, FLAMMABLE = 1 << 5, REPLACEABLE = 1 << 6, SLOW = 1 << 7, SOURCE = 1 << 8,
                 SHAPE_LIGHT = 1 << 9, GRASS = 1 << 10, MOSS = 1 << 11, SAND = 1 << 12, DIRT = 1 << 13, SNOW = 1 << 14,
                 SOUL_BASE = 1 << 15, FIRE = 1 << 16, NO_FLUID = 1 << 17, PLANT = 1 << 18, SNOW_LAYER = 1 << 19,
-                /** Снег для дёрна под ним ({@code SnowyDirtBlock}: тег {@code minecraft:snow} — слой, блок, рыхлый снег). */
+                /** Snow for turf beneath ({@code SnowyDirtBlock}: {@code minecraft:snow} tag, layer, block, powder snow). */
                 SNOWY_TOP = 1 << 20;
 
         boolean is(int flag) {
@@ -101,7 +101,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return flash >>> 2;
         }
 
-        /** Непрозрачно для карты высот {@code RuinPlan.HEIGHTMAP_TYPES[type]}. */
+        /** Opaque to heightmap {@code RuinPlan.HEIGHTMAP_TYPES[type]}. */
         boolean opaque(int type) {
             return (flags & OPAQUE << type) != 0;
         }
@@ -110,26 +110,26 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return response.thresholdPsi();
         }
 
-        /** Ломается волной (бревно — только стволом дерева, не по блокам). */
+        /** Wave-breakable (log only as tree trunk, not per block). */
         boolean breakable() {
             return response.kind() != BlockResponse.Kind.NONE && !log;
         }
     }
 
-    /** Свойства состояний для решателей руин: в потоке сервера — по общей таблице, в фоне — по опубликованной. */
+    /** State properties for ruin solvers: shared table on server thread, published table in background. */
     interface PropsView {
         Props get(BlockState st);
     }
 
-    /** Все известные свойства (только поток сервера). */
+    /** All known properties (server thread only). */
     private static final Reference2ObjectOpenHashMap<BlockState, Props> PROPS = new Reference2ObjectOpenHashMap<>();
-    /** Копия {@link #PROPS} для фоновых потоков: не меняется, новая — при {@link #publish}. */
+    /** Copy of {@link #PROPS} for background threads: immutable, replaced by {@link #publish}. */
     private static volatile Reference2ObjectOpenHashMap<BlockState, Props> published = new Reference2ObjectOpenHashMap<>();
     private static boolean dirty;
-    /** Сколько раз таблицу сбрасывали: снимок, снятый до сброса, заново заносит свои состояния ({@link ChunkShot#current}). */
+    /** Table reset count: snapshot taken before reset republishes its states ({@link ChunkShot#current}). */
     static int generation;
 
-    /** Теги перезагрузили: пороги другие (поток сервера — как и всё в руинах). */
+    /** Tags reloaded: thresholds changed (server thread, like all ruin work). */
     static void clearProps() {
         generation++;
         PROPS.clear();
@@ -137,7 +137,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         dirty = false;
     }
 
-    /** Свойства состояния (поток сервера). */
+    /** State properties (server thread). */
     static Props props(BlockState st) {
         Props p = PROPS.get(st);
         if (p == null) {
@@ -147,12 +147,12 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         return p;
     }
 
-    /** Состояние из снимка ({@link ChunkShot}) — в таблицу (поток сервера); фоновым потокам — после {@link #publish}. */
+    /** Snapshot state ({@link ChunkShot}) into table (server thread); background threads receive after {@link #publish}. */
     static void ensure(BlockState st) {
         props(st);
     }
 
-    /** Таблица для фоновых задач, созданных после этого вызова (поток сервера): все свойства, известные сейчас. */
+    /** Table for background tasks created after call (server thread): all currently known properties. */
     static PropsView publish() {
         props(AIR);
         props(RuinWindow.MASS);
@@ -169,7 +169,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         };
     }
 
-    /** Свойства в потоке сервера. */
+    /** Properties on server thread. */
     static final PropsView SERVER = Blast::props;
 
     private static final BlockState AIR = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
@@ -181,18 +181,18 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         var shape = st.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
         boolean full = !liquid && Block.isShapeFullBlock(shape);
         boolean leaves = st.is(BlockTags.LEAVES), log = st.is(BlockTags.LOGS);
-        // опора — всё с коллизией (стекло, цепи, заборы тоже); листва держится за ствол, а не опирается ({@link Collapse})
+        // support: anything with collision (glass, chains, fences too); leaves attach to trunk rather than rest on support ({@link Collapse})
         boolean bearing = !liquid && !leaves && !shape.isEmpty();
-        // пролёт: сколько блоков вбок (или вниз) блок держится без опоры под собой
+        // span: blocks sideways (or down) a block holds without support beneath
         int span;
         if (st.getBlock() instanceof FallingBlock || r.thresholdPsi() <= 1) span = 0;
         else if (log || r.kind() == BlockResponse.Kind.NONE || r.kind() == BlockResponse.Kind.GROUND || r.thresholdPsi() >= 12) span = 6;
         else span = 4;
         boolean waterlogged = !liquid && st.hasProperty(BlockStateProperties.WATERLOGGED) && st.getValue(BlockStateProperties.WATERLOGGED);
-        // неразрушимое (коренная порода, барьер, свет, рамка портала, обсидиан): не падает, не отрывается и держит
+        // indestructible (bedrock, barrier, light, portal frame, obsidian): never falls or detaches, provides support
         float destroy = st.getBlock().defaultDestroyTime();
         boolean fixed = !st.isAir() && !liquid && (destroy < 0 || destroy >= 50);
-        // для достройки плана ({@code RuinPlanner.finish}) в фоне: свет, огонь, карты высот, земля — здесь, в потоке сервера
+        // for background plan completion ({@code RuinPlanner.finish}): light, fire, heightmaps, ground obtained here on server thread
         int flags = 0;
         for (int t = 0; t < RuinPlan.HEIGHTMAP_TYPES.length; t++) if (RuinPlan.HEIGHTMAP_TYPES[t].isOpaque().test(st)) flags |= Props.OPAQUE << t;
         EmptyBlockGetter at = EmptyBlockGetter.INSTANCE;
@@ -210,8 +210,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (st.is(Blocks.SNOW_BLOCK)) flags |= Props.SNOW;
         if (st.is(Blocks.SNOW)) flags |= Props.SNOW_LAYER;
         if (st.is(BlockTags.SNOW)) flags |= Props.SNOWY_TOP;
-        // то, что вспышка сжигает над землёй, — растения тега nuke_plants (тот же тег держит их порог давления); сухой
-        // куст — то, что от них остаётся
+        // flash burns above-ground plants tagged nuke_plants (same tag defines pressure threshold); dead
+        // bush is their remnant
         if (!liquid && st.getFluidState().isEmpty() && !st.is(Blocks.DEAD_BUSH) && st.is(ModTags.NUKE_PLANTS)) flags |= Props.PLANT;
         if (st.is(BlockTags.SOUL_FIRE_BASE_BLOCKS)) flags |= Props.SOUL_BASE;
         if (st.is(Blocks.FIRE)) flags |= Props.FIRE;
@@ -221,21 +221,21 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 RuinPlan.normal(st), FlashChar.material(st) | FlashChar.hash(st.getBlock()) << 2);
     }
 
-    /** Отражённое давление при падении по нормали (воздух, γ = 1.4), psi. */
+    /** Normally reflected pressure (air, γ = 1.4), psi. */
     static double reflected(double p) {
         return 2 * p * (7 * P0 + 4 * p) / (7 * P0 + p);
     }
 
-    // ---------------------------------------------------------------- результат
+    // ---------------------------------------------------------------- result
 
-    /** Место чанка (как ключи {@link RuinPlan}: секция, y, z, x) сломано волной или повалено со стволом. */
+    /** Chunk position (like {@link RuinPlan} keys: section, y, z, x) broken by wave or toppled with trunk. */
     boolean gone(int lx, int y, int lz) {
         int i = (y - minY) >> 4;
         if (i < 0) return false;
         return java.util.Arrays.binarySearch(removed, i << RuinPlan.SECTION_SHIFT | (y & 15) << 8 | lz << 4 | lx) >= 0;
     }
 
-    /** Разлом чанка окна {@code w} (любой поток: окно — из снимков). */
+    /** Fracture of window {@code w} chunk (any thread: snapshot window). */
     static Blast solve(RuinWindow w, Detonation d, boolean blockDamage, boolean treeFall) {
         Solver s = new Solver(w, d);
         try {
@@ -245,7 +245,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
     }
 
-    /** Буферы решателя — свои у каждого потока: один решатель за раз берёт их, вложенный — свои. */
+    /** Solver buffers per thread: one solver takes them at a time; nested solver uses its own. */
     private static final class Buffers {
         byte[] sky = new byte[0];
         long[] gone = new long[0];
@@ -254,7 +254,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
 
     private static final ThreadLocal<Buffers> BUFFERS = ThreadLocal.withInitial(Buffers::new);
 
-    /** Очереди руин пусты: буферы решателя этого потока больше не нужны. */
+    /** Ruin queues empty: this thread's solver buffers no longer needed. */
     static void releaseBuffers() {
         Buffers b = BUFFERS.get();
         if (b.busy) return;
@@ -263,9 +263,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
     }
 
     /**
-     * Третий раунд — по разлому всех чанков окна (его строит {@link Collapse}): что осталось стоять у проломов соседей
-     * (угол дома, стена у перекрытия, ядро за выбитыми этажами), теперь тоньше и открыто с другой стороны — решается
-     * заново теми же правилами в столбцах чанка ± {@code margin}. Места — окна: {@code wx | wz << 6 | (y − minY) << 12}.
+     * Third round uses fractures of all window chunks (built by {@link Collapse}): remnants near neighboring breaches
+     * (house corner, wall beside floor, core behind broken stories) now thinner and exposed from another side, solved
+     * again by same rules in chunk columns ± {@code margin}. Window positions: {@code wx | wz << 6 | (y − minY) << 12}.
      */
     static int[] remnants(RuinWindow w, Detonation d, Blast[] blasts, int margin, boolean blockDamage) {
         if (!blockDamage) return new int[0];
@@ -277,10 +277,10 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
     }
 
-    // ---------------------------------------------------------------- решение
+    // ---------------------------------------------------------------- solution
 
     private static final class Solver {
-        /** Третий раунд ({@link Blast#remnants}): проломы всех чанков окна — пролом и есть. */
+        /** Third round ({@link Blast#remnants}): every window chunk's breaches count as breaches. */
         int[] remnants(Blast[] blasts, int margin) {
             skyAir();
             IntArrayList breaks = new IntArrayList();
@@ -309,12 +309,12 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         final Detonation d;
         final Vec3 burst;
         final int yb, yt, h;
-        /** Самый низкий верх в окрестности {@link #SKY_DEPTH} + 1: ниже него проёмов с небом нет. */
+        /** Lowest top within {@link #SKY_DEPTH} + 1: no sky openings below. */
         final int[] lowTop = new int[SIDE * SIDE];
-        /** Глубина воздуха, связанного с небом (1…{@link #SKY_DEPTH}); над верхом столбца — небо без записи. */
+        /** Sky-connected air depth (1…{@link #SKY_DEPTH}); above column top, sky without stored entry. */
         final byte[] sky;
         final long[] gone;
-        /** Буферы {@link #sky} и {@link #gone} — потока ({@link #BUFFERS}). */
+        /** Thread buffers {@link #sky} and {@link #gone} ({@link #BUFFERS}). */
         final Buffers pooled;
         final List<long[]> trees = new ArrayList<>();
         final List<BlockState> treeLogs = new ArrayList<>();
@@ -348,7 +348,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     minTop = Math.min(minTop, m);
                 }
             }
-            // ниже самого низкого проёма минус глубина неба волна ничего не видит
+            // wave sees nothing below lowest opening minus sky depth
             this.yb = Math.max(w.minY, Math.min(minTop, maxTop) - SKY_DEPTH - 2);
             this.yt = Math.min(w.maxY - 1, maxTop + 1);
             this.h = Math.max(1, yt - yb + 1);
@@ -370,7 +370,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        /** Буферы — обратно в общие. */
+        /** Return buffers to shared storage. */
         void close() {
             if (pooled != null) pooled.busy = false;
         }
@@ -400,7 +400,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return inside(wx, y, wz) && bit(gone, idx(wx, y, wz));
         }
 
-        /** Воздух, связанный с небом: над верхом столбца, внутри не глубже {@link #SKY_DEPTH}, или пролом. */
+        /** Sky-connected air: above column top, within {@link #SKY_DEPTH} inside, or breach. */
         boolean open(int wx, int y, int wz) {
             if (wx < 0 || wx >= SIDE || wz < 0 || wz >= SIDE) return false;
             if (y >= w.maxY) return true;
@@ -425,20 +425,20 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                             Props p = w.props(wx, y, wz);
                             if (p.air() || isGone(wx, y, wz)) continue;
                             if (!p.breakable()) continue;
-                            // отсечка: блок не сломается и опрокидыванием (гибкость — не больше высоты над ним: 64 блока)
+                            // rejection: block cannot fail even by toppling (slenderness bounded by height above, 64 blocks)
                             if (p.threshold() * 0.85 > pmax * 64 / K[3]) continue;
                             decide(wx, y, wz, p, pmax, round, true);
                         }
                     }
                 }
                 for (int i = 0; i < round.size(); i++) set(gone, round.getInt(i));
-                // проломы первого раунда впускают волну во весь воздух за ними (залы, этажи, ядро за фасадом);
-                // второй раунд — в самом чанке: блоки у проломов и у этого воздуха
+                // first-round breaches admit wave into all connected air (halls, floors, core behind facade);
+                // second round inside chunk: blocks beside breaches and this air
                 IntArrayList second = new IntArrayList();
                 aroundBreaks(round, 0, second);
                 for (int i = 0; i < second.size(); i++) set(gone, second.getInt(i));
             }
-            // сломанное в самом чанке — ключами плана
+            // broken positions inside chunk use plan keys
             IntArrayList out = new IntArrayList();
             for (int y = yb; y <= yt; y++) {
                 for (int wz = LO; wz < HI; wz++) {
@@ -454,10 +454,10 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
 
         /**
-         * Волна входит в проломы {@code breaks}: весь воздух, связанный с ними, в столбцах чанка ± {@link #ROUND_ONE}
-         * получает давление падающей волны (становится воздухом с небом), и блоки у проломов и у этого воздуха в столбцах
-         * чанка ± {@code margin} решаются заново — в {@code out}. Дальше {@link #ROUND_ONE} заливка не идёт: решения там
-         * не нужны ни этому чанку, ни обрушению (его пути опоры короче), а высотка в окне 48×48 — десятки мс на единицу.
+         * Wave enters {@code breaks}: all connected air in chunk columns ± {@link #ROUND_ONE}
+         * receives incident-wave pressure (becomes sky air); blocks beside breaches and this air in chunk columns
+         * ± {@code margin} solved again into {@code out}. Fill stops at {@link #ROUND_ONE}: decisions beyond
+         * are needed by neither chunk nor collapse (shorter support paths); 48×48 tower window costs tens of ms per unit.
          */
         void aroundBreaks(IntArrayList breaks, int margin, IntArrayList out) {
             IntArrayList reach = new IntArrayList(breaks);
@@ -469,7 +469,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     if (nx < LO - ROUND_ONE || nx >= HI + ROUND_ONE || nz < LO - ROUND_ONE || nz >= HI + ROUND_ONE) continue;
                     if (!inside(nx, ny, nz) || ny > w.top(nx, nz)) continue;
                     int n = idx(nx, ny, nz);
-                    // место с небом уже пройдено (у воздуха — отметка глубины, проставленная при первом заходе)
+                    // sky position already visited (air depth marked on first visit)
                     if (bit(gone, n) || sky[n] != 0 || !w.air(nx, ny, nz)) continue;
                     sky[n] = (byte) Math.min(Byte.MAX_VALUE, dc + 1);
                     reach.add(n);
@@ -490,7 +490,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        /** Сломать ли блок (толщина, отражение) и опрокинуть ли элемент; сломанные места — в {@code out}. */
+        /** Whether block breaks (thickness, reflection) or element topples; broken positions into {@code out}. */
         void decide(int wx, int y, int wz, Props p, double pmax, IntArrayList out, boolean first) {
             int x = w.x0 + wx, z = w.z0 + wz;
             double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
@@ -498,7 +498,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             if (len < 1e-6) len = 1e-6;
             double vy = uy / len, hl = Math.hypot(ux, uz);
             double ex = hl < 1e-6 ? 0 : ux / hl, ez = hl < 1e-6 ? 0 : uz / hl;
-            // грани у неба: самая прямая к взрыву (стены — по углу в горизонтальной плоскости, стебель Маха; крыши — по вертикали)
+            // sky-facing faces: most directly blast-facing (horizontal wall angle, Mach stem; vertical roof angle)
             double facing = -2;
             Direction.Axis faceAxis = null;
             for (Direction dir : Direction.values()) {
@@ -509,10 +509,10 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     faceAxis = dir.getAxis();
                 }
             }
-            if (facing < -1) return; // не у неба
+            if (facing < -1) return; // not beside sky
             long th = thickness(wx, y, wz, p);
             int t = (int) (th & 7);
-            // массив: ломается только опрокидыванием — ему нужна высота над местом
+            // mass: fails only by toppling, requiring height above position
             int height = 0;
             if (t > 3) {
                 if (p.leaves() || hl < 1e-6) return;
@@ -521,16 +521,16 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
             double psi = d.psi(new Vec3(cx, cy, cz)), pr = reflected(psi);
             int seed = Mth.murmurHash3Mixer(Long.hashCode(BlockPos.asLong(x, y, z)));
-            // грунт (земля, камень, терракота) ломается тонким элементом, только если с обеих сторон — воздух с небом:
-            // гребень, стенка, навес; свод закрытой пещеры, бункера, подвала под толщей земли — нет (перепада нет)
-            // (и неполный грунт — тропинка, грядка, грязь: иначе траншеи по тропам и полям)
+            // ground (soil, stone, terracotta) fails as thin element only with sky-connected air on both sides:
+            // ridge, wall, overhang; no closed cave/bunker/basement ceiling under thick ground (no pressure difference)
+            // (also partial ground: path, farmland, mud, otherwise trenches along paths and fields)
             boolean thin = t <= 3 && (p.response().kind() != BlockResponse.Kind.GROUND || ends(wx, y, wz, th));
             if (thin) {
                 double pressure = facing > 0 ? Math.max(psi, pr * facing) : psi;
                 if (p.response().breaksAt(pressure / K[t], seed)) {
                     int axis = (int) (th >> 3 & 3);
                     if (facing > 0 && faceAxis.ordinal() == axis && t > 1) {
-                        // пробит с лица: элемент ломается на всю толщину
+                        // face breached: element fails through full thickness
                         int a = (int) (th >> 5 & 3), b = (int) (th >> 7 & 3);
                         int dx = axis == 0 ? 1 : 0, dy = axis == 1 ? 1 : 0, dz = axis == 2 ? 1 : 0;
                         for (int i = -b; i <= a; i++) take(wx + dx * i, y + dy * i, wz + dz * i, out);
@@ -548,14 +548,14 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             topple(wx, y, wz, p, pr, ex, ez, height, seed, out, first);
         }
 
-        /** Оба конца ряда толщины — воздух с небом (или пролом). */
+        /** Both ends of thickness row are sky-connected air (or breach). */
         boolean ends(int wx, int y, int wz, long th) {
             int axis = (int) (th >> 3 & 3), a = (int) (th >> 5 & 3), b = (int) (th >> 7 & 3);
             int dx = axis == 0 ? 1 : 0, dy = axis == 1 ? 1 : 0, dz = axis == 2 ? 1 : 0;
             return open(wx + dx * (a + 1), y + dy * (a + 1), wz + dz * (a + 1)) && open(wx - dx * (b + 1), y - dy * (b + 1), wz - dz * (b + 1));
         }
 
-        /** Место в разлом, если оно ломается (жидкость и неломаемое внутри элемента остаются). */
+        /** Add position to fracture if breakable (liquid and unbreakable blocks inside element remain). */
         void take(int wx, int y, int wz, IntArrayList out) {
             if (!inside(wx, y, wz)) return;
             Props p = w.props(wx, y, wz);
@@ -563,27 +563,27 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
 
         /**
-         * Опрокидывание: ряд полных кубов от грани к взрыву по оси от эпицентра (не толще {@link #MAX_TOPPLE}, небо
-         * с обеих сторон) и высота над местом {@code H}: при {@code H/t ≥} {@link #SLENDER} и давлении — ломается весь ряд.
+         * Toppling: full-cube row from blast-facing face along axis away from epicenter (no thicker than {@link #MAX_TOPPLE}, sky
+         * both sides) and height {@code H} above position: entire row breaks when {@code H/t ≥} {@link #SLENDER} and pressure sufficient.
          */
         void topple(int wx, int y, int wz, Props p, double pr, double ex, double ez, int height, int seed, IntArrayList out, boolean first) {
             boolean alongX = Math.abs(ex) >= Math.abs(ez);
             int step = alongX ? (ex > 0 ? -1 : 1) : (ez > 0 ? -1 : 1);
             double cos = alongX ? Math.abs(ex) : Math.abs(ez);
             int fx = alongX ? wx - step : wx, fz = alongX ? wz : wz - step;
-            if (!open(fx, y, fz)) return; // лицом не к небу
-            // грунт (скалы, столбы, мезы) опрокидывается не толще GROUND_TOPPLE; постройке — до MAX_TOPPLE
+            if (!open(fx, y, fz)) return; // face not beside sky
+            // ground (cliffs, pillars, mesas) topples up to GROUND_TOPPLE; structures to MAX_TOPPLE
             int most = p.response().kind() == BlockResponse.Kind.GROUND ? GROUND_TOPPLE : MAX_TOPPLE;
             int run = 0;
             while (run <= most && full(alongX ? wx + step * run : wx, y, alongX ? wz : wz + step * run)) run++;
             if (run == 0 || run > most) return;
             int bx = alongX ? wx + step * run : wx, bz = alongX ? wz : wz + step * run;
-            if (!open(bx, y, bz)) return; // сзади не небо: массив, склон
-            // плечо — только та высота, где элемент стоит один, с воздухом сзади: простенок держит перекрытие над этажом
+            if (!open(bx, y, bz)) return; // no sky behind: mass, slope
+            // lever arm only height where element stands alone with air behind: wall pier supports floor above story
             height = freeHeight(wx, y, wz, bx, bz, height);
             if (height < SLENDER * run) return;
-            // за проломами (второй и третий раунды) опрокидывается только столб — ядро, угол, простенок: стену вширь
-            // держат поперечные стены и перекрытия
+            // beyond breaches (second/third rounds), only column topples: core, corner, pier; crosswalls and floors
+            // support wide walls
             if (!first) {
                 int a = 0, b = 0;
                 while (a < most && full(alongX ? wx : wx + a + 1, y, alongX ? wz + a + 1 : wz)) a++;
@@ -598,8 +598,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
 
         /**
-         * Свободная высота над местом (не больше {@code limit}): блоки столбца стоят (не выбиты), а за ними, в столбце
-         * {@code bx, bz} за элементом, — воздух или пролом. Перекрытие или перемычка сзади — конец плеча.
+         * Free height above position (at most {@code limit}): column blocks standing (not removed), with air or breach
+         * behind in column {@code bx, bz}. Floor or lintel behind ends lever arm.
          */
         int freeHeight(int wx, int y, int wz, int bx, int bz, int limit) {
             int k = 0;
@@ -612,28 +612,28 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return k;
         }
 
-        /** Полный куб ряда опрокидывания: жидкость — тоже (за водой не небо), выбитое в раунде 1 — нет. */
+        /** Full cube in toppling row: includes liquid (no sky beyond water), excludes round-1 removals. */
         boolean full(int wx, int y, int wz) {
             if (isGone(wx, y, wz)) return false;
             Props p = w.props(wx, y, wz);
             return p.full() || p.fluid();
         }
 
-        /** Твёрдый полный куб для толщины: жидкость — нет, выбитое в раунде 1 — нет. */
+        /** Solid full cube for thickness: excludes liquid and round-1 removals. */
         boolean solid(int wx, int y, int wz) {
             return !isGone(wx, y, wz) && w.props(wx, y, wz).full();
         }
 
-        /** Жидкость (не выбитая): за ней перепада нет. */
+        /** Liquid (not removed): no pressure difference beyond it. */
         boolean wet(int wx, int y, int wz) {
             return inside(wx, y, wz) && !isGone(wx, y, wz) && w.props(wx, y, wz).fluid();
         }
 
         /**
-         * Толщина элемента через место: наименьшая по осям длина ряда твёрдых полных кубов (4 — массив). Ось, у которой
-         * оба конца ряда — вода, не в счёт: воду с обеих сторон волна не продавит (стекло в пруду цело), а стекло
-         * аквариума с водой только сзади — тонкое: лицо к воздуху получает давление, и хрупкое лопается.
-         * Упаковано: биты 0–2 — толщина, 3–4 — ось, 5–6 и 7–8 — сколько кубов ряда в плюс и в минус по оси.
+         * Element thickness through position: shortest axis-aligned solid-full-cube row (4 means mass). Axis with
+         * water at both ends excluded: wave cannot push through water on both sides (pond glass intact); aquarium
+         * glass with water only behind is thin: air-facing face receives pressure, fragile glass breaks.
+         * Packed: bits 0–2 thickness, 3–4 axis, 5–6 and 7–8 cube count in positive/negative axis directions.
          */
         long thickness(int wx, int y, int wz, Props self) {
             if (!self.full()) return 1 | 1L << 3;
@@ -654,7 +654,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return best | (long) bestAxis << 3 | (long) bestA << 5 | (long) bestB << 7;
         }
 
-        /** Воздух под верхом столбцов, связанный с небом через проёмы, — не глубже {@link #SKY_DEPTH}. */
+        /** Air below column tops connected to sky through openings, at most {@link #SKY_DEPTH} deep. */
         void skyAir() {
             IntArrayList queue = new IntArrayList();
             for (int wz = 0; wz < SIDE; wz++) {
@@ -665,7 +665,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     for (Direction dir : Direction.Plane.HORIZONTAL) {
                         int nx = wx + dir.getStepX(), nz = wz + dir.getStepZ();
                         if (nx < 0 || nx >= SIDE || nz < 0 || nz >= SIDE || !w.has(nx, nz)) continue;
-                        // места столбца выше верха соседа смотрят в небо сбоку
+                        // column positions above neighbor's top see sky sideways
                         for (int y = Math.max(low, topOr(nx, nz) + 1); y <= Math.min(t, yt); y++) {
                             int i = idx(wx, y, wz);
                             if (sky[i] != 0 || !w.air(wx, y, wz)) continue;
@@ -673,7 +673,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                             queue.add(i);
                         }
                     }
-                    // и снизу открытого неба (навес, арка): воздух прямо под местом над верхом соседнего столбца — выше
+                    // also below open sky (overhang, arch): air immediately beneath position above neighboring column top is higher
                 }
             }
             for (int q = 0; q < queue.size(); q++) {
@@ -691,7 +691,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        /** Стволы на опоре валятся целиком от эпицентра (до волны по блокам; листва потом — без ствола, {@link Collapse}). */
+        /** Supported trunks topple whole away from epicenter (before per-block wave; unsupported leaves follow, {@link Collapse}). */
         void fellTrees() {
             for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                 for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
@@ -704,7 +704,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         if (pb.log() || pb.leaves() || !pb.bearing()) continue;
                         int x = w.x0 + wx, z = w.z0 + wz;
                         if (d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) continue;
-                        // ствол — только дерево: над ним листва (иначе бревенчатая стена или столб)
+                        // trunk only if tree: leaves above (otherwise log wall or pillar)
                         int height = 0;
                         while (height < 24 && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
@@ -716,7 +716,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                             trees.add(new long[]{BlockPos.asLong(x, y, z), height, dir.get3DDataValue()});
                             treeLogs.add(st);
                         }
-                        break; // ниже комля — опора
+                        break; // support below trunk base
                     }
                 }
             }

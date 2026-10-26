@@ -56,26 +56,26 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Общий бюджет тяжёлой работы ({@link WorkScheduler}): попадания — единицами под сроком тика, взрыв — по частям
- * с тем же итогом, что у ванили, порядок работ удара, неготовые районы, доля блэкаута. Время — считающими часами
- * ({@link WorkClock#counting}: единица = 1 мс), настенное время на CI не мерится.
+ * Shared heavy-work budget ({@link WorkScheduler}): impacts in work units within a tick deadline, explosion batches
+ * with the same result as vanilla, strike-job order, unready areas and blackout share. Time uses counting clocks
+ * ({@link WorkClock#counting}: one work unit = 1 ms); no wall-clock measurements on CI.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WorkGameTests {
     private static final long MS = 1_000_000L;
-    /** Середина площадки «range» на уровне травы (пол — 11 слоёв). */
+    /** Center of the "range" platform at grass level (11-layer floor). */
     private static final BlockPos CENTER = new BlockPos(32, 11, 32);
 
     private WorkGameTests() {}
 
     /**
-     * Квартал: дома 7×7 из каменного кирпича высотой 9 со стёклами и светокамнем внутри, сеткой через 14 блоков вокруг
-     * середины площадки (x и z от 11 до 53). Обломки на время теста не ложатся блоками.
+     * District: 7×7 stone-brick houses, height 9, glass and glowstone inside, on a 14-block grid around the platform
+     * center (x and z from 11 to 53). Debris does not settle as blocks during the test.
      */
     private static void buildTown(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // обломки ложатся блоками (угольный блок, базальт) и в воронку: «снесён ли блок» — только без них
+        // debris settles as blocks (coal block, basalt), including in the crater: test block removal only without it
         boolean debris = IncomingConfig.SERVER.debrisStay.get();
         IncomingConfig.SERVER.debrisStay.set(false);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
@@ -95,7 +95,7 @@ public final class WorkGameTests {
         }
     }
 
-    /** Взрывы у площадки: что каждый решил снести (блоки, не воздух), по порядку. */
+    /** Explosions near the platform: each explosion's chosen removal positions (blocks, not air), in order. */
     private record Blast(Vec3 at, float radius, long gameTime, Set<BlockPos> blocks) {}
 
     private static List<Blast> recordBlasts(GameTestHelper h, double range) {
@@ -113,7 +113,7 @@ public final class WorkGameTests {
         return out;
     }
 
-    /** Тикеты районов взрывов ({@code BlastArea}: регион и загрузка) в чанках района {@code at}. */
+    /** Explosion-area tickets ({@code BlastArea}: region and loading) in chunks of the area at {@code at}. */
     @SuppressWarnings("unchecked")
     private static int blastTickets(ServerLevel level, Vec3 at) {
         try {
@@ -135,7 +135,7 @@ public final class WorkGameTests {
             }
             return n;
         } catch (ReflectiveOperationException ex) {
-            throw new GameTestAssertException("тикеты не читаются: " + ex);
+            throw new GameTestAssertException("cannot read tickets: " + ex);
         }
     }
 
@@ -144,8 +144,8 @@ public final class WorkGameTests {
     }
 
     /**
-     * Снесён наземным взрывом заряда: воздух, огонь или грунт вала воронки, который лёг на снесённое место
-     * ({@code Craters.dig}; площадка — земля с травой).
+     * Removed by a surface-charge explosion: air, fire, or crater-rim soil placed at a removed position
+     * ({@code Craters.dig}; platform is grass-covered dirt).
      */
     private static boolean goneOrRim(BlockState s) {
         if (gone(s)) return true;
@@ -160,9 +160,9 @@ public final class WorkGameTests {
     }
 
     /**
-     * Залп по кварталу (пять шахедов и ракета в одном тике) на считающих часах: за тик — не больше общего срока и одной
-     * единицы; работа растянута на несколько тиков; итог — как у ванили: каждый блок, который выбрал любой взрыв
-     * ({@code ExplosionEvent.Detonate}), снесён (или горит).
+     * A salvo against the district (five Shaheds and a missile in one tick) with counting clocks: each tick uses
+     * at most the total allowance plus one work unit; work spans multiple ticks; final result matches vanilla:
+     * every block chosen by any explosion ({@code ExplosionEvent.Detonate}) is removed (or burning).
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "work_budget", skyAccess = true)
     public static void impactsStayWithinBudget(GameTestHelper h) {
@@ -179,57 +179,58 @@ public final class WorkGameTests {
         Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         long total = WorkScheduler.totalNanos();
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий: " + StrikeWorld.get(level).impacts().size());
-            h.assertTrue(clock.maxTickNanos() <= total + MS, "тик " + clock.maxTickNanos() / MS + " мс при сроке " + total / MS);
-            h.assertTrue(clock.ticksWorked() > 1, "всё в одном тике — бюджет не делит работу (" + clock.units() + " единиц)");
-            // по одному подрыву заряда на удар: вторичных подрывов и взрыва огненного шара нет
-            h.assertTrue(blasts.size() == 6, "взрывов " + blasts.size());
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "impact queue: " + StrikeWorld.get(level).impacts().size());
+            h.assertTrue(clock.maxTickNanos() <= total + MS, "tick " + clock.maxTickNanos() / MS + " ms with allowance " + total / MS);
+            h.assertTrue(clock.ticksWorked() > 1, "all in one tick: budget does not split work (" + clock.units() + " work units)");
+            // one charge detonation per strike: no secondary detonations or fireball explosion
+            h.assertTrue(blasts.size() == 6, "explosions " + blasts.size());
             int blocks = 0;
             for (Blast b : blasts) {
                 for (BlockPos p : b.blocks()) {
-                    h.assertTrue(goneOrRim(level.getBlockState(p)), "взрыв у " + b.at() + " не снёс " + p + ": " + level.getBlockState(p));
+                    h.assertTrue(goneOrRim(level.getBlockState(p)), "explosion at " + b.at() + " did not remove " + p + ": " + level.getBlockState(p));
                 }
                 blocks += b.blocks().size();
             }
-            // шахеды рвутся в домах (газы выбивают комнату), ракета — в среднем доме
-            h.assertTrue(blocks > 300, "снесено блоков " + blocks);
-            Incoming.LOG.info("WORKBENCH залп: {} единиц за {} тиков (до {} за тик), взрывов {}, блоков {}", clock.units(),
+            // Shaheds burst inside houses (gases breach the room), missile in the center house
+            h.assertTrue(blocks > 300, "blocks removed " + blocks);
+            Incoming.LOG.info("WORKBENCH salvo: {} work units over {} ticks (up to {} per tick), explosions {}, blocks {}", clock.units(),
                     clock.ticksWorked(), clock.maxUnitsPerTick(), blasts.size(), blocks);
         });
     }
 
-    /** Одиночное попадание при пустой очереди: подрыв (лучи, урон, события) — в тике удара, без задержки картинки. */
+    /** A single impact with an empty queue: detonation (rays, damage, events) in the impact tick, without visual delay. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "work_same_tick", skyAccess = true)
     public static void impactWithEmptyQueueRunsSameTick(GameTestHelper h) {
-        // очередь мира общая: работы ударов прошлых партий могут ещё доделываться — ждём, пока опустеет
+        // the world queue is shared: strike work from previous batches may still be finishing; wait until empty
         whenQueueEmpty(h, 150, () -> {
             ServerLevel level = h.getLevel();
-            // считающие часы: единица = 1 мс, срок 30 — подрыв (начало, 11 единиц лучей, Detonate) влезает в тик
+            // counting clocks: one work unit = 1 ms, allowance 30; detonation (start, 11 ray work units, Detonate) fits the tick
             useCounting(h, WorkClock.counting(MS));
             List<Blast> blasts = recordBlasts(h, 16);
             long t = level.getGameTime();
             Warheads.detonate(level, WeaponType.DRONE, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), null, null);
             h.runAfterDelay(1, () -> {
-                h.assertFalse(blasts.isEmpty(), "подрыва нет и тиком позже");
-                h.assertTrue(blasts.getFirst().gameTime() == t, "подрыв на тике " + blasts.getFirst().gameTime() + ", удар — на " + t);
+                h.assertFalse(blasts.isEmpty(), "no detonation even a tick later");
+                h.assertTrue(blasts.getFirst().gameTime() == t, "detonation at tick " + blasts.getFirst().gameTime() + ", impact at " + t);
                 h.succeed();
             });
         });
     }
 
-    /** {@code then} — в первом тике, когда очередь попаданий мира пуста (проверка тика — до планировщика). */
+    /** Run {@code then} on the first tick when the world impact queue is empty (tick check runs before the scheduler). */
     private static void whenQueueEmpty(GameTestHelper h, int ticksLeft, Runnable then) {
         if (StrikeWorld.get(h.getLevel()).impacts().isEmpty()) {
             then.run();
             return;
         }
-        if (ticksLeft <= 0) throw new GameTestAssertException("очередь попаданий не опустела: " + StrikeWorld.get(h.getLevel()).impacts().size());
+        if (ticksLeft <= 0) throw new GameTestAssertException("impact queue did not empty: " + StrikeWorld.get(h.getLevel()).impacts().size());
         h.runAfterDelay(1, () -> whenQueueEmpty(h, ticksLeft - 1, then));
     }
 
     /**
-     * Порядок: два шахеда в одном тике — подрывы обоих (лучи, урон) в тике удара, раньше порций блоков; воронка, шар
-     * топлива и обломки первого — только когда его подрыв снёс всё своё (огонь шара — в уже снесённом).
+     * Order: two Shaheds in one tick; both detonate (rays, damage) during the impact tick, before block batches;
+     * the first strike's crater, fuel fireball and debris run only once its detonation has removed everything selected
+     * (fireball ignition in already cleared space).
      */
     @GameTest(template = "range", timeoutTicks = 1000, batch = "work_order", skyAccess = true)
     public static void impactUnitsKeepOrder(GameTestHelper h) {
@@ -240,21 +241,21 @@ public final class WorkGameTests {
         List<Blast> blasts = recordBlasts(h, 48);
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         Vec3 first = c.add(-14, 0, 0), second = c.add(14, 0, 0);
-        // книжные шкафы за западной стеной первого дома: волна шахеда их не ломает (дальше 5 м — Джаррет B, порог 5 psi, как у
-        // брёвен), шар топлива (8 м) доходит до них, когда газы выбили стену; бумага загорается от его вспышки (порог газеты
-        // 7,9 кал/см² против ~8,4 — больше половины шкафов, PulseIgnition), брёвна от вспышки в секунду — нет
+        // bookshelves behind the first house's west wall: Shahed wave cannot break them (beyond 5 m, Jarrett B, 5 psi threshold as for
+        // logs); the fuel fireball (8 m) reaches them once gases breach the wall; its flash ignites paper (newspaper threshold
+        // 7.9 cal/cm² versus ~8.4: more than half the bookshelves, PulseIgnition), but not logs during a one-second flash
         BlockPos pile = BlockPos.containing(first).offset(-7, 0, -1);
         for (int y = 0; y < 4; y++) for (int z = 0; z < 3; z++) level.setBlock(pile.offset(0, y, z), Blocks.BOOKSHELF.defaultBlockState(), 2);
         List<String> early = new ArrayList<>();
         int[] fires = {0};
-        // огонь шара топлива первого шахеда (в его доме) — только после того, как подрыв снёс выбранное
+        // the first Shahed's fuel-fireball ignition (inside its house) runs only after detonation removes the chosen blocks
         Consumer<net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent> onFire = e -> {
             if (e.getLevel() != level || !(e.getState().getBlock() instanceof BaseFireBlock) || blasts.isEmpty()) return;
             if (Vec3.atCenterOf(e.getPos()).distanceTo(first) > 12) return;
             fires[0]++;
             for (BlockPos p : blasts.getFirst().blocks()) {
                 if (!gone(level.getBlockState(p))) {
-                    early.add("огонь у " + e.getPos() + " раньше, чем снесён " + p);
+                    early.add("fire at " + e.getPos() + " before removal of " + p);
                     return;
                 }
             }
@@ -274,21 +275,21 @@ public final class WorkGameTests {
         Warheads.detonate(level, WeaponType.DRONE, first, null, null);
         Warheads.detonate(level, WeaponType.DRONE, second, null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty() && blasts.size() == 2, "взрывов " + blasts.size());
-            h.assertTrue(blasts.get(0).at().distanceTo(first) < 0.01, "первым — не подрыв первого");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty() && blasts.size() == 2, "explosions " + blasts.size());
+            h.assertTrue(blasts.get(0).at().distanceTo(first) < 0.01, "first event is not the first detonation");
             h.assertTrue(starts.size() >= 2 && starts.get(0).distanceTo(first) < 0.01 && starts.get(1).distanceTo(second) < 0.01,
-                    "первые единицы — не подрывы шахедов: " + starts);
-            h.assertTrue(startTicks.get(0) == t && startTicks.get(1) == t, "подрывы начались не в тике удара: " + startTicks + " (удар " + t + ")");
-            h.assertTrue(fires[0] > 0, "шар топлива первого ничего не поджёг");
+                    "first work units are not the Shahed detonations: " + starts);
+            h.assertTrue(startTicks.get(0) == t && startTicks.get(1) == t, "detonations did not start in the impact tick: " + startTicks + " (impact " + t + ")");
+            h.assertTrue(fires[0] > 0, "first fuel fireball ignited nothing");
             h.assertTrue(early.isEmpty(), early.toString());
-            h.assertTrue(clock.ticksWorked() > 1, "всё в одном тике — порядок не проверен");
+            h.assertTrue(clock.ticksWorked() > 1, "all in one tick: order not checked");
         });
     }
 
     /**
-     * Остановка сервера посреди очереди ({@code StrikeWorld.onServerStopping} → {@code UnitQueue.finish}): начатые
-     * взрывы доделываются сразу (блоки, выбранные лучами, снесены), работа в неготовом районе вдали отпускается и его
-     * не читает.
+     * Server shutdown during queued work ({@code StrikeWorld.onServerStopping} → {@code UnitQueue.finish}): active
+     * explosions finish immediately (blocks chosen by rays are removed), while a job in a distant unready area
+     * releases it without reading it.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_stop", skyAccess = true)
     public static void stopFinishesQueue(GameTestHelper h) {
@@ -299,27 +300,27 @@ public final class WorkGameTests {
         List<Blast> blasts = recordBlasts(h, 48);
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         Vec3 far = c.add(0, 0, 5200);
-        h.assertFalse(Terrain.readyAround(level, far, 32), "район вдали уже загружен");
+        h.assertFalse(Terrain.readyAround(level, far, 32), "distant area already loaded");
         Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         Warheads.detonate(level, WeaponType.DRONE, far, null, null);
         h.runAfterDelay(1, () -> {
-            h.assertFalse(blasts.isEmpty(), "подрыва нет");
+            h.assertFalse(blasts.isEmpty(), "no detonation");
             boolean half = blasts.getFirst().blocks().stream().anyMatch(p -> !gone(level.getBlockState(p)));
-            h.assertTrue(half, "подрыв ракеты снесён за тик — нечего доделывать");
+            h.assertTrue(half, "missile detonation removed everything in one tick: nothing left to finish");
             StrikeWorld.get(level).impacts().finish(level);
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь не пуста после остановки");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "queue not empty after shutdown");
             for (Blast b : blasts) {
-                // вал воронки (Craters.dig, тоже доделан остановкой) ложится и на снесённое место — по случайной добавке блоков
-                for (BlockPos p : b.blocks()) h.assertTrue(goneOrRim(level.getBlockState(p)), "не снесён " + p + " (" + level.getBlockState(p) + ") взрыва у " + b.at());
+                // crater rim (Craters.dig, also completed by shutdown) can occupy removed positions through random whole-block addition
+                for (BlockPos p : b.blocks()) h.assertTrue(goneOrRim(level.getBlockState(p)), "not destroyed: " + p + " (" + level.getBlockState(p) + ") from explosion at " + b.at());
             }
-            h.assertFalse(Terrain.readyAround(level, far, 32), "район вдали загрузился синхронно");
-            // остановка без самой остановки: таймлайны ударов (вторичные ракеты, шахед вдали) не должны достаться другим тестам
+            h.assertFalse(Terrain.readyAround(level, far, 32), "distant area loaded synchronously");
+            // shutdown without actually stopping: strike timelines (secondary missiles, distant Shahed) must not affect other tests
             StrikeWorld.get(level).dropAll(level);
             h.succeed();
         });
     }
 
-    /** Блок, сменившийся между лучами и своей порцией (поставил игрок, натекла вода), взрыв не трогает. */
+    /** The explosion leaves alone a block changed between ray selection and its batch (player placement, flowing water). */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_changed", skyAccess = true)
     public static void portionSkipsChangedBlock(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -331,24 +332,25 @@ public final class WorkGameTests {
         Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         BlockPos[] changed = {null};
         h.runAfterDelay(1, () -> {
-            // самый дальний блок подрыва — в последних порциях
+            // the farthest detonation block is in the last batches
             BlockPos far = null;
             for (BlockPos p : blasts.getFirst().blocks()) {
                 if (!gone(level.getBlockState(p)) && (far == null || p.distToCenterSqr(c) > far.distToCenterSqr(c))) far = p;
             }
-            h.assertTrue(far != null, "подрыв ракеты снесён за тик — нечего проверять");
+            h.assertTrue(far != null, "missile detonation removed everything in one tick: nothing left to check");
             level.setBlock(far, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
             changed[0] = far;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(changed[0] != null && StrikeWorld.get(level).impacts().isEmpty(), "очередь не пуста");
-            h.assertTrue(level.getBlockState(changed[0]).is(Blocks.GOLD_BLOCK), "сменившийся блок снесён: " + level.getBlockState(changed[0]));
+            h.assertTrue(changed[0] != null && StrikeWorld.get(level).impacts().isEmpty(), "queue not empty");
+            h.assertTrue(level.getBlockState(changed[0]).is(Blocks.GOLD_BLOCK), "changed block removed: " + level.getBlockState(changed[0]));
         });
     }
 
     /**
-     * Соединяющиеся блоки: снятие внутренней порции меняет свойства внешних соседей (забор, стена и панель теряют
-     * соседа, лестница — форму, листва — дистанцию), но это тот же блок — лучи его выбрали, и он снесён.
+     * Connecting blocks: removing an inner batch changes outer neighbors' properties (fence, wall and pane lose
+     * a neighbor, stairs change shape, leaves change distance), but they remain the same blocks, selected by rays
+     * and therefore removed.
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "work_connected", skyAccess = true)
     public static void portionTakesReshapedNeighbours(GameTestHelper h) {
@@ -360,7 +362,7 @@ public final class WorkGameTests {
         BlockState[] rows = {Blocks.OAK_FENCE.defaultBlockState(), Blocks.GLASS_PANE.defaultBlockState(),
                 Blocks.COBBLESTONE_WALL.defaultBlockState(), Blocks.IRON_BARS.defaultBlockState(),
                 Blocks.OAK_STAIRS.defaultBlockState(), Blocks.OAK_LEAVES.defaultBlockState()};
-        // ряды через центр по x и по z, соседи соединяются (флаг 3 — обновления формы)
+        // rows through the center along x and z; neighbors connect (flag 3: shape updates)
         for (int i = -20; i <= 20; i++) {
             for (int y = 0; y < rows.length; y++) {
                 level.setBlock(c.offset(i, y, 1), rows[y], 3);
@@ -372,24 +374,24 @@ public final class WorkGameTests {
         List<Blast> blasts = recordBlasts(h, 48);
         Warheads.detonate(level, WeaponType.MISSILE, Vec3.atBottomCenterOf(c), null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(!blasts.isEmpty() && StrikeWorld.get(level).impacts().isEmpty(), "очередь не пуста");
+            h.assertTrue(!blasts.isEmpty() && StrikeWorld.get(level).impacts().isEmpty(), "queue not empty");
             int connected = 0;
             for (Blast b : blasts) {
                 for (BlockPos p : b.blocks()) {
                     BlockState now = level.getBlockState(p);
-                    h.assertTrue(goneOrRim(now), "выбран лучами и не снесён: " + p + " " + now + " (взрыв у " + b.at() + ")");
+                    h.assertTrue(goneOrRim(now), "selected by rays but not removed: " + p + " " + now + " (explosion at " + b.at() + ")");
                 }
             }
             for (BlockPos p : blasts.getFirst().blocks()) if (Math.abs(p.getX() - c.getX()) <= 1 || Math.abs(p.getZ() - c.getZ()) <= 1) connected++;
-            // волна заряда ракеты ломает ряды лёгкого и хрупкого на метры (кладка и решётки — ближе), порций — несколько
-            h.assertTrue(connected > 24, "лучи задели мало рядов (" + connected + ") — порций снаружи нет");
+            // missile-charge wave breaks light and brittle rows over meters (masonry and bars closer); multiple batches
+            h.assertTrue(connected > 24, "rays touched too few rows (" + connected + "): no outer batches");
         });
     }
 
     /**
-     * Лучи своим циклом выбирают то же, что ванильный {@code explode()}: один сид, площадка из камня, воды, обсидиана,
-     * стекла и руды, ванильный калькулятор и калькулятор бомбы (ослабленные блоки), все лучи одной единицей
-     * и по 128. Взрыв без разрушений — площадка одна на все прогоны.
+     * The custom ray loop selects the same blocks as vanilla {@code explode()}: same seed; platform containing stone,
+     * water, obsidian, glass and ore; vanilla and bomb calculators (weakened blocks); all rays in one work unit or
+     * batches of 128. Non-destructive explosion: the same platform for every run.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_rays", skyAccess = true)
     public static void raysMatchVanilla(GameTestHelper h) {
@@ -402,8 +404,8 @@ public final class WorkGameTests {
             if (x == 0 && z == 0 && y <= 1) continue;
             level.setBlock(c.offset(x, y, z), mix[pick.nextInt(mix.length)], 2);
         }
-        // вода не течёт: иначе между взрывами (и между единицами по 128 лучей) мир менялся бы, и прогоны сравнивали бы
-        // разное
+        // water does not flow: otherwise the world would change between explosions (and between 128-ray work units), and runs
+        // would compare different worlds
         net.minecraft.world.level.levelgen.structure.BoundingBox box = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(
                 c.offset(-10, -1, -10), c.offset(10, 10, 10));
         level.getFluidTicks().clearArea(box);
@@ -432,7 +434,7 @@ public final class WorkGameTests {
         };
         NeoForge.EVENT_BUS.addListener(on);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(on));
-        // по одному взрыву: следующий — когда прошлый выбрал
+        // one explosion at a time: the next starts after the previous one finishes selection
         int[] started = {0};
         h.onEachTick(() -> {
             if (started[0] > seen.size() || started[0] >= runs.size() || !StrikeWorld.get(level).impacts().isEmpty()) return;
@@ -440,12 +442,12 @@ public final class WorkGameTests {
             probes.add(Warheads.testRays(level, at, 6, r.weak() ? bunker : null, 12345L, r.vanilla(), r.rays()));
         });
         h.succeedWhen(() -> {
-            h.assertTrue(seen.size() == runs.size() && StrikeWorld.get(level).impacts().isEmpty(), "взрывов " + seen.size());
+            h.assertTrue(seen.size() == runs.size() && StrikeWorld.get(level).impacts().isEmpty(), "explosions " + seen.size());
             int i0 = 0;
             for (BlockPos p : BlockPos.betweenClosed(c.offset(-10, -1, -10), c.offset(10, 10, 10))) {
-                if (level.getBlockState(p) != before.get(i0++)) throw new GameTestAssertException("площадка изменилась у " + p.immutable() + ": прогоны сравнивали разный мир");
+                if (level.getBlockState(p) != before.get(i0++)) throw new GameTestAssertException("platform changed at " + p.immutable() + ": runs compared different worlds");
             }
-            h.assertTrue(seen.get(0).size() > 100, "лучи выбрали мало: " + seen.get(0).size());
+            h.assertTrue(seen.get(0).size() > 100, "rays selected too few: " + seen.get(0).size());
             for (int i = 1; i < runs.size(); i++) {
                 Set<BlockPos> want = runs.get(i).weak() ? seen.get(3) : seen.get(0);
                 if (!seen.get(i).equals(want)) {
@@ -453,19 +455,19 @@ public final class WorkGameTests {
                     extra.removeAll(want);
                     Set<BlockPos> missing = new HashSet<>(want);
                     missing.removeAll(seen.get(i));
-                    throw new GameTestAssertException(runs.get(i) + ": лишние " + extra.size() + ", нет " + missing.size() + " из " + want.size());
+                    throw new GameTestAssertException(runs.get(i) + ": extra " + extra.size() + ", missing " + missing.size() + " of " + want.size());
                 }
             }
-            h.assertFalse(seen.get(3).equals(seen.get(0)), "калькулятор бомбы ничего не изменил — проверка пустая");
+            h.assertFalse(seen.get(3).equals(seen.get(0)), "bomb calculator changed nothing: empty check");
             for (int i = 0; i < runs.size(); i++) {
-                h.assertTrue(probes.get(i).vanilla() == runs.get(i).vanilla(), runs.get(i) + ": путь взрыва не тот, что задан");
+                h.assertTrue(probes.get(i).vanilla() == runs.get(i).vanilla(), runs.get(i) + ": explosion path differs from the requested path");
             }
         });
     }
 
     /**
-     * Взрыв у собранного аппарата Sable: корпус снят фронтом до урона телу за ним, а не после конца фронта мира.
-     * Проверка под считающими часами: в самом callback урона все выбранные блоки корпуса уже сняты.
+     * Explosion near an assembled Sable craft: the front removes hull before damaging the body behind it, not after
+     * the whole world front ends. With counting clocks, all selected hull blocks are already removed inside the damage callback.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_craft", skyAccess = true)
     public static void craftBlocksGoRightAfterDamage(GameTestHelper h) {
@@ -520,9 +522,9 @@ public final class WorkGameTests {
         });
         int[] waited = {0};
         h.onEachTick(() -> {
-            // Sable достраивает аппарат не обязательно в том же тике: взрыв — когда площадка под ним пуста
+            // Sable need not finish assembly in the same tick: explode once the platform beneath the craft is empty
             if (at[0] >= 0 || waited[0]++ != 5) return;
-            h.assertTrue(level.getBlockState(a).isAir(), "аппарат не собран: " + level.getBlockState(a));
+            h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
             h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
                     "craft does not initially shield the body");
@@ -530,17 +532,17 @@ public final class WorkGameTests {
         });
         StrikeGameTests.afterTest(h, () -> WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock()));
         h.succeedWhen(() -> {
-            h.assertTrue(checked[0] && damaged[0] >= at[0], "тело за корпусом не получило эту волну");
-            h.assertTrue(hullGoneAtDamage[0], "корпус ещё цел во время урона телу за ним");
-            h.assertFalse(plot.isEmpty(), "лучи не выбрали ни одного блока аппарата");
-            // блоки аппарата в выбранном — значит, лучи шли ванильным explode() с миксином Sable
-            h.assertTrue(left.isEmpty(), "блоки аппарата не сняты в тике взрыва: " + left);
+            h.assertTrue(checked[0] && damaged[0] >= at[0], "body behind hull did not receive this wave");
+            h.assertTrue(hullGoneAtDamage[0], "hull still intact when damaging the body behind it");
+            h.assertFalse(plot.isEmpty(), "rays selected no craft blocks");
+            // craft blocks in the selection mean rays ran through vanilla explode() with the Sable mixin
+            h.assertTrue(left.isEmpty(), "craft blocks not removed in the explosion tick: " + left);
         });
     }
 
     /**
-     * Аппарат в охвате лучей, но дальше 1,3 силы (в воздухе луч уходит до ~1,73 силы): взрыв — ванильным путём, иначе
-     * миксин Sable не толкнул бы аппарат и не снял бы его блоки. С охватом сила × 1,3 + 1 тест падает.
+     * Craft within ray reach but farther than 1.3 power (air rays reach ~1.73 power): use the vanilla explosion path;
+     * otherwise Sable's mixin would neither push the craft nor remove its blocks. Reach power × 1.3 + 1 fails the test.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_craft_reach", skyAccess = true)
     public static void craftInRayReachGoesVanilla(GameTestHelper h) {
@@ -550,7 +552,7 @@ public final class WorkGameTests {
         }
         ServerLevel level = h.getLevel();
         float power = 8;
-        // ближний край аппарата — в 12 блоках: дальше 1,3 × 8 + 1, ближе, чем луч силы до 10,4 уходит по воздуху (~13,9)
+        // nearest craft edge 12 blocks away: beyond 1.3 × 8 + 1, closer than a ray of up to 10.4 power travels in air (~13.9)
         BlockPos base = CENTER.offset(12, 0, -1);
         for (int x = 0; x < 3; x++) for (int y = 0; y < 3; y++) for (int z = 0; z < 3; z++) h.setBlock(base.offset(x, y, z), Blocks.OAK_PLANKS);
         BlockPos a = h.absolutePos(base), b = h.absolutePos(base.offset(2, 2, 2));
@@ -562,21 +564,21 @@ public final class WorkGameTests {
         Warheads.Probe[] blast = {null};
         h.onEachTick(() -> {
             if (blast[0] != null || waited[0]++ != 5) return;
-            h.assertTrue(level.getBlockState(a).isAir(), "аппарат не собран: " + level.getBlockState(a));
-            h.assertTrue(at.distanceTo(Vec3.atLowerCornerOf(a)) > power * 1.3 + 1, "аппарат ближе старого охвата — проверять нечего");
+            h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
+            h.assertTrue(at.distanceTo(Vec3.atLowerCornerOf(a)) > power * 1.3 + 1, "craft inside the old reach: nothing to check");
             blast[0] = Warheads.testRays(level, at, power, null, 1L, false, 128);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(blast[0] != null && blast[0].done(), "взрыв не кончился");
-            h.assertTrue(blast[0].vanilla(), "аппарат в охвате лучей, а путь свой");
+            h.assertTrue(blast[0] != null && blast[0].done(), "explosion not finished");
+            h.assertTrue(blast[0].vanilla(), "craft within ray reach but custom path used");
         });
     }
 
     /**
-     * Два подрыва бомбы, прорвавшейся наружу (один район, один тик): волна в подземной комнате и волна той доли заряда,
-     * что вышла в воздух, над домиком наверху. На считающих часах оба выбирают лучами по нетронутому — ни один блок,
-     * выбранный прошлым подрывом, не снят к {@code ExplosionEvent.Detonate} следующего. Иначе лучи следующего идут то по
-     * снятому, то нет, и разрушения зависят от скорости сервера.
+     * Two bomb detonations after venting (same area, same tick): charge wave in an underground room and the escaped
+     * charge share's wave above the surface house. With counting clocks, both ray selections see untouched blocks:
+     * no block selected by the previous detonation is removed before the next {@code ExplosionEvent.Detonate}.
+     * Otherwise, subsequent rays see removed or intact blocks depending on server speed, changing destruction.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_area_order", skyAccess = true)
     public static void areaExplosionsPickTogether(GameTestHelper h) {
@@ -590,13 +592,13 @@ public final class WorkGameTests {
         for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-10, -10, -10), CENTER.offset(10, 0, 10))) {
             level.setBlock(h.absolutePos(p), Blocks.STONE.defaultBlockState(), 2);
         }
-        // комната под землёй вокруг заряда, стены кирпичные
+        // underground room around the charge, brick walls
         BlockPos room = CENTER.offset(0, -5, 0);
         for (BlockPos p : BlockPos.betweenClosed(room.offset(-3, -2, -3), room.offset(3, 2, 3))) {
             boolean wall = Math.abs(p.getX() - room.getX()) == 3 || Math.abs(p.getY() - room.getY()) == 2 || Math.abs(p.getZ() - room.getZ()) == 3;
             level.setBlock(h.absolutePos(p), wall ? Blocks.BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
         }
-        // кирпичный домик наверху
+        // small brick house above
         for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-3, 1, -3), CENTER.offset(3, 4, 3))) {
             boolean wall = Math.abs(p.getX() - CENTER.getX()) == 3 || Math.abs(p.getZ() - CENTER.getZ()) == 3 || p.getY() == CENTER.getY() + 4;
             if (wall) level.setBlock(h.absolutePos(p), Blocks.BRICKS.defaultBlockState(), 2);
@@ -607,7 +609,7 @@ public final class WorkGameTests {
         List<String> early = new ArrayList<>();
         long[] first = {-1}, last = {-1};
         Consumer<ExplosionEvent.Detonate> check = e -> {
-            // после записи взрывов (LOWEST): последний в списке — этот подрыв
+            // after explosion recording (LOWEST): the last list entry is this detonation
             if (e.getLevel() != level || e.getExplosion().radius() < 12 || e.getExplosion().center().distanceTo(charge) > 16) return;
             if (first[0] < 0) first[0] = level.getGameTime();
             last[0] = level.getGameTime();
@@ -616,7 +618,7 @@ public final class WorkGameTests {
                 if (blasts.get(i).radius() < 12) continue;
                 for (BlockPos p : blasts.get(i).blocks()) {
                     if (gone(level.getBlockState(p))) {
-                        early.add("к подрыву " + (i + 2) + " снят " + p + " прошлого");
+                        early.add("before detonation " + (i + 2) + " removed " + p + " from the previous detonation");
                         return;
                     }
                 }
@@ -627,17 +629,17 @@ public final class WorkGameTests {
         Warheads.bunker(level, charge, charge.add(0, 9, 0), null, null);
         h.succeedWhen(() -> {
             long mains = blasts.stream().filter(b -> b.radius() >= 12).count();
-            h.assertTrue(mains == 2 && StrikeWorld.get(level).impacts().isEmpty(), "подрывов " + mains);
-            h.assertTrue(blasts.stream().allMatch(b -> b.radius() < 12 || !b.blocks().isEmpty()), "подрыв ничего не выбрал — порядок не проверен");
-            h.assertTrue(last[0] > first[0], "все подрывы в одном тике — порядок не проверен");
+            h.assertTrue(mains == 2 && StrikeWorld.get(level).impacts().isEmpty(), "detonations " + mains);
+            h.assertTrue(blasts.stream().allMatch(b -> b.radius() < 12 || !b.blocks().isEmpty()), "detonation selected nothing: order not checked");
+            h.assertTrue(last[0] > first[0], "all detonations in one tick: order not checked");
             h.assertTrue(early.isEmpty(), early.toString());
         });
     }
 
     /**
-     * Порции блоков — по времени: на считающих часах (1 мс на блок, срок 5 мс) в порции ровно 5 блоков; блок дольше
-     * 10 мс (11 мс на блок) — порция из одного блока и строка «removing block took» (в лог — первые пять за удар). Всё, что
-     * выбрали лучи, снесено.
+     * Block batches use time: counting clocks (1 ms per block, 5 ms deadline) give exactly 5 blocks per batch; a block
+     * over 10 ms (11 ms per block) gives a one-block batch and a "removing block took" line (first five per strike logged).
+     * Every block chosen by rays is removed.
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "work_portion_time", skyAccess = true)
     public static void blockPortionsByTime(GameTestHelper h) {
@@ -655,26 +657,26 @@ public final class WorkGameTests {
         Warheads.Probe heavy = Warheads.testBlast(level, Vec3.atCenterOf(h.absolutePos(centres[1])), 6, true, false,
                 () -> slow[0] += 11 * MS, 5 * MS);
         h.succeedWhen(() -> {
-            h.assertTrue(quick.done() && heavy.done() && blasts.size() == 2, "взрывов " + blasts.size());
+            h.assertTrue(quick.done() && heavy.done() && blasts.size() == 2, "explosions " + blasts.size());
             int blocks = 0;
             for (Blast b : blasts) {
-                for (BlockPos p : b.blocks()) h.assertTrue(gone(level.getBlockState(p)), "выбран лучами и не снесён: " + p);
+                for (BlockPos p : b.blocks()) h.assertTrue(gone(level.getBlockState(p)), "selected by rays but not removed: " + p);
                 blocks += b.blocks().size();
             }
-            h.assertTrue(blocks > 60, "лучи выбрали мало: " + blocks);
-            h.assertTrue(quick.largestPortion() == 5, "порция по 1 мс на блок: " + quick.largestPortion() + " блоков");
-            h.assertTrue(quick.slowBlocks() == 0, "долгих блоков при 1 мс: " + quick.slowBlocks());
-            h.assertTrue(heavy.largestPortion() == 1, "порция по 11 мс на блок: " + heavy.largestPortion() + " блоков");
-            h.assertTrue(heavy.slowBlocks() > BLAST_SLOW_LOGGED, "долгих блоков " + heavy.slowBlocks());
+            h.assertTrue(blocks > 60, "rays selected too few: " + blocks);
+            h.assertTrue(quick.largestPortion() == 5, "batch at 1 ms per block: " + quick.largestPortion() + " blocks");
+            h.assertTrue(quick.slowBlocks() == 0, "slow blocks at 1 ms: " + quick.slowBlocks());
+            h.assertTrue(heavy.largestPortion() == 1, "batch at 11 ms per block: " + heavy.largestPortion() + " blocks");
+            h.assertTrue(heavy.slowBlocks() > BLAST_SLOW_LOGGED, "slow blocks " + heavy.slowBlocks());
         });
     }
 
     /**
-     * Места POI, которых нет в данных POI мира (город карты вставлен мимо {@code setBlock}), взрыв мода снимает без
-     * ошибок PoiSection «never registered», и в данных после него не остаётся записей на месте снятых блоков. Рабочие
-     * места жителей стоят парами в одной секции: одно ставится через мир (в данных), другое — прямо в секцию (мимо
-     * данных). Ошибку ваниль пишет, только если у секции данные POI уже есть: секцию без данных она при загрузке
-     * чанка проходит сама и вносит всё, а снятие из секции без данных молчит.
+     * The mod explosion removes POIs absent from world POI data (a map city pasted without {@code setBlock}), without
+     * PoiSection "never registered" errors or stale records at removed positions. Villager workstations come in pairs
+     * within a section: one placed through the world (recorded), the other directly into the section (unrecorded).
+     * Vanilla logs the error only when the section already has POI data: on chunk load it scans a section without
+     * data and registers everything; removal from a section without data is silent.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "work_poi_blast", skyAccess = true)
     public static void poiInBlastStaysConsistent(GameTestHelper h) {
@@ -691,9 +693,9 @@ public final class WorkGameTests {
             registered.add(r);
             bare.add(b);
         }
-        // кровати обеими половинами мимо данных POI: изножье, снятое взрывом, уводит изголовье (место POI) обновлением
-        // формы — мимо того, кто снимал блок (в городе — пары соседних мест по этажам домов). Порядок
-        // снятия случаен, у шести кроватей хоть одно изножье уходит раньше изголовья почти всегда (1 − 1/64)
+        // both bed halves bypass POI data: the explosion-removed foot removes the head (the POI) through a shape update
+        // outside the block-removal code (in a city, neighboring POI pairs on building floors). Removal order is random;
+        // among six beds, at least one foot almost always goes before its head (1 − 1/64)
         List<BlockPos> heads = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             BlockPos foot = h.absolutePos(c.offset(i - 3, 0, -2)), head = foot.south();
@@ -722,35 +724,35 @@ public final class WorkGameTests {
             counter.stop();
         });
         h.runAfterDelay(2, () -> {
-            // добавления POI через мир идут задачей сервера — к этому тику они в данных
-            for (BlockPos p : registered) h.assertTrue(level.getPoiManager().getType(p).isPresent(), "подготовка: нет в данных " + p.toShortString());
-            for (BlockPos p : bare) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "подготовка: в данных " + p.toShortString());
+            // POI additions through the world run as a server task; by this tick they are recorded
+            for (BlockPos p : registered) h.assertTrue(level.getPoiManager().getType(p).isPresent(), "setup: not recorded " + p.toShortString());
+            for (BlockPos p : bare) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "setup: recorded " + p.toShortString());
             long[] t = {0};
             Warheads.Probe probe = Warheads.testBlast(level, Vec3.atCenterOf(h.absolutePos(c)), 6, true, false, () -> t[0] += MS, 5 * MS);
             long[] doneAt = {-1};
             h.succeedWhen(() -> {
-                h.assertTrue(probe.done(), "взрыв идёт");
+                h.assertTrue(probe.done(), "explosion running");
                 if (doneAt[0] < 0) doneAt[0] = level.getGameTime();
-                // снятие из данных POI — задачей сервера после смены блока
-                h.assertTrue(level.getGameTime() >= doneAt[0] + 2, "ждём задачи сервера");
-                h.assertTrue(errors[0] == 0, "ошибки PoiSection: " + errors[0]);
-                for (BlockPos p : bare) h.assertTrue(gone(level.getBlockState(p)), "не снесён " + p.toShortString() + " " + level.getBlockState(p));
-                for (BlockPos p : heads) h.assertTrue(gone(level.getBlockState(p.north())), "не снесено изножье " + p.north().toShortString());
-                for (BlockPos p : registered) h.assertTrue(gone(level.getBlockState(p)), "не снесён " + p.toShortString());
-                for (BlockPos p : bare) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "запись POI осталась " + p.toShortString());
-                for (BlockPos p : registered) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "запись POI осталась " + p.toShortString());
+                // POI-data removal runs as a server task after the block changes
+                h.assertTrue(level.getGameTime() >= doneAt[0] + 2, "waiting for server tasks");
+                h.assertTrue(errors[0] == 0, "PoiSection errors: " + errors[0]);
+                for (BlockPos p : bare) h.assertTrue(gone(level.getBlockState(p)), "not destroyed: " + p.toShortString() + " " + level.getBlockState(p));
+                for (BlockPos p : heads) h.assertTrue(gone(level.getBlockState(p.north())), "bed foot not removed: " + p.north().toShortString());
+                for (BlockPos p : registered) h.assertTrue(gone(level.getBlockState(p)), "not destroyed: " + p.toShortString());
+                for (BlockPos p : bare) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "POI record remains " + p.toShortString());
+                for (BlockPos p : registered) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "POI record remains " + p.toShortString());
             });
         });
     }
 
-    /** Строк «removing block took» за удар (как {@code BlastArea.SLOW_BLOCKS_LOGGED}). */
+    /** Number of "removing block took" lines per strike (as in {@code BlastArea.SLOW_BLOCKS_LOGGED}). */
     private static final int BLAST_SLOW_LOGGED = 5;
 
     /**
-     * Взрыв мода — выпадение с затуханием ({@code DESTROY_WITH_DECAY}, как у крипера): снятый блок выпадает с вероятностью
-     * 1/сила, и правило {@code tntExplosionDropDecay} (по умолчанию выключено) этого не меняет. Без затухания выпадает всё
-     * снятое: после залпов по 30 в мире лежат тысячи предметов, и их тик занимает две трети потока сервера.
-     * Куб земли 15×8×15 и взрыв силы 16 в нём; снятые блоки — по всей коробке взрыва, с полом площадки.
+     * Mod explosions use drop decay ({@code DESTROY_WITH_DECAY}, like a creeper): a removed block drops with probability
+     * 1/power, unaffected by {@code tntExplosionDropDecay} (disabled by default). Without decay, everything removed
+     * drops: after salvos of 30, thousands of items occupy two thirds of the server thread while ticking.
+     * A 15×8×15 dirt box with a power-16 explosion inside; count removed blocks across the whole blast box, including platform floor.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "work_drop_decay", skyAccess = true)
     public static void blastDropsDecay(GameTestHelper h) {
@@ -767,17 +769,17 @@ public final class WorkGameTests {
         Warheads.Probe blast = Warheads.testBlast(level, Vec3.atCenterOf(h.absolutePos(CENTER.above(4))), 16, true, false, System::nanoTime, 5 * MS);
         boolean[] logged = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(blast.done(), "взрыв идёт");
+            h.assertTrue(blast.done(), "explosion running");
             int removed = before - solid(level, lo, hi), items = 0;
             for (ItemEntity e : level.getEntitiesOfClass(ItemEntity.class, new AABB(Vec3.atLowerCornerOf(lo), Vec3.atLowerCornerOf(hi.offset(1, 1, 1))).inflate(8))) {
                 items += e.getItem().getCount();
             }
-            if (!logged[0]) Incoming.LOG.info("BLASTDROPS взрыв силы 16: снято {} блоков, выпало {} предметов", removed, items);
+            if (!logged[0]) Incoming.LOG.info("BLASTDROPS power-16 explosion: {} blocks removed, {} items dropped", removed, items);
             logged[0] = true;
-            h.assertTrue(removed >= 1000, "взрыв снял мало: " + removed);
-            h.assertTrue(items > 0, "не выпало ничего: затухание — не отмена выпадения");
-            // 1/16 — около 6 %, с запасом на разброс — не больше шестой части
-            h.assertTrue(items * 6 <= removed, "выпало " + items + " предметов на " + removed + " снятых блоков");
+            h.assertTrue(removed >= 1000, "explosion removed too few: " + removed);
+            h.assertTrue(items > 0, "nothing dropped: decay is not drop cancellation");
+            // 1/16 is about 6 %; with spread margin, no more than a sixth
+            h.assertTrue(items * 6 <= removed, "dropped " + items + " items for " + removed + " removed blocks");
         });
     }
 
@@ -788,9 +790,9 @@ public final class WorkGameTests {
     }
 
     /**
-     * Ванильный путь (как у аппарата): урон — по списку сущностей после {@code ExplosionEvent.Detonate}, и бьют его
-     * единицы мода (обработчик {@code Detonate} мода забирает список, ванильный цикл {@code explode()} идёт по пустому).
-     * Корова, которую обработчик убрал из списка, цела; соседняя — ранена.
+     * Vanilla path (as near a craft): damage uses the entity list after {@code ExplosionEvent.Detonate}, delivered
+     * in mod work units (the mod's {@code Detonate} handler takes the list; vanilla {@code explode()} iterates an empty list).
+     * A cow removed from the list by a handler is unharmed; its neighbor is injured.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "work_handoff", skyAccess = true)
     public static void vanillaPathDamagesDetonateList(GameTestHelper h) {
@@ -807,19 +809,19 @@ public final class WorkGameTests {
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(on));
         Warheads.Probe blast = Warheads.testBlast(level, at, 4, false, true, System::nanoTime, 5 * MS);
         h.succeedWhen(() -> {
-            h.assertTrue(blast.done(), "взрыв не кончился");
-            h.assertTrue(listed[0], "корова не попала в список Detonate — проверять нечего");
-            h.assertTrue(blast.vanilla(), "взрыв шёл не ванильным путём");
-            h.assertTrue(blast.handedDamage(), "урон сделал ванильный цикл explode(), а не единицы мода");
-            h.assertTrue(spared.isAlive() && spared.getHealth() == spared.getMaxHealth(), "убранная из списка ранена: " + spared.getHealth());
-            h.assertTrue(!hit.isAlive() || hit.getHealth() < hit.getMaxHealth(), "корова в списке не ранена");
+            h.assertTrue(blast.done(), "explosion not finished");
+            h.assertTrue(listed[0], "cow absent from Detonate list: nothing to check");
+            h.assertTrue(blast.vanilla(), "explosion did not use the vanilla path");
+            h.assertTrue(blast.handedDamage(), "vanilla explode() loop dealt damage rather than mod work units");
+            h.assertTrue(spared.isAlive() && spared.getHealth() == spared.getMaxHealth(), "entity removed from the list was injured: " + spared.getHealth());
+            h.assertTrue(!hit.isAlive() || hit.getHealth() < hit.getMaxHealth(), "cow in the list was not injured");
         });
     }
 
     /**
-     * Взрыв у аппарата Sable: блок аппарата, который обработчик {@code ExplosionEvent.Detonate} убрал из выбранного,
-     * остаётся; остальные выбранные блоки аппарата сняты в тике, где взрыв добил сущности (настоящие часы: единицы
-     * взрыва могут уйти и в следующие тики).
+     * Explosion near a Sable craft: a craft block removed from the selection by an {@code ExplosionEvent.Detonate}
+     * handler remains; other selected craft blocks are removed in the tick when entity damage finishes
+     * (real clocks: explosion work units may extend into subsequent ticks).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_handoff_craft", skyAccess = true)
     public static void craftBlockLeftByDetonateStays(GameTestHelper h) {
@@ -852,8 +854,8 @@ public final class WorkGameTests {
         Consumer<ServerTickEvent.Post> afterScheduler = e -> {
             if (blast[0] == null || blast[0].picking() || checked[0]) return;
             checked[0] = true;
-            if (kept[0] != null && level.getBlockState(kept[0]).isAir()) wrong.add("убранный из выбранного снят: " + kept[0]);
-            for (BlockPos p : plot) if (!level.getBlockState(p).isAir()) wrong.add("не снят " + p + " " + level.getBlockState(p));
+            if (kept[0] != null && level.getBlockState(kept[0]).isAir()) wrong.add("block removed from the selection was destroyed: " + kept[0]);
+            for (BlockPos p : plot) if (!level.getBlockState(p).isAir()) wrong.add("not removed: " + p + " " + level.getBlockState(p));
         };
         NeoForge.EVENT_BUS.addListener(onBlast);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, afterScheduler);
@@ -864,22 +866,22 @@ public final class WorkGameTests {
         int[] waited = {0};
         h.onEachTick(() -> {
             if (blast[0] != null || waited[0]++ != 5) return;
-            h.assertTrue(level.getBlockState(a).isAir(), "аппарат не собран: " + level.getBlockState(a));
+            h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
             blast[0] = Warheads.testBlast(level, c, 4, true, false, System::nanoTime, 5 * MS);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(checked[0] && blast[0].done(), "взрыва нет");
-            h.assertTrue(kept[0] != null && !plot.isEmpty(), "лучи выбрали мало блоков аппарата: " + (kept[0] == null ? 0 : 1 + plot.size()));
-            h.assertTrue(blast[0].vanilla(), "у аппарата не ванильный путь");
+            h.assertTrue(checked[0] && blast[0].done(), "no explosion");
+            h.assertTrue(kept[0] != null && !plot.isEmpty(), "rays selected too few craft blocks: " + (kept[0] == null ? 0 : 1 + plot.size()));
+            h.assertTrue(blast[0].vanilla(), "craft did not use the vanilla path");
             h.assertTrue(wrong.isEmpty(), wrong.toString());
         });
     }
 
     /**
-     * Обшивка аппарата закрывает от взрыва, как у ванили: стенка из стекла (аппарат Sable) между взрывом и коровой.
-     * Ванильный {@code level.explode} бьёт сущности до снятия блоков — корова за стенкой почти цела; у мода (ванильный
-     * путь, урон — его единицами) корова ранена не больше, хотя лучи выбрали стенку и к концу взрыва она снята.
-     * Если снимать блоки аппарата при разделе, до урона, корова остаётся без обшивки и погибает.
+     * Craft hull shields from explosion as in vanilla: a glass wall (Sable craft) between explosion and cow. Vanilla
+     * {@code level.explode} damages entities before removing blocks, leaving the shielded cow almost unharmed; the
+     * mod (vanilla path, damage in its work units) injures the cow no more, although rays select the wall and remove
+     * it by explosion end. Removing craft blocks during splitting, before damage, leaves the cow unshielded and kills it.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_craft_shield", skyAccess = true)
     public static void craftHullShieldsLikeVanilla(GameTestHelper h) {
@@ -888,7 +890,7 @@ public final class WorkGameTests {
             return;
         }
         ServerLevel level = h.getLevel();
-        // мод — A, ваниль — B: в 24 блоках, дальше охвата лучей и урона (2 × сила) друг друга
+        // mod A, vanilla B: 24 blocks apart, beyond each other's ray and damage reach (2 × power)
         BlockPos oA = CENTER.offset(0, 0, -12), oB = CENTER.offset(0, 0, 12);
         float power = 4;
         net.minecraft.world.entity.animal.Cow[] cows = new net.minecraft.world.entity.animal.Cow[2];
@@ -931,32 +933,32 @@ public final class WorkGameTests {
         int[] waited = {0};
         h.onEachTick(() -> {
             if (blast[0] != null || waited[0]++ != 5) return;
-            for (BlockPos w : walls) h.assertTrue(level.getBlockState(w).isAir(), "аппарат не собран: " + level.getBlockState(w));
-            // считающие часы: весь взрыв мода — в этом же тике, аппараты не успевают сдвинуться между лучами и уроном
+            for (BlockPos w : walls) h.assertTrue(level.getBlockState(w).isAir(), "craft not assembled: " + level.getBlockState(w));
+            // counting clocks: the whole mod explosion runs this tick; craft cannot move between rays and damage
             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
             blast[0] = Warheads.testBlast(level, centers[0], power, true, true, System::nanoTime, 5 * MS);
             level.explode(null, ModDamageTypes.source(level, ModDamageTypes.STRIKE, null, null), null,
                     centers[1].x, centers[1].y, centers[1].z, power, false, Level.ExplosionInteraction.TNT);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(health[0] >= 0 && blast[0].done(), "взрыва нет");
-            h.assertTrue(blast[0].vanilla(), "у аппарата не ванильный путь");
+            h.assertTrue(health[0] >= 0 && blast[0].done(), "no explosion");
+            h.assertTrue(blast[0].vanilla(), "craft did not use the vanilla path");
             float max = cows[1].getMaxHealth();
-            // без обшивки корова в 3,5 блока от взрыва силы 4 гибнет; за ней — 1 единица урона
-            h.assertTrue(health[1] >= max - 1.5f, "ваниль: корова за обшивкой ранена " + health[1] + " из " + max + " — обшивка не закрывает, проверять нечего");
-            h.assertTrue(plot.size() >= 3, "лучи выбрали мало блоков обшивки: " + plot.size());
+            // unshielded, a cow 3.5 blocks from a power-4 explosion dies; shielded, it takes 1 damage
+            h.assertTrue(health[1] >= max - 1.5f, "vanilla: shielded cow injured " + health[1] + " of " + max + ": hull does not shield, nothing to check");
+            h.assertTrue(plot.size() >= 3, "rays selected too few hull blocks: " + plot.size());
             List<String> left = new ArrayList<>();
             for (BlockPos p : plot) if (!level.getBlockState(p).isAir()) left.add(p + " " + level.getBlockState(p));
-            h.assertTrue(left.isEmpty(), "выбранная обшивка не снята: " + left);
-            h.assertTrue(health[0] >= health[1] - 0.01f, "мод: корова за обшивкой ранена сильнее ванили: " + health[0] + " против " + health[1]);
+            h.assertTrue(left.isEmpty(), "selected hull not removed: " + left);
+            h.assertTrue(health[0] >= health[1] - 0.01f, "mod: shielded cow injured more than in vanilla: " + health[0] + " versus " + health[1]);
         });
     }
 
     /**
-     * Работа, чей район не готов, ждёт и ничего не читает (иначе чанк загрузился бы в тике), а следующие за ней идут:
-     * подрыв вдали от загруженного мира и подрыв на площадке — второй в тике удара, первый — когда район догружен.
-     * Как {@link #impactWithEmptyQueueRunsSameTick}: очередь прошлых партий пуста, часы считающие — иначе «в тике удара»
-     * зависит от скорости машины (на CI третьей партией после старта сервера лучи идут и по 57 мс за единицу).
+     * A job with an unready area waits without reading it (otherwise the chunk would load within the tick); later jobs
+     * proceed. A distant detonation and one on the platform: the latter runs in the impact tick, the former when its area
+     * finishes loading. As in {@link #impactWithEmptyQueueRunsSameTick}, empty previous-batch queue and counting clocks:
+     * otherwise "in the impact tick" depends on machine speed (CI third batch after server start: up to 57 ms per ray work unit).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_unready", skyAccess = true)
     public static void unitSkipsUnreadyChunk(GameTestHelper h) {
@@ -966,7 +968,7 @@ public final class WorkGameTests {
             Vec3 near = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
             Vec3 far = near.add(0, 0, -5200);
             double area = 32;
-            h.assertFalse(Terrain.readyAround(level, far, area), "район вдали уже загружен");
+            h.assertFalse(Terrain.readyAround(level, far, area), "distant area already loaded");
             int[] nearN = {0}, farN = {0};
             Consumer<ExplosionEvent.Detonate> count = e -> {
                 if (e.getLevel() != level) return;
@@ -977,10 +979,10 @@ public final class WorkGameTests {
             Consumer<ServerTickEvent.Post> afterScheduler = e -> {
                 if (checked[0]) return;
                 checked[0] = true;
-                // в том же тике, после планировщика: ближний сделан, дальний ждёт и район не загружен синхронно
-                if (nearN[0] < 1) h.fail("подрыв на площадке не сделан в тике удара");
-                if (farN[0] != 0) h.fail("подрыв вдали сделан в неготовом районе");
-                if (Terrain.readyAround(level, far, area)) h.fail("район вдали загрузился в тике удара");
+                // same tick, after the scheduler: nearby job done, distant job waiting, area not loaded synchronously
+                if (nearN[0] < 1) h.fail("platform detonation did not run in the impact tick");
+                if (farN[0] != 0) h.fail("distant detonation ran in an unready area");
+                if (Terrain.readyAround(level, far, area)) h.fail("distant area loaded in the impact tick");
             };
             NeoForge.EVENT_BUS.addListener(count);
             NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, afterScheduler);
@@ -995,19 +997,19 @@ public final class WorkGameTests {
                     for (int cz = Mth.floor(far.z - area) >> 4; cz <= Mth.floor(far.z + area) >> 4; cz++) level.getChunk(cx, cz);
             });
             h.succeedWhen(() -> {
-                h.assertTrue(checked[0], "тик планировщика не прошёл");
-                h.assertTrue(farN[0] >= 1, "подрыв вдали не сделан и после загрузки района");
-                h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
-                // район держали таймлайн и работы очереди: отпущен, когда отпустили все
-                h.assertTrue(blastTickets(level, far) == 0, "тикеты района вдали остались: " + blastTickets(level, far));
+                h.assertTrue(checked[0], "scheduler tick did not run");
+                h.assertTrue(farN[0] >= 1, "distant detonation still missing after area load");
+                h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "impact queue not empty");
+                // timeline and queued jobs held the area; released once all holders release it
+                h.assertTrue(blastTickets(level, far) == 0, "distant area tickets remain: " + blastTickets(level, far));
             });
         });
     }
 
     /**
-     * Блэкаут и залп в одних тиках (считающие часы у обеих полос): пока у блэкаута есть работа, попадания берут не больше
-     * 2/3 общего срока и одной единицы, а блэкаут делает свои единицы; весь тик — не больше общего срока и одной
-     * единицы на полосу.
+     * Blackout and salvo in the same ticks (counting clocks for both lanes): while blackout has work, impacts take
+     * at most 2/3 of the total allowance plus one work unit, and blackout runs its own work units; the whole tick
+     * uses at most the total allowance plus one work unit per lane.
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "work_lanes", skyAccess = true)
     public static void lanesShareTick(GameTestHelper h) {
@@ -1024,11 +1026,11 @@ public final class WorkGameTests {
         Consumer<ServerTickEvent.Pre> before = e -> gridBusy[0] = Blackouts.pending(server);
         Consumer<ServerTickEvent.Post> after = e -> {
             long used = impact.usedThisTickNanos() + grid.usedThisTickNanos();
-            if (impact.workedThisTick() && used > total + 2 * MS) over.add("тик " + used / MS + " мс");
+            if (impact.workedThisTick() && used > total + 2 * MS) over.add("tick " + used / MS + " ms");
             if (!gridBusy[0] || !impact.workedThisTick()) return;
             shared[0]++;
             if (grid.workedThisTick()) gridWorked[0]++;
-            if (impact.usedThisTickNanos() > total * 2 / 3 + MS) over.add("попадания " + impact.usedThisTickNanos() / MS + " мс при блэкауте");
+            if (impact.usedThisTickNanos() > total * 2 / 3 + MS) over.add("impacts " + impact.usedThisTickNanos() / MS + " ms during blackout");
         };
         NeoForge.EVENT_BUS.addListener(before);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, after);
@@ -1041,7 +1043,7 @@ public final class WorkGameTests {
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         Blackouts.blackout(level, c, 200, 2, -1);
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(Blackouts.pending(server), "у блэкаута нет работы"))
+                .thenWaitUntil(() -> h.assertTrue(Blackouts.pending(server), "blackout has no work"))
                 .thenExecute(() -> {
                     for (int i = 0; i < 5; i++) {
                         double a = i * Math.PI * 2 / 5;
@@ -1049,12 +1051,12 @@ public final class WorkGameTests {
                     }
                     Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
                 })
-                .thenWaitUntil(() -> h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста"))
+                .thenWaitUntil(() -> h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "impact queue not empty"))
                 .thenExecute(() -> {
-                    h.assertTrue(over.isEmpty(), "за бюджетом: " + over);
-                    h.assertTrue(shared[0] > 0, "залп и блэкаут ни разу не шли в одном тике");
-                    h.assertTrue(gridWorked[0] > 0, "в общих тиках блэкаут не сделал ни одной единицы (" + shared[0] + " тиков)");
-                    Incoming.LOG.info("WORKBENCH полосы: общих тиков {}, из них блэкаут работал в {}", shared[0], gridWorked[0]);
+                    h.assertTrue(over.isEmpty(), "over budget: " + over);
+                    h.assertTrue(shared[0] > 0, "salvo and blackout never ran in the same tick");
+                    h.assertTrue(gridWorked[0] > 0, "blackout ran no work unit in any shared tick (" + shared[0] + " ticks)");
+                    Incoming.LOG.info("WORKBENCH lanes: {} shared ticks, blackout worked in {}", shared[0], gridWorked[0]);
                 })
                 .thenSucceed();
     }

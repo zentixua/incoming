@@ -4,66 +4,66 @@ import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 
 /**
- * Очередь обновлений Distant Horizons 3.3.3, как её видит мод (без Minecraft — юнит-тесты): своя задержка DH от вызова
- * API до записи LOD в его базу ({@link #LEAD}) и окно держанных копий в его ограниченной очереди ({@link #window};
- * экземпляр — учёт отданных и не подтверждённых, {@link DhUpdates#sendHeld}).
+ * Distant Horizons 3.3.3 update queue as seen by the mod (Minecraft-free for unit tests): DH's own delay from
+ * API call to database LOD write ({@link #LEAD}) and held-copy window in its bounded queue ({@link #window};
+ * an instance tracks sent, unacknowledged copies, {@link DhUpdates#sendHeld}).
  * <p>
- * Задержка — из кода DH: обновление ждёт в очереди не меньше {@code ChunkUpdateQueueManager.UPDATE_DEBOUNCE_NANOS}
- * ({@link #DEBOUNCE_MS}); собранный LOD чанка пишется в участок 64×64 блока (4×4 чанка), а участок — в базу не раньше
- * {@code saveDelayInMs} после последней записи в него ({@code AbstractDhLevel}: {@link #SAVE_DELAY_MS}, каждая запись
- * откладывает снова), поток сохранения ({@code AbstractDelayedSaveCache.runCleanupLoop}) просыпается раз в секунду и
- * ещё {@link #SAVE_PAUSE_MS} ждёт перед записью; потом DH рассылает участок (игрокам и своей отрисовке) и шлёт
- * {@code DhApiChunkModifiedEvent} на каждый его записанный чанк. Грубые уровни LOD догоняют за ним — до 250 мс на
- * уровень ({@code FullDataUpdatePropagatorV2}).
+ * Delay comes from DH code: updates wait at least {@code ChunkUpdateQueueManager.UPDATE_DEBOUNCE_NANOS}
+ * ({@link #DEBOUNCE_MS}); a built chunk LOD is written to a 64×64-block section (4×4 chunks), and the section to the
+ * database no earlier than {@code saveDelayInMs} after its last write ({@code AbstractDhLevel}: {@link #SAVE_DELAY_MS},
+ * each write postpones it again). The save thread ({@code AbstractDelayedSaveCache.runCleanupLoop}) wakes once a second,
+ * then waits another {@link #SAVE_PAUSE_MS} before writing; DH then distributes the section (to players and its renderer)
+ * and sends {@code DhApiChunkModifiedEvent} for each written chunk. Coarse LOD levels catch up afterward — up to 250 ms
+ * per level ({@code FullDataUpdatePropagatorV2}).
  * <p>
- * Очередь DH ограничена ({@code ChunkUpdateQueueManager.maxSize}): {@link #PER_THREAD} позиций на поток его разбора
- * ({@code numberOfThreads}), в одиночной игре — на каждого игрока, на сервере — на 1 + игроков; переполненная молча
- * выкидывает дальнюю от игрока (на выделенном сервере — от 0 0) и раз в 30 с пишет «overloaded». Копию чанка она
- * держит, пока не разберёт, а разбор идёт по одной в потоке очереди (карты высот и хеш чанка, затем сборка в потоках DH).
+ * DH queue is bounded ({@code ChunkUpdateQueueManager.maxSize}): {@link #PER_THREAD} positions per processing thread
+ * ({@code numberOfThreads}), per player in single-player, per 1 + players on a server; overflow silently
+ * drops the farthest from the player (from 0 0 on dedicated servers) and logs “overloaded” once per 30 s. It retains
+ * chunk copies until processing, one at a time on the queue thread (heightmaps and chunk hash, then DH-thread building).
  */
 final class DhQueue {
-    /** {@code ChunkUpdateQueueManager.UPDATE_DEBOUNCE_NANOS}: обновление ждёт в очереди не меньше, мс. */
+    /** {@code ChunkUpdateQueueManager.UPDATE_DEBOUNCE_NANOS}: minimum update queue wait, ms. */
     static final int DEBOUNCE_MS = 250;
-    /** {@code AbstractDhLevel}: участок пишется в базу не раньше, чем через столько после последней записи, мс. */
+    /** {@code AbstractDhLevel}: minimum delay from last section write to database save, ms. */
     static final int SAVE_DELAY_MS = 1000;
-    /** {@code AbstractDelayedSaveCache.cleanUp}: пауза потока сохранения перед записью снятых участков, мс. */
+    /** {@code AbstractDelayedSaveCache.cleanUp}: save-thread pause before writing collected sections, ms. */
     static final int SAVE_PAUSE_MS = 100;
     /**
-     * Своя задержка DH, тиков, — наименьшая (5 + 20 + 2 тика по 50 мс, без разбора и без ожидания потока сохранения):
-     * копия, отданная за столько до прихода фронта, меняет LOD не раньше фронта; позже — на разбор, до секунды ожидания
-     * потока сохранения и грубые уровни.
+     * Minimum DH-internal delay, ticks (5 + 20 + 2 ticks of 50 ms, excluding processing and save-thread wait):
+     * a copy sent this far ahead of front arrival changes the LOD no earlier than the front; further delay comes from
+     * processing, up to a second of save-thread wait, and coarse levels.
      */
     static final int LEAD = (DEBOUNCE_MS + SAVE_DELAY_MS + SAVE_PAUSE_MS + 49) / 50;
     /** {@code ChunkUpdateQueueManager.MAX_UPDATING_CHUNK_COUNT_PER_THREAD_AND_PLAYER}. */
     static final int PER_THREAD = 1000;
     /**
-     * Подтверждения ждать не дольше, нс: вдвое дольше наибольшей задержки DH без очереди (250 мс, до 2 с ожидания
-     * сохранения и 100 мс): без подтверждения (DH только читает — повтор Flashback; проверка неизменных чанков у DH
-     * выключена — события нет; чанк не изменился — DH его не пишет) копия уходит из окна по сроку.
+     * Acknowledgment timeout, ns: twice DH's maximum delay without queuing (250 ms, up to 2 s waiting for
+     * save and 100 ms). Without acknowledgment (read-only DH — Flashback replay; DH unchanged-chunk check
+     * disabled — no event; unchanged chunk — DH does not write it), the copy leaves the window on timeout.
      */
     static final long TIMEOUT_NANOS = 5_000_000_000L;
     /**
-     * {@code ChunkUpdateQueueManager.queuedChunkWrapperByChunkPos}: копию чанка, отданную DH, его кэш держит ещё столько
-     * после последнего обращения ({@code expireAfterAccess(10, SECONDS)}), нс.
+     * {@code ChunkUpdateQueueManager.queuedChunkWrapperByChunkPos}: DH's cache retains a submitted chunk copy this long
+     * after last access ({@code expireAfterAccess(10, SECONDS)}), ns.
      */
     static final long CACHE_NANOS = 10_000_000_000L;
 
-    /** Отданные держанные копии без подтверждения: чанк → когда отданы ({@code System.nanoTime}). */
+    /** Sent, unacknowledged held copies: chunk → send time ({@code System.nanoTime}). */
     private final Long2LongOpenHashMap out = new Long2LongOpenHashMap();
-    /** Для строки в лог ({@link #take}): отдано, подтверждено, по сроку; задержка подтверждённых — сумма и наибольшая, нс. */
+    /** Log line ({@link #take}): sent, acknowledged, expired; sum and maximum acknowledgment delay, ns. */
     private long sent, acked, expired, latencySum, latencyMax;
 
     /**
-     * Сколько держанных копий может ждать в очереди DH разом: половина её наименьшего предела (одиночная игра, один
-     * игрок) — вторая половина остаётся обновлениям самого DH и отметкам мода ({@link DhUpdates#mark}).
+     * Maximum held copies waiting in the DH queue together: half its smallest limit (single-player, one
+     * player), leaving the other half for DH's own updates and mod marks ({@link DhUpdates#mark}).
      *
-     * @param threads потоки разбора DH ({@code numberOfThreads}; не знаем — 1)
+     * @param threads DH processing threads ({@code numberOfThreads}; unknown: 1)
      */
     static int window(int threads) {
         return PER_THREAD * Math.max(1, threads) / 2;
     }
 
-    /** Отдано и не подтверждено. */
+    /** Sent and unacknowledged. */
     int waiting() {
         return out.size();
     }
@@ -73,7 +73,7 @@ final class DhQueue {
         sent++;
     }
 
-    /** DH записал чанк в базу: копия уходит из окна; false — не ждали (своё обновление DH, прошлый мир). */
+    /** DH wrote the chunk to its database: release window slot; false if not awaited (DH's own update, previous world). */
     boolean ack(long chunk, long nanos) {
         if (!out.containsKey(chunk)) return false;
         long took = nanos - out.remove(chunk);
@@ -83,7 +83,7 @@ final class DhQueue {
         return true;
     }
 
-    /** Ждавшие подтверждения дольше {@link #TIMEOUT_NANOS} — из окна. */
+    /** Remove copies awaiting acknowledgment longer than {@link #TIMEOUT_NANOS} from the window. */
     void expire(long nanos) {
         if (out.isEmpty()) return;
         for (var it = out.long2LongEntrySet().fastIterator(); it.hasNext(); ) {
@@ -95,14 +95,14 @@ final class DhQueue {
         }
     }
 
-    /** Проверки: окно пусто (счётчики остаются). */
+    /** Tests: empty the window (retain counters). */
     void clear() {
         out.clear();
     }
 
     /**
-     * Отдано, подтверждено, по сроку, средняя и наибольшая задержка подтверждённых (мс) с прошлого вызова, ждут
-     * подтверждения сейчас; счёт начинается заново.
+     * Sent, acknowledged, expired, mean and maximum acknowledgment delay (ms) since last call, and currently awaiting
+     * acknowledgment; reset the counters.
      */
     long[] take() {
         long[] s = {sent, acked, expired, acked == 0 ? 0 : latencySum / acked / 1_000_000, latencyMax / 1_000_000, out.size()};

@@ -28,15 +28,15 @@ import java.util.function.Supplier;
 public final class ModAttachments {
     public static final DeferredRegister<AttachmentType<?>> REGISTER = DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Incoming.MOD_ID);
 
-    /** Доза и заражение игрока; смерть сбрасывает (не копируется). */
+    /** Player dose and contamination; reset on death (not copied). */
     public static final Supplier<AttachmentType<RadiationDose>> RADIATION = REGISTER.register("radiation",
             () -> AttachmentType.builder(() -> RadiationDose.NONE).serialize(RadiationDose.CODEC).build());
 
-    /** Ожоги сетчатки игрока — слепые пятна от вспышки; смерть сбрасывает (не копируется). */
+    /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
             () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());
 
-    /** Чанк: номер последнего ядерного подрыва, чьи повреждения к нему уже применены. */
+    /** Chunk: number of the last nuclear detonation whose damage has been applied to it. */
     public static final Supplier<AttachmentType<Integer>> CHUNK_SCAR = REGISTER.register("chunk_scar",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 
@@ -50,37 +50,37 @@ public final class ModAttachments {
             REGISTER.register("surface_displays", () -> AttachmentType.builder(ua.zentix.incoming.warhead.SurfaceDamage.Displays::new).build());
 
     /**
-     * Чанк: номер подрыва, чей слой вспышки зажёг в нём огонь, а руины ещё не встали ({@code FlashScorch}): огонь слоя
-     * без тиков, руины, построенные без плана слоя (после перезапуска), гасят или ведут его. Сохраняется с чанком.
+     * Chunk: detonation number whose flash layer ignited fire here before ruins were applied ({@code FlashScorch}): layer fire
+     * does not tick; ruins built without the layer plan (after restart) extinguish or manage it. Saved with the chunk.
      */
     public static final Supplier<AttachmentType<Integer>> FLASH_LAYER = REGISTER.register("flash_layer",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 
-    /** Чанк: следы вспышки на гранях — гарь и силуэты ({@link ua.zentix.incoming.nuclear.flash.FlashMarks}); сохраняются с чанком. */
+    /** Chunk: flash traces on faces — soot and silhouettes ({@link ua.zentix.incoming.nuclear.flash.FlashMarks}); saved with the chunk. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.flash.FlashMarks>> FLASH_MARKS = REGISTER.register("flash_marks",
             () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.flash.FlashMarks.EMPTY)
                     .serialize(ua.zentix.incoming.nuclear.flash.FlashMarks.CODEC, m -> !m.isEmpty()).build());
 
-    /** Чанки, чьи следы вспышки ушли со сменившимися блоками, — игрокам в конце тика мира ({@code FlashSync}); не сохраняется. */
+    /** Chunks whose changed blocks removed flash traces: sent to players at world-tick end ({@code FlashSync}); not saved. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.flash.FlashSync.Pending>> FLASH_PENDING = REGISTER.register("flash_pending",
             () -> AttachmentType.builder(ua.zentix.incoming.nuclear.flash.FlashSync.Pending::new).build());
 
     /**
-     * Чанк: в нём стоят погашенные блэкаутом лампы (отметка, по которой загрузка чанка возвращает в него свет, когда
-     * отключение кончилось); нет отметки — нет и погашенных ламп.
+     * Chunk: contains lamps extinguished by blackout (mark used on chunk load to restore light when the
+     * outage ends); no mark means no extinguished lamps.
      */
     public static final Supplier<AttachmentType<Boolean>> GRID_DARK = REGISTER.register("grid_dark",
             () -> AttachmentType.builder(() -> false).build());
 
-    /** Мир: блэкаут — каскады и очередь чанков ({@link BlackoutWorld}); не сохраняется. */
+    /** World: blackout cascades and chunk queue ({@link BlackoutWorld}); not saved. */
     public static final Supplier<AttachmentType<BlackoutWorld>> BLACKOUT_WORLD = REGISTER.register("blackout_world",
             () -> AttachmentType.builder(BlackoutWorld::new).build());
 
-    /** Верхний мир: часы бюджета блэкаута — один на тик сервера ({@link Blackouts#clock}); не сохраняется. */
+    /** Overworld: blackout budget clock — one per server tick ({@link Blackouts#clock}); not saved. */
     public static final Supplier<AttachmentType<WorkClock>> GRID_CLOCK = REGISTER.register("grid_clock",
             () -> AttachmentType.builder(Blackouts::newClock).build());
 
-    /** Верхний мир: часы полосы попаданий общего бюджета ({@link WorkScheduler#impactClock}); не сохраняется. */
+    /** Overworld: common-budget impact-lane clock ({@link WorkScheduler#impactClock}); not saved. */
     public static final Supplier<AttachmentType<WorkClock>> IMPACT_CLOCK = REGISTER.register("impact_clock",
             () -> AttachmentType.builder(WorkScheduler::newImpactClock).build());
 
@@ -88,82 +88,82 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.ImpactTiming>> IMPACT_TIMING = REGISTER.register("impact_timing",
             () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ImpactTiming()).build());
 
-    /** Мир: таймлайны взрывов ({@link StrikeWorld}); не сохраняется. */
+    /** World: explosion timelines ({@link StrikeWorld}); not saved. */
     public static final Supplier<AttachmentType<StrikeWorld>> STRIKE_WORLD = REGISTER.register("strike_world",
             () -> AttachmentType.builder(StrikeWorld::new).build());
 
-    /** Чанки не в мире, чьи руины и лампы уходят в LOD Distant Horizons с диска (несохраняемое, у каждого мира своё). */
+    /** Outside-world chunks whose ruins and lamps go from disk to Distant Horizons LODs (unsaved, per world). */
     public static final Supplier<AttachmentType<FarLods>> FAR_LODS = REGISTER.register("far_lods",
             () -> AttachmentType.builder(FarLods::new).build());
 
-    /** Что мод изменил в мире — в LOD Distant Horizons (несохраняемое, у каждого мира своё). */
+    /** Mod world changes sent to Distant Horizons LODs (unsaved, per world). */
     public static final Supplier<AttachmentType<DhUpdates>> DH_UPDATES = REGISTER.register("dh_updates",
             () -> AttachmentType.builder(DhUpdates::new).build());
 
-    /** Главный мир: что мод изменил в мире — в LOD Voxy игроков, их очереди (несохраняемое). */
+    /** Main world: mod world changes sent to players' Voxy LODs, their queues (unsaved). */
     public static final Supplier<AttachmentType<ua.zentix.incoming.compat.VoxyLods>> VOXY_LODS = REGISTER.register("voxy_lods",
             () -> AttachmentType.builder(ua.zentix.incoming.compat.VoxyLods::new).build());
 
-    /** Мир: съёмка рельефа без загрузки чанков — карты высот с диска и рельеф генератора в фоне ({@link ua.zentix.incoming.util.TerrainSurvey}); не сохраняется. */
+    /** World: terrain survey without chunk loading — disk heightmaps and background generator terrain ({@link ua.zentix.incoming.util.TerrainSurvey}); not saved. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.util.TerrainSurvey>> TERRAIN_SURVEY = REGISTER.register("terrain_survey",
             () -> AttachmentType.builder(ua.zentix.incoming.util.TerrainSurvey::new).build());
 
-    /** Мир: осыпание в воронках обычных взрывов ({@link CraterFalls}); не сохраняется. */
+    /** World: ordinary explosion crater falls ({@link CraterFalls}); not saved. */
     public static final Supplier<AttachmentType<CraterFalls>> CRATER_FALLS = REGISTER.register("crater_falls",
             () -> AttachmentType.builder(CraterFalls::new).build());
 
     /**
-     * Мир: горящее топливо ударов на блоках ({@link ua.zentix.incoming.warhead.FuelFires}); сохраняется — огонь клеток стоит
-     * в чанках, и топливо должно догореть в свой срок и после перезапуска.
+     * World: strike fuel burning on blocks ({@link ua.zentix.incoming.warhead.FuelFires}); saved — cell fires remain
+     * in chunks, and fuel must finish burning on schedule after restart too.
      */
     public static final Supplier<AttachmentType<ua.zentix.incoming.warhead.FuelFires>> FUEL_FIRES = REGISTER.register("fuel_fires",
             () -> AttachmentType.builder(ua.zentix.incoming.warhead.FuelFires::new)
                     .serialize(ua.zentix.incoming.warhead.FuelFires.CODEC, f -> !f.isEmpty()).build());
 
-    /** Мир: ядерные очереди — фронт, свет, воронки, чанки, осадки у мобов ({@link NuclearWorld}); не сохраняется. */
+    /** World: nuclear queues — front, light, craters, chunks, fallout on mobs ({@link NuclearWorld}); not saved. */
     public static final Supplier<AttachmentType<NuclearWorld>> NUCLEAR_WORLD = REGISTER.register("nuclear_world",
             () -> AttachmentType.builder(NuclearWorld::new).build());
 
-    /** Верхний мир: часы бюджета ядерной работы — один на тик сервера ({@link NuclearWorld#clock}); не сохраняется. */
+    /** Overworld: nuclear work budget clock — one per server tick ({@link NuclearWorld#clock}); not saved. */
     public static final Supplier<AttachmentType<WorkClock>> NUCLEAR_CLOCK = REGISTER.register("nuclear_clock",
             () -> AttachmentType.builder(WorkClock::new).build());
 
-    /** Игрок: игровое время последнего пуска или отбоя с пульта (защита от дребезга); не сохраняется. */
+    /** Player: game time of last remote launch or cancel (debounce); not saved. */
     public static final Supplier<AttachmentType<Long>> LAST_FIRE = REGISTER.register("last_fire",
             () -> AttachmentType.builder(() -> 0L).build());
 
-    /** Игрок: игровое время последнего перенацеливания из камеры снаряда; не сохраняется. */
+    /** Player: game time of last retarget from the projectile camera; not saved. */
     public static final Supplier<AttachmentType<Long>> LAST_RETARGET = REGISTER.register("last_retarget",
             () -> AttachmentType.builder(() -> 0L).build());
 
-    /** Игрок: с борта какого своего снаряда он смотрит камерой и куда ({@link CameraLink}); не сохраняется. */
+    /** Player: which owned projectile hosts their camera and where it looks ({@link CameraLink}); not saved. */
     public static final Supplier<AttachmentType<Optional<CameraLink>>> CAMERA_LINK = REGISTER.register("camera_link",
             () -> AttachmentType.builder(Optional::<CameraLink>empty).build());
 
-    /** Игрок: игровое время последнего запроса игроков для карты наведения; не сохраняется. */
+    /** Player: game time of last player-list request for the targeting map; not saved. */
     public static final Supplier<AttachmentType<Long>> LAST_MAP_PLAYERS = REGISTER.register("last_map_players",
             () -> AttachmentType.builder(() -> 0L).build());
 
-    /** Игрок: ему показан непустой список снарядов в полёте — погасить HUD, когда всё долетит; не сохраняется. */
+    /** Player: shown a nonempty list of flying projectiles — clear HUD once all arrive; not saved. */
     public static final Supplier<AttachmentType<Boolean>> FLIGHTS_SHOWN = REGISTER.register("flights_shown",
             () -> AttachmentType.builder(() -> false).build());
 
-    /** Игрок: район, который грузится по клику на карте наведения ({@link PickHints}); не сохраняется. */
+    /** Player: area loaded by a targeting-map click ({@link PickHints}); not saved. */
     public static final Supplier<AttachmentType<PickHints.Slot>> PICK_HINT = REGISTER.register("pick_hint",
             () -> AttachmentType.builder(PickHints.Slot::new).build());
 
     /**
-     * Игрок: тикет, с которым место входа или возрождения грузится раньше районов мода ({@link ArrivalTickets}); не
-     * сохраняется, к новому объекту игрока переходит в {@link ArrivalTickets#onClone}.
+     * Player: ticket loading the entry/respawn location before mod areas ({@link ArrivalTickets}); not
+     * saved, transfers to the new player object in {@link ArrivalTickets#onClone}.
      */
     public static final Supplier<AttachmentType<ArrivalTickets.Slot>> ARRIVAL = REGISTER.register("arrival",
             () -> AttachmentType.builder(ArrivalTickets.Slot::new).build());
 
-    /** Мир: кого и что видела каждая сторона ({@link Sightings}); не сохраняется. */
+    /** World: whom and what each side saw ({@link Sightings}); not saved. */
     public static final Supplier<AttachmentType<Sightings>> SIGHTINGS = REGISTER.register("sightings",
             () -> AttachmentType.builder(Sightings::new).build());
 
-    /** Мир: зенитные ракеты в полёте, их цели и объявленные тревоги ({@link DefenseWorld}); не сохраняется. */
+    /** World: flying interceptors, their targets and announced alerts ({@link DefenseWorld}); not saved. */
     public static final Supplier<AttachmentType<DefenseWorld>> DEFENSE_WORLD = REGISTER.register("defense_world",
             () -> AttachmentType.builder(DefenseWorld::new).build());
 

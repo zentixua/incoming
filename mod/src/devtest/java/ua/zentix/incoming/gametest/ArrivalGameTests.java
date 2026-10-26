@@ -45,29 +45,29 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Место входа или возрождения игрока грузится раньше районов залпа ({@link ArrivalTickets}).
+ * The player arrival or respawn site loads before salvo areas ({@link ArrivalTickets}).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ArrivalGameTests {
-    /** Загрузка места игроком: тикет уровня 33 на один чанк, как {@code UNKNOWN} у синхронного {@code getChunk}. */
+    /** Player-site loading: a level-33 ticket on one chunk, like {@code UNKNOWN} for synchronous {@code getChunk}. */
     private static final TicketType<ChunkPos> PLAYER_LOAD = TicketType.create("incoming_test_player_load", Comparator.comparingLong(ChunkPos::toLong));
     private static final int SALVO = 30, SPREAD = 150;
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
-    /** Выгруженный чанк лежит столько, прежде чем его грузят снова (запись на диск). */
+    /** An unloaded chunk waits this long before reloading (disk write). */
     private static final int SETTLE_TICKS = 60;
 
     private ArrivalGameTests() {}
 
     /**
-     * Место, где игрок уже был (чанк P и округа сгенерированы и выгружены), и через 5 тиков после залпа из 30 районов с
-     * разбросом 150 в свежий рельеф — вход: тикет входа и загрузка P, как её просит тик игрока. Без тикета входа
-     * загрузка P стоит в очереди за районами залпа (уровни 29–33 против 33), и сервер ждёт её в тике. С ним P
-     * идёт в очереди первым: засчитывается, если P готов раньше, чем целиком готов хоть один район залпа, у которого при
-     * входе не было готово больше половины чанков. Порядок, а не доля: сколько чанков районов успеет догенерироваться,
-     * пока грузится P, зависит от числа ядер и нагрузки машины (задачи генерации, уже отданные потокам, очередь
-     * не обгоняет) — доля «меньше половины» на занятой машине не держится (774 из 888 при соседней сборке на тех же
-     * 4 ядрах), хотя P идёт первым.
+     * A previously visited site (chunk P and surroundings generated, then unloaded), entered 5 ticks after a salvo
+     * requesting 30 areas with spread 150 in fresh terrain: arrival ticket and P loading as requested by the player
+     * tick. Without the arrival ticket, P queues behind salvo areas (levels 29–33 versus 33), and the server waits
+     * within a tick. With it, P queues first: pass if P is ready before any whole salvo area that had more than half
+     * its chunks unready at arrival. Check order, not a fraction: how many area chunks finish while P loads depends
+     * on CPU cores and machine load (the queue cannot overtake generation tasks already assigned to threads).
+     * A "less than half" fraction fails on a busy machine (774 of 888 with a neighboring build on the same 4 cores),
+     * even though P goes first.
      */
     @GameTest(template = "range", timeoutTicks = 3600, batch = "arrival", skyAccess = true)
     public static void arrivalLoadsBeforeSalvoAreas(GameTestHelper h) {
@@ -75,8 +75,8 @@ public final class ArrivalGameTests {
     }
 
     /**
-     * То же во время залпа «Ланцетов»: их район цели больше ({@link FlightTickets#LOITER_DISTANCE}, центр — уровень 27). С
-     * тикетом входа уровня 28 место входа ждёт весь залп: готово через 2276 тиков, после всех 888 чанков районов.
+     * The same during a Lancet salvo: its target area is larger ({@link FlightTickets#LOITER_DISTANCE}, center level 27).
+     * A level-28 arrival ticket made the arrival site wait for the whole salvo: ready after 2276 ticks, after all 888 area chunks.
      */
     @GameTest(template = "range", timeoutTicks = 3600, batch = "arrival_loiter", skyAccess = true)
     public static void arrivalLoadsBeforeLoiterAreas(GameTestHelper h) {
@@ -87,7 +87,7 @@ public final class ArrivalGameTests {
         ServerLevel level = h.getLevel();
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         ChunkPos p = new ChunkPos(base.x + 190, base.z);
-        // округа P в дальности тикета входа и ещё 2 — как у места, где игрок уже был
+        // surroundings of P out to arrival-ticket distance plus 2, as at a previously visited site
         for (int dx = -7; dx <= 7; dx++) {
             for (int dz = -7; dz <= 7; dz++) level.getChunk(p.x + dx, p.z + dz, ChunkStatus.FULL, true);
         }
@@ -102,12 +102,12 @@ public final class ArrivalGameTests {
             for (int i = 0; i < targets.size(); i++) FlightTickets.hold(level, targets.get(i), distance, keys.get(i), false);
         });
         int[] tick = {0}, unloadedAt = {-1}, salvoAt = {-1}, arrivedAt = {-1}, pendingAtArrival = {-1};
-        // районы залпа, в основном не готовые при входе: ни один не должен стать готовым раньше P
+        // salvo areas, mostly unready at arrival: none may become ready before P
         List<ChunkPos> racing = new ArrayList<>();
         h.onEachTick(() -> {
             tick[0]++;
             if (salvoAt[0] < 0) {
-                // P выгружен и лежит на диске
+                // P is unloaded and stored on disk
                 if (level.getChunkSource().chunkMap.getVisibleChunkIfPresent(p.toLong()) != null) {
                     unloadedAt[0] = -1;
                     return;
@@ -129,37 +129,37 @@ public final class ArrivalGameTests {
             }
             if (arrivedAt[0] < 0) {
                 if (tick[0] - salvoAt[0] < 5) return;
-                // вход: событие входа ставит тикет, тик игрока просит свой чанк
+                // arrival: the login event installs the ticket; the player tick requests its chunk
                 ArrivalTickets.arrive(level, p, who, slot);
                 level.getChunkSource().chunkMap.getDistanceManager().addTicket(PLAYER_LOAD, p, ChunkLevel.byStatus(FullChunkStatus.FULL), p);
                 pendingAtArrival[0] = pending(level, targets, distance);
-                // районы, у которых при входе не готово больше половины: почти готовый район мог добраться последними задачами,
-                // уже отданными потокам генерации
+                // areas with more than half their chunks unready at arrival: an almost-ready area could finish through its last tasks
+                // already assigned to generation threads
                 int area = (2 * distance + 1) * (2 * distance + 1);
                 for (ChunkPos t : targets) if (!racing.contains(t) && pending(level, List.of(t), distance) * 2 > area) racing.add(t);
                 arrivedAt[0] = tick[0];
-                h.assertTrue(!racing.isEmpty(), "районы залпа готовы сразу — проверка ничего не проверила");
+                h.assertTrue(!racing.isEmpty(), "salvo areas were ready immediately: the check tested nothing");
                 return;
             }
             boolean ready = Terrain.ready(level, p.x, p.z);
             for (ChunkPos t : racing) {
                 if (pending(level, List.of(t), distance) == 0) {
-                    throw new GameTestAssertException("место входа ждало районы залпа: район у " + t + " готов через "
-                            + (tick[0] - arrivedAt[0]) + " тиков после входа, место — " + (ready ? "в том же тике" : "ещё нет"));
+                    throw new GameTestAssertException("arrival site waited for salvo areas: area at " + t + " ready after "
+                            + (tick[0] - arrivedAt[0]) + " ticks since arrival, site: " + (ready ? "same tick" : "not yet"));
                 }
             }
             if (!ready) return;
-            Incoming.LOG.info("Вход во время залпа (районы {}): P готов через {} тиков, чанков районов не готово {} из {} при входе",
+            Incoming.LOG.info("Arrival during salvo (areas {}): P ready after {} ticks, area chunks unready {} of {} at arrival",
                     distance, tick[0] - arrivedAt[0], pending(level, targets, distance), pendingAtArrival[0]);
-            h.assertTrue(ArrivalTickets.count(level, who) == 1, "тикет входа снят раньше срока");
+            h.assertTrue(ArrivalTickets.count(level, who) == 1, "arrival ticket removed too early");
             h.succeed();
         });
     }
 
     /**
-     * Прыжок игрока ({@link ArrivalTickets#moved}): шаг меньше {@link ArrivalTickets#JUMP} чанков и место, которое держат
-     * тикеты игроков, тикета не ставят; прыжок на свободное место — ставит, вместо прежнего; первый тик в мире только
-     * запоминает место.
+     * Player jump ({@link ArrivalTickets#moved}): a step smaller than {@link ArrivalTickets#JUMP} chunks or a site
+     * held by player tickets creates no ticket; a jump to an unheld site creates one, replacing the previous ticket;
+     * the first tick in the world only remembers position.
      */
     @GameTest(template = "range", batch = "arrival_jump")
     public static void jumpHoldsArrivalTicket(GameTestHelper h) {
@@ -180,30 +180,30 @@ public final class ArrivalGameTests {
                 }
             }
         });
-        h.assertFalse(ArrivalTickets.moved(level, c, who, slot, 32), "первый тик в мире поставил тикет");
+        h.assertFalse(ArrivalTickets.moved(level, c, who, slot, 32), "first tick in the world created a ticket");
         h.assertFalse(ArrivalTickets.moved(level, new ChunkPos(c.x + ArrivalTickets.JUMP - 1, c.z), who, slot, 32),
-                "шаг меньше прыжка поставил тикет");
+                "step smaller than a jump created a ticket");
         ChunkPos far = new ChunkPos(c.x + 30, c.z - 30);
-        h.assertTrue(ArrivalTickets.moved(level, far, who, slot, 32), "прыжок на свободное место не поставил тикет");
-        h.assertTrue(far.equals(ArrivalTickets.held(slot)) && ArrivalTickets.count(level, who) == 1, "тикет прыжка не на новом месте");
+        h.assertTrue(ArrivalTickets.moved(level, far, who, slot, 32), "jump to an unheld site created no ticket");
+        h.assertTrue(far.equals(ArrivalTickets.held(slot)) && ArrivalTickets.count(level, who) == 1, "jump ticket is not at the new site");
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 ChunkPos pos = new ChunkPos(covered.x + dx, covered.z + dz);
                 distances.addTicket(TicketType.PLAYER, pos, playerLevel, pos);
             }
         }
-        h.assertFalse(ArrivalTickets.moved(level, covered, who, slot, 32), "прыжок туда, где стоят тикеты игроков, поставил тикет");
-        h.assertTrue(far.equals(ArrivalTickets.held(slot)), "прыжок без тикета снял прежний");
+        h.assertFalse(ArrivalTickets.moved(level, covered, who, slot, 32), "jump to a site held by player tickets created a ticket");
+        h.assertTrue(far.equals(ArrivalTickets.held(slot)), "a jump needing no ticket removed the previous ticket");
         h.succeed();
     }
 
     /**
-     * Телепорт на свежее место: NeoForge грузит чанк назначения синхронно ({@code Entity.setPosRaw → Level.getChunk},
-     * тикет {@code UNKNOWN}), через тик тикет снимается. Тикет прыжка, поставленный в том же тике, держит кольцо этой загрузки:
-     * ни один держатель на 11 чанков вокруг не уходит в выгрузку, пока тикеты игрока не встали (здесь их нет совсем).
-     * Иначе держатель кольца, которого потом поднимут тикеты игрока, а соседи ещё генерируются, крутит ванильную задачу
-     * выгрузки до конца каждого тика ({@link ArrivalTickets}, стенд: 50 мс/тик). Вторая проверка — то же без тикета: кольцо
-     * уходит в выгрузку (иначе первая ничего не доказывала бы).
+     * Teleport to fresh terrain: NeoForge loads the destination synchronously ({@code Entity.setPosRaw → Level.getChunk},
+     * {@code UNKNOWN} ticket), then removes the ticket a tick later. A jump ticket created in the same tick holds
+     * that loading ring: no holder within 11 chunks enters unloading before player tickets take hold (none exist here).
+     * Otherwise, with neighbors still generating, a ring holder later revived by player tickets spins the vanilla unload
+     * task until each tick ends ({@link ArrivalTickets}, rig: 50 ms/tick). The second check repeats without a ticket:
+     * the ring enters unloading, otherwise the first check would prove nothing.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "arrival_teleport", skyAccess = true)
     public static void teleportRingStaysLoaded(GameTestHelper h) {
@@ -224,13 +224,13 @@ public final class ArrivalGameTests {
         ArrivalTickets.Slot slot = new ArrivalTickets.Slot();
         StrikeGameTests.afterTest(h, () -> ArrivalTickets.release(level.getServer(), who, slot));
         var map = level.getChunkSource().chunkMap;
-        h.assertTrue(map.getVisibleChunkIfPresent(p.toLong()) == null, "место телепорта уже загружено");
+        h.assertTrue(map.getVisibleChunkIfPresent(p.toLong()) == null, "teleport site already loaded");
         ArrivalTickets.moved(level, base, who, slot, 32);
-        // телепорт: синхронная загрузка назначения, как у NeoForge, и в том же тике — конец тика мира
+        // teleport: synchronous destination load as in NeoForge, then world-tick end in the same tick
         level.getChunk(p.x, p.z);
-        if (arrival) h.assertTrue(ArrivalTickets.moved(level, p, who, slot, 32), "прыжок не поставил тикет");
-        // держатели, которые подняла синхронная загрузка: уходят в выгрузку — уровень выше загрузки или держателя уже нет
-        // (выгрузка свежего чанка проходит toDrop и pendingUnloads в одном тике)
+        if (arrival) h.assertTrue(ArrivalTickets.moved(level, p, who, slot, 32), "jump created no ticket");
+        // holders raised by the synchronous load enter unloading when their level exceeds loading or the holder is already gone
+        // (a fresh chunk passes toDrop and pendingUnloads in one tick)
         Map<Long, ChunkHolder> ring = new HashMap<>();
         for (int dx = -11; dx <= 11; dx++) {
             for (int dz = -11; dz <= 11; dz++) {
@@ -239,7 +239,7 @@ public final class ArrivalGameTests {
                 if (holder != null) ring.put(c, holder);
             }
         }
-        h.assertTrue(ring.size() > 1, "синхронная загрузка не подняла кольцо");
+        h.assertTrue(ring.size() > 1, "synchronous load did not raise a ring");
         int[] tick = {0};
         h.onEachTick(() -> {
             tick[0]++;
@@ -249,16 +249,16 @@ public final class ArrivalGameTests {
                 if (now != e.getValue() || !ChunkLevel.isLoaded(now.getTicketLevel())) dropped++;
             }
             if (arrival && dropped > 0) {
-                throw new GameTestAssertException(dropped + " держателей кольца синхронной загрузки ушли в выгрузку через " + tick[0] + " тиков");
+                throw new GameTestAssertException(dropped + " holders in the synchronous-load ring entered unloading after " + tick[0] + " ticks");
             }
             if (!arrival && dropped > 0) h.succeed();
             if (tick[0] < 20) return;
             if (arrival) h.succeed();
-            else throw new GameTestAssertException("без тикета прыжка кольцо синхронной загрузки за 20 тиков не ушло в выгрузку");
+            else throw new GameTestAssertException("without a jump ticket, the synchronous-load ring did not enter unloading within 20 ticks");
         });
     }
 
-    /** Тикет входа снимается сам через {@link ArrivalTickets#LIFESPAN} тиков, новый вход заменяет прежний. */
+    /** The arrival ticket expires after {@link ArrivalTickets#LIFESPAN} ticks; a new arrival replaces the previous one. */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LIFESPAN + 100, batch = "arrival_lifespan")
     public static void arrivalTicketExpires(GameTestHelper h) {
         holdWork(h);
@@ -269,17 +269,17 @@ public final class ArrivalGameTests {
         StrikeGameTests.afterTest(h, () -> ArrivalTickets.release(level.getServer(), who, slot));
         ArrivalTickets.arrive(level, c, who, slot);
         ArrivalTickets.arrive(level, new ChunkPos(c.x + 1, c.z), who, slot);
-        h.assertTrue(ArrivalTickets.count(level, who) == 1, "новый вход не заменил прежний тикет");
+        h.assertTrue(ArrivalTickets.count(level, who) == 1, "new arrival did not replace the previous ticket");
         long placed = level.getGameTime();
         h.onEachTick(() -> {
             long age = level.getGameTime() - placed;
             int n = ArrivalTickets.count(level, who);
             if (age < ArrivalTickets.LIFESPAN) {
-                if (n != 1) throw new GameTestAssertException("тикет входа снят через " + age + " тиков, раньше срока");
+                if (n != 1) throw new GameTestAssertException("arrival ticket removed after " + age + " ticks, too early");
                 return;
             }
             if (n != 0) {
-                if (age > ArrivalTickets.LIFESPAN + 2) throw new GameTestAssertException("тикет входа стоит " + age + " тиков");
+                if (age > ArrivalTickets.LIFESPAN + 2) throw new GameTestAssertException("arrival ticket still present after " + age + " ticks");
                 return;
             }
             h.succeed();
@@ -287,9 +287,9 @@ public final class ArrivalGameTests {
     }
 
     /**
-     * Тикет входа снимается, когда место держат тикеты игроков ({@code TicketType.PLAYER}) на квадрате радиуса
-     * {@code DISTANCE − 2}, не дальше обзора. Тикеты игроков здесь ставятся вручную — без игрока: мок-игрок ломается о
-     * пакеты Create.
+     * The arrival ticket is removed once player tickets ({@code TicketType.PLAYER}) hold a square of radius
+     * {@code DISTANCE − 2}, limited by view distance. Player tickets are installed manually without a player here:
+     * mock players fail on Create packets.
      */
     @GameTest(template = "range", batch = "arrival_players")
     public static void arrivalReleasedWhenPlayersHoldPlace(GameTestHelper h) {
@@ -314,28 +314,28 @@ public final class ArrivalGameTests {
                 placed.add(pos);
             }
         }
-        // без угла квадрата тикет стоит
+        // without one corner of the square, the ticket remains
         ArrivalTickets.arrive(level, c, who, slot);
         ArrivalTickets.tick(level.getServer(), who, slot, 32, false);
-        h.assertTrue(ArrivalTickets.count(level, who) == 1, "тикет входа снят, хотя угол квадрата не держит ни один игрок");
-        // обзор меньше квадрата: хватает квадрата обзора
+        h.assertTrue(ArrivalTickets.count(level, who) == 1, "arrival ticket removed although no player holds the square corner");
+        // view distance smaller than the square: the view-distance square suffices
         ArrivalTickets.tick(level.getServer(), who, slot, r - 1, false);
-        h.assertTrue(ArrivalTickets.count(level, who) == 0, "тикет входа не снят, хотя квадрат обзора держат игроки");
-        // весь квадрат
+        h.assertTrue(ArrivalTickets.count(level, who) == 0, "arrival ticket remains although players hold the view-distance square");
+        // the full square
         ArrivalTickets.arrive(level, c, who, slot);
         distances.addTicket(TicketType.PLAYER, corner, playerLevel, corner);
         placed.add(corner);
         ArrivalTickets.tick(level.getServer(), who, slot, 32, false);
-        h.assertTrue(ArrivalTickets.count(level, who) == 0, "тикет входа не снят, хотя весь квадрат держат игроки");
-        // слот пуст: следующий тик ничего не снимает и не падает
+        h.assertTrue(ArrivalTickets.count(level, who) == 0, "arrival ticket remains although players hold the full square");
+        // slot empty: the next tick removes nothing and does not crash
         ArrivalTickets.tick(level.getServer(), who, slot, 32, false);
         h.succeed();
     }
 
     /**
-     * Тикет на месте возрождения (ставится при смерти) стоит, пока мёртвый игрок тикает, — дольше срока тикета входа и
-     * аренды и даже когда место держат тикеты игроков; возрождение (вход на новом месте) его заменяет, и тикет входа снова
-     * снимается по тикетам игроков.
+     * The respawn-site ticket (installed at death) remains while the dead player ticks, longer than the arrival-ticket
+     * lifespan and lease, even when player tickets hold the site. Respawn (arrival at the new site) replaces it, and
+     * the arrival ticket is again removed according to player tickets.
      */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LIFESPAN + 100, batch = "arrival_respawn")
     public static void respawnTicketWaitsForRespawn(GameTestHelper h) {
@@ -363,22 +363,22 @@ public final class ArrivalGameTests {
         h.onEachTick(() -> {
             ArrivalTickets.tick(level.getServer(), who, slot, 32, true);
             if (ArrivalTickets.count(level, who) != 1) {
-                throw new GameTestAssertException("тикет места возрождения снят через " + (level.getGameTime() - placedAt) + " тиков, игрок ещё мёртв");
+                throw new GameTestAssertException("respawn-site ticket removed after " + (level.getGameTime() - placedAt) + " ticks, player still dead");
             }
             if (level.getGameTime() - placedAt <= ArrivalTickets.LIFESPAN + 20) return;
-            // возрождение в другом месте: тикет входа там, тикет места возрождения снят
+            // respawn elsewhere: arrival ticket there, respawn-site ticket removed
             ArrivalTickets.arrive(level, new ChunkPos(c.x + 20, c.z), who, slot);
-            h.assertTrue(ArrivalTickets.count(level, who) == 1, "возрождение не заменило тикет места возрождения");
-            // вход на месте, которое держат игроки: это уже тикет входа, и тик его снимает (флаг «мёртв» у тикета входа
-            // ничего не значит; остался бы флаг тикета возрождения — тик продлил бы его)
+            h.assertTrue(ArrivalTickets.count(level, who) == 1, "respawn did not replace the respawn-site ticket");
+            // arrival at a site held by players: now an arrival ticket, removed by its tick (the arrival ticket's "dead" flag
+            // has no effect; a remaining respawn-ticket flag would extend it on tick)
             ArrivalTickets.arrive(level, c, who, slot);
             ArrivalTickets.tick(level.getServer(), who, slot, 32, true);
-            h.assertTrue(ArrivalTickets.count(level, who) == 0, "тикет входа после возрождения остался тикетом возрождения");
+            h.assertTrue(ArrivalTickets.count(level, who) == 0, "arrival ticket after respawn remained a respawn ticket");
             h.succeed();
         });
     }
 
-    /** Тикет места возрождения, который никто не продлевает (игрок больше не тикает), снимается сам через аренду. */
+    /** An unrenewed respawn-site ticket (player no longer ticks) expires after its lease. */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LEASE + 100, batch = "arrival_respawn")
     public static void respawnTicketLeaseExpires(GameTestHelper h) {
         holdWork(h);
@@ -393,20 +393,20 @@ public final class ArrivalGameTests {
             long age = level.getGameTime() - placedAt;
             int n = ArrivalTickets.count(level, who);
             if (age < ArrivalTickets.LEASE) {
-                if (n != 1) throw new GameTestAssertException("тикет места возрождения снят раньше аренды: через " + age + " тиков");
+                if (n != 1) throw new GameTestAssertException("respawn-site ticket removed before lease expiry: after " + age + " ticks");
                 return;
             }
             if (age < ArrivalTickets.LEASE + 5) return;
-            h.assertTrue(n == 0, "тикет места возрождения стоит через " + age + " тиков без тика игрока");
+            h.assertTrue(n == 0, "respawn-site ticket still present after " + age + " ticks without player ticks");
             h.succeed();
         });
     }
 
     /**
-     * Обработчики событий на {@code FakePlayer} NeoForge (он не входит в список игроков и пакетов не шлёт, в отличие от
-     * мок-игрока GameTest): смерть ставит тикет на кровать, тик мёртвого его держит, {@code Clone} передаёт слот новому
-     * объекту, возрождение переносит тикет на место появления, выход снимает; выход мёртвым и тик ожившего — тоже снимают.
-     * Без точки возрождения тикета нет: точку появления мира держит ванильный {@code START}.
+     * Event handlers with a NeoForge {@code FakePlayer} (absent from the player list, sends no packets, unlike the
+     * GameTest mock player): death installs a bed ticket, dead-player tick holds it, {@code Clone} transfers its slot
+     * to the new object, respawn moves it to the spawn site, logout removes it; logout while dead and a revived player
+     * tick remove it too. No respawn point means no ticket: vanilla {@code START} holds the world spawn.
      */
     @GameTest(template = "range", batch = "arrival_respawn_events")
     public static void respawnEventsMoveTicket(GameTestHelper h) {
@@ -418,49 +418,49 @@ public final class ArrivalGameTests {
         StrikeGameTests.afterTest(h, () -> {
             for (FakePlayer p : made) ArrivalTickets.release(level.getServer(), p.getUUID(), p.getData(ModAttachments.ARRIVAL.get()));
         });
-        // смерть → экран смерти → возрождение → выход
+        // death → death screen → respawn → logout
         GameProfile profile = new GameProfile(UUID.randomUUID(), "incoming_arrival_a");
         FakePlayer dead = died(level, profile, bed, made);
         UUID who = profile.getId();
-        h.assertTrue(ArrivalTickets.count(level, who) == 1 && new ChunkPos(bed).equals(held(dead)), "смерть не поставила тикет на кровать: " + held(dead));
+        h.assertTrue(ArrivalTickets.count(level, who) == 1 && new ChunkPos(bed).equals(held(dead)), "death created no bed ticket: " + held(dead));
         ArrivalTickets.onPlayerTick(new PlayerTickEvent.Post(dead));
-        h.assertTrue(ArrivalTickets.count(level, who) == 1, "тик мёртвого игрока снял тикет места возрождения");
+        h.assertTrue(ArrivalTickets.count(level, who) == 1, "dead-player tick removed the respawn-site ticket");
         FakePlayer neu = new FakePlayer(level, profile);
         made.add(neu);
         neu.moveTo(Vec3.atCenterOf(base.offset(16 * 40, 0, 0)));
         ArrivalTickets.onClone(new PlayerEvent.Clone(neu, dead, true));
         ArrivalTickets.onRespawn(new PlayerEvent.PlayerRespawnEvent(neu, false));
         h.assertTrue(ArrivalTickets.count(level, who) == 1 && neu.chunkPosition().equals(held(neu)),
-                "возрождение не перенесло тикет на место появления: тикетов " + ArrivalTickets.count(level, who) + ", слот "
-                        + held(neu) + ", игрок в " + neu.chunkPosition());
+                "respawn did not move the ticket to the spawn site: tickets " + ArrivalTickets.count(level, who) + ", slot "
+                        + held(neu) + ", player at " + neu.chunkPosition());
         ArrivalTickets.onLogout(new PlayerEvent.PlayerLoggedOutEvent(neu));
-        h.assertTrue(ArrivalTickets.count(level, who) == 0, "выход не снял тикет входа");
-        // выход с экрана смерти
+        h.assertTrue(ArrivalTickets.count(level, who) == 0, "logout did not remove the arrival ticket");
+        // logout from the death screen
         GameProfile quitter = new GameProfile(UUID.randomUUID(), "incoming_arrival_b");
         FakePlayer gone = died(level, quitter, bed, made);
-        h.assertTrue(ArrivalTickets.count(level, quitter.getId()) == 1, "смерть не поставила тикет");
+        h.assertTrue(ArrivalTickets.count(level, quitter.getId()) == 1, "death created no ticket");
         ArrivalTickets.onLogout(new PlayerEvent.PlayerLoggedOutEvent(gone));
-        h.assertTrue(ArrivalTickets.count(level, quitter.getId()) == 0, "выход мёртвым не снял тикет места возрождения");
-        // смерть отменил другой мод и вылечил игрока
+        h.assertTrue(ArrivalTickets.count(level, quitter.getId()) == 0, "logout while dead did not remove the respawn-site ticket");
+        // another mod canceled death and healed the player
         GameProfile revived = new GameProfile(UUID.randomUUID(), "incoming_arrival_c");
         FakePlayer alive = died(level, revived, bed, made);
         alive.setHealth(alive.getMaxHealth());
         ArrivalTickets.onPlayerTick(new PlayerTickEvent.Post(alive));
-        h.assertTrue(ArrivalTickets.count(level, revived.getId()) == 0, "тик живого игрока не снял тикет места возрождения");
-        // без точки возрождения: точку появления мира держит START
+        h.assertTrue(ArrivalTickets.count(level, revived.getId()) == 0, "live-player tick did not remove the respawn-site ticket");
+        // without a respawn point: START holds world spawn
         GameProfile homeless = new GameProfile(UUID.randomUUID(), "incoming_arrival_d");
         died(level, homeless, null, made);
         if (level.getGameRules().getInt(GameRules.RULE_SPAWN_CHUNK_RADIUS) > 0) {
-            h.assertTrue(ArrivalTickets.count(level, homeless.getId()) == 0, "тикет на точке появления мира, которую держит START");
+            h.assertTrue(ArrivalTickets.count(level, homeless.getId()) == 0, "ticket at world spawn held by START");
         } else {
-            h.assertTrue(ArrivalTickets.count(level, homeless.getId()) == 1, "без точки появления в чанках START тикета нет");
+            h.assertTrue(ArrivalTickets.count(level, homeless.getId()) == 1, "without a spawn point in START chunks, no ticket");
         }
         h.succeed();
     }
 
     /**
-     * Кровать на аппарате Sable: точка возрождения — в сетке плотов (возрождает Sable по своей точке в мире), тикета там
-     * нет. Иначе тикет уровня 26 встаёт в сетку плотов, мимо защиты Sable ({@code addRegionTicket}).
+     * Bed on a Sable craft: respawn point lies in the plot grid (Sable respawns at its own world point); no ticket
+     * there. Otherwise a level-26 ticket would enter the plot grid, bypassing Sable's guard ({@code addRegionTicket}).
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "arrival_respawn_craft", skyAccess = true)
     public static void respawnOnCraftNoTicket(GameTestHelper h) {
@@ -482,15 +482,15 @@ public final class ArrivalGameTests {
         h.startSequence()
                 .thenExecute(() -> server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withLevel(level).withSuppressedOutput(),
                         String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d", a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ())))
-                .thenWaitUntil(() -> h.assertFalse(SubLevels.near(level, centre, 8).isEmpty(), "аппарат не собран"))
+                .thenWaitUntil(() -> h.assertFalse(SubLevels.near(level, centre, 8).isEmpty(), "craft not assembled"))
                 .thenExecute(() -> {
                     SubLevelAccess sub = SubLevels.near(level, centre, 8).getFirst();
                     BlockPos plot = BlockPos.containing(SubLevels.toPlot(sub, centre.add(0, 1, 0)));
-                    h.assertTrue(SubLevels.inPlotGrid(level, new ChunkPos(plot)), "точка аппарата " + plot + " не в сетке плотов");
+                    h.assertTrue(SubLevels.inPlotGrid(level, new ChunkPos(plot)), "craft point " + plot + " not in the plot grid");
                     GameProfile profile = new GameProfile(UUID.randomUUID(), "incoming_arrival_craft");
                     FakePlayer dead = died(level, profile, plot, made);
                     h.assertTrue(ArrivalTickets.count(level, profile.getId()) == 0,
-                            "тикет места возрождения в сетке плотов: " + held(dead) + " (точка " + dead.getRespawnPosition() + ")");
+                            "respawn-site ticket in the plot grid: " + held(dead) + " (point " + dead.getRespawnPosition() + ")");
                 })
                 .thenSucceed();
     }
@@ -504,7 +504,7 @@ public final class ArrivalGameTests {
         FlightTickets.hold(level, centre, 0, flight, true);
     }
 
-    /** Игрок (без списка игроков и пакетов) с точкой возрождения {@code bed} (null — без неё) умер: смерть дошла до мода. */
+    /** A player (outside the player list, no packets) with respawn point {@code bed} (null for none) died: death reached the mod. */
     private static FakePlayer died(ServerLevel level, GameProfile profile, @Nullable BlockPos bed, List<FakePlayer> made) {
         FakePlayer p = new FakePlayer(level, profile);
         made.add(p);
@@ -519,7 +519,7 @@ public final class ArrivalGameTests {
         return ArrivalTickets.held(p.getData(ModAttachments.ARRIVAL.get()));
     }
 
-    /** Чанков районов залпа (квадраты радиуса {@code r}), которые ещё не готовы. */
+    /** Salvo-area chunks (squares of radius {@code r}) that are still unready. */
     private static int pending(ServerLevel level, List<ChunkPos> targets, int r) {
         Set<Long> seen = new HashSet<>();
         int n = 0;

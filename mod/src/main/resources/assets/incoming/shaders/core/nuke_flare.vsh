@@ -1,6 +1,6 @@
 #version 150
 
-// Круглое свечение ядерного удара (client/nuclear/NukeRenderer, NukeFlash): квадрат, UV0 — от 0 до 1 по сторонам.
+// Round nuclear glow (client/nuclear/NukeRenderer, NukeFlash): quad, UV0 from 0 to 1 along sides.
 in vec3 Position;
 in vec2 UV0;
 in vec4 Color;

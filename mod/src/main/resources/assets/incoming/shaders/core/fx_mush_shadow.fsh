@@ -3,25 +3,25 @@
 #moj_import <incoming:pall.glsl>
 #moj_import <incoming:mushroom.glsl>
 
-// Карта тени грибов от солнца (client/fx/layer/PallPass, до лучей пелены; mushroom.glsl: карта тени): пиксель — тексель
-// плитки гриба, прямая вдоль солнца через его место в плоскости поперёк солнца. Толща — поле гриба без шума (mushMean,
-// среднее по клубам: тень на земле — от массы облака, её край размыт размахом клубов), шагами по отрезку прямой в рамке
-// гриба от солнца вниз; пустое — прыжком до вещества (mushGap). Где прямая проходит высоты слоёв, вещество над ними
-// записывается (толща, её середина на прямой, ширина облака поперёк и альбедо); ниже последнего шага — всё вещество
-// прямой. Свет к слою — прямой пучок сквозь эту толщу и рассеянный ею вперёд: два потока в столбе вдоль солнца (как свет
-// на самом грибе: альбедо и асимметрия — у каждой части свои, у столба воды — капель), на землю — та доля, с которой
-// облако такой ширины на таком расстоянии видно с земли (mushSeen; ширина части — по площади её тени, mushAcross).
+// Mushroom sunlight shadow map (client/fx/layer/PallPass, before pall rays; mushroom.glsl: shadow map): pixel is texel
+// in mushroom tile, a line along sunlight through its position in the sun-perpendicular plane. Depth uses noiseless mushroom field
+// (mushMean, billow mean: ground shadow follows cloud mass, edge blurred by billow extent), stepping down from sun through
+// line segment within mushroom bounds; empty space jumps to matter (mushGap). At layer heights, record matter above them
+// (optical depth, its line centroid, crosswise cloud width/albedo); below last step, all matter on line.
+// Light reaching layer is direct beam through this depth plus forward-scattered light: two streams in a sun-aligned column (like
+// light on mushroom: each part has own albedo/asymmetry, water column uses drops); ground receives the share with which a
+// cloud this wide at this distance is visible from ground (mushSeen; part width from shadow area, mushAcross).
 
-// таблица грибов (MushroomField)
+// mushroom table (MushroomField)
 uniform sampler2D Sampler0;
-// направление на солнце (xyz) и сила солнца днём (w)
+// sun direction (xyz), daytime sun strength (w)
 uniform vec4 PallSun;
 
 out vec4 fragColor;
 
-// Свет солнца к слою под веществом гриба (MushroomField.shadowThrough): толща tau, середина вещества на прямой — в d от
-// слоя, полуширина облака поперёк width, альбедо w и асимметрия g (после усечения пика); mu — косинус пучка на землю
-// у вывода на кадр
+// Sunlight reaching layer below mushroom matter (MushroomField.shadowThrough): optical depth tau, matter centroid on line d from
+// layer, crosswise cloud half-width width, albedo w, asymmetry g (after peak truncation); mu is beam cosine to ground
+// at frame output
 float through(float tau, float d, float width, float w, float g, float mu) {
     if (tau < 1e-4) return 1.0;
     float scattered = max(pallDiffuse(w, g, tau, tau, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, -0.6666667), 0.0);
@@ -40,20 +40,20 @@ void main() {
     float top = texelFetch(Sampler0, ivec2(MUSH_SHADOW_TOP, k), 0).x;
     vec3 sun = mushShadowSun(PallSun.xyz), a, b;
     mushShadowAxes(sun, a, b);
-    // полуширина шапки, юбки и столба воды поперёк солнца — по площади их тени (ножки — на высоте шага); шапка — от низа
-    // кольца до верха купола
+    // cap/skirt/water-column half-width across sun from shadow area (stem at step height); cap spans from ring
+    // bottom to dome top
     float capH = max(m.capY + m.ringB, m.domeY + m.domeH) - (m.capY - m.ringB);
     float capW = mushAcross(m.capR, capH, sun.y), skirtW = mushAcross(m.skirtR + m.skirtW, m.skirtH, sun.y);
     float colW = mushAcross(max(m.colMid + m.colHalf, m.crownR), m.colTop + m.crownH, sun.y);
     vec2 uv = (vec2(float(at.x), float(at.y - k * MUSH_SHADOW)) + 0.5) / float(MUSH_SHADOW);
     vec2 w = rect.xy + uv * rect.zw;
-    // прямая: точка плоскости поперёк солнца (от глаза) и шаг вдоль солнца; высота над землёй под эпицентром — h0 + sun.y·s
+    // line: point in sun-perpendicular plane (eye-relative), step along sun; height above epicenter ground is h0 + sun.y·s
     vec3 o = m.base + a * w.x + b * w.y;
     vec2 span = mushLine(m, o, sun);
     float h0 = o.y - m.base.y;
-    // места высот слоёв на прямой: земля под эпицентром, середина между ней и верхом мира, верх
+    // layer-height positions on line: epicenter ground, midpoint to world top, top
     vec3 layer = (vec3(0.0, 0.5 * top, top) - h0) / sun.y;
-    // вещество над слоями: толща и её доли с местом на прямой, шириной облака, альбедо и асимметрией (поделить на толщу)
+    // matter above layers: optical depth and its shares of line position, cloud width, albedo/asymmetry (divide by depth)
     vec3 tauL = vec3(0.0), atL = vec3(0.0), wideL = vec3(0.0), albL = vec3(0.0), asymL = vec3(0.0);
     float tau = 0.0, atS = 0.0, wide = 0.0, alb = 0.0, asym = 0.0, s = span.y;
     if (span.y > span.x) {
@@ -61,7 +61,7 @@ void main() {
         for (int i = 0; i <= MUSH_SHADOW_STEPS; i++) {
             if (s <= span.x || tau >= MUSH_SHADOW_DARK) break;
             float gap = mushGap(m, mushLocal(m, o + sun * s));
-            // вниз от s на шаг (или прыжок по пустому — без вещества), выборка — в середине шага
+            // downward from s by step (or empty-space jump, no matter), sample at step midpoint
             float from = max(s - max(gap, ds), span.x);
             float sigma = 0.0, width = 0.0, albedo = 0.0, g = 0.0;
             if (gap <= ds) {
@@ -74,7 +74,7 @@ void main() {
                     g = (matter.x * m.capMat.a + matter.y * m.stemMat.a + matter.z * m.skirtMat.a + matter.w * m.colMat.a) / sigma;
                 }
             }
-            // слои, которые прямая проходит на этом шаге: вещество над ними — до них
+            // layers crossed by line this step: matter above them counts only up to them
             vec3 crossed = step(vec3(from), layer) * (vec3(1.0) - step(vec3(s), layer));
             vec3 part = sigma * max(vec3(s) - layer, vec3(0.0));
             tauL = mix(tauL, vec3(tau) + part, crossed);
@@ -91,7 +91,7 @@ void main() {
             s = from;
         }
     }
-    // слои ниже последнего шага — под всем веществом прямой
+    // layers below last step lie beneath all line matter
     vec3 below = step(layer, vec3(s));
     tauL = mix(tauL, vec3(tau), below);
     atL = mix(atL, vec3(atS), below);

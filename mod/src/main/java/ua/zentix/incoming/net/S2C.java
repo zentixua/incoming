@@ -23,42 +23,42 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Сервер → клиент: только события; всё, что видно и слышно, клиент строит сам (частицы, звук с задержкой, тряска). */
+/** Server → client: events only; client builds everything visible/audible (particles, delayed sound, shake). */
 public final class S2C {
     private S2C() {}
 
     /**
-     * Взрыв: вид (0 — шахед, 1 — ракета, 2 — бомба под землёй, 3 — снаряд РСЗО — как взрыв происходит), грунт, высота
-     * поверхности над точкой (у бомбы — верх над зарядом, {@code BunkerCover}; у остальных — высота самой точки удара: где
-     * лежит поверхность вокруг, клиент видит сам), сид, снаряд, который взорвался (его путь у клиента кончается в этот тик, и мотор звучит,
-     * пока до уха не дойдёт фронт взрыва, а не стихает раньше), и оружие ({@code WeaponType.id}): заряд и топливо —
-     * в его паспорте, клиент берёт их оттуда ({@code client.fx.BlastSource}); ось боевой части (курс снаряда у удара,
-     * единичный вектор): по ней и сиду клиент разлетает те же осколки, что сервер ({@code warhead.FragmentModel}).
+     * Explosion: kind (0 — Shahed, 1 — missile, 2 — buried bomb, 3 — MLRS projectile — how explosion occurs), ground, surface
+     * height above point (bomb: top above charge, {@code BunkerCover}; others: impact-point height — client sees
+     * surrounding surface itself), seed, exploded projectile (client path ends this tick; engine sounds
+     * until explosion front reaches the ear rather than fading early), and weapon ({@code WeaponType.id}): charge/fuel
+     * are in its spec, read by client ({@code client.fx.BlastSource}); warhead axis (projectile heading at impact,
+     * unit vector): axis and seed produce same client/server fragments ({@code warhead.FragmentModel}).
      * <p>
-     * Опора у грани удара ({@link Support}) — то, что о преграде знает пробой сервера: во что попал заряд и плита ли это над
-     * пустотой, которую он пробивает. Клиент выбирает по ней картинку цели ({@code client.fx.smoke.BlastTarget}).
+     * Support at impact face ({@link Support}): server breach knowledge of barrier — material hit and whether a slab over
+     * void was breached. Client chooses target presentation from it ({@code client.fx.smoke.BlastTarget}).
      * <p>
-     * Формат только растёт с конца (replay.md): оружие и ось дописаны в конец; в повторе, записанном до него, его нет
-     * ({@link #NO_WEAPON}) — оно выводится из вида, как вид тогда и выбирали ({@link #weaponType}).
+     * Format only grows at end (replay.md): weapon/axis appended; older recordings lack weapon
+     * ({@link #NO_WEAPON}) — infer from kind as kind was chosen then ({@link #weaponType}).
      */
     public record Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
                         boolean fuelApart, Optional<Support> support) implements CustomPacketPayload {
         public static final int DRONE = 0, MISSILE = 1, BUNKER = 2, ROCKET = 3;
-        /** Оружия в пакете нет (повтор, записанный до этого поля). */
+        /** No weapon in packet (recording predates this field). */
         public static final int NO_WEAPON = -1;
         public static final Type<Blast> TYPE = new Type<>(Incoming.id("blast"));
         private static final StreamCodec<ByteBuf, Optional<UUID>> PROJECTILE = ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC);
         private static final StreamCodec<ByteBuf, Integer> WEAPON = StreamCodecs.trailing(ByteBufCodecs.VAR_INT, NO_WEAPON);
-        /** Ось боевой части — вниз, если её нет в пакете (повтор, записанный до этого поля). */
+        /** Warhead axis downward when absent from packet (recording predates field). */
         public static final Vec3 DOWN = new Vec3(0, -1, 0);
         private static final StreamCodec<ByteBuf, Vec3> AXIS = StreamCodecs.trailing(StreamCodecs.VEC3, DOWN);
         /**
-         * Топливо в воронке горит отдельно — огнём на блоках сервера и пакетом {@link FuelFire} ({@code warhead/FuelFires}):
-         * его дым и гул клиент ведёт только по нему. В повторе, записанном до этого поля, — нет: дым и гул топлива — у
-         * места удара, как тогда (огня на блоках в такой записи нет).
+         * Crater fuel burns separately — server fire blocks and {@link FuelFire} packet ({@code warhead/FuelFires}):
+         * client drives its smoke/rumble only from that packet. Recordings predating this field use impact-site
+         * fuel smoke/rumble as before (no fire blocks in such recordings).
          */
         private static final StreamCodec<ByteBuf, Boolean> FUEL_APART = StreamCodecs.trailing(ByteBufCodecs.BOOL, false);
-        /** Опоры нет в пакете (повтор, записанный до этого поля; взрыв без сервера; заряд не приложен к преграде). */
+        /** No packet support (recording predates field; serverless explosion; charge not against barrier). */
         private static final StreamCodec<ByteBuf, Optional<Support>> SUPPORT = StreamCodecs.trailing(ByteBufCodecs.optional(Support.CODEC), Optional.empty());
         public static final StreamCodec<ByteBuf, Blast> CODEC = StreamCodec.of((b, p) -> {
             ByteBufCodecs.VAR_INT.encode(b, p.kind);
@@ -75,31 +75,31 @@ public final class S2C {
                 ByteBufCodecs.FLOAT.decode(b), ByteBufCodecs.VAR_LONG.decode(b), PROJECTILE.decode(b), WEAPON.decode(b), AXIS.decode(b),
                 FUEL_APART.decode(b), SUPPORT.decode(b)));
 
-        /** Взрыв без оси боевой части (бомба, картинка после ядерки): ось вниз. */
+        /** Explosion without warhead axis (bomb, post-nuclear presentation): downward axis. */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, DOWN);
         }
 
-        /** Взрыв, чьё топливо (если есть) горит у клиента у места удара: без огня сервера на блоках (картинка без сервера). */
+        /** Explosion whose fuel (if any) burns client-side at impact: no server fire blocks (serverless presentation). */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, false);
         }
 
-        /** Взрыв без опоры от сервера: цель — по материалу ({@link Support}). */
+        /** Explosion without server support: target by material ({@link Support}). */
         public Blast(int kind, Vec3 pos, int material, float surfaceY, long seed, Optional<UUID> projectile, int weapon, Vec3 axis,
                      boolean fuelApart) {
             this(kind, pos, material, surfaceY, seed, projectile, weapon, axis, fuelApart, Optional.empty());
         }
 
         /**
-         * Опора у грани удара — итог пробоя сервера по одному лучу, нормали грани внутрь преграды ({@code warhead.SlabBreach#support}):
-         * тот же закон, те же блоки и то же правило «пустота под перекрытием», что у лучей, которые сносят плиту.
+         * Impact-face support: server breach result along one ray normal inward into barrier ({@code warhead.SlabBreach#support}):
+         * same law, blocks and “void under cover” rule as slab-removal rays.
          *
-         * @param loose  то, во что попал заряд, — рыхлое (группа пробоя «земля», FM 5-250 табл. B-3)
-         * @param slab   толщина плиты до пустоты под перекрытием по нормали, м; 0 — не пробита (толща, грунт, пустота под небом)
-         * @param breach радиус пробоя плиты у этого заряда по её блокам (путь / сумма путей, делённых на радиус каждого), м
-         * @param normal нормаль грани внутрь преграды (единичная): ось дыры и тыльного откола
-         * @param lift   на сколько точка взрыва ушла за грань по нормали, м (точка прицела — полблока в блок): заряд лежит в
+         * @param loose  charge hit loose material (earth breach group, FM 5-250 table B-3)
+         * @param slab   slab thickness to covered void along normal, m; 0 — not breached (bulk, ground, open-sky void)
+         * @param breach slab breach radius for this charge through its blocks (path / sum of paths divided by each radius), m
+         * @param normal inward face normal (unit): hole and rear-spall axis
+         * @param lift   distance explosion point moved past face along normal, m (aim point half a block inside): charge rests at
          *               {@code pos − normal·lift}
          */
         public record Support(boolean loose, float slab, float breach, Vec3 normal, float lift) {
@@ -109,15 +109,15 @@ public final class S2C {
                     ByteBufCodecs.BOOL, Support::loose, ByteBufCodecs.FLOAT, Support::slab, ByteBufCodecs.FLOAT, Support::breach,
                     NORMAL, Support::normal, ByteBufCodecs.FLOAT, Support::lift, Support::new);
 
-            /** Опора у грани сверху (нормаль вниз, заряд на грани). */
+            /** Support on upper face (downward normal, charge on face). */
             public Support(boolean loose, float slab, float breach) {
                 this(loose, slab, breach, DOWN, 0);
             }
         }
 
         /**
-         * Оружие, которое взорвалось. Нет в пакете ({@link #NO_WEAPON}) — по виду, как его выбирал сервер до этого поля
-         * (шахед и «Ланцет» оба шли видом шахеда).
+         * Exploded weapon. Absent from packet ({@link #NO_WEAPON}): infer from kind as server chose it before field
+         * (Shahed and Lancet both used Shahed kind).
          */
         public WeaponType weaponType() {
             WeaponType[] all = WeaponType.values();
@@ -136,7 +136,7 @@ public final class S2C {
         }
     }
 
-    /** Подстанция выбита: хлопок, дуга и искры, затихающий гул трансформатора. */
+    /** Substation disabled: bang, arc/sparks, fading transformer hum. */
     public record GridFailure(Vec3 pos, long seed) implements CustomPacketPayload {
         public static final Type<GridFailure> TYPE = new Type<>(Incoming.id("grid_failure"));
         public static final StreamCodec<ByteBuf, GridFailure> CODEC = StreamCodec.composite(
@@ -148,7 +148,7 @@ public final class S2C {
         }
     }
 
-    /** Квартал рядом погас (щелчок реле, гул обрывается) или в него вернулся свет ({@code on}). */
+    /** Nearby district went dark (relay click, hum stops) or power returned ({@code on}). */
     public record GridDistrict(Vec3 pos, boolean on) implements CustomPacketPayload {
         public static final Type<GridDistrict> TYPE = new Type<>(Incoming.id("grid_district"));
         public static final StreamCodec<ByteBuf, GridDistrict> CODEC = StreamCodec.composite(
@@ -160,10 +160,10 @@ public final class S2C {
         }
     }
 
-    /** Бомба вошла в грунт: звуковой удар, удар о землю, фонтан у входного отверстия. */
+    /** Bomb entered ground: sonic boom, ground impact, fountain at entry hole. */
     public record BunkerImpact(Vec3 pos, int material, float speed) implements CustomPacketPayload {
         public static final Type<BunkerImpact> TYPE = new Type<>(Incoming.id("bunker_impact"));
-        /** Скорость удара в повторе, записанном до этого поля, м/с: прежний предел падения, 12,5 блока/тик. */
+        /** Impact speed for recordings predating field, m/s: former fall limit, 12.5 blocks/tick. */
         public static final float OLD_SPEED = 250;
         public static final StreamCodec<ByteBuf, BunkerImpact> CODEC = StreamCodec.composite(
                 StreamCodecs.VEC3, BunkerImpact::pos, ByteBufCodecs.VAR_INT, BunkerImpact::material,
@@ -176,14 +176,14 @@ public final class S2C {
     }
 
     /**
-     * Газы подземного взрыва вырвались из скважины.
+     * Buried explosion gases vented through borehole.
      *
-     * @param airKg какая доля заряда вышла в воздух, кг ТНТ ({@code warhead.BuriedBlast#airCharge}; в повторе до этого поля —
+     * @param airKg charge fraction vented into air, kg TNT ({@code warhead.BuriedBlast#airCharge}; recordings predating field:
      *              {@link #OLD_AIR_KG})
      */
     public record Vent(Vec3 pos, int material, float airKg) implements CustomPacketPayload {
         public static final Type<Vent> TYPE = new Type<>(Incoming.id("vent"));
-        /** Доля заряда в повторе, записанном до этого поля: 2,4 т через ход 0,8 м из полости 3,4 м, кг ТНТ. */
+        /** Charge fraction for recordings predating field: 2.4 t through a 0.8 m borehole from a 3.4 m cavity, kg TNT. */
         public static final float OLD_AIR_KG = 8.5f;
         public static final StreamCodec<ByteBuf, Vent> CODEC = StreamCodec.composite(
                 StreamCodecs.VEC3, Vent::pos, ByteBufCodecs.VAR_INT, Vent::material,
@@ -196,19 +196,19 @@ public final class S2C {
     }
 
     /**
-     * Топливо удара горит на блоках ({@code warhead/FuelFires}): состояние воронки — при появлении, при каждой перемене и
-     * тому, кому уходит её чанк. Дым, свет и гул этого пожара клиент ведёт сам по закону топлива оружия на этих клетках
-     * ({@code WeaponSpec.pool(lit)}), огонь — блоки мира.
+     * Impact fuel burns on blocks ({@code warhead/FuelFires}): crater state on creation, every change and
+     * chunk delivery. Client drives fire smoke/light/rumble from weapon fuel law over these cells
+     * ({@code WeaponSpec.pool(lit)}); fire itself is world blocks.
      *
-     * @param id        воронка (в своём мире)
-     * @param cells     клетки огня в порядке выгорания (первая горит дольше всех: туда топливо стекло) — нынешние места
-     * @param smothered клетки (биты по номеру), чьё топливо кончилось раньше срока: засыпало, залило, упало в воду
-     * @param weapon    оружие ({@code WeaponType.id})
-     * @param blastTick игровое время удара: закон горения считает время от него
+     * @param id        crater (in its world)
+     * @param cells     fire cells in burnout order (first burns longest: fuel pooled there) — current locations
+     * @param smothered cells (bits by index) whose fuel ended early: buried, flooded, fell into water
+     * @param weapon    weapon ({@code WeaponType.id})
+     * @param blastTick impact game time: burning law counts from it
      */
     public record FuelFire(int id, List<BlockPos> cells, long smothered, int weapon, long blastTick) implements CustomPacketPayload {
         public static final Type<FuelFire> TYPE = new Type<>(Incoming.id("fuel_fire"));
-        /** Клеток в пакете не больше: биты {@link #smothered} — одно long (у ракеты — 9). */
+        /** Maximum packet cells: {@link #smothered} fits one long (missile: 9). */
         public static final int MAX_CELLS = 64;
         public static final StreamCodec<ByteBuf, FuelFire> CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, FuelFire::id, BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_CELLS)), FuelFire::cells,
@@ -222,13 +222,13 @@ public final class S2C {
     }
 
     /**
-     * Свод над полостью обрушился: провал на поверхности.
+     * Roof above cavity collapsed: surface subsidence.
      *
-     * @param volume сколько грунта ушло в провал, м³ (объём полости; в повторе до этого поля — {@link #OLD_VOLUME})
+     * @param volume ground volume lost into subsidence, m³ (cavity volume; recordings predating field: {@link #OLD_VOLUME})
      */
     public record Collapse(Vec3 pos, int material, float volume) implements CustomPacketPayload {
         public static final Type<Collapse> TYPE = new Type<>(Incoming.id("collapse"));
-        /** Объём в повторе, записанном до этого поля: полость 2,4 т (радиус 3,4 м), м³. */
+        /** Volume for recordings predating field: 2.4 t cavity (3.4 m radius), m³. */
         public static final float OLD_VOLUME = 160;
         public static final StreamCodec<ByteBuf, Collapse> CODEC = StreamCodec.composite(
                 StreamCodecs.VEC3, Collapse::pos, ByteBufCodecs.VAR_INT, Collapse::material,
@@ -285,7 +285,7 @@ public final class S2C {
         }
     }
 
-    /** Воздушная тревога у цели: 0 — воздушная, 1 — ракетная опасность. */
+    /** Air-raid alert at target: 0 — air raid, 1 — missile warning. */
     public record Siren(Vec3 pos, int kind) implements CustomPacketPayload {
         public static final int AIR_RAID = 0, MISSILE = 1;
         public static final Type<Siren> TYPE = new Type<>(Incoming.id("siren"));
@@ -298,7 +298,7 @@ public final class S2C {
         }
     }
 
-    /** Ход залпа у того, кто его запустил. */
+    /** Salvo progress for its launcher. */
     public record SalvoStatus(int weapon, int fired, int total) implements CustomPacketPayload {
         public static final Type<SalvoStatus> TYPE = new Type<>(Incoming.id("salvo_status"));
         public static final StreamCodec<ByteBuf, SalvoStatus> CODEC = StreamCodec.composite(
@@ -311,13 +311,13 @@ public final class S2C {
     }
 
     /**
-     * Свои снаряды в полёте — тому, кто их пустил, раз в 5 тиков (и пустой список, когда все долетели): для HUD
-     * с временем до удара, меток на экране и камеры снаряда. Сервер знает и тех, что летят вне загруженного мира. В конце —
-     * сетевые номера сущностей цели, по снаряду ({@link #target}).
+     * Owned projectiles in flight, sent to owner every 5 ticks (empty list once all arrived): HUD
+     * impact ETA, screen markers and projectile camera. Server also knows outside-world flights. Trailing list:
+     * target entity network IDs per projectile ({@link #target}).
      */
     public record Flights(List<Flight> flights, List<Integer> targets) implements CustomPacketPayload {
         public static final Type<Flights> TYPE = new Type<>(Incoming.id("flights"));
-        /** Сущности цели нет (цель — точка, аппарат или сущность, которой сервер не нашёл). */
+        /** No target entity (point, craft, or entity server could not find). */
         public static final int NO_ENTITY = -1;
         public static final StreamCodec<ByteBuf, Flights> CODEC = StreamCodec.composite(Flight.CODEC.apply(ByteBufCodecs.list()), Flights::flights,
                 StreamCodecs.trailing(ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), List.of()), Flights::targets, Flights::new);
@@ -327,9 +327,9 @@ public final class S2C {
         }
 
         /**
-         * Сетевой номер сущности цели снаряда i ({@link #NO_ENTITY} — нет): по нему клиент ставит метку туда, где рисует
-         * цель, а не в точку, что сервер шлёт раз в 5 тиков. Список в конце пакета (формат 2): у записи повтора прежней
-         * сборки его нет.
+         * Target entity network ID for projectile i ({@link #NO_ENTITY} — none): client places marker where it renders
+         * target rather than at the server's once-per-5-tick point. List at packet end (format 2): recordings from previous
+         * builds lack it.
          */
         public int target(int i) {
             return i < targets.size() ? targets.get(i) : NO_ENTITY;
@@ -342,20 +342,20 @@ public final class S2C {
     }
 
     /**
-     * Один снаряд: UUID (тот же после возвращения в мир), оружие, фаза полёта, тиков до удара, где он и куда летит,
-     * ядерная ли БЧ.
+     * One projectile: UUID (same after world reentry), weapon, flight phase, impact ETA ticks, position/destination,
+     * nuclear warhead flag.
      */
     public record Flight(UUID id, int weapon, int phase, int eta, Vec3 pos, Vec3 target, boolean nuclear,
                          int targetKind, String targetName, boolean targetLost) {
-        /** Цель — точка (подписи нет). */
+        /** Point target (no label). */
         public static final int TARGET_POINT = 0;
-        /** Игрок или сущность с именем: {@code targetName} — само имя. */
+        /** Player or named entity: {@code targetName} is the name itself. */
         public static final int TARGET_NAMED = 1;
-        /** Сущность без имени: {@code targetName} — ключ перевода её типа. */
+        /** Unnamed entity: {@code targetName} is entity-type translation key. */
         public static final int TARGET_TYPE = 2;
-        /** Аппарат Sable: {@code targetName} — его имя или пусто. */
+        /** Sable craft: {@code targetName} is its name or empty. */
         public static final int TARGET_AIRCRAFT = 3;
-        /** Длина {@code targetName}, дальше сервер обрезает. */
+        /** {@code targetName} length limit; server truncates beyond it. */
         public static final int MAX_NAME = 64;
         private static final StreamCodec<ByteBuf, String> NAME = ByteBufCodecs.stringUtf8(MAX_NAME);
 
@@ -384,11 +384,11 @@ public final class S2C {
     }
 
     /**
-     * Снаряды, которых у клиента нет (дальше, чем ему выдаёт сущности ваниль, или в полёте вне мира), но которые он
-     * уже может слышать ({@link ua.zentix.incoming.strike.Hearing}) или видеть ({@code visibility.far_range}): по ним
-     * клиент ведёт тот же звук с задержкой и Доплером, что и по сущности, и рисует снаряд вдали. Слышимые — раз
-     * в {@link #PERIOD} тика (звук тянется по прямой между пакетами), только видимые — раз в {@link #FAR_PERIOD}: вдали
-     * снаряд за тик сдвигается на экране на доли пикселя, а залп в 40 снарядов — это 40 записей в каждом пакете.
+     * Projectiles absent from client (beyond vanilla entity delivery, or outside-world flight) but already audible
+     * ({@link ua.zentix.incoming.strike.Hearing}) or visible ({@code visibility.far_range}): client
+     * drives same delayed Doppler sound as for entities, and draws distant projectile. Audible ones every
+     * {@link #PERIOD} ticks (sound follows straight line between packets), visible-only every {@link #FAR_PERIOD}: distant
+     * projectile moves a fraction of a screen pixel per tick, and a 40-projectile salvo means 40 records in each packet.
      */
     public record FarFlights(List<FarFlight> flights) implements CustomPacketPayload {
         public static final int PERIOD = 2, FAR_PERIOD = 4;
@@ -402,17 +402,17 @@ public final class S2C {
     }
 
     /**
-     * Один снаряд вдали: UUID (тот же у сущности, когда она появится у клиента), оружие, B-2 ли это (у бомбы то же
-     * оружие), бурит ли бомба, слышно ли его (тогда пакеты чаще), где он, сдвиг за последний тик
-     * ({@code StrikeProjectile.velocity}; float — точнее миллиметра), куда смотрит нос и крен (модель вдали кренится
-     * в развороте, как вблизи), фаза полёта и сколько она идёт,
-     * куда он летит (точка цели); на старте — ещё и высота земли под ним (первый воздух) по чанку сервера
-     * ({@code ground}; NaN — не на старте или чанк не готов): у клиента вдали чанка нет, а рельеф мода LOD бывает не у
-     * всех — облако старта без земли не встанет.
+     * One distant projectile: UUID (same as entity when client receives it), weapon, B-2 flag (bomb has same
+     * weapon), bomb-drilling flag, audibility (more frequent packets), position, last-tick displacement
+     * ({@code StrikeProjectile.velocity}; float: better than millimeter precision), nose direction and bank (distant model banks
+     * in turns like nearby), flight phase and phase age,
+     * destination (target point); at launch also underlying ground height (first air) from server chunk
+     * ({@code ground}; NaN — not launching or chunk unready): client lacks distant chunk, and LOD terrain mods are not
+     * installed for everyone — launch cloud needs ground to stand on.
      */
     public record FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
                             float pitch, float roll, int phase, int phaseAge, Vec3 aim, float ground, boolean ended) {
-        /** Ракета ЗРК: это вид полёта, не новый вид оружия. */
+        /** SAM missile: flight kind, not a new weapon kind. */
         public static final int INTERCEPTOR = -1;
         private static final int BOMBER = 1, DRILLING = 2, AUDIBLE = 4, GROUND = 8, ENDED = 16;
 
@@ -425,7 +425,7 @@ public final class S2C {
             return weapon == INTERCEPTOR;
         }
 
-        /** Без земли под снарядом. */
+        /** No ground beneath projectile. */
         public FarFlight(UUID id, int weapon, boolean bomber, boolean drilling, boolean audible, Vec3 pos, Vec3 velocity, float yaw,
                          float pitch, float roll, int phase, int phaseAge, Vec3 aim) {
             this(id, weapon, bomber, drilling, audible, pos, velocity, yaw, pitch, roll, phase, phaseAge, aim, Float.NaN);
@@ -467,16 +467,16 @@ public final class S2C {
             }
         };
 
-        /** Через сколько тиков придёт следующий пакет об этом снаряде. */
+        /** Ticks until next packet for this projectile. */
         public int period() {
             return audible ? FarFlights.PERIOD : FarFlights.FAR_PERIOD;
         }
     }
 
     /**
-     * Метки для карты наведения и целей пульта — ответ на {@link C2S.MapPlayers}: свои игроки и замеченное стороной
-     * спросившего в его измерении и не дальше {@code map_range} (кто попадает в список — {@code ServerActions.mapPlayers});
-     * {@code shown} — карта их рисует ({@code map_players}), иначе они только цели пульта.
+     * Targeting-map and remote-target markers — reply to {@link C2S.MapPlayers}: own players and sightings by requester's
+     * side in their dimension within {@code map_range} (selection: {@code ServerActions.mapPlayers});
+     * {@code shown}: map renders them ({@code map_players}); otherwise only remote targets.
      */
     public record MapPlayers(List<MapPlayer> players, boolean shown) implements CustomPacketPayload {
         public static final Type<MapPlayers> TYPE = new Type<>(Incoming.id("map_players"));
@@ -490,11 +490,11 @@ public final class S2C {
     }
 
     /**
-     * Метка на карте: UUID, имя (у игрока — ник, им же пульт целится), что это, где оно (у чужого — где его видели
-     * последний раз), свой ли по команде и сколько секунд назад видели (0 — видят сейчас).
+     * Map marker: UUID, name (player nickname also used for remote targeting), kind, position (hostile: last seen
+     * position), same-team flag and seconds since sighting (0 — currently seen).
      */
     public record MapPlayer(UUID id, String name, double x, double z, Sightings.Kind kind, boolean friendly, int age) {
-        /** Имя игрока в Minecraft — до 16 знаков; запас на имена модов. */
+        /** Minecraft player name: up to 16 characters; reserve for mod names. */
         public static final int MAX_NAME = 64;
         private static final StreamCodec<ByteBuf, Sightings.Kind> KIND = ByteBufCodecs.idMapper(
                 i -> Sightings.Kind.values()[Math.floorMod(i, Sightings.Kind.values().length)], Sightings.Kind::ordinal);
@@ -504,7 +504,7 @@ public final class S2C {
                 ByteBufCodecs.BOOL, MapPlayer::friendly, ByteBufCodecs.VAR_INT, MapPlayer::age, MapPlayer::new);
     }
 
-    /** Открыть экран пульта (команда /incoming menu). */
+    /** Open remote screen (/incoming menu command). */
     public record OpenRemote() implements CustomPacketPayload {
         public static final Type<OpenRemote> TYPE = new Type<>(Incoming.id("open_remote"));
         public static final StreamCodec<ByteBuf, OpenRemote> CODEC = StreamCodec.unit(new OpenRemote());
@@ -516,10 +516,10 @@ public final class S2C {
     }
 
     /**
-     * Отбой: заглушить моторы и камеру снарядов, которых больше нет ({@code projectiles}). {@code owner} — свой отбой этого
-     * игрока (у него гаснет строка залпа, у остальных тревога остаётся: чужие удары летят дальше); пусто — отбой всего,
-     * гаснет и тревога. {@code nuclear} — отменены и ядерные удары (иначе ядерные снаряды летят дальше, их звук и камера
-     * остаются).
+     * Cancel: silence engines/cameras of removed {@code projectiles}. {@code owner}: this player's own cancel
+     * (their salvo line clears, others keep alert: other players' strikes continue); empty: cancel all,
+     * clearing alert too. {@code nuclear}: nuclear strikes canceled too (otherwise nuclear projectiles continue,
+     * retaining sound/camera).
      */
     public record Cleared(Optional<UUID> owner, boolean nuclear, List<UUID> projectiles) implements CustomPacketPayload {
         public static final Type<Cleared> TYPE = new Type<>(Incoming.id("cleared"));
@@ -534,15 +534,15 @@ public final class S2C {
     }
 
     /**
-     * Запущена МБР: след разгона и вход боеголовки — клиенту для картинки.
+     * ICBM launched: boost trail and warhead reentry for client presentation.
      *
-     * @param alarm игрок в радиусе тревоги (сирена гражданской обороны и отсчёт)
-     * @param mine  запустил этот игрок (отсчёт до подрыва)
-     * @param scale масштаб ядерных эффектов мира (effects_scale): высота подрыва и путь боеголовки в блоках
+     * @param alarm player within alert radius (civil-defense siren/countdown)
+     * @param mine  this player launched it (detonation countdown)
+     * @param scale world nuclear-effects scale (effects_scale): burst height and warhead path in blocks
      */
     public record NukeWarning(int strikeId, Vec3 target, Vec3 launchPos, long launchTime, long detonateTime, double yieldKt,
                               boolean airBurst, boolean alarm, boolean mine, float scale) implements CustomPacketPayload {
-        /** Высота подрыва над целью, блоки. */
+        /** Burst height above target, blocks. */
         public double burstHeight() {
             return airBurst ? Yield.optimalBurstHeight(yieldKt) * scale : 0;
         }
@@ -577,14 +577,14 @@ public final class S2C {
     }
 
     /**
-     * Ядерный подрыв: всё остальное (вспышку, шар, гриб, волну, звук, дождь) клиент считает сам по модели. Кроме
-     * настроек сервера: {@code blackout} — радиус, в котором удар гасит сеть ({@code Blackouts.nukeRadius}; 0 — не
-     * гасит), там лампы коротят дугой ЭМИ.
+     * Nuclear detonation: client computes everything else (flash, fireball, mushroom, wave, sound, rain) from model. Except
+     * server settings: {@code blackout} — grid-outage radius ({@code Blackouts.nukeRadius}; 0 — no
+     * outage), where lamps short with EMP arcs.
      * <p>
-     * Формат только растёт с конца (replay.md): поля выпуска 3.1.0, потом {@code wave}, {@code blackout}, время суток
-     * подрыва ({@link Detonation#dayTime}) и пожары ({@link Detonation#fires}) — каждое дописано в конец пакета и в
-     * повторе, записанном до него, читается «как до него»: скорость стены {@link Detonation#OLD_WAVE}, без ЭМИ, время
-     * суток неизвестно, пожары есть.
+     * Format only grows at end (replay.md): 3.1.0 fields, then {@code wave}, {@code blackout}, detonation time of day
+     * ({@link Detonation#dayTime}) and fires ({@link Detonation#fires}), each appended to packet end; recordings
+     * predating them read “as before”: wall speed {@link Detonation#OLD_WAVE}, no EMP, time of day
+     * unknown, fires enabled.
      */
     public record NukeDetonation(Detonation detonation, float blackout) implements CustomPacketPayload {
         public static final Type<NukeDetonation> TYPE = new Type<>(Incoming.id("nuke_detonation"));
@@ -603,23 +603,23 @@ public final class S2C {
     }
 
     /**
-     * Блоки, которые снесла ядерная волна в чанке (несколько мест из руин чанка, {@code RuinPlan#thrown}), — тем, кто видит
-     * чанк: клиент бросает их куски, когда до места доходит фронт, и слышит стёкла и обломки.
+     * Blocks removed by nuclear wave in chunk (sampled chunk-ruin locations, {@code RuinPlan#thrown}), sent to chunk
+     * viewers: client throws pieces when front arrives and plays glass/debris sounds.
      *
-     * @param removed сколько мест чанка волна снесла целиком (места {@code pieces} — выборка из них по хешу места); в повторе
-     *                до этого поля — {@link #OLD_REMOVED}
+     * @param removed chunk locations fully removed by wave ({@code pieces} locations sampled by position hash); recordings
+     *                predating field: {@link #OLD_REMOVED}
      */
     public record NukeDebris(int detonation, List<Piece> pieces, int removed) implements CustomPacketPayload {
         public static final Type<NukeDebris> TYPE = new Type<>(Incoming.id("nuke_debris"));
-        /** Повтор, записанный до поля: снесённых мест не знаем — столько, сколько в выборке. */
+        /** Recording predates field: removed count unknown — use sample size. */
         public static final int OLD_REMOVED = 0;
 
-        /** Сколько снесённых мест чанка стоит за каждым местом выборки (1 — выборка и есть все). */
+        /** Removed chunk locations represented by each sampled location (1 — sample includes all). */
         public double weight() {
             return pieces.isEmpty() ? 0 : Math.max(1.0, (double) removed / pieces.size());
         }
 
-        /** Место и блок, который там был. */
+        /** Position and former block. */
         public record Piece(BlockPos pos, BlockState state) {
             static final StreamCodec<ByteBuf, Piece> CODEC = StreamCodec.composite(BlockPos.STREAM_CODEC, Piece::pos,
                     ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY), Piece::state, Piece::new);
@@ -636,8 +636,8 @@ public final class S2C {
     }
 
     /**
-     * Следы вспышки на гранях чанка ({@link ua.zentix.incoming.nuclear.flash.FlashMarks}): все, что есть у чанка, — когда
-     * чанк уходит игроку и когда они меняются (руины, силуэты). Пустые — у чанка их больше нет.
+     * Chunk-face flash traces ({@link ua.zentix.incoming.nuclear.flash.FlashMarks}): all traces in chunk, sent on
+     * chunk delivery and trace changes (ruins, silhouettes). Empty means no traces remain.
      */
     public record NukeFlashMarks(long chunk, ua.zentix.incoming.nuclear.flash.FlashMarks marks) implements CustomPacketPayload {
         public static final Type<NukeFlashMarks> TYPE = new Type<>(Incoming.id("nuke_flash_marks"));
@@ -651,10 +651,10 @@ public final class S2C {
     }
 
     /**
-     * Вход в мир и смена измерения: действующие подрывы и летящие МБР этого измерения. Подрывы в списке — полями выпуска
-     * 3.1.0 ({@link Detonation#STREAM_CODEC}); что подрыв знает сверх них (скорость стены {@link Detonation#wave}, время
-     * суток {@link Detonation#dayTime}, пожары {@link Detonation#fires}), — списками в конце пакета, по подрыву на место
-     * (формат растёт с конца, replay.md): в повторе, записанном до них, списков нет — «как до них».
+     * World entry/dimension change: active detonations and flying ICBMs in this dimension. Listed detonations use 3.1.0
+     * fields ({@link Detonation#STREAM_CODEC}); additional data (wall speed {@link Detonation#wave}, time
+     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}) in trailing packet lists, one entry per detonation
+     * (format grows at end, replay.md): older recordings lack lists — “as before”.
      */
     public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings)
             implements CustomPacketPayload {
@@ -670,7 +670,7 @@ public final class S2C {
                 p -> p.detonations.stream().map(Detonation::fires).toList(),
                 (detonations, warnings, waves, dayTimes, fires) -> new NukeSync(extended(detonations, waves, dayTimes, fires), warnings));
 
-        /** Подрывы с полями из списков в конце пакета (пустой список — поля в повторе ещё не было). */
+        /** Detonations with trailing-list fields (empty list: field absent from recording). */
         private static List<Detonation> extended(List<Detonation> detonations, List<Float> waves, List<Long> dayTimes,
                 List<Boolean> fires) {
             check("waves", waves, detonations);
@@ -699,7 +699,7 @@ public final class S2C {
         }
     }
 
-    /** Облучение игрока: доза (Гр), мощность дозы (Р/ч, для счётчика Гейгера), заражение, стадия болезни. */
+    /** Player irradiation: dose (Gy), dose rate (R/h, for Geiger counter), contamination, illness stage. */
     public record Radiation(float doseGy, float rate, float contamination, int stage) implements CustomPacketPayload {
         public static final Type<Radiation> TYPE = new Type<>(Incoming.id("radiation"));
         public static final StreamCodec<ByteBuf, Radiation> CODEC = StreamCodec.composite(
@@ -712,7 +712,7 @@ public final class S2C {
         }
     }
 
-    /** Ожоги сетчатки игрока — все пятна целиком ({@link ua.zentix.incoming.nuclear.radiation.FlashEyes}). */
+    /** Player retinal burns — all spots in full ({@link ua.zentix.incoming.nuclear.radiation.FlashEyes}). */
     public record RetinaScars(ua.zentix.incoming.nuclear.radiation.RetinaScars scars) implements CustomPacketPayload {
         public static final Type<RetinaScars> TYPE = new Type<>(Incoming.id("retina_scars"));
         public static final StreamCodec<ByteBuf, RetinaScars> CODEC = ua.zentix.incoming.nuclear.radiation.RetinaScars.STREAM_CODEC
@@ -725,8 +725,8 @@ public final class S2C {
     }
 
     /**
-     * Конец тика сервера повтора Flashback ({@link ua.zentix.incoming.compat.FlashbackReplay}): место в записи и идёт ли
-     * перемотка. Пакеты, пришедшие до метки, прочитаны в этом тике; только повтор, в игре её нет.
+     * Flashback replay-server tick end ({@link ua.zentix.incoming.compat.FlashbackReplay}): recording position and whether
+     * seeking. Packets before marker were read this tick; replay only, absent during gameplay.
      */
     public record ReplayTick(int place, boolean seeking) implements CustomPacketPayload {
         public static final Type<ReplayTick> TYPE = new Type<>(Incoming.id("replay_tick"));
@@ -740,9 +740,9 @@ public final class S2C {
     }
 
     /**
-     * Зенитная ракета разорвалась в воздухе ({@code defense.Interceptor}): у цели или сама (самоликвидация, земля).
-     * kill — цель сбита: её путь у клиента кончается в этот тик ({@code target}), обломки летят сущностями. Наземного
-     * взрыва нет — только вспышка, облачко и хлопок; сид — вариант звука.
+     * SAM missile airburst ({@code defense.Interceptor}): near target or self-destruction (timeout, ground).
+     * kill — target downed: client path ends this tick ({@code target}), debris flies as entities. No ground
+     * explosion — only flash, puff and bang; seed selects sound variant.
      */
     public record Intercept(Vec3 pos, boolean kill, Optional<UUID> target, long seed) implements CustomPacketPayload {
         public static final Type<Intercept> TYPE = new Type<>(Incoming.id("intercept"));
@@ -757,11 +757,11 @@ public final class S2C {
     }
 
     /**
-     * Экран радара ЗРК своим рядом с ним ({@code defense.SamBlockEntity}, раз в осмотр): где антенна, дальности радара
-     * и огня, ракеты на направляющих и в запасе, цели. Перестал приходить — экран гаснет.
+     * SAM radar screen for nearby friendlies ({@code defense.SamBlockEntity}, once per scan): antenna location, radar/fire
+     * ranges, missiles on rails/in reserve, targets. Stops arriving: screen fades.
      */
     public record RadarScope(Vec3 radar, int range, int engageRange, int ready, int stock, List<Blip> blips) implements CustomPacketPayload {
-        /** Больше целей экран не покажет (ближние — первыми). */
+        /** Maximum screen targets (nearest first). */
         public static final int MAX_BLIPS = 64;
         public static final Type<RadarScope> TYPE = new Type<>(Incoming.id("radar_scope"));
         public static final StreamCodec<ByteBuf, RadarScope> CODEC = StreamCodec.composite(
@@ -776,16 +776,16 @@ public final class S2C {
     }
 
     /**
-     * Цель на экране радара: сдвиг от антенны по x и z, блоков, курс (градусы, как у сущности), вид оружия
-     * ({@link ua.zentix.incoming.strike.WeaponType#id()}: крупный корпус — крупнее отметка) и признаки {@link #HOSTILE},
+     * Radar target: x/z offset from antenna, blocks, heading (degrees, same as entity), weapon kind
+     * ({@link ua.zentix.incoming.strike.WeaponType#id()}: larger body — larger blip), and {@link #HOSTILE},
      * {@link #ENGAGEABLE}, {@link #ENGAGED}.
      */
     public record Blip(float dx, float dz, float yaw, int weapon, int flags) {
-        /** Чужая. */
+        /** Hostile. */
         public static final int HOSTILE = 1;
-        /** В дальности огня и стоит ракеты. */
+        /** Within firing range and worth a missile. */
         public static final int ENGAGEABLE = 2;
-        /** За ней идёт ракета. */
+        /** A missile is pursuing it. */
         public static final int ENGAGED = 4;
         public static final StreamCodec<ByteBuf, Blip> CODEC = StreamCodec.composite(
                 ByteBufCodecs.FLOAT, Blip::dx, ByteBufCodecs.FLOAT, Blip::dz, ByteBufCodecs.FLOAT, Blip::yaw,
@@ -797,12 +797,12 @@ public final class S2C {
     }
 
     /**
-     * Чанк, которого у клиента нет, — в LOD Voxy ({@code compat/VoxyLods}, только игрокам, у кого Voxy): руины, воронки,
-     * след подрыва и лампы квартала вдали. {@code sections} — секции со светом ({@code compat/LodSections}); измерение —
-     * чьё это: после смены измерения пакет старого не принимается.
+     * Chunk absent from client, sent to Voxy LOD ({@code compat/VoxyLods}, Voxy players only): distant ruins, craters,
+     * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}); dimension:
+     * whose chunk it is — packets from old dimension rejected after dimension change.
      */
     public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
-        /** Больше чанк не бывает: 24 секции глобальной палитрой и два слоя света — ~250 КБ. */
+        /** Maximum chunk size: 24 globally paletted sections and two light layers — ~250 KB. */
         static final int MAX_BYTES = 1 << 20;
         public static final Type<VoxyChunk> TYPE = new Type<>(Incoming.id("voxy_chunk"));
         public static final StreamCodec<ByteBuf, VoxyChunk> CODEC = StreamCodec.composite(

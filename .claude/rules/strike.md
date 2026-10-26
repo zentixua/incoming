@@ -6,111 +6,130 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/strike/**"
 ---
 
-# Приказы, пуск, цели (`strike/`, `target/`)
+# Orders, launch, targets (`strike/`, `target/`)
 
-## Устройство
-- `strike/` — приказы: `ServerActions` (пакеты пульта, права, отбой; `strike(игрок, …, rules)` — `rules`: приказ по правилам
-  игрока — пульт у всех, и у операторов, и команда не оператора), `Munitions` (боеприпасы из инвентаря: приказ `rules`
-  не в творческом оплачивается при отдаче целиком — по предмету на снаряд из паспорта `WeaponSpec.munition`, у пакета
-  «Града» — по снаряду из пакета (начатый пакет — компонент `incoming:rounds`), ядерная БЧ на носителе — ещё
-  предметом `nuclear_warhead`; не хватает — отказ строкой «нужно N, есть M», приказ не урезается; неудачный пуск
-  возвращает оплаченное, отменённый залп — невыпущенное и неудачные пуски, владельцу в сети, полный инвентарь — к ногам,
-  погибшему до возрождения — на место гибели (инвентарь без `keepInventory` не переносится); не в сети — только строка в лог;
-  упавший с ошибкой пуск — тоже неудачный), `NuclearKeys` (ядерный приказ `rules` не оператора и не хоста — `trusted`,
-  при `ops_only = false`: оплаченный ждёт второго ключа — клавиша `C2S.NuclearKey` игрока не дальше `second_key_distance`
-  от запускающего за `second_key_window` с, не свой; срок вышел — возврат; один в сети — без ключа; МБР летит не меньше
-  `MIN_WARNING` (90 с, `StrikeService.launchIcbm(…, flightTicks)`), носитель стартует через 90 с после тревоги у цели
-  (сирена и строка в радиусе ядерной тревоги); удачный пуск — всем «Обнаружен пуск … из района X, Z» по клетке 256 и
-  сирена; ядерный отбой и перенацеливание ядерного снаряда — только `trusted`; приказы — в `StrikeWorld`, не сохраняются, их снаряды — в работе для `max_active_per_player` (`StrikeWorld.active`):
-  ядерный отбой, остановка сервера и выход запускающего до ключа снимают их с возвратом), `StrikeService` (пуск одного снаряда, сирена,
-  строка в лог; `launchBy` — от игрока без поиска в списке игроков), `SalvoData` (залпы, SavedData; убирается залп
-  только через `cancel(мир, владелец, игроки в сети)` и конец или ошибку тика — все пути возвращают через один
-  `refund`; игроки в сети — параметром: `FakePlayer` GameTest в списке игроков нет; зерно залпа `seed` (сохраняется) даёт
-  каждому снаряду свою полосу на маршруте — `WeaponSpec.Lanes.offset` по номеру пуска, `StrikeService.launch(…, lane)`,
-  `Route.inLane`: залп летит волной, а не ниткой; одиночный удар и залп из одного — по самому пути), `StrikeWorld` (таймлайны взрывов + залпы в конце тика мира; несохраняемый attachment мира),
-  `Loadout`/`WeaponType`/`TargetMode` (`Loadout.Nuke.onCarrier` — ядерная БЧ на ракете и B-2), **паспорт оружия**
-  `WeaponSpec` (`WeaponType.spec()`: всё, чем оружие отличается, — сирена, залп, БЧ, мощность, заряд наземного взрыва `charge()` (стёкла, картинка и звук; из БЧ изделия, которое бьёт), способ пуска, маршрут,
-  пакет пусковой `entity/LauncherRack`, картинка взрыва; `Airframe` на сущность полёта — скорости, пределы поворота,
-  высоты, нос, прочность, запас хода, запас взрывателя, старт, полоса подлёта, геометрия атаки, паспорт звука `noise`
-  (`sound/Noise`: двигатели, ускоритель, корпус, разовые удары старта — числа изделий с источниками),
-  заметность для ЗРК `Signature` (доля дальности радара и стоит ли перехвата — `defense.md`), изделие по ТТХ `article`
-  (`strike/Article`: массы, размеры, CdA и кривая f(M), двигатели — винт, ТРДД, РДТТ, — настоящие скорости и высота,
-  условия удара, БЧ — ТНТ, ВВ, корпус, топливо к удару; источник каждого числа — в Javadoc паспорта; скорости и высоты
-  самого `Airframe` — игровые, не по физике; шкала полёта мира `scale.flight_speed` (`FlightScale.x()`, по пресету; без
-  загруженных настроек — 0) ведёт их к настоящим: `Airframe.cruiseSpeed()/diveSpeed()/cruiseHeight()` — смешение
-  `FlightScale.blend` (при 0 — ровно игровые, сценарии не сдвигаются), длины из скорости (`range`,
-  `visibleLeg`, `attack`, у паспорта `finalLeg`/`capture`/`standoff`) — × `Airframe.stretch`, у «Града» вынос — по
-  дальности траектории при угле пакета на скорости схода шкалы (`WeaponSpec.standoff`), сопротивление без мотора —
-  `Airframe.drag()` (`Ballistics.Drag`: игровое без кривой Маха → ρ₀·CdA/2m с f(M)); игровые числа — `game*` компоненты,
-  читать их напрямую только там, где нужна игровая шкала (угол сброса B-2 `BomberEntity.releaseLine`); двигатели — одни константы `WeaponSpec.*_PISTON/_TURBOFAN/_BOOSTER/_MOTOR`
-  для сервера, звука `*_NOISE` и факелов `ClientWeaponSpec`, `WeaponSpecTest` сверяет выведенное законом с ТТХ); у B-2
-  ещё `payload` — бомба; клиентская часть — `client/ClientWeaponSpec`: звуковые слои, голос ускорителя, сопла и факелы,
-  сброшенный ускоритель). Новое число, которым оружие отличается, — в паспорт, а не константой в сущности и не
-  `switch` по оружию (исключение — разбор имён в командах); `WeaponSpecTest` сверяет подобранные числа с выводимыми, `ChunkTickets`
-  (свой `TicketType`: снаряд держит свой чанк и чанк впереди, только уже готовые; чанк впереди — `ChunkHold`, только пока есть кому видеть: `FlightTickets.watched`). Пуск и полёт: `LaunchSite` (где поставить пусковую у игрока: ровно, твёрдо,
-  небо, только готовые чанки; у шахедов и ракет сектор пуска до взведения взрывателя свободен от блоков из каждой ячейки пакета, разгон — по его
-  закону из паспорта (`LaunchProfile.boost`, тот же у снаряда), — `clearAhead`, иначе
-  другая сторона обхода или поворот пакета: на разгоне снаряд сталкивается с блоками, до взведения разбивается без подрыва,
-  строка «Projectiles: … crashed before fuze arming»; и подъём после взведения — по курсу на `reliefLookahead` блоков рельеф ниже
-  набора по закону автопилота `Autopilot.climbOver`, иначе место между высотками не годится; проверки одного выбора
-  пусковой — не больше `LaunchSite.Budget` клеток (≈8–16 мс), иначе заход издалека; проверки сектора с курсами
-  назад и вбок ставят место выше соседних площадок сетки GameTest — `ABOVE_GRID`; огневая позиция — `LaunchSite.Post`:
-  у игрока или место пуска из приказа — `/incoming salvo … from x z` (только с правами оператора) или с карты пульта
-  (`C2S.Fire.from`: оператор и хост — `NuclearKeys.trusted`, не дальше `map_range`, `ServerActions.launchSiteProblem`;
-  приказ по правилам, оплачивается; у пульта с привязанными пусковыми его нет), залп сохраняет его в `SalvoData`:
-  там сперва само место, потом ближайшее годное в его районе (`LaunchSite.PLACE_AREA`, 96 блоков: места шагом 2 от
-  ближних к дальним, `LaunchSite.nearest`; место с закрытым сектором закрывает соседние в 9 блоках; проверка места — клетка
-  предела `Budget`): точка с карты бывает в воде, в лесу, на склоне — расчёт едет на поляну, дорогу, берег (до #397
-  кольцо из 12 мест 13–38 блоков вокруг места пропускало годное в 7 блоках у берега и в 50–72 у озера и в лесу Newisle,
-  и пуск шёл вне мира без пусковой), пусковая с флагом `ordered` (в NBT) повёрнута к цели,
-  берётся снова по своей отметке (`LauncherEntity.mark` в NBT: перенесённую дальше 9 блоков отметку обслуживает новая; без отметки — в `PLACE_REUSE`), не входит в предел `MAX_PER_OWNER` и стоит до «Отбоя» (своего у владельца, у пусковой
-  консоли без владельца — оператора); место не готово (`LaunchSite.PLACE_REACH` вокруг) — приказ, и один снаряд,
-  идёт залпом, который грузит район места (`LaunchPlaces`: `AreaLoader`, держит, пока залп идёт) и ждёт его не дольше
-  `LaunchPlaces.WAIT`: пуск видно издалека (`FarFlights`), а без района снаряд стартовал бы вне мира уже на маршевом
-  участке (ракета — на высоте крейсера, РСЗО — на нисходящей ветви) — пуска не видел бы никто; не дождался или места
-  нет — снаряд стартует с самого места без пусковой (вне мира — `VirtualFlights`), B-2 берёт оттуда только курс захода
-  (ему ждать нечего: пакета нет, `LaunchPlaces.fromPad`), МБР — нет; `via x z …` команды — те же `Waypoints`, что с карты, проверка у обоих — `ServerActions.routeProblem`; откуда
-  пуск — `LaunchOrigin`: место из приказа или стационарная пусковая, `launcher.md`), `VirtualFlights` (SavedData: снаряды вне загруженного мира — живые объекты сущностей
-  не в мире; вошёл в тикающие чанки — снова в мир с тем же UUID), `FlightTickets` (свой `TicketType`: район цели
-  грузится в фоне заранее, а тикает только последние `AREA_TICK_LEAD` тиков подлёта (`etaTicks`; «Ланцет» — весь круг); у ракеты ещё полоса подлёта `approach` — последние 256 блоков пути тикают сущностями, и её
-  подлёт видно игроку у цели, даже когда дистанция симуляции меньше прорисовки; только при игроке у цели, районы полос
-  общие для залпа (`holdApproach`), не больше `APPROACH_LIMIT` на мир), `AreaLoader` (районы, которые мод грузит заранее: цели снарядов, подсказки карты; грузит
-  сразу, а тикать пускает только над готовыми соседями, отпущенные выгружает по очереди — см. `server-chunks.md`; место
-  ядерного подрыва — с пуска и без тика), `ArrivalTickets` (вход в мир, смена измерения, прыжок игрока в мире — телепорт, возрождение: тикет загрузки уровня 26 на чанк игрока или место
-  возрождения, чтобы оно грузилось раньше районов залпа — см. `server-chunks.md`), `FlightStatus` (раз в 5 тиков владельцу — фаза и время до удара его снарядов),
-  `ImpactCost` (сколько потока сервера заняли попадания в тике по видам: взрывы — лучи, взрывы — `Detonate` и урон, блоки,
-  стёкла, обломки, огонь и грунт; тик дольше 50 мс — строка «Impacts (…): N ms in a tick» в лог с шагами взрывов в скобках,
-  очередь ждёт дольше 20 тиков — «N jobs queued»; каждый удар, отпуская свой `BlastArea`, пишет «Strike summary (…)»:
-  единицы, взрывы, снятые блоки, тики, самая долгая единица, шаги взрывов, счёт шагов лучей (в воздухе, из кэша, запросы
-  аппаратов, ванильные взрывы), блоков дольше 10 мс; после 100 тиков без попаданий — «Impact series summary (…)»: удары, единицы, самая
-  долгая единица и тик, тики дольше 50 мс), `FarFlights` (каждому игроку — путь снарядов, которых у него нет как сущностей
-  (дальше дальности сущностей и вне мира): слышимые — раз в 2 тика (слышно ли — `Hearing.audible`: шум из паспорта
-  звука на настоящей скорости против фона по октавам после пути по открытому воздуху, `sound/Propagation`; тот же
-  расчёт даёт громкость слоёв на клиенте, преграды — только у клиента; дальше `Hearing.RANGE` (60 с звука) — нет), только видимые — раз в 4 до `visibility.far_range` (8000 блоков, по горизонтали: B-2 на настоящем эшелоне 12 км
-  над головой — в нём), не больше 64 ближних;
-  пакет `S2C.FarFlights`; на старте (горит ускоритель) в нём ещё земля под снарядом по готовому чанку сервера —
-  `FarFlight.ground`, у клиента вдали на неё встаёт облако старта, `FlightTrack.launchGround`); пакеты взрывов `S2C.Blast` — до `far_range` или докуда слышно взрыв его заряда тихой ночью, `HearingModel.audibleRangeM`, но не дальше `IncomingConfig.FAR_RANGE_MAX`, — что дальше).
-- `target/` — `Target` (точка, место с карты `Ground` — высоту находит сервер: верх с кронами из готового чанка, иначе оценка — верх по карте клиента (`C2S.AimHint.mapSurface`), без неё рельеф генератора `getBaseHeight` не ниже его уровня моря (`Terrain.estimate`; у городов из сохранения он под крышами, у мира 1.17, поднятого до 1.21, бывает и дном мира); РСЗО ставит точку падения на поверхность, когда чанк готов, B-2 — к сбросу; `Ground` — и цель команды `at x z` (`ServerActions.groundAim`, `at x y z` — точка как есть), и снаряд залпа вокруг неподвижного центра на земле (`SalvoData` `around`: точка на высоте центра у далёкой цели, чей чанк к пуску не готов, висела бы в воздухе над низиной; центр в воздухе или нет, решает первый снаряд — `aloft`, чанк не готов — земля, — и до конца залпа: иначе залп делился бы, когда загрузится район или яма от первых попаданий откроет воздух под центром); сущность, аппарат Sable; кодек), `TargetPicker` (что под прицелом: аппарат → блок
-  аппарата → сущность → блок), `TargetTracker`; `Target.Sighted` — замеченная цель: сама цель (`quarry`, `subject()`) и место,
-  где её видели (`seen`; `resolve` — только оно, поэтому залп из неё не идёт за целью), `TargetTracker` двигает место за
-  целью, только пока предикат видимости его принимает (`inSight`), иначе место стоит и цель не теряется. `Sight` — прямая видимость на сервере без загрузки чанков: `sees(игрок, сущность)` (не невидима, отдаётся его клиенту,
-  по горизонтали не дальше, чем ваниль её ему отдаёт, — `range`/`viewRange`, глаза → глаза или середина тела чисты),
-  `within(игрок, точка)`, `clear(мир, из, в)` (`ClipContext.Block.VISUAL`: стекло прозрачно; неготовый чанк на пути — не
-  видно); `Sides` — свои по `/team` (тот же игрок или одна команда; по UUID — и для владельца не в сети, через кэш профилей). `Sightings` — разведка
-  стороны (`Sides.side`: команда или игрок; несохраняемый attachment мира): раз в 5 тиков каждый игрок отмечает чужих игроков
-  и аппараты Sable в поле зрения (конус 60°) без преград — глазами и из кадра камеры своего снаряда (тот же вид
-  `CameraLink`, что ведёт цель), радар и другие датчики — `Sightings.spot`; помнится `sight_memory` (30 с). Карта
-  (`mapPlayers`) — свои всегда, чужие и прочее замеченное — где видели, с давностью; без `sight_rules` — все игроки.
-  `compat/SubLevels` — вся связь с Sable (через sable-companion, вшит jar-in-jar; сам Sable — compileOnly).
-- Правила целей — пульт, бинокль, карта и камера снаряда всегда, команды — только без прав оператора
-  (`ServerActions.strike(…, rules)`, `IncomingCommand.rules`: `!hasPermission(2)`); консоль, командные блоки, ведущий
-  (`dispatch`) и стенд — без правил. С правилами цель не дальше `map_range`, а `ServerActions.sighted` пускает по чужому
-  игроку (и сущности, на которой он едет) и аппарату только замеченному (`sight_rules`): стрелявший видит его сейчас
-  (приказ — `Sightings.sees`/`seesCraft`, перенацеливание из камеры — `CameraLink.holds`) или его сторона видела только
-  что (`Sightings.CURRENT`) — по нему; видели раньше — по месту, где видели (`Target.Point`); иначе отказ
-  `incoming.target.unseen`. Сущность или аппарат становится `Target.Sighted`. Кто ведёт замеченную цель — паспорт `WeaponSpec.Tracking`: `CAMERA`
-  (шахед, «Ланцет») — за целью, только пока оператор держит её в кадре камеры этого снаряда, иначе летит туда, где видел;
-  `POINT` — по месту приказа. Кадр — `CameraLink`: клиент с борта шлёт `C2S.CameraView` (поворот камеры) каждый тик, вид
-  свежий 10 тиков, конус 25°, до `REACH` (1024), `Sight.within`, чистый луч `Sight.clear`, у аппарата —
-  `SubLevels.visibleFrom` (луч может упереться в сам аппарат); вид у игрока один — ведомый снаряд один. Без правил цель —
-  `OfEntity`/`OfSubLevel`: снаряд идёт за ней без камеры.
+## Structure
+- `strike/` handles orders: `ServerActions` (remote packets, permissions, cancel;
+  `strike(player, …, rules)`: `rules` means an order under player rules, every remote including operators', and
+  non-operator commands), `Munitions` (inventory ammunition: non-creative `rules` orders are paid in full when issued,
+  one spec `WeaponSpec.munition` item per projectile; Grad pack uses one round from a pack (opened pack component
+  `incoming:rounds`); nuclear warhead on carrier costs an additional `nuclear_warhead`; insufficient stock refuses
+  with “need N, have M”, never truncates order; failed launch refunds payment, canceled salvo refunds unfired/failed
+  launches to online owner, full inventory drops at feet, dead owner before respawn at death location (inventory
+  without `keepInventory` does not carry across); offline owner gets only log line; throwing launch counts as failed),
+  `NuclearKeys` (nuclear `rules` order from non-operator/non-host uses `trusted`, when `ops_only = false`: paid order
+  waits for second key, `C2S.NuclearKey` button from another player within `second_key_distance` of launcher player
+  during `second_key_window` s, not own key; expiry refunds; alone online needs no key; ICBM flies at least
+  `MIN_WARNING` (90 s, `StrikeService.launchIcbm(…, flightTicks)`), carrier launches 90 s after target alarm
+  (siren/line in nuclear alarm radius); successful launch tells everyone “Launch … detected from area X, Z” by
+  256-block cell, plus siren; nuclear cancel/nuclear-projectile retarget only `trusted`; orders in `StrikeWorld`, not
+  saved; their projectiles count active for `max_active_per_player` (`StrikeWorld.active`); nuclear cancel, server
+  stop or launcher-player exit before second key removes/refunds them), `StrikeService` (one projectile launch, siren,
+  log line; `launchBy` launches for player without looking up player list), `SalvoData` (salvos, SavedData; removal
+  only by `cancel(world, owner, online players)` and completion/tick error, every path refunds through one `refund`;
+  online players passed as parameter, GameTest `FakePlayer` absent from player list; salvo `seed` (saved) assigns
+  each projectile a route lane, `WeaponSpec.Lanes.offset` by launch index, `StrikeService.launch(…, lane)`,
+  `Route.inLane`: salvo flies as wave rather than thread; single strike/one-shot salvo follow route itself),
+  `StrikeWorld` (explosion timelines plus salvos at world-tick end; non-persistent world attachment),
+  `Loadout`/`WeaponType`/`TargetMode` (`Loadout.Nuke.onCarrier`: nuclear warhead on missile/B-2), **weapon spec**
+  `WeaponSpec` (`WeaponType.spec()`: all weapon differences, siren, salvo, warhead, yield, ground-explosion charge
+  `charge()` (glass, visuals/sound, from warhead of article that hits), launch method, route, launcher rack
+  `entity/LauncherRack`, explosion look; `Airframe` for flying entity: speeds, turn limits, heights, nose, durability,
+  range reserve, fuze margin, launch, approach lane, attack geometry; sound spec `noise` (`sound/Noise`: engines,
+  booster, body, launch one-shots, sourced article numbers); SAM signature `Signature` (radar-range share/worth
+  intercepting, `defense.md`); real article `article` (`strike/Article`: masses, dimensions, CdA/f(M) curve, propeller,
+  turbofan/solid rocket motors, real speed/height, impact conditions, warhead TNT/HE/casing/fuel at impact; each number
+  sourced in spec Javadoc; `Airframe` speeds/heights are game values, not physical; world flight scale
+  `scale.flight_speed` (`FlightScale.x()`, by preset, 0 before settings load) takes them toward real values:
+  `Airframe.cruiseSpeed()/diveSpeed()/cruiseHeight()` blend via `FlightScale.blend` (at 0 exactly game values, scenarios
+  unchanged); speed-derived lengths (`range`, `visibleLeg`, `attack`, spec `finalLeg`/`capture`/`standoff`) multiply by
+  `Airframe.stretch`; Grad standoff follows trajectory range at rack angle with scaled launch rail exit speed,
+  `WeaponSpec.standoff`; unpowered drag `Airframe.drag()` (`Ballistics.Drag`: game without Mach curve → ρ₀·CdA/2m
+  with f(M)); game numbers are `game*` components, read directly only when game scale is needed (B-2 release angle,
+  `BomberEntity.releaseLine`); shared `WeaponSpec.*_PISTON/_TURBOFAN/_BOOSTER/_MOTOR` constants feed server,
+  `*_NOISE` sound and `ClientWeaponSpec` plumes, `WeaponSpecTest` compares law-derived values with article specs);
+  B-2 additionally has bomb `payload`; client spec `client/ClientWeaponSpec`: sound layers, booster voice,
+  nozzles/plumes, dropped booster). New weapon-specific numbers go in spec, not entity constants or weapon `switch`
+  (exception: command-name parsing); `WeaponSpecTest` compares chosen/derived numbers. `ChunkTickets` (own
+  `TicketType`: projectile holds own/ahead chunk, only ready ones; ahead chunk `ChunkHold` only while someone can
+  see, `FlightTickets.watched`). Launch/flight: `LaunchSite` (launcher near player: level, solid, sky, ready chunks
+  only; Shahed/missile launch sector before fuze arming must be clear of blocks from every rack slot, acceleration
+  under spec law `LaunchProfile.boost`, shared with projectile, `clearAhead`; otherwise other bypass side/rack turn:
+  projectile collides during boost, crashes without detonation before arming, log “Projectiles: … crashed before
+  fuze arming”; after-arming climb: terrain along heading over `reliefLookahead` blocks below autopilot climb law,
+  `Autopilot.climbOver`, otherwise location between towers invalid; one launcher choice checks at most
+  `LaunchSite.Budget` cells (≈8–16 ms), otherwise distant approach; backward/sideways heading sector checks raise site
+  above neighboring GameTest grid platforms, `ABOVE_GRID`; firing position `LaunchSite.Post`: near player or ordered
+  launch location, `/incoming salvo … from x z` (operator permission only), or remote map (`C2S.Fire.from`: operator
+  and host, `NuclearKeys.trusted`, within `map_range`, `ServerActions.launchSiteProblem`; ruled/paid order; absent on
+  remote with linked launchers); salvo stores it in `SalvoData`: try exact position, then nearest valid nearby
+  (`LaunchSite.PLACE_AREA`, 96 blocks, step-2 positions nearest first, `LaunchSite.nearest`; blocked-sector position
+  blocks neighbors within 9 blocks; each site check counts one `Budget` cell). Map point may be water/forest/slope:
+  crew moves to clearing/road/shore (before #397, 12-point ring 13–38 blocks around position missed valid sites 7
+  blocks away by shore and 50–72 by Newisle lake/forest, launching outside world without launcher); launcher with
+  `ordered` flag (NBT) faces target, reused by mark (`LauncherEntity.mark` in NBT; mark moved beyond 9 blocks gets
+  new launcher; without mark, within `PLACE_REUSE`), does not count toward `MAX_PER_OWNER`, remains until Cancel
+  (owner's own, operator for ownerless console launcher); unready site (`LaunchSite.PLACE_REACH` around it) sends
+  order, even one projectile, through a salvo that loads site area (`LaunchPlaces`: `AreaLoader`, held while salvo
+  runs), waiting at most `LaunchPlaces.WAIT`: launch visible from afar (`FarFlights`); without site area projectile
+  would start outside world already in cruise (missile at cruise altitude, MLRS descending), nobody sees launch;
+  timeout/no site launches directly from ordered location without launcher (outside world `VirtualFlights`); B-2
+  takes only approach heading from it (nothing to wait for, no rack, `LaunchPlaces.fromPad`), ICBM does not;
+  command `via x z …` uses same `Waypoints` as map, both checked by `ServerActions.routeProblem`; launch origin
+  `LaunchOrigin`: ordered place/fixed launcher, `launcher.md`), `VirtualFlights` (SavedData: projectiles outside
+  loaded world are live entity objects absent from world; entering ticking chunks returns them with same UUID),
+  `FlightTickets` (own `TicketType`: target area loads early in background, ticks only for last `AREA_TICK_LEAD`
+  approach ticks (`etaTicks`; Lancet entire circle); missile additionally has `approach` lane, last 256 route blocks
+  entity-ticking, visible to target-area player even when simulation distance below render distance; only with a
+  player at target; salvo shares lane areas, `holdApproach`, at most `APPROACH_LIMIT` per world), `AreaLoader` (areas
+  mod preloads: projectile targets, map hints; loads immediately, enables ticking only over ready neighbors,
+  releases/unloads gradually, `server-chunks.md`; nuclear detonation location from launch, no ticking),
+  `ArrivalTickets` (world entry, dimension change, player jumps within world, teleport/respawn: level-26 loading
+  ticket on player/respawn chunk to load before salvo areas, `server-chunks.md`), `FlightStatus` (every 5 ticks sends
+  owner's projectile phase/ETA), `ImpactCost` (server-thread impact time per tick by type: explosion rays, explosion
+  `Detonate`/damage, blocks, glass, debris, fire/ground; tick over 50 ms logs “Impacts (…): N ms in a tick” with
+  explosion steps in parentheses; queue waiting over 20 ticks, “N jobs queued”; each impact releasing `BlastArea`
+  logs “Strike summary (…)”: work units, explosions, removed blocks, ticks, longest unit, explosion steps, ray-step
+  counts (air, cache, craft queries, vanilla explosions), blocks over 10 ms; after 100 impact-free ticks, “Impact
+  series summary (…)”: impacts, work units, longest unit/tick, ticks over 50 ms), `FarFlights` (each player receives
+  tracks of projectiles absent as entities (beyond entity range/outside world): audible every 2 ticks
+  (`Hearing.audible`: spec sound noise at real speed versus octave background after open-air path,
+  `sound/Propagation`; same calculation gives client-layer volume, obstructions client-only; none beyond
+  `Hearing.RANGE`, 60 s of sound); only-visible every 4 ticks to `visibility.far_range` (8000 blocks horizontally,
+  including B-2 overhead at real 12 km level), at most 64 nearest; packet `S2C.FarFlights`; during launch (burning
+  booster) also server ready-chunk ground below projectile, `FarFlight.ground`, distant client launch cloud rests on
+  it, `FlightTrack.launchGround`); explosion packets `S2C.Blast` reach `far_range` or quiet-night charge audibility,
+  `HearingModel.audibleRangeM`, capped by `IncomingConfig.FAR_RANGE_MAX`, whichever reaches farther).
+- `target/`: `Target` (point; map location `Ground`, server finds height, canopy-inclusive top from ready chunk,
+  otherwise estimated client map top `C2S.AimHint.mapSurface`, without it generator `getBaseHeight` no lower than its
+  sea level (`Terrain.estimate`; below roofs in saved cities, can be world bottom in 1.17 worlds upgraded to 1.21);
+  MLRS fixes impact point to surface when chunk ready, B-2 by release; `Ground` also command `at x z` target,
+  `ServerActions.groundAim` (`at x y z` exact point), and salvo round around stationary ground center (`SalvoData`
+  `around`: point at center height for distant target with unready launch-time chunk would hang above lowland;
+  first projectile decides center airborne status, `aloft`, unready chunk means ground, retained until salvo end,
+  otherwise salvo would split when area loads or early impacts open air beneath center); entity, Sable craft; codec),
+  `TargetPicker` (crosshair: craft → craft block → entity → block), `TargetTracker`; `Target.Sighted`: spotted target,
+  actual target (`quarry`, `subject()`) and last seen place (`seen`, `resolve` returns only it, so salvo does not
+  follow target); `TargetTracker` moves location with target only while visibility predicate accepts (`inSight`),
+  otherwise location stays and target is not lost. `Sight`: server line of sight without chunk loading,
+  `sees(player, entity)` (not invisible, sent to client, horizontal range no farther than vanilla sends entity,
+  `range`/`viewRange`, clear eyes-to-eyes/body-center), `within(player, point)`, `clear(world, from, to)`
+  (`ClipContext.Block.VISUAL`: glass transparent; unready path chunk means unseen); `Sides`: friendlies by `/team`
+  (same player/team; UUID also supports offline owner via profile cache). `Sightings`: side reconnaissance
+  (`Sides.side`: team/player, non-persistent world attachment): every 5 ticks each player marks hostile players and
+  Sable craft unobstructed in view (60° cone), through own eyes and own projectile-camera frame (same `CameraLink`
+  view as guidance); radar/other sensors use `Sightings.spot`; retains `sight_memory` (30 s). Map (`mapPlayers`):
+  friendlies always, hostiles/other spotted subjects at last seen place with age; without `sight_rules`, all players.
+  `compat/SubLevels`: all Sable interaction (sable-companion, embedded jar-in-jar; Sable itself compileOnly).
+- Target rules always apply to remote/binoculars/map/projectile camera; commands only without operator permission
+  (`ServerActions.strike(…, rules)`, `IncomingCommand.rules`: `!hasPermission(2)`); console, command blocks, game
+  master (`dispatch`), scene bench bypass them. Under rules target within `map_range`, `ServerActions.sighted`
+  permits hostile player (and ridden entity)/craft only if spotted (`sight_rules`): shooter currently sees it
+  (order `Sightings.sees`/`seesCraft`, camera retarget `CameraLink.holds`) or side saw it just now
+  (`Sightings.CURRENT`), target itself; seen earlier, last seen place (`Target.Point`); otherwise refuse
+  `incoming.target.unseen`. Entity/craft becomes `Target.Sighted`. Tracking comes from `WeaponSpec.Tracking`:
+  `CAMERA` (Shahed/Lancet) follows target only while operator holds it in this projectile's camera frame, otherwise
+  flies to last seen place; `POINT` flies to order location. Frame `CameraLink`: onboard client sends
+  `C2S.CameraView` (camera rotation) every tick, fresh for 10 ticks, 25° cone, out to `REACH` (1024), `Sight.within`,
+  clear `Sight.clear` ray, craft uses `SubLevels.visibleFrom` (ray can hit craft itself); player has one view,
+  one guided projectile. Without rules target is `OfEntity`/`OfSubLevel`, followed without camera.

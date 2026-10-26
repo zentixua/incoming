@@ -1,8 +1,8 @@
 #version 150
 
-// Круглое свечение по формуле, а не из картинки: ореол шара бывает шире экрана, и картинка 64×64 вышла бы в нём
-// квадратами по её пикселю (ближайшим пикселем — ступенями, гладко — изломом выборки на каждом). Яркое ядро и мягкий
-// ореол (r — от середины в долях полуразмера), к краю — ноль без ступеньки; цвет и сила — у вершин.
+// Round glow by formula rather than image: ball halo can exceed screen size, so a 64×64 image would show its pixels
+// as squares (nearest: steps; smooth: sampling slope breaks at each). Bright core and soft
+// halo (r is center distance in half-size units), smoothly zero at edge; vertex color/strength.
 in vec2 texCoord0;
 in vec4 vertexColor;
 

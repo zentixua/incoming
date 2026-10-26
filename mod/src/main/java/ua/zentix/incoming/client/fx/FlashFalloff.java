@@ -3,53 +3,53 @@ package ua.zentix.incoming.client.fx;
 import ua.zentix.incoming.client.far.Sight;
 
 /**
- * Сила вспышки взрыва на экране (0..1) — как её видит глаз, без Minecraft, чтобы кривую можно было проверить тестом.
+ * On-screen explosion flash strength (0..1) as seen by the eye; no Minecraft, allowing a unit test of the curve.
  * <ul>
- *   <li>Освещённость от точечного источника падает как 1/d² (закон обратных квадратов), ближе {@code near}
- *       (огненный шар и то, что он заливает светом) — предельная.</li>
- *   <li>Засветка на весь экран — это блеск: вуаль, которую яркий источник рассеивает в глазу. По формуле
- *       Стайлса–Холладея (CIE, слепящий блеск) её яркость пропорциональна освещённости у глаза и падает с углом между
- *       взглядом и источником как 1/θ². Воспринимаемая яркость — степенная функция Стивенса с показателем 0.5 для
- *       точечного источника, поэтому на экране вуаль спадает как near/d, а не как 1/d².</li>
- *   <li>Взрыв вне поля зрения не слепит: остаётся отсвет на окружении ({@link #AMBIENT}); за преградой — только он
- *       и слабее ({@link #OCCLUDED}).</li>
- *   <li>Ближе {@code near} взрыв заполняет поле зрения, и угол к нему перестаёт значить.</li>
- *   <li>К {@code range} сила плавно доходит до нуля, без скачка на краю.</li>
- *   <li>Засветка — свет шара против света вокруг ({@link #daylight}): днём шар освещает окрестность на проценты
- *       от солнца, и экран едва светлеет; в сумерках и ночью — вспышка.</li>
+ *   <li>Point-source illuminance falls as 1/d² (inverse-square law), capped closer than {@code near}
+ *       (fireball and what its light floods).</li>
+ *   <li>Full-screen glare is a veil: light the bright source scatters in the eye. Under the Stiles–Holladay
+ *       formula (CIE, disability glare), brightness is proportional to eye illuminance and falls with angle
+ *       between gaze and source as 1/θ². Perceived brightness follows Stevens' power law with exponent 0.5 for a
+ *       point source, so on-screen veil falls as near/d rather than 1/d².</li>
+ *   <li>An explosion outside the field of view does not dazzle: only reflected light on surroundings remains ({@link #AMBIENT});
+ *       behind an obstruction, only that contribution, weaker ({@link #OCCLUDED}).</li>
+ *   <li>Closer than {@code near}, the explosion fills the view and its angle stops mattering.</li>
+ *   <li>Strength smoothly reaches zero at {@code range}, without an edge step.</li>
+ *   <li>Flash light is fireball light relative to surroundings ({@link #daylight}): by day it adds a few percent
+ *       of sunlight and barely brightens the screen; in twilight/night, a flash.</li>
  * </ul>
- * Ядерная вспышка — отдельная ({@code client/nuclear/NukeFlash}): она и должна ослеплять.
+ * The nuclear flash is separate ({@code client/nuclear/NukeFlash}): it is meant to dazzle.
  */
 public final class FlashFalloff {
-    /** Сила вблизи, лицом к взрыву. */
+    /** Near strength, facing the explosion. */
     static final float PEAK = 0.85f;
-    /** Доля силы от взрыва за спиной при прямой видимости: свет, отражённый окружением. */
+    /** Strength share from a directly visible explosion behind the viewer: light reflected by surroundings. */
     static final float AMBIENT = 0.5f;
-    /** Доля силы от взрыва за преградой. */
+    /** Strength share from an explosion behind an obstruction. */
     static final float OCCLUDED = 0.35f;
     /**
-     * Сила засветки экрана днём против полной (в темноте): днём засветки почти нет. Подача: свет шара на мир считают
-     * {@code CloudModel.emittedLight} и {@code HeatPass}, а прежнее «4–11 % от солнца» этим числом не выводится.
+     * Daytime screen-flash strength relative to full strength (darkness): almost absent by day. presentation: fireball world light is
+     * computed by {@code CloudModel.emittedLight} and {@code HeatPass}; this number does not derive the old “4–11 % of sunlight”.
      */
     static final double DAYLIGHT = 0.08;
 
     private FlashFalloff() {}
 
     /**
-     * Доля засветки при свете вокруг глаза ambient ({@code FarView#adaptation}: 1 днём под небом, 0,17 ночью, 0,12
-     * в темноте): днём — {@link #DAYLIGHT}, к сумеркам, в пещере и доме свет вокруг падает на порядки (глаз привыкает —
-     * {@link Sight#adapted}), и засветка полная.
+     * Flash share at eye-local ambient light ({@code FarView#adaptation}: 1 under daytime sky, 0.17 at night, 0.12
+     * in darkness): {@link #DAYLIGHT} by day; at twilight, inside caves/houses, light drops by orders of magnitude (eye adapts,
+     * {@link Sight#adapted}), giving full flash strength.
      */
     public static float daylight(double ambient) {
         return (float) Math.min(1, DAYLIGHT * Sight.adapted(1, ambient));
     }
 
     /**
-     * @param d       расстояние от глаз до взрыва, блоки
-     * @param near    ближе этого — полная сила (радиус огненного шара с запасом), блоки
-     * @param range   дальше этого вспышки нет, блоки
-     * @param cosView косинус угла между взглядом и направлением на взрыв
-     * @param visible взрыв виден напрямую
+     * @param d       eye-to-explosion distance, blocks
+     * @param near    full strength closer than this (fireball radius with margin), blocks
+     * @param range   no flash beyond this, blocks
+     * @param cosView cosine of angle between gaze and explosion direction
+     * @param visible explosion directly visible
      */
     public static float strength(double d, double near, double range, double cosView, boolean visible) {
         if (d >= range) return 0;
@@ -58,7 +58,7 @@ public final class FlashFalloff {
         double edge = 1 - r * r * r * r;
         double facing = Math.max(0, cosView);
         double view = visible ? AMBIENT + (1 - AMBIENT) * facing * facing : OCCLUDED;
-        // вплотную взрыв заливает светом всё поле зрения, куда ни смотри: к нулю угол перестаёт значить
+        // up close the explosion fills the whole view with light in any gaze direction: angle stops mattering toward zero
         if (visible && d < near) view += (1 - view) * (1 - d / near);
         return (float) (PEAK * distance * edge * view);
     }

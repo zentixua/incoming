@@ -547,7 +547,7 @@ public final class ProjectileCamera {
         double kmh = ClientFlights.kmh(p.speed());
         double dist = p.position().distanceTo(f.target());
         boolean rec = (mc.level.getGameTime() / 10) % 2 == 0;
-        String left1 = (rec ? "● " : "  ") + "REC  "
+        String left1 = (rec ? "● " : "  ") + Component.translatable("incoming.camera.rec").getString() + "  "
                 + Component.translatable("incoming.hud.flight", f.weapon().displayName().getString().toUpperCase(Locale.ROOT), f.number).getString();
         g.drawString(font, left1, m + 6, m + 6, rec ? 0xFFFF4040 : 0xFFE8E8E8);
         g.drawString(font, f.phase().displayName().getString().toUpperCase(Locale.ROOT),
@@ -556,7 +556,7 @@ public final class ProjectileCamera {
                 Component.translatable("incoming.camera.alt", String.format(Locale.ROOT, "%.0f", alt)),
                 Component.translatable("incoming.camera.speed", String.format(Locale.ROOT, "%.0f", kmh)),
                 Component.translatable("incoming.camera.range", String.format(Locale.ROOT, "%.0f", dist)),
-                Component.literal("T-" + StrikesHud.clock(f.etaSeconds(pt)))
+                Component.translatable("incoming.hud.eta", StrikesHud.clock(f.etaSeconds(pt)))
         };
         for (int i = 0; i < right.length; i++) {
             g.drawString(font, right[i], w - m - 6 - font.width(right[i]), m + 6 + 12 * i, i == 3 ? 0xFFFFC040 : 0xFFE8E8E8);

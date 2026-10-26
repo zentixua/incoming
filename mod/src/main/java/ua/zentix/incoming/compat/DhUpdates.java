@@ -17,8 +17,6 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.ArrayDeque;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -68,8 +66,6 @@ public final class DhUpdates {
      * столько после отдачи.
      */
     public static final long HOLD_NANOS = DhQueue.TIMEOUT_NANOS + DhQueue.CACHE_NANOS;
-    /** Миры, ждущие подтверждений держанных копий: поток DH ({@link #saved}) находит по миру его очередь. */
-    private static final Map<Object, DhUpdates> LISTENING = new ConcurrentHashMap<>();
 
     /** Чанк → тик, не раньше которого его отправить; по порядку отметок. */
     private final Long2LongLinkedOpenHashMap due = new Long2LongLinkedOpenHashMap();
@@ -90,6 +86,20 @@ public final class DhUpdates {
     /** Куда уходят чанки: в игре — {@link DhChunks} и {@link VoxyLods}; проверки подставляют свой приёмник ({@link #testSink}). */
     private Sink sink = DhUpdates::deliver;
     private boolean test;
+    private boolean listening;
+    /** Non-owning callback fast path; queues and world references remain in level attachments. */
+    private static volatile int waitingLevels;
+
+    private void setListening(boolean value) {
+        if (listening == value) return;
+        listening = value;
+        waitingLevels += value ? 1 : -1;
+    }
+
+    /** Server lifecycle boundary: the previous server's level attachments no longer receive acknowledgements. */
+    static void resetWaiting() {
+        waitingLevels = 0;
+    }
 
     /** Приёмник чанков. */
     public interface Sink {
@@ -127,7 +137,8 @@ public final class DhUpdates {
             u.offered.clear();
             u.offeredCount.clear();
             u.held.clear();
-            LISTENING.remove(level, u);
+            u.setListening(false);
+            u.acks.clear();
         }
     }
 
@@ -214,7 +225,7 @@ public final class DhUpdates {
         // подтверждения записи — только от DH: без него темп держит место в очередях Voxy (heldRoom)
         boolean paced = u.paced();
         if (paced && u.held.waiting() == 0) {
-            LISTENING.put(level, u);
+            u.setListening(true);
             DhChunks.listen();
         }
         if (u.test) {
@@ -234,13 +245,16 @@ public final class DhUpdates {
      * держанной копии ({@link #sendHeld}). Мир — тот, что DH обёртывает ({@code getWrappedMcObject}).
      */
     public static void saved(Object level, int x, int z) {
-        DhUpdates u = LISTENING.get(level);
-        if (u != null) u.acks.add(new long[] {ChunkPos.asLong(x, z), System.nanoTime()});
-    }
-
-    /** Сервер остановлен: подтверждения больше никто не ждёт. */
-    static void forgetLevels() {
-        LISTENING.clear();
+        if (waitingLevels == 0 || !(level instanceof ServerLevel world)) return;
+        var server = world.getServer();
+        if (!server.isRunning()) return;
+        long at = System.nanoTime();
+        // Attachment access belongs to the server thread; DH callbacks can arrive after world shutdown.
+        server.execute(() -> {
+            if (!server.isRunning() || server.getLevel(world.dimension()) != world || !world.hasData(ModAttachments.DH_UPDATES)) return;
+            DhUpdates u = world.getData(ModAttachments.DH_UPDATES);
+            if (u.listening) u.acks.add(new long[] {ChunkPos.asLong(x, z), at});
+        });
     }
 
     /**
@@ -260,7 +274,7 @@ public final class DhUpdates {
         if (held.waiting() > 0) {
             for (long[] a; (a = acks.poll()) != null; ) held.ack(a[0], a[1]);
             held.expire(System.nanoTime());
-            if (held.waiting() == 0) LISTENING.remove(level, this);
+            if (held.waiting() == 0) setListening(false);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
         // игроки с Voxy (и с DH): темп — и место в их очередях, иначе лишнее они бы не получили

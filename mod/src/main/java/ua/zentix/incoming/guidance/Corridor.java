@@ -4,39 +4,39 @@ import ua.zentix.incoming.util.GridWalk;
 import ua.zentix.incoming.util.Relief;
 
 /**
- * Полоса над путём по земле: какой высоты рельеф надо перелететь, во всех колонках блоков, которые задевает полоса
- * заданной полуширины вдоль ломаной пути. Колонка не пропускается, даже тонкая (столб, мачта, фонарь): полоса
- * проходится параллельными линиями чаще, чем через блок ({@link #LANE}), и каждая линия — по всем колонкам, которые
- * она пересекает ({@link GridWalk}); колонка, задетая полосой, но не задетая ни одной линией, целиком лежала бы между
- * соседними линиями, а она шире промежутка. Чистый код без мира Minecraft.
+ * Corridor over a ground path: terrain height to clear in every block column touched by a strip
+ * of given half-width along the path polyline. No column is missed, even thin ones (post, mast, lamp): traverse
+ * parallel lines spaced less than a block apart ({@link #LANE}), each through all columns it
+ * intersects ({@link GridWalk}); a column touched by the strip but by no line would have to fit wholly between
+ * adjacent lines, but is wider than that gap. Pure code without a Minecraft world.
  */
 public final class Corridor {
-    /** Промежуток между линиями обхода, блоков: меньше ширины колонки. */
+    /** Traversal-line spacing, blocks: smaller than column width. */
     static final double LANE = 0.9;
 
     private Corridor() {}
 
     /**
-     * Набор высоты снаряда до колонки впереди: первые {@code reaction} блоков пути — без набора (снаряд только выходит
-     * на него), дальше — {@code gradient} блоков высоты на блок пути.
+     * Projectile climb before a column ahead: first {@code reaction} blocks of travel without climb (only establishing
+     * it), then {@code gradient} blocks of height per block traveled.
      */
     public record Climb(double reaction, double gradient) {
-        /** Без набора: колонка учитывается целиком, как бы далеко ни была. */
+        /** No climb: column counts in full regardless of distance. */
         public static final Climb NONE = new Climb(0, 0);
 
-        /** Сколько высоты снаряд успеет набрать за {@code along} блоков пути. */
+        /** Height projectile can gain over {@code along} blocks of travel. */
         public double gain(double along) {
             return gradient * Math.max(0, along - reaction);
         }
     }
 
     /**
-     * Высота, на которой снаряд должен быть сейчас, чтобы, набирая высоту по {@code climb}, пройти над рельефом всей
-     * полосы: наибольшее по колонкам «рельеф − набор до колонки». С {@link Climb#NONE} — просто наибольшая высота
-     * рельефа под полосой. Путь до колонки — проекция её середины на ломаную (не меньше 0).
+     * Altitude projectile needs now to clear all corridor terrain while climbing by {@code climb}:
+     * maximum across columns of “terrain − climb before column”. With {@link Climb#NONE}, just maximum
+     * terrain height beneath corridor. Distance to column: projection of its center onto polyline (at least 0).
      *
-     * @param track     путь по земле: x0, z0, x1, z1, … (одна точка — квадрат вокруг неё)
-     * @param halfWidth полуширина полосы, блоков
+     * @param track     ground path: x0, z0, x1, z1, … (one point — square around it)
+     * @param halfWidth corridor half-width, blocks
      */
     public static double highest(double[] track, double halfWidth, Climb climb, Relief relief) {
         double[] max = {Double.NEGATIVE_INFINITY};
@@ -48,7 +48,7 @@ public final class Corridor {
             double dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
             boolean point = len < 1e-9;
             if (point) {
-                // точка: отрезок поперёк самой полосы
+                // Point: segment across the corridor itself.
                 az -= halfWidth;
                 bz += halfWidth;
                 dx = 0;

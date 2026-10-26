@@ -6,9 +6,9 @@ import ua.zentix.incoming.strike.WeaponSpec;
 import ua.zentix.incoming.util.Relief;
 
 /**
- * Управляемый летательный аппарат, каким его видит автопилот ({@link Autopilot}): датчики (место, скорость, фаза,
- * рельеф) и органы управления (ориентация, скорость, фаза). Без мира Minecraft: у снаряда — сама сущность,
- * в юнит-тестах — модель на модели рельефа.
+ * Guided craft as seen by the autopilot ({@link Autopilot}): sensors (position, speed, phase,
+ * terrain) and controls (orientation, speed, phase). No Minecraft world: projectile uses its entity,
+ * unit tests use a model over model terrain.
  */
 public interface Craft {
     Vec3 position();
@@ -17,14 +17,14 @@ public interface Craft {
 
     AltitudeHold altitude();
 
-    /** Скорость, блоков/тик. */
+    /** Speed, blocks/tick. */
     double speed();
 
     void setSpeed(double speed);
 
     FlightPhase phase();
 
-    /** Сколько тиков идёт текущая фаза. */
+    /** Ticks elapsed in current phase. */
     int phaseAge();
 
     void setPhase(FlightPhase phase);
@@ -41,21 +41,21 @@ public interface Craft {
     }
 
     /**
-     * Сколько блоков прямой до точки {@code to} свободно от блоков: расстояние до первой закрытой клетки или
-     * {@link Double#POSITIVE_INFINITY}, если свободна вся прямая, кроме последних {@code margin} блоков у самой точки
-     * (там цель достаёт взрыватель). Где блоков не прочесть (полёт вне мира, неготовый чанк на пути), — по верху рельефа
-     * ({@link #relief}); где и он ещё не известен — свободна: датчик молчит.
+     * Blocks of unobstructed straight line to {@code to}: distance to first blocked cell, or
+     * {@link Double#POSITIVE_INFINITY} if the whole line is clear except last {@code margin} blocks at the point
+     * (fuze reaches the target there). Where blocks cannot be read (outside-world flight, unready chunk along path), use terrain top
+     * ({@link #relief}); where that is still unknown, clear: sensor has no reading.
      */
     double clearAlong(Vec3 to, double margin);
 
-    /** Держать высоту {@code desired} ({@link AltitudeHold}) с поворотами участка полёта {@code a}. */
+    /** Hold {@code desired} altitude ({@link AltitudeHold}) with flight-phase turns {@code a}. */
     default void holdAltitude(double desired, double gain, WeaponSpec.Handling h, WeaponSpec.Agility a) {
         altitude().hold(flight(), position().y, desired, gain, h, a);
     }
 
     /**
-     * Скорость за тик по своей модели полёта ({@link WeaponSpec.Airframe#airspeed}): мотор тянет к {@code target},
-     * набор высоты отнимает скорость, снижение прибавляет.
+     * Per-tick speed in our flight model ({@link WeaponSpec.Airframe#airspeed}): motor pulls toward {@code target},
+     * climb subtracts speed, descent adds it.
      */
     default void throttle(WeaponSpec.Airframe air, double target) {
         setSpeed(air.airspeed(speed(), target, flight().forward().y));

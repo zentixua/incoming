@@ -1,87 +1,87 @@
-// Гриб объёмом (client/nuclear/MushroomField — числа кадра, nuclear/model/MushroomModel — законы): шапка — огненный шар,
-// свернувшийся в кольцо с куполом над его дыркой (до сворачивания — сфера шара: кольцо нулевого радиуса), ножка, юбка
-// пыли у её основания; у подрыва на воде — ещё полый столб воды с короной брызг наверху (nuclear/model/WaterModel). Поле аналитическое: функции чисел гриба этого кадра и
-// места; клубы — шум общей плитки пелены (VolumeNoise) в координатах тела гриба, в долях его размера. Общее у объёма
-// (fx_pall), накопления (fx_pall_resolve) и квадратов слоя эффектов (fx.vsh: что гриб закрывает перед частицей).
-// Скалярные законы — копии MushroomModel и MushroomField (MushroomGlslTest считает их и сверяет с Java).
+// Volumetric mushroom (client/nuclear/MushroomField frame data, nuclear/model/MushroomModel laws): cap is fireball
+// rolled into a ring with a dome over its hole (before rollup, fireball sphere: zero-radius ring), stem, dust skirt
+// at its base; water bursts add a hollow water column with spray crown (nuclear/model/WaterModel). Analytic field: functions of this frame's mushroom data and
+// position; billows from shared pall noise tile (VolumeNoise), in mushroom-body coordinates and size units. Shared by volume
+// (fx_pall), accumulation (fx_pall_resolve), effects-layer quads (fx.vsh: mushroom occlusion before particle).
+// Scalar laws copy MushroomModel/MushroomField (MushroomGlslTest evaluates and compares with Java).
 //
-// Таблица грибов (MushroomField.TEXELS текселей RGBA32F на гриб; строка k — гриб k, строка MUSH_BB_ROW — свет чёрного
-// тела): блоки, от глаза; высоты — над землёй под эпицентром.
-//   0 = (эпицентр x, z; земля под ним по y; 1 — гриб есть)
-//   1 = (снос ветром x, z на всю долю; верх после стабилизации — по его доле снос; радиус рамки)
-//   2 = (середина кольца шапки по высоте; радиус шапки; большой радиус кольца; верх рамки)
-//   3 = (полуоси сечения кольца по горизонтали и вертикали; середина купола; его полуось по горизонтали)
-//   4 = (полуось купола по вертикали; ослабление шапки, 1/блок; плитка клубов шапки, блоки; секунды после подрыва)
-//   5 = (альбедо ω' шапки rgb; асимметрия g')
-//   6 = (верх ножки; её радиус, средний по высоте; раструб пыли у земли сверх низа ножки; толща ножки поперёк)
-//   7 = (ω' ножки rgb; g')
-//   8 = (середина юбки по земле; её полуширина; высота; ослабление, 1/блок)
-//   9 = (ω' юбки rgb; g')
-//  10 = (воздух вокруг, K; перепад температуры ядра, K; низ шапки; плитка клубов ножки)
-//  11 = (подъём струй ножки, блоки — MushroomModel.stemRise; верх дыма шторма — тот же, что у его столбов в пелене;
-//        радиус зоны пожаров; высота слияния подсоса с ножкой, блоки — MushroomField.foot)
-//  12 = (свет пожаров под грибом rgb, как у пелены: карта огня шторма и свет кадра; часы кипения шапки, рад)
-//  13 = (середина стенки столба воды по радиусу; её полутолщина; верх стенки — середина короны; ослабление, 1/блок;
-//        0 — столба нет)
-//  14 = (ω' столба rgb; g')
-//  15 = (наружный край короны по радиусу; её полувысота; подъём струй стенки — верх столба, блоки; плитка клубов
-//        столба, блоки)
-//  16 = (доля перепада температуры ядра у края шапки: у шара 1, у кольца MushroomModel.EDGE_HEAT; размах клубов края
-//        против кольца: у шара — гладкая сфера; место кадра узора поверхности шара — от −1 (узора нет) к 0 и номер
-//        кадра с долей; доля узора против языков клубов — 1 − доля кольца, 0 — узор не прочитан; MushroomField.ballSurface)
-//  17 = (плитка карты тени в плоскости поперёк солнца — начало u, v и стороны от эпицентра, блоки; сторона 0 — тени нет;
+// Mushroom table (MushroomField.TEXELS RGBA32F texels per mushroom; row k is mushroom k, MUSH_BB_ROW is black-body
+// light): blocks, eye-relative; heights above epicenter ground.
+//   0 = (epicenter x, z; ground y; 1 if mushroom present)
+//   1 = (full wind drift x, z; stabilized top, height share scales drift; bounds radius)
+//   2 = (cap-ring center height; cap radius; ring major radius; bounds top)
+//   3 = (ring-section horizontal/vertical semiaxes; dome center; dome horizontal semiaxis)
+//   4 = (dome vertical semiaxis; cap extinction, 1/block; cap billow tile, blocks; seconds since detonation)
+//   5 = (cap albedo ω' rgb; asymmetry g')
+//   6 = (stem top; height-mean stem radius; extra ground dust flare beyond stem base; cross-stem optical depth)
+//   7 = (stem ω' rgb; g')
+//   8 = (skirt ground center; half-width; height; extinction, 1/block)
+//   9 = (skirt ω' rgb; g')
+//  10 = (ambient air, K; core temperature excess, K; cap bottom; stem billow tile)
+//  11 = (stem-jet rise, blocks, MushroomModel.stemRise; storm smoke top, same as its pall columns;
+//        fire-zone radius; inflow/stem merge height, blocks, MushroomField.foot)
+//  12 = (under-mushroom fire light rgb, like pall: storm fire map/frame light; cap churn clock, rad)
+//  13 = (water-column wall radial center; wall half-thickness; wall top at crown center; extinction, 1/block;
+//        0 if no column)
+//  14 = (column ω' rgb; g')
+//  15 = (crown outer radius; half-height; wall-jet rise at column top, blocks; column billow
+//        tile, blocks)
+//  16 = (cap-edge core-temperature excess share: sphere 1, ring MushroomModel.EDGE_HEAT; edge-billow extent
+//        relative to ring: smooth sphere before rollup; ball-surface pattern frame position from −1 (absent) to 0 and frame
+//        index with fraction; pattern versus billow-tongue share, 1 − ring share, 0 means pattern not read; MushroomField.ballSurface)
+//  17 = (shadow tile in sun-perpendicular plane: u/v origin and sides relative to epicenter, blocks; side 0 means no shadow;
 //        MUSH_SHADOW_RECT)
-//  18 = (верх мира над землёй под эпицентром — верхний слой карты тени; отражение земли под грибом rgb — верх слоя пыли
-//        у основания ножки, MushroomField.groundUnder; MUSH_SHADOW_TOP)
-//  19 = (подсос у основания ножки, MushroomField.foot: верх слоя пыли у стенки ножки, блоки; его ослабление у земли
-//        × доля гриба, 1/блок; доля подсоса; докуда поднялся воздух ножки с начала подсоса, блоки; 0 — подсоса нет)
-//  20..35 = 64 высоты оптического столба поднятой пыли; 36..67 = столб выше края полосы на 128 радиусах (FootColumn)
+//  18 = (world top above epicenter ground, shadow-map top layer; ground reflectance under mushroom rgb, top of dust layer
+//        at stem base, MushroomField.groundUnder; MUSH_SHADOW_TOP)
+//  19 = (stem-base inflow, MushroomField.foot: dust-layer top at stem wall, blocks; ground extinction
+//        × mushroom share, 1/block; inflow share; stem-air rise since inflow began, blocks; 0 means no inflow)
+//  20..35 = 64 heights of lifted-dust optical column; 36..67 = column above band edge at 128 radii (FootColumn)
 
 const int MUSHROOMS = 4;
 const int MUSH_BB_ROW = 4;
-// свет чёрного тела в таблице: узлов, температуры края (K) — по логарифму (MushroomField.BB_*)
+// table black-body light: node count, logarithmic edge temperatures (K) (MushroomField.BB_*)
 const float MUSH_BB_NODES = 256.0;
 const float MUSH_BB_FROM = 500.0;
 const float MUSH_BB_TO = 30000.0;
-// размах сдвига края клубами и мягкость края — шапка, ножка, юбка, в единицах клубов части (MushroomField: LOBES_*,
-// EDGE_*): у шапки — меньшая полуось сечения кольца, у ножки — её радиус на этой высоте, у юбки — меньшая полуось
+// billow edge displacement/softness for cap, stem, skirt, in part-billow units (MushroomField: LOBES_*,
+// EDGE_*): cap uses smaller ring-section semiaxis, stem radius at height, skirt smaller semiaxis
 const float MUSH_CAP_LOBES = 0.4;
 const float MUSH_CAP_EDGE = 0.07;
 const float MUSH_STEM_LOBES = 0.4;
 const float MUSH_STEM_EDGE = 0.2;
 const float MUSH_SKIRT_LOBES = 0.8;
 const float MUSH_SKIRT_EDGE = 0.25;
-// то же у столба воды, в единицах толщины его стенки (MushroomField: LOBES_COLUMN, EDGE_COLUMN)
+// same for water column, wall-thickness units (MushroomField: LOBES_COLUMN, EDGE_COLUMN)
 const float MUSH_COLUMN_LOBES = 0.6;
 const float MUSH_COLUMN_EDGE = 0.15;
-// сглаживание объединения кольца и купола, в единицах клубов шапки (мягкий минимум опускает край не больше чем на
-// четверть его)
+// ring/dome union smoothing in cap-billow units (smooth minimum lowers edge by at most one
+// quarter of it)
 const float MUSH_BLEND = 0.25;
-// языки клубов на краю шапки (MushroomModel.SKIN): нагрев края ± эта доля его же на размах клубов — выступ клуба —
-// свежий горячий газ изнутри, ложбина — уже смешанный; у шара — запечённый узор (mushBallPattern в fx_pall), языки —
-// его доля, пока шар сворачивается
+// cap-edge billow tongues (MushroomModel.SKIN): edge heating ±this share over billow extent; protrusion is
+// fresh hot gas from inside, trough already mixed; sphere uses baked pattern (mushBallPattern in fx_pall), tongues use
+// their share during rollup
 const float MUSH_SKIN = 0.09 / 0.35;
-// большой радиус кольца шапки — эта доля её радиуса, когда шар свернулся (MushroomModel.RING): доля кольца — по нему
+// cap-ring major radius is this cap-radius share after rollup (MushroomModel.RING): defines ring share
 const float MUSH_RING = 0.55;
-// Кипение шапки (mushCapLobes): узор её клубов — два слоя, каждый живёт столько радиан часов кипения (churn —
-// MushroomModel.churn: сколько радиан своего сечения прошло вещество шапки). Клубы поднимаются из шапки к середине жизни
-// слоя и уходят в неё к концу — за время оборота вихря своего размера: клуб в полсечения (MushroomField: пузырь в
-// полсечения) по закону Колмогорова оборачивается за (1/2)^(2/3) радиана часов, вверх и вниз — вдвое дольше
+// Cap churn (mushCapLobes): two billow-pattern layers, each lives this many churn-clock radians (churn:
+// MushroomModel.churn, radians of own section traveled by cap matter). Billows rise out of cap by layer
+// midlife, sink back by end, over their eddy turnover: half-section billow (MushroomField: half-section
+// bubble) turns over in (1/2)^(2/3) clock radians by Kolmogorov law; up/down take twice that
 const float MUSH_CYCLE = 1.26;
-// верх и низ клубов одного слоя (mushLobes в fx_pall: 0,5 крупных и 0,175 мелких), в долях размаха
+// one layer's billow top/bottom (mushLobes in fx_pall: 0.5 large, 0.175 small), extent fractions
 const float MUSH_LOBES_TOP = 0.675;
-// на сколько слой уходит в шапку, когда его нет, в долях размаха клубов: больше всего их размаха (±MUSH_LOBES_TOP),
-// чтобы уходящий слой не выступал над рождённым и смена его узора не была видна
+// layer submergence when absent, billow-extent units: beyond full extent (±MUSH_LOBES_TOP),
+// so outgoing layer does not protrude above newly born layer and pattern change is invisible
 const float MUSH_SINK = 1.4;
-// глубже всего клубы шапки уходят внутрь (верхний из двух слоёв с поправкой mushRise — до 1/6 ниже низа одного слоя),
-// в долях размаха: глубже края, сдвинутого так, шапка густа целиком
+// deepest cap billow penetration (upper of two layers with mushRise correction: up to 1/6 below one layer bottom),
+// extent units: deeper than this displaced edge, cap is fully dense
 const float MUSH_LOBES_DEEP = MUSH_LOBES_TOP + 1.0 / 6.0;
-// докуда за край без клубов доходит вещество (сдвиг клубами наружу до 0,68 размаха, мягкость края, у шапки — и мягкий
-// минимум), в единицах клубов — шапка, ножка, юбка
+// matter extent beyond unbillowed edge (outward displacement up to 0.68 extent, edge softness, cap also smooth
+// minimum), billow units: cap, stem, skirt
 const float MUSH_CAP_REACH = 0.68 * MUSH_CAP_LOBES + MUSH_CAP_EDGE + 0.25 * MUSH_BLEND;
 const float MUSH_STEM_REACH = 0.68 * MUSH_STEM_LOBES + MUSH_STEM_EDGE;
 const float MUSH_SKIRT_REACH = 0.68 * MUSH_SKIRT_LOBES + MUSH_SKIRT_EDGE;
-// у столба — и мягкий минимум стенки и короны
+// column also includes wall/crown smooth minimum
 const float MUSH_COLUMN_REACH = 0.68 * MUSH_COLUMN_LOBES + MUSH_COLUMN_EDGE + 0.25 * MUSH_BLEND;
 
 struct Mush {
@@ -147,7 +147,7 @@ Mush mushLoad(sampler2D data, int k) {
     vec4 t8 = texelFetch(data, ivec2(8, k), 0), t10 = texelFetch(data, ivec2(10, k), 0), t11 = texelFetch(data, ivec2(11, k), 0);
     vec4 t12 = texelFetch(data, ivec2(12, k), 0), t13 = texelFetch(data, ivec2(13, k), 0), t15 = texelFetch(data, ivec2(15, k), 0);
     vec4 t16 = texelFetch(data, ivec2(16, k), 0), t19 = texelFetch(data, ivec2(19, k), 0);
-    // эпицентр в таблице — x, z и земля по y (как у слота пелены): в место — x, y, z
+    // table epicenter is x/z/ground y (like pall slot); position becomes x/y/z
     return Mush(t0.xzy, t1.xy, t1.z, t1.w, t2.x, t2.y, t2.z, t2.w, t3.x, t3.y, t3.z, t3.w, t4.x, t4.y, t4.z, t4.w,
             texelFetch(data, ivec2(5, k), 0), t6.x, t6.y, t6.z, t6.w, texelFetch(data, ivec2(7, k), 0), t8.x, t8.y, t8.z, t8.w,
             texelFetch(data, ivec2(9, k), 0), t10.x, t10.y, t10.z, t10.w, t11.x, t11.y, t11.z, t12.rgb, t12.w,
@@ -155,33 +155,33 @@ Mush mushLoad(sampler2D data, int k) {
             t19.x, t19.y, t19.z, t19.w, t11.w);
 }
 
-// есть ли гриб k в кадре
+// whether mushroom k is in frame
 bool mushOn(sampler2D data, int k) {
     return texelFetch(data, ivec2(0, k), 0).w > 0.5;
 }
 
-// доля сноса ветром на высоте h (MushroomModel.driftShare): верх сносит сильнее низа
+// wind-drift share at height h (MushroomModel.driftShare): top drifts more than base
 float mushShare(float h, float endTop) {
     return clamp(h / max(endTop, 1.0), 0.0, 1.0);
 }
 
-// радиус ножки на доле её высоты w (MushroomModel.stemRadius): в среднем stemR, у шапки шире на треть, у земли — раструб
-// пыли flare сверх низа ножки
+// stem radius at height fraction w (MushroomModel.stemRadius): mean stemR, one third wider at cap, ground dust flare
+// flare beyond stem base
 float mushStemR(float w, float stemR, float flare) {
     float x = clamp(w, 0.0, 1.0);
     float base = pow(1.0 - x, 6.0);
     return stemR * (0.85 + 0.45 * x * x) + flare * base;
 }
 
-// Подсос у основания ножки (MushroomField.footWidth, footShare, footDensity, footBand): ветер к ножке у земли
-// (afterwinds) несёт слой пыли волны в неё и поворачивает вверх по её стенке — течение в углу «земля — стенка» (ψ = x·z:
-// линия тока, что вдали идёт по верху слоя top, у стенки уходит вверх, x·z → top²). Полоса воздуха слоя за стенкой ножки
-// на высоте h — top/√(1 + (h/top)²) (то же, сглаженное у земли; ⚠ угол плоский, у ножки радиус того же порядка, что
-// слой). Пыль в ней — пыль слоя: ослабление у земли sigma, вверх — доля footShare (полоса тоньше, её разбавляет ножка,
-// ⚠ оценка), за вычетом той, что сам слой ещё держит на этой высоте (pallProfile): у стенки слой и подсос вместе —
-// sigma·footShare, без ступени на верху слоя. Где слой с подсосом уже не гуще самой ножки, его пыль в ней перемешана (её
-// несёт ножка, StemDust): полоса от верха слоя сужается к стенке до высоты merge, где слой с подсосом сравнивается с
-// ножкой (её считает Java, MushroomField.foot); выше фронта пыли подсоса (rise) пыли слоя ещё нет
+// Stem-base inflow (MushroomField.footWidth, footShare, footDensity, footBand): ground-level wind toward stem
+// (afterwinds) carries wave-dust layer into stem and turns upward along wall, corner flow (ψ = x·z:
+// streamline following distant layer top top rises along wall, x·z → top²). Layer-air band outside stem wall
+// at height h: top/√(1 + (h/top)²) (same, smoothed near ground; ⚠ planar corner, stem radius comparable to
+// layer depth). Dust is layer dust: ground extinction sigma, height share footShare (narrower band, diluted by stem,
+// ⚠ (est.)), minus dust still held by layer at this height (pallProfile): layer plus inflow at wall is
+// sigma·footShare, no layer-top step. Where layer plus inflow is no denser than stem, dust mixes into it
+// (StemDust carries it): band tapers from layer top to wall by height merge, where layer plus inflow matches
+// stem (Java calculates it, MushroomField.foot); no layer dust above inflow dust front (rise) yet
 float mushFootWidth(float h, float top) {
     float t = max(top, 1.0), u = h / t;
     return t / sqrt(1.0 + u * u);
@@ -192,49 +192,49 @@ float mushFootShare(float h, float top) {
     return 1.0 / (1.0 + u * u);
 }
 
-// слой и подсос вместе у стенки на высоте h: до фронта пыли подсоса rise — пыль слоя, выше — ещё нет
+// layer/inflow together at wall, height h: layer dust below inflow dust front rise, absent above
 float mushFootBoth(float h, float top, float sigma, float rise) {
     float t = max(top, 1.0);
     return sigma * mushFootShare(h, t) * clamp((rise - h) / t, 0.0, 1.0);
 }
 
-// ослабление подсоса на высоте h без доли края: share — его доля (у края подсоса полоса уже; густота пыли в ней — слоя:
-// воздух несёт её, не разбавляя)
+// inflow extinction at height h without edge share: share is inflow share (narrower band at edge, dust density stays layer's;
+// air carries without dilution)
 float mushFootDensity(float h, float top, float sigma, float share, float rise) {
     if (h < 0.0) return 0.0;
     if (share <= 0.0) return 0.0;
     return max(mushFootBoth(h, top, sigma, rise) - sigma * pallProfile(h / max(top, 1.0)), 0.0);
 }
 
-// доля полосы подсоса на высоте h: от верха слоя (или половины высоты слияния, если она ниже) сходит на нет к высоте
-// слияния merge (густота — нет: у слияния она и так — ножки) (+ 1e-6: у слияния на земле края нет — smoothstep с равными краями не определён)
+// inflow-band share at height h: tapers from layer top (or half merge height if lower) to
+// merge height merge (density does not: already stem density at merge) (+1e-6: ground-level merge has no edge, equal-edge smoothstep undefined)
 float mushFootNarrow(float h, float top, float merge) {
     return 1.0 - smoothstep(min(top, 0.5 * merge), merge + 1e-6, h);
 }
 
-// полоса подсоса за стенкой ножки на высоте h: сужается к стенке до высоты слияния
+// inflow band outside stem wall at height h: tapers to wall by merge height
 float mushFootBand(float h, float top, float share, float merge) {
     if (share <= 0.0) return 0.0;
     return share * mushFootWidth(max(h, 0.0), top) * mushFootNarrow(h, top, merge);
 }
 
-// Слабая азимутальная доля притока — подача: данных о закрутке у основания нет.
+// presentation: weak azimuthal inflow share; no measured stem-base swirl data.
 const float MUSH_FOOT_TURN = 0.6;
 
-// доля подсоса на rho от оси у ножки радиуса r: он — у стенки и наружу; внутри ножки пыль — её своя (StemDust), с
-// подсосом во всю ножку внутри она стояла бы густотой ковра до фронта пыли подсоса — кольцом поперёк ножки
+// inflow share at rho from axis for stem radius r: at wall/outward; stem interior has own dust (StemDust), from
+// inflow filling whole stem would give carpet density throughout it up to inflow dust front: a ring across stem
 float mushFootWall(float rho, float r) {
     return smoothstep(0.6 * r, r, rho);
 }
 
-// Доля света ковра в точке: в чистом притоке у входа — ровно 1, внутри прежней ножки без притока — 0;
-// к высоте слияния — прежний свет ножки. Смешивается функция источника, а не готовый цвет пикселя поверх дыма.
+// Carpet-light share at point: exactly 1 in pure incoming flow at entrance, 0 in original stem interior without inflow;
+// by merge height, original stem light. Blends source function, not finished pixel color over smoke.
 float mushFootLightShare(float h, float top, float merge, float carried, float total) {
     return clamp(carried / max(total, 1e-7), 0.0, 1.0) * mushFootNarrow(h, top, merge);
 }
 
-// Доля движущегося воздуха ковра у основания: только внешний край ножки и ближайший ковёр, до высоты слияния.
-// К шапке, внутрь ножки и на дальнюю мглу эта карта течения не доходит.
+// Moving carpet-air share at base: only outer stem edge/nearest carpet, up to merge height.
+// Flow map does not reach cap, stem interior or distant haze.
 float mushFootInfluence(float h, float rho, float r, float top, float share, float merge) {
     if (h < 0.0) return 0.0;
     if (share <= 0.0) return 0.0;
@@ -244,26 +244,26 @@ float mushFootInfluence(float h, float rho, float r, float top, float share, flo
     return share * mushFootWall(rho, r) * (1.0 - smoothstep(r + t, r + 2.0 * t, rho)) * mushFootNarrow(h, t, merge);
 }
 
-// Поворот потока от горизонтального притока к подъёму. Геометрия поворота — оценка; путь — stemRise модели.
+// Flow turn from horizontal inflow to rise. Turn geometry (est.); path from model stemRise.
 float mushFootUp(float h, float top) {
     float t = max(top, 1.0);
     return smoothstep(0.25 * t, 1.25 * t, h);
 }
 
-// мера места в сечении кольца: 1 — на его краю (rho — от оси по горизонтали, y — от середины кольца)
+// ring-section position measure: 1 at edge (rho horizontal from axis, y from ring center)
 float mushRing(float rho, float y, float ringR, float a, float b) {
     float u = (rho - ringR) / max(a, 1e-3), v = y / max(b, 1e-3);
     return sqrt(u * u + v * v);
 }
 
-// мера места в эллипсе (купол, юбка в сечении): 1 — на краю
+// ellipse position measure (dome, skirt section): 1 at edge
 float mushEllipse(float x, float y, float rx, float ry) {
     float u = x / max(rx, 1e-3), v = y / max(ry, 1e-3);
     return sqrt(u * u + v * v);
 }
 
-// Расстояние со знаком до края эллипса с полуосями rx, ry, блоки (внутри — меньше нуля): мера − 1, делённая на её
-// наклон, — точно у края, где его и сдвигают клубы; в глубине — не глубже меньшей полуоси
+// Signed distance to ellipse edge, semiaxes rx/ry, blocks (negative inside): (measure − 1) divided by its
+// slope, exact at edge where billows displace it; inside, no deeper than smaller semiaxis
 float mushEllipseDist(float x, float y, float rx, float ry) {
     vec2 r = max(vec2(rx, ry), vec2(1e-3));
     vec2 u = vec2(x, y) / r;
@@ -273,63 +273,63 @@ float mushEllipseDist(float x, float y, float rx, float ry) {
     return max((s - 1.0) * s / slope, deep);
 }
 
-// мягкий минимум (полиномиальный, k — ширина сглаживания): кольцо и купол — одна поверхность; опускает не больше k/4
+// polynomial smooth minimum, k smoothing width: ring/dome one surface; lowers by at most k/4
 float mushSmin(float a, float b, float k) {
     float h = clamp(0.5 + 0.5 * (b - a) / max(k, 1e-3), 0.0, 1.0);
     return b + (a - b) * h - k * h * (1.0 - h);
 }
 
-// Плотность края: 1 внутри, 0 снаружи, край мягкий на ±e блоков (d — расстояние со знаком до края, сдвинутого клубами)
+// Edge density: 1 inside, 0 outside, softened over ±e blocks (d signed distance to billow-displaced edge)
 float mushEdge(float d, float e) {
     return smoothstep(-e, e, -d);
 }
 
-// Место точки p (от глаза) в теле гриба: x, z — от оси гриба на этой высоте (со сносом), y — над землёй под эпицентром
+// Eye-relative p in mushroom body: x/z from mushroom axis at this height (with drift), y above epicenter ground
 vec3 mushLocal(Mush m, vec3 p) {
     float h = p.y - m.base.y;
     vec2 xz = p.xz - m.base.xz - m.drift * mushShare(h, m.endTop);
     return vec3(xz.x, h, xz.y);
 }
 
-// Возраст слоя j (0 или 1) узора клубов шапки на часах кипения churn, доля его жизни 0..1: слои — со сдвигом на полжизни
+// Cap-billow pattern layer j (0/1) age by churn clock, life fraction 0..1: layers half-life apart
 float mushLayerAge(float churn, float j) {
     float c = churn / MUSH_CYCLE + 0.5 * j;
     return c - floor(c);
 }
 
-// Доля слоя возраста age: ноль при рождении и в конце, 1 — в середине; у двух слоёв вместе — 1
+// Layer share at age age: zero at birth/end, 1 at midpoint; two layers sum to 1
 float mushLayerWeight(float age) {
     return 1.0 - abs(2.0 * age - 1.0);
 }
 
-// Номер узора слоя j: свой у каждой жизни каждого слоя
+// Pattern index for layer j, unique per life per layer
 float mushLayerSeed(float churn, float j) {
     return 2.0 * floor(churn / MUSH_CYCLE + 0.5 * j) + j;
 }
 
-// Поправка края шапки на среднее (low — доля слабейшего слоя): край — верхний из двух слоёв, опущенных на MUSH_SINK × (1 −
-// доля), и без поправки в середине жизни слоёв шапка садилась бы на треть размаха. Среднее верхнего из двух равномерных
-// на ±h (h = 1/2) со сдвигами − (1 − w)·K: −low·K + h·(2 − e)³/24, e = |w₀ − w₁|·K/h (rest = 2 − e), пока e < 2
+// Cap-edge mean correction (low is weaker layer share): edge is upper of two layers, lowered by MUSH_SINK × (1 −
+// share); without correction cap sinks one third of extent halfway through layer lives. Mean upper of two uniforms
+// over ±h (h = 1/2), offsets −(1 − w)·K: −low·K + h·(2 − e)³/24, e = |w₀ − w₁|·K/h (rest = 2 − e), while e < 2
 float mushRise(float low) {
     float rest = max(2.0 - 2.0 * MUSH_SINK * (1.0 - 2.0 * low), 0.0);
     return MUSH_SINK * low - rest * rest * rest / 48.0;
 }
 
-// Доля обращения на расстоянии rho от оси гриба: у оси (вершина купола — точка застоя, поток там только поднимается) — 0,
-// к оси кольца — вся
+// Circulation share at radius rho from mushroom axis: 0 at axis (dome apex is stagnation point, only rising flow),
+// full at ring axis
 float mushTaper(float rho, float ringR) {
     return smoothstep(0.0, max(ringR, 1.0), rho);
 }
 
-// Доля обращения в месте (u, v) сечения кольца (в долях его полуосей): вихрь Рэнкина — внутри сечения ядро вращается
-// целиком, снаружи поток без завихренности, угловая скорость падает как 1/r². Целиком вращаясь и снаружи, купол над
-// кольцом переходил бы через ось гриба, и узор там складывался бы зеркально
+// Circulation share at ring-section (u, v), semiaxis units: Rankine vortex, solid rotation inside section,
+// irrotational flow outside, angular speed falls as 1/r². Solid rotation outside too would carry dome above ring
+// through mushroom axis, mirroring/folding pattern there
 float mushSwirl(float u, float v) {
     return 1.0 / max(u * u + v * v, 1.0);
 }
 
-// Откуда пришло вещество, которое сейчас в месте (u, v) сечения, если оно обошло ось кольца на ang радиан: обращение
-// по часовой в плоскости «от оси гриба, вверх» — внутри вверх, по верху наружу, снаружи вниз; назад — против часовой
+// Origin of matter now at section (u, v) after ang radians around ring axis: clockwise in plane
+// “outward from mushroom axis, up”, rising inside, outward over top, downward outside; backward is counterclockwise
 float mushWasU(float u, float v, float ang) {
     return cos(ang) * u - sin(ang) * v;
 }
@@ -338,7 +338,7 @@ float mushWasV(float u, float v, float ang) {
     return sin(ang) * u + cos(ang) * v;
 }
 
-// единицы клубов, блоки (MushroomField.capUnit, skirtUnit): шапка — меньшая полуось сечения кольца, юбка — её сечения
+// billow units, blocks (MushroomField.capUnit, skirtUnit): cap smaller ring-section semiaxis; skirt smaller section semiaxis
 float mushCapUnit(Mush m) {
     return min(m.ringA, m.ringB);
 }
@@ -347,29 +347,29 @@ float mushSkirtUnit(Mush m) {
     return min(m.skirtW, m.skirtH);
 }
 
-// единица клубов столба воды, блоки (MushroomField.columnUnit): толщина стенки
+// water-column billow unit, blocks (MushroomField.columnUnit): wall thickness
 float mushColumnUnit(Mush m) {
     return 2.0 * m.colHalf;
 }
 
-// Отражение полубесконечного слоя вещества в рассеянном свете, R∞ (MushroomField.wallReflectance): два потока в
-// замыкании полусферического среднего (Toon et al. 1989, табл. 1: γ₁ = 2 − ω(1 + g), γ₂ = ω(1 − g)) — (1 − s)/(1 + s),
-// s = √((1 − ω)/(1 − ωg)), от 0 у одного поглощения до 1 у одного рассеяния. Не Эддингтон: у него обратное рассеяние
-// γ₂ = (ω(4 − 3g) − 1)/4 при ω < 1/(4 − 3g) меньше нуля, и R∞ уходит ниже нуля (у шара без капель — до −0,07)
+// Semi-infinite matter-layer diffuse reflectance R∞ (MushroomField.wallReflectance): two streams with
+// hemispheric-mean closure (Toon et al. 1989, table 1: γ₁ = 2 − ω(1 + g), γ₂ = ω(1 − g)), (1 − s)/(1 + s),
+// s = √((1 − ω)/(1 − ωg)), from 0 for pure absorption to 1 for pure scattering. Not Eddington: its backscatter
+// γ₂ = (ω(4 − 3g) − 1)/4 is negative for ω < 1/(4 − 3g), making R∞ negative (droplet-free sphere: down to −0.07)
 float mushWallR(float w, float g) {
     float s = sqrt(max(1.0 - w, 0.0) / max(1.0 - w * g, 1e-4));
     return (1.0 - s) / (1.0 + s);
 }
 
-// радиус ножки на высоте h места тела
+// stem radius at body height h
 float mushStemAt(Mush m, float h) {
     return mushStemR(h / max(m.capBot, 1.0), m.stemR, m.stemFlare);
 }
 
-// Место в узоре клубов шапки (от её оси и середины по высоте, блоки) для места q тела, если ядро кольца с тех пор обошло
-// своё сечение на turn радиан: обращение по эллипсу сечения вокруг оси кольца (mushWasU, mushWasV), снаружи сечения
-// слабее (mushSwirl), у оси гриба сходит на нет (mushTaper). Узор идёт с веществом: точку, где вещество сейчас, узор
-// берёт оттуда, где оно было
+// Cap-billow pattern position (from cap axis/height center, blocks) for body q after ring core circled section
+// by turn radians: elliptical section circulation around ring axis (mushWasU, mushWasV), weaker outside section
+// (mushSwirl), tapering at mushroom axis (mushTaper). Pattern follows matter: for matter's current point, sample pattern
+// where matter used to be
 vec3 mushFlow(Mush m, vec3 q, float turn) {
     float rho = length(q.xz);
     float a = max(m.ringA, 1.0), b = max(m.ringB, 1.0);
@@ -380,25 +380,25 @@ vec3 mushFlow(Mush m, vec3 q, float turn) {
     return vec3(around.x * r, b * mushWasV(u, v, ang), around.y * r);
 }
 
-// Сдвиг часов кипения в месте q шапки гриба k, доли жизни слоя: клубы кипят не все разом, а пятнами в полшапки (с одними
-// часами на всю шапку её узор дышал бы весь сразу — каждые полжизни слоя клубов то вдвое больше, то снова как было).
-// Плавный: где сдвиг меняется, слой одной жизни повёрнут на разный угол (mushFlow), и узор тянется — у края сечения
-// не больше чем на 0,6 своего размера к концу жизни
+// Churn-clock offset at cap q of mushroom k, layer-life units: billows churn in half-cap patches, not all at once (one
+// clock for whole cap would make whole pattern breathe: twice as many billows every half-life, then back).
+// Smooth: where offset changes, a layer's same life has different rotation (mushFlow), stretching pattern, at section
+// edge no more than 0.6 of its size by life end
 float mushPhase(Mush m, vec3 q, float k) {
     vec3 x = vec3(q.x, q.y - m.capY, q.z) / max(m.capR, 1.0);
     return 0.25 * (sin(1.3 * x.x + 0.9 * x.y + k) + sin(1.1 * x.z - 1.2 * x.y + 2.1 + 0.7 * k)
             + sin(0.8 * x.x + 1.0 * x.z + 4.2 + 1.3 * k));
 }
 
-// Стенка столба воды без клубов в месте q тела (rho — от оси): полый цилиндр от воды (и чуть под ней) до середины
-// короны; расстояние со знаком не дальше настоящего — по радиусу и по высоте
+// Unbillowed water-column wall at body q (rho from axis): hollow cylinder from water (slightly below too) to crown
+// center; signed distance no farther than true distance, radial/vertical
 float mushWall(Mush m, vec3 q, float rho) {
     return max(abs(rho - m.colMid) - m.colHalf, max(q.y - m.colTop, -q.y - 0.02 * m.colTop));
 }
 
-// Расстояния со знаком до края шапки, ножки, юбки и столба воды без клубов в месте q тела, блоки (у ножки — по радиусу на
-// этой высоте; её верх и низ — mushStemSigma; столба нет — далеко): стенка столба и корона на ней — одна поверхность;
-// корона — кольцо, в сечении эллипс с серединой на середине стенки (WaterModel.Column)
+// Signed unbillowed cap/stem/skirt/water-column edge distances at body q, blocks (stem radial at this height;
+// top/bottom from mushStemSigma; absent column far away): column wall/crown one surface;
+// crown ring with elliptical section centered on wall center (WaterModel.Column)
 vec4 mushDist(Mush m, vec3 q) {
     float rho = length(q.xz);
     float ring = mushEllipseDist(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB);
@@ -412,15 +412,15 @@ vec4 mushDist(Mush m, vec3 q) {
             mushEllipseDist(rho - m.skirtR, q.y, m.skirtW, m.skirtH), column);
 }
 
-// Густота ножки на высоте h без доли края: её толща поперёк на её ширине; верх тает у верха ножки, под землёй её нет
+// Stem density at height h without edge share: cross-stem depth over width; fades at stem top, absent underground
 float mushStemSigma(Mush m, float h) {
     if (h < -0.02 * m.capBot || h > m.stemTop) return 0.0;
-    // у шара у земли низ шапки ниже земли (capBot < 0): ширина таяния — не меньше блока
+    // grounded sphere cap bottom below ground (capBot < 0): fade width at least one block
     float topFade = clamp((m.stemTop - h) / max(0.05 * m.capBot + 1.0, 1.0), 0.0, 1.0);
     return m.stemTau / (2.0 * mushStemAt(m, h)) * topFade;
 }
 
-// полоса подсоса за стенкой ножки на высоте h места тела, блоки, и радиус подсоса: ножка и эта полоса
+// inflow band outside stem wall at body height h, blocks, and inflow radius: stem plus this band
 float mushFootBandAt(Mush m, float h) {
     return mushFootBand(h, m.footTop, m.footShare, m.footMerge);
 }
@@ -438,7 +438,7 @@ const int MUSH_FOOT_NODES = 64;
 const int MUSH_FOOT_EDGES = 36;
 const int MUSH_FOOT_EDGE_NODES = 128;
 
-// Две таблицы FootColumn (CPU): интеграл по высоте и часть выше края сужающейся полосы на данном радиусе.
+// Two CPU FootColumn tables: height integral and portion above tapered-band edge at given radius.
 float mushFootTable(sampler2D data, int k, int first, int nodes, float fraction) {
     float u = clamp(fraction, 0.0, 1.0) * float(nodes - 1);
     int i = min(int(u), nodes - 2), j = i + 1;
@@ -450,19 +450,19 @@ float mushFootColumn(sampler2D data, int k, Mush m, float h) {
     return mushFootTable(data, k, MUSH_FOOT_COLUMNS, MUSH_FOOT_NODES, h / max(m.footMerge, 1e-6));
 }
 
-// band(h) монотонно сужается. Над её краем на этом радиусе пыли нет: вычесть col(hEdge), а не тень всей стенки.
+// band(h) narrows monotonically. No dust above edge at this radius: subtract col(hEdge), not whole-wall shadow.
 float mushFootRemoved(sampler2D data, int k, Mush m, float offset) {
     return mushFootTable(data, k, MUSH_FOOT_EDGES, MUSH_FOOT_EDGE_NODES,
             max(offset, 0.0) / max(mushFootBandAt(m, 0.0), 1e-6));
 }
 
-// Ослабление шапки, ножки, юбки и столба воды в месте q без шума — среднее по клубам (край размыт на размах клубов): для
-// толщи к свету и квадратов слоя; без столба его край не считается (стенка нулевой толщины — край нулевой ширины)
+// Noiseless cap/stem/skirt/water-column extinction at q, billow mean (edge blurred over billow extent): for
+// light-path depth/layer quads; absent column skips edge (zero-thickness wall has zero-width edge)
 vec4 mushMean(Mush m, vec3 q) {
     vec4 d = mushDist(m, q);
     float r = mushStemAt(m, q.y), rho = length(q.xz), soft = 0.5 * MUSH_STEM_LOBES * r;
     float stem = mushStemSigma(m, q.y) * mushEdge(d.y, soft);
-    // Выше слияния нет добавки: не считать профиль ковра на каждом отсчёте толщи всей шапки и ножки.
+    // No addition above merge: avoid evaluating carpet profile at every whole-cap/stem depth sample.
     if (m.footShare > 0.0 && q.y >= 0.0 && q.y < m.footMerge) {
         float band = mushFootBandAt(m, q.y);
         if (rho < r + band + soft) stem = max(stem, mushFootSigma(m, q.y) * mushFootWall(rho, r) * mushEdge(rho - r - band, soft));
@@ -473,10 +473,10 @@ vec4 mushMean(Mush m, vec3 q) {
     return s;
 }
 
-// Сколько до вещества гриба от места q, блоки мира, не больше (0 — уже в нём или рядом): шаг луча по пустому. Мера
-// эллипса растёт не быстрее расстояния, делённого на меньшую полуось, — мера − 1, умноженная на неё, не дальше края;
-// радиус ножки по высоте меняется не круче своего наклона; стенка столба — уже расстояние не дальше настоящего; снос по
-// высоте растягивает тело не больше чем в 1 + снос / верх раз
+// Distance to mushroom matter from q, world blocks, conservative (0 inside/near): empty-space ray step. Ellipse
+// measure grows no faster than distance / smaller semiaxis, so (measure − 1) times it stays before edge;
+// stem radius height variation bounded by its slope; column wall already conservative; height-based
+// drift stretches body by at most 1 + drift / top
 float mushGap(Mush m, vec3 q) {
     float rho = length(q.xz);
     float gap = 1e9;
@@ -486,8 +486,8 @@ float mushGap(Mush m, vec3 q) {
         gap = min(ring, dome) - MUSH_CAP_REACH * mushCapUnit(m);
     }
     if (m.stemTau > 0.0) {
-        // Выше слияния — исходный зазор ножки. Ниже — только настоящая полоса; производная её сужения
-        // ограничена 1.5/(merge-start), а производная ширины — 2/(3√3).
+        // Above merge, original stem gap. Below, actual band only; taper derivative
+        // bounded by 1.5/(merge-start), width derivative by 2/(3√3).
         float slope = (1.0 + MUSH_STEM_REACH) * max(0.9 * m.stemR, 6.0 * m.stemFlare) / max(m.capBot, 1.0);
         float foot = mushFootBandAt(m, q.y);
         if (m.footShare > 0.0 && q.y < m.footMerge) {
@@ -509,10 +509,10 @@ float mushGap(Mush m, vec3 q) {
     return max(gap, 0.0) / (1.0 + length(m.drift) / max(m.endTop, 1.0));
 }
 
-// Отрезок прямой o + dir·t (o — от глаза, dir — единичный) в рамке гриба: цилиндр радиуса boundR вдоль оси, наклонённой
-// сносом (доля сноса растёт с высотой — mushLocal; выше endTop и под землёй — запас в boundR). В координатах со сдвигом по
-// высоте ось вертикальна, а прямая остаётся прямой: вертикальный цилиндр вокруг середины сноса брал бы на поздних кадрах с
-// ветром пустое шириной в снос. Вход ≥ выхода — мимо
+// Line segment o + dir·t (eye-relative o, unit dir) within mushroom bounds: radius boundR cylinder along drift-tilted
+// axis (drift share grows with height, mushLocal; above endTop/below ground, boundR margin). In height-shifted
+// coordinates axis is vertical and line remains straight: vertical cylinder around drift midpoint included drift-wide empty
+// space in late windy frames. Entry ≥ exit means miss
 vec2 mushLine(Mush m, vec3 o, vec3 dir) {
     vec3 base = m.base - o;
     vec2 k = m.drift / max(m.endTop, 1.0);
@@ -520,7 +520,7 @@ vec2 mushLine(Mush m, vec3 o, vec3 dir) {
     float a = dot(d, d), b = dot(d, c), cc = dot(c, c) - m.boundR * m.boundR;
     vec2 t;
     if (a < 1e-8) {
-        // прямая вдоль оси: внутри цилиндра — вся, снаружи — мимо
+        // axis-aligned line: whole if inside cylinder, miss outside
         if (cc > 0.0) return vec2(1.0, 0.0);
         t = vec2(-1e9, 1e9);
     } else {
@@ -539,14 +539,14 @@ vec2 mushLine(Mush m, vec3 o, vec3 dir) {
     return t;
 }
 
-// Отрезок луча из глаза (dir — единичный) в рамке гриба (mushLine): только перед глазом
+// Eye-ray segment (unit dir) in mushroom bounds (mushLine): in front of eye only
 vec2 mushSpan(Mush m, vec3 dir) {
     vec2 t = mushLine(m, vec3(0.0), dir);
     return vec2(max(t.x, 0.0), t.y);
 }
 
-// Октаэдрическая карта направления (x, y, z; y — вверх) — u и v 0..1 (NukeBallSurface.octU/octV, pack.py: octa_decode):
-// верхняя полусфера — ромб в середине карты, нижняя — его углы
+// Octahedral direction map (x/y/z, y up), u/v 0..1 (NukeBallSurface.octU/octV, pack.py: octa_decode):
+// upper hemisphere is central diamond, lower its corners
 float mushOctU(float x, float y, float z) {
     float s = abs(x) + abs(y) + abs(z);
     if (y < 0.0) return 0.5 * ((1.0 - abs(z / s)) * sign(x) + 1.0);
@@ -559,32 +559,32 @@ float mushOctV(float x, float y, float z) {
     return 0.5 * (z / s + 1.0);
 }
 
-// Насколько виден узор поверхности шара при месте кадра f (MushroomField.ballSurface): до минимума яркости (f = −1) —
-// нет, поверхность — гладкий фронт; до отрыва (f = 0) проступает сквозь проясняющийся фронт (FireballModel.unmasked)
+// Sphere-surface pattern visibility at frame position f (MushroomField.ballSurface): absent before luminosity minimum (f = −1),
+// surface is smooth front; emerges through clearing front by breakaway (f = 0) (FireballModel.unmasked)
 float mushBallContrast(float f) {
     return clamp(f + 1.0, 0.0, 1.0);
 }
 
-// место температуры в строке света чёрного тела (0..1)
+// temperature position in black-body light row (0..1)
 float mushBbU(float kelvin) {
     float x = (log2(max(kelvin, MUSH_BB_FROM)) - log2(MUSH_BB_FROM)) / (log2(MUSH_BB_TO) - log2(MUSH_BB_FROM));
     return clamp(x, 0.0, 1.0);
 }
 
-// Свет ламбертова шара радиуса R (квадрат r2) в d (квадрат d2) от его середины — доля света у его поверхности:
+// Lambertian-sphere light, radius R (squared r2), distance d (squared d2) from center, as surface-light share:
 // R²/max(d², R²) (MushroomModel.light)
 float mushBallFalloff(float d2, float r2) {
     return r2 / max(d2, r2);
 }
 
-// Свет шара на грани мира — доля света шара на белой стене лицом к нему без воздуха (MushroomField.ballFace): прямой
-// пучок e^(−σd) по косинусу к грани (nv — косинус между нормалью грани и направлением на шар); рассеянный воздухом —
-// сколько света импульса доходит прямым и рассеянным вместе (Glasstone 1964, рис. 7.104: e^(−(D/V)^0,544), D/V = σd/3,912)
-// без прямого, с неба вокруг шара — на грань по (1 + nv)/2 (оценка: рассеянное вперёд светит со стороны шара); и
-// отражённый землёй с альбедо albedo свет шара на горизонталь — на грань по доле земли, что она видит, (1 − ny)/2. Под
-// пеленой: прямое и рассеянное у шара — сквозь неё (through, e^(−τ/μ)), рассеянное ею вниз на горизонталь — diffuse на
-// единицу света над ней, на грань — по доле неба (1 + ny)/2. vy — синус высоты шара над горизонтом точки. Тени рельефа и
-// построек нет. Ближе ~0,05 V формула Glasstone ниже прямого — рассеянного нет (MushroomField.ballFace).
+// Ball light on world face as share of air-free ball light on facing white wall (MushroomField.ballFace): direct
+// beam e^(−σd), face cosine (nv between face normal and ball direction); air-scattered is total direct/diffuse
+// pulse light transmitted (Glasstone 1964, fig. 7.104: e^(−(D/V)^0.544), D/V = σd/3.912)
+// minus direct, from sky around ball, face share (1 + nv)/2 (est.: forward scatter comes from ball side); plus
+// ball light reflected from ground of albedo albedo onto horizontal, face ground share (1 − ny)/2. Under
+// pall: direct/air-scattered ball light passes through it (through, e^(−τ/μ)); pall downward-scattered horizontal light diffuse per
+// overhead light unit, face sky share (1 + ny)/2. vy is sine of ball elevation above point horizon. No terrain/building
+// shadows. Closer than ~0.05 V, Glasstone formula below direct gives no diffuse contribution (MushroomField.ballFace).
 float mushBallFace(float nv, float vy, float ny, float sd, float albedo, float through, float diffuse) {
     float direct = exp(-sd);
     float scattered = max(exp(-pow(max(sd, 0.0) / 3.912, 0.544)) - direct, 0.0);
@@ -594,64 +594,64 @@ float mushBallFace(float nv, float vy, float ny, float sd, float albedo, float t
     return beam * through + sky * 0.5 * (1.0 + ny) + albedo * (ground * through + sky) * 0.5 * (1.0 - ny);
 }
 
-// Свет чёрного тела температуры T в единицах кадра (белая стена в полдень — 1), линейный rgb (BlackBody)
+// Black-body light at T in frame units (noon white wall = 1), linear rgb (BlackBody)
 vec3 mushBlackBody(sampler2D data, float kelvin) {
     vec2 size = vec2(textureSize(data, 0));
     float x = (mushBbU(kelvin) * (MUSH_BB_NODES - 1.0) + 0.5) / size.x;
     return texture(data, vec2(x, (float(MUSH_BB_ROW) + 0.5) / size.y)).rgb;
 }
 
-// Подача огненного шара (client/nuclear/NukeExposure — копия; MushroomGlslTest сверяет): экспозиция по огню и плёночная
-// кривая, как у обычного шара (tools/bake_fx/pack.py). Яркость шара в мере белой стены — сотни и тысячи белых, и кадр
-// срезал его в ровный диск; камера выставлена по огню: ядро яркостью L (полуденных белых, без привыкания глаза) — на
-// кривой K·L^β, тусклое свечение — в мере кадра с привыканием глаза, между ними — плавно
+// presentation: fireball (client/nuclear/NukeExposure copy, checked by MushroomGlslTest), fire exposure and film
+// curve like conventional ball (tools/bake_fx/pack.py). Ball brightness spans hundreds/thousands of white-wall units; frame
+// clipped it to a flat disk. Camera exposed for fire: core brightness L (noon whites, without eye adaptation) on
+// curve K·L^β, dim glow in frame measure with eye adaptation, smooth transition
 const float MUSH_FILM_KEY = 0.233;
 const float MUSH_FILM_FOLLOW = 0.15;
-// выше белого — эта доля связи каналов (pack.py: white)
+// above white: this channel-coupling share (pack.py: white)
 const float MUSH_FILM_WHITE = 0.35;
-// Плёночной кривой идёт свечение, пока шар — шар: со сворачиванием в кольцо (доля кольца, MushroomModel.rollUp) — плавно
-// к прежнему пути (свет с пеленой, пересвет в долю пикселя одним оттенком): на этих долях кольца — от кривой к нему
+// Film curve applies while ball remains a sphere; as it rolls into ring (ring share, MushroomModel.rollUp), smoothly
+// return to old path (light with pall, overexposure to pixel coverage in one hue): curve-to-old transition at these ring shares
 const float MUSH_FILM_ROLL_FROM = 0.15;
 const float MUSH_FILM_ROLL_TO = 0.45;
 
-// Во сколько раз экспозиция шара темнее кадра, когда его ядро светит key (линейный, белая стена — 1, с привыканием глаза
-// к небу adapt: днём 1, ночью ~1 200)
+// Ball exposure reduction relative to frame when core emits key (linear, white wall = 1, eye-adapted
+// to sky by adapt: day 1, night ~1200)
 float mushBallGain(float key, float adapt) {
     float r = pow(max(key, 0.0), 1.0 - MUSH_FILM_FOLLOW) * pow(max(adapt, 1e-9), MUSH_FILM_FOLLOW) / MUSH_FILM_KEY;
     return 1.0 / sqrt(1.0 + r * r);
 }
 
-// Доля свечения гриба на плёночной кривой при доле кольца roll (NukeExposure.filmShare): шар — вся, свернувшаяся шапка —
-// ни капли: у неё прежний путь, где горячее нутро в просветах клубов горит оранжевым сквозь мглу
+// Mushroom emission share using film curve at ring share roll (NukeExposure.filmShare): whole sphere, none for rolled cap;
+// cap uses old path, hot interior glows orange through haze in billow gaps
 float mushFilmShare(float roll) {
     return 1.0 - smoothstep(MUSH_FILM_ROLL_FROM, MUSH_FILM_ROLL_TO, roll);
 }
 
-// Плёночная кривая по каналу (ACES, приближение Narkowicz 2016): свет с экспозицией → линейный 0..1
+// Per-channel film curve (ACES, Narkowicz 2016 approximation): exposed light → linear 0..1
 float mushFilm(float x) {
     float v = max(x, 0.0);
     return min(v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14), 1.0);
 }
 
-// Связь каналов выше белого: доля к белому у пикселя, чей ярчайший канал с экспозицией — top
+// Above-white channel coupling: white share for pixel whose brightest exposed channel is top
 float mushFilmWhite(float top) {
     return MUSH_FILM_WHITE * (1.0 - exp(-max(top - 1.0, 0.0)));
 }
 
-// Свет x (с экспозицией шара) на экране: кривая по каналам и связь каналов, линейный 0..1
+// Light x (ball-exposed) on screen: per-channel curve/channel coupling, linear 0..1
 vec3 mushFilm3(vec3 x) {
     vec3 d = vec3(mushFilm(x.r), mushFilm(x.g), mushFilm(x.b));
     return d + (1.0 - d) * mushFilmWhite(max(max(x.r, x.g), x.b));
 }
 
-// Шар на экране (NukeExposure.cap): поверхность светом e (линейный, с привыканием глаза adapt) при экспозиции по ней же —
-// предел света шара на том, что его обнимает (оболочка облака Вильсона в fx_pall)
+// Ball on screen (NukeExposure.cap): surface light e (linear, eye adaptation adapt), exposed for same surface,
+// caps ball light on surroundings (Wilson-cloud shell in fx_pall)
 vec3 mushBallCap(vec3 e, float adapt) {
     return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
 }
 
-// Пропускание гриба k вдоль луча dir на [0, len] без шума (steps шагов) — квадраты слоя перед частицей; air — воздух
-// кадра (pallAir)
+// Mushroom k transmittance along ray dir over [0, len], noiseless (steps steps), for layer quads before particle; air is
+// frame air (pallAir)
 float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
     float through = 1.0;
     for (int k = 0; k < MUSHROOMS; k++) {
@@ -664,39 +664,39 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
         for (int i = 0; i < steps; i++) {
             tau += dot(mushMean(m, mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds))), vec4(1.0)) * ds;
         }
-        // гриб в дымке воздуха тает в небе за ним (pallAir): его свет и непрозрачность × доля, дошедшая через воздух, а не
-        // цвет тумана — то, что за ним, видно сильнее
+        // mushroom in air haze fades into sky behind (pallAir): light/opacity × share transmitted through air, not
+        // fog color; what lies behind becomes more visible
         through *= 1.0 - pallAir(air, 0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
     }
     return through;
 }
 
-// ---------------------------------------------------------------- тень грибов от солнца (PallPass: fx_mush_shadow)
-// Карта тени: у гриба k — плитка MUSH_SHADOW × MUSH_SHADOW (строки k·MUSH_SHADOW…) в плоскости поперёк солнца (оси —
-// mushShadowAxes, начало и стороны — тексель MUSH_SHADOW_RECT таблицы, от эпицентра). Тексель — прямая вдоль солнца; в нём
-// доля света солнца, что гриб на этой прямой пропускает к трём высотам над землёй под эпицентром — земле, середине между ней и
-// верхом мира и самому верху (r, g, b; верх — тексель MUSH_SHADOW_TOP), в долях прямого пучка на горизонтальную землю: прямой пучок сквозь
-// толщу гриба без шума над высотой и рассеянный этой толщей вперёд (mushSeen). Доля бывает больше 1: тонкое белое
-// вещество низко над слоем при низком солнце светит вперёд ярче пучка, — кто берёт карту, зажимает её до 1
-// (mushShadow). Над точкой мира свет солнца проходит то, что на её прямой выше неё: всё вещество гриба к солнцу — выше
-// точки, от солнца — ниже (солнце над горизонтом). Плитка считается раз в кадр (MUSH_SHADOW² прямых), точке мира — одна
-// выборка на гриб. Её берут мир (fx_pall_composite) и солнце на пелене (fx_pall: пыль под шапкой — в её тени, как
-// ножка); частицы слоя — пока нет.
+// ---------------------------------------------------------------- mushroom sunlight shadow (PallPass: fx_mush_shadow)
+// Shadow map: mushroom k has MUSH_SHADOW × MUSH_SHADOW tile (rows k·MUSH_SHADOW…) in sun-perpendicular plane (axes
+// mushShadowAxes, origin/sides in table texel MUSH_SHADOW_RECT, epicenter-relative). Texel is a sun-aligned line; stores
+// sunlight share mushroom transmits on it to three heights above epicenter ground: ground, midpoint to
+// world top, top (r/g/b; top in MUSH_SHADOW_TOP), relative to direct beam on horizontal ground: direct beam through
+// noiseless mushroom depth above height plus forward scattering (mushSeen). Share can exceed 1: thin white
+// matter low above layer under low sun scatters forward brighter than beam; map consumers clamp to 1
+// (mushShadow). Sunlight above world point traverses matter on its line above it: mushroom matter sunward is above
+// point, away from sun below (sun above horizon). Tile calculated once per frame (MUSH_SHADOW² lines), one sample per
+// mushroom per world point. Used by world (fx_pall_composite) and pall sunlight (fx_pall: dust under cap shadowed like
+// stem); not yet by layer particles.
 const int MUSH_SHADOW = 128;
-// тексели строки гриба: плитка карты (MushroomField.SHADOW_RECT) и верх мира над землёй под эпицентром (SHADOW_TOP)
+// mushroom-row texels: map tile (MushroomField.SHADOW_RECT), world top above epicenter ground (SHADOW_TOP)
 const int MUSH_SHADOW_RECT = 17;
 const int MUSH_SHADOW_TOP = 18;
-// шагов на прямую в рамке гриба, не больше (пустое — прыжком до вещества, mushGap: прыжок не короче шага); дальше толщи
-// MUSH_SHADOW_DARK прямую не считать — ниже всё равно темно: прямой свет — e^−100, рассеянный вперёд — меньше процента
-// и у самого белого вещества, водяной пыли юбки и столба воды и шапки 0,1 кт к концу её жизни (ω' 0,9975: у 80 толщ
-// прошло бы около 1 %, у 100 — 0,3 %), даже во всё небо у низкого солнца (у 16 толщ — больше половины; MushroomGlslTest)
+// maximum steps per line within mushroom bounds (empty jumps to matter, mushGap, at least one step); stop after optical depth
+// MUSH_SHADOW_DARK: dark below anyway, direct light e^−100, forward-scattered below one percent
+// even for whitest matter, skirt/column mist, and 0.1 kt cap near end of life (ω' 0.9975: ~1 % through depth 80,
+// 0.3 % through 100), even across full sky under low sun (over half at depth 16; MushroomGlslTest)
 const int MUSH_SHADOW_STEPS = 128;
 const float MUSH_SHADOW_DARK = 100.0;
-// солнце ниже этой высоты (синус) тень кладёт как с неё: от заходящего солнца тень гриба — на сотни километров, и вдоль
-// почти горизонтальной прямой высоты слоёв карты не различить; свет такого солнца и так слаб
+// sun below this elevation (sine) casts shadows from this height: setting-sun mushroom shadow spans hundreds of kilometers;
+// nearly horizontal lines cannot distinguish map-layer heights, and that sunlight is weak anyway
 const float MUSH_SHADOW_LOW = 0.05;
 
-// Направление на солнце для тени (единичное): высота — не ниже MUSH_SHADOW_LOW, по горизонтали — то же
+// Unit shadow-sun direction: elevation at least MUSH_SHADOW_LOW, same horizontal direction
 // (MushroomField.shadowSun)
 vec3 mushShadowSun(vec3 sun) {
     float e = clamp(sun.y, MUSH_SHADOW_LOW, 1.0), h = length(sun.xz);
@@ -705,8 +705,8 @@ vec3 mushShadowSun(vec3 sun) {
     return vec3(sun.x * c, e, sun.z * c);
 }
 
-// Оси плоскости поперёк солнца s (MushroomField.shadowAxes): a — поперёк s и оси z мира (у Minecraft солнце ходит в
-// плоскости x, y — она горизонтальна), b — s × a
+// Axes of plane perpendicular to sun s (MushroomField.shadowAxes): a perpendicular to s and world z (Minecraft sun moves
+// in x/y plane, making a horizontal), b = s × a
 void mushShadowAxes(vec3 s, out vec3 a, out vec3 b) {
     vec3 c = cross(s, vec3(0.0, 0.0, 1.0));
     if (dot(c, c) < 0.01) c = cross(s, vec3(1.0, 0.0, 0.0));
@@ -714,40 +714,40 @@ void mushShadowAxes(vec3 s, out vec3 a, out vec3 b) {
     b = cross(s, a);
 }
 
-// Полуширина облака поперёк солнца на высоте mu (синус; MushroomField.across): радиус круга той же площади, что тень
-// столба радиуса r и высоты h на плоскость поперёк солнца — πr²·mu сверху и 2rh·√(1 − mu²) сбоку. Шапка и юбка — плоские
-// и при низком солнце видны узкой полосой, ножка — высокая и сбоку видна во всю высоту. Доля неба, которую облако
-// закрывает с земли, — по площади его тени (мал телесный угол — он и есть площадь, делённая на квадрат расстояния).
+// Cloud half-width across sun at elevation mu (sine; MushroomField.across): equal-area disk radius of shadow
+// of radius-r, height-h column onto sun-perpendicular plane, πr²·mu from top, 2rh·√(1 − mu²) from side. Cap/skirt are flat,
+// narrow strips under low sun; tall stem visible at full height from side. Ground-view sky share occluded by cloud
+// follows shadow area (small solid angle is area / distance²).
 float mushAcross(float r, float h, float mu) {
     return sqrt(r * (r * mu + 0.6366198 * h * sqrt(max(1.0 - mu * mu, 0.0))));
 }
 
-// Сколько света, рассеянного облаком вперёд, доходит до горизонтальной земли, в долях пучка на неё (косинус пучка — mu,
-// как у вывода на кадр), против слоя без края (MushroomField.seen): два потока считают слой бесконечным вбок, и снизу его
-// видно всё полушарие вокруг солнца — на горизонтальную землю (1 + μ)/2 его потока. Облако поперёк w (полуширина,
-// mushAcross) на расстоянии d по прямой к солнцу видно кругом с долей v = w²/(w² + d²) потока полушария; узкое — у самого
-// солнца, на землю как пучок (v·μ); между пределами — плавно (облако целиком над горизонтом выходит ярче точного v·μ не
-// больше чем на 12 %). Без этого тонкая ножка и край шапки тени почти не давали: рассеянный ими вперёд свет приходил со
-// всего неба.
+// Cloud forward-scattered light reaching horizontal ground relative to beam on it (beam cosine mu,
+// as frame output), versus edgeless slab (MushroomField.seen): two streams assume infinite lateral slab, visible
+// across whole hemisphere around sun from below, giving horizontal ground (1 + μ)/2 of its flux. Width-w cloud (half-width,
+// mushAcross), distance d along sun line, appears as disk with hemisphere-flux share v = w²/(w² + d²); narrow cloud lies near
+// sun, reaching ground like beam (v·μ); smooth between limits (cloud wholly above horizon no more than 12 % brighter than exact
+// v·μ). Without this, thin stem/cap edge barely cast shadows: their forward-scattered light came from
+// whole sky.
 float mushSeen(float w, float d, float mu) {
     float v = w * w / max(w * w + d * d, 1e-6);
     return v * (mu + (1.0 - mu) * 0.5 * v) / mu;
 }
 
-// Свет солнца над точкой на высоте h над землёй под эпицентром по трём слоям карты: t0 — над землёй под эпицентром,
-// t1 — над серединой между ней и верхом мира, t2 — над верхом (top — верх мира над той же землёй); между слоями — по прямой, ниже земли
-// под эпицентром — как над ней, выше верха — как над ним (MushroomField.shadowLayer)
+// Sunlight above point at height h above epicenter ground, from three map layers: t0 above epicenter ground,
+// t1 above midpoint to world top, t2 above top (top is world top above same ground); linear between layers, below epicenter
+// ground as at ground, above top as at top (MushroomField.shadowLayer)
 float mushShadowLayer(float h, float top, float t0, float t1, float t2) {
     float x = clamp(h / max(top, 1.0), 0.0, 1.0);
     if (x < 0.5) return t0 + (t1 - t0) * 2.0 * x;
     return t1 + (t2 - t1) * (2.0 * x - 1.0);
 }
 
-// Доля света солнца к точке p, как у mushShadow (ниже), но высота точки в слоях карты — не ниже доли low верха мира над землёй под эпицентром. Пелена (fx_pall:
-// pallSunAt) висит в воздухе, а слои карты — земля, середина и верх: между землёй и серединой карта смешивала бы тень
-// земли — и вещество гриба ниже точки на её прямой к солнцу (у низкого солнца — ножку и юбку под ковром на освещённой
-// стороне). С low = ½ точке пелены ниже середины — тень от вещества выше середины (шапка и почти вся ножка: она —
-// километры); ⚠ ножка между точкой и серединой (сотня-другая блоков) тени ковру за ней не даёт
+// Sunlight share at p as mushShadow below, but map-layer height at least low of world top above epicenter ground. Pall (fx_pall:
+// pallSunAt) is airborne, while map layers are ground/midpoint/top: below midpoint map would blend ground
+// shadow, including mushroom matter below point on sun line (under low sun, stem/skirt beneath carpet on lit
+// side). With low = ½, pall points below midpoint take shadow from matter above midpoint (cap/almost whole stem, kilometers
+// high); ⚠ stem between point/midpoint (hundreds of blocks) casts no shadow on carpet behind it
 float mushShadowFrom(sampler2D data, sampler2D map, vec3 sun, vec3 p, float low) {
     vec3 a, b;
     mushShadowAxes(sun, a, b);
@@ -759,7 +759,7 @@ float mushShadowFrom(sampler2D data, sampler2D map, vec3 sun, vec3 p, float low)
         vec3 q = p - texelFetch(data, ivec2(0, k), 0).xzy;
         vec2 uv = (vec2(dot(q, a), dot(q, b)) - rect.xy) / rect.zw;
         if (uv.x <= 0.0 || uv.y <= 0.0 || uv.x >= 1.0 || uv.y >= 1.0) continue;
-        // в своей плитке: соседняя плитка (другой гриб) в выборку не попадает
+        // inside own tile: sample cannot enter neighboring tile (another mushroom)
         uv = clamp(uv, vec2(0.5 / float(MUSH_SHADOW)), vec2(1.0 - 0.5 / float(MUSH_SHADOW)));
         vec4 t = textureLod(map, vec2(uv.x, (float(k) + uv.y) / float(MUSHROOMS)), 0.0);
         float top = texelFetch(data, ivec2(MUSH_SHADOW_TOP, k), 0).x;
@@ -768,8 +768,8 @@ float mushShadowFrom(sampler2D data, sampler2D map, vec3 sun, vec3 p, float low)
     return light;
 }
 
-// Доля прямого света солнца, что грибы кадра пропускают к точке p (от глаза), по карте тени map, вместе с рассеянным
-// ими вперёд (mushShadowSun — sun); вне плиток — 1
+// Direct sunlight share frame mushrooms transmit to eye-relative p from shadow map map, including forward
+// scattering (mushShadowSun, sun); outside tiles 1
 float mushShadow(sampler2D data, sampler2D map, vec3 sun, vec3 p) {
     return mushShadowFrom(data, map, sun, p, 0.0);
 }

@@ -1,4 +1,4 @@
-# interceptor: краска и светящиеся детали (срез сопла) — gen_models.py
+# interceptor: paint and glowing parts (nozzle exit) — gen_models.py
 newmtl paint
 Kd 1 1 1 1
 map_Kd incoming:block/weapon/interceptor

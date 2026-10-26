@@ -14,33 +14,33 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Как блок переносит ударную волну: порог избыточного давления (psi) и что с ним происходит.
- * Пороги из DESIGN-nuke §3.3: теги {@code incoming:nuke_*} (их можно переопределить датапаком), остальное —
- * по прочности блока. Ответ кэшируется на состояние блока.
+ * Block response to shock wave: overpressure threshold (psi) and consequence.
+ * Thresholds from DESIGN-nuke §3.3: {@code incoming:nuke_*} tags (datapack-overridable), otherwise
+ * block strength. Response cached per block state.
  */
 public record BlockResponse(float thresholdPsi, Kind kind) {
     public static final float NEVER = Float.MAX_VALUE;
-    /** Порог хрупкого ({@code incoming:nuke_fragile}: стекло, панели, фонари, факелы), psi — самый низкий из всех. */
+    /** Fragile threshold ({@code incoming:nuke_fragile}: glass, panes, lanterns, torches), psi, lowest of all. */
     public static final float FRAGILE_PSI = 0.8f;
     /**
-     * Порог растений ({@code incoming:nuke_plants}: трава, цветы, кусты, посевы), psi: их срывает тот же напор, что
-     * сдирает дёрн ({@code RuinPlanner.STRIP_PSI}); волна слабее их гнёт, а не ломает. Дальше их жжёт свет.
+     * Plant threshold ({@code incoming:nuke_plants}: grass, flowers, bushes, crops), psi: stripped by same pressure that
+     * strips turf ({@code RuinPlanner.STRIP_PSI}); weaker wave bends rather than breaks. Light burns them farther away.
      */
     public static final float PLANT_PSI = 8f;
     private static final float JITTER_SPAN = 0.3f;
-    /** Разброс порога в {@link #breaksAt}: блок ломается от давления между порог × {@code JITTER_MIN} и порог × {@code JITTER_MAX}. */
+    /** Threshold variation in {@link #breaksAt}: block fails between threshold × {@code JITTER_MIN} and threshold × {@code JITTER_MAX}. */
     public static final float JITTER_MIN = 0.85f, JITTER_MAX = JITTER_MIN + JITTER_SPAN;
 
     public enum Kind {
-        /** Не поражается волной (воздух, жидкость, неразрушимое). */
+        /** Unaffected by wave (air, liquid, indestructible). */
         NONE,
-        /** Грунт (земля, камень, терракота): ломается как кладка, но горы и берега толстые — волна их не ломает ({@link Blast}). */
+        /** Ground (soil, stone, terracotta): breaks like masonry, but thick mountains and banks withstand wave ({@link Blast}). */
         GROUND,
-        /** Ломается в воздух. */
+        /** Breaks into air. */
         BREAK,
-        /** Листва: ломается, а в сильном световом импульсе загорается. */
+        /** Leaves: break, ignite under strong light pulse. */
         LEAVES,
-        /** Бревно: ствол дерева на земле валится от эпицентра. */
+        /** Log: ground-rooted tree trunk topples away from epicenter. */
         LOG
     }
 
@@ -52,7 +52,7 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         return CACHE.computeIfAbsent(s, BlockResponse::classify);
     }
 
-    /** Теги могли измениться: /reload или другой мир в одиночной игре (свои датапаки). */
+    /** Tags may change: /reload or different single-player world (own datapacks). */
     public static synchronized void clearCache() {
         CACHE.clear();
         Blast.clearProps();
@@ -64,14 +64,14 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
 
     public boolean breaksAt(double psi, int jitterSeed) {
         if (thresholdPsi == NEVER) return false;
-        // ±15%: соседние одинаковые блоки ломаются не по линейке
+        // ±15%: neighboring identical blocks do not break along a ruler-straight line
         return psi >= thresholdPsi * jitter(jitterSeed);
     }
 
     /**
-     * Ломается ли блок от волны обычного заряда: давление {@code psi} и импульс {@code impulsePas} (Па·с) против кривой
-     * равного разрушения его порога ({@link BlastDamage}). Разброс порога — тот же, что у {@link #breaksAt(double, int)},
-     * на обе оси. У волны ядерки импульс много выше кривой — ответ тот же, что по одному давлению.
+     * Whether conventional-charge wave breaks block: pressure {@code psi} and impulse {@code impulsePas} (Pa·s) against
+     * threshold's iso-damage curve ({@link BlastDamage}). Same threshold variation as {@link #breaksAt(double, int)},
+     * on both axes. Nuclear-wave impulse is far above curve, giving same result as pressure alone.
      */
     public boolean breaksAt(double psi, double impulsePas, int jitterSeed) {
         if (thresholdPsi == NEVER) return false;
@@ -79,7 +79,7 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         return BlastDamage.breaks(BlastModel.kpa(psi) / j, impulsePas / j, BlastModel.kpa(thresholdPsi));
     }
 
-    /** Доля волны, что проходит дальше через этот блок, когда она его сломала ({@link BlastDamage#passes}); 0 — не сломала. */
+    /** Wave fraction passing through after block breaks ({@link BlastDamage#passes}); 0 if unbroken. */
     public double passes(double psi, double impulsePas, int jitterSeed) {
         if (thresholdPsi == NEVER) return 0;
         float j = jitter(jitterSeed);
@@ -87,8 +87,8 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
     }
 
     /**
-     * Множитель порога блока на месте {@code pos} ({@code JITTER_MIN}…{@code JITTER_MAX}): разброс у взрывов мода
-     * берётся по хэшу места, и тот же блок на том же месте ломается одинаково.
+     * Block-threshold multiplier at {@code pos} ({@code JITTER_MIN}…{@code JITTER_MAX}): mod explosions
+     * derive variation from position hash, so same block at same place breaks identically.
      */
     public static float jitterAt(BlockPos pos) {
         return jitter(Mth.murmurHash3Mixer(Long.hashCode(pos.asLong())));
@@ -100,7 +100,7 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
 
     private static BlockResponse classify(BlockState s) {
         if (s.isAir() || s.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) return NONE;
-        // неразрушимое и сверхпрочное (коренная порода, барьер, обсидиан) волна не ломает, что бы ни говорили теги
+        // wave never breaks indestructible or ultra-strong blocks (bedrock, barrier, obsidian), regardless of tags
         float destroy = s.getBlock().defaultDestroyTime();
         if (destroy < 0 || destroy >= 50) return NONE;
         if (s.is(ModTags.NUKE_GROUND)) return GROUND;

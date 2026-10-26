@@ -11,13 +11,13 @@ import java.util.SplittableRandom;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Полоса рельефа над путём ({@link Corridor}): ни одна колонка в полосе не пропущена; набор высоты до дальних колонок. */
+/** Terrain lane over the path ({@link Corridor}): no column in the lane is skipped; climb is accounted for before distant columns. */
 class CorridorTest {
     private static final double HALF_WIDTH = 1.5;
 
     /**
-     * На случайных ломаных спрошена каждая колонка, середина которой ближе полуширины к одному из отрезков (поперёк него:
-     * полоса — без скруглений на концах, позади начала пути колонки снаряду не нужны).
+     * For random polylines, query every column whose center is within half-width of a segment (across it:
+     * the lane has no rounded ends; the projectile does not need columns behind the path start).
      */
     @Test
     void asksEveryColumnInBand() {
@@ -40,25 +40,25 @@ class CorridorTest {
             for (int cx = -120; cx <= 120; cx++) {
                 for (int cz = -120; cz <= 120; cz++) {
                     if (distance(track, cx + 0.5, cz + 0.5) <= HALF_WIDTH) {
-                        assertTrue(asked.contains(key(cx, cz)), "колонка " + cx + " " + cz + " не спрошена, путь " + java.util.Arrays.toString(track));
+                        assertTrue(asked.contains(key(cx, cz)), "column " + cx + " " + cz + " was not queried, path " + java.util.Arrays.toString(track));
                     }
                 }
             }
         }
     }
 
-    /** Тонкая колонка в полосе — её высота, а не соседей. */
+    /** A narrow column in the lane contributes its own height, not its neighbors' heights. */
     @Test
     void thinColumnCounts() {
         double[] track = {0.3, 0, 0.3, 256};
         for (int at = 0; at < 256; at += 7) {
             int mz = at;
             double h = Corridor.highest(track, HALF_WIDTH, Corridor.Climb.NONE, (x, z) -> x == 1 && z == mz ? 104 : 64);
-            assertEquals(104, h, "колонка в " + at);
+            assertEquals(104, h, "column at " + at);
         }
     }
 
-    /** Колонка дальше пути реакции учитывается за вычетом набора до неё, ближняя — целиком. */
+    /** A column beyond the reaction distance contributes its height minus the climb before it; a nearby column contributes its full height. */
     @Test
     void farColumnLessClimb() {
         double[] track = {0.5, 0, 0.5, 200};
@@ -67,13 +67,13 @@ class CorridorTest {
         assertEquals(150 - 0.1 * (100.5 - 10), far, 1e-9);
         double near = Corridor.highest(track, HALF_WIDTH, climb, (x, z) -> x == 0 && z == 5 ? 150 : 0);
         assertEquals(150, near, 1e-9);
-        // путь — вдоль ломаной: на втором отрезке он считается от начала первого
+        // distance follows the polyline: on the second segment, it is measured from the start of the first
         double[] bent = {0.5, 0, 0.5, 50, 50.5, 50};
         double corner = Corridor.highest(bent, HALF_WIDTH, climb, (x, z) -> x == 30 && z == 49 ? 150 : 0);
         assertEquals(150 - 0.1 * (50 + 30 - 10), corner, 1e-9);
     }
 
-    /** Одна точка — квадрат вокруг неё. */
+    /** A single point gives a square around it. */
     @Test
     void pointIsSquare() {
         double h = Corridor.highest(new double[] {10.5, 10.5}, HALF_WIDTH, Corridor.Climb.NONE, (x, z) -> x == 10 && z == 11 ? 90 : 64);
@@ -129,7 +129,7 @@ class CorridorTest {
         return ((long) x << 32) ^ (z & 0xffffffffL);
     }
 
-    /** Расстояние от точки поперёк до ближайшего отрезка ломаной, на который она проецируется; одна точка — по квадрату. */
+    /** Cross-track distance from a point to the nearest polyline segment onto which it projects; a single point uses a square. */
     private static double distance(double[] track, double px, double pz) {
         if (track.length == 2) return Math.max(Math.abs(px - track[0]), Math.abs(pz - track[1]));
         double best = Double.POSITIVE_INFINITY;

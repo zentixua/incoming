@@ -27,16 +27,16 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Снаряды, которых у клиента нет. Сущность уходит клиенту только в пределах его дальности прорисовки (и ближе дальности
- * слежения своего типа), а в полёте вне мира ({@link VirtualFlights}) её нет ни у кого, — но мотор ракеты или вой
- * снаряда РСЗО слышно дальше, а факел, шлейф и сам корпус видно ещё дальше. Каждому игроку уходят снаряды его мира,
- * которых у него нет и которые он уже может слышать ({@link Hearing#audible}) или видеть ({@link #range}): слышимые —
- * раз в {@link S2C.FarFlights#PERIOD} тика, только видимые — раз в {@link S2C.FarFlights#FAR_PERIOD}, не больше
- * {@link #LIMIT} ближних. Клиент ведёт по ним тот же звук, что и по сущности, и рисует снаряд вдали, а когда сущность
- * появится, продолжает по ней без шва.
+ * Projectiles absent from the client. Entities reach a client only within its render distance (and their type's
+ * tracking range); outside-world flights ({@link VirtualFlights}) have no entity on any client. But missile engines
+ * or MLRS projectile howls are audible farther, and exhaust, trails and bodies visible farther still. Each player receives
+ * projectiles in their world that they lack and can already hear ({@link Hearing#audible}) or see ({@link #range}): audible ones
+ * once per {@link S2C.FarFlights#PERIOD} ticks, visible-only once per {@link S2C.FarFlights#FAR_PERIOD}, at most
+ * {@link #LIMIT} nearest. Client uses the same sound as for an entity and draws the distant projectile; when the entity
+ * appears, it continues seamlessly from it.
  */
 public final class FarFlights {
-    /** Снарядов в пакете одному игроку, не больше: ближние (дальние в большом залпе — точки в одном пикселе). */
+    /** Maximum projectiles per player packet: nearest (distant ones in large salvos are single-pixel dots). */
     static final int LIMIT = 64;
 
     private FarFlights() {}
@@ -63,23 +63,23 @@ public final class FarFlights {
         }
     }
 
-    /** Все снаряды мира в полёте: в мире и вне его (на пусковой в закрытой ячейке — нет). */
+    /** All flying projectiles in the world and outside it (excluding closed launcher slots). */
     public static List<StrikeProjectile> flights(ServerLevel level) {
         List<StrikeProjectile> flights = StrikeWorld.projectiles(level);
         flights.removeIf(p -> !p.isActive());
         return flights;
     }
 
-    /** Докуда игрокам видно снаряды (по горизонтали) и взрывы, блоков (настройка мира). */
+    /** Player projectile (horizontal) and explosion visibility distance, blocks (world setting). */
     public static double range() {
         return IncomingConfig.SERVER.farRange.get();
     }
 
     /**
-     * Что из точки {@code eye} слышно или видно из того, чего у игрока {@code player} нет (без игрока — всё), не больше
-     * {@link #LIMIT} ближних.
+     * Projectiles audible/visible from {@code eye} that {@code player} lacks (without a player: all), at most
+     * {@link #LIMIT} nearest.
      *
-     * @param silent и те, которых не слышно, а только видно (они уходят реже)
+     * @param silent include inaudible, visible-only projectiles (sent less often)
      */
     public static List<S2C.FarFlight> sample(ServerLevel level, List<StrikeProjectile> flights, Vec3 eye, @Nullable ServerPlayer player, boolean silent) {
         double sight = silent ? range() : 0;
@@ -87,8 +87,8 @@ public final class FarFlights {
         List<Candidate> found = new ArrayList<>();
         for (StrikeProjectile p : flights) {
             if (player != null && !p.isVirtual() && seenBy(level, p, player)) continue;
-            // видно и ближние — по горизонтали, как прорисовку и отслеживание сущностей: высота полёта (B-2 на настоящем
-            // эшелоне 12 км при шкале полёта 1) снаряд над головой не прячет
+            // Visibility and nearest selection are horizontal, like rendering and entity tracking: flight altitude (B-2 at real
+            // 12 km flight level with flight scale 1) does not hide an overhead projectile.
             double d2 = p.position().subtract(eye).horizontalDistanceSqr();
             boolean audible = Hearing.audible(p, eye, weather);
             if (!audible && d2 > sight * sight) continue;
@@ -103,7 +103,7 @@ public final class FarFlights {
         return out;
     }
 
-    /** Дальний путь ЗРК нужен дыму и после ухода сущности из прорисовки; никакой новой загрузки чанков. */
+    /** Distant SAM path also serves smoke after entity leaves render distance; no new chunk loading. */
     public static List<S2C.FarFlight> sampleInterceptors(ServerLevel level, List<Interceptor> flights, Vec3 eye,
                                                        @Nullable ServerPlayer player, boolean silent) {
         List<S2C.FarFlight> out = new ArrayList<>();
@@ -124,7 +124,7 @@ public final class FarFlights {
         return out;
     }
 
-    /** Последнее место пути — до сообщения разрыва: конец следа не экстраполируется за точку встречи. */
+    /** Final path position before burst message: trail end is not extrapolated past the intercept point. */
     public static void endInterceptor(ServerLevel level, Interceptor f, Vec3 at) {
         S2C.FarFlights packet = new S2C.FarFlights(List.of(interceptor(level, f, at, true)));
         double reach2 = range() * range();
@@ -147,7 +147,7 @@ public final class FarFlights {
 
     private record Candidate(StrikeProjectile p, double d2, boolean audible) {}
 
-    /** Сущность уже есть у этого игрока — её звук и картинку он ведёт сам. */
+    /** Player already has the entity and handles its sound and rendering. */
     private static boolean seenBy(ServerLevel level, StrikeProjectile p, ServerPlayer player) {
         ChunkMap.TrackedEntity tracked = level.getChunkSource().chunkMap.entityMap.get(p.getId());
         return tracked != null && tracked.seenBy.contains(player.connection);
@@ -160,8 +160,8 @@ public final class FarFlights {
     }
 
     /**
-     * Земля под снарядом на старте (горит ускоритель — облако старта у клиента встаёт на неё): первый воздух по карте высот
-     * {@code MOTION_BLOCKING} готового чанка, как у клиента в его чанках; не на старте или чанк не готов — NaN.
+     * Ground beneath projectile at launch (booster burning — client launch cloud rests here): first air from a ready chunk's
+     * {@code MOTION_BLOCKING} heightmap, as on client chunks; not launching or unready chunk: NaN.
      */
     private static float ground(StrikeProjectile p) {
         if (!p.flightPhase().boosterLit()) return Float.NaN;
