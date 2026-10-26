@@ -14,6 +14,10 @@ Six weapons, in the order the designator lists them. Each launch uses [munitions
 
 Times are for a nearby target. The world owner can change flight times.
 
+Weapon details: [Shahed](#shahed), [Lancet](#lancet), [cruise missile](#cruise-missile), [Grad](#grad),
+[B-2 bomb](#bomb-b-2), [ICBM](#nuclear-icbm). Reference sections cover [blast damage](#what-a-blast-does),
+[flight](#how-they-fly), [appearance](#what-a-blast-looks-like) and [trails](#flames-and-smoke-trails).
+
 Fuel burning in a crater produces a continuous roar and crackle from where it burns. It fades as the fuel runs out; the
 recording does not fade and restart every few seconds. Its level and arrival time depend on the heat output and the path
 to you.
