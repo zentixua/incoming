@@ -161,7 +161,7 @@ file changes.
   minus streaming clamp(√mono, 2, 8)); OpenAL Soft has 255 mono and 1 stereo, 247 static; our 12 (`OwnSources.MAX`) use
   the same 256 OpenAL sources, leaving 236 in practice (`BlastVoices.reach`, device count from `OwnSources.deviceSources`
   on engine load; engine-constructor event has no context). Ceiling: 236 minus motors, explosion rumble, fire roar,
-  the nuke, world (estimate), reserve for yielding voices — 96 (`BlastVoices.CAP`); beyond world estimate, use actual
+  the nuke, world (est.), reserve for yielding voices — 96 (`BlastVoices.CAP`); beyond world estimate, use actual
   free engine channels at hit time and a near-hit reserve (`BlastVoices.reserve`: once per tick, if free including
   channels yielding voices will soon return is less than `SPARE + GROUP`, quietest own voices yield early: channels
   cannot be freed on the hit tick). `GROUP` reserve belongs to the loudest: a new sound quieter than any playing one
@@ -292,7 +292,7 @@ file changes.
   `uv run tools/build_sounds.py --alone <sections>` builds only these sections, preserving other `sounds.json` events
   and credits; sections using recordings cannot be built this way.
 - World sounds other than motors/explosions (sirens, substation, districts, ruin collapse, ICBM launch, fire roar and
-  crater falls) use `client/sound/Sources`: source power from spec (sourced or “estimate”), ISO 9613 path, `Loudness`;
+  crater falls) use `client/sound/Sources`: source power from spec (sourced or marked `(est.)`), ISO 9613 path, `Loudness`;
   file normalized to reference `Loudness.ENGINE_LUFS` using its loudness from `Spectra`, no louder than ceiling
   (`*_LUFS`, measured by `build_sounds.py --measure` on built files, without Freesound); sound arrives at sound speed.
   No manual ranges (`ClientSounds.at` with volume > 1). Bomb sounds belong to S5, SAM sounds to S6.

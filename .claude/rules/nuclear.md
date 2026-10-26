@@ -24,7 +24,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
     crater, radiation sickness, burns, eyes, blast injuries — `BlastInjury`), unit tests. Point pressure and dynamic
     pressure: `Detonation` (`overpressureKpa`, `dynamicPressureKpa`: along-ground dynamic pressure, `blastWind`,
     `positivePhaseSeconds`; ground versions `ground*`): an elevated point is treated as ground with burst height
-    reduced by its height; above the burst, as a surface burst (upper estimate: no Mach stem high above ground,
+    reduced by its height; above the burst, as a surface burst (upper bound (est.): no Mach stem high above ground,
     DESIGN-nuke §1.1); wave hits down to 0.3 psi (`HIT_KPA`), front window by slant range `blastReach`, not `radiusMax`
     (ground range);
   - `Detonation` — one detonation (all server/client inputs for visuals and consequences), `NuclearEvents` (SavedData:
@@ -56,7 +56,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   with air; pattern is brightness temperature along radius from outside, octahedral direction map from cap center,
   mean p⁴ = 1, power from model): absent before luminosity minimum (surface is the smooth shock front, G&D 2.117–2.119),
   clumps emerge by breakaway (`FireballModel.breakawaySeconds`, 15/11 of minimum time) (Brode 1963; spread ~4.5 % and
-  correlation 0.15 R estimated from Trinity 25 ms image), then frame follows rise path in fireball radii
+  correlation 0.15 R (est.) from Trinity 25 ms image), then frame follows rise path in fireball radii
   (`FireballModel.surfaceRise`: self-similar bubble flow, one pattern for all yields); cool air darkens the underside;
   during rollup the pattern gives way to billow tongues `SKIN` (share 1 − `rollUp`; texel 16.z, w:
   `MushroomField.ballSurface`). Bake uses a 1 m radius sphere: Mantaflow buoyancy is in cells, thousands of times weaker
@@ -66,7 +66,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   ~12 s), glare and veil (`NukeRenderer.fireballs`), amber sky (`NukeSky.amber`; it and `NukeFlash` sky glare use weather
   at detonation, `Detonation.visibility`: air-scattered light, direct+diffuse transmittance
   `ThermalModel.transmittance`, Glasstone fig. 7.104; glare is a beam, `Sight.Air`; sky-glare share 0.6 and world-flash
-  threshold 0.05 are estimates, `NukeFlash.SKY_GLARE`), dust-wall, pall, Wilson cloud and camera-local dust light
+  threshold 0.05 are (est.), `NukeFlash.SKY_GLARE`), dust-wall, pall, Wilson cloud and camera-local dust light
   (`CloudPuffs.pallLight` → `pallBallLight`, `client-fx.md`). Matter cannot appear brighter than screen white, so at pall
   ray end (`fx_pall`) overbrightness becomes pixel coverage (cover·L, its own light color) and adds to what is behind:
   frame transmittance stays real; layer quads behind matter receive its light (`fx.fsh`: before). Otherwise a sphere
@@ -151,15 +151,15 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   at 1.4 km 58 m), at 1.42 km beneath layer night until minute 20, brighter by minute 30 (Fujii in Hersey), at 3.2 km
   twilight, at 300 m clears in minutes. Fine dust hangs for hours: surface 15 kt pall visible ~1.6 h, airburst (592 m)
   ~1.7 h (longest a kilometer from epicenter; at 3 km ~0.9 and ~1.1 h); detonation holds its pall slot that long.
-  Unsourced numbers (fitted to Hiroshima or estimated) are marked in `DustModel`: debris dust 0.1 kg/m² and `FINE_S`
+  Numbers marked `(est.)` (fitted to Hiroshima or estimated) in `DustModel`: debris dust 0.1 kg/m² and `FINE_S`
   (together, with `HobBlast` pressure; old Kinney–Graham ×1.8 used 0.5 kg/m² and 1000 s), `STEM_*`, `RISE_S`, `TOP_MAX`,
   `TOP_C`, heating light share 0.2, γ 5 K/km, entrainment wind over pressure phase (not dynamic-pressure phase, survey
   §8.1), and `lifted` shaped as dynamic-pressure impulse rather than an entrainment law. No per-cell surface classes
   (grass, city, sand) yet; `REFERENCE` everywhere. From above, pall is one blanket (18.10 complaint: golden/dark patches
   from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
   e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
-  Willis and Deardorff 1976, estimate), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
-  entrainment zone, Stull 1988, estimate; `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
+  Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
+  entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
   troughs equals layer-top light (depth overhead from the same layer); previously rays through billow gaps reached
   bottom, lit by mean optical depth (and fires), producing dark/orange patches seen only from above.
   `PallFieldTest.oldPallIsOneBlanket`: after 6–7 minutes, where mean depth ≥ 5, thinnest column ≥ 3. Wind carries dust
@@ -171,7 +171,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   dust carried past the map rests on edge terrain. No dust above water (DESIGN-nuke §6, step 6): wind-stripped spray
   behind the front has its own table row (slot rows: dust, spray, haze; `PallField.ROWS`, 6 for two detonations in
   `PallPass`), height and law: rises to wave-crest stripping height (`WaterModel.sprayHeight`), large drops fall,
-  lowering top to 0.6 of that (`PallField.sprayTop`, estimate), rather than rising like dust over hot ground
+  lowering top to 0.6 of that (`PallField.sprayTop`, (est.)), rather than rising like dust over hot ground
   (`WaterModel.spray`: visible over 60 m, thins in 30 s, falls out in three minutes; head portion is the same lower,
   rearward wedge, same `handoff`); water bursts also have a base surge by model laws/clock (`PallField.surge`,
   `WaterModel.surge*`; from the water-column wall falling into it on the same clock in the mushroom volume). Pall OFF
@@ -207,7 +207,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
   dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
   back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
-  `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (estimate). Beyond wedge, transition to
+  `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (est.). Beyond wedge, transition to
   pall from 1 to 1.5 wedge lengths (`handoff`; pall takes 1 − handoff by local age / t₊). Where wind no longer lofts
   visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLifted`,
   `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
@@ -276,7 +276,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   inverting zero-clamped Eddington reflectance raised every channel with ω' < 0.38 to 0.38 on steam's first frame
   (edge glow to ×0.77). Mushroom lifetime (`MushroomModel.lifeSeconds`, also `CloudPuffs.lifeSeconds`, client detonation
   and `BlastWall` table) is stabilization and turbulent dispersion, (R²/(g·ε))^⅓ by cap radius (Richardson–Obukhov,
-  ε estimated): grows with yield, not slow rise (4 stabilization times gave 1 kt 45 minutes, longer than 15 kt and
+  ε (est.)): grows with yield, not slow rise (4 stabilization times gave 1 kt 45 minutes, longer than 15 kt and
   1 Mt). Stem/skirt matter is local dust, thick-layer color `NukePall.DUST` (`MushroomField.DUST`): stem fed only by wave
   dust (`StemDust`), its old “dust with smoke” color was grayer than the carpet beneath. Ground seen by stem, skirt and
   cap underside is this layer's top (`MushroomField.groundUnder`, texel 18.yzw: layer optical depth τ from
@@ -323,7 +323,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   band (`mushFootBandAt`), old stem clearance above merge. Slope bound below merge includes both derivatives:
   width ≤0.385 and taper ≤1.5/(merge−start). Inflow cylinder checked once per pixel; inside, one flow map per slot is
   shared by all billow/shadow samples, outside old coordinates. ⚠ Corner is planar (stem radius comparable to layer
-  depth), share decay with height is estimated; inside stem near axis carpet top remains (carpet denser there than
+  depth), share decay with height is an approximation (est.); inside stem near axis carpet top remains (carpet denser there than
   at wall, but stem opaque across). `StemFootTest` catches steps/voids between carpet and stem (along inflow streamline,
   no jumps and density at least half carpet or stem; dust surface over carpet is a flare outside wall, tapering up).
   Stem jets (texel 11.x) rise with cloud-rise share (`MushroomModel.stemRise`) and appear with it; storm smoke top under

@@ -11,7 +11,7 @@ Thus each custom tool/rule here receives one verdict:
 - **(b)** consequence of a root error: fix root, remove tool;
 - **(c)** real need without a standard: keep, with reason.
 
-Sources at the end; unsourced items marked “estimate”. Retrospective since 01.10: `docs/dev-process.md`.
+Sources at the end; unsourced items marked `(est.)`. Retrospective since 01.10: `docs/dev-process.md`.
 
 ## Summary
 
@@ -191,7 +191,7 @@ Roots (section 4): **K1** multiple visual sessions on one GPU; **K2** visuals ch
 |---|---|---|---|
 | Method body, number or shader edit → frame | JBR + HotswapAgent dev client (sandbox), F3+T; frame `shot --at` | ≤ 10 s | 10 s (22.10 measurement), but sandbox died overnight (K1) |
 | Edit not supported by hot swap (registration, mixin, static field) | restart dev client, like everyone (mixin swaps unreliable: Mixin #592, #408) | ≤ 40 s with Iris | 20–39 s |
-| Nuclear frame at time t | Flashback replay: record once, seek | ≤ 1 min (estimate, trial part B) | 342 s full scenario per round |
+| Nuclear frame at time t | Flashback replay: record once, seek | ≤ 1 min ((est.), trial part B) | 342 s full scenario per round |
 | “Done” to merge | CI (`setup-gradle`, sharded GameTest) + fresh-agent review of PR frames; wait `pr_ci.sh`, after “Записка” removal `gh pr checks --watch --required` | ≤ 20 min | 1.5–5.5 h for visual PRs |
 | Player pack loads | `mc-runtime-test` in open-skies CI | minutes, every pack PR | no client-launch check |
 | Full-pack Iris look | one-off 3.4.1 comparison, one pass/session | once | every visible PR |
@@ -227,7 +227,7 @@ Custom items kept and why, only (c) from section 3:
      within same session, is merge gate; bench frames go to reviewer. Not full-pack recording (section 3).
    - Finish one-off 3.4.1 comparison in one pass, then remove `look_gate`, `ProbeScenario`, `prod_client.py --video` and
      `x11_record.py`. CI “Записка” removed 25.10.
-   - Gain: 9.9 GPU hours overnight → minutes/PR; “done → merged” 1.5–5.5 h → ~20 min (estimate).
+   - Gain: 9.9 GPU hours overnight → minutes/PR; “done → merged” 1.5–5.5 h → ~20 min (est.).
 3. **Simple (a) replacements, one hour or less each:**
    - `pr_ci.sh` → `gh pr checks --watch --fail-fast --required` (already one required check);
    - “Что изменилось” → job-level `dorny/paths-filter` (not `on.pull_request.paths`);
@@ -243,14 +243,14 @@ Custom items kept and why, only (c) from section 3:
    - Remove `copyRuntimeMods_*`, `fetch_runtime_mods.py`; it already fetches Sable/Aeronautics from Modrinth, whose Maven
      serves any Modrinth project.
    - Host shaderpack (`sandbox.sh shaders`, `trailer/record.sh`, `client_scenario.sh`) is resource; keep copy.
-   - Cost: ~2–3 h (estimate).
+   - Cost: ~2–3 h (est.).
 5. **Own swap agent → HotswapAgent (`autoHotswap`) on JBR.**
    - Put `hotswap-agent.jar` in JBR's own `lib/hotswap` (HotswapAgent README), flags:
      `-XX:+AllowEnhancedClassRedefinition -XX:HotswapAgent=fatjar`.
    - Part B trial: sees mod classes in NeoForge loader? Otherwise JDWP `redefine`, like IDE.
    - Then remove `src/sandboxAgent`.
 6. **One dev client: `client_scenario.sh` scenarios as sandbox-command lists.**
-   - Cost: large (estimate one day), gain one custom client instead of two. After 1–5.
+   - Cost: large ((est.), one day), gain one custom client instead of two. After 1–5.
 7. **Nuclear moment via Flashback replay** (trial part B).
 8. **K3: fix flakes one by one.** Then remove `ci_repeat.sh` and manual repeat CI.
 9. **open-skies (other repo): `mc-runtime-test` in pack CI.** “Pack loads” check now substituted by laptop launch.
@@ -335,5 +335,5 @@ Standard replacements (section 3):
 - gamescope, `--backend headless`: https://github.com/ValveSoftware/gamescope (backend list: `gamescope --help`)
 - `mc-runtime-test`: https://github.com/headlesshq/mc-runtime-test
 
-Not found: published modder measurements for “edit → game” (seconds for hot swap, 30–90 s restart are estimates);
+Not found: published modder measurements for “edit → game” (seconds for hot swap, 30–90 s restart, both (est.));
 Reddit posts from 2025–2026 (site would not open); Iris RenderDoc guide.

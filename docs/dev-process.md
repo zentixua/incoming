@@ -1,7 +1,7 @@
 # How we develop: retrospective, fixes, next steps
 
 Analysis as of 22.10.2026 (session D): what went wrong since 01.10, why, what is fixed and planned. Numbers come from
-GitHub history, laptop journal, session transcripts and measurements; estimates are marked.
+GitHub history, laptop journal, session transcripts and measurements; estimates are marked `(est.)`.
 
 ## Summary
 
@@ -13,7 +13,7 @@ GitHub history, laptop journal, session transcripts and measurements; estimates 
   - Sessions spent 17.5 h polling.
   - Sessions ending turns mid-job were manually resumed 13+ times.
 - **Main loss: reworking 3.5.0.** Visuals and sound merged without comparison to the previous release. Almost all of the
-  21–22.10 batch (~$635 by session counters, ~15 laptop hours, estimate) went to restoring 3.4.1 quality or better.
+  21–22.10 batch (~$635 by session counters, ~15 laptop hours, (est.)) went to restoring 3.4.1 quality or better.
 - **All cases share one root.** Rules followed Artem's complaints and lived as text in memory. No tool enforced them.
   Thus the fixes below are in tools, not new rule lines.
 
@@ -251,7 +251,7 @@ in one final batch PR.
 - Cost: changes “guide in same PR” rule, Artem's decision.
 
 **5.6. Short brief and visuals without GPU.**
-- Brief: rules/links, details in on-demand files: ~16 thousand tokens per session/continuation → ~3 thousand (estimate).
+- Brief: rules/links, details in on-demand files: ~16 thousand tokens per session/continuation → ~3 thousand (est.).
 - Visuals without GPU, after sandbox X:
   - reference frames of one effect at fixed times (0.1/1/10/60 s) with comparison threshold (SSIM/FLIP, as studios use);
   - Flashback strike replay instead of new flight, comparing versions on one trajectory.
