@@ -207,7 +207,7 @@ class NukeExposureTest {
                     medium *= cover / shownCover; } medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
                     return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover; }
                     """),
-            new Block("mushAt (свечение)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Mushroom step at ray t", """
+            new Block("mushAt (glow)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Mushroom step at ray t", """
                     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape)); vec3 source = w * light;
                     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet); hot = st * thermal * (1.0 - fromCarpet);
                     float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
@@ -223,17 +223,17 @@ class NukeExposureTest {
                     vec4 r = mushAt(k, m, p, q, cone, near, partHeat, partGlow, partFilm); gap = min(gap, r.w > 1e-7 ? 0.0 : 0.5 * max(near, 0.0));
                     sum += r; heat += partHeat; glow += partGlow; film += partFilm; } return sum; }
                     """),
-            new Block("main (начальные суммы)", "vec3 heat = vec3(0.0), emitted = vec3(0.0);", "float transmit = 1.0;", """
+            new Block("main (initial sums)", "vec3 heat = vec3(0.0), emitted = vec3(0.0);", "float transmit = 1.0;", """
                     vec3 heat = vec3(0.0), emitted = vec3(0.0); float filmed = 0.0;
                     """),
-            new Block("main (накопление по лучу)", "vec4 r = mushStep(tm, cone, gap, hot, glowing, film);", "tm += ds;", """
+            new Block("main (ray accumulation)", "vec4 r = mushStep(tm, cone, gap, hot, glowing, film);", "tm += ds;", """
                     vec4 r = mushStep(tm, cone, gap, hot, glowing, film); float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
                     if (r.w > 1e-7) { ds = clamp(0.5 / r.w, dsMin, dsMax); ds = min(ds, m1 - tm); passesBefore(tm, light, transmit, lost);
                     float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y); light += transmit * air * r.rgb * (1.0 - tr) / r.w;
                     float part = transmit * air * (1.0 - tr) / r.w; heat += part * hot; emitted += part * glowing; filmed += part * film;
                     lost += transmit * (1.0 - air) * (1.0 - tr); transmit *= tr; tauEye += r.w * ds; }
                     """),
-            new Block("main (сборка пикселя)", "float cover = 1.0 - transmit - lost;", "vec4 res = vec4(shown, min(transmit + lost, 1.0));", """
+            new Block("main (pixel assembly)", "float cover = 1.0 - transmit - lost;", "vec4 res = vec4(shown, min(transmit + lost, 1.0));", """
                     float cover = 1.0 - transmit - lost; vec3 shown = pallShown(light + heat, cover);
                     float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0); if (film > 0.0) {
                     vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);
@@ -279,10 +279,10 @@ class NukeExposureTest {
     void silentShaderEditsFailTheCheck() throws IOException {
         String fx = fxPall();
         String[][] mutations = {
-                {"filmed += part * film;", "filmed += part * 0.0;", "main (накопление по лучу)"},
-                {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (сборка пикселя)"},
-                {"film = dot(hot, LUMA) * mushFilmShare(roll);", "film = dot(hot, LUMA);", "mushAt (свечение)"},
-                {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (сборка пикселя)"},
+                {"filmed += part * film;", "filmed += part * 0.0;", "main (ray accumulation)"},
+                {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (pixel assembly)"},
+                {"film = dot(hot, LUMA) * mushFilmShare(roll);", "film = dot(hot, LUMA);", "mushAt (glow)"},
+                {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},
                 {"medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));", "", "pallShown"}};
         for (String[] m : mutations) {
