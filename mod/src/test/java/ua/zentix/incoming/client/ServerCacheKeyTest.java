@@ -94,6 +94,23 @@ class ServerCacheKeyTest {
         assertEquals(legacy, ServerCacheKey.fromAddress("[2001:db8::1]:25565").directory(root));
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "пример.рф, ______.__, xn--e1afmkfd.xn--p1ai",
+            "пример.рф:25565, ______.___25565, xn--e1afmkfd.xn--p1ai",
+            "ПРИМЕР.РФ:25571, ______.___25571, xn--e1afmkfd.xn--p1ai_25571"
+    })
+    void originalTypedIdnCacheIsReused(String address, String oldName, String canonical) throws IOException {
+        Path legacy = Files.createDirectory(root.resolve(oldName));
+        Files.writeString(legacy.resolve("terrain.bin"), "old IDN terrain");
+        var server = ServerCacheKey.fromAddress(address);
+        assertEquals(canonical, server.key());
+        Path selected = server.directory(root);
+        assertEquals(legacy, selected);
+        assertEquals("old IDN terrain", Files.readString(selected.resolve("terrain.bin")));
+        assertFalse(Files.exists(root.resolve(canonical)), "прежние данные остаются в исходной папке");
+    }
+
     @Test
     void ipv6HostAndPortDoNotShareTerrainEvenWithTheSameSeed() throws IOException {
         var withPort = ServerCacheKey.fromAddress("[2001:db8::1]:1234");

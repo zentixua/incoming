@@ -41,9 +41,10 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
         String key = keyHost + (port == DEFAULT_PORT ? "" : "_" + port);
         String oldHost = ipv6 ? "[" + host + "]" : host;
         String explicit = safe(oldHost + ":" + port);
-        // Все варианты — из разобранного адреса: смена регистра, скобок или явного 25565 не меняет поиск папки.
-        List<String> legacy = port != DEFAULT_PORT ? List.of(explicit)
-                : ipv6 ? List.of(safe(oldHost), explicit, safe(host)) : List.of(safe(host), explicit);
+        // Разобранные варианты имеют приоритет; исходное старое имя сохраняет также кэш IDN и иных написаний.
+        String original = safe(address);
+        List<String> legacy = port != DEFAULT_PORT ? List.of(explicit, original)
+                : ipv6 ? List.of(safe(oldHost), explicit, safe(host), original) : List.of(safe(host), explicit, original);
         return new ServerCacheKey(key, legacy);
     }
 
@@ -51,7 +52,7 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
      * Новая папка имеет приоритет. Если есть только прежняя, читаем и сохраняем в ней: создание новой после записи
      * одного измерения спрятало бы остальные измерения прежней папки при следующем входе. Файлы не переносим.
      * Прежние имена ищем без учёта регистра. Без порта — раньше явного 25565; внутри варианта точное имя — раньше
-     * отличающихся регистром, затем имена по алфавиту. Этот порядок не зависит от строки текущего входа.
+     * отличающихся регистром, затем имена по алфавиту. После разобранных вариантов — старое имя от исходной строки.
      * Вызывается потоком ввода-вывода, результат хранится до конца работы с кэшем.
      */
     public Path directory(Path root) throws IOException {
