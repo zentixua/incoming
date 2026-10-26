@@ -9,3 +9,10 @@ mod/runs/
 tools/.sound-cache/
 tools/.trailer-cache/
 mod/logs/
+scratch/
+fzc/
+.idea/
+*.iml
+.vscode/
+.claude/settings.json
+.claude/settings.local.json

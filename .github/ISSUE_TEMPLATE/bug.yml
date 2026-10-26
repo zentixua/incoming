@@ -1,0 +1,51 @@
+name: Bug report
+description: Report incorrect behavior with reproduction steps and a log.
+body:
+  - type: markdown
+    attributes:
+      value: Read the [guide](https://github.com/zentixua/incoming/blob/main/docs/guide/README.md) and search existing issues first. For security issues, follow [SECURITY.md](https://github.com/zentixua/incoming/blob/main/SECURITY.md).
+  - type: input
+    id: incoming
+    attributes:
+      label: Incoming version
+      placeholder: 3.8.0
+    validations:
+      required: true
+  - type: input
+    id: minecraft
+    attributes:
+      label: Minecraft and NeoForge versions
+      placeholder: Minecraft 1.21.1, NeoForge 21.1.264
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where does it happen?
+      options:
+        - Singleplayer
+        - LAN host or client
+        - Dedicated server or client
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include relevant settings and commands, expected behavior and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods and shaders
+      description: List versions and say whether it also happens with only Incoming and NeoForge.
+    validations:
+      required: true
+  - type: input
+    id: log
+    attributes:
+      label: Complete latest.log link
+      description: Upload the log to a paste service or attach it in the issue. Remove private data first; if attaching, write "attached" here.
+    validations:
+      required: true
