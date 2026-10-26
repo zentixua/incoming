@@ -73,7 +73,10 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
 
     /**
      * Jet engine: jet noise by Lighthill's law — mechanical jet power share η = K·M⁵ (M — jet Mach relative to air),
-     * K = 10⁻⁴ (M. J. Lighthill, “On sound generated aerodynamically”, 1952–54; ⚠ check primary source). Jet speed relative to
+     * K = 10⁻⁴ (est.; model normalization, not a measured universal constant). Lighthill, “On sound generated
+     * aerodynamically I. General theory”, Proc. R. Soc. A 211 (1952), 564–587, doi:10.1098/rspa.1952.0060,
+     * derives the low-Mach eighth-power velocity scaling (M⁵ efficiency at fixed jet area/density).
+     * Jet speed relative to
      * air subtracts flight speed (simplest flight correction, (V<sub>j</sub> − V)⁷: measured flight reduces noise less —
      * underestimated here, B-2 by ~5 dB), thrust is static (lower at altitude — overestimated here). Mass flow is static
      * thrust / jet speed. Starts after booster separation; rotor RPM rises from idle to full over {@code spool} ticks;
@@ -86,7 +89,7 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
      * @param spool  spool-up ticks
      */
     public record Jet(double thrust, double jet, int count, double idle, double spool, Spectrum spectrum) implements Engine {
-        /** Lighthill coefficient. */
+        /** Estimated normalization of the Lighthill scaling; see {@link Jet}. */
         static final double LIGHTHILL = 1e-4;
 
         @Override

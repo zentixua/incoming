@@ -889,9 +889,11 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     static final double OPEN_EXHAUST = 10;
 
     /**
-     * Shahed class reference measurement: ultralight 15–30 hp full throttle, ~70 dBA 150 m below (F. W. J. van
-     * Deventer, “Noise aspects of ultralights and model airplanes”, Proc. IOA), ~16.4 kW (22 hp); microphone 1.2
-     * m above grass, as aircraft noise measurements (ICAO Annex 16; ⚠ paper conditions recalled, not stated).
+     * Shahed class reference: van Deventer, “Noise aspects of ultralights and model airplanes”, Inter-Noise 85
+     * (1985), “Ultralights / Noise levels”, reports full-throttle flyovers at 150 m with maxima around 70 dBA
+     * and above, for a 15–30 hp aircraft class. Using 70 dBA and 16.4 kW (22 hp) as one representative pair is
+     * an estimate (est.), not an individual measured aircraft. Microphone height 1.2 m and grass ground are
+     * assumed propagation inputs (est.); they are not stated measurement conditions in that paper.
      * Power inverted through mod propagation law ({@link Noise#fromMeasured}): former formula 70 + 20·lg 150 + 11
      * − 3 “microphone reflection” (121.5 dBA), with ISO 9613-2 meadow ground, gave 65 dBA at the measurement site
      * itself.

@@ -98,6 +98,14 @@ public final class Condensation {
         return water(peak, -under * tail * tail * (3 - 2 * tail), humidity);
     }
 
+    /** Conservative support for every shell cell, before density or droplets are evaluated. */
+    public void bounds(double seconds, SmokeBounds out) {
+        if (seconds <= 0 || seconds >= life || reach <= 0) return;
+        // Every shell centre is within reach; sigma never exceeds 0.14 times its radius.
+        double r = reach * (1 + SmokeBounds.PUFF * 0.14);
+        out.box(-r, -r, -r, r, r, r);
+    }
+
     /** Shell cells follow the local pressure history; shape discretization only, no static sphere at t=0. */
     public void blobs(double seconds, CloudModel.Blobs out) {
         if (front == null || seconds <= 0 || seconds >= life || reach <= 0) return;

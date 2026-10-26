@@ -64,6 +64,14 @@ public final class Ejecta {
         life = flight(vMax, Math.toRadians(ANGLE_DEG + SPREAD_DEG));
     }
 
+    /** All ballistic jet endpoints and their billboard margins, without constructing any jets. */
+    public void bounds(double t, SmokeBounds out) {
+        if (t <= 0 || t >= life || grains <= 0) return;
+        double sigma = Math.max(Math.toRadians(SPREAD_DEG) / Math.sqrt(3) * vMax * t, 0.25 * radius);
+        double r = radius + vMax * t + SmokeBounds.PUFF * sigma;
+        out.box(-r, -r, -r, r, r, r);
+    }
+
     /** Piece receiver: ejection position (m, world) and velocity, m/s. */
     public interface Pieces {
         void piece(Vec3 at, Vec3 velocity);

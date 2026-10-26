@@ -89,6 +89,17 @@ public final class SmokeGrid {
     public interface Source {
         boolean emit(double seconds, Sink out);
 
+        /** Cheap support at absolute time. False leaves legacy/volume sources on their existing path. */
+        default boolean bounds(double seconds, SmokeBounds out) { return false; }
+        /** Absolute source age, used only to prioritize rapidly changing young clouds. */
+        default double age(double seconds) { return Double.POSITIVE_INFINITY; }
+
+        /** Incremental hidden history only, on the client thread under the shared preparation budget. */
+        default void maintain(double seconds) {}
+
+        /** Conventional source also uses the preparation budget when its short-lived support is not bounded. */
+        default boolean budgeted() { return false; }
+
         /**
          * Источник того масштаба, что объём сетки разрешает (облако в сотни метров и больше): только такой идёт в сетку.
          * Облака обычного оружия — нет: их рисуют квадраты слоя ({@link #quads}).
@@ -234,6 +245,7 @@ public final class SmokeGrid {
     public static final double RESOLVE = 2;
 
     private static final List<Source> SOURCES = new ArrayList<>();
+    private static final SmokePreparation PREPARATION = new SmokePreparation();
     /** Источники, чьи клубы легли в сетку этого кадра (остальных рисуют квадраты, {@link #quads}). */
     private static final java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private static final Frame FRAME = new Frame();
@@ -292,6 +304,7 @@ public final class SmokeGrid {
     /** Смена мира, перемотка повтора: источников нет. */
     public static void reset() {
         SOURCES.clear();
+        PREPARATION.reset();
         IN_GRID.clear();
         FRAME.count = 0;
     }
@@ -346,6 +359,11 @@ public final class SmokeGrid {
                 it.remove();
             }
         }
+    }
+
+    public static void quads(double seconds, double x, double y, double z, java.util.function.Predicate<SmokeBounds> visible,
+                             SmokePreparation.Draw draw) {
+        PREPARATION.draw(SOURCES, on() ? IN_GRID : java.util.Set.of(), seconds, x, y, z, visible, draw);
     }
 
     /** Черновик клубов кадра: {@link #STAGE} чисел на клуб; источники по порядку и их ближний край. */

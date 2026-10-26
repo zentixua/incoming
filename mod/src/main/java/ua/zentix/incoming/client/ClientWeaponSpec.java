@@ -2,6 +2,8 @@ package ua.zentix.incoming.client;
 
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.util.Air;
+import ua.zentix.incoming.client.fx.BlastSource.Explosive;
+import ua.zentix.incoming.client.sound.Loudness;
 import ua.zentix.incoming.client.fx.plume.Flame;
 import ua.zentix.incoming.client.fx.plume.FlameModel;
 import ua.zentix.incoming.client.fx.plume.Motor;
@@ -36,9 +38,12 @@ import java.util.function.Supplier;
  * @param launch     one-shot ignition sound at the launcher
  * @param separates  audible booster separation (pyrotechnic crack and latch clank)
  * @param spent      spent booster; null if there is no booster
+ * @param explosive  impact composition for smoke: RDX for PBXN-107; TNT surrogate otherwise (est.)
+ * @param ceilingLufs engine loudness ceiling; ICBM retains the nuclear reference level
  */
 public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe payload, BoosterVoice booster,
-                               LaunchCue launch, boolean separates, @Nullable SpentBooster spent) {
+                               LaunchCue launch, boolean separates, @Nullable SpentBooster spent,
+                               Explosive explosive, double ceilingLufs) {
 
     /** Point in projectile axes: right-left, up, along (nose along +Z), in blocks. */
     public record At(double x, double y, double z) {}
@@ -75,15 +80,26 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     /** Sound of the launch booster (or motor) while burning. */
     public enum BoosterVoice {
         /** Catapult, without fire: only a one-shot thump and whistle ({@link LaunchCue#CATAPULT}). */
-        NONE,
+        NONE(1),
         /** Shahed booster: over the one-shot launch roar at the launcher, moves away with the projectile. */
-        SOLID,
+        SOLID(1),
         /** Cruise missile booster: the same, at a lower pitch. */
-        SOLID_LOW,
+        SOLID_LOW(0.9),
         /** Small rocket motor: sharp hiss, at a higher pitch. */
-        ROCKET,
+        ROCKET(1.3),
         /** Minuteman: low roar of a solid-fuel stage, audible a kilometre away. */
-        ICBM
+        ICBM(0.7);
+
+        private final double pitch;
+
+        BoosterVoice(double pitch) {
+            this.pitch = pitch;
+        }
+
+        /** Presentation: playback pitch of the shared solid-motor recording, relative to native speed. */
+        public double pitch() {
+            return pitch;
+        }
     }
 
     /** One-shot ignition sound when its front reaches the ear. */
@@ -339,14 +355,14 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
             new ClientAirframe(WeaponModels::drone, List.of(EngineSound.Layer.DRONE_NEAR, EngineSound.Layer.DRONE_FAR, EngineSound.Layer.BOOSTER),
                     List.of(new At(0, 0.03, -1.95)), new At(0, -0.29, -1.95), 0.55f, DRONE_FAR),
             null, BoosterVoice.SOLID, LaunchCue.BOOSTER, true,
-            new SpentBooster(() -> WeaponModels.Mesh.DRONE_BOOSTER, 0.1f, 0.29f, 1.22f));
+            new SpentBooster(() -> WeaponModels.Mesh.DRONE_BOOSTER, 0.1f, 0.29f, 1.22f), Explosive.TNT, Loudness.CEILING_LUFS);
 
     public static final ClientWeaponSpec MISSILE = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::missile, List.of(EngineSound.Layer.MISSILE_FRONT, EngineSound.Layer.MISSILE_REAR, EngineSound.Layer.MISSILE_DIVE,
                     EngineSound.Layer.MISSILE_FAR, EngineSound.Layer.MISSILE_WHISTLE, EngineSound.Layer.BOOSTER),
                     List.of(new At(0, 0, -3.2)), new At(0, 0, -3.45), 0.8f, MISSILE_FAR),
             null, BoosterVoice.SOLID_LOW, LaunchCue.BOOSTER_LOW, true,
-            new SpentBooster(() -> WeaponModels.Mesh.MISSILE_BOOSTER, 0.24f, 0, 3.15f));
+            new SpentBooster(() -> WeaponModels.Mesh.MISSILE_BOOSTER, 0.24f, 0, 3.15f), Explosive.RDX, Loudness.CEILING_LUFS);
 
     public static final ClientWeaponSpec BUNKER = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::bomber, List.of(EngineSound.Layer.BOMBER_NEAR, EngineSound.Layer.BOMBER_FAR),
@@ -354,23 +370,23 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
                     null, 0, BOMBER_FAR),
             new ClientAirframe(WeaponModels::bomb, List.of(EngineSound.Layer.BOMB_NEAR, EngineSound.Layer.BOMB_FAR, EngineSound.Layer.BOMB_DRILL),
                     List.of(new At(0, 0, -5.2)), null, 0, BOMB_FAR),
-            BoosterVoice.SOLID, LaunchCue.BOOSTER, true, null);
+            BoosterVoice.SOLID, LaunchCue.BOOSTER, true, null, Explosive.TNT, Loudness.CEILING_LUFS);
 
     public static final ClientWeaponSpec NUKE = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::icbm, List.of(EngineSound.Layer.BOOSTER), List.of(new At(0, 0, -10)), null, 0, ICBM_FAR),
-            null, BoosterVoice.ICBM, LaunchCue.NONE, false, null);
+            null, BoosterVoice.ICBM, LaunchCue.NONE, false, null, Explosive.TNT, Loudness.ENGINE_LUFS);
 
     /** MLRS: motor roar while burning; then the rocket coasts and howls through the air. */
     public static final ClientWeaponSpec ROCKET = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::rocket, List.of(EngineSound.Layer.BOOSTER, EngineSound.Layer.ROCKET_AIR), List.of(new At(0, 0, -1.5)),
                     null, 0, ROCKET_FAR),
-            null, BoosterVoice.ROCKET, LaunchCue.ROCKET_TUBE, true, null);
+            null, BoosterVoice.ROCKET, LaunchCue.ROCKET_TUBE, true, null, Explosive.TNT, Loudness.CEILING_LUFS);
 
     /** Loitering munition: same propeller, but a small electric motor, higher and quieter (see {@code EngineSound}). */
     public static final ClientWeaponSpec LOITER = new ClientWeaponSpec(
             new ClientAirframe(WeaponModels::loiter, List.of(EngineSound.Layer.LOITER_NEAR, EngineSound.Layer.LOITER_FAR, EngineSound.Layer.LOITER_DIVE,
                     EngineSound.Layer.BOOSTER), List.of(), null, 0, LOITER_FAR),
-            null, BoosterVoice.NONE, LaunchCue.CATAPULT, false, null);
+            null, BoosterVoice.NONE, LaunchCue.CATAPULT, false, null, Explosive.TNT, Loudness.CEILING_LUFS);
 
     /** Client weapon spec. */
     public static ClientWeaponSpec of(WeaponType weapon) {

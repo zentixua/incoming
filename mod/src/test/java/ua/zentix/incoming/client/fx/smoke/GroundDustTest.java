@@ -1,6 +1,8 @@
 package ua.zentix.incoming.client.fx.smoke;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.defense.InterceptorSpec;
 import ua.zentix.incoming.nuclear.model.BlastModel;
@@ -777,15 +779,16 @@ class GroundDustTest {
      *  explosion saw, and does not hang (third review): Shahed into the roof of 10 m, the street is 15 m below, the relief is known only up to 14 m - to 120 s
      *  no billows are higher than 1 m above the street.
      */
-    @Test
-    void fallingDustOverUnknownReliefStillFalls() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void fallingDustOverUnknownReliefStillFalls(boolean hiddenGap) {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 4, 0, 0.1, (int) Stability.C, 0.5);
         double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
         for (double[] row : h) for (int b = 0; b < row.length; b++) row[b] = GroundDust.BANDS[b] < 10 ? 0 : -15;
         GroundDust.Relief known = (x, z) -> Math.hypot(x, z) < 10 ? 0 : Math.hypot(x, z) < 14 ? -15 : Double.NaN;
         GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, known);
         GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
-        for (double t = 0.3; t <= 120; t += 0.5) layer(dust, t);
+        for (double t = 0.3; t <= 120; t += 0.5) if (!hiddenGap || t <= 5 || t >= 30) layer(dust, t);
         for (double[] b : layer(dust, 120)) assertTrue(b[1] - 0.8 * b[4] <= -15 + 1 + 1e-6, "120 s: billows in " + b[0] + " m, bottom " + (b[1] - 0.8 * b[4]));
     }
 
@@ -795,8 +798,9 @@ class GroundDustTest {
      *  streets along 6 m), calm - up to 240 s the bottom of billows raised from the street, while the layer is thinner than houses (2σv < 12), not higher than 1 m above the
      *  street, and thicker - covers the block: the bottom is not higher than half the height of the houses or a quarter of its thickness (2σv).
      */
-    @Test
-    void calmStreetDustStaysInTheStreet() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void calmStreetDustStaysInTheStreet(boolean hiddenGap) {
         GroundDust.Relief town = GroundDustTest::town;
         double[][] h = new double[GroundDust.SECTORS][GroundDust.BANDS.length];
         for (int k = 0; k < GroundDust.SECTORS; k++) {
@@ -808,6 +812,7 @@ class GroundDustTest {
         List<Double> ts = nodes(1, 240);
         List<double[]> first = layer(dust, ts.getFirst());
         for (double t : ts) {
+            if (hiddenGap && t > 5 && t < 30) continue;
             List<double[]> now = layer(dust, t);
             for (int i = 0; i < now.size(); i++) {
                 double[] b = now.get(i);
@@ -830,8 +835,9 @@ class GroundDustTest {
      *  goes on top, skimming flow), and the thicker one covers the houses: the bottom is not higher than half of their height or a quarter of its thick
      *  (for a moment, while the trail is all over the roofs - no longer than 3 in a row).
      */
-    @Test
-    void windyStreetDustStaysInTheStreet() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void windyStreetDustStaysInTheStreet(boolean hiddenGap) {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.C, 0.5);
         GroundDust.Relief town = GroundDustTest::town;
         GroundDust.Relief tower = (x, z) -> x > 30 && x < 50 && Math.abs(z) < 10 ? 40 : 0;
@@ -849,6 +855,7 @@ class GroundDustTest {
             double[] high = new double[first.size()];
             double last = ts.getFirst();
             for (double t : ts) {
+                if (hiddenGap && t > 5 && t < 30) continue;
                 List<double[]> now = layer(dust, t);
                 for (int i = 0; i < now.size(); i++) {
                     double[] b = now.get(i);
@@ -876,8 +883,9 @@ class GroundDustTest {
      *  layer or step at which it waits, and the billows, which has passed the step further than its width (σh) and another 20 m, is again on the
      *  surface (within two blocks).
      */
-    @Test
-    void dustClimbsStepsAndHillsBehindThem() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void dustClimbsStepsAndHillsBehindThem(boolean hiddenGap) {
         CloudModel.Air air = new CloudModel.Air(CloudModel.N_STANDARD, 5, 0, 0.1, (int) Stability.C, 0.5);
         for (double[] c : new double[][]{{20, 2}, {10, 4}}) {
             double at = c[0], rise = c[1];
@@ -890,6 +898,7 @@ class GroundDustTest {
             GroundDust.Ground g = new GroundDust.Ground(GroundDust.Ground.filled(1), GroundDust.Ground.filled(0), GroundDust.Ground.filled(0), h, step);
             GroundDust dust = new CloudModel(BlastSource.of(WeaponType.DRONE, false), air, false, 0, g).ground;
             for (double t : nodes(3, 90)) {
+                if (hiddenGap && t > 5 && t < 30) continue;
                 for (double[] b : layer(dust, t)) {
                     double base = b[1] - 0.8 * b[4], below = under(dust, b);
                     String where = "step " + rise + " in " + at + " m, " + t + " s: billows " + b[0] + " m, bottom " + base + ", surface " + below + ", σv " + b[4];

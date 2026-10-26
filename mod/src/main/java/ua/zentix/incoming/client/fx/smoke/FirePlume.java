@@ -7,19 +7,23 @@ import ua.zentix.incoming.util.Stability;
  * <ul>
  * <li><b>Source.</b> Fire block is a burning ~1 m² face: (est.) {@value #BLOCK_WATTS} W (wood peak heat release
  * 100–250 kW/m², Babrauskas, SFPE Handbook, 5th ed., ch. 26, midpoint). Convection carries {@value #CONVECTIVE}
- * (radiation 0.3, wood flame radiative fraction, same source; (est.) from memory). Soot yield 0.015 kg per kg burned at
- * effective heat 12.4 MJ/kg (red oak, Tewarson's SFPE Handbook table; (est.) from memory).</li>
- * <li><b>Rise</b>: Briggs (Briggs G. A., "Plume Rise Predictions", 1975; formulas as EPA ISC3, vol. 2, §1.1.4;
- * (est.) verify): buoyancy flux F = g·Q_c/(π·c_p·ρ·T); rise path Δh(x) = 1.6·F^⅓·x^⅔/u until final rise: neutral and unstable
- * air 21.425·F^¾/u (F &lt; 55) or 38.71·F^⅗/u, stable air 2.6·(F/(u·s))^⅓, s = N², calm air 5.0·F^¼·s^(−⅜)
- * (MTT; smaller of the two). Smooth between classes D and E.</li>
+ * (radiation 0.3 is a model estimate (est.), not a fixed wood property). Soot yield 0.015 kg/kg and chemical heat
+ * 12.4 MJ/kg: Tewarson and Haskell, “Fire hardening of composite systems”, NISTIR 5499 (1994), p. 118,
+ * table 1, red-oak row. Applying that sample to all burning blocks is an estimate (est.).</li>
+ * <li><b>Rise</b>: EPA, “User's Guide for the Industrial Source Complex (ISC3) Dispersion Models”, vol. II,
+ * EPA-454/B-95-003b (September 1995), §1.1.4: buoyancy flux F = g·Q_c/(π·c_p·ρ·T);
+ * rise path Δh(x) = 1.6·F^⅓·x^⅔/u until final rise: neutral/unstable 21.425·F^¾/u (F &lt; 55) or 38.71·F^⅗/u
+ * (eqs. 1-14, 1-15), stable 2.6·(F/(u·s))^⅓, s = N². The calm cap 5.0·F^¼·s^(−⅜) and smooth interpolation
+ * between classes D and E are model estimates (est.), not those ISC3 equations.</li>
  * <li><b>Spread</b>: Pasquill–Gifford along wind path ({@link Stability}), rise (σ = Δh/3.5, Pasquill 1976), and source
  * size, in quadrature.</li>
  * <li><b>Mass</b>: soot per metre of wind path ṁ/u. Plume visible while centre chord optical depth exceeds Koschmieder
  * threshold (0.02).</li>
- * <li><b>Temperature</b> near source: Heskestad axis excess, ΔT = 9.1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3) (SFPE Handbook,
- * ch. 13; (est.) from memory), capped at flame ({@link #FLAME_K}: surface emissive power of small fires 50–100 kW/m²,
- * midpoint) (est.); visible flame light comes from luminous soot ({@link #flameLight}).</li>
+ * <li><b>Temperature</b> near source: Heskestad axis excess, ΔT = 9.1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3).
+ * Peacock et al., CFAST Technical Reference Guide, NIST TN 1889v1 (October 2015), §3.4, eq. 3.20,
+ * doi:10.6028/NIST.TN.1889v1, uses z−z₀. Here z₀ = 0, the 0.1 m height floor and the flame cap
+ * ({@link #FLAME_K}, 75 kW/m²) are near-source approximations (est.); the plume law applies above the flame.
+ * Visible flame light comes from luminous soot ({@link #flameLight}).</li>
  * </ul>
  * Below wind {@value #CALM} m/s, plume formulas fail: use that value (as for trails).
  */
@@ -39,7 +43,13 @@ public final class FirePlume {
      */
     public static final double LUMINOUS_K = Math.pow(140e3 / 5.670374e-8, 0.25);
     /**
-     * Luminous flame temperature fluctuations, K (est.) (from memory: JP-8 pool flame 200–300 K, Gritzo et al., 1998).
+     * Luminous flame temperature fluctuation scale, K. Gritzo, Sivathanu and Gill, “Transient Measurements
+     * of Radiative Properties, Soot Volume Fraction and Soot Temperature in a Large Pool Fire”,
+     * Combust. Sci. Technol. 139 (1998), 113–136, doi:10.1080/00102209808952083, reports in its abstract
+     * an approximately normal temperature distribution: mean 1400 K, standard deviation about 67 K,
+     * measured in a 6 m × 6 m JP-8 pool fire. Here the Gaussian standard deviation remains 200 K
+     * (est.; presentation: roughly three times that measurement), about {@link #LUMINOUS_K} (~1250 K).
+     * Assessing this presentation choice requires a separate visual comparison; it is not a measured 200 K spread.
      * Visible brightness rises steeply with T (Wien ∝ e^(−c₂/λT)), so mean flame brightness is that of its hot regions.
      */
     public static final double FLUCTUATION_K = 200;
@@ -176,8 +186,9 @@ public final class FirePlume {
     }
 
     /**
-     * Heskestad axis gas speed at height z above source, m/s: u = 3.4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓) (SFPE Handbook,
-     * ch. 13; (est.) from memory, as {@link #excess}).
+     * Heskestad axis gas speed at height z above source, m/s: u = 3.4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓).
+     * NIST TN 1889v1 (October 2015), §3.4, eq. 3.21 (citation above). Setting virtual origin z₀ = 0 and
+     * using a 0.1 m height floor instead of its flame-region speed cap are approximations (est.), as for {@link #excess}.
      */
     public double axisSpeed(double z) {
         double c = 3.4 * Math.cbrt(CloudModel.G / (CloudModel.CP * CloudModel.RHO * CloudModel.T_AIR));
