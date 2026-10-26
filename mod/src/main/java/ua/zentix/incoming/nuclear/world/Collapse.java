@@ -23,20 +23,20 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import ua.zentix.incoming.nuclear.Detonation;
 
 /**
- * Руины чанка после разлома ({@link Blast}): второй физический процесс — <b>падает то, что потеряло опору</b>, — и его
- * последствия: листва без ствола, вода без дна, навесное без того, на чём висело.
+ * Chunk ruins after fracture ({@link Blast}): second physics process, <b>what lost support falls</b>, and its
+ * consequences: leaves without trunks, water without bottom, attachments without their support.
  * <ul>
- * <li>Расстояние опоры до земли — обход 0-1 от низа окна (вверх 0, вбок и вниз +1, до {@link #C}): блок держится, пока
- * оно не больше его пролёта ({@link Blast.Props#span}); грунт в постройке (кладка без арматуры) — только если опора
- * не стала длиннее, а висящий, которого до удара держал ряд между опорами с двух сторон, — только пока его так держит
- * ряд и после ({@link #unspanned}). Падает только то, что волна лишила опоры: {@code после > L}
- * и ({@code до ≤ L}, или {@code после ≥ до + 3} — дыра в перекрытии не режет щелей, или до удара опоры не было,
- * а блок касается сломанного) — природные своды и навесы, которые и так «висели», стоят.</li>
- * <li>Считается, только если волна сломала опорный блок, над которым или рядом с которым что-то уцелело; по окну
- * чанка (±16 блоков), а падает — в чанке (точно — на 8 блоков вокруг: пути опоры короче {@link #C}).</li>
- * <li>Листва держится за ствол (как в игре: не дальше 6 листьев), без ствола опадает.</li>
- * <li>Малая вода (бассейн, фонтан: до {@link #MAX_DRAIN} мест и 16 блоков в ширину), которой волна пробила дно или
- * стенку, стекает целиком; большая (река, море) затекает в пролом тиками жидкости.</li>
+ * <li>Support distance to ground: 0-1 traversal from window bottom (up 0, sideways/down +1, up to {@link #C}); block holds while
+ * distance within span ({@link Blast.Props#span}); structural ground (unreinforced masonry) only if support
+ * path did not lengthen, and hanging masonry formerly held by a row between supports on both sides only while still held by
+ * such row ({@link #unspanned}). Only wave-deprived support falls: {@code after > L}
+ * and ({@code before ≤ L}, or {@code after ≥ before + 3}, avoiding slits around floor holes, or unsupported before strike
+ * and touching broken block); already “hanging” natural arches/overhangs stand.</li>
+ * <li>Computed only if wave broke load-bearing block with survivors above or beside it; uses chunk
+ * window (±16 blocks), falls within chunk (exact within 8 blocks around it: support paths shorter than {@link #C}).</li>
+ * <li>Leaves attach to trunks (like game: no farther than 6 leaves); fall without trunk.</li>
+ * <li>Small water bodies (pool, fountain: up to {@link #MAX_DRAIN} positions and 16 blocks wide) with breached bottom or
+ * wall drain entirely; large ones (river, sea) flow into breach through fluid ticks.</li>
  * </ul>
  */
 final class Collapse {
@@ -45,7 +45,7 @@ final class Collapse {
     private static final int MAX_DRAIN = 4096, DRAIN_WIDTH = 16, LEAF_REACH = 6;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
-    /** Буферы обхода — свои у каждого потока (без повторного входа): растут и переиспользуются. */
+    /** Traversal buffers per thread (no reentry): grow and reuse. */
     private static final class Buffers {
         byte[] before = new byte[0], after = new byte[0];
         int[] ring = new int[0];
@@ -58,19 +58,19 @@ final class Collapse {
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
     final int yb, yt, h;
-    /** Самая низкая исходная поверхность окна (верх опоры столбца): всё несущее не выше неё — земля, опора. */
+    /** Lowest original window surface (column support top): all load-bearing blocks at or below it are ground/support. */
     final int surface;
     final long[] gone;
-    /** Вода, которая стекла. */
+    /** Drained water. */
     final long[] drained;
 
-    /** Результат по чанку: новое состояние места (ключ — {@link BlockPos#asLong}). */
+    /** Chunk result: new state at position (key {@link BlockPos#asLong}). */
     final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState> changes = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    /** По столбцу чанка: сколько снесено блоков, дающих завал, и из них деревянных; земля после руин (MIN — нет). */
+    /** Per chunk column: removed rubble-producing blocks and wooden subset; post-ruin ground (MIN absent). */
     final int[] removed = new int[256], wood = new int[256], ground = new int[256];
-    /** Сломанная волной листва (место) — пожары от света. */
+    /** Wave-broken leaves (position), for light-ignited fires. */
     final LongArrayList leaves = new LongArrayList();
-    /** Жидкость у изменённых мест: ей тик (и в соседних чанках — у мест этого). */
+    /** Fluid beside changed positions: tick it (including neighboring chunks beside this chunk's positions). */
     final LongArrayList fluidTicks = new LongArrayList();
 
     private final Detonation d;
@@ -92,7 +92,7 @@ final class Collapse {
                 if (t != Integer.MIN_VALUE) high = Math.max(high, t);
             }
         }
-        // разлом бывает и ниже самой низкой опоры (пролом под водой, листва над оврагом)
+        // fracture may extend below lowest support (underwater breach, leaves above ravine)
         for (int k = 0; k < 9; k++) {
             if (blasts[k] == null || blasts[k].removed().length == 0) continue;
             int c = blasts[k].removed()[0];
@@ -123,14 +123,14 @@ final class Collapse {
         }
     }
 
-    /** Руины чанка в центре снимков (любой поток): разломы окна — из кэша подрыва или заново. */
+    /** Ruins of central snapshot chunk (any thread): window fractures cached per detonation or computed anew. */
     static Collapse solve(RuinContext.Grid g) {
         Collapse c = new Collapse(g);
         c.run();
         return c;
     }
 
-    /** По каким снимкам построено окно чанка. */
+    /** Snapshot IDs used to build chunk window. */
     RuinWindow.Stamp stamp() {
         return w.stamp();
     }
@@ -139,7 +139,7 @@ final class Collapse {
         return blasts[4];
     }
 
-    // ---------------------------------------------------------------- места
+    // ---------------------------------------------------------------- positions
 
     int idx(int wx, int y, int wz) {
         return ((y - yb) * SIDE + wz) * SIDE + wx;
@@ -165,10 +165,10 @@ final class Collapse {
         return w.props(wx, y, wz);
     }
 
-    // ---------------------------------------------------------------- решение
+    // ---------------------------------------------------------------- solution
 
     private void run() {
-        // третий раунд волны: что уцелело у проломов соседей (точно на 9 блоков вокруг чанка — столько читает опора)
+        // third wave round: survivors near neighbors' breaches (exact within 9 blocks around chunk, support read reach)
         IntArrayList breaks = new IntArrayList();
         for (int k = 0; k < 9; k++) {
             Blast b = blasts[k];
@@ -193,7 +193,7 @@ final class Collapse {
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
             if (support || !p.bearing() || p.log()) continue;
-            // опору потеряло то, что уцелело над сломанным или рядом с ним
+            // survivors above/beside broken blocks may have lost support
             if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
@@ -208,7 +208,7 @@ final class Collapse {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
     }
 
-    // ---------------------------------------------------------------- опора
+    // ---------------------------------------------------------------- support
 
     private void support() {
         int n = SIDE * SIDE * h;
@@ -235,8 +235,8 @@ final class Collapse {
                 }
             }
         }
-        // кладка, ставшая консолью ({@link #unspanned}), падает; её падение удлиняет опору другим — расстояния
-        // чинятся там, где опора шла через неё ({@link #reroute}), и кто теперь падает — падает; до неподвижной точки
+        // masonry made cantilever ({@link #unspanned}) falls, lengthening others' support paths; repair distances
+        // where support passed through it ({@link #reroute}), let new unsupported blocks fall; repeat to fixed point
         while (true) {
             int was = fall.size();
             if (!unspanned(masonry, down, fall)) break;
@@ -250,9 +250,9 @@ final class Collapse {
                 }
             }
         }
-        // постройка, которую и до удара не держало ничего в пределах {@link #C} (зал шире 2C, стоящее на висящей
-        // площадке): падает всё, что касается сломанного или падающего, — и дальше по связанным, до неподвижной точки.
-        // Грунт так не падает: природные своды и навесы, которые «висели» и до удара, стоят
+        // structure unsupported even before strike within {@link #C} (hall wider than 2C, blocks on floating
+        // platform): everything touching broken/falling blocks falls, cascading through connections to fixed point.
+        // Ground does not fall this way: preexisting natural “hanging” arches/overhangs stand
         IntArrayList queue = new IntArrayList();
         for (int y = yb; y <= yt; y++) {
             for (int wz = LO - C; wz < HI + C; wz++) {
@@ -281,14 +281,14 @@ final class Collapse {
         for (int i = 0; i < fall.size(); i++) set(gone, fall.getInt(i));
     }
 
-    /** Несущее не из грунта, без опоры в пределах {@link #C} и до удара, и после, ещё не падает. */
+    /** Non-ground load-bearing block unsupported within {@link #C} before/after strike, not yet falling. */
     private boolean unsupported(int i, int wx, int y, int wz, long[] down) {
         if (bit(gone, i) || bit(down, i) || before[i] < INF || after[i] < INF) return false;
         Blast.Props p = props(wx, y, wz);
         return p.bearing() && !p.fixed() && p.response().kind() != BlockResponse.Kind.GROUND;
     }
 
-    /** Касается сломанного или падающего несущего (цветок, факел, листва рядом каскада не начинают). */
+    /** Touches broken/falling load-bearing block (nearby flower, torch, leaves do not start cascade). */
     private boolean touches(int wx, int y, int wz, long[] bits) {
         for (Direction dir : Direction.values()) {
             int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
@@ -298,29 +298,29 @@ final class Collapse {
     }
 
     /**
-     * Падает ли блок, чья опора после удара — {@code a}: дальше его пролёта, и опору отняла волна (до неё была ближе,
-     * или стала дальше на 3 и больше; не дальше {@link #INF}). Блок без опоры и до удара ({@code INF}) — отдельно
-     * ({@link #support}). Неразрушимое не падает.
+     * Whether block with post-strike support {@code a} falls: beyond its span and wave removed support (closer before,
+     * or lengthened by 3 or more; no farther than {@link #INF}). Unsupported before strike ({@code INF}) handled separately
+     * ({@link #support}). Indestructible blocks never fall.
      */
     private boolean falls(int i, int a, Blast.Props p) {
         if (p.fixed()) return false;
         int b = before[i];
-        // грунт в постройке (терракота, кальцит, камень) — кладка без арматуры: треснув, она держится только так, как
-        // держалась до удара, — консоль, которой стала опора подлиннее, падает
+        // structural ground (terracotta, calcite, stone) is unreinforced masonry: once cracked it holds only as
+        // before strike; cantilever whose support path lengthened falls
         if (a <= p.span()) return a > b && p.response().kind() == BlockResponse.Kind.GROUND;
         return b <= p.span() || b < INF && a >= Math.min(b + 3, INF);
     }
 
     /**
-     * Грунт в постройке — кладка без арматуры — держится плитой, перемычкой, сводом: рядом блоков между опорами с двух
-     * сторон. Висящая кладка (стоит не на несущем, опора — вбок), которую до удара держал такой ряд хотя бы по одной оси
-     * ({@code masonry}: {@link #spanned} до удара), а теперь ни по одной, стала консолью и падает, даже если ближняя опора
-     * та же (плита у уцелевшего ядра, чьи стены рухнули, — расстояние до ядра у ближних к нему мест прежнее). Каскадом:
-     * её падение рвёт ряды соседей и выбивает опору из-под стоящего на ней. Природный навес или карниз и до удара
-     * держался с одной стороны — стоит; перекрытие с дырой держится рядом по другой оси. Новые падающие — в {@code down}
-     * и {@code fall}; решение не зависит от порядка: ряды и опоры снизу только пропадают.
+     * Structural ground, unreinforced masonry, holds as slab, lintel or arch: row between supports on both
+     * sides. Hanging masonry (not on load-bearing block, support sideways), formerly held by such row on at least one axis
+     * ({@code masonry}: {@link #spanned} before strike) but now on none, became cantilever and falls even if nearest support
+     * unchanged (slab beside surviving core after walls fall: nearest positions keep same core distance). Cascade:
+     * fall breaks neighbors' rows and support beneath blocks on it. Natural overhang/ledge was supported on one side
+     * already and stands; holed floor can hold along other axis. New falls into {@code down}
+     * and {@code fall}; order-independent: rows and supports below only disappear.
      *
-     * @return упало ли что-то
+     * @return whether anything fell
      */
     private boolean unspanned(IntArrayList masonry, long[] down, IntArrayList fall) {
         boolean any = false, changed = true;
@@ -340,13 +340,13 @@ final class Collapse {
     }
 
     /**
-     * Опора после удара без упавшей кладки ({@code fall} с {@code from}) — заново только там, где она шла через неё,
-     * а не обходом всего окна (тот же результат: расстояния только растут). Место теряет расстояние, если у него не
-     * осталось держащего соседа на шаг ближе к опоре (снизу — на том же расстоянии): места проверяются по возрастанию
-     * расстояния и снизу вверх, поэтому соседи, через которых оно держится, уже решены. Потерявшие получают расстояние
-     * от уцелевших соседей обходом по корзинам расстояний ({@code after}).
+     * Post-strike support without fallen masonry ({@code fall} from {@code from}) recalculated only where paths passed through it,
+     * not over whole window (same result: distances only increase). Position loses distance if no
+     * supporting neighbor remains one step closer to support (same distance below): process ascending
+     * distance, bottom-up, so supporting neighbors already resolved. Lost positions receive distance
+     * from surviving neighbors by distance-bucket traversal ({@code after}).
      *
-     * @return места, чьё расстояние выросло (могут теперь падать — {@link #falls})
+     * @return positions whose distance increased (may now fall, {@link #falls})
      */
     private IntArrayList reroute(IntArrayList fall, int from, long[] down) {
         long[] seen = new long[gone.length], lost = new long[gone.length];
@@ -363,7 +363,7 @@ final class Collapse {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!standingAfter(nx, ny, nz, down)) continue;
                 int m = idx(nx, ny, nz);
-                // сосед снизу держит на том же расстоянии (вверх — 0), остальные — на шаг ближе
+                // neighbor below supports at same distance (up 0), others one step closer
                 if (!bit(lost, m) && after[m] + (dir == Direction.DOWN ? 0 : 1) == after[i] && leads(m, nx, ny, nz)) {
                     held = true;
                     break;
@@ -407,7 +407,7 @@ final class Collapse {
         return out;
     }
 
-    /** В очередь {@link #reroute} — стоящие соседи, чья опора могла идти через место {@code i} (на шаг дальше, сверху — на том же). */
+    /** Queue standing neighbors for {@link #reroute} whose support may pass through {@code i} (one step farther, above same distance). */
     private void successors(int i, LongHeapPriorityQueue queue, long[] down, long[] lost) {
         int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb, di = after[i];
         for (Direction dir : Direction.values()) {
@@ -415,17 +415,17 @@ final class Collapse {
             if (!standingAfter(nx, ny, nz, down)) continue;
             int m = idx(nx, ny, nz), nd = di + (dir == Direction.UP ? 0 : 1);
             if (bit(lost, m) || nd > C || after[m] != nd) continue;
-            // по расстоянию, потом снизу вверх: держащие места решены раньше
+            // distance then bottom-up: supporting positions resolved first
             queue.enqueue((long) (nd * h + ny - yb) << 32 | m);
         }
     }
 
-    /** Опора идёт через место дальше, как в {@link #distances}: оно само опора или держится и не падает. */
+    /** Support passes onward through position, as in {@link #distances}: own support or supported and not falling. */
     private boolean leads(int i, int wx, int y, int wz) {
         return after[i] == 0 || after[i] < INF && !falls(i, after[i], props(wx, y, wz));
     }
 
-    /** Несущее место стоит после удара: не сломано и не падает. */
+    /** Load-bearing position stands after strike: not broken or falling. */
     private boolean standingAfter(int wx, int y, int wz, long[] down) {
         if (!inside(wx, y, wz)) return false;
         int i = idx(wx, y, wz);
@@ -433,8 +433,8 @@ final class Collapse {
     }
 
     /**
-     * Ряд несущего через место (по x или по z, на его высоте) с обеих сторон доходит до стоящего от земли (опора на
-     * расстоянии 0 с пролётом: стена, колонна, ядро; не стекло) не дальше пролёта места — до удара или после него.
+     * Load-bearing row through position (x or z, same height) reaches ground-supported blocks on both sides (support
+     * distance 0 with span: wall, column, core; not glass) within position's span, before or after strike.
      */
     private boolean spanned(int wx, int y, int wz, boolean afterBlast, long[] down) {
         int reach = props(wx, y, wz).span();
@@ -449,11 +449,11 @@ final class Collapse {
             if (!inside(x, y, z)) return false;
             int m = idx(x, y, z);
             Blast.Props p = props(x, y, z);
-            // после удара — ещё и не падает по опоре: за полосой, где решают падение ({@code down} там нет), падающее
-            // по опоре выглядело бы стоящим, и соседние окна решали бы плиту у границы чанков по-разному
+            // after strike must also not be falling from support loss: beyond fall-solving band ({@code down} absent there), falling
+            // blocks would appear standing, making neighboring windows solve chunk-edge slab differently
             if (afterBlast ? !standingAfter(x, y, z, down) || !leads(m, x, y, z) : !p.bearing()) return false;
-            // без пролёта (стекло, песок) конец ряда не держит: окна вылетают при 0.8 psi, и перекрытие между ядром и
-            // стеклянной стеной и до удара — консоль от ядра, а не плита
+            // no span (glass, sand) means row end provides no support: windows break at 0.8 psi, so floor between core and
+            // glass wall was already cantilevered from core, not a slab
             if (dist[m] == 0 && p.span() > 0) return true;
         }
         return false;
@@ -464,7 +464,7 @@ final class Collapse {
         return props(wx, y, wz).bearing();
     }
 
-    /** Неразрушимое несущее в окне (только в секциях, чья палитра его знает) — опоры, как земля. */
+    /** Indestructible load-bearing blocks in window (only sections whose palettes know them), support like ground. */
     private long[] fixedCells() {
         long[] out = new long[gone.length];
         for (int k = 0; k < 9; k++) {
@@ -486,10 +486,10 @@ final class Collapse {
     }
 
     /**
-     * 0-1 обход от опор (вверх 0, вбок и вниз +1, не дальше {@link #C}; дальше — {@link #INF}). Опоры — земля: всё
-     * несущее на низу окна и не выше самой низкой исходной поверхности окна ({@link #surface}), и неразрушимое. После
-     * удара падающий блок ({@link #falls}) никого не держит: обход через него не идёт — обрушение идёт каскадом за один
-     * обход (места выходят из очереди по возрастанию расстояния, и первое — окончательное).
+     * 0-1 traversal from supports (up 0, sideways/down +1, up to {@link #C}; beyond {@link #INF}). Ground supports: all
+     * load-bearing blocks at window bottom no higher than lowest original window surface ({@link #surface}), plus indestructible blocks. After
+     * strike falling block ({@link #falls}) supports nobody: traversal never passes through it; collapse cascades in one
+     * traversal (positions leave queue ascending by distance, first distance final).
      */
     private void distances(byte[] dist, boolean afterBlast, int n, long[] fixed) {
         java.util.Arrays.fill(dist, 0, n, (byte) INF);
@@ -506,7 +506,7 @@ final class Collapse {
                 }
             }
             if (!ground && y > surface) {
-                // выше земли — только неразрушимое: его места уже собраны, остальные слои не перебираются
+                // above ground only indestructible supports: already collected, skip other layers
                 for (int wd = (y - yb) * SIDE * SIDE >> 6, e = ((yt - yb + 1) * SIDE * SIDE + 63) >> 6; wd < e; wd++) {
                     long bits = fixed[wd];
                     while (bits != 0) {
@@ -560,22 +560,22 @@ final class Collapse {
         ring = b.ring;
     }
 
-    /** Очереди руин пусты: буферы обхода этого потока больше не нужны (окно высокого города — десятки МБ). */
+    /** Ruin queues empty: this thread's traversal buffers no longer needed (tall city window tens of MB). */
     static void releaseBuffers() {
         Buffers b = BUFFERS.get();
         b.before = b.after = new byte[0];
         b.ring = new int[0];
     }
 
-    // ---------------------------------------------------------------- листва
+    // ---------------------------------------------------------------- leaves
 
     /**
-     * Листва дальше {@link #LEAF_REACH} от уцелевшего ствола (по листве), которая до удара была ближе, — опадает.
-     * Измениться это могло только у листвы не дальше {@link #LEAF_REACH} от сломанного бревна или листа, поэтому
-     * обход — только вокруг них (стволы — в пределах двойного охвата), а не по всему окну.
+     * Leaves farther than {@link #LEAF_REACH} from surviving trunk (through leaves), formerly closer, fall.
+     * Only leaves within {@link #LEAF_REACH} of broken log/leaf could change, so traversal
+     * stays around those (trunks within double reach), not entire window.
      */
     private void leaves() {
-        // что сломано из дерева: семена
+        // broken wood positions are seeds
         IntArrayList seeds = new IntArrayList();
         for (int wd = 0; wd < gone.length; wd++) {
             long bits = gone[wd];
@@ -588,7 +588,7 @@ final class Collapse {
             }
         }
         if (seeds.isEmpty()) return;
-        // район: листва до 2·LEAF_REACH + 1 шагов от семян (и брёвна рядом с ней); ближние LEAF_REACH — кандидаты
+        // area: leaves within 2·LEAF_REACH + 1 steps of seeds (and adjacent logs); nearest LEAF_REACH are candidates
         it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap reach = new it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap();
         IntArrayList logs = new IntArrayList(), queue = new IntArrayList();
         for (int i : seeds) {
@@ -625,7 +625,7 @@ final class Collapse {
         }
     }
 
-    /** Расстояние по листве района до ствола (до или после удара), не дальше {@link #LEAF_REACH}. */
+    /** Leaf-path distance within area to trunk (before/after strike), no farther than {@link #LEAF_REACH}. */
     private it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap leafDistances(it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap reach, IntArrayList logs, boolean afterBlast) {
         it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap dist = new it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap();
         IntArrayList queue = new IntArrayList();
@@ -650,12 +650,12 @@ final class Collapse {
         return dist;
     }
 
-    // ---------------------------------------------------------------- вода
+    // ---------------------------------------------------------------- water
 
     /**
-     * Малая вода у сломанного (пробито дно или стенка), с местами в чанке, — стекает целиком. Обход водоёма
-     * останавливается, как только он большой ({@link #MAX_DRAIN} мест, {@link #DRAIN_WIDTH} в ширину) или у края окна:
-     * море не обходится целиком.
+     * Small water beside broken blocks (breached bottom/wall), with positions in chunk, drains entirely. Water-body traversal
+     * stops once large ({@link #MAX_DRAIN} positions, {@link #DRAIN_WIDTH} wide) or at window edge:
+     * never traverse entire sea.
      */
     private void drain() {
         long[] seen = new long[gone.length], big = new long[gone.length];
@@ -684,7 +684,7 @@ final class Collapse {
                                 continue;
                             }
                             if (!props(nx, ny, nz).fluid()) continue;
-                            // часть большого водоёма, обход которого уже бросили
+                            // part of large water body whose traversal already abandoned
                             if (bit(big, m)) stop = true;
                             if (bit(seen, m)) continue;
                             set(seen, m);
@@ -710,9 +710,9 @@ final class Collapse {
         }
     }
 
-    // ---------------------------------------------------------------- навесное
+    // ---------------------------------------------------------------- attachments
 
-    /** Что держится за соседа, а не стоит само, — снято вместе с тем, за что держалось (два прохода: дверь на факеле). */
+    /** Blocks attached to neighbors rather than self-supporting removed with support (two passes: door on torch). */
     private void attachments() {
         for (int pass = 0; pass < 2; pass++) {
             for (int y = Math.max(yb, w.minY + 1); y <= yt; y++) {
@@ -722,7 +722,7 @@ final class Collapse {
                         if (bit(gone, i)) continue;
                         Blast.Props p = props(wx, y, wz);
                         if (p.air() || p.fluid() || p.fixed()) continue;
-                        // опорное стоит само (его роняет обход опоры), листва держится за ствол
+                        // load-bearing blocks stand independently (support traversal drops them); leaves attach to trunk
                         if ((p.bearing() || p.leaves()) && !attached(w.get(wx, y, wz))) continue;
                         if (detached(wx, y, wz, w.get(wx, y, wz), p)) set(gone, i);
                     }
@@ -731,7 +731,7 @@ final class Collapse {
         }
     }
 
-    /** Держится за соседа по своему виду (дверь, кровать, кнопка, настенное), а не стоит само. */
+    /** Attached to neighbor by type (door, bed, button, wall-mounted), not self-supporting. */
     private static boolean attached(BlockState st) {
         Block b = st.getBlock();
         return b instanceof DoorBlock || b instanceof DoublePlantBlock || b instanceof BedBlock || b instanceof FaceAttachedHorizontalDirectionalBlock
@@ -761,13 +761,13 @@ final class Collapse {
             Direction back = st.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite();
             return isGone(wx + back.getStepX(), y, wz + back.getStepZ());
         }
-        // опорное стоит само (его роняет обход опоры); остальное без коллизии — ковёр, факел, рельс, пыль, растение — на
-        // том, что под ним
+        // load-bearing blocks stand independently (support traversal drops them); other non-colliding blocks (carpet, torch, rail, dust, plant) rest on
+        // block beneath
         if (p.bearing() || p.leaves()) return false;
         return isGone(wx, y - 1, wz);
     }
 
-    // ---------------------------------------------------------------- выход
+    // ---------------------------------------------------------------- output
 
     private void collect() {
         java.util.Arrays.fill(ground, Integer.MIN_VALUE);
@@ -793,7 +793,7 @@ final class Collapse {
                 }
             }
         }
-        // тики жидкости: у сломанного в чанке — и в соседних чанках; жидкость чанка у сломанного соседей
+        // fluid ticks: beside this chunk's broken blocks, including neighboring chunks; this chunk's fluid beside neighbors' broken blocks
         for (int y = yb; y <= yt; y++) {
             for (int wz = LO - 1; wz <= HI; wz++) {
                 for (int wx = LO - 1; wx <= HI; wx++) {
@@ -812,7 +812,7 @@ final class Collapse {
         }
     }
 
-    /** Блок с водой, сломанный у воды, которая осталась (причал у реки), — вода; высоко и в одиночку — воздух. */
+    /** Waterlogged block broken beside remaining water (river pier) becomes water; isolated high block becomes air. */
     private boolean wet(int wx, int y, int wz) {
         for (Direction dir : Direction.values()) {
             if (dir == Direction.DOWN) continue;

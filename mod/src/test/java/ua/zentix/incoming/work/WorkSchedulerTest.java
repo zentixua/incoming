@@ -12,8 +12,8 @@ class WorkSchedulerTest {
     private static final long TOTAL = 30 * MS, GRID_CAP = (long) (TOTAL * WorkScheduler.GRID_SHARE);
 
     /**
-     * Доли полос в одном бюджете при 30 мс по умолчанию — те же мс, что были отдельными настройками (4 мс блэкаута,
-     * 8 мс подготовки руин): результат GameTest блэкаута и ядерки не меняется.
+     * Lane shares within the default 30 ms budget give the same times as the former separate settings (4 ms for blackout,
+     * 8 ms for ruin preparation): blackout and nuke GameTest results remain unchanged.
      */
     @Test
     void sharesKeepTheOldLimitsAtTheDefaultBudget() {
@@ -31,18 +31,18 @@ class WorkSchedulerTest {
     void lowerLaneGetsWhatIsLeftUpToItsCap() {
         assertEquals(GRID_CAP, WorkScheduler.remaining(TOTAL, 0, GRID_CAP));
         assertEquals(2 * MS, WorkScheduler.remaining(TOTAL, 28 * MS, GRID_CAP));
-        assertEquals(0, WorkScheduler.remaining(TOTAL, 45 * MS, GRID_CAP), "полоса выше ушла за срок — не отрицательный срок");
+        assertEquals(0, WorkScheduler.remaining(TOTAL, 45 * MS, GRID_CAP), "the higher lane exceeded its deadline: no negative allowance");
     }
 
     /**
-     * Волна ядерки и каскад блэкаута одновременно (считающие часы, единица 1 мс): блэкаут получает
-     * свои 4 мс, а не одну единицу за тик; без работы у блэкаута ядерке — весь остаток.
+     * A nuke wave and blackout cascade run together (counting clocks, 1 ms work units): blackout gets
+     * its 4 ms rather than one work unit per tick; with no blackout work, the nuke gets the whole remainder.
      */
     @Test
     void nuclearLeavesGridItsShareWhileGridWaits() {
         assertEquals(TOTAL, WorkScheduler.nuclearBudget(TOTAL, 0, 0));
         assertEquals(26 * MS, WorkScheduler.nuclearBudget(TOTAL, 0, GRID_CAP));
-        assertEquals(0, WorkScheduler.nuclearBudget(TOTAL, 28 * MS, GRID_CAP), "попадания и запас блэкаута съели срок");
+        assertEquals(0, WorkScheduler.nuclearBudget(TOTAL, 28 * MS, GRID_CAP), "impacts and the blackout reserve exhausted the allowance");
         WorkClock nuclear = WorkClock.counting(MS), grid = WorkClock.counting(MS);
         for (int tick = 0; tick < 50; tick++) {
             nuclear.start(WorkScheduler.nuclearBudget(TOTAL, 0, GRID_CAP));
@@ -51,13 +51,13 @@ class WorkSchedulerTest {
             while (grid.canStart()) grid.end(grid.begin());
             assertTrue(nuclear.usedThisTickNanos() + grid.usedThisTickNanos() <= TOTAL + 2 * MS);
         }
-        assertTrue(grid.maxUnitsPerTick() >= 3, "блэкауту за тик " + grid.maxUnitsPerTick() + " единиц");
-        assertTrue(nuclear.maxUnitsPerTick() <= 26, "ядерке за тик " + nuclear.maxUnitsPerTick() + " единиц");
+        assertTrue(grid.maxUnitsPerTick() >= 3, "blackout per tick: " + grid.maxUnitsPerTick() + " work units");
+        assertTrue(nuclear.maxUnitsPerTick() <= 26, "nuke per tick: " + nuclear.maxUnitsPerTick() + " work units");
     }
 
     /**
-     * Сервер не успевает (времени в тике нет): полоса идёт до малого срока {@link WorkScheduler#BUSY_MS}, а не весь
-     * бюджет поверх его работы; время появилось — снова до своего срока.
+     * The server is behind (no time left in the tick): the lane runs to the short deadline {@link WorkScheduler#BUSY_MS}, rather than using its full
+     * budget on top of server work; once time is available, it runs to its own deadline again.
      */
     @Test
     void busyServerGetsShortDeadline() {
@@ -72,33 +72,33 @@ class WorkSchedulerTest {
             c.end(began);
             units++;
         }
-        assertEquals(4, units, "срок 2 мс, единицы по 0,5 мс: начинаются, пока срок не вышел");
+        assertEquals(4, units, "2 ms deadline, 0.5 ms work units: start while the deadline has not passed");
         now[0] = WorkScheduler.BUSY_MS * MS;
-        assertTrue(c.overdue(), "малый срок вышел");
-        // тяжёлая единица не останавливает полосу на последующие тики: оценка 5 мс больше малого срока
+        assertTrue(c.overdue(), "the short deadline passed");
+        // a heavy work unit does not stop the lane on subsequent ticks: the 5 ms estimate exceeds the short allowance
         c.start(TOTAL, () -> spare[0], WorkScheduler.BUSY_MS * MS);
         long heavy = c.begin();
         now[0] += 5 * MS;
         c.end(heavy);
         c.start(TOTAL, () -> spare[0], WorkScheduler.BUSY_MS * MS);
         c.end(c.begin());
-        assertTrue(c.canStart(), "после тяжёлой единицы — снова до малого срока, а не одна единица за тик");
+        assertTrue(c.canStart(), "after a heavy work unit, run to the short deadline again rather than one work unit per tick");
         spare[0] = true;
-        assertTrue(c.canStart(), "время в тике есть — дальше по бюджету");
+        assertTrue(c.canStart(), "time is available in the tick: continue within the budget");
         assertFalse(c.overdue());
     }
 
-    /** Считающие часы (сценарии полёта, проверки) идут только работой: настенное «время в тике» на них не влияет. */
+    /** Counting clocks (flight scenarios, checks) advance only through work: wall-clock "time left in the tick" does not affect them. */
     @Test
     void countingClockIgnoresSpareTime() {
         WorkClock c = WorkClock.counting(MS);
         c.start(TOTAL, () -> false, 0);
         c.end(c.begin());
-        assertTrue(c.canStart(), "считающим часам — весь бюджет");
+        assertTrue(c.canStart(), "counting clocks get the full budget");
         assertFalse(c.overdue());
     }
 
-    /** Срок полосы уже вышел — одна единица всё равно: иначе полоса ниже вставала бы на весь залп. */
+    /** Even past the lane deadline, run one work unit: otherwise a lower lane would stop for the whole salvo. */
     @Test
     void laneWithNoBudgetStillDoesOneUnit() {
         WorkClock c = WorkClock.counting(MS);
@@ -111,8 +111,8 @@ class WorkSchedulerTest {
     }
 
     /**
-     * Две полосы с работой без конца, единицы по 1 мс (считающие часы): за тик — не больше общего срока и одной единицы
-     * на полосу; попадания — 2/3 общего, блэкаут — остальное до своего предела; оценки полос друг на друга не влияют.
+     * Two lanes with endless work and 1 ms work units (counting clocks): each tick uses at most the total allowance plus one work unit
+     * per lane; impacts get 2/3 of the total, blackout gets the remainder up to its cap; lane estimates do not affect each other.
      */
     @Test
     void tickStaysWithinTotalPlusOneUnitPerLane() {
@@ -123,15 +123,15 @@ class WorkSchedulerTest {
             grid.start(WorkScheduler.remaining(TOTAL, impact.usedThisTickNanos(), GRID_CAP));
             while (grid.canStart()) grid.end(grid.begin());
             long used = impact.usedThisTickNanos() + grid.usedThisTickNanos();
-            assertTrue(used <= TOTAL + 2 * MS, "тик " + used / MS + " мс");
-            assertTrue(grid.workedThisTick(), "блэкаут без единицы");
-            assertTrue(impact.usedThisTickNanos() <= 20 * MS, "попадания " + impact.usedThisTickNanos() / MS + " мс");
+            assertTrue(used <= TOTAL + 2 * MS, "tick " + used / MS + " ms");
+            assertTrue(grid.workedThisTick(), "blackout had no work unit");
+            assertTrue(impact.usedThisTickNanos() <= 20 * MS, "impacts " + impact.usedThisTickNanos() / MS + " ms");
         }
         assertEquals(19, impact.maxUnitsPerTick());
         assertEquals(3, grid.maxUnitsPerTick());
     }
 
-    /** Долгий взрыв в полосе попаданий: блэкаут ниже делает свою единицу и не ждёт, пока оценка попаданий спадёт. */
+    /** A long explosion in the impact lane: blackout below it runs its work unit without waiting for the impact estimate to decay. */
     @Test
     void longImpactUnitDoesNotStarveGrid() {
         long[] now = {0};
@@ -145,7 +145,7 @@ class WorkSchedulerTest {
         grid.start(WorkScheduler.remaining(TOTAL, impact.usedThisTickNanos(), GRID_CAP));
         assertTrue(grid.canStart());
         grid.end(grid.begin());
-        assertFalse(grid.canStart(), "срок блэкаута вышел — только одна единица");
+        assertFalse(grid.canStart(), "the blackout deadline passed: only one work unit");
     }
 
     /** Real clock policy, not WorkClock.counting: the optional consumer makes Post.hasTime false every tick. */

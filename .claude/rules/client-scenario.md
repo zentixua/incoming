@@ -8,275 +8,265 @@ paths:
   - "mod/src/sandboxAgent/**"
 ---
 
-# Сценарии клиента без окна
+# Headless client scenarios
 
-## Строки сценария
-Сценарий клиента пишет строки `SCENARIO …` в лог (звуки, fps, вспышка, `SCENARIO far` — что рисуется вдали и последний
-дальний раскат, `SCENARIO nuke-sound` — эхо ядерки: лучи, отражения с задержкой и уровнем, дорожки, от чего отсчитано начало
-(`by sound|tick`); горящий город, свои источники OpenAL с преградой и цена `FireWatch` за тик) — по ним и по кадрам проверяется картинка и звук. Сценарий `commands` (`incoming.commands`, шаги через
-«;», `ScenarioCommands`/`CommandPlan`): команды, `wait:N`, `shot:<имя>`, `hud:off|on`, `wait:nuke` (шаги ждут пакета
-подрыва), `wait:blast` (ждут следующего взрыва на сервере, не дольше 3600 тиков). Подробный город для замера огня
-клиента — `INCOMING_CITY=N@тик` (`FireCity`: секция поверхности и N − 1 под ней в каждом чанке клиента — с глобальной
-палитрой, только у клиента).
+## Scenario lines
+Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: distant visuals and last distant roll;
+`SCENARIO nuke-sound`: nuclear echo, rays, reflection delay/level, tracks, start anchor `by sound|tick`; burning city,
+own OpenAL sources with obstruction, per-tick `FireWatch` cost). Use these and frames to check look/sound.
+`commands` scenario (`incoming.commands`, semicolon-separated steps, `ScenarioCommands`/`CommandPlan`): commands,
+`wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:blast` (wait for next server
+explosion, at most 3600 ticks). Detailed city for client-fire measurements: `INCOMING_CITY=N@tick` (`FireCity`:
+surface section plus N − 1 below per client chunk, with global palette, client-only).
 
-## Песочница эффектов: кадр во время работы; полная сборка под Iris — только разовое сравнение с 3.4.1
-Правило ([проверки картинки и звука](../../docs/dev-pipeline.md#4-visual-and-audio-checks)):
-картинку и звук смотрят во время работы, как моддер в dev-игре, —
-правка → кадр и WAV песочницы через секунды; кадры и WAV «до и после» — в PR, ревьюер смотрит их. Песочница —
-dev-клиент MDG с набором `devtest` (как `clientGameTest` у JEI); своё в ней — только кадр файлом в заданный тик и
-команды без чата (Claude не видит экран, клиентских тестов со снимками у NeoForge нет — NeoForge #3624). Клиент со всей
-сборкой под Iris (`look_gate`, `prod_client.py`: ~3 мин до первого кадра, 10–25 мин на набор сцен, ядерка — 5–6 мин на
-сцену) снимают только для разового сравнения с 3.4.1, одним заходом, пока сцены не дотянут до его уровня; на каждый PR
-его нет. Картинку делает одна сессия за раз: видеокарта одна. Варианты улучшения инструментов (свой агент замены → HotswapAgent на JBR,
-сценарии — списками команд песочницы) — [оценка изменений инструментов](../../docs/dev-pipeline.md#7-evaluating-tool-changes).
-Стенд сцен (`tools/stand`, решение Артёма 24.10) — не песочница: песочница — кадр во время работы в dev-клиенте этого
-дерева, стенд — одни и те же настоящие удары с любым jar Incoming 3.4.1+ (выпуск, артефакт CI) рядом с принятым
-выпуском, время кадра и кадры; условие влития PR с картинкой — время кадра при 100 ударах (статус «Стенд сцен»).
-Сцену, которую надо сравнивать с выпуском, — в `scenes.json` стенда, а не в песочницу. Во время работы стенд гонят
-выборкой (`--packs none --scenes 100`).
-Замер 22.10 на ноутбуке: старт песочницы 19–24 с (сборка 5–8 с, клиент от JVM до мира 13–15 с), с Iris и шейдерпаком —
-39 с (клиент 30 с); правка тела метода или шейдера → кадр на 3-й секунде эффекта — 10 с (Gradle и замена 5–7 с), с
-Iris — тоже 10 с.
-- `tools/sandbox.sh start [shaders] [dh]` — клиент только с модом (sable-companion рядом: в dev он не вшит; `shaders` —
-  Sodium, Iris и шейдерпак хоста из инстанса, `dh` — Distant Horizons) в плоском мире (`Sandbox`: коренная порода, камень,
-  земля, трава, верх травы — y 64; полдень без погоды и мобов; каждый запуск тот же мир), без окна во вложенном KWin,
-  задачей ноутбука: живёт, пока не остановят (`stop`) или не запустится игра Артёма (`fx/stopped`; при игре — сразу
-  выход 75); чужие задачи её не гасят. Видеокарта — одна (`tools/gpu_lease.sh`): клиент (`nested_kwin.sh`, через него
-  идут все клиенты) берёт аренду своей сессии (владелец — по дереву `wt-<S>…`) и замок «клиент на видеокарте» и держит
-  их, пока жив, продлевая аренду; `start` спрашивает их ещё до сборки. Видеокарта у другой сессии — выход 75 со строкой
-  «видеокарта у <кто> (<дерево>), с <время>»; клиент уже идёт (и свой: песочница другого дерева, шлагбаум) — выход 75
-  «на видеокарте идёт клиент …»; живой вложенный KWin без замка (клиент скрипта до аренды, запуск мимо неё) — выход 75
-  «на видеокарте идёт клиент без аренды …» (23.10 такая песочница ZM шла при «свободной» аренде, и клиент FX её выбил;
-  второй KWin на том же сокете `nested_kwin.sh` не пускает — он ронял первый); `--wait` — встать в очередь аренды:
-  ждущие — честная очередь (FIFO, `$LEASE.queue`), освободившуюся берёт первый пришедший, без `--wait` свободную при
-  очереди не взять («её ждут: …»), держащую очередь не выбивает, прерванный ждущий уходит из неё сам; кто держит и кто
-  ждёт — `tools/gpu_lease.sh status` (23.10 без очереди `start --wait` ждал ~35 мин, пока видеокарту по очереди брали
-  V3, L1 и WV). Своя сессия перезапускает свою песочницу без ожидания; задачи без
-  видеокарты (GameTest, сборка) её не гасят. Не поднялась — только что взятая аренда отпускается. Закончил с
-  картинкой — `stop`, потом `tools/gpu_lease.sh release`; иначе аренда истекает через 10 мин без работы. Почему
-  аренда, а не очередь задач и не правило на память: правило не держалось (23.10 видеокарту брали три работы сразу,
-  песочница перезапускалась пять раз), а семафоры процесса (`sem`, `ts`) между кадрами, пока правят код, видеокарту
-  не держат.
-  `shaders` без jar Sodium и Iris, `dh` без jar Distant Horizons в каталоге модов песочницы (Gradle берёт их из модов
-  инстанса по шаблонам и молча пропускает, чего нет) — выход 2 со строкой, чего нет и откуда их берёт Gradle, а не
-  съёмка без Iris (`tools/test_sandbox.sh`). `soft` — без видеокарты, только где есть xvfb-run (облако): во вложенном KWin `LIBGL_ALWAYS_SOFTWARE` драйвер NVIDIA
-  не слушает, и клиент брал видеокарту. Своих модов песочница не ставит в сборку: каталог `run/sandbox` свой.
-- `scenery grass|paved|forest` — одинаковая геометрия для сравнения источников пыли: площадка 97×97, каменная мостовая или трава, лес из одинаковых дубовых блоков (проницаемые кроны, стволы, центральная прогалина). Перед сменой убрать `house 0`, после — `wait 80` на доставку блоков клиенту. Только мир песочницы.
-- Команды — `tools/sandbox.sh fx '<команда>'` (файл в `run/sandbox/fx/inbox`, итог — `*.done`) или `/fx …` в чате;
-  разбор и список — `SandboxCommand`. `blast <оружие> [зерно] [высота]` — пакет взрыва только у клиента тем же входом, что от сервера
-  (высота — над травой: точка в воздухе; удар в крышу — на высоте дома `house <высота> [полуширина]`, сплошного из
-  каменного кирпича под точкой, `house 0` — убрать); `raid [число] [радиус] [с между] [оружие] [water]` — налёт: столько же
-  пакетов (по умолчанию шахедов) в круге через интервал (по умолчанию 16 за 45 с в 120 м), кадр в дыму многих ударов;
-  `water` — в пруд, как у `blast` (залп «Града» по воде, сцена `grad-day`: `raid 12 15 1 rocket water`, `--cam '30 14 0 6'`); строка `SANDBOX
-  shot` пишет к/с, время слоя на видеокарте (`FxLayer.describeTiming`) и заливку дыма (`FarRenderer.describeSmoke`)
-  (`ClientHooks.blast`): картинка и звук как в игре, а воронки, огня и обломков сервера нет — земля цела, взрыв можно
-  повторять; `real <оружие> [deck|concrete <м> | paved]` — настоящий взрыв боевой части (`Warheads.detonate`) каждый раз на нетронутой земле (через
-  320 блоков к +X; остальные эффекты — снова в исходной точке; `deck` — в середину моста: настил из камня в столько
-  метров над руслом с водой вдоль X, пробой плиты; `concrete` — тот же настил из бетона; `paved` — метр чёрного бетона на грунте); `nuke <кт> [air|ground]` — `/incoming nuke now` через
-  6 км; `airburst` — разрыв зенитной ракеты в 30 м над точкой; `sam` — заряженный ЗРК в точке и шахед с 1400 блоков
-  к северу через неё (как сцена `sam-side` пробы), время — от схода зенитной ракеты (след, облако схода, мотор; `track on`
-  ведёт её), `clear` убирает ЗРК; `sam` начинает с gameTime 6000 (воздух для сравнения веток тот же,
-  время суток не меняет); `launch`/`flight <оружие> [от]` — настоящий пуск
-  (`/incoming salvo … from`; последнее слово `own` — от имени игрока: свои снаряды, список и метки на экране), время — от первого движения снаряда или от ближайшего к точке места (пролёт шахеда с
-  400 блоков — ~45 с: пусковая и катапульта); `flight` — по прямой над точкой: пуск в `от` (по умолчанию 600, 50–5000)
-  блоках к югу, цель — столько же к северу, у шахеда, ракеты и «Ланцета» точка маршрута `via` — сама точка
-  (`SandboxCommand.order`): без неё они летят петлёй и заходят из-за спины стреляющего, проходя в 200–350 блоках от
-  точки, и песочница их не дожидалась («не дождался начала эффекта»); «Град» и B-2 точек не берут и идут по прямой сами; `spent <оружие> [высота]` — отработавший
-  ускоритель в высоте над точкой (по умолчанию 20 м), время — от конца работы его двигателя (горячее сопло: пуск его в
-  кадр почти не приводит — ускоритель кувыркается в собственном следе); `fire [сторона]` — квадрат огня на незераке
-  (`clear` возвращает траву).
-  Заряд — паспорт оружия (произвольного заряда нет: картинке заряд даёт `BlastSource` по оружию в пакете), бомбу B-2 без
-  сервера не взорвать. `cam <дальность> [высота] [азимут] [взгляд]` — камера от точки (азимут как поворот игрока: 0 — юг,
-  90 — запад), `track on` — взгляд ведёт снаряд эффекта `launch`/`flight`, `zoom <k>` — зум ×k (поле зрения / k последним, как Ok Zoomer; 1 — без него), `time day|night`, `overlay on` — числа модели поверх кадра (время эффекта, дальность, последний взрыв,
-  дальние взрывы, звук у уха с давлением, эхом и слухом, пожары — строки `describe` тех же классов, что пишут
-  `SCENARIO`), `clear` — всё снять (`IncomingClient.resetSession`, как выход из мира; снаряды, огонь).
-  `stance stand|fly` — стоящий игрок (creative, полёт выключен) или наблюдатель (по умолчанию): наклон тела и шеи
-  проверять стоя, с `cam … 1.62 …`, после `wait 10` для приземления; в полёте видна только дрожь удара.
-  `weather clear|rain` — погода своего стенда; после смены `wait 40`, чтобы дождь и влажность дошли до клиента.
-- `tools/sandbox.sh shot <имя> '<эффект>' --at 0.1,0.5,1,3 --wav 4 [--cam …] [--time night] [--overlay]` — одна команда
-  от правки до кадров: сборка и замена (`swap`), `clear`, эффект; кадр — первый, нарисованный после нужного тика (`age` в
-  `capture.json` — время с долей тика), звук — кусок `audio.wav` (48 кГц) от начала эффекта (`audio.from` — секунды от
-  начала эффекта, у `nuke … near` с кадрами до фронта — от первого кадра). Часы эффекта — тики мира: на паузе
-  (перезагрузка ресурсов, меню) они стоят. Время суток — у каждого снимка своё (`--time`, по умолчанию `day`): смена
-  суток в мире песочницы выключена, и ночь прошлого снимка держалась бы. `time` шлёт клиенту пакет времени сразу и
-  кончается, когда время пришло к клиенту (не пришло за 2 с — `error`): сервер сам шлёт его раз в 20 тиков, и эффект
-  за командой первую секунду шёл при прежнем свете.
-- Игра Артёма для песочницы, шлагбаума и задач `--gpu` — `artem_playing` (`gpu_lease.sh`): java в папке его инстанса
-  Prism или в группе Prism, а не путь в командной строке: с `MC_DIR` на инстанс моды песочницы лежат по его пути, и
-  `pgrep -f 'PrismLauncher/instances/'` ловил её саму (код 75). `start shaders` без шейдерпака инстанса — отказ, а не
-  песочница без пака.
-- Ядерка у камеры за секунды — `nuke <кт> [air|ground] near [м]` (сцена `debris` без нового клиента): на новом месте дом
-  из каменного кирпича со стеклянными панелями и дощатой крышей, дощатый дом со стёклами, три дуба (раскладка
-  `ClientScenario.debrisEvents`), подрыв в `м` к северу (по умолчанию 2000, как у `debris`), время эффекта (`--at`) —
-  приход фронта к домам по часам подрыва клиента, кадры можно и до него (с −10 с). Камера сцены `debris` — `--cam '60 15 0 5'`
-  (60 к югу, 15 над землёй, на дома). Волна — та же, что у всех сценариев клиента (1,0 скорости звука: `TestScale` ставит
-  её с запуском сервера в JVM сценария, и песочница — тоже): у 15 кт фронт доходит до домов в 2 км за ~4 с игры, подрыв
-  — в том же тике, что и команда, поэтому весь вид — ~6 с игры. Подлёт не ускорить `/tick rate`: клиент 1.21.1 берёт
-  `max(50 мс, mspt)` — замедлить можно, ускорить нельзя (проба 23.10: сервер ушёл на 98 тиков, клиент — на 35, руины
-  встали раньше фронта картинки). Чем отличается от полного сценария: дубы — ровные кроны блоками (у сценария — `place feature`, форма
-  случайная); земля — плоская трава. Место у каждого запуска новое, но разброс порогов (`BlockResponse.jitterAt`, хеш
-  места) на нём тот же (сдвиг x на k·2¹⁶ и z на k·2¹⁰ снимается в `Long.hashCode(BlockPos.asLong())`), номер подрыва тот
-  же (9000: сид подрыва сценария) и время игры в миг подрыва то же (6000: ветер мира — функция времени игры, `Wind.at`;
-  земля эпицентра грузится сразу, и подрыв идёт в том же тике, а не отложенным; часы мира отматываются — запланированные
-  раньше тики блоков у прежних эффектов ждут дольше, `clear` их снимает), — ломаются те же блоки при том же ветре; прочая случайность по месту мира (шум следа,
-  выборка обломков) — своя, как у двух прогонов сценария. `overlay on` — фронт против точки и глаза, давление у точки,
-  обломки и полосы пыли (`NukeDust.describe`).
-- Горячая замена: агент `ua.zentix.hotswap.HotswapAgent` (свой набор исходников `src/sandboxAgent`, в jar мода не
-  входит) следит за `build/classes/java/{main,devtest}` и подменяет загруженные классы, когда Gradle дописал
-  (`fx/hotswap` — номер и итог). Ресурсы `swap` перезагружает, как F3+T (`fx reload`): наши шейдеры, текстуры, звуки,
-  язык; звуковой движок при этом перезапускается (свои источники `OwnSources` забываются, `client-sound.md`, а
-  `audio.wav` пишется заново). `reload` кончается, когда экран загрузки ушёл и пауза снята: одиночная игра на время
-  перезагрузки на паузе, экран гаснет ещё ~1 с, и эффект, начатый в это время, стоял (кадр «3 с» был ~2 с и без
-  хвостов обломков). Берёт без перезапуска: тела методов, числа в них и константы, которые javac вписал в код
-  (`static final` примитив или строка), новые классы. Нужен `restart` (~20 с): новое поле, метод, лямбда, сменилась
-  сигнатура (`fx/hotswap` — «fail», код 3), статический инициализатор (массивы, таблицы, `static final` из выражения:
-  заново не считается), регистрации (частицы, звуки, пакеты, команды), миксины, AT, настройки. С JetBrains Runtime
-  (`tools/sandbox.sh jbr` ставит его в `mod/run/jbr` главного дерева, `start` берёт сам и ставит
-  `-XX:+AllowEnhancedClassRedefinition`, только если заданная JVM этот флаг знает — обычная с ним не стартует) замена берёт и новые поля, методы и лямбды, но новое статическое поле
-  остаётся нулём или null — инициализатор не идёт: тоже `restart`.
+## Effects sandbox: frames during work; full pack under Iris only for one comparison with 3.4.1
+Rule ([visual/audio checks](../../docs/dev-pipeline.md#4-visual-and-audio-checks)): inspect look/sound during work,
+like a modder in a dev game: edit → sandbox frame/WAV in seconds; before/after frames/WAV in PR for reviewer.
+Sandbox is an MDG dev client with `devtest` (like JEI's `clientGameTest`); custom parts are only frame-to-file at a
+specified tick and chatless commands (Claude cannot see screen; NeoForge has no screenshot client tests,
+NeoForge #3624). Full-pack Iris client (`look_gate`, `prod_client.py`: ~3 min to first frame, 10–25 min per scene set,
+the nuke 5–6 min per scene) records only the one-off 3.4.1 comparison, in one session until scenes reach its level;
+not per PR. One visual session at a time: one GPU. Tool-improvement options (own replacement agent → HotswapAgent
+on JBR; scenarios as sandbox command lists): [evaluating tool changes](../../docs/dev-pipeline.md#7-evaluating-tool-changes).
+Scene bench (`tools/stand`, Artem's decision 24.10) differs from sandbox: sandbox gives work-in-progress frames in
+this tree's dev client; bench runs identical real strikes with any Incoming 3.4.1+ jar (release/CI artifact) beside
+accepted release, measuring frame time and frames; visual PR merge condition is frame time at 100 strikes (status
+“Стенд сцен”). Scenes compared with release belong in bench `scenes.json`, not sandbox. During work, sample bench
+with `--packs none --scenes 100`.
+Laptop measurement 22.10: sandbox start 19–24 s (build 5–8 s, JVM-to-world client 13–15 s); with Iris/shaderpack 39 s
+(client 30 s); method-body/shader edit → frame at effect second 3 takes 10 s (Gradle/replacement 5–7 s), also 10 s
+with Iris.
+- `tools/sandbox.sh start [shaders] [dh]`: mod-only client (sable-companion alongside: not embedded in dev; `shaders`
+  adds Sodium/Iris/host shaderpack from instance, `dh` Distant Horizons), flat world (`Sandbox`: bedrock, stone,
+  dirt, grass, grass top y 64; noon, no weather/mobs; same world every launch), headless in nested KWin, as laptop
+  job; lives until `stop` or Artem's game starts (`fx/stopped`; game running means immediate exit 75); other jobs
+  cannot stop it. One GPU (`tools/gpu_lease.sh`): client (`nested_kwin.sh`, used by every client) acquires its
+  session lease (owner from `wt-<S>…` tree) and GPU-client lock, holds/renews while alive; `start` requests them
+  before building. Another session holds GPU: exit 75, line “GPU held by <owner> (<tree>), since <time>”; client
+  already running (even own session's sandbox in another tree/look gate): exit 75, “client running on GPU …”;
+  live nested KWin without lock (pre-lease script client or bypass launch): exit 75, “client running on GPU without
+  lease …” (23.10 ZM sandbox ran under a “free” lease and FX client displaced it; `nested_kwin.sh` refuses second
+  KWin on same socket, which used to crash first); `--wait` joins lease queue: fair FIFO (`$LEASE.queue`), first
+  arrival gets released GPU; without `--wait` a queued free GPU cannot be taken (“waiting: …”); queue does not
+  evict holder, interrupted waiter removes itself; holder/waiters via `tools/gpu_lease.sh status` (23.10 without
+  queue, `start --wait` waited ~35 min while V3, L1, WV successively took GPU). A session restarts own sandbox
+  without waiting; GPU-free jobs (GameTest/build) cannot stop it. Failed startup releases a newly acquired lease.
+  Finish visuals with `stop`, then `tools/gpu_lease.sh release`; otherwise lease expires after 10 idle minutes.
+  Why lease instead of job queue/memory rule: rule failed (23.10 three GPU jobs at once, sandbox restarted five
+  times), process semaphores (`sem`, `ts`) do not hold GPU between frames while editing.
+  `shaders` without Sodium/Iris jars, `dh` without Distant Horizons jar in sandbox mods (Gradle takes instance mods
+  by patterns, silently skips missing) exits 2 explaining missing mods/Gradle source, instead of recording without
+  Iris (`tools/test_sandbox.sh`). `soft` uses no GPU, only where xvfb-run exists (cloud): nested KWin's NVIDIA
+  driver ignores `LIBGL_ALWAYS_SOFTWARE`, so client took GPU. Sandbox installs no mods into pack: own `run/sandbox`.
+- `scenery grass|paved|forest`: identical dust-source comparison geometry, 97×97 platform, stone paving or grass,
+  forest of identical oak blocks (permeable canopies, trunks, central clearing). Before switching remove `house 0`,
+  afterward `wait 80` for client block delivery. Sandbox world only.
+- Commands: `tools/sandbox.sh fx '<command>'` (file in `run/sandbox/fx/inbox`, result `*.done`) or `/fx …` in chat;
+  parser/list `SandboxCommand`. `blast <weapon> [seed] [height]`: client-only explosion packet through same entry
+  as server (height above grass, airborne point; roof impact at `house <height> [half-width]`, solid stone brick
+  beneath point; `house 0` removes). `raid [count] [radius] [seconds-between] [weapon] [water]`: that many packets
+  (default Shahed) within circle at interval (default 16 over 45 s within 120 m), frame inside many strikes' smoke;
+  `water` uses pond like `blast` (Grad water salvo, scene `grad-day`: `raid 12 15 1 rocket water`,
+  `--cam '30 14 0 6'`); `SANDBOX shot` logs fps, layer GPU time (`FxLayer.describeTiming`), smoke fill
+  (`FarRenderer.describeSmoke`) (`ClientHooks.blast`): game look/sound, without server crater/fire/debris, ground
+  intact, repeatable explosion. `real <weapon> [deck|concrete <m> | paved]`: real warhead explosion
+  (`Warheads.detonate`) on untouched ground each time (320-block +X steps; other effects return to original point;
+  `deck` hits bridge center: stone deck this many meters above water channel along X, slab breach; `concrete`
+  same concrete deck; `paved` meter of black concrete on ground). `nuke <kt> [air|ground]`: `/incoming nuke now`
+  6 km away; `airburst`: SAM burst 30 m above point; `sam`: loaded SAM at point and Shahed from 1400 blocks north
+  through it (like probe `sam-side`), time from interceptor launch rail exit (trail, rail-exit cloud, motor;
+  `track on` follows it), `clear` removes SAM; `sam` starts at gameTime 6000 (same branch-comparison air, leaves
+  time of day unchanged). `launch`/`flight <weapon> [from]`: real launch (`/incoming salvo … from`; final `own`
+  means on player's behalf: own projectiles, screen list/markers), time from first projectile motion or nearest
+  approach to point (Shahed flyby from 400 blocks ~45 s: launcher/catapult). `flight` crosses point on straight
+  route: launch `from` blocks south (default 600, 50–5000), target same distance north; Shahed/missile/Lancet use
+  point itself as `via` waypoint (`SandboxCommand.order`), otherwise loop behind shooter, pass 200–350 blocks from
+  point and sandbox times out (“effect did not start”); Grad/B-2 ignore waypoints and fly straight themselves.
+  `spent <weapon> [height]`: spent booster above point (default 20 m), time from motor burnout (hot nozzle: launch
+  rarely shows it, booster tumbles in own trail). `fire [side]`: square netherrack fire (`clear` restores grass).
+  Charge from weapon spec (no arbitrary charge: `BlastSource` supplies visual charge from packet weapon); B-2 bomb
+  cannot detonate without server. `cam <distance> [height] [azimuth] [gaze]`: camera relative to point (azimuth like
+  player yaw: 0 south, 90 west); `track on` follows `launch`/`flight` projectile; `zoom <k>` zoom ×k (FOV / k last,
+  like Ok Zoomer; 1 none); `time day|night`; `overlay on` model values over frame (effect time, distance, last
+  explosion, distant explosions, ear sound with pressure/echo/hearing, fires, `describe` lines from same classes as
+  `SCENARIO`); `clear` removes everything (`IncomingClient.resetSession`, like world exit; projectiles/fire).
+  `stance stand|fly`: standing creative player with flight off, or spectator (default); check body/neck lean
+  standing with `cam … 1.62 …`, then `wait 10` to land; in flight only impact tremor visible.
+  `weather clear|rain`: own bench weather; afterward `wait 40` for client rain/humidity.
+- `tools/sandbox.sh shot <name> '<effect>' --at 0.1,0.5,1,3 --wav 4 [--cam …] [--time night] [--overlay]`: one command
+  from edit to frames: build/replacement (`swap`), `clear`, effect; screenshot is first rendered frame after target
+  tick (`capture.json` `age` includes tick fraction), audio slice from `audio.wav` (48 kHz) from effect start
+  (`audio.from` seconds since effect start; `nuke … near` with pre-front frames starts from first frame). Effect
+  clock uses world ticks, paused during resource reload/menus. Each shot sets own time (`--time`, default `day`):
+  sandbox daylight cycle disabled, so previous shot's night would persist. `time` sends client time immediately,
+  ends once client receives it (no receipt in 2 s: `error`): server normally sends every 20 ticks; an effect
+  immediately after command previously spent first second in old light.
+- Artem's game detection for sandbox/look gate/`--gpu` jobs: `artem_playing` (`gpu_lease.sh`), java working in Prism
+  instance directory or Prism group, not command-line path: with `MC_DIR` pointing at instance, sandbox mods share
+  its path and `pgrep -f 'PrismLauncher/instances/'` matched sandbox itself (code 75). `start shaders` without
+  instance shaderpack refuses, instead of running packless sandbox.
+- Nuclear effects near camera in seconds: `nuke <kt> [air|ground] near [m]` (`debris` scene without new client): at
+  fresh location, stone-brick house with glass panes/plank roof, glass-windowed plank house, three oaks
+  (`ClientScenario.debrisEvents` layout); burst `m` north (default 2000, like `debris`); effect time (`--at`) is
+  front arrival at houses by client detonation clock, frames allowed beforehand (from −10 s). `debris` camera:
+  `--cam '60 15 0 5'` (60 south, 15 above ground, facing houses). Wave same as all client scenarios (sound-speed
+  scale 1.0: `TestScale` sets it at same-JVM scenario server start, sandbox too): 15 kt front reaches houses 2 km
+  away in ~4 game seconds; detonation same tick as command, whole scene ~6 game seconds. `/tick rate` cannot
+  accelerate approach: client 1.21.1 uses `max(50 ms, mspt)`, can slow only (probe 23.10: server advanced 98 ticks,
+  client 35, ruins preceded visual front). Differences from full scenario: oaks have regular block canopies
+  (scenario `place feature` random shapes), flat grass ground. Fresh location each run, but threshold scatter
+  (`BlockResponse.jitterAt`, position hash) identical there (x shift k·2¹⁶, z k·2¹⁰ cancel in
+  `Long.hashCode(BlockPos.asLong())`), same detonation ID (9000: scenario detonation seed), same detonation game time
+  (6000: world wind is game-time function `Wind.at`; epicenter ground loads immediately, detonation same tick
+  rather than deferred; world clock rewound, previously scheduled old-effect block ticks wait longer, `clear`
+  removes them), so same blocks break in same wind; other position-based randomness (trail noise, debris sampling)
+  differs, as between scenario runs. `overlay on`: front relative to point/eye, pressure at point, debris/dust
+  streaks (`NukeDust.describe`).
+- Hot replacement: agent `ua.zentix.hotswap.HotswapAgent` (own source set `src/sandboxAgent`, excluded from mod jar)
+  watches `build/classes/java/{main,devtest}`, replaces loaded classes after Gradle finishes writing (`fx/hotswap`
+  number/result). `swap` reloads resources like F3+T (`fx reload`): own shaders/textures/sounds/language; sound engine
+  restarts (`OwnSources` forgotten, `client-sound.md`, `audio.wav` restarted). `reload` ends when loading screen
+  disappears and pause ends: single-player pauses during reload, screen takes another ~1 s to fade, effects
+  started then stood still (“3 s” frame was ~2 s without debris tails). Without restart supports method bodies,
+  their numbers/javac-inlined constants (`static final` primitive/string), new classes. `restart` (~20 s) needed
+  for new field/method/lambda, changed signature (`fx/hotswap` “fail”, code 3), static initializer (arrays/tables,
+  `static final` expression not recalculated), registrations (particles/sounds/packets/commands), mixins/AT/settings.
+  JetBrains Runtime (`tools/sandbox.sh jbr` installs to main tree `mod/run/jbr`; `start` auto-selects and adds
+  `-XX:+AllowEnhancedClassRedefinition` only if selected JVM supports it, ordinary JVM fails with flag) supports new
+  fields/methods/lambdas, but new static fields remain zero/null, initializer does not run: also `restart`.
 
-- `/fx surface <depth> [black|gray]` — сохранённое частичное повреждение на новом участке покрытия без взрыва:
-  для проверки размера излома/сколов по глубине (0 < depth ≤ 1); обычный display с тем же серверным путём и светом.
+- `/fx surface <depth> [black|gray]`: saved partial damage on fresh covering patch, no explosion; checks fracture/
+  chip size by depth (0 < depth ≤ 1); ordinary display with same server path/light.
 
-## Подводные камни
-- Сервер может отставать от клиента по тикам (генерация мира): в сценарии клиента кадры привязаны к событиям, не к счётчику.
-- Кадры сценария сравниваются от прогона к прогону: под свойством `incoming.scenario` сид ядерного подрыва — по его
-  номеру (`NuclearWarhead`), ветер — по времени игры в миг подрыва (`Wind.at`), а подробность пелены — из настройки, без бюджета видеокарты (`PallPass.Detail.pin`:
-  на llvmpipe бюджет опустил бы её до LOW).
-- Сценарий `pall-front` — пелена за фронтом ночью из 400 м от наземных 15 кт на 120 м над землёй (как кадр повтора хоста),
-  кадры от прихода фронта к камере. `INCOMING_EXPORT=2560x1440` — кадр игры больше окна, как при выводе видео Flashback:
-  окно сообщает размер вывода (поля `Window.framebufferWidth/Height` отражением; у Flashback — миксин `Window.getWidth`,
-  пока `ExportJob.shouldChangeFramebufferSize`) и `Minecraft.resizeDisplay` ставит его кадру игры — проверка всего, что
-  берёт размер кадра (пелена, `SceneDepth`, `ScreenSize` шейдеров слоя); с `INCOMING_SIZE=640x360` — как у ноутбука хоста
-  (окно 640×360, вывод 1280×720). Кадры `*_off` — тот же миг без пелены (настройка OFF на несколько кадров): пара, по
-  которой видно, темнит ли пелена освещённую стену и город. `pall-low` — тот же подрыв, но эпицентр на каменном столбе
-  в 45 блоках над землёй у камеры, а камера в 8 блоках над землёй, ниже земли под эпицентром (кадр трейлера из долины):
-  под горизонтом за прорисовкой (и за краем LOD DH) пелена должна лежать до рельефа (`PallGround`), а не обрываться
-  ровной чертой; кадры `pall_low_*` через 5, 20 и 60 с после фронта (камера перед каждым — снова на место: волна её
-  сносит), прогон — с `dh` и без.
-- Сценарий `pall-mine` — днём в 1,5 км от наземных 15 кт: за фронтом у камеры забор, решётки и столб в 3–5 блоках,
-  под ней штольня в 80 блоков (дальше окна `OpenAir`) со светящимся потолком и шахтой к небу в её конце. Кадры `mine_surface`, `mine_tunnel` (пелены в штольне быть не
-  должно), `mine_shaft` (со дна шахты вверх — пыль есть: шахта открыта небу), `mine_rim_120s/240s` (пропуск времени, как
-  у `firestorm`: пелена у камеры редеет, видно 17 и 51 блок; край решёток и столба на её фоне), у каждого `_off`. С
-  шейдерпаком в облаке: Sodium, Iris (Modrinth) к модам, пак — в `run/scenario/shaderpacks`, `iris.properties` с
-  `enableShaders=true`; `_off` под паком снимается через 40 тиков (кадр — раз в секунды).
-- Сценарий `mushroom` — гриб объёмом издалека: наземные 15 кт в 10 км (к северу или в первую по часовой сторону, где
-  по генератору суша под эпицентром и в 600 блоках вокруг: у зерна сценария к северу море, подрыв там водяной, и столб
-  воды закрывал шар), зритель висит в 200 блоках над землёй,
-  кадры `pall_mushroom_<секунды>s` от 2 с до 4 минут; утро (солнце сбоку) или `INCOMING_MUSHROOM=night`, качество —
-  `INCOMING_PALL`. `INCOMING_MUSHROOM=shadow` — тень гриба на земле (подрыв в 5 км, кадры `pall_shadow_*`),
-  `glow` — свет шара на земле ночью (подрыв в 3 км к востоку, кадры `pall_glow_<секунды>s` от 1 до 14 с), `film` —
-  вид видео хоста над Newisle: воздушные 15 кт в 1383 блоках над сушей днём, наблюдатель в 40 блоках над землёй
-  (волна его не сносит), кадры `pall_film_front_<десятые>ds` с 1 по 3,5 с (фронт подходит: кольцо преломления по его
-  краю), `pall_film_<секунды>s` с 4 по 40 с (стена проходит его на ~7 с) и `pall_film_up_*`
-  на 55° вверх до 90 с — гриб с ножкой виден, пока зритель в пыли. `blanket` — пыль с земли и пелена с высоты (жалобы
-  18.10): воздушные 15 кт в 3 км, `nuclear.wave_speed` 0,2, как на серверах хоста (`INCOMING_WAVE_SPEED`), зритель-наблюдатель
-  в 20 блоках над самым высоким рельефом первых 800 блоков к эпицентру (холм у глаза закрывал стену); кадры
-  `pall_blanket_ground_<секунды>s` каждые 6 с до 54 с, потом через 1 и 5 минут с высот 60, 150, 400, 1000 и 2500 блоков
-  (`pall_blanket_<минуты>m_up<высота>`) и сверху с 1000 блоков в 1,5 км от эпицентра (`…_over1000`): сверху старая пелена —
-  одно одеяло, без клочьев и провалов. `flash` — свет шара днём: воздушные 15 кт в 4 км над
-  сушей, наблюдатель в 30 блоках над землёй смотрит поперёк направления на взрыв и вниз (склоны к шару и от него в одном
-  кадре), кадры `pall_flash_*` до вспышки и через 2–60 тиков; возраст кадра — по `ball r` строки `SCENARIO pall`
-  (226 блоков — ~0,3 с, 250 — ~1 с, 265 — ~2,5 с): на llvmpipe клиент встаёт в первые тики подрыва, и снимок берёт кадр,
-  нарисованный тиком-двумя раньше. Свежий мир сценария (первый прогон) рисует в пелене вертикальные полосы — сравнивать
-  кадры прогонов на одном и том же мире.
-- С Iris без шейдерпака и DH (как у ноутбука хоста): `INCOMING_SHADERS=1 INCOMING_DH=1` и `-PmcModsDir` с каталогом, где
-  к модам `fetch_runtime_mods.py` добавлены Sodium, Iris и jar DH той версии, что в сборке (Modrinth, sha512 — из
-  `pack/mods/*.pw.toml` open-skies); `iris.properties` не писать — шейдеры выключены. LOD DH в облаке строит мало: доля
-  кадра под LOD дальше прорисовки — в `SCENARIO … depth:`.
-- Экран приветствия доступности и пауза без фокуса ломают клиент без окна — `client_scenario.sh` пишет свой `options.txt`.
-- Клиент без окна работает и в облаке, без KWin и шейдеров (каталог `run/scenario/logs` для gc.log Gradle создаёт сам):
+## Pitfalls
+- Server may lag client ticks during world generation: client-scenario frames anchor to events, not a counter.
+- Scenario frames compare across runs: with `incoming.scenario`, nuclear seed derives from ID (`NuclearWarhead`),
+  wind from detonation game time (`Wind.at`), pall detail from setting without GPU budget (`PallPass.Detail.pin`:
+  llvmpipe budget would lower to LOW).
+- `pall-front`: night post-front pall, camera 400 m from surface 15 kt, 120 m above ground (like host replay frame),
+  frames relative to camera-front arrival. `INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback
+  video export; window reports output size (`Window.framebufferWidth/Height` fields via reflection; Flashback mixes
+  into `Window.getWidth` while `ExportJob.shouldChangeFramebufferSize`), `Minecraft.resizeDisplay` applies it to game
+  frame, checking all frame-size consumers (pall, `SceneDepth`, layer-shader `ScreenSize`); with
+  `INCOMING_SIZE=640x360`, like host laptop (640×360 window, 1280×720 output). `*_off` frames show same instant
+  without pall (OFF for a few frames), revealing whether pall darkens lit wall/city. `pall-low`: same burst but
+  epicenter on stone column 45 blocks above camera ground; camera 8 above ground, below epicenter ground (valley
+  trailer frame): below horizon beyond rendering/DH LOD edge, pall must extend to terrain (`PallGround`), without
+  straight cutoff. `pall_low_*` frames 5/20/60 s after front (restore camera before each: wave carries it), with/without
+  `dh`.
+- `pall-mine`: daytime, 1.5 km from surface 15 kt; after front, fence/bars/post 3–5 blocks from camera; beneath,
+  80-block mine tunnel (beyond `OpenAir` window), luminous ceiling and sky shaft at end. Frames `mine_surface`,
+  `mine_tunnel` (no tunnel pall), `mine_shaft` (upward from shaft bottom: dust, shaft open to sky),
+  `mine_rim_120s/240s` (time skip like `firestorm`: thinning local pall, visibility 17/51 blocks; bar/post edges
+  against it), each paired with `_off`. Cloud shaderpack setup: add Sodium/Iris (Modrinth) to mods, pack into
+  `run/scenario/shaderpacks`, `iris.properties` with `enableShaders=true`; pack `_off` captured after 40 ticks
+  (frames take seconds).
+- `mushroom`: distant volumetric mushroom, surface 15 kt at 10 km (north, or first clockwise direction where generator
+  says epicenter and 600 blocks around it are land: scenario seed has sea north, water burst/column hid sphere);
+  viewer 200 blocks above ground, `pall_mushroom_<seconds>s` frames from 2 s to 4 min; morning (side sun) or
+  `INCOMING_MUSHROOM=night`, quality `INCOMING_PALL`. `INCOMING_MUSHROOM=shadow`: ground mushroom shadow (burst 5 km,
+  `pall_shadow_*`); `glow`: nighttime ground fireball light (burst 3 km east, `pall_glow_<seconds>s`, 1–14 s);
+  `film`: host video view above Newisle, daytime airburst 15 kt 1383 blocks away over land, spectator 40 above ground
+  (wave cannot move it), `pall_film_front_<tenths>ds` from 1 to 3.5 s (approaching front, refraction ring at edge),
+  `pall_film_<seconds>s` from 4 to 40 s (wall crosses viewer ~7 s), `pall_film_up_*` looking 55° up through 90 s,
+  mushroom/stem visible while viewer in dust. `blanket`: ground-view dust/overhead pall (complaints 18.10), airburst
+  15 kt at 3 km, `nuclear.wave_speed` 0.2 like host servers (`INCOMING_WAVE_SPEED`), spectator 20 blocks above highest
+  terrain in first 800 blocks toward epicenter (eye-local hill hid wall); `pall_blanket_ground_<seconds>s` every 6 s
+  through 54 s, then 1/5 minutes at heights 60/150/400/1000/2500 blocks (`pall_blanket_<minutes>m_up<height>`), plus
+  overhead at 1000 blocks, 1.5 km from epicenter (`…_over1000`): old pall is one blanket from above, no patches/holes.
+  `flash`: daytime fireball light, airburst 15 kt 4 km over land, spectator 30 above ground looks across explosion
+  direction/down (slopes facing toward/away in same frame), `pall_flash_*` before flash and 2–60 ticks afterward;
+  frame age from `ball r` in `SCENARIO pall` (226 blocks ~0.3 s, 250 ~1 s, 265 ~2.5 s): llvmpipe client stalls in
+  first detonation ticks, screenshot takes frame rendered one/two ticks earlier. Fresh scenario world (first run)
+  draws vertical pall stripes: compare runs on same world.
+- Iris installed without shaderpack plus DH (like host laptop): `INCOMING_SHADERS=1 INCOMING_DH=1`, `-PmcModsDir`
+  pointing to directory with `fetch_runtime_mods.py` mods plus Sodium/Iris/DH jar matching pack version (Modrinth,
+  sha512 from open-skies `pack/mods/*.pw.toml`); do not write `iris.properties`, shaders off. Cloud DH builds little:
+  frame share covered by LOD beyond render distance in `SCENARIO … depth:`.
+- Accessibility welcome screen/unfocused pause break headless client; `client_scenario.sh` writes own `options.txt`.
+- Headless client works in cloud without KWin/shaders (Gradle creates `run/scenario/logs` for gc.log):
   `INCOMING_SCENARIO=launch LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClientScenario
-  -PmcModsDir=run/ci-mods` (моды — `tools/fetch_runtime_mods.py`; 3–6 fps). На llvmpipe секции чанков строятся
-  медленно: сразу после резкой смены точки обзора сущности в кадре могут не появиться на несколько кадров.
-- Сценарий `fx` (и `fx-night`) снимает эффекты крупным планом: зритель висит в 50 блоках от цели, кадры — от момента,
-  когда снаряд пропал (взрыв), в конце — старт МБР; столбы прежних ударов перед следующим снимаются (`FarRenderer.reset`).
-  `fx-late` — шахед и ракета и их столб через 45 с с половины прорисовки и из-за её края. В облаке (без KWin) клиент
-  идёт под `xvfb-run` с llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1`), ~10 fps; без Create/Sable в `run/scenario/mods` нужен
-  jar sable-companion.
-- Сценарии дыма объёмом (`planSmoke`): `smoke-salvo` — пакет «Града» (40 снарядов с разбросом 15) по равнине в 30
-  блоках перед зрителем, кадры `smoke_salvo_<с>s` от первого разрыва до минуты; `smoke-salvo-pall` — тот же залп в живой
-  пелене наземных 15 кт в 2,5 км (худший случай бюджета); `smoke-column` — шахед, через 30 с зритель пролетает сквозь
-  облако (центр — по той же модели, `smoke_column_*`). `smoke-fire` — ночью шахед в деревянный дом 15×7×15 в 60 блоках перед зрителем
-  (чанки дома — `forceload`: `fill` в незагруженном месте не делает ничего); загорелось мало (меньше 8 блоков через 3 с) —
-  огонь внутри дома ставит сценарий (строка `SCENARIO smoke fire placed…`; наш дым — только у топлива воронки, огонь дома —
-  огонь мира), кадры
-  `smoke_fire_<с>s` до 90 с и `smoke_fire_far_*` из ~200 блоков; `INCOMING_SMOKE_FIRE=day` — то же днём
-  (`smoke_fire_day_*`: чёрный столб на небе). В строке `SCENARIO smoke` — очаги `FireSmoke.describe`. Строка `SCENARIO smoke` раз в секунду — источники сетки, проход
-  пелены (время на видеокарте) и слой.
-- Сценарии `nuke-water` и `nuke-lake` — ядерка у воды без полёта (`nuke now`, 15 кт на земле), кадры `water_*`/`lake_*`
-  от подрыва и строка `SCENARIO water` раз в 10 тиков (`NukeWater.describe`: вода под эпицентром и откуда известна,
-  столб — верх, наружный радиус и доля воды, радиус базисной волны, клубы у земли над водой, кольца наклейки, брызги,
-  частицы пыли у земли). `nuke-water`:
-  зритель в 20 блоках над морем в 40 блоках от берега ближайшего тёплого моря (у замёрзшего — лёд и айсберги), подрыв —
-  в 1,5 км в ту сторону, где дно генератора (`OCEAN_FLOOR_WG`) ниже уровня моря на всём пути и в 150 блоках по бокам от
-  зрителя (с мыса сбоку пыль суши летит над водой у камеры); `nuke-lake`: равнина, от которой на +Z 1,6 км суши по
-  генератору (у ближайшей равнины бывает море, рядом — снежный лес, где пруд замёрз бы: место выбирается по сетке вокруг
-  неё), пруд 120×140 блоков перед зрителем (над ним и до зрителя расчищено на 40 блоков: холмы и деревья закрывали его)
-  на высоте генератора (чанк клиента к этому тику мог не прийти, и зритель вставал под воду); чанки пруда сервер
-  генерирует сразу — наблюдатель грузит их в фоне, и `fill` отвечал «That position is not loaded» (полосами — предел
-  32768 блоков); подрыв — на суше в 1,5 км за ним. Зритель — наблюдатель: волну в 1,5 км (2 psi) игрок в творческом
-  режиме сносит с площадки. Без DH дальше прорисовки воды нет: кольцо на море видно, только когда фронт входит в
-  прорисовку (у 15 кт — с ~4 с), дальнее море и кольцо по LOD — только с `dh` у хоста. У `nuke` (МБР с 2 км)
-  кадры `nuke_wall_*` (без HUD) — через 2,25 и 3,75 с после того, как фронт прошёл смотровую площадку и сбросил с неё
-  зрителя (по `arrivalTicks` и часам сервера: бросок — тик сервера, а сервер бывает позади счётчика кадров клиента):
-  под ней в воздухе стена, бревна, трава и пруд 3×3, листва на стене, по бокам от неё крона в 30 блоках и конёк крыши
-  в 50 — перед небом, почти по горизонту от глаза. В полосе ряби за фронтом тёмное кольцо наклейки темнит пруд, а на
-  боковых гранях полос и по краю листвы и крыши перед небом точек быть не должно (полосы по рядам блоков — признак воды
-  по одной высоте без глади, точки — горизонтали по скачку к фону); потом зритель снова на смотровой площадке (кадр
-  гриба `nuke` через 20 с). Эпицентр `nuke` у этого зерна (0 63 −2000) — вода: подрыв там «водяной» (столб, базисная
-  волна, брызги).
-- Сценарий `debris` — обломки и пыль у камеры: днём на ближайшей равнине площадка 41×41 (камень на 10 блоков вглубь —
-  иначе часть площадки висела бы над низиной, и обрушение руин уронило бы её целиком), на ней дом из каменного кирпича
-  со стеклянными панелями и дощатой крышей, дощатый дом со стёклами и три дуба (`place feature`); наземные 15 кт к
-  северу в `INCOMING_DEBRIS` метрах (2000). Зритель-наблюдатель — в 60 блоках к югу и в 15 над площадкой: у самых домов
-  он через доли секунды после фронта уже в голове стены, где видно на метры (первый вариант сцены, кадры тёмные у обеих
-  веток). Кадры `debris_<тики>t` — за 10 тиков до прихода фронта к домам и через 1–200 тиков (по часам подрыва у клиента),
-  строки `SCENARIO debris` — где фронт и голова против домов и камеры (сравнивать кадры прогонов по ним: миг кадра
-  гуляет на тики), что сорвано (`NukeDust.describe`: пакеты, места, куски по веществу, полосы пыли и их наибольшая толща)
-  и время слоя.
-- Сценарий `firestorm` (огненный шторм; `INCOMING_FIRESTORM=night|day`, качество пелены — `INCOMING_PALL`): воздушные
-  15 кт там, где в 1,6 км вокруг больше всего горючей суши по биомам сервера (у точки появления мира сценария — лёд и
-  море, деревни ближе 1,6 км нет), кадры `fs_*` с 2 км, с 800 м и изнутри у огненного смерча через ~1, 5 и 15 минут;
-  у крыши — окна по 2 с со штормом и без него по очереди (строки `SCENARIO firestorm gpu`: на llvmpipe — только
-  сравнение между собой). Минуты пропускаются: часы сервера — `setGameTime` и пакет времени всем, у клиента —
-  `ClientNuclear.rewound`, как перемотка повтора. Ночь — подрыв в 4000, потом `time set 18000` и перемотка: утро
-  пелены и шторма — по времени суток в миг подрыва (без перемотки прыжок часов перенёс бы утро к ближайшему восходу,
-  через 4 минуты). Точки съёмки — над самым высоким рельефом в 8 блоках вокруг: в шпиле льда кадр был бы тёмной
-  заглушкой блока без руки; изнутри — сбоку от смерча над горючей сушей (не над морем или льдом: они не горят).
-  `INCOMING_FIRESTORM_QUICK=1` — только два кадра (изнутри у смерча и с 2 км) сразу после пропуска к смерчу: для
-  подбора вида.
-- Сценарий `guide` (`GuideShots`, кадры руководства): снимок — после трёх отрисованных кадров (`settle`): на llvmpipe
-  тики идут пачками между кадрами, и снимок сразу после шага показывает прежнее (пустой верстак до раскладки). DH в
-  облаке почти ничего не строит и рисует вместо рельефа столбы — снимать без `dh`; карта там — по загруженным чанкам
-  (прорисовка 20, цель в 180 блоках: за 5 минут генерация успевает около 14 чанков вокруг).
-  Shift+ЛКМ без окна не нажать: точку маршрута в GIF ставит сам сценарий, подсказку клавиш он рисует на кадре.
-  Кадры — по-английски, как руководство (русское берёт те же картинки): `client_scenario.sh guide` ставит
-  `lang:en_us` в `options.txt`, подсказки клавиш на кадре тоже английские; в облаке без скрипта `options.txt` пишется
-  руками (как в скрипте, плюс `lang:en_us`), иначе клиент встаёт на экране первого запуска.
-  GIF мира: llvmpipe рисует ~5 кадров в секунду, а GIF идёт 12 — сценарий замедляет сервер (`/tick rate`) по замеренной
-  частоте кадров, чтобы GIF шла в заданном темпе (`startGif(имя, темп)`; 0 — экран GUI, кадр на шаг). Шаги планируются
-  в конструкторе, до входа в мир: всё, что зависит от места съёмки (`view`, `along`, `across`), — только в лямбдах.
-  Подпись клавиши поверх бинокля: слои HUD уходят вверх по z, а GUI рисуется с проверкой глубины — перед подписью
-  сбросить глубину. Зритель стоит на вершине среди деревьев: пусковая у него не встаёт, снаряды заходят издалека
-  (так и снимается); ровная площадка вокруг зрителя закрывает вид вниз на деревню (прицел бинокля — в траву у ног).
-  `fill` в незагруженном месте не делает ничего, а у ЗРК под листвой нет открытого неба — ему своя поляна.
-  Ракета заходит на цель из-за спины стреляющего, а атака не видит склона между ней и целью: с холма зрителя она
-  цепляет деревья на вершине. Камера ракеты снимается с зрителем у деревни и прямым путём (`from` и `via` на одной
-  линии) с той стороны, где рельеф ниже.
-- Сценарий `flame-edge` — факел на краю прорисовки: ракета «Града» и ракета на ускорителе ночью и днём сбоку, на одной
-  линии от зрителя far-models — клиентской копией сущности на 0,5, 0,85 и 0,97 прорисовки и путём по пакетам на 0,97,
-  1,1 и 1,4 (кадры `flame_<свет>_<снаряд>_<сотые>_<entity|far>`, на 0,97 — одна поза обоими путями); после каждого
-  кадра пути и шлейфы снимаются (`FlightTracks.reset`, `FarRenderer.reset`): следующий снаряд — на той же линии.
-  Строка `SCENARIO flame-edge` — свет ближнего факела из `FarFlightView.describe` (ядро, его доля, блик, вуаль).
-- Сценарий `flash` (`FlashScenario`, следы вспышки — DESIGN-nuke §3.7): ровную равнину под площадку он ищет по высотам
-  генератора (`ChunkGenerator.getBaseHeight`, биом — по источнику биомов, чанки не грузятся), а строит её в потоке
-  сервера секундами — шаги считаются от готовой площадки и от найденного места дымков, а не от входа в мир (по тикам
-  клиента подрыв приходился на ещё пустое место). Пожары на время ближнего подрыва выключены настройкой: огонь травы
-  закрывал стену. Стена — очищенная берёза (на светлом дереве гарь и тени видны лучше всего), под телами — площадь из
-  каменных кирпичей (тень на земле). Дымки — второй подрыв в настоящем масштабе на другой равнине, шар — сбоку за
-  кадром: в кадре с шаром на 1,3 км экран белеет. Дуги ЭМИ снимаются в нём же вблизи, с теневой стороны фонарей, кадром
-  на каждый тик первых секунд и в замедлении `/tick rate 4`: вспышка дуги живёт 2–3 тика, а клиент без видеокарты после
-  подрыва рисует 3 кадра в секунду — на 20 тиках снимок (`Screenshot.grab` берёт последний нарисованный кадр) повторял
-  один кадр по 5 тиков подряд, и дуга проходила между ними. Строки `SCENARIO flash shot …` — метки у клиента, дуги ЭМИ и дымки
+  -PmcModsDir=run/ci-mods` (mods from `tools/fetch_runtime_mods.py`, 3–6 fps). llvmpipe builds chunk sections slowly:
+  after abrupt viewpoint change, entities may remain absent for several frames.
+- `fx`/`fx-night`: close effects, viewer 50 blocks from target, frames from projectile disappearance (explosion),
+  ICBM launch at end; previous strike columns removed before next (`FarRenderer.reset`). `fx-late`: Shahed/missile
+  and columns at 45 s from half render distance/beyond edge. Cloud without KWin uses `xvfb-run`/llvmpipe
+  (`LIBGL_ALWAYS_SOFTWARE=1`), ~10 fps; without Create/Sable in `run/scenario/mods`, sable-companion jar required.
+- Volume-smoke scenarios (`planSmoke`): `smoke-salvo` full Grad pack (40 rockets, spread 15) onto plain 30 blocks
+  before viewer, `smoke_salvo_<seconds>s` from first burst through minute; `smoke-salvo-pall` same salvo inside live
+  surface-15-kt pall 2.5 km away (worst budget case); `smoke-column` Shahed, viewer flies through cloud after 30 s
+  (center from same model, `smoke_column_*`). `smoke-fire`: nighttime Shahed into 15×7×15 wood house 60 blocks before
+  viewer (house chunks `forceload`, since `fill` in unloaded place does nothing); few ignitions (fewer than 8 blocks
+  after 3 s) means scenario places indoor fire (`SCENARIO smoke fire placed…`; our smoke only over crater fuel,
+  house fire belongs to world), `smoke_fire_<seconds>s` through 90 s, `smoke_fire_far_*` from ~200 blocks;
+  `INCOMING_SMOKE_FIRE=day` same by day (`smoke_fire_day_*`, black column against sky). `SCENARIO smoke` includes
+  `FireSmoke.describe` sources; once per second logs grid sources, pall-pass GPU time and layer.
+- `nuke-water`/`nuke-lake`: nuclear effects by water without flight (`nuke now`, surface 15 kt), `water_*`/`lake_*`
+  frames from detonation, `SCENARIO water` every 10 ticks (`NukeWater.describe`: water under epicenter/source,
+  column top/outer radius/water share, base-surge radius, ground-level billows over water, decal rings, spray,
+  ground-dust particles). `nuke-water`: viewer 20 above sea, 40 blocks offshore at nearest warm ocean (frozen ocean
+  has ice/icebergs); burst 1.5 km along direction where generator bed (`OCEAN_FLOOR_WG`) is below sea throughout path
+  and 150 blocks sideways from viewer (side cape sends land dust over camera water). `nuke-lake`: plain with 1.6 km
+  generator land along +Z (nearest plain may border sea/snow forest where pond freezes; choose via surrounding
+  grid), 120×140-block pond before viewer (cleared 40 blocks over pond and toward viewer: hills/trees hid it), at
+  generator height (client chunk may not have arrived, putting viewer underwater); server generates pond chunks
+  immediately, since spectator loads asynchronously and `fill` said “That position is not loaded” (strips for
+  32768-block limit); burst on land 1.5 km beyond. Spectator viewer: wave at 1.5 km (2 psi) throws creative player
+  off platform. Without DH there is no beyond-render water: sea ring appears only when front enters render
+  distance (~4 s for 15 kt); distant sea/LOD ring only host with `dh`. `nuke` (ICBM 2 km): `nuke_wall_*` HUD-free
+  frames 2.25/3.75 s after front crosses viewing platform and throws viewer off (server `arrivalTicks`/clock:
+  throw is server tick, server can trail client frame counter); beneath, airborne wall/logs/grass/3×3 pond,
+  leaves on wall, canopy 30 blocks aside, roof ridge 50 blocks aside, against sky almost at eye horizon.
+  Post-front ripple band: dark decal ring darkens pond; no dots on side faces of strips or leaf/roof edges against
+  sky (block-row strips indicate water from height alone without horizontal surface; dots indicate horizontal
+  inferred from background jump). Viewer then returns to platform (`nuke` mushroom frame at 20 s). This seed's
+  `nuke` epicenter (0 63 −2000) is water: water burst (column, base surge, spray).
+- `debris`: camera-local debris/dust, daytime nearest plain, 41×41 platform (stone 10 blocks deep, otherwise part
+  hangs over lowland and ruin collapse drops whole platform), stone-brick house with glass panes/plank roof,
+  glass-windowed plank house, three oaks (`place feature`); surface 15 kt north at `INCOMING_DEBRIS` meters (2000).
+  Spectator 60 blocks south/15 above platform: right beside houses, fractions of a second after front viewer is
+  already in wall head with meter-scale visibility (initial scene, both branches dark). `debris_<ticks>t` frames
+  10 ticks before house-front arrival and 1–200 ticks after (client detonation clock); `SCENARIO debris` gives
+  front/head relative to houses/camera (compare frames by these, frame instant varies by ticks), removed matter
+  (`NukeDust.describe`: packets, positions, pieces by material, dust streaks/max depth), layer time.
+- `firestorm` (`INCOMING_FIRESTORM=night|day`, pall quality `INCOMING_PALL`): airburst 15 kt where server biomes give
+  most flammable land within 1.6 km (scenario spawn has ice/sea, no village within 1.6 km); `fs_*` frames from 2 km,
+  800 m, inside beside fire tornado at ~1/5/15 minutes; roof alternates 2 s storm-on/off windows (`SCENARIO firestorm
+  gpu`; llvmpipe only compares these). Minutes skipped: server `setGameTime` plus time packet to all; client
+  `ClientNuclear.rewound`, like replay seek. Night: detonate at 4000, then `time set 18000` and seek; pall/storm
+  morning from detonation time of day (without seeking, clock jump would move morning to nearest sunrise,
+  4 minutes away). Camera above highest terrain within 8 blocks: inside ice spike frame would be dark block fill
+  without hand; inside view beside tornado over flammable land (not sea/ice, which do not burn).
+  `INCOMING_FIRESTORM_QUICK=1`: only two frames (beside tornado, from 2 km), immediately after tornado time skip,
+  for appearance tuning.
+- `guide` (`GuideShots`, guide frames): shot after three rendered frames (`settle`); llvmpipe ticks in batches
+  between frames, immediate shot after step shows old state (empty crafting table before layout). Cloud DH builds
+  almost nothing, draws columns instead of terrain: record without `dh`; map from loaded chunks (render distance
+  20, target 180 blocks, generation manages ~14 surrounding chunks in 5 min). Headless Shift+left-click unavailable:
+  scenario places GIF waypoint itself, renders key hint on frame. English frames like guide (Russian guide shares
+  images): `client_scenario.sh guide` sets `lang:en_us` in `options.txt`, key hints English too; cloud without script
+  needs hand-written `options.txt` (same as script plus `lang:en_us`), otherwise first-launch screen stalls client.
+  World GIF: llvmpipe ~5 fps, GIF 12, scenario slows server (`/tick rate`) by measured fps to retain requested GIF
+  pace (`startGif(name, pace)`; 0 GUI, one frame per step). Steps planned in constructor before world entry: all
+  camera-place-dependent values (`view`, `along`, `across`) only in lambdas. Key caption over binoculars: HUD
+  layers rise in z, GUI uses depth test; clear depth before caption. Viewer stands on peak among trees: launcher
+  cannot fit, projectiles approach from afar (recorded that way); flat platform around viewer blocks downward
+  village view (binocular crosshair hits grass at feet). `fill` in unloaded place does nothing; SAM under leaves
+  has no open sky, needs own clearing. Missile approaches target from behind shooter, attack does not see slope
+  between them: from viewer hill it hits summit trees. Missile camera records with viewer near village and straight
+  path (`from`/`via` collinear), approaching from lower-terrain side.
+- `flame-edge`: plume at render edge, Grad rocket/missile on booster, night/day side views, same line from
+  far-models viewer; client entity copy at 0.5/0.85/0.97 render distance, packet track at 0.97/1.1/1.4
+  (`flame_<light>_<projectile>_<hundredths>_<entity|far>`, identical pose at 0.97 through both paths); reset
+  tracks/trails after each (`FlightTracks.reset`, `FarRenderer.reset`), next projectile on same line.
+  `SCENARIO flame-edge`: near-plume light from `FarFlightView.describe` (core/share/glare/veil).
+- `flash` (`FlashScenario`, flash traces DESIGN-nuke §3.7): finds level plain for platform by generator heights
+  (`ChunkGenerator.getBaseHeight`, biome from biome source, no chunk loads), builds over seconds on server thread;
+  steps measured from completed platform/found wisp location, not world entry (client-tick timing detonated into
+  empty location). Fires disabled for nearby burst: grass fire hid wall. Wall stripped birch (light wood best for
+  scorch/shadows), stone-brick square under bodies (ground shadow). Wisps use second burst at real scale on another
+  plain, ball offscreen to side: with ball at 1.3 km frame goes white. EMP arcs filmed there close from lamp shadow
+  side, one frame per tick in first seconds, slowed with `/tick rate 4`: arc flash lasts 2–3 ticks, GPU-free client
+  renders 3 fps after detonation; at 20 ticks, `Screenshot.grab` takes last rendered frame, repeating one frame for
+  5 consecutive ticks, arcs passing between. `SCENARIO flash shot …` gives client marks, EMP arcs/wisps
   (`FlashAftermath.describe`).

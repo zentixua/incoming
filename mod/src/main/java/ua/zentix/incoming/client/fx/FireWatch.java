@@ -16,41 +16,41 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Огонь горящего города ядерного подрыва, который клиент видит: блоки огня в своих чанках у подрывов (круг руин и
- * {@link #NUKE_MARGIN} блоков за ним — докуда {@code NukeAfter} берёт огонь в гул пожаров и в ветер в огонь), по чанку за
- * чанком, сколько успеется за {@link #BUDGET_NANOS} тика (весь круг прорисовки — за секунды; пожары меняются минутами).
- * Огонь вне подрывов мод не смотрит: огонь мира, и тот, что поджёг обычный удар, горит и дымит как любой огонь игры
- * (ванилью или модом, который ведёт горение). Подрыва нет — обхода нет.
+ * Burning nuclear city fire visible to the client: fire blocks in local chunks near detonations (ruin circle plus
+ * {@link #NUKE_MARGIN} blocks beyond it, where {@code NukeAfter} counts fire for roar and inward wind), chunk by
+ * chunk within {@link #BUDGET_NANOS} per tick (the whole render circle takes seconds; fires change over minutes).
+ * The mod does not inspect fire outside detonations: world fire, including conventional-strike ignitions, burns/smokes like all
+ * game fire (vanilla or the combustion mod). No detonation means no scan.
  * <p>
- * Секция без огня в палитре не смотрится ({@code maybeHas}); с огнём — выборкой: каждый {@link #SAMPLE}-й блок, счёт
- * ×{@link #SAMPLE}. Полный счёт ({@code PalettedContainer.count}: все 4096 мест в новую карту) стоил бы миллисекунд за
- * тик: в подробном городе палитра секции глобальная ({@code maybeHas} всегда да), а малая помнит сгоревший огонь. По
- * этому огню звук горящего города ставит огонь, который рядом, на его место, а дальнюю модель ({@code FireField}) — в
- * меру того, что горит на деле (настройки пожаров сервера клиент не знает: пожары могут быть выключены или погашены).
+ * Sections without fire in their palette are skipped ({@code maybeHas}); others sampled: every {@link #SAMPLE}th block,
+ * count ×{@link #SAMPLE}. Full counting ({@code PalettedContainer.count}: all 4096 positions into a new map) would cost milliseconds
+ * per tick: detailed cities use a global section palette ({@code maybeHas} always true), while small palettes retain spent fire.
+ * This fire lets burning-city sound place nearby fire at its actual position, and scale the distant model ({@code FireField})
+ * to actual burning (client does not know server fire settings: fires may be disabled/extinguished).
  * <p>
- * Огонь на клетках горящего топлива воронок — не огонь дерева ({@link FuelCells}): его тепло и сажу несёт очаг
- * воронки, и в счёт он не идёт.
+ * Fire on burning crater-fuel cells is not wood fire ({@link FuelCells}): crater sources carry its heat and soot;
+ * excluded from the count.
  */
 public final class FireWatch {
-    /** Время на огонь за тик, нс (хотя бы один чанк). */
+    /** Fire time per tick, ns (at least one chunk). */
     static final long BUDGET_NANOS = 100_000;
-    /** Чанков за тик не больше. */
+    /** Maximum chunks per tick. */
     static final int MAX_PER_TICK = 8;
-    /** Выборка в секции: каждый столько-й блок (по x — 2 места из 16, все y и z). */
+    /** Section sampling: every this many blocks (two x positions out of 16, all y/z). */
     static final int SAMPLE = 8;
-    /** За кругом руин подрыва — столько блоков: так далеко {@code NukeAfter} берёт огонь подрыва в счёт. */
+    /** Blocks beyond the ruin circle: how far {@code NukeAfter} counts detonation fire. */
     public static final double NUKE_MARGIN = 64;
-    /** Чанк → (число огня << 16) | высота огня над дном мира. */
+    /** Chunk → (fire count << 16) | fire height above world bottom. */
     private static final Long2LongOpenHashMap SEEN = new Long2LongOpenHashMap();
     @Nullable
     private static ClientLevel level;
     private static int cursor, total, phase;
-    /** Цена с прошлой строки сценария: время за тики с огнём, сколько тиков, самый долгий тик (нс), чанков и секций. */
+    /** Cost since last scenario line: time in fire ticks, tick count, longest tick (ns), chunks/sections. */
     private static long spent, ticks, slowest, chunks, scanned;
 
     private FireWatch() {}
 
-    /** Ещё часть чанков у ядерных подрывов в радиусе {@code radius} чанков от чанка камеры. */
+    /** Another portion of chunks near nuclear detonations within {@code radius} chunks of camera chunk. */
     public static void tick(ClientLevel lvl, int cx, int cz, int radius) {
         long t0 = System.nanoTime();
         if (lvl != level) reset();
@@ -63,7 +63,7 @@ public final class FireWatch {
             }
             return;
         }
-        // обход — только рамка кругов подрывов в квадрате прорисовки: подрыв вдали от камеры не стоит обхода всего круга
+        // scan only bounds of detonation circles within render square: a distant detonation does not cost a whole-circle scan
         int n = nukes.size();
         double[] bx = new double[n], bz = new double[n], reach = new double[n];
         for (int j = 0; j < n; j++) {
@@ -81,7 +81,7 @@ public final class FireWatch {
             return;
         }
         int w = box.x1 - box.x0 + 1, all = w * (box.z1 - box.z0 + 1);
-        // каждый шаг — в счёт времени, и чанк мимо кругов тоже: рамка нескольких подрывов может быть почти всем квадратом
+        // every step counts toward time, even chunks outside circles: bounds of several detonations can cover almost the whole square
         for (int k = 0, step = 0; k < MAX_PER_TICK && step < all; step++) {
             if (step > 0 && System.nanoTime() - t0 > BUDGET_NANOS) break;
             int i = cursor++ % all;
@@ -111,7 +111,7 @@ public final class FireWatch {
         slowest = Math.max(slowest, dt);
     }
 
-    /** Рамка чанков (включительно). */
+    /** Inclusive chunk bounds. */
     record Box(int x0, int z0, int x1, int z1) {
         boolean has(int x, int z) {
             return x >= x0 && x <= x1 && z >= z0 && z <= z1;
@@ -119,8 +119,8 @@ public final class FireWatch {
     }
 
     /**
-     * Рамка чанков, которые задевают круги подрывов (середина {@code bx, bz}, радиус {@code reach}, блоки), внутри квадрата
-     * {@code radius} чанков от чанка камеры; ни одного — {@code null}.
+     * Bounds of chunks intersecting detonation circles (center {@code bx, bz}, radius {@code reach}, blocks), within the square
+     * {@code radius} chunks from camera chunk; {@code null} if none.
      */
     @Nullable
     static Box box(double[] bx, double[] bz, double[] reach, int cx, int cz, int radius) {
@@ -138,7 +138,7 @@ public final class FireWatch {
         return x0 > x1 || z0 > z1 ? null : new Box(x0, z0, x1, z1);
     }
 
-    /** Чанк (x, z) задевает круг подрыва: середина не дальше радиуса и полудиагонали чанка. */
+    /** Chunk (x, z) intersects a detonation circle: center within radius plus chunk half-diagonal. */
     static boolean nuclear(double[] bx, double[] bz, double[] reach, int x, int z) {
         double mx = x * 16 + 8, mz = z * 16 + 8;
         for (int j = 0; j < bx.length; j++) {
@@ -149,8 +149,8 @@ public final class FireWatch {
     }
 
     /**
-     * Огонь чанка выборкой: (число << 16) | средняя высота; {@code offset} — сдвиг выборки (свой в каждом обходе). Огонь на
-     * клетках горящего топлива воронок — не в счёте: его дым — очаг воронки ({@link FuelCells}).
+     * Sampled chunk fire: (count << 16) | mean height; {@code offset} shifts sampling per scan. Burning crater-fuel
+     * cells are excluded: their smoke belongs to the crater source ({@link FuelCells}).
      */
     private static long scan(LevelChunk chunk, int offset) {
         LevelChunkSection[] sections = chunk.getSections();
@@ -163,7 +163,7 @@ public final class FireWatch {
             scanned++;
             PalettedContainer<BlockState> states = s.getStates();
             int n = 0;
-            // индекс секции — (y << 8) | (z << 4) | x
+            // section index is (y << 8) | (z << 4) | x
             for (int j = offset; j < 4096; j += SAMPLE) {
                 if (fire(states.get(j & 15, j >> 8, (j >> 4) & 15))
                         && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), minY + i * 16 + (j >> 8), bz + ((j >> 4) & 15)))) n++;
@@ -180,7 +180,7 @@ public final class FireWatch {
         return state.getBlock() instanceof BaseFireBlock;
     }
 
-    /** Чанки, которых у клиента больше нет, и чанки вне рамки обхода: их огонь не пересматривается и не гас бы. */
+    /** Chunks no longer on client or outside scan bounds: their fire is no longer reassessed and would never go out. */
     private static void prune(ClientLevel lvl, Box box) {
         for (var it = SEEN.long2LongEntrySet().iterator(); it.hasNext(); ) {
             Long2LongMap.Entry e = it.next();
@@ -192,7 +192,7 @@ public final class FireWatch {
         }
     }
 
-    /** Огонь по чанкам. */
+    /** Fire by chunk. */
     public interface Visitor {
         void fire(double x, double y, double z, int count);
     }
@@ -217,8 +217,8 @@ public final class FireWatch {
     }
 
     /**
-     * Для строки {@code SCENARIO}: цена за тик с прошлой строки (средняя и самая долгая, мс), чанков и секций с огнём
-     * в палитре за тик, огня всего; счёт — заново.
+     * For the {@code SCENARIO} line: per-tick cost since last line (mean/longest, ms), chunks and sections with fire
+     * in palette per tick, total fire; resets counters.
      */
     public static String describe() {
         String s = ticks == 0 ? "watch -" : String.format(Locale.ROOT, "watch %.3f/%.3f ms/tick chunks %.1f sections %.1f fire %d",

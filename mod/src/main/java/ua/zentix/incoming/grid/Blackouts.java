@@ -29,38 +29,38 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Блэкаут: удар по узлу сети (подстанции), ядерный удар или команда обесточивают район — кварталы гаснут каскадом
- * от центра, а через {@code grid.restore_minutes} свет возвращается вразнобой. Здесь входы и подписки на события;
- * работа по чанкам — {@link BlackoutWorld}, состояние — {@link PowerGrid}.
+ * Blackout: a grid-node (substation) hit, nuclear strike or command cuts power to an area — districts go dark in a cascade
+ * from the center, then light returns in random order after {@code grid.restore_minutes}. Entry points and event hooks here;
+ * chunk work in {@link BlackoutWorld}, state in {@link PowerGrid}.
  */
 public final class Blackouts {
-    /** Взрыв выбивает узел, если его центр ближе этого (блоки) плюс радиус взрыва: подстанция — площадка, не точка. */
+    /** Explosion disables a node if its center is closer than this (blocks) plus blast radius: a substation is a site, not a point. */
     static final double HIT = 6;
-    /** Порог оборудования подстанции для волны обычного заряда, psi — как у лёгких деревянных построек ({@code nuke_light}; оценка). */
+    /** Substation equipment threshold for a chemical-charge wave, psi — like light wooden structures ({@code nuke_light}; (est.)). */
     static final double EQUIPMENT_PSI = 4;
-    /** Кому слышен и виден выход подстанции из строя (блоки). */
+    /** Distance at which substation failure is audible and visible (blocks). */
     private static final double FAILURE_RANGE = 320;
-    /** Каскад ядерного удара: электромагнитный импульс и волна гасят район почти разом (блоков за тик). */
+    /** Nuclear cascade: EMP and wave darken the area almost simultaneously (blocks per tick). */
     private static final double NUKE_SPEED = 50;
-    /** Возврат света по команде — за 10 с. */
+    /** Commanded light restoration takes 10 s. */
     private static final int COMMAND_RESTORE_SPREAD = 200;
-    /** Самый слабый взрыв, выбивающий подстанцию: огненный шар гаста (1) — нет, крипер (3) и TNT (4) — да. */
+    /** Weakest explosion disabling a substation: ghast fireball (1) — no; creeper (3) and TNT (4) — yes. */
     private static final float MIN_BLAST = 2f;
 
     private Blackouts() {}
 
-    // ---------------------------------------------------------------- входы
+    // ---------------------------------------------------------------- entry points
 
     /**
-     * Взрыв рядом с узлом сети выводит его из строя (удар мода, TNT, крипер — подстанции всё равно). Порыв ветра
-     * (заряд ветра, вихрь) и совсем слабые хлопки — не взрыв для неё.
+     * Explosion near a grid node disables it (mod strike, TNT, creeper — the substation does not care). A wind gust
+     * (wind charge, breeze) and very weak pops do not count as explosions for it.
      */
     public static void onExplosion(ExplosionEvent.Detonate e) {
         if (!(e.getLevel() instanceof ServerLevel level) || !IncomingConfig.SERVER.gridEnabled.get()) return;
         if (e.getExplosion().getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK || e.getExplosion().radius() < MIN_BLAST) return;
         Vec3 at = e.getExplosion().center();
-        // взрыв боевой части по заряду: подстанция — оборудование на открытой площадке, выбита там, где волна ломает
-        // лёгкие постройки (4 psi, кривая давление–импульс); ванильный взрыв — по его радиусу
+        // Warhead explosion by charge: substation equipment is outdoors; disabled where the wave breaks
+        // light structures (4 psi, pressure–impulse curve); vanilla explosions use their radius.
         double charge = Warheads.chargeOf(e.getExplosion());
         double reach = HIT + (charge > 0 ? Warheads.breakReach(EQUIPMENT_PSI, charge) : e.getExplosion().radius());
         List<Node> hit = new ArrayList<>();
@@ -71,8 +71,8 @@ public final class Blackouts {
     }
 
     /**
-     * Узел выведен из строя: хлопок, дуга и искры, район гаснет каскадом от него. Уже выбитый узел — свет вернут
-     * позже (ремонт начинается заново).
+     * Node disabled: bang, arc and sparks; its area darkens in an outward cascade. Already disabled nodes restore light
+     * later (repairs restart).
      */
     public static void knockOut(ServerLevel level, Node node) {
         PowerGrid grid = PowerGrid.get(level);
@@ -92,8 +92,8 @@ public final class Blackouts {
     }
 
     /**
-     * Ядерный удар обесточивает всё, до чего доходит (стёкла или ожоги), сразу по вспышке; подстанции в этом радиусе
-     * выбиты — каждая гасит и свой район.
+     * Nuclear strike cuts power everywhere it reaches (glass or burns), immediately at the flash; substations in this radius
+     * are disabled — each also darkens its own area.
      */
     public static void nuke(ServerLevel level, Detonation d) {
         double radius = nukeRadius(d);
@@ -107,8 +107,8 @@ public final class Blackouts {
     }
 
     /**
-     * Радиус, в котором ядерный удар гасит сеть ({@link #nuke}; клиентам — с подрывом: там лампы коротят дугой ЭМИ),
-     * блоки; 0 — сеть он не гасит (блэкаут или удар по сети выключены настройкой).
+     * Nuclear grid-outage radius ({@link #nuke}; sent to clients with detonation: lamps short with EMP arcs),
+     * blocks; 0 — no grid outage (blackout or grid damage disabled by setting).
      */
     public static double nukeRadius(Detonation d) {
         if (!IncomingConfig.SERVER.gridEnabled.get() || !IncomingConfig.SERVER.gridNuke.get()) return 0;
@@ -116,10 +116,10 @@ public final class Blackouts {
     }
 
     /**
-     * Отключение района с центром {@code at}: каскад со скоростью {@code speed} блоков за тик, свет вернётся по
-     * настройке. Радиус — не больше {@code grid.max_radius}, откуда бы он ни пришёл (узел, команда, ядерный удар).
+     * Outage centered at {@code at}: cascade at {@code speed} blocks per tick, light returns according to
+     * settings. Radius capped at {@code grid.max_radius}, regardless of origin (node, command, nuclear strike).
      *
-     * @param node узел, чей выход из строя его вызвал; -1 — не узел
+     * @param node failed node causing this outage; -1 — not a node
      */
     public static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node) {
         radius = Math.min(radius, IncomingConfig.SERVER.gridMaxRadius.get());
@@ -133,17 +133,17 @@ public final class Blackouts {
     }
 
     /**
-     * Вернуть свет сейчас (за 10 с вразнобой) в отключениях, чей центр ближе {@code radius} к {@code at}; null — во всех.
-     * Отключение, в которое свет уже возвращается, — быстрее: оставшиеся кварталы тоже за 10 с. Чанки вне
-     * загруженного мира ничего не ждут: на диске у них настоящие лампы ({@link ChunkSaves}).
+     * Restore light now (random order over 10 s) in outages centered within {@code radius} of {@code at}; null — all.
+     * Outages already restoring light finish sooner: remaining districts also take 10 s. Outside-world chunks
+     * do not wait: their disk data contains real lamps ({@link ChunkSaves}).
      *
-     * @return сколько отключений снято
+     * @return number of outages cleared
      */
     public static int restore(ServerLevel level, @Nullable Vec3 at, double radius) {
         return restore(level, at, radius, COMMAND_RESTORE_SPREAD);
     }
 
-    /** То же, свет — вразнобой за {@code spread} тиков (0 — во всех кварталах сейчас). */
+    /** Same, restoring light in random order over {@code spread} ticks (0 — all districts now). */
     public static int restore(ServerLevel level, @Nullable Vec3 at, double radius, int spread) {
         PowerGrid grid = PowerGrid.get(level);
         long now = level.getGameTime();
@@ -154,13 +154,13 @@ public final class Blackouts {
             if (o.restoreAt() > now) {
                 restoring = o.restoring(now, spread);
             } else {
-                // разброс только сжимается: кварталы, где свет уже есть, так и остаются светлыми
+                // Spread only shrinks: districts already lit remain lit.
                 long left = Math.min(o.restoreSpread(), now - o.restoreAt() + spread);
                 if (left >= o.restoreSpread()) continue;
                 restoring = o.restoring(o.restoreAt(), (int) left);
             }
             grid.replace(restoring);
-            // каскад возврата — заново по новым срокам
+            // Restart restoration cascade with the new times.
             grid.swept(o.id(), true, Long.MIN_VALUE);
             BlackoutWorld.get(level).onRestore(restoring);
             Incoming.LOG.info("Blackout #{} ({}): power restored by command", o.id(), level.dimension().location());
@@ -170,7 +170,7 @@ public final class Blackouts {
         return n;
     }
 
-    // ---------------------------------------------------------------- настройки
+    // ---------------------------------------------------------------- settings
 
     private static double speed() {
         return IncomingConfig.SERVER.gridCascadeSpeed.get() / 20;
@@ -185,26 +185,26 @@ public final class Blackouts {
         return IncomingConfig.SERVER.gridRestoreSpread.get() * 20;
     }
 
-    // ---------------------------------------------------------------- события
+    // ---------------------------------------------------------------- events
 
     /**
-     * Блэкаут всех измерений — полоса {@link WorkScheduler.Lane#GRID} общего бюджета тика: не больше
-     * доли {@code WorkScheduler.GRID_SHARE} общего бюджета и не больше, чем оставили полосы выше. {@code levels} — первым идёт следующее
-     * измерение, как у ядерных очередей.
+     * Blackout in all dimensions uses the common tick-budget {@link WorkScheduler.Lane#GRID} lane: no more than
+     * {@code WorkScheduler.GRID_SHARE} of the total budget and no more than higher lanes left. {@code levels} starts with
+     * the next dimension, like nuclear queues.
      *
-     * @param clock часы полосы, уже запущены
+     * @param clock lane clock, already running
      */
     public static void work(MinecraftServer server, List<ServerLevel> levels, WorkClock clock) {
         boolean plots = server.getTickCount() % BlackoutWorld.PLOT_SCAN == 0 && ModList.get().isLoaded("sable");
         boolean second = server.getTickCount() % 20 == 0;
         for (ServerLevel level : levels) {
             PowerGrid grid = PowerGrid.get(level);
-            // подстанции следуют за сетью и без отключений: блок, чей чанк не был готов, выравнивается, когда станет
+            // Substations follow grid state even without outages: a block whose chunk was unready aligns once ready.
             if (second) Substations.sync(level, grid, level.getGameTime());
-            // двойники в плотах аппаратов Sable — и после перезапуска, когда отключений уже нет
+            // Twins in Sable craft plots — also after restart, when no outages remain.
             List<SubLevelAccess> ships = plots ? SubLevels.all(level) : List.of();
             if (!ships.isEmpty()) BlackoutWorld.get(level).relightPlots(level, ships);
-            // миры без отключений и без работы блэкаута не тратят времени
+            // Worlds without outages or blackout work take no time.
             if (!grid.outages().isEmpty() || level.hasData(ModAttachments.BLACKOUT_WORLD) && BlackoutWorld.get(level).busy()) {
                 BlackoutWorld.get(level).tick(level, clock);
             }
@@ -212,8 +212,8 @@ public final class Blackouts {
     }
 
     /**
-     * Есть ли у блэкаута работа в очереди хоть в одном мире (полосам выше — не весь бюджет). Само отключение — ещё
-     * не работа: каскад ставит кварталы в очередь по времени, а между ними блэкауту делать нечего.
+     * Any world has queued blackout work (higher lanes must leave budget). An outage alone is not work:
+     * the cascade queues districts on schedule, with nothing for blackout to do between them.
      */
     public static boolean pending(MinecraftServer server) {
         for (ServerLevel level : server.getAllLevels()) {
@@ -222,32 +222,32 @@ public final class Blackouts {
         return false;
     }
 
-    /** Часы бюджета блэкаута — одни на сервер (в верхнем мире). */
+    /** Blackout budget clock — one per server (in the overworld). */
     public static WorkClock clock(MinecraftServer server) {
         return server.overworld().getData(ModAttachments.GRID_CLOCK);
     }
 
     /**
-     * Часы бюджета блэкаута: единицы очереди дешёвые и ровные (≈0.3 мс), и оценка тает вдвое к каждому тику, чтобы
-     * один всплеск (пауза GC, чужой затык) не держал очередь на одной единице за тик ({@link WorkClock#decaying}).
+     * Blackout budget clock: cheap, consistent queue work units (≈0.3 ms); estimate halves each tick so
+     * one spike (GC pause, unrelated stall) cannot keep the queue at one work unit per tick ({@link WorkClock#decaying}).
      */
     public static WorkClock newClock() {
         return WorkClock.decaying(0.5);
     }
 
-    /** Подменить часы бюджета (проверки — считающими, {@link WorkClock#counting}; вернуть — {@link #newClock}). */
+    /** Replace budget clock (tests: counting, {@link WorkClock#counting}; restore with {@link #newClock}). */
     public static void useClock(MinecraftServer server, WorkClock clock) {
         server.overworld().setData(ModAttachments.GRID_CLOCK, clock);
     }
 
     public static void onChunkLoad(ChunkEvent.Load e) {
-        // в чанке погашенные лампы или его задевает отключение — привести к сети; остальные миры и чанки не трогаем
+        // Chunk has extinguished lamps or intersects an outage: align to grid; leave other worlds/chunks alone.
         if (e.getLevel() instanceof ServerLevel level && e.getChunk() instanceof LevelChunk chunk
                 && (chunk.hasData(ModAttachments.GRID_DARK) || PowerGrid.get(level).covered(chunk.getPos().x, chunk.getPos().z)
                 || ChunkLights.anyUnlit(chunk.getSections()))) {
             BlackoutWorld.get(level).enqueue(chunk.getPos().toLong());
         }
-        // соседу этого чанка, возможно, только его и не хватало для сверки ламп с сигналом
+        // This chunk may be the only neighbor missing for signal-lamp reconciliation.
         if (e.getLevel() instanceof ServerLevel level && e.getChunk() instanceof LevelChunk chunk && level.hasData(ModAttachments.BLACKOUT_WORLD)) {
             BlackoutWorld.get(level).neighbourLoaded(chunk.getPos());
         }
@@ -259,7 +259,7 @@ public final class Blackouts {
         }
     }
 
-    /** Лампа, поставленная в тёмном квартале, гаснет. */
+    /** A lamp placed in a dark district goes out. */
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent e) {
         if (e.getLevel() instanceof ServerLevel level && GridLights.isLit(e.getPlacedBlock())) {
             BlockPos pos = e.getPos();

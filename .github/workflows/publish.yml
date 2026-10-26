@@ -6,18 +6,18 @@
 # the separate CURSEFORGE_API_KEY used to check existing files before upload. Required page media
 # must all exist before any remote mutation. No release or publishing runs automatically.
 name: publish
-run-name: publish ${{ inputs.step }} ${{ inputs.version || '(последний выпуск)' }}
+run-name: publish ${{ inputs.step }} ${{ inputs.version || '(latest release)' }}
 
 on:
   workflow_dispatch:
     inputs:
       step:
-        description: "draft — черновик Modrinth; submit — на проверку (и CurseForge); release — новый выпуск"
+        description: "draft — Modrinth draft; submit — review (and CurseForge); release — new version"
         type: choice
         options: [draft, submit, release]
         default: draft
       version:
-        description: Выпуск на GitHub без «v» (3.0.0); пусто — последний
+        description: GitHub release without “v” (3.0.0); empty — latest
         type: string
         required: false
       update_page:
@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
 
-# два запуска не создают проект дважды
+# Concurrent runs must not create the project twice.
 concurrency:
   group: publish
   cancel-in-progress: false
@@ -46,7 +46,7 @@ jobs:
     env:
       HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
       HAS_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' && vars.CURSEFORGE_ID != '' }}
-      # необязательные; slug — как на CurseForge (Create Aeronautics там нет — только Modrinth)
+      # Optional; slug as on CurseForge (Create Aeronautics is only on Modrinth).
       DEPENDENCIES: |
         create(optional){modrinth:create}{curseforge:create}
         create-aeronautics(optional){modrinth:create-aeronautics}#(ignore:curseforge)
@@ -71,7 +71,7 @@ jobs:
       - name: Validate store drafts
         run: python3 -m unittest discover -s .github/scripts -p 'test_store*.py' -v
 
-      - name: Выпуск
+      - name: Release
         id: rel
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,7 +80,7 @@ jobs:
         run: |
           python3 tools/prepare_publish.py
 
-      - name: "Modrinth: страница"
+      - name: "Modrinth: page"
         id: page
         if: env.HAS_MODRINTH == 'true' && (inputs.step == 'draft' || (inputs.step == 'release' && inputs.update_page))
         env:
@@ -97,8 +97,8 @@ jobs:
           JAR: ${{ steps.rel.outputs.jar }}
         run: bash .github/scripts/modrinth.sh version "$JAR"
 
-      # Kira-NT/mc-publish v3.3.1, закреплён коммитом: ему отдаются токены; площадка без токена пропускается
-      - name: "Modrinth: версия"
+      # Kira-NT/mc-publish v3.3.1 pinned by commit: receives tokens; stores without tokens skipped.
+      - name: "Modrinth: version"
         if: steps.page.outputs.upload == 'true' || steps.version.outputs.upload == 'true'
         uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
         with:
@@ -115,7 +115,7 @@ jobs:
           environment: ${{ steps.rel.outputs.environment }}
           dependencies: ${{ env.DEPENDENCIES }}
 
-      - name: "Modrinth: на проверку"
+      - name: "Modrinth: submit for review"
         if: env.HAS_MODRINTH == 'true' && inputs.step == 'submit'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}

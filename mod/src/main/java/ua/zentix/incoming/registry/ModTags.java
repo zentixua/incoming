@@ -7,40 +7,40 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import ua.zentix.incoming.Incoming;
 
-/** Теги (data/incoming/tags). Среда блока для бомбы — карта данных {@link ModDataMaps#PENETRATION}, не теги. */
+/** Tags (data/incoming/tags). Bomb block medium is the {@link ModDataMaps#PENETRATION} data map, not tags. */
 public final class ModTags {
-    /** Сквозь это летим: воздух, трава, цветы, снег-слой, огонь. */
+    /** Fly through these: air, grass, flowers, snow layers, fire. */
     public static final TagKey<Block> PASSABLE = block("passable");
-    /** Бьются ударной волной. */
+    /** Broken by the shock wave. */
     public static final TagKey<Block> SHATTERS = block("shatters");
-    /** Ядерный удар: природный грунт (волна не трогает, только свет — верхний слой — и воронка). */
+    /** Nuclear strike: natural ground (untouched by wave, only light on the top layer and the crater). */
     public static final TagKey<Block> NUKE_GROUND = block("nuke_ground");
-    /** Ядерный удар: ломается при 0.5–1 psi. */
+    /** Nuclear strike: breaks at 0.5–1 psi. */
     public static final TagKey<Block> NUKE_FRAGILE = block("nuke_fragile");
-    /** Ядерный удар: растения — их срывает напор, что сдирает и дёрн (~8 psi); слабая волна их только гнёт. */
+    /** Nuclear strike: plants torn away by the dynamic pressure that also strips turf (~8 psi); a weak wave only bends them. */
     public static final TagKey<Block> NUKE_PLANTS = block("nuke_plants");
-    /** Ядерный удар: лёгкие постройки, 3–5 psi. */
+    /** Nuclear strike: light structures, 3–5 psi. */
     public static final TagKey<Block> NUKE_LIGHT = block("nuke_light");
-    /** Ядерный удар: кладка, 10–15 psi. */
+    /** Nuclear strike: masonry, 10–15 psi. */
     public static final TagKey<Block> NUKE_MASONRY = block("nuke_masonry");
-    /** Ядерный удар: вспышка обугливает грани до черноты — дерево, шерсть, сено ({@code nuclear/flash/FlashChar}). */
+    /** Nuclear strike: flash chars faces black — wood, wool, hay ({@code nuclear/flash/FlashChar}). */
     public static final TagKey<Block> NUKE_CHARS = block("nuke_chars");
-    /** Ядерный удар: вспышка только закапчивает грани — кладка, бетон, терракота. */
+    /** Nuclear strike: flash only deposits soot on faces — masonry, concrete, terracotta. */
     public static final TagKey<Block> NUKE_SOOTS = block("nuke_soots");
 
     /**
-     * Шар топлива поджигает импульсом ({@code nuclear/model/PulseIgnition}): листва, бумага, сухая трава и кусты, ткань —
-     * у каждого свой порог; остальное горючее (дерево) — только горящее топливо на нём ({@code warhead/Craters}).
+     * Fuel fireball ignites with a pulse ({@code nuclear/model/PulseIgnition}): leaves, paper, dry grass and shrubs, fabric —
+     * each has its own threshold; other combustibles (wood) need burning fuel on them ({@code warhead/Craters}).
      */
     public static final TagKey<Block> PULSE_LEAVES = block("pulse_leaves");
     public static final TagKey<Block> PULSE_PAPER = block("pulse_paper");
     public static final TagKey<Block> PULSE_GRASS = block("pulse_grass");
     public static final TagKey<Block> PULSE_FABRIC = block("pulse_fabric");
 
-    /** Ядерный удар: биомы, которые свет не перекрашивает (моря, реки, пещеры), — {@code nuclear/world/ScorchedBiomes}. */
+    /** Nuclear strike: biomes light does not recolor (seas, rivers, caves) — {@code nuclear/world/ScorchedBiomes}. */
     public static final TagKey<Biome> NUKE_KEEPS_BIOME = TagKey.create(Registries.BIOME, Incoming.id("nuke_keeps_biome"));
 
-    /** Прозрачны для прицела: «клей», сиденья, служебные сущности Create/Sable. */
+    /** Transparent to aiming: glue, seats, Create/Sable helper entities. */
     public static final TagKey<EntityType<?>> AIM_IGNORE = TagKey.create(Registries.ENTITY_TYPE, Incoming.id("aim_ignore"));
 
     private ModTags() {}

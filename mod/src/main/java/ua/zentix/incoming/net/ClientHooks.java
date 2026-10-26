@@ -1,8 +1,8 @@
 package ua.zentix.incoming.net;
 
 /**
- * Мост к клиентскому коду: сервер регистрирует обработчики пакетов «сервер → клиент», но на выделенном сервере
- * они никогда не выполняются, а клиентских классов там нет. Клиентский модуль подставляет реализацию при запуске.
+ * Bridge to client code: server registers server → client handlers, but dedicated servers
+ * never execute them and have no client classes. Client module installs implementation at startup.
  */
 public interface ClientHooks {
     default void blast(S2C.Blast p) {}
@@ -22,8 +22,8 @@ public interface ClientHooks {
     default void gridDistrict(S2C.GridDistrict p) {}
 
     /**
-     * Случайный тик подстанции у игрока ({@code SubstationBlock.animateTick}): работает — гул, выбита — горит масло
-     * трансформатора и иногда ({@code spark}) трещит дуга.
+     * Nearby substation random tick ({@code SubstationBlock.animateTick}): working — hum; disabled — transformer
+     * oil burns and arc sometimes crackles ({@code spark}).
      */
     default void substation(net.minecraft.core.BlockPos pos, boolean powered, boolean spark, float pitch) {}
 
@@ -61,7 +61,7 @@ public interface ClientHooks {
 
     default void radarScope(S2C.RadarScope p) {}
 
-    /** Чанк в LOD Voxy; поток сети. */
+    /** Chunk into Voxy LOD; network thread. */
     default void voxyChunk(S2C.VoxyChunk p) {}
 
     ClientHooks NONE = new ClientHooks() {};

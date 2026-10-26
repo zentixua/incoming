@@ -24,34 +24,34 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Всё ядерное, что знает клиент: подрывы этого измерения (из них по модели выводятся вспышка, шар, гриб,
- * волна, звук, дождь) и летящие МБР. Сервер присылает по одному пакету на событие — дальше клиент сам.
+ * Everything nuclear known to the client: this dimension's detonations (model derives flash, sphere, mushroom,
+ * wave, sound, rain) and flying ICBMs. Server sends one packet per event; client handles the rest.
  */
 public final class ClientNuclear {
     /**
-     * Подрыв на клиенте. «Вживую» (не при входе в мир и не из перемотки повтора Flashback) — со вспышкой, звуком
-     * и тряской. Время картинки считают свои тики клиента от прихода пакета, а не игровые часы: те прыгают назад, когда
-     * сервер догоняет отставание, а шар и двойная вспышка длятся доли секунды — их нельзя ни проскочить, ни повторить.
+     * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
+     * and shake. Visual time uses own client ticks since packet arrival rather than game time, which jumps backward during
+     * server catch-up; the sphere/double flash last fractions of a second and must neither be skipped nor repeated.
      */
     public static final class Active {
         public final Detonation d;
         public final boolean live;
-        /** Свет шара и пожаров на пыли и вода под эпицентром ({@link CloudPuffs}). */
+        /** Fireball/fire light on dust and water under epicenter ({@link CloudPuffs}). */
         public final CloudPuffs puffs;
-        /** Стена пыли ударной волны: голова-вал и облако Вильсона ({@link BlastWall}; рисует пелена, {@link NukePall}). */
+        /** Shock-wave dust wall: rolling head and Wilson cloud ({@link BlastWall}; pall renders it, {@link NukePall}). */
         public final BlastWall wall;
-        /** Вода под подрывом ({@link NukeWater#resolve}): столб в объёме гриба, базисная волна в пелене. */
+        /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
         final BurstWater water;
         /**
-         * Пелена после волны ({@link NukePall}): «до утра» — от времени суток в миг подрыва и по часам мира после него
+         * Post-wave pall ({@link NukePall}): “until morning” follows time of day at detonation, then world clock
          * ({@link PallField#daylight}).
          */
         public final PallField pall;
-        /** Огненный шторм над горящим городом ({@link FireStorm}): по возрасту подрыва, до утра пелены. */
+        /** Firestorm over the burning city ({@link FireStorm}): follows detonation age until pall morning. */
         public final FireStorm storm;
-        /** Рельеф под пеленой ({@link PallGround}): где кончается её луч, за которым нет мира. */
+        /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
-        /** Сколько тиков прошло до прихода пакета (у пришедших при входе в мир — с самого подрыва). */
+        /** Ticks elapsed before packet arrival (world-entry packets: since detonation). */
         private final long before;
         private long age;
         final NukeSounds.Schedule sounds;
@@ -60,7 +60,7 @@ public final class ClientNuclear {
             this(d, live, clientNow, new CloudPuffs(d), new BlastWall(d), new BurstWater(), null, null, null);
         }
 
-        /** Тот же подрыв после перемотки повтора: прошлое, без вспышки и звука, возраст — по часам этого места записи. */
+        /** Same detonation after replay seek: past, without flash/sound, age from this recording position's clock. */
         Active(Active a, long clientNow) {
             this(a.d, false, clientNow, a.puffs, a.wall, a.water, a.pall, a.storm, a.ground);
         }
@@ -78,45 +78,45 @@ public final class ClientNuclear {
                 pall.rewound();
                 this.pall = pall;
             } else {
-                // время суток подрыва — с сервера; у подрыва из сохранения или повтора прежней сборки — по нынешним
-                // часам: прыжка часов до входа так не видно (nuclear.md)
+                // detonation time of day from server; old-save/replay detonations use current
+                // clock: jumps before entry are then invisible (nuclear.md)
                 this.pall = new PallField(d, d.hasDayTime() ? d.dayTime()
                         : level == null ? 0 : level.getDayTime() - (level.getGameTime() - d.gameTime()));
             }
-            // первый замер часов — сразу: вошедший после сна не видит мглы и кадр до тика
+            // measure clock immediately: late entry after sleep shows no haze even for the frame before a tick
             if (level != null) this.pall.daylight(ticks(0), level.getGameTime(), level.getDayTime());
             this.storm = storm != null ? storm : new FireStorm(d, this.pall);
-            // рельеф тот же: известное остаётся; новая карта заполняется с водой под эпицентром
+            // same terrain: known data stays; new map fills using water under epicenter
             if (ground == null) NukeWater.resolve(this, level);
             this.ground = ground != null ? ground : new PallGround(d, this.pall);
             this.sounds = new NukeSounds.Schedule(this);
         }
 
-        /** Свои тики клиента от прихода пакета (после перемотки повтора — от неё). */
+        /** Own client ticks since packet arrival (since replay seek afterward). */
         long age() {
             return age;
         }
 
-        /** Тики после подрыва (с долей кадра). */
+        /** Ticks since detonation (with frame fraction). */
         public double ticks(float partialTick) {
             return before + age + partialTick;
         }
 
-        /** Секунды модели после подрыва (с учётом масштаба мира). */
+        /** Model seconds since detonation (world scale applied). */
         public double seconds(float partialTick) {
             return ticks(partialTick) / (20.0 * d.scale());
         }
     }
 
     /**
-     * На сколько тиков часы клиента могут уходить вперёд сервера. Клиент сам прибавляет тик к игровому времени,
-     * а сервер присылает своё раз в секунду: пока сервер отстаёт (генерация, руины, сохранение), часы клиента
-     * убегают вперёд и потом прыгают назад. Отсчёт до подрыва по часам клиента поэтому доходит до нуля раньше,
-     * чем сервер доходит до срока, — это не задержка подрыва. Запас — самый большой прыжок назад за последние
-     * десятки секунд (медленно тает), плюс {@link #DELAY_GRACE_TICKS}.
+     * How far client clock may lead server, ticks. Client increments game time itself,
+     * server sends its time once a second: while server lags (generation, ruins, saving), client clock
+     * runs ahead then jumps backward. The client-clock countdown thus reaches zero before
+     * server reaches the deadline; this is not delayed detonation. Allowance is the largest backward jump over recent
+     * tens of seconds (slowly decaying), plus {@link #DELAY_GRACE_TICKS}.
      */
     static final class ClockLead {
-        /** Тает на столько тиков за тик: прыжок в секунду забывается за 20 с. */
+        /** Ticks decayed per tick: a one-second jump is forgotten over 20 s. */
         static final double DECAY = 0.05;
         private long last = Long.MIN_VALUE;
         private double lead;
@@ -141,12 +141,12 @@ public final class ClientNuclear {
     }
 
     /**
-     * Сколько тиков после срока по часам клиента ждать пакета подрыва, прежде чем говорить «подрыв задерживается»:
-     * сервер шлёт время раз в 20 тиков, пакет подрыва идёт с задержкой сети.
+     * Client-clock ticks after deadline to wait for detonation packet before reporting delayed detonation:
+     * server sends time every 20 ticks; detonation packet has network delay.
      */
     static final int DELAY_GRACE_TICKS = 50;
 
-    /** Раз в сколько тиков сервер присылает игровое время (в повторе — так же, из записи). */
+    /** Server game-time packet interval in ticks (same in replay, from recording). */
     static final int TIME_SYNC_TICKS = 20;
 
     private static final ClockLead CLOCK = new ClockLead();
@@ -157,9 +157,9 @@ public final class ClientNuclear {
 
     private ClientNuclear() {}
 
-    // ---------------------------------------------------------------- пакеты
+    // ---------------------------------------------------------------- packets
 
-    /** Пуск МБР; {@code live} — не из перемотки повтора ({@link ua.zentix.incoming.client.replay.Replay#event}): рёв пуска только вживую. */
+    /** ICBM launch; {@code live} excludes replay seeking ({@link ua.zentix.incoming.client.replay.Replay#event}): launch roar only live. */
     public static void warning(S2C.NukeWarning w, boolean live) {
         boolean fresh = !WARNINGS.containsKey(w.strikeId());
         WARNINGS.put(w.strikeId(), w);
@@ -167,15 +167,15 @@ public final class ClientNuclear {
     }
 
     /**
-     * Подрыв; {@code live} — не из перемотки повтора: вспышка, звук и тряска только вживую, подрыв из перемотки виден
-     * в своём возрасте. Живой пакет подрыва, который уже показан как прошлый (повтор перемотали на миг до него), —
-     * показывается заново вживую.
+     * Detonation; {@code live} excludes replay seeking: flash/sound/shake only live; sought detonations appear
+     * at their age. A live detonation packet already shown as past (replay sought just before it)
+     * is shown live again.
      */
     public static void detonation(S2C.NukeDetonation p, boolean live) {
         Detonation d = p.detonation();
-        // подрыв бывает и позже отсчёта: сервер ждёт, пока догрузится место (NuclearStrikes.GIVE_UP_TICKS). Подрыв
-        // номера удара не несёт — снимается одно предупреждение: из подходящих по месту и сроку — с самым ранним
-        // отсчётом (сервер подрывает удары по сроку); другой удар в ту же точку остаётся на экране
+        // detonation can follow countdown: server waits for location loading (NuclearStrikes.GIVE_UP_TICKS). Detonation
+        // has no strike ID; remove one warning, earliest countdown among matching place/deadline
+        // (server detonates by deadline); another strike at the same point remains on screen
         WARNINGS.values().stream()
                 .filter(w -> w.target().distanceToSqr(new Vec3(d.burst().x, w.target().y, d.burst().z)) < 4 && d.gameTime() >= w.detonateTime() - 40)
                 .min(Comparator.comparingLong(S2C.NukeWarning::detonateTime).thenComparingInt(S2C.NukeWarning::strikeId))
@@ -183,7 +183,7 @@ public final class ClientNuclear {
         ClientLevel level = Minecraft.getInstance().level;
         Active known = DETONATIONS.get(d.id());
         if ((known != null && (known.live || !live)) || level == null) return;
-        // прошлый показ того же подрыва (из перемотки) — его петли горящего города прочь
+        // previous display of same detonation (from seek): remove its burning-city loops
         if (known != null) known.sounds.stop();
         Active a = new Active(d, live, level.getGameTime());
         DETONATIONS.put(d.id(), a);
@@ -193,7 +193,7 @@ public final class ClientNuclear {
         }
     }
 
-    /** Вход в мир или смена измерения: всё, что уже есть, без вспышки и удара (они уже прошли). */
+    /** World entry/dimension change: all current state, without flash/hit (already passed). */
     public static void sync(S2C.NukeSync p) {
         stopAll();
         Map<Integer, Active> old = new HashMap<>(DETONATIONS);
@@ -202,8 +202,8 @@ public final class ClientNuclear {
         ClientLevel level = Minecraft.getInstance().level;
         long now = level == null ? 0 : level.getGameTime();
         for (Detonation d : p.detonations()) {
-            // тот же подрыв (возрождение, повтор с места после него) — как после перемотки: пыль, пелена и шторм
-            // со своей историей (сверка шторма с огнём, пока он был молод, позже не повторить)
+            // same detonation (respawn, replay position after it): as after seek, dust/pall/storm
+            // retain history (cannot repeat the young storm's comparison with fire later)
             Active known = old.get(d.id());
             DETONATIONS.put(d.id(), known != null && known.d.equals(d) ? new Active(known, now) : new Active(d, false, now));
         }
@@ -213,16 +213,16 @@ public final class ClientNuclear {
     }
 
     /**
-     * Повтор Flashback перемотан: всё, что было до этого места записи, — прошлое, без вспышки, звука и оглушения,
-     * в своём возрасте по часам мира; подрывы и пуски позже него убираются (дойдёт повтор — придут снова). Часы клиента
-     * в повторе — по последнему пакету времени записи, а он раз в секунду: подрыв в пределах секунды после часов
-     * остаётся (ему возраст 0).
+     * Flashback replay sought: everything before this recording position is past, without flash/sound/deafness,
+     * at its age by world clock; later detonations/launches are removed (arrive again when replay reaches them). Client clock
+     * in replay follows the last recorded time packet, sent once a second: a detonation within the next second
+     * is retained (age 0).
      */
     public static void rewound() {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         long now = level.getGameTime();
-        // прежние подрывы уходят (позже места записи) или становятся прошлым — их эхо и петли больше не ведут
+        // old detonations disappear (later than recording position) or become past; stop driving their echoes/loops
         stopAll();
         DETONATIONS.values().removeIf(a -> a.d.gameTime() > now + TIME_SYNC_TICKS);
         DETONATIONS.replaceAll((id, a) -> new Active(a, now));
@@ -235,8 +235,8 @@ public final class ClientNuclear {
     }
 
     /**
-     * Игрок возродился после смерти: слух, глаза и наклон ветром — у тела, новое цело и стоит. Смена измерения (и выход
-     * из Энда) — тот же клон, слух и глаза остаются.
+     * Player respawned after death: hearing, eyes and wind lean belong to the body; new body is intact and upright. Dimension
+     * change (including End exit) uses the same clone event, retaining hearing/eyes.
      */
     public static void respawned(ClientPlayerNetworkEvent.Clone e) {
         if (!e.getOldPlayer().isDeadOrDying()) return;
@@ -249,7 +249,7 @@ public final class ClientNuclear {
         radiation = p;
     }
 
-    /** Блоки, которые снесла волна в чанке рядом: куски разлетаются ({@link NukeDust#debris}), руины потом осыпаются. */
+    /** Blocks removed by wave in a nearby chunk: pieces fly ({@link NukeDust#debris}), ruins crumble afterward. */
     public static void debris(S2C.NukeDebris p) {
         Active a = DETONATIONS.get(p.detonation());
         if (a == null) return;
@@ -258,9 +258,9 @@ public final class ClientNuclear {
     }
 
     /**
-     * Прогреть то, что подрыв строит в потоке кадра в миг прихода пакета ({@link Active}: стена пыли и пелена — законы
-     * слоя пыли {@code DustModel}, таблицы прихода фронта): загрузка классов и компиляция горячих мест, у подрывов у земли
-     * и в воздухе. Без этого первый подрыв за запуск стоит кадру втрое дороже. Звать в фоне, раз за запуск
+     * Warm what detonation builds on the frame thread at packet arrival ({@link Active}: dust wall/pall, dust-layer
+     * laws {@code DustModel}, front-arrival tables): class loading and hotspot compilation for surface
+     * and airbursts. Otherwise first detonation per launch costs three times the frame time. Call in background once per launch
      * ({@code IncomingClient.login}).
      */
     public static void warm() {
@@ -278,7 +278,7 @@ public final class ClientNuclear {
         radiation = null;
         CLOCK.reset();
         NukeFlash.reset();
-        // ожоги сетчатки — состояние игрока на сервере: перемотка их не трогает, выход — забывает (вход пришлёт заново)
+        // retinal burns are server player state: seeking leaves them, exit forgets them (entry sends again)
         NukeFlash.scars(RetinaScars.NONE);
         NukeSounds.reset();
         NukeSky.reset();
@@ -287,16 +287,16 @@ public final class ClientNuclear {
         NukePall.reset();
     }
 
-    /** Звуки всех подрывов — стоп (сами подрывы уходят или заменяются). */
+    /** Stop all detonation sounds (detonations disappear or are replaced). */
     private static void stopAll() {
         for (Active a : DETONATIONS.values()) a.sounds.stop();
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
     /**
-     * Верх рельефа под пеленой и смерчами; null — в измерении с потолком (верх карты высот там — потолок, а не земля).
-     * Над пустотой (Энд) рельефа нет — NaN.
+     * Terrain top under pall/tornadoes; null in ceiling dimensions (heightmap top is ceiling, not ground).
+     * No terrain over void (End): NaN.
      */
     @Nullable
     private static Sightline.Heights ground(ClientLevel level) {
@@ -317,21 +317,21 @@ public final class ClientNuclear {
         CLOCK.tick(now);
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         Sightline.Heights heights = ground(level);
-        // вода сверху колонок — для карты под пеленой (из чего пелена); под потолком (Незер) её нет, как и рельефа
+        // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level);
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
             a.age++;
             a.sounds.tick();
             a.pall.daylight(a.ticks(0), level.getGameTime(), level.getDayTime());
-            // рельеф и вода под пеленой — для её луча, за которым нет мира, и вещества (в измерении с потолком — земля под
-            // эпицентром)
-            // вода под эпицентром — до карты под пеленой: та заполняет неизвестное ею
+            // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
+            // under epicenter)
+            // water under epicenter before pall map: map fills unknowns from it
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
             if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water);
-            // смерчи огненного шторма — по рельефу под ними
+            // firestorm tornadoes follow terrain beneath them
             if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
             NukeWater.tick(a, level, eye);
             NukeDust.front(a, eye);
@@ -340,7 +340,7 @@ public final class ClientNuclear {
                 it.remove();
             }
         }
-        // предупреждение живёт, пока не придёт подрыв (или отбой — сервер пришлёт всё заново), но не дольше срока ожидания места
+        // warning lives until detonation (or cancel; server resends all), capped at location-wait deadline
         WARNINGS.values().removeIf(w -> now > w.detonateTime() + NuclearStrikes.GIVE_UP_TICKS + 100);
         NukeSky.tick(level);
         NukeSounds.tick();
@@ -353,17 +353,17 @@ public final class ClientNuclear {
     }
 
     /**
-     * Подрыв исчезает с клиента, когда гриб рассеялся, звук дошёл до дальних слушателей (Distant Horizons: 20 км) и
-     * кончился чёрный дождь (осадки клиент не рисует: мощность дозы для счётчика шлёт сервер).
+     * Detonation leaves client after mushroom disperses, sound reaches distant listeners (Distant Horizons: 20 km), and
+     * black rain ends (client draws no precipitation: server sends dose rate for counter).
      */
     private static double lifeTicks(Detonation d) {
         return Math.max(Math.max(CloudPuffs.lifeSeconds(d) * 20 * d.scale(), d.arrivalTicks(d.blocks(20_000)) + 200),
                 d.blackRainEndTicks());
     }
 
-    // ---------------------------------------------------------------- для рисования и звука
+    // ---------------------------------------------------------------- rendering and sound
 
-    /** Часы подрыва {@code id} у клиента — тики после подрыва ({@link Active#ticks}); подрыва нет — NaN. */
+    /** Client detonation {@code id} clock: ticks since detonation ({@link Active#ticks}); NaN if absent. */
     static double ticksOf(int id) {
         Active a = DETONATIONS.get(id);
         return a == null ? Double.NaN : a.ticks(0);
@@ -382,8 +382,8 @@ public final class ClientNuclear {
     }
 
     /**
-     * Сервер задерживает подрыв (догружает место удара), а не просто часы клиента ушли вперёд: срок прошёл
-     * с запасом на отставание сервера и на задержку пакета.
+     * Server is delaying detonation (loading impact location), rather than merely client clock leading: deadline passed
+     * with allowance for server lag and packet delay.
      */
     public static boolean detonationOverdue(S2C.NukeWarning w, double now) {
         return overdue(now, w.detonateTime(), CLOCK.lead());

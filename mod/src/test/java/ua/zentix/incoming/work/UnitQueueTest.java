@@ -10,11 +10,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Очередь единиц без мира: работы получают {@code null} вместо мира, время мира — числом. */
+/** Work-unit queue without a world: jobs receive {@code null} for the world and world time as a number. */
 class UnitQueueTest {
     private static final long MS = 1_000_000L;
 
-    /** Работа из {@code units} единиц; пишет в журнал «имя:номер» и «имя:end». */
+    /** A job of {@code units} work units; logs "name:number" and "name:end". */
     private static final class Fake implements UnitQueue.Job {
         final String name;
         final List<String> log;
@@ -67,7 +67,7 @@ class UnitQueueTest {
         q.work(null, now, clock);
     }
 
-    /** Первые единицы новых работ — раньше продолжений начатых: подрыв второго удара не ждёт порций первого. */
+    /** New jobs run their first work units before existing jobs continue: the second strike detonates without waiting for the first strike's batches. */
     @Test
     void headsBeforeTails() {
         List<String> log = new ArrayList<>();
@@ -81,7 +81,7 @@ class UnitQueueTest {
         assertTrue(q.isEmpty());
     }
 
-    /** Работа, которая ждёт другую, пропускается, пока та не кончится; следующие идут. */
+    /** A job waiting for another is skipped until that job finishes; later jobs continue. */
     @Test
     void blockedWaitsForItsJob() {
         List<String> log = new ArrayList<>();
@@ -102,7 +102,7 @@ class UnitQueueTest {
         assertTrue(q.isEmpty());
     }
 
-    /** Неготовая работа ждёт до {@link UnitQueue#GIVE_UP_TICKS}, потом отменяется: отпускается один раз, без единиц. */
+    /** An unready job waits until {@link UnitQueue#GIVE_UP_TICKS}, then is canceled: released once, without work units. */
     @Test
     void unreadyJobGivesUpOnce() {
         List<String> log = new ArrayList<>();
@@ -118,7 +118,7 @@ class UnitQueueTest {
         assertTrue(q.isEmpty());
     }
 
-    /** Работа, поставленная из работы (взрыв будит обработчики), встаёт в конец и идёт в том же обходе. */
+    /** A job enqueued by another job (an explosion invokes handlers) joins the end and runs in the same pass. */
     @Test
     void jobAddedFromJobRunsInSameTick() {
         List<String> log = new ArrayList<>();
@@ -130,7 +130,7 @@ class UnitQueueTest {
         assertEquals(List.of("first:1", "first:end", "child:1", "child:end"), log);
     }
 
-    /** Остановка: всё, что может идти, доделывается без срока; неготовое и ждущее его — отпускаются. */
+    /** Shutdown: all runnable work finishes without a deadline; unready jobs and jobs waiting for them are released. */
     @Test
     void finishDoesReadyWorkAndReleasesTheRest() {
         List<String> log = new ArrayList<>();
@@ -153,7 +153,7 @@ class UnitQueueTest {
         assertTrue(!log.contains("far:2") && !log.contains("after:1"), log.toString());
     }
 
-    /** Дорогой вид единиц не стартует впритык к сроку после дешёвых: у каждого вида своя оценка. */
+    /** An expensive work-unit kind does not start near the deadline after cheap units: each kind has its own estimate. */
     @Test
     void kindsHaveOwnEstimates() {
         long[] now = {0};
@@ -171,8 +171,8 @@ class UnitQueueTest {
         b = clock.begin();
         now[0] += MS / 10;
         clock.end(b, 2);
-        assertTrue(clock.canStart(2), "дешёвая порция влезает");
-        assertTrue(!clock.canStart(1), "дорогие лучи (40 мс) в срок 30 мс не влезают");
+        assertTrue(clock.canStart(2), "a cheap batch fits");
+        assertTrue(!clock.canStart(1), "expensive rays (40 ms) do not fit a 30 ms deadline");
     }
 
     @Test

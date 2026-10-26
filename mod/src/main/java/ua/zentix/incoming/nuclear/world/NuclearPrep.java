@@ -34,72 +34,72 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Руины заранее — пока летит МБР (полторы минуты): для чанков в памяти в радиусе руин ({@link Detonation#ruinRadius})
- * строится план руин ({@link RuinPlanner}): снимки — в тике сервера, разломы и обрушение — фоновыми потоками
- * ({@link RuinWorkers}), достройка по живому чанку — снова в тике, под бюджетом. Когда волна доходит до чанка, остаётся
- * только записать план в секции ({@link RuinPlan#apply}) — разрушения идут вместе с фронтом, а не догоняют его. Чанки,
- * загруженные во время полёта, подхватываются (раз в {@link #REFRESH} тиков); для подготовки ничего не грузится.
+ * Prebuilt ruins during ICBM flight (minute and a half): in-memory chunks within ruin radius ({@link Detonation#ruinRadius})
+ * get ruin plans ({@link RuinPlanner}): snapshots on server tick, fractures/collapse on background threads
+ * ({@link RuinWorkers}), completion from live chunk back on tick under budget. When wave reaches chunk, only
+ * write plan into sections ({@link RuinPlan#apply}): destruction follows front instead of chasing it. Chunks
+ * loaded during flight picked up every {@link #REFRESH} ticks; preparation loads nothing.
  * <p>
- * После подрыва — зона за волной: тяжёлая зона (у земли от 5 psi) грузится квадратами 5×5 вслед за фронтом, чтобы руины
- * были на диске и в LOD Distant Horizons, а не только там, где стоял игрок. Из квадрата грузится каждый чанк, чьё окно
- * руин ({@link RuinPlanner#REACH}) целое на диске ({@link DiskStatus.State#WHOLE}: заголовки читаются в фоне через
- * {@code chunkScanner}) или в памяти, — то же окно, что у плана с диска. Ради удара мир не генерируется: такой чанк
- * ваниль грузит без генерации (сам целый, соседи готовы — {@code ChunkGenerationTask.canLoadWithoutGeneration}).
- * Чанк мира 1.17 с догенерацией под нулём план с диска получает ({@link DiskStatus.State#FINAL}), но зона его не
- * грузит: его план ждёт игрока или копии для LOD вдали ({@link FarLods}). Чанки держатся каждый своим тикетом загрузки без тика
- * ({@link AreaLoader}, {@code ticks = false}, уровень 33: не тикают и под чужим счётом тика), ближние к цели квадраты
- * первыми, не больше {@link #HELD_TILES} квадратов сразу; руины их чанков строит очередь ({@link ScarQueue}), квадрат
- * отпускается, когда его руины стоят. Ничего не сохраняется: после перезапуска подготовка начинается заново по
- * запланированному удару.
+ * After detonation, zone behind wave: heavy zone (ground pressure from 5 psi) loads in 5×5 squares following front, putting ruins
+ * on disk and in Distant Horizons LODs beyond player locations. Each square chunk loads if ruin
+ * window ({@link RuinPlanner#REACH}) whole on disk ({@link DiskStatus.State#WHOLE}: headers read in background via
+ * {@code chunkScanner}) or memory, same window as disk plan. Strike generates no world: vanilla loads such chunks
+ * without generation (chunk whole, neighbors ready, {@code ChunkGenerationTask.canLoadWithoutGeneration}).
+ * 1.17 chunk with below-zero retrogen gets disk plan ({@link DiskStatus.State#FINAL}), but zone does not
+ * load it: plan awaits player or distant LOD copy ({@link FarLods}). Each chunk held by own non-ticking load ticket
+ * ({@link AreaLoader}, {@code ticks = false}, level 33: no ticking even under external tick count), nearest-target squares
+ * first, at most {@link #HELD_TILES} at once; queue ({@link ScarQueue}) builds chunk ruins; release square
+ * once ruins applied. Unsaved: restart rebuilds preparation from
+ * scheduled strike.
  * <p>
- * Место подрыва и земля под ним — как у самого подрыва ({@link NuclearWarhead#geometry}); план не зависит ни от времени,
- * ни от сида подрыва — только от места, мощности и масштаба, и подходит подрыву, если тот случился там же; такой подрыв
- * берёт место, землю и видимость подготовки ({@link #planned}).
+ * Burst location/ground match detonation ({@link NuclearWarhead#geometry}); plan depends neither on time
+ * nor detonation seed, only location, yield, scale, and matches detonation there; such detonation
+ * takes preparation location, ground and visibility ({@link #planned}).
  */
 public final class NuclearPrep {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_nuclear_prep", Comparator.<UUID>naturalOrder());
-    /** Давление у земли, до которого руины строятся заранее. */
+    /** Ground pressure threshold for prebuilt ruins. */
     static final double PSI = 5;
-    /** Квадраты: 5×5 чанков, чьи руины строятся вместе. */
+    /** Squares: 5×5 chunks whose ruins built together. */
     private static final int TILE_RADIUS = 2;
     private static final int TILE = TILE_RADIUS * 2 + 1;
-    /** Все чанки квадрата: бит {@code (dx + 2) * 5 + (dz + 2)}. */
+    /** All square chunks: bit {@code (dx + 2) * 5 + (dz + 2)}. */
     private static final int ALL = (1 << TILE * TILE) - 1;
     /**
-     * Окна руин чанков квадрата — квадрат с полями {@link RuinPlanner#REACH}: чанк грузится, если его окно целое на диске.
-     * Сам квадрат полями не держится: окна чанков у его края очередь руин ({@link ScarQueue}) читает с диска
-     * ({@link RuinContext#requestWindow}), готовый план соседей не ждёт (кроме {@link RuinPlan#neighbourRadius} — те держат
-     * соседей сами). Квадрат 9×9 с полями — 81 чанк на 25 руин, и зона за волной грузилась бы втрое дольше (~23 чанка
-     * в секунду, отставание у игроков до 6514 тиков). Чанк, чьё окно не целое, пропускается один, а не весь квадрат:
-     * иначе планы с диска чанков у края исследованного мира и у недогенерированных мест ждали бы до конца зоны.
+     * Square chunk ruin windows: square plus {@link RuinPlanner#REACH} margins; load chunk if window whole on disk.
+     * Do not hold square margins: ruin queue ({@link ScarQueue}) reads edge-chunk windows from disk
+     * ({@link RuinContext#requestWindow}); ready plans need no neighbors (except {@link RuinPlan#neighbourRadius}, holding
+     * their own). Margined 9×9 square means 81 chunks per 25 ruins, tripling behind-wave zone load time (~23 chunks
+     * per second, player lag up to 6514 ticks). Skip individual non-whole-window chunk, not entire square:
+     * otherwise disk plans near explored-world edge and partial chunks would await zone completion.
      */
     private static final int WINDOWS_REACH = TILE_RADIUS + RuinPlanner.REACH, WINDOWS = 2 * WINDOWS_REACH + 1;
-    /** Сколько квадратов отпускать за тик: каждый — 25 выгрузок чанков с записью на диск в этом тике сервера. */
+    /** Squares released per tick: each means 25 chunk unloads/disk writes this server tick. */
     private static final int RELEASE_PER_TICK = 2;
-    /** Квадратов в загрузке одновременно (не все сразу: игрокам тоже надо грузить мир). */
+    /** Concurrent loading squares (not all at once: players need world loads too). */
     private static final int LOADING_TILES = 6;
-    /** Чтений заголовков чанков с диска одновременно. */
+    /** Concurrent disk chunk-header reads. */
     private static final int SCANS = 64;
-    /** Подготовка не начинается, если до подрыва меньше, тиков. */
+    /** Minimum ticks before detonation to start preparation. */
     private static final int MIN_LEAD = 100;
-    /** Квадратов зоны за волной, которые держатся сразу (в загрузке и с руинами в очереди): память сервера. */
+    /** Maximum held squares behind wave (loading/ruins queued): server memory. */
     private static final int HELD_TILES = 6;
-    /** Раз в сколько тиков подхватывать чанки, загруженные во время полёта, и писать ход зоны за волной. */
+    /** Ticks between picking up flight-loaded chunks and logging behind-wave zone progress. */
     private static final int REFRESH = 40, ZONE_REPORT = 600;
-    /** После подрыва квадраты зоны за волной держатся не дольше, тиков. */
+    /** Maximum held-square duration after detonation, ticks. */
     private static final int ZONE_HOLD = 12_000;
     /**
-     * Сколько места под руины заранее, байт: готовые планы, снимки чанков (из памяти и с диска), чтения в работе и буферы
-     * фоновых потоков. Сверх него новые чтения ждут, пока планы не отпустят снимки; планы сверх него не строятся.
+     * Prebuilt-ruin memory cap, bytes: ready plans, chunk snapshots (memory/disk), in-flight reads, background
+     * thread buffers. Beyond cap new reads await plans releasing snapshots; no further plans built above cap.
      */
     static final long PLANS_CAP = 512L << 20;
-    /** Чтений чанков с диска в работе сразу и оценка памяти на одно (разобранный чанк города — десятки КБ). */
+    /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
     private static final int READS = 64;
     private static final long READ_BYTES = 96L << 10;
-    /** Насколько место подрыва может отличаться от места плана, блоки. */
+    /** Allowed detonation-location difference from plan, blocks. */
     private static final double SAME_PLACE = 8;
 
-    /** Для {@link #heapTight}: номер прошлого замера кучи и сколько замеров подряд она выше предела. */
+    /** For {@link #heapTight}: previous heap sample number and consecutive above-limit samples. */
     private long lastMeasured;
     private int heapStrikes;
 
@@ -108,22 +108,22 @@ public final class NuclearPrep {
     private static final class Tile {
         final ChunkPos centre;
         TileState state = TileState.SCAN;
-        /** Чанков окон руин квадрата, чей ответ с диска ещё не пришёл или не запрошен. */
+        /** Square ruin-window chunks with disk result not received/requested. */
         int unknown = WINDOWS * WINDOWS;
-        /** Чанки квадрата (биты {@link #bit}), в чьём окне руин есть чанк не целый на диске: зона их не грузит. */
+        /** Square chunks (bits {@link #bit}) with non-whole-disk chunk in ruin window: zone does not load them. */
         int partial;
-        /** Чанки квадрата, чьи тикеты он держит (биты {@link #bit}). */
+        /** Square chunks whose tickets held (bits {@link #bit}). */
         int held;
-        /** Тикеты взяты, когда все эти чанки уже были в памяти: квадрат ничего не грузит, мест в загрузке не занимает. */
+        /** Tickets taken with all chunks already in memory: square loads nothing, uses no load slot. */
         boolean resident;
-        /** Для {@link NukeDiag}: когда взяты тикеты и когда все чанки стали полными (игровое время), −1 — ещё нет. */
+        /** For {@link NukeDiag}: ticket acquisition/all-chunks-full game times, −1 if not yet. */
         long heldAt = -1, readyAt = -1;
 
         Tile(ChunkPos centre) {
             this.centre = centre;
         }
 
-        /** Чанки, которые зона берёт в мир: окно руин целое на диске. */
+        /** Chunks zone brings into world: ruin window whole on disk. */
         int loads() {
             return ALL & ~partial;
         }
@@ -132,24 +132,24 @@ public final class NuclearPrep {
             return 1 << (dx + TILE_RADIUS) * TILE + dz + TILE_RADIUS;
         }
 
-        /** Чанк квадрата по смещению от центра. */
+        /** Square chunk by center offset. */
         long chunk(int dx, int dz) {
             return ChunkPos.asLong(centre.x + dx, centre.z + dz);
         }
 
-        /** Тикет чанка квадрата: свой у каждого, уровень 33 — только полная загрузка. */
+        /** Square chunk ticket: unique per chunk, level 33 full loading only. */
         AreaLoader.Area area(int strike, int dx, int dz) {
             ChunkPos c = new ChunkPos(centre.x + dx, centre.z + dz);
             return new AreaLoader.Area(TYPE, c, 0, new UUID(strike, c.toLong()), false);
         }
 
-        /** Взять тикеты чанков квадрата из маски {@code chunks}. */
+        /** Acquire square chunk tickets from {@code chunks} mask. */
         void hold(ServerLevel level, int strike, int chunks) {
             held = chunks;
             tickets(level, strike, true);
         }
 
-        /** Отпустить тикеты, которые квадрат держит. */
+        /** Release tickets held by square. */
         void release(ServerLevel level, int strike) {
             tickets(level, strike, false);
             held = 0;
@@ -172,79 +172,79 @@ public final class NuclearPrep {
         final long detonateTime;
         @Nullable
         Detonation geometry;
-        /** Раскладка зоны ({@link #layout}), пока строится в фоне; null — уже на месте или ещё не начата. */
+        /** Zone layout ({@link #layout}) while built in background; null if ready or not started. */
         @Nullable
         CompletableFuture<Layout> layout;
-        /** Чанки тяжёлой зоны, ближние первыми (зона за волной). */
+        /** Heavy-zone chunks nearest first (zone behind wave). */
         long[] order = new long[0];
-        /** Чанки в памяти в радиусе руин, ближние первыми: им план заранее. */
+        /** In-memory chunks within ruin radius nearest first: prebuild plans. */
         final LongArrayList todo = new LongArrayList();
         int nextTodo;
         final LongOpenHashSet considered = new LongOpenHashSet();
-        /** Все чанки, бывшие в памяти в радиусе руин за полёт (знаменатель строк «ready» и «pre-built ruins»). */
+        /** All chunks ever in memory within ruin radius during flight (denominator in “ready”/“pre-built ruins” lines). */
         final LongOpenHashSet everInMemory = new LongOpenHashSet();
-        /** Планов по чанкам в памяти (ближняя подготовка). */
+        /** Plans for in-memory chunks (near preparation). */
         int nearPlans;
-        /** Чанки, чей план строят фоновые потоки. */
+        /** Chunks with background plans running. */
         final LongArrayList submitted = new LongArrayList();
         long nextRefresh;
-        /** Байт в готовых планах. */
+        /** Bytes in ready plans. */
         long planBytes;
         boolean capped;
         long nextZoneReport;
-        /** Чанки за краем тяжёлой зоны в {@link RuinPlanner#REACH} от неё: планов заранее у них нет. */
+        /** Chunks beyond heavy-zone edge within {@link RuinPlanner#REACH}: no prebuilt plans. */
         long[] edge = new long[0];
         List<Tile> tiles = new ArrayList<>();
-        /** Квадраты, которым нужен ответ по чанку (свой или кольцо соседа). */
+        /** Squares needing chunk result (own chunk or neighbor ring). */
         Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
-        /** Памяти мало: руины заранее больше не строятся, квадраты зоны за волной грузят только чанки с готовым планом. */
+        /** Memory tight: stop prebuilding, behind-wave squares load only chunks with ready plans. */
         boolean heapStop;
-        /** Очередь чанков на чтение с диска и ответы (приходят из потока ввода-вывода). */
+        /** Disk-read queue and results (from I/O thread). */
         LongArrayList toScan = new LongArrayList();
         int nextScan, scanning;
         final ConcurrentLinkedQueue<long[]> scanned = new ConcurrentLinkedQueue<>();
         /**
-         * Для {@link NukeDiag}: на чём остановился набор квадратов в тиках (слоты, квадрат без ответа с диска, волна
-         * не дошла, брать нечего, подрыв забыт) и отпущенные квадраты: число, тикет → полные (сумма, наибольшее),
-         * полные → отпущен, волна → тикет.
+         * For {@link NukeDiag}: square admission stop reasons in ticks (slots, square awaiting disk, wave
+         * not arrived, nothing to acquire, detonation forgotten), released squares: count, ticket → full (sum/max),
+         * full → release, wave → ticket.
          */
         final long[] diagStops = new long[5], diagDone = new long[8];
-        /** Сколько раз готовый квадрат не отпущен: его ждущим соседей чанкам не хватило удержаний (за весь подрыв). */
+        /** Times ready square not released because neighbor-waiting chunks lack holds (whole detonation). */
         long diagRefused;
         long nextIoReport;
         final Long2ObjectOpenHashMap<RuinPlan> plans = new Long2ObjectOpenHashMap<>();
-        /** Руины по всем чанкам (разломы соседей): переходят подрыву вместе с планами. */
+        /** All-chunk ruins (neighbor fractures): transferred to detonation with plans. */
         @Nullable
         RuinContext ruins;
         final LongArrayList planned = new LongArrayList();
-        /** Отдан подрыву с этим номером (тикеты ещё держатся); -1 — ещё летит. */
+        /** Handed to this detonation ID (tickets still held); -1 still flying. */
         int detonation = -1;
-        /** Руины больше не нужны: квадраты отпускаются по нескольку за тик. */
+        /** Ruins no longer needed: release a few squares per tick. */
         boolean draining;
         long handedOff;
         boolean announced;
 
-        // ---- фаза 2: тяжёлая зона не в памяти — с диска, в порядке прихода волны
+        // ---- phase 2: heavy zone outside memory, disk in wave-arrival order
         @Nullable
         DiskShots.Format format;
-        /** Чтения с диска в работе (отдано — и ответ ещё не разобран) и ответы из фоновых потоков. */
+        /** In-flight disk reads (submitted, result not yet parsed) and background results. */
         final LongOpenHashSet reading = new LongOpenHashSet();
         final ConcurrentLinkedQueue<DiskShots.Read> reads = new ConcurrentLinkedQueue<>();
-        /** Чанки, которых нет на диске полностью сгенерированными: плана им и их соседям заранее нет. */
+        /** Chunks absent as fully generated disk chunks: no preplans for them/neighbors. */
         final LongOpenHashSet unreadable = new LongOpenHashSet();
-        /** Почему чанки не прочитались ({@link DiskShots.Read#skip} до двоеточия) — для строки «ready». */
+        /** Unread reasons ({@link DiskShots.Read#skip} before colon), for “ready” line. */
         final Object2IntOpenHashMap<String> unreadWhy = new Object2IntOpenHashMap<>();
-        /** Курсоры по {@link #order}: докуда отданы чтения окон и докуда отданы планы. */
+        /** {@link #order} cursors: submitted window reads and plans. */
         int nextRead, nextFar;
-        /** Чанки, чей план по снимкам с диска строят фоновые потоки. */
+        /** Chunks whose disk-snapshot plans background threads build. */
         final LongArrayList farRunning = new LongArrayList();
         int farPlans, diskShots, farSkipped;
-        /** Курсор по {@link #order}: докуда волна дошла и чанки отданы в LOD вдали ({@link FarLods}). */
+        /** {@link #order} cursor: wave-reached chunks submitted to distant LODs ({@link FarLods}). */
         int nextLod;
-        /** Чанки тяжёлой зоны не в памяти при подрыве: для строки «far rings». */
+        /** Heavy-zone chunks outside memory at detonation, for “far rings” line. */
         @Nullable
         long[] farAtDetonation;
-        /** Копии LOD зоны с готовыми планами с диска — в DH вместе с фронтом. */
+        /** Zone LOD copies from ready disk plans, into DH with front. */
         final FrontLods lods;
 
         Prep(int strike, long detonateTime) {
@@ -255,55 +255,55 @@ public final class NuclearPrep {
     }
 
     private final List<Prep> preps = new ArrayList<>();
-    /** Удары, чья подготовка упала с ошибкой: заново не начинается (иначе — ошибка в лог каждый тик). */
+    /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
     private final WorkClock clock = WorkClock.decaying(0.5);
 
-    /** Сколько руин готово заранее по всем ударам (проверки, статус). */
+    /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
         return preps.stream().mapToInt(p -> p.plans.size()).sum();
     }
 
-    /** Подготовки нет ни одной: буферы решателя руин ей не нужны. */
+    /** No preparations: release ruin-solver buffers. */
     public boolean idle() {
         return preps.isEmpty();
     }
 
-    /** Чанк выгружен: его фоновый план больше не нужен. */
+    /** Chunk unloaded: background plan unnecessary. */
     void forget(long chunk) {
         for (Prep p : preps) {
             p.submitted.rem(chunk);
-            // до подрыва руины подготовки — не в NuclearWorld: задачу снимает она сама
+            // before detonation preparation ruins outside NuclearWorld: preparation removes task itself
             if (p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
             p.considered.remove(chunk);
         }
     }
 
-    /** Память руин заранее: планы, снимки, чтения в работе, буферы потоков. */
+    /** Prebuilt-ruin memory: plans, snapshots, in-flight reads, thread buffers. */
     private static long memory(ServerLevel level, Prep p) {
         return p.planBytes + p.ruins.shotBytes() + p.reading.size() * READ_BYTES + RuinWorkers.bufferBytes(level.getHeight());
     }
 
-    /** Сколько квадратов держится тикетами (проверки). */
+    /** Squares held by tickets (tests). */
     public int heldTiles() {
         return (int) preps.stream().flatMap(p -> p.tiles.stream()).filter(t -> t.state == TileState.LOADING || t.state == TileState.READY).count();
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
     /**
-     * Подготовка под бюджетом: свой срок (доля общего бюджета {@link WorkScheduler#PREP_SHARE}) и срок полосы ядерки.
+     * Budgeted preparation: own deadline (shared-budget fraction {@link WorkScheduler#PREP_SHARE}) and nuclear-lane deadline.
      *
-     * @param shared общие часы тика (уже запущены)
+     * @param shared shared tick clock (already started)
      */
     public void tick(ServerLevel level, NuclearEvents events, ScarQueue scars, WorkClock shared) {
         long now = level.getGameTime();
         long cap = WorkScheduler.prepCapNanos();
-        // новые удары: подготовка с пуска
+        // new strikes: preparation from launch
         for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
             if (!IncomingConfig.SERVER.nukeBlockDamage.get()) break;
             if (s.detonateTime() - now < MIN_LEAD || failed.contains(s.id()) || preps.stream().anyMatch(p -> p.strike == s.id())) continue;
-            // один район — одна подготовка: второй удар по тем же местам руины заранее не строит (память под зону — одна)
+            // one area, one preparation: second strike at same places prebuilds no ruins (single-zone memory)
             if (preps.stream().anyMatch(p -> p.geometry != null && p.detonation < 0
                     && Math.hypot(p.geometry.burst().x - s.target().x, p.geometry.burst().z - s.target().z) < 2 * heavyRadius(p.geometry) + 64)) continue;
             preps.add(new Prep(s.id(), s.detonateTime()));
@@ -315,13 +315,13 @@ public final class NuclearPrep {
                 if (p.draining) {
                     p.plans.clear();
                     p.lods.clear(level);
-                    // до подрыва задачи руин подготовки никому не отданы: бросить
+                    // before detonation preparation tasks not handed off: abandon
                     if (p.ruins != null && p.detonation < 0) p.ruins.cancelTasks();
                     if (releaseSome(level, p, RELEASE_PER_TICK) == 0) it.remove();
                     continue;
                 }
                 if (p.detonation >= 0) {
-                    // отдан подрыву: зона за волной грузится квадратами, квадрат отпускается, когда его руины стоят
+                    // handed to detonation: behind-wave zone loads squares, releases when ruins applied
                     if (!p.heapStop && heapTight()) stopForHeap(p);
                     Detonation d = events.detonations().stream().filter(x -> x.id() == p.detonation).findFirst().orElse(null);
                     behindWave(level, p, scars, d, now, shared);
@@ -338,7 +338,7 @@ public final class NuclearPrep {
                 }
                 NuclearEvents.ScheduledStrike s = events.scheduled().stream().filter(x -> x.id() == p.strike).findFirst().orElse(null);
                 if (s == null) {
-                    // отбой или подрыв не там, где план
+                    // cancelled or detonation differs from planned location
                     p.draining = true;
                     continue;
                 }
@@ -347,7 +347,7 @@ public final class NuclearPrep {
                 Incoming.LOG.error("Ruin preparation for strike #{} failed with an exception; dropped", p.strike, e);
                 failed.add(p.strike);
                 if (p.draining) {
-                    // упала уже отпуская квадраты: отпустить все разом и больше не трогать (иначе ошибка — каждый тик)
+                    // failed while releasing squares: release all, do not retry (otherwise error every tick)
                     it.remove();
                     try {
                         release(level, p);
@@ -364,12 +364,12 @@ public final class NuclearPrep {
 
     private void work(ServerLevel level, NuclearEvents.ScheduledStrike s, Prep p, WorkClock shared) {
         if (p.geometry == null) {
-            // место подрыва — как у самого подрыва: земля под целью из готового чанка (его держит район цели с пуска)
+            // detonation location as for actual burst: ground beneath target from ready chunk (target area held since launch)
             if (!Terrain.ready(level, BlockPos.containing(s.target()))) return;
             p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
                     (float) IncomingConfig.SERVER.effectsScale());
             Detonation g = p.geometry;
-            // раскладка — в фоне: у 15 кт в зоне ~33 тыс. чанков и ~1400 квадратов, в тике это 50–65 мс
+            // background layout: 15 kt zone ~33 thousand chunks/~1400 squares, costing 50–65 ms on tick
             p.layout = CompletableFuture.supplyAsync(() -> layout(g), Util.backgroundExecutor());
             p.ruins = new RuinContext(level, p.geometry);
         }
@@ -391,7 +391,7 @@ public final class NuclearPrep {
         frontLods(level, p, now);
         if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()) {
             p.announced = true;
-            // строка для проверок и съёмки: руины удара готовы заранее (чанки, загруженные потом, ещё подхватываются)
+            // line for tests/recording: strike ruins prebuilt (later-loaded chunks still picked up)
             Runtime rt = Runtime.getRuntime();
             Incoming.LOG.info("Ruins for strike #{} ready: plans for loaded chunks {} (chunks loaded during flight {}), from disk {} (heavy zone {} chunks), not from disk {} "
                             + "(unread {}{}; {} s to detonation), plans {} MB, snapshots {} MB, background threads {} busy {} %, heap {} of {} MB",
@@ -402,7 +402,7 @@ public final class NuclearPrep {
         }
     }
 
-    /** Причины по убыванию числа чанков: «: not on disk 1200, not fully generated on disk 30»; пусто — нет причин. */
+    /** Reasons descending by chunk count: “: not on disk 1200, not fully generated on disk 30”; empty if none. */
     private static String why(Object2IntOpenHashMap<String> counts) {
         StringBuilder out = new StringBuilder();
         counts.object2IntEntrySet().stream().sorted((x, y) -> Integer.compare(y.getIntValue(), x.getIntValue()))
@@ -410,7 +410,7 @@ public final class NuclearPrep {
         return out.toString();
     }
 
-    /** Чанки в памяти в радиусе руин, которых ещё нет в очереди подготовки: в очередь, ближние первыми. */
+    /** In-memory chunks within ruin radius absent from preparation queue: enqueue nearest first. */
     private static void refresh(ServerLevel level, Prep p) {
         Detonation d = p.geometry;
         double radius = d.ruinRadius();
@@ -423,7 +423,7 @@ public final class NuclearPrep {
             fresh.add(c.toLong());
         }
         if (fresh.isEmpty()) return;
-        // оставшиеся и новые — по расстоянию (ключ — один раз)
+        // remaining/new chunks by distance (compute key once)
         LongArrayList rest = new LongArrayList(p.todo.subList(p.nextTodo, p.todo.size()));
         rest.addAll(fresh);
         long[] keyed = new long[rest.size()];
@@ -434,23 +434,23 @@ public final class NuclearPrep {
         p.nextTodo = 0;
     }
 
-    /** Наклонная дальность от точки подрыва до ближайшего места чанка на уровне земли (как у очереди руин). */
+    /** Slant range from burst to nearest chunk point at ground level (like ruin queue). */
     private static double nearest(ChunkPos p, Detonation d) {
         double h = horizontal(p, d), dy = d.burst().y - d.groundY();
         return Math.sqrt(h * h + dy * dy);
     }
 
-    /** Готовые фоновые планы — достроить по живому чанку, по одному за единицу работы. */
+    /** Complete ready background plans from live chunk, one per work unit. */
     private void harvest(ServerLevel level, Prep p, WorkClock shared) {
         for (int i = 0; i < p.submitted.size() && clock.canStart() && shared.canStart(); ) {
             long c = p.submitted.getLong(i);
             if (!p.ruins.done(c)) {
-                if (!p.ruins.running(c)) p.submitted.removeLong(i); // задачу сняли (чанк выгружен)
+                if (!p.ruins.running(c)) p.submitted.removeLong(i); // task removed (chunk unloaded)
                 else i++;
                 continue;
             }
             p.submitted.removeLong(i);
-            // чанк опустился ниже полной загрузки (край видимости): план верен — подмена сверит его с чанком
+            // chunk below full loading (view edge): plan valid, replacement checks against chunk
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c));
             long c0 = shared.begin();
             try {
@@ -459,7 +459,7 @@ public final class NuclearPrep {
                     keep(level, p, c, plan);
                     p.nearPlans++;
                 } else if (p.ruins.running(c)) {
-                    p.submitted.add(c); // чанк перезагрузили: план заново
+                    p.submitted.add(c); // chunk reloaded: rebuild plan
                 }
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Pre-built ruins: plan for chunk {} failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
@@ -469,7 +469,7 @@ public final class NuclearPrep {
         }
     }
 
-    /** Готовый план — к руинам заранее; сверх места — дальше не строятся. */
+    /** Add ready plan to prebuilt ruins; halt further building beyond capacity. */
     private static void keep(ServerLevel level, Prep p, long c, RuinPlan plan) {
         p.plans.put(c, plan);
         p.planned.add(c);
@@ -482,19 +482,19 @@ public final class NuclearPrep {
     }
 
     /**
-     * Фаза 2 — тяжёлая зона, которой нет в памяти: чанки читаются с диска в порядке прихода волны (окно 5×5 каждого —
-     * на {@link #READS} чтений вперёд), снимок с диска встаёт в руины подрыва, план строят фоновые потоки по тем же
-     * правилам, что и у чанков в памяти ({@link RuinContext#submitDisk}). Идёт и после подрыва: квадраты зоны за волной
-     * берут готовые планы. Ничего не грузится в мир; память — под {@link #PLANS_CAP} вместе с планами.
+     * Phase 2: heavy zone outside memory. Read chunks in wave-arrival order (each 5×5 window
+     * {@link #READS} reads ahead); disk snapshot enters detonation ruins, background threads plan by same
+     * rules as in-memory chunks ({@link RuinContext#submitDisk}). Continues after detonation: behind-wave squares
+     * take ready plans. No world loads; memory under {@link #PLANS_CAP} including plans.
      */
     private void far(ServerLevel level, Prep p, WorkClock shared) {
         if (p.heapStop || !IncomingConfig.SERVER.nukeBlockDamage.get()) return;
         if (p.format == null) {
             p.format = DiskShots.Format.of(level);
-            // за краем тяжёлой зоны планов заранее нет: снимки соседей их не ждут
+            // no preplans beyond heavy-zone edge: neighbor snapshots do not await them
             for (long k : p.edge) p.ruins.markNoPlan(k);
         }
-        // ответы с диска: снимок — в руины (состояния — в таблицу свойств), одна единица работы на чанк
+        // disk results: snapshots into ruins (states into property table), one work unit per chunk
         for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.poll()) != null; ) {
             long c = r.pos().toLong();
             p.reading.remove(c);
@@ -514,7 +514,7 @@ public final class NuclearPrep {
                 clock.record(shared.end(c0));
             }
         }
-        // готовые планы
+        // ready plans
         for (int i = 0; i < p.farRunning.size() && clock.canStart() && shared.canStart(); ) {
             long c = p.farRunning.getLong(i);
             if (p.ruins.running(c) && !p.ruins.done(c)) {
@@ -522,7 +522,7 @@ public final class NuclearPrep {
                 continue;
             }
             p.farRunning.removeLong(i);
-            if (!p.ruins.done(c)) continue; // забрал кто-то другой (очередь руин) или задача брошена
+            if (!p.ruins.done(c)) continue; // collected elsewhere (ruin queue) or task abandoned
             long c0 = shared.begin();
             try {
                 RuinPlan plan = p.ruins.collect(new ChunkPos(c));
@@ -537,7 +537,7 @@ public final class NuclearPrep {
                 clock.record(shared.end(c0));
             }
         }
-        // чтения окон вперёд по порядку волны
+        // window read-ahead in wave order
         while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level, p) < PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
@@ -557,11 +557,11 @@ public final class NuclearPrep {
             if (!all) break;
             p.nextRead++;
         }
-        // планы по порядку волны: окно готово — фоновым потокам; ждёт чтений — дальше не идём
+        // plans in wave order: ready window goes to background threads; pending reads stop cursor
         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
             long c = p.order[p.nextFar];
             if (p.plans.containsKey(c) || p.ruins.running(c) || p.ruins.failed(c) || p.ruins.doneAt(c) >= 0 || readyChunk(level, c) != null) {
-                // готов, строится, или чанк в памяти с соседями — его план заранее строит ближняя подготовка
+                // ready, building, or in-memory chunk with neighbors, preplanned by near preparation
                 p.nextFar++;
                 continue;
             }
@@ -575,13 +575,13 @@ public final class NuclearPrep {
                 }
             }
             if (skip) {
-                // окно не прочитать целиком: руины чанка — после волны
+                // cannot read entire window: chunk ruins after wave
                 p.farSkipped++;
                 p.ruins.noPlan(c);
                 p.nextFar++;
                 continue;
             }
-            // после подрыва половина пула — очереди руин: чанки у игроков важнее дальних колец
+            // after detonation reserve half pool for ruin queue: player chunks before distant rings
             if (missing > 0 || !RuinWorkers.admit(RuinWorkers.Priority.FAR) || p.detonation >= 0 && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) break;
             long c0 = shared.begin();
             try {
@@ -598,8 +598,8 @@ public final class NuclearPrep {
     }
 
     /**
-     * Чанки зоны, до которых дошла волна, — в LOD Distant Horizons вдали ({@link FarLods}): копия с диска с руинами по
-     * готовому плану (план, который ещё строится, она ждёт). Загруженные чанки получают руины и LOD своим путём.
+     * Wave-reached zone chunks into distant Distant Horizons LODs ({@link FarLods}): disk copy with ready-plan
+     * ruins (awaits running plan). Loaded chunks receive ruins/LODs through own path.
      */
     private static void farLods(ServerLevel level, Prep p, Detonation d, long now) {
         for (; p.nextLod < p.order.length; p.nextLod++) {
@@ -610,9 +610,9 @@ public final class NuclearPrep {
     }
 
     /**
-     * Копии LOD зоны к фронту ({@link FrontLods}): собираются, когда планы с диска всей зоны отданы и готовы (или их
-     * больше не строят — место кончилось), из места руин заранее, которое оставили планы, снимки и чтения; после подрыва
-     * уходят в DH к приходу фронта. Память кончилась — копий больше нет (их LOD — путём {@link FarLods} после волны).
+     * Front zone LOD copies ({@link FrontLods}): built once all zone disk plans submitted/ready (or
+     * halted at capacity), using prebuilt-ruin memory remaining after plans, snapshots, reads; after detonation
+     * sent to DH for front arrival. Heap exhausted means no copies (LODs via {@link FarLods} after wave).
      */
     private static void frontLods(ServerLevel level, Prep p, long now) {
         if (p.ruins == null) return;
@@ -624,7 +624,7 @@ public final class NuclearPrep {
         p.lods.tick(level, p.plans, PLANS_CAP - memory(level, p), plansDone, now);
     }
 
-    /** Копию LOD чанка держит фронт подготовки ({@link FrontLods#claim}): {@link FrontLods#NONE} — нет. */
+    /** Preparation front holds chunk LOD copy ({@link FrontLods#claim}): {@link FrontLods#NONE} if not. */
     int frontClaim(ServerLevel level, long chunk, boolean lights, long now) {
         for (Prep p : preps) {
             if (p.draining) continue;
@@ -634,19 +634,19 @@ public final class NuclearPrep {
         return FrontLods.NONE;
     }
 
-    /** Чанк загрузился: копия его LOD к фронту больше не нужна — руины и LOD ему ставит мир. */
+    /** Chunk loaded: front LOD copy unnecessary, world supplies ruins/LODs. */
     void loaded(long chunk) {
         for (Prep p : preps) p.lods.loaded(chunk);
     }
 
-    /** Для проверок: копии LOD к фронту подготовки удара {@code strike} ({@link FrontLods#stats}); null — подготовки нет. */
+    /** For tests: strike {@code strike} preparation front LOD copies ({@link FrontLods#stats}); null without preparation. */
     @Nullable
     long[] frontStats(int strike) {
         for (Prep p : preps) if (p.strike == strike) return p.lods.stats();
         return null;
     }
 
-    /** Готовый план руин чанка, до которого уже дошла волна своего подрыва; null — нет такого. */
+    /** Ready ruin plan for chunk reached by its detonation's wave; null if none. */
     @Nullable
     RuinPlan arrivedPlan(ServerLevel level, NuclearEvents events, long chunk, long now) {
         for (Prep p : preps) {
@@ -660,15 +660,15 @@ public final class NuclearPrep {
         return null;
     }
 
-    /** Чанки по порядку — фоновым потокам (снимки — единицей работы), пока у подрыва есть место под задачи. */
+    /** Chunks in order to background threads (snapshots per work unit), while detonation has task capacity. */
     private void submit(ServerLevel level, Prep p, WorkClock shared) {
         while (p.nextTodo < p.todo.size() && RuinWorkers.admit(RuinWorkers.Priority.NEAR) && clock.canStart() && shared.canStart()) {
             long c = p.todo.getLong(p.nextTodo++);
             if (p.plans.containsKey(c) || p.ruins.running(c)) continue;
-            // чанк без загруженных соседей (край загруженного мира) план заранее не получает: окно не прочитать
+            // chunk without loaded neighbors (loaded-world edge) gets no preplan: unreadable window
             LevelChunk chunk = readyChunk(level, c);
             if (chunk == null) {
-                // соседи ещё не загружены (край загруженного мира): подхватится снова, когда загрузятся
+                // neighbors not loaded (loaded-world edge): picked up again once loaded
                 p.considered.remove(c);
                 continue;
             }
@@ -684,7 +684,7 @@ public final class NuclearPrep {
         }
     }
 
-    /** Радиус тяжёлой зоны у земли, блоки (бисекция по давлению, монотонному с расстоянием). */
+    /** Ground heavy-zone radius, blocks (bisection on pressure monotonic with distance). */
     static double heavyRadius(Detonation d) {
         double lo = 0, hi = d.radiusMax();
         for (int i = 0; i < 40; i++) {
@@ -695,7 +695,7 @@ public final class NuclearPrep {
         return lo;
     }
 
-    /** Раскладка тяжёлой зоны: чанки и квадраты загрузки по расстоянию, и какие квадраты ждут ответа по какому чанку. */
+    /** Heavy-zone layout: chunks/load squares by distance, which squares await which disk chunk. */
     private record Layout(long[] order, long[] edge, List<Tile> tiles, Long2ObjectOpenHashMap<List<Tile>> askedBy, LongArrayList toScan) {}
 
     private static void install(Prep p, Layout l) {
@@ -707,7 +707,7 @@ public final class NuclearPrep {
         p.toScan = l.toScan;
     }
 
-    /** Чанки зоны по расстоянию, край за ней и квадраты загрузки по расстоянию; без мира — в фоне. */
+    /** Zone chunks by distance, outside edge, load squares by distance; world-free background work. */
     private static Layout layout(Detonation d) {
         double radius = heavyRadius(d) + 16;
         int cx = Mth.floor(d.burst().x) >> 4, cz = Mth.floor(d.burst().z) >> 4, r = Mth.ceil(radius / 16) + 1;
@@ -718,7 +718,7 @@ public final class NuclearPrep {
                 if (horizontal(c, d) <= radius) in.add(c.toLong());
             }
         }
-        // по расстоянию: ключи — один раз (сортировка с расстоянием в сравнении — десятки мс на 15 тыс. чанков)
+        // by distance: keys computed once (distance in sort comparator costs tens of ms for 15 thousand chunks)
         long[] order = in.toLongArray();
         long[] keyed = new long[order.length];
         for (int i = 0; i < order.length; i++) keyed[i] = (long) (horizontal(new ChunkPos(order[i]), d) * 16) << 20 | i;
@@ -756,14 +756,14 @@ public final class NuclearPrep {
         return l;
     }
 
-    /** Горизонтальное расстояние от эпицентра до ближайшей точки чанка. */
+    /** Horizontal epicenter distance to nearest chunk point. */
     static double horizontal(ChunkPos p, Detonation d) {
         double x = Math.max(p.getMinBlockX(), Math.min(d.burst().x, p.getMaxBlockX() + 1));
         double z = Math.max(p.getMinBlockZ(), Math.min(d.burst().z, p.getMaxBlockZ() + 1));
         return Math.hypot(x - d.burst().x, z - d.burst().z);
     }
 
-    /** Целы ли чанки на диске ({@link DiskStatus.State#WHOLE}): в памяти — сразу, остальные — чтением заголовка в фоне. */
+    /** Whether chunks whole on disk ({@link DiskStatus.State#WHOLE}): memory immediate, others background header reads. */
     private static void scan(ServerLevel level, Prep p) {
         for (long[] r; (r = p.scanned.poll()) != null; ) {
             p.scanning--;
@@ -781,7 +781,7 @@ public final class NuclearPrep {
         }
     }
 
-    /** Ответ по чанку: не целый — его соседи в квадратах (в радиусе окна руин) не грузятся. */
+    /** Chunk result: not whole means neighboring square chunks (ruin-window radius) not loaded. */
     private static void answer(Prep p, long chunk, boolean whole) {
         List<Tile> asked = p.askedBy.get(chunk);
         if (asked == null) return;
@@ -799,12 +799,12 @@ public final class NuclearPrep {
     }
 
     /**
-     * Квадраты — ближние первыми, за фронтом (волна уже прошла ближний край квадрата), не больше нескольких в загрузке
-     * и не больше {@link #HELD_TILES} всего; квадрат, чьи чанки к загрузке все в памяти и без готовых планов, не
-     * держится — их руины и так в очереди. С готовым планом такой квадрат держится, но мест не занимает: чанк в памяти
-     * может держать чужой тикет (место подрыва отпускается в тике подрыва), и без своего он уходил бы из памяти раньше
-     * волны, а план пропадал бы. После остановки по куче квадрат грузит только чанки с готовым планом: руины чанка без
-     * плана строились бы на месте, когда памяти мало; они встанут, когда чанк загрузит кто-то другой.
+     * Squares nearest first, behind front (wave passed nearest square edge), a few loading at once
+     * and at most {@link #HELD_TILES} total; square whose loadable chunks all in memory without ready plans not
+     * held, since ruins already queued. With ready plan, hold without occupying slot: in-memory chunk
+     * may use external ticket (detonation area released on detonation tick); without own ticket it would leave memory before
+     * wave, losing plan. After heap stop, square loads only ready-plan chunks: on-site planning unplanned chunks
+     * would consume scarce memory; their ruins wait for another loader.
      */
     private static void load(ServerLevel level, Prep p, ScarQueue scars, Detonation d, long now) {
         int loading = 0, held = 0;
@@ -823,7 +823,7 @@ public final class NuclearPrep {
         for (Tile t : p.tiles) {
             if (t.state == TileState.SCAN) {
                 stop = 1;
-                break; // порядок — по расстоянию: дальние ждут, пока ближние не прочитаны
+                break; // distance order: distant await nearest disk reads
             }
             if (t.state != TileState.WAIT) continue;
             if (now < d.gameTime() + d.arrivalTicks(nearest(new ChunkPos(t.centre.x - TILE_RADIUS, t.centre.z - TILE_RADIUS), t, d))) {
@@ -835,7 +835,7 @@ public final class NuclearPrep {
                 if (planned == 0) {
                     t.state = TileState.SKIP;
                 } else {
-                    // всё уже в памяти: тикеты только держат чанки до руин, грузить нечего — мест квадрат не занимает
+                    // all already in memory: tickets hold until ruins, no loads/slot needed
                     t.hold(level, p.strike, take);
                     t.resident = true;
                     t.state = TileState.READY;
@@ -862,7 +862,7 @@ public final class NuclearPrep {
         p.diagStops[stop]++;
     }
 
-    /** Чанки квадрата к загрузке ({@link Tile#loads}), у которых есть ещё не поставленный готовый план. */
+    /** Loadable square chunks ({@link Tile#loads}) with ready but unapplied plan. */
     private static int withPlan(Prep p, ScarQueue scars, Tile t) {
         int chunks = 0;
         for (int dx = -TILE_RADIUS; dx <= TILE_RADIUS; dx++) {
@@ -873,7 +873,7 @@ public final class NuclearPrep {
         return chunks;
     }
 
-    /** Наклонная дальность до ближнего места квадрата на уровне земли. */
+    /** Slant range to nearest square point at ground level. */
     private static double nearest(ChunkPos corner, Tile t, Detonation d) {
         double x = Math.max(corner.getMinBlockX(), Math.min(d.burst().x, (t.centre.x + TILE_RADIUS + 1) * 16.0));
         double z = Math.max(corner.getMinBlockZ(), Math.min(d.burst().z, (t.centre.z + TILE_RADIUS + 1) * 16.0));
@@ -882,15 +882,15 @@ public final class NuclearPrep {
     }
 
     /**
-     * Все чанки квадрата с центром {@code centre} полностью загружены сейчас: их руины идут и без квадрата. Чанк в памяти,
-     * опущенный ниже полной загрузки (край загруженного мира), не в счёт: он ждёт соседей без своего тикета, и квадрат,
-     * пропущенный из-за него, оставил бы его без руин. Открыт для проверок.
+     * All square chunks centered at {@code centre} fully loaded now: ruins proceed without square. In-memory chunk
+     * below full loading (loaded-world edge) excluded: awaits neighbors without own ticket; skipping square
+     * because of it leaves it without ruins. Exposed for tests.
      */
     public static boolean tileFull(ServerLevel level, ChunkPos centre) {
         return full(level, centre, ALL);
     }
 
-    /** Чанки квадрата из маски {@code chunks} (биты {@link Tile#bit}) полностью загружены сейчас. */
+    /** Square chunks in {@code chunks} mask (bits {@link Tile#bit}) fully loaded now. */
     private static boolean full(ServerLevel level, ChunkPos centre, int chunks) {
         for (int dx = -TILE_RADIUS; dx <= TILE_RADIUS; dx++) {
             for (int dz = -TILE_RADIUS; dz <= TILE_RADIUS; dz++) {
@@ -900,13 +900,13 @@ public final class NuclearPrep {
         return true;
     }
 
-    /** Зона за волной (после подрыва): чтение заголовков, загрузка квадратов, отпуск тех, где руины стоят. */
+    /** Zone behind wave (after detonation): header reads, square loads, release ruined squares. */
     private static void behindWave(ServerLevel level, Prep p, ScarQueue scars, @Nullable Detonation d, long now, WorkClock clock) {
         if (d != null) {
             scan(level, p);
             load(level, p, scars, d, now);
         } else {
-            // подрыв забыт: зона за волной больше не грузится
+            // detonation forgotten: stop loading zone behind wave
             for (Tile t : p.tiles) if (t.state == TileState.SCAN || t.state == TileState.WAIT) t.state = TileState.SKIP;
             p.diagStops[4]++;
         }
@@ -923,9 +923,9 @@ public final class NuclearPrep {
     }
 
     /**
-     * Строки «DIAG» (только с {@link NukeDiag#ON}): что держит слоты зоны за волной. Квадраты по состояниям, на чём
-     * останавливался набор, сколько шли отпущенные квадраты, у квадратов в загрузке — чанков не полных, у готовых —
-     * что с чанками, которые не дают отпустить квадрат; причины ожидания очереди руин и чтения с диска.
+     * “DIAG” lines (only {@link NukeDiag#ON}): what holds behind-wave zone slots. Square states, admission
+     * stop reasons, released-square durations, non-full chunks in loading squares; ready squares show
+     * chunks blocking release; ruin-queue/disk-read wait reasons.
      */
     private static void diagReport(ServerLevel level, Prep p, ScarQueue scars, long now) {
         int[] states = new int[TileState.values().length];
@@ -968,13 +968,13 @@ public final class NuclearPrep {
         Incoming.LOG.info("DIAG ruin queue: {}", NukeDiag.takeWaits());
     }
 
-    /** Строка для проверок: сколько чанков тяжёлой зоны уже в руинах (в памяти при подрыве и загруженных за волной). */
+    /** Test line: ruined heavy-zone chunks (in memory at detonation and loaded behind wave). */
     private static void zoneReport(Prep p, ScarQueue scars, @Nullable Detonation d, long now) {
         int done = 0;
         for (long c : p.order) if (scars.ruined(p.detonation, c)) done++;
         Incoming.LOG.info("Detonation #{}: zone behind the wave — {} of {} chunks done, tiles held {}", p.detonation, done, p.order.length, heldTiles(p));
         if (d == null || p.farAtDetonation == null || p.ruins == null) return;
-        // дальние кольца: чанки не в памяти при подрыве, до которых волна уже дошла, — был ли план готов к её приходу
+        // distant rings: outside-memory chunks at detonation already wave-reached, whether plan ready at arrival
         int passed = 0, ready = 0, late = 0, none = 0, unreadable = 0;
         long lateSum = 0, lateMax = 0;
         for (long c : p.farAtDetonation) {
@@ -1009,8 +1009,8 @@ public final class NuclearPrep {
     }
 
     /**
-     * Живой объём кучи выше {@link HeapWatch#LIMIT} в двух замерах подряд ({@link HeapWatch}: старое поколение после
-     * сборки, которая видит его живой объём): в нём бывает немного несобранного, один замер — ещё не нехватка.
+     * Live heap above {@link HeapWatch#LIMIT} in two consecutive samples ({@link HeapWatch}: old generation after
+     * GC measuring live size): may contain some uncollected matter; one sample does not yet mean pressure.
      */
     private boolean heapTight() {
         HeapWatch watch = HeapWatch.get();
@@ -1025,12 +1025,12 @@ public final class NuclearPrep {
         return heapStrikes >= 2;
     }
 
-    /** Для проверок: все подготовки останавливаются, как при нехватке памяти. */
+    /** For tests: stop all preparations as under memory pressure. */
     void stopAllForHeap() {
         for (Prep p : preps) if (!p.heapStop && !p.draining) stopForHeap(p);
     }
 
-    /** Памяти мало: готовые планы остаются, остальные чанки — на месте при волне (медленнее, но без нехватки памяти). */
+    /** Memory tight: retain ready plans, other chunks planned on-site at wave (slower, avoids exhaustion). */
     private static void stopForHeap(Prep p) {
         Runtime rt = Runtime.getRuntime();
         Incoming.LOG.warn("Ruins for strike #{}: heap after GC {} of {} MB — no more ruins are pre-built (plans {}, heavy zone chunks {})",
@@ -1038,26 +1038,26 @@ public final class NuclearPrep {
         p.heapStop = true;
     }
 
-    /** Чанк, если он и чанки в радиусе {@link RuinPlanner#REACH} готовы (руины читают их). */
+    /** Chunk if it and radius-{@link RuinPlanner#REACH} neighbors ready (ruins read them). */
     @Nullable
     private static LevelChunk readyChunk(ServerLevel level, long c) {
         ChunkPos pos = new ChunkPos(c);
         return NuclearTickets.neighbourhoodLoaded(level, pos, RuinPlanner.REACH) ? level.getChunkSource().getChunkNow(pos.x, pos.z) : null;
     }
 
-    // ---------------------------------------------------------------- подрыв
+    // ---------------------------------------------------------------- detonation
 
     /**
-     * Подрыв: готовые руины того же места, мощности и масштаба — ему (очередь ставит их чанки первыми). Тикеты держатся,
-     * пока руины не поставлены.
+     * Detonation: transfer ready ruins at same location/yield/scale (queue processes their chunks first). Hold tickets
+     * until ruins applied.
      *
-     * @return готовые руины и порядок их чанков; null — не готовили
+     * @return ready ruins and chunk order; null if unprepared
      */
     @Nullable
     Handoff handOff(ServerLevel level, Detonation d, long now) {
         for (Prep p : preps) {
             if (!preparedFor(p, d)) continue;
-            // раскладка ещё в фоне (место подрыва стало известно за тик-другой до него): дождаться, иначе зоны за волной нет
+            // layout still building (location known only tick or two before burst): await it, otherwise no behind-wave zone
             if (p.layout != null) {
                 try {
                     install(p, p.layout.join());
@@ -1085,23 +1085,23 @@ public final class NuclearPrep {
     record Handoff(Long2ObjectOpenHashMap<RuinPlan> plans, long[] order, RuinContext ruins) {}
 
     /**
-     * Место подрыва, по которому готовились руины, если подрыв — тот, к которому готовились; иначе {@code fresh}. Подрыв
-     * берёт его точку, землю и видимость: руины заранее и руины чанков, загруженных после того, как руины подготовки
-     * забыты (по самому подрыву), тогда одни и те же — и когда за полёт МБР сменилась погода.
+     * Prepared detonation geometry if detonation matches preparation, otherwise {@code fresh}. Detonation
+     * takes its point, ground and visibility, so prebuilt ruins match later-loaded chunk ruins after preparation
+     * forgotten (derived from detonation), even if weather changed during ICBM flight.
      */
     Detonation planned(Detonation fresh) {
         for (Prep p : preps) if (preparedFor(p, fresh)) return p.geometry;
         return fresh;
     }
 
-    /** Подготовка — к этому подрыву: ещё не отдана, то же место, мощность и масштаб. */
+    /** Preparation matches detonation: not handed off, same location, yield and scale. */
     private static boolean preparedFor(Prep p, Detonation d) {
         Detonation g = p.geometry;
         return p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
                 && g.burst().distanceTo(d.burst()) <= SAME_PLACE;
     }
 
-    /** Чанки зоны за волной (для сводки руин). */
+    /** Chunks in zone behind wave (ruin summary). */
     private static java.util.function.LongPredicate zone(Prep p) {
         return new LongOpenHashSet(p.order)::contains;
     }
@@ -1113,17 +1113,17 @@ public final class NuclearPrep {
     }
 
     /**
-     * После подрыва: квадрат, где руины его загруженных чанков уже стоят, больше не держится — не больше нескольких
-     * квадратов за тик: выгрузка чанка пишет его на диск в тике сервера. Выгруженный чанк сохраняется с руинами; чанки,
-     * которые квадрат не грузил (окно не целое на диске), его не держат: их руины идут своим путём, если их загрузит
-     * кто-то другой.
+     * After detonation, square whose loaded chunks ruined no longer held; release only a few
+     * per tick: chunk unload writes disk on server tick. Unloaded chunk saved with ruins; chunks
+     * square never loaded (window not whole on disk) do not hold it: ruins follow own path if loaded
+     * by someone else.
      */
     private static void releaseDone(ServerLevel level, Prep p, ScarQueue scars, WorkClock clock) {
         int released = 0;
         for (Tile t : p.tiles) {
             if (released >= RELEASE_PER_TICK || !clock.canStart()) return;
             if (t.state != TileState.READY) continue;
-            // руины всех чанков стоят — или оставшиеся ждут только соседей: тогда их держат свои тикеты
+            // all chunks ruined, or remainder await only neighbors and hold own tickets
             boolean done = true;
             int waiting = 0;
             for (int dx = -TILE_RADIUS; done && dx <= TILE_RADIUS; dx++) {
@@ -1162,7 +1162,7 @@ public final class NuclearPrep {
         }
     }
 
-    /** Отпустить до {@code limit} квадратов; сколько ещё держится. */
+    /** Release up to {@code limit} squares; returns remaining held count. */
     private static int releaseSome(ServerLevel level, Prep p, int limit) {
         int held = 0;
         for (Tile t : p.tiles) {
@@ -1184,7 +1184,7 @@ public final class NuclearPrep {
         p.tiles.clear();
     }
 
-    /** Отбой, выгрузка мира, ошибка: все тикеты отпущены, готовые руины, отданные подрыву, очереди больше не нужны. */
+    /** Cancellation, world unload, error: release all tickets; queues no longer need ready ruins handed to detonation. */
     public void clear(ServerLevel level, ScarQueue scars) {
         for (Prep p : preps) {
             release(level, p);

@@ -11,11 +11,11 @@ import ua.zentix.incoming.nuclear.flash.FlashMarks;
 import ua.zentix.incoming.nuclear.model.WorldNoise;
 
 /**
- * Обугленные вспышкой грани чанка для плана руин (любой поток, как {@link RuinPlanner#finish}): грани блоков тегов
- * {@code incoming:nuke_chars}/{@code nuke_soots}, которые уцелеют в руинах, открыты (перед гранью не полный блок —
- * так мир стоял до волны) и видят шар (тень — по картам высот подрыва, {@link RuinContext.Grid#sees}). Свет на грани —
- * импульс у её центра, умноженный на косинус угла падения; степень — {@link FlashChar#level} со случайностью грани.
- * Мира не читает: блоки — из снимков окна, материал и хеш блока — из таблицы свойств ({@link Blast.Props#flash}).
+ * Flash-charred chunk faces for ruin plan (any thread, like {@link RuinPlanner#finish}): faces of blocks tagged
+ * {@code incoming:nuke_chars}/{@code nuke_soots} that survive ruins, are exposed (no full block ahead of face
+ * in pre-wave world), and see fireball (shadow from detonation heightmaps, {@link RuinContext.Grid#sees}). Face light is
+ * pulse at center × incidence cosine; tier from {@link FlashChar#level} with face randomness.
+ * Reads no world: blocks from window snapshots, material and block hash from property table ({@link Blast.Props#flash}).
  */
 final class FlashFaces {
     private static final Direction[] DIRECTIONS = Direction.values();
@@ -23,13 +23,13 @@ final class FlashFaces {
 
     private FlashFaces() {}
 
-    /** Метки граней ({@link FlashChar#mark}), не больше {@link FlashMarks#MAX_CHARS} самых тёмных. */
+    /** Face marks ({@link FlashChar#mark}), at most {@link FlashMarks#MAX_CHARS} darkest. */
     static int[] chars(RuinContext.Grid g, RuinPlanner.Sections s) {
         Detonation d = g.ctx().d;
         Vec3 burst = d.burst();
         ChunkShot shot = g.at(0, 0);
         int x0 = shot.x << 4, z0 = shot.z << 4;
-        // ярче всего — ближняя к шару точка чанка: если и там ни одна грань не потемнеет, чанк чистый
+        // brightest point is chunk point nearest fireball: if no face can darken even there, chunk is clean
         Vec3 nearest = new Vec3(Mth.clamp(burst.x, x0, x0 + 16), Mth.clamp(burst.y, shot.minY, shot.maxY()), Mth.clamp(burst.z, z0, z0 + 16));
         double brightest = d.fluence(nearest);
         if (!FlashChar.possible(brightest, FlashChar.CHARS)) return NONE;
@@ -76,7 +76,7 @@ final class FlashFaces {
         }
     }
 
-    /** Закрыта ли грань соседом (место — в координатах центрального чанка, может выходить за него): полный блок до волны. */
+    /** Whether neighbor covers face (position in central-chunk coordinates, may extend outside): full pre-wave block. */
     private static boolean covered(RuinContext.Grid g, ChunkShot shot, Blast.PropsView view, int lx, int y, int lz) {
         if (y < shot.minY || y >= shot.maxY()) return false;
         ChunkShot c = shot;

@@ -14,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Взрыв на воде: столб по таблице Swisdak (заряд и глубина), баллистика струй, падение завесой, водяная пыль, пена и
- * волна на воде.
+ * Water explosion: column from the Swisdak table (charge and depth), ballistic jets, falling curtain, spray, foam,
+ * and water wave.
  */
 class WaterBlastTest {
     private static final double DEEP = Double.POSITIVE_INFINITY;
 
-    /** Верх брызг (центр самого высокого клуба) в возрасте t, м. */
+    /** Spray top (center of the highest billow) at age t, m. */
     private static double topBlob(WaterBlast w, double t) {
         double[] top = {0};
         w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> top[0] = Math.max(top[0], y), 0, 0, 0);
@@ -28,13 +28,13 @@ class WaterBlastTest {
     }
 
     /**
-     * Клубы струй в возрасте t (без плоского кольца водяной пыли) — точками: отрезок струи — 64 гаусса его сечения вдоль
-     * оси; место, σh, σv, ослабление (м²).
+     * Jet billows at age t (excluding the flat spray ring), as points: each jet segment is 64 cross-section Gaussians
+     * along its axis; position, σh, σv, extinction (m²).
      */
     private static List<double[]> spray(WaterBlast w, double t) {
         List<double[]> p = new ArrayList<>();
         w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
-            // струи — круглые отрезки; плоское кольцо водяной пыли — свой закон (радиус базисной волны)
+            // jets are round segments; the flat spray ring follows its own law (base-surge radius)
             if (sh != sv) return;
             int n = 64;
             for (int i = 0; i < n; i++) {
@@ -45,7 +45,7 @@ class WaterBlastTest {
         return p;
     }
 
-    /** Толща брызг по горизонтальному лучу вдоль z на высоте y в стороне x от оси (интеграл гауссов вдоль луча). */
+    /** Spray optical depth along a horizontal z ray at height y, offset x from the axis (Gaussian integral along the ray). */
     private static double sight(List<double[]> p, double x, double y) {
         double tau = 0;
         for (double[] q : p) {
@@ -149,13 +149,14 @@ class WaterBlastTest {
     }
 
     /**
-     * Класс жалобы «удар в воду без столба» и его обратной стороны — «столб пеленой во весь кадр» (финальный проход 3.7.0:
-     * залп «Града» по воде у берега закрывал кадр ровной серой заливкой): H и R таблицы Swisdak — видимый султан, и на них
-     * лежит его видимый край — где толща по лучу взгляда падает до порога видимости ({@link CloudModel#SEEN}), а не середины
-     * струй. Прежде середины стояли на H и R, а густая струя видна ещё на 3–4 σ дальше: столб «Града» выходил втрое шире
-     * закона, и камера в 30 м от залпа оказывалась внутри. R — наибольший радиус за всё событие, а дальше всего брызги
-     * уходят, падая (ревью #445: с радиусом по вершине завеса на спаде уходила до 1,41 R). У каждого оружия: видимый
-     * верх — H (−3…0 %), видимый радиус струй за весь полёт до 2·подъёма на любой высоте — R (−8…0 %).
+     * Covers the "water hit without a column" complaint and its opposite, "column fills the frame with a veil"
+     * (final 3.7.0 pass: a Grad salvo near shore covered the frame uniformly gray): Swisdak table H and R describe
+     * the visible plume, whose edge is where line-of-sight optical depth falls to {@link CloudModel#SEEN}, not jet centers.
+     * Previously, centers lay at H and R, while dense jets remained visible another 3–4 σ out: the Grad column was
+     * three times wider than the law and put the camera 30 m from the salvo inside it. R is the maximum radius over
+     * the whole event; falling spray travels farthest (review #445: with radius based on the apex, the falling curtain
+     * reached 1.41 R). Every weapon: visible top H (−3…0 %), visible jet radius over the full flight to 2·rise time
+     * at any height R (−8…0 %).
      */
     @Test
     void everyWeaponThrowsAColumnOfTheLawSize() {
@@ -187,19 +188,19 @@ class WaterBlastTest {
                 }
             }
             double side = sideIndex < 0 ? 0 : xs[sideIndex];
-            assertTrue(top <= law && top >= 0.97 * law, wt.name() + ": видимый верх " + top + " против " + law);
-            assertTrue(side <= wide && side >= 0.92 * wide, wt.name() + ": видимый радиус за полёт " + side + " против " + wide);
+            assertTrue(top <= law && top >= 0.97 * law, wt.name() + ": visible top " + top + " versus " + law);
+            assertTrue(side <= wide && side >= 0.92 * wide, wt.name() + ": visible radius over the flight " + side + " versus " + wide);
         }
-        // порядок величины у шахеда: десятки метров (у 500 кг на 30 м пример отчёта — 56 м по таблице)
+        // Shahed order of magnitude: tens of meters (report example, 500 kg at 30 m: table height 56 m)
         WaterBlast shahed = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
-        assertTrue(shahed.height > 60 && shahed.height < 100, "столб шахеда " + shahed.height);
+        assertTrue(shahed.height > 60 && shahed.height < 100, "Shahed column " + shahed.height);
     }
 
     /**
-     * Струя — отрезок круглых клубов, а не вытянутый гаусс: вода одного направления, выброшенная в один миг с разной
-     * скоростью, лежит на прямой. Прежде струя была гауссом с σ по вертикали до пяти σ поперёк (чтобы закрыть щель между
-     * пятью скоростями), и слой рисовал его растянутым клубом — плоская полоса с прямыми боками (кадры 6 и 20 с залпа). Ни
-     * одного вытянутого клуба брызг ни в каком возрасте; вода в струях — та, что ещё в воздухе.
+     * A jet is a segment of round billows rather than a stretched Gaussian: water ejected in one direction at one
+     * instant with different speeds lies on a straight line. Previously, vertical Gaussian σ reached five transverse σ
+     * (to close the gaps between five speeds), and the layer drew a stretched billow: a flat stripe with straight sides
+     * (salvo frames at 6 and 20 s). No stretched spray billows at any age; jets contain only water still airborne.
      */
     @Test
     void jetsAreRoundSegments() {
@@ -212,14 +213,14 @@ class WaterBlastTest {
                 double[] water = {0};
                 w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, wet, r, g, b, k, rise) -> {
                     if (sh == sv) water[0] += wet;
-                    else assertTrue(sh > 3 * sv, wt.name() + " в " + time + " с: вытянутый клуб брызг σh " + sh + ", σv " + sv);
+                    else assertTrue(sh > 3 * sv, wt.name() + " at " + time + " s: stretched spray billow σh " + sh + ", σv " + sv);
                 }, 0, 0, 0);
                 assertEquals(WaterBlast.asGridDrops(w.water) * w.aloft(t), water[0], 1e-6 * WaterBlast.asGridDrops(w.water), wt.name());
             }
         }
     }
 
-    /** Таблица — как в отчёте: пример гл. 14 (500 кг на 30 м: радиус 61,5 м, высота 56 м — до запаса). */
+    /** The table matches the report: chapter 14 example (500 kg at 30 m: radius 61.5 m, height 56 m, before margin). */
     @Test
     void tableMatchesTheReportExample() {
         double scaled = 30 / Math.pow(500, 0.25);
@@ -229,7 +230,7 @@ class WaterBlastTest {
         assertEquals(56.0 / 1.4, w.height, 0.5);
     }
 
-    /** Заряд ×8 — столб ×2 (подобие по кубическому корню при той же приведённой глубине — у глади). */
+    /** Charge ×8 gives column ×2 (cube-root similarity at the same scaled depth, at the surface). */
     @Test
     void sizeScalesWithTheCubeRoot() {
         WaterBlast a = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD), b = new WaterBlast(400, 0, DEEP, CloudModel.Air.STANDARD);
@@ -237,7 +238,7 @@ class WaterBlastTest {
         assertEquals(2, b.radius / a.radius, 1e-9);
     }
 
-    /** Глубже лучшей глубины столб ниже: на 9 м/кг^¼ — 5,9 против 29,7 у глади. */
+    /** Beyond the optimum depth the column is lower: at 9 m/kg^¼, 5.9 versus 29.7 at the surface. */
     @Test
     void deepChargeThrowsLess() {
         double kg = 50, deep = 9 * Math.pow(kg, 0.25);
@@ -246,29 +247,29 @@ class WaterBlastTest {
     }
 
     /**
-     * Струи — баллистика: быстрый конец крайней струи в вершине — в H'·sin2θ от оси, падает в 2H'·sin2θ — внутри R (с
-     * ореолом — R); к 2·подъёма вода в воде, брызг в воздухе нет; медленные струи падают раньше.
+     * Ballistic jets: at the apex, the fast end of the outer jet is H'·sin2θ from the axis, landing at 2H'·sin2θ,
+     * inside R (R with the halo); by 2·rise time, water has returned to water, with no airborne spray; slower jets land earlier.
      */
     @Test
     void jetsFlyAndFall() {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
         double[] wide = {0};
-        // середина отрезка крайней струи в её вершине — в стороне H'·sin2θ·(1 + доля медленной)/2: место линейно по скорости
+        // center of the outer jet segment at its apex is H'·sin2θ·(1 + slow share)/2 to the side: position is linear in speed
         w.blobs(w.rise * Math.cos(w.cone), (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
             if (sh == sv) wide[0] = Math.max(wide[0], Math.hypot(x + ax, z + az));
         }, 0, 0, 0);
         double apex = w.speed * w.speed * Math.sin(2 * w.cone) / (2 * 9.80665);
-        assertEquals(apex, wide[0], 0.02 * w.radius, "быстрый конец крайней струи в вершине — в H'·sin2θ");
+        assertEquals(apex, wide[0], 0.02 * w.radius, "fast end of the outer jet at its apex: H'·sin2θ");
         assertEquals(1, w.aloft(0.5 * w.rise), 0);
-        assertTrue(w.aloft(1.2 * w.rise) < 1 && w.aloft(1.2 * w.rise) > 0, "завеса падает по частям");
+        assertTrue(w.aloft(1.2 * w.rise) < 1 && w.aloft(1.2 * w.rise) > 0, "the curtain falls in parts");
         assertEquals(0, w.aloft(2 * w.rise + 1e-6), 0);
-        assertTrue(topBlob(w, 2 * w.rise + 1e-6) < 0.1 * w.height, "столба нет — вода упала, у воды только водяная пыль");
-        // упала вода — до 2H'·sin2θ от середины: внутри R, с ореолом падающей струи — на R
+        assertTrue(topBlob(w, 2 * w.rise + 1e-6) < 0.1 * w.height, "no column: water has landed, only spray remains above water");
+        // water lands up to 2H'·sin2θ from the center: inside R, reaching R with the falling-jet halo
         assertEquals(2 * apex, w.fallen(2 * w.rise), 0.02 * w.radius);
-        assertTrue(w.fallen(2 * w.rise) < w.radius && w.fallen(2 * w.rise) > 0.4 * w.radius, "середины падают в " + w.fallen(2 * w.rise));
+        assertTrue(w.fallen(2 * w.rise) < w.radius && w.fallen(2 * w.rise) > 0.4 * w.radius, "centers land at " + w.fallen(2 * w.rise));
     }
 
-    /** Водяная пыль: кольцо базисной волны после падения, видно секунды–десятки секунд, потом брызг нет. */
+    /** Spray: base-surge ring after landing, visible for seconds to tens of seconds, then no spray. */
     @Test
     void mistAfterTheColumn() {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
@@ -276,25 +277,25 @@ class WaterBlastTest {
         List<Double> taus = new ArrayList<>();
         w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> taus.add(CloudModel.DROP_K * water / (2 * Math.PI * sh * sv)), 0, 0,
                 0);
-        assertEquals(WaterBlast.RING, taus.size(), "после падения — только кольцо водяной пыли");
-        assertTrue(taus.getFirst() > 3 * CloudModel.SEEN, "кольцо водяной пыли видно: толща " + taus.getFirst());
+        assertEquals(WaterBlast.RING, taus.size(), "after landing, only the spray ring remains");
+        assertTrue(taus.getFirst() > 3 * CloudModel.SEEN, "spray ring visible: optical depth " + taus.getFirst());
         double life = w.mistLife() - t;
-        assertTrue(life > 3 && life < 120, "водяная пыль после падения столба " + life + " с");
+        assertTrue(life > 3 && life < 120, "spray after column landing " + life + " s");
         assertFalse(w.blobs(w.mistLife() + 1, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {}, 0, 0, 0));
     }
 
     /**
-     * Водяная пыль оседает из тонкого слоя: капли 0,1 мм падают со скоростью 0,3 м/с, а вихри у глади их не держат, пока
-     * число Рауза выше порога взвеси (над водой при ветре 6 м/с P ≈ 3,6). Прежде слой рос вверх по Бриггсу, как газ, — до
-     * 28 м за 20 с (над камерой залпа), а капли терял как слой высотой 2,5 м: туман вставал стеной и держался. Теперь при
-     * таком ветре видимый верх слоя — не выше базисной волны всё время, а в воздухе остаётся e^(−v·t/h), h — толща слоя у
-     * глади (√(2πe)·σv для клуба с серединой на σv); в сильный ветер (P < 2,5) вихри поднимают слой.
+     * Spray settles from a thin layer: 0.1 mm drops fall at 0.3 m/s, and surface eddies cannot suspend them while
+     * the Rouse number exceeds the suspension threshold (over water at 6 m/s wind, P ≈ 3.6). Previously the layer rose
+     * like gas under Briggs, reaching 28 m in 20 s (above the salvo camera), but lost drops as a 2.5 m layer: a lasting
+     * fog wall. At this wind, the visible layer top now stays below the base surge, with e^(−v·t/h) remaining airborne;
+     * h is the layer thickness at the surface (√(2πe)·σv for a billow centered at σv). Strong wind (P < 2.5) lifts the layer.
      */
     @Test
     void mistSettlesFromAThinLayer() {
         CloudModel.Air breeze = new CloudModel.Air(0.012, 0, -6, 0.14, 2, 1), gale = new CloudModel.Air(0.012, 0, -20, 0.14, 2, 1);
         double rouse = WaterBlast.mistSettling() / (WaterBlast.KARMAN * Math.sqrt(WaterBlast.DRAG_WATER) * 6);
-        assertTrue(rouse > 3 && rouse < 4.5, "число Рауза при 6 м/с " + rouse);
+        assertTrue(rouse > 3 && rouse < 4.5, "Rouse number at 6 m/s " + rouse);
         WaterBlast w = new WaterBlast(6.4, 0.5, 4, breeze);
         assertEquals(0, w.suspended(), 0);
         for (double since = 0.25; since < w.mistLife() - w.landing(); since *= 1.5) {
@@ -303,39 +304,39 @@ class WaterBlastTest {
             w.blobs(t, (x, y, z, ax, ay, az, sh, sv, soot, dust, water, r, g, b, k, rise) -> {
                 if (sh > 3 * sv) top[0] = Math.max(top[0], y + WaterBlast.visible(CloudModel.DROP_K * water / (2 * Math.PI * sh * sv)) * sv);
             }, 0, 0, 0);
-            assertTrue(top[0] <= 1.001 * w.surgeTop(), "через " + since + " с видимый верх водяной пыли " + top[0] + " выше волны " + w.surgeTop());
+            assertTrue(top[0] <= 1.001 * w.surgeTop(), "after " + since + " s, visible spray top " + top[0] + " above wave " + w.surgeTop());
         }
         double h = Math.sqrt(2 * Math.PI * Math.E) * w.mistSigmaV(0);
         assertEquals(Math.exp(-WaterBlast.mistSettling() * 10 / h), w.mistLeft(10), 1e-9);
-        assertTrue(h > 0.7 * w.surgeTop() && h < 1.1 * w.surgeTop(), "толща слоя " + h + " против высоты волны " + w.surgeTop());
+        assertTrue(h > 0.7 * w.surgeTop() && h < 1.1 * w.surgeTop(), "layer thickness " + h + " versus wave height " + w.surgeTop());
         WaterBlast windy = new WaterBlast(6.4, 0.5, 4, gale);
-        assertTrue(windy.suspended() > 0, "ветер 20 м/с держит капли");
-        assertTrue(windy.mistSigmaV(20) > 2 * windy.mistSigmaV(0), "и слой растёт вверх");
+        assertTrue(windy.suspended() > 0, "20 m/s wind suspends the drops");
+        assertTrue(windy.mistSigmaV(20) > 2 * windy.mistSigmaV(0), "and the layer grows upward");
     }
 
-    /** Пена: у полости — сразу, дальше — когда туда упала вода; тает. Волна: предел мелкой воды и dω/dk при конечной глубине. */
+    /** Foam: immediate at the cavity, elsewhere when water lands; fades. Wave: shallow-water limit and dω/dk at finite depth. */
     @Test
     void foamAndWaveOnTheWater() {
         WaterBlast w = new WaterBlast(50, 0, DEEP, CloudModel.Air.STANDARD);
         assertEquals(1, w.foam(0, 0.01), 0.01);
-        // завеса ложится до 2H'·sin2θ — дальности середин крайних струй, за ней — по сечению струи
+        // the curtain lands to 2H'·sin2θ, the range of outer jet centers; beyond it, follow the jet cross-section
         double reach = w.fallen(2 * w.rise), fall = reach + 0.5 * w.jet;
-        assertTrue(fall > w.radius / 2, "завеса ложится за полостью");
-        assertEquals(0, w.foam(fall, w.rise), 0, "завеса ещё не упала");
-        assertTrue(w.foam(fall, 2 * w.rise) > 0.5, "упала — пена");
-        assertTrue(w.foam(fall, 2 * w.rise + 60) < 0.05, "через минуту — почти нет");
-        assertTrue(w.foam(reach + w.jet, 2 * w.rise) > 0.3 && w.foam(reach + w.jet, 2 * w.rise) < 0.7, "за дальностью середин — по сечению струи");
-        assertEquals(0, w.foam(reach + 1.01 * w.halo * w.jet, 2 * w.rise), 0, "за видимым краем завесы пены нет");
+        assertTrue(fall > w.radius / 2, "the curtain lands beyond the cavity");
+        assertEquals(0, w.foam(fall, w.rise), 0, "the curtain has not landed yet");
+        assertTrue(w.foam(fall, 2 * w.rise) > 0.5, "landed: foam");
+        assertTrue(w.foam(fall, 2 * w.rise + 60) < 0.05, "after a minute, almost gone");
+        assertTrue(w.foam(reach + w.jet, 2 * w.rise) > 0.3 && w.foam(reach + w.jet, 2 * w.rise) < 0.7, "beyond the centers' range, follow the jet cross-section");
+        assertEquals(0, w.foam(reach + 1.01 * w.halo * w.jet, 2 * w.rise), 0, "no foam beyond the visible curtain edge");
         WaterBlast pond = new WaterBlast(50, 0, 1, CloudModel.Air.STANDARD);
         assertEquals(Math.sqrt(9.80665), pond.waveSpeed(), 0.01 * Math.sqrt(9.80665));
         assertTrue(pond.waveSpeed() < w.waveSpeed());
-        // Независимая сверка: численная производная дисперсии, не ещё одна запись формулы групповой скорости.
+        // Independent comparison: numerical derivative of dispersion, rather than another copy of the group-speed formula.
         double k = 2 * Math.PI / w.waveLength(), dk = k * 1e-5;
         for (double depth : new double[]{0.01, 1, 4, 20, 1000}) {
             WaterBlast finite = new WaterBlast(50, 0, depth, CloudModel.Air.STANDARD);
             double hi = Math.sqrt(9.80665 * (k + dk) * Math.tanh((k + dk) * depth));
             double lo = Math.sqrt(9.80665 * (k - dk) * Math.tanh((k - dk) * depth));
-            assertEquals((hi - lo) / (2 * dk), finite.waveSpeed(), 1e-7, "глубина " + depth);
+            assertEquals((hi - lo) / (2 * dk), finite.waveSpeed(), 1e-7, "depth " + depth);
         }
         assertTrue(w.waveRadius(10) > w.waveRadius(1));
     }

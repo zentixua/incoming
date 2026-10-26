@@ -8,16 +8,16 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Клетки горящего топлива воронок (сервер, {@code warhead/FuelFires}, пакет {@code S2C.FuelFire}): огонь на них — топливо,
- * а не горящий город. Его тепло, сажу и гул несёт очаг воронки ({@link FireSmoke#pool}); посчитанный ещё и огнём города
- * ядерки ({@link FireWatch}), он шёл бы в гул пожаров подрыва дважды. Топливо, потерявшее опору, капает вниз в своей
- * колонке, поэтому огонь в колонке клетки не выше её — тоже его. Без Minecraft-клиента.
+ * Burning crater-fuel cells (server {@code warhead/FuelFires}, packet {@code S2C.FuelFire}): their fire belongs to fuel,
+ * rather than the burning city. The crater source carries its heat, soot and roar ({@link FireSmoke#pool}); counting it as
+ * nuclear city fire ({@link FireWatch}) would add its roar to detonation fires twice. Unsupported fuel drips downward in its
+ * column, so fire in that cell's column no higher than it also belongs to fuel. No Minecraft client dependency.
  */
 final class FuelCells {
-    /** Колонка (x, z) → верх клетки в ней; колонок в чанке. */
+    /** Column (x, z) → cell top in it; column count per chunk. */
     private final Long2IntOpenHashMap columns = new Long2IntOpenHashMap(), chunks = new Long2IntOpenHashMap();
 
-    /** Заново — по клеткам всех горящих воронок (их немного). */
+    /** Rebuild from cells of all burning craters (few of them). */
     void index(Collection<List<BlockPos>> pools) {
         columns.clear();
         chunks.clear();
@@ -34,12 +34,12 @@ final class FuelCells {
         }
     }
 
-    /** В чанке есть клетки топлива ({@link #covers} стоит спрашивать). */
+    /** Chunk contains fuel cells ({@link #covers} is worth querying). */
     boolean inChunk(long chunk) {
         return !chunks.isEmpty() && chunks.containsKey(chunk);
     }
 
-    /** Огонь в (x, y, z) — горящее топливо: в колонке клетки и не выше её. */
+    /** Fire at (x, y, z) is burning fuel: in a cell's column, no higher than it. */
     boolean covers(int x, int y, int z) {
         long column = BlockPos.asLong(x, 0, z);
         return columns.containsKey(column) && y <= columns.get(column);

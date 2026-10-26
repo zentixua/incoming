@@ -27,54 +27,54 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Руины одного чанка от одного подрыва — заранее, без изменений в мире ({@link RuinPlan}): что с каждым местом
- * сделали волна и свет, разницей к секциям чанка; пожары — там, где огонь удержится на руинах (DESIGN-nuke §3.2–3.4).
- * Разрушение — два физических процесса, без правил «постройка или рельеф»:
+ * One chunk's ruins from one detonation, planned without world changes ({@link RuinPlan}): wave/light changes to each position
+ * as chunk-section deltas; fires where they survive on ruins (DESIGN-nuke §3.2–3.4).
+ * Destruction uses two physical processes without “structure or terrain” rules:
  * <ul>
- * <li>перепад давления ломает тонкое ({@link Blast}): стены, перекрытия, окна, колонны, высокие узкие массивы;
- * гора, скала, берег, земля толще — стоят;</li>
- * <li>падает то, что потеряло опору ({@link Collapse}): этажи без стен, крыша на выбитых стёклах, листва без ствола,
- * вода без дна, навесное без того, на чём висело.</li>
+ * <li>pressure differences break thin elements ({@link Blast}): walls, floors, windows, columns, tall narrow masses;
+ * thicker mountains, cliffs, banks and ground stand;</li>
+ * <li>what lost support falls ({@link Collapse}): stories without walls, roof on shattered glass, leaves without trunk,
+ * water without bottom, attachments without support.</li>
  * </ul>
- * Потом — по земле после руин (верхний опорный блок): завал из щебня, где рухнула постройка (в огненном
- * шаре — ничего), стволы, поваленные от эпицентра, содранный волной дёрн, свет: гарь, выжженная трава, сгоревшие
- * растения, растаявший снег, тринитит и вскипевшая вода в шаре, опалённые биомы ({@link ScorchedBiomes}). Где что
- * случилось — не по порогу, а по кривым поражения с шумом мира ({@link Fragility}): края зон рваные, пятнами.
+ * Then post-ruin ground (highest supporting block): rubble where structures collapsed (nothing inside
+ * fireball), trunks toppled away from epicenter, wave-stripped turf, light: scorch, burned grass,
+ * burned plants, melted snow, trinitite and boiling water inside fireball, scorched biomes ({@link ScorchedBiomes}). What happens
+ * where follows damage curves with world noise ({@link Fragility}), not thresholds: ragged, patchy zone edges.
  * <p>
- * Всё считается по исходным блокам окна чанка (он и 8 соседей; у соседей, чьи руины уже стоят, — их старые блоки),
- * случайное — из хеша координат: план места один и тот же заранее (во время полёта МБР) и в момент подрыва, в каком
- * бы порядке ни шли чанки. Чанк и соседи в радиусе 2 загружены целиком (разломы соседей читают своих соседей).
+ * All computed from original chunk-window blocks (chunk plus 8 neighbors; neighbors already ruined use their old blocks),
+ * randomness from coordinate hashes: same position plan in advance (during ICBM flight) and at detonation, regardless
+ * of chunk order. Chunk and radius-2 neighbors fully loaded (neighbor fractures read their own neighbors).
  */
 public final class RuinPlanner {
-    /** Давление, при котором волна сдирает дёрн с половины мест (разброс {@link #STRIP_BETA}). */
+    /** Pressure stripping turf from half the positions (spread {@link #STRIP_BETA}). */
     static final double STRIP_PSI = 8;
-    /** Свет на земле (кал/см²), при котором у половины мест дёрн выгорает до земли. */
+    /** Ground light (cal/cm²) burning turf to bare soil at half the positions. */
     static final double BURN_Q = 15;
-    /** Свет, при котором у половины мест остаётся гарь — обугленная подстилка (подзол). */
+    /** Light leaving scorch, charred litter (podzol), at half the positions. */
     static final double CHAR_Q = 30;
-    /** Свет, при котором половина растений над землёй (трава, цветы, кусты, посевы) сгорает и снег-слой тает. */
+    /** Light burning half the above-ground plants (grass, flowers, bushes, crops) and melting snow layers. */
     static final double PLANT_Q = 6;
-    /** Разброс кривых поражения (логнормальный): напор ровнее, гарь — пятнами шире всех. */
+    /** Damage-curve spread (lognormal): pressure more even, scorch patches widest. */
     static final double STRIP_BETA = 0.25, BURN_BETA = 0.35, CHAR_BETA = 0.45, PLANT_BETA = 0.4;
-    /** Доля сгоревших растений, от которых остаётся сухой куст. */
+    /** Fraction of burned plants leaving dead bush. */
     static final double DEAD_BUSH = 0.08;
-    /** Слои шума мира: разные последствия — разные пятна. */
+    /** World-noise layers: different consequences, different patches. */
     private static final int LAYER_BURN = 1, LAYER_CHAR = 2, LAYER_STRIP = 3, LAYER_PLANT = 4, LAYER_BIOME = 5;
-    /** Случайность места — шум мира (пятна) и хеш места (зерно): веса при сумме квадратов 1, разброс остаётся 1. */
+    /** Local randomness: world noise (patches) plus position hash (grain); squared weights sum to 1, preserving spread 1. */
     private static final double SMOOTH = 0.8, GRAIN = 0.6;
     /**
-     * Свет на склоне к взрыву — не больше стольких раз от ровной земли; полутень у края тени склона, рад (шар — не точка:
-     * за километры его видно в несколько градусов), и высота взрыва над горизонтом в расчёте — не ниже её.
+     * Maximum blast-facing slope light relative to flat ground; slope-shadow edge penumbra, rad (fireball not point:
+     * several degrees across from kilometers away), also minimum burst elevation above horizon used in calculation.
      */
     private static final double MAX_INCIDENCE = 2.5, LOW_SUN = 0.1;
-    /** Уклон земли — по соседям до стольких столбцов в каждую сторону: ступени рельефа не дают полос по горизонталям. */
+    /** Ground slope from neighbors up to this many columns each side: terrain steps do not produce contour stripes. */
     private static final int SLOPE_REACH = 2;
     /**
-     * Доля радиуса руин у его края, на которой след света сходит на нет: дальше планов нет, и склон к взрыву, которому
-     * свет там ещё оставил бы опалённую траву, обрывался бы кругом.
+     * Fraction of ruin radius at edge over which light trace fades: no plans beyond, so blast-facing slope
+     * that light could still singe would otherwise end in a circular boundary.
      */
     private static final double EDGE_FADE = 0.2;
-    /** Сколько чанков вокруг должны быть загружены целиком для плана. */
+    /** Surrounding chunks that must be fully loaded for plan. */
     public static final int REACH = 2;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
@@ -86,19 +86,19 @@ public final class RuinPlanner {
     private static final BlockState DIRT = Blocks.DIRT.defaultBlockState(), COARSE_DIRT = Blocks.COARSE_DIRT.defaultBlockState(),
             PODZOL = Blocks.PODZOL.defaultBlockState(), DEAD_BUSH_STATE = Blocks.DEAD_BUSH.defaultBlockState(),
             WATER = Blocks.WATER.defaultBlockState(), FIRE = Blocks.FIRE.defaultBlockState(), SOUL_FIRE = Blocks.SOUL_FIRE.defaultBlockState();
-    /** Земля, которая под снегом «заснежена» ({@code snowy}): снега над ней нет — она без снега. */
+    /** Ground marked “snowy” beneath snow ({@code snowy}): no snow above means no snow appearance. */
     private static final BlockState[] SNOWY_GROUND = {Blocks.GRASS_BLOCK.defaultBlockState(), Blocks.PODZOL.defaultBlockState(),
             Blocks.MYCELIUM.defaultBlockState()};
     private static final Direction[] DIRECTIONS = Direction.values();
-    /** Грани огня к горючим соседям (как {@code FireBlock.getStateForPlacement}: вниз граней нет). */
+    /** Fire faces toward flammable neighbors (like {@code FireBlock.getStateForPlacement}, no downward faces). */
     private static final Direction[] FIRE_FACE_DIRS = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.UP};
     private static final net.minecraft.world.level.block.state.properties.BooleanProperty[] FIRE_FACES = {BlockStateProperties.NORTH,
             BlockStateProperties.EAST, BlockStateProperties.SOUTH, BlockStateProperties.WEST, BlockStateProperties.UP};
 
-    /** Сброс таблицы свойств, после которого свои состояния уже в ней (поток сервера). */
+    /** Property-table reset after which own states already present (server thread). */
     private static int ownStates = -1;
 
-    /** Состояния, которые пишет план сам (завал, огонь, земля): их свойства — в таблицу вместе со снимками. */
+    /** States plan writes itself (rubble, fire, ground): properties published with snapshots. */
     static void ensureOwnStates() {
         if (ownStates == Blast.generation) return;
         ownStates = Blast.generation;
@@ -115,35 +115,35 @@ public final class RuinPlanner {
 
     private RuinPlanner() {}
 
-    /** Хеш места и соли — число в [0, 1). */
+    /** Position/salt hash as number in [0, 1). */
     static double hash(int x, int y, int z, int salt) {
         int h = Mth.murmurHash3Mixer(Long.hashCode(BlockPos.asLong(x, y, z)) * 31 + salt);
         return (h >>> 8) / (double) (1 << 24);
     }
 
-    /** Хеш места как нормальная величина ~N(0, 1). */
+    /** Position hash as normal variable ~N(0, 1). */
     static double grain(int x, int y, int z, int salt) {
         return Fragility.inverse((hash(x, y, z, salt) * (1 << 24) + 0.5) / (1 << 24));
     }
 
-    /** Случайность столбца для кривой поражения: шум мира слоя {@code layer} с зерном хеша, ~N(0, 1). */
+    /** Column randomness for damage curve: world-noise {@code layer} plus hash grain, ~N(0, 1). */
     private static double chance(WorldNoise noise, int x, int z, int layer, int salt) {
         return SMOOTH * noise.at(x + 0.5, z + 0.5, layer) + GRAIN * grain(x, 0, z, salt);
     }
 
-    /** Кривая поражения места при воздействии {@code effect}; шум считается, только если последствие вообще возможно. */
+    /** Position damage curve for {@code effect}; compute noise only if consequence possible. */
     private static boolean struck(double effect, double median, double beta, WorldNoise noise, int x, int z, int layer, int salt) {
         return Fragility.possible(effect, median, beta) && Fragility.hit(effect, median, beta, chance(noise, x, z, layer, salt));
     }
 
-    /** План руин чанка (он и соседи в радиусе {@link #REACH} загружены целиком, поток сервера). */
+    /** Chunk ruin plan (chunk plus radius-{@link #REACH} neighbors fully loaded, server thread). */
     public static RuinPlan plan(ServerLevel level, Detonation d, LevelChunk chunk) {
         return plan(level, NuclearWorld.get(level).ruins(level, d, level.getGameTime()), chunk);
     }
 
     /**
-     * Для проверок: план чанка с чистого листа (без кэша подрыва), в потоке сервера или фоновыми потоками (поток
-     * сервера ждёт задачу). Одинаковые планы обоими путями — фоновый решатель не читает мир.
+     * For tests: fresh chunk plan (without detonation cache), on server or background threads (server
+     * thread awaits task). Matching plans through both paths: background solver reads no world.
      */
     public static RuinPlan planFresh(ServerLevel level, Detonation d, LevelChunk chunk, boolean background) {
         RuinContext ctx = new RuinContext(level, d);
@@ -153,15 +153,15 @@ public final class RuinPlanner {
     }
 
     /**
-     * Для проверок: план чанка по снимкам, прочитанным с диска ({@link DiskShots}), решателем фоновых потоков — чанк и его
-     * соседи записаны так, как их записал бы мир ({@code ChunkSerializer.write}), и разобраны как чанки не в памяти;
-     * окно — только из них (снимок чанка в памяти, {@link RuinContext#shot}, заменил бы снимок с диска).
+     * For tests: chunk plan from disk-read snapshots ({@link DiskShots}), background solver; chunk and
+     * neighbors serialized as world would ({@code ChunkSerializer.write}), parsed as outside-memory chunks;
+     * window uses only these (in-memory chunk snapshot, {@link RuinContext#shot}, would replace disk snapshot).
      */
     public static RuinPlan planFromDisk(ServerLevel level, Detonation d, LevelChunk chunk) {
         return planFromDisk(level, d, chunk, java.util.function.UnaryOperator.identity());
     }
 
-    /** То же, а записанное — каким оно лежит на диске ({@code onDisk}: например, чанк мира 1.17 после обновления). */
+    /** Same with serialized data as actually stored ({@code onDisk}: e.g. upgraded 1.17-world chunk). */
     public static RuinPlan planFromDisk(ServerLevel level, Detonation d, LevelChunk chunk, java.util.function.UnaryOperator<net.minecraft.nbt.CompoundTag> onDisk) {
         RuinContext ctx = new RuinContext(level, d);
         ChunkPos c = chunk.getPos();
@@ -178,7 +178,7 @@ public final class RuinPlanner {
         return fromCachedDisk(level, ctx, c);
     }
 
-    /** План чанка по окну из снимков с диска в кэше {@code ctx} ({@link RuinContext#putDisk}), решателем фоновых потоков. */
+    /** Chunk plan from disk-snapshot window cached in {@code ctx} ({@link RuinContext#putDisk}), background solver. */
     private static RuinPlan fromCachedDisk(ServerLevel level, RuinContext ctx, ChunkPos c) {
         RuinContext.Grid g = ctx.cachedGridForTest(level, c);
         for (int dx = -RuinContext.Grid.R; dx <= RuinContext.Grid.R; dx++) {
@@ -190,9 +190,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Для проверок: фоновый план чанка в памяти, как его строит очередь руин ({@link ScarQueue}): окно — снимки соседей
-     * в памяти, остальные — с диска ({@link RuinContext#requestWindow}); соседа нет на диске целым — в окне сплошной
-     * массив. {@code window}: [0] соседей прочитано с диска, [1] из них нет на диске целыми.
+     * For tests: background plan for in-memory chunk as ruin queue builds it ({@link ScarQueue}): window uses in-memory
+     * neighbor snapshots, disk for remainder ({@link RuinContext#requestWindow}); neighbor absent as whole disk chunk means solid
+     * mass in window. {@code window}: [0] disk neighbors read, [1] those absent as whole disk chunks.
      */
     public static RuinPlan planWithWindow(ServerLevel level, Detonation d, LevelChunk chunk, int[] window) {
         RuinContext ctx = new RuinContext(level, d);
@@ -208,11 +208,11 @@ public final class RuinPlanner {
     }
 
     /**
-     * Для проверок: план чанка, где стоит слой вспышки, как его строят руины подрыва, у которых снимков уже нет (вытеснены,
-     * взяты заново): все снимки и разломы руин подрыва — прочь, снимки окна заново — по миру до вспышки
-     * ({@link RuinPlan#unflash}). {@code way}: 0 — в потоке сервера, 1 — фоновыми потоками, 2 — с диска: чанк и соседи
-     * записаны, как их записал бы мир, разобраны ({@link DiskShots}) и окно — только из них (решатель — тот же, что у
-     * фоновых потоков).
+     * For tests: flash-layer chunk plan as built by detonation ruins whose snapshots are gone (evicted,
+     * retaken): discard all detonation snapshots/fractures; retake window from pre-flash world
+     * ({@link RuinPlan#unflash}). {@code way}: 0 server thread, 1 background, 2 disk: chunk/neighbors
+     * serialized as world would, parsed ({@link DiskShots}), window only from them (same solver as
+     * background threads).
      */
     public static RuinPlan testPlanOverFlash(ServerLevel level, Detonation d, LevelChunk chunk, int way) {
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
@@ -249,7 +249,7 @@ public final class RuinPlanner {
     }
 
     /**
-     * Замер цены плана (проверки): {время обрушения, время достройки} в нс — по чанку, чьи разломы уже в кэше подрыва
+     * Plan-cost measurement (tests): {collapse time, completion time}, ns, for chunk whose fractures already in detonation cache
      * ({@link #blastsReady}).
      */
     public static long[] timedParts(ServerLevel level, Detonation d, LevelChunk chunk) {
@@ -263,8 +263,8 @@ public final class RuinPlanner {
     }
 
     /**
-     * Проверки: след на земле без руин ({@link #scorch}) по чанку в памяти — с картами высот тени того же подрыва, что
-     * и {@link #plan(ServerLevel, Detonation, LevelChunk)}.
+     * Tests: ground trace without ruins ({@link #scorch}) for in-memory chunk, with same detonation shadow heightmaps as
+     * {@link #plan(ServerLevel, Detonation, LevelChunk)}.
      */
     public static RuinPlan testScorch(ServerLevel level, Detonation d, LevelChunk chunk) {
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
@@ -273,8 +273,8 @@ public final class RuinPlanner {
     }
 
     /**
-     * Для проверок: падающее давление у земли, psi, от которого волна может сломать растение — отражённое на открытой
-     * грани ({@link Blast#reflected}) достаёт до нижнего порога растений.
+     * For tests: incident ground pressure, psi, where wave can break plant: reflection on exposed
+     * face ({@link Blast#reflected}) reaches lowest plant threshold.
      */
     public static double testPlantBreakPsi() {
         double lo = 0, hi = BlockResponse.PLANT_PSI;
@@ -287,8 +287,8 @@ public final class RuinPlanner {
     }
 
     /**
-     * Готов ли чанк к плану одной единицей работы: разломы его окна в кэше. Нет — посчитан один из них (это и есть
-     * единица работы), план — следующей.
+     * Whether chunk ready for one-unit plan: window fractures cached. Otherwise compute one fracture (the
+     * work unit), plan next unit.
      */
     public static boolean blastsReady(ServerLevel level, Detonation d, LevelChunk chunk) {
         return blastsReady(level, NuclearWorld.get(level).ruins(level, d, level.getGameTime()), chunk);
@@ -306,9 +306,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * План по готовому обрушению (любой поток): пожары, завал, дёрн, свет, поваленные стволы — по снимку чанка, и
-     * разница к его секциям. Мира не читает: блоки — из снимка, свойства — из таблицы окна ({@link Blast.Props}),
-     * тень света — по картам высот подрыва ({@link RuinContext.Grid#lit}).
+     * Plan from finished collapse (any thread): fires, rubble, turf, light, toppled trunks from chunk snapshot,
+     * plus section deltas. Reads no world: snapshot blocks, window property table ({@link Blast.Props}),
+     * light shadow from detonation heightmaps ({@link RuinContext.Grid#lit}).
      */
     static RuinPlan finish(RuinContext.Grid g, Collapse c) {
         Detonation d = g.ctx().d;
@@ -319,7 +319,7 @@ public final class RuinPlanner {
             long at = e.getLongKey();
             s.set(BlockPos.getX(at) & 15, BlockPos.getY(at), BlockPos.getZ(at) & 15, e.getValue());
         }
-        // листва, сорванная волной, на свету загорается там, где волна слабая и огонь не сбит
+        // wave-torn leaves ignite in light where wave weak and fire not blown out
         if (g.fires()) {
             for (int k = 0; k < c.leaves.size(); k++) {
                 m.set(c.leaves.getLong(k));
@@ -329,19 +329,19 @@ public final class RuinPlanner {
         double[] heat = land(g, s, c.ground, c.removed, c.wood, false);
         Blast own = c.blast();
         if (own != null) for (int i = 0; i < own.trees().size(); i++) lay(s, own.trees().get(i), own.treeLogs().get(i));
-        // после всего, что ложится на землю (завал, стволы)
+        // after everything deposited on ground (rubble, trunks)
         for (int column = 0; column < 256; column++) if (c.ground[column] != Integer.MIN_VALUE) snowy(s, column & 15, c.ground[column], column >> 4);
         RuinPlan plan = s.finish(g.ctx(), c.fluidTicks.toLongArray(), biomes(g.ctx().noise, c.ground, heat, shot.x << 4, shot.z << 4));
-        // гарь вспышки на гранях того, что уцелеет: по миру до волны, ставится с руинами
+        // flash scorch on surviving faces: pre-wave world, applied with ruins
         if (plan != RuinPlan.EMPTY) plan.flash(FlashFaces.chars(g, s));
         return plan;
     }
 
     /**
-     * След подрыва на земле чанка без руин (любой поток): свет и напор — как в плане руин ({@link #finish}) там, где
-     * волна ничего не сломала, — по снимку одного чанка, без окна и соседей. Для LOD Distant Horizons вдали за тяжёлой
-     * зоной ({@link FarLods}): там волна бьёт стёкла, а издали видно землю — выгоревший дёрн, гарь, опалённые биомы. Чанк,
-     * который потом загрузят, получает свои руины целиком, и его земля та же, если волна у него ничего не обрушила.
+     * Chunk ground trace without ruins (any thread): light/pressure like ruin plan ({@link #finish}) where
+     * wave broke nothing, using one chunk snapshot, no window/neighbors. For Distant Horizons LODs beyond heavy
+     * zone ({@link FarLods}): wave breaks glass there, but distant view shows ground, burned turf, scorch, scorched biomes. Chunk
+     * loaded later gets full ruins, same ground if wave collapsed nothing.
      */
     static RuinPlan scorch(RuinContext.Grid g) {
         Sections s = new Sections(g.at(0, 0), g.view());
@@ -349,13 +349,13 @@ public final class RuinPlanner {
     }
 
     /**
-     * Слой вспышки чанка (любой поток): то, что с ним делает один свет, — в миг вспышки, до волны ({@link FlashScorch}).
-     * Как {@link #scorch}, но без напора: дёрн не сдирается (это волна), пожары — все, что зажёг свет (min(1, q/20), без
-     * доли, которую сбивает волна), а те, что волна потом собьёт (от 2 psi — половину, тем же броском хеша, что у руин), —
-     * в списке плана ({@link RuinPlan#blown}): их гасит подмена руин. Гарь на гранях — того, что свет не изменил, по
-     * окну чанка и соседей в памяти (соседа нет — грань у края открыта). Там, где волна ничего не сломала, руины по
-     * миру до вспышки меняют те же места на то же (GameTest {@code flashScorchesBeforeTheWaveAndRuinsMatch}): подмена на
-     * волне меняет сверх слоя только то, что сделала волна.
+     * Chunk flash layer (any thread): light-only changes at flash, before wave ({@link FlashScorch}).
+     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (min(1, q/20), without
+     * wave-blown fraction); fires wave will later extinguish (half from 2 psi, same hash roll as ruins)
+     * listed in plan ({@link RuinPlan#blown}), extinguished by ruin replacement. Face scorch on blocks unchanged by light, using
+     * chunk/in-memory-neighbor window (absent neighbor means exposed edge face). Where wave breaks nothing, ruins from
+     * pre-flash world change same positions to same states (GameTest {@code flashScorchesBeforeTheWaveAndRuinsMatch}): wave
+     * replacement adds only wave changes beyond layer.
      */
     static RuinPlan flash(RuinContext.Grid g) {
         Sections s = new Sections(g.at(0, 0), g.view());
@@ -364,12 +364,12 @@ public final class RuinPlanner {
         return plan;
     }
 
-    /** Земля чанка без руин ({@link #scorch}, {@link #flash}): свет, напор (кроме {@code flash}), снег; ступени биома. */
+    /** Chunk ground without ruins ({@link #scorch}, {@link #flash}): light, pressure (except {@code flash}), snow; biome tiers. */
     @Nullable
     private static ScorchedBiomes.Cells groundPass(RuinContext.Grid g, Sections s, boolean flash) {
         ChunkShot shot = s.shot;
-        // дно — как у обрушения (Collapse.yb): на 16 ниже самой низкой опоры (вода — опора), под глубокой
-        // водой земли нет; окно обрушения — и соседи, здесь — один чанк
+        // bottom like collapse (Collapse.yb): 16 below lowest support (water supports); no ground under deep
+        // water; collapse window includes neighbors, here only one chunk
         int low = Integer.MAX_VALUE;
         for (int column = 0; column < 256; column++) if (shot.solid[column] >= s.minY) low = Math.min(low, shot.solid[column]);
         int bottom = low == Integer.MAX_VALUE ? s.minY : Math.max(s.minY, low - 16);
@@ -381,8 +381,8 @@ public final class RuinPlanner {
     }
 
     /**
-     * Земля столбца без руин — как у {@link Collapse}, где ничего не сломано: верхний опорный блок, не бревно, не ниже
-     * {@code bottom} ({@code Integer.MIN_VALUE} — нет). Секции из одного воздуха пропускаются целиком.
+     * Ground column without ruins, like {@link Collapse} with no breakage: highest supporting block, not log, no lower than
+     * {@code bottom} ({@code Integer.MIN_VALUE} absent). All-air sections skipped entirely.
      */
     private static int groundOf(Sections s, int lx, int lz, int bottom) {
         for (int i = s.sections - 1; i >= 0 && s.minY + (i << 4) + 15 >= bottom; i--) {
@@ -396,12 +396,12 @@ public final class RuinPlanner {
     }
 
     /**
-     * Земля по столбцам (любой поток): завал, где рухнула постройка, содранный дёрн, свет — гарь, выжженная трава,
-     * сгоревшие растения, пожары, тринитит и вскипевшая вода в огненном шаре. {@code removed}, {@code wood} — сколько
-     * снесено над столбцом и из них деревянных (null — ничего не снесено: {@link #scorch}). {@code flash} — один свет, без
-     * напора ({@link #flash}): дёрн не сдирается, пожары — все зажжённые светом, а сбитые потом волной помечены.
+     * Ground by columns (any thread): rubble from collapsed structures, stripped turf, light, scorch, burned grass,
+     * burned plants, fires, trinitite and boiled water in fireball. {@code removed}, {@code wood} count
+     * removed blocks above column and wooden subset (null none removed: {@link #scorch}). {@code flash} is light only, without
+     * pressure ({@link #flash}): no turf stripping, all light-ignited fires, future wave-blown ones marked.
      *
-     * @return свет на земле столбцов с учётом склона — для ступеней биома
+     * @return slope-adjusted column ground light for biome tiers
      */
     private static double[] land(RuinContext.Grid g, Sections s, int[] groundOf, @Nullable int[] removed, @Nullable int[] wood, boolean flash) {
         Detonation d = g.ctx().d;
@@ -420,7 +420,7 @@ public final class RuinPlanner {
             double lit = g.lit(new BlockPos(x, ground, z));
             double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, d.burst()) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
             heat[column] = inFireball ? lit : q;
-            // рухнувшее оставляет завал при любом давлении (дом падает и ниже 5 psi); в огненном шаре — ничего
+            // collapse leaves rubble at any pressure (house falls even below 5 psi); nothing in fireball
             if (blockDamage && !inFireball && removed != null && removed[column] >= 3) rubble(s, lx, ground, lz, x, z, removed[column], wood[column]);
             if (inFireball) {
                 if (blockDamage) strip(s, lx, ground, lz, x, z);
@@ -435,9 +435,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Ступени опалённого биома по клеткам 4×4 чанка ({@link ScorchedBiomes}): средний свет на земле клетки и шум мира;
-     * клетки меняются от земли клетки на {@link ScorchedBiomes#BELOW} вниз. Земля клетки — нижняя четверть её столбцов:
-     * трава улицы между домами — под ней, а колодец или яма в одном столбце клетку вниз не уводят. Null — ни одной.
+     * Scorched-biome tiers for chunk 4×4 cells ({@link ScorchedBiomes}): average ground light and world noise;
+     * cells change from cell ground down {@link ScorchedBiomes#BELOW}. Cell ground is lower column quartile:
+     * below street grass among houses, but single-column well/hole does not pull cell down. Null if none.
      */
     @Nullable
     private static ScorchedBiomes.Cells biomes(WorldNoise noise, int[] ground, double[] heat, int x0, int z0) {
@@ -469,11 +469,11 @@ public final class RuinPlanner {
     }
 
     /**
-     * Во сколько раз свет на земле столбца сильнее, чем на ровной земле там же: поток через площадку — косинус угла
-     * между лучом и нормалью (склон к взрыву жжёт сильнее, склон от взрыва — слабее, круче луча — тень, с полутенью в
-     * {@link #LOW_SUN} рад: шар не точка), пороги ожогов — для ровной земли. Нормаль — по земле чанка после руин;
-     * перепад — не больше блока на блок (стена, завал и ствол склоном не считаются). Ровная земля — ровно 1 при любой
-     * высоте взрыва.
+     * Ground-light factor relative to same flat ground: flux through area is cosine between
+     * ray and normal (blast-facing slope burns more, opposite less, steeper than ray shadowed with penumbra of
+     * {@link #LOW_SUN} rad: fireball not point); burn thresholds defined for flat ground. Normal from post-ruin chunk ground;
+     * height difference capped at block per block (wall, rubble, trunk not slopes). Flat ground exactly 1 at any
+     * burst height.
      */
     static double incidence(int[] ground, int lx, int lz, int h, int x, int z, Vec3 burst) {
         double gx = slope(ground, lx, lz, h, 1, 0), gz = slope(ground, lx, lz, h, 0, 1);
@@ -487,16 +487,16 @@ public final class RuinPlanner {
         return Math.min(MAX_INCIDENCE, Math.max(0, cos + LOW_SUN) / Math.max(ry + LOW_SUN, LOW_SUN));
     }
 
-    /** След света у края руин: 1 до {@code 1 − EDGE_FADE} радиуса, дальше плавно до 0 на краю. */
+    /** Light trace at ruin edge: 1 to {@code 1 − EDGE_FADE} radius, then smoothly to 0 at edge. */
     static double edge(int x, int z, Vec3 burst, double ruinRadius) {
         double f = Mth.clamp((1 - Math.hypot(x + 0.5 - burst.x, z + 0.5 - burst.z) / ruinRadius) / EDGE_FADE, 0, 1);
         return f * f * (3 - 2 * f);
     }
 
     /**
-     * Докуда свет оставляет след на земле, блоки по горизонтали от эпицентра ({@link #scorch}): дальше и склон к взрыву
-     * ({@link #MAX_INCIDENCE}) не дотягивает ни до растений, ни до нижней ступени биома даже в крайнем хвосте кривой
-     * ({@link Fragility#possible}); не дальше радиуса руин.
+     * Light ground-trace reach, horizontal blocks from epicenter ({@link #scorch}): beyond, even blast-facing slope
+     * ({@link #MAX_INCIDENCE}) reaches neither plant nor lowest biome tier even in extreme curve tail
+     * ({@link Fragility#possible}); capped at ruin radius.
      */
     static double scorchReach(Detonation d) {
         double lo = 0, hi = d.ruinRadius();
@@ -510,8 +510,8 @@ public final class RuinPlanner {
     }
 
     /**
-     * Уклон земли вдоль оси ({@code dx, dz}): средний перепад к столбцам чанка до {@link #SLOPE_REACH} в обе стороны,
-     * каждый не больше блока на блок.
+     * Ground slope along axis ({@code dx, dz}): mean difference to chunk columns up to {@link #SLOPE_REACH} each side,
+     * each capped at block per block.
      */
     private static double slope(int[] ground, int lx, int lz, int h, int dx, int dz) {
         double sum = 0;
@@ -530,7 +530,7 @@ public final class RuinPlanner {
         return n == 0 ? 0 : sum / n;
     }
 
-    /** Завал на месте рухнувшей постройки: высота — по тому, сколько рухнуло, материал — по тому, из чего. */
+    /** Rubble from collapsed structure: height from amount collapsed, material from original material. */
     private static void rubble(Sections s, int lx, int ground, int lz, int x, int z, int removed, int wood) {
         int height = Math.min(4, Math.max(1, Math.round(removed * 0.12f)));
         BlockState[] kind = wood * 2 > removed ? WOOD_RUBBLE : STONE_RUBBLE;
@@ -541,7 +541,7 @@ public final class RuinPlanner {
         }
     }
 
-    /** Скоростной напор содрал дёрн и траву: голая земля. */
+    /** Dynamic pressure stripped turf/grass: bare soil. */
     private static void strip(Sections s, int lx, int ground, int lz, int x, int z) {
         Blast.Props p = s.props(lx, ground, lz);
         if (p.is(Blast.Props.GRASS) || p.is(Blast.Props.MOSS)) {
@@ -549,7 +549,7 @@ public final class RuinPlanner {
         }
     }
 
-    /** Внутри огненного шара у земли: песок сплавляется, вода вскипает. */
+    /** Inside fireball at ground: sand melts, water boils. */
     private static void fireball(Sections s, int lx, int ground, int lz) {
         if (s.props(lx, ground, lz).is(Blast.Props.SAND)) s.set(lx, ground, lz, ModBlocks.TRINITITE.get().defaultBlockState());
         for (int i = 1; i <= 3 && ground + i < s.maxY; i++) {
@@ -559,10 +559,10 @@ public final class RuinPlanner {
     }
 
     /**
-     * Верхний блок грунта: напор сдирает дёрн (голая земля, даже в тени), свет выжигает траву до земли, а там, где он
-     * сильнее всего, оставляет гарь пятнами; снег тает. Каждое — кривой поражения со своим шумом мира.
+     * Top ground block: pressure strips turf (bare soil even in shadow), light burns grass to soil, strongest
+     * light leaves scorch patches; snow melts. Each uses damage curve with own world noise.
      *
-     * @return дёрн содран напором (с ним — и растения над ним)
+     * @return turf stripped by pressure (and plants above with it)
      */
     private static boolean ground(Sections s, WorldNoise noise, int lx, int ground, int lz, int x, int z, double q, double psi, boolean blockDamage) {
         Blast.Props p = s.props(lx, ground, lz);
@@ -575,7 +575,7 @@ public final class RuinPlanner {
             strip(s, lx, ground, lz, x, z);
             return true;
         }
-        // гарь — только там, где дёрн и так выгорел: пятна гари внутри выгоревшего, а не крапинами в зелёной траве
+        // scorch only where turf already burned: patches inside burned ground, not speckles in green grass
         if (struck(q, BURN_Q, BURN_BETA, noise, x, z, LAYER_BURN, 5)) {
             s.set(lx, ground, lz, struck(q, CHAR_Q, CHAR_BETA, noise, x, z, LAYER_CHAR, 7) ? PODZOL
                     : hash(x, ground, z, 5) < 0.5 ? COARSE_DIRT : DIRT);
@@ -584,9 +584,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Над землёй: трава, цветы, кусты и посевы ({@code nuke_plants}) сгорают (от части остаётся сухой куст) или уходят с
-     * содранным дёрном — со всем, что над ними (верх высокой травы, тростник), снег-слой тает. Случайность — больше
-     * зерно места, чем пятна: трава горит клочьями.
+     * Above ground: grass, flowers, bushes, crops ({@code nuke_plants}) burn (some leave dead bush) or leave with
+     * stripped turf, including everything above (tall grass top, cane); snow layers melt. Randomness mostly position
+     * grain rather than patches: grass burns in tufts.
      */
     private static void plants(Sections s, WorldNoise noise, int lx, int ground, int lz, int x, int z, double q, boolean stripped) {
         int y = ground + 1;
@@ -600,7 +600,7 @@ public final class RuinPlanner {
             s.set(lx, y, lz, AIR);
             return;
         }
-        // двойная трава и высокие цветы, тростник: верх уходит с низом
+        // double grass/tall flowers, cane: top removed with bottom
         for (int up = y + 1; up < s.maxY && s.props(lx, up, lz).is(Blast.Props.PLANT); up++) s.set(lx, up, lz, AIR);
         Blast.Props under = s.props(lx, ground, lz);
         boolean bush = !stripped && hash(x, y, z, 43) < DEAD_BUSH && (under.is(Blast.Props.DIRT) || under.is(Blast.Props.SAND));
@@ -608,9 +608,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Земля «заснежена» ({@code snowy}: белые бока у дёрна), только пока над ней снег, как у {@code SnowyDirtBlock}:
-     * снежный слой сдуло волной, растопило светом или накрыло стволом — бока зелёные, выгоревший под уцелевшим снегом —
-     * снова белые. Только там, где план менял землю или место над ней: остальной мир — как был.
+     * Ground “snowy” ({@code snowy}: white turf sides) only with snow above, like {@code SnowyDirtBlock}:
+     * snow layer wave-blown, flash-melted or covered by trunk means green sides; burned turf beneath surviving snow
+     * white again. Only where plan changed ground or position above: rest of world unchanged.
      */
     private static void snowy(Sections s, int lx, int ground, int lz) {
         if (ground + 1 >= s.maxY || !s.touched(lx, ground, lz) && !s.touched(lx, ground + 1, lz)) return;
@@ -622,9 +622,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Пожар на земле, где свет поджёг горючее (вероятность растёт со светом), а волна сбила огонь не везде (от 2 psi
-     * остаётся {@link #BLOWN_KEEP}). {@code flash} — слой вспышки: кандидат — с вероятностью света, доля, что не собьёт
-     * волна, — отдельно.
+     * Ground fires where light ignited fuel (chance rises with light), not all extinguished by wave (from 2 psi
+     * {@link #BLOWN_KEEP} remain). {@code flash} means flash layer: candidate by light probability, fraction surviving
+     * wave separate.
      */
     private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double q, double psi, boolean flash) {
         if (ground + 1 >= s.maxY) return;
@@ -636,10 +636,10 @@ public final class RuinPlanner {
         }
     }
 
-    /** Доля пожаров, которых волна не сбивает там, где давление у земли не меньше 2 psi. */
+    /** Fire fraction surviving wave where ground pressure at least 2 psi. */
     static final double BLOWN_KEEP = 0.5;
 
-    /** Поваленный ствол: брёвна лёжа по направлению от эпицентра, по поверхности. */
+    /** Toppled trunk: horizontal logs along surface away from epicenter. */
     private static void lay(Sections s, long[] tree, BlockState log) {
         BlockPos base = BlockPos.of(tree[0]);
         Direction dir = Direction.from3DDataValue((int) tree[2]);
@@ -647,13 +647,13 @@ public final class RuinPlanner {
         for (int i = 0; i < tree[1]; i++) {
             BlockPos p = base.relative(dir, i);
             if (p.getX() >> 4 != s.chunkX || p.getZ() >> 4 != s.chunkZ) {
-                // дальше по ходу ствола — соседний чанк: брёвна кладутся туда через мир при подмене
+                // farther along trunk, neighboring chunk: logs placed through world during replacement
                 s.outside.add(p.asLong());
                 s.outsideState.add(lying);
                 continue;
             }
             int lx = p.getX() & 15, lz = p.getZ() & 15;
-            // первый непроходимый блок сверху вниз от уровня комля (+8: склон вверх)
+            // first impassable block downward from trunk-base level (+8 for uphill slope)
             int y = Math.min(s.maxY - 1, base.getY() + 8);
             while (y > s.minY && s.props(lx, y, lz).is(Blast.Props.REPLACEABLE)) y--;
             if (y + 1 >= s.maxY || !s.props(lx, y + 1, lz).is(Blast.Props.REPLACEABLE)) break;
@@ -662,26 +662,26 @@ public final class RuinPlanner {
     }
 
     /**
-     * Чанк для плана: исходные блоки — из снимка, изменения — поверх (место → состояние). В план идёт одна разница
-     * ({@link RuinPlan}); свойства — из таблицы окна, код блоков не зовётся.
+     * Plan chunk: original snapshot blocks, overlaid changes (position → state). Only delta enters plan
+     * ({@link RuinPlan}); properties from window table, no block-code calls.
      */
     static final class Sections {
         final ChunkShot shot;
         final Blast.PropsView view;
         final int minY, maxY, sections, chunkX, chunkZ;
-        /** Изменения: номер секции {@code << 12} | место в секции. */
+        /** Changes: section index {@code << 12} | position in section. */
         private final Int2ObjectOpenHashMap<BlockState> changes = new Int2ObjectOpenHashMap<>();
         /**
-         * Кандидаты в пожары: позиция, вероятность и доля огня, которую не собьёт волна (у слоя вспышки; у руин — 1: их
-         * вероятность — уже после волны).
+         * Fire candidates: position, probability and wave-surviving fraction (flash layer; ruins use 1,
+         * their probability already post-wave).
          */
         final LongArrayList fires = new LongArrayList();
         final it.unimi.dsi.fastutil.doubles.DoubleArrayList fireChance = new it.unimi.dsi.fastutil.doubles.DoubleArrayList(),
                 fireKeep = new it.unimi.dsi.fastutil.doubles.DoubleArrayList();
-        /** Брёвна поваленных деревьев в соседних чанках: место (высота — по поверхности при подмене) и состояние. */
+        /** Toppled-tree logs in neighboring chunks: position (height from surface at replacement) and state. */
         final LongArrayList outside = new LongArrayList();
         final List<BlockState> outsideState = new ArrayList<>();
-        /** Изменённые места: номер секции << 12 | место в секции (с повторами). */
+        /** Changed positions: section index << 12 | position in section (with duplicates). */
         final IntArrayList changed = new IntArrayList();
 
         Sections(ChunkShot shot, Blast.PropsView view) {
@@ -708,7 +708,7 @@ public final class RuinPlanner {
             return view.get(get(lx, y, lz));
         }
 
-        /** Менял ли план это место. */
+        /** Whether plan changed position. */
         boolean touched(int lx, int y, int lz) {
             return y >= minY && y < maxY && changes.containsKey(key(lx, y, lz));
         }
@@ -727,15 +727,15 @@ public final class RuinPlanner {
             fireKeep.add(keep);
         }
 
-        /** Состояние по координатам мира после плана: вне чанка — воздух (огонь выбирает вид по соседям в чанке). */
+        /** State at world coordinates after plan: air outside chunk (fire chooses shape from in-chunk neighbors). */
         private BlockState at(int x, int y, int z) {
             if (x >> 4 != chunkX || z >> 4 != chunkZ) return AIR;
             return get(x & 15, y, z & 15);
         }
 
         /**
-         * Огонь в месте плана, если он там удержится (как {@code FireBlock.canSurvive}); null — не удержится. Вид огня
-         * — как {@code BaseFireBlock.getState}: на основе для синего — синий, иначе обычный, грани — к горючим соседям.
+         * Fire at plan position if survivable (like {@code FireBlock.canSurvive}); null if not. Fire type
+         * like {@code BaseFireBlock.getState}: blue on blue-fire base, normal otherwise; faces toward flammable neighbors.
          */
         @Nullable
         private BlockState fireAt(int x, int y, int z) {
@@ -762,12 +762,12 @@ public final class RuinPlanner {
         }
 
         RuinPlan finish(RuinContext ctx, long[] fluidTicks, @Nullable ScorchedBiomes.Cells biomes) {
-            // места без повторов, по секциям
+            // unique positions by section
             int[] cells = changed.toIntArray();
             java.util.Arrays.sort(cells);
             int n = 0;
             for (int k = 0; k < cells.length; k++) if (k == 0 || cells[k] != cells[k - 1]) cells[n++] = cells[k];
-            // пожары: бросок — хешем места (план и подрыв совпадают), место — где огонь удержится на руинах
+            // fires: roll from position hash (plan/detonation match), position where fire survives on ruins
             IntArrayList fireCells = new IntArrayList(), blown = new IntArrayList();
             List<BlockState> fireStates = new ArrayList<>();
             for (int k = 0; k < fires.size(); k++) {
@@ -782,12 +782,12 @@ public final class RuinPlanner {
                 int cell = i << RuinPlan.SECTION_SHIFT | (fy & 15) << 8 | (fz & 15) << 4 | fx & 15;
                 fireCells.add(cell);
                 fireStates.add(fire);
-                // тот же бросок, что у руин (у них вероятность — chance · keep): волна сбивает то, чего руины не зажгли бы
+                // same roll as ruins (their probability chance · keep): wave extinguishes what ruins would not ignite
                 if (roll >= chance * fireKeep.getDouble(k)) blown.add(cell);
             }
             ChunkPos pos = new ChunkPos(chunkX, chunkZ);
             if (n == 0 && fireCells.isEmpty() && outside.isEmpty() && fluidTicks.length == 0) return RuinPlan.nothing(ctx, biomes);
-            // верх каждого столбца после руин: ниже него убранный или новый блок меняет свет не только как источник неба
+            // column tops after ruins: removed/new blocks below change light beyond sky-source change
             int[] topChanged = new int[256];
             java.util.Arrays.fill(topChanged, Integer.MIN_VALUE);
             for (int k = 0; k < n; k++) {
@@ -848,10 +848,10 @@ public final class RuinPlanner {
         }
 
         /**
-         * Карты высот и нижние источники неба изменённых столбцов после руин (для {@link RuinPlan}): тем же правилом, что
-         * у {@code Heightmap.update} и {@code ChunkSkyLightSources}, но по изменениям поверх снимка и один раз на столбец.
-         * Выше верхнего изменённого блока столбец тот же, поэтому поиск идёт от него вниз. Значения «до» — из снимка (у
-         * снимка с диска источник неба считается здесь же по его блокам).
+         * Heightmaps and lower sky sources of changed columns after ruins (for {@link RuinPlan}): same rule as
+         * {@code Heightmap.update} and {@code ChunkSkyLightSources}, using snapshot-overlaid changes once per column.
+         * Above highest changed block column unchanged, so search starts there downward. “Before” values from snapshot (for
+         * disk snapshot sky source computed here from blocks).
          */
         private int[] heights(int[] topChanged) {
             IntArrayList out = new IntArrayList();
@@ -866,7 +866,7 @@ public final class RuinPlanner {
                     while (y >= minY && !props(lx, y, lz).opaque(t)) y--;
                     if (y + 1 != old) triple(out, column << 3 | t, old, y + 1);
                 }
-                // нижний источник неба: верх первой сверху закрытой грани; выше top + 1 грани не менялись
+                // lower sky source: top of first occluded face from above; above top + 1 faces unchanged
                 int old = shot.sky != null ? shot.sky[column] : oldSky(lx, lz);
                 if (old > top + 1) continue;
                 int source = skyMin;
@@ -884,7 +884,7 @@ public final class RuinPlanner {
             return out.toIntArray();
         }
 
-        /** Нижний источник неба столбца по исходным блокам снимка ({@code ChunkSkyLightSources.findLowestSourceY}). */
+        /** Column lower sky source from original snapshot blocks ({@code ChunkSkyLightSources.findLowestSourceY}). */
         private int oldSky(int lx, int lz) {
             BlockState upper = AIR;
             for (int y = maxY - 1; y >= minY; y--) {
@@ -901,7 +901,7 @@ public final class RuinPlanner {
             out.add(now);
         }
 
-        /** Как {@code ChunkSkyLightSources.isEdgeOccluded}: свет неба не проходит вниз через грань между блоками. */
+        /** Like {@code ChunkSkyLightSources.isEdgeOccluded}: skylight blocked downward through face between blocks. */
         private boolean edgeOccluded(BlockState upper, BlockState lower) {
             Blast.Props below = view.get(lower);
             if (below.lightBlock() != 0) return true;

@@ -19,16 +19,16 @@ import java.util.Set;
 import java.util.function.IntBinaryOperator;
 
 /**
- * Высота рельефа без ожидания: на сервере {@code Level.getHeight} для чанка, который загружен, но ещё не готов
- * к выдаче, ждёт его в {@code managedBlock} — и выполняет в это время чужие задачи загрузки (до сотен мс за вызов).
- * Здесь берётся только уже готовый чанк ({@code getChunkNow}); нет чанка — как у ванили, нижняя граница мира.
+ * Terrain height without waiting: server {@code Level.getHeight} on a loaded chunk not yet ready
+ * for delivery waits in {@code managedBlock}, executing unrelated loading tasks meanwhile (up to hundreds of ms per call).
+ * Only ready chunks here ({@code getChunkNow}); absent chunk returns world bottom, like vanilla.
  */
 public final class Terrain {
     private Terrain() {}
 
     /**
-     * Чанк уже загружен и готов: на сервере — {@code getChunkNow}, а не {@code hasChunk}/{@code isLoaded}
-     * (те верны и для чанка, который ещё грузится, и чтение из него ждёт загрузку).
+     * Chunk loaded and ready: server uses {@code getChunkNow}, not {@code hasChunk}/{@code isLoaded}
+     * (also true for still-loading chunks, whose reads wait for loading).
      */
     public static boolean ready(Level level, int chunkX, int chunkZ) {
         if (level instanceof ServerLevel server) return server.getChunkSource().getChunkNow(chunkX, chunkZ) != null;
@@ -40,14 +40,14 @@ public final class Terrain {
     }
 
     /**
-     * Чанк в памяти: полностью загруженный, опущенный ниже (у края видимости) или ждущий выгрузки, — пока не пришёл
-     * его {@code ChunkEvent.Unload}; null — его нет в памяти или он ещё не бывал полностью загружен ({@code ChunkEvent.Load}
-     * поставит его сам). Держатель, у которого не осталось тикетов, ваниль убирает из видимой карты чанков сразу, а сам
-     * чанк выгружает позже, когда его можно сохранить ({@code ChunkMap.processUnloads} → {@code pendingUnloads} →
-     * {@code scheduleUnload}); вернувшийся за это время тикет возвращает держатель из {@code pendingUnloads} с тем же
-     * чанком и без нового {@code ChunkEvent.Load}. Поэтому «нет в видимой карте» ещё не значит «выгружен».
-     * Читать из такого чанка его же данные (карта высот) можно — загрузки это не вызывает. AT: {@code ChunkMap.pendingUnloads},
-     * только чтение.
+     * Chunk in memory: fully loaded, downgraded (visibility edge) or awaiting unload, until its
+     * {@code ChunkEvent.Unload}; null if absent from memory or never fully loaded ({@code ChunkEvent.Load}
+     * will supply it). Vanilla immediately removes ticketless holders from the visible chunk map, but unloads the
+     * chunk later when savable ({@code ChunkMap.processUnloads} → {@code pendingUnloads} →
+     * {@code scheduleUnload}); a ticket returning meanwhile restores the holder from {@code pendingUnloads} with the same
+     * chunk and no new {@code ChunkEvent.Load}. Thus “absent from visible map” does not mean “unloaded”.
+     * Reading such a chunk's own data (heightmap) is safe — causes no loading. AT: {@code ChunkMap.pendingUnloads},
+     * read-only.
      */
     @Nullable
     public static LevelChunk inMemory(ServerLevel level, long pos) {
@@ -57,7 +57,7 @@ public final class Terrain {
         return holder != null && holder.getChunkIfPresentUnchecked(ChunkStatus.FULL) instanceof LevelChunk chunk ? chunk : null;
     }
 
-    /** Готовы чанк и все восемь соседей: цепочка обновлений от блока в нём (до 16 блоков) не выходит за готовые. */
+    /** Chunk and all eight neighbors ready: block-update chain (up to 16 blocks) stays within ready chunks. */
     public static boolean neighbourhoodReady(Level level, int chunkX, int chunkZ) {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) if (!ready(level, chunkX + dx, chunkZ + dz)) return false;
@@ -65,7 +65,7 @@ public final class Terrain {
         return true;
     }
 
-    /** Готовы все чанки, которых касается квадрат со стороной {@code 2r} вокруг точки. */
+    /** All chunks touched by a square of side {@code 2r} around the point are ready. */
     public static boolean readyAround(Level level, Vec3 centre, double r) {
         for (int cx = Mth.floor(centre.x - r) >> 4; cx <= Mth.floor(centre.x + r) >> 4; cx++) {
             for (int cz = Mth.floor(centre.z - r) >> 4; cz <= Mth.floor(centre.z + r) >> 4; cz++) {
@@ -76,10 +76,10 @@ public final class Terrain {
     }
 
     /**
-     * Докуда отрезок {@code from → to} идёт по готовым чанкам: точка чуть до входа в первый неготовый чанк (или
-     * {@code to}, если весь путь готов). Луч {@code Level.clip} читает каждый блок на пути, а на сервере чтение
-     * незагруженного чанка грузит и генерирует его прямо в тике — длинный луч (прицел до 1024 блоков, нос снаряда)
-     * вставал бы на секунды. На клиенте незагруженный чанк — пустой, обрезать нечего.
+     * Ready portion of segment {@code from → to}: point just before first unready chunk (or
+     * {@code to} if entire path ready). {@code Level.clip} reads every block along its ray; server reads
+     * of unloaded chunks load and generate synchronously in the tick — long rays (aim up to 1024 blocks, projectile nose)
+     * would stall for seconds. Client unloaded chunks are empty; no clipping needed.
      */
     public static Vec3 readyUntil(Level level, Vec3 from, Vec3 to) {
         if (!(level instanceof ServerLevel)) return to;
@@ -87,21 +87,21 @@ public final class Terrain {
         return t >= 1 ? to : from.lerp(to, t);
     }
 
-    /** Весь отрезок идёт по готовым чанкам (см. {@link #readyUntil}). */
+    /** Entire segment crosses ready chunks (see {@link #readyUntil}). */
     public static boolean readyAlong(Level level, Vec3 from, Vec3 to) {
         return !(level instanceof ServerLevel) || readyFraction(from.x, from.z, to.x, to.z, (x, z) -> ready(level, x, z)) >= 1;
     }
 
-    /** Готов ли чанк (x, z). */
+    /** Chunk (x, z) is ready. */
     @FunctionalInterface
     public interface ChunkReady {
         boolean test(int chunkX, int chunkZ);
     }
 
     /**
-     * Доля отрезка (0..1) до первой неготовой колонки чанков на его пути. Колонки обходятся по сетке
-     * ({@link GridWalk}): ни одна пересечённая колонка не пропускается, даже если отрезок срезает угол.
-     * Конец берётся на {@link #EDGE} блока раньше границы, чтобы последний проверяемый блок остался в готовом чанке.
+     * Segment fraction (0..1) before its first unready chunk column. Grid traversal
+     * ({@link GridWalk}) misses no intersected column, even when cutting a corner.
+     * End is {@link #EDGE} blocks before boundary, keeping last checked block inside a ready chunk.
      */
     public static double readyFraction(double fromX, double fromZ, double toX, double toZ, ChunkReady ready) {
         double t = GridWalk.walk(fromX, fromZ, toX, toZ, 16, ready::test);
@@ -111,10 +111,10 @@ public final class Terrain {
     private static final double EDGE = 0.01;
 
     /**
-     * Доля отрезка {@code from → to} (0..1), на которой он впервые уходит под поверхность по картам высот
-     * {@code MOTION_BLOCKING} из набора {@code allowed}; 1 — весь над ней. Колонка блоков, которую пересекает отрезок
-     * ({@link GridWalk}), закрыта, если поверхность в ней выше нижней точки отрезка в этой колонке. Это проверка по
-     * верху рельефа, а не по блокам: навес и пещеру она не видит. Где рельеф неизвестен (низ мира), — открыто.
+     * Fraction of segment {@code from → to} (0..1) where it first goes below surface from
+     * {@code MOTION_BLOCKING} heightmaps in {@code allowed}; 1 — entirely above. A block column intersected by segment
+     * ({@link GridWalk}) is blocked if its surface is above the segment's lowest point in that column. This checks
+     * terrain top, not blocks: cannot see overhangs or caves. Unknown terrain (world bottom) is open.
      */
     public static double underRelief(Level level, Vec3 from, Vec3 to, Allowed allowed) {
         double dy = to.y - from.y;
@@ -131,9 +131,9 @@ public final class Terrain {
     }
 
     /**
-     * Первый воздух над картой высот (как {@link Level#getHeight}) — источник {@link Source#CHUNK} без выбора: для кода,
-     * который сам знает, что чанк готов (район взрыва, очередь ядерки), или которому низ мира — верный ответ. «Где земля»
-     * там, где чанк может быть не готов, — {@link #estimate}.
+     * First air above heightmap (like {@link Level#getHeight}) — {@link Source#CHUNK} without source selection: for code
+     * that knows chunk readiness (explosion area, nuclear queue), or accepts world bottom as correct. Use {@link #estimate}
+     * for “where is the ground” when the chunk may be unready.
      */
     public static int height(Level level, Heightmap.Types type, int x, int z) {
         if (level instanceof ServerLevel server) {
@@ -143,80 +143,80 @@ public final class Terrain {
         return level.getHeight(type, x, z);
     }
 
-    /** Откуда известна высота поверхности — от точного к грубому; {@link #estimate} берёт первый разрешённый. */
+    /** Surface-height source, precise to coarse; {@link #estimate} takes the first allowed one. */
     public enum Source {
-        /** Карта высот готового чанка. */
+        /** Ready-chunk heightmap. */
         CHUNK,
         /**
-         * Карта высот готового чанка в мире с потолком (Незер): это верх потолка из коренной породы, а не земля. В мире
-         * она годится для обхода препятствий, для полёта вне мира и точки на земле — нет.
+         * Ready-chunk heightmap in a ceiling dimension (Nether): top of bedrock ceiling, not ground. In-world
+         * obstacle avoidance can use it; outside-world flight and ground points cannot.
          */
         CEILING,
         /**
-         * Сохранённая карта высот чанка, который не готов: копия в памяти (чанк ждёт выгрузки или опущен у края
-         * видимости) или файл чанка на диске, прочитанный в потоке ввода-вывода чанков без загрузки чанка
-         * ({@link TerrainSurvey}). Точна, как карта высот чанка на момент записи; ответ — не сразу, а когда съёмка
-         * дочитает его (тик не ждёт). Только в мире без потолка.
+         * Saved heightmap of an unready chunk: in-memory copy (awaiting unload or downgraded at visibility
+         * edge), or chunk file read on chunk I/O thread without chunk loading
+         * ({@link TerrainSurvey}). As accurate as chunk heightmap when recorded; answer arrives only after survey
+         * reads it (tick does not wait). Only in dimensions without a ceiling.
          */
         DISK,
-        /** Верх по карте клиента, на которой игрок выбрал место (Distant Horizons или чанки клиента), — подсказка приказа. */
+        /** Top from client map where player picked a location (Distant Horizons or client chunks): order hint. */
         CLIENT_MAP,
         /**
-         * Рельеф генератора мира ({@code ChunkGenerator.getBaseHeight}: шум без загрузки чанка, без деревьев и построек;
-         * ≈3 мс на точку — только для приказа, не для тика), не ниже его уровня моря (над водой поверхность — сама вода).
-         * У мира, построенного не этим генератором, он далёк от поверхности: город с карты мира (63 под крышей на 107),
-         * мир 1.17, поднятый до 1.21 (генератор даёт дно мира);
-         * уровень моря держит оценку хотя бы у суши. В съёмке рельефа ({@link TerrainSurvey}, набор с фоновыми
-         * источниками) — для чанка, которого нет на диске или он там недогенерирован: считается в фоне, по узлам через
-         * {@link TerrainSurvey#GENERATOR_STEP} блоков.
+         * World-generator terrain ({@code ChunkGenerator.getBaseHeight}: noise without chunk loading, trees or structures;
+         * ≈3 ms per point — orders only, not ticks), at least generator sea level (water itself is surface over water).
+         * For worlds built by another generator, far from surface: downloaded city map (63 beneath roof at 107),
+         * 1.17 world upgraded to 1.21 (generator gives world bottom);
+         * sea level keeps estimate at least near land. Terrain survey ({@link TerrainSurvey}, source set with background
+         * sources) uses it for chunks absent or partially generated on disk: computed in background on nodes every
+         * {@link TerrainSurvey#GENERATOR_STEP} blocks.
          */
         GENERATOR,
         /**
-         * Уровень моря генератора — дёшево, для тика: ниже него суша почти не бывает. Не {@code Level.getSeaLevel}:
-         * в 1.21.1 он всегда 63, а у плоского мира море −63.
+         * Generator sea level: cheap, tick-safe; land is rarely below it. Not {@code Level.getSeaLevel}:
+         * always 63 in 1.21.1, while flat-world sea level is −63.
          */
         SEA,
-        /** Ни один разрешённый источник не знает: низ мира, как у ванили для незагруженного чанка. */
+        /** No allowed source knows: world bottom, like vanilla for an unloaded chunk. */
         UNKNOWN
     }
 
-    /** Высота поверхности (первый воздух над ней) и откуда она известна. */
+    /** Surface height (first air above) and its source. */
     public record Surface(int y, Source source) {
-        /** Высоту дал какой-то источник (не {@link Source#UNKNOWN}). */
+        /** Some source supplied height (not {@link Source#UNKNOWN}). */
         public boolean known() {
             return source != Source.UNKNOWN;
         }
     }
 
     /**
-     * Какие источники вызывающему разрешены и подсказка карты клиента, если она есть. Цена — в самом наборе:
-     * {@link #CHUNK}, {@link #FLIGHT} и {@link #RELIEF} годятся для тика, {@link #ORDER} читает генератор — только для приказа.
-     * Набор с фоновыми источниками ({@link #RELIEF}) берёт {@link Source#DISK} и {@link Source#GENERATOR} только из
-     * готовой съёмки ({@link TerrainSurvey}) и заказывает её, если ответа ещё нет: сам он ни диска, ни генератора не ждёт.
+     * Sources allowed for caller and optional client-map hint. Cost is encoded in the source set:
+     * {@link #CHUNK}, {@link #FLIGHT} and {@link #RELIEF} are tick-safe; {@link #ORDER} reads generator — orders only.
+     * Sets with background sources ({@link #RELIEF}) take {@link Source#DISK} and {@link Source#GENERATOR} only from
+     * a completed survey ({@link TerrainSurvey}), requesting it if unanswered; never wait for disk or generator themselves.
      */
     public static final class Allowed {
-        /** В мире, в тике: только готовый чанк (и потолок, где он есть), иначе низ мира. */
+        /** In-world, tick-safe: ready chunk (including ceiling if present), otherwise world bottom. */
         public static final Allowed CHUNK = new Allowed(Set.of(Source.CHUNK, Source.CEILING), Optional.empty(), false);
-        /** Полёт вне мира, в тике: готовый чанк, иначе уровень моря; потолок — не земля. */
+        /** Outside-world flight, tick-safe: ready chunk, otherwise sea level; ceiling is not ground. */
         public static final Allowed FLIGHT = new Allowed(Set.of(Source.CHUNK, Source.SEA), Optional.empty(), false);
-        /** Приказ (раз на пуск): готовый чанк, иначе рельеф генератора. */
+        /** Order (once per launch): ready chunk, otherwise generator terrain. */
         public static final Allowed ORDER = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.GENERATOR), Optional.empty(), false);
         /**
-         * Рельеф для полёта, в тике, в мире и вне его: готовый чанк (и потолок, где он есть), иначе съёмка — карта
-         * высот с диска или из памяти, у чанка, которого на диске нет, — рельеф генератора, посчитанный в фоне; пока
-         * съёмка не ответила — низ мира, как у ванили для незагруженного чанка.
+         * Tick-safe flight terrain, inside/outside world: ready chunk (including ceiling if present), otherwise survey — disk
+         * or memory heightmap; for chunks absent from disk, generator terrain computed in background; until
+         * survey answers, world bottom, like vanilla for an unloaded chunk.
          */
         public static final Allowed RELIEF = new Allowed(Set.of(Source.CHUNK, Source.CEILING, Source.DISK, Source.GENERATOR), Optional.empty(), true);
 
-        /** Вне мира потолок Незера — неизвестный рельеф, как у FLIGHT; верх коренной породы не земля. */
+        /** Outside world, Nether ceiling is unknown terrain, like FLIGHT; bedrock top is not ground. */
         public static final Allowed VIRTUAL_RELIEF = new Allowed(Set.of(Source.CHUNK, Source.DISK, Source.GENERATOR), Optional.empty(), true);
 
         private final Set<Source> sources;
         private final Optional<Integer> map;
-        /** {@link Source#DISK} и {@link Source#GENERATOR} — только из готовой съёмки ({@link TerrainSurvey}). */
+        /** {@link Source#DISK} and {@link Source#GENERATOR} only from completed survey ({@link TerrainSurvey}). */
         private final boolean survey;
 
-        /** Снаружи — только наборы выше и {@link #withMap}. */
+        /** Externally, only the sets above and {@link #withMap}. */
         Allowed(Set<Source> sources, Optional<Integer> map, boolean survey) {
             if (sources.contains(Source.CLIENT_MAP) != map.isPresent()) throw new IllegalArgumentException("CLIENT_MAP only with a map hint");
             if (sources.contains(Source.DISK) && !survey) throw new IllegalArgumentException("DISK only from the background survey");
@@ -226,8 +226,8 @@ public final class Terrain {
         }
 
         /**
-         * Те же источники и ещё {@link Source#CLIENT_MAP}: {@code top} — первый воздух над землёй по карте клиента;
-         * пустая подсказка или верх, чей блок вне высот мира, не в счёт.
+         * Same sources plus {@link Source#CLIENT_MAP}: {@code top} is first air above ground from client map;
+         * empty hints or tops whose block is outside world height are ignored.
          */
         public Allowed withMap(Optional<Integer> top) {
             if (top.isEmpty()) return this;
@@ -240,23 +240,23 @@ public final class Terrain {
             return sources.contains(source);
         }
 
-        /** Фоновые источники: {@link Source#DISK} и {@link Source#GENERATOR} — из съёмки, не в вызове. */
+        /** Background sources: {@link Source#DISK} and {@link Source#GENERATOR} from survey, not during the call. */
         boolean survey() {
             return survey;
         }
 
-        /** Подсказка карты клиента (есть, только если разрешён {@link Source#CLIENT_MAP}). */
+        /** Client-map hint (present only if {@link Source#CLIENT_MAP} allowed). */
         Optional<Integer> map() {
             return map;
         }
     }
 
     /**
-     * Высота поверхности в колонке (x, z) — единственный ответ мода на «где земля»: первый источник из {@code allowed}
-     * по порядку {@link Source}, который её знает. Чанк не грузится: готовность — {@link #ready}. На клиенте генератора
-     * нет — только чанк и карта; там же нет карт высот {@code …_NO_LEAVES} (клиенту приходят лишь
-     * {@code MOTION_BLOCKING} и {@code WORLD_SURFACE}).
-     * Не высота цели: цель бывает в воздухе (игрок в полёте, аппарат), а поверхность под ней — нет.
+     * Surface height in column (x, z) — mod's sole answer to “where is the ground”: first source in {@code allowed},
+     * ordered by {@link Source}, that knows. No chunk loading: readiness via {@link #ready}. Client has no generator,
+     * only chunk and map; also no {@code …_NO_LEAVES} heightmaps (client receives only
+     * {@code MOTION_BLOCKING} and {@code WORLD_SURFACE}).
+     * Not target height: target may be airborne (flying player, craft), surface beneath it is not.
      */
     public static Surface estimate(Level level, Heightmap.Types type, int x, int z, Allowed allowed) {
         return choose(new LevelColumn(level, type, x >> 4, z >> 4), allowed).at(x, z);

@@ -13,40 +13,40 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Район цели, который снаряд догружает заранее ({@link FlightTickets}), и полоса подлёта к ней
- * ({@link FlightTickets#approach}). При смене сущности миссии передаётся целиком, без снятия тикетов и ссылок полосы.
- * Не сохраняется, как и тикеты: после загрузки снаряд берёт район заново на подлёте.
+ * Target area preloaded by projectile ({@link FlightTickets}) and its approach lane
+ * ({@link FlightTickets#approach}). Transfers whole when mission changes entity, without releasing tickets or lane references.
+ * Unsaved, like tickets: after load, projectile reacquires the area on approach.
  * <p>
- * Район берётся сначала без тика — только загрузка: тикать ему нужно, лишь чтобы снаряд вернулся в мир и взорвался,
- * а тикающий район — это его мобы, блок-сущности и спавн. Иначе залп по всей карте держал бы десятки районов тикающими
- * по 15 с подлёта каждого снаряда. Тикающим район берётся, когда снаряд скажет ({@code ticks}: последние
- * секунды подлёта), и с тех пор остаётся таким; район без тика отпускается после — чанки не проседают ни на тик.
+ * Area initially held without ticking, load-only: ticking needed only for world reentry and detonation,
+ * while a ticking area also means mobs, block entities and spawning. Otherwise a map-wide salvo would keep dozens of areas
+ * ticking for each projectile's 15 s approach. Acquire ticking area when projectile says ({@code ticks}: final
+ * approach seconds), retaining it afterward; release load-only area after acquisition — no chunk-level drop even for a tick.
  */
 public final class TargetAreaHold {
-    /** Чанк, вокруг которого держится район цели (null — не держится). */
+    /** Chunk around which target area is held (null — not held). */
     @Nullable
     private ChunkPos area;
-    /** Размер района, взятого в {@link #area}: уровень тикета {@link FlightTickets}. */
+    /** Size of area held in {@link #area}: {@link FlightTickets} ticket level. */
     private int size;
-    /** Район взят тикающим, а не только загружается. */
+    /** Area acquired with ticking rather than load-only. */
     private boolean ticking;
-    /** Полоса подлёта, которую держит снаряд; пустая — не держит. */
+    /** Projectile's held approach lane; empty — none held. */
     private List<ChunkPos> approach = List.of();
 
-    /** Новая форма полёта ещё не владеет районом или полосой. */
+    /** New flight form does not own the area or lane yet. */
     public boolean isEmpty() {
         return area == null && approach.isEmpty();
     }
 
     /**
-     * Держать район цели {@code aim}, когда до неё не дальше {@code preload}: цель ушла на 2 чанка и дальше — район
-     * идёт за ней. Тикающим — с тех пор, как {@code ticks}. Полоса подлёта длиной {@code visibleLeg} (0 — без неё) —
-     * когда район взят и раз в секунду.
+     * Hold area around {@code aim} once within {@code preload}: if target moves at least 2 chunks, area
+     * follows it. Ticking once {@code ticks}. Approach lane of {@code visibleLeg} length (0 — none)
+     * when area acquired and once per second.
      *
-     * @param size  размер района: уровень тикета {@link FlightTickets}
-     * @param ticks району пора тикать: снаряд на последних секундах подлёта
-     * @param route маршрут снаряда (полоса ложится назад по нему от цели) или null
-     * @param age   возраст снаряда, тиков: по нему — раз в секунду
+     * @param size  area size: {@link FlightTickets} ticket level
+     * @param ticks area should tick: projectile in final approach seconds
+     * @param route projectile route (lane follows it backward from target), or null
+     * @param age   projectile age, ticks: used for once-per-second updates
      */
     public void hold(ServerLevel level, UUID owner, Vec3 pos, Vec3 aim, double preload, int size, boolean ticks, double visibleLeg,
                      @Nullable Route route, int age) {
@@ -59,7 +59,7 @@ public final class TargetAreaHold {
             FlightTickets.hold(level, area, size, owner, ticking, true);
             taken = true;
         } else if (area != null && ticks && !ticking) {
-            // сначала тикающий, потом без тика: уровни чанков не проседают ни на тик
+            // Ticking first, then load-only: no chunk-level drop even for one tick.
             FlightTickets.hold(level, area, this.size, owner, true, true);
             FlightTickets.hold(level, area, this.size, owner, false, false);
             ticking = true;
@@ -68,9 +68,9 @@ public final class TargetAreaHold {
     }
 
     /**
-     * Полоса подлёта, пока держится район цели: берётся, когда у цели есть кому смотреть ({@link FlightTickets#watched}),
-     * и отпускается, когда смотреть больше некому. Не хватило места в мире ({@link FlightTickets#APPROACH_LIMIT}) —
-     * попробует через секунду.
+     * Approach lane while target area is held: acquire when someone can watch at target ({@link FlightTickets#watched}),
+     * release when no watchers remain. No world capacity ({@link FlightTickets#APPROACH_LIMIT}):
+     * retry in one second.
      */
     private void updateApproach(ServerLevel level, UUID owner, Vec3 pos, Vec3 aim, double visibleLeg, @Nullable Route route) {
         if (!FlightTickets.watched(level, aim, visibleLeg)) {
@@ -79,7 +79,7 @@ public final class TargetAreaHold {
             return;
         }
         if (!approach.isEmpty()) return;
-        // назад по пути снаряда: цель, точки маршрута от последней (точка входа) к ближайшей, сам снаряд
+        // Backward along projectile path: target, waypoints from last (entry point) to nearest, projectile itself.
         List<Vec3> path = new ArrayList<>();
         path.add(aim);
         if (route != null) {
@@ -91,12 +91,12 @@ public final class TargetAreaHold {
         if (FlightTickets.holdApproach(level, centres, owner)) approach = centres;
     }
 
-    /** Район цели взят тикающим: снаряд на последних секундах подлёта. */
+    /** Target area acquired with ticking: projectile in final approach seconds. */
     public boolean ticking() {
         return area != null && ticking;
     }
 
-    /** Отпустить район и полосу (снаряд убран или перенацелен — новый район возьмётся на подлёте). */
+    /** Release area and lane (projectile removed/retargeted — new area acquired on approach). */
     public void release(ServerLevel level, UUID owner) {
         if (area != null) FlightTickets.hold(level, area, size, owner, ticking, false);
         FlightTickets.releaseApproach(level, approach, owner);

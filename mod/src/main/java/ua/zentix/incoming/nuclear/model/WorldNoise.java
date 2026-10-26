@@ -3,22 +3,22 @@ package ua.zentix.incoming.nuclear.model;
 import ua.zentix.incoming.util.noise.FastNoiseLite;
 
 /**
- * Гладкое случайное поле местности для кривых поражения ({@link Fragility}): почему у одного склона трава выгорела, а
- * у соседнего нет (влажность, густота, торф, ветер). OpenSimplex2 fBm (4 октавы: пятна от ~90 м до ~10 м) с доменным
- * искажением (края пятен рваные, не круглые), приведённое к среднему 0 и разбросу 1 — как {@code z ~ N(0, 1)}.
- * Координаты — блоки мира, размер пятен — в метрах модели ({@code blocksPerMetre}), но крупные — не меньше
- * {@link #MIN_PATCH_BLOCKS} блоков: в малом масштабе удара пятна иначе мельчали бы до зерна. Поле зависит только от зерна и
- * места: план руин чанка одинаков в любом порядке и в любом потоке. Экземпляр после создания только читается
- * (FastNoiseLite без изменяемого состояния при чтении) — общий для потоков руин.
+ * Smooth random terrain field for damage curves ({@link Fragility}): why grass burned on one slope but
+ * not its neighbor (moisture, density, peat, wind). OpenSimplex2 fBm (4 octaves: patches from ~90 m to ~10 m) with domain
+ * warping (ragged patch edges, not round), normalized to mean 0 and spread 1, like {@code z ~ N(0, 1)}.
+ * Coordinates are world blocks, patch sizes are model meters ({@code blocksPerMetre}), but large patches are at least
+ * {@link #MIN_PATCH_BLOCKS} blocks: otherwise a small strike scale would shrink patches to grain. The field depends only on seed and
+ * position: a chunk's ruin plan is identical in any order and on any thread. An instance is read-only after construction
+ * (FastNoiseLite has no mutable state during reads), shared by ruin threads.
  */
 public final class WorldNoise {
-    /** Разброс fBm OpenSimplex2 (4 октавы, усиление 0.5) после искажения — по замеру ({@code WorldNoiseTest}). */
+    /** Measured spread of OpenSimplex2 fBm (4 octaves, gain 0.5) after warping ({@code WorldNoiseTest}). */
     static final double STD = 0.333;
-    /** Размер самых крупных пятен, м. */
+    /** Largest patch size, m. */
     static final double PATCH_M = 90;
-    /** Крупные пятна — не меньше стольких блоков. */
+    /** Large patches are at least this many blocks across. */
     static final double MIN_PATCH_BLOCKS = 12;
-    /** Искажение: сдвиг до ~30 м, волна ~150 м. */
+    /** Warping: displacement up to ~30 m, wavelength ~150 m. */
     private static final double WARP_M = 30, WARP_WAVE_M = 150;
 
     private final FastNoiseLite noise = new FastNoiseLite(), warp = new FastNoiseLite();
@@ -40,7 +40,7 @@ public final class WorldNoise {
         warp.SetFrequency((float) (1 / WARP_WAVE_M));
     }
 
-    /** Поле в месте мира (x, z — блоки), ~N(0, 1); {@code layer} — независимый слой (разные последствия — разные пятна). */
+    /** Field at a world position (x, z in blocks), ~N(0, 1); {@code layer} is independent (different consequences have different patches). */
     public double at(double x, double z, int layer) {
         FastNoiseLite.Vector2 p = new FastNoiseLite.Vector2(x * metresPerBlock + layer * 7919.0, z * metresPerBlock - layer * 6271.0);
         warp.DomainWarp(p);
@@ -48,9 +48,9 @@ public final class WorldNoise {
     }
 
     /**
-     * То же в объёме (x, y, z — блоки): пятна на стенах, а не столбы через всю высоту дома. Разброс 3D-шума — тот же
-     * порядок, что у плоского ({@code WorldNoiseTest}), поле ~N(0, 1) с точностью до десятков процентов: для пятен
-     * гари этого хватает.
+     * The same in volume (x, y, z in blocks): patches on walls rather than columns through the full building height. The 3D noise spread is
+     * of the same order as the planar field ({@code WorldNoiseTest}), ~N(0, 1) to within tens of percent: sufficient for
+     * scorch patches.
      */
     public double at(double x, double y, double z, int layer) {
         FastNoiseLite.Vector3 p = new FastNoiseLite.Vector3(x * metresPerBlock + layer * 7919.0, y * metresPerBlock + layer * 3301.0,

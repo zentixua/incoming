@@ -1,6 +1,6 @@
 #version 150
 
-// Наклейка на воду (client/fx/layer/WaterDecal): квадрат во весь кадр.
+// Water decal (client/fx/layer/WaterDecal): full-frame quad.
 in vec3 Position;
 
 void main() {

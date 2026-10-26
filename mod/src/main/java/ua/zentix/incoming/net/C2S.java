@@ -16,20 +16,20 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
 
-/** Клиент → сервер. Сервер ничему не верит на слово: руку, предмет, дальность и цель проверяет сам. */
+/** Client → server. Server trusts no claims: verifies hand, item, range and target itself. */
 public final class C2S {
     private C2S() {}
 
     static final StreamCodec<ByteBuf, InteractionHand> HAND = ByteBufCodecs.BOOL.map(b -> b ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, h -> h == InteractionHand.OFF_HAND);
 
     /**
-     * Что клиент видит под прицелом бинокля. Движущуюся цель клиент и сервер видят чуть по-разному,
-     * поэтому клиент говорит, что именно выбрано, а сервер находит это у себя и проверяет.
+     * What client sees under binocular crosshairs. Client/server see moving targets slightly differently,
+     * so client identifies its selection, and server locates and validates it.
      *
-     * @param kind       0 — точка, 1 — сущность (entityId), 2 — аппарат Sable (plotPos — точка в плоте), 3 — место на земле
-     *                   с карты (x и z; высоту земли там находит сервер)
-     * @param mapSurface у места с карты — верх земли там по карте клиента (первый воздух над землёй, как карта высот),
-     *                   если карта его знает: оценка сервера, пока чанк места у него не готов
+     * @param kind       0 — point, 1 — entity (entityId), 2 — Sable craft (plotPos — point in plot), 3 — ground location
+     *                   from map (x and z; server finds ground height)
+     * @param mapSurface map location's ground top from client map (first air above ground, like heightmap),
+     *                   if known: server estimate until destination chunk is ready
      */
     public record AimHint(int kind, Vec3 point, int entityId, Vec3 plotPos, Optional<Integer> mapSurface) {
         public static final int POINT = 0, ENTITY = 1, AIRCRAFT = 2, GROUND = 3;
@@ -38,7 +38,7 @@ public final class C2S {
             this(kind, point, entityId, plotPos, Optional.empty());
         }
 
-        /** Место на земле, выбранное на карте: x и z и верх земли по карте клиента, если он там известен. */
+        /** Ground location selected on map: x, z and client-map ground top if known. */
         public static AimHint ground(double x, double z, OptionalInt mapSurface) {
             return new AimHint(GROUND, new Vec3(x, 0, z), 0, Vec3.ZERO,
                     mapSurface.isPresent() ? Optional.of(mapSurface.getAsInt()) : Optional.empty());
@@ -49,10 +49,10 @@ public final class C2S {
     }
 
     /**
-     * Пуск. Из бинокля — по {@code aim} (что под прицелом); с экрана пульта — по режиму цели из loadout
-     * (куда смотрю / вокруг меня / игрок / аппарат из списка). {@code via} — точки маршрута с карты наведения
-     * (пусто — путь строит пуск), {@code from} — место пуска с неё (x и z; пусто — пуск у стреляющего): его выбирает
-     * только оператор или хост, сервер проверяет ({@code ServerActions.launchSiteProblem}).
+     * Launch. Binoculars use {@code aim} (under crosshairs); remote screen uses loadout target mode
+     * (where I look / around me / player / listed craft). {@code via}: targeting-map waypoints
+     * (empty: launch builds path); {@code from}: map launch site (x, z; empty: near shooter), selected
+     * only by operator/host, validated server-side ({@code ServerActions.launchSiteProblem}).
      */
     public record Fire(Loadout loadout, Optional<AimHint> aim, Optional<UUID> aircraft, Waypoints via, Optional<Vec3> from) implements CustomPacketPayload {
         public static final Type<Fire> TYPE = new Type<>(Incoming.id("fire"));
@@ -71,8 +71,8 @@ public final class C2S {
     }
 
     /**
-     * Камера снаряда смотрит с борта своего снаряда {@code projectile} в направлении {@code yaw}/{@code pitch}: клиент
-     * шлёт каждый тик, пока смотрит ({@code strike.CameraLink}). Перестал слать — камеру закрыли.
+     * Projectile camera aboard owned {@code projectile} looks along {@code yaw}/{@code pitch}: client
+     * sends every tick while viewing ({@code strike.CameraLink}). No more packets means camera closed.
      */
     public record CameraView(UUID projectile, float yaw, float pitch) implements CustomPacketPayload {
         public static final Type<CameraView> TYPE = new Type<>(Incoming.id("camera_view"));
@@ -86,7 +86,7 @@ public final class C2S {
         }
     }
 
-    /** Перенацелить свой снаряд на то, что под прицелом его камеры. */
+    /** Retarget owned projectile to what its camera crosshairs point at. */
     public record Retarget(UUID projectile, AimHint aim) implements CustomPacketPayload {
         public static final Type<Retarget> TYPE = new Type<>(Incoming.id("retarget"));
         public static final StreamCodec<ByteBuf, Retarget> CODEC = StreamCodec.composite(
@@ -98,7 +98,7 @@ public final class C2S {
         }
     }
 
-    /** Сохранить настройки пульта в предмете в руке. */
+    /** Save remote settings in held item. */
     public record SetLoadout(InteractionHand hand, Loadout loadout) implements CustomPacketPayload {
         public static final Type<SetLoadout> TYPE = new Type<>(Incoming.id("set_loadout"));
         public static final StreamCodec<ByteBuf, SetLoadout> CODEC = StreamCodec.composite(
@@ -111,8 +111,8 @@ public final class C2S {
     }
 
     /**
-     * Место выбрано на карте (клик), приказа ещё нет: сервер начинает грузить район заранее ({@code PickHints}).
-     * Только x и z; проверки те же, что у приказа по карте.
+     * Map location selected (click), no order yet: server preloads area ({@code PickHints}).
+     * Only x/z; same checks as a map order.
      */
     public record Pick(double x, double z) implements CustomPacketPayload {
         public static final Type<Pick> TYPE = new Type<>(Incoming.id("pick"));
@@ -125,7 +125,7 @@ public final class C2S {
         }
     }
 
-    /** Карта наведения открыта: где сейчас игроки (ответ — {@link S2C.MapPlayers}); клиент спрашивает раз в полсекунды. */
+    /** Targeting map open: current players (reply: {@link S2C.MapPlayers}); client asks twice per second. */
     public record MapPlayers() implements CustomPacketPayload {
         public static final Type<MapPlayers> TYPE = new Type<>(Incoming.id("map_players_query"));
         public static final StreamCodec<ByteBuf, MapPlayers> CODEC = StreamCodec.unit(new MapPlayers());
@@ -136,7 +136,7 @@ public final class C2S {
         }
     }
 
-    /** «Отбой» с пульта: свои удары игрока прекращаются ({@code ServerActions.recall}). */
+    /** Remote cancel: stop player's own strikes ({@code ServerActions.recall}). */
     public record Clear() implements CustomPacketPayload {
         public static final Type<Clear> TYPE = new Type<>(Incoming.id("clear"));
         public static final StreamCodec<ByteBuf, Clear> CODEC = StreamCodec.unit(new Clear());
@@ -148,8 +148,8 @@ public final class C2S {
     }
 
     /**
-     * Клавиша «Второй ключ»: подтвердить ядерный пуск игрока рядом ({@code strike.NuclearKeys}). Что подтверждать, кто
-     * рядом и не свой ли это пуск — решает сервер.
+     * “Second key” binding: confirm nearby player's nuclear launch ({@code strike.NuclearKeys}). Server decides what
+     * to confirm, who is nearby and whether this is one's own launch.
      */
     public record NuclearKey() implements CustomPacketPayload {
         public static final Type<NuclearKey> TYPE = new Type<>(Incoming.id("second_key"));
@@ -162,8 +162,8 @@ public final class C2S {
     }
 
     /**
-     * Чем клиент рисует дальний рельеф: при входе в мир. {@code voxy} — у клиента Voxy, и мод кладёт в него чанки
-     * ({@code client/VoxyIngest}): сервер шлёт ему чанки, которых у клиента нет ({@code compat/VoxyLods}).
+     * Client's distant-terrain renderer, on world entry. {@code voxy}: client has Voxy and mod ingests chunks into it
+     * ({@code client/VoxyIngest}); server sends chunks absent from client ({@code compat/VoxyLods}).
      */
     public record LodMods(boolean voxy) implements CustomPacketPayload {
         public static final Type<LodMods> TYPE = new Type<>(Incoming.id("lod_mods"));
@@ -176,15 +176,15 @@ public final class C2S {
     }
 
     /**
-     * LOD Server Support переписал в Voxy клиента чанки, которые прислал мод (его первая сверка шлёт чанк с диска
-     * сервера, а руин вдали на диске нет): сервер присылает их заново, если они всё ещё отличаются от диска
-     * ({@code compat/VoxyLods.stale}). Чанки — {@code ChunkPos.toLong}, не больше {@link #MAX} за пакет.
+     * LOD Server Support overwrote mod-sent chunks in client Voxy (initial reconciliation sends server-disk chunks,
+     * but distant ruins are absent on disk): server resends if they still differ from disk
+     * ({@code compat/VoxyLods.stale}). Chunks use {@code ChunkPos.toLong}, at most {@link #MAX} per packet.
      */
     public record VoxyStale(long[] chunks) implements CustomPacketPayload {
         public static final int MAX = 1024;
         /**
-         * Сколько чанков клиент называет за тик: 12 × 20 = 240 в секунду — меньше, чем сервер принимает от игрока
-         * ({@code VoxyLods.STALE_PER_SECOND}, 256): сверх его предела чанки отбрасываются.
+         * Chunk reports per client tick: 12 × 20 = 240 per second — below server per-player acceptance
+         * ({@code VoxyLods.STALE_PER_SECOND}, 256); chunks beyond its limit are dropped.
          */
         public static final int PER_TICK = 12;
         public static final Type<VoxyStale> TYPE = new Type<>(Incoming.id("voxy_stale"));

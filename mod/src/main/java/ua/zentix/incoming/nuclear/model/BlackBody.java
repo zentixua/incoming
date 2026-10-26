@@ -1,29 +1,29 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Свет чёрного тела в единицах кадра: линейный sRGB, белая стена под полуденным солнцем — 1. Закон Планка по видимому
- * спектру, функции сложения цветов CIE 1931 — многолепестковое приближение Wyman, Sloan, Shirley (2013), как у кадров
- * огненного шара ({@code tools/gen_particles.py}). Яркость — от солнца: чёрное тело 5 800 K — диск солнца, в
- * {@link #SUN_DISK} раз ярче белой стены (1,6·10⁹ кд/м² против E/π ≈ 3,5·10⁴ кд/м² у стены под солнцем и небом).
+ * Black-body light in frame units: linear sRGB, a white wall under noon sun is 1. Planck's law over the visible
+ * spectrum, CIE 1931 color-matching functions via the multi-lobe approximation of Wyman, Sloan, Shirley (2013), as for
+ * fireball frames ({@code tools/gen_particles.py}). Brightness is referenced to the sun: a 5 800 K black body is the solar disk,
+ * {@link #SUN_DISK} times brighter than a white wall (1.6·10⁹ cd/m² versus E/π ≈ 3.5·10⁴ cd/m² for a wall under sun and sky).
  */
 public final class BlackBody {
-    /** Диск солнца против белой стены в полдень. */
+    /** Solar disk relative to a white wall at noon. */
     public static final double SUN_DISK = 46_200;
-    /** Температура солнца как чёрного тела, K. */
+    /** Sun's black-body temperature, K. */
     static final double SUN_K = 5_800;
-    /** Длины волн, нм: 380–780 через 2. */
+    /** Wavelengths, nm: 380–780 in steps of 2. */
     private static final double FROM_NM = 380, TO_NM = 780, STEP_NM = 2;
-    /** Вторая радиационная постоянная c₂ = hc/k, м·K. */
+    /** Second radiation constant c₂ = hc/k, m·K. */
     private static final double C2 = 1.4388e-2;
-    /** XYZ → линейный sRGB (D65). */
+    /** XYZ → linear sRGB (D65). */
     private static final double[][] TO_RGB = {{3.2406, -1.5372, -0.4986}, {-0.9689, 1.8758, 0.0415}, {0.0557, -0.2040, 1.0570}};
     private static final double SUN_Y = xyz(SUN_K)[1];
 
     private BlackBody() {}
 
     /**
-     * Свет чёрного тела температуры {@code kelvin} в единицах кадра: r, g, b линейного sRGB (без отрицательных) и яркость Y
-     * — в {@code out} (4 числа). Цвет вне охвата sRGB срезан по каналам, яркость — настоящая.
+     * Black-body light at {@code kelvin} in frame units: linear sRGB r, g, b (nonnegative) and luminance Y
+     * in {@code out} (4 numbers). Out-of-sRGB-gamut color is clipped per channel; luminance is the actual value.
      */
     public static void light(double kelvin, double[] out) {
         double[] xyz = xyz(kelvin);
@@ -35,12 +35,12 @@ public final class BlackBody {
         out[3] = xyz[1] * k;
     }
 
-    /** Яркость чёрного тела в единицах кадра (белая стена в полдень — 1). */
+    /** Black-body luminance in frame units (a white wall at noon is 1). */
     public static double luminance(double kelvin) {
         return xyz(kelvin)[1] * SUN_DISK / SUN_Y;
     }
 
-    /** XYZ чёрного тела (в своих единицах: Планк без постоянных перед дробью, сумма по 2 нм). */
+    /** Black-body XYZ (in its own units: Planck without the constants before the fraction, summed every 2 nm). */
     private static double[] xyz(double kelvin) {
         double x = 0, y = 0, z = 0;
         for (double nm = FROM_NM; nm <= TO_NM + 1e-9; nm += STEP_NM) {
@@ -53,7 +53,7 @@ public final class BlackBody {
         return new double[]{x, y, z};
     }
 
-    /** Лепесток приближения CIE: гаусс с разной шириной слева и справа. */
+    /** CIE approximation lobe: a Gaussian with different widths on the left and right. */
     private static double lobe(double nm, double mu, double left, double right) {
         double s = nm < mu ? left : right, u = (nm - mu) / s;
         return Math.exp(-0.5 * u * u);
