@@ -1,32 +1,21 @@
 package ua.zentix.incoming.util;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.strike.StrikeWorld;
 
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Server shutdown: chunk generation and loading begun before exit are drained in {@code ServerStoppingEvent}, before
- * vanilla's unload loop in {@code MinecraftServer.stopServer}.
- * <p>
- * Why. A generation task ({@code ChunkGenerationTask}) holds every chunk holder in its window ({@code acquireGeneration}:
- * {@code getGenerationRefCount() > 0}) until its stages complete, even when canceled; a stage (disk chunk decoding, FULL
- * step) completes only through a server-thread task ({@code ServerChunkCache.pollTask}). Vanilla shutdown calls
- * {@code ServerChunkCache.tick(() -> true, false)}: {@code ChunkMap.processUnloads} drains the unload queue without limit,
- * while an unload task for a generation-held holder ({@code isReadyForSaving} false) immediately requeues itself
- * ({@code scheduleUnload}). The call never returns, server-thread tasks do not run, generation never ends — exit hangs
- * at “Saving worlds” (after a nuclear strike, 632 s in {@code processUnloads}). Player tickets also start generation,
- * but mod areas and zones (ruins, preparation, target areas, approach corridors, player arrival) make this frequent.
- * <p>
- * What it does. After mod tickets and work are released (normal-priority handlers; areas via {@code StrikeWorld.releaseAreas}),
- * this handler (last, {@code LOWEST}) polls each world's chunk tasks ({@code pollTask}: also applies removed tickets via
- * {@code runDistanceManagerUpdates} and wakes lighting) until no chunk-map holder is generating ({@link #inFlight}),
- * at most {@link #LIMIT_NANOS} (then logs and proceeds with vanilla shutdown). Nobody requests new generation afterward:
- * shutdown only removes tickets. Vanilla code is unchanged. Checked by GameTest {@code stopDrainLetsVanillaUnloadFinish}.
+ * Finish generation retained by Incoming's released area tickets before vanilla's shutdown unload loop.
+ * A canceled generation task can retain an unload-queued holder until server-thread chunk tasks run;
+ * vanilla's unlimited unload loop would otherwise keep requeuing that holder without polling those tasks.
+ * AreaLoader remembers only busy holders in its own ticket footprints, including canceled loads. No other
+ * holders or idle dimensions are drained. The world attachment owns those references until generation ends.
  */
 public final class StopDrain {
     /** Wait limit for the whole server. */
@@ -46,15 +35,15 @@ public final class StopDrain {
             int n = inFlight(level);
             if (n > 0) s.append(' ').append(level.dimension().location()).append(" — ").append(n);
         }
-        Incoming.LOG.warn("Shutdown: chunk generation not finished within {} s, holders busy:{} — exit will probably hang at \"Saving worlds\"",
+        Incoming.LOG.warn("Shutdown: Incoming chunk generation not finished within {} s, holders busy:{} — exit will probably hang at \"Saving worlds\"",
                 LIMIT_NANOS / 1_000_000_000L, s);
     }
 
     /**
-     * Run world chunk tasks while generation or loading is active.
+     * Run chunk tasks only while Incoming generation or loading is active.
      *
      * @param deadline {@code System.nanoTime()} after which to stop
-     * @return no generation remains in any world
+     * @return no Incoming generation remains in any world
      */
     public static boolean drain(Iterable<ServerLevel> levels, long deadline) {
         long report = System.nanoTime() + REPORT_NANOS;
@@ -62,7 +51,9 @@ public final class StopDrain {
             boolean busy = false;
             for (ServerLevel level : levels) {
                 ServerChunkCache cache = level.getChunkSource();
-                while (cache.pollTask()) {
+                if (inFlight(level) == 0) continue;
+                cache.runDistanceManagerUpdates();
+                while (inFlight(level) > 0 && cache.pollTask()) {
                     if (System.nanoTime() > deadline) return false;
                 }
                 if (inFlight(level) > 0) busy = true;
@@ -74,25 +65,15 @@ public final class StopDrain {
                 report = now + REPORT_NANOS;
                 int n = 0;
                 for (ServerLevel level : levels) n += inFlight(level);
-                Incoming.LOG.info("Shutdown: waiting for chunk generation started before exit (holders busy {})", n);
+                Incoming.LOG.info("Shutdown: waiting for Incoming chunk generation started before exit (holders busy {})", n);
             }
             // generation stages run on generation, I/O and light threads; they submit server-thread tasks themselves
             LockSupport.parkNanos(1_000_000L);
         }
     }
 
-    /**
-     * World chunk-map holders busy generating or loading (generation task takes center and whole window, releases only
-     * after its stages complete). Apply tickets first ({@code runDistanceManagerUpdates}) so visible map matches working
-     * map; a generation-busy holder remains in the working map ({@code processUnloads} skips it).
-     */
+    /** Busy generation retained by Incoming areas; never creates state or polls unrelated loads. */
     public static int inFlight(ServerLevel level) {
-        ServerChunkCache cache = level.getChunkSource();
-        cache.runDistanceManagerUpdates();
-        int n = 0;
-        for (ChunkHolder holder : cache.chunkMap.getChunks()) {
-            if (holder.getGenerationRefCount() > 0) n++;
-        }
-        return n;
+        return level.hasData(ModAttachments.STRIKE_WORLD) ? StrikeWorld.get(level).areas().inFlight(level) : 0;
     }
 }

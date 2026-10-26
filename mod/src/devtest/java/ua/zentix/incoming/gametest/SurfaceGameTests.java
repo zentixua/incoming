@@ -283,7 +283,9 @@ public final class SurfaceGameTests {
         for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) hits.add(new BlockPos(first + step * i, TOP, first + step * k));
         for (BlockPos hit : hits) {
             // Stable source seeds, independent of the random GameTest origin, other tests and deferred-work order.
-            long seed = Mth.getSeed(hit.getX(), hit.getY(), hit.getZ());
+            // Preserve the old Mth.getSeed fixture hash, including its 32-bit x multiplication.
+            long seed = (long) (hit.getX() * 3129871) ^ (long) hit.getZ() * 116129781L ^ hit.getY();
+            seed = (seed * seed * 42317861L + seed * 11L) >> 16;
             Warheads.testDetonate(level, weapon, Vec3.atBottomCenterOf(h.absolutePos(hit.above())), striker(level, weapon), seed);
         }
         Row[] row = {null};

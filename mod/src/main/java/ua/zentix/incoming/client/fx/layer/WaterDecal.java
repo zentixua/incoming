@@ -22,6 +22,7 @@ import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.compat.HandleFailures;
 import ua.zentix.incoming.client.far.FarView;
 
 import java.lang.invoke.MethodHandle;
@@ -184,10 +185,12 @@ public final class WaterDecal {
         if (packInUse == null) return false;
         try {
             return (boolean) packInUse.invokeExact();
-        } catch (Throwable t) {
+        } catch (Exception | LinkageError t) {
             packInUse = null;
             Incoming.LOG.warn("Iris: shader pack check failed, the water decal assumes no shader pack", t);
             return false;
+        } catch (Throwable t) {
+            throw HandleFailures.propagate(t);
         }
     }
 

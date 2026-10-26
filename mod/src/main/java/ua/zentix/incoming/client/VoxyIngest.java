@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.replay.Replay;
 import ua.zentix.incoming.compat.LodSections;
+import ua.zentix.incoming.compat.HandleFailures;
 import ua.zentix.incoming.net.C2S;
 import ua.zentix.incoming.net.S2C;
 
@@ -105,9 +106,10 @@ public final class VoxyIngest {
         } catch (LinkageError e) {
             broken = true;
             Incoming.LOG.warn("Voxy: rawIngest no longer matches ({}) — strike damage far away shows in Voxy only when you get there", e.toString());
-        } catch (Throwable e) {
-            if (e instanceof Error err) throw err;
+        } catch (Exception e) {
             Incoming.LOG.warn("Voxy: changed chunk {} {} not put into its LODs", p.x(), p.z(), e);
+        } catch (Throwable e) {
+            throw HandleFailures.propagate(e);
         }
     }
 

@@ -178,7 +178,7 @@ final class BlastArea {
         DhUpdates.markArea(level, centre, reach, now + DhUpdates.SETTLE);
         DhUpdates.markArea(level, centre, reach, now + CraterFalls.GRACE);
         if (units > 0) {
-            Incoming.LOG.info(summary(level.dimension().location().toString()));
+            if (Incoming.LOG.isDebugEnabled()) Incoming.LOG.debug(summary(level.dimension().location().toString()));
             StrikeWorld.get(level).impactCost().strikeDone();
         }
     }

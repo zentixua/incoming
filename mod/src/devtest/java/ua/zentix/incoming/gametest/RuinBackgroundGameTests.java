@@ -516,14 +516,16 @@ public final class RuinBackgroundGameTests {
                 h.assertTrue(pending.containsKey(a.toLong()) && !unloadQueue.isEmpty(), "A did not join the upload queue");
                 // ticket loading on B nearby, like the mod districts: A returns to work, generation B holds it
                 ChunkPos b = new ChunkPos(a.x + 2, a.z);
-                net.minecraft.server.level.TicketType<ChunkPos> type = net.minecraft.server.level.TicketType.create("incoming_test_stop",
-                        java.util.Comparator.comparingLong(ChunkPos::toLong));
-                cache.addRegionTicket(type, b, 0, b);
+                net.minecraft.server.level.TicketType<java.util.UUID> type = net.minecraft.server.level.TicketType.create("incoming_test_stop",
+                        java.util.Comparator.naturalOrder());
+                var areas = ua.zentix.incoming.strike.StrikeWorld.get(nether).areas();
+                var area = new ua.zentix.incoming.strike.AreaLoader.Area(type, b, 0, java.util.UUID.randomUUID(), false);
+                areas.hold(nether, area);
                 cache.tick(() -> false, false);
                 h.assertTrue(updating.get(a.toLong()) instanceof net.minecraft.server.level.GenerationChunkHolder g && g.getGenerationRefCount() > 0,
                         "generation B does not hold A - the case is not reproduced");
                 // ServerStoppingEvent: the mod removes its ticket and waits for the generation started before release
-                cache.removeRegionTicket(type, b, 0, b);
+                areas.releaseAll(nether);
                 boolean drained = ua.zentix.incoming.util.StopDrain.drain(java.util.List.of(nether),
                         System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS);
                 int busy = ua.zentix.incoming.util.StopDrain.inFlight(nether);

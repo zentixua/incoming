@@ -69,7 +69,8 @@ public final class RadarScope {
         float a = (ticks + pt) / SWEEP * Mth.TWO_PI;
         HudDraw.line(g, cx, cy, cx + Mth.sin(a) * RADIUS, cy - Mth.cos(a) * RADIUS, 1, 0xB046F07A);
         Font font = mc.font;
-        g.drawString(font, "N", cx - font.width("N") / 2, cy - RADIUS + 2, DIM, false);
+        Component north = Component.translatable("incoming.hud.north");
+        g.drawString(font, north, cx - font.width(north) / 2, cy - RADIUS + 2, DIM, false);
         int hostile = 0;
         for (S2C.Blip b : s.blips()) {
             float x = cx + b.dx() * scale, y = cy + b.dz() * scale;

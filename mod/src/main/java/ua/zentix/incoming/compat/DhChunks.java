@@ -61,7 +61,6 @@ public final class DhChunks {
      * в следующем мире — мод туда не лезет.
      */
     public static void onServerStopped(ServerStoppedEvent e) {
-        DhUpdates.forgetLevels();
         if (!available()) return;
         try {
             Api.forgetGenerators();
