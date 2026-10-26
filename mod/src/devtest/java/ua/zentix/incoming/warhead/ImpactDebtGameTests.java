@@ -43,6 +43,7 @@ public final class ImpactDebtGameTests {
         int budget = IncomingConfig.SERVER.workBudgetMs.get();
         WorkClock previous = WorkScheduler.impactClock(server);
         WorkClock clock = WorkClock.counting(1_000_000L);
+        // Deliberately below the public 5-ms minimum: counting units force a short, reproducible interleaving.
         IncomingConfig.SERVER.workBudgetMs.set(3);
         WorkScheduler.useImpactClock(server, clock);
         StrikeGameTests.afterTest(h, () -> {

@@ -19,127 +19,118 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * Общий бюджет тяжёлой работы мода на тик сервера ({@code performance.work_ms_per_tick}): полосы по порядку важности,
- * у каждой свои часы ({@link WorkClock}: своя оценка единицы — ванильный взрыв и лампа блэкаута разные величины),
- * срок полосы — то, что оставили полосы выше, не больше её собственного предела. Готовые попадания идут до миров:
- * до абсолютного срока тика за вычетом измеренного резерва обязательной симуляции ({@link TickReserve}). В Post —
- * остаток того же бюджета и старт нового попадания. Часы и расход общие для обоих окон и всех миров.
+ * Shared heavy-work budget per server tick ({@code performance.work_ms_per_tick}). Each lane has its own
+ * {@link WorkClock} and unit estimates; its allowance is bounded by its cap and what higher lanes left.
+ * Ready impacts run before world ticks, reserving measured mandatory simulation ({@link TickReserve}).
+ * Post uses the remaining budget and can start a newly queued impact. Both windows and all worlds share expenditure.
  * <p>
- * Бюджет — потолок, а не обещание: весь он — только пока у сервера есть время в тике ({@code hasTime} события —
- * ванильное «до следующего тика ещё есть время», по которому и ваниль выгружает чанки). Сервер, который отстаёт от
- * расписания (тик дольше 50 мс, догон после заминки, задачи чанков между тиками до самого следующего), получает по
- * {@link #BUSY_MS} мс на полосу, а не бюджет поверх своей работы: залп ведущего по всей карте на занятом сервере
- * прибавлял бы к каждому тику до 30 мс. В ускорении ({@code /tick sprint}) тики идут без пауз и
- * времени в тике у ванили нет никогда — там полосам весь их бюджет, как в обычном тике.
+ * The budget is a ceiling, available only while vanilla's {@code hasTime} permits work. A server already behind
+ * schedule keeps the {@link #BUSY_MS} fallback instead of adding the full budget to an overdue tick. Even without
+ * an early window, a Post window with spare time ends at the absolute next-tick deadline. Sprint uses the full cap.
  * <p>
- * Одна единица за тик у каждой полосы с работой — всегда ({@link WorkClock#canStart}): иначе после долгой единицы
- * полоса встала бы. Отсюда и граница тика: общий срок плюс по одной единице на полосу. Миры в полосе — по кругу:
- * первым каждый тик идёт следующий.
- * <p>
- * Фоновый пул руин ядерки ({@code RuinWorkers}) — вне часов: в полосе NUCLEAR только работа потока сервера.
+ * Each lane can start one unit to guarantee progress after a slow unit; the bound is its deadline plus that unit.
+ * Worlds rotate each tick. Nuclear background workers ({@code RuinWorkers}) are outside the server-thread clock.
  */
 public final class WorkScheduler {
-    /** Полоса работы; порядок — порядок в тике. */
+    /** Work lanes in service order. */
     public enum Lane {
-        /** Попадания: взрывы, стёкла, обломки, щебень бомбы ({@link StrikeWorld#impacts}) — видно сразу. */
+        /** Immediately visible impacts: explosions, glass, debris and bomb rubble ({@link StrikeWorld#impacts}). */
         IMPACT,
-        /** Очереди ядерки ({@link NuclearStrikes#work}): фронт, свет, руины, воронки — идут по волне, терпят тики. */
+        /** Nuclear fronts, light, ruins and craters ({@link NuclearStrikes#work}) follow the wave. */
         NUCLEAR,
-        /** Блэкаут ({@link Blackouts#work}) — фон. */
+        /** Background blackout work ({@link Blackouts#work}). */
         GRID
     }
 
     /**
-     * Срок полосы на сервере без свободного времени в тике, мс: очереди идут (волна ядерки бьёт по мобу за единицу, и
-     * одна единица за тик растянула бы её на минуты), а к отстающему тику три полосы прибавляют не больше 6 мс (и ещё до 6 мс — руинам ядерки, которые видит
-     * игрок: {@code ScarQueue.SEEN_BUSY_NANOS}).
+     * Busy-server allowance in milliseconds. Queues still progress (one mob per nuclear unit), but the three
+     * lanes add at most 6 ms before their final units, plus up to 6 ms for visible ruins (ScarQueue.SEEN_BUSY_NANOS).
      */
     static final long BUSY_MS = 2;
 
-    /** Доля общего бюджета у попаданий, пока у полос ниже есть работа: блэкаут не стоит весь залп. */
+    /** Impact share while lower lanes wait, so a blackout does not wait for the whole salvo. */
     static final double IMPACT_SHARE_WHEN_SHARED = 2.0 / 3.0;
 
     /**
-     * Наибольшая доля общего бюджета у блэкаута; пока у него есть работа, ядерка оставляет ему её. Блэкаут — фон: его
-     * лампы стоят ещё и света у движка освещения и пересборки секций у клиентов ({@code blockChanged}), которых часы
-     * полосы не видят, а скорость, с которой гаснут кварталы, задаёт правило мира {@code grid.cascade_speed}, а не
-     * бюджет. При бюджете по умолчанию (30 мс) — 4 мс, как было, когда предел был отдельной настройкой.
+     * Blackout cap, also reserved by the nuclear lane while grid work waits. Lamps incur additional lighting and
+     * client section rebuild costs outside this clock. Their pace comes from grid.cascade_speed, not this budget.
+     * At the default 30-ms budget this preserves the former 4-ms limit.
      */
     static final double GRID_SHARE = 2.0 / 15.0;
 
     /**
-     * Наибольшая доля общего бюджета у подготовки руин заранее, пока МБР летит ({@code NuclearPrep}; внутри полосы
-     * ядерки): до подрыва — 90 с и больше, спешить некуда, а снимки чанков и чтения с диска в потоке сервера — та же цена
-     * тика, что у разрушений волны, которые идут сейчас. При 30 мс — 8 мс, как было отдельной настройкой.
+     * Nuclear preparation cap within its lane. An ICBM flight gives it at least 90 seconds; server-thread snapshots
+     * and disk reads should not displace ongoing destruction. At 30 ms this preserves the former 8-ms limit.
      */
     public static final double PREP_SHARE = 4.0 / 15.0;
 
     /**
-     * Время полос мода по тикам сервера, нс (кольцо по номеру тика, как у ванильных {@code tickTimesNanos}): из тика
-     * вычитает его подстройка фоновых потоков руин ({@link #ownNanos}). Не состояние мира — замер последних тиков,
-     * каждый тик переписывается, поэтому статика.
+     * Measured lane time by server tick, indexed like vanilla tickTimesNanos. Nuclear worker tuning subtracts
+     * this via {@link #ownNanos}. Every tick overwrites its slot; these measurements are not world state.
      */
     private static final long[] OWN = new long[100];
-    /** Сводка полос раз в {@link #REPORT_TICKS}: тиков, их время, наибольший, время полос (попадания, ядерка, блэкаут). */
+    /** Every 600 ticks: server time/max, lane time, early-window count, early/late impact time and unload-debt count. */
     private static final int REPORT_TICKS = 600;
-    private static final long[] WINDOW = new long[6];
+    private static final long[] WINDOW = new long[10];
 
     private WorkScheduler() {}
 
-    /** Сколько заняли полосы мода в тике с этим номером ({@code MinecraftServer.getTickCount}), нс. */
+    /** Lane time in nanoseconds for this MinecraftServer tick number. */
     public static long ownNanos(int tick) {
         return OWN[Math.floorMod(tick, OWN.length)];
     }
 
-    /** Часы полосы попаданий — одни на сервер (в верхнем мире). */
+    /** One impact clock per server, attached to the overworld. */
     public static WorkClock impactClock(MinecraftServer server) {
         return server.overworld().getData(ModAttachments.IMPACT_CLOCK);
     }
 
-    /** Часы полосы попаданий в игре: оценка тает к каждому тику, иначе один взрыв на сотни мс держал бы очередь на единице за тик. */
+    /** Decay the estimate each tick so one slow explosion does not limit the queue to one unit indefinitely. */
     public static WorkClock newImpactClock() {
         return WorkClock.decaying(0.5);
     }
 
-    /** Подменить часы попаданий (проверки — считающими, {@link WorkClock#counting}; вернуть — {@link #newImpactClock}). */
+    /** Replace the impact clock for tests; restore {@link #newImpactClock} afterwards. */
     public static void useImpactClock(MinecraftServer server, WorkClock clock) {
         server.overworld().setData(ModAttachments.IMPACT_CLOCK, clock);
     }
 
-    /** Общий бюджет тика, нс. */
+    /** Common tick budget in nanoseconds. */
     public static long totalNanos() {
         return IncomingConfig.SERVER.workBudgetMs.get() * 1_000_000L;
     }
 
-    /** Предел блэкаута в общем бюджете, нс ({@link #GRID_SHARE}). */
+    /** Blackout cap within the common budget, in nanoseconds ({@link #GRID_SHARE}). */
     public static long gridCapNanos() {
         return (long) (totalNanos() * GRID_SHARE);
     }
 
-    /** Предел подготовки руин заранее в общем бюджете, нс ({@link #PREP_SHARE}). */
+    /** Nuclear preparation cap, in nanoseconds ({@link #PREP_SHARE}). */
     public static long prepCapNanos() {
         return (long) (totalNanos() * PREP_SHARE);
     }
 
-    /**
-     * Бюджет полосы попаданий: весь общий, если полосам ниже нечего делать, иначе {@link #IMPACT_SHARE_WHEN_SHARED}.
-     */
+    /** Impacts take the whole cap unless lower lanes wait; then use {@link #IMPACT_SHARE_WHEN_SHARED}. */
     static long impactBudget(long total, boolean lowerLanesPending) {
         return lowerLanesPending ? (long) (total * IMPACT_SHARE_WHEN_SHARED) : total;
     }
 
     /**
-     * Бюджет ядерки: что осталось после попаданий, за вычетом предела блэкаута, пока у него есть работа
-     * ({@code gridReserve}): иначе во время волны ядерка брала бы весь срок, а каскад блэкаута ядерки шёл бы по единице
-     * за тик вместо своей доли.
+     * Nuclear work gets the remainder after impacts and the pending grid reserve. Without that reserve, its
+     * blackout cascade would get only one unit per tick instead of its share during the wave.
      */
     static long nuclearBudget(long total, long usedAbove, long gridReserve) {
         return remaining(total, usedAbove + gridReserve, total);
     }
 
-    /** Бюджет полосы ниже: что осталось от общего после полос выше, не больше её предела и не меньше нуля. */
+    /** Remaining common budget, bounded by this lane cap and zero. */
     static long remaining(long total, long usedAbove, long cap) {
         return Math.min(cap, Math.max(0, total - usedAbove));
+    }
+
+    /** The window must end at the absolute server deadline, even when no early window was granted. */
+    static long untilTick(long cap, long now, long tickDeadline) {
+        return Math.min(cap, Math.max(0, tickDeadline - now));
     }
 
     public static void onServerTickPre(ServerTickEvent.Pre e) {
@@ -202,7 +193,7 @@ public final class WorkScheduler {
             // This is still the same tick: no second decay, budget or counters.
             long left = remaining(cap, impact.usedThisTickNanos(), cap);
             if (!server.tickRateManager().isSprinting()) {
-                left = Math.min(left, Math.max(0, server.getNextTickTime() - Util.getNanos()));
+                left = untilTick(left, Util.getNanos(), server.getNextTickTime());
             }
             // A short early window is not a debt tick: topping it up to BUSY_MS after autosave would overrun
             // the schedule by several units (e.g. 49 ms mandatory simulation). Only the final new unit may start.
@@ -210,6 +201,9 @@ public final class WorkScheduler {
             // If early work stayed inside its allowance, the permitted final unit can start a new hit in Post.
             if (timing.earlyUsed <= timing.earlyBudget && impact.usedThisTickNanos() < cap) impact.allowLateStart();
         } else {
+            if (!impact.isCounting() && !server.tickRateManager().isSprinting() && spare.getAsBoolean()) {
+                cap = untilTick(cap, Util.getNanos(), server.getNextTickTime());
+            }
             impact.start(cap, spare, busy);
         }
         workImpacts(levels, impact);
@@ -227,7 +221,7 @@ public final class WorkScheduler {
         Blackouts.work(server, levels, grid);
 
         OWN[Math.floorMod(server.getTickCount(), OWN.length)] = impact.usedThisTickNanos() + nuclear.usedThisTickNanos() + grid.usedThisTickNanos();
-        report(server, impact.usedThisTickNanos(), nuclear.usedThisTickNanos(), grid.usedThisTickNanos());
+        report(server, impact.usedThisTickNanos(), nuclear.usedThisTickNanos(), grid.usedThisTickNanos(), timing);
     }
 
     /** Include other mods' normal/low-priority Post work in the next tick's mandatory reserve. */
@@ -237,11 +231,10 @@ public final class WorkScheduler {
     }
 
     /**
-     * Раз в 30 с, если полосы работали: средний и наибольший тик сервера (прошлого — нынешний ещё идёт), сколько из
-     * него в среднем заняли полосы и сколько — всё остальное (ваниль и другие моды). По ней видно, чей тик: нашего
-     * бюджета или чужой работы (строка «Mod work over 30 s»).
+     * Every 600 ticks with work: previous server tick time, current lane time and the remainder. Early-window and
+     * mandatory-unload percentages use all ticks in this report; early/late impact averages use the same denominator.
      */
-    private static void report(MinecraftServer server, long impact, long nuclear, long grid) {
+    private static void report(MinecraftServer server, long impact, long nuclear, long grid, ImpactTiming timing) {
         long[] times = server.getTickTimesNanos();
         long last = times[Math.floorMod(server.getTickCount() - 1, times.length)];
         WINDOW[0]++;
@@ -250,18 +243,29 @@ public final class WorkScheduler {
         WINDOW[3] += impact;
         WINDOW[4] += nuclear;
         WINDOW[5] += grid;
+        long early = timing.active ? timing.earlyUsed : 0;
+        if (timing.active && timing.earlyClock != null) WINDOW[6]++;
+        WINDOW[7] += early;
+        WINDOW[8] += Math.max(0, impact - early);
+        if (timing.active && timing.hasUnloadDebt()) WINDOW[9]++;
         if (WINDOW[0] < REPORT_TICKS) return;
         long n = WINDOW[0];
         if (WINDOW[3] + WINDOW[4] + WINDOW[5] > 0) {
             ua.zentix.incoming.Incoming.LOG.info("Mod work over 30 s: server tick avg {} ms (max {}), of which mod lanes avg — "
-                            + "impacts {}, nuke {}, blackout {} ms; the rest (vanilla, other mods) {} ms",
+                            + "impacts {}, nuke {}, blackout {} ms; the rest (vanilla, other mods) {} ms; "
+                            + "impact early window {}% of ticks, early avg {} ms, late avg {} ms; mandatory unload debt {}% of ticks",
                     ms(WINDOW[1] / n), ms(WINDOW[2]), ms(WINDOW[3] / n), ms(WINDOW[4] / n), ms(WINDOW[5] / n),
-                    ms(Math.max(0, WINDOW[1] - WINDOW[3] - WINDOW[4] - WINDOW[5]) / n));
+                    ms(Math.max(0, WINDOW[1] - WINDOW[3] - WINDOW[4] - WINDOW[5]) / n),
+                    percent(WINDOW[6], n), ms(WINDOW[7] / n), ms(WINDOW[8] / n), percent(WINDOW[9], n));
         }
         java.util.Arrays.fill(WINDOW, 0);
     }
 
     private static String ms(long nanos) {
         return String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6);
+    }
+
+    private static String percent(long ticks, long total) {
+        return String.format(java.util.Locale.ROOT, "%.1f", ticks * 100.0 / total);
     }
 }

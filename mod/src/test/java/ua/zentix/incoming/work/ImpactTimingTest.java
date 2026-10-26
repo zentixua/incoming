@@ -1,6 +1,9 @@
 package ua.zentix.incoming.work;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import org.junit.jupiter.api.Test;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,6 +23,8 @@ class ImpactTimingTest {
         timing.pop();
         now[0] += 2 * MS;
         assertEquals(10 * MS, timing.optionalNanos());
+        assertEquals(1, timing.chunkUnloadSections());
+        assertFalse(timing.hasUnloadDebt());
         assertEquals(40 * MS, timing.mandatoryNanos(2 * MS));
     }
 
@@ -36,6 +41,19 @@ class ImpactTimingTest {
         timing.pop();
         assertEquals(0, timing.optionalNanos());
         assertEquals(50 * MS, timing.mandatoryNanos(0));
+        assertEquals(1, timing.chunkUnloadSections());
+        assertTrue(timing.hasUnloadDebt());
+        timing.begin(() -> true);
+        assertEquals(0, timing.chunkUnloadSections());
+        assertFalse(timing.hasUnloadDebt(), "debt is a per-tick observation, not sticky state");
+    }
+
+    @Test void unloadDebtMatchesWorkVanillaDoesWithoutHasTime() {
+        var drops = new LongOpenHashSet(new long[]{42});
+        assertFalse(ImpactTiming.hasMandatoryUnloads(drops, pos -> 1, List.of()), "generation-held holder is skipped");
+        assertTrue(ImpactTiming.hasMandatoryUnloads(drops, pos -> 0, List.of()), "releasable holder or stale ID is removed");
+        assertFalse(ImpactTiming.hasMandatoryUnloads(drops, pos -> 1, Collections.nCopies(2000, 0)), "callbacks wait for hasTime");
+        assertTrue(ImpactTiming.hasMandatoryUnloads(drops, pos -> 1, Collections.nCopies(2001, 0)), "excess callbacks run even without hasTime");
     }
 
     @Test void lateMandatoryWorkAndAnOuterProfilerPopAreNotOptionalSaving() {

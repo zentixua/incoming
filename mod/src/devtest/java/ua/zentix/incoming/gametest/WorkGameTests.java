@@ -584,6 +584,7 @@ public final class WorkGameTests {
         // Round-robin rays can finish both blasts in the same tick at 30 ms. One unit per tick keeps this a
         // cross-tick dependency test: weakening peersPicking must still remove blocks before the other Detonate.
         int budget = IncomingConfig.SERVER.workBudgetMs.get();
+        // Deliberately below the public 5-ms minimum: one counting-clock unit keeps Detonate events on separate ticks.
         IncomingConfig.SERVER.workBudgetMs.set(1);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.workBudgetMs.set(budget));
         for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-10, -10, -10), CENTER.offset(10, 0, 10))) {

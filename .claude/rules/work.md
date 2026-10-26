@@ -6,43 +6,55 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/work/**"
 ---
 
-# Бюджет работы на тик (`work/`)
+# Server work budget (`work/`)
 
-## Устройство
-- `work/` — общий бюджет тяжёлой работы на тик сервера: `WorkScheduler` (готовые попадания — перед первым тиком мира, после применения freeze/step; новые — ещё и в Post; потолок `performance.work_ms_per_tick` — весь, пока в тике есть свободное время (`ServerTickEvent.hasTime`; в `/tick sprint` — всегда); серверу, отстающему от расписания (тик дольше 50 мс, догон после заминки, задачи чанков между тиками до следующего тика), — `BUSY_MS` = 2 мс на полосу (руинам чанков, которые видит игрок, — ещё 6 мс: `nuclear-world.md`); считающим часам — весь бюджет,
-  полосы по порядку: попадания `IMPACT` — всё, а пока у ядерки или блэкаута есть работа, 2/3; ядерка `NUCLEAR`
-  (`NuclearStrikes.work`, работа потока сервера; фоновый пул руин — вне часов) — остаток (подготовка руин заранее
-  внутри неё — не больше `PREP_SHARE` = 4/15 общего); блэкаут `GRID` — что осталось после них, не больше `GRID_SHARE` =
-  2/15 общего (пока у него есть работа, ядерка оставляет ему её). Настройка одна — `work_ms_per_tick`: доли — в коде с
-  причиной, при 30 мс — прежние 4 и 8 мс (`WorkSchedulerTest.sharesKeepTheOldLimitsAtTheDefaultBudget`); у каждой полосы свои
-  часы `WorkClock` и одна единица за тик всегда — тик не длиннее срока плюс единицы на полосу; время полос по тикам —
-  `ownNanos`, раз в 30 с, пока полосы работают, строка «Mod work over 30 s»: тик сервера, полосы, остальное), `UnitQueue` (работы — цепочки единиц; сначала первые единицы
-  новых работ по порядку постановки, потом продолжения начатых по одной единице по кругу; место в круге сохраняется между окнами и тиками; неготовый район и работа, ждущая другую (`blocked`:
-  огненный шар и стёкла ждут главный взрыв удара), пропускаются; у каждого вида единиц своя оценка часов; при остановке
-  сервера очередь доделывается без срока — `finish`). Таймлайны ударов в свой тик ставят работу в
-  `StrikeWorld.impacts()`, а не делают её: в пустой очереди — в том же тике. `StallWatch` — замер: поток сервера стоял
-  дольше 2 с (в тике или между тиками: задачи чанков, пакеты игроков) — когда пошёл дальше, строка WARN «Server thread
-  stalled for N s» с самыми частыми местами по снимкам стека (наблюдатель раз в 0,5 с, стек — только во время остановки; пауза
-  одиночной игры — не остановка). Ваниль даёт только накопленное «Can't keep up», а «Mod work over 30 s» видит лишь тики.
+## Structure
+- `WorkScheduler` shares `performance.work_ms_per_tick` across heavy work on the server thread. Ready impacts run
+  before the first world tick, after freeze/step has been applied; newly queued hits can also start in Post.
+  The cap is available while `ServerTickEvent.hasTime` permits work, or unconditionally during `/tick sprint`.
+  A server behind schedule keeps `BUSY_MS` = 2 ms per lane (visible nuclear ruins get another 6 ms:
+  `nuclear-world.md`). Counting clocks use the full cap independently of wall time.
+- Lanes: `IMPACT` takes the whole cap, or 2/3 while nuclear/grid work waits. `NUCLEAR` (`NuclearStrikes.work`) gets
+  the remainder; its background workers are outside the clock, and preparation is capped at `PREP_SHARE` = 4/15.
+  `GRID` gets what remains, capped at `GRID_SHARE` = 2/15; nuclear work reserves that share while grid work waits.
+  One setting controls the total; shares have reasons in code. At 30 ms the old 4-ms grid and 8-ms preparation
+  limits remain (`WorkSchedulerTest.sharesKeepTheOldLimitsAtTheDefaultBudget`). Each lane has its own `WorkClock`
+  and a one-unit progress guarantee: its deadline plus one final unit bounds the window.
+- `ownNanos` records lane time per server tick. Every 600 ticks with work, `Mod work over 30 s` reports server time,
+  lane time and the remainder. It also reports the percentage of ticks with an early impact window, mean early and
+  late impact time, and the percentage with mandatory unload debt; all four use the same 600-tick denominator.
+  `tools/logscan.py` shows this line in full under `Work budget`, including fields beyond its usual truncation limit.
+- `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
+  Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
+  work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
+  world tick. Unit kinds keep separate clock estimates. Shutdown drains available work without a deadline via
+  `finish`, then releases jobs that cannot proceed. Strike timelines enqueue into `StrikeWorld.impacts()` rather
+  than executing directly; an empty queue can start the job that tick.
+- `StallWatch` samples the server stack every 0.5 s while stalled. After a stall longer than 2 s, within or between
+  ticks, it logs `Server thread stalled for N s` with common stack locations. A single-player pause is not a stall.
+  Vanilla's `Can't keep up` is accumulated lateness; the lane report only sees ticks.
 
-## Подводные камни
-- Урон по мобу — это его смерть, лут и обработчики смерти всех модов сборки (у хоста ~0.2 мс и больше на моба):
-  массовый урон — единицами работы под бюджетом (`BlastFront`, `PulseJob`), а не циклом в одном тике.
-
-- Раннее окно IMPACT — `min(2/3 общего бюджета, абсолютный остаток до getNextTickTime − резерв)`; доля оставляет
-  место нижним полосам, даже если их работа появится в тике мира. Резерв — максимум последних 20 замеров обязательной
-  части тика (`TickReserve`). Пока замеров нет или расписание уже просрочено — только прежнее позднее окно BUSY.
-  Это оценка будущей симуляции, не обещание предугадать новый затык ванили. Новых настроек нет.
-- `ImpactTiming` присоединяется к штатному `ProfilerFiller` через `tee` на один тик, потом возвращает прежний.
-  Замер кончается в Post с приоритетом LOWEST: обычные и LOW-обработчики других модов тоже входят в резерв.
-  Из резерва исключается только секция `chunk_unload`, начавшаяся с пустыми `toDrop`, `pendingUnloads`, `unloadQueue`:
-  там остаётся необязательное сохранение. При долге выгрузки вся секция остаётся обязательной — вычитать её целиком
-  опасно (ваниль выгружает часть чанков и без hasTime). Поставщики имён секций не вызываются, пути не строятся.
-  Ванильные `tickTimesNanos` ставятся ДО ServerTick.Post: нельзя вычесть из них обе фазы IMPACT для этого резерва.
-- Оба окна — одни часы и расход: `WorkClock.resume` не сбрасывает оценку/счётчики. Если ранняя фаза уложилась и
-  общий потолок ещё не исчерпан, Post может начать одну новую работу как последнюю единицу тика; после раннего
-  превышения это запрещено. `/tick sprint` получает полный бюджет, `/tick freeze` останавливает обе фазы, считающие
-  часы сценариев идут только в Post. Замер и резерв — несохраняемый attachment верхнего мира, не статика.
-- Регрессии: `ImpactTimingTest` (обязательная выгрузка остаётся в резерве), `WorkSchedulerTest`, GameTest
-  `work_impact_schedule` (40/43/47 мс + фон на управляемых часах), `work_impact_debt` (настоящие Ignition/Shatter и
-  новый фронт, тики первого блока/конца фронта/summary), `work_impact_modes` (freeze, sprint, два мира).
+## Pitfalls
+- Damage includes death, drops and other mods' death handlers (measured at roughly 0.2 ms or more per mob on the
+  host). Mass damage runs as budgeted units (`BlastFront`, `PulseJob`), not as one whole-tick entity loop.
+- The early impact window is `min(2/3 of the total cap, nextTickTime - now - reserve)`. The share leaves room for
+  lower-lane work that may appear during world simulation. `TickReserve` keeps the maximum of 20 recent mandatory
+  samples. Unknown cost or an overdue schedule leaves the late fallback. This estimates future simulation; it
+  cannot predict a new vanilla/GC stall. There are no new settings.
+- `ImpactTiming` attaches through vanilla `ProfilerFiller.tee` for one tick and restores the prior profiler at
+  LOWEST-priority Post, including other mods' normal/LOW Post handlers in the measurement. A `chunk_unload` section
+  is optional only if it starts without work vanilla performs with `hasTime=false`: removable `toDrop` holders
+  (`getGenerationRefCount()==0`, or stale IDs) or more than 2000 queued unload callbacks. Generation-held entries,
+  pending save futures and up to 2000 callbacks do not alone imply mandatory debt. With debt the entire section
+  stays reserved. Section name suppliers are not evaluated and no profiler paths are built.
+  Vanilla writes `tickTimesNanos` before Post; subtracting both impact windows from it would understate the reserve.
+- Both impact windows share one clock and expenditure; `WorkClock.resume` retains counters and estimates. If early
+  work stayed within its allowance and the cap has room, Post may start one new unit as the final unit. An early
+  overrun forbids that extra guarantee. Even when the early window was skipped, Post with spare time is limited by
+  the absolute next-tick deadline. Sprint and counting scenarios keep their full allowance; freeze stops both
+  impact windows. Timing/reserve state is an unsaved overworld attachment, not static world state.
+- Regressions: `ImpactTimingTest` (mandatory unload classification), `WorkSchedulerTest` (including a skipped early
+  window), `UnitQueueTest` (one readiness/dependency check per continuation window), and GameTests
+  `work_impact_schedule` (40/43/47 ms plus background on controlled clocks), `work_impact_debt` (real Ignition/Shatter
+  and a new front, first-block/front-end/summary ticks), `work_impact_modes` (freeze, sprint, two worlds), and
+  `work_impact_profiler` (real `chunk_unload` sections on four consecutive server ticks).

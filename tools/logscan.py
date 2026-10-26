@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Выжимка из лога игры всего, что касается мода Incoming, — чтобы не просить игроков что-то проверять вручную.
+"""Summarize Incoming's game log without asking players to inspect it manually.
 
-  python3 tools/logscan.py                последняя сессия latest.log
-  python3 tools/logscan.py --all          весь latest.log
-  python3 tools/logscan.py --since 18:30  только строки после времени (ЧЧ:ММ)
-  python3 tools/logscan.py path/to.log    другой файл (например logs/2026-09-27-1.log.gz)
+  python3 tools/logscan.py               last session in latest.log
+  python3 tools/logscan.py --all         all of latest.log
+  python3 tools/logscan.py --since 18:30 lines after HH:MM
+  python3 tools/logscan.py path/to.log   another log, including .log.gz
 
-Разделы: загрузка мода, ошибки и предупреждения мода (со стеком), удары и ядерные подрывы (мод пишет строку
-на каждый приказ), отставание сервера («Can't keep up», телепорты, медленные попадания и ядерные тики мода рядом по
-времени), переезд со старого датапака, неизвестные звуки, аппараты Sable, чат, вход/выход игроков.
+Sections include mod loading, errors with stack traces, strikes, server stalls and work budgets,
+legacy migration, missing sounds, Sable lifecycle, player chat and connections.
 """
 import gzip
 import os
@@ -26,7 +25,7 @@ with opener(path, "rt", encoding="utf-8", errors="replace") as f:
     lines = f.read().splitlines()
 
 if "--all" not in args and since is None:
-    # последняя сессия — от последнего запуска мира
+    # Last session starts at the most recent world startup.
     starts = [i for i, l in enumerate(lines) if "Starting integrated minecraft server" in l or "Preparing start region" in l]
     if starts:
         lines = lines[starts[-1]:]
@@ -40,7 +39,7 @@ def time_of(line):
 if since:
     lines = [l for l in lines if time_of(l) >= since]
 
-# стек исключения: строки «\tat …» и «Caused by» после строки с ошибкой нашего мода
+# Stack trace lines after an error from our mod.
 errors = []
 for i, l in enumerate(lines):
     if re.search(r"/(ERROR|WARN)\]", l) and re.search(r"Incoming/\]|ua\.zentix|ua\.ze\.in\.", l) and "Assets URL" not in l:
@@ -53,26 +52,26 @@ for i, l in enumerate(lines):
         errors.append("\n    ".join(block[:12]))
 
 sections = [
-    ("Загрузка мода", r"Loading mod incoming|Found mod file incoming|incoming.*(mod file|version)"),
-    ("Удары и ядерные подрывы", r"Incoming/\]: (Strike:|Nuclear detonation|ICBM)"),
-    # «Can't keep up» — накопленное отставание с прошлой такой строки (не чаще 15 с игры), а не одна пауза;
-    # рядом по времени — удары и медленные тики мода; строки чата (игрок написал «Teleported…»:
-    # «[CHAT] <…>» у клиента, «]: <…>» у сервера) — не в счёт
-    ("Отставание сервера", r"^(?!.*(\[CHAT\]|\]: (\[Not Secure\] )?<)).*(Can't keep up|Incoming/\]: (Strike:|Impacts \(|Strike summary \(|Impact series summary \(|Blast: removing block|Nuclear tick|Server thread stalled)|Teleported)"),
-    ("Снаряды: потеря цели, самоликвидация, сбитые ЗРК", r"Incoming/\]: Projectiles: "),
-    ("Переезд со старого датапака", r"Incoming/\]: (Disabling old datapacks|Datapack settings moved|Removed objectives of the old datapack)"),
-    ("Неизвестные звуки", r"Unable to play unknown soundEvent|Missing sound for event: (incoming|snassets):"),
-    ("Аппараты Sable (добавлены/удалены)", r"shtreimel\.lifecycle.*sub-level (added|removed)"),
-    ("Чат игроков", r"\[CHAT\] <"),
-    ("Игроки вход/выход", r"joined the game|left the game|lost connection"),
+    ("Work budget", r"Incoming/\]: Mod work over 30 s:"),
+    ("Mod loading", r"Loading mod incoming|Found mod file incoming|incoming.*(mod file|version)"),
+    ("Strikes and nuclear detonations", r"Incoming/\]: (Strike:|Nuclear detonation|ICBM)"),
+    # Vanilla lateness accumulates between reports; include nearby strikes and slow ticks, excluding chat.
+    ("Server lateness", r"^(?!.*(\[CHAT\]|\]: (\[Not Secure\] )?<)).*(Can't keep up|Incoming/\]: (Strike:|Impacts \(|Strike summary \(|Impact series summary \(|Blast: removing block|Nuclear tick|Server thread stalled)|Teleported)"),
+    ("Projectiles: lost targets, self-destruction, interceptions", r"Incoming/\]: Projectiles: "),
+    ("Legacy datapack migration", r"Incoming/\]: (Disabling old datapacks|Datapack settings moved|Removed objectives of the old datapack)"),
+    ("Unknown sounds", r"Unable to play unknown soundEvent|Missing sound for event: (incoming|snassets):"),
+    ("Sable sub-levels (added/removed)", r"shtreimel\.lifecycle.*sub-level (added|removed)"),
+    ("Player chat", r"\[CHAT\] <"),
+    ("Player connections", r"joined the game|left the game|lost connection"),
 ]
 
 
 def short(line):
-    return re.sub(r"^\[[^\]]*?(\d\d:\d\d:\d\d)(?:\.\d+)?\] \[[^\]]*\] \[[^\]]*\]: ", r"\1 ", line)[:260]
+    text = re.sub(r"^\[[^\]]*?(\d\d:\d\d:\d\d)(?:\.\d+)?\] \[[^\]]*\] \[[^\]]*\]: ", r"\1 ", line)
+    return text if "Mod work over 30 s:" in line else text[:260]
 
 
-print(f"== Ошибки и предупреждения мода: {len(errors)}")
+print(f"== Mod errors and warnings: {len(errors)}")
 for e in errors[-20:]:
     print("  " + short(e))
 for title, pat in sections:

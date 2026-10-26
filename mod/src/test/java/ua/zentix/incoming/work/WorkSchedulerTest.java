@@ -204,4 +204,25 @@ class WorkSchedulerTest {
         began = clock.begin(); now[0] += MS; clock.end(began);
         assertFalse(clock.canStart());
     }
+
+    @Test
+    void skippedEarlyWindowStillHonorsTheAbsoluteDeadlineWhenPostHasTime() {
+        for (int mandatory : new int[]{40, 43, 47, 49, 50, 51}) {
+            long[] now = {mandatory * MS};
+            long deadline = 50 * MS;
+            TickReserve reserve = new TickReserve();
+            reserve.observe(50 * MS);
+            assertEquals(0, reserve.earlyNanos(TOTAL, 0, deadline));
+            WorkClock clock = WorkClock.decaying(() -> now[0], 0.5);
+            clock.start(WorkScheduler.untilTick(TOTAL, now[0], deadline), () -> now[0] < deadline, 2 * MS);
+            while (clock.canStart()) {
+                long began = clock.begin();
+                now[0] += MS / 4;
+                clock.end(began);
+            }
+            assertTrue(now[0] <= Math.max(mandatory * MS, deadline) + MS / 4, "deadline plus one last unit");
+            assertTrue(clock.usedThisTickNanos() <= TOTAL);
+        }
+        assertEquals(TOTAL, WorkScheduler.untilTick(TOTAL, 0, 100 * MS), "the work cap still applies");
+    }
 }

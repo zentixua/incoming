@@ -11,6 +11,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.world.WorkClock;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.work.ImpactTiming;
 import ua.zentix.incoming.work.TickReserve;
@@ -70,6 +71,35 @@ public final class ImpactScheduleGameTests {
         while (clock.canStart(0)) {
             long began = clock.begin(); now[0] += MS / 4; clock.end(began, 0);
         }
+    }
+
+    /** Real server events and ChunkMap profiler sections: no manually pushed section names or fake clock. */
+    @GameTest(template = "pad", timeoutTicks = 40, batch = "work_impact_profiler")
+    public static void observerSeesVanillaChunkUnloadOnConsecutiveTicks(GameTestHelper h) {
+        var server = h.getLevel().getServer();
+        WorkClock previous = WorkScheduler.impactClock(server);
+        WorkScheduler.useImpactClock(server, WorkScheduler.newImpactClock());
+        int[] posts = {0}, seen = {0}, sections = {0};
+        List<String> errors = new ArrayList<>();
+        Consumer<ServerTickEvent.Post> observe = e -> {
+            // The test starts after the worlds of its first tick; the new clock takes effect next Pre.
+            if (++posts[0] == 1 || seen[0] >= 4) return;
+            ImpactTiming timing = server.overworld().getData(ModAttachments.IMPACT_TIMING);
+            int count = timing.chunkUnloadSections();
+            if (count == 0) errors.add("no vanilla chunk_unload in server tick " + server.getTickCount());
+            sections[0] += count;
+            seen[0]++;
+        };
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, observe);
+        StrikeGameTests.afterTest(h, () -> {
+            NeoForge.EVENT_BUS.unregister(observe);
+            WorkScheduler.useImpactClock(server, previous);
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(seen[0] == 4, "waiting for four real server ticks");
+            h.assertTrue(errors.isEmpty(), errors.toString());
+            Incoming.LOG.info("PL10 PROFILER real_ticks={} chunk_unload_sections={}", seen[0], sections[0]);
+        });
     }
 
     /** Server events continue while the GameTest/world is frozen; they thaw it without wall-clock sleeps. */

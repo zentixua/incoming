@@ -22,6 +22,7 @@ class UnitQueueTest {
         boolean ready = true;
         UnitQueue.Job waitsFor;
         int ended;
+        int readyCalls, blockedCalls;
         Runnable onStep = () -> {};
 
         Fake(String name, int units, List<String> log) {
@@ -32,11 +33,13 @@ class UnitQueueTest {
 
         @Override
         public boolean ready(ServerLevel level) {
+            readyCalls++;
             return ready;
         }
 
         @Override
         public boolean blocked() {
+            blockedCalls++;
             return waitsFor instanceof Fake f && f.ended == 0;
         }
 
@@ -192,5 +195,47 @@ class UnitQueueTest {
         assertTrue(queue.isEmpty());
         assertEquals(1, ignition.ended);
         assertEquals(1, shatter.ended);
+    }
+
+    @Test
+    void continuationReadinessIsCachedPerWindowIncludingSkippedJobs() {
+        List<String> log = new ArrayList<>();
+        UnitQueue queue = new UnitQueue();
+        Fake waiting = new Fake("waiting", 1000, log), active = new Fake("active", 1000, log);
+        queue.add(0, waiting);
+        queue.add(0, active);
+        WorkClock clock = WorkClock.counting(MS);
+        tick(queue, clock, 3 * MS, 0); // both heads become continuations
+        waiting.ready = false;
+        waiting.readyCalls = waiting.blockedCalls = active.readyCalls = active.blockedCalls = 0;
+        tick(queue, clock, 100 * MS, 1);
+        assertEquals(1, waiting.readyCalls);
+        assertEquals(1, waiting.blockedCalls);
+        assertEquals(1, active.readyCalls);
+        assertEquals(1, active.blockedCalls);
+        assertTrue(active.units < 950, "many rounds ran inside one window");
+        waiting.ready = true;
+        tick(queue, clock, 100 * MS, 1); // Post can be a new window in the same world tick
+        assertEquals(2, waiting.readyCalls);
+        assertEquals(2, waiting.blockedCalls);
+        assertTrue(waiting.units < 999, "the next window observes newly ready terrain");
+    }
+
+    @Test
+    void dependencyIntroducedByHeadIsCheckedBeforeContinuationAndRefreshedNextWindow() {
+        List<String> log = new ArrayList<>();
+        UnitQueue queue = new UnitQueue();
+        Fake blocks = new Fake("blocks", 3, log), rays = new Fake("rays", 2, log);
+        blocks.onStep = () -> blocks.waitsFor = rays;
+        queue.add(0, blocks);
+        queue.add(0, rays);
+        WorkClock clock = WorkClock.counting(MS);
+        tick(queue, clock, 100 * MS, 0);
+        assertEquals(1, rays.ended);
+        assertEquals(2, blocks.units, "newly introduced dependency blocks the continuation this window");
+        assertEquals(2, blocks.blockedCalls, "one head check and one continuation check");
+        tick(queue, clock, 100 * MS, 0);
+        assertEquals(1, blocks.ended);
+        assertEquals(3, blocks.blockedCalls, "one more check in the new window");
     }
 }

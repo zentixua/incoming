@@ -1,5 +1,6 @@
 package ua.zentix.incoming.work;
 
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.Util;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -9,12 +10,13 @@ import ua.zentix.incoming.nuclear.world.WorkClock;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.LongToIntFunction;
 import java.util.function.Supplier;
 
 /**
  * A passive observer of vanilla's existing profiler sections, installed only for one server tick.
  * Level events bracket simulation but include ChunkMap's optional autosave. Only a chunk_unload section with
- * no pending or mandatory unload work is excluded: with unload debt the entire section stays in the reserve.
+ * no unload work required without hasTime is excluded; pending futures alone do not keep it in the reserve.
  * No section name suppliers are evaluated, no stacks/paths are allocated, and only section boundaries read time.
  */
 public final class ImpactTiming implements ProfilerFiller {
@@ -24,6 +26,8 @@ public final class ImpactTiming implements ProfilerFiller {
     private BooleanSupplier savingOnly = () -> false;
     private long started, optionalStarted, optionalNanos;
     private int depth, optionalDepth = -1;
+    private int chunkUnloadSections;
+    private boolean unloadDebt;
     boolean earlyVisited;
     boolean active;
     WorkClock earlyClock;
@@ -52,6 +56,8 @@ public final class ImpactTiming implements ProfilerFiller {
         optionalNanos = 0;
         depth = 0;
         optionalDepth = -1;
+        chunkUnloadSections = 0;
+        unloadDebt = false;
         earlyVisited = false;
         earlyClock = null;
         active = false;
@@ -60,10 +66,25 @@ public final class ImpactTiming implements ProfilerFiller {
     }
 
     void level(ServerLevel level) {
-        savingOnly = () -> {
-            var map = level.getChunkSource().chunkMap;
-            return map.toDrop.isEmpty() && map.pendingUnloads.isEmpty() && map.unloadQueue.isEmpty();
+        var map = level.getChunkSource().chunkMap;
+        LongToIntFunction generationRefs = pos -> {
+            var holder = map.getUpdatingChunkIfPresent(pos);
+            return holder == null ? 0 : holder.getGenerationRefCount();
         };
+        savingOnly = () -> !hasMandatoryUnloads(map.toDrop, generationRefs, map.unloadQueue);
+    }
+
+    /** Match processUnloads with hasTime=false: removable holders, or queued callbacks beyond 2000. */
+    static boolean hasMandatoryUnloads(LongSet toDrop, LongToIntFunction generationRefs, Iterable<?> unloadQueue) {
+        for (var it = toDrop.iterator(); it.hasNext(); ) {
+            // Missing holders are stale IDs that vanilla removes; generation-held entries are left alone.
+            if (generationRefs.applyAsInt(it.nextLong()) == 0) return true;
+        }
+        // pendingUnloads may only be waiting on save futures. Even ready callbacks below this threshold wait
+        // for hasTime. Stop counting at the threshold rather than walking an arbitrarily large queue twice.
+        int queued = 0;
+        for (Object ignored : unloadQueue) if (++queued > 2000) return true;
+        return false;
     }
 
     void finish(MinecraftServer server, long ownNanos) {
@@ -85,11 +106,25 @@ public final class ImpactTiming implements ProfilerFiller {
         return optionalNanos;
     }
 
+    /** Actual vanilla sections seen this tick, also exposed to the short native integration test. */
+    public int chunkUnloadSections() {
+        return chunkUnloadSections;
+    }
+
+    public boolean hasUnloadDebt() {
+        return unloadDebt;
+    }
+
     @Override public void push(String name) {
         depth++;
-        if (optionalDepth < 0 && "chunk_unload".equals(name) && savingOnly.getAsBoolean()) {
-            optionalDepth = depth;
-            optionalStarted = time.getAsLong();
+        if (optionalDepth < 0 && "chunk_unload".equals(name)) {
+            chunkUnloadSections++;
+            if (savingOnly.getAsBoolean()) {
+                optionalDepth = depth;
+                optionalStarted = time.getAsLong();
+            } else {
+                unloadDebt = true;
+            }
         }
     }
 
