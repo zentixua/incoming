@@ -6,8 +6,13 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -30,23 +35,40 @@ public record ServerCacheKey(String key, List<String> legacyKeys) {
         ServerAddress parsed = ServerAddress.parseString(address);
         String host = parsed.getHost().toLowerCase(Locale.ROOT);
         int port = parsed.getPort();
-        String key = safe(host) + (port == DEFAULT_PORT ? "" : "_" + port);
-        // Прежняя папка с явным портом нужна и при входе без него; исходное написание — для старых HOST и IPv6.
-        String explicit = (host.contains(":") ? "[" + host + "]" : host) + ":" + port;
-        return new ServerCacheKey(key, List.of(safe(explicit), safe(address)));
+        boolean ipv6 = host.contains(":");
+        // Скобки отделяют весь IPv6-хост от порта; обратимое кодирование не смешивает ':' с '_' и '%' в зоне.
+        String keyHost = ipv6 ? "[" + URLEncoder.encode(host, StandardCharsets.UTF_8) + "]" : safe(host);
+        String key = keyHost + (port == DEFAULT_PORT ? "" : "_" + port);
+        String oldHost = ipv6 ? "[" + host + "]" : host;
+        String explicit = safe(oldHost + ":" + port);
+        // Все варианты — из разобранного адреса: смена регистра, скобок или явного 25565 не меняет поиск папки.
+        List<String> legacy = port != DEFAULT_PORT ? List.of(explicit)
+                : ipv6 ? List.of(safe(oldHost), explicit, safe(host)) : List.of(safe(host), explicit);
+        return new ServerCacheKey(key, legacy);
     }
 
     /**
      * Новая папка имеет приоритет. Если есть только прежняя, читаем и сохраняем в ней: создание новой после записи
      * одного измерения спрятало бы остальные измерения прежней папки при следующем входе. Файлы не переносим.
+     * Прежние имена ищем без учёта регистра. Без порта — раньше явного 25565; внутри варианта точное имя — раньше
+     * отличающихся регистром, затем имена по алфавиту. Этот порядок не зависит от строки текущего входа.
      * Вызывается потоком ввода-вывода, результат хранится до конца работы с кэшем.
      */
-    public Path directory(Path root) {
+    public Path directory(Path root) throws IOException {
         Path canonical = root.resolve(key);
-        if (Files.exists(canonical)) return canonical;
-        for (String legacy : legacyKeys) {
-            Path old = root.resolve(legacy);
-            if (Files.isDirectory(old)) return old;
+        if (Files.exists(canonical) || legacyKeys.isEmpty()) return canonical;
+        try (var children = Files.list(root)) {
+            List<Path> directories = children.filter(Files::isDirectory)
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
+            for (String legacy : legacyKeys) {
+                Path exact = root.resolve(legacy);
+                if (directories.contains(exact)) return exact;
+                for (Path old : directories) {
+                    if (old.getFileName().toString().equalsIgnoreCase(legacy)) return old;
+                }
+            }
+        } catch (NoSuchFileException e) {
+            // Первый вход: корневой папки кэша ещё нет. Прочие ошибки чтения не прячем созданием новой папки.
         }
         return canonical;
     }

@@ -248,7 +248,7 @@ final class LssTerrain implements TerrainSource {
         }
     }
 
-    private static Path file(World w) {
+    private static Path file(World w) throws IOException {
         if (w.directory == null) {
             Path root = Minecraft.getInstance().gameDirectory.toPath().resolve("incoming").resolve("lss-terrain");
             w.directory = w.server.directory(root);
@@ -261,28 +261,33 @@ final class LssTerrain implements TerrainSource {
     }
 
     private static void load(World w) {
-        Path f = file(w);
-        w.file = f.toString();
-        if (!Files.isRegularFile(f)) {
-            w.loaded.set(true);
-            return;
-        }
+        Path f = null;
         long start = System.nanoTime();
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(f), 1 << 16)))) {
-            int n = w.store.read(in);
-            w.fresh.set(n > 0);
-            Incoming.LOG.info("LOD Server Support: {} chunks of map terrain read from {} in {} ms", n, f, (System.nanoTime() - start) / 1_000_000);
+        try {
+            f = file(w);
+            w.file = f.toString();
+            if (!Files.isRegularFile(f)) return;
+            try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(f), 1 << 16)))) {
+                int n = w.store.read(in);
+                w.fresh.set(n > 0);
+                Incoming.LOG.info("LOD Server Support: {} chunks of map terrain read from {} in {} ms", n, f, (System.nanoTime() - start) / 1_000_000);
+            }
         } catch (IOException | RuntimeException e) {
             Incoming.LOG.warn("LOD Server Support: map terrain file {} not read ({}) — far terrain comes as the server sends it; /lss clearcache asks for all of it again",
-                    f, e.toString());
+                    f == null ? w.server.key() : f, e.toString());
+        } finally {
+            w.loaded.set(true);
         }
-        w.loaded.set(true);
     }
 
     private static void save(World w) {
         if (!w.dirty.getAndSet(false)) return;
-        Path f = file(w), tmp = f.resolveSibling(f.getFileName() + ".tmp");
+        Path f = null;
         try {
+            // Поиск папки при чтении не удался: после восстановления доступа сначала дочитать старый рельеф.
+            if (w.directory == null) load(w);
+            f = file(w);
+            Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.createDirectories(f.getParent());
             try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(tmp), 1 << 16) {
                 {
@@ -298,7 +303,7 @@ final class LssTerrain implements TerrainSource {
             }
         } catch (IOException | RuntimeException e) {
             w.dirty.set(true);
-            Incoming.LOG.warn("LOD Server Support: map terrain file {} not written", f, e);
+            Incoming.LOG.warn("LOD Server Support: map terrain file {} not written", f == null ? w.server.key() : f, e);
         }
     }
 
