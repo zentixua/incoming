@@ -1,78 +1,128 @@
-# Store listing: Modrinth and CurseForge
+# Store drafts: Modrinth and CurseForge
 
-Fields to paste when the project pages are created. The long description is [description.md](description.md).
+These are repository drafts. Do not create, submit or publish a project as part of documentation maintenance.
+Account fields and storefront previews require a separate authorized step.
+
+## Text and fields
+
+Public text stays in separate language files. English goes first when assembling a store body, followed by a
+separator and the complete Russian text. Both platforms permit additional languages after English; keep the main
+title and summary in English.
+
+- Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
+- CurseForge **Markdown editor**: [curseforge.md](curseforge.md), then [curseforge.ru.md](curseforge.ru.md).
+  These exports use absolute media/link URLs and a static JPEG poster; no HTML or animated WebP is required.
+- Summaries: [English](summary.md), [Russian](summary.ru.md). `modrinth.json.description` matches the English file.
+  Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
+- Edit both description languages and their CurseForge exports together.
 
 | Field | Value |
 |---|---|
 | Title | Incoming: Air Strikes and Air Defense |
 | Slug | `incoming` |
-| Summary | Modern air strikes on a real scale: Shahed drones, Lancets, cruise missiles, Grad rocket salvos, a B-2 bomber and a nuclear ICBM, aimed with one designator. A surface-to-air missile system shoots down drones, cruise missiles and bombers. |
-| Loader and version | NeoForge, Minecraft 1.21.1 (NeoForge 21.1.264 or newer) |
-| Environment | client: required; server: required (same version on both) |
+| Summary | [summary.md](summary.md) |
+| Loader and game | NeoForge, Minecraft 1.21.1; NeoForge 21.1.264+; Java 21 |
+| Environment | Client & Server; client required, server required; same Incoming version |
 | Modrinth categories | Equipment, Technology, Game Mechanics |
-| CurseForge categories | Armor, Tools, and Weapons; Technology; Miscellaneous |
+| CurseForge categories | Armor, Tools, and Weapons (main); Technology (additional) |
 | License | GPL-3.0-only |
-| Content disclosure | Modrinth: "Contains AI-generated content" (the code and the page texts are written with Claude Code). It is set by hand in the project's Settings → Disclosures. CurseForge has no such field |
 | Source | https://github.com/zentixua/incoming |
 | Issues | https://github.com/zentixua/incoming/issues |
-| Wiki / guide | https://github.com/zentixua/incoming/blob/main/docs/guide/README.md |
+| English guide | https://github.com/zentixua/incoming/blob/main/docs/guide/README.md |
+| Russian guide | https://github.com/zentixua/incoming/blob/main/docs/guide/ru/README.md |
 | Mod id | `incoming` |
-| Dependencies | none required; optional: Create, Create Aeronautics + Sable, Distant Horizons, Voxy (through Roxy), LOD Server Support |
+| Required dependencies | None |
+
+Content disclosure belongs in the platform's field, separate from the public description. The code and page texts
+use AI assistance. Verify the current disclosure controls and saved value in the author's account before submission.
+
+## Optional dependencies and sides
+
+All rows are optional for Incoming. Rendering dependencies belong on clients; they are not dedicated-server requirements.
+
+| Integration | Side and version | Upload relation |
+|---|---|---|
+| Create | Client and server; recipes use its parts when present | Optional on both stores |
+| Create Aeronautics + Sable | Client and server; Sable 2.0.6+ | Both optional on Modrinth; Sable on CurseForge; Aeronautics has no configured CurseForge alias |
+| Distant Horizons | Client rendering; 3.3+ with API 7, integration developed against 3.3.3 | Optional on both stores |
+| Voxy + Roxy | Clients; original Fabric Voxy 0.2.16-beta for MC 1.21.11, translated by Roxy to NeoForge 1.21.1 | Both optional on Modrinth; Roxy on CurseForge; no verified Voxy CurseForge alias |
+| LOD Server Support | Server and clients; Incoming targets NeoForge 0.19.0 | Optional on Modrinth; no verified CurseForge alias |
+
+Roxy's [0.4.1 version](https://modrinth.com/mod/roxy/version/VnJRhuAn) specifies Sodium 0.8.12 for NeoForge 1.21.1,
+Forgified Fabric API 0.116.14+2.3.0 for 1.21.1, and the Voxy jar above as required dependencies of **Roxy**. They are not
+required dependencies of Incoming. The [README](../../README.md#compatibility) links those exact files and explains
+LSS, DH and shader limits. This list is not a claim that every combination has been tested.
+
+The optional upload list in `.github/workflows/publish.yml` uses these same seven integrations. Platform entries
+without a verified alias are explicitly skipped, rather than guessing a project or making a dependency mandatory.
+Sound Physics Remastered, Iris and Flashback are additional supported integrations described in the README; the
+upload list records the terrain/recipe/craft integrations above.
 
 ## Media
 
-The icon is `docs/media/icon.png` (512×512), the same picture as the mod's logo `incoming.png` in the jar. CurseForge
-takes a 400×400 avatar and no WebP, so its avatar is `docs/media/icon-400.png`, the same picture scaled down. The page
-opens with the loop `docs/media/hero.webp` (960×540), which also heads the README. The gallery, in this order (the
-first one is featured):
+The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
+The default first screen uses `docs/media/still-2.jpg` (about 188 KiB), rather than loading the 6 MiB animation.
+The original `docs/media/hero.webp` remains available by clicking the README poster. `docs/guide/img/remote.gif`
+is an existing GIF demonstration of console controls; a GIF conversion of the large hero loop is unnecessary for
+the static first screen. There is no verified finished trailer URL to embed.
+
+The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-2.jpg` | Cruise missile in flight over a city |
-| `docs/media/still-1.jpg` | Cruise missile flying low over the terrain toward its target |
-| `docs/media/still-3.jpg` | Cruise missile in its final dive onto a burning factory |
-| `docs/media/still-4.jpg` | The warhead explodes inside the factory |
-| `docs/media/still-5.jpg` | Cruise missiles dive onto a factory: the first one has just hit |
-| `docs/media/still-6.jpg` | More hits on the factory as another cruise missile comes in |
-| `docs/guide/img/nuke-wave.jpg` | Fireball and blast wave of a 15 kt airburst over a city |
-| `docs/guide/img/nuke.jpg` | Mushroom cloud; the dust wall of the blast wave below |
-| `docs/guide/img/nuke-ruins.jpg` | A city after a 15 kt strike: ruins and fires |
+| `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
+| `docs/guide/img/remote.gif` | Strike Designator console: weapon, salvo and target |
+| `docs/guide/img/map.gif` | Targeting map and flight route |
+| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 in flight |
+| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet on its launcher |
+| `docs/guide/img/weapon-grad.jpg` | Grad rocket launcher |
+| `docs/guide/img/sam.webp` | SAM and radar during a drone raid |
+| `docs/guide/img/launcher.webp` | Fixed cruise missile launcher |
+| `docs/guide/img/nuke-wave.jpg` | Fireball and blast wave over a city |
+| `docs/guide/img/nuke-ruins.jpg` | Ruins and fires after a nuclear strike |
 
-## Publishing
+These are existing game captures, not a fresh visual check of the current jar. Before public submission, replace
+changed effect/interface captures after the active effect and camera work has settled. For CurseForge, use static
+JPEG/PNG images in the description and preview gallery animations separately. Check both language sections, image
+loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 
-The workflow `.github/workflows/publish.yml` creates the Modrinth page and uploads the jar of a GitHub release. It
-runs only when started by hand. [modrinth.json](modrinth.json) holds the Modrinth fields from the table above, the
-icon path and the gallery with captions; change it together with this file.
+## Authorized publishing workflow
 
-Secrets and variable, in Settings → Secrets and variables → Actions:
+`.github/workflows/publish.yml` runs only by hand. No mode is part of this documentation task. Even `draft` writes
+to Modrinth and uploads a jar; `submit` and `release` can make files public.
 
-- `MODRINTH_TOKEN`: New repository secret. A Modrinth personal access token with the scopes Create projects, Read
-  projects, Write projects, Create versions and Read versions.
-- `CURSEFORGE_TOKEN`: New repository secret. A CurseForge API token for file uploads.
-- `CURSEFORGE_ID`: Variables tab → New repository variable. The project ID shown on the CurseForge project page.
+It uses the fields/icon/gallery in [modrinth.json](modrinth.json). The page script assembles the English and Russian
+body files in that order. CurseForge's description is pasted into its Markdown editor separately; the workflow
+uploads version files, not that description.
 
-Without `MODRINTH_TOKEN` the workflow skips Modrinth, and without `CURSEFORGE_TOKEN` or `CURSEFORGE_ID` it skips
-CurseForge. The run does not fail because of that.
+Repository settings used by an authorized publishing run:
 
-To start it: Actions → publish → Run workflow, choose the step, enter the version (for example `3.0.0`; empty means
-the latest GitHub release) and press Run workflow.
+- `MODRINTH_TOKEN`: secret with project read/write/create and version read/create scopes.
+- `CURSEFORGE_TOKEN`: secret for CurseForge file uploads.
+- `CURSEFORGE_ID`: repository variable containing the existing project's ID.
 
-- `draft`: creates the Modrinth project as a draft, or updates the draft: the fields, the page text from
-  [description.md](description.md), the icon `docs/media/icon.png` and the gallery images from `modrinth.json` that
-  exist in the repository, and the jar. Only the project members see a draft and its versions. Run it again after
-  changing the images or the texts: it uploads only new images and skips a jar that is already uploaded.
-- `submit`: sends the Modrinth draft for review and uploads the jar to CurseForge. On CurseForge the first file sends
-  a new project for review. Turn on the Modrinth content disclosure by hand before the first `submit`.
-- `release`: for later versions, after Modrinth has approved the project: updates the Modrinth page and uploads the
-  jar to Modrinth and CurseForge.
+Without the relevant token/ID the corresponding store is skipped. The version input selects an existing GitHub
+release without `v`; empty means latest. Changelog comes from `docs/releases/<version>.md`, or the release body if
+that file is absent.
 
-Each uploaded file lists the optional mods as dependencies: Create, Create Aeronautics, Sable and Distant Horizons on
-Modrinth, and the same without Create Aeronautics on CurseForge, which has no project with the slug
-`create-aeronautics`.
-An image removed from `gallery` is removed from the site on the next `draft` or `release`; captions of uploaded
-images are changed on the site. Running `submit` or `release` twice for the same version uploads the file to
-CurseForge twice.
+- `draft`: creates or updates a hidden Modrinth project, its text, icon, gallery and jar. It skips an already uploaded jar.
+- `submit`: sends the Modrinth draft for review and uploads the jar to CurseForge, where a first file can trigger review.
+- `release`: updates the approved Modrinth page and uploads a later version to both stores.
 
-A CurseForge project can only be created on the site. Create it by hand first with the fields above (title, summary,
-CurseForge categories, license, links, the avatar `docs/media/icon-400.png`, and description.md as the description),
-then add its ID as `CURSEFORGE_ID`.
+Removed gallery entries are removed remotely on the next applicable update. Repeating `submit` or `release` can
+upload a duplicate CurseForge file. A CurseForge project is created in the account, not by this workflow.
+
+## Needs Artem before a public store step
+
+- Identify the existing hidden projects, if any, from the owner account; record their IDs, URLs, owner and visibility.
+  A public API 404 does not prove that no private draft exists; a 403 does not establish a CurseForge project's state.
+- Compare the account fields, disclosure, dependency relations and assembled English/Russian body with these drafts.
+  Confirm any missing CurseForge project aliases before adding relations.
+- Check the real store preview, refresh captures affected by ongoing visual/UI work, and choose a finished trailer
+  only if one is available. Nothing here claims a new render or sound check.
+- Separately authorize any account edit, submission, visibility change or file publication. Existing GitHub Release
+  bodies that link the personal pack also need a separately authorized public edit; tracked release notes are fixed here.
+
+Platform references: [CurseForge submission and Markdown editor](https://support.curseforge.com/support/solutions/articles/9000199552-project-submission-guide-and-tips),
+[CurseForge language/avatar rules](https://support.curseforge.com/support/solutions/articles/9000197279-moderation-policies),
+[Roxy's installation requirements](https://modrinth.com/mod/roxy).

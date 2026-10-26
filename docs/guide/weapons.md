@@ -59,7 +59,7 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **The crater** follows the law for a charge on the ground: about 0.65·∛W metres across and a quarter of that deep,
   a little smaller in rock, a little larger in waterlogged ground under water; dry sand and the gravel of a rail bed dig
   like soil. A crater is only dug where the blast is at the ground. A missile crater is a pit two to three blocks across
-  and about a block deep: craters are much smaller than in earlier versions, and that is the real size.
+  and about a block deep at this charge.
 - **Paving on a solid backing** cannot bend like a free wall. It is excavated with its backing, using the crater
   law for its material. In cohesive stone and concrete, a fraction of a block is saved as surface damage and shown
   with pale fresh aggregate, small material chips and an uneven scorched edge, plus nearby cracks.
@@ -88,7 +88,8 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
 - **Fuel in the crater**: the last quarter of the fuel stays in the crater and burns there as ordinary Minecraft fire on
   real blocks: about 5 blocks for the Shahed for about 2.5 minutes, about 9 blocks for the missile for about a quarter of
   an hour. The fuel falls to the first solid surface under the impact (the bottom of the crater, the floor under a
-  broken roof), runs downhill and over edges, but not uphill or through walls; on water it does not burn. On bare earth
+  broken roof). The initial spill favors lower surfaces and can splash onto an adjacent one-block step; it does not
+  pass through walls. Fuel drains down over edges and does not burn on water. On bare earth
   or stone the flames stand on top of the block, as on netherrack. The fuel keeps them alight for its whole life, rain
   included; a block placed on it or water poured over it puts that part out. If the block under the fuel burns or
   breaks away, the fuel drips down to the next surface, so fuel fire never hangs in the air. Planks, logs and anything
@@ -135,8 +136,8 @@ fragment leaves a pit of a few centimetres (not physical).
 ## How they fly
 
 Flight is the mod's own game model, not a copy of the real weapons: the same rules for every weapon, with each one's
-own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Everything at the target
-(charge, blast, damage) is real.
+own game numbers (not physical, chosen for blocks and for how a flight reads on screen). Blast effects use the charge
+and material models, with the [scale exceptions and limits](not-physical.md).
 
 By default speeds and flight heights are game values, lower than the real ones (not physical): a block is a metre,
 but you see only a few hundred blocks, and at real speed a fast weapon crosses that in a second or two. The world

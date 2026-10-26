@@ -50,6 +50,9 @@ jobs:
         create-aeronautics(optional){modrinth:create-aeronautics}#(ignore:curseforge)
         sable(optional){modrinth:sable}{curseforge:sable}
         distanthorizons(optional){modrinth:distanthorizons}{curseforge:distant-horizons}
+        voxy(optional){modrinth:voxy}#(ignore:curseforge)
+        roxy(optional){modrinth:roxy}{curseforge:roxy}
+        lss(optional){modrinth:lod-server-support}#(ignore:curseforge)
     steps:
       - uses: actions/checkout@v5
         with:
@@ -63,6 +66,8 @@ jobs:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           STEP: ${{ inputs.step }}
         run: python3 tools/release_checks.py stores "$STEP"
+      - name: Validate store drafts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_store*.py' -v
 
       - name: Выпуск
         id: rel

@@ -10,6 +10,8 @@ Recipe: redstone dust on top; iron ingot, spyglass and iron ingot in the middle 
 
 ![Strike Designator recipe](img/recipe-strike_designator.png)
 
+Ingredients: 1 redstone dust, 2 iron ingots, 1 spyglass and 1 compass. Makes 1 designator.
+
 In Creative mode the designator is in the Incoming tab. If the world owner has limited the designator to operators, it
 does not fire for other players.
 

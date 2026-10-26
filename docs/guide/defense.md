@@ -19,7 +19,8 @@ burning rocket motor many kilometres away. By day the warm ground bends sound up
 so you hear everything from closer. Damp air takes less of the high notes: in rain a distant engine sounds brighter,
 even though you lose it sooner. An air defence missile's motor is heard by the same law, far away too. Sound travels at the speed of sound: a distant flash shows up before you hear the
 explosion, and you hear a fast projectile only shortly before it arrives. A projectile faster than sound is not heard
-until its shock wave reaches you: first comes the crack, then its own sound. None of today's weapons fly that fast.
+until its shock wave reaches you: first comes the crack, then its own sound. At the default GAME speeds these projectiles are subsonic. With REAL, or CUSTOM toward real speed, Grad rockets
+and SAM interceptors can be supersonic, so their sound can arrive after they pass.
 
 An explosion is heard as far as its charge carries: on a quiet night even a Lancet or a Grad rocket rumbles tens of
 kilometres away, up to 32 km, the farthest the mod sends anything; by day, behind hills and in rain much less. A small
@@ -82,5 +83,14 @@ Against a SAM: a salvo (it has only four rails), a route around it or behind hil
 
 ![SAM Interceptor recipe (two per craft)](img/recipe-interceptor.png)
 
-Interceptors are loaded with a right click or through a hopper, so a factory can keep the SAM supplied. They cannot be
-taken out, but a broken SAM drops them along with itself.
+SAM ingredients: 2 iron bars, 1 compass, 4 iron ingots, 1 precision mechanism and 1 iron block; makes 1 SAM.
+Interceptor ingredients: 1 precision mechanism, 4 iron ingots and 2 gunpowder; makes **2 interceptors**.
+Without Create, use a clock in the SAM and a comparator in the interceptor instead of the precision mechanism.
+
+1. Place the SAM under open sky and keep its chunk ticking by staying nearby.
+2. Load interceptors with RMB or a hopper. Stock has two slots of 16 missiles each, separate from the four ready rails.
+3. Wait for loading: by default one missile moves from stock to a free rail every 8 seconds, including the first one.
+   Filling four empty rails takes 32 seconds if nothing fires (`air_defense.reload_seconds` and `rails` change this).
+4. RMB with an empty hand checks ready missiles and stock. Stock alone cannot fire until a missile reaches a rail.
+
+Missiles cannot be taken back out, but a broken SAM drops its stock and ready missiles.

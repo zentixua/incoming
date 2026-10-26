@@ -17,6 +17,7 @@ set -euo pipefail
 API=${MODRINTH_API:-https://api.modrinth.com/v2}
 STORE_JSON=${STORE_JSON:-docs/store/modrinth.json}
 BODY_MD=${BODY_MD:-docs/store/description.md}
+BODY_RU_MD=${BODY_RU_MD-docs/store/description.ru.md}
 OUT=${GITHUB_OUTPUT:-/dev/null}
 SUMMARY=${GITHUB_STEP_SUMMARY:-/dev/null}
 
@@ -93,10 +94,11 @@ page() {
   done < <(jq -r '(.icon // empty), (.gallery[]?.file)' "$STORE_JSON")
   file=$(jq -r '.icon // empty' "$STORE_JSON")
   if [ -n "$file" ]; then image "$file" 524288; fi
+  bash "$(dirname "$0")/store_body.sh" "$BODY_MD" "$BODY_RU_MD" > "$tmp/description.md"
   case "$step:$status" in
     draft:none)
       # новый — только черновиком: без версий Modrinth иначе не создаёт, и до проверки его видит лишь команда
-      jq --rawfile body "$BODY_MD" '{slug, title, description, body: $body, categories,
+      jq --rawfile body "$tmp/description.md" '{slug, title, description, body: $body, categories,
           additional_categories: (.additional_categories // []), client_side, server_side, license_id,
           source_url, issues_url, wiki_url, discord_url, project_type: "mod", is_draft: true, initial_versions: []}
         | with_entries(select(.value != null))' "$STORE_JSON" > "$tmp/data.json"
@@ -107,7 +109,7 @@ page() {
       ;;
     draft:draft | draft:rejected | draft:processing | release:approved | release:unlisted | release:private | \
       release:archived | release:processing)
-      jq --rawfile body "$BODY_MD" '. as $s
+      jq --rawfile body "$tmp/description.md" '. as $s
         | [ "title", "description", "categories", "additional_categories", "license_id",
             "source_url", "issues_url", "wiki_url", "discord_url" ]
         | map(select(. as $k | $s | has($k)) | {(.): $s[.]}) | add + {body: $body}' "$STORE_JSON" > "$tmp/edit.json"

@@ -7,10 +7,10 @@ aimed with one item, the Strike Designator. The projectiles are full size; they 
 and a siren sounds at the target before impact.
 
 What happens at the target follows the real weapon and the laws of physics: what breaks and how far, the crater,
-wounds, how big a blast is and how long it lasts. Flight and air defense are the mod's own game model, and by default
+wounds, how big a blast is and how long it lasts, subject to model approximations and the selected nuclear scale. Flight and air defense are the mod's own game model, and by default
 speeds and heights in flight are game values ([how they fly](weapons.md#how-they-fly)). How it is shown (light,
 colour, contrast, billowing smoke, camera) can be stronger than a camera would record, so that it reads well in the game; that
-never changes what happens. Where the mod departs from physics, this guide says "not physical".
+never changes what happens. The [Not physical](not-physical.md) list collects deliberate game rules, including nuclear scale and wave timing.
 
 ## Getting started
 
@@ -51,6 +51,7 @@ Shift+RMB opens the console (salvo, spread, target), and `,` opens the map for s
 | in game | `,` | targeting map |
 | in game | `N` | projectile camera; press again for the next projectile |
 | in the projectile camera | LMB / Shift | new target / exit |
+| in the projectile camera | F5 | outside view (normal perspective key) |
 | on the map | LMB / Enter | pick a target / fire |
 | on the map | Shift+LMB / RMB | add / remove a route point |
 | on the map | Ctrl+LMB | pick a launch site (operators and the host) |

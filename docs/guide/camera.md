@@ -12,6 +12,7 @@ character.
 - When the projectile is beyond your render distance, you see a map with its path instead of video. The video starts
   by itself once it comes closer.
 - **LMB**: new target, whatever is under the crosshair.
+- **F5**: switch to an outside view using the normal perspective key.
 - The Shahed and the Lancet follow a moving target while you keep it in frame. Other weapons hit where the target was
   at launch.
 - To have the camera start by itself at every launch, turn on "Projectile camera on launch" in the

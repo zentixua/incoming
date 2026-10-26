@@ -2,12 +2,15 @@
 
 English · [Русский](ru/commands.md)
 
-Everything the designator does can also be done with the `/incoming` command. For a regular player the command uses
+The `/incoming` command orders conventional strikes and ICBMs and provides administration tools. It does not select
+a nuclear warhead for a cruise missile or B-2; use the designator for that. Its entity argument selects a player or
+mob, rather than the designator's aircraft picker. For a regular player the command uses
 munitions and follows the same [rules](rules.md) as the designator; for operators and command blocks it does not.
 
-Weapons in commands: `drone` (or `shahed`), `loiter` (`lancet`), `missile`, `rocket` (`grad`), `bunker`, `nuke`.
+Conventional `<weapon>` values: `drone` (or `shahed`), `loiter` (`lancet`), `missile`, `rocket` (`grad`), `bunker`.
+The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or salvo command.
 
-## Strikes
+## Conventional strikes
 
 | Command | What it does |
 |---|---|
@@ -30,18 +33,39 @@ Weapons in commands: `drone` (or `shahed`), `loiter` (`lancet`), `missile`, `roc
 | `/incoming nuke at <x y z> [kt [air\|ground]]` | ICBM at a point |
 | `/incoming nuke now [at <x y z>] [kt [air\|ground]]` | detonation at once, without a flight (operators only) |
 
-Without a number: 15 kt, air burst. `air` or `ground` only after the number: `/incoming nuke 15 ground`.
+Without a number: the world's `nuclear.default_yield` (15 kt by default), air burst. `air` or `ground` only after the
+number: `/incoming nuke 15 ground`.
 
 ## Other commands
 
 | Command | What it does |
 |---|---|
-| `/incoming clear` | abort your strikes; for an operator, every strike of every player, nuclear ones included |
+| `/incoming clear` | abort your conventional strikes; for an operator or the host, every player's strikes, nuclear ones included |
 | `/incoming menu` | console |
 | `/incoming help` | short help in chat |
 | `/incoming give [players]` | give a Strike Designator (operators only) |
 | `/incoming radiation [player]`, `radiation clear [players]` | radiation dose, clear radiation (operators only) |
-| `/incoming grid status`, `blackout`, `restore` | power grid: status, cut power to an area, bring power back (operators only) |
+
+## Power grid
+
+Operators only. Coordinates and node IDs refer to the command's dimension, except `status` and a bare `restore`,
+which cover all dimensions. Optional coordinates default to your position; optional radii default to
+`grid.node_radius` (512 blocks). New nodes and outages are capped by `grid.max_radius` (4096 blocks by default).
+
+| Command | What it does |
+|---|---|
+| `/incoming grid status` | outages, nodes and pending light updates in all dimensions |
+| `/incoming grid blackout [<x y z> [radius]]` | cut power without a substation; requested radius 16–16384 blocks |
+| `/incoming grid restore` | restore every outage in all dimensions |
+| `/incoming grid restore at <x y z> <radius>` | restore outages whose centers lie in this area; radius 1–1000000 blocks |
+| `/incoming grid node add [<x y z> [radius]]` | add a grid node without placing a substation block; requested radius 16–16384 blocks |
+| `/incoming grid node list` | list nodes and their IDs in this dimension |
+| `/incoming grid node remove <id>` | remove a node |
+| `/incoming grid node knockout <id>` | knock a node out as a strike would |
+
+For example, `/incoming grid blackout 100 64 -200 128` selects an area around X=100, Z=-200. Afterwards,
+`/incoming grid restore at 100 64 -200 128` starts restoring outages centered within 128 blocks of that point.
+Their whole districts recover over 10 seconds; restoration is not clipped to the circle.
 
 ## Fixed launcher
 
