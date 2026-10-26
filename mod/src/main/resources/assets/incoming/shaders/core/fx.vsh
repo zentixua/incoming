@@ -15,7 +15,7 @@ in vec4 Color;
 // x: мягкость края у рельефа, блоков × 16 (меньше нуля — свет в глазу от источника: минус номер его пробы,
 // SourceProbes); y: во сколько раз точка перенесена ближе (дальше дальней плоскости), × 32767
 in ivec2 UV1;
-// свет мира (карта освещения)
+// свет мира (карта освещения); у запечённых клубов — базис их геометрии (puffBasis), свет — FULL_BRIGHT
 in ivec2 UV2;
 // x: туман Minecraft 0..1; y: 1 — частица (ближайшим пикселем, как из атласа Minecraft), −1 — плитка атласа дальних
 // моделей (свет в ней уже есть), ½ — ореол far/glow (крупный — по формуле, fx.fsh), −¼ — запечённый клуб с
@@ -54,7 +54,7 @@ out float opacity;
 // сколько пропускает пелена между глазом и квадратом (её свет — в fx.fsh, по пелене на кадре)
 out float pallFront;
 // запечённый клуб: доля прямого света (солнце или луна) в свете неба; свет огненных шаров против света у глаза (rgb);
-// направления на прямой свет и на шары в мире (fx.fsh переводит их в оси фактической геометрии и UV клуба)
+// направления на прямой свет и на шары в осях фактической геометрии и UV клуба
 out float sixKey;
 out vec3 sixBall;
 out vec3 sixKeyDir;
@@ -67,6 +67,31 @@ out float emitGain;
 out float emitSpot;
 // на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
 uniform vec4 FxSun;
+
+// Две окружности из UV2 (PuffGeometry.faceLight/flatLight): каждая хранит sin/(|cos| + |sin|) в знаковых 15 битах.
+// Знак short x — знак cos ширины; знак short y — отражение UV. Подъём −16384 — горизонтальная плоскость.
+// В ответе — (cos, sin) ширины и подъёма; у плоскости z = −1, w — знак нормали к глазу. Две нормировки вместо
+// четырёх sin/cos, четыре числа вместо матрицы; геометрия и 36 байт вершины прежние.
+vec4 puffAxes(ivec2 code, float height) {
+    float q = float((code.x & 16383) - (code.x & 16384)) / 16383.0;
+    vec2 yaw = vec2(1.0 - abs(q), q);
+    if (code.x < 0) yaw.x = -yaw.x;
+    yaw = normalize(yaw);
+    int p = (code.y & 16383) - (code.y & 16384);
+    if (p == -16384) return vec4(yaw, -1.0, height > 0.0 ? -1.0 : 1.0);
+    q = float(p) / 16383.0;
+    return vec4(yaw, normalize(vec2(1.0 - abs(q), q)));
+}
+
+// Мировое направление в оси UV: сначала горизонтальная составляющая к клубу, затем подъём; отражение меняет только
+// право/лево, нормаль остаётся к глазу. У лежащего клуба «вверх» карты — горизонталь поперёк его ширины.
+vec3 puffDirection(vec3 l, vec4 axes, bool mirror) {
+    float right = -axes.x * l.x - axes.y * l.z;
+    if (mirror) right = -right;
+    float h = -axes.y * l.x + axes.x * l.z;
+    if (axes.z < 0.0) return vec3(right, h, axes.w * l.y);
+    return vec3(right, axes.z * l.y - axes.w * h, -axes.z * h - axes.w * l.y);
+}
 
 // свет точки p (от камеры) огненными шарами на экране (доля белого, привыкание глаза — уже в FxBallLight): у поверхности
 // шара — его освещённость, дальше — как (r/d)²; с колена — не ярче огня самого шара на экране: освещённое не бывает ярче
@@ -109,16 +134,23 @@ void main() {
     gl_Position = ProjMat * view;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
-    // у пятна свечения UV2 несёт его свет (FxBloom.magnitude), не место на карте освещения
-    vec4 light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
-    if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
-        // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
-        light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
-        // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
-        // ярче света дня — экран больше не покажет; светящееся своим светом (FULL_BRIGHT) его не берёт
-        vec3 add = balls(Position / unfold);
-        if (PallAmbient.w > 0.5) add += firelight(Sampler7, PallSlot0, PallFire0, Position / unfold) + firelight(Sampler8, PallSlot1, PallFire1, Position / unfold);
-        light.rgb += add / max(1.0, dot(add, LUMA));
+    bool six = Normal.y < -0.1 && Normal.y > -0.4;
+    vec4 light;
+    if (six) {
+        // UV2 клуба — базис, не координаты света; FULL_BRIGHT не входит в обычную ветку освещения частиц.
+        light = texelFetch(Sampler2, ivec2(15), 0);
+    } else {
+        // у пятна свечения UV2 несёт его свет (FxBloom.magnitude), не место на карте освещения
+        light = Normal.y < -0.5 || Emit > 129.5 ? vec4(1.0) : texelFetch(Sampler2, UV2 / 16, 0);
+        if (Normal.y > -0.5 && Emit < 129.5 && any(lessThan(UV2, ivec2(240)))) {
+            // доля света неба в точке (небо 0..15): её оттенок — как у вещества под открытым небом, свет блоков — как есть
+            light.rgb *= mix(vec3(1.0), FxSkyFix, float(UV2.y) / 240.0);
+            // свет шаров — к карте освещения: в долях света неба на экране (карта при открытом небе без блоков) и вместе не
+            // ярче света дня — экран больше не покажет; светящееся своим светом (FULL_BRIGHT) его не берёт
+            vec3 add = balls(Position / unfold);
+            if (PallAmbient.w > 0.5) add += firelight(Sampler7, PallSlot0, PallFire0, Position / unfold) + firelight(Sampler8, PallSlot1, PallFire1, Position / unfold);
+            light.rgb += add / max(1.0, dot(add, LUMA));
+        }
     }
     // блик и вуаль у глаза за ними ничто не режет: их видно, сколько видно в кадре самого источника
     float seen = 1.0;
@@ -131,13 +163,15 @@ void main() {
     sixBall = vec3(0.0);
     sixKeyDir = vec3(0.0, 1.0, 0.0);
     sixBallDir = vec3(0.0, 1.0, 0.0);
-    if (Normal.y < -0.1 && Normal.y > -0.4) {
+    if (six) {
         // цвет вершины клуба — вещество в свете неба под открытым небом (SmokePuffs, FarView.sky); по сторонам его делят карты кадра (fx.fsh)
-        sixKey = FxSun.w;
-        sixKeyDir = normalize(FxSun.xyz);
+        // Сначала шары: оси клуба и направление солнца не живут через весь цикл их света.
         vec3 bd;
         sixBall = ballsToward(Position / unfold, bd);
-        sixBallDir = bd;
+        vec4 axes = puffAxes(UV2, Position.y);
+        sixKey = FxSun.w;
+        sixKeyDir = puffDirection(normalize(FxSun.xyz), axes, UV2.y < 0);
+        sixBallDir = puffDirection(bd, axes, UV2.y < 0);
         if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
     }
     // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно

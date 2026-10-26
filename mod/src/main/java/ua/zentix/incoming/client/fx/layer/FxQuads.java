@@ -17,7 +17,8 @@ import java.util.Arrays;
  * смешивается верно только в таком порядке: ближний клуб поверх дальнего, а не «кто родился позже».
  * <p>
  * Вершина — 36 байт ({@link #FORMAT}): место от камеры, место на листе, свет с умноженной альфой, мягкость края
- * у рельефа или проба источника ({@link #seenBy}) и множитель переноса ближе ({@code UV1}), свет мира ({@code UV2}),
+ * у рельефа или проба источника ({@link #seenBy}) и множитель переноса ближе ({@code UV1}), свет мира ({@code UV2}; у
+ * запечённых клубов — базис света, {@link PuffGeometry#faceLight}),
  * туман Minecraft ({@code Normal.x}),
  * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
  * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
@@ -439,6 +440,7 @@ public final class FxQuads {
     public void facePosition(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
                              float soft, float unfold, int light, float fog) {
         PuffGeometry.face(x, y, z, halfA, halfB, puff);
+        if (nearest <= -13 && nearest >= -13 - SHADE_STEPS) light = PuffGeometry.faceLight(x, y, z, s.u1() < s.u0());
         puff(key, s, r, g, b, a, soft, unfold, light, fog);
     }
 
@@ -446,6 +448,7 @@ public final class FxQuads {
     public void flat(float x, float y, float z, float key, float halfA, float halfB, double angle, FxAtlas.Sprite s, float r, float g, float b, float a,
                      float soft, float unfold, int light, float fog) {
         PuffGeometry.flat(x, y, z, halfA, halfB, angle, puff);
+        if (nearest <= -13 && nearest >= -13 - SHADE_STEPS) light = PuffGeometry.flatLight(angle, s.u1() < s.u0());
         puff(key, s, r, g, b, a, soft, unfold, light, fog);
     }
 

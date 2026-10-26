@@ -176,12 +176,13 @@ public final class FarSprites implements SmokePuffs.Out {
     /**
      * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
      * своя непрозрачность, цвет (толща по её лучу) и мягкость к миру (где вещество по лучу), между ними — линейно; клетки, где
-     * вуали нет, не рисуются.
+     * вуали нет, не рисуются. В порядке смешивания клетка — на глубине вещества, не ближней сетки: иначе вуаль
+     * далёких мест бюджета стирала свет и текстуру клубов перед ними.
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {
         FxAtlas.Sprite w = FxAtlas.white();
-        float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2, key = (float) SmokePuffs.VEIL_AT;
+        float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2;
         int n = SmokePuffs.Veil.N;
         FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         for (int j = 0; j + 1 < n; j++) {
@@ -189,7 +190,7 @@ public final class FarSprites implements SmokePuffs.Out {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
                         d = SmokePuffs.Veil.index(i, j + 1);
                 if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
-                out.quad(key);
+                out.quad(veil.depth(i, j));
                 veilCorner(veil, i, j, a, u, v, light);
                 veilCorner(veil, i, j + 1, d, u, v, light);
                 veilCorner(veil, i + 1, j + 1, c, u, v, light);

@@ -195,7 +195,6 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
-    vec3 px = dFdx(worldPos), py = dFdy(worldPos);
     float lod = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
@@ -209,16 +208,6 @@ void main() {
     } else if (six && FxGlowPass.x > 0.5) {
         tex = vec4(sixAlpha(texCoord0, dx, dy, opacity));
     } else if (six) {
-        // Оси настоящей плоскости и её UV: стоячий клуб смотрит на положение глаза, лежащий повёрнут своим зерном.
-        // Поворот камеры не меняет света. Знак определителя сохраняет отражение по u; нормаль — всегда к глазу,
-        // чтобы отражённая картинка меняла право/лево, а не свет спереди/сзади. Производные — до discard sixFrames.
-        float handed = dx.x * dy.y - dx.y * dy.x < 0.0 ? -1.0 : 1.0;
-        vec3 right = normalize((px * dy.y - py * dx.y) * handed);
-        vec3 up = normalize((px * dy.x - py * dx.x) * handed);
-        vec3 front = normalize(cross(right, up));
-        if (dot(front, worldPos) > 0.0) front = -front;
-        vec3 keyDir = vec3(dot(sixKeyDir, right), dot(sixKeyDir, up), dot(sixKeyDir, front));
-        vec3 ballDir = vec3(dot(sixBallDir, right), dot(sixBallDir, up), dot(sixBallDir, front));
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
@@ -230,10 +219,10 @@ void main() {
         // байт −13…−50 в Normal.y: FxQuads.sixWay)
         // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
-        float key = pow(max(sixLight(a.rgb, b, keyDir) / FxSixLight.z, 1e-6), shade);
+        float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, ballDir) / FxSixLight.z, 1e-6), shade);
+        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // клуб, лежащий на горизонтали (степень тени 0 — освещённый сверху верх слоя): свет шаров — в этом пикселе
         if (-nearest * 127.0 - 13.0 < 0.5) {
             vec3 bd;

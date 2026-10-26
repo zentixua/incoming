@@ -25,6 +25,31 @@ public final class PuffGeometry {
         corners(x, y, z, c * halfA, 0, s * halfA, -s * halfB, 0, c * halfB, out);
     }
 
+    /**
+     * Базис света клуба в двух short UV2 вместо FULL_BRIGHT (он у клубов постоянный и восстанавливается в fx.vsh):
+     * две окружности — горизонтальная ось ширины и подъём луча к середине. У каждой — sin/(|cos| + |sin|) в знаковых
+     * 15 битах (±16383), cos восстанавливается как 1 − |sin|, затем пара нормируется. Бит 15 — знак cos ширины, бит 31 —
+     * отражение UV; cos подъёма неотрицателен. Ошибка каждого угла меньше 0,0035°, без atan2 при записи и sin/cos в шейдере.
+     */
+    static int faceLight(double x, double y, double z, boolean mirror) {
+        double h = Math.hypot(x, z);
+        int pitch = h + Math.abs(y) > 1e-9 ? unit(y / (h + Math.abs(y))) : 0;
+        return (h > 1e-9 ? yaw(z, -x) : 0) | pitch << 16 | (mirror ? 0x80000000 : 0);
+    }
+
+    /** Лежащий клуб: та же горизонтальная окружность, код подъёма −16384 (вне её диапазона) — плоскость горизонтальна. */
+    static int flatLight(double angle, boolean mirror) {
+        return yaw(Math.cos(angle), Math.sin(angle)) | 0x40000000 | (mirror ? 0x80000000 : 0);
+    }
+
+    private static int yaw(double c, double s) {
+        return unit(s / (Math.abs(c) + Math.abs(s))) | (c < 0 ? 0x8000 : 0);
+    }
+
+    private static int unit(double q) {
+        return (int) Math.round(q * 16383) & 0x7fff;
+    }
+
     private static void corners(double x, double y, double z, double ax, double ay, double az, double bx, double by, double bz, double[] out) {
         out[0] = x - ax - bx;
         out[1] = y - ay - by;
