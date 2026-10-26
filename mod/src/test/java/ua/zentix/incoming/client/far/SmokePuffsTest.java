@@ -95,8 +95,8 @@ class SmokePuffsTest {
     @Test
     void flatClubLiesWhenSeenFromAbove() {
         assertEquals(1, SmokePuffs.lyingShare(15, 0.5, -18, 53));
-        assertEquals(0, SmokePuffs.lyingShare(15, 0.5, -1, 53), "с уровня глаза — полоса");
-        assertEquals(0, SmokePuffs.lyingShare(5, 5, -18, 53), "круглый");
+        assertEquals(0, SmokePuffs.lyingShare(15, 0.5, -1, 53), "a strip at eye level");
+        assertEquals(0, SmokePuffs.lyingShare(5, 5, -18, 53), "round");
     }
 
     /**

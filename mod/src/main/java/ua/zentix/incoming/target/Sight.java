@@ -11,31 +11,29 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import ua.zentix.incoming.util.Terrain;
 
 /**
- * Прямая видимость на сервере: что игрок видит своими глазами. Сервер не знает, что у игрока на экране, поэтому
- * «видит» значит то же, что у самого Minecraft «сущность приходит клиенту» ({@code ChunkMap.TrackedEntity.updatePlayer}),
- * плюс чистая линия от глаз до тела. Ни одна проверка не грузит чанков: отрезок через неготовый чанк — не видно.
+ * Server line of sight: what player sees with own eyes. Server does not know screen contents, so “sees” means
+ * Minecraft's “entity sent to client” ({@code ChunkMap.TrackedEntity.updatePlayer}) plus clear eye-to-body line.
+ * No check loads chunks: a segment through an unready chunk is unseen.
  * <p>
- * Преграда — то, что заслоняет взгляд ({@link ClipContext.Block#VISUAL}): стекло и решётки прозрачны, листва,
- * стены и крыши — нет; вода и лава взгляд не останавливают. С Sable блоки летательных аппаратов тоже заслоняют:
- * ванильный {@code Level.clip} у него видит и их.
+ * Obstacles block vision ({@link ClipContext.Block#VISUAL}): glass/bars transparent, leaves/walls/roofs opaque;
+ * water/lava do not block. Sable aircraft blocks also obstruct: its vanilla {@code Level.clip} sees them.
  */
 public final class Sight {
     private Sight() {}
 
     /**
-     * Игрок {@code viewer} видит сущность {@code target} своими глазами — {@link #sees(ServerPlayer, Vec3, Entity)} из его
-     * глаз.
+     * {@code viewer} sees {@code target} with own eyes: {@link #sees(ServerPlayer, Vec3, Entity)} from eyes.
      */
     public static boolean sees(ServerPlayer viewer, Entity target) {
         return sees(viewer, viewer.getEyePosition(), target);
     }
 
     /**
-     * Игрок {@code viewer} видит сущность {@code target} из точки {@code eye} — своими глазами или камерой своего снаряда
-     * (картинка камеры у клиента есть, только пока сущность ему отдаётся): она в его мире, жива и не невидима для него
-     * (зелье невидимости, кроме своих по команде с {@code seeFriendlyInvisibles}), Minecraft отдаёт её его клиенту
-     * ({@link Entity#broadcastToPlayer}: наблюдатель не виден), она не дальше от игрока по горизонтали, чем клиент её
-     * получает ({@link #range}), и из {@code eye} до её глаз или середины тела взгляд ничего не заслоняет ({@link #clear}).
+     * {@code viewer} sees {@code target} from {@code eye}, own eyes or owned-projectile camera (client camera
+     * image exists only while entity is sent): same world, alive, not invisible to viewer (invisibility potion
+     * except team with {@code seeFriendlyInvisibles}), Minecraft sends it ({@link Entity#broadcastToPlayer}:
+     * spectator unseen), within horizontal client reception range from player ({@link #range}), clear line from
+     * {@code eye} to target eyes or body center ({@link #clear}).
      */
     public static boolean sees(ServerPlayer viewer, Vec3 eye, Entity target) {
         if (target == viewer || target.level() != viewer.level() || !target.isAlive()) return false;
@@ -46,17 +44,16 @@ public final class Sight {
     }
 
     /**
-     * Точка {@code at} в дальности, докуда сервер вообще отдаёт сущности клиенту игрока ({@link #viewRange}), по
-     * горизонтали. Мир точки — мир игрока (вызывающий проверяет сам).
+     * {@code at} within server entity-sending horizontal range for player ({@link #viewRange}). Caller checks
+     * point world matches player world.
      */
     public static boolean within(ServerPlayer viewer, Vec3 at) {
         return within(viewer, at, viewRange(viewer));
     }
 
     /**
-     * Докуда по горизонтали клиент игрока получает сущность — как у Minecraft: дальность отслеживания её типа (с
-     * пассажирами — наибольшая; с поправкой сервера {@code entity-broadcast-range-percentage}), но не дальше
-     * {@link #viewRange}.
+     * Horizontal client entity reception range, as Minecraft: type tracking range (maximum with passengers;
+     * server {@code entity-broadcast-range-percentage} adjustment), capped at {@link #viewRange}.
      */
     public static double range(ServerPlayer viewer, Entity target) {
         int tracking = target.getType().clientTrackingRange() * 16;
@@ -67,8 +64,8 @@ public final class Sight {
     }
 
     /**
-     * Дальность прорисовки игрока в блоках: его настройка, зажатая дальностью сервера, — дальше этого сервер
-     * сущностей ему не отдаёт ({@code ChunkMap.TrackedEntity.updatePlayer}).
+     * Player render distance, blocks: player setting capped by server; no entities sent beyond ({@code
+     * ChunkMap.TrackedEntity.updatePlayer}).
      */
     public static int viewRange(ServerPlayer viewer) {
         int serverView = Mth.clamp(viewer.server.getPlayerList().getViewDistance(), 2, 32);
@@ -81,8 +78,8 @@ public final class Sight {
     }
 
     /**
-     * Взгляд из {@code from} в {@code to} ничем не заслонён. Отрезок, который заходит в неготовый чанк, — «не видно»:
-     * чанк ради взгляда не грузится ({@link Terrain#readyAlong}).
+     * Unobstructed view from {@code from} to {@code to}. Segment entering unready chunk is “unseen”; do not load
+     * chunks for sight ({@link Terrain#readyAlong}).
      */
     public static boolean clear(ServerLevel level, Vec3 from, Vec3 to) {
         if (!Terrain.readyAlong(level, from, to)) return false;

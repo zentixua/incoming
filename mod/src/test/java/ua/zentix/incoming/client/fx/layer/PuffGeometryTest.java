@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Проверяет настоящие вершины буфера GPU: поворот взгляда не поворачивает клубы вокруг неподвижного глаза. */
+/** Checks actual GPU-buffer vertices: turning the view does not rotate puffs around a stationary eye. */
 class PuffGeometryTest {
     @Test
     void worldVerticesIgnoreCameraYawPitchAndRoll() {
@@ -32,24 +32,24 @@ class PuffGeometryTest {
                     expectedFace = face;
                     expectedFlat = flat;
                 } else {
-                    assertArrayEquals(expectedFace, face, 0, "стоячий клуб, поворот " + k);
-                    assertArrayEquals(expectedFlat, flat, 0, "лежащий клуб, поворот " + k);
+                    assertArrayEquals(expectedFace, face, 0, "upright puff, rotation " + k);
+                    assertArrayEquals(expectedFlat, flat, 0, "horizontal puff, rotation " + k);
                 }
-                // Плоскость стоячего клуба перпендикулярна лучу к его середине, верх — от вертикали мира.
+                // The upright puff plane is perpendicular to its center ray, with up derived from world vertical.
                 for (int i = 0; i < 4; i++) {
                     double dot = 0;
                     for (int j = 0; j < 3; j++) dot += (face[3 * i + j] - center[j]) * center[j];
                     assertEquals(0, dot, 1e-3);
                     assertEquals(center[1], flat[3 * i + 1], 0);
                 }
-                assertTrue(face[4] >= face[1], "верх клуба — вверх в мире");
+                assertTrue(face[4] >= face[1], "puff up points upward in world space");
             }
         }
     }
 
     /**
-     * Базис света в двух short совпадает с осями настоящих вершин и UV, включая полюса и отражения. Шестисторонний свет
-     * после упаковки меняется меньше 0,0003: меньше десятой доли шага цвета. Декодирование — puffAxes/puffDirection в fx.vsh.
+     * The lighting basis in two shorts matches actual vertex and UV axes, including poles and mirroring. Packing
+     * changes six-way lighting by less than 0.0003, under one tenth of a color step. Decode matches puffAxes/puffDirection in fx.vsh.
      */
     @Test
     void packedLightBasisMatchesTheWorldVertices() {
@@ -80,9 +80,9 @@ class PuffGeometryTest {
                     int code = code(out, quad, 0);
                     LightFrame frame = decode(code, y);
                     Vec3[] got = frame.axes();
-                    for (int corner = 1; corner < 4; corner++) assertEquals(code, code(out, quad, corner), "один базис у четырёх вершин");
-                    for (int axis = 0; axis < 3; axis++) assertTrue(expected[axis].distanceTo(got[axis]) < 1.3e-4, "точность оси " + axis);
-                    for (Vec3 light : lights) assertEquals(light(expected, light), light(frame.project(light)), 0.0003, "шестисторонний свет");
+                    for (int corner = 1; corner < 4; corner++) assertEquals(code, code(out, quad, corner), "one basis for all four vertices");
+                    for (int axis = 0; axis < 3; axis++) assertTrue(expected[axis].distanceTo(got[axis]) < 1.3e-4, "axis precision " + axis);
+                    for (Vec3 light : lights) assertEquals(light(expected, light), light(frame.project(light)), 0.0003, "six-way lighting");
                 }
             }
         }
@@ -93,7 +93,7 @@ class PuffGeometryTest {
         return (MemoryUtil.memGetShort(address + 28) & 0xffff) | (MemoryUtil.memGetShort(address + 30) & 0xffff) << 16;
     }
 
-    /** Та же распаковка, что у puffAxes: две окружности в норме L1, отражение, подъём или горизонтальная плоскость. */
+    /** The same decoding as puffAxes: two L1 circles, mirroring, elevation or a horizontal plane. */
     private static LightFrame decode(int code, double height) {
         int yawCode = (short) code, pitchCode = (short) (code >>> 16);
         double s = ((yawCode & 16383) - (yawCode & 16384)) / 16383.0, c = 1 - Math.abs(s);
@@ -108,7 +108,7 @@ class PuffGeometryTest {
         return new LightFrame(c, s, cp * scale, sp * scale, pitchCode < 0);
     }
 
-    /** Четыре параметра и скалярная проекция puffDirection: без матрицы и тригонометрии. */
+    /** Four parameters and the scalar puffDirection projection, without a matrix or trigonometry. */
     private record LightFrame(double c, double s, double cp, double sp, boolean mirror) {
         Vec3 project(Vec3 light) {
             double right = (-c * light.x - s * light.z) * (mirror ? -1 : 1), h = -s * light.x + c * light.z;

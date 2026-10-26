@@ -1,289 +1,277 @@
-# Конвейер разработки: стандарт сообщества вместо своего
+# Development pipeline: community standards instead of custom tools
 
-Исследование и предложение на 23.10.2026 (сессия DL), переделано по решению Артёма 23.10 07:40–07:41.
-- **07:40.** Конвейер — стандартный конвейер сообщества (NeoForge, Fabric, проверенные инструменты). Отличия — только
-  временные разовые шаги вроде сравнения с 3.4.1.
-- **07:41.** Своё можно только там, где есть настоящая нужда, которую стандарт не покрывает. Нельзя, если своё обходит
-  архитектурную ошибку, которую мышление от базовых принципов убрало бы в корне.
+Research and proposal as of 23.10.2026 (session DL), revised after Artem's decision, 23.10 07:40–07:41.
+- **07:40.** Use the standard community pipeline (NeoForge, Fabric, proven tools). Differences only for temporary,
+  one-off steps such as comparison with 3.4.1.
+- **07:41.** Custom tools only for real needs not covered by standards. Not when they work around architectural errors
+  that first-principles thinking would remove at the root.
 
-Поэтому у каждого нашего инструмента и правила здесь один вердикт:
-- **(а)** заменить стандартом сообщества;
-- **(б)** следствие корневой ошибки: чинить корень, инструмент убрать;
-- **(в)** настоящая нужда, стандарта нет: оставить, с причиной.
+Thus each custom tool/rule here receives one verdict:
+- **(a)** replace with community standard;
+- **(b)** consequence of a root error: fix root, remove tool;
+- **(c)** real need without a standard: keep, with reason.
 
-Источники — в конце; где источника нет, стоит «оценка». Ретроспектива с 01.10 — `docs/dev-process.md`.
+Sources at the end; unsourced items marked `(est.)`. Retrospective since 01.10: `docs/dev-process.md`.
 
-## Коротко
+## Summary
 
-- **Как работают моддеры.**
-  - Правят в запущенной dev-игре: горячая замена кода на JetBrains Runtime, F3+T для ресурсов, R у Iris для
-    шейдеров. Правка видна через секунды.
-  - CI проверяет сборку и серверные GameTest, 2–5 мин.
-  - Картинку автор смотрит сам, пока делает. Сравнения кадров в CI нет ни у одного большого мода рендера (Sodium,
-    Iris, Distant Horizons, Veil, Flywheel, Flashback).
-  - Ошибки ловят беты и игроки.
-- **У нас 24 своих инструмента и правила** (п. 3): 10 заменяет готовое (а), 8 — следствия корневых ошибок (б),
-  8 — настоящая нужда (в); три строки смешанные. Главные корни — два.
-  - **Первая ошибка:** до четырёх сессий с картинкой сразу на одной видеокарте. Отсюда очередь, замки, песочница,
-    которая гаснет от чужих задач, и 15 ч ожидания за ночь 22–23.10.
-  - **Вторая ошибка:** картинку смотрели после работы, а не во время. Отсюда съёмка всей сборки под Iris на каждый PR:
-    130 запусков за ночь, 9,9 ч видеокарты.
-- **Предложение.** Перейти на стандарт и убрать своё, где стандарт есть.
-  - Картинку — одна сессия за раз на видеокарте.
-  - Кадр смотреть в dev-клиенте во время работы.
-  - Сравнение со всей сборкой — только разовое, с 3.4.1, пока не достигнут его уровень.
-  - Своё остаётся там, где у NeoForge стандарта нет: кадр в заданный миг для Claude, клиент без окна на чужом
-    рабочем столе, защита игры Артёма.
+- **How modders work.**
+  - Edit in a running dev game: hot swap on JetBrains Runtime, F3+T for resources, Iris R for shaders. Changes visible
+    in seconds.
+  - CI checks build and server GameTest, 2–5 min.
+  - Author checks visuals while working. No major rendering mod compares frames in CI (Sodium, Iris, Distant Horizons,
+    Veil, Flywheel, Flashback).
+  - Betas and players find bugs.
+- **We have 24 custom tools/rules** (section 3): ready-made alternatives replace 10 (a), 8 result from root errors (b),
+  8 serve real needs (c); three rows mixed. Two main roots.
+  - **First error:** up to four visual sessions sharing one GPU. Hence queue, locks, sandbox killed by other jobs,
+    15 h waiting overnight 22–23.10.
+  - **Second error:** checking visuals after work rather than during. Hence full-pack Iris recording per PR: 130 runs
+    overnight, 9.9 GPU hours.
+- **Proposal.** Adopt standards, remove custom tools where standards exist.
+  - One visual session on the GPU at a time.
+  - Check frames in dev client while working.
+  - Full-pack comparison only once against 3.4.1 until reaching its quality.
+  - Keep custom tools where NeoForge has no standard: Claude's precisely timed frame, headless client on someone
+    else's desktop, protection of Artem's game.
 
-## 1. Звенья: как у моддеров, как у нас, что берём
+## 1. Stages: modders, us, what to adopt
 
-| Звено | Как у опытных моддеров (конец 2026) | Как у нас | Что берём |
+| Stage | Experienced modders (late 2026) | Us | Adopt |
 |---|---|---|---|
-| Проект | MDK NeoForge 1.21.1: ModDevGradle 2.0.148, Parchment 2024.11.17. Create, Mekanism, AE2, JEI, Sodium, Iris, Veil — на MDG 2.0.14x. Мультилоадер (MultiLoader-Template, Architectury, Stonecutter) — только кому нужны несколько загрузчиков или версий | MDG 2.0.147, Parchment 2024.11.17, одна версия | так и оставить; мультилоадер не нужен (решение 22.10: остаёмся на NeoForge 1.21.1) |
-| Скорость сборки | MDK: `daemon`, `parallel`, `caching`, `configuration-cache` — все `true`; MDG поддерживает кэш настройки; Mekanism, AE2, JEI его включили; Create — без демона | тёплый демон для `build` (#384): компиляция 3–6 с; кэш сборки общий; кэш настройки выключен | настройки MDK как есть: демон и кэш настройки включены (проверка — часть B) |
-| Запуск и отладка | запуски из IDE, отладчик; горячая замена тел методов; JetBrains Runtime с `-XX:+AllowEnhancedClassRedefinition` — и поля, и методы (Create ставит флаг на всех запусках, Mekanism — когда JVM от JetBrains); замена миксинов ненадёжна (Mixin #592, #408) — перезапуск | песочница: свой агент замены, JBR 21 (`sandbox.sh jbr`), `restart` ~20 с | JBR + HotswapAgent (`autoHotswap`) вместо своего агента; отладчик и IDE Claude не нужны: вместо точек останова — строки `SCENARIO` и `overlay` |
-| Перезагрузка в игре | F3+T — ресурсы, `/reload` — данные, R у Iris — шейдерпак; Veil следит за файлами и пересобирает шейдеры сам | `swap` делает F3+T, шейдеры слоя — наши ресурсы | так и есть; ещё — настройки: NeoForge перечитывает изменённый TOML и шлёт `ModConfigEvent.Reloading` без перезапуска |
-| Подбор чисел вида | ползунки в ImGui (Veil F6, ImGuiMC), экраны настроек | число — в коде или в аргументе `/fx`, кадр — `shot` | ползунки не берём: Claude их не двигает, ему нужен кадр в заданный миг |
-| Автотесты | JUnit; JUnit с игрой (`unitTest` MDG + `testframework`); серверные GameTest в CI — Create, JEI, AE2, Mekanism; клиентские тесты со снимком и сравнением с шаблоном — только Fabric (с 1.21.5); у NeoForge их нет (#3624, открыт 10.10.2026); `mc-runtime-test` — запуск клиента в CI без снимков | JUnit-законы, GameTest шестью частями, сценарии полёта, клиент без окна со снимками | стандарт уже есть; клиентских тестов со снимком у NeoForge нет — кадр берём из dev-клиента (п. 3) |
-| Проверка картинки | глазами в своей игре; RenderDoc и Nsight — разбирать кадр (на Linux — `renderdoccmd`; RenderNurse NeoForge требует Java 25); вне Minecraft: Bevy снимает кадры примеров в CI, NVIDIA FLIP считает разницу кадров | шлагбаум `look_gate` со всей сборкой под Iris на каждый видимый PR, сравнение глазами (кадры шумят на 10–40 % пикселей) | как у всех: автор смотрит кадр во время работы в dev-клиенте, кадры — в PR; полная сборка — только разовое сравнение с 3.4.1 |
-| CI | GitHub Actions + `gradle/actions/setup-gradle` (v6.4.0; кэш пишет только основная ветка). Время: Create 2–4 мин, Sodium 1,5–3, AE2 3–4, Mekanism 2–3, JEI 5–14 | 4,9 мин медиана, p90 7,1; GameTest шестью частями; `setup-gradle@v5` | оставить; v6 — мелкая правка |
-| Выпуск | `mod-publish-plugin` 2.2.1 (Create, Sodium), `mc-publish` 3.3.2, Minotaur; журнал изменений — Keep a Changelog, git-cliff | `mc-publish` 3.3.1, `docs/releases/<версия>.md`, `release=true`, PR сборки | оставить, работает за минуты |
-| Беты и отзывы | Sodium: 39 бет и 11 альф на Modrinth, Distant Horizons — 191 бета, Iris — 12; ночные сборки из CI; формы задач с логом на mclo.gs; мод Crash Assistant | друзья получают только выпуски через сборку; `logscan.py` после игры | бета у друзей — решение Артёма (п. 6) |
-| ИИ-инструменты | HeadlessMC MCP (клиент из командной строки; экран — JSON без картинки), minecraft-mod-mcp, mcpfabric — молодые проекты; у NeoForge и Fabric про агентов ничего | песочница: команды `/fx`, кадр и WAV файлом | не берём: у нас то же, и кадр точнее |
+| Project | NeoForge 1.21.1 MDK: ModDevGradle 2.0.148, Parchment 2024.11.17. Create, Mekanism, AE2, JEI, Sodium, Iris, Veil on MDG 2.0.14x. Multiloader (MultiLoader-Template, Architectury, Stonecutter) only for multiple loaders/versions | MDG 2.0.147, Parchment 2024.11.17, one version | keep; no multiloader needed (22.10 decision: stay on NeoForge 1.21.1) |
+| Build speed | MDK: `daemon`, `parallel`, `caching`, `configuration-cache` all `true`; MDG supports configuration cache; Mekanism, AE2, JEI enable it; Create has no daemon | warm daemon for `build` (#384), compile 3–6 s; shared build cache; configuration cache off | MDK settings as is: daemon/configuration cache on (check in part B) |
+| Launch/debug | IDE runs, debugger; method-body hot swap; JetBrains Runtime `-XX:+AllowEnhancedClassRedefinition` supports fields/methods too (Create sets flag for all runs, Mekanism for JetBrains JVM); mixin swaps unreliable (Mixin #592, #408), restart | sandbox: own swap agent, JBR 21 (`sandbox.sh jbr`), `restart` ~20 s | JBR + HotswapAgent (`autoHotswap`) instead of own agent; Claude needs neither debugger nor IDE: `SCENARIO` lines and `overlay` instead of breakpoints |
+| In-game reload | F3+T resources, `/reload` data, Iris R shaderpack; Veil watches files/rebuilds shaders | `swap` does F3+T; effects-layer shaders are our resources | already so; also settings: NeoForge rereads changed TOML, sends `ModConfigEvent.Reloading` without restart |
+| Visual tuning | ImGui sliders (Veil F6, ImGuiMC), settings screens | number in code or `/fx` argument, frame via `shot` | no sliders: Claude cannot move them, needs a frame at a specified moment |
+| Automated tests | JUnit; JUnit with game (MDG `unitTest` + `testframework`); server GameTest in CI: Create, JEI, AE2, Mekanism; client screenshot/template tests only Fabric (since 1.21.5); absent in NeoForge (#3624, opened 10.10.2026); `mc-runtime-test` runs client in CI without screenshots | JUnit laws, six-shard GameTest, flight scenarios, headless screenshot client | standard already present; NeoForge lacks client screenshot tests, get frames from dev client (section 3) |
+| Visual checks | eyes in own game; RenderDoc/Nsight frame analysis (Linux `renderdoccmd`; NeoForge RenderNurse needs Java 25); outside Minecraft, Bevy captures example frames in CI, NVIDIA FLIP measures difference | full-pack Iris `look_gate` per visible PR, visual comparison (10–40 % pixels noisy) | community approach: author checks frames in dev client during work, frames in PR; full pack only one-off comparison with 3.4.1 |
+| CI | GitHub Actions + `gradle/actions/setup-gradle` (v6.4.0; cache writes only main branch). Times: Create 2–4 min, Sodium 1.5–3, AE2 3–4, Mekanism 2–3, JEI 5–14 | median 4.9 min, p90 7.1; six-shard GameTest; `setup-gradle@v5` | keep; v6 a small change |
+| Release | `mod-publish-plugin` 2.2.1 (Create, Sodium), `mc-publish` 3.3.2, Minotaur; changelog Keep a Changelog, git-cliff | `mc-publish` 3.3.1, `docs/releases/<version>.md`, `release=true`, pack PR | keep, takes minutes |
+| Betas/feedback | Sodium: 39 betas, 11 alphas on Modrinth; Distant Horizons 191 betas, Iris 12; CI nightlies; issue forms with mclo.gs log; Crash Assistant mod | friends receive only releases through pack; post-game `logscan.py` | friends' betas are Artem's decision (section 6) |
+| AI tools | HeadlessMC MCP (CLI client, JSON screen without image), minecraft-mod-mcp, mcpfabric are young projects; NeoForge/Fabric say nothing about agents | sandbox: `/fx`, frame/WAV files | skip: same capability here, frame more precise |
 
-Вывод по таблице: у моддеров нет волшебного инструмента, которого нет у нас. Разница — в том, **где** они проверяют
-картинку (в живой игре автора) и **как часто** гоняют тяжёлое (CI — только сборка и тесты, картинка — бетой).
+Table conclusion: modders have no magic tool we lack. Difference is **where** they check visuals (author's live game)
+and **how often** they run heavy work (CI build/tests only, visuals through beta).
 
-## 2. Наши потери 22–23.10 (числа из данных)
+## 2. Our losses, 22–23.10 (from data)
 
-Данные:
-- PR #379–#406 (`gh`) и 172 запуска CI `build` с 22.10 14:00 UTC;
-- журнал задач ноутбука: 146 задач с 22.10 17:51 до 23.10 07:28 UTC (раньше журнал пуст — была перезагрузка);
-- транскрипты сессий X, F4, N1–N4, LFX, F5, VXG, LNB, H, PK и итоги `mod/run/incoming-sessions/*.json`.
+Data:
+- PRs #379–#406 (`gh`), 172 CI `build` runs since 22.10 14:00 UTC;
+- laptop job journal: 146 jobs from 22.10 17:51 to 23.10 07:28 UTC (earlier journal empty after reboot);
+- transcripts of X, F4, N1–N4, LFX, F5, VXG, LNB, H, PK and `mod/run/incoming-sessions/*.json` results.
 
-`sessions.log` нет: ночные сессии шли старым `mod/run/incoming-sessions/go.sh`, а не `tools/sessions/go.sh`
-(п. 5.1 `dev-process.md` не внедрён).
+No `sessions.log`: overnight sessions used old `mod/run/incoming-sessions/go.sh`, not `tools/sessions/go.sh`
+(`dev-process.md` 5.1 not implemented).
 
-### 2.1. Ночь 22.10 19:51 – 23.10 09:28 (13,6 ч, местное время)
+### 2.1. Night 22.10 19:51 – 23.10 09:28 (13.6 h, local time)
 
-- **Сколько сессий.** С картинкой за ночь шли одиннадцать: F4, VXC4, VXG, N1, N4, LFX, F5, N2, к утру — N3, LNB и PK;
-  одновременно — до четырёх (по транскриптам: N1, N4, LFX и VXG в 20:30 UTC, N4, LFX, F5 и N2 в 22:05).
-- **Видеокарта.** 130 запусков клиента со всей сборкой; видеокарта занята 9,9 ч из 13,6 (73 %).
-- **Очередь.** Задачи ждали её 15,0 ч в сумме: N4 — 186 мин, LFX — 179, F5 — 162, N2 — 140. Время работы и ожидания
-  разделено по замку очереди (тяжёлые задачи идут по одной), это расчёт по журналу, а не прямой замер.
-- **Эталон.** `main` и 3.4.1 сняли 43 раза — 2,65 ч видеокарты из 9,9. Одни и те же сцены ядерки на `main` сняли N1,
-  N2, N3 и N4, каждый для себя; N2 и LFX сняли `main` по три раза.
-- **Круги своей ветки.** LFX снял свою ветку со всей сборкой 11 раз (от 4 до 74 мин каждый), F5 — 7 раз.
-- **Песочница.** Её пробовали N1, N2 (дважды) и F5. Она прожила 5 с и 16 с, а у N2 не стартовала: её гасит любая
-  задача на видеокарте (`tools/sandbox.sh`, `run_client`). N2: «песочницу для крупного плана шара запустить не
-  удалось: очередь видеокарты всё время была занята другими сессиями». F5: «отдельная песочница не пригодилась».
-- **Ожидание в сессиях.** В `sleep` и опросах: N2 — 101 мин из 214, N1 — 75 из 108, LFX — 72 из 353 (и ещё 163 мин в
-  задачах ноутбука).
+- **Sessions.** Eleven visual sessions overnight: F4, VXC4, VXG, N1, N4, LFX, F5, N2; by morning N3, LNB, PK; up to four
+  concurrent (transcripts: N1, N4, LFX, VXG at 20:30 UTC; N4, LFX, F5, N2 at 22:05).
+- **GPU.** 130 full-pack client launches; GPU busy 9.9 of 13.6 h (73 %).
+- **Queue.** Jobs waited 15.0 h total: N4 186 min, LFX 179, F5 162, N2 140. Run/wait separated by queue lock (heavy jobs
+  run singly); journal-derived calculation, not direct measurement.
+- **Reference.** `main`/3.4.1 recorded 43 times, 2.65 of 9.9 GPU hours. N1, N2, N3, N4 each recorded the same `main`
+  nuclear scenes; N2/LFX recorded `main` three times each.
+- **Own-branch rounds.** LFX recorded its branch full-pack 11 times (4–74 min each), F5 7 times.
+- **Sandbox.** N1, N2 (twice), F5 tried it. Lasted 5 s/16 s, failed for N2: any GPU job kills it (`tools/sandbox.sh`,
+  `run_client`). N2: “could not start the sandbox for a fireball close-up: other sessions kept the GPU queue busy”.
+  F5: “separate sandbox was no use”.
+- **Session waiting.** `sleep`/polling: N2 101 of 214 min, N1 75 of 108, LFX 72 of 353 (plus 163 in laptop jobs).
 
-### 2.2. N3 (#404): код за 18 минут, проверка — 2,5 часа
+### 2.2. N3 (#404): code in 18 minutes, checks in 2.5 hours
 
-Сессия шла 04:36–07:24 UTC, 2,8 ч (в брифе было «~6 ч»; по транскрипту и журналу — 2,8).
-- **Код.** Код и черновик PR готовы за 18 мин: PR открыт в 04:54.
-- **Проверка.** Остальные 2,5 ч — 39 запусков сцен со всей сборкой под Iris: 4 круга ветки и 2 — `main`. Это 100 мин
-  видеокарты и 34 мин очереди.
-- **Длина сцен.** Сцена `nuke` — 342 с на запуск, `mushroom` и `firestorm` — по 5 мин, `wall` и `debris` — 1–1,5 мин.
-- **Песочница.** N3 её не запускал. Ядерка там есть (`nuke <кт>`), но нужный миг — волна у камеры через секунды
-  после прихода фронта, пелена через минуты — можно увидеть, только прожив сцену целиком в реальном времени.
-- **Цена находок.** Каждая находка съёмки стоила нового круга полных сцен: пыль от стволов, бежевая вуаль, лимит
-  частиц, лист меньше пикселя.
-- **Сравнение кадров.** Числом сравнить нельзя. N1: «кадры ядерки шумят от прогона к прогону, 10–40 % пикселей
-  различаются и без правки». Поэтому `main` снимают дважды, чтобы видеть шум, и сравнивают глазами.
+Session ran 04:36–07:24 UTC, 2.8 h (brief said “~6 h”; transcript/journal 2.8).
+- **Code.** Code/draft PR ready in 18 min, PR opened 04:54.
+- **Checks.** Remaining 2.5 h: 39 full-pack Iris scene launches, 4 branch rounds, 2 `main`; 100 GPU minutes, 34 queued.
+- **Scene length.** `nuke` 342 s/run, `mushroom`/`firestorm` 5 min each, `wall`/`debris` 1–1.5 min.
+- **Sandbox.** N3 did not launch it. It has the nuke (`nuke <kt>`), but desired moments (wave near camera seconds after
+  front arrival, pall minutes later) require playing the whole scene in real time.
+- **Finding cost.** Each recording finding required another full-scene round: trunk dust, beige veil, particle limit,
+  subpixel leaf.
+- **Frame comparison.** Numeric comparison impossible. N1: “nuclear frames vary between runs, 10–40 % of pixels differ
+  even without edits”. Thus `main` recorded twice to see noise, then compared by eye.
 
-### 2.3. PR #379–#406
+### 2.3. PRs #379–#406
 
-- **Влито** 27 PR.
-- **От открытия до влития:**
-  - инструменты процесса (#380–#388) — до 45 мин;
-  - картинка ночью — 1,5–5,5 ч: #398 1,5 ч, #401 1,7, #404 2,5, #403 2,75, #400 3,9, #402 4,6, #399 5,5.
-- **CI `build`:** медиана 4,9 мин, p90 7,1.
-- **Повторы CI.** Правило «ветка обновлена до свежего `main`» требует нового прогона на каждое влитие в пачке: у LFX
-  было 16 прогонов, у N3 — 12, у F5 и VXG — по 8. Каждый прогон — 5 мин ожидания, а не часы.
+- **Merged:** 27 PRs.
+- **Opening to merge:**
+  - process tools (#380–#388), up to 45 min;
+  - overnight visuals 1.5–5.5 h: #398 1.5 h, #401 1.7, #404 2.5, #403 2.75, #400 3.9, #402 4.6, #399 5.5.
+- **CI `build`:** median 4.9 min, p90 7.1.
+- **CI reruns.** “Branch updated to current `main`” requires rerunning after each batch merge: LFX 16 runs, N3 12,
+  F5/VXG 8 each. Each run is 5 min waiting, not hours.
 
-### 2.4. Потери по звеньям
+### 2.4. Losses by stage
 
-| Звено | Потеря 22–23.10 | Причина |
+| Stage | Loss, 22–23.10 | Cause |
 |---|---|---|
-| Съёмка со всей сборкой на каждый PR | 9,9 ч видеокарты, 130 запусков; PR с картинкой — 1,5–5,5 ч до влития | К2: проверка после работы вместо кадра во время работы |
-| Эталон снимают заново | 2,65 ч из 9,9 | К1 и К2: каждая параллельная сессия снимала свой эталон к своей съёмке |
-| Очередь видеокарты | 15 ч ожидания задач | К1: до четырёх сессий с картинкой сразу на одной видеокарте |
-| Песочница не живёт | ночью ни одного полезного запуска | К1: гаснет от любой чужой задачи на видеокарте |
-| Нужный миг ядерки | 342 с на запуск ради кадра «через 5 с у камеры» | не взят стандартный повтор Flashback |
-| Сравнение кадров | 2 прогона `main` на сессию, глазами | К2: сравнение всей сборки вместо кадра во время работы; кадры ещё и не повторяются |
-| Ожидание в сессиях | 1–2 ч на сессию | К1: ждут очередь видеокарты |
-| CI | 5 мин, до 16 прогонов на PR | строгое «обновлено до main» (стандарт GitHub) при пачке влитий — растёт от числа параллельных PR (К1) |
+| Full-pack recording per PR | 9.9 GPU hours, 130 launches; visual PRs 1.5–5.5 h to merge | K2: checks after work instead of frames during work |
+| Rerecording reference | 2.65 of 9.9 h | K1/K2: every concurrent session recorded its own reference |
+| GPU queue | 15 job-wait hours | K1: up to four visual sessions on one GPU |
+| Sandbox dies | no useful overnight launch | K1: any other session's GPU job kills it |
+| Desired nuclear moment | 342 s/run for “5 s after camera arrival” frame | standard Flashback replay not adopted |
+| Frame comparison | 2 `main` runs/session, by eye | K2: full-pack comparison instead of frame during work; frames not repeatable either |
+| Session waiting | 1–2 h/session | K1: waiting for GPU queue |
+| CI | 5 min, up to 16 runs/PR | strict “up to date with main” (GitHub standard) during batch merges grows with parallel PR count (K1) |
 
-## 3. Наше своё: вердикт по каждому инструменту и правилу
+## 3. Custom tools: verdict for every tool and rule
 
-Корни (подробно — п. 4): **К1** — несколько сессий с картинкой на одной видеокарте; **К2** — картинку смотрят
-после работы, а не во время; **К3** — нестабильные GameTest; **К4** — моды для запусков берутся из инстанса Артёма, а
-не из Gradle.
+Roots (section 4): **K1** multiple visual sessions on one GPU; **K2** visuals checked after work, not during;
+**K3** flaky GameTest; **K4** runtime mods from Artem's instance rather than Gradle.
 
-| Своё | Что делает | Вердикт | Чем заменить или почему оставить |
+| Custom item | Purpose | Verdict | Replacement or reason to keep |
 |---|---|---|---|
-| `tools/look_gate` + `ProbeScenario`: съёмка всей сборки под Iris на каждый видимый PR | кадры и звук рядом с 3.4.1 | **(б) К2**, и разовое | Стандарт: автор смотрит кадр в dev-клиенте, пока работает, кадры — в PR. Сравнение с 3.4.1 — временный разовый шаг (слово Артёма 07:40): довести все сцены до уровня 3.4.1 одним заходом, потом `look_gate` и `ProbeScenario` убрать |
-| Сравнение кадров рядом с эталоном на каждый PR (правило «Проверяет не автор … кадры рядом с выпуском») | ловить регрессию картинки до влития | **(в) решение Артёма 24.10**: стенд сцен `tools/stand` | Прежний вердикт был (б) К2. 24.10 Артём решил: стенд снимается на каждом PR с картинкой и служит условием влития — время кадра при 100 ударах не хуже принятого выпуска (3.5.0 и 3.7.0 просели по времени кадра, и это видно только под нагрузкой ударов, не в кадре песочницы). Это не тот же `look_gate`: минуты, а не часы — мод-обвязка без зависимости от Incoming в плоском мире, рядом только Sodium и Iris (не вся сборка), принятый снимается парой в том же сеансе, только сцена «100» (~30 мин видеокарты; кэш эталона пробовали — нагрев видеокарты ноутбука разводит сеансы на 6–29 %), видеокарта — одна сессия за раз (аренда). Вид числом не судится: кадры стенда рядом с принятым — ревьюеру, как скриншоты в PR |
-| Эталон 3.4.1, снимаемый каждой сессией | база сравнения | **разовый шаг**, его пересъёмка — **(б) К1** | снять один раз, пока идёт сравнение с 3.4.1; потом не нужен |
-| Песочница `tools/sandbox.sh` | dev-клиент с модом в плоском мире, эффект командой `/fx`, кадр и WAV в заданный миг (`shot --at`) | **(в)** в ядре, **(б) К1** в обвязке | Ядро — то же, что стандартный `runClient` MDG с dev-набором исходников (так JEI держит свой `clientGameTest`). Своё в нём по нужде: Claude не видит экран и не печатает в чат, ему нужен кадр файлом в точный тик; у NeoForge клиентских тестов со снимками нет (NeoForge #3624). Обвязка «ждать очередь, гаснуть от чужой задачи» — следствие К1, убрать |
-| Свой агент горячей замены `src/sandboxAgent` (`HotswapAgent` в `ua.zentix.hotswap`) | подменяет классы, когда Gradle их дописал | **(а)** | JetBrains Runtime + HotswapAgent (HotswapProjects, `-XX:HotswapAgent=fatjar`, `autoHotswap=true`: следит за `.class` и меняет их сам). Если он не видит классы мода в загрузчике NeoForge — стандартный путь IDE: JDWP (`-agentlib:jdwp`) и `redefine`. Проба — часть B |
-| `tools/client_scenario.sh` + `ClientScenario` (сценарии клиента без окна) | кадры руководства, трейлера, сцены ядерки | **(в)**, слить с песочницей | Стандарта для NeoForge нет (у Fabric — клиентские GameTest). Но держать два своих клиента (сценарии и песочница) — лишнее: сценарий = список команд песочницы (`commands` уже есть). Один dev-клиент |
-| Миг ядерки (сцена `nuke` 342 с ради кадра через 5 с) | кадр в момент t | **(а)** | Flashback (в сборке): записать один раз, перемотать, снять. Перемотка не повторяет разовые события (`replay.md`), но ядерку рисует по часам подрыва. Ванильный `/tick` не поможет: клиент не тикает чаще 20 раз в секунду (`Minecraft.getTickTargetMillis`: максимум из 50 мс и шага `TickRateManager`) |
-| `tools/prod_client.py` (клиент со всей сборкой, копия инстанса) | «как у игрока»: сборка грузится, вид под Iris | **(а)** + разовый шаг | «Сборка грузится» — `mc-runtime-test` в CI open-skies (запускает настоящий клиент со сборкой). Вид под Iris — только разовое сравнение с 3.4.1 |
-| `tools/x11_record.py` (видео окна для `prod_client.py --video`) | видео клиента со всей сборкой в реальном времени | **(а)** | Уходит вместе с `prod_client.py --video`. Ролики по повторам уже идут выводом видео Flashback (`tools/clips`); трейлер пишет свои кадры покадрово (`trailer/record.sh`) и `x11_record.py` не берёт |
-| `tools/nested_kwin.sh --virtual` | клиент на видеокарте без окна и звука на рабочем столе Артёма | **(в)** | Стандарт CI — `xvfb-run` (Fabric Loom, Bevy), но он рисует на процессоре (llvmpipe, 3–10 кадров/с, без шейдеров). Нужда настоящая: ноутбук — рабочий стол Артёма. Сам KWin с `--virtual` — штатный режим KDE; запасной штатный — `gamescope --backend headless` (стоит на ноутбуке) |
-| `tools/laptop_job.sh` | своя служба systemd, замок очереди, ждать закрытой игры Артёма | очередь — **(б) К1**; служба и игра — **(в)** | Своя служба: `systemd-run --user` — стандарт, обёртка тонкая. Защита игры Артёма — настоящая нужда: машина общая. Замок очереди убрать вместе с К1 |
-| `tools/gpu_busy.sh` | чужая задача держит видеокарту | **(б) К1** | убрать вместе с К1 |
-| `tools/sessions/go.sh`, `supervise.sh` | фоновая сессия claude2 своей службой, сама продолжается по концу задач | **(в)** | У Claude Code нет штатного «сессия службой, переживает родителя»; `claude -p`, `--resume` и `systemd-run` — штатные, обёртка тонкая. Число сессий и их длину ограничивает К1 |
-| `live.md` (вне репозитория: `mod/run/incoming-sessions/`) | новые решения для идущих сессий | **(б) К1**, убран 25.10 | Долгие параллельные сессии не видят новых решений. Решения идут в задание перед запуском, сессии короткие |
-| `mod/run/incoming-sessions/go.sh` (старый, без git) | то же | **(а)** | уже заменён `tools/sessions/go.sh` (#382), но ночью 22–23.10 шли через старый — убрать |
-| `tools/pr_ci.sh` | ждать «Итог», конфликт — код 3 | **(а)** | «Записка» убрана 25.10, обязательна одна «Итог». Ещё `pr_ci.sh` берёт итог задачи, которую GitHub оставил «идущей» после конца, по её `completedAt`, а `--watch` ждал бы такую задачу до своего предела. Замена — `gh pr checks <PR> --watch --fail-fast --required` (gh 2.102 на ноутбуке), конфликт — `gh pr view --json mergeable`; зависшую задачу тогда видно по времени ожидания, перезапуск — `gh run rerun` |
-| `tools/ci_repeat.sh` и ручной CI «повторить партии N раз» | ловить флак | **(б) К3** | Чинить нестабильные тесты (корень); до починки — стандарт GitHub `gh run rerun --failed` и `@GameTest(required = false)` у известного флака |
-| Проверка «Записка» (`note.yml`, `pr_note.py`) | PR с видимым несёт раздел ожиданий | **(а)**, убрана 25.10 | Стандарт — шаблон PR (`.github/PULL_REQUEST_TEMPLATE.md`) и ревью. План большой правки — несколько строк в описании PR, проверки CI на это нет |
-| `copyRuntimeMods_*` из `mods/` инстанса (`build.gradle`:53–65, 325–338) + `tools/fetch_runtime_mods.py` для CI | моды в запусках: Create, Sable, Aeronautics; по флагам — Sodium и Iris (`INCOMING_SHADERS`), Distant Horizons (`INCOMING_DH`), Voxy, Roxy и Forgified Fabric API (`INCOMING_VOXY`), LOD Server Support (`INCOMING_LSS`), Lithium (`-PwithLithium`). Рядом от инстанса зависят ещё шейдерпак хоста (копируют `sandbox.sh shaders`, `trailer/record.sh`, `client_scenario.sh`) и переопределение зависимостей FML (`build.gradle`:271 — включается, если в `mcModsDir` есть Aeronautics) | **(б) К4** → **(а)** | Стандарт MDK: зависимости в Gradle — `localRuntime "maven.modrinth:<мод>:<версия>"` (Modrinth Maven), каждая группа — за своим флагом, как сейчас. Один источник для ноутбука, облака и CI; уходят копирование из инстанса и правило «выровнять пины в `fetch_runtime_mods.py`» (`live.md` 07:18, вне репозитория). Sable и Aeronautics `fetch_runtime_mods.py` уже качает с Modrinth. Переопределение FML — по тому же флагу, а не по каталогу. Шейдерпак — не мод, а ресурс: его копия из инстанса остаётся (в) |
-| `org.gradle.daemon=false` + `--daemon` только для `build` и «`gradlew --stop` не звать» | игра из `run*` не в группе демона; демоны сессий не гасят друг друга | `run*` без демона — **(в)**; остальное — **(а)** | Причина `daemon=false` (`mod/gradle.properties`:2–4, #384): игра, запущенная задачей `run*` через демон, жила бы в cgroup демона (часто — приложения Claude), а не в службе `laptop_job.sh`; это нужда общей машины, у MDK её нет — оставить. Для `build` и тестов тёплый демон уже есть (`--daemon`). Из настроек MDK взять `configuration-cache=true` (проба — часть B). «`gradlew --stop` не звать» остаётся и после К1: сессии без видеокарты по-прежнему идут параллельно, и `--stop` гасит демоны всех |
-| Части GameTest (`GameTestShards`, `gametest_durations.py`) | CI 5 мин вместо ~20 | **(в)** | Своё ради скорости: у MDG и NeoForge деления GameTest на части нет; матрица — штатная у GitHub |
-| «Что изменилось» в `build.yml` | не собирать мод на правку `docs/` | **(а)** | `dorny/paths-filter` — штатный фильтр путей на уровне задач: задача «Итог» идёт всегда и отчитывается. `on.pull_request.paths` не подходит: без запуска обязательная «Итог» не отчитается, и PR не влить |
-| `tools/stress.sh`, `mp_scenario.sh`, `rig_procs.sh`, `free_port.py`, `rig_config.py` | мультиплеер и нагрузка без окон | **(в)** | Для автоматического мультиплеера у NeoForge стандарта нет; вручную — `runServer` и `runClient`. Оставить, запускать по нужде |
-| `tools/deploy.sh`, `logscan.py`, `paths.py`, `chunk_status.py` | jar в инстанс, выжимка лога, пути | **(в)** | мелкие помощники; выпуск к игрокам и так идёт стандартно (выпуск → packwiz-сборка) |
-| `build_sounds.py`, `gen_*.py`, `bake_fx/`, `freesound.py`, `guide_images.sh` | ресурсы мода | **(в)**, вне конвейера | Генераторы ресурсов этого мода, не конвейер. Модели из кода (`gen_models.py`) против Blockbench/Blender — отдельный вопрос, не здесь |
-| `replayscan/`, `clips/`, `trailer/` | ролики | вне конвейера | производство роликов, не разработка мода |
-| Мой прошлый вариант (хранилище эталона, очередь кадров видеокарты, число разницы FLIP, съёмка каждого кандидата выпуска) | — | **снято** | всё это своё поверх К1 и К2; по решению 07:40–07:41 не предлагаю |
-| Правила «Сначала готовое», «Сначала ожидание», «Инвариант — тестом», ревью свежим контекстом, «Сверх этого проверок нет» | — | стандарт | готовые библиотеки, тесты и ревью — обычная практика; «сначала ожидание» — шаблон PR |
+| `tools/look_gate` + `ProbeScenario`: full-pack Iris recording per visible PR | frames/sound beside 3.4.1 | **(b) K2**, also one-off | Standard: author checks frames in dev client while working, puts frames in PR. Comparison to 3.4.1 is temporary/one-off (Artem 07:40): bring all scenes to 3.4.1 quality in one pass, then remove `look_gate`/`ProbeScenario` |
+| Frame comparison beside reference per PR (rule “Checked by someone other than author … frames beside release”) | catch visual regressions before merge | **(c) Artem's decision 24.10**: scene bench `tools/stand` | Former verdict (b) K2. On 24.10 Artem required scene bench on every visual PR as merge gate: frame time with 100 strikes no worse than accepted release (3.5.0/3.7.0 frame-time regressions show only under strike load, not sandbox frames). Different from `look_gate`: minutes, not hours, a wrapper mod without Incoming dependency in a flat world, only Sodium/Iris (not whole pack), accepted release captured as a pair in same session, only “100” scene (~30 GPU min; reference cache tried, laptop GPU heat shifts sessions by 6–29 %); one GPU session at a time (lease). No numeric visual verdict: bench frames beside accepted release go to reviewer like PR screenshots |
+| 3.4.1 reference recorded by every session | comparison base | **one-off**, rerecording **(b) K1** | record once during 3.4.1 comparison, unneeded afterward |
+| Sandbox `tools/sandbox.sh` | flat-world dev client, `/fx` effects, timed frame/WAV (`shot --at`) | core **(c)**, wrapper **(b) K1** | Core like standard MDG `runClient` with dev source set (JEI uses `clientGameTest` this way). Custom need: Claude cannot see screen/type in chat, needs frame file at exact tick; NeoForge lacks client screenshot tests (#3624). Remove “wait queue, die to another job” wrapper, a K1 consequence |
+| Custom hot-swap agent `src/sandboxAgent` (`HotswapAgent` in `ua.zentix.hotswap`) | replaces classes after Gradle writes them | **(a)** | JetBrains Runtime + HotswapAgent (HotswapProjects, `-XX:HotswapAgent=fatjar`, `autoHotswap=true`: watches/swaps `.class`). If it cannot see mod classes in NeoForge loader, standard IDE path: JDWP (`-agentlib:jdwp`) and `redefine`. Trial part B |
+| `tools/client_scenario.sh` + `ClientScenario` (headless client scenarios) | guide/trailer frames, nuclear scenes | **(c)**, merge with sandbox | No NeoForge standard (Fabric has client GameTest). Two custom clients (scenarios/sandbox) are redundant: scenario = sandbox-command list (`commands` exists). One dev client |
+| Nuclear moment (`nuke` scene 342 s for frame after 5 s) | frame at time t | **(a)** | Flashback (in pack): record once, seek, capture. Seek skips one-shot events (`replay.md`) but renders nuke by detonation clock. Vanilla `/tick` cannot help: client max 20 ticks/s (`Minecraft.getTickTargetMillis`: max of 50 ms and `TickRateManager` step) |
+| `tools/prod_client.py` (full-pack client, instance copy) | “as for player”: pack loads, Iris visuals | **(a)** + one-off | “Pack loads”: `mc-runtime-test` in open-skies CI (real full-pack client). Iris visuals only one-off 3.4.1 comparison |
+| `tools/x11_record.py` (window video for `prod_client.py --video`) | real-time full-pack client video | **(a)** | Remove with `prod_client.py --video`. Replay clips already use Flashback export (`tools/clips`); trailer records frame by frame (`trailer/record.sh`), no `x11_record.py` |
+| `tools/nested_kwin.sh --virtual` | GPU client without window/audio on Artem's desktop | **(c)** | Standard CI `xvfb-run` (Fabric Loom, Bevy) renders on CPU (llvmpipe, 3–10 fps, no shaders). Real need: laptop is Artem's desktop. KWin `--virtual` is standard KDE mode; standard fallback `gamescope --backend headless` (installed) |
+| `tools/laptop_job.sh` | separate systemd service, queue lock, wait for Artem's game to close | queue **(b) K1**, service/game **(c)** | Separate service: `systemd-run --user` standard, thin wrapper. Game protection is real need on shared machine. Remove queue lock with K1 |
+| `tools/gpu_busy.sh` | another job holds GPU | **(b) K1** | remove with K1 |
+| `tools/sessions/go.sh`, `supervise.sh` | background claude2 session in separate service, auto-resume after jobs | **(c)** | Claude Code lacks “session as service surviving parent”; `claude -p`, `--resume`, `systemd-run` standard, thin wrapper. K1 limits session count/length |
+| `live.md` (outside repo: `mod/run/incoming-sessions/`) | new decisions for running sessions | **(b) K1**, removed 25.10 | Long parallel sessions miss new decisions. Put decisions in task before startup, keep sessions short |
+| `mod/run/incoming-sessions/go.sh` (old, outside git) | same | **(a)** | already replaced by `tools/sessions/go.sh` (#382), but used overnight 22–23.10; remove |
+| `tools/pr_ci.sh` | wait for “Итог”, code 3 on conflict | **(a)** | “Записка” removed 25.10, only “Итог” required. Also `pr_ci.sh` reads conclusion of jobs GitHub leaves “running” after completion via `completedAt`; `--watch` would wait until its limit. Replacement `gh pr checks <PR> --watch --fail-fast --required` (laptop gh 2.102), conflict `gh pr view --json mergeable`; stalled job then visible by wait duration, rerun `gh run rerun` |
+| `tools/ci_repeat.sh`, manual CI “repeat batches N times” | find flakes | **(b) K3** | Fix unstable tests (root); until then standard GitHub `gh run rerun --failed`, `@GameTest(required = false)` for known flakes |
+| “Записка” check (`note.yml`, `pr_note.py`) | visible-change PR has expectations section | **(a)**, removed 25.10 | Standard PR template (`.github/PULL_REQUEST_TEMPLATE.md`) and review. Large-change plan is a few PR-description lines, no CI check |
+| `copyRuntimeMods_*` from instance `mods/` (`build.gradle`:53–65, 325–338) + CI `tools/fetch_runtime_mods.py` | runtime mods: Create, Sable, Aeronautics; flags for Sodium/Iris (`INCOMING_SHADERS`), Distant Horizons (`INCOMING_DH`), Voxy/Roxy/Forgified Fabric API (`INCOMING_VOXY`), LOD Server Support (`INCOMING_LSS`), Lithium (`-PwithLithium`). Host shaderpack also comes from instance (`sandbox.sh shaders`, `trailer/record.sh`, `client_scenario.sh`), as does FML dependency override (`build.gradle`:271, enabled if `mcModsDir` contains Aeronautics) | **(b) K4** → **(a)** | MDK standard: Gradle dependencies `localRuntime "maven.modrinth:<mod>:<version>"` (Modrinth Maven), each group behind its own flag as now. One source for laptop/cloud/CI; remove instance copying and “align pins in `fetch_runtime_mods.py`” rule (`live.md` 07:18, outside repo). `fetch_runtime_mods.py` already fetches Sable/Aeronautics from Modrinth. FML override by same flag, not directory. Shaderpack is resource, not mod: keep instance copy (c) |
+| `org.gradle.daemon=false` + `--daemon` only for `build`, “never call `gradlew --stop`” | `run*` game outside daemon cgroup; sessions do not kill each other's daemons | no daemon for `run*` **(c)**, rest **(a)** | `daemon=false` reason (`mod/gradle.properties`:2–4, #384): daemon `run*` game would live in daemon cgroup (often Claude app), not `laptop_job.sh` service; shared-machine need absent in MDK, keep. Warm daemon already used for `build`/tests (`--daemon`). Adopt MDK `configuration-cache=true` (trial part B). “Never call `gradlew --stop`” remains after K1: GPU-free sessions still parallel, `--stop` kills all daemons |
+| GameTest shards (`GameTestShards`, `gametest_durations.py`) | CI 5 min instead of ~20 | **(c)** | Custom for speed: MDG/NeoForge have no GameTest sharding; matrix is standard GitHub |
+| “Что изменилось” in `build.yml` | skip mod build for `docs/` edits | **(a)** | `dorny/paths-filter` standard job-level path filter; “Итог” always runs/reports. Not `on.pull_request.paths`: required “Итог” would never report when skipped, preventing merge |
+| `tools/stress.sh`, `mp_scenario.sh`, `rig_procs.sh`, `free_port.py`, `rig_config.py` | headless multiplayer/load | **(c)** | No NeoForge automated-multiplayer standard; manual `runServer`/`runClient`. Keep, run as needed |
+| `tools/deploy.sh`, `logscan.py`, `paths.py`, `chunk_status.py` | jar to instance, log digest, paths | **(c)** | small helpers; player delivery already standard (release → packwiz pack) |
+| `build_sounds.py`, `gen_*.py`, `bake_fx/`, `freesound.py`, `guide_images.sh` | mod resources | **(c)**, outside pipeline | This mod's asset generators, not pipeline. Code models (`gen_models.py`) versus Blockbench/Blender a separate question |
+| `replayscan/`, `clips/`, `trailer/` | videos | outside pipeline | video production, not mod development |
+| My previous proposal (reference store, GPU frame queue, FLIP difference metric, recording every release candidate) | — | **withdrawn** | custom layers over K1/K2; not proposing after 07:40–07:41 decision |
+| Rules “Ready-made first”, “Expectation first”, “Test invariants”, fresh-context review, “No checks beyond these” | — | standard | libraries/tests/review ordinary practice; “expectation first” is PR template |
 
-## 4. Корневые ошибки (от базовых принципов)
+## 4. Root errors (first principles)
 
-**К1. Несколько сессий с картинкой на одной видеокарте.**
-- **Ресурс.** Видеокарта у нас одна, как у любого моддера. Работа с картинкой упирается в неё: кадр, съёмка, Blender.
-- **Что было.** Ночью 22–23.10 шли до четырёх таких сессий сразу.
-- **Что пришлось городить.** Очередь `laptop_job.sh`, проверку `gpu_busy.sh`, песочницу, которая гаснет от чужой
-  задачи, повторные эталоны и `live.md` для долгих сессий. Цена — 15 ч ожидания задач за ночь.
-- **Корень.** Параллелить работу на одном общем ресурсе.
-- **Как чинить.** Картинку делает одна сессия за раз — так работает моддер. Параллельно идут только сессии без
-  видеокарты: сервер, полёт, ПВО, инструменты, тексты.
-- **Что уходит.** Очередь, `gpu_busy.sh`, обвязка песочницы, пересъёмка эталона и `live.md` (вне репозитория).
-  Правило «`gradlew --stop` не звать» остаётся: сессии без видеокарты идут параллельно.
+**K1. Multiple visual sessions on one GPU.**
+- **Resource.** One GPU, like any modder. Visual work bottlenecks there: frames, recording, Blender.
+- **Past.** Up to four such sessions concurrently overnight 22–23.10.
+- **Workarounds built.** `laptop_job.sh` queue, `gpu_busy.sh`, sandbox killed by others' jobs, repeated references,
+  `live.md` for long sessions. Cost: 15 job-wait hours overnight.
+- **Root.** Parallelizing work on one shared resource.
+- **Fix.** One visual session at a time, as a modder works. Only GPU-free sessions run in parallel: server, flight,
+  air defense, tools, text.
+- **Remove.** Queue, `gpu_busy.sh`, sandbox wrapper, reference rerecording, `live.md` (outside repo). Keep “never call
+  `gradlew --stop`”: GPU-free sessions remain parallel.
 
-**К2. Картинку смотрели после работы, а не во время.**
-- **Что было в 3.5.0.** PR проверяли тесты законов и ревью кода, а кадра никто не видел (`dev-process.md`, 2.1).
-- **Что поставили сверху.** Шлагбаум со всей сборкой на каждый PR и проверку «Записка». Это проверка после факта, и
-  стоит она часы на PR.
-- **Корень.** Автор не смотрел на результат, пока делал.
-- **Как чинить.** Как у всех: правка → кадр в dev-клиенте через секунды. Кадры кладутся в PR, ревьюер смотрит их
-  по записке.
-- **Что уходит.** Съёмка всей сборки на PR и проверка «Записка» в CI. Сравнение с 3.4.1 — разовое, пока все сцены не
-  дотянут до его уровня.
+**K2. Checking visuals after work instead of during.**
+- **3.5.0.** PRs checked law tests/code review, nobody saw a frame (`dev-process.md`, 2.1).
+- **Added workaround.** Full-pack look gate per PR, “Записка” check. After-the-fact checks cost hours/PR.
+- **Root.** Author did not look at results while working.
+- **Fix.** Community approach: edit → dev-client frame in seconds. Frames in PR, reviewer checks against note.
+- **Remove.** Full-pack recording per PR, CI “Записка”. 3.4.1 comparison is one-off until all scenes reach its quality.
 
-**К3. Нестабильные GameTest.**
-- **Сколько.** 10 % полных прогонов падали (`dev-process.md`, 2.7).
-- **Что поставили сверху.** Повтор партий N раз на шести машинах — это поиск флака, а не починка.
-- **Корень.** Тест зависит от времени, порядка или общей статики.
-- **Как чинить.** Починить каждый тест. До починки — стандартные `@GameTest(required = false)` и
-  `gh run rerun --failed`.
+**K3. Flaky GameTest.**
+- **Amount.** 10 % of full runs failed (`dev-process.md`, 2.7).
+- **Added workaround.** N batch repeats on six machines finds flakes, does not fix them.
+- **Root.** Tests depend on timing, order or shared statics.
+- **Fix.** Fix each test; until then standard `@GameTest(required = false)`, `gh run rerun --failed`.
 
-**К4. Моды для запусков — из инстанса Артёма.**
-- **Как сейчас.** `build.gradle` копирует из `mods/` его инстанса Create, Sable и Aeronautics, а по флагам — Sodium,
-  Iris, Distant Horizons, Voxy, Roxy, Forgified Fabric API, LOD Server Support и Lithium. Переопределение зависимостей
-  FML включается, если в этом каталоге есть Aeronautics. CI и облако берут Create, Sable и Aeronautics своим скриптом
-  `fetch_runtime_mods.py` с Modrinth.
-- **Что выходит.** Два источника одной зависимости. При обновлении сборки пины приходится выравнивать вручную
-  (`live.md` 07:18, вне репозитория).
-- **Как чинить.** Как в MDK: `localRuntime "maven.modrinth:<мод>:<версия>"` в Gradle, каждая группа — за своим флагом,
-  одна версия для всех запусков. Шейдерпак хоста — ресурс, а не мод: его копия остаётся.
+**K4. Runtime mods from Artem's instance.**
+- **Now.** `build.gradle` copies Create/Sable/Aeronautics from instance `mods/`; flags add Sodium, Iris, Distant Horizons,
+  Voxy, Roxy, Forgified Fabric API, LOD Server Support, Lithium. FML override enabled if directory has Aeronautics.
+  CI/cloud fetch Create/Sable/Aeronautics from Modrinth via own `fetch_runtime_mods.py`.
+- **Result.** Two sources for one dependency. Pack updates require manual pin alignment (`live.md` 07:18, outside repo).
+- **Fix.** MDK approach: Gradle `localRuntime "maven.modrinth:<mod>:<version>"`, each group behind own flag, one version
+  across runs. Host shaderpack is resource, not mod: keep copy.
 
-## 5. Конвейер по стандарту и целевые времена
+## 5. Standard pipeline and target times
 
-| Шаг | Как (стандарт; своё — с вердиктом (в)) | Цель | Сейчас |
+| Step | Method (standard; custom verdict (c)) | Target | Now |
 |---|---|---|---|
-| Правка тела метода, числа или шейдера → кадр | dev-клиент (песочница) на JBR + HotswapAgent, F3+T; кадр — `shot --at` | ≤ 10 с | 10 с (замер 22.10), но ночью песочница не жила (К1) |
-| Правка, которую замена не берёт (регистрация, миксин, статическое поле) | перезапуск dev-клиента, как у всех (замена миксинов ненадёжна: Mixin #592, #408) | ≤ 40 с с Iris | 20–39 с |
-| Кадр ядерки в момент t | повтор Flashback: записать один раз, перемотать | ≤ 1 мин (оценка, проба — часть B) | 342 с полного сценария на круг |
-| От «готово» до влития | CI (`setup-gradle`, GameTest частями) + ревью свежим агентом по кадрам из PR; ждать — `pr_ci.sh`, после удаления «Записки» — `gh pr checks --watch --required` | ≤ 20 мин | 1,5–5,5 ч у PR с картинкой |
-| Сборка грузится у игрока | `mc-runtime-test` в CI open-skies | минуты, на каждый PR сборки | проверки запуском клиента нет |
-| Вид со всей сборкой под Iris | только разовое сравнение с 3.4.1, одним заходом, одной сессией | один раз | на каждый видимый PR |
-| Выпуск и отзывы | `mc-publish`, заметки, PR сборки; беты — по слову Артёма (п. 6) | минуты | минуты |
+| Method body, number or shader edit → frame | JBR + HotswapAgent dev client (sandbox), F3+T; frame `shot --at` | ≤ 10 s | 10 s (22.10 measurement), but sandbox died overnight (K1) |
+| Edit not supported by hot swap (registration, mixin, static field) | restart dev client, like everyone (mixin swaps unreliable: Mixin #592, #408) | ≤ 40 s with Iris | 20–39 s |
+| Nuclear frame at time t | Flashback replay: record once, seek | ≤ 1 min ((est.), trial part B) | 342 s full scenario per round |
+| “Done” to merge | CI (`setup-gradle`, sharded GameTest) + fresh-agent review of PR frames; wait `pr_ci.sh`, after “Записка” removal `gh pr checks --watch --required` | ≤ 20 min | 1.5–5.5 h for visual PRs |
+| Player pack loads | `mc-runtime-test` in open-skies CI | minutes, every pack PR | no client-launch check |
+| Full-pack Iris look | one-off 3.4.1 comparison, one pass/session | once | every visible PR |
+| Release/feedback | `mc-publish`, notes, pack PR; betas only on Artem's instruction (section 6) | minutes | minutes |
 
-Что остаётся своим и почему — только (в) из таблицы п. 3:
-- **Кадр файлом в заданный тик и команды в dev-клиент без чата.** Claude не видит экран, а у NeoForge клиентских
-  тестов со снимками нет.
-- **Клиент на видеокарте без окна.** Ноутбук — рабочий стол Артёма, а `xvfb` рисует на процессоре.
-- **Защита игры Артёма.** Машина общая.
-- **Фоновые сессии службой и части GameTest в CI.**
+Custom items kept and why, only (c) from section 3:
+- **Frame file at a specified tick, dev-client commands without chat.** Claude cannot see screen; NeoForge has no
+  client screenshot tests.
+- **Headless GPU client.** Laptop is Artem's desktop; `xvfb` renders on CPU.
+- **Protecting Artem's game.** Shared machine.
+- **Background sessions as services, CI GameTest shards.**
 
-## 6. Чем мы честно отличаемся от моддера
+## 6. How we actually differ from a modder
 
-- **Смотрит Claude, а не человек.** Ползунки, отладчик и ImGui ему не помогут, ему нужен кадр файлом в заданный тик.
-  Это единственная причина держать своё ядро песочницы.
-- **Машина — рабочий стол Артёма.** Отсюда клиент без окна и защита его игры.
-- **Бет нет.** Друзья играют в выпуски. Стандарт сообщества — беты (у Sodium их 39 на Modrinth, у Distant Horizons —
-  191). Выпускать беты — публичный шаг, это решение Артёма.
-- **Несколько сессий.** Это не отличие, которое надо обслуживать инструментами: с картинкой работает одна сессия за
-  раз (К1).
+- **Claude looks, not a person.** Sliders, debugger, ImGui do not help; needs frame file at a specified tick. Sole reason
+  to retain custom sandbox core.
+- **Machine is Artem's desktop.** Hence headless client and game protection.
+- **No betas.** Friends play releases. Community standard is betas (Sodium 39 on Modrinth, Distant Horizons 191).
+  Publishing betas is a public step, Artem's decision.
+- **Multiple sessions.** Not a difference to support with tools: one visual session at a time (K1).
 
-## 7. План: перейти на стандарт и убрать своё (по выигрышу на усилие)
+## 7. Plan: adopt standards, remove custom tools (gain per effort)
 
-1. **К1: картинка — одна сессия за раз на видеокарте.**
-   - Правило в CLAUDE.md (этот PR), порядок пакетов у координатора (`mod/run/incoming-sessions/DL-context-patch.md`,
-     вне репозитория).
-   - Выигрыш: 15 ч очереди за ночь → 0, песочница живёт.
-   - После этого убрать замок очереди из `laptop_job.sh`, `gpu_busy.sh` и обвязку «гаснуть» в `sandbox.sh`. Правило
-     «`gradlew --stop` не звать» остаётся.
-   - Цена: правило сейчас, ~1 ч на чистку скриптов.
-2. **К2: кадр — во время работы, в PR — кадры dev-клиента; съёмку всей сборки на PR убрать.**
-   - Правило и шаблон PR заменены в этом PR: в PR — кадры и WAV dev-клиента по моментам записки, без «рядом с выпуском».
-     24.10 Артём добавил к этому стенд сцен (`tools/stand`) на каждом PR с картинкой: время кадра при 100 ударах против
-     принятого выпуска, снятого парой в том же сеансе, — условие влития, кадры стенда — ревьюеру. Это не съёмка всей сборки (п. 3).
-   - Разовое сравнение с 3.4.1 закончить одним заходом. После него убрать `look_gate`, `ProbeScenario`,
-     `prod_client.py --video` с `x11_record.py`. Проверка «Записка» в CI убрана 25.10.
-   - Выигрыш: 9,9 ч видеокарты за ночь → минуты на PR; «готово → влито» — с 1,5–5,5 ч до ~20 мин (оценка).
-3. **Простые замены (а), по часу и меньше каждая:**
-   - `pr_ci.sh` → `gh pr checks --watch --fail-fast --required` (обязательная проверка уже одна);
-   - «Что изменилось» → `dorny/paths-filter` на уровне задач (не `on.pull_request.paths`);
-   - `gradle.properties` → `configuration-cache=true` из MDK (проба — часть B); `daemon=false` для `run*` остаётся;
-   - старый `mod/run/incoming-sessions/go.sh` (вне репозитория) → `tools/sessions/go.sh`;
-   - `mc-publish` 3.3.1 → 3.3.2 (вышел 22.10.2026), `setup-gradle@v5` → `v6`.
-4. **К4: моды запусков — `localRuntime` из Modrinth Maven.**
-   - Всё, что сейчас копируется из инстанса: Create, Sable, Aeronautics; за флагами — Sodium и Iris, Distant Horizons,
-     Voxy, Roxy и Forgified Fabric API, LOD Server Support, Lithium.
-   - Флаги — те же (`INCOMING_SHADERS`, `INCOMING_DH`, `INCOMING_VOXY`, `INCOMING_LSS`, `-PwithLithium`); песочница —
-     по-прежнему без Create и Sable.
-   - Переопределение зависимостей FML (`build.gradle`:271) — по флагу Aeronautics, а не по каталогу инстанса.
-   - Убрать `copyRuntimeMods_*` и `fetch_runtime_mods.py`; Sable и Aeronautics он уже берёт с Modrinth, а Modrinth Maven
-     отдаёт любой проект Modrinth.
-   - Шейдерпак хоста (`sandbox.sh shaders`, `trailer/record.sh`, `client_scenario.sh`) — ресурс, его копия остаётся.
-   - Цена: ~2–3 ч (оценка).
-5. **Свой агент замены → HotswapAgent (`autoHotswap`) на JBR.**
-   - `hotswap-agent.jar` кладут в `lib/hotswap` самой JBR (по README HotswapAgent), флаги —
+1. **K1: one visual session on GPU at a time.**
+   - CLAUDE.md rule (this PR), coordinator batch order (`mod/run/incoming-sessions/DL-context-patch.md`, outside repo).
+   - Gain: 15 queue hours overnight → 0, sandbox survives.
+   - Then remove `laptop_job.sh` queue lock, `gpu_busy.sh`, “die” wrapper in `sandbox.sh`. Keep “never call
+     `gradlew --stop`”.
+   - Cost: rule now, ~1 h script cleanup.
+2. **K2: frames during work, dev-client frames in PR; remove full-pack recording per PR.**
+   - Rule/PR template replaced in this PR: dev-client frames/WAV at note's moments, no “beside release”. On 24.10 Artem
+     added scene bench (`tools/stand`) for every visual PR: 100-strike frame time against accepted release, paired
+     within same session, is merge gate; bench frames go to reviewer. Not full-pack recording (section 3).
+   - Finish one-off 3.4.1 comparison in one pass, then remove `look_gate`, `ProbeScenario`, `prod_client.py --video` and
+     `x11_record.py`. CI “Записка” removed 25.10.
+   - Gain: 9.9 GPU hours overnight → minutes/PR; “done → merged” 1.5–5.5 h → ~20 min (est.).
+3. **Simple (a) replacements, one hour or less each:**
+   - `pr_ci.sh` → `gh pr checks --watch --fail-fast --required` (already one required check);
+   - “Что изменилось” → job-level `dorny/paths-filter` (not `on.pull_request.paths`);
+   - `gradle.properties` → MDK `configuration-cache=true` (trial part B); retain `daemon=false` for `run*`;
+   - old `mod/run/incoming-sessions/go.sh` (outside repo) → `tools/sessions/go.sh`;
+   - `mc-publish` 3.3.1 → 3.3.2 (released 22.10.2026), `setup-gradle@v5` → `v6`.
+4. **K4: runtime mods through Modrinth Maven `localRuntime`.**
+   - Everything now copied from instance: Create, Sable, Aeronautics; flags for Sodium/Iris, Distant Horizons,
+     Voxy/Roxy/Forgified Fabric API, LOD Server Support, Lithium.
+   - Same flags (`INCOMING_SHADERS`, `INCOMING_DH`, `INCOMING_VOXY`, `INCOMING_LSS`, `-PwithLithium`); sandbox still
+     without Create/Sable.
+   - FML dependency override (`build.gradle`:271) by Aeronautics flag, not instance directory.
+   - Remove `copyRuntimeMods_*`, `fetch_runtime_mods.py`; it already fetches Sable/Aeronautics from Modrinth, whose Maven
+     serves any Modrinth project.
+   - Host shaderpack (`sandbox.sh shaders`, `trailer/record.sh`, `client_scenario.sh`) is resource; keep copy.
+   - Cost: ~2–3 h (est.).
+5. **Own swap agent → HotswapAgent (`autoHotswap`) on JBR.**
+   - Put `hotswap-agent.jar` in JBR's own `lib/hotswap` (HotswapAgent README), flags:
      `-XX:+AllowEnhancedClassRedefinition -XX:HotswapAgent=fatjar`.
-   - Проба в части B: видит ли он классы мода в загрузчике NeoForge. Если нет — JDWP `redefine`, как IDE.
-   - Потом удалить `src/sandboxAgent`.
-6. **Один dev-клиент: сценарии `client_scenario.sh` — списками команд песочницы.**
-   - Цена: большая (оценка: день), выигрыш — один свой клиент вместо двух. Делать после пп. 1–5.
-7. **Миг ядерки — повтор Flashback** (проба в части B).
-8. **К3: чинить флаки по одному.** Потом убрать `ci_repeat.sh` и ручной CI повторов.
-9. **open-skies (другой репозиторий): `mc-runtime-test` в CI сборки.** Это проверка «сборка грузится», которую сейчас
-   заменяет запуск на ноутбуке.
+   - Part B trial: sees mod classes in NeoForge loader? Otherwise JDWP `redefine`, like IDE.
+   - Then remove `src/sandboxAgent`.
+6. **One dev client: `client_scenario.sh` scenarios as sandbox-command lists.**
+   - Cost: large ((est.), one day), gain one custom client instead of two. After 1–5.
+7. **Nuclear moment via Flashback replay** (trial part B).
+8. **K3: fix flakes one by one.** Then remove `ci_repeat.sh` and manual repeat CI.
+9. **open-skies (other repo): `mc-runtime-test` in pack CI.** “Pack loads” check now substituted by laptop launch.
 
-**Часть B (замеры на ноутбуке после выпуска, по ним правится этот отчёт):**
-- HotswapAgent `autoHotswap` с JBR в песочнице: что берёт и за сколько секунд;
-- повтор Flashback ядерки в песочнице: время от команды до кадра «через 60 с»;
-- `./gradlew build` с настройками MDK (демон, кэш настройки);
-- старт и правка в песочнице без очереди;
-- `gamescope --backend headless` против вложенного KWin — только если KWin начнёт мешать.
+**Part B (laptop measurements after release, used to revise this report):**
+- HotswapAgent `autoHotswap` with sandbox JBR: supported changes, seconds;
+- Flashback nuclear replay in sandbox: command to “after 60 s” frame time;
+- `./gradlew build` with MDK settings (daemon, configuration cache);
+- sandbox startup/edit without queue;
+- `gamescope --backend headless` versus nested KWin, only if KWin becomes a problem.
 
-## 8. Источники
+## 8. Sources
 
-Проект и сборка:
+Project and build:
 - MDK NeoForge 1.21.1: https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle (`build.gradle`, `gradle.properties`)
 - ModDevGradle: https://github.com/neoforged/ModDevGradle , https://docs.neoforged.net/toolchain/docs/plugins/mdg/ ,
   https://plugins.gradle.org/plugin/net.neoforged.moddev , https://neoforged.net/news/moddevgradle2/
 - Fabric Loom: https://docs.fabricmc.net/develop/loom ; Architectury Loom: https://github.com/architectury/architectury-loom ;
   Stonecutter: https://github.com/stonecutter-versioning/stonecutter-template-neoforge ;
   MultiLoader-Template: https://github.com/jaredlll08/MultiLoader-Template/tree/1.21.1
-- Сборка больших модов: Create https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/build.gradle ,
+- Large-mod builds: Create https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/build.gradle ,
   Mekanism https://github.com/mekanism/Mekanism/blob/26.3/build.gradle ,
   AE2 https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/main/settings.gradle ,
   JEI https://github.com/mezz/JustEnoughItems/blob/26.3/build.gradle.kts ,
@@ -292,27 +280,27 @@
   Veil https://github.com/FoundryMC/Veil/blob/1.21/build.gradle ,
   Distant Horizons https://gitlab.com/distant-horizons-team/distant-horizons/-/blob/main/buildSrc/build.gradle
 
-Запуск, замена, перезагрузка:
-- Fabric, запуск и горячая замена: https://docs.fabricmc.net/develop/getting-started/intellij-idea/launching-the-game ;
-  отладка, F3+T и `/reload`: https://docs.fabricmc.net/develop/debugging ; замена миксинов: https://wiki.fabricmc.net/tutorial:mixin_hotswaps
-- MDG выбирает JVM запуска только по версии языка: https://github.com/neoforged/ModDevGradle/blob/main/src/main/java/net/neoforged/moddevgradle/internal/ModDevRunWorkflow.java
+Launch, hot swap, reload:
+- Fabric launch and hot swap: https://docs.fabricmc.net/develop/getting-started/intellij-idea/launching-the-game ;
+  debugging, F3+T and `/reload`: https://docs.fabricmc.net/develop/debugging ; mixin swaps: https://wiki.fabricmc.net/tutorial:mixin_hotswaps
+- MDG chooses launch JVM only by language version: https://github.com/neoforged/ModDevGradle/blob/main/src/main/java/net/neoforged/moddevgradle/internal/ModDevRunWorkflow.java
 - JetBrains Runtime: https://github.com/JetBrains/JetBrainsRuntime/releases ; HotswapAgent: https://github.com/HotswapProjects/HotswapAgent
-- Ошибки замены миксинов: https://github.com/SpongePowered/Mixin/issues/592 , https://github.com/SpongePowered/Mixin/issues/408
-- Клавиши Iris (R, K, O): https://github.com/IrisShaders/Iris/blob/1.21.1/common/src/main/java/net/irisshaders/iris/Iris.java
-- Veil, редактор и слежение за файлами: https://github.com/FoundryMC/Veil/blob/1.21/common/src/main/java/foundry/veil/impl/client/imgui/VeilImGuiCompat.java ,
+- Mixin swap issues: https://github.com/SpongePowered/Mixin/issues/592 , https://github.com/SpongePowered/Mixin/issues/408
+- Iris keys (R, K, O): https://github.com/IrisShaders/Iris/blob/1.21.1/common/src/main/java/net/irisshaders/iris/Iris.java
+- Veil editor and file watching: https://github.com/FoundryMC/Veil/blob/1.21/common/src/main/java/foundry/veil/impl/client/imgui/VeilImGuiCompat.java ,
   https://github.com/FoundryMC/Veil/blob/1.21/common/src/main/java/foundry/veil/impl/resource/VeilResourceManagerImpl.java ;
   ImGuiMC: https://github.com/FoundryMC/imguimc
-- Слежение NeoForge за файлами настроек: https://github.com/neoforged/FancyModLoader/blob/1.21.1/loader/src/main/java/net/neoforged/fml/config/ConfigWatcher.java ,
+- NeoForge config file watching: https://github.com/neoforged/FancyModLoader/blob/1.21.1/loader/src/main/java/net/neoforged/fml/config/ConfigWatcher.java ,
   https://docs.neoforged.net/docs/misc/config/
 
-Тесты и проверка картинки:
+Tests and visual checks:
 - NeoForge GameTest 1.21.1: https://docs.neoforged.net/docs/1.21.1/misc/gametest
-- Клиентские тесты Fabric со снимками: https://fabricmc.net/2025/03/24/1215.html , https://docs.fabricmc.net/develop/automatic-testing ,
+- Fabric client screenshot tests: https://fabricmc.net/2025/03/24/1215.html , https://docs.fabricmc.net/develop/automatic-testing ,
   https://github.com/FabricMC/fabric/blob/HEAD/fabric-client-gametest-api-v1/src/client/java/net/fabricmc/fabric/api/client/gametest/v1/context/ClientGameTestContext.java ,
   https://github.com/FabricMC/fabric/blob/HEAD/fabric-client-gametest-api-v1/src/client/java/net/fabricmc/fabric/api/client/gametest/v1/screenshot/TestScreenshotComparisonAlgorithm.java
-- У NeoForge клиентских тестов со снимками нет: https://github.com/neoforged/NeoForge/issues/3624
+- NeoForge has no client screenshot tests: https://github.com/neoforged/NeoForge/issues/3624
 - mc-runtime-test: https://github.com/headlesshq/mc-runtime-test ; HeadlessMC: https://github.com/headlesshq/headlessmc/blob/HEAD/headlessmc-lwjgl/README.md
-- CI модов рендера (только сборка): Sodium https://github.com/CaffeineMC/sodium/blob/dev/.github/workflows/build-pull-request.yml ,
+- Rendering-mod CI (build only): Sodium https://github.com/CaffeineMC/sodium/blob/dev/.github/workflows/build-pull-request.yml ,
   Iris https://github.com/IrisShaders/Iris/blob/26.1/.github/workflows/build.yml ,
   Veil https://github.com/FoundryMC/Veil/blob/1.21/.github/workflows/build.yml ,
   Flywheel https://github.com/Engine-Room/Flywheel/blob/26.1.2/dev/.github/workflows/build.yml ,
@@ -320,32 +308,32 @@
   Flashback https://github.com/Moulberry/Flashback
 - RenderDoc: RenderNurse https://github.com/neoforged/RenderNurse , GFX-Debuggers https://modrinth.com/mod/gfx-debuggers ,
   shaderLABS https://shaderlabs.org/wiki/Attaching_Graphics_Debuggers_to_Minecraft
-- Вне Minecraft: NVIDIA FLIP https://github.com/NVlabs/flip ; Bevy https://github.com/bevyengine/bevy/blob/main/.github/workflows/example-run.yml ;
+- Outside Minecraft: NVIDIA FLIP https://github.com/NVlabs/flip ; Bevy https://github.com/bevyengine/bevy/blob/main/.github/workflows/example-run.yml ;
   Mesa CI https://docs.mesa3d.org/ci/index.html
 
-CI и выпуск:
+CI and release:
 - setup-gradle: https://github.com/gradle/actions/blob/main/docs/setup-gradle.md , https://github.com/gradle/actions/releases
-- CI с GameTest: Create https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/.github/workflows/build.yml ,
+- CI with GameTest: Create https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/.github/workflows/build.yml ,
   JEI https://github.com/mezz/JustEnoughItems/blob/26.3/.github/workflows/tests.yml ,
   AE2 https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/main/.github/workflows/build.yml ,
   Mekanism https://github.com/mekanism/Mekanism/blob/26.3/.github/workflows/gametests.yml
-- Публикация: https://modmuss50.github.io/mod-publish-plugin/ , https://github.com/Kir-Antipov/mc-publish ,
-  https://github.com/modrinth/minotaur ; журнал изменений: https://keepachangelog.com/en/1.1.0/ , https://github.com/orhun/git-cliff
-- Беты на Modrinth: https://api.modrinth.com/v2/project/sodium/version?loaders=%5B%22neoforge%22%5D ;
-  формы задач Create: https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/.github/ISSUE_TEMPLATE/crash.yml ;
+- Publishing: https://modmuss50.github.io/mod-publish-plugin/ , https://github.com/Kir-Antipov/mc-publish ,
+  https://github.com/modrinth/minotaur ; changelog: https://keepachangelog.com/en/1.1.0/ , https://github.com/orhun/git-cliff
+- Modrinth betas: https://api.modrinth.com/v2/project/sodium/version?loaders=%5B%22neoforge%22%5D ;
+  Create issue forms: https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/.github/ISSUE_TEMPLATE/crash.yml ;
   Crash Assistant: https://modrinth.com/mod/crash-assistant
-- NeoForge, советы: https://docs.neoforged.net/docs/1.21.1/gettingstarted/ , https://docs.neoforged.net/docs/1.21.1/gettingstarted/structuring
-- ИИ-инструменты: https://github.com/headlesshq/headlessmc-mcp , https://github.com/langyo/minecraft-mod-mcp , https://github.com/denfry/mcpfabric
+- NeoForge advice: https://docs.neoforged.net/docs/1.21.1/gettingstarted/ , https://docs.neoforged.net/docs/1.21.1/gettingstarted/structuring
+- AI tools: https://github.com/headlesshq/headlessmc-mcp , https://github.com/langyo/minecraft-mod-mcp , https://github.com/denfry/mcpfabric
 
-Стандартные замены (п. 3):
+Standard replacements (section 3):
 - HotswapAgent, `autoHotswap`: https://github.com/HotswapProjects/HotswapAgent
-- `localRuntime` в MDK: https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle/blob/main/build.gradle
+- MDK `localRuntime`: https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle/blob/main/build.gradle
 - `gh pr checks --watch --fail-fast`: https://cli.github.com/manual/gh_pr_checks
-- Фильтр путей: https://github.com/dorny/paths-filter , https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore
-- Ванильный `/tick`: https://minecraft.wiki/w/Commands/tick ; клиент не тикает чаще 20 раз в секунду — `Minecraft.getTickTargetMillis`
-  в исходниках NeoForge 21.1 (`Math.max(defaultValue, tickratemanager.millisecondsPerTick())`)
-- gamescope, `--backend headless`: https://github.com/ValveSoftware/gamescope (список бэкендов — `gamescope --help`)
+- Path filter: https://github.com/dorny/paths-filter , https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore
+- Vanilla `/tick`: https://minecraft.wiki/w/Commands/tick ; client does not tick more than 20 times per second — `Minecraft.getTickTargetMillis`
+  in NeoForge 21.1 sources (`Math.max(defaultValue, tickratemanager.millisecondsPerTick())`)
+- gamescope, `--backend headless`: https://github.com/ValveSoftware/gamescope (backend list: `gamescope --help`)
 - `mc-runtime-test`: https://github.com/headlesshq/mc-runtime-test
 
-Не нашлось: опубликованных замеров «правка → игра» у моддеров (секунды на замену и 30–90 с на перезапуск — оценка);
-постов на Reddit 2025–2026 (сайт не открылся); руководства Iris по RenderDoc.
+Not found: published modder measurements for “edit → game” (seconds for hot swap, 30–90 s restart, both (est.));
+Reddit posts from 2025–2026 (site would not open); Iris RenderDoc guide.

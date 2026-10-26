@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Из чего воронка: по нему выбираются обломки, цвет пыли и «фонтан» грунта.
- * Сначала смотрим блок под точкой удара, затем сам поражённый блок — он важнее.
+ * Crater material: selects debris, dust color, ground fountain. Check below impact first, then struck block
+ * itself, which takes priority.
  */
 public enum GroundMaterial {
     DIRT(() -> Blocks.DIRT, 0.36f, 0.27f, 0.18f, 1,
@@ -46,18 +46,18 @@ public enum GroundMaterial {
     private final Supplier<Block> particle;
     public final float r, g, b;
     /**
-     * Пористость для звука — G по ISO 9613-2 (п. 7.3.1): 1 — рыхлое (почва с травой, песок, снег) у земли глушит верха,
-     * 0 — твёрдое (камень, кладка, дерево, вода) отражает, гравий — между.
+     * Acoustic porosity G, ISO 9613-2 (7.3.1): 1 loose (grassy soil, sand, snow), attenuates highs near ground; 0
+     * hard (stone, masonry, wood, water), reflects; gravel between.
      */
     public final float porosity;
     private final String[] debris;
     private List<BlockState> debrisStates;
 
     /**
-     * Грунт для закона воронки ({@link ua.zentix.incoming.nuclear.model.CraterModel.Soil}): скала — камень и кладка;
-     * насыщенный водой — дно под водой; сухой — почва, песок, гравий (насыпь путей — щебень, рыхлое, не скала: жалоба
-     * 23.10, воронка в балласте была на 30 % уже, чем в поле). ⚠ Снег — как насыщенный: данных о воронках в снегу нет,
-     * он рыхлее сухого грунта (оценка).
+     * Crater-law ground ({@link ua.zentix.incoming.nuclear.model.CraterModel.Soil}): rock means stone/masonry;
+     * saturated means underwater bottom; dry means soil/sand/gravel (rail ballast is loose rubble, not rock:
+     * complaint 23.10, ballast crater was 30% narrower than field). ⚠ Snow as saturated: no snow-crater data,
+     * looser than dry ground (estimate).
      */
     public ua.zentix.incoming.nuclear.model.CraterModel.Soil soil() {
         return switch (this) {
@@ -91,12 +91,12 @@ public enum GroundMaterial {
         this.debris = debris;
     }
 
-    /** Блок для частиц «фонтана» грунта. */
+    /** Block for ground-fountain particles. */
     public BlockState particleBlock() {
         return particle.get().defaultBlockState();
     }
 
-    /** Девять обломков грунта (как debris/gN). */
+    /** Nine ground debris pieces (like debris/gN). */
     public List<BlockState> debris() {
         if (debrisStates == null) debrisStates = states(debris);
         return debrisStates;
@@ -106,7 +106,7 @@ public enum GroundMaterial {
         return this == WATER;
     }
 
-    /** Грунт в точке удара; чанк не готов — гравий: чтение из неготового чанка на сервере грузит его прямо в тике. */
+    /** Impact ground; unready chunk defaults gravel: server read would load synchronously in tick. */
     public static GroundMaterial sample(Level level, BlockPos at) {
         if (!Terrain.ready(level, at)) return GRAVEL;
         GroundMaterial below = of(level.getBlockState(at.below()));
@@ -114,7 +114,7 @@ public enum GroundMaterial {
         return here != null ? here : below != null ? below : GRAVEL;
     }
 
-    /** Из чего блок; {@code null} — ни грунт, ни постройка (воздух, трава, блоки других модов без тегов). */
+    /** Block material; {@code null} neither ground nor structure (air, grass, untagged mod blocks). */
     public static @Nullable GroundMaterial of(BlockState s) {
         if (s.is(Blocks.WATER)) return WATER;
         if (s.is(BlockTags.TERRACOTTA) || s.is(Blocks.CLAY)) return TERRACOTTA;
@@ -123,7 +123,7 @@ public enum GroundMaterial {
         if (s.is(BlockTags.SNOW) || s.is(BlockTags.ICE)) return SNOW;
         if (s.is(BlockTags.SAND) || s.is(Blocks.SANDSTONE)) return SAND;
         if (s.is(Blocks.DEEPSLATE) || s.is(Blocks.COBBLED_DEEPSLATE) || s.is(Blocks.TUFF)) return DEEPSLATE;
-        // гравий — сыпучий щебень (насыпь путей), не скала: своя воронка, пыль и звук ({@link #GRAVEL})
+        // Gravel is loose rubble (rail ballast), not rock: own crater/dust/sound ({@link #GRAVEL}).
         if (s.is(Blocks.GRAVEL)) return GRAVEL;
         if (s.is(BlockTags.BASE_STONE_OVERWORLD)) return STONE;
         if (s.is(BlockTags.DIRT) || s.is(Blocks.GRASS_BLOCK)) return DIRT;
@@ -132,7 +132,7 @@ public enum GroundMaterial {
         return null;
     }
 
-    /** Блоки по именам; чего нет (другой мод не установлен) — пропускаем. «_slab» кладём нижней половиной. */
+    /** Blocks by name; missing (mod absent) skipped. “_slab” uses lower half. */
     public static List<BlockState> states(String... ids) {
         List<BlockState> out = new ArrayList<>();
         for (String id : ids) {

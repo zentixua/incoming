@@ -12,18 +12,17 @@ import org.lwjgl.system.MemoryUtil;
 import java.util.Arrays;
 
 /**
- * Квадраты кадра слоя эффектов: копятся в своей памяти (вне кучи Java, между кадрами не освобождается), потом
- * сортируются от дальних к ближним по настоящему расстоянию до камеры и уходят одним вызовом отрисовки. Прозрачное
- * смешивается верно только в таком порядке: ближний клуб поверх дальнего, а не «кто родился позже».
+ * Quads for the effects-layer frame: accumulated in reusable off-heap memory, then sorted far to near by their
+ * true camera distance and submitted in one draw call. Transparency blends correctly only in this order:
+ * a near puff covers a distant one, regardless of which was created later.
  * <p>
- * Вершина — 36 байт ({@link #FORMAT}): место от камеры, место на листе, свет с умноженной альфой, мягкость края
- * у рельефа или проба источника ({@link #seenBy}) и множитель переноса ближе ({@code UV1}), свет мира ({@code UV2}; у
- * запечённых клубов — базис света, {@link PuffGeometry#faceLight}),
- * туман Minecraft ({@code Normal.x}),
- * чем брать текстуру ({@code Normal.y}: 1 — частица ближайшим пикселем, {@link #nearestTexels}; −1 — плитка атласа
- * дальних моделей, {@link #modelTiles}; ½ — ореол по формуле, {@link #glowShape}; −¼ — запечённый клуб с шестисторонним
- * светом, {@link #sixWay}; ⅝ — кадры огня со смесью, {@link #fireballMix}; 0 — лист слоя гладко) и непрозрачность частицы без текстуры или смесь кадров клуба
- * ({@code Normal.z}, {@link #opacity}), свечение ({@code Emit}, {@link #emission}).
+ * A vertex is 36 bytes ({@link #FORMAT}): camera-relative position, atlas coordinates, premultiplied color,
+ * terrain softness or source probe ({@link #seenBy}) and near-fold factor ({@code UV1}), world light ({@code UV2};
+ * baked puffs store their lighting basis instead, {@link PuffGeometry#faceLight}), Minecraft fog ({@code Normal.x}),
+ * texture mode ({@code Normal.y}: 1 for nearest-texel particles, {@link #nearestTexels}; −1 for distant-model atlas
+ * tiles, {@link #modelTiles}; ½ for analytic glow, {@link #glowShape}; −¼ for baked puffs with six-way lighting,
+ * {@link #sixWay}; ⅝ for blended fire frames, {@link #fireballMix}; 0 for smooth effects-atlas sampling), and particle
+ * opacity before texturing or puff-frame blend ({@code Normal.z}, {@link #opacity}), plus emission ({@code Emit}, {@link #emission}).
  */
 public final class FxQuads {
     /**
@@ -68,7 +67,7 @@ public final class FxQuads {
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
-    /** Вершины клуба в мировых осях; одна память на весь кадр, как у остальных квадратов. */
+    /** Puff vertices in world axes; one scratch buffer for the whole frame, as with other quads. */
     private final double[] puff = new double[12];
     private byte nearest, opacity, emit;
     private short probe;
@@ -436,7 +435,7 @@ public final class FxQuads {
         vertex(x + ax - bx, y, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
     }
 
-    /** Клуб лицом к положению глаза с верхом мира ({@link PuffGeometry#face}); поворот камеры его не поворачивает. */
+    /** Puff facing the eye position with world up ({@link PuffGeometry#face}); turning the camera does not rotate it. */
     public void facePosition(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
                              float soft, float unfold, int light, float fog) {
         PuffGeometry.face(x, y, z, halfA, halfB, puff);
@@ -444,7 +443,7 @@ public final class FxQuads {
         puff(key, s, r, g, b, a, soft, unfold, light, fog);
     }
 
-    /** Клуб на горизонтали с постоянным углом от зерна; обычный {@link #flat} сохраняет оси своих прежних вызовов. */
+    /** Horizontal puff at a fixed seeded angle; ordinary {@link #flat} retains the axes of its existing callers. */
     public void flat(float x, float y, float z, float key, float halfA, float halfB, double angle, FxAtlas.Sprite s, float r, float g, float b, float a,
                      float soft, float unfold, int light, float fog) {
         PuffGeometry.flat(x, y, z, halfA, halfB, angle, puff);

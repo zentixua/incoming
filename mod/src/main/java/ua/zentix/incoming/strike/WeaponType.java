@@ -14,27 +14,27 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.IntFunction;
 
-/** Виды оружия: номер, имя и паспорт ({@link WeaponSpec}) — всё, чем оружие отличается от другого. */
+/** Weapon types: number, name, spec ({@link WeaponSpec}), everything distinguishing weapons. */
 public enum WeaponType implements StringRepresentable {
-    /** Дрон-камикадзе в духе Shahed-136: ≈150 км/ч, крейсер над рельефом, пикирование на цель. */
+    /** Shahed-136-style kamikaze drone: ≈150 km/h, cruise above terrain, target dive. */
     DRONE(0, "drone", WeaponSpec.DRONE),
-    /** Крылатая ракета: бреющий полёт, горка, пикирование; 80 м/с — медленнее настоящей, чтобы подлёт было видно. */
+    /** Cruise missile: terrain-hugging, popup, dive; 80 m/s slower than real so approach visible. */
     MISSILE(1, "missile", WeaponSpec.MISSILE),
-    /** B-2 и бетонобойная бомба: пробивает грунт и взрывается под землёй. */
+    /** B-2 and bunker-buster: penetrates ground, detonates underground. */
     BUNKER(2, "bunker", WeaponSpec.BUNKER),
-    /** Межконтинентальная баллистическая ракета с ядерной боеголовкой (см. пакет nuclear). */
+    /** Intercontinental ballistic missile with nuclear warhead (see nuclear package). */
     NUKE(3, "nuke", WeaponSpec.NUKE),
     /**
-     * РСЗО в духе БМ-21 «Град»: неуправляемые реактивные снаряды по баллистике с пакета из 40 труб, залп очередью
-     * по полсекунды. Номер в {@link #id} — порядок в перечислении (индексы {@code values()} совпадают с id).
+     * BM-21 Grad-style MLRS: unguided ballistic rockets from 40-tube rack, half-second launch sequence. {@link
+     * #id} follows enum order ({@code values()} indices equal ids).
      */
     ROCKET(4, "rocket", WeaponSpec.ROCKET),
-    /** Барражирующий боеприпас в духе «Ланцета»: кружит над целью, пикирует по команде или по истечении барража. */
+    /** Lancet-style loitering munition: circles above target, dives on command or loiter timeout. */
     LOITER(5, "loiter", WeaponSpec.LOITER);
 
     public static final Codec<WeaponType> CODEC = StringRepresentable.fromEnum(WeaponType::values);
     private static final IntFunction<WeaponType> BY_ID = ByIdMap.continuous(WeaponType::id, values(), ByIdMap.OutOfBoundsStrategy.CLAMP);
-    /** По номеру; чужой номер (старый мир, другая версия) — ближайшее оружие, а не ошибка. */
+    /** By number; unknown number (old world, other version) gives nearest weapon rather than error. */
     public static WeaponType byId(int id) {
         return BY_ID.apply(id);
     }
@@ -51,7 +51,7 @@ public enum WeaponType implements StringRepresentable {
         this.spec = spec;
     }
 
-    /** Паспорт оружия. */
+    /** Weapon spec. */
     public WeaponSpec spec() {
         return spec;
     }
@@ -77,12 +77,12 @@ public enum WeaponType implements StringRepresentable {
         return spec.siren();
     }
 
-    /** Пауза между пусками в залпе, тиков. */
+    /** Salvo launch gap, ticks. */
     public int salvoGap(RandomSource random) {
         return spec.salvoGap(random);
     }
 
-    /** Порядок в пульте и при прокрутке в бинокле: от лёгкого к ядерному. */
+    /** Designator/binocular scroll order: light to nuclear. */
     public static List<WeaponType> menu() {
         return List.of(DRONE, LOITER, MISSILE, ROCKET, BUNKER, NUKE);
     }
@@ -97,7 +97,7 @@ public enum WeaponType implements StringRepresentable {
         return m.get((m.indexOf(this) + m.size() - 1) % m.size());
     }
 
-    /** Имена в командах: английские и русские синонимы («shahed» — это дрон). */
+    /** Command names: English/Russian synonyms (“shahed” means drone). */
     public static WeaponType parse(String s) {
         return switch (s.toLowerCase(Locale.ROOT)) {
             case "drone", "shahed", "шахед", "дрон" -> DRONE;

@@ -1,6 +1,7 @@
 package ua.zentix.incoming.guidance;
 
 import ua.zentix.incoming.util.GridWalk;
+import ua.zentix.incoming.util.Relief;
 
 /**
  * Полоса над путём по земле: какой высоты рельеф надо перелететь, во всех колонках блоков, которые задевает полоса
@@ -14,12 +15,6 @@ public final class Corridor {
     static final double LANE = 0.9;
 
     private Corridor() {}
-
-    /** Высота рельефа (первый воздух над препятствиями) в колонке блоков. */
-    @FunctionalInterface
-    public interface Relief {
-        double at(int x, int z);
-    }
 
     /**
      * Набор высоты снаряда до колонки впереди: первые {@code reaction} блоков пути — без набора (снаряд только выходит

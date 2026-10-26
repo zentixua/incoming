@@ -33,9 +33,9 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEntities;
 
 /**
- * Обломок взрыва: блок грунта, кусок корпуса или тлеющий уголь. Летит по баллистике (как falling_block),
- * калечит тех, в кого попал; при {@code debris_stay} глыбы ложатся на рыхлый грунт, крупные детали остаются блоками, крошка рассыпается.
- * Горячие обломки оставляют огненно-дымный след и могут поджечь место падения.
+ * Explosion debris: ground block, casing piece, or glowing ember. Flies ballistically (like falling_block),
+ * injures those it hits; with {@code debris_stay}, boulders settle on loose ground, large parts remain as blocks,
+ * chips scatter. Hot debris leaves a fire/smoke trail and may ignite its landing site.
  */
 public class DebrisEntity extends Entity {
     private static final EntityDataAccessor<BlockState> DATA_BLOCK = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BLOCK_STATE);
@@ -48,7 +48,7 @@ public class DebrisEntity extends Entity {
     /** Ground/charred material, as distinct from an actual large piece of the airframe. Server only. */
     private boolean groundMaterial;
     private final IntSet hit = new IntOpenHashSet();
-    /** Клиент: случайное вращение в полёте (градусов за тик вокруг двух осей). */
+    /** Client: random rotation in flight (degrees per tick around two axes). */
     public final float spinX, spinZ;
 
     public DebrisEntity(EntityType<? extends DebrisEntity> type, Level level) {
@@ -117,8 +117,8 @@ public class DebrisEntity extends Entity {
 
         if (level().isClientSide) return;
         ServerLevel level = (ServerLevel) level();
-        // улетел из тикающих чанков (за край района цели): там он больше не тикает и висел бы в воздухе, пока чанк
-        // не выгрузится, — рассыпается сразу и не ложится блоком туда, где мир не тикает
+        // Left ticking chunks (beyond the target-area edge): it no longer ticks there and would hang in air until the chunk
+        // unloads; scatter immediately, without placing a block where the world does not tick.
         if (!level.isPositionEntityTicking(blockPosition())) {
             discard();
             return;
@@ -131,7 +131,7 @@ public class DebrisEntity extends Entity {
         }
     }
 
-    /** Как у falling_block: 2 урона за блок падения, но не больше 16; каждому — один раз. */
+    /** Like falling_block: 2 damage per block fallen, capped at 16; once per victim. */
     private void hurtWhoIsHit(ServerLevel level, Vec3 v) {
         for (Entity e : level.getEntities(this, getBoundingBox().expandTowards(v).inflate(0.2), e -> e instanceof LivingEntity && e.isAlive())) {
             if (!hit.add(e.getId())) continue;
@@ -143,8 +143,8 @@ public class DebrisEntity extends Entity {
     private void land(ServerLevel level, Vec3 impactVelocity) {
         BlockPos pos = blockPosition();
         if (impactVelocity.y <= -0.05) {
-            // удар звучит своим веществом (звуки блока у ванили: металл, дерево, камень, грунт), а не всегда гравием и
-            // камнем; громкость — прежняя: массы у обломка-представителя пока нет (общий учёт вещества взрыва — впереди)
+            // Impact uses its material's sound (vanilla block sounds: metal, wood, stone, ground), rather than always gravel and
+            // stone; volume unchanged: representative debris has no mass yet (shared blast material accounting is still ahead).
             SoundType sound = blockState().getSoundType(level, pos, this);
             level.playSound(null, pos, sound.getBreakSound(), SoundSource.BLOCKS, 2.0f * sound.getVolume(), 0.6f * sound.getPitch());
             level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, 1.5f * sound.getVolume(), 0.7f * sound.getPitch());
@@ -165,7 +165,7 @@ public class DebrisEntity extends Entity {
         boolean replaceable = here.canBeReplaced(new DirectionalPlaceContext(level, pos, Direction.DOWN, ItemStack.EMPTY, Direction.UP));
         boolean supported = state.canSurvive(level, pos) && !FallingBlock.isFree(level.getBlockState(pos.below()));
         if (!replaceable || !supported) return;
-        // горящий обломок поджигает только горючее, на котором или у которого лёг; на камне и земле он догорает сам
+        // Burning debris ignites only fuel it lands on or beside; on stone and ground it burns out by itself.
         if (state.is(Blocks.FIRE) && (!IncomingConfig.SERVER.fire.get() || !touchesFuel(level, pos))) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) && level.getFluidState(pos).getType() == Fluids.WATER) {
             state = state.setValue(BlockStateProperties.WATERLOGGED, true);
@@ -173,7 +173,7 @@ public class DebrisEntity extends Entity {
         level.setBlock(pos, state, 3);
     }
 
-    /** Рядом горючее: огонь на этом месте будет гореть, а не погаснет сам. */
+    /** Fuel nearby: fire here will keep burning rather than go out by itself. */
     private static boolean touchesFuel(ServerLevel level, BlockPos pos) {
         for (Direction d : Direction.values()) {
             BlockPos n = pos.relative(d);

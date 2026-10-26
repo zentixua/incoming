@@ -710,26 +710,26 @@ paths:
   шлейфы пожаров, ножки — `SmokePuffs.tube` их не рисует, а кладёт в ожидание, `Draw.holdPlace`) ждут; близкие (ближе σ)
   клубы источника сливаются в один с той же массой и моментами (`merge`, как слияние пуфов SCIPUFF); план — сколько
   экранов закроет каждый клуб и место одним квадратом (пол) и кучкой (`cover`, сумма площадей на экране с перекрытием).
-  Цена кадра ограничена при любом числе ударов — `FILL_BUDGET` экранов (16, ~4,8 мс на 4060 при 2560×1600; при 8 налёт
-  из 40 с края и изнутри уже терял тёмную растекающуюся массу и шлейфы в ровную мглу вуали). Пол выше — сначала отбор
-  скрытого в направлениях мира (`Draw.conceal`), затем клубы и места
-  разных источников, что лежат друг на друге, сливаются тем же законом уровнями
+  Frame cost is bounded at any strike count by `FILL_BUDGET` screens (16, about 4.8 ms on the 4060 at 2560×1600;
+  at 8, the edge/inside views of 40 strikes already lost dark spreading clouds and plumes to smooth veil haze).
+  Above that floor, first conceal occluded matter in world directions (`Draw.conceal`), then merge overlapping
+  clumps and places from different sources with the same moment-preserving law at successive levels
   (`Draw.mergeLevel`: ячейки мира в 0,5/1/2 края своего клуба по октавам края — не экрана: поворот взгляда слитое не трогает;
   клубы разного вида (`SmokeGrid.Look`: дым, завеса выброса, пыль дробления, облако разрыва) и брызги с дымом не сливаются,
   брызги — круглыми; места одной трубки не сливаются ни на каком уровне — у группы слитых мест весь её состав трубок
   (`SmokePuffs.TubeGroups`, живёт между уровнями: держатель группы помнил одну трубку, и группы A+B и B+A следующего
   уровня сливались), у ячейки до `SLOTS` групп, места соседних трубок сходятся попарно; ряд мест трубки, слитый вдоль оси,
-  — бусы или толстая трубка, у густого шлейфа — лишняя непрозрачность внизу кадра (`SmokeRaidTest`, с края)); не уложился и так — квадратами остаются самые видные (`Draw.fit`: по
-  своей непрозрачности, дошедшей сквозь ближние сердцевины, — у места трубки вся трубка у оси, иначе тонкий тёмный шлейф уходил первым — пока
-  их пол в бюджете), остальное — в вуаль, лента — не рисуется; отобранные в последних 15 %
-  бюджета (`FIT_FADE`) тают плавно уже до переполнения: `fit` действует при поле выше 0,85 бюджета, даже если все
-  квадраты ещё влезают. Иначе при переходе 16,093 → 15,986 экрана сразу возвращались 573 частично растворённых клуба,
-  и пропускание луча скакало на 0,064 (STEADY, неподвижный налёт, поворот 0,5°). Ширина 15 % сохраняет плавность и
-  залп по воде с полом 13,16 без бюджетной вуали (`WaterSalvoTest`); при прежних 25 % её непрозрачность достигала 0,175.
-  Полоса по видности от порога вдвое у
-  ровной сцены гасила все отобранные. Ленты следов
-  и шлейфов — тоже в плане и бюджете (`SmokePuffs.ribbon` → `Draw.holdRibbon`: ждут кадра, заливка — полоса по своим
-  вершинам, круг торца, вуаль «глаз в трубке»; геометрия одна у рисования, плана и проверки — `FarSprites.RibbonShape`):
+  creates beads or a thick tube and adds opacity at the bottom of a dense plume (`SmokeRaidTest`, edge view));
+  If merging still cannot fit, `Draw.fit` keeps the most visible quads within the floor budget, ranked by their
+  opacity after nearby cores. A tube place uses the whole tube's axial opacity, otherwise thin dark plumes go first.
+  The remainder becomes veil; rejected ribbons are omitted. The final 15% of the budget fades (`FIT_FADE`) before
+  overflow: fit runs above 0.85 budget even when every quad still fits. Otherwise crossing 16.093 → 15.986 screens
+  restored 573 partially faded clumps at once, jumping ray transmittance by 0.064 (STEADY frozen raid, 0.5° yaw).
+  The 15% band preserves continuity and leaves the 13.16-screen water salvo without budget veil (`WaterSalvoTest`);
+  the former 25% band reached opacity 0.175 there. An earlier visibility band twice the cutoff faded every selected
+  record in a uniform scene. Trail/plume ribbons also enter the plan and budget
+  (`SmokePuffs.ribbon` → `Draw.holdRibbon`: queued for the frame; fill uses the strip vertices, end disc and eye-in-tube
+  veil; rendering, planning and tests share `FarSprites.RibbonShape` geometry):
   прежде отрезки сверх мест кадра шли лентой мимо бюджета, и 300 стоячих трубок в 30 м заливали 29,5 экрана при 16
   (`SmokeRaidTest.ribbonsStayInTheBudget`, и 1000). Прежде в вуаль шли крупнейшие на экране — а это передние клубы, на них весь вид: стена дыма с края
   становилась ровной бурой мглой с краем клетки вуали. Сливать дальше двух краёв нельзя: облака в одной ячейке на 16
@@ -740,15 +740,15 @@ paths:
   ⌈кучки⌉ квадратов — последний с долей альфы заливает всю свою площадь, — размер 0,8–1,2 и сдвиг по зерну, у места трубки
   и одиночный клуб со своим размером, у лежащего — по проекции четырёх вершин квадрата на горизонтали, `polygonFill`: на
   глубине середины слой пыли в 40 м под глазом на 5 м выходил 15,4 экрана против 36,7, `lyingDustIsMeasuredByItsCorners`);
-  больше бюджета — доля меньше. Доля прошлого кадра держится, пока её настоящая заливка в бюджете; рост подробности —
-  только с запасом 20 %, после превышения тоже остаётся этот запас (гистерезис). Прежде план
-  считал дробную кучку и средний размер, и 12 перекрывающихся гауссов при плане 8 заливали 11,3 экрана; теперь
-  нарисованное — не больше плана (`SmokeRaidTest.drawnFillNeverExceedsThePlan`). Налёт из 16 ударов ложится в бюджет как
-  есть (`SmokeFillTest`); налёт стенда из 100 по грунту (сцена «100»: 70 шлейфов топлива, завеса выброса у земли,
-  дроблёная пыль камня) — пол 15/29/67 экранов снаружи/с края/внутри (с шагом мест по бюджету; прежде бюджет не действовал вовсе:
-  меньше клуба на гаусс кучка не брала, шлейфы шли мимо плана — на стенде 41/104/175 экранов), с бюджетом — 15/16/16 и
-  пропускание по частям кадра к веществу модели не дальше полного кадра (`SmokeRaidTest`: 0,08/0,17/0,08 против
-  0,21/0,24/0,29). ⚠ Вуаль
+  Above budget, reduce the share. Keep the previous frame's share while its actual fill fits; detail grows only
+  with 20% headroom, which is also retained after overflow (hysteresis). The old plan used fractional clump counts
+  and mean size: 12 overlapping Gaussians planned as 8 screens actually filled 11.3. Now drawn fill never exceeds
+  the plan (`SmokeRaidTest.drawnFillNeverExceedsThePlan`). A 16-strike raid fits unchanged (`SmokeFillTest`).
+  The 100-strike ground fixture (70 fuel plumes, ground ejecta curtain and crushed stone dust) originally had floors
+  of 15/29/67 screens outside/edge/inside with budgeted place stride. Before the budget applied to all paths, one
+  clump per Gaussian was the minimum and plumes bypassed planning: 41/104/175 screens. Budgeted fill was 15/16/16;
+  regional transmittance stayed closer to model matter than a uniform full-screen layer (`SmokeRaidTest` errors
+  0.08/0.17/0.08 versus 0.21/0.24/0.29). ⚠ The veil
   светлее и ровнее клубов того же вещества (свет без карт клуба, 12×12 клеток): то, что ушло в неё, — дымка. Работа
   плана с налётом не растёт по построению, в каждом кадре и в первом кадре налёта тоже: мест трубок — не больше `PLACES`
   (= `CLUB_BUDGET`, 3000; сверх — у отрезка мест в этом кадре нет, его места — в бюджет клубов, и шаг мест растёт), клубов
@@ -757,25 +757,25 @@ paths:
   через 40 м выходила гауссами σ 20 м — дым в пустых промежутках, `blobLimitDoesNotSmearOverClearSky`), ждущие — подряд
   без слитых (`Draw.thin`, `compact`; налёт из 400 — `SmokeRaidTest`); гауссов вуали — `VEIL_MAX`. ⚠ Сама модель облаков (`CloudModel.blobs`, пыль у земли) считается
   каждый кадр у каждого источника: ~2 мс процессора на 100 ударов. Одиночный клуб — без разброса размера.
-  STEADY: отбор скрытого сеткой экрана 32×18 заменён сеткой направлений мира. В неподвижном налёте 100 при повороте на 0,5° среднее |ΔT|
-  внутри было 0,002915; без одного этого отбора — 0,000106 (−96,4 %), при прежнем пределе заливки. Сетка меняла и
-  приоритет вуали, поэтому одного плавного гашения отброшенных было бы мало. Новый отбор — 24×24 клетки на каждой из
-  шести сторон куба, узлы на швах совпадают, выборка билинейная. Ближние сердцевины складывают толщу с плавным краем;
-  девять лучей сердцевины дальнего клуба берут её минимум, клуб тает между толщами 2 и 3 (полный порог прежний).
-  Частичное скрытие входит в видимую долю самой записи рисования (`held`/`places`) и её приоритет: запись по-прежнему
-  может сливаться. Отдельный флаг частичного скрытия оставлял ~2 лишних экрана пола и отдавал бюджет почти исчезнувшим
-  местам с прежним приоритетом.
-  Поворот камеры не меняет эти направления; отбор включается плавно между полом в один и 1,25 бюджета, при свободном
-  бюджете не нужен. Лежащие клубы и вещество у глаза не отбрасываются. Обход узлов ограничен пересечением сферы клуба
-  с пирамидой грани: без этой отсечки клубы у горизонта обходили две лишние грани целиком (~10 мс против ~0,9 мс
-  процессора на камере края 100 ударов). Стоячий клуб теперь обращён к положению
-  глаза с верхом мира, лежащий — под постоянным углом зерна (`PuffGeometry`, одна геометрия у GPU, плана и проверки).
-  Переход лежащий/стоящий — долями оптической толщи (`lyingShare`), обе плоскости входят в бюджет. Первый клуб кучки
-  остаётся в центре, дочерние места — пары по зерну; размер и разброс непрерывны у числа 1 (`clusterSize`, `clubScale`).
-  Прежний порог 40 px менял пропускание луча до 0,61 при шаге глаза 0,00019 м, порог лежащего — до 0,49 при 2 мкм.
-  `SmokeSteadinessProbe` — лучи мира, неподвижное время, поворот и шаг, предел среднего |ΔT| и доли видимых скачков;
-  `SmokeTargetedProbe` — оба порога и неизменные вершины лежащего. `Screen` пересекает луч с настоящей плоскостью:
-  диск на глубине середины не проверял поворот плоских клубов, а ступени радиального профиля добавляли ложные скачки.
+  STEADY replaces the 32×18 screen occlusion grid with a world-direction field. In the original frozen 100-strike
+  ablation, 0.5° yaw gave mean |ΔT| 0.002915 inside; removing only that grid gave 0.000106 (−96.4%) at the same fill cap.
+  The grid also changed veil priority, so merely fading rejected records would not suffice. The new field has 24×24
+  cells per cube face, shared seam nodes and bilinear sampling. Nearby cores add optical depth with a smooth edge;
+  nine rays through a distant core take its minimum, fading the clump between depths 2 and 3 (old full cutoff).
+  Partial concealment enters the rendering record's visibility (`held`/`places`) and priority before merging.
+  A separate partial-hide flag prevented merging, leaving about two extra screens of floor and giving nearly
+  invisible places their original budget priority.
+  Camera yaw cannot rotate these directions. Concealment ramps between one and 1.25 budgets of floor and is absent
+  with spare budget; flat clumps and matter at the eye are retained. Node traversal is bounded by the clump sphere's
+  intersection with each face pyramid: without this bound, horizon clumps traversed two extra faces in full
+  (about 10 ms versus 0.9 ms CPU at the 100-strike edge camera). Upright planes face the eye position with world-up;
+  flat planes keep a seeded world angle (`PuffGeometry`, shared by GPU, plan and tests). `lyingShare` divides optical
+  depth continuously between flat/upright planes, both charged to the budget. The first child stays at the center;
+  additional children occupy seeded pairs. Size/scatter remain continuous at count 1 (`clusterSize`, `clubScale`).
+  The old 40 px threshold changed ray T by up to 0.61 for a 0.00019 m eye step; the flat switch gave 0.49 for 2 µm.
+  `SmokeSteadinessProbe` freezes time and measures fixed world rays under yaw/steps, bounding mean |ΔT| and visible
+  jumps. `SmokeTargetedProbe` checks both thresholds and fixed flat corners. `Screen` intersects the actual plane:
+  a center-depth disc could not test flat-plane rotation, and stepped radial sampling introduced false jumps.
   Вуаль (`SmokePuffs.Veil`, рисует `FarSprites.veil`) — 12×12 клеток на 2 блока перед глазом, у каждой вершины толща по
   её лучу через все гауссы вуали (`sightDepth`), между вершинами — линейно, шум в полступени у вывода `fx.fsh` (иначе
   плавная вуаль на 8 битах ступенями); гауссов в ней — не больше `VEIL_MAX` (48: ~0,3 мс процессора), больше — близкие
@@ -784,11 +784,12 @@ paths:
   вуали мир берёт там, где по лучу набирается половина её непрозрачности (`Veil.half`: вещество — отрезок по среднему и
   разбросу по толще, `sightMoments`, усечённый гаусс; у густого — ближе к началу): дом перед далёким облаком в вуали в
   него не тонет, а в густом дыме вокруг глаза стена в нескольких метрах уже почти скрыта (⚠ линейный спуск —
-  приближение доли толщи перед миром; прежде вуаль закрывала всё дальше 2 блоков целиком). Геометрия сетки остаётся
-  у глаза, а клетка смешивается на глубине половины непрозрачности своего вещества (`Veil.depth`, среднее четырёх
-  вершин по их альфе). Прежний ключ 2 м клал бюджетную вуаль с глубиной 68–72 м поверх клубов на 16–60 м и стирал их
-  текстуру; перестановка не меняла пропускание и не ловилась проверкой только T. `VeilDepthTest` держит порядок
-  между ближними и дальними клубами и прежний порядок густого вещества у глаза. Гаусс идёт в неё, пока глаз в его краю: долей, которую его квадраты не показывают
+  approximation of the optical depth in front of the scene; formerly veil hid everything beyond 2 blocks).
+  The mesh remains near the eye, but each cell blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted
+  mean of four corners). In the projection-matched CPU trace, the old 2 m key put veil matter at 96–109 m over textured
+  clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a transmittance-only test misses it.
+  `VeilDepthTest` checks ordering between near/far clumps and retains dense eye-local matter's old order.
+  A Gaussian enters the veil while the eye is within its edge, by the fraction its quads do not show
   — середина сбоку, позади или у самого глаза (`SmokePuffs.front`: квадрат лицом к камере весь на глубине середины и тает у
   ближней плоскости, как в `fx.fsh`), а
   впереди на 1–2,5 σ вдоль взгляда — уже клубы (`SmokePuffs.ahead`). Прежде вуаль была одним квадратом с толщей по
@@ -800,10 +801,11 @@ paths:
   цвет — толстый слой смеси (`SmokePuffs.thick`: R∞ = (1 − s)/(1 + s), s² = (1 − ω')/(1 − ω'g'), замыкание по средним
   полусфер — у Эддингтона у сажи выходило отрицательное, сажа — чёрной; обращение — `SmokeGrid.dustAlbedo`) в свете неба
   у глаза; свет по сторонам — в шейдере (`fx.fsh`: `sixFrames`, `sixLight`): прямой (солнце, луна — `FxLayer.sun`, доля
-  ⚠ оценка) по картам с весами — квадратами косинусов (в сумме 1: по самим косинусам солнце под 45° светило бы в √2
-  сильнее); направления — в осях реальной плоскости и UV клуба, не экрана. Базис в двух short `UV2` вместо постоянного
-  `FULL_BRIGHT` (`PuffGeometry.faceLight/flatLight`); `fx.vsh` восстанавливает свет и переводит направления на вершинах,
-  формат по-прежнему 36 байт. На пикселе нет производных и нормализации базиса. Рассеянный — средний по шести, огненные шары кадра (`FxLights`) — по картам и не ярче огня на экране в той же
+  (est.)) uses squared-cosine weights (sum 1; plain cosines would make 45° sunlight √2 brighter). Directions follow
+  the actual plane and clump UV axes. Two `UV2` shorts carry the basis instead of constant `FULL_BRIGHT`
+  (`PuffGeometry.faceLight/flatLight`); `fx.vsh` restores light and transforms directions at vertices, retaining the
+  36-byte format. No fragment basis derivatives/normalization. Ambient averages all six sides; frame fireballs
+  (`FxLights`) use the maps and cannot exceed on-screen fire in the same
   мере, что у `balls` (освещённость × свет неба `FxAmbient`: иначе ночью огонь почти не светил бы на дым); тень в картах — у вещества запекания
   (`bake.py`: ω 0,55, g 0,55), у смеси клуба — в степени k смеси / k запекания (`SmokePuffs.shade`, k двух потоков
   √(3(1 − ω')(1 − ω'g')); байт `Normal.y` в полосе клуба, `FxQuads.sixWay`): белый дым окиси алюминия и капли почти без
@@ -820,9 +822,9 @@ paths:
   симуляции — рассеивающийся конечный клуб, а растущее облако подобно себе (Scorer 1957); по росту облака на 150–300 м в
   10–30 с брали поздние кадры — ровные размытые шары (RV2). Кадры шапки клубятся все, разброс кадра у клубов кучки и трубки —
   ±`SmokePuffs.FRAME_SPREAD` около кадра источника, у конца листа — назад (`clubFrame`): у старого облака кадр источника —
-  последний, и все клубы были бы одной картинкой. Кадр и отражение — по зерну и у одиночного клуба облака: прежде
-  в налёте 100 с 3 км все 335 старых одиночных клубов были одной картой 14 без отражения, одинаковыми срезами.
-  Светящийся газ (горячее точки Дрейпера) у источника, что рисует тело
+  the last, otherwise all clumps would use one image. Even a single cloud clump uses its seed for frame and mirroring:
+  in the old 100-strike fixture at 3 km, all 335 old single clumps used unmirrored frame 14, repeating the same cut.
+  Glowing gas (above the Draper point) in a source that draws the fire body
   огня (`Source.drawsGlow`: облако взрыва), — его шар: дым проступает той же долей, что тело тает (`CloudModel.glowShare(K,
   sky)`: 798 → 1200 K и B(T) против света неба на дыме `SMOKE_SEEN`·sky, sky — `FarView.skyLuminance` (днём 1, ночью
   ~8·10⁻⁴), ровно 0 и 1 за порогом контраста 0,02 в обе стороны, между — по логарифму отношения (B/(B + s) не доходит до 1,
@@ -879,21 +881,22 @@ paths:
   сервера), шлейф Бриггса и свет пламени на дым (`FxLights`), гул `CraterFire` там же; новое состояние той же воронки
   (стекло, засыпало, залило) переносит очаг и гул и урезает площадь, кончилось всё — очаг гаснет (`FuelBurnTest`;
   ревью FV: прежде место и срок брались из первого пакета). При `blast_effects` = false — ничего этого (огонь на
-  блоках — мира, его дым — как у огня дерева). Огонь на клетках топлива `FireWatch` в счёт
-  огня дерева не берёт (`FuelCells`: колонка клетки, не выше её — топливо капает только вниз; иначе пожар дымил
-  бы дважды, 175 кВт на блок сверх топлива). Пакет не пришёл (вошедший позже, дальше дальности пакета) — дым идёт от
-  блоков огня, как от огня дерева. На воде огня в воронке нет (решает сервер: топливо падает на воду — клеток нет).
+  блоках — мира, своего дыма у мода над ним нет). Огонь на клетках топлива `FireWatch` в счёт
+  огня ядерного города не берёт (`FuelCells`: колонка клетки, не выше её — топливо капает только вниз; иначе он шёл бы и
+  в гул пожаров подрыва, сверх гула воронки). Пакет не пришёл (вошедший позже, дальше дальности пакета) — очага нет,
+  на блоках — огонь мира. На воде огня в воронке нет (решает сервер: топливо падает на воду — клеток нет).
   Видимый свет пламени (тело масла вдали, свет на дым и мир) — светящейся сажи (`FirePlume.flameLight`: 140 кВт/м²
   светящейся части по Mudan–Croce, пульсации ⚠ 200 K — ~0,1 белой стены, оранжевый), а не `FLAME_K` среднего потока.
   Шлейф клонится по ветру по Бриггсу: при ветре у земли ~5 м/с у пожара в 2 МВт он стелется — ~3,5 м подъёма на первых
   10 м, ~11 м на 60 м; «столба» 3.4.1 из ручной таблицы при таком ветре нет. Ветер и устойчивость шлейфа — на миг огня,
   на всё горение. Дым и звук топлива — разовое событие: после перемотки повтора Flashback (`Replay`, разовое событие из
   перемотки — прошлое) они не возвращаются, огонь на блоках — как записан.
-- Дым над пожарами — облако клиента (`fx/FireSmoke`, рисует `SmokePuffs`): огонь, который видит клиент (`fx/FireWatch` —
-  общий с ядеркой, тикает всегда; окно выборок: у чанка последние 8 обходов по сдвигу выборки — счёт и середина огня
-  точные, без мигания малого очага между 0 и 8 блоками; у свежего удара с топливом (огонь ставит только шар топлива, `Craters.ignite`) — `FireWatch.hot` из события `FarBlasts`: чанки ±1 от удара 3 мин смотрятся ещё и целиком своей очередью, секция за секцией в половине бюджета тика (обход их не пропускает: его выборка свежая, и длинный список налёта не хуже обхода), — огонь, что удар поджёг, идёт в дым с первых секунд и нынешним счётом: обход прорисовки 12 чанков — ~4 с на проход, первая выборка 1/8 не видит очаг в 5 блоков в половине случаев, а окно из 8 проходов держит счёт полминуты назад, `FireWatchTest`), — очаг на чанк, шлейф Бриггса (`fx/smoke/FirePlume`: подъём по
-  пути, конечный по классу устойчивости, расплывание Паскуилла–Гиффорда и подъёмом, сажа — выход древесины; блок огня —
-  ⚠ 175 кВт), кусками трубки (`SmokeGrid.Sink.tube`: σ и сажа на метр у каждого конца) — их рисует тот же отрезок трубки, что
+- Дым над пожарами удара — облако клиента (`fx/FireSmoke`, рисует `SmokePuffs`): очаги — топливо воронок и масло
+  подстанций. Огонь Minecraft на блоках, и тот, что поджёг удар, мод не дымит и не смотрит: это огонь игры, его вид — у
+  ванили или мода, который ведёт горение (решение Артёма 26.10: мод не меняет того, что не его оружие и не его механика,
+  и не держит кода под отдельные моды; прежде дым шёл над любым огнём прорисовки, с Burnt — два слоя дыма). `fx/FireWatch`
+  смотрит огонь только у ядерных подрывов (гул горящего города, `NukeAfter`). Шлейф Бриггса (`fx/smoke/FirePlume`: подъём по
+  пути, конечный по классу устойчивости, расплывание Паскуилла–Гиффорда и подъёмом, сажа — своя у топлива), кусками трубки (`SmokeGrid.Sink.tube`: σ и сажа на метр у каждого конца) — их рисует тот же отрезок трубки, что
   у следа снаряда (`FarFlightView.line`: вдали лентой, крупный — клубами `SmokePuffs.tube`), 10 кусков на любой дальности
   (`FireSmoke.lay`: сажа на метр оси — ṁ/u × путь/ось, у очага ось круче пути; пустые куски тоже отдаются — номер куска
   держит зерно клубов; край дыма — по истории очага внутри куска, `FirePlumeLayTest`; прежде дальше 256 м от глаза — 4 отрезка по ≤ 12 клубов с полной непрозрачностью каждого, σ середины
@@ -901,7 +904,7 @@ paths:
   отпускает его по ветру. Очаги, чьи шлейфы
   сливаются (d ≤ 0,6·(Δh₁ + Δh₂), вовлечение Бриггса β = 0,6), — один пожар (`FireSmoke.merge`/`fires`): подъём и σ — по
   теплу всего пожара, сажа — своя (дом на стыке чанков давал два-четыре слабых шлейфа — низкую полосу, `FireMergeTest`).
-  Очаги — огонь Minecraft (`WOOD`), масло подстанций и топливо в воронках взрывов (`FireSmoke.pool`, доля
+  Очаги — масло подстанций и топливо в воронках взрывов (`FireSmoke.pool`, доля
   `CloudModel.poolShare`; его шлейф, свет и жар — здесь, а не у события `FarBlasts`). Шлейф — не длиннее
   `FireSmoke.REACH` (~770 м) по ветру. Ветер — у высоты очага на весь шлейф (сдвига ветра с высотой нет, ⚠ упрощение). Шторм ядерки — свой (`FireStorm`), этим не меняется.
 - Свои шейдеры (`shaders/core`) Veil, который несёт Sable, пересобирает через свой разбор GLSL (glsl-processor 0.2.3):
@@ -915,6 +918,14 @@ paths:
   ставит сам): необъявленную ваниль не задаёт — новая карта или число, добавленные в один проход и забытые в другом
   (`fx_pall`, `fx_pall_composite`, `fx.vsh`), читали бы чужую текстуру или ноль. Каким шейдер стал после Veil,
   видно, прогнав его через `GlslParser.parse(…).toSourceString()` из glsl-processor (jar в jar Veil в jar Sable).
+  `ShaderSourceTest.veilPrintsEveryProgram` так и прогоняет каждую программу `core` (glsl-processor 0.2.3 — в тестах):
+  не разобрал или упал — в логе ERROR «Couldn't load vanilla shader … skipping», и Veil шейдер не пересобирает. Так было с
+  `fx_pall` в 3.7.0–3.8.0: «#» в комментарии («ревью #441») разбор считает меткой узла, с меткой печать берёт хеш
+  каждой функции, а хеш `return;` без значения — NPE (`GlslReturnNode.hashCode`). Импорт — только
+  `#moj_import <incoming:имя>` из `shaders/include` (`everyImportIsAnInclude`): импорт в кавычках NeoForge ищет рядом
+  с шейдером, Forgified Fabric API (Fabric Rendering, есть в сборке) приписывает namespace шейдера ещё раз
+  (`incoming:incoming:…` — программа не создаётся, так не грузился `fx_pall_foot` в 3.8.0), а Veil клеит его к пути
+  самого файла.
 - Дым коротких выбросов — `fx/smoke/Puffs` (источник облака, рисуют клубы `SmokePuffs`): выброс — термик `Thermal`
   своего тепла, жизнь — по толще поперёк ({@code CloudModel.SEEN}); термики одной плавучести и радиуса (с точностью
   √2) — один расчёт (`Puffs.thermal`: ~2,7 мс на термик). Так рисуются горящие обломки в полёте (`Exhaust.debris`:
@@ -925,7 +936,7 @@ paths:
   молодого выброса.
 - Выбитая подстанция — очаг масла трансформатора у `FireSmoke` (`FireSmoke.Fuel.OIL`, ~3,6 МВт), пока блок выбит
   (`SubstationBlock.out`; у вошедшего позже — по случайному тику блока, `ClientHooks.substation`). Очаги огня — с
-  топливом (`FireSmoke.Fuel`): огонь Minecraft — `WOOD`. Пламя очагов и горящих обломков светит на частицы и клубы
+  топливом (`FireSmoke.Fuel`); огонь Minecraft на блоках — не очаг мода. Пламя очагов и горящих обломков светит на частицы и клубы
   (`FireSmoke.lights`, `Exhaust.lights` → `FxLights`).
 - Взрыв на воде — `fx/smoke/WaterBlast` у события `FarBlasts` (пыли воронки нет: `CloudModel(…, onWater)`): размер —
   Swisdak 1978, табл. 14 (заряд и приведённая глубина; запас безопасности уменьшен, оценка), время — баллистика
@@ -1004,8 +1015,8 @@ paths:
 - Свет вспышки и огня обычного оружия на мир и дрожание воздуха — `fx/layer/HeatPass` (шейдер `fx_heat`) после пелены и
   до квадратов: копия кадра (своя, линейная), пиксель пишется целиком. Свет — тот же закон, что у шара ядерки на мир
   (`mushBallFace`, `relit`; общие функции мира кадра — `include/scene.glsl`); шары ядерки — в `fx_pall_composite`, обычного
-  оружия — здесь (`FarBlasts.heat`, лужа, масло подстанции, горящие обломки; огонь Minecraft светит светом блоков сам,
-  здесь только его горячий газ). Факел двигателя — не шар, а струя (`HeatPass.Frame.jet` из `FarFlightView.lit`): ядро
+  оружия — здесь (`FarBlasts.heat`, лужа, масло подстанции, горящие обломки; огонь Minecraft на блоках — игры: ни
+  света, ни дрожания над ним здесь нет). Факел двигателя — не шар, а струя (`HeatPass.Frame.jet` из `FarFlightView.lit`): ядро
   [0, ядро], пламя [0, пламя] (обнимает ядро), хвост [пламя, точка Дрейпера] — равномерные отрезки, свет на метр —
   яркость части × её площадь сбоку / длина / π; прямой свет — точный интеграл по части над гранью (`HeatPass.segment` =
   `heatSegment`, без вычитания близких чисел — в шейдере float), рассеянный и отражённый — как у шара в середине части;

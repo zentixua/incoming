@@ -14,7 +14,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Постоянство клубов у границы кучки 1↔2 и ориентация лежащих клубов в мире, без видеокарты. */
+/** Puff continuity at the 1↔2 cluster threshold and world orientation of horizontal puffs, without a GPU. */
 class SmokeTargetedProbe {
     static SmokeGrid.Source blob(double x, double y, double z, double sh, double sv, double tau, long seed) {
         double soot = tau * 2 * Math.PI * sh * sv / SmokeGrid.SOOT_K;
@@ -123,7 +123,7 @@ class SmokeTargetedProbe {
         FarFlightView.reset();
     }
 
-    /** Старое условие lies: sh·|dy| = sv·distance. Меняется высота глаза всего на два микрометра. */
+    /** Old lies boundary: sh·|dy| = sv·distance. The eye height changes by only two micrometers. */
     @Test
     void flatBoundary() throws IOException {
         double sh = 10, sv = 1, z = 100, height = z * sv / Math.sqrt(sh * sh - sv * sv);
@@ -157,7 +157,7 @@ class SmokeTargetedProbe {
         FarFlightView.reset();
     }
 
-    /** Дальний гаусс меньше порога кучки: единственный клуб хранит размер, но рисунок и отражение — по своему зерну. */
+    /** A distant Gaussian below the cluster threshold: its single puff keeps its size but has a seeded frame and mirroring. */
     @Test
     void distantSinglePuffsKeepSeededVariation() {
         FarView view = SmokeFillTest.view(new Vec3(0, 10, 0), new Vector3f(0, 0, 1));

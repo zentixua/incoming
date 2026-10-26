@@ -1,10 +1,10 @@
 package ua.zentix.incoming.entity;
 
 /**
- * Очистка пустого ускорителя — не по физике: 20 с после отделения или 5 с после падения, что раньше;
- * под дном мира — 3 с с тем же плавным исчезновением.
- * Модель и её свечение исчезают вместе за 2 с; последняя секунда невидима, чтобы пакет удаления и небольшое
- * расхождение часов сервера и клиента не обрывали свет. Температура стенок от этой подачи не меняется.
+ * Empty booster cleanup is not physical: 20 s after separation or 5 s after landing, whichever comes first; below
+ * the world bottom, 3 s with the same smooth fade. Model and glow fade together over 2 s; the last second is
+ * invisible so the removal packet and small server/client clock differences do not cut off light. Wall
+ * temperature is unchanged by this presentation.
  */
 public final class BoosterLifetime {
     public static final int MAX_AGE = 400;
@@ -14,7 +14,7 @@ public final class BoosterLifetime {
 
     private BoosterLifetime() {}
 
-    /** Остаток жизни по часам сервера → общая видимость сетки и горячего сопла. */
+    /** Remaining lifetime on the server clock → shared visibility of mesh and hot nozzle. */
     public static float visibility(double remainingTicks) {
         double x = Math.clamp((remainingTicks - HIDDEN_TICKS) / FADE_TICKS, 0, 1);
         return (float) (x * x * (3 - 2 * x));

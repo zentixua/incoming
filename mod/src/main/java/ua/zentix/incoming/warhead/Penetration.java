@@ -3,80 +3,80 @@ package ua.zentix.incoming.warhead;
 import ua.zentix.incoming.strike.Article;
 
 /**
- * Пробитие грунта, скалы и бетона телом бомбы — уравнения Янга (C. W. Young, «Penetration Equations», Sandia
- * SAND97-2426, 1997, прил. A; сверено по первоисточнику), без Minecraft. Метры, килограммы, секунды.
+ * Bomb-body penetration of soil, rock, concrete: Young equations (C. W. Young, “Penetration Equations”, Sandia
+ * SAND97-2426, 1997, app. A; checked against primary source), without Minecraft. Meters, kilograms, seconds.
  * <p>
- * Путь в однородной среде: D = 0,000018·S·N·(m/A)^0,7·(V − 30,5) при V ≥ 61 м/с, иначе
- * D = 0,0008·S·N·(m/A)^0,7·ln(1 + 2,15·10⁻⁴·V²); S — проницаемость среды (чем больше, тем мягче), N — нос, m/A — масса
- * на площадь сечения. Поправок лёгкого тела нет: у бомбы в 13,6 т они ниже порогов (27 кг в грунте, 182 кг в скале).
+ * Homogeneous path: D = 0.000018·S·N·(m/A)^0.7·(V − 30.5) at V ≥ 61 m/s, otherwise D = 0.0008·S·N·(m/A)^0.7·ln(1
+ * + 2.15·10⁻⁴·V²); S penetrability (larger softer), N nose, m/A mass per cross-section. No light-body
+ * corrections: for 13.6 t bomb they are below thresholds (27 kg soil, 182 kg rock).
  * <p>
- * Слои (разд. 6): в слое по пути длиной T скорость на выходе V·√(1 − T/D) — средняя перегрузка в слое постоянна; следующий
- * слой — по этой скорости. Грунт сразу за бетоном (под плитой и между плитами) — с S вдвое меньше на первые
- * {@value #SOFT_UNDER_CONCRETE} калибров пути. Точность (по Янгу): уравнение ~15 %, с S бетона 15–20 %, у скалы — от 20 %
- * до двух раз: глубина в камне — оценка.
+ * Layers (sec. 6): layer path length T gives exit V·√(1 − T/D), constant mean deceleration in layer; next layer
+ * uses exit speed. Soil immediately behind concrete (under/between slabs) halves S for first {@value
+ * #SOFT_UNDER_CONCRETE} calibers. Accuracy per Young: equation ~15%, with concrete S 15–20%, rock 20% to factor
+ * two: rock depth is an estimate.
  * <p>
- * Вода и другие жидкости — не по Янгу: сопротивление жидкости ½·ρ·v²·CdA гасит скорость как e^(−ρ·CdA·x/(2m)).
+ * Water/other fluids do not use Young: ½·ρ·v²·CdA drag attenuates speed as e^(−ρ·CdA·x/(2m)).
  */
 public final class Penetration {
-    /** Граница двух ветвей уравнения, м/с. */
+    /** Equation branch boundary, m/s. */
     static final double V_SPLIT = 61;
-    /** Грунт за бетоном — с S/2 на столько калибров пути (Янг, разд. 6). */
+    /** Soil behind concrete uses S/2 for this many path calibers (Young, sec. 6). */
     static final double SOFT_UNDER_CONCRETE = 6;
     /**
-     * Медленнее этого тело в жидкости считается вставшим, м/с (оценка): вязкое сопротивление и тяжесть в законе
-     * квадратичного сопротивления не учтены, иначе бомба шла бы в воде бесконечно, замедляясь.
+     * Below this fluid speed body counts as stopped, m/s (estimate): viscous drag/gravity absent from quadratic
+     * law, otherwise bomb would slow forever through water.
      */
     static final double FLUID_REST = 1;
 
     private Penetration() {}
 
-    /** Чем блок встречает тело. */
+    /** Block medium encountered by body. */
     public enum Kind {
-        /** Грунт: земля, песок, гравий, глина, снег, рыхлое и мягкое. */
+        /** Soil: earth, sand, gravel, clay, snow, loose/soft. */
         SOIL,
-        /** Скала и камень. */
+        /** Rock and stone. */
         ROCK,
-        /** Бетон и кладка (после него грунт — с S/2). */
+        /** Concrete/masonry (following soil uses S/2). */
         CONCRETE,
-        /** Жидкость: сопротивление по плотности, не по Янгу. */
+        /** Fluid: density-based drag, not Young. */
         FLUID,
-        /** Непробиваемое (коренная порода мира, служебные блоки): тело встаёт. */
+        /** Impenetrable (world bedrock, utility blocks): body stops. */
         STOP
     }
 
     /**
-     * Тело.
+     * Body.
      *
-     * @param mass     масса, кг
-     * @param diameter диаметр корпуса, м
-     * @param length   длина, м
-     * @param nose     коэффициент носа N ({@link #ogive})
-     * @param cda      площадь сопротивления в воздухе C<sub>d</sub>·S, м² (её же — в жидкости)
+     * @param mass mass, kg
+     * @param diameter body diameter, m
+     * @param length length, m
+     * @param nose nose coefficient N ({@link #ogive})
+     * @param cda air drag area C<sub>d</sub>·S, m² (same in fluid)
      */
     public record Body(double mass, double diameter, double length, double nose, double cda) {
-        /** Площадь сечения, м². */
+        /** Cross-section, m². */
         public double area() {
             return Math.PI * diameter * diameter / 4;
         }
 
-        /** m/A, кг/м². */
+        /** m/A, kg/m². */
         public double massPerArea() {
             return mass / area();
         }
     }
 
-    /** Тело изделия по паспорту: масса без топлива, диаметр, длина, нос, CdA; изделие без пробивателя — null. */
+    /** Spec article body: dry mass, diameter, length, nose, CdA; no penetrator means null. */
     public static Body body(Article a) {
-        if (a.penetrator() == null) throw new IllegalArgumentException("не пробиватель");
+        if (a.penetrator() == null) throw new IllegalArgumentException("not a penetrator");
         return new Body(a.dryMass(), a.diameter(), a.length(), ogive(a.penetrator().crh()), a.cda());
     }
 
-    /** Нос-оживало по радиусу дуги в калибрах (CRH): N = 0,18·√(CRH − 0,25) + 0,56. */
+    /** Ogive nose from arc radius in calibers (CRH): N = 0.18·√(CRH − 0.25) + 0.56. */
     public static double ogive(double crh) {
         return 0.18 * Math.sqrt(crh - 0.25) + 0.56;
     }
 
-    /** Путь тела {@code body} со скоростью {@code v} м/с в однородной среде проницаемости {@code s}, м. */
+    /** Path of {@code body} at {@code v} m/s in homogeneous penetrability {@code s}, m. */
     public static double depth(Body body, double s, double v) {
         if (v <= 0) return 0;
         double k = s * body.nose() * Math.pow(body.massPerArea(), 0.7);
@@ -84,41 +84,41 @@ public final class Penetration {
     }
 
     /**
-     * Ход тела сквозь среду, по кускам пути: соседние куски одной среды — один слой Янга (как бы его ни резали, путь в
-     * однородной среде — D), смена среды — новый слой со скоростью на выходе из прежнего.
+     * Body travel through medium in path pieces: adjacent same-medium pieces form one Young layer (any
+     * subdivision gives homogeneous path D); medium change starts next layer at previous exit velocity.
      */
     public static final class Run {
         private final Body body;
         private double v;
         private Kind kind;
         private double s = Double.NaN;
-        /** Скорость на входе в слой, его путь по Янгу и сколько пройдено в нём, м. */
+        /** Layer entry speed, Young path, and distance traversed, m. */
         private double vIn, dIn, along;
-        /** Сколько пути грунта ещё с S/2 за бетоном, м. */
+        /** Soil path still at S/2 behind concrete, m. */
         private double soft;
-        /** Последняя твёрдая среда или жидкость на пути (пустоты не в счёт). */
+        /** Last solid/fluid medium on path (voids ignored). */
         private Kind lastSolid;
         private boolean stopped;
 
-        /** Тело {@code body} входит в среду со скоростью {@code v} м/с. */
+        /** {@code body} enters medium at {@code v} m/s. */
         public Run(Body body, double v) {
             this.body = body;
             this.v = v;
         }
 
-        /** Скорость сейчас, м/с. */
+        /** Current speed, m/s. */
         public double speed() {
             return v;
         }
 
-        /** Тело встало. */
+        /** Body stopped. */
         public boolean stopped() {
             return stopped;
         }
 
         /**
-         * Пройти {@code len} м средой {@code kind} проницаемости {@code s} ({@code s} у жидкости — её плотность, кг/м³).
-         * Возвращает, сколько пройдено: меньше {@code len} — тело встало в этом куске.
+         * Traverse {@code len} m of {@code kind} with penetrability {@code s} (fluid {@code s} is density,
+         * kg/m³). Returns distance traveled: less than {@code len} means stopped in this piece.
          */
         public double through(Kind kind, double s, double len) {
             if (stopped || len <= 0) return 0;
@@ -126,7 +126,7 @@ public final class Penetration {
                 stop();
                 return 0;
             }
-            // грунт сразу за бетоном (и за пустотой между плитами) — с S/2 на первые калибры пути
+            // Soil directly behind concrete (and void between slabs) uses S/2 for first path calibers.
             if (kind == Kind.SOIL && lastSolid == Kind.CONCRETE) soft = SOFT_UNDER_CONCRETE * body.diameter();
             else if (kind != Kind.SOIL) soft = 0;
             lastSolid = kind;
@@ -141,7 +141,7 @@ public final class Penetration {
             return layer(kind, s, len);
         }
 
-        /** Пустота (воздух, проём): сопротивления нет, слой кончился — за ней тело входит в среду заново. */
+        /** Void (air, opening): no drag, layer ended; enter medium anew beyond it. */
         public void gap() {
             kind = null;
             s = Double.NaN;
@@ -168,7 +168,7 @@ public final class Penetration {
         private double fluid(double density, double len) {
             kind = Kind.FLUID;
             s = density;
-            // v(x) = v₀·e^(−ρ·CdA·x/(2m)); тело встаёт на FLUID_REST
+            // v(x) = v₀·e^(−ρ·CdA·x/(2m)); stops at FLUID_REST.
             double k = density * body.cda() / (2 * body.mass());
             double rest = Math.log(v / FLUID_REST) / k;
             if (len >= rest) {

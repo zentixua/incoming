@@ -8,9 +8,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.Mth;
 
 /**
- * Настройки пульта (компонент предмета): оружие, количество, разброс, режим цели, выбранный игрок
- * и — для ядерной боеголовки — мощность и вид подрыва. Значения зажимаются при каждом создании,
- * поэтому из пакета или NBT невалидное не приходит.
+ * Designator settings (item component): weapon, count, spread, target mode, selected player, and nuclear
+ * yield/burst type. Clamp values on every construction so invalid values cannot enter from packets or NBT.
  */
 public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode, String player, Nuke nuke) {
     public static final int MAX_COUNT = 100;
@@ -18,14 +17,14 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
     public static final Loadout DEFAULT = new Loadout(WeaponType.MISSILE, 1, 0, TargetMode.LOOK, "", Nuke.DEFAULT);
 
     /**
-     * Ядерная боеголовка: мощность, кт, воздушный (true) или наземный подрыв и — для крылатой ракеты и B-2 —
-     * нести ли её вместо обычной ({@code onCarrier}; у МБР она всегда ядерная).
+     * Nuclear warhead: yield, kt, airburst (true) or surface burst, and for cruise missile/B-2 whether carried
+     * instead of conventional ({@code onCarrier}; ICBM always nuclear).
      */
     public record Nuke(int yieldKt, boolean airBurst, boolean onCarrier) {
         /**
-         * Наибольшая мощность, кт. Тяжёлая зона (от 5 psi у земли) растёт как Y^⅔: у 15 кт — около 32 тыс. чанков, у
-         * мощнее она не помещается в память и бюджет разрушений, и руины отстали бы от фронта волны. Старые пульты и
-         * сохранения с большей мощностью урезаются до неё.
+         * Maximum yield, kt. Heavy zone (5 psi at ground and above) grows as Y^⅔: 15 kt covers about 32 thousand
+         * chunks; higher yields exceed memory and destruction budget, leaving ruins behind the blast front. Older
+         * designators/saves with higher yield are clamped to this.
          */
         public static final int MAX_YIELD = 15;
         public static final Nuke DEFAULT = new Nuke(15, true, false);
@@ -58,12 +57,12 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
         }
     }
 
-    /** Эта настройка пульта несёт ядерную БЧ: МБР или ракета/B-2 с ядерной БЧ. */
+    /** This designator setting carries a nuclear warhead: ICBM or nuclear missile/B-2. */
     public boolean nuclear() {
         return weapon.spec().warhead().always() || nuke.onCarrier() && carriesNuke(weapon);
     }
 
-    /** Кто может нести ядерную БЧ, кроме МБР (паспорт). */
+    /** Who can carry a nuclear warhead besides ICBM (spec). */
     public static boolean carriesNuke(WeaponType w) {
         return w.spec().warhead().optional();
     }
@@ -94,7 +93,7 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
     }
 
     public Loadout withWeapon(WeaponType w) {
-        // оружие, которое одиночным не стреляет (РСЗО): по умолчанию — очередь из паспорта
+        // Weapon that cannot fire single shots (MLRS): default to spec burst.
         WeaponSpec.Salvo salvo = w.spec().salvo();
         if (salvo.count() > 1 && weapon != w && count == 1) return new Loadout(w, salvo.count(), Math.max(spread, salvo.spread()), mode, player, nuke);
         return new Loadout(w, count, spread, mode, player, nuke);

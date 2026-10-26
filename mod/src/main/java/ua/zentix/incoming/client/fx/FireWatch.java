@@ -2,8 +2,6 @@ package ua.zentix.incoming.client.fx;
 
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BaseFireBlock;
@@ -12,30 +10,26 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.nuclear.ClientNuclear;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
- * Огонь, который клиент видит: блоки огня в своих чанках вокруг камеры, по чанку за чанком, сколько успеется за
- * {@link #BUDGET_NANOS} тика (весь круг прорисовки — за секунды; пожары меняются минутами). Секция без огня в палитре не
- * смотрится ({@code maybeHas}); с огнём — выборкой: каждый {@link #SAMPLE}-й блок, счёт ×{@link #SAMPLE}. Полный счёт
- * ({@code PalettedContainer.count}: все 4096 мест в новую карту) стоил бы миллисекунд за тик: в подробном городе палитра
- * секции глобальная ({@code maybeHas} всегда да), а малая помнит сгоревший огонь. По этому огню звук горящего города ядерки
- * ставит огонь, который рядом, на его место, а дальнюю модель ({@code FireField}) — в меру того, что горит на деле
- * (настройки пожаров сервера клиент не знает: пожары могут быть выключены или погашены); дым над пожарами
- * ({@link FireSmoke}) берёт окно выборок ({@link #forEachGroup}): у каждого чанка — последние {@link #SAMPLE} обходов,
- * по одному на каждый сдвиг выборки, вместе — все места чанка: счёт и середина огня точные, а не ×{@link #SAMPLE} одной
- * выборки (маленький очаг иначе мигал бы между 0 и 8 блоками).
+ * Огонь горящего города ядерного подрыва, который клиент видит: блоки огня в своих чанках у подрывов (круг руин и
+ * {@link #NUKE_MARGIN} блоков за ним — докуда {@code NukeAfter} берёт огонь в гул пожаров и в ветер в огонь), по чанку за
+ * чанком, сколько успеется за {@link #BUDGET_NANOS} тика (весь круг прорисовки — за секунды; пожары меняются минутами).
+ * Огонь вне подрывов мод не смотрит: огонь мира, и тот, что поджёг обычный удар, горит и дымит как любой огонь игры
+ * (ванилью или модом, который ведёт горение). Подрыва нет — обхода нет.
+ * <p>
+ * Секция без огня в палитре не смотрится ({@code maybeHas}); с огнём — выборкой: каждый {@link #SAMPLE}-й блок, счёт
+ * ×{@link #SAMPLE}. Полный счёт ({@code PalettedContainer.count}: все 4096 мест в новую карту) стоил бы миллисекунд за
+ * тик: в подробном городе палитра секции глобальная ({@code maybeHas} всегда да), а малая помнит сгоревший огонь. По
+ * этому огню звук горящего города ставит огонь, который рядом, на его место, а дальнюю модель ({@code FireField}) — в
+ * меру того, что горит на деле (настройки пожаров сервера клиент не знает: пожары могут быть выключены или погашены).
  * <p>
  * Огонь на клетках горящего топлива воронок — не огонь дерева ({@link FuelCells}): его тепло и сажу несёт очаг
  * воронки, и в счёт он не идёт.
- * <p>
- * У свежего удара ({@link #hot}) огонь загорается в тот же тик (шар топлива, горящее топливо в воронке, обломки), а
- * растёт и гаснет за секунды: обход всех чанков прорисовки (12 чанков — 625 чанков, ~4 с) с выборкой 1/{@link #SAMPLE}
- * видел бы его на проход позже, а окно из {@link #SAMPLE} проходов держало бы счёт полминуты назад — дом, что
- * разгорается от 5 до 30 блоков, дымил бы силой первых. Чанки у удара поэтому смотрятся целиком (все сдвиги выборки
- * за раз, {@link #hotScan}) вне очереди, от середины наружу, пока огонь там может расти
- * ({@link #HOT_SECONDS}).
  */
 public final class FireWatch {
     /** Время на огонь за тик, нс (хотя бы один чанк). */
@@ -44,28 +38,10 @@ public final class FireWatch {
     static final int MAX_PER_TICK = 8;
     /** Выборка в секции: каждый столько-й блок (по x — 2 места из 16, все y и z). */
     static final int SAMPLE = 8;
-    /**
-     * Чанки у удара смотрятся целиком: столько чанков от чанка удара — огонь, что ставит удар, лежит в шаре топлива и у
-     * его края (`Craters.ignite`: у ракеты радиус 17 м, листва загорается и до 26 м, у шахеда — 8 м) и в воронке; 1 чанк —
-     * 16–31 м во все стороны. Огонь дальше (шар ушёл с ветром) и горящие обломки, что легли дальше, видит обход.
-     */
-    static final int HOT_CHUNKS = 1;
-    /** Столько секунд после удара (пожар у воронки разгорается и гаснет минутами: лужа шахеда — 2,5 мин). */
-    static final int HOT_SECONDS = 180;
-    /** Чанки у ударов по порядку осмотра (от середины наружу) и тик, до которого каждый смотрится. */
-    private static final it.unimi.dsi.fastutil.longs.LongArrayList HOT = new it.unimi.dsi.fastutil.longs.LongArrayList();
-    private static final Long2LongOpenHashMap HOT_UNTIL = new Long2LongOpenHashMap();
-    private static int hotCursor;
-    private static long clock;
+    /** За кругом руин подрыва — столько блоков: так далеко {@code NukeAfter} берёт огонь подрыва в счёт. */
+    public static final double NUKE_MARGIN = 64;
     /** Чанк → (число огня << 16) | высота огня над дном мира. */
     private static final Long2LongOpenHashMap SEEN = new Long2LongOpenHashMap();
-    /**
-     * Чанк → окно выборок: по сдвигу выборки — огня, сумма x, y, z мест (от угла чанка и дна мира), в конце — маска
-     * сдвигов, что уже смотрелись.
-     */
-    private static final Long2ObjectOpenHashMap<int[]> WINDOW = new Long2ObjectOpenHashMap<>();
-    /** Последняя выборка {@link #scan}: огня (без ×{@link #SAMPLE}), суммы мест. */
-    private static int sampleN, sampleX, sampleY, sampleZ;
     @Nullable
     private static ClientLevel level;
     private static int cursor, total, phase;
@@ -74,38 +50,56 @@ public final class FireWatch {
 
     private FireWatch() {}
 
-    /** Ещё часть чанков в радиусе {@code radius} чанков от чанка камеры. */
+    /** Ещё часть чанков у ядерных подрывов в радиусе {@code radius} чанков от чанка камеры. */
     public static void tick(ClientLevel lvl, int cx, int cz, int radius) {
         long t0 = System.nanoTime();
         if (lvl != level) reset();
         level = lvl;
-        clock++;
-        hotScan(lvl, t0);
-        int side = 2 * radius + 1, all = side * side;
-        for (int k = 0; k < Math.min(MAX_PER_TICK, all); k++) {
-            if (k > 0 && System.nanoTime() - t0 > BUDGET_NANOS) break;
+        List<ClientNuclear.Active> nukes = ClientNuclear.detonations();
+        if (nukes.isEmpty()) {
+            if (!SEEN.isEmpty()) {
+                SEEN.clear();
+                total = 0;
+            }
+            return;
+        }
+        // обход — только рамка кругов подрывов в квадрате прорисовки: подрыв вдали от камеры не стоит обхода всего круга
+        int n = nukes.size();
+        double[] bx = new double[n], bz = new double[n], reach = new double[n];
+        for (int j = 0; j < n; j++) {
+            ClientNuclear.Active a = nukes.get(j);
+            bx[j] = a.d.burst().x;
+            bz[j] = a.d.burst().z;
+            reach[j] = a.d.ruinRadius() + NUKE_MARGIN;
+        }
+        Box box = box(bx, bz, reach, cx, cz, radius);
+        if (box == null) {
+            if (!SEEN.isEmpty()) {
+                SEEN.clear();
+                total = 0;
+            }
+            return;
+        }
+        int w = box.x1 - box.x0 + 1, all = w * (box.z1 - box.z0 + 1);
+        // каждый шаг — в счёт времени, и чанк мимо кругов тоже: рамка нескольких подрывов может быть почти всем квадратом
+        for (int k = 0, step = 0; k < MAX_PER_TICK && step < all; step++) {
+            if (step > 0 && System.nanoTime() - t0 > BUDGET_NANOS) break;
             int i = cursor++ % all;
             if (cursor >= all) {
                 cursor = 0;
                 phase = (phase + 1) % SAMPLE;
-                prune(lvl);
-                // окно — только в круге обхода: огонь за ним не пересматривается и не гас бы
-                WINDOW.keySet().removeIf(c -> Math.abs(ChunkPos.getX(c) - cx) > radius || Math.abs(ChunkPos.getZ(c) - cz) > radius);
+                prune(lvl, box);
             }
-            int x = cx - radius + i % side, z = cz - radius + i / side;
+            int x = box.x0 + i % w, z = box.z0 + i / w;
             long key = ChunkPos.asLong(x, z);
-            // чанк у удара обход смотрит как все: его выборка — свежая, она лишь заменяет свой сдвиг в окне полного осмотра;
-            // длинный список ударов (налёт) поэтому не хуже обхода
-            LevelChunk chunk = lvl.getChunkSource().getChunk(x, z, false);
             long was = SEEN.remove(key);
             total -= (int) (was >>> 16);
-            if (chunk == null) {
-                WINDOW.remove(key);
-                continue;
-            }
+            if (!nuclear(bx, bz, reach, x, z)) continue;
+            k++;
+            LevelChunk chunk = lvl.getChunkSource().getChunk(x, z, false);
+            if (chunk == null) continue;
             chunks++;
             long now = scan(chunk, phase);
-            window(key, phase);
             if (now != 0) {
                 SEEN.put(key, now);
                 total += (int) (now >>> 16);
@@ -117,141 +111,41 @@ public final class FireWatch {
         slowest = Math.max(slowest, dt);
     }
 
-    /**
-     * Удар в (x, z): чанки вокруг ({@link #HOT_CHUNKS}) смотрятся целиком вне очереди {@link #HOT_SECONDS} с, от
-     * середины наружу; повторный удар рядом продлевает срок.
-     */
-    public static void hot(ClientLevel lvl, double x, double z) {
-        if (lvl != level) {
-            reset();
-            level = lvl;
-        }
-        int cx = (int) Math.floor(x) >> 4, cz = (int) Math.floor(z) >> 4;
-        long until = clock + 20L * HOT_SECONDS;
-        // новые — сразу у курсора, по кольцам: середина нового удара не ждёт круга по чанкам прежних
-        int at = Math.min(hotCursor, HOT.size());
-        for (int ring = 0; ring <= HOT_CHUNKS; ring++) {
-            for (int dx = -ring; dx <= ring; dx++) {
-                for (int dz = -ring; dz <= ring; dz++) {
-                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
-                    long key = ChunkPos.asLong(cx + dx, cz + dz);
-                    if (HOT_UNTIL.put(key, until) == 0) HOT.add(at++, key);
-                }
-            }
+    /** Рамка чанков (включительно). */
+    record Box(int x0, int z0, int x1, int z1) {
+        boolean has(int x, int z) {
+            return x >= x0 && x <= x1 && z >= z0 && z <= z1;
         }
     }
 
     /**
-     * Чанк у удара, что смотрится сейчас (null — никакой), следующая его секция и огонь, найденный в прошлых секциях:
-     * по 4 числа на сдвиг выборки и маска, как в окне.
+     * Рамка чанков, которые задевают круги подрывов (середина {@code bx, bz}, радиус {@code reach}, блоки), внутри квадрата
+     * {@code radius} чанков от чанка камеры; ни одного — {@code null}.
      */
-    private static long hotKey;
     @Nullable
-    private static LevelChunk hotChunk;
-    private static int hotSection;
-    private static int[] hotWindow = new int[4 * SAMPLE + 1];
-    private static long hotCount, hotY;
-
-    /**
-     * Чанки у удара — целиком, секция за секцией ({@link #phases}), пока у тика есть половина {@link #BUDGET_NANOS}
-     * (хотя бы одна секция): в подробном городе палитра секции глобальная, все 4096 мест каждой секции — десятки
-     * микросекунд, и чанк целиком за один тик съел бы бюджет всего обхода. Чанк досмотрен — его окно и счёт — нынешний
-     * огонь; срок вышел — чанк уходит из списка.
-     */
-    private static void hotScan(ClientLevel lvl, long t0) {
-        boolean first = true;
-        // не больше круга по списку за тик: чанки без огня в палитре смотрятся мгновенно, и цикл крутил бы их до бюджета
-        int left = HOT.size();
-        while (first || System.nanoTime() - t0 < BUDGET_NANOS / 2) {
-            first = false;
-            if (hotChunk == null && (left-- <= 0 || !nextHot(lvl))) return;
-            LevelChunk chunk = hotChunk;
-            LevelChunkSection[] sections = chunk.getSections();
-            boolean fuel = FireSmoke.FUEL.inChunk(hotKey);
-            int bx = chunk.getPos().getMinBlockX(), bz = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
-            while (hotSection < sections.length) {
-                int i = hotSection++;
-                LevelChunkSection s = sections[i];
-                if (s.hasOnlyAir() || !s.maybeHas(FireWatch::fire)) continue;
-                scanned++;
-                PalettedContainer<BlockState> states = s.getStates();
-                int base = minY + i * 16;
-                int n = phases(j -> fire(states.get(j & 15, j >> 8, (j >> 4) & 15))
-                        && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), base + (j >> 8), bz + ((j >> 4) & 15))), i * 16, hotWindow);
-                hotCount += n;
-                hotY += (long) n * (i * 16 + 8);
-                break;
-            }
-            if (hotSection < sections.length) continue;
-            // чанк досмотрен: окно — весь его огонь сейчас
-            long key = hotKey, was = SEEN.remove(key);
-            total -= (int) (was >>> 16);
-            if (hotCount == 0) {
-                WINDOW.remove(key);
-            } else {
-                hotWindow[4 * SAMPLE] = (1 << SAMPLE) - 1;
-                WINDOW.put(key, hotWindow);
-                SEEN.put(key, Math.min(hotCount, 0xFFFFFFL) << 16 | (hotY / hotCount) & 0xFFFF);
-                total += (int) Math.min(hotCount, 0xFFFFFFL);
-                hotWindow = new int[4 * SAMPLE + 1];
-            }
-            hotChunk = null;
+    static Box box(double[] bx, double[] bz, double[] reach, int cx, int cz, int radius) {
+        int x0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+        for (int j = 0; j < bx.length; j++) {
+            x0 = Math.min(x0, Math.floorDiv((int) Math.floor(bx[j] - reach[j]), 16));
+            z0 = Math.min(z0, Math.floorDiv((int) Math.floor(bz[j] - reach[j]), 16));
+            x1 = Math.max(x1, Math.floorDiv((int) Math.floor(bx[j] + reach[j]), 16));
+            z1 = Math.max(z1, Math.floorDiv((int) Math.floor(bz[j] + reach[j]), 16));
         }
+        x0 = Math.max(x0, cx - radius);
+        z0 = Math.max(z0, cz - radius);
+        x1 = Math.min(x1, cx + radius);
+        z1 = Math.min(z1, cz + radius);
+        return x0 > x1 || z0 > z1 ? null : new Box(x0, z0, x1, z1);
     }
 
-    /** Следующий чанк у удара, что есть у клиента: в {@link #hotChunk}; сроки вышедшие — из очереди. Нашёлся ли. */
-    private static boolean nextHot(ClientLevel lvl) {
-        for (int tries = HOT.size(); tries > 0 && !HOT.isEmpty(); tries--) {
-            if (hotCursor >= HOT.size()) hotCursor = 0;
-            long key = HOT.getLong(hotCursor);
-            if (HOT_UNTIL.get(key) < clock) {
-                HOT.removeLong(hotCursor);
-                HOT_UNTIL.remove(key);
-                continue;
-            }
-            hotCursor++;
-            LevelChunk chunk = lvl.getChunkSource().getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), false);
-            if (chunk == null) {
-                long was = SEEN.remove(key);
-                total -= (int) (was >>> 16);
-                WINDOW.remove(key);
-                continue;
-            }
-            chunks++;
-            hotKey = key;
-            hotChunk = chunk;
-            hotSection = 0;
-            hotCount = hotY = 0;
-            java.util.Arrays.fill(hotWindow, 0);
-            return true;
+    /** Чанк (x, z) задевает круг подрыва: середина не дальше радиуса и полудиагонали чанка. */
+    static boolean nuclear(double[] bx, double[] bz, double[] reach, int x, int z) {
+        double mx = x * 16 + 8, mz = z * 16 + 8;
+        for (int j = 0; j < bx.length; j++) {
+            double r = reach[j] + 12, dx = mx - bx[j], dz = mz - bz[j];
+            if (dx * dx + dz * dz <= r * r) return true;
         }
         return false;
-    }
-
-    /**
-     * Огонь одной секции во все сдвиги выборки: {@code fire} — огонь ли на месте j = (y << 8) | (z << 4) | x, {@code base}
-     * — высота секции над дном мира; в {@code w} (по 4 числа на сдвиг j mod {@link #SAMPLE}: огня, сумма x, y, z мест)
-     * прибавляется её огонь. Сколько огня в секции.
-     */
-    static int phases(java.util.function.IntPredicate fire, int base, int[] w) {
-        int n = 0;
-        for (int j = 0; j < 4096; j++) {
-            if (!fire.test(j)) continue;
-            int p = 4 * (j % SAMPLE);
-            w[p]++;
-            w[p + 1] += j & 15;
-            w[p + 2] += base + (j >> 8);
-            w[p + 3] += (j >> 4) & 15;
-            n++;
-        }
-        return n;
-    }
-
-    /** Блоков огня по окну чанка ({@link #WINDOW}): выборки сдвигов, что смотрелись, на их долю. */
-    static double blocks(int[] w) {
-        long n = 0;
-        for (int p = 0; p < SAMPLE; p++) n += w[4 * p];
-        return n * (double) SAMPLE / Math.max(1, Integer.bitCount(w[4 * SAMPLE]));
     }
 
     /**
@@ -260,7 +154,6 @@ public final class FireWatch {
      */
     private static long scan(LevelChunk chunk, int offset) {
         LevelChunkSection[] sections = chunk.getSections();
-        sampleN = sampleX = sampleY = sampleZ = 0;
         long count = 0, ySum = 0;
         boolean fuel = FireSmoke.FUEL.inChunk(chunk.getPos().toLong());
         int bx = chunk.getPos().getMinBlockX(), bz = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
@@ -273,14 +166,8 @@ public final class FireWatch {
             // индекс секции — (y << 8) | (z << 4) | x
             for (int j = offset; j < 4096; j += SAMPLE) {
                 if (fire(states.get(j & 15, j >> 8, (j >> 4) & 15))
-                        && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), minY + i * 16 + (j >> 8), bz + ((j >> 4) & 15)))) {
-                    n++;
-                    sampleX += j & 15;
-                    sampleY += i * 16 + (j >> 8);
-                    sampleZ += (j >> 4) & 15;
-                }
+                        && !(fuel && FireSmoke.FUEL.covers(bx + (j & 15), minY + i * 16 + (j >> 8), bz + ((j >> 4) & 15)))) n++;
             }
-            sampleN += n;
             n *= SAMPLE;
             count += n;
             ySum += (long) n * (i * 16 + 8);
@@ -289,62 +176,20 @@ public final class FireWatch {
         return Math.min(count, 0xFFFFFFL) << 16 | (ySum / count) & 0xFFFF;
     }
 
-    /** Выборка сдвига phase — в окно чанка; окно без огня уходит. */
-    private static void window(long key, int phase) {
-        int[] w = WINDOW.get(key);
-        if (w == null) {
-            if (sampleN == 0) return;
-            w = new int[4 * SAMPLE + 1];
-            WINDOW.put(key, w);
-        }
-        w[4 * phase] = sampleN;
-        w[4 * phase + 1] = sampleX;
-        w[4 * phase + 2] = sampleY;
-        w[4 * phase + 3] = sampleZ;
-        w[4 * SAMPLE] |= 1 << phase;
-        for (int p = 0; p < SAMPLE; p++) if (w[4 * p] != 0) return;
-        WINDOW.remove(key);
-    }
-
-    /** Очаг огня: середина горящих мест в мире, блоков огня (по окну; пока не все сдвиги смотрелись — в их долю). */
-    public interface Group {
-        void fire(long chunk, double x, double y, double z, double blocks);
-    }
-
-    /** Огонь по чанкам — окно выборок ({@link #WINDOW}). */
-    public static void forEachGroup(Group v) {
-        if (level == null) return;
-        int minY = level.getMinBuildHeight();
-        for (Long2ObjectMap.Entry<int[]> e : WINDOW.long2ObjectEntrySet()) {
-            int[] w = e.getValue();
-            long n = 0, x = 0, y = 0, z = 0;
-            for (int p = 0; p < SAMPLE; p++) {
-                n += w[4 * p];
-                x += w[4 * p + 1];
-                y += w[4 * p + 2];
-                z += w[4 * p + 3];
-            }
-            if (n == 0) continue;
-            long key = e.getLongKey();
-            v.fire(key, ChunkPos.getX(key) * 16 + x / (double) n + 0.5, minY + y / (double) n + 0.5, ChunkPos.getZ(key) * 16 + z / (double) n + 0.5,
-                    blocks(w));
-        }
-    }
-
     private static boolean fire(BlockState state) {
         return state.getBlock() instanceof BaseFireBlock;
     }
 
-    /** Чанки, которых у клиента больше нет. */
-    private static void prune(ClientLevel lvl) {
+    /** Чанки, которых у клиента больше нет, и чанки вне рамки обхода: их огонь не пересматривается и не гас бы. */
+    private static void prune(ClientLevel lvl, Box box) {
         for (var it = SEEN.long2LongEntrySet().iterator(); it.hasNext(); ) {
             Long2LongMap.Entry e = it.next();
-            if (lvl.getChunkSource().getChunk(ChunkPos.getX(e.getLongKey()), ChunkPos.getZ(e.getLongKey()), false) == null) {
+            int x = ChunkPos.getX(e.getLongKey()), z = ChunkPos.getZ(e.getLongKey());
+            if (!box.has(x, z) || lvl.getChunkSource().getChunk(x, z, false) == null) {
                 total -= (int) (e.getLongValue() >>> 16);
                 it.remove();
             }
         }
-        WINDOW.keySet().removeIf(k -> lvl.getChunkSource().getChunk(ChunkPos.getX(k), ChunkPos.getZ(k), false) == null);
     }
 
     /** Огонь по чанкам. */
@@ -367,11 +212,7 @@ public final class FireWatch {
 
     public static void reset() {
         SEEN.clear();
-        WINDOW.clear();
-        HOT.clear();
-        HOT_UNTIL.clear();
-        hotChunk = null;
-        cursor = total = hotCursor = 0;
+        cursor = total = 0;
         level = null;
     }
 

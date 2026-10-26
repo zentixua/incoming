@@ -114,10 +114,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Запечённый клуб ({@link FxAtlas#puff6}: кадр sprite, смесь со следующим mix) с центром (dx, dy, dz) от камеры,
-     * полуразмерами halfA поперёк и halfB вверх: цвет (r, g, b) — вещество в свете неба у глаза, его свет по сторонам —
-     * в шейдере по картам кадра, тень в картах — в степени shade ({@link SmokePuffs#shade}); непрозрачность a (уже с дымкой
-     * воздуха). Плоскость обращена к положению глаза, верх — от вертикали мира; оси карт следуют её геометрии.
+     * Baked puff ({@link FxAtlas#puff6}: frame sprite, blend mix with the next frame), centered at (dx, dy, dz) from the camera,
+     * with half-sizes halfA across and halfB up. Color (r, g, b) is the material in skylight at the eye; the shader applies
+     * its directional light from the frame maps, raising their shadows to shade ({@link SmokePuffs#shade}). Opacity a
+     * already includes atmospheric haze. The plane faces the eye position with world up; map axes follow its geometry.
      */
     public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                       float b, float a) {
@@ -134,10 +134,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Запечённый клуб плоского гаусса (слой пыли у земли), лежащий на горизонтали ({@link FxQuads#flat}): полуразмеры
-     * {@code halfA} и {@code halfB} — по горизонтали в мире; мягкость края у рельефа {@code soft} — путь луча в слое до
-     * земли (у лежащего квадрата зазор до мира за ним одинаков по всей площади, и мягкость по полуразмеру гасила бы
-     * слой целиком). Угол на горизонтали — постоянный у зерна клуба.
+     * Baked puff of a flat Gaussian (ground dust layer), lying horizontally ({@link FxQuads#flat}):
+     * {@code halfA} and {@code halfB} are horizontal world half-sizes. Terrain softness {@code soft} is the ray's path
+     * through the layer to the ground: the gap behind a horizontal quad is the same across its area, so softness based
+     * on its half-size would fade the entire layer. Its horizontal angle is fixed by the puff's seed.
      */
     public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                           float r, float g, float b, float a) {
@@ -174,10 +174,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
-     * своя непрозрачность, цвет (толща по её лучу) и мягкость к миру (где вещество по лучу), между ними — линейно; клетки, где
-     * вуали нет, не рисуются. В порядке смешивания клетка — на глубине вещества, не ближней сетки: иначе вуаль
-     * далёких мест бюджета стирала свет и текстуру клубов перед ними.
+     * Veil of cloud material near the eye ({@link SmokePuffs.Veil}): a full-screen grid at one depth, with opacity,
+     * color (optical depth along its ray) and terrain softness (material location along the ray) at each vertex,
+     * interpolated linearly; empty cells are not drawn. Cells blend at the material's depth, not the nearby grid's depth:
+     * otherwise the veil from distant budget entries erased the lighting and texture of puffs in front of them.
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {

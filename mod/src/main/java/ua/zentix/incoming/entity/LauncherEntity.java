@@ -24,28 +24,28 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Мобильная пусковая установка у стреляющего: прицеп с наклонной направляющей. Для шахедов — пакет на пять
- * ячеек (как на иранских пусковых; с него же катапультой стартуют барражирующие), для крылатых ракет — два наклонных контейнера. Появляется рядом с игроком
- * при первом пуске, разворачивает пакет (подъём на угол возвышения) и дальше служит всем его пускам поблизости:
- * залп идёт с одной установки по ячейкам. Ломается ударом (без дропа); «Отбой» убирает все.
+ * Mobile launcher near the shooter: trailer with an inclined rail. Shaheds use five cells (as on Iranian
+ * launchers; loitering munitions also launch from it by catapult); cruise missiles use two inclined canisters.
+ * Appears near the player on first launch, deploys the rack (raises to elevation), then serves all nearby
+ * launches: the salvo uses one launcher cell by cell. A hit breaks it (no drops); “Abort” removes all.
  * <p>
- * Пусковая на месте пуска из приказа ({@code /incoming salvo … from x z}, {@link #ordered}) стоит там, куда её
- * поставили, до «Отбоя» или удара: лишней у владельца она не считается ({@code LaunchSite.deploy}).
+ * A launcher at an ordered launch site ({@code /incoming salvo … from x z}, {@link #ordered}) stays where placed
+ * until “Abort” or a hit: it does not count as an extra owner launcher ({@code LaunchSite.deploy}).
  */
 public class LauncherEntity extends Entity implements Launcher {
     private static final EntityDataAccessor<Byte> DATA_WEAPON = SynchedEntityData.defineId(LauncherEntity.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Long> DATA_DEPLOYED = SynchedEntityData.defineId(LauncherEntity.class, EntityDataSerializers.LONG);
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER = SynchedEntityData.defineId(LauncherEntity.class, EntityDataSerializers.OPTIONAL_UUID);
 
-    /** Сколько тиков пакет поднимается на угол возвышения. */
+    /** Ticks for the rack to rise to elevation. */
     public static final int DEPLOY_TICKS = 40;
 
     private final LaunchQueue queue = new LaunchQueue();
-    /** Стоит на месте пуска из приказа, а не у стреляющего (только сервер: клиенту не нужно). */
+    /** At the ordered launch site rather than near the shooter (server only: client does not need it). */
     private boolean ordered;
     /**
-     * Отметка места пуска из приказа, по которой она встала (по горизонтали; встаёт она на ближайшем годном месте её
-     * района, {@code LaunchSite.PLACE_AREA}); null — у стреляющего или поставлена до того, как отметку стали помнить.
+     * Ordered launch-site mark used for placement (horizontal; actual placement is the nearest suitable site in
+     * its area, {@code LaunchSite.PLACE_AREA}); null if near the shooter or placed before marks were remembered.
      */
     @Nullable
     private Vec3 mark;
@@ -55,12 +55,12 @@ public class LauncherEntity extends Entity implements Launcher {
         this.setNoGravity(true);
     }
 
-    /** @param ordered на месте пуска из приказа ({@link #ordered}) */
+    /** @param ordered at the ordered launch site ({@link #ordered}) */
     public static LauncherEntity create(ServerLevel level, Vec3 pos, float yaw, WeaponType weapon, @Nullable UUID owner, boolean ordered) {
         return create(level, pos, yaw, weapon, owner, ordered, null);
     }
 
-    /** @param mark отметка места пуска из приказа ({@link #mark}) */
+    /** @param mark ordered launch-site mark ({@link #mark}) */
     public static LauncherEntity create(ServerLevel level, Vec3 pos, float yaw, WeaponType weapon, @Nullable UUID owner, boolean ordered,
                                         @Nullable Vec3 mark) {
         LauncherEntity l = new LauncherEntity(ModEntities.LAUNCHER.get(), level);
@@ -84,18 +84,18 @@ public class LauncherEntity extends Entity implements Launcher {
         return entityData.get(DATA_OWNER).orElse(null);
     }
 
-    /** Стоит на месте пуска из приказа: до «Отбоя» или удара, а не одна из установок, что идут за стреляющим. */
+    /** At the ordered launch site until “Abort” or a hit, rather than one of the launchers following the shooter. */
     public boolean ordered() {
         return ordered;
     }
 
-    /** Отметка места пуска из приказа ({@link #mark}); null — нет. */
+    /** Ordered launch-site mark ({@link #mark}); null if absent. */
     @Nullable
     public Vec3 mark() {
         return mark;
     }
 
-    /** Снаряд этой пусковой: того же оружия и того же владельца (пусковая одна на игрока и оружие рядом с ним). */
+    /** Projectile of this launcher: same weapon and owner (one nearby launcher per player and weapon). */
     public boolean serves(StrikeProjectile p) {
         return p.weapon() == weapon() && Objects.equals(p.ownerId(), ownerId());
     }
@@ -120,12 +120,12 @@ public class LauncherEntity extends Entity implements Launcher {
         return queue;
     }
 
-    /** Пакет пусковой оружия ({@link LauncherRack#of}). */
+    /** Weapon launcher rack ({@link LauncherRack#of}). */
     public static LauncherRack rack(WeaponType weapon) {
         return LauncherRack.of(weapon);
     }
 
-    /** Угол возвышения направляющей (паспорт): шахеды 15°, катапульта барражирующих 20°, ракеты 40°, трубы РСЗО 50°. */
+    /** Rail elevation (spec): Shahed 15°, loitering catapult 20°, missiles 40°, MLRS tubes 50°. */
     public static float elevation(WeaponType weapon) {
         return rack(weapon).elevation();
     }
@@ -134,16 +134,19 @@ public class LauncherEntity extends Entity implements Launcher {
         return rack(weapon).slots();
     }
 
-    /** Пакет РСЗО: 4 ряда по 10 труб, шаг труб и длина трубы (блоков). */
+    /** MLRS rack: 4 rows of 10 tubes, tube spacing and length (blocks). */
     public static final int ROCKET_COLUMNS = 10, ROCKET_ROWS = 4;
     public static final float TUBE_PITCH = 0.3f, TUBE_LENGTH = 3.2f;
 
-    /** Центр снаряда на направляющей {@code slot} у прицепа оружия {@code weapon}, стоящего в {@code pos} с курсом {@code yaw}. */
+    /**
+     * Projectile center on {@code slot}'s rail for a {@code weapon} trailer at {@code pos} with heading {@code
+     * yaw}.
+     */
     public static Vec3 railPoint(Vec3 pos, float yaw, WeaponType weapon, int slot) {
         return LauncherMount.TRAILER.railPoint(pos, yaw, weapon, slot);
     }
 
-    /** Направляющие барражирующих: три внизу, два сверху (0.83 м между осями). */
+    /** Loitering munition rails: three below, two above (0.83 m between axes). */
     public static float loiterLeft(int slot) {
         return slot < 3 ? 0.83f - 0.83f * slot : slot == 3 ? 0.415f : -0.415f;
     }
@@ -152,12 +155,12 @@ public class LauncherEntity extends Entity implements Launcher {
         return slot < 3 ? 0.5f : 1.35f;
     }
 
-    /** Наименьший интервал между пусками с одной установки, тиков: РСЗО — полсекунды, остальные — 0.8 с. */
+    /** Minimum launch interval from one launcher, ticks: MLRS half a second, others 0.8 s. */
     public static int spacing(WeaponType weapon) {
         return rack(weapon).spacing();
     }
 
-    /** Прицеп поворачивается целиком. */
+    /** The entire trailer turns. */
     @Override
     public void turnTo(float yaw, long now) {
         if (turnedYaw(yaw, now) == getYRot()) return;
@@ -170,13 +173,13 @@ public class LauncherEntity extends Entity implements Launcher {
     public void tick() {
         super.tick();
         if (level().isClientSide && level().getGameTime() - deployedAt() < DEPLOY_TICKS) {
-            // гидравлика поднимает пакет: пыхтит сизым паром у оси
+            // Hydraulics raise the rack, puffing bluish vapor at the pivot.
             Vec3 pivot = mount().pivot(position(), getYRot()).subtract(0, 0.6, 0);
             if (random.nextInt(3) == 0) level().addParticle(ParticleTypes.CLOUD, pivot.x, pivot.y, pivot.z, 0, 0.02, 0);
         }
     }
 
-    // ---------------------------------------------------------------- удар ломает
+    // ---------------------------------------------------------------- a hit breaks it
 
     @Override
     public boolean isPickable() {
@@ -209,7 +212,7 @@ public class LauncherEntity extends Entity implements Launcher {
         return distanceSq < 256 * 256;
     }
 
-    // ---------------------------------------------------------------- данные
+    // ---------------------------------------------------------------- data
 
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {

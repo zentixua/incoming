@@ -31,36 +31,39 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * Что взрыв заряда делает с землёй после волны: воронка по закону обычного заряда ({@link CraterModel#chargeRadius}) и
- * поджиг шаром топлива из бака ({@link FuelFireball}). Каждое — своей единицей в очереди попаданий, после главного взрыва;
- * топливо, что осталось в воронке, — {@link FuelFires}.
+ * Ground effects after charge wave: conventional crater ({@link CraterModel#chargeRadius}) and tank-fuel fireball
+ * ignition ({@link FuelFireball}). Each is a separate impact-queue work unit after main explosion; crater fuel is
+ * {@link FuelFires}.
  */
 final class Craters {
     /**
-     * Больше клеток шар топлива не обходит: у «Томагавка» на ровной земле клеток с импульсом выше
-     * {@link PulseIgnition#FLOOR} под потолком обхода ({@link Ignition#ceiling}) — ~7 тыс. (круг в 47 м), в лесу и под
-     * крышей — больше. Клетки идут от ближних по воздуху к дальним: за пределом остаются дальние, где и импульс меньше. По
-     * импульсу (от большего) — нельзя: у всплывшего шара он больше всего в воздухе над ним, и предел кончал обход там, не
-     * дойдя до земли у края шара (ревью #467: под навесом 65×65 — на 8 кал/см², листва у земли в 22 м — 52 %).
+     * Maximum cells traversed by fuel fireball: Tomahawk flat-ground cells above {@link PulseIgnition#FLOOR}
+     * under traversal ceiling ({@link Ignition#ceiling}) ~7 thousand (47 m circle), more in forest/under roof.
+     * Traverse by air distance, near to far: excluded far cells have less exposure. Cannot prioritize exposure:
+     * risen ball peaks in air above it, exhausting cap before ground at ball edge (review #467: 65×65 canopy, 8
+     * cal/cm²; ground leaves 22 m away, 52%).
      */
     static final int FIREBALL_CELLS = 40_000;
-    /** Клеток обхода шара топлива за единицу работы: клетка с соседями — 3–5 мкс (GameTest), единица — около 1 мс. */
+    /** Fuel-fireball cells per work unit: cell plus neighbors 3–5 μs (GameTest), unit about 1 ms. */
     static final int PORTION = 256;
 
     private Craters() {}
 
     /**
-     * Воронка заряда {@code tntKg} кг ТНТ у {@code pos}: чаша и вал той же формы, что у ядерной ({@link CraterJob#digColumn}),
-     * только по грунту — постройки над ней ломает волна; чаша мельче блока встаёт блоками со случайной добавкой (объём в
-     * среднем — по закону: у «Ланцета» и «Града» — ямка в блок или ничего). Воронки нет, если заряд рвётся выше грунта
-     * больше чем на её глубину (крыша, этаж). Возвращает, сколько столбцов смотрели.
+     * Crater of {@code tntKg} kg TNT at {@code pos}: same bowl/rim as nuclear ({@link CraterJob#digColumn}),
+     * ground only; wave breaks structures above. Sub-block bowl uses randomly added whole blocks (mean volume
+     * follows law: Lancet/Grad yield a one-block hole or none). No crater if burst is higher above ground than
+     * crater depth (roof, floor). Returns columns checked.
      */
     static int dig(ServerLevel level, Vec3 pos, double tntKg, GroundMaterial mat, long seed) {
         CraterModel.Soil soil = mat.soil();
         return dig(level, pos, CraterModel.chargeRadius(tntKg, soil), CraterModel.chargeDepth(tntKg, soil), mat, RandomSource.create(seed));
     }
 
-    /** Воронка радиусом {@code rc} и глубиной {@code depth} блоков у {@code pos} (та же чаша и вал). Сколько столбцов смотрели. */
+    /**
+     * Crater at {@code pos}, {@code rc} radius/{@code depth} depth in blocks (same bowl/rim). Returns columns
+     * checked.
+     */
     static int dig(ServerLevel level, Vec3 pos, double rc, double depth, GroundMaterial mat) {
         return dig(level, pos, rc, depth, mat, level.random);
     }
@@ -98,24 +101,24 @@ final class Craters {
     }
 
     /**
-     * Огонь от шара топлива: {@code fuelKg} кг к удару, из них шаром ({@link FuelFireball#ballKg}) горит диаметром
-     * 5,8·M^⅓ м — тот же шар, что видит игрок ({@link FuelFireball.Sweep}: растёт от земли, всплывает к 0,75·D, уходит с
-     * ветром мира). Импульс у места — от этого шара за всё горение ({@link FuelFireball.Sweep#exposure}): пока место в шаре —
-     * полный поток поверхности, вне — меньше. Прежде шар сервера стоял полусферой D/2 у точки удара с полным импульсом в
-     * ней: крону над поднявшимся шаром он не трогал, а траву, которую шар покинул в начале горения, жёг всю (BLASTSEQ D18).
-     * Обход по воздуху от точки удара, пока импульс не ниже {@link PulseIgnition#FLOOR} (за уцелевшей стеной шара нет); у
-     * каждой горючей грани, к которой подходит этот воздух, — решение раз на блок: импульс поджигает тонкое горючее с
-     * долей его порога ({@link PulseIgnition#share}: листва, бумага, трава, ткань — тегами {@code pulse_*}; блок другого
-     * мода без тега, что огонь ванили берёт быстро (поджиг ≥ {@link #THIN_SPREAD}), — как трава, ⚠ приближение); толстое
-     * дерево — нет: за секунды шара прогревается слой меньше миллиметра. Топливо, что осталось в воронке
-     * ({@link FuelFireball#POOL_SHARE}), горит своим огнём на блоках, куда легло ({@link FuelFires}): дерево, к которому оно
-     * стекло, загорается от него по правилам игры.
+     * Fuel-fireball fire: {@code fuelKg} kg at impact, {@link FuelFireball#ballKg} burning as 5.8·M^⅓ m diameter
+     * ball, same visible ball ({@link FuelFireball.Sweep}: grows from ground, rises to 0.75·D, drifts with world
+     * wind). Exposure at site integrates ball over entire burn ({@link FuelFireball.Sweep#exposure}): full
+     * surface flux inside, lower outside. Former server ball was a stationary D/2 hemisphere at impact with full
+     * exposure inside: ignored canopy above risen ball, burned all grass left early in burn (BLASTSEQ D18). Air
+     * traversal from impact while exposure ≥ {@link PulseIgnition#FLOOR} (no ball behind surviving wall); each
+     * fuel face reached gets one decision per block: exposure ignites thin fuels by threshold share ({@link
+     * PulseIgnition#share}: leaves, paper, grass, fabric via {@code pulse_*}; untagged mod blocks readily ignited
+     * by vanilla, spread ≥ {@link #THIN_SPREAD}, as grass, ⚠ approximation). Thick wood does not ignite: seconds
+     * heat less than a millimeter. Crater fuel ({@link FuelFireball#POOL_SHARE}) burns on blocks where it settles
+     * ({@link FuelFires}); wood it flows to ignites by game rules.
      * <p>
-     * Огонь — на самом горючем ({@link #light}): растение без формы (трава, цветы) горит на своём месте, твёрдое — пламенем в
-     * воздухе у его грани, если ванильный огонь там держится за него (над его верхом или без твёрдого пола), а не стоит на
-     * камне или песке рядом. У шахеда у точки удара загорается пятая часть сухой травы и три четверти листвы, к краю шара —
-     * меньше; у ракеты — почти вся трава и листва в шаре, листва — и в полутора радиусах (четверть), и в кроне над шаром;
-     * ткань — редко ({@code FuelFireballTest}). Ставит обход в очередь попаданий ({@link Ignition}): после взрывов {@code after}, если взрыв был ({@code happened}).
+     * Fire on fuel itself ({@link #light}): shapeless plants (grass/flowers) burn in place; solid fuel has flame
+     * in adjacent air if vanilla fire attaches to it (above its top or without solid floor), rather than standing
+     * on nearby stone/sand. At Shahed impact, one fifth dry grass and three quarters foliage ignite, less toward
+     * edge; missile almost all grass/leaves inside, leaves also at 1.5 radii (quarter) and canopy above ball;
+     * fabric rarely ({@code FuelFireballTest}). Queue traversal ({@link Ignition}) after {@code after} explosions
+     * if explosion {@code happened}.
      */
     static void ignite(ServerLevel level, BlastArea area, List<StagedExplosion> after, BooleanSupplier happened, Vec3 pos, double fuelKg) {
         if (!IncomingConfig.SERVER.fire.get() || FuelFireball.ballKg(fuelKg) <= 0) return;
@@ -123,9 +126,9 @@ final class Craters {
     }
 
     /**
-     * Обход шара топлива ({@link #ignite}) порциями по {@link #PORTION} клеток за единицу работы: у ракеты он берёт до
-     * {@link #FIREBALL_CELLS} клеток — около 0,2 с потока сервера разом. Порции идут по тикам под бюджетом работы:
-     * огонь у ракеты встаёт за десятки тиков, а не в один.
+     * Fuel-fireball traversal ({@link #ignite}) in {@link #PORTION}-cell work units: missile takes up to {@link
+     * #FIREBALL_CELLS}, ~0.2 s server thread all at once. Portions span ticks under budget: missile fire appears
+     * over tens of ticks, not one.
      */
     static final class Ignition implements UnitQueue.Job {
         private final BlastArea area;
@@ -133,19 +136,19 @@ final class Craters {
         private final BooleanSupplier happened;
         private final Vec3 pos;
         private final double ballKg;
-        /** Путь шара: считается в первой единице, когда ветер мира — тот, что у шара на картинке. */
+        /** Ball path calculated in first work unit when world wind matches visible ball. */
         private FuelFireball.Sweep ball;
-        /** Импульс в клетке воздуха: считается раз, когда клетка встала в обход. */
+        /** Air-cell exposure calculated once on traversal insertion. */
         private final Long2DoubleOpenHashMap pulse = new Long2DoubleOpenHashMap();
         private final LongOpenHashSet seen = new LongOpenHashSet();
-        /** Решение по блоку горючего: загорится ли (раз на блок), и стоит ли уже его огонь. */
+        /** Fuel-block decision: ignition (once per block), whether fire already placed. */
         private final Long2BooleanOpenHashMap burns = new Long2BooleanOpenHashMap();
         private final LongOpenHashSet lit = new LongOpenHashSet();
-        /** От ближних по воздуху к дальним ({@link #FIREBALL_CELLS}). */
+        /** Near-to-far by air distance ({@link #FIREBALL_CELLS}). */
         private final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-        /** Высота клетки начала: ниже неё обход идёт и выше потолка столбцов ({@link #ceiling}). */
+        /** Starting cell height: below it traversal runs even above column ceilings ({@link #ceiling}). */
         private int startY;
-        /** Потолок обхода по столбцам ({@link #ceiling}). */
+        /** Column traversal ceiling ({@link #ceiling}). */
         private final Long2IntOpenHashMap tops = new Long2IntOpenHashMap();
         private int cells;
 
@@ -180,7 +183,7 @@ final class Craters {
             return !queue.isEmpty() && cells < FIREBALL_CELLS;
         }
 
-        /** Путь шара и первая клетка обхода; взрыв, отменённый приватом, не жжёт. */
+        /** Ball path and first cell; claim-canceled explosion does not ignite. */
         private int start(ServerLevel level) {
             Air air = Air.of(level);
             double alpha = Stability.alpha(air.stability()), u = air.wind().at(10, alpha);
@@ -195,7 +198,7 @@ final class Craters {
             return portion(level);
         }
 
-        /** До {@link #PORTION} клеток обхода; сколько обошла. */
+        /** Traverse up to {@link #PORTION} cells; return count. */
         private int portion(ServerLevel level) {
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
             BlockPos.MutableBlockPos n = new BlockPos.MutableBlockPos();
@@ -233,11 +236,11 @@ final class Craters {
         }
 
         /**
-         * Выше всего в столбце и у его соседей ({@link Heightmap.Types#MOTION_BLOCKING}, с листвой) клетка воздуха не
-         * касается ни одной грани — обход туда не идёт: шар ракеты всплывает на 26 м, и небо над ним — сотни тысяч клеток с
-         * импульсом выше {@link PulseIgnition#FLOOR}, а горючего там нет. Связь по воздуху остаётся: через стену — полосой у
-         * её верха, в двор и в окно — вниз вдоль стены. Не выше точки подрыва — всё ({@link #startY}): подрыв в воздухе, над
-         * проломом крыши иначе был бы отрезан от земли под ним (ревью #467).
+         * Above column/neighbors' highest block ({@link Heightmap.Types#MOTION_BLOCKING}, leaves included), air
+         * touches no face; do not traverse there. Missile ball rises 26 m, sky above has hundreds of thousands of
+         * cells above {@link PulseIgnition#FLOOR} but no fuel. Air connectivity remains: strip over wall top,
+         * down wall into yard/window. At/below burst height include all ({@link #startY}), otherwise airburst
+         * over roof hole disconnected from ground below (review #467).
          */
         private int ceiling(ServerLevel level, int x, int z) {
             long key = (long) x << 32 | (z & 0xFFFFFFFFL);
@@ -260,15 +263,15 @@ final class Craters {
         }
     }
 
-    /** Импульс шара {@code ball} от точки взрыва {@code pos} в середине клетки {@code at}, кал/см². */
+    /** Exposure of {@code ball} from blast {@code pos} at cell {@code at} center, cal/cm². */
     private static double exposure(FuelFireball.Sweep ball, Vec3 pos, BlockPos at) {
         return ball.exposure(at.getX() + 0.5 - pos.x, at.getY() + 0.5 - pos.y, at.getZ() + 0.5 - pos.z);
     }
 
-    /** Поджиг ванили (скорость, с какой огонь берёт блок), с которой горючее без тега считается тонким, как трава. */
+    /** Vanilla ignition spread rate above which untagged fuel counts as thin, like grass. */
     static final int THIN_SPREAD = 60;
 
-    /** Как импульс поджигает горючее {@code s} на месте {@code at} (грань {@code face} к шару). */
+    /** How exposure ignites {@code s} at {@code at} ({@code face} toward ball). */
     static PulseIgnition.Fuel fuel(ServerLevel level, BlockPos at, BlockState s, Direction face) {
         if (s.is(ModTags.PULSE_LEAVES)) return PulseIgnition.Fuel.LEAVES;
         if (s.is(ModTags.PULSE_PAPER)) return PulseIgnition.Fuel.PAPER;
@@ -282,14 +285,13 @@ final class Craters {
     }
 
     /**
-     * Огонь на горючем {@code fuel} ({@code s}), к чьей грани подходит клетка воздуха шара {@code air} ({@code here}) с
-     * его стороны {@code dir}: растение без формы столкновений — огонь на его месте (так его берёт и огонь ванили); иначе —
-     * огонь в клетке воздуха, если он держится за горючее: оно под ним или пола под ним нет (огонь у стены). Над камнем,
-     * песком, рельсами рядом с горючим огонь не ставится: ванильный огонь с твёрдым полом рисуется на полу, и горел бы
-     * песок. Поставлен ли огонь.
+     * Fire on {@code fuel} ({@code s}) whose face meets fireball air {@code air} ({@code here}) from {@code dir}:
+     * no collision shape means fire in place (vanilla also burns it this way); otherwise fire in air cell only if
+     * attached to fuel beneath or with no floor (wall fire). No fire over stone, sand, rails beside fuel: vanilla
+     * fire with solid floor renders on floor and would burn sand. Returns whether placed.
      */
     private static boolean light(ServerLevel level, BlockPos air, BlockState here, BlockPos fuel, BlockState s, Direction dir) {
-        // растение без формы (трава, цветы, посевы, тростник) — как его жжёт огонь ванили: огонь на его месте
+        // Shapeless plant (grass, flowers, crops, sugar cane): vanilla-style fire in place.
         if (s.getCollisionShape(level, fuel).isEmpty() && s.getFluidState().isEmpty()) return Warheads.igniteIn(level, fuel);
         if (!here.isAir()) return false;
         BlockPos below = air.below();

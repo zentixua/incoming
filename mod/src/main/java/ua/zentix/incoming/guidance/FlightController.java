@@ -5,9 +5,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Ориентация и поворот снаряда. Углы в градусах в соглашении Minecraft: yaw 0 = +Z (юг), растёт к -X (запад);
- * pitch > 0 — нос вниз. Угловая скорость (°/тик) и угловое ускорение (°/тик²) ограничены — поэтому полёт
- * без рывков: снаряд не «ломается» в точке, а выходит на курс плавной дугой.
+ * Projectile orientation and turning. Degrees in Minecraft convention: yaw 0 = +Z (south), increasing toward -X
+ * (west); pitch > 0 means nose down. Angular speed (°/tick) and acceleration (°/tick²) are limited for smooth
+ * flight: the projectile does not snap at a point but enters course along a smooth arc.
  */
 public final class FlightController {
     private float yaw;
@@ -20,7 +20,7 @@ public final class FlightController {
         this.pitch = pitch;
     }
 
-    /** Копия с теми же углами и угловыми скоростями: проиграть поворот вперёд, не трогая снаряд. */
+    /** Copy with identical angles and angular velocities: simulate turns ahead without touching the projectile. */
     public FlightController copy() {
         FlightController c = new FlightController(yaw, pitch);
         c.yawRate = yawRate;
@@ -41,15 +41,15 @@ public final class FlightController {
         this.pitch = Mth.clamp(pitch, -89f, 89f);
     }
 
-    /** Направление носа (единичный вектор). */
+    /** Nose direction (unit vector). */
     public Vec3 forward() {
         return Vec3.directionFromRotation(pitch, yaw);
     }
 
     /**
-     * Тангаж: командная угловая скорость → ограничения |ω| ≤ maxRate, |Δω| ≤ maxAccel.
+     * Pitch: commanded angular speed → limits |ω| ≤ maxRate, |Δω| ≤ maxAccel.
      *
-     * @param commandRate желаемая угловая скорость, °/тик (> 0 — нос вниз)
+     * @param commandRate desired angular speed, °/tick (> 0 means nose down)
      */
     public void steerPitch(double commandRate, double maxRate, double maxAccel) {
         double w = Mth.clamp(commandRate, -maxRate, maxRate);
@@ -58,14 +58,14 @@ public final class FlightController {
         pitch = Mth.clamp(pitch + pitchRate, -89f, 89f);
     }
 
-    /** Держать тангаж: угловая скорость пропорциональна ошибке. */
+    /** Hold pitch: angular speed proportional to error. */
     public void holdPitch(double targetPitch, double gain, double maxRate, double maxAccel) {
         steerPitch((targetPitch - pitch) * gain, maxRate, maxAccel);
     }
 
     /**
-     * Наведение по дуге (пропорциональное): ω = 2·G·v·(угол на цель − тангаж)/дальность, G = 1.6.
-     * На большой дальности поворот мягкий, у цели — энергичный; снаряд входит в цель по дуге.
+     * Arcing guidance (proportional): ω = 2·G·v·(target angle − pitch)/range, G = 1.6. Gentle turning at long
+     * range, vigorous near target; projectile enters target along an arc.
      */
     public void arcPitch(double losPitch, double speed, double distance, double maxRate, double maxAccel) {
         double w = 3.2 * speed * (losPitch - pitch) / Math.max(distance, 1.0);
@@ -73,18 +73,18 @@ public final class FlightController {
     }
 
     /**
-     * Курс на цель: ω = gain·ошибка, |ω| ≤ maxRate °/тик, |Δω| ≤ maxAccel °/тик².
+     * Target heading: ω = gain·error, |ω| ≤ maxRate °/tick, |Δω| ≤ maxAccel °/tick².
      *
-     * @param targetYaw курс на цель
+     * @param targetYaw target heading
      */
     public void steerYaw(double targetYaw, double gain, double maxRate, double maxAccel) {
         trackYaw(targetYaw, 0, gain, maxRate, maxAccel);
     }
 
     /**
-     * Курс по кривой: к упреждению {@code feedForward} (°/тик — с какой скоростью поворачивает сама кривая,
-     * например v/R на круге) добавляется поправка gain·ошибка. Без упреждения на установившемся развороте курс
-     * отстаёт на ω/gain, и снаряд сползает с кривой наружу.
+     * Curve heading: add gain·error correction to {@code feedForward} (°/tick, how fast the curve itself turns,
+     * e.g. v/R on an orbit). Without feed-forward, steady-turn heading lags by ω/gain and the craft drifts
+     * outward from the curve.
      */
     public void trackYaw(double targetYaw, double feedForward, double gain, double maxRate, double maxAccel) {
         double err = Mth.wrapDegrees(targetYaw - yaw);
@@ -94,19 +94,19 @@ public final class FlightController {
         yaw = Mth.wrapDegrees(yaw + yawRate);
     }
 
-    /** Гасим курсовую скорость (над самой целью курс не трогаем). */
+    /** Damp yaw rate (leave heading alone directly above target). */
     public void settleYaw(double maxAccel) {
         yawRate -= (float) Mth.clamp(yawRate, -maxAccel, maxAccel);
         yaw = Mth.wrapDegrees(yaw + yawRate);
     }
 
     /**
-     * Крен модели по скорости разворота, как в координированном вираже: tan(крен) = v·ω/g. g здесь — игровое, не по
-     * физике: 0,08 блока/тик² (тяжесть сущностей Minecraft) вместо 0,0245 — с настоящим шахед на 3°/тик лежал бы на
-     * боку (77°), а с игровым кренится на ~55°, как и выглядит разворот с таким радиусом.
+     * Model bank from turn rate, as in a coordinated turn: tan(bank) = v·ω/g. Here g is a game value, not
+     * physical: 0.08 blocks/tick² (Minecraft entity gravity) rather than 0.0245. Real g would put a Shahed at
+     * 3°/tick on its side (77°); game g banks ~55°, matching the look of a turn at this radius.
      */
     public float bankAngle(double speed) {
-        // v в блоках/тик, ω в рад/тик
+        // v in blocks/tick, ω in rad/tick.
         double w = Math.toRadians(yawRate);
         return (float) Mth.clamp(Math.toDegrees(Math.atan(speed * w / 0.08)), -70, 70);
     }
@@ -125,7 +125,7 @@ public final class FlightController {
         pitchRate = tag.getFloat("pitch_rate");
     }
 
-    /** Угол на точку: [yaw, pitch] в градусах. */
+    /** Angle to a point: [yaw, pitch] in degrees. */
     public static float[] anglesTo(Vec3 from, Vec3 to) {
         double dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
         double h = Math.sqrt(dx * dx + dz * dz);

@@ -250,7 +250,7 @@ public final class IncomingClient {
         FarRenderer.tick();
         FxLayer.tick();
         ua.zentix.incoming.client.fx.smoke.SmokeGrid.tick();
-        // огонь в своих чанках — дым над пожарами (и звук горящего города ядерки)
+        // огонь горящего города ядерки в своих чанках — его гул; дым топлива воронок и масла подстанций
         Vec3 fireEye = mc.gameRenderer.getMainCamera().getPosition();
         ua.zentix.incoming.client.fx.FireWatch.tick(mc.level, (int) Math.floor(fireEye.x) >> 4, (int) Math.floor(fireEye.z) >> 4,
                 mc.options.getEffectiveRenderDistance());

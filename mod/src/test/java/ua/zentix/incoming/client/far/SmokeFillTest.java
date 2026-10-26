@@ -83,8 +83,8 @@ class SmokeFillTest {
     }
 
     /**
-     * Клубы в мире: заливка по четырём вершинам, непрозрачность — по пересечению луча с их настоящей плоскостью.
-     * quads сохраняет экранные сведения для проверок количества и размера; сам кадр по ним не измеряется.
+     * World-space puffs: fill comes from four vertices; opacity comes from ray intersection with the actual plane.
+     * quads retains screen metadata for count and size checks; it does not define the measured frame.
      */
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
@@ -198,7 +198,7 @@ class SmokeFillTest {
             faces.add(new double[]{(x * l.x + y * l.y + z * l.z) / depth, (x * up.x + y * up.y + z * up.z) / depth, half / depth, half / depth, Math.min(1, a)});
         }
 
-        /** Сколько экранов закрывает геометрия (с перекрытием): каждый клуб и лента учитываются ровно один раз. */
+        /** Screen area covered by geometry, including overlap: count each puff and ribbon exactly once. */
         double fill() {
             double sum = 0;
             for (Puff p : puffs) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p.vertices, 12));
@@ -206,7 +206,7 @@ class SmokeFillTest {
                 double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
                 if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
             }
-            // Лежащие клубы сохранены и в polygons для прежних проверок лент, но уже посчитаны выше.
+            // Horizontal puffs also remain in polygons for existing ribbon checks, but were already counted above.
             for (double[] p : polygons) if (p.length >= 15) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p, 12));
             return sum;
         }
@@ -217,7 +217,7 @@ class SmokeFillTest {
             return transmittanceRay(f.x + u * l.x + v * up.x, f.y + u * l.y + v * up.y, f.z + u * l.z + v * up.z, prof);
         }
 
-        /** Тот же луч мира при разных поворотах камеры: пересечение и UV задаёт плоскость клуба, а не экран. */
+        /** The same world ray under different camera rotations: the puff plane, not the screen, defines the hit and UV. */
         double transmittanceRay(double rx, double ry, double rz, double[][] prof) {
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double depth = rx * f.x + ry * f.y + rz * f.z;
@@ -233,7 +233,7 @@ class SmokeFillTest {
             return clear;
         }
 
-        /** Дополнительный замер по настоящей 2D-альфе и векторам движения (билинейно, без уменьшенных копий). */
+        /** Additional measurement using actual 2D alpha and motion vectors, with bilinear sampling and no mipmaps. */
         double texturedTransmittanceRay(double rx, double ry, double rz) throws IOException {
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double depth = rx * f.x + ry * f.y + rz * f.z;
@@ -250,14 +250,14 @@ class SmokeFillTest {
             double clear = veil == null ? 1 : veil.through(u, v);
             for (double[] q : faces) if (Math.abs(u - q[0]) <= q[2] && Math.abs(v - q[1]) <= q[3]) clear *= 1 - q[4];
             for (double[] p : polygons) {
-                // Полосы лент — ровной непрозрачностью внутри; клубы — ниже, по пересечению с плоскостью.
+                // Ribbon strips have uniform interior opacity; puffs are handled below by intersection with their plane.
                 if (p[12] <= 0 || p.length < 15) continue;
                 if (insideProjected(p, u, v)) clear *= 1 - p[12];
             }
             return clear;
         }
 
-        /** Профиль задан средними колец: линейно между их серединами, без скачка на каждом BIN. */
+        /** The profile stores ring means: interpolate between ring centers, without a jump at each BIN. */
         private static double profile(double[] profile, double radius) {
             double at = Math.max(0, radius / PlumeContinuityTest.BIN - 0.5);
             int bin = (int) at;
@@ -267,7 +267,7 @@ class SmokeFillTest {
         }
     }
 
-    /** Исходные карты клуба: та же 2D-альфа, отражение и сдвиг кадров, что в sixPlaces/sixAlpha шейдера. */
+    /** Source puff maps: the same 2D alpha, mirroring and frame displacement as shader sixPlaces/sixAlpha. */
     private record Baked(BufferedImage a, BufferedImage next, BufferedImage flow, boolean mirror) {
         private static final Map<FxAtlas.Sprite, Baked> CACHE = new HashMap<>();
 
@@ -315,7 +315,7 @@ class SmokeFillTest {
             return a0 + (a1 - a0) * mix;
         }
 
-        /** Билинейная выборка с полутекселем у края; цвет — с умноженной альфой, как на листе FxAtlas. */
+        /** Bilinear sampling with a half-texel inset; color is premultiplied, as in the FxAtlas atlas. */
         private static double channel(BufferedImage image, double u, double v, int shift) {
             double x = Math.clamp(u * image.getWidth() - 0.5, 0, image.getWidth() - 1);
             double y = Math.clamp(v * image.getHeight() - 0.5, 0, image.getHeight() - 1);
@@ -332,7 +332,7 @@ class SmokeFillTest {
         }
     }
 
-    /** Плоскость клуба и преобразование точки попадания в его UV; только тестовая модель приёмника слоя. */
+    /** Puff plane and hit-to-UV transform; a test-only model of the layer sink. */
     static final class Puff {
         final double[] vertices;
         final FxAtlas.Sprite sprite;
@@ -363,7 +363,7 @@ class SmokeFillTest {
             cv = cx * vx + cy * vy + cz * vz;
         }
 
-        /** Непрозрачность вершины с near-fade шейдера; out — местные координаты попадания (−1…1). */
+        /** Vertex opacity with the shader near fade; out receives local hit coordinates (−1…1). */
         double hit(double rx, double ry, double rz, Vector3f forward, double[] out) {
             double facing = rx * nx + ry * ny + rz * nz;
             if (Math.abs(facing) < 1e-12) return 0;
@@ -378,7 +378,7 @@ class SmokeFillTest {
         }
     }
 
-    /** Один и тот же мировой луч попадает в те же UV клуба при повороте взгляда, включая крен камеры. */
+    /** A fixed world ray hits the same puff UV while the view rotates, including camera roll. */
     @Test
     void fixedPuffKeepsWorldRayTransmittanceWhenCameraTurns() throws IOException {
         double[][] profile = PlumeContinuityTest.profiles();
@@ -393,9 +393,9 @@ class SmokeFillTest {
                 v.left().rotateAxis(turn * 0.19f, f.x, f.y, f.z);
                 v.up().rotateAxis(turn * 0.19f, f.x, f.y, f.z);
                 Screen moved = fixedPuff(v, flat);
-                assertArrayEquals(vertices, moved.puffs.getFirst().vertices, 0, "мировые вершины клуба");
+                assertArrayEquals(vertices, moved.puffs.getFirst().vertices, 0, "world-space puff vertices");
                 assertEquals(SmokePuffs.polygonFill(v, java.util.Arrays.copyOf(vertices, 12)), moved.fill(), 1e-12,
-                        "площадь клуба считается один раз, по его вершинам");
+                        "puff area is counted once, from its vertices");
                 for (int y = -4; y <= 4; y++) {
                     for (int x = -4; x <= 4; x++) {
                         double[] ray = center.clone();
@@ -406,12 +406,12 @@ class SmokeFillTest {
                         double textured = first.texturedTransmittanceRay(ray[0], ray[1], ray[2]);
                         least = Math.min(least, textured);
                         most = Math.max(most, textured);
-                        assertEquals(radial, moved.transmittanceRay(ray[0], ray[1], ray[2], profile), 1e-12, "радиальный профиль, поворот " + turn);
-                        assertEquals(textured, moved.texturedTransmittanceRay(ray[0], ray[1], ray[2]), 1e-12, "2D-альфа, поворот " + turn);
+                        assertEquals(radial, moved.transmittanceRay(ray[0], ray[1], ray[2], profile), 1e-12, "radial profile, rotation " + turn);
+                        assertEquals(textured, moved.texturedTransmittanceRay(ray[0], ray[1], ray[2]), 1e-12, "2D alpha, rotation " + turn);
                     }
                 }
             }
-            assertTrue(most - least > 0.2, "проверены и прозрачный край, и плотная середина");
+            assertTrue(most - least > 0.2, "both the transparent edge and dense center are covered");
         }
     }
 

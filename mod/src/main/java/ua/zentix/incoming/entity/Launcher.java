@@ -5,33 +5,33 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.strike.WeaponType;
 
 /**
- * Пусковая установка: пакет оружия ({@link LauncherRack}) на опоре ({@link LauncherMount}) с курсом и очередью пусков по
- * ячейкам. Мобильная — прицеп, который ставится у стреляющего ({@link LauncherEntity}); стационарная — блок, который
- * поставил игрок ({@code launcher.FixedLauncherBlockEntity}). Пуск ставит снаряд в ячейку любой из них одинаково.
+ * Launcher: weapon rack ({@link LauncherRack}) on a mount ({@link LauncherMount}) with heading and per-cell
+ * launch queue. Mobile is a trailer placed near the shooter ({@link LauncherEntity}); fixed is a player-placed
+ * block ({@code launcher.FixedLauncherBlockEntity}). Launch places a projectile in either one's cell identically.
  */
 public interface Launcher {
-    /** Повернуть пакет можно, если новый курс отличается больше чем на столько, °. */
+    /** The rack may turn if the new heading differs by more than this many degrees. */
     float TURN_THRESHOLD = 15;
 
     WeaponType weapon();
 
-    /** Место пусковой: у прицепа — его центр на земле, у блока — середина его низа. */
+    /** Launcher position: trailer ground center, or center of the block's bottom. */
     Vec3 position();
 
-    /** Курс пакета, °. */
+    /** Rack heading, °. */
     float yaw();
 
     LauncherMount mount();
 
-    /** Тик, когда пакет начал подниматься на угол возвышения: поставлен или довёрнут. */
+    /** Tick when the rack started raising to elevation: placed or turned. */
     long deployedAt();
 
-    /** Очередь пусков (только сервер). */
+    /** Launch queue (server only). */
     LaunchQueue queue();
 
     /**
-     * Довернуть пакет на курс {@code yaw} (РСЗО, барражирующие, стационарная — на любую цель), если нужно и можно
-     * ({@link #turnedYaw}): пакет опускается, поворачивается и поднимается снова, пуски ждут подъёма.
+     * Turn the rack to {@code yaw} (MLRS, loitering munitions, fixed launcher at any target) if needed and
+     * allowed ({@link #turnedYaw}): it lowers, turns, and raises again; launches wait for it to rise.
      */
     void turnTo(float yaw, long now);
 
@@ -39,37 +39,40 @@ public interface Launcher {
         return LauncherRack.of(weapon());
     }
 
-    /** Угол возвышения направляющей (паспорт): шахеды 15°, катапульта барражирующих 20°, ракеты 40°, трубы РСЗО 50°. */
+    /** Rail elevation (spec): Shahed 15°, loitering catapult 20°, missiles 40°, MLRS tubes 50°. */
     default float elevation() {
         return rack().elevation();
     }
 
-    /** Центр снаряда на направляющей {@code slot} при полном подъёме пакета. */
+    /** Projectile center on {@code slot}'s rail with rack fully raised. */
     default Vec3 railPoint(int slot) {
         return mount().railPoint(position(), yaw(), weapon(), slot);
     }
 
-    /** Сколько тиков ещё поднимается пакет (0 — поднят). */
+    /** Ticks until rack finishes raising (0 means raised). */
     default int raisingTicks(long now) {
         return (int) Math.max(0, deployedAt() + LauncherEntity.DEPLOY_TICKS - now);
     }
 
-    /** Текущий угол пакета с учётом подъёма (клиент рисует по нему). */
+    /** Current rack angle including raising (used for client rendering). */
     default float deployedElevation(long gameTime, float partialTick) {
         float t = Mth.clamp((gameTime - deployedAt() + partialTick) / LauncherEntity.DEPLOY_TICKS, 0, 1);
         return elevation() * t * t * (3 - 2 * t);
     }
 
     /**
-     * Занять ячейку под пуск ({@link LaunchQueue#reserve}): не раньше, чем пакет поднимется.
+     * Reserve a launch cell ({@link LaunchQueue#reserve}): no earlier than the rack is raised.
      *
-     * @return [ячейка, через сколько тиков поджиг]
+     * @return [cell, ticks until ignition]
      */
     default int[] reserve(long now, int minReady, int busyTicks) {
         return queue().reserve(rack(), now, deployedAt() + LauncherEntity.DEPLOY_TICKS + 5, minReady, busyTicks);
     }
 
-    /** Курс пакета после {@link #turnTo}{@code (yaw, now)}: прежний, если доворачивать не нужно или установка не молчит. */
+    /**
+     * Rack heading after {@link #turnTo}{@code (yaw, now)}: unchanged if turning is unnecessary or the launcher
+     * is not quiet.
+     */
     default float turnedYaw(float yaw, long now) {
         return Math.abs(Mth.wrapDegrees(yaw - yaw())) <= TURN_THRESHOLD || !queue().silent(now) ? yaw() : yaw;
     }

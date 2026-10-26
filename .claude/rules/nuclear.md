@@ -6,430 +6,471 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/nuclear/**"
 ---
 
-# Ядерный удар (`nuclear/`, `client/nuclear/`)
+# Nuclear strike (`nuclear/`, `client/nuclear/`)
 
-Руины и всё, что в `nuclear/world/`, — в `nuclear-world.md`.
+Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
-## Устройство
-- Единицы: модель — в метрах, секундах, килотоннах; `Detonation.blocks/metres` переводят с учётом `effects_scale`
-  (`scale`): расстояния × scale, время фронта модели × scale. Фронт в игре — `FrontProfile`
-  (`Detonation.arrivalTicks/frontRadius`): до двух радиусов шара (не дальше 200 блоков) — как у модели, дальше плавно
-  к 600 блокам до скорости дальней зоны — доли звука `nuclear.wave_speed` у подрыва (`Detonation.wave`; 1.0 — как в
-  жизни: руины города встают за секунды, меньше — у сервера больше времени, и видно, как стена катится), за краем
-  стены пыли (0.3 psi) — только звук, со скоростью звука; стена пыли, мгла, звук, урон, отброс и руины (по центру
-  чанка) берут время прихода только оттуда.
-- `nuclear/` — ядерный удар:
-  - `model/` — чистая физика без Minecraft (давление у земли по высоте подрыва — `HobBlast`: Броуд до 2 psi,
-    стандарт DNA дальше, таблица по ln R и углу; приход фронта и положительная фаза — подпрограмма PT Броуда, фаза
-    ниже 1 psi — Кинни–Грэхем у слушателя; шар, гриб, свет, проникающая радиация, осадки и чёрный дождь, воронка,
-    лучевая болезнь, ожоги, глаза, ранения волной — `BlastInjury`), юнит-тесты. Давление и напор в точке —
-    `Detonation` (`overpressureKpa`, `dynamicPressureKpa` — напор вдоль земли, `blastWind`, `positivePhaseSeconds`;
-    по земле — `ground*`): точка над землёй — как точка земли с подрывом ниже на её высоту, выше подрыва — как
-    наземный (оценка сверху: высоко над землёй стебля Маха нет, DESIGN-nuke §1.1); волна бьёт до 0.3 psi
-    (`HIT_KPA`) — окно фронта по наклонной дальности `blastReach`, а не по `radiusMax` (это дальность по земле);
-  - `Detonation` — один подрыв (всё, из чего сервер и клиенты выводят картинку и последствия), `NuclearEvents`
-    (SavedData: подрывы и запланированные удары), `NuclearWarhead` (подрыв; свет и радиация по одной сущности),
-    `NuclearStrikes` (пуск МБР, таймер, события мира, синхронизация клиентам);
-  - `radiation/` — доза игрока (attachment), `RadiationTicker` (раз в секунду: поле осадков × защита + заражение),
-    `Shielding` (защита блоками по массе на пути: от подрыва — луч к нему и к небу, от осадков — лучи к открытой небу
-    поверхности вокруг), `FlashBurns` (ожоги светом по слотам брони: кожа, одежда, металл; шок), `FlashEyes` (ожог
-    сетчатки: пятна в поле зрения, attachment `RETINA`, пакет `S2C.RetinaScars` — весь список, состояние; засветку поля
-    считает клиент, `NukeFlash`), эффекты лучевой болезни и ожогов (ожоги держат здоровье пределом, пока заживают).
-- Гриб — объём в проходе пелены (`fx_pall`), не клубы: законы формы, вещества шапки и остывания — `nuclear/model/MushroomModel`
-  и `BlackBody`, подъём и высота — `CloudModel` (один закон у шара и облака: верх
-  S + (E − S)(1 − e^(−t/τ)), центр шара — путь верха; τ и высота по данным — «Уосп» 1 кт, «Грейбл» 15 кт, табл. 2.12
-  Glasstone и Dolan для 1 Мт; высоты Невады — над землёй, AGL; верх и центр кольца не опускаются, `MushroomModelTest`), кадр — таблица
-  `client/nuclear/MushroomField` (68 текселей на гриб, строка света чёрного тела), шейдер — `include/mushroom.glsl` (копия законов, сверяет `MushroomGlslTest`) и функции `mush*` в `fx_pall.fsh`.
-  Клубы — купола канала B шума (`VolumeNoise`), у ножки — пятна канала R. У «водяного» подрыва в том же объёме —
-  четвёртая часть, полый столб воды с короной брызг (`WaterModel.column`: стенка от воды до середины короны и корона —
-  эллипс над ней, одной поверхностью мягким минимумом; капли — белые, g = 0,85, как водяная пыль пелены; струи стенки
-  — пятна канала R, вытянутые по высоте и сдвинутые на верх столба: идут с водой вверх и, падая, вниз; корона —
-  купола). Сухой подрыв столба не считает (ослабление 0 — ни одной выборки). Огненный шар — та же форма с первого
-  кадра (шаг M2): шапка до сворачивания — сфера шара (`FireballModel.radius`, `centreHeight`), кольцо растёт из неё
-  долей `rollUp` (каждое число формы — от шара к шапке, без смены картинки); видимая температура — Стефан–Больцман по
-  яркости и радиусу до второго максимума (двойная вспышка; у 15 кт минимум через ~10 мс — короче кадра, под белым
-  экраном), потом остывание к воздуху (`FireballModel.temperature`, ключи хроники); сворачиваясь, край смешивается с
-  воздухом (`MushroomModel.edgeShare`: у шара 1, у кольца `EDGE_HEAT`) и клубы растут (`billows`: шар — почти гладкий).
-  Перепад температуры по поверхности шара — запечённый узор (`client/nuclear/NukeBallSurface`, `textures/fx/nukeball.bin`,
-  `tools/bake_fx`: Mantaflow в Blender — пузырь горячего газа со сгустками паров заряда всплывает и перемешивается с
-  воздухом; узор — яркостная температура по радиусу снаружи, октаэдрическая карта по направлению от середины шапки,
-  среднее p⁴ — 1, мощность — модели): до минимума яркости его нет (поверхность — гладкий фронт ударной волны, G&D
-  2.117–2.119), к отрыву фронта (`FireballModel.breakawaySeconds`, 15/11 минимума) проступает сгустками (Brode 1963;
-  разброс ~4,5 % и корреляция 0,15 R — оценка по снимку Trinity 25 мс), потом кадр — по пути всплытия в радиусах шара
-  (`FireballModel.surfaceRise`: течение пузыря подобно себе, один узор на все мощности), холодный воздух снизу темнит
-  низ; со сворачиванием в кольцо узор уступает языкам клубов `SKIN` (доля 1 − `rollUp`; тексель 16.z, w —
-  `MushroomField.ballSurface`). Запекание считает шар радиусом 1 м: плавучесть Mantaflow — в клетках, у шара в 200 м
-  она в тысячи раз слабее, и он не всплывает. Свет шара вокруг — ламбертов шар радиуса шапки яркостью чёрного тела её видимой
-  температуры (`MushroomModel.light`, L·R²/d²): пучком на ножку, юбку и столб воды (`mushAt`), светом частиц
-  (`FxLights`), на мир (`fx_pall_composite`: `MushroomField.balls`, ночью — до ~12 с), бликом и вуалью
-  (`NukeRenderer.fireballs`), янтарным небом (`NukeSky.amber`; оно и засветка неба вспышкой `NukeFlash` — по погоде в
-  миг подрыва, `Detonation.visibility`, — рассеянный воздухом свет, пропускание прямого и рассеянного вместе `ThermalModel.transmittance`, Glasstone рис. 7.104; блик —
-  пучок, `Sight.Air`; доли засветки 0,6 и порог 0,05 вспышки мира — оценки, `NukeFlash.SKY_GLARE`), светом стены пыли, пелены, облака Вильсона и пыли у
-  камеры (`CloudPuffs.pallLight` → `pallBallLight`, `client-fx.md`). Ярче белого на экране вещество не бывает, поэтому
-  в конце луча пелены (`fx_pall`) пересвет уходит в долю пикселя (cover·L, цветом своего света) и прибавляется к тому, что за ним:
-  пропускание в кадре остаётся настоящим, квадраты слоя за веществом берут его свет (`fx.fsh`: before). Иначе шар в
-  дымке вдали (10 км ясно — доля 0,14) был бы бледным пятном на дневном небе. Своё свечение гриба (шар, накал
-  шапки и ножки) — не с пеленой: отдельная сумма луча (`mushAt` → `emitted`) с экспозицией шара и в экран плёночной
-  кривой поверх пелены, как у обычного шара (`client/nuclear/NukeExposure`, копия — `mushBallGain`, `mushFilm*` в
-  `mushroom.glsl`, сверяет `MushroomGlslTest`; подача): камера выставлена по огню — видимая поверхность (температура края
-  шапки) яркостью L полуденных белых на кривой K·L^β (K 0,233, β 0,15; днём и ночью одинаково), тусклое свечение — в мере
-  кадра с привыканием глаза, как было. Мерило — поверхность, не ядро (с мерилом по ядру шапка на 7–10 с тускнела).
-  Кривая — только пока шар — шар: по доле кольца (`mushFilmShare` ↔ `NukeExposure.filmShare`, 0,15 → 0,45; у 15 кт
-  ~5 → 7 с) кадр переходит к прежнему пути (`pallShown`: свечение со светом пелены, пересвет в долю пикселя одним
-  оттенком), между ними — смесь готовых картинок, а не свечения (малая его доля прежним путём уже пересвечивает
-  пиксель — скачок). Кривая по каналам у свернувшейся шапки белила её оранжевое нутро ночью и гасила его сквозь мглу
-  (ревью #441); `NukeExposureTest.rolledCapIsComposedAsBeforeThroughHaze` — на 7 и 10 с, днём и ночью, сквозь мглу и
-  пыль пиксель шапки тот же, что у прежнего пути (копия конца `main` — `NukeExposure.pixel`; блоки `fx_pall`, которые она повторяет, —
-  `pallShown`, свечение в `mushAt`, `mushStep`, суммы и накопление `heat`/`emitted`/`filmed` и сборку пикселя — целиком,
-  без пробелов и комментариев, сверяет `shaderBlocksAreWhatTheJavaCopyModels`; правка шейдера без правки копии и её
-  ожидаемого текста роняет сверку, `silentShaderEditsFailTheCheck` держит это мутациями), переход — без скачков. В пересвете «в долю пикселя» весь шар ярче белого был одним цветом — ровный диск на 3–5 с
-  (FX 23.10); теперь перепад температуры по поверхности виден на 1–5 с
-  (`NukeExposureTest.fireballKeepsItsPatternFromOneToFiveSeconds`). Свет шара на мгле, стене пыли, ножке и мире — в мере
-  кадра, как был: предел «не ярче шара на экране» на них убивал свечение мглы ночью (пучок шара гаснет в толще пыли
-  e^(−τ) от настоящей яркости, а не от экранной) и оранжевый свет на земле днём. Предел (`mushBallCap`) — только у того,
-  что шар обнимает: оболочка облака Вильсона (поверхность шара для неё — не ярче шара на экране, потом L·R²/d²; без него
-  на 0,5–1 с она сливалась с шаром в белый диск) и блик с вуалью (`NukeExposure.capShown`); размер блика — по яркости с
-  экспозицией шара и пересветом кадра. Фаза капель оболочки у шара — средняя по его диску (`hgDisc`, сверяет
-  `NukeExposureTest`): шар рядом с ней виден в десятки градусов, и пик точечного источника (у g 0,85 — 82 против ~11 у
-  диска в 30°) светил оболочкой вокруг шара в разы ярче его. Кадр во вспышку (`NukeFlash.overexposed`) —
-  пересвет X = K^(e^(−u/0,2 с)) после второго максимума (K — свет вспышки у камеры против выставленного,
-  `NukeFlash.flashOnCamera`): усиление кадра X^(1/2,2) смешиванием «кадр × (1 + c)» и рассеянный в объективе свет X/100;
-  у 15 кт в 1,4 км белый до ~0,25 с, на 0,5 с — ×3, к секунде — как был (прежде белая заливка весь импульс 1,24 с и ещё 2–4 с). Вуаль
-  засветки глаз — с максимума импульса. Шум объёма готовится со входа в мир
-  (`IncomingClient.login`): у `/incoming nuke now` нет предупреждения, и шар первую секунду был бы без тела.
-  Тень гриба на мире днём — карта тени (`fx_mush_shadow`, вывод — `fx_pall_composite`; `client-fx.md`; плитка и верх
-  мира — тексели 17 и 18).
-  - `flash/` — следы вспышки на гранях (DESIGN-nuke §3.7): `FlashChar` (материал по тегам `nuke_chars`/`nuke_soots`,
-    ступень гари 1–7 по свету × углу, метка грани в одном int: место, сторона, ступень, хеш блока), `FlashMarks`
-    (attachment чанка `FLASH_MARKS`: слои по подрывам, гарь, тени с масками 16×16 по 2 бита; пределы на чанк
-    `MAX_CHARS`/`MAX_SHADOWS`, слоёв — `MAX_LAYERS`, самые старые (меньшие номера) уходят: тот же предел проверяет разбор пакета,
-    и чанк с 17 слоями отключал бы клиента), `FlashShadows` (тени тел: снимок в тике подрыва, лучи под бюджетом ядерки),
-    `FlashSync` (attachment и `S2C.NukeFlashMarks` тем, кто видит чанк, и при отправке чанка; смена блока на месте
-    метки — ниже). Гарь считает план руин (`nuclear-world.md`); клиент — `client/nuclear/FlashMarksClient` (метки по
-    чанкам и секциям, ворота по часам), `FlashMarksMesh` (квадраты в меш секции), `FlashAftermath` (ЭМИ у ламп сети
-    в кварталах, которые гасит удар, — радиус в `S2C.NukeDetonation` с сервера, `Blackouts.nukeRadius`; дымки до
-    волны; только вживую).
-  - `MobPanic` — паника мобов: своя цель бегства каждому `PathfinderMob` при входе в мир, будят вспышка
-    (`NuclearWarhead.expose`) и волна (`BlastBody.hit`).
-- `client/nuclear/` после удара: `NukeEchoes` — эхо от рельефа (общий `client/sound/BlastEchoes`, геометрия `TerrainEcho`, сведение
-  `EchoMix`, игра — `OwnSources`), `NukeAfter` — горящий город (гул — по теплу шторма `FireStorm` вдали и огня в своих
-  чанках `fx/FireWatch`, общего с дымом пожаров, законом `client/sound/FireRoar`; ветер в огонь и вторичные взрывы — по
-  модели пожаров сервера `FireField`; обрушения), `NukeSounds.Schedule.clatter` — стёкла и обломки, что снесла волна у
-  слушателя (`S2C.NukeDebris`: выборка мест и сколько снесено всего, закон — `client/sound/Clatter`), `AnimalSilence` —
-  тишина животных.
+## Structure
+- Units: model in meters, seconds, kilotons; `Detonation.blocks/metres` convert with `effects_scale` (`scale`): distances
+  × scale, model front time × scale. In-game front is `FrontProfile` (`Detonation.arrivalTicks/frontRadius`): model speed
+  out to two sphere radii (at most 200 blocks), then smoothly to 600 blocks toward far-zone speed, a sound-speed share
+  `nuclear.wave_speed` stored per detonation (`Detonation.wave`; 1.0 is real life: city ruins appear in seconds; lower
+  gives the server more time and makes the rolling wall visible); beyond the dust-wall edge (0.3 psi), only sound at
+  sound speed; dust wall, haze, sound, damage, knockback and ruins (by chunk center) take arrival time only from here.
+- `nuclear/` — nuclear strike:
+  - `model/` — pure physics without Minecraft (ground pressure by burst height: `HobBlast`, Brode down to 2 psi, DNA
+    standard beyond, table over ln R and angle; front arrival and positive phase from Brode's PT subroutine, phase
+    below 1 psi from Kinney–Graham at the listener; sphere, mushroom, light, prompt radiation, fallout and black rain,
+    crater, radiation sickness, burns, eyes, blast injuries — `BlastInjury`), unit tests. Point pressure and dynamic
+    pressure: `Detonation` (`overpressureKpa`, `dynamicPressureKpa`: along-ground dynamic pressure, `blastWind`,
+    `positivePhaseSeconds`; ground versions `ground*`): an elevated point is treated as ground with burst height
+    reduced by its height; above the burst, as a surface burst (upper bound (est.): no Mach stem high above ground,
+    DESIGN-nuke §1.1); wave hits down to 0.3 psi (`HIT_KPA`), front window by slant range `blastReach`, not `radiusMax`
+    (ground range);
+  - `Detonation` — one detonation (all server/client inputs for visuals and consequences), `NuclearEvents` (SavedData:
+    detonations and scheduled strikes), `NuclearWarhead` (detonation, light and radiation for one entity),
+    `NuclearStrikes` (ICBM launch, timer, world events, client synchronization);
+  - `radiation/` — player dose (attachment), `RadiationTicker` (once per second: fallout field × shielding +
+    contamination), `Shielding` (block shielding by path mass: rays toward burst and sky for detonation, rays toward
+    surrounding sky-exposed surfaces for fallout), `FlashBurns` (light burns by armor slot: skin, clothes, metal; shock),
+    `FlashEyes` (retinal burns: visual-field spots, attachment `RETINA`, packet `S2C.RetinaScars`, full list/state;
+    client calculates field glare, `NukeFlash`), radiation-sickness and burn effects (burns cap health while healing).
+- Mushroom is a volume in the pall pass (`fx_pall`), not billows: shape, cap matter and cooling laws in
+  `nuclear/model/MushroomModel` and `BlackBody`; rise and height in `CloudModel` (one law for sphere and cloud: top
+  S + (E − S)(1 − e^(−t/τ)), sphere center follows top; τ and height from Wasp 1 kt, Grable 15 kt, Glasstone and Dolan
+  table 2.12 for 1 Mt; Nevada heights are above ground, AGL; ring top and center never descend, `MushroomModelTest`);
+  frame table `client/nuclear/MushroomField` (68 texels per mushroom, black-body light row), shader
+  `include/mushroom.glsl` (law copies checked by `MushroomGlslTest`) and `mush*` functions in `include/fx_pall.glsl`.
+  Billows are domes from noise channel B (`VolumeNoise`), stem uses R-channel patches. A water burst adds a fourth
+  component to the same volume, a hollow water column with spray crown (`WaterModel.column`: wall from water to crown
+  middle, crown an ellipse above, one surface via smooth minimum; white drops, g = 0.85 like pall spray; wall jets are
+  R-channel patches stretched vertically and offset to column top: move upward with water, downward while falling;
+  crown uses domes). Dry bursts do not calculate a column (extinction 0, no samples). Fireball is the same shape from
+  the first frame (step M2): before rollup, cap is the fireball sphere (`FireballModel.radius`, `centreHeight`), ring
+  grows from it by `rollUp` share (each shape number moves from sphere to cap, no image swap); apparent temperature
+  follows Stefan–Boltzmann from luminosity and radius until the second maximum (double flash; for 15 kt, minimum at
+  ~10 ms, shorter than a frame, under white screen), then cooling toward air (`FireballModel.temperature`, chronology
+  keys); rolling edge mixes with air (`MushroomModel.edgeShare`: sphere 1, ring `EDGE_HEAT`) and billows grow (`billows`:
+  sphere almost smooth). Fireball surface temperature variation is baked (`client/nuclear/NukeBallSurface`,
+  `textures/fx/nukeball.bin`, `tools/bake_fx`: Blender Mantaflow hot-gas bubble with charge-vapor clumps rises and mixes
+  with air; pattern is brightness temperature along radius from outside, octahedral direction map from cap center,
+  mean p⁴ = 1, power from model): absent before luminosity minimum (surface is the smooth shock front, G&D 2.117–2.119),
+  clumps emerge by breakaway (`FireballModel.breakawaySeconds`, 15/11 of minimum time) (Brode 1963; spread ~4.5 % and
+  correlation 0.15 R (est.) from Trinity 25 ms image), then frame follows rise path in fireball radii
+  (`FireballModel.surfaceRise`: self-similar bubble flow, one pattern for all yields); cool air darkens the underside;
+  during rollup the pattern gives way to billow tongues `SKIN` (share 1 − `rollUp`; texel 16.z, w:
+  `MushroomField.ballSurface`). Bake uses a 1 m radius sphere: Mantaflow buoyancy is in cells, thousands of times weaker
+  for a 200 m sphere, which does not rise. Surrounding fireball light is a Lambertian sphere of cap radius at the
+  black-body brightness of its apparent temperature (`MushroomModel.light`, L·R²/d²): beam on stem, skirt and water
+  column (`mushAt`), particle light (`FxLights`), world light (`fx_pall_composite`: `MushroomField.balls`, at night to
+  ~12 s), glare and veil (`NukeRenderer.fireballs`), amber sky (`NukeSky.amber`; it and `NukeFlash` sky glare use weather
+  at detonation, `Detonation.visibility`: air-scattered light, direct+diffuse transmittance
+  `ThermalModel.transmittance`, Glasstone fig. 7.104; glare is a beam, `Sight.Air`; sky-glare share 0.6 and world-flash
+  threshold 0.05 are (est.), `NukeFlash.SKY_GLARE`), dust-wall, pall, Wilson cloud and camera-local dust light
+  (`CloudPuffs.pallLight` → `pallBallLight`, `client-fx.md`). Matter cannot appear brighter than screen white, so at pall
+  ray end (`fx_pall`) overbrightness becomes pixel coverage (cover·L, its own light color) and adds to what is behind:
+  frame transmittance stays real; layer quads behind matter receive its light (`fx.fsh`: before). Otherwise a sphere
+  in distant haze (10 km clear, share 0.14) would be a pale patch in the daytime sky. Mushroom emission (sphere, glowing
+  cap/stem) is separate from pall: own ray sum (`mushAt` → `emitted`) with fireball exposure, film curve over pall,
+  like the conventional sphere (`client/nuclear/NukeExposure`, copy `mushBallGain`, `mushFilm*` in `mushroom.glsl`,
+  `MushroomGlslTest`; presentation): camera exposed for fire, visible surface (cap-edge temperature) with brightness L
+  in noon whites on curve K·L^β (K 0.233, β 0.15, same day/night); dim glow remains in frame measure with eye adaptation
+  as before. Reference is surface, not core (core reference dimmed the cap at 7–10 s). Curve only while sphere is a
+  sphere: ring share (`mushFilmShare` ↔ `NukeExposure.filmShare`, 0.15 → 0.45; ~5 → 7 s for 15 kt) transitions to the old
+  path (`pallShown`: emission with pall light, overbrightness to coverage in one hue); blend finished images, not
+  emission (even a small share through the old path already overexposes a pixel, causing a jump). Per-channel curves
+  whitened the rolled cap's orange interior at night and dimmed it through haze (review #441);
+  `NukeExposureTest.rolledCapIsComposedAsBeforeThroughHaze` checks cap pixels at 7 and 10 s, day/night, through haze and
+  dust against the old path (copy of `main`'s end, `NukeExposure.pixel`; `shaderBlocksAreWhatTheJavaCopyModels` compares
+  whole copied `fx_pall` blocks, ignoring whitespace/comments: `pallShown`, emission in `mushAt`, `mushStep`, sums and
+  accumulation of `heat`/`emitted`/`filmed`, pixel composition; shader edits without updating copy and expected text fail
+  comparison, `silentShaderEditsFailTheCheck` guards with mutations), transition has no jumps. Coverage overexposure
+  gave the entire over-white sphere one color, a flat disk at 3–5 s (FX 23.10); now surface temperature variation shows
+  at 1–5 s (`NukeExposureTest.fireballKeepsItsPatternFromOneToFiveSeconds`). Fireball light on haze, dust wall, stem and
+  world remains in frame measure: a “no brighter than on-screen sphere” cap killed nighttime haze glow (fireball beam
+  attenuates through dust by e^(−τ) from real, not screen brightness) and orange ground light by day. Cap
+  (`mushBallCap`) applies only to what surrounds the sphere: Wilson shell (sphere surface no brighter than on screen,
+  then L·R²/d²; without this, at 0.5–1 s it merged with the sphere as a white disk) and glare/veil
+  (`NukeExposure.capShown`); glare size follows brightness with fireball exposure and frame overexposure. Droplet phase
+  near the sphere averages its disk (`hgDisc`, `NukeExposureTest`): nearby sphere spans tens of degrees; point-source
+  peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
+  (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
+  exposure, `NukeFlash.flashOnCamera`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
+  X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second (previously white for full 1.24 s pulse
+  plus 2–4 s). Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
+  `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
+  shadow is a shadow map (`fx_mush_shadow`, output `fx_pall_composite`; `client-fx.md`; tile and world top: texels 17, 18).
+  - `flash/` — flash traces on faces (DESIGN-nuke §3.7): `FlashChar` (material by `nuke_chars`/`nuke_soots` tags,
+    scorch tier 1–7 by light × angle, face mark in one int: position, side, tier, block hash), `FlashMarks` (chunk
+    attachment `FLASH_MARKS`: layers per detonation, scorch, shadows with 16×16 2-bit masks; per-chunk limits
+    `MAX_CHARS`/`MAX_SHADOWS`, layers `MAX_LAYERS`, oldest (lower IDs) evicted: packet decoding checks the same limit,
+    and a chunk with 17 layers would disconnect a client), `FlashShadows` (body shadows: snapshot on detonation tick,
+    rays under nuclear budget), `FlashSync` (attachment and `S2C.NukeFlashMarks` to chunk viewers and on chunk send;
+    block changes at marks below). Ruin plans calculate scorch (`nuclear-world.md`); client:
+    `client/nuclear/FlashMarksClient` (marks by chunks/sections, clock gate), `FlashMarksMesh` (quads into section mesh),
+    `FlashAftermath` (EMP at grid lamps in strike-darkened districts, radius from server in `S2C.NukeDetonation`,
+    `Blackouts.nukeRadius`; pre-wave wisps; live only).
+  - `MobPanic` — mob panic: own flee goal for each `PathfinderMob` on world entry, triggered by flash
+    (`NuclearWarhead.expose`) and wave (`BlastBody.hit`).
+- `client/nuclear/` after the strike: `NukeEchoes` — terrain echo (shared `client/sound/BlastEchoes`, `TerrainEcho`
+  geometry, `EchoMix` mixing, `OwnSources` playback), `NukeAfter` — burning city (roar from distant `FireStorm` heat and
+  local-chunk fire `fx/FireWatch` (watches only near detonations), law `client/sound/FireRoar`; inward wind and secondary
+  explosions from server fire model `FireField`; collapses), `NukeSounds.Schedule.clatter` — glass/debris removed by
+  wave near listener (`S2C.NukeDebris`: position sample and total removed, law `client/sound/Clatter`), `AnimalSilence` —
+  quiet animals.
 
-- Пелена после волны (`client/nuclear/PallField` — поле, `NukePall` — у камеры и в кадр, `NukeAsh` — пепел;
-  рисует `client/fx/layer/PallPass`): пыль по давлению на земле и приходу фронта, мгла над зоной поджига до утра
-  (время суток в миг подрыва — с сервера, `Detonation.dayTime`; меньше чем за 5 минут до восхода — до следующего утра;
-  дальше — по часам мира, `PallField.daylight`: прыжок часов (сон, `/time add`, `/time set`) — сдвиг времени суток
-  против игрового времени (поправки отстающего сервера двигают оба вместе), утро заново по времени суток, а не по
-  числу часов (`/time set` ставит их как есть): уже день после ночи — мгла гаснет за минуту, иначе — к ближайшему
-  восходу, но не раньше 5 минут после подрыва; позже прежнего не гаснет; вход в мир и перемотка повтора сравнивают
-  первый замер с мигом подрыва — прыжок, которого клиент не видел, тот же, что у всех, только без минуты угасания);
-  подрыв живёт на клиенте, пока видна пелена. Законы поля — в Java и копией в `shaders/include/pall.glsl`
-  (`PallGlslTest` считает функции шейдера из файла и сверяет с Java; правка закона — в обоих); свет шара и пожаров на пелене
-  (`pallBallShare`, `pallBurn`) — копия `CloudPuffs.ball` и `burn` (ими же светится пыль у камеры, `NukePall.dustColor`):
-  правка света — и там.
-  Пыль — один слой с головой стены пыли (`nuclear/model/DustModel`; законы — обзор «Blast-lofted dust», дизайн «ядерка
-  уровня кино» §8; DESIGN-nuke §6), а не две подобранные кривые: что подняла волна — грунт по ветру за фронтом вдоль
-  земли за положительную фазу на месте (давление на земле, фаза и доля напора вдоль земли — по высоте подрыва,
-  `HobBlast`; Gaj и Small 1991: u* шероховатой пластины, взвесь с 10 порогов срыва, ниже — сальтация; поверхность
-  — `Surface.REFERENCE`, сухой суглинистый песок) и пыль обломков там, где рушатся дома (`destroyed`, 0,6–6 psi); верх —
-  в фазе волны пыльный пограничный слой Kuhl (h = 0,1·R^(1/6)·(U_s·τ)^(5/6): у фронта ноль, десятки метров; U_s·τ —
-  настоящий путь замедляющегося фронта по своей нормали за местом в возрасте пыли, `DustModel.run`/`waveTop`, а не
-  скорость в миг прихода × фаза: у эпицентра наземного 15 кт та давала 2·10⁶ м вместо 440 и верх в 18 км; под воздушным
-  подрывом — ∫cos α по пути следа фронта на земле (`normalPath`; cos α = √`HobBlast.alongGround`, как у ветра выноса):
-  у правильного отражения след бежит быстрее фронта, у эпицентра — бесконечно, и путь — приращение наклонной дальности,
-  в области Маха — путь ножки; путь следа у 15 кт на 592 м давал за фазу под подрывом 509 м вместо 189, верх 52 м
-  вместо 23, и голова, отходя от эпицентра, проседала до 36 м), потом его поднимает нагретая вспышкой земля (h_b за
-  `RISE_S` = 60 с, не выше 400·∛(Y/15) м); пять корзин по размеру (3–400 мкм)
-  оседают из перемешанного слоя, мелкие уходят разбавлением за `FINE_S` (800 с), у эпицентра — в ножку (`STEM_*`);
-  толща — геометрическая оптика, k = 3Q/(2ρD) (смесь — 108 м²/кг). Возраст пыли — секунды модели с прихода фронта в игре,
-  как у головы: пыль моложе положительной фазы — голова, старше — пелена, место переходит за полфазы (`BlastWall.handoff`,
-  `PallField.pallShare`), и толща над землёй у обеих вместе — толща слоя (`PallFieldTest.headAndPallAreOneLayer`: в
-  пределах 20 %, на стыке в 2,5 км — 6 %). Числа обзора держит `DustModelTest` (15 кт на 592 м): верх в 0,25 с — 6–30 м,
-  к концу фазы — 30–70 м, через 5 с — 50–150 м (Rosenblatt: 60–150 м; в 1,4 км — 58 м), в 1,42 км под слоем ночь до
-  20-й минуты и светлее к 30-й (Фудзии у Херси), в 3,2 км — сумерки, в 300 м светлеет за минуты. Мелкая пыль висит
-  часами: пелена наземного 15 кт видна ~1,6 ч, воздушного (592 м) — ~1,7 ч (дольше всего — в километре от эпицентра; в
-  3 км — ~0,9 и ~1,1 ч), и подрыв столько же держит слот пелены. Числа
-  без источника (подобраны по Хиросиме или оценены) — пыль обломков 0,1 кг/м² и `FINE_S` (вместе, по давлению
-  `HobBlast`: при прежнем Кинни–Грэме ×1,8 было 0,5 кг/м² и 1000 с), `STEM_*`, `RISE_S`, `TOP_MAX`, `TOP_C`, доля света
-  на нагрев 0,2, γ 5 К/км, ветер выноса на фазу давления (а не напора, обзор §8.1) и форма `lifted` — импульса
-  напора, а не закона выноса, — помечены в `DustModel`. Классов поверхности по клеткам (трава, город, песок) пока нет — всюду `REFERENCE`.
-  Пелена сверху — одно одеяло (жалоба 18.10: с высоты — золотистые и тёмные клочья): клочья молодого слоя (шум с
-  просветами, `pallShape`) перемешиваются за оборот вихря слоя (`PallField.mixed`, e-кратно за `DustModel.RISE_S`,
-  четвёртый канал строки пыли) до колебаний `MIXED` = 0,2 средней (`clumps`, `pallMixed`; Willis и Deardorff 1976 — оценка),
-  а верх слоя бугрится термиками — верх, а не дыры: `topD` × (1 ± `BUMPS` = 0,3, зона вовлечения — Stull 1988, оценка;
-  `topBumps` в `fx_pall`, последний параметр `pallField`, без шума — 1). Свет в ложбине между буграми — как у верха слоя (толща
-  над точкой — того же слоя); прежде в просвете клубов луч доходил до низа, где свет считался по средней толще (и светили
-  пожары), — тёмные и оранжевые пятна, видные только сверху. `PallFieldTest.oldPallIsOneBlanket`: через 6–7 минут, где
-  средняя толща ≥ 5, самый тонкий столб ≥ 3.
-  Ветер сносит пыль и брызги с того мига, как их подняло (`PallField.share` — доля сноса `drift` по возрасту пыли,
-  четвёртый канал строки мглы; `source`), а не всю пелену на путь ветра с подрыва: иначе край пыли и голова стены по
-  ветру шли впереди фронта сервера (звук, тряска, отброс, обломки) на сотню-две блоков, против ветра — позади.
-  Рамка пелены растёт со сносом до оседания пыли (`PallField.extent`: за час — десятки километров), а карта рельефа под
-  ней — нет: она на пелену у источника, голову стены и камеру (`PallField.sourceExtent`, `client-fx.md`), иначе клетка
-  у камеры огрубела бы к полукилометру; снесённая за карту пыль лежит на рельефе её края.
-  Над водой пыли нет (DESIGN-nuke §6, шаг 6): брызги, сорванные ветром за фронтом, — своя строка таблицы (строки слота —
-  пыль, брызги, мгла: `PallField.ROWS`, у `PallPass` — 6 на два подрыва) со своей высотой и законом: встают на высоту срыва
-  гребней (`WaterModel.sprayHeight`), крупные капли выпадают — верх опускается к 0,6 её (`PallField.sprayTop`, оценка), а
-  не растёт, как пыль, над нагретой землёй (`WaterModel.spray`; видно на 60 м, редеют за 30 с, через три минуты выпали;
-  их часть в голове стены — тот же клин ниже и позади, `handoff` — та же), у «водяного» подрыва ещё
-  базисная волна — по законам и часам модели (`PallField.surge`, `WaterModel.surge*`; от стенки столба, который в объёме
-  гриба падает в неё по тем же часам). При пелене OFF волны нет, столб остаётся (гриб — на LOW). Что под пеленой — доля
-  воды во втором канале карты `PallGround`; вещество — по месту, откуда его подняло (точка минус снос, где читается и
-  таблица): пыль, снесённая на воду, остаётся пылью, брызги, снесённые на берег, —
-  брызгами; мгла и её зарево — по воде у источника на оси шлейфа (над водой пожаров нет), пепел и бумага — тоже
-  (`PallField.Water`, `NukePall.water`). Чего под пеленой нет (`PallGround.hasLand`/`hasWater`), того нет и в таблице:
-  подрыв посреди моря без пыли и мглы слот не занимает, когда брызги выпали и волна растаяла, а над сушей шейдер карту
-  воды не читает. Неизвестная вода — ближайшим известным, не средним (`PallGround.nearest`; эпицентр — известная
-  точка, `NukeWater.under`): средним пруд у камеры разливался бы бледными брызгами по всей неизвестной суше, а у берега
-  над морем вокруг подрыва висело бы полпыли.
-- Стена пыли ударной волны (`client/nuclear/BlastWall` — законы; рисует пелена: `pallWall*`, `pallWilson` в `pall.glsl`,
-  голова — в `fx_pall`, числа слота `PallWall0/1`, `PallWilson0/1`): сам фронт не виден, ветер за ним вдоль земли
-  (`Detonation.groundWind`: Ренкин–Гюгонио × √доли напора вдоль земли) поднимает то, что лежит на земле, — пыль, над
-  пожарами с дымом, над водой брызги. Голова — самая молодая, низкая и густая часть слоя пыли пелены (`DustModel`,
-  выше), а не своя кривая: клин от фронта до места, где положительная фаза на месте уже кончилась (`length` = фронт(t) −
-  `tail`(t); `tail` — где приход фронта в игре и фаза там вместе — t, по узлам таблицы; фаза — своя на каждой дальности,
-  `HobBlast.positivePhaseSeconds`: у 15 кт на 592 м 0,45 с под подрывом, 0,74 с в 1 км, 1,29 с в 5 км). Передний
-  край пыли — сам фронт в игре (`head`), кольцо — вокруг самого эпицентра (снос ветром у фронта — ноль,
-  `PallField.share`). В огненном шаре на земле пыли нет (`underBall`: шар гриба, `FireballModel.groundRadius`): пока
-  фронт в шаре, головы нет; вышел — клин с переходом к пелене не длиннее (фронт − край шара) / `HANDOFF_TO`, полоса брызг
-  над водой (`SPRAY_LAG`) — тоже до края, пелены (`PallField.pallShare`) под шаром нет. Пыль в конце такого клина
-  моложе своей фазы (`backAge`; так же у любого подрыва, пока фаза нигде не кончилась и клин — до эпицентра): верх —
-  слой в её возрасте (`DustModel.waveTop`: закон Kuhl по пути фронта за этот возраст, как `Column.height`), поднятое —
-  `lifted` той же доли фазы. У наземного 15 кт
-  голова встаёт с нулевой высоты к ~0,13 с (первые 2 мс фронт на метр впереди шара — голова в сантиметр), клин доходит
-  до конца фазы к ~0,6 с, шар отрывается от земли к ~4,4 с; воздушного шар земли не касается. Верх за свежим фронтом —
-  с нуля: в первые 0,1 с у 1 кт–1 Мт, наземных и низких воздушных, — не выше ~7 м (прежде — до 48 км у наземного 1 Мт;
-  `BlastWallTest.headTopIsTheBoundaryLayer`: сетка с 0,1 мс, и высокие воздушные — 1 кт на 240 м, 15 кт на 592 м, —
-  верх — закон Kuhl по пути фронта по нормали за концом клина в возрасте пыли там, всплесков нет, а пока шар не на
-  земле, верх не проседает больше чем на 2 % и 5 см). Известный предел вне игры: у низкого воздушного подрыва больше
-  15 кт (1 Мт на 700 м) шар касается земли уже за фронтом, и в этот тик клин короче в 1,5 раза, верх ниже на 10–25 %,
-  а полоса передачи пелене (`PALL_WALL_HANDOFF_FROM/TO` — постоянные шейдера) отходит от шара скачком: радиуса шара в
-  слоте нет (все 20 чисел заняты); у подрывов игры (до 15 кт, воздушные выше 2,9 радиуса шара) этого не бывает. По доле u клина за краем поднятое растёт как импульс скоростного
-  напора (`DustModel.lifted`), верх —
-  как пыльный слой Kuhl, u^(5/6) (`top`), густота у земли — их отношение (`shape`: у самого края 0, у u ≈ 0,1 — в 2,6 раза
-  гуще конца клина), столб над землёй растёт назад. Верх в конце клина и густота у края и в конце — из того же
-  `DustModel.Column` (`first`, `lifted`: таблица на 256 узлов до 0,2 psi), между ними густота — по прямой (оценка). За
-  клином место переходит к пелене от 1 до 1,5 его длины (`handoff`; пелена берёт 1 − handoff по возрасту / t₊ на
-  месте). Где ветер больше не поднимает пыль (тоньше `GONE`, видно на 4 км), головы нет — пыль осталась пеленой. Копии законов —
-  `pallLifted`, `pallWallTop/Shape/Fade/Mean` (сверяет `PallGlslTest`). Шум головы — в координатах самой пыли (`BlastWall.origin`, копия `pallWallOrigin`): место
-  точки за вычетом пути с ветром за фронтом (`carried`: путь воздуха за положительную фазу на месте, U·t₊/e по
-  Фридлендеру, у 15 кт на 592 м — десятки метров; по доле фазы — `carriedShare` = u·e^(1−u)); у земли воздух стоит, выше —
-  закон 1/7 пограничного слоя, вверх — 0,02–0,08 пути (Kuhl §3.4). Клубы встают там, где фронт сорвал пыль, и остаются
-  там; против уходящего фронта пыль у края идёт вверх и назад — так катится вал. Плитка шума (`TILE` наибольшего верха
-  слоя к концу фазы) — одна на подрыв: растущая с головой плитка, как и прежний шум в плитке, повёрнутой на угол вала у
-  фронта, двигала клубы по земле со скоростью фронта — пыль «расходилась от эпицентра» (жалоба 18.10,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Координаты — декартовы, без окружности в плитках и фаз шума. Луч проходит голову гуще (`pallWallSpans`: кольцо от края
-  пыли до 1,5 клина и слой высот карты, шаг — восьмая её высоты, не больше `steps` шагов сверх обычных). Свет — тот же,
-  что у пелены, а толщи к свету — по форме клина (`wall` в `fx_pall`, копия — `NukePall.dustLight`): рассеянный — по
-  меньшей толще средней головы над точкой (до верха клина здесь) и до выхода из клина вбок (на высоте z клин кончается
-  ближе к краю на (z/верх)^1,2 длины — обращение u^(5/6)); под точкой — до рельефа (земля и пожары, без пыли под картой);
-  пучки к солнцу и шару — до верха головы (не дальше 1,5 клина и его верха), шаги к точке гуще (квадратично,
-  `wallChordNear`: в густом свет гаснет на первых метрах). Прежние четыре ровных шага на 1,5 клина и верх перешагивали
-  тонкий клин, и в глубине головы стоял ровный свет. Поэтому внутри головы темно (видно на метры), верх освещён солнцем и
-  шаром, низ ночью — пожарами (`BlastWallTest.nearDustTakesWallLight`). Тень клубов — две выборки к главному свету.
-  Облако Вильсона — гауссова оболочка за фронтом (0,93 радиуса фронта, во
-  влажном воздухе, 0,15–3,5·∛(Y/15) с): проход луча — событием, как смерч (`pallWilson`, `wilsonLight`). Пелена у
-  камеры (`NukePall.tick`: звук, дальность луча) берёт и среднюю голову (`BlastWall.sigma`). Запасная пыль у
-  камеры (`NukeDust.front`, когда пелена не рисуется) — у головы `BlastWall.wall`, в её свете (`NukePall.dustColor`, ниже).
-- Видимый фронт ударной волны и марево над шаром и штормом — проход дрожания `HeatPass` (`client/nuclear/NukeHeat`,
-  `client-fx.md`): сфера `frontRadius` у подрыва, пока она дальше шара; толща сжатия — `ShockOptics.DECAY_SHARE`
-  длины положительной фазы в игре (`frontRadius − phaseEndRadius`); за краем стены пыли — нет, от 0,6 psi скачок сходит
-  на нет (подача, помечено: что делает волна, не меняет).
-- Огненный шторм (`client/nuclear/FireStorm` — модель, `FireStorms` — кадр; рисует тот же `PallPass`): источники по
-  сетке 32 блока — закон поджига сервера и звука (`FireField`) с горючестью районов из зерна подрыва (сетка — в фоне),
-  поджиг — вспышкой, как слой вспышки сервера (`Detonation.flashTicks` по свету клетки, разброс до `IGNITE_SPREAD_S`),
-  волна с приходом к клетке сбивает часть огня за `BLOW_TICKS` (`Grid.before` → `strength`, от 1,5 до 2,5 psi — до
-  половины), пламя и дым по возрасту клетки, гаснет к утру пелены (`PallField.end`); всё — от возраста
-  подрыва (перемотка, вошедший позже), пакета нет. Вода, лёд и снег, что знает клиент (свои чанки, плитки карты
-  `TerrainTiles.wet`), не горят (`FireStorm.survey`, 128 клеток за тик); где клиент не знает ничего — как под
-  эпицентром (`NukeWater.under`: подрыв над морем вдали не жжёт море); увиденная клетка остаётся увиденной. Сервер не
-  поджигает (`nuclear.fires`, `fires_per_detonation` = 0) — зоны пожаров нет (`PallField`: ни мглы над ними, ни
-  зарева), шторма и гула нет: `Detonation.fires` (настройки в миг подрыва, в пакете подрыва; без поля — да). Шторм
-  гаснет и там, где огонь потушили: `FireStorm.trust` — сверка с огнём в своих чанках, только пока огонь молод (потом
-  ванильный огонь прогорает по-своему, а шторм горит до утра), живёт со штормом и после перемотки повтора; не было
-  своих чанков в зоне за это время — доверие 1. Законы столба (снос, ширина, уровни карты) — в Java и копией в
+- Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
+  `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
+  until morning (server time of day at detonation, `Detonation.dayTime`; less than 5 minutes before sunrise means next
+  morning; afterward world clock, `PallField.daylight`: clock jumps (sleep, `/time add`, `/time set`) are time-of-day
+  shifts relative to game time (lagging-server corrections move both); recalculate morning from time of day, not hour
+  count (`/time set` sets it directly): daytime after night fades haze over a minute, otherwise next sunrise, no earlier
+  than 5 minutes after detonation; never fade later than the old deadline; world entry and replay seek compare first
+  sample to detonation time, so unseen jumps match everyone else's, without the minute fade); detonation lives on the
+  client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
+  shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
+  `pallBurn`) copies `CloudPuffs.ball` and `burn` (also camera dust light, `NukePall.dustColor`): change lighting there too.
+  Dust and dust-wall head are one layer (`nuclear/model/DustModel`; laws: “Blast-lofted dust” survey, “cinema-level
+  nuke” design §8; DESIGN-nuke §6), not two fitted curves: wave-lofted ground carried by wind behind the front along
+  ground during local positive phase (ground pressure, phase and along-ground dynamic-pressure share by burst height,
+  `HobBlast`; Gaj and Small 1991: rough-plate u*, suspension from 10 entrainment thresholds, below that saltation;
+  surface `Surface.REFERENCE`, dry loamy sand) and debris dust where houses collapse (`destroyed`, 0.6–6 psi); top during
+  wave phase is Kuhl's dusty boundary layer (h = 0.1·R^(1/6)·(U_s·τ)^(5/6): zero at front, tens of meters; U_s·τ is
+  actual decelerating-front path along its normal behind the position over dust age, `DustModel.run`/`waveTop`, not
+  arrival speed × phase: at a surface 15 kt epicenter that gave 2·10⁶ m instead of 440 and an 18 km top; under an airburst,
+  integrate ∫cos α along ground-front trace (`normalPath`; cos α = √`HobBlast.alongGround`, as for entrainment wind):
+  regular reflection's trace runs faster than the front, infinitely at epicenter; path is slant-range increment,
+  Mach region uses stem path; ground-trace path for 15 kt at 592 m gave 509 m during phase under burst instead of 189,
+  top 52 m instead of 23, and head sagged to 36 m as it left epicenter); then flash-heated ground lifts it (h_b over
+  `RISE_S` = 60 s, capped at 400·∛(Y/15) m); five size bins (3–400 µm) settle from the mixed layer, fines dilute over
+  `FINE_S` (800 s), near epicenter into stem (`STEM_*`); optical depth uses geometrical optics, k = 3Q/(2ρD) (mix:
+  108 m²/kg). Dust age is model seconds since in-game front arrival, like the head: younger than positive phase means
+  head, older means pall; transition over half a phase (`BlastWall.handoff`, `PallField.pallShare`), combined column
+  depth equals the layer depth (`PallFieldTest.headAndPallAreOneLayer`: within 20 %, at 2.5 km seam 6 %). Survey numbers
+  in `DustModelTest` (15 kt at 592 m): top at 0.25 s 6–30 m, phase end 30–70 m, after 5 s 50–150 m (Rosenblatt: 60–150 m;
+  at 1.4 km 58 m), at 1.42 km beneath layer night until minute 20, brighter by minute 30 (Fujii in Hersey), at 3.2 km
+  twilight, at 300 m clears in minutes. Fine dust hangs for hours: surface 15 kt pall visible ~1.6 h, airburst (592 m)
+  ~1.7 h (longest a kilometer from epicenter; at 3 km ~0.9 and ~1.1 h); detonation holds its pall slot that long.
+  Numbers marked `(est.)` (fitted to Hiroshima or estimated) in `DustModel`: debris dust 0.1 kg/m² and `FINE_S`
+  (together, with `HobBlast` pressure; old Kinney–Graham ×1.8 used 0.5 kg/m² and 1000 s), `STEM_*`, `RISE_S`, `TOP_MAX`,
+  `TOP_C`, heating light share 0.2, γ 5 K/km, entrainment wind over pressure phase (not dynamic-pressure phase, survey
+  §8.1), and `lifted` shaped as dynamic-pressure impulse rather than an entrainment law. No per-cell surface classes
+  (grass, city, sand) yet; `REFERENCE` everywhere. From above, pall is one blanket (18.10 complaint: golden/dark patches
+  from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
+  e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
+  Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
+  entrainment zone, Stull 1988, (est.); `topBumps` in `fx_pall`, last `pallField` parameter, 1 without noise). Light in
+  troughs equals layer-top light (depth overhead from the same layer); previously rays through billow gaps reached
+  bottom, lit by mean optical depth (and fires), producing dark/orange patches seen only from above.
+  `PallFieldTest.oldPallIsOneBlanket`: after 6–7 minutes, where mean depth ≥ 5, thinnest column ≥ 3. Wind carries dust
+  and spray from the moment lofted (`PallField.share`, age-based drift share `drift`, haze-row fourth channel;
+  `source`), not the entire pall by wind travel since detonation: otherwise downwind dust edge/head led the server
+  front (sound, shake, knockback, debris) by 100–200 blocks, upwind lagged. Pall bounds grow with drift until dust
+  settles (`PallField.extent`: tens of kilometers in an hour); terrain map does not: it covers pall at source, wall
+  head and camera (`PallField.sourceExtent`, `client-fx.md`), otherwise camera cells would coarsen to half a kilometer;
+  dust carried past the map rests on edge terrain. No dust above water (DESIGN-nuke §6, step 6): wind-stripped spray
+  behind the front has its own table row (slot rows: dust, spray, haze; `PallField.ROWS`, 6 for two detonations in
+  `PallPass`), height and law: rises to wave-crest stripping height (`WaterModel.sprayHeight`), large drops fall,
+  lowering top to 0.6 of that (`PallField.sprayTop`, (est.)), rather than rising like dust over hot ground
+  (`WaterModel.spray`: visible over 60 m, thins in 30 s, falls out in three minutes; head portion is the same lower,
+  rearward wedge, same `handoff`); water bursts also have a base surge by model laws/clock (`PallField.surge`,
+  `WaterModel.surge*`; from the water-column wall falling into it on the same clock in the mushroom volume). Pall OFF
+  hides the surge, leaves the column (mushroom LOW). Water beneath pall is channel 2 of `PallGround`; matter follows
+  its source (position minus drift, also table lookup): dust carried over water stays dust, spray carried ashore stays
+  spray; haze/glow use source water on the plume axis (no fires over water), as do ash/paper (`PallField.Water`,
+  `NukePall.water`). What is absent under pall (`PallGround.hasLand`/`hasWater`) is absent in the table: a sea burst
+  without dust/haze releases its slot once spray settles and surge fades, while over land shaders skip the water map.
+  Unknown water takes nearest known, not average (`PallGround.nearest`; epicenter is known, `NukeWater.under`): averaging
+  would spread a camera-local pond's pale spray across unknown land, and leave half-dust over sea near a shore burst.
+- Shock-wave dust wall (`client/nuclear/BlastWall` laws; rendered by pall: `pallWall*`, `pallWilson` in `pall.glsl`, head
+  in `fx_pall`, slot numbers `PallWall0/1`, `PallWilson0/1`): front itself is invisible; along-ground wind behind it
+  (`Detonation.groundWind`: Rankine–Hugoniot × √along-ground dynamic-pressure share) lofts surface matter: dust, mixed
+  with smoke over fires, spray over water. Head is pall dust's youngest, lowest, densest part (`DustModel` above), not
+  its own curve: a wedge from front to where local positive phase has ended (`length` = front(t) − `tail`(t); `tail`
+  solves in-game front arrival + local phase = t, by table nodes; phase varies by range, `HobBlast.positivePhaseSeconds`:
+  15 kt at 592 m: 0.45 s beneath burst, 0.74 s at 1 km, 1.29 s at 5 km). Dust leading edge is in-game front (`head`),
+  ring centered on actual epicenter (wind drift zero at front, `PallField.share`). No ground dust inside the fireball
+  (`underBall`: mushroom sphere, `FireballModel.groundRadius`): no head while front is inside; once out, wedge plus
+  pall handoff no longer than (front − sphere edge) / `HANDOFF_TO`, water spray band (`SPRAY_LAG`) also stops at sphere
+  edge, no pall (`PallField.pallShare`) under sphere. Dust at such a wedge's back is younger than its phase (`backAge`;
+  same for any detonation before phase ends anywhere, with wedge to epicenter): top uses layer at that age
+  (`DustModel.waveTop`: Kuhl law over front path during that age, like `Column.height`), lofted amount `lifted` at the
+  same phase share. Surface 15 kt head grows from zero height by ~0.13 s (first 2 ms front a meter ahead of sphere,
+  head a centimeter high); wedge reaches phase end by ~0.6 s, sphere lifts off ground at ~4.4 s; airburst sphere never
+  touches ground. Top behind fresh front starts at zero: first 0.1 s for 1 kt–1 Mt surface/low airbursts, no higher than
+  ~7 m (previously up to 48 km for surface 1 Mt; `BlastWallTest.headTopIsTheBoundaryLayer`: 0.1 ms grid and high airbursts,
+  1 kt at 240 m, 15 kt at 592 m; top is Kuhl law over front-normal path behind wedge end during local dust age,
+  no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known out-of-game limit: low
+  airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
+  10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
+  no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
+  Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
+  dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
+  back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
+  `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (est.). Beyond wedge, transition to
+  pall from 1 to 1.5 wedge lengths (`handoff`; pall takes 1 − handoff by local age / t₊). Where wind no longer lofts
+  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLifted`,
+  `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
+  `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
+  Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
+  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
+  against the departing front, edge dust goes up/back, rolling the wall. Noise tile (`TILE` of maximum phase-end layer
+  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
+  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
+  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
+  Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
+  step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
+  (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge
+  top) or sideways to wedge exit (at height z, wedge ends nearer edge by (z/top)^1.2 of length, inverse of u^(5/6));
+  below point, to terrain (ground/fires, no below-map dust); sun/fireball beams to head top (within 1.5 wedges and its
+  top), steps denser near point (quadratic, `wallChordNear`: dense dust extinguishes light in first meters). Old four
+  even steps over 1.5 wedges/top skipped thin wedge, leaving uniform light deep inside. Thus head interior is dark
+  (meters of visibility), top lit by sun/fireball, bottom by fires at night (`BlastWallTest.nearDustTakesWallLight`).
+  Billow shadow uses two samples toward main light. Wilson cloud is a Gaussian shell behind front (0.93 front radius,
+  humid air, 0.15–3.5·∛(Y/15) s): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
+  (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`). Fallback camera dust (`NukeDust.front`,
+  when pall is not drawn) uses head `BlastWall.wall`, in its light (`NukePall.dustColor`, below).
+- Visible shock front and shimmer over sphere/storm use distortion pass `HeatPass` (`client/nuclear/NukeHeat`,
+  `client-fx.md`): sphere `frontRadius` while beyond the fireball; compression thickness `ShockOptics.DECAY_SHARE` of
+  in-game positive-phase length (`frontRadius − phaseEndRadius`); absent beyond dust-wall edge, shock fades from
+  0.6 psi (presentation, marked: changes no wave consequences).
+- Firestorm (`client/nuclear/FireStorm` model, `FireStorms` frame; same `PallPass` renders): sources on 32-block grid,
+  server/sound ignition law (`FireField`), district flammability from detonation seed (grid in background); flash
+  ignition like server flash layer (`Detonation.flashTicks` by cell light, spread to `IGNITE_SPREAD_S`); wave arrival
+  blows out some cell fire over `BLOW_TICKS` (`Grid.before` → `strength`, from 1.5 to 2.5 psi, up to half); flame/smoke
+  by cell age, fades by pall morning (`PallField.end`); all from detonation age (seek, late entry), no packet. Known
+  water/ice/snow (client chunks, `TerrainTiles.wet` map tiles) do not burn (`FireStorm.survey`, 128 cells/tick); unknown
+  cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells remain seen.
+  Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
+  storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes). Storm
+  also fades where fire was extinguished: `FireStorm.trust` checks local-chunk fire only while young (later vanilla
+  fire burns out independently, storm lasts until morning); lives with storm, including after replay seek; no local
+  zone chunks in this period means trust 1. Column laws (drift, width, map levels) are in Java and copied in
   `pall.glsl` (`PallGlslTest`).
 
-## Подводные камни
-- Дальняя плоскость отсечения — `renderDistance × 4` блоков: шар и небо дальше рисуются «сжатыми» (`NukeRenderer`).
-- Таблица грибов хранит эпицентр как слот пелены — (x, z, земля по y): шейдер берёт `t0.xzy`. Прочитанный как xyz, гриб
-  стоял под землёй, и его не было видно.
-- Свет гриба: толща к солнцу по среднему полю без клубов делает шапку плоским шаром (мягкий край вдоль поверхности — десятки
-  толщ) — ближние 0,75 плитки клубов — по самим клубам (`mushSunTau`), дальше среднее поле. Толща к глазу для света неба
-  сбоку — пройденная лучом (`gTauEye`), а не среднее поле: оно закрывало бы видимый край и чернило середину шапки. Пустые
-  шаги луча — со сдвигом кадра: без него лучи попадают в одни места каждый кадр, и зерно на краях клубов не усредняется.
-- Пожары под грибом — по карте огня шторма (`FireStorm.meanFlame`, доверие `gate`), не по таблице мглы: таблица воды
-  не знает, и над морем низ шапки днём выходил рыжим. Свет пишет `MushroomField.fire` после света кадра (день и ночь).
-- Гриб вдали тает в дымке воздуха (`pallAir` в `pall.glsl`, как `Sight.Air` у дальнего): доля его света и
-  непрозрачности, а не цвет тумана — в дождь гриб в 10 км не стоит чётким силуэтом. Дымка редеет с высотой
-  (аэрозоль — масштаб 1,2 км, чистый воздух — 8 км; дальность видимости — у моря): ровная по всей высоте, она прятала
-  шапку 2 кт в 5 км над холмом в 2,6 км на две трети, и та стояла бледным полупрозрачным шаром. Шапка — капли и NO₂,
-  без часов цвета и без своего цвета (`MushroomModel.capDrops`/`capNo2`, `MushroomField.capMatter`; числа и источники —
-  DESIGN-nuke §1.3): капли рассеивают (ослабление из водности, асимметрия капель), NO₂ поглощает по каналам
-  (`NO2_CROSS` × молекулы подрыва на объём шапки), грунт — поглощением толстого слоя цвета `CAP_DUSTY` (серая, только
-  если шар касался земли не над водой, `MushroomModel.soil`); дельта-Эддингтон, как у пелены: в тексель 4 — σ' по
-  зелёному (одна толща на луч), в тексель 5 — ω' по каналам и g'. Снаружи шапка белеет, когда NO₂ редеет с ростом
-  шапки; на просвет и внутри — бурая: поглощение копится по многократному пути (`MushroomFieldTest`). Стенки ложбин
-  (R∞ в `mushAt`) — замыкание полусферического среднего (`mushWallR`, `MushroomField.wallReflectance`, Toon et al.
-  1989): у Эддингтона при ω' < 1/(4 − 3g') R∞ ниже нуля. Свежее кольцо снаружи — охра (оттенок 35° у 15 кт), насквозь —
-  красно-бурое (17°): в отражённом свете красно-бурым оно не бывает (`MushroomFieldTest`). Пар «водяного» подрыва —
-  вещество в смеси с шапкой: ω' — среднее по долям ослабления (пару — `STEAM_SHARE` × вода под подрывом × доля кольца,
-  его ω' — по цвету `STEAM`), а не смешение в цвете слоя на экране: обращение отражения Эддингтона, зажатого в нуль,
-  поднимало в первый кадр пара каждый канал с ω' < 0,38 до 0,38 (свечение края — до ×0,77).
-  Жизнь гриба (`MushroomModel.lifeSeconds`, её же берут `CloudPuffs.lifeSeconds`, подрыв на клиенте и таблица вала
-  `BlastWall`) — стабилизация и рассеяние турбулентностью, (R²/(g·ε))^⅓ по радиусу шапки (Ричардсон — Обухов, ε —
-  оценка): растёт с мощностью, а не с тем, как медленно облако поднималось (4 стабилизации давали 1 кт 45 минут, больше
-  15 кт и 1 Мт). Вещество ножки и юбки — пыль места подрыва, цвет толстого слоя `NukePall.DUST` (`MushroomField.DUST`): ножку питает только пыль из слоя волны (`StemDust`), прежний свой цвет «пыль с дымом» был серее ковра под ней. Земля, которую ножка, юбка и низ шапки видят внизу, — верх этого слоя (`MushroomField.groundUnder`, тексель 18.yzw: слой толщи τ из `PallField.tau` в 2 радиусах ножки над землёй, от земли к R∞ пыли как e^(−2kτ)), а не голая земля 0,2; солнце на пелене под шапкой — сквозь её карту тени (`pallSunAt`). Серая ножка днём — тень шапки: с солнцем сбоку её освещённая сторона — бурая, как ковёр. Подсос у основания ножки (тексель 19, `MushroomField.foot`, `mushFoot*` в `mushroom.glsl` ↔ `MushroomField.footWidth/footShare/footDensity`, `MushroomGlslTest.footMatchesJava`): ветер к ножке у земли несёт слой пыли волны в неё — течение в углу «земля — стенка» (ψ = x·z), полоса воздуха слоя за стенкой ножки на высоте h — top/√(1 + (h/top)²), top — верх слоя у стенки (`PallField.footLayer`, среднее по четырём сторонам); пыль в ней — пыль слоя (воздух несёт её, не разбавляя; доля подсоса `DustModel.stemShare` у стенки — ширина полосы, а не густота): слой и подсос у стенки вместе — σ·1/(1 + (h/top)²), без ступени на верху ковра (подсос — за вычетом того, что слой держит сам, `pallProfile`); полоса от верха ковра сужается к стенке до высоты слияния (`MushroomField.footMerge`, тексель 11.w: где σ/(1 + (h/top)²) сравнивается с ножкой — выше пыль ковра в ножке перемешана, её несёт `StemDust`), выше фронта пыли подсоса (`stemRise` с прихода фронта к стенке + `DustModel.stemFrom`) пыли ковра нет. Обрезать полосу по густоте нельзя: в толстой пыли любой спад густоты виден резким краем там, где толща полосы падает до единицы, — уступ «гильзой» с ровным верхом (первый вариант, кадры песочницы); сужение к стенке сводит поверхность подсоса в поверхность ножки. Ножка и подсос — одна пыль (`mushMean`, `mushDense`: где подсос гуще — он). Источник света у входящей пыли — общий с ковром (`pallSource` в `fx_pall`, материал и тени клубов через `slot`), считается раз в кадр предпроходом `fx_pall_foot`: цилиндрическая таблица 64 азимута × 16 радиусов × 32 высоты в RGBA32F (сырой свет HDR, не цвет экрана). Две билинейные выборки интерполируют высоту; азимут замкнут повтором первого столбца, радиус задан от 0,6 стенки до наружного края клубов. Неизменные параметры гриба читаются из общей текстуры (`mushLoad`), а не копируются в частный массив `gMush` каждого пикселя. Основной проход гриба не вызывает `pallSource` и не держит его регистры: только источник из таблицы; сама движущаяся густота и поверхность — прежней подробности. Свет фильтруется по размеру узла таблицы. Программа предпрохода включает тот же `fx_pall.fsh` через стандартный именной относительный `#moj_import` (`incoming:` обязателен: без него NeoForge ищет в minecraft). Поднятая пыль входит и в местную густоту, и в столб над точкой/весь слой: `FootColumn` интегрирует положительную часть `footDensity` по замкнутой первообразной (границы положительных участков — бисекция при фронте внутри ковра), 64 высоты в текселях 20–35 и 128 радиусов в 36–67. Для отступа от стенки на CPU находится высота края сужающейся полосы, столб выше неё вычитается из столба над точкой и всего слоя: поверхность холма не затеняется пылью, которой над ней нет (`FootColumnTest`). На GPU — интерполяция и радиальная доля стенки. Без этого купол брал полное небо и белел сбоку; до начала сужения полосы — свет ковра, к высоте слияния — плавно свет ножки (`mushFootLightShare`). Одинаковой плотности недостаточно для стыка: отдельное освещение ножки делало на ковре ровный сизый колокол. Узор основной ножки — прежний `mushLobes`, без переотображения; у подсоса — масштаб клубов ковра (`mushInflowLobes`). Сам ковёр у основания и его поднятая пыль берут одну карту движения (`carpetFlow`, `carpetUv`): внутрь у земли, затем вверх; путь — `stemRise`, слабая закрутка и геометрия поворота — подача, не замеры. Два перекрывающихся отрезка пути со сдвигом в полцикла (Vlachos, Valve, Water Flow 2010) не дают узору растянуться в гладкие дуги: сдвиг ограничен третью плитки клубов, начало фаз смещено плавным шумом по месту, чтобы полоса не пульсировала вся разом. Влияние (`mushFootInfluence`) — снаружи 0,6 радиуса ножки, не дальше двух высот ковра за стенкой и не выше слияния; дальняя мгла и внутренние струи ножки этой картой не меняются. Подсос — у стенки и наружу (`mushFootWall`, от 0,6 радиуса ножки): внутри ножки пыль своя. Первый вариант, где подсос заполнял всю ножку густотой ковра, а поворот шёл по всей ножке, дал на кадрах кольцо поперёк ножки (фронт пыли подсоса внутри) и струи «ёлочкой» над ним; `StemFootTest.stemAwayFromTheFootIsAsBefore` держит: выше слияния и внутри ножки поле и узор — как без подсоса. Рамка берёт полосу во всю ширину (`MushroomField.reach`); шаг по пустому — настоящую суженную полосу (`mushFootBandAt`), выше слияния — прежний зазор ножки. Оценка наклона ниже слияния учитывает обе производные: ширины ≤0,385 и сужения ≤1,5/(merge−start). Цилиндр притока проверяется один раз на пиксель; внутри него одна карта потока на слот общая для всех выборок клубов и их теней, снаружи — прежние координаты. ⚠ Угол плоский (радиус ножки — того же порядка, что слой), убывание доли с высотой — оценка; внутри ножки у оси верх ковра остаётся (там ковёр гуще, чем у стенки, но ножка поперёк непрозрачна). Ступень и пустоту между ковром и ножкой ловит `StemFootTest` (по линии тока притока — без скачков и не реже половины ковра или ножки; поверхность пыли над ковром — раструб за стенкой, сужается вверх). Струи ножки (тексель 11.x) идут вверх долей подъёма облака (`MushroomModel.stemRise`) и встают с ним;
-  верх дыма шторма под грибом (11.y) — `PallField.hazeTop`, до него встают и столбы шторма в пелене (`FireStorms.slot`).
-  Дождь и гроза по высоте не редеют (капли и облака): шапку над ними в дождь видно едва, в грозу — нет. Луч пелены и гриба
-  дальше 12 толщ пыли не идёт (за ними видно меньше 10⁻⁵) — по толще вдоль самого луча (`pallClip` в `fx_pall`): пыль
-  у глаза (`PallFrame.w`) редеет с высотой как слой, вертикальные толщи над глазом и под ним — `PallEyeTau` (пелена и
-  средняя голова, `NukePall.tick`), по ним и наклону луча; луч кончается, где толща слоя дошла до 12, а не дошёл —
-  не обрывается; и не ближе половины плитки клубов пелены: обрыв считает среднюю толщу, а глаз бывает в просвете клубов
-  (до ячейки шума — четверть плитки). В слое пыли волны у 15 кт в 1,4 км видно на метры, обрыв по средней — 20 блоков, и
-  луч, оборванный в просвете, не доходил до его стенок: сквозь толщу в десятки было видно небо (кадры `film`). Прежний обрыв на 12/σ у глаза срезал шапку и ножку целиком, когда зритель в пыли (видео хоста 18.10:
-  гриб пропал на 17 с, хотя над ним пыль тонкая). Грибы на луче обрыва не знают — их кончает пропускание. Выключенная
-  пелена (OFF) луч не режет (σ и толщи — нули), иначе гриб пропадал бы за невидимой пылью.
-- Голова стены пыли стоит на карте рельефа пелены (`PallGround`, как пол слоя), а не на высоте эпицентра (иначе шла бы
-  одной плоскостью — сквозь холмы и над долинами): карта грубее мира, поэтому под неё голова уходит на четверть-половину
-  своей высоты — в низинах под картой она не висит.
-- Обломки снесённого — косметика клиента: сервер шлёт снесённые места чанка (`S2C.NukeDebris`) только игрокам, которые
-  видят чанк, в тике подмены руин; клиент срывает куски, когда до места дошёл фронт его часов (`NukeDust.debris`:
-  задержка до `Fragments.DELAY_MAX`; руины позже фронта больше чем на секунду — без обломков: ветра там уже нет). Куски
-  несёт ветер волны в месте, откуда их сорвало (`BlastGust`: Фридлендер с `blastWind` и положительной фазой места — тот
-  же путь воздуха, что у пыли головы, `BlastWall.carriedShare`), а пыль из проломов кладки (масса — за все места,
-  что представляет место выборки, `S2C.NukeDebris.weight`) — полосой по ветру клубами слоя эффектов (`BlastDust`:
-  кучками по клеткам 4 блока до 48 блоков от камеры, дальше — одной на чанк, до `NukeDust.NEAR`; тает в слое Kuhl). При
-  игровой волне (`wave_speed` 0,2) фронт у подрыва медленнее настоящего ветра за ним: ветер не быстрее фронта в игре, путь
-  воздуха не дальше фронта, впереди фронта ветра нет (`BlastGustTest.piecesStayBehindTheFront`: без предела скорости клок
-  листвы у 600 м за тик набирал 7 блоков/тик и проскакивал фронт). Часы ветра — по номеру подрыва (`ClientNuclear.ticksOf`):
-  вход в мир и перемотка заменяют запись подрыва, а куски в полёте остаются. Сорванное с земли — только дёрн, подстилка и
-  листва (`NukeDust.litter`), лёгкими пластинами; с камня, песка и снега кусков нет. Полос пыли у подрыва — до 256
-  (`BlastDust.MAX_STREAKS`, ближняя вытесняет дальнюю). Стволы, которые сервер валит, — тоже «снесённые
-  места» (бревно переезжает), а пыли от дерева нет: пыль — только у кладки (иначе лес давал тонны пыли шарами, кадры
-  `wall`); природный грунт и скала (гребни и уступы, что срывает волна, `NukeDust.ground`) — пыль самой пелены (вынос с
-  земли), иначе тонны пыли полосами с камерой внутри (кадры `film`). Полоса уходит в слой, когда слой её перерастает
-  (`BlastDust.apart`: доля σ²/(σ² + σ_слоя²)), а не раздувается до него: клубы слоя внутри головы стены светятся небом без
-  её тени, и раздутая полоса ложилась ровной вуалью на весь кадр. Из перемотки повтора обломки не рождаются (`Replay.event`).
-- Вода (`NukeWater`, `BurstWater`, `fx/layer/WaterDecal`, модель `WaterModel`): над водой пыли нет — юбка гриба над
-  водой (вода под эпицентром, `BurstWater.under`) белеет, голова стены над водой (доля воды под точкой по карте
-  `PallGround`) — брызги: ниже (высота срыва гребней), своей густоты (`WaterModel.spray`), пыль
-  у камеры (`NukeDust.front`) — только над сушей; над водой у камеры водяную пыль рисует та же голова объёмом, частицы
-  `NukeWater.front` — капли с гребней (клубы водяной пыли — запасные, гладкие, когда пелена голову не рисует,
-  `NukePall.drawsHead`: клуб шире экрана у глаза был второй водяной пылью поверх объёма и лесенкой квадратов). Голова
-  брызг и брызги у камеры встают позади края пыли (самого фронта) на путь головы за последние `WaterModel.SPRAY_LAG`
-  (0,5 с; у огненного шара на земле — не дальше его края; `BlastWall.slot`): брызги на самом фронте закрывали от
-  зрителя у воды тёмное кольцо, а оно и есть главный признак волны на воде.
-  Вода под эпицентром (чанк клиента, плитка карты, иначе — гладь ровно на уровне моря 63) решается заново, пока подрыв
-  на клиенте моложе 30 своих тиков (пришедший прошлым — при входе в мир или из перемотки повтора — 100; `NukeWater.settles`), и дальше не меняется: столб
-  не появляется и не пропадает посреди подрыва. Срок — от `Active.age` (прихода пакета), а не от подрыва: у вошедшего
-  посреди подрыва `seconds` с первого тика больше срока, и вода застывала бы до прихода чанка эпицентра; после перемотки
-  `BurstWater` — тот же объект (`Active(Active, …)`). `groundY` у суши и карты высот — первый воздух над землёй (целое),
-  а у прицела, бинокля, ракеты и B-2 (луч с жидкостью) — сама гладь, 62,889 у моря: блок поверхности —
-  `NukeWater.surfaceBlock` (`ceil − 1`), а не `floor − 1` (блок под верхним блоком воды — мелкая вода выходила бы сушей
-  без столба и волны, а догадка «море» не срабатывала). `BlastWall.humidity` берёт тот же блок (спрашивала воздух, и
-  облако Вильсона над водой зависело от биома). `Level.getSeaLevel` в 1.21.1
-  устарел (всегда 63) — `WaterDecal.SEA_LEVEL`.
-- Пыль и куски поверхности берут верх карты высот `MOTION_BLOCKING`: в измерении с потолком (Незер) это потолок —
-  там пыль стоит на высоте эпицентра, а кусков поверхности нет; над пустотой (Энд) рельефа нет.
-- Пакет подрыва может прийти на тик раньше, чем часы клиента дойдут до `gameTime` подрыва — время не бывает < 0.
-- Следы вспышки рисует `AddSectionGeometryEvent`: событие — в потоке игры, а рисователь — в потоках сборки секций после
-  всех блоков; всё, что он читает (метки, ступени соседних чанков), снимается в событии (`FlashMarksMesh.Section`).
-  `QuadLighter.process` умножает цвет вершин квадрата (`readExistingColor`): затемнение — цветом вершин копии квадрата
-  модели. Гарь — те же места вершин, что у модели блока, в том же слое после блоков (`LEQUAL` глубины), без сдвига:
-  сдвиг давал бы мерцание вдали и щели на стыках. Силуэт — полосы клеток поверх гари на 1/256 блока впереди грани:
-  полосы в местах вершин модели дрались бы за глубину (интерполяция по разным треугольникам расходится в последних
-  битах — светлые строки через всю грань, кадры сценария `flash`); дальше ~50 блоков зазор тонет в точности глубины, и
-  силуэт сливается с гарью. Ступень в углах сглаживается по соседям в плоскости грани,
-  поэтому метки у края чанка перестраивают и секции соседа (`FlashMarksClient.dirty`).
-- Метки чанка — данные с хешем блока: блок на месте сменился — метка уходит. Сервер снимает её у самого места по
-  `BlockEvent.NeighborNotifyEvent` (`updateNeighborsAt`: `setBlock` с флагом 1, `/setblock`, `/fill`, поршни, взрыв,
-  руки игрока; приходит и для соседей, что не менялись, — снимается только метка, которую блок на месте больше не
-  держит, `FlashChar.holds`: материал и хеш), пакет чанка — один в конце тика мира (`FlashSync.onLevelTick`, чанки — в
-  несохраняемом attachment мира `FLASH_PENDING`). Иначе блок того же типа, поставленный на место сломанного, вернул бы
-  метку: хеш у него тот же. Смену без оповещения соседей (`setBlock` без флага 1 — так блоки двигают некоторые моды)
-  событие не видит: метку снимут следующая запись или отправка чанка (`FlashMarks.pruned`), если до них на месте
-  не встал блок того же типа. На клиенте меш проверяет
-  тот же хеш, пока пакета нет. Хеш блока — 6 бит: все 32 бита метки заняты.
-- Игровые часы клиента прыгают назад, когда сервер догоняет отставание: время картинки подрыва — свои тики клиента
-  от прихода пакета (`ClientNuclear.Active`), а не `level.getGameTime()`.
-- Время суток подрыва — `Detonation.dayTime` от сервера (`level.getDayTime()` в миг подрыва, сохраняется с подрывом),
-  а не по нынешним часам клиента: у вошедшего позже (вход, смена измерения) после сна вскоре после ночного удара
-  подрыв по нынешним часам выходил за минуты до восхода, и мгла ждала следующего утра, а у остальных уже погасла.
-  Подрыв из сохранения или повтора прежней сборки его не знает (`NO_DAY_TIME`) — тогда по нынешним часам, как раньше.
-  Потоковый кодек подрыва (`Detonation.STREAM_CODEC`, поля выпуска 3.1.0) заморожен: новое поле подрыва — в `CODEC`
-  (сохранение, `optionalFieldOf`) и в конец каждого пакета с подрывом (`NukeDetonation`, `NukeSync`; replay.md).
-- В сценарии клиента (`incoming.scenario`, сервер в той же JVM) ветер и сид подрыва — по номеру подрыва
-  (`NuclearWarhead.SCENARIO`), а не из `level.random`: кадры пелены, гриба и шлейфа сравнимы от прогона к прогону.
-- Пыль у камеры рисует пелена объёмом, как голову стены вдали (`NukePall.drawsHead`: качество не OFF, шейдеры и шум в
-  порядке, подрыв среди двух слотов пелены — ближайших по краю пелены или головы стены, `NukePall.outside`: по одной
-  пелене голова третьего подрыва у камеры уступала бы слот подрывам, в чьей мгле камера); частицы `NukeDust` у камеры
-  над сушей тогда — только клочья мусора, куски снесённого и сорванное с земли (над водой — так же, капли с гребней — `NukeWater.front`). Клубы-квадраты
-  в шаге-двух от глаза и шире кадра ложились на объём второй пылью: пиксели картинки лестницей во весь экран (частица
-  вблизи — ближайшим пикселем), тёмные шары над верхом стены, а над морем — клубы в 340 м над водой, выше верха головы.
-  Запасная пыль у камеры, когда пелена не рисуется (`NukeDust`: клубы у головы стены, пыль из проломов, клубы, пока голова
-  у игрока, — только в ней, по средней густоте в месте клуба, `BlastWall.sigma`; все гладкие, `Fx.Spec.smooth`) — цветом
-  стены в своём месте (`NukePall.dustColor` → `dustLight`: копия света `wall` в `fx_pall` по средней голове — тот же
-  свет кадра `NukePall.sky`, те же толщи к верху, краю, солнцу и шару, `PallLight.diffuse`; фаза пучков — средняя; тёмные
-  клубы и дым — его доля), без карты освещения (`Fx.Spec.prelit`, под крышей темнее по свету неба и блоков): ночью карта
-  освещения тёмная, а стена — в отсвете пожаров, и клубы у камеры (2–6 % высоты кадра) лежали на оранжевой стене почти
-  чёрными пятнами (трейлер, ночной план над городом в 2 км). Свой свет клубов (прежний `CloudPuffs.wallColor`: отсвет
-  шара без тени головы) днём красил их оранжевым на серо-бурой стене в тени от шара — свет пыли и стены один. Пелена
-  на весь экран (`NukeDust.veil`) — от средней головы у глаза (`NukePall.tick`), цветом стены там и только при пелене OFF
-  (или когда пелена не рисуется — сломался шум): иначе голову у глаза рисует сама пелена, и экран темнел бы дважды.
-  Голова держит пелену, пока она у глаза (`veilWanted` каждого тика), и та гаснет, только когда голова ушла. Прежняя — по давлению в миг прихода фронта, не
-  слабее 0,2 — темнила экран и там, куда доходит только звук (15 кт за 10 км, видео хоста). Клочья мусора
-  и куски — по свету мира: мелкие и непрозрачные, против стены они и должны быть тёмными.
-- Настроек пожаров сервера (`fires`, `fires_per_detonation`) клиент не знает: огонь вдали — модель `FireField`
-  (вероятность как у сервера: поджиг вспышкой, `Detonation.flashTicks`, волна с приходом к земле — по наклонной от точки
-  подрыва — сбивает от 2 psi половину; срез — счётом сервера по 20 000 пожаров, что останутся после волны: у 15 кт в
-  воздухе зажжено 40 000 до ~146 блоков). Руин модель не знает — известный её предел: огонь слоя в счёте, который руины
-  гасят (завал, обвал), уходит из счёта сервера, и руины дальше кольца, где слой упёрся в предел, ставят свои пожары —
-  в городе после волны у сервера горит и за последним кольцом модели, а у модели там пусто; рядом с игроком это
-  поправляют свои чанки, вдали — нет. В своих чанках — настоящие блоки огня (`FireWatch`), и модель вдали верится в меру того, что горит в своих чанках против модели там же (`NukeAfter.trust`, окно — от последнего поджига);
-  пока своих чанков с моделью мало — как есть. Сервер ставит слой вспышки сперва в чанках игроков, и счётчик пожаров
-  тратится там: модель вдали — без того, что уже горит в своих чанках (в сценарии `nuke` в 2 км у зрителя — 8–11 тыс.
-  блоков огня). Всё горящее — от возраста подрыва: вторичные взрывы — расписание из зерна от прихода волны, после
-  перемотки повтора новый `Active` пропускает прошлые.
-- Паника жителя — память `WALK_TARGET` (идёт мозг), не занятие `PANIC`: оно зовёт големов. Цель бегства у мобов с
-  мозгом кладёт место в память и снимает его, только если там всё ещё её место.
-- Цель бегства (приоритет −1, `MOVE`) перебивает `SitWhenOrderedToGoal`: свои (прирученные, чьи-то — `OwnableEntity`,
-  на поводке, с именем) не бегут, иначе сидящий волк убегал на сотни блоков. У запертого моба (загон, ферма, пруд)
-  навигация всегда `isDone()`: новый путь по ней — каждый тик цели (до 8 мест и полный поиск пути), поэтому
-  поиск не чаще `MIN_REPATH`, а путь, что никуда не уводит, откладывает следующий вдвое (GameTest `nuke_panic`: корова
-  в загоне 1×1 — 3–6 поисков за панику, без отсрочки — 33). Волна в укрытии не пугает.
-- Место бегства — своё (`MobPanic.place`), не ванильный `DefaultRandomPos`: высота наугад (годна одна из 15), места вбок
-  и под ногами — пустой поиск и путь в шаг считались загоном, и моб стоял 4–8 с (GameTest падал в 4 из 30 прогонов).
-  Пустой поиск не всегда загон: моб в воздухе (только что появился, подброшен волной) пути по земле не получит —
-  он ждёт земли, а не уходит в отсрочку. У летунов без своей проверки (попугай, тихоня) «устойчива» сама твёрдая клетка,
-  закрытая для пути, — им место даёт запасной `LandRandomPos` (поднимает место из твёрдого наверх).
-- `FireWatch`: `maybeHas` у глобальной палитры (подробный город) всегда да, а малая помнит сгоревший огонь — полный
-  счёт секции (`PalettedContainer.count`, карта на 4096 мест) по 16 чанков за тик стоил в сценарии 0,7 мс за тик над
-  горящей местностью и 3,2 мс в городе (6 секций с глобальной палитрой на чанк); поэтому выборка каждого 8-го блока под
-  бюджетом 0,1 мс: 0,07 и 0,13 мс за тик (медиана по 20 тикам; одиночный тик в 4–8 мс — простой потока на общей машине
-  во время сборки мусора, у прежнего счёта — до 17 мс). Мир в статике — сброс, когда ничего не горит, и при смене мира
-  (иначе держал бы старый `ClientLevel`). Цена — строка `SCENARIO nuke-sound … watch` (с `INCOMING_CITY` — в подробном
-  городе, и рядом строка `SCENARIO city old-scan` — прежний счёт на тех же чанках).
-- Тексель 12 таблицы грибов (`MushroomField`) пишут двое: `frame` — часы кипения шапки в w, `fire` после света кадра —
-  свет пожаров в rgb, w оставляя. Часы — функция возраста подрыва (`MushroomModel.churn`, таблица на подрыв), не сумма
-  по кадрам: повтор после перемотки и вход позже дают ту же шапку.
-- Звук подрыва слышит камера (слушатель движка), а ухо и тело — у игрока: камера снаряда облетает место взрыва в
-  32–42 блоках, игрок стоит за километры. `NukeSounds.Schedule` встречает фронт дважды (`FrontMeeting`): у камеры —
-  звуки волны, эхо и шум ветра (`arrive`), пыль у глаза, у глаз игрока — слух и наклон тела (`hit`), по его давлению,
-  пути и фазе. Камера на игроке или рядом (по расстоянию до взрыва — в пределах пути фронта за тик) встречает фронт по
-  телу, в тот же тик — иначе на тик раньше удар по ушам глушил бы звуки своей волны. Встреча — только когда фронт
-  прошёл место в этот тик (`FrontMeeting.passed`: был до него или место шло к взрыву не дальше `JUMP` за тик —
-  навстречу фронту место пересекает его между тиками): по одному «фронт дальше места» камера, перенесённая за фронт
-  (облёт следующего попадания, возврат к телу), слышала бы удар заново. У наблюдателя тело — камера: глазами другой сущности
-  `LocalPlayer` у клиента стоит, где начал смотреть (сервер двигает только `ServerPlayer`). Что касается тела, — в
-  `hit`, а не по месту камеры.
-- Путь пыли головы с ветром за фронтом (`BlastWall.carriedShare`, копия `pallWallCarried`) — интеграл Фридлендера
-  u·e^(1−u) и за положительной фазой: в фазе разрежения ветер обратный (G&D §3.05), пыль возвращается к эпицентру
-  (полный импульс волны — ноль). Тот же Фридлендер — у шума ветра за фронтом (`BlastPulse.friedlander`).
-- Пыль ножки гриба — `nuclear/model/StemDust`: то, что подсос забрал из слоя пыли (`DustModel.Column.stem`, с
-  `stemFrom`: у шара на земле — сразу, у воздушного — через `STEM_FROM_S`·∛(Y/15) с), поднимается с воздухом ножки
-  (`MushroomModel.stemRise`); у воздушного подрыва пыльная ножка может не догнать шапку (NRC 1985, с. 22), у наземного —
-  след шара до шапки. Таблица на подрыв считается в фоне (`StemDust.ready`: первые кадры — без пыли).
+## Pitfalls
+- Far clip plane is `renderDistance × 4` blocks: sphere/sky beyond it render “compressed” (`NukeRenderer`).
+- Mushroom table stores epicenter like pall slot, (x, z, ground y); shader reads `t0.xzy`. Reading xyz placed the mushroom
+  underground, invisible.
+- Mushroom light: sun optical depth from mean field without billows makes the cap a flat sphere (soft edge along
+  surface spans tens of optical depths); nearest 0.75 billow tile uses actual billows (`mushSunTau`), mean field beyond.
+  Eye optical depth for side skylight is ray-traversed (`gTauEye`), not mean field, which would hide visible edge and
+  blacken cap center. Empty ray steps use frame jitter; without it rays sample the same places every frame and billow
+  edge grain never averages out.
+- Fires under mushroom come from storm fire map (`FireStorm.meanFlame`, trust `gate`), not haze table: it knows no water
+  and made daytime cap underside orange over sea. `MushroomField.fire` writes light after frame light (day/night).
+- Distant mushroom fades into air haze (`pallAir` in `pall.glsl`, like distant `Sight.Air`): share of its light/opacity,
+  not fog color — in rain, a mushroom 10 km away is not a crisp silhouette. Haze thins with altitude (aerosol scale
+  1.2 km, clean air 8 km; visibility at sea level): uniform-height haze hid two thirds of a 2 kt cap 5 km high over a
+  hill 2.6 km away, leaving a pale translucent sphere. Cap is droplets and NO₂, no color clock or own color
+  (`MushroomModel.capDrops`/`capNo2`, `MushroomField.capMatter`; numbers/sources DESIGN-nuke §1.3): droplets scatter
+  (extinction from water content, droplet asymmetry), NO₂ absorbs per channel (`NO2_CROSS` × detonation molecules per
+  cap volume), soil contributes thick-layer `CAP_DUSTY` color absorption (gray, only if sphere touched ground not over
+  water, `MushroomModel.soil`); delta-Eddington like pall: texel 4 σ' in green (one ray depth), texel 5 per-channel ω'
+  and g'. Cap whitens outside as NO₂ dilutes with growth; transmitted light/interior is brown: absorption accumulates
+  through multiple scattering (`MushroomFieldTest`). Trough walls (R∞ in `mushAt`) use hemispheric-mean closure
+  (`mushWallR`, `MushroomField.wallReflectance`, Toon et al. 1989): Eddington gives R∞ below zero at ω' < 1/(4 − 3g').
+  Fresh ring outside is ochre (35° hue for 15 kt), transmitted is reddish brown (17°); reflected light is never reddish
+  brown (`MushroomFieldTest`). Water-burst steam is matter mixed with cap: ω' averaged by extinction shares (steam
+  `STEAM_SHARE` × water under burst × ring share, its ω' from `STEAM` color), not screen-layer color blending:
+  inverting zero-clamped Eddington reflectance raised every channel with ω' < 0.38 to 0.38 on steam's first frame
+  (edge glow to ×0.77). Mushroom lifetime (`MushroomModel.lifeSeconds`, also `CloudPuffs.lifeSeconds`, client detonation
+  and `BlastWall` table) is stabilization and turbulent dispersion, (R²/(g·ε))^⅓ by cap radius (Richardson–Obukhov,
+  ε (est.)): grows with yield, not slow rise (4 stabilization times gave 1 kt 45 minutes, longer than 15 kt and
+  1 Mt). Stem/skirt matter is local dust, thick-layer color `NukePall.DUST` (`MushroomField.DUST`): stem fed only by wave
+  dust (`StemDust`), its old “dust with smoke” color was grayer than the carpet beneath. Ground seen by stem, skirt and
+  cap underside is this layer's top (`MushroomField.groundUnder`, texel 18.yzw: layer optical depth τ from
+  `PallField.tau` at 2 stem radii above ground, from ground to dust R∞ as e^(−2kτ)), not bare ground 0.2; sunlight on
+  pall beneath cap passes through its shadow map (`pallSunAt`). Gray stem by day is cap shadow: side-lit face is brown
+  like the carpet. Inflow at stem foot (texel 19, `MushroomField.foot`, `mushFoot*` in `mushroom.glsl` ↔
+  `MushroomField.footWidth/footShare/footDensity`, `MushroomGlslTest.footMatchesJava`): ground-level wind toward stem
+  carries wave dust into it, flow in a “ground–wall” corner (ψ = x·z); layer-air band outside stem wall at height h is
+  top/√(1 + (h/top)²), top = layer top at wall (`PallField.footLayer`, mean of four sides); dust is layer dust (air
+  carries it without dilution; inflow share `DustModel.stemShare` at wall is band width, not density): layer plus
+  inflow at wall is σ·1/(1 + (h/top)²), no step at carpet top (inflow subtracts what the layer already holds,
+  `pallProfile`); above carpet top, band tapers to wall by merge height (`MushroomField.footMerge`, texel 11.w: where
+  σ/(1 + (h/top)²) equals stem density — above, carpet dust mixes into stem and `StemDust` carries it); no carpet dust
+  above inflow dust front (`stemRise` from front arrival at wall + `DustModel.stemFrom`). Do not truncate band by
+  density: in thick dust any density fade shows a sharp edge where band depth reaches one, a flat-topped “cartridge
+  case” ledge (first version, sandbox frames); tapering into wall joins inflow surface to stem surface. Stem/inflow
+  are one dust (`mushMean`, `mushDense`: use inflow where denser). Incoming dust's light source is shared with carpet
+  (`pallSource` in `fx_pall`, material/billow shadows via `slot`), computed once per frame in prepass `fx_pall_foot`:
+  cylindrical table 64 azimuths × 16 radii × 32 heights in RGBA32F (raw HDR light, not screen color). Two bilinear
+  samples interpolate height; azimuth wraps by repeating first column, radius runs from 0.6 of wall radius to outer
+  billow edge. Constant mushroom parameters read the shared texture (`mushLoad`), not copied into each pixel's private
+  `gMush` array. Main mushroom pass neither calls `pallSource` nor retains its registers, only table light; moving
+  density/surface detail stays unchanged. Light filters by table-node size. Pall body is `include/fx_pall.glsl`:
+  `core/fx_pall.fsh` and prepass `core/fx_pall_foot.fsh` (with `#define PALL_FOOT_CACHE`) import it via
+  `#moj_import <incoming:fx_pall.glsl>`; Forgified Fabric API and Veil handle quoted imports differently from NeoForge
+  (`client-fx.md`, Veil). Lifted dust contributes to local density and column above point/whole layer: `FootColumn`
+  integrates positive `footDensity` using a closed-form primitive (positive interval boundaries via bisection when
+  front is inside carpet), 64 heights in texels 20–35 and 128 radii in 36–67. CPU finds tapered-band edge height for
+  offset from wall; subtract column above it from column above point and whole layer: hill surface is not shadowed
+  by nonexistent overhead dust (`FootColumnTest`). GPU interpolates and applies radial wall share. Without this,
+  dome received full sky and whitened at the side; before taper, carpet light, smoothly to stem light at merge height
+  (`mushFootLightShare`). Equal density alone cannot join them: separate stem lighting made a smooth bluish bell on
+  the carpet. Main stem pattern remains `mushLobes`, no remapping; inflow uses carpet billow scale (`mushInflowLobes`).
+  Carpet at foot and lifted dust share one flow map (`carpetFlow`, `carpetUv`): inward at ground, then upward; path
+  `stemRise`, weak swirl and bend geometry are presentation, not measurements. Two overlapping path segments offset
+  by half a cycle (Vlachos, Valve, Water Flow 2010) prevent stretching into smooth arcs: displacement capped at a third
+  of a billow tile, phase starts shifted by smooth spatial noise so the whole band does not pulse together. Influence
+  (`mushFootInfluence`) starts outside 0.6 stem radius, extends at most two carpet heights beyond wall and no higher
+  than merge; this map leaves distant haze and inner stem jets unchanged. Inflow is at wall and outward
+  (`mushFootWall`, from 0.6 stem radius): stem interior has its own dust. First version filled the whole stem with
+  carpet-density inflow and bent flow across the whole stem, producing a ring across the stem (inflow dust front
+  inside) and “herringbone” jets above; `StemFootTest.stemAwayFromTheFootIsAsBefore` checks unchanged field/pattern above
+  merge and inside stem. Bounds include full band width (`MushroomField.reach`); empty-space steps use actual tapered
+  band (`mushFootBandAt`), old stem clearance above merge. Slope bound below merge includes both derivatives:
+  width ≤0.385 and taper ≤1.5/(merge−start). Inflow cylinder checked once per pixel; inside, one flow map per slot is
+  shared by all billow/shadow samples, outside old coordinates. ⚠ Corner is planar (stem radius comparable to layer
+  depth), share decay with height is an approximation (est.); inside stem near axis carpet top remains (carpet denser there than
+  at wall, but stem opaque across). `StemFootTest` catches steps/voids between carpet and stem (along inflow streamline,
+  no jumps and density at least half carpet or stem; dust surface over carpet is a flare outside wall, tapering up).
+  Stem jets (texel 11.x) rise with cloud-rise share (`MushroomModel.stemRise`) and appear with it; storm smoke top under
+  mushroom (11.y) is `PallField.hazeTop`, storm columns rise to it in pall too (`FireStorms.slot`). Rain/thunderstorm do
+  not thin with altitude (drops/clouds): cap above them barely visible in rain, invisible in thunderstorm. Pall/mushroom
+  rays stop beyond 12 dust optical depths (visibility < 10⁻⁵), by depth along the ray itself (`pallClip` in `fx_pall`):
+  eye-local dust (`PallFrame.w`) thins with altitude like the layer; vertical depths above/below eye are `PallEyeTau`
+  (pall and mean head, `NukePall.tick`), combined with ray slope; end where layer depth reaches 12, otherwise do not
+  truncate; no closer than half a pall billow tile: cutoff uses mean depth, but eye may be in a billow gap (noise cell
+  is quarter tile). In 15 kt wave dust at 1.4 km, visibility is meters, mean-depth cutoff 20 blocks; truncating inside
+  a gap missed its walls, showing sky through tens of optical depths (`film` frames). Old cutoff at eye-local 12/σ
+  removed cap/stem entirely for dusty viewers (host video 18.10: mushroom vanished at 17 s despite thin dust above).
+  Mushrooms on the ray ignore cutoff; transmittance ends them. Pall OFF does not cut rays (σ/depths zero), otherwise
+  invisible dust would hide the mushroom.
+- Dust-wall head rests on pall terrain map (`PallGround`, like layer floor), not epicenter altitude (otherwise one
+  plane through hills and above valleys): map is coarser than world, so head extends a quarter to half its height
+  below it, avoiding hovering in lowlands beneath the map.
+- Removed debris is client cosmetic: server sends removed chunk positions (`S2C.NukeDebris`) only to chunk viewers on
+  ruin-replacement tick; client tears off pieces when its clock's front reaches the position (`NukeDust.debris`:
+  delay up to `Fragments.DELAY_MAX`; ruins more than a second after front mean no debris, wind is already gone).
+  Pieces ride local wave wind at removal origin (`BlastGust`: Friedlander with `blastWind` and local positive phase,
+  same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
+  sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
+  within 48 blocks of camera, one per chunk beyond, to `NukeDust.NEAR`; fades into Kuhl layer). With game wave
+  (`wave_speed` 0.2), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
+  at front position, no wind ahead (`BlastGustTest.piecesStayBehindTheFront`: without speed cap, a leaf clump at 600 m
+  reached 7 blocks/tick in one tick and overtook front). Wind clock uses detonation ID (`ClientNuclear.ticksOf`): entry
+  and seek replace detonation records while airborne pieces remain. Surface litter is only turf, litter and leaves
+  (`NukeDust.litter`), light sheets; no pieces from stone, sand or snow. At most 256 streaks per detonation
+  (`BlastDust.MAX_STREAKS`, nearer evicts farther). Server-toppled trunks are also “removed positions” (log relocates),
+  but wood has no dust: masonry only (otherwise forests produced tons of dust spheres, `wall` frames); natural ground
+  and rock (wave-torn ridges/ledges, `NukeDust.ground`) use pall dust (surface entrainment), otherwise tons of streak dust
+  around camera (`film` frames). Streak merges into layer as layer outgrows it (`BlastDust.apart`: share
+  σ²/(σ² + σ_layer²)), not expanding to layer size: effects-layer billows inside wall head receive sky without head
+  shadow, so expanded streaks formed a flat veil across the frame. Replay seeks spawn no debris (`Replay.event`).
+- Water (`NukeWater`, `BurstWater`, `fx/layer/WaterDecal`, model `WaterModel`): no dust above water — mushroom skirt over
+  water (water under epicenter, `BurstWater.under`) whitens; wall head over water (`PallGround` water share at point)
+  is spray, lower (crest-stripping height), own density (`WaterModel.spray`); camera dust (`NukeDust.front`) only over
+  land; over water the same head volume draws local spray, `NukeWater.front` particles are crest drops (fallback spray
+  billows are smooth when pall does not draw head, `NukePall.drawsHead`: a billow wider than screen near eye duplicated
+  volume spray and made square stair-steps). Spray head/local spray start behind dust edge (front itself) by head
+  travel during last `WaterModel.SPRAY_LAG` (0.5 s; no farther than grounded fireball edge; `BlastWall.slot`): spray on
+  the front hid the dark ring from waterside viewers, the main water-wave cue. Water under epicenter (client chunk,
+  map tile, otherwise surface exactly at sea level 63) is reevaluated until client detonation age 30 own ticks
+  (historical entry/seek 100; `NukeWater.settles`), then fixed: column cannot appear/disappear mid-detonation. Deadline
+  from `Active.age` (packet arrival), not detonation: late joiners' `seconds` already exceed it on first tick, freezing
+  water before epicenter chunk arrives; `BurstWater` stays the same object after seek (`Active(Active, …)`). Land and
+  heightmap `groundY` is first air above ground (integer); sight, binoculars, missile and B-2 (fluid ray) use surface
+  itself, 62.889 at sea: surface block is `NukeWater.surfaceBlock` (`ceil − 1`), not `floor − 1` (block below top water
+  block, making shallow water land without column/surge, while “sea” fallback failed). `BlastWall.humidity` uses same
+  block (used to query air, making over-water Wilson cloud biome-dependent). `Level.getSeaLevel` is deprecated in
+  1.21.1 (always 63), use `WaterDecal.SEA_LEVEL`.
+- Dust/surface pieces use `MOTION_BLOCKING` heightmap top: in ceiling dimensions (Nether), that is ceiling, so dust uses
+  epicenter altitude and no surface pieces; over void (End), no terrain.
+- Detonation packet may arrive one tick before client clock reaches detonation `gameTime`; time must never be < 0.
+- Flash traces render via `AddSectionGeometryEvent`: event on game thread, renderer on section-build threads after
+  all blocks; snapshot everything it reads (marks, neighboring chunk tiers) in the event (`FlashMarksMesh.Section`).
+  `QuadLighter.process` multiplies quad vertex color (`readExistingColor`): darken through copied model-quad vertex
+  colors. Scorch uses model vertices at the same positions/layer after blocks (`LEQUAL` depth), no offset: offset
+  would flicker at distance and open seams. Silhouette uses cell strips over scorch 1/256 block ahead of face: strips
+  at model vertices fought depth (different-triangle interpolation differs in final bits, bright lines across whole
+  faces in `flash` scenario frames); beyond ~50 blocks the gap falls below depth precision and silhouette merges with
+  scorch. Neighbor tiers in face plane smooth corners, so edge marks also rebuild neighboring sections
+  (`FlashMarksClient.dirty`).
+- Chunk marks carry block hashes: block changed, mark gone. Server removes marks at the position on
+  `BlockEvent.NeighborNotifyEvent` (`updateNeighborsAt`: `setBlock` flag 1, `/setblock`, `/fill`, pistons, explosions,
+  player hands; also fires for unchanged neighbors — remove only marks no longer held by the local block,
+  `FlashChar.holds`: material/hash); one chunk packet at world-tick end (`FlashSync.onLevelTick`, chunks in
+  non-persistent world attachment `FLASH_PENDING`). Otherwise replacing a broken block with the same type would
+  restore the mark, same hash. Changes without neighbor notification (`setBlock` without flag 1, used by some mods)
+  are invisible to event: next chunk save/send prunes (`FlashMarks.pruned`), unless same-type block replaced it first.
+  Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
+- Client game clock jumps backward during server catch-up: visual detonation time uses own client ticks since packet
+  arrival (`ClientNuclear.Active`), not `level.getGameTime()`.
+- Detonation time of day is server `Detonation.dayTime` (`level.getDayTime()` at detonation, saved), not current client
+  clock: joining later (login/dimension change) after sleep soon after a night strike made detonation appear minutes
+  before sunrise, so haze waited until next morning while others had cleared. Old-save/replay detonations do not know
+  it (`NO_DAY_TIME`), then use current clock as before. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
+  is frozen: new fields go in `CODEC` (save, `optionalFieldOf`) and at end of each detonation packet (`NukeDetonation`,
+  `NukeSync`; replay.md).
+- Client scenarios (`incoming.scenario`, same-JVM server) derive wind/detonation seed from detonation ID
+  (`NuclearWarhead.SCENARIO`), not `level.random`: pall, mushroom and plume frames compare across runs.
+- Pall volume draws camera dust like distant wall head (`NukePall.drawsHead`: quality not OFF, shaders/noise working,
+  detonation in two pall slots, nearest by pall or head edge, `NukePall.outside`: pall alone made a third detonation's
+  local head yield to detonations whose haze contains camera); land-local `NukeDust` then only draws litter, removed
+  pieces and surface litter (same over water, crest drops `NukeWater.front`). Square billows a step or two from eye,
+  wider than frame, duplicated volume dust: full-screen pixel stair-steps (near particles use nearest pixels), dark
+  spheres above wall top, over sea billows 340 m above water, above head top. Fallback camera dust when pall is not
+  drawn (`NukeDust`: head billows, breach dust, billows while head surrounds player only within it, by local mean
+  density `BlastWall.sigma`; all smooth, `Fx.Spec.smooth`) uses local wall color (`NukePall.dustColor` → `dustLight`:
+  copy of `wall` light in `fx_pall` over mean head, same frame light `NukePall.sky`, depths to top/edge/sun/sphere,
+  `PallLight.diffuse`; mean beam phase; dark billows/smoke take a share), without lightmap (`Fx.Spec.prelit`, darker
+  under roofs by sky/block light): nighttime lightmap is dark while wall glows from fires, so camera billows
+  (2–6 % frame height) formed near-black spots on orange wall (trailer, night city shot at 2 km). Own billow light
+  (old `CloudPuffs.wallColor`, fireball glow without head shadow) made them orange by day over a gray-brown wall in
+  fireball shadow: dust/wall share light. Full-screen veil (`NukeDust.veil`) uses mean head at eye (`NukePall.tick`),
+  local wall color, only with pall OFF (or not drawn due to broken noise): otherwise pall draws head itself, doubling
+  screen darkening. Head holds veil while at eye (`veilWanted` each tick), fading only after head leaves. Old veil,
+  based on front-arrival pressure, minimum 0.2, darkened even sound-only locations (15 kt beyond 10 km, host video).
+  Litter and pieces use world light: small/opaque, correctly dark against wall.
+- Client does not know server fire settings (`fires`, `fires_per_detonation`): distant fire is `FireField` model (server
+  probability: flash ignition, `Detonation.flashTicks`, wave arrival at ground by slant range from burst blows out
+  half from 2 psi; cap by server count of 20 000 fires remaining after wave: airburst 15 kt ignites 40 000 out to ~146
+  blocks). Model lacks ruins, a known limit: counted layer fire extinguished by ruins (rubble/collapse) leaves server
+  count, and ruins beyond the layer's capped ring place their own fires — after wave a city server burns beyond
+  model's last ring, model empty; local chunks correct this near player, not far away. Local chunks use real fire
+  blocks (`FireWatch`), and trust in distant model follows actual versus modeled local fire (`NukeAfter.trust`, window
+  from last ignition); too few modeled local chunks means unchanged. Server applies flash layer in player chunks
+  first, spending the fire counter there: distant model excludes local fires (in `nuke` scenario, 8–11 thousand fire
+  blocks near viewer at 2 km). All burning follows detonation age: secondary explosions scheduled from seed from wave
+  arrival; after replay seek new `Active` skips past events.
+- Villager panic uses `WALK_TARGET` memory (brain runs), not `PANIC` activity, which summons golems. Brain-mob flee goals
+  set memory location and clear only if it remains their location.
+- Flee goal (priority −1, `MOVE`) overrides `SitWhenOrderedToGoal`: owned (tamed, someone's `OwnableEntity`, leashed,
+  named) mobs do not flee, otherwise sitting wolves ran hundreds of blocks. Enclosed mobs (pen, farm, pond) always
+  report navigation `isDone()`: new paths every goal tick (up to 8 positions plus full pathfinding), so search at most
+  every `MIN_REPATH`; a path going nowhere doubles next delay (GameTest `nuke_panic`: cow in 1×1 pen, 3–6 searches
+  during panic, 33 without backoff). Sheltered waves do not scare.
+- Flee position is custom (`MobPanic.place`), not vanilla `DefaultRandomPos`: random height (one of 15 valid), sideways
+  and underfoot positions made empty search/one-step paths count as enclosure, leaving mobs standing 4–8 s (GameTest
+  failed 4 of 30 runs). Empty search is not always a pen: airborne mobs (just spawned/wave-tossed) cannot find ground
+  paths; wait for ground instead of backoff. Flyers without their own check (parrot, allay) see a solid, path-blocked
+  cell itself as “stable”; fallback `LandRandomPos` raises it out of solid ground.
+- `FireWatch`: global-palette `maybeHas` (detailed city) always says yes, small palette remembers burned-out fire;
+  full section count (`PalettedContainer.count`, map of 4096 positions) over 16 chunks/tick cost 0.7 ms/tick over burning
+  land and 3.2 ms in city (6 global-palette sections/chunk), so sample every 8th block under 0.1 ms budget: 0.07 and
+  0.13 ms/tick (20-tick median; single 4–8 ms ticks were thread stalls on shared machine during GC, old count up to
+  17 ms). Static world reference resets when nothing burns and on world change (otherwise retains old `ClientLevel`).
+  Cost: `SCENARIO nuke-sound … watch` (`INCOMING_CITY` for detailed city, adjacent `SCENARIO city old-scan` for old count
+  over same chunks).
+- Mushroom-table texel 12 (`MushroomField`) has two writers: `frame` writes cap churn clock to w, `fire` after frame
+  light writes fire light to rgb, preserving w. Clock is detonation-age function (`MushroomModel.churn`, per-detonation
+  table), not frame accumulation: replay after seek and late entry produce same cap.
+- Camera (engine listener) hears detonation, player holds ears/body: projectile camera circles explosion 32–42 blocks
+  away, player kilometers away. `NukeSounds.Schedule` meets front twice (`FrontMeeting`): camera gets wave sounds,
+  echo/wind (`arrive`), eye-local dust; player's eyes get hearing/body tilt (`hit`) by own pressure/path/phase. Camera
+  on/near player (distance to burst within one tick's front path) meets front by body on the same tick, otherwise
+  one-tick-early ear hit would muffle its own wave sounds. Meet only when front crossed position this tick
+  (`FrontMeeting.passed`: front was before it, or position moved toward burst by at most `JUMP` per tick — approaching
+  positions cross front between ticks): checking only “front beyond position” would replay hit when camera teleports
+  behind front (next impact orbit, return to body). Spectator body is camera: viewing through another entity leaves
+  client `LocalPlayer` at initial viewing location (server moves only `ServerPlayer`). Body effects belong in `hit`,
+  not at camera position.
+- Head-dust wind path behind front (`BlastWall.carriedShare`, copy `pallWallCarried`) is Friedlander integral
+  u·e^(1−u), including after positive phase: negative-phase wind reverses (G&D §3.05), dust returns toward epicenter
+  (total wave impulse zero). Same Friedlander for post-front wind sound (`BlastPulse.friedlander`).
+- Mushroom stem dust is `nuclear/model/StemDust`: dust drawn from wave layer (`DustModel.Column.stem`, starting at
+  `stemFrom`: immediately for grounded sphere, after `STEM_FROM_S`·∛(Y/15) s for airburst) rises with stem air
+  (`MushroomModel.stemRise`); airburst dusty stem may never catch cap (NRC 1985, p. 22), surface burst leaves sphere
+  trail up to cap. Per-detonation table builds in background (`StemDust.ready`: first frames without dust).

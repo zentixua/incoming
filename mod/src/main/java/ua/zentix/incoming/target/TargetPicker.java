@@ -22,8 +22,8 @@ import ua.zentix.incoming.registry.ModTags;
 import java.util.function.Predicate;
 
 /**
- * Что под прицелом: луч от глаз до первого препятствия — аппарат Sable, сущность или блок.
- * Общий для клиента (прицельная марка в бинокле) и сервера (сам пуск), поэтому видишь ровно то, куда ударит.
+ * Crosshair target: eye ray to first obstacle, Sable craft, entity, block. Shared by client (binocular marker)
+ * and server (launch), so what you see is exactly where strike goes.
  */
 public final class TargetPicker {
     private TargetPicker() {}
@@ -31,11 +31,11 @@ public final class TargetPicker {
     public enum Kind { BLOCK, ENTITY, PLAYER, AIRCRAFT, SURFACE }
 
     /**
-     * @param target   что преследовать
-     * @param point    мировая точка удара сейчас
-     * @param kind     что это (для подписи в интерфейсе)
-     * @param label    подпись: блок, имя сущности или аппарата
-     * @param entity   сущность-цель, если это сущность
+     * @param target quarry to pursue
+     * @param point current world impact point
+     * @param kind kind for interface label
+     * @param label block, entity, or craft name
+     * @param entity target entity, if applicable
      */
     public record Pick(Target target, Vec3 point, Kind kind, Component label, @Nullable Entity entity) {}
 
@@ -51,7 +51,7 @@ public final class TargetPicker {
             blockWorld = aircraft != null ? SubLevels.toWorld(level, block.getLocation()) : block.getLocation();
         }
 
-        // сущности ищем только до препятствия
+        // Search entities only up to obstacle.
         Vec3 entityEnd = blockWorld != null ? blockWorld : end;
         EntityHitResult entityHit = entityAlong(level, viewer, eye, entityEnd);
         if (entityHit != null) {
@@ -69,7 +69,7 @@ public final class TargetPicker {
             return new Pick(new Target.Point(blockWorld), blockWorld, Kind.BLOCK, name, null);
         }
 
-        // в небо или дальше дальности прицела — поверхность под концом луча, если чанк загружен
+        // Sky/beyond aim range: surface beneath ray end if chunk loaded.
         BlockPos col = BlockPos.containing(end);
         Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, col.getX(), col.getZ(), Terrain.Allowed.CHUNK);
         if (!ground.known()) return null;
@@ -78,8 +78,8 @@ public final class TargetPicker {
     }
 
     /**
-     * Ближайшая сущность на отрезке. Идём отрезками по 16 блоков: один большой AABB на 400 блоков
-     * перебирал бы тысячи секций, а клиент зовёт это каждый тик, пока смотрит в бинокль.
+     * Nearest entity on segment. Traverse 16-block segments: one 400-block AABB would scan thousands of sections;
+     * client calls each binocular-view tick.
      */
     @Nullable
     private static EntityHitResult entityAlong(Level level, Entity viewer, Vec3 from, Vec3 to) {

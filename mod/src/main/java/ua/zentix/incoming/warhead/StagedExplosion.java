@@ -67,56 +67,56 @@ import java.util.UUID;
 import java.util.function.LongSupplier;
 
 /**
- * Ванильный взрыв по единицам работы ({@link UnitQueue}): те же шаги, что у {@code ServerLevel.explode}, только
- * порциями в разных единицах. На сборке хоста (город, ракета) два взрыва силы 12–20 одним вызовом — 559 мс в одном
- * тике, а при делении только на подрыв и порции блоков одна единица «лучи и урон» стоила бы до 150 мс.
+ * Vanilla explosion in work units ({@link UnitQueue}): same {@code ServerLevel.explode} stages, portioned across
+ * units. Host pack (city, missile) two power-12–20 explosions in one call cost 559 ms in one tick; splitting only
+ * detonation/block portions still leaves “rays and damage” up to 150 ms.
  * <ol>
- *     <li>{@link Explosion} с правилами TNT, {@link EventHooks#onExplosionStart} (приваты отменяют его, как обычно),
- *     один запрос аппаратов Sable на весь охват лучей. Аппарат рядом — ванильный {@link Explosion#explode()} в этой же
- *     единице: миксин Sable на каждом воздушном шаге луча ищет аппарат, переводит точку в плот, добавляет блоки аппарата
- *     и толкает его — это его внутренности, повторять их нельзя, и мод в этот метод не лезет; урон и отбрасывание
- *     уходят в свои единицы через {@code ExplosionEvent.Detonate} ({@link #onDetonate}). Нет аппарата — миксину Sable нечего
- *     менять, и лучи идут своим циклом (копия ванильного): здесь только событие {@code EXPLODE} и все 1352 множителя
- *     силы лучей из {@code level.random} в ванильном порядке — выборка не зависит от того, как лучи поделены.</li>
- *     <li>Лучи по {@link #RAYS_PER_UNIT} за единицу; множество выбранных копится. Внутри луча блок, в котором лежат
- *     подряд несколько шагов по 0,3 блока, читается один раз (как у Lithium {@code world.explosions}).</li>
- *     <li>Сбор сущностей и {@code ExplosionEvent.Detonate} (обработчики модов — одной единицей, со списком, по которому
- *     потом идёт урон).</li>
- *     <li>Разбор выбранного: воздух без огня отбрасывается, плоты аппаратов — раз на чанк, мир — от центра наружу по
- *     заранее посчитанному расстоянию.</li>
- *     <li>Урон и отбрасывание по {@link #ENTITIES_PER_UNIT} сущностей (копия ванильного цикла; живость, расстояние
- *     и видимость — на момент единицы); игроку пакет взрыва с его отбрасыванием уходит в той же единице. Потом —
- *     блоки аппаратов, одним разом ({@link #blowCrafts}).</li>
- *     <li>Блоки мира от центра наружу порциями по времени ({@link #PORTION_NANOS}) шагами {@code Explosion.finalizeExplosion}
- *     ({@code onExplosionHit}, затем огонь). Выпадение копится за весь взрыв и выпадает в конце. Блок, который сменился
- *     с момента лучей (натекла вода, поставил игрок), не трогается; сменившиеся свойства того же блока (забор потерял
- *     соседа) — не смена.</li>
+ * <li>{@link Explosion} with TNT rules, {@link EventHooks#onExplosionStart} (claims cancel normally), one Sable
+ * craft query across ray reach. Craft nearby uses vanilla {@link Explosion#explode()} in same unit: Sable mixin
+ * queries craft each air ray step, transforms to plot, adds craft blocks, pushes craft. These are its internals,
+ * cannot duplicate; mod does not enter method. Damage/knockback split via {@code ExplosionEvent.Detonate} ({@link
+ * #onDetonate}). Without craft, Sable has nothing to change; own ray loop (vanilla copy), only {@code EXPLODE}
+ * event and all 1352 {@code level.random} strength factors here in vanilla order, selection independent of
+ * splitting.</li>
+ * <li>{@link #RAYS_PER_UNIT} rays per unit, accumulating selected set. Repeated 0.3-block steps in same block
+ * read once (like Lithium {@code world.explosions}).</li>
+ * <li>Entity collection and {@code ExplosionEvent.Detonate} (mod handlers in one unit, using future damage
+ * list).</li>
+ * <li>Process selected: discard air without fire, craft plots once per chunk, world outward from center by
+ * precalculated distance.</li>
+ * <li>Damage/knockback {@link #ENTITIES_PER_UNIT} entities (vanilla loop copy, life/distance/visibility at unit
+ * time); player receives explosion/knockback packet in same unit. Then craft blocks together ({@link
+ * #blowCrafts}).</li>
+ * <li>World blocks outward in timed portions ({@link #PORTION_NANOS}), via {@code Explosion.finalizeExplosion}
+ * ({@code onExplosionHit}, then fire). Collect drops across entire blast, release at end. Changed block since
+ * rays (flowing water, player placement) untouched; property change of same block (fence lost neighbor) is not
+ * replacement.</li>
  * </ol>
- * У заряда блоки, тела и корпуса аппаратов объединены во фронте по расстоянию. Корпус — одно событие на ближайшем
- * твёрдом блоке, до тела за ним; ванильный путь выше относится к обычному TNT/аварийному взрыву.
- * Между единицами мир может меняться (1–3 тика) — порции сверяют блок. Взрыв с центром в сетке плотов (на аппарате) —
- * одним ванильным {@code level.explode}: Sable переносит такой взрыв в мир своей обёрткой {@code ServerLevel.explode}.
+ * Charge merges blocks, bodies, craft hulls into distance-ordered front. Hull is one event at nearest solid block
+ * before bodies behind; vanilla path above covers ordinary TNT/crash blast. World can change between units (1–3
+ * ticks), so portions recheck blocks. Plot-grid-centered blast (on craft) uses one vanilla {@code level.explode}:
+ * Sable relocates it via {@code ServerLevel.explode} wrapper.
  * <p>
- * Район держит {@link BlastArea} (свой или таймлайна), пока взрыв не кончится; единица ждёт, пока район готов, а блоки
- * в чанках, которые к её сроку не готовы, пропускает.
+ * {@link BlastArea} (own/timeline) held until completion; unit waits for readiness, skips blocks in chunks
+ * unready by its deadline.
  * <p>
- * Источник у {@link Explosion} — снаряд ({@code getDirectSourceEntity}), как у ванильных взрывов TNT, крипера и фаербола:
- * обработчики {@code ExplosionEvent} других модов (Explosion Overhaul — по id типа сущности, приваты) отличают удар
- * Incoming и его оружие от прочих взрывов. Сам снаряд взрыв не бьёт, как у ванили.
+ * {@link Explosion} source is projectile ({@code getDirectSourceEntity}), like vanilla TNT/creeper/fireball:
+ * other mods' {@code ExplosionEvent} handlers (Explosion Overhaul by entity type id, claims) distinguish Incoming
+ * strikes/weapons. Projectile itself unharmed, like vanilla.
  */
 final class StagedExplosion implements UnitQueue.Job {
-    /** Порция блоков мира — по времени: блоки идут, пока единица короче этого. */
+    /** World block portion timed: continue while unit shorter than this. */
     static final long PORTION_NANOS = 5_000_000L;
-    /** Блок дольше этого — строка в лог. */
+    /** Longer block logs a line. */
     static final long SLOW_BLOCK_NANOS = 10_000_000L;
-    /** Пачка блоков от центра наружу, внутри которой порядок перемешан. */
+    /** Outward block batch with shuffled internal order. */
     static final int BATCH = 16;
-    /** Лучей за единицу (всего 1352). */
+    /** Rays per unit (1352 total). */
     static final int RAYS_PER_UNIT = 128;
-    /** Сущностей за единицу урона: смерть моба — лут и обработчики всех модов сборки. */
+    /** Entities per damage unit: mob death includes loot/all pack handlers. */
     static final int ENTITIES_PER_UNIT = 8;
 
-    /** Направления 1352 лучей ванильного взрыва в ванильном порядке (грани куба 16³, нормированные). */
+    /** 1352 vanilla ray directions in vanilla order (normalized 16³ cube faces). */
     private static final double[] RAY_X, RAY_Y, RAY_Z;
 
     static {
@@ -148,56 +148,59 @@ final class StagedExplosion implements UnitQueue.Job {
         return RAY_X.length;
     }
 
-    /** Что делает следующая единица. */
+    /** Next unit's action. */
     private enum Phase { START, RAYS, GAS, DETONATE, SPLIT, REMEMBER, DAMAGE, FRONT, BLOCKS }
 
-    /** Проверки: лучи ванильным {@code explode()} (как при аппарате рядом) — сравнить выборку своего цикла с ванильной. */
+    /** Tests: rays via vanilla {@code explode()} (like nearby craft), compare own selection to vanilla. */
     boolean forceVanilla;
-    /** Проверки: лучей за единицу. */
+    /** Tests: rays per unit. */
     int raysPerUnit = RAYS_PER_UNIT;
-    /** Проверки: сид {@code level.random} перед лучами (выборка обоих путей из одних множителей). */
+    /** Tests: {@code level.random} seed before rays (same factors for both paths). */
     @Nullable
     Long seed;
-    /** Проверки: часы порций блоков; null — часы полосы попаданий ({@link WorkClock#sampler}: у считающих — 1 шаг на блок). */
+    /**
+     * Tests: block-portion clock; null uses impact-lane clock ({@link WorkClock#sampler}: counting clock 1 step
+     * per block).
+     */
     @Nullable
     LongSupplier clock;
-    /** Проверки: срок порции блоков. */
+    /** Tests: block-portion deadline. */
     long portionNanos = PORTION_NANOS;
-    /** Для проверок: порций блоков и самая большая из них. */
+    /** Tests: block portions and largest size. */
     int portions, largestPortion;
 
     private final BlastArea area;
     /**
-     * Заряд боевой части по физике, кг ТНТ ({@link #charge}): волна Кинни–Грэхема ломает блоки по кривой давление–импульс
-     * ({@code BlockResponse.breaksAt}), газы держат давление в помещении, тела бьёт {@link BlastBody}. 0 — ванильный взрыв
-     * силы {@link #power} (бетонобойная бомба, её вход в грунт, проверки).
+     * Physical warhead charge, kg TNT ({@link #charge}): Kinney–Graham wave breaks via pressure–impulse curve
+     * ({@code BlockResponse.breaksAt}), gases sustain room pressure, {@link BlastBody} damages bodies. 0 means
+     * vanilla {@link #power} blast (bunker-buster, ground entry, tests).
      */
     private final double charge;
-    /** Центр волны в мире: у взрыва на аппарате Sable — его точка в мире ({@link SubLevels#toWorld}). */
+    /** World wave center: Sable craft explosion world position ({@link SubLevels#toWorld}). */
     private Vec3 centre;
-    /** Взрыв по заряду: докуда лучи могут сломать хоть что-то и докуда волна бьёт по телам, блоков. */
+    /** Charge explosion reach for any block break/body wave damage, blocks. */
     private final double breakReach, hitReach;
-    /** Случайность тел у этого взрыва ({@code BlastBody.fate}). */
+    /** This blast's body randomness ({@code BlastBody.fate}). */
     private long waveId;
-    /** Помещение, где взорвался заряд (газы), или null — взрыв на открытом. */
+    /** Charge room (gases), null if outdoors. */
     @Nullable
     private Room room;
     @Nullable
     private BlastBody.Wave wave;
-    /** Как заряд приложен к преграде: пробой плиты ({@link SlabBreach}) — только у приложенного. */
+    /** Contact placement: slab breach ({@link SlabBreach}) only for contact charges. */
     private SlabBreach.Placement placement = SlabBreach.Placement.NONE;
-    /** Курс боевой части у удара: через какую грань она пришла к преграде ({@link SlabBreach#locate}); null — неизвестен. */
+    /** Warhead impact heading: entry face ({@link SlabBreach#locate}); null unknown. */
     @Nullable
     private Vec3 axis;
-    /** Откуда идут лучи пробоя; null — заряд ни к чему не приложен (или ещё не искали: {@link #breachLocated}). */
+    /** Breach ray origin; null no contact (or not searched, {@link #breachLocated}). */
     @Nullable
     private SlabBreach.Origin breach;
     private boolean breachLocated;
-    /** Блоков, снесённых пробоем (для проверок и итога). */
+    /** Breach-removed blocks (tests/summary). */
     int breached;
-    /** Блоки на луче пробоя (снимаются, если луч пробил). */
+    /** Breach ray blocks (removed if breached). */
     private final LongArrayList breachPath = new LongArrayList();
-    /** Взрывы, которые должны кончиться раньше (вторичные подрывы удара ждут главный). */
+    /** Explosions required to finish first (strike secondaries await main). */
     private final List<StagedExplosion> after;
     private final Vec3 at;
     private final float power;
@@ -213,11 +216,11 @@ final class StagedExplosion implements UnitQueue.Job {
     private Phase phase = Phase.START;
     @Nullable
     private Explosion explosion;
-    /** Калькулятор, которым считает сам {@link Explosion} (без своего — ванильный по умолчанию). */
+    /** Calculator used by {@link Explosion} itself (vanilla default if none supplied). */
     private ExplosionDamageCalculator damage = new ExplosionDamageCalculator();
     @Nullable
     private DamageSource source;
-    /** Сила лучей: мощность × множитель из {@code level.random}, в ванильном порядке. */
+    /** Ray strengths: power × {@code level.random} factor, vanilla order. */
     private float[] strength = new float[0];
     private int nextRay;
     private final Set<BlockPos> chosen = new HashSet<>();
@@ -230,48 +233,51 @@ final class StagedExplosion implements UnitQueue.Job {
     private LongSupplier frontTime = () -> Long.MAX_VALUE;
     private final java.util.Map<Entity, BlastBody.Before> bodyBefore = new java.util.IdentityHashMap<>();
     private final Set<ServerPlayer> told = new HashSet<>();
-    /** Блоки мира, от центра наружу, и сами блоки на момент лучей. */
+    /** World blocks outward from center and identities at ray time. */
     private List<BlockPos> toBlow = List.of();
     private List<Block> blocksAtRays = List.of();
     private int next;
-    /** Начатая пачка: индексы в {@link #toBlow}, перемешаны, берутся с конца. */
+    /** Started batch: shuffled {@link #toBlow} indices, taken from end. */
     private final IntArrayList batch = new IntArrayList();
-    /** Позиции мира после раздела, до снимка ({@link #split}). */
+    /** World positions after separation, before snapshot ({@link #split}). */
     private List<BlockPos> picked = List.of();
-    /** Блоки аппаратов после раздела и сами блоки на момент раздела — ждут конца урона ({@link #blowCrafts}). */
+    /** Craft blocks/identities at separation, waiting for damage completion ({@link #blowCrafts}). */
     private List<BlockPos> crafts = List.of();
     private List<Block> craftBlocks = List.of();
-    /** Чей плот лежал в чанке блоков аппаратов при разделе: id аппарата или null. */
+    /** Craft id owning plot in craft-block chunk at separation, or null. */
     private final Long2ObjectOpenHashMap<UUID> craftOwners = new Long2ObjectOpenHashMap<>();
     private boolean partitioned;
-    /** Взрыв шёл ванильным {@code explode()} (аппарат рядом). */
+    /** Used vanilla {@code explode()} (craft nearby). */
     private boolean vanilla;
-    /** Урон уже сделал ванильный {@code explode()}: список сущностей из {@code Detonate} к моду не попал. */
+    /** Vanilla {@code explode()} already damaged: mod did not receive {@code Detonate} entity list. */
     private boolean vanillaDamage;
-    /** Взрыв, чей ванильный {@code explode()} мод сейчас ведёт (поток сервера), и список, забранный у его {@code Detonate}. */
+    /**
+     * Explosion currently run through vanilla {@code explode()} by mod (server thread), and list taken from its
+     * {@code Detonate}.
+     */
     @Nullable
     private static Explosion driving;
     @Nullable
     private static List<Entity> handed;
-    /** Выпадение за весь взрыв (как {@code Explosion.addOrAppendStack}). */
+    /** Drops for entire explosion (like {@code Explosion.addOrAppendStack}). */
     private final List<Pair<ItemStack, BlockPos>> drops = new ArrayList<>();
     private boolean done;
 
-    /** Замер: время по шагам ({@link ExplosionStage}), счётчики лучей. */
+    /** Measurements: stage times ({@link ExplosionStage}), ray counters. */
     private final long[] stages = new long[ExplosionStage.values().length];
     private final RayCounts counts = new RayCounts();
 
-    /** Счётчики лучей взрыва для итога удара. */
+    /** Explosion ray counters for strike summary. */
     static final class RayCounts {
-        /** Шаги лучей (по 0,3 блока). */
+        /** Ray steps (0.3 blocks). */
         long steps;
-        /** Из них в воздухе — на каждом таком шаге миксин Sable в ванильном {@code explode()} ищет аппарат. */
+        /** Air steps among them: Sable mixin queries craft each such vanilla {@code explode()} step. */
         long airSteps;
-        /** Шаги, где блок взят из кэша луча (тот же блок, что на прошлом шаге). */
+        /** Steps served from ray block cache (same block as previous step). */
         long cached;
-        /** Запросы аппаратов Sable (свои: один на взрыв). */
+        /** Sable craft queries (ours: one per blast). */
         int craftQueries;
-        /** Взрывы, которые шли ванильным {@code explode()} целиком (аппарат рядом). */
+        /** Blasts using full vanilla {@code explode()} (craft nearby). */
         int vanilla;
 
         void add(RayCounts o) {
@@ -288,7 +294,7 @@ final class StagedExplosion implements UnitQueue.Job {
         this(area, after, at, power, 0, fire, blocks, direct, owner, calculator);
     }
 
-    /** Взрыв заряда {@code tntKg} кг ТНТ по физике, приложенного к преграде так, как {@code placement}. */
+    /** Physical charge explosion {@code tntKg} kg TNT with {@code placement} contact. */
     StagedExplosion(BlastArea area, List<StagedExplosion> after, Vec3 at, double tntKg, SlabBreach.Placement placement, @Nullable Vec3 axis,
                     boolean blocks, @Nullable Entity direct, @Nullable Entity owner) {
         this(area, after, at, (float) breakReach(tntKg), tntKg, false, blocks, direct, owner, null);
@@ -313,34 +319,34 @@ final class StagedExplosion implements UnitQueue.Job {
         this.calculator = calculator;
     }
 
-    /** Взрыв кончился (или отменён): работы удара, которые ждут его, могут идти. */
+    /** Explosion finished/canceled: waiting strike jobs may proceed. */
     boolean done() {
         return done;
     }
 
     @Override
     public boolean ready(ServerLevel level) {
-        // район удара целиком (он накрывает и этот взрыв): у работ одного удара одно условие — порядок не ломается
+        // Whole strike area covers this explosion too: shared condition preserves work order.
         return (phase != Phase.FRONT || level.getGameTime() >= frontDueTick) && area.ready(level)
                 && (frontArea == null || frontArea.ready(level));
     }
 
-    /** Шёл ванильным {@code explode()}. */
+    /** Used vanilla {@code explode()}. */
     boolean vanilla() {
         return vanilla;
     }
 
-    /** Ванильный путь отдал урон моду ({@link #onDetonate}). */
+    /** Vanilla path handed damage to mod ({@link #onDetonate}). */
     boolean handedDamage() {
         return vanilla && !vanillaDamage;
     }
 
-    /** Ещё выбирает лучами или бьёт сущности (блоки не снимает). */
+    /** Still selecting rays/damaging entities (not removing blocks). */
     boolean picking() {
         return !done && (charge > 0 ? phase.ordinal() <= Phase.REMEMBER.ordinal() : phase.ordinal() < Phase.BLOCKS.ordinal());
     }
 
-    /** Ждёт взрывы {@code after} целиком. */
+    /** Waits for entire {@code after} explosions. */
     boolean waiting() {
         return Warheads.pending(after);
     }
@@ -402,12 +408,12 @@ final class StagedExplosion implements UnitQueue.Job {
         stages[stage.ordinal()] += System.nanoTime() - since;
     }
 
-    /** Первая единица; {@code true} — есть ещё единицы. */
+    /** First unit; {@code true} means more remain. */
     private boolean start(ServerLevel level) {
         long t = System.nanoTime();
-        // выпадение с затуханием, как у крипера: снятый блок выпадает с вероятностью 1/сила (у TNT по умолчанию выпадает
-        // всё, и после залпов по 30 тик тысяч предметов занимал бы две трети потока сервера). Level.explode берёт его из
-        // правила: BLOCK — blockExplosionDropDecay, по умолчанию включено
+        // Creeper-style drop decay: removed block drops with probability 1/power (TNT normally drops
+        // everything; after 30-shot salvos, thousands of items would consume two thirds of server thread). Level.explode uses
+        // game rule: BLOCK uses blockExplosionDropDecay, enabled by default.
         Level.ExplosionInteraction interaction = blocks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE;
         if (SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(at)))) {
             counts.vanilla++;
@@ -424,8 +430,8 @@ final class StagedExplosion implements UnitQueue.Job {
         boolean cancelled = EventHooks.onExplosionStart(level, e);
         time(ExplosionStage.START, t);
         if (cancelled) return false;
-        // в воздухе калькулятор сопротивления не даёт, и сила луча падает только на 0,225 за шаг в 0,3 блока: луч
-        // уходит до 1,3 × 1,33 ≈ 1,73 силы — аппарат ищем в охвате района взрыва (2 силы + 1)
+        // In air, calculator gives no resistance; ray loses only 0.225 per 0.3-block step,
+        // reaching 1.3 × 1.33 ≈ 1.73 power; search craft across blast-area reach (2 power + 1).
         double reach = Warheads.reach(power);
         counts.craftQueries++;
         if (seed != null) level.random.setSeed(seed);
@@ -440,17 +446,17 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Аппарат рядом: ванильный {@code explode()} (лучи с миксином Sable, сбор сущностей, {@code Detonate}) — одним шагом
-     * замера, снимок блоков мира — следующей единицей. Урон и отбрасывание — порциями ({@link Phase#DAMAGE}) по списку,
-     * который обработчики {@code Detonate} оставили ({@link #onDetonate}): ванильный цикл урона идёт в той же единице, что
-     * и лучи (ракета у дирижабля: весь {@code explode()} — 181,6 мс в одном тике). Блоки
-     * аппаратов — после урона ({@link #blowCrafts}); если урон всё же сделал сам {@code explode()} — сразу.
+     * Craft nearby: vanilla {@code explode()} (Sable-mixin rays, entity collection, {@code Detonate}) is one
+     * timed stage; world block snapshot next unit. Damage/knockback portioned ({@link Phase#DAMAGE}) over list
+     * left by {@code Detonate} handlers ({@link #onDetonate}): vanilla damages in ray unit (missile by airship:
+     * full {@code explode()} 181.6 ms/tick). Craft blocks after damage ({@link #blowCrafts}); if {@code
+     * explode()} already damaged, immediately.
      */
     private boolean vanilla(ServerLevel level, Explosion e) {
         counts.vanilla++;
         vanilla = true;
         long t = System.nanoTime();
-        // взрыв, начатый изнутри (обработчиком события), ведёт свой: внешний — вернуть как был
+        // Nested explosion (event handler) runs its own state: restore outer afterward.
         Explosion outer = driving;
         List<Entity> outerHanded = handed;
         driving = e;
@@ -467,20 +473,20 @@ final class StagedExplosion implements UnitQueue.Job {
         if (got != null) {
             entities = got;
         } else {
-            // список не забран (Detonate не пришёл): урон сделал сам explode() — его пакет игрокам, как у ванили
+            // List not captured (no Detonate): explode() damaged itself; player packet as vanilla.
             vanillaDamage = true;
             for (ServerPlayer p : level.players()) {
                 if (p.distanceToSqr(at.x, at.y, at.z) < 4096.0) tell(p, e.getHitPlayers().get(p));
             }
         }
         partition(level);
-        // урон уже позади — блоки аппаратов сразу
+        // Damage already complete: craft blocks immediately.
         if (vanillaDamage) blowCrafts(level);
         phase = Phase.SPLIT;
         return true;
     }
 
-    /** Лучи {@code [nextRay, nextRay + raysPerUnit)} — копия ванильного цикла {@code Explosion.explode}. */
+    /** Rays {@code [nextRay, nextRay + raysPerUnit)}, vanilla {@code Explosion.explode} loop copy. */
     private boolean rays(ServerLevel level) {
         long t = System.nanoTime();
         Explosion e = explosion;
@@ -519,26 +525,26 @@ final class StagedExplosion implements UnitQueue.Job {
         return true;
     }
 
-    // ---------------------------------------------------------------- взрыв по заряду
+    // ---------------------------------------------------------------- charge explosion
 
-    /** Сколько клеток воздуха обходит поиск помещения у заряда: больше — взрыв на открытом (UFC: помещение — замкнутый объём). */
+    /** Maximum air cells for charge room search: beyond means outdoors (UFC: room is enclosed volume). */
     static final int ROOM_CELLS = 4000;
-    /** Блок, которому ванильный взрыв не страшен (обсидиан 1200 и защищённые блоки модов), волну держит. */
+    /** Vanilla-blast-resistant blocks (obsidian 1200, protected mod blocks) stop wave. */
     private static final float BLAST_PROOF = 1200;
-    /** Шаг луча, блоков: как у ванили. */
+    /** Ray step, blocks, like vanilla. */
     private static final double STEP = 0.3;
 
-    /** Докуда волна заряда {@code tntKg} может сломать хоть что-то — самый слабый блок у нижнего края разброса, блоков. */
+    /** Maximum reach where {@code tntKg} charge wave breaks anything: weakest block at lowest jitter, blocks. */
     static double breakReach(double tntKg) {
         return reachFor(BlockResponse.FRAGILE_PSI, tntKg) + 1;
     }
 
-    /** Докуда волна заряда бьёт тела: до порога осколков стекла ({@code BlastBody}: ниже него ран нет), блоков. */
+    /** Charge wave body reach: glass-fragment threshold ({@code BlastBody}: no injury below), blocks. */
     static double hitReach(double tntKg) {
         return BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), tntKg);
     }
 
-    /** Докуда в открытом поле ломается блок с порогом {@code psi} у нижнего края разброса, блоков. */
+    /** Open-field break reach for {@code psi} threshold at lowest jitter, blocks. */
     static double reachFor(double psi, double tntKg) {
         double pc = BlastModel.kpa(psi);
         double lo = 0.05, hi = 1e4;
@@ -551,16 +557,16 @@ final class StagedExplosion implements UnitQueue.Job {
         return lo;
     }
 
-    /** Как {@code BlockResponse.breaksAt} у нижнего края разброса: давление и импульс делятся на {@code JITTER_MIN}. */
+    /** Like {@code BlockResponse.breaksAt} at lowest jitter: divide pressure/impulse by {@code JITTER_MIN}. */
     private static boolean breaksOpen(double r, double tntKg, double pcKpa) {
         double j = BlockResponse.JITTER_MIN;
         return BlastDamage.breaks(BlastModel.surfaceOverpressureKpa(r, tntKg) / j, BlastModel.chemicalImpulse(r, tntKg, true) / j, pcKpa);
     }
 
     /**
-     * Первая единица взрыва по заряду: {@link Explosion} с радиусом {@link #breakReach} (его видят обработчики событий и
-     * выпадение с затуханием), {@code ExplosionEvent.Start} (приваты отменяют его, как обычно), событие {@code EXPLODE}.
-     * Ванильного пути нет: блоки аппаратов ломает тот же закон ({@link #crafts}).
+     * Charge first unit: {@link Explosion} radius {@link #breakReach} (event handlers/drop decay see it), {@code
+     * ExplosionEvent.Start} (claims cancel normally), {@code EXPLODE} event. No vanilla path: same law breaks
+     * craft blocks ({@link #crafts}).
      */
     private boolean startCharge(ServerLevel level) {
         long t = System.nanoTime();
@@ -570,7 +576,7 @@ final class StagedExplosion implements UnitQueue.Job {
         Explosion e = new Explosion(level, direct, source, null, centre.x, centre.y, centre.z, power, false, destroy,
                 ModParticles.NONE.get(), ModParticles.NONE.get(), ModSounds.SILENT);
         explosion = e;
-        // обработчики начала уже видят заряд ({@link #chargeOf})
+        // Start handlers already see charge ({@link #chargeOf}).
         CHARGES.put(e, charge);
         cancelled = EventHooks.onExplosionStart(level, e);
         started = true;
@@ -587,10 +593,11 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Лучи {@code [nextRay, nextRay + raysPerUnit)} волны заряда: вдоль луча давление и импульс — Кинни–Грэхем на земле
-     * ({@link BlastModel}), блок ломается по своей кривой давление–импульс ({@code BlockResponse.breaksAt}), сломанный
-     * пропускает дальше долю волны ({@code BlockResponse.passes}), уцелевший, грунт, жидкость и неразрушимое — тень: за
-     * ними луч кончается. Приближение: волна не огибает дома, а у сломанного блока теряет ровно импульс его разрушения.
+     * Charge-wave rays {@code [nextRay, nextRay + raysPerUnit)}: ground Kinney–Graham pressure/impulse ({@link
+     * BlastModel}); block breaks by pressure–impulse curve ({@code BlockResponse.breaksAt}); broken transmits
+     * wave share ({@code BlockResponse.passes}); surviving block, ground, fluid, indestructible cast shadow and
+     * end ray. Approximation: wave does not wrap buildings, broken block consumes exactly its destruction
+     * impulse.
      */
     private boolean chargeRays(ServerLevel level) {
         long t = System.nanoTime();
@@ -610,8 +617,8 @@ final class StagedExplosion implements UnitQueue.Job {
             // entire slab thickness (and remove a metre of concrete for a sub-metre Lancet charge).
             if (placement != SlabBreach.Placement.SURFACE || breach == null || !breach.inward(dx, dy, dz))
                 wave(level, e, centre, dx, dy, dz, 0, 1, Long.MIN_VALUE);
-            // пробой: луч внутрь преграды, к которой приложен заряд; дошёл до пустоты — пройденное снесено, волна идёт
-            // дальше в пустоту
+            // Breach: ray into contacted obstacle; reaching void removes traversed blocks, wave continues
+            // into void.
             if (breach == null || !breach.inward(dx, dy, dz)) continue;
             liquid[0] = false;
             double out = SlabBreach.march(level, breach, dx, dy, dz, e, damage, breachPath, liquid);
@@ -619,8 +626,8 @@ final class StagedExplosion implements UnitQueue.Job {
             for (int i = 0; i < breachPath.size(); i++) {
                 if (chosen.add(BlockPos.of(breachPath.getLong(i)))) breached++;
             }
-            // приближение: волна за пробоем — как в открытом поле на том же расстоянии от центра (энергия, ушедшая на
-            // пробой, не вычитается) — верхняя оценка для того, что за плитой
+            // Approximation: wave beyond breach as open field at same center distance (breach energy
+            // not deducted), upper estimate behind slab.
             if (!liquid[0]) wave(level, e, breach.at(), dx, dy, dz, out, 1, breachPath.getLong(breachPath.size() - 1));
         }
         nextRay = end;
@@ -630,8 +637,8 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Волна по лучу из {@code from} по {@code (dx, dy, dz)} от расстояния {@code d0}: давление и импульс — Кинни–Грэхем на
-     * расстоянии от центра заряда, с долей {@code share}; {@code last} — блок, который луч уже прошёл (не трогать).
+     * Wave from {@code from} along {@code (dx, dy, dz)} starting at {@code d0}: Kinney–Graham at charge-center
+     * distance, {@code share} fraction; {@code last} already traversed, leave alone.
      */
     private void wave(ServerLevel level, Explosion e, Vec3 from, double dx, double dy, double dz, double d0, double share, long last) {
         for (double d = d0; d <= breakReach; d += STEP) {
@@ -659,8 +666,8 @@ final class StagedExplosion implements UnitQueue.Job {
             double impulse = BlastModel.chemicalImpulse(range, charge, true) * share;
             int seed = Mth.murmurHash3Mixer(Long.hashCode(key));
             boolean breaks = damage.shouldBlockExplode(e, level, pos, state, 1f) && response.breaksAt(psi, impulse, seed);
-            // трава, цветы, посевы, факелы без формы столкновений — без массы на пути волны: сломаны они или нет,
-            // волна идёт сквозь, ничего не теряя
+            // Shapeless grass/flowers/crops/torches have no mass in wave path: broken or not,
+            // wave passes without loss.
             boolean massless = state.getCollisionShape(level, pos).isEmpty();
             Direction entry = SlabBreach.exitFace(pos, new Vec3(x, y, z), new Vec3(-dx, -dy, -dz));
             if (!massless && (entry == null || SurfaceBlocks.backed(level, pos, entry))) break;
@@ -673,10 +680,10 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Газы взрыва в помещении: обход воздуха от заряда не больше {@link #ROOM_CELLS} клеток. Кончился раньше — заряд в
-     * замкнутом объёме: давление газов ({@link BlastDamage#quasiStaticKpa}) давит на все стены, пока не вытечет через
-     * проёмы — стёкла, деревянные двери и люки и то, что уже пробили лучи ({@link BlastDamage#ventSeconds}); стена
-     * ломается по той же кривой, с импульсом газов. Комнату выбивает целиком — выбитый этаж.
+     * Room blast gases: traverse up to {@link #ROOM_CELLS} air cells from charge. Ending sooner means enclosure;
+     * gas pressure ({@link BlastDamage#quasiStaticKpa}) loads all walls until venting through openings, glass,
+     * wooden doors/trapdoors, ray breaches ({@link BlastDamage#ventSeconds}); same wall curve with gas impulse.
+     * Entire room blown out, destroyed floor.
      */
     private boolean gas(ServerLevel level) {
         long t = System.nanoTime();
@@ -711,10 +718,13 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Помещение заряда: клетки воздуха, стены вокруг, проёмы (м²) и давление газов, кПа.
+     * Charge room: air cells, surrounding walls, openings (m²), gas pressure kPa.
      */
     record Room(LongOpenHashSet cells, List<BlockPos> walls, int vents, double kpa) {
-        /** Замкнутый объём у {@code centre}; null — воздух уходит дальше {@link #ROOM_CELLS} (взрыв на открытом) или в неготовый чанк. */
+        /**
+         * Enclosure at {@code centre}; null if air extends beyond {@link #ROOM_CELLS} (outdoors) or into unready
+         * chunk.
+         */
         @Nullable
         static Room find(ServerLevel level, Vec3 centre, Set<BlockPos> broken) {
             LongOpenHashSet seen = new LongOpenHashSet();
@@ -731,7 +741,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 p.set(queue.dequeueLong());
                 if (!level.isInWorldBounds(p) || !Terrain.ready(level, p)) return null;
                 BlockState s = level.getBlockState(p);
-                // заряд рвётся у самой поверхности, в которую ударил: блок центра — тоже воздух помещения
+                // Charge bursts at struck surface: center block counts as room air too.
                 if (!first && !passes(level, p, s)) {
                     BlockPos wall = p.immutable();
                     walls.add(wall);
@@ -753,7 +763,7 @@ final class StagedExplosion implements UnitQueue.Job {
             return s.isAir() || s.getCollisionShape(level, p).isEmpty();
         }
 
-        /** Проём: стекло и хрупкое (выбивает первым, при 0,8 psi), деревянные двери и люки. */
+        /** Vent: glass/fragile (first broken at 0.8 psi), wooden doors/trapdoors. */
         private static boolean vent(BlockState s) {
             return s.is(ModTags.SHATTERS) || BlockResponse.of(s).thresholdPsi() <= BlockResponse.FRAGILE_PSI
                     || s.is(BlockTags.WOODEN_DOORS) || s.is(BlockTags.WOODEN_TRAPDOORS);
@@ -764,7 +774,7 @@ final class StagedExplosion implements UnitQueue.Job {
         }
     }
 
-    /** Волна заряда по телу ({@link BlastBody}): давление открытого поля там, куда она прошла, газы — в помещении. */
+    /** Charge wave on body ({@link BlastBody}): open-field pressure where it reached, room gases indoors. */
     private BlastBody.Wave wave() {
         if (wave == null) wave = new BlastBody.Wave() {
             @Override
@@ -772,7 +782,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 return centre;
             }
 
-            /** Волна открытого поля, а в помещении заряда — не меньше давления газов. */
+            /** Open-field wave, at least charge-room gas pressure indoors. */
             @Override
             public double overpressureKpa(Vec3 p) {
                 double free = BlastModel.surfaceOverpressureKpa(p.distanceTo(centre), charge);
@@ -959,20 +969,19 @@ final class StagedExplosion implements UnitQueue.Job {
         return true;
     }
 
-    /** Докуда волна ломает лёгкие постройки, блоков (−1 — ещё не считали). */
+    /** Light-structure break reach, blocks (−1 not calculated). */
     private double lightReach = -1;
-    /** Порог лёгких деревянных построек ({@code nuke_light}), psi: так же волна разбивает незакреплённые вещи. */
+    /** Light wooden structure threshold ({@code nuke_light}), psi: also breaks unsecured objects. */
     private static final double LIGHT_PSI = 4;
-    /** Урон, после которого любая сущность без здоровья (предмет, вагонетка, рамка) разбита. */
+    /** Damage breaking any healthless entity (item, minecart, item frame). */
     private static final float BREAKS_ANYTHING = 1000;
 
     /**
-     * Аппараты Create Aeronautics в охвате: их блоки лежат в плотах Sable, и лучи по миру их не видят. Путь — как у
-     * ядерной волны ({@code BlastFront}): ванильный взрыв в центре, лучи которого Sable проводит и по блокам аппарата
-     * (и толкает его), а какой блок аппарата сломать, решает тот же закон давления и импульса по расстоянию до центра в
-     * мире ({@link CraftCharge}); сущности он не трогает. Сила — чтобы ванильный луч в воздухе дошёл до {@link #breakReach}
-     * при наименьшем множителе (0,7): дальше закон ничего не ломает. Толчок аппарата — Sable по ванильным лучам, не по
-     * физике.
+     * Create Aeronautics craft in reach: blocks in Sable plots, unseen by world rays. Like nuclear wave ({@code
+     * BlastFront}): vanilla center explosion whose rays Sable also traces through craft (and pushes it); same
+     * pressure/impulse law at world center distance determines craft breaks ({@link CraftCharge}); entities
+     * untouched. Power makes weakest-factor (0.7) air ray reach {@link #breakReach}; beyond law breaks nothing.
+     * Craft impulse is Sable vanilla-ray behavior, not physical.
      */
     private void crafts(ServerLevel level, CraftFront hit) {
         float craftPower = hit.power();
@@ -982,8 +991,8 @@ final class StagedExplosion implements UnitQueue.Job {
         boolean destroy = blocks;
         Entity by = direct, from = owner;
         Warheads.whenReady(level, c, craftReach(craftPower), l -> {
-            // пока идёт этот взрыв, обработчики событий видят заряд ({@link #chargeOf}), а список сущностей у его
-            // {@code Detonate} пуст ({@link #onDetonate}): урона и толчка от него нет, лучей видимости к телам — тоже
+            // During this explosion, handlers see charge ({@link #chargeOf}), and its entity list
+            // in {@code Detonate} is empty ({@link #onDetonate}): no damage/knockback or body visibility rays.
             double outer = craftCharge;
             craftCharge = tnt;
             try {
@@ -996,13 +1005,13 @@ final class StagedExplosion implements UnitQueue.Job {
         });
     }
 
-    /** Заряд взрыва по аппаратам, который сейчас идёт в потоке сервера ({@link #crafts}); 0 — нет такого. */
+    /** Craft explosion charge currently on server thread ({@link #crafts}); 0 absent. */
     private static double craftCharge;
 
     /**
-     * Сила ванильного взрыва по аппаратам ({@link #crafts}): луч в воздухе при множителе 0,7 уходит на 0,7 × 1,33 силы —
-     * до самой дальней точки аппаратов в охвате волны, но не дальше охвата ({@link #breakReach}: дальше закон ничего не
-     * ломает); 0 — аппаратов нет. Сила по всему охвату читала бы мир на ~1,9 охвата и стоила бы пика тика.
+     * Vanilla craft-explosion power ({@link #crafts}): factor-0.7 air ray reaches 0.7 × 1.33 power, to farthest
+     * craft point within wave reach, capped at {@link #breakReach} (nothing breaks beyond); 0 no craft.
+     * Full-reach power would read world to ~1.9 reach and spike tick.
      */
     static float craftPower(Level level, Vec3 centre, double tntKg) {
         double reach = breakReach(tntKg), far = 0;
@@ -1017,12 +1026,12 @@ final class StagedExplosion implements UnitQueue.Job {
         return far <= 0 ? 0 : (float) Math.min(60, Math.max(1, Math.min(reach, far) / (0.7 * 1.33)));
     }
 
-    /** Докуда читает мир взрыв по аппаратам силы {@code power}: луч при множителе 1,3 — 1,73 силы, с запасом в блок. */
+    /** World read reach of craft blast {@code power}: factor-1.3 ray, 1.73 power, plus one block. */
     static double craftReach(float power) {
         return power * 1.73 + 1;
     }
 
-    /** Взрыв по аппаратам: только блоки плотов, по закону давления и импульса в их точке мира; без урона и толчка сущностей. */
+    /** Craft explosion: plot blocks only, pressure/impulse law at world positions; no entity damage/knockback. */
     private static final class CraftCharge extends ExplosionDamageCalculator {
         private final Level level;
         private final Vec3 centre;
@@ -1064,31 +1073,31 @@ final class StagedExplosion implements UnitQueue.Job {
         }
     }
 
-    /** Заряд взрывов по заряду, пока они идут (обработчики событий: {@link #chargeOf}). */
+    /** Charges of ongoing charge explosions (event handlers, {@link #chargeOf}). */
     private static final java.util.Map<Explosion, Double> CHARGES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
-    /** Заряд взрыва мода по физике, кг ТНТ; 0 — ванильный или чужой взрыв. */
+    /** Physical mod explosion charge, kg TNT; 0 vanilla/other explosion. */
     static double chargeOf(Explosion e) {
         Double c = CHARGES.get(e);
         return c != null ? c : craftCharge;
     }
 
-    /** Заряд не отменён ({@code ExplosionEvent.Start}): работа удара после главного взрыва идёт, только если он был. */
+    /** Charge not canceled ({@code ExplosionEvent.Start}): post-main strike work only if explosion happened. */
     boolean happened() {
         return started && !cancelled;
     }
 
-    /** Первая единица прошла (район дождался), и обработчик-приват не отменил взрыв. */
+    /** First unit ran (area ready), claim handler did not cancel. */
     private boolean started, cancelled;
 
-    /** Выбранное лучами — во взрыв, сбор сущностей, {@code ExplosionEvent.Detonate}. */
+    /** Ray-selected blocks into explosion, collect entities, {@code ExplosionEvent.Detonate}. */
     private boolean detonate(ServerLevel level) {
         Explosion e = explosion;
         e.getToBlow().addAll(chosen);
         chosen.clear();
         strength = new float[0];
         long t = System.nanoTime();
-        // взрыв по заряду бьёт тела, пока давление выше порога осколков стекла; ванильный — в 2 × силы
+        // Charge blast damages bodies above glass-fragment pressure threshold; vanilla within 2 × power.
         float f2 = charge > 0 ? (float) hitReach : power * 2.0F;
         Vec3 c = centre;
         int x0 = Mth.floor(c.x - f2 - 1.0), x1 = Mth.floor(c.x + f2 + 1.0);
@@ -1104,8 +1113,8 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Раздел выбранного: плот аппарата — вопрос к Sable раз на чанк, его блоки (кроме воздуха без огня) ждут конца урона
-     * ({@link #blowCrafts}) вместе с тем, чей плот был в чанке; позиции мира ждут снимка ({@link #split}).
+     * Separate selection: Sable plot query once per chunk; craft blocks (except air without fire) wait for damage
+     * end ({@link #blowCrafts}) with plot owner; world positions await snapshot ({@link #split}).
      */
     private void partition(ServerLevel level) {
         long t = System.nanoTime();
@@ -1113,7 +1122,7 @@ final class StagedExplosion implements UnitQueue.Job {
         List<BlockPos> plot = new ArrayList<>();
         List<Block> plotBlocks = new ArrayList<>();
         List<BlockPos> world = new ArrayList<>();
-        // без разрушений блоков и без огня порциям нечего делать
+        // No block destruction/fire means no portion work.
         if (e.interactsWithBlocks() || fire) {
             Long2BooleanOpenHashMap plotChunk = new Long2BooleanOpenHashMap();
             for (BlockPos p : e.getToBlow()) {
@@ -1139,10 +1148,10 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Блоки аппаратов — одним разом после урона, как у ванили ({@code explode()} бьёт сущности, {@code finalizeExplosion}
-     * потом снимает блоки): урон и отбрасывание видят корпус целым (луч видимости {@code getSeenPercent} Sable ведёт и
-     * через блоки аппаратов). С раздела прошло несколько тиков, и аппарат мог расколоться, а его плот уйти другому:
-     * блок, сменившийся с раздела, и чанк, чей плот теперь не у того аппарата, не трогаются.
+     * Craft blocks removed together after damage, like vanilla ({@code explode()} damages entities, {@code
+     * finalizeExplosion} removes blocks): damage/knockback see intact hull ({@code getSeenPercent} ray also
+     * traces craft via Sable). Several ticks since separation can split craft/reassign plot; changed blocks or
+     * chunks now owned by another craft untouched.
      */
     private void blowCrafts(ServerLevel level) {
         if (crafts.isEmpty()) return;
@@ -1163,9 +1172,9 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * Разбор выбранного (после раздела): воздух без огня отбрасывается (у силы 20 выбранных — десятки тысяч, в основном
-     * воздух), мир — от центра наружу по заранее посчитанному расстоянию. Блок для сверки порции ({@link #portion}) —
-     * тот, что стоит на месте в момент разбора (после всех лучей), а не в момент луча.
+     * Process selected after separation: discard air without fire (power 20 selects tens of thousands, mostly
+     * air), world outward by precalculated distance. {@link #portion} identity comes from processing time after
+     * all rays, not ray time.
      */
     private boolean split(ServerLevel level) {
         if (!partitioned) partition(level);
@@ -1199,7 +1208,7 @@ final class StagedExplosion implements UnitQueue.Job {
         return phase == Phase.DAMAGE || !toBlow.isEmpty();
     }
 
-    /** Урон и отбрасывание по {@link #ENTITIES_PER_UNIT} сущностей — копия ванильного цикла {@code Explosion.explode}. */
+    /** Damage/knockback {@link #ENTITIES_PER_UNIT} entities: vanilla {@code Explosion.explode} loop copy. */
     private boolean damage(ServerLevel level) {
         long t = System.nanoTime();
         Explosion e = explosion;
@@ -1207,7 +1216,7 @@ final class StagedExplosion implements UnitQueue.Job {
         int end = Math.min(entities.size(), nextEntity + ENTITIES_PER_UNIT);
         for (int i = nextEntity; i < end; i++) {
             Entity entity = entities.get(i);
-            // между единицами сущность могла умереть или уйти в другое измерение
+            // Entity may have died/changed dimension between units.
             if (!entity.isAlive() || entity.level() != level || entity.ignoreExplosion(e)) continue;
             double d11 = Math.sqrt(entity.distanceToSqr(at)) / (double) f2;
             if (d11 > 1.0) continue;
@@ -1228,14 +1237,14 @@ final class StagedExplosion implements UnitQueue.Job {
                 e.getHitPlayers().put(player, push);
                 if (player instanceof ServerPlayer sp && sp.distanceToSqr(at.x, at.y, at.z) < 4096.0) tell(sp, push);
             }
-            // как у ванили: игрок помнит толчок — урон от падения после него, булава; причину толчка ваниль отличает только
-            // у заряда ветра, снаряд не передаём
+            // Like vanilla: player remembers impulse for fall damage/mace; vanilla distinguishes cause only
+            // for wind charge, so do not pass projectile.
             entity.onExplosionHit(null);
         }
         nextEntity = end;
         time(ExplosionStage.DAMAGE, t);
         if (nextEntity < entities.size()) return true;
-        // ваниль шлёт пакет всем игрокам в 64 блоках, и без отбрасывания
+        // Vanilla sends packet to all players within 64 blocks, even without knockback.
         for (ServerPlayer p : level.players()) {
             if (!told.contains(p) && p.distanceToSqr(at.x, at.y, at.z) < 4096.0) tell(p, null);
         }
@@ -1246,12 +1255,11 @@ final class StagedExplosion implements UnitQueue.Job {
     }
 
     /**
-     * {@code ExplosionEvent.Detonate} (приоритет {@code LOWEST}: все обработчики уже видели и правили список): у взрыва,
-     * чей ванильный {@code explode()} ведёт мод, — список сущностей забирается в урон мода, а сам список событию
-     * остаётся пустым, и ванильный цикл урона после события ни по кому не идёт. Список у события изменяемый — так
-     * NeoForge и задумал {@code getAffectedEntities}. Обработчики того же приоритета, зарегистрированные позже мода,
-     * видят у этого взрыва пустой список — и только у него. Другие взрывы (и взрыв, начатый обработчиком внутри) —
-     * другие объекты, их не трогаем.
+     * {@code ExplosionEvent.Detonate}, {@code LOWEST} priority (all handlers already saw/edited list): for
+     * explosion whose vanilla {@code explode()} mod runs, take entity list for mod damage, leave event list empty
+     * so subsequent vanilla loop hits nobody. Event list mutable by NeoForge design, {@code getAffectedEntities}.
+     * Same-priority handlers registered later see empty list only for this explosion. Other explosions (including
+     * handler-created nested ones) are distinct objects, untouched.
      */
     static void onDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
         if (craftCharge > 0 && CHARGES.get(event.getExplosion()) == null) {
@@ -1264,7 +1272,7 @@ final class StagedExplosion implements UnitQueue.Job {
         list.clear();
     }
 
-    /** Ванильный пакет взрыва игроку: его отбрасывание, без блоков (блоки клиенты видят по мере снятия). */
+    /** Vanilla player explosion packet: own knockback, no blocks (clients see removals as they happen). */
     private void tell(ServerPlayer p, @Nullable Vec3 push) {
         Explosion e = explosion;
         told.add(p);
@@ -1272,14 +1280,14 @@ final class StagedExplosion implements UnitQueue.Job {
                 e.getBlockInteraction(), e.getSmallExplosionParticles(), e.getLargeExplosionParticles(), e.getExplosionSound()));
     }
 
-    /** Сколько блоков сняла последняя порция (блок, сменившийся с лучей, не в счёт) — для «blocks removed». */
+    /** Last portion's removed count (exclude blocks changed since rays), for “blocks removed”. */
     private int blown;
 
     /**
-     * Порция блоков мира по времени: блоки идут, пока порция короче {@link #portionNanos}, хоть один — всегда. Порядок —
-     * от центра наружу пачками по {@link #BATCH}, внутри пачки перемешан (как весь список у ванили); начатая пачка
-     * доходит в следующей порции. Огонь — по снятому этой порцией. Блок дольше {@link #SLOW_BLOCK_NANOS} — в лог
-     * ({@link BlastArea#slowBlock}).
+     * Timed world block portion: continue while under {@link #portionNanos}, always at least one. Outward {@link
+     * #BATCH} batches, shuffled inside (vanilla shuffles whole list); unfinished batch continues next portion.
+     * Fire uses this portion's removals. Block exceeding {@link #SLOW_BLOCK_NANOS} logged ({@link
+     * BlastArea#slowBlock}).
      */
     private boolean portion(ServerLevel level) {
         Explosion e = explosion;
@@ -1315,10 +1323,10 @@ final class StagedExplosion implements UnitQueue.Job {
         return !batch.isEmpty() || next < toBlow.size();
     }
 
-    /** Позиция мира, выбранная лучами: расстояние до центра (ключ порядка) и блок в момент лучей. */
+    /** Ray-selected world position: center distance (order key), block identity at ray time. */
     private record Target(double distSqr, BlockPos pos, Block block) {}
 
-    /** Шаги {@code Explosion.finalizeExplosion} на части списка: снятие блоков (выпадение — в общий список), огонь. */
+    /** {@code Explosion.finalizeExplosion} on partial list: removal (shared drops list), fire. */
     private void blow(ServerLevel level, List<BlockPos> part) {
         Explosion e = explosion;
         if (part.isEmpty() || e == null) return;
@@ -1333,7 +1341,7 @@ final class StagedExplosion implements UnitQueue.Job {
         if (fire) burn(level, part);
     }
 
-    /** Огонь {@code Explosion.finalizeExplosion}: треть снятого, где воздух над твёрдым. */
+    /** {@code Explosion.finalizeExplosion} fire: one third of removals, air over solid. */
     private void burn(ServerLevel level, List<BlockPos> part) {
         for (BlockPos p : part) {
             if (level.random.nextInt(3) == 0 && level.getBlockState(p).isAir() && level.getBlockState(p.below()).isSolidRender(level, p.below())) {
@@ -1342,7 +1350,7 @@ final class StagedExplosion implements UnitQueue.Job {
         }
     }
 
-    /** {@code Explosion.addOrAppendStack}: одинаковые предметы — в одну стопку (до 16), у места первого. */
+    /** {@code Explosion.addOrAppendStack}: identical items merge (up to 16) at first location. */
     private void addOrAppend(ItemStack stack, BlockPos pos) {
         for (int i = 0; i < drops.size(); i++) {
             Pair<ItemStack, BlockPos> pair = drops.get(i);
@@ -1364,7 +1372,7 @@ final class StagedExplosion implements UnitQueue.Job {
 
     @Override
     public void end(ServerLevel level) {
-        // отменён или упал посреди работы: выпавшее уже снятыми блоками — всё равно выпадает
+        // Canceled/failed midway: drops from removed blocks still released.
         popDrops(level);
         done = true;
         area.recordCounts(counts);

@@ -10,13 +10,13 @@ import net.minecraft.util.StringRepresentable;
 
 import java.util.function.IntFunction;
 
-/** Куда бьёт пуск с экрана пульта. Из бинокля — всегда в точку под прицелом. Новый режим — только в конец (id в пакетах). */
+/** Launch target from designator screen. Binoculars always use crosshair point. Append new modes only (packet id). */
 public enum TargetMode implements StringRepresentable {
     LOOK(0, "look"),
     AROUND_ME(1, "around_me"),
     PLAYER(2, "player"),
     AIRCRAFT(3, "aircraft"),
-    /** Место, выбранное на карте наведения. */
+    /** Site selected on designator map. */
     MAP(4, "map");
 
     public static final Codec<TargetMode> CODEC = StringRepresentable.fromEnum(TargetMode::values);

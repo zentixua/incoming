@@ -11,29 +11,33 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Конец полёта не по плану — в лог одной строкой за тик на группу: залп из 30 шахедов по погибшему игроку теряет цель
- * в одном тике, и строка на каждый снаряд дала бы десятки строк (logscan держит 40 последних в разделе). Группа — вид
- * снаряда и событие; у снарядов залпа с разбросом свои точки, поэтому строка даёт их середину и разброс. Каждый снаряд
- * с UUID — строкой DEBUG там, где событие случилось. Пишется в конце тика мира ({@link StrikeWorld}).
+ * Unplanned flight end: one log line per group per tick. A 30-Shahed salvo targeting a dead player loses its
+ * target in one tick; one line per projectile would produce dozens (logscan retains 40 recent per section). Group
+ * by projectile type and event; dispersed salvo projectiles have distinct points, so line gives center and
+ * spread. Each projectile UUID is logged at DEBUG where event occurs. Written at world tick end ({@link
+ * StrikeWorld}).
  */
 public final class FlightLog {
-    /** Что случилось с полётом. */
+    /** What happened to the flight. */
     public enum Event {
-        /** Цель пропала (умерла, вышла, другое измерение, аппарат разобран): снаряд идёт в её последнюю точку. */
+        /**
+         * Target vanished (died, logged out, changed dimension, craft disassembled): projectile goes to its last
+         * point.
+         */
         LOST_GONE(Level.INFO, "lost the target (gone), heading to its last position"),
-        /** Цель ушла дальше запаса погони. */
+        /** Target moved beyond chase budget. */
         LOST_OUT_OF_REACH(Level.INFO, "lost the target (beyond pursuit range), heading to its last position"),
-        /** Запас хода кончился в мире: самоликвидация. */
+        /** Range exhausted in the world: self-destruct. */
         EXPIRED(Level.INFO, "ran out of endurance and self-destructed, target"),
-        /** Запас хода кончился вне мира: снаряд убран без взрыва. */
+        /** Range exhausted outside the world: removed without explosion. */
         EXPIRED_VIRTUAL(Level.WARN, "ran out of endurance off-world and were removed, target"),
-        /** Столкновение до взведения взрывателя (на старте): разбились без подрыва боевой части. */
+        /** Collision before fuze arming (at launch): crash without warhead detonation. */
         CRASHED(Level.WARN, "crashed before fuze arming at"),
-        /** Сбиты уроном до взведения (подробность — тип урона): разбились без подрыва боевой части. */
+        /** Shot down by damage before arming (detail: damage type): crash without warhead detonation. */
         SHOT_DOWN(Level.WARN, "shot down before fuze arming at"),
-        /** Убраны не модом (команда, чистильщик сущностей другого мода; подробность — кем). */
+        /** Removed externally (command, another mod's entity cleaner; detail: by whom). */
         REMOVED(Level.WARN, "removed externally at"),
-        /** Сбиты зенитной ракетой (подробность — какой ЗРК): боевая часть не сработала, корпус упал обломками. */
+        /** Shot down by interceptor (detail: which SAM): warhead did not detonate, casing fell as debris. */
         INTERCEPTED(Level.INFO, "shot down by a SAM at");
 
         private final Level level;
@@ -45,12 +49,12 @@ public final class FlightLog {
         }
     }
 
-    /** Строка лога: уровень и текст. */
+    /** Log line: level and text. */
     record Line(Level level, String text) {}
 
     private record Key(String weapon, Event event, boolean targetLost, String detail) {}
 
-    /** Сколько снарядов в группе, самый большой оставшийся запас хода (секунд полёта на маршевой) и рамка их точек. */
+    /** Projectile count in group, largest remaining range (seconds at cruise speed), and bounds of their points. */
     private static final class Group {
         int count;
         int seconds;
@@ -68,7 +72,7 @@ public final class FlightLog {
             maxZ = Math.max(maxZ, p.getZ());
         }
 
-        /** Середина рамки и её полуразмер по горизонтали — «x y z (±r)», у одной точки без разброса. */
+        /** Bounds center and horizontal half-size, “x y z (±r)”; no spread for a single point. */
         String where() {
             int r = (Math.max(maxX - minX, maxZ - minZ) + 1) / 2;
             String at = Math.floorDiv(minX + maxX, 2) + " " + Math.floorDiv(minY + maxY, 2) + " " + Math.floorDiv(minZ + maxZ, 2);
@@ -77,33 +81,33 @@ public final class FlightLog {
     }
 
     private final Map<Key, Group> groups = new LinkedHashMap<>();
-    /** Сколько снарядов отмечено за всё время, по событиям (для проверок). */
+    /** All-time projectile counts by event (tests). */
     private final int[] totals = new int[Event.values().length];
 
     /**
-     * Отметить снаряд.
+     * Record a projectile.
      *
-     * @param weapon     вид снаряда (id типа сущности)
-     * @param point      последняя точка цели (для потери) или точка, куда он шёл
-     * @param targetLost цель к этому времени потеряна
-     * @param seconds    на сколько секунд полёта на маршевой скорости ему осталось запаса хода (для потери цели; иначе 0)
+     * @param weapon projectile type (entity type id)
+     * @param point last target point (on loss) or destination point
+     * @param targetLost target already lost
+     * @param seconds remaining seconds of flight at cruise speed (for target loss; otherwise 0)
      */
     public void note(String weapon, Event event, BlockPos point, boolean targetLost, int seconds) {
         note(weapon, event, point, targetLost, seconds, "");
     }
 
-    /** То же с подробностью (курс, тип урона, кем убран): своя строка на каждую. */
+    /** Same with detail (heading, damage type, remover): separate line for each. */
     public void note(String weapon, Event event, BlockPos point, boolean targetLost, int seconds, String detail) {
         groups.computeIfAbsent(new Key(weapon, event, targetLost, detail), k -> new Group()).add(point, seconds);
         totals[event.ordinal()]++;
     }
 
-    /** Сколько снарядов отмечено событием {@code event} за жизнь мира в памяти. */
+    /** Projectiles recorded for {@code event} during this world's lifetime in memory. */
     public int total(Event event) {
         return totals[event.ordinal()];
     }
 
-    /** Строки за тик, по одной на группу; отмеченное забывается. */
+    /** Tick lines, one per group; recorded entries are forgotten. */
     List<Line> drain() {
         List<Line> lines = new ArrayList<>(groups.size());
         groups.forEach((k, g) -> {
@@ -122,7 +126,7 @@ public final class FlightLog {
         return lines;
     }
 
-    /** В лог — в конце тика мира. */
+    /** Log at world tick end. */
     void flush() {
         if (groups.isEmpty()) return;
         for (Line line : drain()) Incoming.LOG.atLevel(line.level()).log(line.text());

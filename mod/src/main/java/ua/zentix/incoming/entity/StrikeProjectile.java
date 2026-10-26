@@ -33,6 +33,7 @@ import ua.zentix.incoming.guidance.AltitudeHold;
 import ua.zentix.incoming.guidance.Autopilot;
 import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.Craft;
+import ua.zentix.incoming.util.Relief;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
@@ -181,6 +182,11 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
 
         @Override
+        public Relief reliefSurvey() {
+            return Terrain.relief(level(), virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
+        }
+
+        @Override
         public double clearAlong(Vec3 to, double margin) {
             return StrikeProjectile.this.clearAlong(level(), to, margin);
         }
@@ -217,8 +223,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     @Nullable
     private Vec3 grounded;
-    /** Район цели и полоса подлёта ({@link #visibleLeg}), которые держит снаряд; не сохраняются, как и тикеты. */
-    private final TargetAreaHold aimArea = new TargetAreaHold();
+    /** Район цели и полоса подлёта миссии: переходят копии с тем же UUID; не сохраняются, как и тикеты. */
+    private TargetAreaHold aimArea = new TargetAreaHold();
     /** Свой чанк и чанк впереди по курсу. */
     private final ChunkHold chunks = new ChunkHold();
 
@@ -525,6 +531,18 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Снаряд передан {@link ua.zentix.incoming.strike.VirtualFlights}: в мир его не добавлять, пока не вернётся сам. */
     public void markVirtual() {
         virtual = true;
+    }
+
+    /**
+     * Передать район и полосу новой копии этой миссии до удаления старой сущности ({@link VirtualFlights#park}).
+     * Свои чанки остаются старой сущности: её удаление отпустит их, но уже не удержание миссии.
+     */
+    public final void handOverTargetArea(StrikeProjectile copy) {
+        if (copy == this || copy.level() != level() || !copy.getUUID().equals(getUUID()) || !copy.aimArea.isEmpty()) {
+            throw new IllegalArgumentException("Target area handover needs a fresh copy of the same mission");
+        }
+        copy.aimArea = aimArea;
+        aimArea = new TargetAreaHold();
     }
 
     /** Время до удара, тиков (сервер): оставшийся путь по маршруту на маршевой скорости и старт. */
@@ -1274,7 +1292,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         Vec3 pos = position();
         double yawRad = Math.toRadians(flight.yaw());
         double[] track = {pos.x, pos.z, pos.x - Math.sin(yawRad) * distance, pos.z + Math.cos(yawRad) * distance};
-        return Autopilot.reliefAlong(track, (x, z) -> relief(level, x, z));
+        return Autopilot.reliefAlong(track, Terrain.relief(level, virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF));
     }
 
     /**

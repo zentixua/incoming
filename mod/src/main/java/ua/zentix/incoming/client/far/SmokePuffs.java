@@ -157,16 +157,16 @@ final class SmokePuffs {
     /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
     static double budget = FILL_BUDGET;
     /**
-     * Уровней слияния разных источников ({@link Draw#mergeLevel}): ячейка уровня k — {@link #LOD_CELL}·2^k края клуба (на
-     * последнем — два края; дальше сливать нельзя, иначе отдельные облака превратятся в одно над всем налётом).
+     * Cross-source merge levels ({@link Draw#mergeLevel}): a level-k cell spans {@link #LOD_CELL}·2^k puff edges
+     * (two edges at the last level). Merging farther would turn separate clouds into one spanning the entire raid.
      */
     static final int LEVELS = 3;
     static final double LOD_CELL = 0.5;
     /** Уровень слияния прошлого кадра держится, пока пол уровнем ниже не меньше этой доли бюджета. */
     static final double HYSTERESIS = 0.8;
     /**
-     * Отобранные квадратами ({@code Draw.fit}) с этой доли бюджета по накопленной заливке тают в вуаль (лента — гаснет).
-     * Полоса подачи: 15 % держат переход без скачка, не превращая свободный залп по воде (пол 13,16) в дымку.
+     * Quads selected by {@code Draw.fit} fade into the veil from this fraction of cumulative budget fill; ribbons fade out.
+     * Presentation: a 15% band keeps the transition continuous without turning an under-budget water salvo (floor 13.16) into haze.
      */
     static final double FIT_FADE = 0.85;
     /** Групп в ячейке слияния мест трубок: места одной трубки — в разных группах. */
@@ -283,7 +283,7 @@ final class SmokePuffs {
         return Math.min(1, Math.abs(area) * 0.5 / (4 * w * h));
     }
 
-    /** Один выпуклый многоугольник получает не больше одной вершины на каждую из пяти плоскостей обрезки. */
+    /** A convex polygon gains at most one vertex at each of the five clipping planes. */
     private static final class PolygonScratch {
         double[] a = new double[48], b = new double[48];
 
@@ -322,8 +322,8 @@ final class SmokePuffs {
     static final double MAX_SHARE = 0.8;
 
     /**
-     * Переход от одного клуба к кучке: первый клуб остаётся тем же и плавно приобретает размер, разброс и кадр кучки.
-     * ceil(many) определяет только число вызовов рисования; от него не зависит вид уже существующего клуба.
+     * Transition from one puff to a cluster: the first puff stays in place and gradually gains the cluster's size, spread and frame.
+     * ceil(many) determines only the number of draw calls, not the appearance of an existing puff.
      */
     static double clusterBlend(double many) {
         return smoothstep(1, 2, many);
@@ -343,12 +343,12 @@ final class SmokePuffs {
         return plain + (clubFrame(age, unit(seed >>> 28), true) - plain) * (vary ? 1 : clusterBlend(many));
     }
 
-    /** Оси горизонтального клуба принадлежат ему, а не камере. */
+    /** A horizontal puff owns its axes; they do not belong to the camera. */
     static double clubAngle(long seed) {
         return 2 * Math.PI * unit(seed >>> 35);
     }
 
-    /** Первый клуб стоит в центре вещества; дочерние места — постоянные пары по разные стороны от него. */
+    /** The first puff sits at the material center; child positions form fixed pairs on opposite sides. */
     static double clubOffset(long seed, int child, int shift) {
         if (child == 0) return 0;
         long pair = mix(seed + ((child + 1L) / 2) * 0x632BE59BD9B4E019L);
@@ -779,16 +779,17 @@ final class SmokePuffs {
         }
 
         /**
-         * Кадр: ждущие клубы облаков и места трубок — квадратами в пределе заливки ({@link #FILL_BUDGET}) при любом их числе.
-         * План — сколько экранов закроет каждый клуб и место одним квадратом (пол) и кучкой. Пол выше бюджета —
+         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their count.
+         * The plan estimates how many screens each puff or place covers with one quad (the floor) and with a cluster.
+         * If the floor exceeds the budget:
          * <ol>
-         * <li>клубы и места разных источников, что лежат друг на друге, сливаются уровнями тем же законом, что {@link #merge}
-         * (масса и моменты), пока пол не уложится ({@link #mergeLevel});</li>
-         * <li>не уложился и так — менее непрозрачные клубы тают в вуаль у глаза (та же толща — по лучам, {@link Veil}),
-         * ровно столько, чтобы остальные легли в бюджет ({@link #fit}); вуаль стоит экран на всё.</li>
+         * <li>overlapping puffs and places from different sources merge in levels using the same mass-and-moment law as
+         * {@link #merge}, until the floor fits ({@link #mergeLevel});</li>
+         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along rays
+         * ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
          * </ol>
-         * Потом кучки берут столько клубов, чтобы заливка уложилась (каждая — с той же непрозрачностью середины), и всё —
-         * квадратами; вуаль — одной сеткой.
+         * Clusters then take enough puffs to fit the fill limit, each retaining its center opacity. All draw as quads;
+         * the veil uses one grid.
          */
         void flush() {
             close();
@@ -822,12 +823,12 @@ final class SmokePuffs {
                 // слитые клубы расходились бы и сходились кадр за кадром
                 while (level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
             }
-            // Последние 15 % бюджета тают уже до переполнения: иначе при пересечении
-            // границы целиком включалась или исчезала вуаль всех этих записей.
+            // The last 15% of the budget fades before overflow; otherwise crossing the boundary
+            // would enable or remove the entire veil of these entries at once.
             if (floor > FIT_FADE * budget) fit(budget);
-            // Подробность держится между двумя границами заливки. Поворот в пределах оставшегося места не пересобирает
-            // кучки; после переполнения оставляем запас до следующей границы. Предел всё равно проверяется настоящими
-            // квадратами текущего кадра, в том числе у переходов между лежащим и стоящим видом.
+            // Detail stays between two fill thresholds. Turning within the remaining capacity does not rebuild clusters;
+            // after overflow, leave headroom to the next threshold. The limit is still checked against actual quads in this
+            // frame, including transitions between horizontal and upright puffs.
             double target = shareReady && drawn(lastShare) > budget ? Math.max(floor, HYSTERESIS * budget) : budget;
             double s = 1;
             if (planned(1) > target) {
@@ -931,8 +932,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Записи плана: вид, место от глаза, полуоси края (м), полное число клубов; пол записи, непрозрачность
-         * (у места — всей трубки у оси, для {@link #fit}), доля в вуали, у глаза ли и слита ли.
+         * Plan entries: kind, position from the eye, edge half-axes (m), full puff count; entry floor, opacity
+         * (for a tube place, the entire tube on its axis, used by {@link #fit}), veil share, near-eye and merged flags.
          */
         private FarView[] planView = new FarView[64];
         private double[] plan = new double[64 * 6], planCover0 = new double[64], planShown = new double[64],
@@ -950,8 +951,9 @@ final class SmokePuffs {
         private int plans;
 
         /**
-         * Кучка клуба или места {@link #current} в план кадра: место от глаза, полуоси края (м), полное число клубов; near —
-         * глаз в его краю (часть вещества — в вуали; такие не сливаются); shown — непрозрачность (у места — вся трубка у оси).
+         * Add the cluster of puff or place {@link #current} to the frame plan: position from the eye, edge half-axes (m), full puff count.
+         * near means the eye is within its edge (some material is in the veil; these entries do not merge);
+         * shown is opacity (for a tube place, the entire tube on its axis).
          */
         private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near,
                                  double opacity, double shown, long seed, double grow, double offV, double lying, boolean place) {
@@ -1050,8 +1052,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Лежащий клуб ({@code PuffGeometry.flat}: квадрат на горизонтали под углом от зерна, полуразмеры a, b)
-         * с серединой (x, y, z) от глаза — доля экрана по его четырём вершинам ({@link #polygonFill}).
+         * Horizontal puff ({@code PuffGeometry.flat}: a horizontal quad at a seeded angle, half-sizes a, b),
+         * centered at (x, y, z) from the eye: screen fraction from its four vertices ({@link #polygonFill}).
          */
         private final double[] flat = new double[12];
 
@@ -1068,16 +1070,16 @@ final class SmokePuffs {
             return f;
         }
 
-        /** Порядок отбора в бюджет. Приоритет принадлежит клубу, не клетке экрана. */
+        /** Budget selection order. Priority belongs to the puff, not a screen cell. */
         private long[] order = new long[64];
 
         /**
-         * Сетка направлений мира: 24 клетки на сторону куба — бюджет отбора скрытого, не детализация рисунка.
-         * Узлы на границах граней совпадают; билинейная выборка непрерывна и там. Камера задаёт только начало лучей.
+         * World-direction grid: 24 cells per cube face bound occlusion work, not visual detail.
+         * Nodes coincide at face boundaries, so bilinear sampling is continuous there too. The camera sets only the ray origin.
          */
         private static final int OCCLUSION_CELLS = 24, OCCLUSION_SIDE = OCCLUSION_CELLS + 1,
                 OCCLUSION_FACE = OCCLUSION_SIDE * OCCLUSION_SIDE;
-        /** Сердцевина карты и полоса плавного края — подача, как прежние 0,6 полуразмера у скрытия по экрану. */
+        /** Presentation: map core and smooth edge band, like the previous 0.6 half-size used for screen-space occlusion. */
         private static final double OCCLUSION_CORE = 0.6, OCCLUSION_INNER = 0.8;
         private final double[] occlusion = new double[6 * OCCLUSION_FACE];
         private final double[] occlusionRays = occlusionRays();
@@ -1098,7 +1100,7 @@ final class SmokePuffs {
             return rays;
         }
 
-        /** Толща на направлении, в том числе между узлами и на стыке граней куба. */
+        /** Optical depth in a direction, including between nodes and across cube-face boundaries. */
         private double occlusion(double x, double y, double z) {
             double ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z), m = Math.max(ax, Math.max(ay, az));
             if (!(m > 0)) return 0;
@@ -1114,13 +1116,13 @@ final class SmokePuffs {
         }
 
         /**
-         * Клубы идут по расстоянию от глаза. У дальнего — девять лучей сердцевины, закреплённых его геометрией;
-         * накопленная ближними толща на всех девяти скрывает его плавно между 2 и 3 (14 % → 5 % света).
-         * Сетка хранит суммарное перекрытие любых источников, без лимита «первых N клубов». Лежащие клубы
-         * и вещество у глаза не отбрасываются. Цена — покрытые угловые клетки на ограниченное число записей плана.
+         * Puffs run in distance order from the eye. A distant puff has nine core rays fixed by its geometry;
+         * optical depth accumulated by nearer puffs on all nine rays hides it smoothly between 2 and 3 (14% to 5% light).
+         * The grid stores total overlap from any sources, with no "first N puffs" limit. Horizontal puffs and material
+         * near the eye are not discarded. Cost is covered angular cells times a bounded number of plan entries.
          */
         private void conceal(double budget) {
-            // При свободном бюджете скрытие не нужно; за его границей оно появляется плавно, а не всем кадром сразу.
+            // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching the whole frame.
             double strength = smoothstep(budget, 1.25 * budget, lastRaw);
             int n = 0;
             for (int e = 0; e < plans; e++) {
@@ -1160,8 +1162,8 @@ final class SmokePuffs {
                 }
                 double tau = -Math.log1p(-Math.min(planOpacity[e], 0.999)) * (1 - hidden);
                 if (hidden > 0) {
-                    // Видимая доля принадлежит записи рисования: её учитывают и слияние, и отбор в бюджет.
-                    // Иначе почти скрытые места занимали бюджет полным приоритетом и запрещали своё слияние.
+                    // Visibility belongs to the draw entry, so both merging and budget selection account for it.
+                    // Otherwise nearly hidden places kept their full budget priority and prevented their own merging.
                     double keep = 1 - hidden;
                     int owner = planOwner[e];
                     if (owner >= 0) held[owner * FIELDS + 13] *= keep;
@@ -1170,14 +1172,14 @@ final class SmokePuffs {
                 }
                 if (!(tau > 0) || !(ra > 0) || !(rb > 0) || planFlat[e] > 0) continue;
                 double radius = Math.max(ra, rb);
-                // Границы сферы сердцевины на каждой грани — только ограничение обхода; вклад проверяется самой плоскостью.
+                // Core-sphere bounds on each face only limit traversal; the actual plane determines the contribution.
                 for (int face = 0; face < 6; face++) {
                     int axis = face / 2;
                     double c = ((face & 1) == 0 ? 1 : -1) * (axis == 0 ? x : axis == 1 ? y : z);
                     if (c + radius <= 0) continue;
                     double u = axis == 0 ? y : x, v = axis == 2 ? y : z;
-                    // Грань куба — пирамида |u|≤c, |v|≤c. Дистанция до её боковой плоскости — (|u|−c)/√2.
-                    // Без этой проверки клуб у горизонта обходил целиком обе грани ±Y, которых вовсе не касался.
+                    // A cube face is the pyramid |u|≤c, |v|≤c. Distance to its side plane is (|u|−c)/√2.
+                    // Without this check a puff near the horizon traversed both entire ±Y faces, even though it touched neither.
                     if (Math.abs(u) - c > Math.sqrt(2) * radius || Math.abs(v) - c > Math.sqrt(2) * radius) continue;
                     double u0 = -1, u1 = 1, v0 = -1, v1 = 1;
                     if (c > radius) {
@@ -1206,13 +1208,14 @@ final class SmokePuffs {
         }
 
         /**
-         * Пол выше бюджета и после слияния: квадратами остаются самые непрозрачные
-         * ({@link #planShown}; у места трубки — вся трубка у оси: тонкий тёмный шлейф заметен, хотя доля
-         * каждого его места мала), пока их пол ложится в бюджет; остальные — в вуаль у глаза, той же толщей
-         * по лучам (лента — не рисуется). Отобранные в последних 15 % бюджета ({@link #FIT_FADE}) тают в вуаль плавно (без
-         * скачка, когда клуб пересекает порог); прежде полоса шла по видности от порога вдвое, и у ровной сцены (1000 одинаковых
-         * трубок) таяли все отобранные — бюджет уходил на невидимое. Передние густые клубы — вид облака — остаются клубами; прежде в вуаль уходили крупнейшие, и
-         * стена дыма с края становилась ровной мглой. Так предел заливки держится по построению.
+         * If the floor remains above budget after merging, keep the most opaque entries as quads
+         * ({@link #planShown}; for a tube place, the entire tube on its axis: a thin dark trail is visible even when each
+         * place contributes little) while their floor fits. The rest enters the near-eye veil with the same optical depth
+         * along rays; ribbons are not drawn. Entries selected in the last 15% of the budget ({@link #FIT_FADE}) fade into
+         * the veil smoothly, without a jump at the threshold. Previously the band spanned twice the visibility threshold,
+         * so a uniform scene (1000 identical tubes) faded every selected entry and spent its budget on invisible geometry.
+         * Dense foreground puffs retain the cloud's appearance; previously the largest entries entered the veil, turning
+         * the edge of a smoke wall into uniform haze. The fill limit therefore holds by construction.
          */
         private void fit(double budget) {
             int n = 0;
@@ -1233,7 +1236,7 @@ final class SmokePuffs {
                     planVeil[e] = 1;
                     continue;
                 }
-                // последние 15 % бюджета (наименее видные из отобранных) тают плавно: клуб у порога не выпрыгивает
+                // The last 15% of the budget (the least visible selected entries) fades smoothly, so puffs do not pop at the threshold.
                 acc += planCover0[e];
                 planVeil[e] = smoothstep(FIT_FADE * budget, budget, acc);
             }
@@ -1879,8 +1882,8 @@ final class SmokePuffs {
                 // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
                 // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
                 double k = clubScale(many, hj, false);
-                // Кадр и отражение принадлежат клубу и у дальнего одиночного: в налёте на 3 км все 335 старых
-                // одиночных клубов прежде брали одну карту 14 без отражения — одинаковые срезы складывались в стену.
+                // Frame and mirroring belong to each puff, including distant single puffs: in a raid at 3 km, all 335 old
+                // single puffs used frame 14 without mirroring, and their identical outlines combined into a wall.
                 double frame = clubFrame(clubAge, unit(hj >>> 28), true);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
@@ -1899,7 +1902,7 @@ final class SmokePuffs {
         }
     }
 
-    /** Два вида слоя делят оптическую толщу в полосе углов: подъём глаза больше не меняет весь квадрат за кадр. */
+    /** The two layer views share optical depth across an angular band, so raising the eye no longer switches the whole quad in one frame. */
     static double lyingShare(double sh, double sv, double dy, double d) {
         return smoothstep(2.5, 3.5, sh / sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
     }
@@ -2143,7 +2146,7 @@ final class SmokePuffs {
          * глаза стена в нескольких метрах уже почти скрыта. ⚠ Линейный спуск вместо доли толщи перед миром — приближение.
          */
         final float[] soft = new float[N * N];
-        /** Расстояние до половины непрозрачности: место вещества для сортировки, независимо от ближней геометрии сетки. */
+        /** Distance to half opacity: the material location used for sorting, independent of the nearby grid geometry. */
         final float[] depth = new float[N * N];
 
         /**
@@ -2197,7 +2200,7 @@ final class SmokePuffs {
             return false;
         }
 
-        /** Клетка смешивается на глубине своего вещества; прозрачные углы её не притягивают к глазу. */
+        /** A cell blends at its material depth; transparent corners do not pull it toward the eye. */
         float depth(int i, int j) {
             double sum = 0, distance = 0;
             for (int y = j; y <= j + 1; y++) for (int x = i; x <= i + 1; x++) {

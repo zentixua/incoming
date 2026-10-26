@@ -8,104 +8,116 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/grid/**"
 ---
 
-# Distant Horizons и LOD Server Support
+# Distant Horizons and LOD Server Support
 
-## Подводные камни
-- Дальний рельеф карты, лучей и звука (`client/map/TerrainTiles`) — один дальний слой: первый работающий из LOD Server
-  Support (`LssTerrain`, пока `LSSApi.isServerEnabled()`), базы Voxy (`VoxyTerrain`, пока Voxy держит мир; `voxy.md`)
-  и DH (`DistantHorizonsTerrain`), иначе только чанки клиента (`TerrainTiles.pickFar`, порядок — `TerrainTiles.stack`,
-  тест `farSourceOrderForEachPack`). Своей настройки «раздавать одиночной игре» у LSS нет (только «Открыть для сети» и
-  тестовое свойство) — в одиночной игре дальний рельеф даёт база Voxy. LSS (MIT, мягкая зависимость `lss`, compileOnly `lss_version`) — через его публичное
-  клиентское API `LSSApi.registerColumnConsumer`: подписка — в `FMLClientSetupEvent` (его API трогает его сетевые
-  классы), подписчик есть — клиент LSS качает и без Voxy. Колонка приходит в его потоке `LSS-ColumnProcessor`: верх
-  колонок считается там же (`LssColumns.summarize`, как слой чанков клиента: `MOTION_BLOCKING`, цвет карты, вода) и
-  кладётся в память; исключение наружу не выпускать — LSS сочтёт чанк не принятым и пришлёт заново всем (и Voxy).
-  Клиент LSS хранит метки полученного (`.lss/cache`) и при новом входе просит у сервера только изменённое, поэтому
-  колонки — и на диске (`incoming/lss-terrain/<сервер>/world-<хэш сида>/<измерение>.bin`, раз в 2 минуты и при выходе из мира); файла
-  нет, а метки LSS есть — вдали пусто до `/lss clearcache`. Подробных чанков (1 КБ) — не больше `LssTerrain.FULL_LIMIT`,
-  дальние от игрока — грубыми, середины клеток 4×4 (колонки плитки уровня 2). Колонки LSS читаются сразу из памяти
-  (`TerrainSource.peek`): `TerrainTiles.height`, `waterDepth`, `wet` (лучи `FarTerrain`, звук, ядерка) знают всё, что
-  прислал сервер, а не только построенные плитки. LSS не раздаёт LOD встроенному серверу одиночной игры (кроме
-  мира, открытого по сети — его `IntegratedServerLanHook`, — и свойства `lss.test.integratedServer`, им пользуется
-  `tools/client_scenario.sh target-map lss`). Файл — по адресу и хэшу сида мира (`BiomeManager.biomeZoomSeed`, AT),
-  как ключ меток самого LSS: другой мир на том же адресе LSS шлёт заново, и старый рельеф не должен остаться. Чанков
-  всего — не больше `LssTerrain.TOTAL_LIMIT` (дальние уходят; LSS их сам не пришлёт); при выходе из игры запись
-  дожидается крюк остановки JVM.
-- Рельеф Distant Horizons для карты — только через его API (`DhApi.Delayed.terrainRepo`), а оно читает базу DH в его
-  пуле ввода-вывода, который ниже по приоритету, чем загрузка LOD: пока DH грузит LOD вокруг (после входа в мир, после
-  дальнего перемещения), чтение стоит в очереди (облако: 30+ с; у хоста первая плитка — 0,3–1 с), потом плитка — десятки
-  мс. Любая колонка читает участок DH полной детализации 64×64 блока (`getColumnDataAtBlockPos` — всегда уровень блока;
-  `getAllTerrainDataAtDetailLevelAndPos` в 3.3.3 разворачивается в те же блочные колонки — грубых данных API не отдаёт),
-  так что плитка уровня L стоит (2^L)² участков: рельеф читается из DH раз — крупные плитки собираются из мелких, тень
-  первого ряда — по последнему ряду плитки к северу, если она в памяти, иначе по склону внутри плитки (не читать ради
-  неё участок соседа), подробные вокруг игрока — заранее, пока
-  карта закрыта (`TerrainTiles.tick`), готовые — по событию DH, а не по часам. Карта этого не ждёт: чанки
-  клиента — слоем поверх, DH читают только фоновые потоки, из потока игры — никогда (это вешает клиент): пока
-  карты нет на экране — два, пока она на экране — по числу потоков DH (`threadCount`: все его пулы, и чтение участка,
-  ждут свободного из них в общей очереди; с двумя чтениями сразу вид на 400 плиток строится минутами),
-  а заранее вокруг игрока тогда не читается; плиток в памяти — два
-  самых широких вида этой карты и запас вокруг игрока (`TerrainTiles.capacity`),
-  надпись на карте говорит, что DH занят. Сводка источников — `TerrainTiles.stats()` (сценарий `target-map` пишет её в лог).
-  Готовность API и загруженные миры DH — из его событий (`DhApiAfterDhInitEvent`, `DhApiLevelLoadEvent`/`…Unload`);
-  мод собран под API 7 (`DhApi.getApiMajorVersion() == 7`), с другой мажорной версией слой DH выключен, в `mods.toml` —
-  необязательная зависимость `distanthorizons` (`dh_version_range`).
-- Тем же путём (`DhUpdates`) изменения идут и в LOD Voxy игроков — `voxy.md`.
-- LOD Distant Horizons чанков вне мира DH строит сам (генератор читает файлы регионов, где лампы горят) и обновляет по
-  загрузке чанка. Поэтому погасший или вновь зажжённый квартал и руины ядерки за волной у чанков не в мире ближе
-  `FarLods.FAR_CHUNKS` от игрока мод отдаёт DH сам: копия чанка с диска с лампами по сети и руинами по готовому плану
-  (`nuclear/world/FarLods` → `compat/DhUpdates.offer`; мир не трогается, загруженный потом чанк получит то же своим
-  путём). След подрыва на земле дальше тяжёлой зоны (выгоревший дёрн, растения, гарь, биомы) — так же: кольцо подрыва
-  (`FarLods.scorch`) подаёт чанки по приходу волны, ближние первыми, своей очередью после руин (не больше
-  `SCORCH_QUEUE` запросов, `FEED_PER_TICK` чанков кольца за тик); чтение — одно на копию и снимок
-  (`DiskShots.readScorch`), снимок — в потоке сервера (`SHOTS_PER_TICK` и `SHOT_NANOS` за тик, пока пул руин берёт
-  задачи; снимок, который бросил, — без копии, а не падение тика), план следа и копия — в фоне, последней ступенью пула
-  руин (`RuinWorkers.Priority.FAR`: руины чанков у игроков идут раньше). Чтения общие с руинами
-  и светом (8 за тик): у следа — не больше половины чтений в работе (снимок, план и копия — тоже его), а при свете в
-  очереди — не больше 6 новых за тик; кольцо 15 кт у игрока в городе — около 200 тыс. чанков,
-  ~20 мин, до 2,5 км (выгоревший дёрн) — первые ~8 мин. Запрос света в кольце после волны и чанк тяжёлой зоны, не
-  дождавшийся плана, идут со следом: иначе их копия стёрла бы след. Копия — с диска: след прошлого подрыва, которого
-  на диске нет, в ней не повторяется. Чанк тяжёлой зоны, которого нет на диске с окончательными блоками (нет вовсе, недогенерированный с блоками или
-  без; заголовок читается в фоне, `DiskStatus.State.PARTIAL`; и чанк 1.17 с догенерацией, не дождавшийся плана), при DH
-  у игроков берёт в мир `nuclear/world/FarZone`:
-  квадратами 5×5 своим тикетом загрузки без тика (≤ 2 в генерации, ≤ 4 всего, срок генерации 2400 тиков), руины
-  встают путём загрузки и уходят в DH отметкой; настройка `nuclear.far_zone`. Работа тика от размера зоны не зависит:
-  `FarLods.VISITS` запросов и `DhUpdates.SCAN` отметок за тик. Запросы руин — своей очередью раньше запросов света
-  (свету — остаток, не меньше четверти просмотров), запрос того же чанка добавляет свой вид, а не теряется: блэкаут ставит
-  весь свой радиус сразу (159 тыс. запросов за 5 с при 8 чтениях за тик), и в общей очереди руины, которых он
-  опередил, ждали бы за ним до 16 мин. Изменённые модом загруженные чанки (воронки, руины,
-  лампы) уходят в DH через `DhUpdates.mark` — не чаще раза в 2 с на чанк и не больше 20 за тик: очередь DH
-  переполненная выкидывает дальние. Свет LOD DH считает по
-  светимости блоков (`DhLightingEngine`), подмена блока в `DhApiChunkProcessingEvent` его не меняет.
-- Руины тяжёлой зоны (5 psi) в LOD — к приходу фронта, а не через десятки секунд (`nuclear/world/FrontLods`, одна на
-  подготовку): пока летит МБР, по планам с диска (фаза 2 `NuclearPrep`) в фоне собираются копии чанков с руинами
-  (`FarLods.build`) и местами горящих ламп — после всех планов, в их же 512 МБ, ближние к эпицентру первыми (места нет —
-  дальние уходят первыми), только чанки не в мире у игроков (`FarLods.FAR_CHUNKS`). После подрыва копия уходит в DH за
-  `DhUpdates.LEAD` (27) тиков до прихода фронта к середине её секции DH 4×4 чанка вместе с секцией (`FrontSchedule`: DH
-  пишет участок 64×64 в базу через секунду после последней записи в него, чанк секции позже других отложил бы весь
-  участок); лампы гаснут по сети на приход фронта (`ChunkLights.darken`). LEAD — наименьшая задержка DH 3.3.3 от вызова
-  API до записи LOD (`compat/DhQueue`: 250 мс в очереди, 1 с до записи участка, 100 мс паузы потока записи); сверх
-  неё — разбор в очереди DH, до секунды ожидания потока записи и грубые уровни (до 250 мс на уровень). Отдача —
-  `DhUpdates.sendHeld`, мимо `PER_TICK`: темп держит окно — половина наименьшей очереди DH (`DhQueue.window`: 500 на
-  поток DH), копия выходит из окна, когда DH записал чанк (`DhApiChunkModifiedEvent`), или через 5 с; секция, которой
-  нет места в окне, ждёт. У 2 кт фронт доходит до края зоны за 24 тика (меньше LEAD) — вся зона уходит в тике подрыва.
-  Загруженный чанк копию теряет (руины и LOD ему ставит мир); чанки без копии (места нет, фронт раньше копии, ракета
-  и бомба, `nuke now`, вне 5 psi) — путём `FarLods`. Запросы `FarLods` к чанку с копией решает `FrontLods.claim`:
-  руины — её; свет квартала — её, пока она держится (лампы ставятся на приход фронта), у ушедшей — если в ней не было
-  ламп или тьма к фронту та же, иначе до фронта — копия заново запросом руин и света, после — путь света. Чанк, отданный
-  DH меньше `RESEND` тиков назад или ждущий отправки (`offer`), `sendHeld` не берёт: DH не ставит чанк, который уже в
-  его очереди (`applyChunkUpdate`), и копия бы пропала. Строки в лог — «heavy zone LODs held for the wave front» в тике
-  подрыва и итог «at the wave front» (отдача минус приход фронта, сколько DH записал и за сколько мс); GameTest
-  `heavyZoneLodsGoWithTheFront`.
-- Distant Horizons 3.3.3 заводит генератор каждому миру сервера в статической карте
-  `WorldGeneratorInjector` и не убирает: все миры, открытые за запуск игры, оставались бы в памяти с чанками (сценарий
-  `leak`: в меню 1,3 → 2,1 → 2,4 ГБ, без e4all так же). После остановки сервера карту чистит
-  `compat/DhChunks.onServerStopped` (метод из jar API DH, без миксина); один прошлый мир DH держит ещё
-  в `ThreadWorldGenParams` до генерации в следующем мире.
-- Глубина LOD для слоя эффектов (`client/render/DhDepth` — источник `LodDepth`, рядом Voxy — `voxy.md`; `SceneDepth`): DH 3.3 без шейдерпака — и когда Iris стоит
-  без него — рисует LOD сам, обратной глубиной (`getDepthDirection` — `REVERSE_Z`, пока шейдерпак не включён; матрица
-  `setClipPlanes(far, near, true)` — NDC 0..1, при диапазоне OpenGL по умолчанию в текстуре 0,5..1, очистка 0), и подмены
-  `IDhApiFramebuffer` нет (Iris без шейдерпака её каждый кадр снимает): матрица DH читается как есть, `irisPlanes` —
-  только для прямой глубины программы пака (`DhDepthTest`). Как читается глубина — строка «Distant Horizons depth for
-  the effects layer» в логе (при смене) и в `SCENARIO … depth:` (с долей кадра под LOD дальше прорисовки — ей видно,
-  построил ли DH что-то; в облаке он строит мало). Расстояние NaN, бесконечное или за глазом — небо (`fx_depth`,
-  `pallScene`): у дальней плоскости и с чужой проекцией LOD выходит за глазом или бесконечно далеко.
+## Pitfalls
+- Distant terrain for the map, rays and sound (`client/map/TerrainTiles`) uses one distant layer: the first working
+  source among LOD Server Support (`LssTerrain`, while `LSSApi.isServerEnabled()`), Voxy's database (`VoxyTerrain`, while
+  Voxy holds a world; `voxy.md`) and DH (`DistantHorizonsTerrain`); otherwise only client chunks (`TerrainTiles.pickFar`,
+  order in `TerrainTiles.stack`, test `farSourceOrderForEachPack`). LSS has no “serve to single-player” setting (only
+  “Open to LAN” and a test property), so single-player distant terrain comes from Voxy's database. LSS (MIT, soft
+  dependency `lss`, compileOnly `lss_version`) uses its public client API `LSSApi.registerColumnConsumer`: subscribe in
+  `FMLClientSetupEvent` (its API touches its network classes); with a subscriber, the LSS client downloads even without
+  Voxy. Columns arrive on its `LSS-ColumnProcessor` thread: column tops are calculated there too
+  (`LssColumns.summarize`, like the client-chunk layer: `MOTION_BLOCKING`, map color, water) and stored in memory;
+  let no exception escape — LSS would consider the chunk unaccepted and resend to everyone (including Voxy).
+  The LSS client stores receipt marks (`.lss/cache`) and on reentry requests only changed data, so columns also live
+  on disk (`incoming/lss-terrain/<server>/world-<seed hash>/<dimension>.bin`, every 2 minutes and on world exit); if the
+  file is absent but LSS marks remain, distant terrain is empty until `/lss clearcache`. Detailed chunks (1 KB) are
+  limited by `LssTerrain.FULL_LIMIT`; distant ones become coarse, centers of 4×4 cells (level-2 tile columns). LSS
+  columns are read directly from memory (`TerrainSource.peek`): `TerrainTiles.height`, `waterDepth`, `wet` (`FarTerrain`
+  rays, sound, the nuke) know everything the server sent, not just built tiles. LSS does not serve LODs to a
+  single-player integrated server (except a LAN-open world via its `IntegratedServerLanHook`, and property
+  `lss.test.integratedServer`, used by `tools/client_scenario.sh target-map lss`). Files are keyed by address and world
+  seed hash (`BiomeManager.biomeZoomSeed`, AT), like LSS's own marks: LSS resends a different world at the same address,
+  and old terrain must not remain. Total chunks are limited by `LssTerrain.TOTAL_LIMIT` (distant ones are evicted;
+  LSS will not resend them itself); a JVM shutdown hook waits for writes on game exit.
+- Client server-cache key: `client/ServerCacheKey`: `ServerAddress.parseString`, lowercase host (`Locale.ROOT`),
+  default port 25565 omitted, others `_port`; no DNS/SRV resolution. IPv6 hosts are bracketed and reversibly encoded
+  by `URLEncoder`, port outside brackets: replacing ':' with '_' merged a host with another server's port.
+  `LssTerrain` chooses the folder on the file thread: new folder takes priority, otherwise legacy. Primary legacy-name
+  candidates come from the parsed address; directory lookup ignores case. The last candidate is always the old
+  `UNSAFE` formula over the address as typed: before parsing, IDNs were underscores on disk, not punycode. Try without
+  port first, then explicit 25565 (IPv6 bracketed, also unbracketed for default port); exact names precede case variants,
+  which sort alphabetically. Keep writing to the legacy folder too: saving one dimension in a new folder would hide
+  the old folder's other dimensions on reentry. Directory-listing errors abort reading/writing rather than starting
+  an empty cache. Do not move or delete user files; log the chosen legacy folder and read file.
+- Distant Horizons terrain for the map comes only through its API (`DhApi.Delayed.terrainRepo`), which reads the DH
+  database in its I/O pool, lower priority than LOD loading: while DH loads surrounding LODs (world entry, distant
+  travel), reads queue (cloud: 30+ s; host's first tile 0.3–1 s), then a tile takes tens of ms. Any column reads a
+  full-detail 64×64-block DH section (`getColumnDataAtBlockPos` always uses block level;
+  `getAllTerrainDataAtDetailLevelAndPos` in 3.3.3 expands to the same block columns — the API gives no coarse data),
+  so a level L tile costs (2^L)² sections: read terrain from DH once, build larger tiles from smaller ones; first-row
+  shading uses the northern tile's last row if in memory, otherwise the slope inside this tile (do not read a neighbor
+  section just for it); detailed tiles around the player preload while the map is closed (`TerrainTiles.tick`), ready
+  ones update on DH events, not a timer. The map does not wait: client chunks overlay it, only background threads
+  read DH, never the game thread (hangs the client); two while the map is hidden, DH's thread count while visible
+  (`threadCount`: all its pools, including section reads, wait for a free thread in one queue; with two reads at once,
+  a 400-tile view takes minutes), and no preloading around the player then; memory holds the map's two widest views
+  plus a reserve around the player (`TerrainTiles.capacity`); map text says DH is busy. Source summary:
+  `TerrainTiles.stats()` (`target-map` scenario logs it). API readiness and loaded DH worlds come from events
+  (`DhApiAfterDhInitEvent`, `DhApiLevelLoadEvent`/`…Unload`); the mod targets API 7 (`DhApi.getApiMajorVersion() == 7`),
+  other major versions disable the DH layer; `mods.toml` has optional dependency `distanthorizons` (`dh_version_range`).
+- The same path (`DhUpdates`) also sends changes to players' Voxy LODs — `voxy.md`.
+- Distant Horizons builds LODs for chunks outside the world itself (its generator reads region files with lit lamps)
+  and updates on chunk load. Thus the mod supplies DH with extinguished or relit districts and nuclear ruins behind
+  the wave for chunks outside the world within `FarLods.FAR_CHUNKS` of a player: a disk-chunk copy with grid-correct
+  lamps and ruins from the finished plan (`nuclear/world/FarLods` → `compat/DhUpdates.offer`; world untouched, a chunk
+  loaded later gets the same through its own path). Ground traces beyond the heavy zone (burned turf, plants, scorch,
+  biomes) work the same: the detonation ring (`FarLods.scorch`) feeds chunks as the wave arrives, near ones first, in
+  its own queue after ruins (at most `SCORCH_QUEUE` requests, `FEED_PER_TICK` ring chunks per tick); one read for copy
+  and snapshot (`DiskShots.readScorch`), snapshot on the server thread (`SHOTS_PER_TICK` and `SHOT_NANOS` per tick while
+  the ruin pool accepts work; a throwing snapshot means no copy, not a crashed tick), trace plan and copy in the
+  background, last priority of the ruin pool (`RuinWorkers.Priority.FAR`: ruins in chunks near players go first).
+  Reads are shared with ruins and lighting (8 per tick): traces use at most half the reads in flight (including
+  snapshot, plan and copy), and when lighting is queued, at most 6 new reads per tick; a 15 kt ring near a city player
+  is about 200 thousand chunks, ~20 min, with up to 2.5 km (burned turf) in the first ~8 min. A lighting request in the
+  ring after the wave and a heavy-zone chunk that did not wait for a plan include the trace: otherwise their copies
+  would erase it. Copies come from disk: a prior detonation's trace absent from disk is not repeated. A heavy-zone
+  chunk without final blocks on disk (absent, partially generated with or without blocks; header read in background,
+  `DiskStatus.State.PARTIAL`; also a 1.17 chunk needing further generation that did not wait for a plan) is brought
+  into the world by `nuclear/world/FarZone` when players have DH: 5×5 squares with a load-only, non-ticking ticket
+  (≤ 2 generating, ≤ 4 total, generation timeout 2400 ticks); ruins apply through the loading path and go to DH as
+  a mark; setting `nuclear.far_zone`. Tick work does not depend on zone size: `FarLods.VISITS` requests and
+  `DhUpdates.SCAN` marks per tick. Ruin requests have a separate queue ahead of lighting (lighting gets the remainder,
+  at least a quarter of visits); requests for the same chunk add their kind rather than being lost: blackout enqueues
+  its entire radius at once (159 thousand requests in 5 s at 8 reads per tick), and in one queue the ruins it overtook
+  would wait behind it for up to 16 min. Loaded chunks changed by the mod (craters, ruins, lamps) go to DH through
+  `DhUpdates.mark`, at most once per 2 s per chunk, no more than 20 per tick: an overflowing DH queue drops distant
+  ones. DH calculates LOD light from block luminance (`DhLightingEngine`); block substitution in
+  `DhApiChunkProcessingEvent` does not change it.
+- Heavy-zone ruins (5 psi) in LODs arrive with the front, not tens of seconds later (`nuclear/world/FrontLods`, one per
+  preparation): while the ICBM flies, disk plans (`NuclearPrep` phase 2) build chunk copies with ruins (`FarLods.build`)
+  and lit-lamp locations in the background, after all plans, within the same 512 MB, nearest the epicenter first
+  (no room: farthest evicted first), only chunks outside the world near players (`FarLods.FAR_CHUNKS`). After detonation,
+  copies go to DH `DhUpdates.LEAD` (27) ticks before front arrival at the center of their DH 4×4-chunk section, with
+  the entire section (`FrontSchedule`: DH writes a 64×64 area to its database one second after its last write; one
+  later chunk would delay the whole area); lamps darken by grid state at front arrival (`ChunkLights.darken`). LEAD is
+  DH 3.3.3's minimum API-call-to-LOD-write delay (`compat/DhQueue`: 250 ms queued, 1 s before section write, 100 ms writer
+  pause); beyond that are DH queue processing, up to a second waiting for the writer, and coarse levels (up to 250 ms
+  per level). Sending uses `DhUpdates.sendHeld`, bypassing `PER_TICK`: rate is bounded by a window, half DH's smallest
+  queue (`DhQueue.window`: 500 per DH thread); a copy leaves the window once DH writes the chunk
+  (`DhApiChunkModifiedEvent`) or after 5 s; sections without window room wait. For 2 kt, the front reaches the zone edge
+  in 24 ticks (less than LEAD), so the whole zone is sent on the detonation tick. Loaded chunks lose their copy (the
+  world supplies their ruins and LODs); chunks without copies (no room, front before copy, missile and bomb,
+  `nuke now`, outside 5 psi) use `FarLods`. `FrontLods.claim` handles `FarLods` requests for a chunk with a copy: ruins
+  belong to it; district light belongs to it while held (lamps set for front arrival), and after sending if it had no
+  lamps or darkness at the front is unchanged; otherwise before the front, rerequest a copy for ruins and light;
+  afterward use the lighting path. `sendHeld` skips chunks sent to DH less than `RESEND` ticks ago or pending send
+  (`offer`): DH rejects a chunk already in its queue (`applyChunkUpdate`), losing the copy. Log lines:
+  “heavy zone LODs held for the wave front” on the detonation tick and final “at the wave front” (send time minus front
+  arrival, how many DH wrote and in how many ms); GameTest `heavyZoneLodsGoWithTheFront`.
+- Distant Horizons 3.3.3 creates a generator for every server world in static map `WorldGeneratorInjector` and never
+  removes it: all worlds opened in a game session would retain chunks in memory (`leak` scenario: menu
+  1.3 → 2.1 → 2.4 GB, same without e4all). After server stop, `compat/DhChunks.onServerStopped` clears the map (method
+  from the DH API jar, no mixin); DH still holds one previous world in `ThreadWorldGenParams` until generation in the
+  next world.
+- LOD depth for the effects layer (`client/render/DhDepth`, a `LodDepth` source, alongside Voxy — `voxy.md`;
+  `SceneDepth`): DH 3.3 without a shaderpack, including with Iris installed but no pack, draws LODs itself with reverse
+  depth (`getDepthDirection` = `REVERSE_Z` while no shaderpack is enabled; matrix `setClipPlanes(far, near, true)` is
+  NDC 0..1, with default OpenGL range the texture contains 0.5..1, clear 0); no `IDhApiFramebuffer` override (Iris removes
+  it each frame without a shaderpack): read the DH matrix as is; `irisPlanes` only for forward depth from the pack's
+  program (`DhDepthTest`). Depth readout: “Distant Horizons depth for the effects layer” in the log (on change) and in
+  `SCENARIO … depth:` (with frame share covered by LODs beyond render distance, showing whether DH built anything;
+  it builds little in the cloud). NaN, infinite or behind-eye distance means sky (`fx_depth`, `pallScene`): near the
+  far plane and with a foreign projection, LODs end up behind the eye or infinitely far away.

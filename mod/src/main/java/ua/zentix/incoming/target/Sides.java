@@ -13,26 +13,26 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * Свой или чужой — по командам {@code /team} (ванильное табло): свои — один и тот же игрок или игроки одной команды.
- * Игрок без команды — сам себе сторона. Удары от консоли и командных блоков (без владельца) — ничьи: чужие всем.
+ * Friend/foe via {@code /team} (vanilla scoreboard): same player or same team is friendly. Teamless player is
+ * their own side. Console/command-block ownerless strikes belong to nobody, hostile to all.
  */
 public final class Sides {
     private Sides() {}
 
-    /** Свои: одна сущность или одна команда ({@link Entity#isAlliedTo(Entity)}). */
+    /** Friendly: same entity or team ({@link Entity#isAlliedTo(Entity)}). */
     public static boolean friendly(Entity a, Entity b) {
         return a == b || a.isAlliedTo(b);
     }
 
     /**
-     * Свои по UUID игроков (владельцы снарядов и пусковых; игрок может быть не в сети): тот же игрок или одна команда.
-     * Null — ничей (консоль), не свой никому.
+     * Friendly player UUIDs (projectile/launcher owners, possibly offline): same player or team. Null is unowned
+     * (console), friendly to nobody.
      */
     public static boolean friendly(MinecraftServer server, @Nullable UUID a, @Nullable UUID b) {
         return friendly(server.getScoreboard(), a, b, names(server));
     }
 
-    /** {@link #friendly(MinecraftServer, UUID, UUID)} по табло {@code board} и именам игроков {@code names}. */
+    /** {@link #friendly(MinecraftServer, UUID, UUID)} using {@code board} and player {@code names}. */
     public static boolean friendly(Scoreboard board, @Nullable UUID a, @Nullable UUID b, Function<UUID, @Nullable String> names) {
         if (a == null || b == null) return false;
         if (a.equals(b)) return true;
@@ -41,19 +41,19 @@ public final class Sides {
     }
 
     /**
-     * Ключ стороны: общий у своих — имя команды, у игрока без команды — его UUID (имена команд и UUID не путаются:
-     * у них разные приставки).
+     * Side key shared by friendlies: team name, or UUID for teamless player (distinct prefixes prevent
+     * confusion).
      */
     public static String side(MinecraftServer server, UUID player) {
         return side(server.getScoreboard(), player, names(server));
     }
 
-    /** {@link #side(MinecraftServer, UUID)} по табло {@code board} и именам игроков {@code names}. */
+    /** {@link #side(MinecraftServer, UUID)} using {@code board} and player {@code names}. */
     public static String side(Scoreboard board, UUID player, Function<UUID, @Nullable String> names) {
         return key(team(board, player, names), player);
     }
 
-    /** Ключ стороны игрока в сети ({@link #side(MinecraftServer, UUID)}): команда — по его имени на табло. */
+    /** Online player's side key ({@link #side(MinecraftServer, UUID)}): team via scoreboard name. */
     public static String side(ServerPlayer player) {
         return key(player.getTeam(), player.getUUID());
     }
@@ -62,7 +62,7 @@ public final class Sides {
         return team != null ? "team:" + team.getName() : "player:" + player;
     }
 
-    /** Команда игрока по UUID: табло хранит участников команд по именам ({@link #names}). */
+    /** Player team by UUID: scoreboard stores team members by name ({@link #names}). */
     @Nullable
     public static PlayerTeam team(Scoreboard board, UUID player, Function<UUID, @Nullable String> names) {
         String name = names.apply(player);
@@ -70,8 +70,8 @@ public final class Sides {
     }
 
     /**
-     * Имя игрока на табло по UUID: у игрока в сети — его, иначе — из кэша профилей сервера (нет там — null: команды не
-     * узнать).
+     * Scoreboard name by UUID: online player's name, otherwise server profile cache (null if absent: team
+     * unknown).
      */
     public static Function<UUID, @Nullable String> names(MinecraftServer server) {
         return id -> {

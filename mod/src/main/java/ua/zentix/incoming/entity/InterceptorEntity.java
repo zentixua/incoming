@@ -19,17 +19,18 @@ import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.registry.ModEntities;
 
 /**
- * Зенитная ракета в мире — то, что видят и слышат игроки. Сама не летит: полёт ({@link Interceptor}) ведёт
- * {@link DefenseWorld} и в мире, и вне его, а сущность — его вид, пока он идёт над тикающими чанками: сервер ставит
- * её на место полёта каждый тик, клиент рисует модель, факел и дым и играет мотор. Не сохраняется (полёт — секунды),
- * не сбивается и ни с чем не сталкивается: разрыв решает полёт.
+ * Interceptor missile in the world: what players see and hear. Does not fly itself: {@link DefenseWorld} runs
+ * flight ({@link Interceptor}) inside and outside the world; this entity is its visual over ticking chunks. The
+ * server places it at the flight position each tick; the client draws model, plume, and smoke and plays the
+ * engine. Not saved (flight lasts seconds), cannot be shot down, and collides with nothing: flight decides the
+ * burst.
  */
 public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn {
     @Nullable
     private Interceptor flight;
-    /** Тиков с пуска (клиенту — с пакетом появления: факел и звук пуска только у молодой ракеты). */
+    /** Ticks since launch (sent to client with spawn packet: launch plume and sound only for a young missile). */
     private int age;
-    /** Клиент: места от сервера — по одному на тик ({@link ArrivalQueue}): пакеты тика сервера приходят неровно. */
+    /** Client: server positions one per tick ({@link ArrivalQueue}); server tick packets arrive unevenly. */
     private final ArrivalQueue arrivals = new ArrivalQueue();
 
     public InterceptorEntity(EntityType<? extends InterceptorEntity> type, Level level) {
@@ -38,7 +39,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
         this.setNoGravity(true);
     }
 
-    /** Вид полёта {@code flight} на его месте. */
+    /** Visual of {@code flight} at its position. */
     public static InterceptorEntity of(ServerLevel level, Interceptor flight) {
         InterceptorEntity e = new InterceptorEntity(ModEntities.INTERCEPTOR.get(), level);
         e.flight = flight;
@@ -52,7 +53,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
         return e;
     }
 
-    /** Сервер: встать туда, где полёт сейчас, носом по курсу. */
+    /** Server: move to the current flight position, nose along heading. */
     public void follow(Interceptor f) {
         Vec3 p = f.position();
         float[] a = FlightController.anglesTo(Vec3.ZERO, f.direction());
@@ -76,7 +77,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
             age++;
             return;
         }
-        // полёт кончился или идёт уже без этого вида (вне тикающих чанков, новый вид)
+        // Flight ended or continues without this visual (outside ticking chunks, new visual).
         if (flight == null || flight.done() || flight.view() != this) discard();
     }
 
@@ -97,7 +98,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
 
     @Override
     public boolean shouldRenderAtSqrDistance(double distanceSq) {
-        // видно издалека: ограничивает только дальность отслеживания сущности сервером
+        // Visible from afar: limited only by server entity tracking range.
         return distanceSq < 512 * 512;
     }
 
@@ -108,7 +109,7 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
 
     @Override
     public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps) {
-        // позиция приходит каждый тик сервера: по месту на тик клиента, а не за три ванильных (ракета отставала бы от полёта)
+        // Position arrives every server tick: one position per client tick, rather than vanilla's three (the missile would lag behind flight).
         arrivals.add(new ArrivalQueue.Sample(x, y, z, yRot, xRot));
     }
 
@@ -138,8 +139,8 @@ public class InterceptorEntity extends Entity implements IEntityWithComplexSpawn
     @Override
     public void recreateFromPacket(ClientboundAddEntityPacket packet) {
         super.recreateFromPacket(packet);
-        // ваниль ставит место с прежним (нулевым) поворотом в «прошлый» и потом поворот пакета: первые кадры модель
-        // доворачивалась бы с юга
+        // Vanilla stores the position with the previous (zero) rotation as “previous”, then applies packet rotation: in the first frames the model
+        // would turn from south.
         yRotO = getYRot();
         xRotO = getXRot();
     }

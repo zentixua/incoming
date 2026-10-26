@@ -31,34 +31,34 @@ import ua.zentix.incoming.util.Magazine;
 import java.util.UUID;
 
 /**
- * Стационарная пусковая на месте ({@link FixedLauncherBlock}): кто поставил (от его имени летят снаряды, его сторона —
- * свои), запас боеприпасов, задача ({@link Mission}) и пакет на поворотном круге над блоком ({@link Launcher},
- * опора {@link LauncherMount#PAD}). Запас заряжают воронка, воронка и жёлоб Create, механическая рука и лента — через
- * воронку ({@link Capabilities.ItemHandler#BLOCK} с любой стороны; вынуть так нельзя). Передний фронт сигнала
- * редстоуна — один приказ по задаче ({@link LauncherOrders#fire}), тем же путём, что приказ игрока: правила, предел
- * снарядов в работе, сектор пуска, «Отбой». Клиенту уходят только оружие пакета, курс и время подъёма — задача и запас
- * остаются на сервере.
+ * Fixed launcher at its site ({@link FixedLauncherBlock}): placer (projectiles belong to them, their side is
+ * friendly), munition inventory, mission ({@link Mission}), and rack on a turntable above the block ({@link
+ * Launcher}, {@link LauncherMount#PAD} mount). Hopper, Create funnel and chute load inventory; mechanical arm and
+ * belt work through a funnel ({@link Capabilities.ItemHandler#BLOCK} from any side; no extraction). Redstone
+ * rising edge issues one mission order ({@link LauncherOrders#fire}) via the same path as a player order: rules,
+ * active-projectile limit, launch sector, “Abort”. Clients receive only rack weapon, heading, and raising time;
+ * mission and inventory stay server-side.
  */
 public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
-    /** Ячеек запаса — как у раздатчика. */
+    /** Storage slots, as in a dispenser. */
     public static final int SLOTS = 9;
 
     @Nullable
     private UUID owner;
     /**
-     * Запас боеприпасов: снаружи — только загрузка; запасная ячейка — под остаток вскрытого пакета «Града», когда воронка
-     * держит открытые полными.
+     * Munition inventory: insertion only from outside; spare slot holds a partly opened Grad pack when a hopper
+     * keeps public slots full.
      */
     private final Magazine stock = new Magazine(SLOTS, 1, FixedLauncherBlockEntity::munition, this::setChanged);
     @Nullable
     private Mission mission;
-    /** Оружие пакета на круге (клиент рисует его); null — задачи нет. */
+    /** Weapon rack on the turntable (client renders it); null means no mission. */
     @Nullable
     private WeaponType rack;
     private float yaw;
     private long deployedAt = Long.MIN_VALUE / 2;
     private final LaunchQueue queue = new LaunchQueue();
-    /** Чем кончился последний сигнал или пуск по нему — для строки состояния (не сохраняется). */
+    /** Result of last signal or its launch, for status (not saved). */
     @Nullable
     private Component last;
 
@@ -70,7 +70,10 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         e.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.FIXED_LAUNCHER.get(), (be, side) -> be.stock.loader());
     }
 
-    /** Боеприпас оружия, которое берёт пусковая ({@link Mission#accepts}): шахеды, «Ланцеты», ракеты, пакеты «Града». */
+    /**
+     * Munitions for weapons accepted by the launcher ({@link Mission#accepts}): Shaheds, Lancets, missiles, Grad
+     * packs.
+     */
     public static boolean munition(ItemStack stack) {
         for (WeaponType w : WeaponType.values()) {
             if (Mission.accepts(w) && stack.is(w.spec().munition().item().get())) return true;
@@ -94,15 +97,15 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
     }
 
     /**
-     * Новая задача (null — снять): пакет её оружия встаёт на круг и доворачивается на цель или первую точку маршрута,
-     * если молчит.
+     * New mission (null clears): place its weapon rack on the turntable and turn toward target or first waypoint
+     * if quiet.
      */
     public void setMission(@Nullable Mission mission) {
         this.mission = mission;
         WeaponType shown = mission != null && Mission.accepts(mission.weapon()) ? mission.weapon() : null;
         long now = level != null ? level.getGameTime() : 0;
         if (shown != rack) {
-            // другой пакет ставится заново: поднимается с нуля
+            // A different rack is placed anew: raises from zero.
             rack = shown;
             deployedAt = now;
         }
@@ -110,12 +113,12 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         sync();
     }
 
-    /** Курс с места пусковой на точку {@code p}, °. */
+    /** Heading from launcher to {@code p}, °. */
     public float yawTo(Vec3 p) {
         return FlightController.anglesTo(position(), p)[0];
     }
 
-    /** Запас боеприпасов (оплата пуска — {@link Munitions#pay(Munitions.Store, Munitions.Bill)}). */
+    /** Munition inventory (launch payment: {@link Munitions#pay(Munitions.Store, Munitions.Bill)}). */
     public Munitions.Store store() {
         return new Munitions.Store() {
             @Override
@@ -125,38 +128,38 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
 
             @Override
             public void put(ItemStack s) {
-                // возврат и остаток вскрытого пакета — в запасную ячейку, если открытые полны; не влезло и туда — выпадает
+                // Refunds and opened pack remainder go to spare slot if public slots are full; overflow there drops.
                 ItemStack rest = stock.stow(s);
                 if (!rest.isEmpty() && level != null) Block.popResource(level, worldPosition.above(), rest);
             }
         };
     }
 
-    /** Положить боеприпасы в запас; возвращает то, что не влезло. */
+    /** Insert munitions into storage; returns what did not fit. */
     public ItemStack load(ItemStack stack) {
         return stock.load(stack);
     }
 
-    /** Предметов в запасе. */
+    /** Items in storage. */
     public int stockCount() {
         return stock.count();
     }
 
-    /** Сигнал компаратора — по заполненности запаса. */
+    /** Comparator signal follows storage fullness. */
     public int comparator() {
         return stock.comparator();
     }
 
-    /** Блок сломан или взорван: запас выпадает. */
+    /** Block broken or exploded: inventory drops. */
     void dropContents(Level level, BlockPos pos) {
         stock.dropAll(level, pos);
     }
 
     /**
-     * Сигнал редстоуна дошёл (или команда ведущего): приказ по задаче; не вышло — щелчок, как у пустого раздатчика, и
-     * причина в строке состояния.
+     * Redstone signal arrived (or game-master command): issue mission order; failure clicks like an empty
+     * dispenser and gives the reason in status.
      *
-     * @return null — приказ отдан; иначе — почему нет
+     * @return null if ordered; otherwise the reason it failed
      */
     @Nullable
     public Component fire(ServerLevel level) {
@@ -166,18 +169,18 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return problem;
     }
 
-    /** Что вышло с приказом или снарядом залпа с этой пусковой: в строку состояния. */
+    /** Order or salvo projectile result from this launcher: into status. */
     public void report(Component what) {
         last = what;
     }
 
-    /** Чем кончился последний сигнал или пуск по нему; null — с загрузки ничего. */
+    /** Result of last signal or its launch; null means nothing since loading. */
     @Nullable
     public Component lastReport() {
         return last;
     }
 
-    /** Строка состояния для игрока, который смотрит на пусковую. */
+    /** Status line for the player looking at the launcher. */
     public Component status() {
         Component state = mission == null ? Component.translatable("incoming.fixed_launcher.no_mission", stockCount())
                 : Component.translatable("incoming.fixed_launcher.status", mission.weapon().displayName(), mission.count(),
@@ -186,14 +189,14 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return last == null ? state : Component.translatable("incoming.fixed_launcher.status.last", state, last);
     }
 
-    // ---------------------------------------------------------------- пакет (Launcher)
+    // ---------------------------------------------------------------- rack (Launcher)
 
     @Override
     public WeaponType weapon() {
         return rack != null ? rack : WeaponType.DRONE;
     }
 
-    /** На круге стоит пакет (есть задача с оружием, у которого он есть). */
+    /** A rack is on the turntable (mission weapon has one). */
     public boolean hasRack() {
         return rack != null;
     }
@@ -208,7 +211,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         return yaw;
     }
 
-    /** Курс пакета без подъёма заново: при установке блока — от ставящего. */
+    /** Rack heading without raising again: on block placement, away from placer. */
     public void setYaw(float yaw) {
         this.yaw = yaw;
         setChanged();
@@ -237,13 +240,13 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         sync();
     }
 
-    /** Сохранить и отдать клиентам то, что они рисуют. */
+    /** Save and send clients what they render. */
     private void sync() {
         setChanged();
         if (level != null && !level.isClientSide) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
     }
 
-    // ---------------------------------------------------------------- сохранение и клиент
+    // ---------------------------------------------------------------- saving and client
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
@@ -254,7 +257,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
         saveShown(tag);
     }
 
-    /** То, что видит клиент: оружие пакета, курс, тик подъёма. */
+    /** What the client sees: rack weapon, heading, raising tick. */
     private void saveShown(CompoundTag tag) {
         if (rack != null) tag.putString("rack", rack.getSerializedName());
         tag.putFloat("yaw", yaw);
@@ -264,7 +267,7 @@ public class FixedLauncherBlockEntity extends BlockEntity implements Launcher {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
-        // пакет обновления клиенту — без хозяина, запаса и задачи: их не трогать
+        // Client update packet omits owner, inventory, and mission: leave them alone.
         if (tag.hasUUID("owner")) owner = tag.getUUID("owner");
         if (tag.contains("stock")) stock.deserializeNBT(registries, tag.getCompound("stock"));
         if (tag.contains("mission")) {

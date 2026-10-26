@@ -8,30 +8,30 @@ import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.sound.Propagation;
 
 /**
- * Слышно ли снаряд: его шум сейчас (паспорт звука аппарата {@link WeaponSpec.Airframe#noise}, настоящая скорость
- * сущности) против фона у уха — по октавам — после пути по открытому воздуху ({@link Propagation}). Тот же расчёт, что даёт
- * громкость слоёв его звука на клиенте ({@code client.sound.EngineSound}), поэтому сервер шлёт путь снаряда
- * ({@link FarFlights}) ровно тем, кто его может слышать, а клиент дальше этого молчит сам. Преграды сервер не считает:
- * за холмом клиент глушит звук сам, и слышимое им всегда внутри посланного.
+ * Whether a projectile is audible: current noise (craft sound spec {@link WeaponSpec.Airframe#noise}, actual
+ * entity speed) against background at the ear, by octave, after open-air propagation ({@link Propagation}). Same
+ * calculation that gives client sound-layer loudness ({@code client.sound.EngineSound}), so server sends path
+ * ({@link FarFlights}) exactly to those who can hear it, and client is silent beyond. Server ignores obstacles:
+ * client attenuates behind hills itself; what it hears always fits transmitted coverage.
  */
 public final class Hearing {
     /**
-     * Дольше звук мода к уху не идёт, тиков: столько клиент помнит путь снаряда (60 с — гул B-2 с 12 км, рёв залпа
-     * «Града» с 20 км). Дальше {@link #RANGE} звук не слышен — предел модели, а не физики: ночью рёв МБР
-     * долетел бы и дальше.
+     * Maximum mod sound travel time to ear, ticks: client remembers path this long (60 s: B-2 rumble from 12 km,
+     * Grad salvo roar from 20 km). Beyond {@link #RANGE} sound is inaudible: model limit, not physical; at night
+     * ICBM roar would travel farther.
      */
     public static final int MAX_DELAY = 1200;
-    /** Дальше этого, блоков (= метров), звук не несётся: путь звука за {@link #MAX_DELAY}. */
+    /** Maximum sound travel distance, blocks (= meters): sound path over {@link #MAX_DELAY}. */
     public static final double RANGE = MAX_DELAY * Noise.SOUND / 20;
 
     private Hearing() {}
 
-    /** Высота источника над землёй под слушателем, м: ухо — на {@link Propagation#EAR} над ней. */
+    /** Source height above ground beneath listener, m: ear at {@link Propagation#EAR} above it. */
     public static double height(Vec3 source, Vec3 ear) {
         return Math.max(0, source.y - ear.y + Propagation.EAR);
     }
 
-    /** Насколько снаряд сейчас громче фона у уха {@code ear} по открытому пути, дБ (меньше нуля — не слышно). */
+    /** How much projectile currently exceeds background at {@code ear} over open path, dB (below zero inaudible). */
     public static double margin(StrikeProjectile p, Vec3 ear, Propagation.Weather weather) {
         Vec3 at = p.position();
         double d = at.distanceTo(ear);
@@ -40,23 +40,23 @@ public final class Hearing {
         return p.airframe().noise().margin(p.flightPhase(), p.phaseAge(), p.velocity().length(), drilling(p), path);
     }
 
-    /** Слышно ли снаряд сейчас у уха {@code ear}. */
+    /** Whether projectile is audible now at {@code ear}. */
     public static boolean audible(StrikeProjectile p, Vec3 ear, Propagation.Weather weather) {
         return margin(p, ear, weather) > 0;
     }
 
     /**
-     * Докуда снаряд сейчас слышно, блоков, если уши на {@code below} блоков ниже него на ровном лугу (0 — не слышно).
-     * Для проверок и описаний: сервер решает по {@link #audible}.
+     * Current audible range, blocks, for ears {@code below} blocks lower on flat meadow (0 inaudible). For tests
+     * and descriptions; server uses {@link #audible}.
      */
     public static double range(StrikeProjectile p, double below, Propagation.Weather weather) {
         return range(p.airframe().noise(), p.flightPhase(), p.phaseAge(), p.velocity().length(), drilling(p), below, weather);
     }
 
     /**
-     * Докуда слышно шум {@code noise} в фазе {@code ph} на скорости {@code speed} (блоков/тик), блоков (0 — не слышно,
-     * не дальше {@link #RANGE}): уши на {@code below} блоков ниже источника на ровном лугу (вблизи источник не выше
-     * расстояния до него).
+     * Audible range of {@code noise} in phase {@code ph} at {@code speed} (blocks/tick), blocks (0 inaudible,
+     * capped at {@link #RANGE}): ears {@code below} blocks below source on flat meadow (nearby source height
+     * capped by source distance).
      */
     public static double range(Noise noise, FlightPhase ph, double age, double speed, boolean drilling, double below, Propagation.Weather w) {
         double lo = 1, hi = RANGE;

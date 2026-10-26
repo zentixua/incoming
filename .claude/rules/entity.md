@@ -8,119 +8,116 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/guidance/**"
 ---
 
-# Снаряды и наведение (`entity/`, `guidance/`)
+# Projectiles and guidance (`entity/`, `guidance/`)
 
-## Устройство
-- `entity/` — `StrikeProjectile` (общий полёт: столкновения, старт с направляющей `launchTick`, `virtualTick`/`materialize`
-  для полёта вне мира, перенацеливание, запас хода; части — `entity/flight/`: `ChunkHold` — свой чанк и чанк впереди (впереди — только на старте, пока есть кому видеть, `FlightTickets.watched`, — по расстоянию, не по `seenBy`, и когда район цели уже тикает: иначе снаряд тянул бы тикающие чанки через всю карту, а у края района цели уходил из мира и возвращался на тик раньше или позже — смотря когда у свежих чанков начнут тикать сущности),
-  `TargetAreaHold` — район цели и полоса подлёта, `ProximityFuse` — взведение и неконтактный взрыватель; автопилоту
-  сущность отдаёт себя как `guidance/Craft`; замеченную цель `Target.Sighted` снаряд с `WeaponSpec.Tracking.CAMERA` ведёт по
-  кадру камеры оператора — `strike/CameraLink`, см. `strike.md`; синхронизированный `Pursuit` — строка камеры: цель
-  в кадре или полёт туда, где видел),
-  `FlightPhase` (синхронизирована: на пусковой → поджиг → разгон → набор → маршрут → горка → атака; по ней эффекты
-  и звук), `DroneEntity`, `LoiterEntity` («Ланцет»: катапульта, круг `LOITER` над целью, пике по времени или по цели
-  из камеры), `CruiseMissileEntity`, `RocketEntity` (РСЗО: баллистика из трубы пакета), `BomberEntity` +
-  `BunkerBusterEntity` (путь в грунте по Янгу: при входе — план пути по блокам `plan` со средой из карты данных `incoming:penetration` (`registry/ModDataMaps`; закон — `warhead/Penetration`), сущность идёт по нему по времени, канал — блок по оси, датчик пустоты — после 4 м твёрдого, когда бомба вошла целиком; неготовый чанк впереди — подрыв на месте; путь не сохраняется — после загрузки план заново с той же скоростью), `IcbmEntity`
-  (только разгон: первая ступень Minuteman III по тяге и массе — `WeaponSpec.Ascent` паспорта, источники
-  в javadoc `WeaponSpec.NUKE`; тангаж упрощён — строго по оси 3 с, потом к 85° над горизонтом (снос ~30 блоков: дальше
-  вбок она уходила бы в чанки, у которых ещё не тикают сущности); за потолок мира + 320
-  уходит через ~8,5 с на y 64; чанк впереди держит по курсу над землёй, а не по носу), `LauncherEntity` (пусковая: пакет, ячейки, очередь пусков), `SpentBoosterEntity` (отработавший
-  ускоритель), `DebrisEntity` (обломки по баллистике), `InterceptorEntity` (только вид зенитной ракеты ЗРК: полёт ведёт
-  `defense/Interceptor`, сбитый снаряд — `StrikeProjectile.intercepted`, `defense.md`). `guidance/FlightController` — повороты с ограничением
-  скорости и ускорения (инерция; крен модели — по скорости разворота с игровым g 0,08); своя игровая модель полёта
-  снарядов с мотором — числа в паспорте `WeaponSpec.Handling` (повороты по участкам `Agility`: набор, маршрут, пике;
-  углы набора и снижения; мотор `accel`/`relax`), скорость за тик — `Craft.throttle` → `Airframe.airspeed` (мотор тянет к
-  нужной, набор отнимает и снижение прибавляет `Handling.TRADE` · g · sin γ, не быстрее `diveSpeed`); `guidance/Route` — маршрут: точка обхода сбоку и точка входа, заход на цель из-за спины;
-  у снаряда залпа — в своей полосе (`inLane`: сдвиг вбок плавно с нуля на `exit` и снова к нулю за `converge` до цели,
-  точки на этих границах добавляются; на повороте — по биссектрисе; числа — `WeaponSpec.Lanes`, игровые);
-  или маршрут оператора `strike/Waypoints` (карта наведения: Shift+ЛКМ, до 5 точек, только x и z; шахед, ракета
-  и «Ланцет» — у кого в паспорте `WeaponSpec.Route.reach`: путь от игрока (места пуска из приказа, у консоли — от
-  первой точки) через точки до цели не длиннее (30 км, у «Ланцета» 15), точка взята за `capture` (около радиуса
-  разворота); проверка у карты и команды `/incoming salvo … via x z …` — `ServerActions.routeProblem`; пусковая
-  смотрит на первую точку, издалека снаряд заходит перед ней — `Waypoints.afar`; запас хода, ETA и сирена — по пути
-  через точки; залп помнит маршрут в `SalvoData`, перенацеливание его бросает — `Route.skip`; горку ракеты после точек решает
-  последний участок — только у маршрута оператора, `Route.byOperator`: маршрута пуска это не касается; сценарий `WAYPOINTS`);
-  `guidance/Homing` — погоня зенитной ракеты (поворот с пределом, ближайшее сближение за тик);
-  `guidance/Ballistics` — полёт без мотора: тяжесть, квадратичное сопротивление
-  (`WeaponSpec.Ballistic.drag`, игровое) с плотностью по высоте и ветер мира (`Path` по тикам, 4 шага на тик), расчёт огня
-  `aim` (Ньютон по скорости и курсу при угле пакета) — у РСЗО с ветром у земли (`Wind.ground`), летит с профилем ветра:
-  снос по ветру и разброс схода из паспорта — рассеивание залпа; парабола без сопротивления осталась проверке сектора
-  пуска; `guidance/Orbit` — круг барража
-  (векторное поле курсов с упреждением v/r: выход на круг по касательной); `guidance/BombDrop` — падение бетонобойной
-  бомбы (рули ведут нос, скорость — тяжесть вдоль пути и сопротивление, снос ветром `drift` — через `StrikeProjectile.drift`):
-  те же шаги у бомбы и у B-2, который проигрывает её падение (без ветра: рули его выбирают) и сбрасывает, когда она попадёт с его высоты;
-  сопротивление бомбы — `Airframe.drag()` шкалы полёта (перегрузки с `Ballistics.Drag` — для проверок на другой шкале);
-  эшелон B-2 — `cruiseHeight()` шкалы (до 12 км), черта сброса — тот же угол на точку (`BomberEntity.releaseLine`),
-  запас хода бомбы — прямая до точки × 1,5, не меньше паспортного;
-  `guidance/Mission` — запас хода в блоках вместо срока жизни: план (путь × 1.5 + 600 тиков на маршевой; «Ланцету» —
-  ещё круг на маршевой и пике на скорости пике, РСЗО — дуга + 200 тиков), погоня (+сдвиг цели × 1.5), потеря цели
-  (путь до последней точки × 1.5 + 200 тиков на маршевой, один раз); расход — пройденный за тик путь, поэтому
-  ожидание района цели и растянутый полёт РСЗО хода не тратят (у ожидания свой предел `AREA_WAIT_LIMIT`); снаряд,
-  сохранённый со сроком жизни, переносится (остаток срока × маршевая сохранения); `guidance/Autopilot` — общие поведения
-  управляемых (круг разворота и повторный заход, курс на точку маршрута), `DroneAutopilot`/`MissileAutopilot` — законы
-  шахеда и ракеты после старта без мира Minecraft (`AltitudeHold` — удержание высоты, `Bearing` — где точка;
-  рельеф впереди — `Autopilot.reliefAhead`: полоса `Corridor` шириной 3 блока над путём на `reliefLookahead` блоков
-  паспорта, путь — проигрыш поворотов, все колонки обходом сетки `GridWalk`, дальняя колонка — за вычетом набора
-  `Corridor.Climb`; замер раз в 4 тика — `ReliefSensor`; датчик рельефа `StrikeProjectile.relief` — на всём пути, в мире
-  и вне его (`Terrain.Allowed.RELIEF` / `VIRTUAL_RELIEF` без потолка Незера: готовый чанк, иначе съёмка `util/TerrainSurvey` — карта высот с диска или из
-  памяти, у чанка, которого на диске нет, — генератор в фоне; пока не ответила — низ мира), съёмку на 1024 блока
-  вперёд по маршруту снаряд заказывает раз в секунду (`surveyAhead`); прямая до цели на заходе — `Autopilot.Sightline`: закрыта
-  блоками (`Craft.clearAlong`: клетки блоков по готовым чанкам, дальше них и вне мира — верх рельефа съёмки,
-  `Terrain.underRelief`) — в атаку не идти, ракета при этом в горке, шахед на крейсере
-  без набора (набор задирает нос, и пике к той же прямой через верх препятствия не успевает), не дольше
-  `DIVE_MARGIN` путей доворота носа; упреждения по идущей цели нет — решение Артёма 21.10);
-  свойства полёта на 10 000 случайных сценариях модели рельефа — юнит-тест `AutopilotPropertiesTest`.
+## Structure
+- `entity/` — `StrikeProjectile` (shared flight: collisions, rail start `launchTick`, `virtualTick`/`materialize` for
+  flight outside world, retargeting, range reserve; parts in `entity/flight/`: `ChunkHold` holds own/ahead chunks
+  (ahead only at launch while someone can see, `FlightTickets.watched`, by distance not `seenBy`, and when target
+  area already ticks: otherwise projectile would drag ticking chunks across map and leave/reenter a tick earlier or
+  later at target-area edge depending on fresh chunks' entity ticking); `TargetAreaHold` target area/approach lane,
+  `ProximityFuse` arming/proximity fuze; entity exposes itself to autopilot as `guidance/Craft`; `Target.Sighted` with
+  `WeaponSpec.Tracking.CAMERA` follows operator camera frame, `strike/CameraLink`, see `strike.md`; synchronized
+  `Pursuit` camera line: target in frame or flying to last seen point), `FlightPhase` (synced: on launcher → ignition
+  → boost → climb → route → pop-up → attack; drives effects/sound), `DroneEntity`, `LoiterEntity` (Lancet: catapult,
+  `LOITER` circle over target, dive by time or camera target), `CruiseMissileEntity`, `RocketEntity` (MLRS ballistics
+  from rack tube), `BomberEntity` + `BunkerBusterEntity` (Young penetration: on entry, block-path `plan` with medium from
+  `incoming:penetration` data map (`registry/ModDataMaps`, law `warhead/Penetration`); entity follows in time, channel
+  one axial block, void sensor after 4 m solid once bomb fully entered; unready chunk ahead means in-place detonation;
+  path not saved, replans after load at same speed), `IcbmEntity` (boost only: Minuteman III first-stage thrust/mass,
+  spec `WeaponSpec.Ascent`, sources in `WeaponSpec.NUKE` javadoc; simplified pitch strictly axial 3 s, then 85° above
+  horizon (drift ~30 blocks, farther sideways would enter chunks not yet ticking entities); exceeds world ceiling
+  + 320 after ~8.5 s from y 64; ahead chunk by ground heading, not nose), `LauncherEntity` (launcher rack/slots/queue),
+  `SpentBoosterEntity` spent booster, `DebrisEntity` ballistic debris, `InterceptorEntity` SAM missile visual only,
+  flight via `defense/Interceptor`, downed projectile `StrikeProjectile.intercepted`, `defense.md`.
+  `guidance/FlightController` turns with speed/acceleration limits (inertia; model bank by turn rate with game g 0.08);
+  powered-projectile game model numbers in `WeaponSpec.Handling` (phase `Agility`: climb/cruise/dive; climb/descent
+  angles, motor `accel`/`relax`), per-tick speed `Craft.throttle` → `Airframe.airspeed` (motor pulls toward desired,
+  climb subtracts/descent adds `Handling.TRADE` · g · sin γ, capped `diveSpeed`); `guidance/Route` side bypass/entry
+  points, approach from behind target; salvo projectile in own lane (`inLane`: lateral offset smoothly from zero at
+  `exit`, back to zero over `converge` before target, boundary points added; turns use bisector; game numbers
+  `WeaponSpec.Lanes`); or operator `strike/Waypoints` (target map Shift+left-click, ≤ 5 x/z points; Shahed/missile/Lancet,
+  specs with `WeaponSpec.Route.reach`: path from player (order launch location, console from first point) via points
+  to target within 30 km, Lancet 15; points captured within `capture`, about turn radius; map/command
+  `/incoming salvo … via x z …` checks `ServerActions.routeProblem`; launcher faces first point, distant projectile
+  enters before it via `Waypoints.afar`; range/ETA/siren follow waypoints; salvo stores route in `SalvoData`, retarget
+  abandons via `Route.skip`; final leg determines missile pop-up after points only for operator route,
+  `Route.byOperator`, not launch route; `WAYPOINTS` scenario); `guidance/Homing` interceptor pursuit (bounded turn,
+  closest approach within tick); `guidance/Ballistics` unpowered gravity/quadratic drag (`WeaponSpec.Ballistic.drag`,
+  game number), altitude density/world wind (`Path` by tick, 4 steps/tick), firing solution `aim` (Newton over speed/
+  heading at rack angle) for MLRS with ground wind `Wind.ground`, flies through wind profile: wind drift/spec rail-exit
+  spread disperse salvo; drag-free parabola remains for launch-sector check; `guidance/Orbit` loiter circle (heading
+  vector field with v/r lead, tangent entry); `guidance/BombDrop` bunker-buster fall (controls steer nose, speed from
+  gravity along path/drag, wind `drift` through `StrikeProjectile.drift`): same steps for bomb/B-2 simulating drop
+  (no wind, controls compensate) and releasing when it will hit from current altitude; bomb drag via flight-scale
+  `Airframe.drag()` (`Ballistics.Drag` overloads for other-scale tests); B-2 flight level scale `cruiseHeight()` up to
+  12 km, release line same target angle (`BomberEntity.releaseLine`), bomb range straight to point × 1.5, at least spec;
+  `guidance/Mission` range in blocks instead of lifetime: plan path × 1.5 + 600 cruise-speed ticks, Lancet extra
+  cruise-speed circle/dive-speed dive, MLRS arc + 200 ticks; pursuit adds target movement × 1.5; lost target grants
+  path to last point × 1.5 + 200 cruise ticks once; spend actual tick travel, so area waiting/stretched MLRS flight
+  costs no range (wait has `AREA_WAIT_LIMIT`); old lifetime saves migrate remaining ticks × saved cruise speed.
+  `guidance/Autopilot` shared guided behavior (turn circle/reapproach, waypoint heading),
+  `DroneAutopilot`/`MissileAutopilot` post-launch Shahed/missile laws without Minecraft world (`AltitudeHold`, `Bearing`
+  point bearing; lookahead terrain `Autopilot.reliefAhead`: 3-block-wide `Corridor` over predicted turn path out to
+  spec `reliefLookahead`, all columns via `GridWalk`, distant columns subtract `Corridor.Climb`; `ReliefSensor` samples
+  every 4 ticks; `StrikeProjectile.relief` over entire path inside/outside world (`Terrain.Allowed.RELIEF` /
+  `VIRTUAL_RELIEF`, no Nether ceiling: ready chunk, else `util/TerrainSurvey` memory/disk heightmap, absent-on-disk
+  chunk uses background generator, pending answer world bottom); projectile orders 1024-block route survey once/sec
+  (`surveyAhead`); target-approach straight line `Autopilot.Sightline`, if blocked (`Craft.clearAlong`: block cells in
+  ready chunks, beyond/outside world survey terrain top, `Terrain.underRelief`), do not attack; missile stays in
+  pop-up, Shahed cruises without climbing (climb raises nose, preventing timely dive along same line over obstacle),
+  at most `DIVE_MARGIN` nose-turn paths; no moving-target lead, Artem's decision 21.10); unit test
+  `AutopilotPropertiesTest` checks 10 000 random model-terrain flight scenarios.
 
-## Подводные камни
-- Путь бомбы в грунте (`BunkerBusterEntity.plan`): остаток оси в блоке вне его формы короче `GRAZE` (1 мкм) —
-  погрешность float на грани, а не пустота. Иначе ось, пересекая под углом грань соседнего блока той же среды, «выходила
-  в пустоту» и начинала слой Янга заново: бомба B-2 под 89° уходила в землю на 18–29 % глубже закона (под 80° — на
-  40 %; отвесно — точно; GameTest `bomb_oblique`, найдено сквозным `surface_bomb`).
-- Заход по прямой до цели (`Autopilot.Sightline`) не дольше, чем нос успевает довернуть: дом, закрывающий цель
-  вплотную круче ~60° (ракета, `MissileSightlineTest`), высотку ближе ~45 блоков к цели (шахед, `DroneDiveTest`)
-  и цель под крышей снаряды не обходят — в руководстве так и сказано.
-- `Entity.onRemovedFromLevel` (NeoForge, из `onTrackingEnd`) приходит и тогда, когда чанк просто перестал выдаваться,
-  а сущность, уже невидимая миру, выгружается с чанком (`setRemoved(UNLOADED_TO_CHUNK)`) без него; `remove` при
-  выгрузке не зовётся. Поэтому снаряд отпускает тикеты и в `remove`, и в `onRemovedFromLevel`, а на край тикающих
-  чанков проверяет шаг до перемещения (`leavesTickingChunks`): шагнув в чанк без тика, он висел бы в мире без тика.
-- Сущность уходит клиенту, только если она ближе `min(clientTrackingRange, дальность прорисовки)` по горизонтали и её
-  чанк отслеживается игроком (`ChunkMap.TrackedEntity.updatePlayer`); смотреть издалека ваниль умеет лишь камерой
-  наблюдателя, которая переносит самого игрока. Поэтому камера снаряда дальше прорисовки показывает карту по телеметрии,
-  а не картинку. В облаке чанки вокруг игрока доходят до «тикают сущности» медленно (генерация на слабом CPU): снаряд
-  в 90 блоках может остаться вне мира — это не баг полёта.
-- Снаряд берёт тикеты своих чанков до входа в мир (`holdChunks`: на пусковой и при возврате из полёта вне мира).
-  Не вошедший — `addFreshEntity` отказал или обработчик `EntityJoinLevelEvent` упал (моды защиты территорий) —
-  отпускает их только `discard`: иначе они стоят до остановки сервера. Ошибку возврата в мир `VirtualFlights.tick`
-  гасит сам (снаряд убирается, остальные летят дальше), иначе она роняла бы тик мира.
-- Тикеты полёта (свои чанки `ChunkHold`, район цели и полоса `TargetAreaHold`) держит сам снаряд и отпускает их в
-  `remove` и `onRemovedFromLevel` — при любом конце полёта. Поэтому снаряд в мире двигается только `moveAlong` (тикет
-  его чанка идёт за ним), и бурение бомбы тоже: сдвинутый мимо (`setPos`) в соседний чанк без тика, он стоит там без
-  конца полёта, а его тикеты держат и его, и район цели до остановки сервера (бомба, прошедшая под тонкой плитой сквозь
-  воздух; GameTest `virtual_risen_ground`).
-- Снаряд вне мира (`VirtualFlights`) — объект сущности, которого нет в мире: `isVirtual()` true, в мир его не добавлять
-  (иначе дубль UUID). Возвращаясь, он ставится выше рельефа под собой и впереди на 5 тиков полёта, каждый блок:
-  с шагом 4 блока он пропускал бы стену и разбивался об неё; путь, который кончается у цели (`pathEnd`), — только до неё
-  (рельеф за целью поднимал бы ракету у цели на скалу, и она рвалась бы в воздухе рядом с целью). Уходящий снаряд (`park`) — это новая сущность: тесты
-  и камера ищут его по UUID, а не по ссылке.
-  Столкновений вне мира нет, но под поверхность он не уходит (`groundCrossing`): поверхность — карта высот готового
-  чанка, у неготового — уровень моря генератора (`ChunkGenerator.getBaseHeight` — ~3 мс на точку, не для тика;
-  `Level.getSeaLevel` в 1.21.1 всегда 63). Рельефа вне мира снаряд не знает и летит на высоте цели, а цель бывает ниже
-  моря и рельефа (карьер, овраг): под поверхностью, но не ниже цели на 16 блоков (`BELOW_AIM`), он летит дальше; пол может
-  встать выше снаряда (цель поднялась, чанк догрузился). Баллистический (бомба, РСЗО) на снижении ниже пола уже
-  в земле и попадает в поверхность над собой. Управляемый (`climbs`) под полом оказывается, только когда тот встал
-  выше него, и ещё несколько тиков снижается, доворачивая вверх: его пол не останавливает. Ниже низа мира не уходит никто.
-  Дошёл — ждёт загрузки места, как у цели, и попадает там в первом тике в мире. Цель под картой высот (пещера) он
-  не достаёт: возвращаясь в мир, снаряд встаёт над рельефом (`materialize`) и взрывается на поверхности над ней.
-- Место снаряда у клиента (`StrikeProjectile`, `InterceptorEntity`) — очередь `ArrivalQueue`, по месту на тик клиента:
-  пакеты тиков сервера приходят неровно (ни одного, потом два — сервер не успел и догоняет; повтор Flashback хранит их
-  так же), и с местом «последний пакет за тик» снаряд то стоял бы тик, то прыгал на два шага — камера погони дёргалась
-  бы с ним. Пусто — прогнозом в долг (не больше 2 тиков вперёд), очередь не длиннее 2, скачок дальше 64 блоков (сумма по осям) — сразу
-  и без прогноза по скачку (`ArrivalQueueTest`). Прогноз — от последнего пришедшего места его шагом за тик сервера,
-  и места, пришедшие за тики в долг, его двигают: у сервера медленнее 20 тиков в секунду пакетов меньше, чем тиков
-  клиента, и долг не гасится, — прогноз прошлым шагом от своего места увёл бы снаряд по прямой на сотни блоков от пути
-  (кружащий шахед — по касательной). Поворот первого кадра — из пакета появления (`recreateFromPacket`), иначе модель
-  первые кадры доворачивалась бы с юга.
-- Наведение — по курсу и тангажу (`FlightController`), тангаж упирается в ±89°: на отвесе остаточный снос идёт по курсу,
-  и цель позади курса тангажом не догнать. Пике «Ланцета» с круга в 700 м (шкала полёта 1) кончается отвесно:
-  `Dive.steer` доворачивает курс и над самой целью, если она позади (на отвесе это поворот носа на доли градуса), иначе
-  промах до 10 м (`loiterLosingTargetAtRealHeightStillDives`, закреплённое зерно).
+## Pitfalls
+- Bomb ground path (`BunkerBusterEntity.plan`): remaining axial distance inside block but outside shape shorter than
+  `GRAZE` (1 µm) is face float error, not void. Otherwise angled crossings between same-medium blocks “exited into
+  void”, restarting Young layer: B-2 bomb at 89° penetrated 18–29 % beyond law (80° 40 %, vertical exact; GameTest
+  `bomb_oblique`, found by end-to-end `surface_bomb`).
+- Straight target approach (`Autopilot.Sightline`) only while nose can finish turning: projectiles do not bypass
+  target-adjacent house steeper than ~60° (missile, `MissileSightlineTest`), tall building within ~45 blocks of target
+  (Shahed, `DroneDiveTest`), or roof-covered target, as guide states.
+- `Entity.onRemovedFromLevel` (NeoForge, from `onTrackingEnd`) also fires when chunk merely stops being served;
+  already world-invisible entity unloads with chunk (`setRemoved(UNLOADED_TO_CHUNK)`) without it, unload never calls
+  `remove`. Thus release tickets in both `remove`/`onRemovedFromLevel`, check step before moving at ticking edge
+  (`leavesTickingChunks`): entering non-ticking chunk would leave it stuck without ticks.
+- Client gets entity only within horizontal `min(clientTrackingRange, render distance)` and player-tracked chunk
+  (`ChunkMap.TrackedEntity.updatePlayer`); vanilla distant viewing only spectator camera moving player itself.
+  Projectile camera beyond render distance therefore shows telemetry map, not image. In cloud, weak-CPU generation
+  brings nearby chunks to entity ticking slowly: projectile 90 blocks away may stay outside world, no flight bug.
+- `ChunkHold` holds projectile's own chunks. World movement, including bomb drilling, only `moveAlong` (ticket follows
+  chunk): bypassing via `setPos` into neighboring non-ticking chunk leaves flight endless, tickets holding self/target
+  area until shutdown (bomb through air under thin slab, GameTest `virtual_risen_ground`). Take own tickets before
+  world entry (`holdChunks`, on launcher/return from virtual flight). Failed entry (`addFreshEntity` refusal or
+  `EntityJoinLevelEvent` handler throws, protection mods) releases only via `discard`, otherwise until shutdown.
+  `VirtualFlights.tick` catches return failures (remove projectile, others continue), otherwise world tick crashes.
+- Target area/lane `TargetAreaHold` belong to mission UUID: `VirtualFlights.park` creates copy, hands over via
+  `handOverTargetArea`, only then removes old entity. Old form no longer owns area, its `remove`/repeated
+  `onRemovedFromLevel` release only its `ChunkHold`. Reentry uses same object/hold. Save/copy errors, final discard,
+  cancellation/retarget release ownership; `AreaHandoverGameTests` checks unchanged ticket objects/lane references
+  across transitions for ready/unready areas. Tickets do not persist through restart. Otherwise projectile releases
+  own chunks/area/lane in `remove`/`onRemovedFromLevel`.
+- Outside-world projectile (`VirtualFlights`) is entity object absent from world, `isVirtual()` true; do not add
+  (duplicate UUID). Return places above terrain beneath/ahead over 5 flight ticks, sampling each block: 4-block
+  steps would miss wall/hit it; target-ending path (`pathEnd`) only to target (terrain beyond would raise missile onto
+  cliff at target, bursting in air beside it). Leaving `park` creates new entity, tests/camera find by UUID not
+  reference. No virtual collisions, but no going below surface (`groundCrossing`): ready-chunk heightmap, otherwise
+  generator sea level (`ChunkGenerator.getBaseHeight` ~3 ms/point, not for tick; `Level.getSeaLevel` always 63 in
+  1.21.1). No virtual terrain knowledge, flies at target altitude, target may be below sea/terrain (quarry/ravine):
+  below surface but no more than 16 blocks below target (`BELOW_AIM`), keeps flying; floor may rise above projectile
+  (target moved up/chunk loaded). Descending ballistics (bomb/MLRS) below floor already underground, hits overhead
+  surface. Guided `climbs` below floor only when floor rose, continues descending several ticks turning upward,
+  floor does not stop it. Nobody goes below world bottom. On arrival waits loading like target, hits on first world
+  tick. Cannot reach cave target below heightmap: `materialize` returns above terrain, explodes on surface above it.
+- Client position (`StrikeProjectile`, `InterceptorEntity`) uses `ArrivalQueue`, one position/client tick: uneven
+  server packets (none then two, server catch-up, Flashback stores same) with “last packet per tick” would stop/jump
+  two steps, jerking chase camera. Empty predicts on credit up to 2 ticks, queue length ≤ 2, jump > 64 blocks
+  (sum over axes) immediate, no jump extrapolation (`ArrivalQueueTest`). Predict from last received position with its
+  server-tick step; positions received during borrowed ticks advance it: server < 20 ticks/s supplies fewer packets
+  than client ticks, debt never clears; predicting from own position using old step would drift hundreds of blocks
+  off path (circling Shahed along tangent). First-frame rotation from spawn packet (`recreateFromPacket`), otherwise
+  model turns from south in first frames.
+- Guidance heading/pitch (`FlightController`), pitch capped ±89°: vertical residual drift follows heading, pitch cannot
+  catch target behind heading. Lancet dive from 700 m circle (flight scale 1) ends vertical: `Dive.steer` turns heading
+  even directly over target if behind (fractions-of-degree nose turn at vertical), otherwise miss up to 10 m
+  (`loiterLosingTargetAtRealHeightStillDives`, fixed seed).

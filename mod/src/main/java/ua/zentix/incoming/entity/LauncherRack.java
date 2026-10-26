@@ -3,23 +3,23 @@ package ua.zentix.incoming.entity;
 import ua.zentix.incoming.strike.WeaponType;
 
 /**
- * Пакет мобильной пусковой ({@link LauncherEntity}) — часть паспорта оружия ({@code WeaponSpec#rack}): угол
- * возвышения, число ячеек, темп пусков, сколько снаряд ждёт и занимает ячейку, где ячейки на пакете.
+ * Mobile launcher rack ({@link LauncherEntity}), part of the weapon spec ({@code WeaponSpec#rack}): elevation,
+ * cell count, launch rate, projectile wait and occupancy time, cell locations.
  *
- * @param elevation угол возвышения направляющей, °
- * @param slots     ячеек в пакете
- * @param spacing   наименьший интервал между пусками с одной установки, тиков
- * @param minReady  через сколько тиков после приказа поджиг, не раньше
- * @param busyTicks сколько тиков снаряд занимает ячейку после готовности (поджиг и сход; труба РСЗО — перезарядка)
+ * @param elevation rail elevation, °
+ * @param slots rack cells
+ * @param spacing minimum launch interval from one launcher, ticks
+ * @param minReady minimum ticks from order to ignition
+ * @param busyTicks projectile cell occupancy after readiness (ignition and launch rail exit; MLRS tube reload)
  */
 public enum LauncherRack {
-    /** Шахеды одна над другой (с него же катапультой стартуют барражирующие — у тех свой пакет {@link #LOITER}). */
+    /** Shaheds stacked vertically (also catapults loitering munitions, which have their own {@link #LOITER} rack). */
     DRONE(15f, 5, 16, 12, 24),
-    /** Два наклонных контейнера крылатых ракет. */
+    /** Two inclined cruise missile canisters. */
     MISSILE(40f, 2, 16, 12, 24),
-    /** Пакет РСЗО: 4 ряда по 10 труб, очередь по полсекунды; труба после пуска перезаряжается минуту. */
+    /** MLRS rack: 4 rows of 10 tubes, half-second sequence; a tube reloads for a minute after launch. */
     ROCKET(50f, LauncherEntity.ROCKET_COLUMNS * LauncherEntity.ROCKET_ROWS, 8, 10, 1200),
-    /** Катапульта барражирующих: три направляющие внизу, две сверху. */
+    /** Loitering catapult: three rails below, two above. */
     LOITER(20f, 5, 16, 12, 24);
 
     private final float elevation;
@@ -37,8 +37,8 @@ public enum LauncherRack {
     }
 
     /**
-     * Пакет оружия {@code weapon} (паспорт, {@code WeaponSpec#rack}); у оружия без пакета (B-2, МБР — такой пусковой не
-     * бывает, разве что из чужого сохранения) — пакет шахедов.
+     * Rack for {@code weapon} (spec, {@code WeaponSpec#rack}); a weapon without a rack (B-2, ICBM: no such
+     * launcher except from someone else's save) uses the Shahed rack.
      */
     public static LauncherRack of(WeaponType weapon) {
         LauncherRack rack = weapon.spec().rack();
@@ -66,21 +66,21 @@ public enum LauncherRack {
     }
 
     /**
-     * Ячейка на пакете в его осях от оси качания (её место — у опоры, {@link LauncherMount}):
-     * {влево, вверх, вперёд}, блоков — центр снаряда на направляющей.
+     * Rack cell in its axes from the elevation pivot (position from the mount, {@link LauncherMount}): {left, up,
+     * forward}, blocks, projectile center on the rail.
      */
     double[] slotOffset(int slot) {
         return switch (this) {
             case MISSILE -> new double[]{slot == 0 ? 0.62 : -0.62, 0.64, 3.3};
             case ROCKET -> {
-                // очередь идёт по рядам слева направо, начиная с верхнего — как на «Граде»
+                // Sequence runs by rows left to right, top row first, as on a Grad.
                 int col = slot % LauncherEntity.ROCKET_COLUMNS, row = LauncherEntity.ROCKET_ROWS - 1 - slot / LauncherEntity.ROCKET_COLUMNS;
                 yield new double[]{(LauncherEntity.ROCKET_COLUMNS - 1) * LauncherEntity.TUBE_PITCH / 2 - col * LauncherEntity.TUBE_PITCH,
                         0.3 + row * LauncherEntity.TUBE_PITCH, LauncherEntity.TUBE_LENGTH / 2};
             }
-            // «Ланцет» 1,65 м: хвост — на тележке у задней стенки (0,1 м), нос — на середине направляющей
+            // Lancet, 1.65 m: tail on the trolley by the rear wall (0.1 m), nose at rail midpoint.
             case LOITER -> new double[]{LauncherEntity.loiterLeft(slot), LauncherEntity.loiterUp(slot), 0.93};
-            // шахеды одна над другой: центр ячейки, 2 м от оси (хвост с ускорителем — у задней стенки)
+            // Shaheds stacked vertically: cell center 2 m from pivot (tail with booster at the rear wall).
             case DRONE -> new double[]{0, 0.45 + 0.8 * slot, 2.0};
         };
     }

@@ -6,155 +6,137 @@ paths:
   - "mod/src/devtest/java/ua/zentix/incoming/**"
 ---
 
-# Чанки, тикеты и тик сервера
+# Chunks, tickets and server tick
 
-## Подводные камни
-- «Где земля» — только `util/Terrain.estimate`: высота и источник `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
-  `UNKNOWN`, вызывающий выбирает допустимые — `Allowed.CHUNK` в мире, `FLIGHT` вне мира, `ORDER` для приказа,
-  `RELIEF` — рельеф полёта на всём пути, `VIRTUAL_RELIEF` — вне мира и для прямой до цели за краем готовых чанков
-  (без потолка Незера); прямых `getBaseHeight`/`getSeaLevel` вне `Terrain` и `TerrainSurvey` нет.
-  `RELIEF` берёт `DISK` и `GENERATOR` только из съёмки `util/TerrainSurvey` (несохраняемый attachment мира): чанк в
-  памяти, но не готов (`Terrain.inMemory`), — его карта высот сразу; иначе первый вопрос заказывает чтение поля
-  `Heightmaps` файла чанка в потоке ввода-вывода чанков (`chunkScanner`, как `DiskStatus.scan`; он же отдаёт ещё не
-  записанное, а запись выгруженного чанка встаёт в его очередь раньше любого чтения после неё) и отвечает null. Та же
-  очередь грузит чанки игрокам: чтений в пути не больше `MAX_READS` (64), остальные заказы ждут в своей очереди
-  (вопросы датчика — первыми, заказ вперёд — следом), с тем же приоритетом у генератора; повторный вопрос продвигает
-  ожидающий предзаказ. Всего живых заказов, включая генератор, не больше 8192; предзаказ занимает не больше половины.
-  В этом пределе заказы не отбрасываются: иначе чей заказ принят, решали бы соседние
-  полёты (сценарии партии идут разом в одном мире) и скорость диска. Ответы
-  из фоновых потоков становятся известны только в конце тика мира (`publish`): иначе ответ посреди тика видела бы одна колонка полосы датчика и не видела соседняя, и полёт зависел бы от
-  скорости диска (сценарии `missile_far.mob.*` расходились с эталоном от прогона к прогону). Нет на
-  диске или недогенерирован — генератор в одном фоновом потоке (общий пул Minecraft; остальные потоки остаются
-  генерации мира, следующий заказ — по концу предыдущего), узлы через 8 блоков; блоки окончательные, а карты не прочесть (формат до 1.18 или длина не по высоте мира)
-  — рельеф неизвестен, генератор не берётся: мир построен не им. Догенерация под нулём
-  (`below_zero_retrogen`) сама по себе карту не отменяет: фикс 1.18 `ChunkHeightAndBiomeFix.getFixedHeightmap`
-  уже сдвинул высоты к новому низу мира; `TerrainSurvey.decode` читает такую карту, если блоки окончательные и
-  упаковка соответствует высоте мира. Чтение с диска открывает файл региона и создаёт
-  пустой (0 байт), если его нет, — как ваниль при поиске старых чанков рядом со свежей генерацией. Чанк в памяти
-  отвечает сам, а уходя из неё (`ChunkEvent.Unload`, перед записью), оставляет съёмке свою карту высот — ту же, что
-  уходит на диск: выгрузка у ванили идёт по свободному времени тика, и без этого чанк был бы неизвестен тик-другой
-  в разные тики от прогона к прогону. `MOTION_BLOCKING` остаётся всегда, даже до первого вопроса о рельефе;
-  каждый вид хранит не больше 8192 карт, давно не читанные вытесняются сразу (LRU): новая выгрузка не выбивает
-  карту, которую активный полёт продолжает читать. Все заказы чанка отменяются при загрузке и
-  выгрузке независимо от наличия карты: поздний ответ не заменит новые данные. Оставляет только полный чанк
-  (`LevelChunk`) и только посчитанную карту (`hasPrimedHeightmap`): у недогенерированного карта без построек или пустая,
-  а `getHeight` несчитанную карту посчитал бы и дописал в чанк. Сбой генератора или чтения — `UNKNOWN` на 200 тиков
-  до повтора (вопросы срок не продлевают), а не WARN и новая работа каждый тик; ошибка IO не означает отсутствие чанка.
-  Сценарии
-  полёта дожидаются заказов в конце тика (`TerrainSurvey.settle` из `InstantChunks`). `Terrain.height` — источник `CHUNK` без выбора для кода, который сам
-  знает, что чанк готов: `LaunchSite`, взрывы `Warheads`, `nuclear/world`, площадка МБР за игроком в `NuclearStrikes`.
-- Выход из мира может зависнуть на «Saving worlds» (ванильный цикл выгрузки чанков, `ChunkMap.processUnloads`): при
-  остановке ваниль зовёт `ServerChunkCache.tick(() -> true, …)`, очередь выгрузки
-  разбирается без предела, а задача выгрузки держателя, которого вернули в работу и держит генерация
-  (`getGenerationRefCount() > 0`; задача генерации держит всё своё окно, и отменённая — пока не дождётся слоёв), кладёт
-  себя обратно сразу же — а слои генерации кончаются только задачами потока сервера (`ServerChunkCache.pollTask`), до
-  которых этот вызов не возвращается. Генерацию, начатую до выхода, запускают тикеты мода (районы, зона, подготовка руин,
-  полосы подлёта, вход игрока), реже — тикеты игрока. Ванильный цикл мод не трогает (решение Артёма): `util/StopDrain`
-  в `ServerStoppingEvent` (приоритет `LOWEST`, после того как мод снял
-  свои тикеты и работу: все районы — `StrikeWorld.releaseAreas`, иначе ожидание применило бы их и ждало генерацию
-  всего залпа) выполняет задачи чанков каждого мира, пока ни один держатель (`chunkMap.getChunks()` после
-  `runDistanceManagerUpdates`) не занят генерацией, не дольше 30 с (раз в 5 с — строка INFO, на пределе — WARN:
-  выход, вероятно, зависнет; GameTest `stopReleasesAreasBeforeDrain`). GameTest
-  `stopDrainLetsVanillaUnloadFinish`: держатель в очереди выгрузки, которого вернула генерация по тикету загрузки, —
-  после ожидания генерации нет, и ванильный цикл остановки как есть кончается; `ServerStoppingEvent` снимает и всю
-  работу руин и их тикеты и останавливает `RuinWorkers` (`stopMidZoneLeavesNoWork`). Выход всё же висит — снять `jstack`.
-- У чанка, который ещё не тикал (свежая генерация у края прорисовки), блок-сущности лежат отложенными данными
-  (`pendingBlockEntities`: после генерации — заглушка «DUMMY», после загрузки — `keepPacked`). `onRemove`/
-  `removeBlockEntity` их не видит: замена блока оставляет данные при воздухе, и ваниль пишет «Tried to load a DUMMY
-  block entity». Менять блоки мира — через `ColumnScar.replace` (сперва `level.getBlockEntity` поднимает их).
-- Нельзя убивать сущности, перебирая `level.getAllEntities()` (живая карта: лут добавляется прямо в неё) — брать
-  снимок `getEntitiesOfClass`.
-- Тикет региона (`addRegionTicket`) делает чанки тикающими сразу по уровню, не дожидаясь соседей: блок-сущности
-  тикают, если чанк в счёте тика (`Level.tickBlockEntities` → `shouldTickBlocksAt`,
-  `DistanceManager.tickingTicketsTracker`) и его уровень загрузки ≤ 32 (`LevelChunk.isTicking`), — улей или хранилище
-  испытаний у края читает соседний чанк, который ещё генерируется, и грузит его синхронно
-  (`ServerChunkCache.getChunk`: тикет `UNKNOWN` уровня 33, ожидание в `managedBlock`) за очередью генерации — сервер
-  стоит по 2–12 с (строка стенда «остановка:»). Поэтому районы мода — через `AreaLoader`:
-  тикет загрузки (`DistanceManager.addTicket`, только счёт загрузки) того же уровня `33 − d` ставится сразу (у каждого
-  района свой, значение — сам район: одинаковые ванильные тикеты сливаются в один), а тикет региона растёт по готовым
-  квадратам; GameTest `targetAreasTickOnlyNextToReadyChunks` ловит тикающие блоки рядом с неготовым чанком (у
-  ванильного тикета региона — сотни тиков). Очередь генерации идёт по уровню тикета (меньше — раньше:
-  `ChunkTaskPriorityQueue`), уровни выше 33 сами генерацию не запускают: проверено на стенде и не годится — предел
-  числа чанков в загрузке, ожидание всего района до тикета, рост кольцами по тикетам уровня 33 (районы не успевают к
-  снарядам); низкий приоритет — тоже (место ядерного подрыва с тикетом уровня 32 не догружается за 90 с полёта МБР,
-  пока залпы держат районы уровня 29). Синхронная загрузка стоит в той же очереди (тикет `UNKNOWN` уровня 33): игрок,
-  вошедший во время залпа, в первом тике ждал бы своё место за районами 0,55–0,8 с; поэтому `ArrivalTickets` ставит на его
-  чанк тикет загрузки уровня 26 — ниже центра любого района мода: у района «Ланцета» центр 27, а загрузка чанка с диска
-  ждёт соседей (радиус 1), так что с тикетом 28 место ждало бы весь залп «Ланцетов». Тикет без тика, снимается, когда квадрат
-  радиуса 5 держат тикеты `PLAYER` любых игроков (карта
-  `DistanceManager.tickets`, AT, только чтение), не позже 200 тиков; GameTest `arrivalLoadsBefore{Salvo,Loiter}Areas`,
-  `arrivalReleasedWhenPlayersHoldPlace`. Возрождение (`PlayerList.respawn`) читает кровать или якорь синхронно ещё до своих
-  событий — тот же тикет ставится при смерти (`LivingDeathEvent`, `LOWEST`) на место возрождения арендой на 100
-  тиков, которую продлевает тик мёртвого игрока, и снимается возрождением, выходом, тиком живого игрока или сроком
-  аренды (игрок больше не тикает); слот переходит к новому игроку в `PlayerEvent.Clone` (GameTest
-  `respawnTicketWaitsForRespawn`, `respawnTicketLeaseExpires`, `respawnEventsMoveTicket` — обработчики событий
-  с `FakePlayer` NeoForge). Кровать на аппарате Sable — точка в сетке плотов (возрождает Sable по своей точке в мире):
-  туда тикетов загрузки не ставить (`SubLevels.inPlotGrid`, GameTest `respawnOnCraftNoTicket`). Пока тикет стоит,
-  у кровати без игрока идёт `checkDespawn`. Телепорт внутри измерения NeoForge грузит синхронно (`Entity.setPosRaw → getChunk`,
-  тикет `UNKNOWN`, через тик снимается), а тикеты игрока на новом месте встают очередью: кольцо синхронной загрузки (до
-  11 чанков) падало ниже загрузки и снова поднималось, пока соседей генерировала очередь районов, — ванильная задача
-  выгрузки такого держателя (`ChunkMap.scheduleUnload`: `isReadyForSaving` ложно, пока `getGenerationRefCount() > 0`)
-  ставит себя в `unloadQueue` снова, и `processUnloads` крутит её до конца времени тика: тик ровно 50 мс, задачам чанков
-  и самой этой генерации времени нет (стенд: 100 шахедов, камера перенесена вместе с залпом — 50 мс/тик до минуты).
-  Поэтому прыжок игрока (`ArrivalTickets.onLevelTick`: чанк в конце тика мира ушёл на `JUMP` чанков и дальше, место не
-  держат тикеты игроков) ставит тикет входа до второго `purgeStaleTickets` (GameTest `teleportRingStaysLoaded`, контроль
-  `teleportRingDropsWithoutArrival`). Поиск портала грузит место раньше, чем мод о нём узнаёт, — это не закрыто. Тот же пробел у самой ванили: чанки игрока в дистанции симуляции у свежего
-  места (телепорт; блоки тикают до радиуса симуляции + 1) — стенд поэтому переносит игрока в готовый квадрат
-  радиусом симуляции + 2. Тикет загрузки мода сам тикать не пускает, но чанк, которому он дал уровень ≤ 32, тикает
-  блок-сущностями без готовых соседей, если его накрывает чужой счёт тика, — по правилу ванили, как чанки у края тикетов
-  самого игрока; хуже ванили только при дальности симуляции больше дальности обзора сервера. Правило тика блок-сущностей
-  мод не меняет (решение Артёма: мод не правит поведение игры и чужих модов для всех): миксин на
-  `LevelChunk$BoundTickingBlockEntity.tick` (тик только при готовом `ChunkHolder.getTickingChunk`) задерживал бы все
-  блок-сущности сборки, а Lithium подменяет тот же вызов. Остановка на стенде до 13 с (хранилище испытаний у района
-  цели; обзор сервера 8, симуляция 6) бывает и ванильной: игрок сходит на чанк за край заранее готового квадрата,
-  а соседний чанк ещё генерируется. У «спящих» блок-сущностей Lithium тикер-заглушка,
-  `getPos()` — null: код, перебирающий `Level.blockEntityTickers`, проверяет место на null. `@Shadow` в миксине — только
-  на член, объявленный в самом целевом классе (refMap нет, в игре имена Mojang); внешний объект вложенного класса —
-  `this$0` (как у Lithium).
-- Выгрузка у ванили (`ChunkMap.processUnloads`) идёт во время, свободное в тике; без него — 200 держателей из `toDrop` за
-  тик, а что сверх 2000 в `toDrop`, она переводит в выгрузку, и готовых к выгрузке сверх 2000 сохраняет и выгружает в
-  том же тике: сотни районов, отпущенных разом (Отбой залпа), стоят тика 6,8 с, на стенде — 5 с на ~9 тыс.
-  чанков. Поэтому `AreaLoader.release` сразу снимает тикеты района (тик прекращается), а чанки готового района держит
-  тикетом отпуска без тика того же уровня, и очередь в конце тика мира снимает их по одному району: пока на выгрузке
-  (`toDrop` + `pendingUnloads`, AT, только чтение, без держателей, которых ещё держит генерация соседей —
-  `getGenerationRefCount() > 0`, их ваниль пропускает) с квадратом держателей района не больше 2000 (это ваниль разберёт
-  во время, свободное в тике), а сверх — темпом ванили без свободного времени, 200 держателей за тик (район больше — в
-  долг на следующие тики), пока на выгрузке меньше 2200, а в `toDrop` меньше 2000; после каждого —
-  `runDistanceManagerUpdates`, чтобы видеть, сколько он отдал. Только места ждать нельзя: сервер без свободного времени
-  (тик дольше 50 мс) держит на выгрузке 2000 и разбирает лишь то, что сверх, а держателей генерации не трогает вовсе, —
-  такая очередь отпускала бы район раз в 100 тиков (после ~60 залпов — 12,5 тыс. тикетов отпуска, ~25
-  тыс. загруженных чанков, TPS 13–15). И предел всей выгрузки нужен: в первом тике со свободным временем ваниль переводит
-  в выгрузку весь `toDrop` и сохраняет сверх своих 2000, даже когда время кончилось, — с одним пределом на `toDrop` после
-  занятых тиков это было бы ~2000 сохранений разом. Тикет отпуска — без срока: тикеты со сроком ванильный
-  `purgeStaleTickets` снимает все разом, а при `/tick freeze` не снимает вовсе; снимает его только очередь. Район, который
-  ещё грузился, и любой при остановке (`!isRunning`; `releaseAll`) — сразу: тикет отпуска догенерировал бы его, а
-  `StopDrain` ждал бы эту генерацию. GameTest `releasedAreasUnloadInTurn` (без очереди — 3645 на выгрузке); без
-  свободного времени (`/tick sprint`: ваниль тикает с `hasTimeLeft = () -> false`) — `releasedAreasUnloadWithoutFreeTime`
-  и `salvoLeavesNoTicketsOnBusyServer` (с очередью, что ждёт только места, 7 из 8 районов и 17 районов залпа ждут
-  дольше срока).
-- Все загруженные чанки — `chunkMap.getChunks()` (открыт AT).
-- `PalettedContainer.maybeHas` точен только для малых палитр: глобальная (больше 256 состояний в секции — обычное
-  дело в детальном городе) всегда отвечает `true`, малая помнит ушедшие состояния. Где ответ решает, проходить ли
-  секцию на каждой загрузке или сохранении чанка, — `util/Palettes.contains` (палитра, затем `PalettedContainer.count`;
-  Lithium заменяет `count` и называет все записи палитры, с нулём блоков тоже — считать только `n > 0`).
-- «Can't keep up … N ms behind» — накопленное отставание сервера с прошлой такой строки (строка не чаще 15 с игры,
-  `MinecraftServer.runServer`), а не длина одной паузы: 12,9 с через 28 с после прошлой строки — это ~11 тиков/с
-  всё это время. Разбор чанка с диска (`ChunkSerializer.read`) и перевод в FULL идут в потоке сервера между тиками
-  (`ChunkMap.scheduleChunkLoad`, `mainThreadExecutor`): телепорт в плотный город стоит секунды и без мода.
-- `ChunkEvent.Load` приходит один раз за жизнь чанка в памяти: у края видимости чанк опускается ниже полной загрузки
-  (`getChunkNow` — null) и поднимается обратно без выгрузки и без нового события. Очередь, которая держит чанки,
-  снимает их только по `ChunkEvent.Unload`; «чанк в памяти» — `NuclearTickets.inMemory`: держатель из
-  `ChunkMap.getVisibleChunkIfPresent` или из `pendingUnloads` (AT, только чтение) + `getChunkIfPresentUnchecked(FULL)`.
-  Держатель без тикетов ваниль убирает из видимой карты сразу, а чанк выгружает (и шлёт `Unload`), когда его можно
-  сохранить; тикет, вернувшийся до этого, возвращает тот же чанк без `ChunkEvent.Load` (GameTest
-  `chunkRevivedFromPendingUnloadStillScarred`). Иначе — полосы нетронутых чанков после ядерки (`ScarQueue`) и квадрат
-  зоны, который держит план чанка без работы.
-  `ChunkEvent.Unload` приходит, только если чанк стал полным (`LevelChunk`); чанк, прочитанный с диска
-  (`ChunkDataEvent.Load`), но так и оставшийся в кольце вокруг краевых (`ImposterProtoChunk`), уходит без события:
-  данные по такому чанку чистить по `getVisibleChunkIfPresent(c) == null` (`BlackoutWorld`, раз в секунду).
-- Длинный луч `Level.clip` на сервере (прицел до 1024 блоков, нос снаряда, тень света ядерки) — только до первого
-  неготового чанка: `Terrain.readyUntil`/`readyAlong` (обход колонок чанков по сетке).
-- Тикеты района `AreaLoader` применяет сразу (`apply` → `DistanceManager.runAllUpdates`: взял, отпустил, вырос в тике;
-  не `runDistanceManagerUpdates` — тот копирует всю карту чанков при новых держателях, а районы берут десятками за тик).
-  Ваниль пересчитывает уровни, когда её позовут: в начале тика, синхронной загрузкой, отпуском чужого района. Без этого
-  район, взятый в тике, тикал в этом тике или в следующем по тому, звал ли кто-то пересчёт, — по чужим ударам.
+## Pitfalls
+- Ground location only via `util/Terrain.estimate`: height/source `CHUNK`/`CEILING`/`DISK`/`CLIENT_MAP`/`GENERATOR`/`SEA`/
+  `UNKNOWN`, caller chooses allowed sources: `Allowed.CHUNK` in world, `FLIGHT` outside, `ORDER` for orders, `RELIEF`
+  for entire flight path, `VIRTUAL_RELIEF` outside world/straight target line beyond ready chunks (no Nether ceiling);
+  no direct `getBaseHeight`/`getSeaLevel` outside `Terrain`/`TerrainSurvey`.
+  For a flight corridor, `Terrain.relief` returns a `util.Relief.Survey` for one synchronous measurement:
+  readiness and source selection run once per unique chunk, each column height is read once, and every geometric
+  visit and climb correction stays in `Corridor.highest`. Never retain views or heights between measurements,
+  even within a tick: blocks and readiness can change. `Terrain.choose` is shared by single-column estimates
+  and chunk views. `Craft.reliefSurvey` is created during the sensor refresh; its four-tick period is unchanged.
+  `RELIEF` uses `DISK`/`GENERATOR` only from `util/TerrainSurvey` (non-persistent world attachment): in-memory unready
+  chunk (`Terrain.inMemory`) gives its heightmap immediately; otherwise first query requests chunk-file `Heightmaps`
+  on chunk I/O thread (`chunkScanner`, like `DiskStatus.scan`; also returns unsaved data, unloaded-chunk writes queue
+  before any later reads), returns null. Same queue loads player chunks: at most `MAX_READS` (64) in flight, others
+  in own queue (sensor queries first, lookahead preorders after), same generator priority; repeat query promotes
+  waiting preorder. Total live orders including generator ≤ 8192, preorders at most half. Within limit, no dropping:
+  otherwise neighboring flights (scenario batch shares world) and disk speed would decide admission. Background
+  answers publish only at world-tick end (`publish`): mid-tick answers would be visible to one corridor column and
+  not its neighbor, making flight disk-speed-dependent (`missile_far.mob.*` differed between runs). Absent/partial
+  disk chunk uses generator on one background thread (shared Minecraft pool, leaving other threads for worldgen,
+  next order after previous completion), nodes every 8 blocks; final blocks but unreadable maps (pre-1.18 format or
+  length mismatching world height) mean unknown terrain, not generator: world not built by it. Below-zero retrogen
+  (`below_zero_retrogen`) alone does not invalidate map: 1.18 `ChunkHeightAndBiomeFix.getFixedHeightmap` already shifted
+  heights to new world bottom; `TerrainSurvey.decode` reads if blocks final/packing matches world height. Disk read
+  opens region file, creating empty 0-byte file if absent, like vanilla old-chunk lookup beside fresh generation.
+  In-memory chunks answer themselves; on leaving (`ChunkEvent.Unload`, before save) leave survey same heightmap sent
+  to disk: vanilla unloads in spare tick time, otherwise chunk unknown for a tick or two at varying times across
+  runs. Always retain `MOTION_BLOCKING`, even before first query; each kind ≤ 8192 maps, least recently read evicted
+  immediately (LRU), so new unload cannot evict active flight's repeatedly read map. Cancel all chunk orders on load/
+  unload regardless of map presence; late answers cannot replace new data. Retain only full `LevelChunk`/primed map
+  (`hasPrimedHeightmap`): partial chunk map lacks structures/is empty, `getHeight` would prime and write it. Generator/
+  read failure means `UNKNOWN` for 200 ticks before retry (queries never extend), not WARN/new job each tick; I/O
+  error does not mean absent chunk. Flight scenarios settle orders at tick end (`TerrainSurvey.settle` from
+  `InstantChunks`). `Terrain.height` gives `CHUNK` without selection to callers already knowing readiness:
+  `LaunchSite`, `Warheads` explosions, `nuclear/world`, ICBM site behind player in `NuclearStrikes`.
+- World exit may hang on “Saving worlds” (vanilla unload loop `ChunkMap.processUnloads`): shutdown calls
+  `ServerChunkCache.tick(() -> true, …)`, drains unload queue without limit; unload task for a revived holder retained
+  by generation (`getGenerationRefCount() > 0`, generation retains whole window, canceled tasks until layers finish)
+  immediately reenqueues itself, while generation layers complete only via server-thread tasks
+  (`ServerChunkCache.pollTask`) unreachable until this call returns. Pre-exit generation started by mod tickets
+  (areas, zone, ruin prep, approach lanes, player arrival), less often player tickets. Do not change vanilla loop
+  (Artem's decision): `util/StopDrain` in `ServerStoppingEvent` (`LOWEST`, after mod releases tickets/work, all areas via
+  `StrikeWorld.releaseAreas`, otherwise wait applies them and awaits whole-salvo generation) executes each world's
+  chunk tasks until no holder (`chunkMap.getChunks()` after `runDistanceManagerUpdates`) is generating, ≤ 30 s
+  (INFO every 5 s, WARN at limit: exit likely hangs; `stopReleasesAreasBeforeDrain`). GameTest
+  `stopDrainLetsVanillaUnloadFinish`: unload-queued holder revived by load-ticket generation has no generation after
+  wait, unchanged vanilla shutdown completes; `ServerStoppingEvent` also removes all ruin work/tickets, stops
+  `RuinWorkers` (`stopMidZoneLeavesNoWork`). Still hanging: capture `jstack`.
+- Chunks not yet ticked (fresh generation at render edge) hold block entities as deferred data (`pendingBlockEntities`:
+  generated “DUMMY”, loaded `keepPacked`). `onRemove`/`removeBlockEntity` miss them; replacing block leaves data in air,
+  vanilla logs “Tried to load a DUMMY block entity”. World block changes via `ColumnScar.replace`, first materializing
+  through `level.getBlockEntity`.
+- Never kill entities while iterating live `level.getAllEntities()` map (loot added directly); snapshot
+  `getEntitiesOfClass`.
+- Region ticket `addRegionTicket` immediately enables ticking by level, not neighbor readiness: block entities tick
+  if chunk in ticking count (`Level.tickBlockEntities` → `shouldTickBlocksAt`, `DistanceManager.tickingTicketsTracker`)
+  and load level ≤ 32 (`LevelChunk.isTicking`); edge beehive/trial spawner reads generating neighbor synchronously
+  (`ServerChunkCache.getChunk`: `UNKNOWN` ticket level 33, `managedBlock` wait) behind generation queue, stalls 2–12 s
+  (rig “stall:” line). Thus mod areas use `AreaLoader`: immediately place load-only ticket
+  (`DistanceManager.addTicket`, loading tracker only) at same `33 − d` (unique per area, value area itself, identical
+  vanilla tickets merge); grow region ticket by ready squares. `targetAreasTickOnlyNextToReadyChunks` catches ticking
+  beside unready chunks (hundreds of ticks with vanilla region ticket). Generation queue by ticket level, lower first
+  (`ChunkTaskPriorityQueue`); levels > 33 do not initiate generation. Tested on rig, unsuitable: cap loading-chunk
+  count, wait whole area before ticket, grow rings with level-33 tickets (areas miss projectile deadlines); lower
+  priority too (level-32 nuclear site not ready in 90 s ICBM flight while salvos hold level-29 areas). Sync loads share
+  queue (`UNKNOWN` 33): mid-salvo joiner would wait 0.55–0.8 s for place on first tick; `ArrivalTickets` uses load level
+  26, below any mod-area center (Lancet center 27, disk load waits radius-1 neighbors, level 28 would wait entire Lancet
+  salvo). Non-ticking, removed once any players' `PLAYER` tickets hold radius-5 square (`DistanceManager.tickets`, AT,
+  read-only), ≤ 200 ticks; `arrivalLoadsBefore{Salvo,Loiter}Areas`, `arrivalReleasedWhenPlayersHoldPlace`. Respawn
+  (`PlayerList.respawn`) reads bed/anchor synchronously before own events: same ticket on death (`LivingDeathEvent`,
+  `LOWEST`) at respawn place, 100-tick lease renewed by dead-player tick, removed on respawn/logout/live tick/expiry
+  (player no longer ticks); slot transfers in `PlayerEvent.Clone` (`respawnTicketWaitsForRespawn`,
+  `respawnTicketLeaseExpires`, `respawnEventsMoveTicket`, handlers with NeoForge `FakePlayer`). Sable-craft bed is plot-
+  grid point (Sable respawns at own world point): no load tickets there (`SubLevels.inPlotGrid`,
+  `respawnOnCraftNoTicket`). While held, bed without player runs `checkDespawn`. Same-dimension NeoForge teleport loads
+  synchronously (`Entity.setPosRaw → getChunk`, `UNKNOWN` removed next tick), new player tickets queue; synchronous
+  ring (≤ 11 chunks) dropped below loading/revived while area queue generated neighbors. Vanilla unload task
+  (`ChunkMap.scheduleUnload`: `isReadyForSaving` false while `getGenerationRefCount() > 0`) reenqueues in `unloadQueue`,
+  `processUnloads` spins until tick deadline, exactly 50 ms/tick, no chunk-task/generation time (rig 100 Shaheds,
+  camera teleported with salvo, 50 ms/tick up to minute). Player jump (`ArrivalTickets.onLevelTick`: chunk moved ≥ `JUMP` chunks at world-
+  tick end, no player tickets holding place) installs arrival ticket before second `purgeStaleTickets` (`teleportRingStaysLoaded`,
+  control `teleportRingDropsWithoutArrival`). Portal search loads before mod learns location, uncovered. Same vanilla
+  gap: fresh-location player simulation chunks (teleport, blocks tick to simulation radius + 1), so rig teleports
+  player into ready simulation-radius + 2 square. Mod load ticket never enables ticking itself, but if it grants
+  level ≤ 32 under another ticking count, block entities tick without ready neighbors, vanilla rule like player
+  ticket edges; worse than vanilla only if simulation distance exceeds server view distance. Never change block-
+  entity ticking rule (Artem: mod does not change game/other mods globally): mixin on
+  `LevelChunk$BoundTickingBlockEntity.tick` (tick only with ready `ChunkHolder.getTickingChunk`) would delay all pack
+  block entities; Lithium replaces same call. Rig stall ≤ 13 s (trial spawner by target area, server view 8/simulation
+  6) also vanilla: player steps beyond pre-ready square, neighbor still generating. Lithium “sleeping” block entities
+  use dummy ticker, `getPos()` null; code iterating `Level.blockEntityTickers` checks null. Mixin `@Shadow` only on
+  members declared by target class itself (no refMap, game Mojang names); nested outer reference `this$0`, like Lithium.
+- Vanilla unload (`ChunkMap.processUnloads`) uses spare tick time; without it, 200 `toDrop` holders/tick; above 2000 in `toDrop`
+  it moves excess to unloading, saves/unloads ready excess above 2000 in same tick: hundreds of simultaneously
+  released areas (salvo Cancel) cost 6.8 s/tick, rig 5 s/~9 thousand chunks. `AreaLoader.release` immediately removes
+  area tickets (ticking stops), holds ready area with same-level non-ticking release ticket; world-tick-end queue
+  releases area by area while unloading (`toDrop` + `pendingUnloads`, AT/read-only, excluding holders retained by
+  neighbor generation `getGenerationRefCount() > 0`, vanilla skips them) plus area's holder square ≤ 2000 (vanilla
+  drains in spare time); beyond that vanilla busy rate 200 holders/tick (large areas borrow following ticks), while
+  unloading < 2200 and `toDrop` < 2000; `runDistanceManagerUpdates` after each to see release count. Waiting only for
+  room fails: busy server (tick > 50 ms) keeps 2000 unloading, drains excess only, never generation holders, releasing
+  one area/100 ticks (~60 salvos leaves 12.5 thousand release tickets/~25 thousand loaded chunks, TPS 13–15). Whole
+  unload cap needed too: first spare tick moves all `toDrop` to unloading, saves excess above 2000 even after time
+  ends, so `toDrop` cap alone after busy ticks gives ~2000 simultaneous saves. Release ticket no timeout: vanilla
+  `purgeStaleTickets` expires all together, none during `/tick freeze`; only queue removes. Still-loading areas and
+  all at shutdown (`!isRunning`, `releaseAll`) release immediately: otherwise release ticket completes generation,
+  `StopDrain` waits. `releasedAreasUnloadInTurn` (without queue 3645 unloading); no spare time (`/tick sprint`, vanilla
+  `hasTimeLeft = () -> false`): `releasedAreasUnloadWithoutFreeTime`, `salvoLeavesNoTicketsOnBusyServer` (room-only queue
+  leaves 7/8 areas and 17 salvo areas past deadline).
+- All loaded chunks: `chunkMap.getChunks()` (AT).
+- `PalettedContainer.maybeHas` exact only for small palettes: global (> 256 states/section, normal detailed city)
+  always `true`, small retains former states. If deciding section scan on each chunk load/save, use
+  `util/Palettes.contains` (palette then `PalettedContainer.count`; Lithium replaces `count`, reports all palette
+  entries including zero-block ones, count only `n > 0`).
+- “Can't keep up … N ms behind” means cumulative lag since previous line (at most once/15 game seconds,
+  `MinecraftServer.runServer`), not one pause: 12.9 s after 28 s means ~11 ticks/s throughout. Disk chunk parsing
+  (`ChunkSerializer.read`)/FULL promotion on server thread between ticks (`ChunkMap.scheduleChunkLoad`,
+  `mainThreadExecutor`); dense-city teleport takes seconds without mod too.
+- `ChunkEvent.Load` once per in-memory lifetime: view-edge chunk drops below full (`getChunkNow` null), returns without
+  unload/new event. Holding queues remove only on `ChunkEvent.Unload`; in-memory check `NuclearTickets.inMemory`:
+  `ChunkMap.getVisibleChunkIfPresent` or `pendingUnloads` (AT/read-only) holder + `getChunkIfPresentUnchecked(FULL)`.
+  Vanilla immediately removes ticketless holder from visible map, unloads/sends `Unload` when savable; returned ticket
+  restores same chunk without `ChunkEvent.Load` (`chunkRevivedFromPendingUnloadStillScarred`). Otherwise untouched
+  nuclear stripes (`ScarQueue`), zone square holding planned chunk without work. `ChunkEvent.Unload` only for full
+  `LevelChunk`; disk-read `ChunkDataEvent.Load` chunk remaining edge-ring `ImposterProtoChunk` leaves without event:
+  clean by `getVisibleChunkIfPresent(c) == null` (`BlackoutWorld`, once/sec).
+- Long server `Level.clip` (aim to 1024 blocks, projectile nose, nuclear thermal shadow) only to first unready chunk:
+  `Terrain.readyUntil`/`readyAlong`, grid traversal of chunk columns.
+- `AreaLoader` applies tickets immediately (`apply` → `DistanceManager.runAllUpdates`, take/release/grow within tick,
+  not `runDistanceManagerUpdates`, which copies whole chunk map for new holders, areas taken dozens/tick). Vanilla
+  recalculates when called: tick start, sync load, another area's release. Otherwise same-tick versus next-tick area
+  ticking depended on others requesting recalculation, hence other strikes.

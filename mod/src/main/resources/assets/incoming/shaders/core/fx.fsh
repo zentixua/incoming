@@ -67,10 +67,10 @@ layout(location = 1) out vec4 fragCover;
 // миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра
 uniform vec2 FxGlowPass;
 
-// Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
-// с той стороны, tools/bake_fx); свет с направления l (оси карты, к источнику) — их доли по квадратам косинусов (в сумме
-// 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку).
-// Отражение по горизонтали уже входит в базис карты, которым получено l.
+// Six-way lighting: a contains right/top/back maps, b left/bottom/front (linear puff light from a sun on that side,
+// tools/bake_fx). Light direction l points toward the source in map axes; weights are squared cosines and sum to 1
+// for every direction. Unsquared cosines would make a sun at 45° sqrt(2) times brighter than one directly to the side.
+// The map basis used to obtain l already includes horizontal mirroring.
 float sixLight(vec3 a, vec3 b, vec3 l) {
     vec3 q = l * l;
     float side = l.x > 0.0 ? a.r : b.r;

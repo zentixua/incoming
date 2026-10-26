@@ -1,29 +1,29 @@
 package ua.zentix.incoming.warhead;
 
 /**
- * Шаг взрыва боевой части ({@link StagedExplosion}) для замера: где время единиц взрыва. Замер у хоста: единица
- * «лучи и урон» стоила до 150 мс, и чтобы решить, как её делить, нужно видеть, чья это цена.
+ * Warhead explosion stage ({@link StagedExplosion}) for timing: where work-unit time goes. Host “rays and damage”
+ * unit took up to 150 ms; splitting it requires knowing which part costs that.
  */
 public enum ExplosionStage {
-    /** До лучей: {@code new Explosion} и {@code ExplosionEvent.Start} (обработчики модов). */
+    /** Before rays: {@code new Explosion}, {@code ExplosionEvent.Start} (mod handlers). */
     START("Start"),
-    /** Ванильный {@code Explosion.explode} целиком (аппарат Sable рядом): лучи, сущности, {@code Detonate}, урон. */
+    /** Entire vanilla {@code Explosion.explode} (Sable craft nearby): rays, entities, {@code Detonate}, damage. */
     VANILLA("vanilla explosion"),
-    /** {@code gameEvent(EXPLODE)}: слушатели вибраций (скалк, моды). */
+    /** {@code gameEvent(EXPLODE)}: vibration listeners (sculk, mods). */
     GAME_EVENT("game event"),
-    /** Лучи по блокам. */
+    /** Block rays. */
     RAYS("rays"),
-    /** Сбор сущностей в кубе досягаемости. */
+    /** Collect entities in reach cube. */
     ENTITIES("entity search"),
-    /** {@code ExplosionEvent.Detonate}: обработчики модов (и наши: блэкаут, запись для проверок). */
+    /** {@code ExplosionEvent.Detonate}: mod handlers (ours too: blackout, test recording). */
     DETONATE("Detonate"),
-    /** Урон и отбрасывание: {@code getSeenPercent} (лучи к сущности), {@code hurt} — смерть, лут, обработчики. */
+    /** Damage/knockback: {@code getSeenPercent} entity rays, {@code hurt}, death, loot, handlers. */
     DAMAGE("damage"),
-    /** Раздел выбранных лучами позиций на плоты аппаратов и мир, чтение блоков мира (воздух без огня — прочь). */
+    /** Separate ray-selected positions into craft plots/world, read world blocks (discard air without fire). */
     SPLIT("split"),
-    /** Снятие блоков аппаратов (плоты Sable) — одним разом после урона, со сверкой аппарата и блока. */
+    /** Remove craft blocks (Sable plots) together after damage, checking craft/block identity. */
     CRAFTS("aircraft blocks"),
-    /** Снимок блоков мира для порций и сортировка от центра. */
+    /** World block snapshot for portions, sorted from center. */
     SNAPSHOT("snapshot");
 
     public final String label;

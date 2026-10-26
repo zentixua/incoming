@@ -16,13 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Дым налёта при остановленном времени: поворот не меняет луч мира, шаг меняет только его начало. Кадр — настоящие
- * плоскости клубов, гладкие радиальные профили их альфы и вуаль; это проверка постоянства рисунка, а не его красоты.
- * У шага естественный параллакс отделяется по веществу модели, как в {@link SmokeRaidTest#truth}.
+ * Raid smoke at frozen time: turning preserves the world ray; stepping changes only its origin. The frame uses
+ * actual puff planes, smooth radial alpha profiles and the veil to check appearance stability, not visual quality.
+ * For steps, natural parallax is separated using the model material, as in {@link SmokeRaidTest#truth}.
  */
 class SmokeSteadinessProbe {
     static final int STEPS = 60, COLS = 32, ROWS = 18;
-    // При 0,60 и наклонённой внутренней камере крайний луч в конце поворота выходил за экран на 0,042 пикселя.
+    // At 0.60 with the tilted inside camera, the outermost ray ended the turn 0.042 pixels outside the viewport.
     static final double INSET = 0.59, VISIBLE = 4.0 / 255;
 
     enum Motion { STILL, YAW, STEP }
@@ -58,12 +58,12 @@ class SmokeSteadinessProbe {
                         System.out.println("STEADY " + got);
                         if (motion == Motion.STILL) assertEquals(0, m.maxDelta, 1e-12, got);
                         else if (motion == Motion.YAW) {
-                            // У поворота то же начало и направление луча мира: естественного изменения вещества нет.
+                            // Turning keeps the same world-ray origin and direction, so the material itself does not change.
                             assertEquals(0, m.meanTruthDelta, 1e-12, got);
                             assertTrue(m.meanDelta <= (Double.isInfinite(budget) ? 1e-4 : 1e-3) && m.visiblePercent <= 0.1, got);
                         } else {
-                            // Радиальные клубы приближают вещество: сверяем изменение ошибки на тех же лучах, не разность
-                            // двух средних |ΔT| (изменения противоположного знака тогда скрылись бы).
+                            // Radial puffs approximate the material: compare the error change on the same rays, not the difference
+                            // between two mean |ΔT| values, which would hide changes with opposite signs.
                             assertTrue(m.meanTruthDelta > 0 && m.meanResidual <= 0.0035 && m.visiblePercent <= 3.5, got);
                         }
                         assertTrue(m.maxFill <= budget + 1e-6, got);
@@ -92,7 +92,7 @@ class SmokeSteadinessProbe {
         return SmokeFillTest.view(eye, forward);
     }
 
-    /** Направления мира закреплены средней камерой; движение меняет проекцию, но не эти числа. */
+    /** World directions are fixed by the middle camera; movement changes their projection, not these values. */
     static double[][] rays(int camera) {
         FarView mid = at(camera, Motion.STILL, STEPS / 2);
         Vector3f f = mid.forward(), l = mid.left(), up = mid.up();
@@ -114,7 +114,7 @@ class SmokeSteadinessProbe {
             FarFlightView.reset();
             FarView first = at(camera, motion, 0);
             SmokeFillTest.Screen warmup = new SmokeFillTest.Screen(first);
-            // Бюджет мест и уровень слияния зависят от прошлых кадров: сначала неподвижная камера.
+            // The place budget and merge level depend on previous frames; begin with a stationary camera.
             for (int frame = 0; frame < 30; frame++) draw(raid, now, first, warmup);
             if (motion != Motion.STEP && truth[0] == null) {
                 truth[0] = truth(raid, now, first, rays);
@@ -184,7 +184,7 @@ class SmokeSteadinessProbe {
         SmokePuffs.flush();
     }
 
-    /** Вещество на тех же направлениях мира, как {@link SmokeRaidTest#truth}; начало луча — глаз текущего кадра. */
+    /** Material along the same world directions as {@link SmokeRaidTest#truth}; each ray starts at the current eye. */
     static double[] truth(List<SmokeGrid.Source> raid, double now, FarView view, double[][] rays) {
         SmokeRaidTest.Matter matter = new SmokeRaidTest.Matter(view);
         for (SmokeGrid.Source source : raid) {

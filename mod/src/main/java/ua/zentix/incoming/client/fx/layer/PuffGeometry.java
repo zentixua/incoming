@@ -1,15 +1,15 @@
 package ua.zentix.incoming.client.fx.layer;
 
 /**
- * Геометрия запечённого клуба в мире: одна у слоя и у расчёта заливки. Поворот взгляда при неподвижном глазе её не
- * меняет. В out — четыре вершины от глаза (x, y, z), в порядке UV: (1, 1), (1, 0), (0, 0), (0, 1).
+ * Baked-puff geometry in world space, shared by rendering and fill calculation. Turning the view without moving
+ * the eye leaves it unchanged. out holds four eye-relative (x, y, z) vertices in UV order: (1, 1), (1, 0), (0, 0), (0, 1).
  */
 public final class PuffGeometry {
     private PuffGeometry() {}
 
     /**
-     * Клуб лицом к положению глаза; верх — проекция вертикали мира на его плоскость. Прямо над глазом и под ним
-     * вертикаль не задаёт поворота: там ось ширины — X мира, независимо от направления камеры.
+     * Puff facing the eye position, with world up projected onto its plane. Directly above or below the eye,
+     * vertical does not define its rotation; there its width follows world X, independent of the camera direction.
      */
     public static void face(double x, double y, double z, double halfA, double halfB, double[] out) {
         double h = Math.hypot(x, z), d = Math.hypot(h, y);
@@ -19,17 +19,18 @@ public final class PuffGeometry {
                 fy * lz * halfB, (fz * lx - fx * lz) * halfB, -fy * lx * halfB, out);
     }
 
-    /** Клуб на горизонтали; угол от оси X мира задан зерном клуба, а не направлением взгляда. */
+    /** Horizontal puff; the seed sets its angle from world X, independently of the view direction. */
     public static void flat(double x, double y, double z, double halfA, double halfB, double angle, double[] out) {
         double c = Math.cos(angle), s = Math.sin(angle);
         corners(x, y, z, c * halfA, 0, s * halfA, -s * halfB, 0, c * halfB, out);
     }
 
     /**
-     * Базис света клуба в двух short UV2 вместо FULL_BRIGHT (он у клубов постоянный и восстанавливается в fx.vsh):
-     * две окружности — горизонтальная ось ширины и подъём луча к середине. У каждой — sin/(|cos| + |sin|) в знаковых
-     * 15 битах (±16383), cos восстанавливается как 1 − |sin|, затем пара нормируется. Бит 15 — знак cos ширины, бит 31 —
-     * отражение UV; cos подъёма неотрицателен. Ошибка каждого угла меньше 0,0035°, без atan2 при записи и sin/cos в шейдере.
+     * Puff lighting basis in two UV2 shorts instead of FULL_BRIGHT, which is constant for puffs and restored in fx.vsh.
+     * Two circles encode the horizontal width axis and the elevation of the center ray. Each stores
+     * sin/(|cos| + |sin|) in signed 15 bits (±16383); cos is reconstructed as 1 − |sin|, then the pair is normalized.
+     * Bit 15 is the width-cosine sign, bit 31 is UV mirroring; the elevation cosine is nonnegative. Each angle's error
+     * is below 0.0035°, without atan2 during packing or sin/cos in the shader.
      */
     static int faceLight(double x, double y, double z, boolean mirror) {
         double h = Math.hypot(x, z);
@@ -37,7 +38,7 @@ public final class PuffGeometry {
         return (h > 1e-9 ? yaw(z, -x) : 0) | pitch << 16 | (mirror ? 0x80000000 : 0);
     }
 
-    /** Лежащий клуб: та же горизонтальная окружность, код подъёма −16384 (вне её диапазона) — плоскость горизонтальна. */
+    /** Horizontal puff: the same yaw circle, with elevation code −16384 (outside its range) marking the horizontal plane. */
     static int flatLight(double angle, boolean mirror) {
         return yaw(Math.cos(angle), Math.sin(angle)) | 0x40000000 | (mirror ? 0x80000000 : 0);
     }

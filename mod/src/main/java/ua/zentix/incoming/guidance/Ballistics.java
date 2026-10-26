@@ -6,44 +6,45 @@ import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.StandardAtmosphere;
 
 /**
- * Полёт без мотора по тикам: тяжесть, квадратичное сопротивление относительно воздуха с плотностью стандартной
- * атмосферы на высоте и ветер мира ({@code WeaponSpec.Ballistic}: «Град» после выгорания, падающая бомба) — шаги
- * {@link #SUBSTEPS} раз за тик ({@link #fly}). Парабола по тикам без сопротивления {@code p(n) = start + n·v0 − g·n(n−1)/2}
- * ({@link #at}) осталась проверке сектора пуска. Расчёт огня ({@link #aim}) ищет скорость и курс схода так, чтобы снаряд при известном ему
- * ветре пришёл в точку.
+ * Unpowered flight by ticks: gravity, quadratic drag relative to air at standard-atmosphere altitude density, and
+ * world wind ({@code WeaponSpec.Ballistic}: Grad after burnout, falling bomb), with {@link #SUBSTEPS} steps per
+ * tick ({@link #fly}). The drag-free tick parabola {@code p(n) = start + n·v0 − g·n(n−1)/2} ({@link #at}) remains
+ * for launch-sector checks. Fire solution ({@link #aim}) finds launch rail exit speed and heading that reach the
+ * point in the wind known to it.
  */
 public final class Ballistics {
-    /** Ускорение свободного падения, блоков/тик²: 9.8 м/с² при 20 тиках в секунду. */
+    /** Gravitational acceleration, blocks/tick²: 9.8 m/s² at 20 ticks per second. */
     public static final double GRAVITY = 9.8 / 400;
-    /** Шагов интегрирования за тик: сопротивление меняется за тик мало, 4 шага — с запасом. */
+    /** Integration steps per tick: drag varies little within a tick; 4 steps give margin. */
     static final int SUBSTEPS = 4;
-    /** Плотность на уровне моря, кг/м³. */
+    /** Sea-level density, kg/m³. */
     private static final double RHO0 = StandardAtmosphere.density(0);
 
     private Ballistics() {}
 
     /**
-     * Сопротивление полёта без мотора: ускорение = coefficient · ρ/ρ₀ · f(M)<sup>mach</sup> · |v|·v (v — относительно
-     * воздуха, блоков/тик), ρ — стандартной атмосферы на высоте, f(M) — кривая {@link Article#machFactor} по скорости
-     * звука на высоте. Игровое ({@code WeaponSpec.Ballistic#drag}) — без кривой ({@code mach} 0); настоящее изделия —
-     * ρ₀·CdA/2m с кривой целиком; шкала полёта ведёт оба числа ({@code WeaponSpec.Airframe#drag}).
+     * Unpowered-flight drag: acceleration = coefficient · ρ/ρ₀ · f(M)<sup>mach</sup> · |v|·v (v relative to air,
+     * blocks/tick); ρ is standard-atmosphere density at altitude; f(M) is {@link Article#machFactor} using sound
+     * speed at altitude. Game drag ({@code WeaponSpec.Ballistic#drag}) has no curve ({@code mach} 0); real
+     * article drag is ρ₀·CdA/2m with the full curve; flight scale blends both values ({@code
+     * WeaponSpec.Airframe#drag}).
      *
-     * @param coefficient коэффициент на уровне моря, 1/блок
-     * @param mach        показатель кривой f(M): 0 — без неё, 1 — вся
+     * @param coefficient sea-level coefficient, 1/block
+     * @param mach f(M) curve exponent: 0 means none, 1 means full curve
      */
     public record Drag(double coefficient, double mach) {
-        /** Игровое: без кривой f(M). */
+        /** Game drag: no f(M) curve. */
         public static Drag of(double coefficient) {
             return new Drag(coefficient, 0);
         }
 
-        /** Коэффициент на высоте мира {@code y} при скорости {@code speed} блоков/тик относительно воздуха, 1/блок. */
+        /** Coefficient at world altitude {@code y} and air-relative {@code speed} blocks/tick, 1/block. */
         public double at(double y, double speed) {
             double h = y - Air.SEA;
             return coefficient * StandardAtmosphere.density(h) / RHO0 * machTerm(h, speed);
         }
 
-        /** f(M)<sup>mach</sup>; без кривой — ровно 1 (игровая траектория не меняется ни в одном бите). */
+        /** f(M)<sup>mach</sup>; exactly 1 without the curve (game trajectory stays bit-identical). */
         private double machTerm(double h, double speed) {
             if (mach == 0) return 1;
             double f = Article.machFactor(speed * 20 / StandardAtmosphere.soundSpeed(h));
@@ -51,7 +52,7 @@ public final class Ballistics {
         }
     }
 
-    /** Ветер на высоте мира: блоков/тик по x и z. */
+    /** Wind at world altitude: blocks/tick in x and z. */
     public interface Wind {
         double x(double y);
 
@@ -59,7 +60,7 @@ public final class Ballistics {
 
         Wind CALM = uniform(0, 0);
 
-        /** Одинаковый на любой высоте. */
+        /** Same at every altitude. */
         static Wind uniform(double x, double z) {
             return new Wind() {
                 @Override
@@ -74,7 +75,7 @@ public final class Ballistics {
             };
         }
 
-        /** Ветер мира с профилем по высоте ({@link Air#speed}). */
+        /** World wind with altitude profile ({@link Air#speed}). */
         static Wind of(Air air) {
             return new Wind() {
                 @Override
@@ -89,14 +90,14 @@ public final class Ballistics {
             };
         }
 
-        /** Ветер у земли мира (10 м над морем) на любой высоте: что знает расчёт огня без зондирования. */
+        /** World ground wind (10 m above sea) at every altitude: what an unsounded fire solution knows. */
         static Wind ground(Air air) {
             double y = Air.SEA + 10;
             return uniform(air.windX(y) / 20, air.windZ(y) / 20);
         }
     }
 
-    /** Путь по тикам: места на тиках 0..n−1 и скорость на последнем. */
+    /** Path by ticks: positions at ticks 0..n−1 and final velocity. */
     public static final class Path {
         private final double[] xs, ys, zs;
         private final int n;
@@ -110,12 +111,12 @@ public final class Ballistics {
             this.last = last;
         }
 
-        /** Сколько тиков посчитано. */
+        /** Ticks calculated. */
         public int ticks() {
             return n - 1;
         }
 
-        /** Место на тике {@code k} (между тиками — по прямой; дальше посчитанного — с последней скоростью). */
+        /** Position at tick {@code k} (linear between ticks; beyond calculated path, use last velocity). */
         public Vec3 at(double k) {
             if (k <= 0) return new Vec3(xs[0], ys[0], zs[0]);
             if (k >= n - 1) {
@@ -127,7 +128,7 @@ public final class Ballistics {
             return new Vec3(xs[i] + (xs[i + 1] - xs[i]) * f, ys[i] + (ys[i + 1] - ys[i]) * f, zs[i] + (zs[i + 1] - zs[i]) * f);
         }
 
-        /** Тик (дробный), когда путь на спуске проходит высоту {@code y}; не проходит — {@code NaN}. */
+        /** Fractional tick when descending path crosses height {@code y}; {@code NaN} if never. */
         public double landing(double y) {
             for (int i = 1; i < n; i++) {
                 if (ys[i] <= y && ys[i - 1] > y && ys[i] < ys[i - 1]) return i - 1 + (ys[i - 1] - y) / (ys[i - 1] - ys[i]);
@@ -136,8 +137,8 @@ public final class Ballistics {
         }
 
         /**
-         * Тик (дробный), когда путь по горизонтали доходит до дальности точки {@code to} от {@code from} (проекция на
-         * направление на неё); не доходит — {@code NaN}.
+         * Fractional tick when horizontal path reaches the range of {@code to} from {@code from} (projection
+         * toward it); {@code NaN} if never.
          */
         public double reaching(Vec3 from, Vec3 to) {
             double ux = to.x - from.x, uz = to.z - from.z, d = Math.sqrt(ux * ux + uz * uz);
@@ -154,9 +155,9 @@ public final class Ballistics {
         }
 
         /**
-         * Тик (дробный), когда снаряд приходит к точке {@code to}: на спуске на её высоте, если там он к ней не дальше,
-         * чем на дальности точки ({@link #reaching}); иначе — на её дальности (точку на холме или башне выше пути спуска
-         * снаряд проходит ещё на подъёме). {@code NaN} — ни того, ни другого.
+         * Fractional tick when the projectile arrives at {@code to}: on descent at its height, if no farther from
+         * it there than at its range ({@link #reaching}); otherwise at its range (a hill or tower point above the
+         * descending path is passed on ascent). {@code NaN} if neither.
          */
         public double arrival(Vec3 from, Vec3 to) {
             double down = landing(to.y), across = reaching(from, to);
@@ -167,8 +168,8 @@ public final class Ballistics {
     }
 
     /**
-     * Полёт из {@code start} со скоростью {@code v0} (блоков/тик) с сопротивлением {@code drag} ({@link Drag}) и ветром
-     * {@code wind}: до {@code maxTicks} тиков или пока путь не уйдёт ниже {@code floor}.
+     * Flight from {@code start} with {@code v0} (blocks/tick), {@code drag} ({@link Drag}), and {@code wind},
+     * until {@code maxTicks} or below {@code floor}.
      */
     public static Path fly(Vec3 start, Vec3 v0, Drag drag, Wind wind, double floor, int maxTicks) {
         int cap = Math.max(2, maxTicks + 1);
@@ -178,7 +179,7 @@ public final class Ballistics {
         ys[0] = s[1];
         zs[0] = s[2];
         int n = 1;
-        // ниже пола — только на спуске: старт ниже него (цель выше пусковой) путь не обрывает
+        // Below floor only on descent: starting below it (target above launcher) does not truncate the path.
         while (n < cap && (s[1] >= floor || s[4] > 0)) {
             step(s, drag, wind);
             xs[n] = s[0];
@@ -190,8 +191,8 @@ public final class Ballistics {
     }
 
     /**
-     * Один тик: {@code s} = {x, y, z, vx, vy, vz}. На каждом шаге ускорение — в начале шага, место — с его половиной
-     * (p += v·dt + a·dt²/2): без сопротивления это точная парабола p = start + v0·t − g·t²/2.
+     * One tick: {@code s} = {x, y, z, vx, vy, vz}. Each substep uses acceleration at its start and half of it for
+     * position (p += v·dt + a·dt²/2): without drag this is the exact parabola p = start + v0·t − g·t²/2.
      */
     static void step(double[] s, Drag drag, Wind wind) {
         double dt = 1.0 / SUBSTEPS;
@@ -210,10 +211,10 @@ public final class Ballistics {
     }
 
     /**
-     * Расчёт огня: скорость схода под углом возвышения {@code elevation} (°), с которой снаряд из {@code from} при ветре
-     * {@code wind} проходит точку {@code to}: на её дальности — на её высоте и без отклонения вбок. Скорость и курс —
-     * Ньютоном по этим двум промахам (производные — разностями; высота на дальности растёт со скоростью); начальное
-     * приближение — парабола без сопротивления. Не сошлось (точка выше досягаемого) — лучшее, что нашлось.
+     * Fire solution: launch rail exit velocity at {@code elevation} (°) that takes a projectile from {@code from}
+     * through {@code to} in {@code wind}: at its range, same height and no lateral offset. Newton solves speed
+     * and heading from these two misses (finite-difference derivatives; height at range grows with speed),
+     * starting from a drag-free parabola. If unconverged (point above reach), return the best solution found.
      */
     public static Vec3 aim(Vec3 from, Vec3 to, float elevation, Drag drag, Wind wind) {
         double dx = to.x - from.x, dz = to.z - from.z;
@@ -231,10 +232,10 @@ public final class Ballistics {
             double det = a * e - b * c;
             if (Math.abs(det) < 1e-12) break;
             double stepS = -(e * miss[0] - b * miss[1]) / det, stepA = -(-c * miss[0] + a * miss[1]) / det;
-            // не дальше половины скорости и 0,2 рад за шаг: вдали от решения производные врут
+            // At most half the speed and 0.2 rad per step: derivatives are unreliable far from the solution.
             stepS = Math.max(-0.5 * speed, Math.min(0.5 * speed, stepS));
             stepA = Math.max(-0.2, Math.min(0.2, stepA));
-            // не быстрее 10 начальных: точки, которой нет решения, не разгонять без конца
+            // At most 10 times initial speed: do not accelerate forever for a point with no solution.
             speed = Math.max(0.05, Math.min(10 * Math.sqrt(GRAVITY * d), speed + stepS));
             az += stepA;
             miss = miss(from, to, speed, el, az, drag, wind, maxTicks);
@@ -248,7 +249,10 @@ public final class Ballistics {
         return velocity(bestSpeed, el, bestAz);
     }
 
-    /** Снаряд из {@code from} со скоростью {@code v0} приходит к {@code to} ({@link Path#arrival}) ближе {@code tolerance}. */
+    /**
+     * A projectile from {@code from} with {@code v0} arrives within {@code tolerance} of {@code to} ({@link
+     * Path#arrival}).
+     */
     public static boolean hits(Vec3 from, Vec3 v0, Vec3 to, Drag drag, Wind wind, double tolerance) {
         double d = Math.sqrt(to.subtract(from).horizontalDistanceSqr());
         int maxTicks = (int) Math.min(6000, 3 * d / Math.max(0.05, v0.horizontalDistance()) + 400);
@@ -263,8 +267,8 @@ public final class Ballistics {
     }
 
     /**
-     * Промах на дальности точки: {высота пути там − высота точки, отклонение вбок (влево — плюс)}. Не долетает до её
-     * дальности — высота самой низкой точки пути за вычетом недолёта (растёт со скоростью, как и высота на дальности).
+     * Miss at point range: {path height there − point height, lateral offset (left positive)}. If it falls short,
+     * use lowest path height minus range shortfall (grows with speed, like height at range).
      */
     private static double[] miss(Vec3 from, Vec3 to, double speed, double el, double az, Drag drag, Wind wind, int maxTicks) {
         double dx = to.x - from.x, dz = to.z - from.z, d = Math.max(1e-9, Math.sqrt(dx * dx + dz * dz));
@@ -278,9 +282,9 @@ public final class Ballistics {
     }
 
     /**
-     * Время полёта по параболе без сопротивления при угле возвышения {@code elevation}: N(N−1) = 2(d·tgθ − dy)/g. Если цель так
-     * близко или так высоко, что выходит меньше {@code minTicks}, — угол круче (шагом 5°, до 80°), как у миномётной
-     * траектории ({@link #elevationFor}).
+     * Drag-free parabolic flight time at {@code elevation}: N(N−1) = 2(d·tgθ − dy)/g. If the target is so close
+     * or high that this gives less than {@code minTicks}, steepen the angle (5° steps, up to 80°), as a mortar
+     * trajectory ({@link #elevationFor}).
      */
     public static int ticksFor(Vec3 from, Vec3 to, float elevation, int minTicks) {
         double dx = to.x - from.x, dz = to.z - from.z;
@@ -292,7 +296,7 @@ public final class Ballistics {
         return minTicks;
     }
 
-    /** Угол возвышения, с которым по {@link #ticksFor} полёт не короче {@code minTicks}: пакет или круче, до 80°. */
+    /** Elevation giving at least {@code minTicks} via {@link #ticksFor}: rack angle or steeper, up to 80°. */
     public static float elevationFor(Vec3 from, Vec3 to, float elevation, int minTicks) {
         double dx = to.x - from.x, dz = to.z - from.z;
         double d = Math.sqrt(dx * dx + dz * dz), dy = to.y - from.y;
@@ -307,12 +311,12 @@ public final class Ballistics {
         return rhs <= 0 ? 0 : (int) Math.ceil((1 + Math.sqrt(1 + 4 * rhs)) / 2);
     }
 
-    /** Начальная скорость, с которой снаряд без сопротивления из {@code from} будет в {@code to} ровно через {@code ticks}. */
+    /** Initial velocity for a drag-free projectile from {@code from} to reach {@code to} in exactly {@code ticks}. */
     public static Vec3 launchVelocity(Vec3 from, Vec3 to, int ticks) {
         return to.subtract(from).scale(1.0 / ticks).add(0, GRAVITY * (ticks - 1) / 2, 0);
     }
 
-    /** Точка параболы без сопротивления на тике {@code k}. */
+    /** Drag-free parabola point at tick {@code k}. */
     public static Vec3 at(Vec3 start, Vec3 v0, double k) {
         return start.add(v0.scale(k)).add(0, -GRAVITY * k * (k - 1) / 2, 0);
     }

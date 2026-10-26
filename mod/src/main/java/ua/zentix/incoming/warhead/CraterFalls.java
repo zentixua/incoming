@@ -25,61 +25,60 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Осыпание в воронках. Взрыв оставляет песок и гравий без опоры (и бомба сама кладёт щебень над полостью), и каждый
- * такой блок ваниль превращает в падающую сущность ({@code FallingBlock.tick} → {@code FallingBlockEntity.fall}):
- * в песке или под сводом полости их сотни за секунды, и сервер несёт их все. Здесь — не больше {@link #LIVE_CAP}
- * живых падающих блоков в районе взрыва (в пересечении районов соседних взрывов — в каждом из них) и {@link #TOTAL_CAP}
- * на мир (залп — это много районов сразу): осыпание,
- * которое видно вблизи. Остальные ложатся сразу туда, где упали бы: {@code fall} уже убрал блок с места, сущность в мир
- * не входит ({@link EntityJoinLevelEvent} отменён), блок ставится на опору под ним. Соседи поставленного блока
- * получают обновление, как от приземления, так что столбец выше осыпается следом тем же путём.
+ * Crater falls. Blast leaves sand/gravel unsupported (bomb also places rubble over cavity); vanilla turns each
+ * into a falling entity ({@code FallingBlock.tick} → {@code FallingBlockEntity.fall}), hundreds within seconds in
+ * sand/under cavity roof, all carried by server. Limit live falling blocks to {@link #LIVE_CAP} per blast area
+ * (each overlapping neighboring area counts it) and {@link #TOTAL_CAP} per world (salvos create many areas):
+ * visible nearby falling. Place others immediately where they would land: {@code fall} already removed source,
+ * cancel entity entry ({@link EntityJoinLevelEvent}), place on support below. Neighbor updates like landing make
+ * higher column collapse via same path.
  * <p>
- * Сразу ложится только то, у чего приземление — это «поставить блок» ({@link #restingPlace}); остальное падает живым,
- * по правилам ванили. Район — горизонтальный квадрат досягаемости взрыва на всю высоту мира (осыпаются и склоны над
- * воронкой): открыт, пока взрыв держит {@link BlastArea}, и ещё {@link #GRACE} тиков после. Не сохраняется: живёт
- * в несохраняемом attachment мира {@link ModAttachments#CRATER_FALLS}.
+ * Immediate placement only if landing is just “place block” ({@link #restingPlace}); others fall live under
+ * vanilla rules. Area is a horizontal blast-reach square across full world height (slopes above crater fall too),
+ * open while blast holds {@link BlastArea} plus {@link #GRACE} ticks. Unsaved world attachment {@link
+ * ModAttachments#CRATER_FALLS}.
  */
 public final class CraterFalls {
-    /** Живых падающих блоков, начавших падать в районе взрыва. */
+    /** Live falling blocks starting within blast area. */
     public static final int LIVE_CAP = 48;
-    /** Живых падающих блоков во всех районах мира вместе: районы залпа с большим разбросом не пересекаются. */
+    /** Live falling blocks across all world areas: widely dispersed salvo areas do not overlap. */
     public static final int TOTAL_CAP = 96;
-    /** Сколько тиков после конца взрыва район ещё осыпается сам (обрушения цепочкой, поздние обновления соседей). */
+    /** Ticks after blast end for remaining falls (chain collapse, late neighbor updates). */
     static final int GRACE = 200;
     /**
-     * Дольше район не живёт, даже если конец взрыва так и не пришёл (исключение в таймлайне): самый долгий взрыв —
-     * отложенный до готовности района ({@link Warheads#DEFERRED_GIVE_UP_TICKS}), и после него — осыпание.
+     * Maximum area lifetime even if blast end never arrives (timeline exception): longest blast is deferred for
+     * readiness ({@link Warheads#DEFERRED_GIVE_UP_TICKS}), then falling.
      */
     static final int OPEN_LIMIT = Warheads.DEFERRED_GIVE_UP_TICKS + GRACE;
 
     private final Map<UUID, Zone> zones = new HashMap<>();
-    /** Падающие блоки, которые районы пустили в мир живыми. */
+    /** Falling blocks admitted live by areas. */
     private final List<Live> live = new ArrayList<>();
-    /** Тик последней чистки {@link #live} и районов. */
+    /** Last cleanup tick for {@link #live} and areas. */
     private long pruned = Long.MIN_VALUE;
-    /** Сколько блоков легло сразу, без сущности, с загрузки мира. */
+    /** Blocks placed immediately without entities since world load. */
     private long settled;
 
-    /** Для {@link ModAttachments#CRATER_FALLS}: своё у каждого мира, не сохраняется. */
+    /** For {@link ModAttachments#CRATER_FALLS}: per-world, unsaved. */
     public CraterFalls() {}
 
     public static CraterFalls get(ServerLevel level) {
         return level.getData(ModAttachments.CRATER_FALLS);
     }
 
-    /** Взрыв с ключом {@code key} достаёт на {@code reach} блоков от {@code centre}: район открыт до {@link #close}. */
+    /** Blast {@code key} reaches {@code reach} from {@code centre}: open until {@link #close}. */
     void open(ServerLevel level, UUID key, Vec3 centre, double reach) {
         zones.put(key, new Zone(Mth.floor(centre.x - reach), Mth.floor(centre.z - reach),
                 Mth.floor(centre.x + reach), Mth.floor(centre.z + reach), level.getGameTime() + OPEN_LIMIT));
     }
 
-    /** Взрыв кончился: район осыпается сам ещё {@link #GRACE} тиков. */
+    /** Blast ended: falls continue for {@link #GRACE} ticks. */
     void close(ServerLevel level, UUID key) {
         Zone z = zones.get(key);
         if (z != null) z.until = Math.min(z.until, level.getGameTime() + GRACE);
     }
 
-    /** Сколько блоков легло сразу, без сущности, с загрузки мира. */
+    /** Blocks placed immediately without entities since world load. */
     public long settled() {
         return settled;
     }
@@ -88,25 +87,24 @@ public final class CraterFalls {
         if (event.loadedFromDisk() || !(event.getLevel() instanceof ServerLevel level)
                 || event.getEntity().getType() != EntityType.FALLING_BLOCK) return;
         FallingBlockEntity falling = (FallingBlockEntity) event.getEntity();
-        // только блок, который сейчас начал падать со своего места (FallingBlockEntity.fall): у /summon, копии при смене
-        // измерения и сущностей других модов начальная точка не своя (не сохраняется, по умолчанию 0 0 0)
+        // Only block just starting to fall from its own site (FallingBlockEntity.fall): /summon, dimension-transfer copies,
+        // and other mods' entities have no own start (unsaved, defaults 0 0 0).
         BlockPos from = falling.getStartPos();
         if (falling.time != 0 || !from.equals(falling.blockPosition()) || !level.getBlockState(from).isAir()) return;
         if (get(level).settle(level, falling, from)) event.setCanceled(true);
     }
 
     /**
-     * Блок {@code falling} начал падать с {@code from} (его место уже пусто). В районе взрыва сверх предела — положить
-     * его сразу на опору и вернуть {@code true} (сущность в мир не входит); иначе — пустить живым. Там, где чанк тикает
-     * блоками, но не сущностями (уровень 32: край тикающего, район взрыва ещё не дорос — {@code AreaLoader} пускает
-     * сущности тикать кольцами по готовности соседей — или уже отпущен), падение тоже ложится сразу: тик блока его начал,
-     * а сущность там не тикает и висела бы в воздухе, пока чанк снова не затикает (CI 22.10: гравий свода, обрушенного
-     * зоной трещин бомбы у края района, висел до конца проверки).
+     * {@code falling} began at {@code from} (already empty). Above area limit, place immediately on support and
+     * return {@code true} (no entity entry), otherwise admit live. Where blocks tick but entities do not (level
+     * 32: edge, not-yet-grown blast area as {@code AreaLoader} grows entity-ticking rings with ready neighbors,
+     * or already released), also place immediately: block tick started fall but entity would hang until ticking
+     * returns (CI 22.10: rubble roof collapsed by bomb fracture zone at area edge hung through test end).
      */
     private boolean settle(ServerLevel level, FallingBlockEntity falling, BlockPos from) {
         prune(level);
-        // районы соседних взрывов (залп, воронка рядом со старой) пересекаются: место считается каждому, в чей квадрат
-        // попало, — иначе в квадрате района живых было бы больше предела на те, что засчитаны соседу
+        // Neighbor blast areas overlap (salvo, crater by old crater): position counts toward every square
+        // containing it, otherwise live count would exceed area limit by those counted for neighbor.
         List<Zone> in = new ArrayList<>(2);
         boolean room = live.size() < TOTAL_CAP;
         for (Zone z : zones.values()) {
@@ -134,8 +132,8 @@ public final class CraterFalls {
     }
 
     /**
-     * Раз в тик: закрыть отжившие районы и забыть ушедшие падающие блоки — приземлились, выгружены с чанком или в мир
-     * так и не вошли (вход отменил обработчик другого мода). Без районов счёт не нужен.
+     * Once per tick, close expired areas and forget departed falling blocks (landed, chunk-unloaded, entry
+     * canceled by other mod). No areas means no counting needed.
      */
     private void prune(ServerLevel level) {
         long now = level.getGameTime();
@@ -154,14 +152,14 @@ public final class CraterFalls {
     }
 
     /**
-     * Куда ляжет блок, падая от {@code from}, — или {@code null}, если приземление у ванили делает больше, чем «поставить
-     * блок», и он должен упасть живым. Сразу ложатся только песок, красный песок, гравий ({@link ColoredFallingBlock})
-     * и бетонная смесь: у наковальни урон и звук, у блоков других модов — свои {@code onLand}/{@code onBrokenAfterFall}.
-     * Клетка — первая над опорой ({@link FallingBlock#isFree}: воздух, огонь, жидкость, заменяемое); как у ванили, её
-     * содержимое заменяется ({@code canBeReplaced} с тем же контекстом), и блок там держится. Опора — с полной верхней
-     * гранью: на факел, плиту, ковёр, слой снега ваниль садит сущность в клетку опоры и выбрасывает блок предметом.
-     * Бетонная смесь, дошедшая до воды, застывает — она падает живой. Столбец — тот же чанк, что уже тикает блоками (его
-     * соседи готовы): чтение ничего не грузит.
+     * Landing position for block falling from {@code from}, or {@code null} if vanilla landing does more than
+     * “place block” and needs a live entity. Immediate placement only for sand, red sand, gravel ({@link
+     * ColoredFallingBlock}), concrete powder; anvils damage/play sound, modded blocks have custom {@code
+     * onLand}/{@code onBrokenAfterFall}. Cell is first above support ({@link FallingBlock#isFree}: air, fire,
+     * fluid, replaceable); as vanilla, replace contents ({@code canBeReplaced} with same context) if block
+     * survives. Support needs full top face: torch/slab/carpet/snow layer puts vanilla entity in support cell and
+     * drops item. Concrete powder reaching water hardens, so falls live. Column is in the already block-ticking
+     * chunk (neighbors ready), so reads load nothing.
      */
     @Nullable
     private static BlockPos restingPlace(ServerLevel level, FallingBlockEntity falling, BlockPos from) {
@@ -191,7 +189,7 @@ public final class CraterFalls {
     private static final class Zone {
         final int minX, minZ, maxX, maxZ;
         long until;
-        /** Живых падающих блоков, начавших падать в квадрате этого района. */
+        /** Live falling blocks starting in this area's square. */
         int live;
 
         Zone(int minX, int minZ, int maxX, int maxZ, long until) {

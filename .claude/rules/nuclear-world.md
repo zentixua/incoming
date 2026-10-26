@@ -4,239 +4,262 @@ paths:
   - "mod/src/main/java/ua/zentix/incoming/mixin/net/**"
 ---
 
-# Руины ядерного удара (`nuclear/world/`)
+# Nuclear strike ruins (`nuclear/world/`)
 
-## Устройство
-- `world/` — в тике подрыва только снимки (сущности и координаты загруженных чанков в радиусе), вся работа — под
-  сроком полосы ядерки общего бюджета (`work.md`) через `WorkClock` (единица начинается, только если по оценке успеет до срока):
-  `PulseJob` (свет и проникающая радиация по сущностям, игроки и ближние первыми, до фронта; игроки — и дальше, до
-  дальности ожога сетчатки, `FlashEyes.reach`), `ScarQueue` (чанки до `Detonation.ruinRadius` — где отражённое давление ещё бьёт стекло, ~0.34 psi
-  падающего; ставит чанки из снимка в очередь по времени прихода фронта, за тик до него, чанк — одна единица; чанки, которые видит игрок, —
-  первыми (в его обзоре, и ещё не отправленные), остальные — следом, а попросившийся к игроку — к видимым; видимым и их
-  проверке заранее на сервере без свободного времени — ещё 6 мс сверх малого срока полосы (`ScarQueue.SEEN_BUSY_NANOS`,
-  `WorkClock.canStartVisible`: волна идёт по городу у игрока, когда тик и так полон, и с 2 мс полосы руины видимых
-  вставали до 64 тиков после фронта, netcup 16.10); чанк, которому нужна ещё единица (разлом соседа для плана на месте,
-  устаревший план), встаёт в конец своей очереди, а не первым: разломы окна по несколько мс держали бы за собой десятки
-  готовых видимых чанков (0,2 мс на подмену) — 38 тиков на netcup 16.10; видимый за
-  `ScarQueue.LOOKAHEAD` (20) тиков до волны проверяется заранее: готовый план, устаревший за полёт (трава проросла, игрок
-  поставил блок), и чанк без плана получают фоновый план сейчас — к волне он готов (GameTest
-  `staleSeenPlanReplannedBeforeWave`); фоновый план, устаревший к подмене, не ставится — план в потоке сервера по чанку
-  как есть (`staleBackgroundPlanRebuiltOnServer`); стволы, упавшие в соседний чанк, — после его руин; соседей чанку не грузит: готовому
-  плану они не нужны (кроме `RuinPlan.neighbourRadius` — место через мир в 2 блоках от края или аппарат Sable рядом:
-  тикет радиуса 1; блок-сущность не из ванили через мир (лента Create снимает цепочку до 20 блоков) — радиус 2), фоновому — окно 5×5 из снимков в памяти и с диска (`RuinContext.requestWindow`), соседа нет на
-  диске целым — в окне сплошной массив, как край мира (GameTest `readyPlanSameWithoutNeighbours`,
-  `windowWithoutNeighboursOnDisk`); у края видимости чанки ждали бы соседей до 200 тиков и уходили бы игроку целыми), `RuinPlanner` (руины чанка разницей к секциям — два физических процесса по исходному миру окна 3×3 чанка
-  (`RuinWindow`: у соседа, чьи руины стоят, — старые блоки мест его плана), поэтому план чанка один и тот же заранее
-  и на месте, в любом порядке чанков (`RuinContext` подрыва: разломы чанков в кэше, кто уже стоит; окно строится из снимков
-  `ChunkShot` — копии палитр секций, карт высот и источников неба, снятые в потоке сервера, или прочитанные с диска
-  (`DiskShots`); снимок верен, пока блоки чанка те же: сверка по отпечаткам секций, лампа, погашенная блэкаутом, — та же
-  лампа; разломы и планы помнят номера снимков, по которым построены, — поэтому `Blast`, `Collapse` и достройка `RuinPlanner.finish` (пожары, свет, завал, стволы, карты высот,
-  разница к секциям) идут фоновыми потоками `RuinWorkers` (очередь — по важности, `RuinWorkers.Priority`: видимые игроку чанки очереди
-  руин, потом остальные руины очереди и подготовка чанков в памяти, потом дальнее — планы с диска и LOD вдали; предел
-  задач у ступени — вместе с более важными: дальние держат пул полным, пока идёт волна; план чанка, который подготовка
-  отдала дальней ступенью и который ещё ждёт в очереди, очередь руин переносит на ступень чанка у волны — GameTest
-  `queuedFarTaskPromoted`; `ruin_threads`, 0 — все ядра без трёх: сервер, отрисовка
-  своей игры, ввод-вывод мира; сколько работает — по тику сервера без полос мода (`WorkScheduler.ownNanos`): выше
-  `50 − work_ms_per_tick + 5` мс — на четверть меньше, ниже `… − 5` — на один больше, в лог; по всему тику с нашими 30 мс
-  держался бы один поток): мира и кода блоков они не зовут, свойства состояний (`Blast.Props`: и огонь, горючесть, прочность верха,
-  непрозрачность по картам высот, свет) — из таблицы, которую поток сервера заполнил по палитрам снимков (`Blast.publish`),
-  тень света — по картам высот подрыва (`RuinContext.lit`); GameTest `backgroundSolversCallNoWorld` обходит байткод
-  по графу вызовов от корней фоновых задач, `backgroundPlanMatchesServerPlan` и `diskPlanMatchesMemoryPlan` — что план
-  тот же; фоновый план дольше 600 тиков работы — от начала, не от постановки в очередь — бросается, план — в потоке сервера):
-  `Blast` — перепад давления ломает тонкое: давление только к граням у воздуха с небом (над верхом и на 4 блока
-  в проёмы, за проломами — во весь связанный с ними воздух в столбцах чанка ± 9; бункер, закрытая пещера, подвал не
-  трогаются), на гранях к взрыву — отражённое `max(p, Pr·cos θ)` (стены —
-  по горизонтали, стебель Маха), элемент толщиной 1–3 (ряд твёрдых кубов; вода с обеих концов — массив,
-  вода с одного — нет: стекло аквариума лопается) ломается при `P ≥ порог·k(t)` (k = 1, 2, 3.5), пробитый с лица —
-  на всю толщину; грунт (терракота, кальцит, камень) — только тонкий с небом с обеих сторон (гребень, стенка, навес);
-  высокое и узкое (до 6 по оси от взрыва, грунт — до 4: скалы и мезы стоят; `H ≥ 4t`, `H` — пока сзади воздух: перекрытие за простенком кончает плечо
-  на этаже) опрокидывается; раунды: второй — за проломами первого (там опрокидывается только столб не шире 6, грунт — 4: ядро, угол), третий — по проломам всех соседей (`Blast.remnants`);
-  деревья валятся стволом; `Collapse` — падает то, что потеряло опору: обход 0-1 от опор (всё несущее на низу окна и не выше самой
-  низкой исходной поверхности окна, и неразрушимое — прочность < 0 или ≥ 50, `Props.fixed`: оно само не ломается и не
-  падает; вверх 0, вбок и вниз +1, до 8), блок держится в пределах пролёта (`Blast.Props.span`; грунт в постройке —
-  кладка без арматуры — только если опора не удлинилась; висящая кладка — не на несущем, — которую до удара держал
-  ряд между опорами с двух сторон хотя бы по одной оси, а теперь ни по одной, — консоль и падает, хотя ближняя опора
-  та же: плита у уцелевшего ядра, чьи стены рухнули, иначе стояла кольцом в воздухе — подрыв точно над ядром, GameTest
-  `towerWithPoolFalls`; её падение удлиняет опору другим — расстояния чинятся только там, где опора шла через неё,
-  `Collapse.reroute`: обход всего окна заново на каждый каскад стоил бы +40–50 % обрушения в городе из грунта; концы ряда —
-  только опоры с пролётом: стекло, выбитое при 0.8 psi, перекрытие и до удара не держало; каскад кладки дальше двух
-  пролётов от своего чанка (редко) за границей чанков не виден), падает, если опору отняла волна (была в
-  пролёте или стала дальше на 3 и больше), падающий никого не держит (каскад за один обход); постройка без видимой опоры и до удара
-  (дальше 8) падает каскадом от сломанного, природные своды и навесы из грунта стоят; листва без ствола опадает, малая вода (до 4096 мест
-  и 16 в ширину) с пробитым дном стекает, навесное (двери, факелы, таблички) — с тем, на чём висело, жидкости у пролома
-  — тик; где рухнуло 3 и больше блока (вне огненного шара) — завал из щебня, свет поджигает/выжигает; всё случайное — из хеша координат; руины чанка ждут готовых
-  чанков в радиусе `RuinPlanner.REACH` = 2), `RuinPlan` (только разница: 4 байта на место, пожары;
-  карты высот и нижние источники неба изменённых столбцов и места проверки света считаются в плане; при подмене — места плана
-  и огонь прямо в секции, карты высот и источники неба ставятся из плана (значение «до» в чанке не то
-  или блоки чанка не те, что в снимке плана, — `RuinPlan.sameBlocks`: отпечатки секций, где разошлись — места с точностью
-  до погашенных ламп; изменения чанков мод не подслушивает, — все столбцы с местами плана заново по чанку одним проходом
-  от верхнего места плана; AT), `checkBlock` в верхней изменённой точке столбца и под уцелевшим верхом — одной задачей движка
-  света на чанк (AT), игрокам — пакетами секций в том же тике (и до 24 снесённых мест
-  с их блоками — обломками у клиента, `ScarQueue.thrown`, `RuinPlan.thrown`, тем, у кого чанк уже есть), LOD Distant Horizons — `compat/DhChunks`
-  (`overwriteChunkDataAsync`); блок-сущности и POI — через мир после подмены; хеш старых
-  состояний в местах плана не совпал — план заново; лампа и её двойник блэкаута для хеша одно и то же), `NuclearPrep` (руины заранее, пока
-  летит МБР: чанки в памяти в радиусе руин (и загруженные за полёт, раз в 40 тиков) с загруженными соседями `REACH` —
-  снимки под долей `WorkScheduler.PREP_SHARE` общего бюджета, план в фоне; раскладка зоны (чанки, край зоны без планов заранее и квадраты загрузки по расстоянию,
-  `NuclearPrep.layout`: у 15 кт ~33 тыс. чанков — 50–65 мс) — тоже в фоне, подрыв раньше её конца её дожидается
-  (`handOff`); ради подготовки ничего не грузится в мир
-  (план в городе — 13 мс на чанк: 32 тыс. чанков зоны в потоке сервера за 90 с полёта не успели бы);
-  тяжёлая зона не в памяти (фаза 2) — с диска в порядке прихода волны: `ChunkStorage.read` (поток ввода-вывода),
-  обновление данных и разбор — в фоне (`DiskShots`, только с окончательными блоками — `DiskStatus.State.blocksFinal`: целые и чанки мира 1.17 с догенерацией под нулём `below_zero_retrogen` — её ваниль пишет только ниже нуля; у Zearth и Greenfield такие почти все чанки; карты высот, которых на диске нет — у карт из редакторов почти у всех чанков, — досчитываются по блокам, как ваниль при загрузке, `DiskShots.Read.primed` (окно очереди руин берёт таких не больше 4 за раз: `Read.cost`); причины непрочитанных — в строке «Ruins for strike #N ready»), снимок — в поток сервера, план — в фоне
-  (`RuinContext.submitDisk`), и после подрыва тоже (половина пула — очереди руин); строка «дальние кольца: готово к волне
-  X из Y»; память — планы, снимки, чтения и буферы потоков — не больше 512 МБ (копии LOD тяжёлой зоны к фронту, `FrontLods`
-  в `dh.md`, — в остатке после планов: берутся, когда планы с диска готовы, остановка по куче их сбрасывает); один район — одна подготовка; подрыв, к которому готовились, берёт место, землю и видимость подготовки (`NuclearPrep.planned`: погода, сменившаяся за полёт, дала бы шов следа у чанков, загруженных позже); живой объём кучи — старое поколение
-  после полной или большой сборки, сборки, которая его освободила (смешанная G1), или любой, после которой оно выше
-  предела (`HeapWatch` по уведомлениям сборщика: молодой пул ZGC «после сборки» — с выделенным за цикл, сумма пулов
-  показывает 9,3–10,1 ГБ при живых 6,4–6,8; JVM без старого поколения у пулов — сумма пулов после сборки), два замера
-  подряд выше 75 % — планы заранее больше не строятся
-  (строка «no more ruins are pre-built»), а зона за волной грузит только чанки с готовым планом (не грузила бы
-  ничего — готовые планы пропадали бы; GameTest `heapStopZoneLoadsOnlyPlanned`); после подрыва — зона за волной: тяжёлая зона от 5 psi грузится квадратами
-  5×5 вслед за фронтом — из квадрата каждый чанк, чьё окно руин 5×5 целое на диске (`DiskStatus.State.WHOLE`: заголовок `chunkScanner`;
-  чанк 1.17 с догенерацией без генерации не грузится — его план с диска ждёт игрока или LOD вдали) или в памяти, своим тикетом загрузки без тика уровня 33 (такой чанк ваниль
-  грузит без генерации — `ChunkGenerationTask.canLoadWithoutGeneration`; окна у края квадрата — с диска; с полями `REACH`
-  вышел бы 81 чанк на 25 руин, и зона отставала бы на тысячи тиков; пропуск всего квадрата с одним нецелым чанком
-  в кольце терял бы планы с диска его чанков; GameTest `zoneLoadsEveryChunkWithPlan`), не больше 6 квадратов сразу
-  (квадрат, где всё уже в памяти, мест не занимает и
-  держится, только если у его чанков есть готовые планы: место подрыва отпускается в тике подрыва, и иначе такой чанк
-  уходит из памяти раньше волны — план пропадает), руины их чанков строит очередь (в фоне), квадрат
-  отпускается, когда руины его чанков стоят или оставшиеся ждут только соседей — тогда каждый берёт свой тикет с соседями (`ScarQueue.holdForTile`;
-  иначе чанк под чужим тикетом своего не берёт, его соседей в незагруженном квадрате никто не грузит, и слоты зоны
-  стоят тысячи тиков; `-Dincoming.nukeDiag=true` — строки «DIAG») (строка «zone behind the wave — X of Y chunks done»); подготовка и очередь руин живут только в памяти
-  (несохраняемый `NuclearWorld`): перезапуск сервера посреди подрыва теряет готовые планы, и руины встают на месте —
-  чанки без отметки `CHUNK_SCAR` проходятся при загрузке; в лог «Ruins for strike #N ready»; сводка подрыва — доля руин по
-  готовому плану у чанков в памяти при подрыве и «sent to players before ruins»: чанк, до которого дошла волна, а руин нет,
-  игроку не отдаётся (`mixin/net/PlayerChunkSenderMixin`, `ChunkSendGate`, до 200 тиков после волны; публичного пути
-  нет — почему, в миксине; GameTest `chunkSendGateApplied`, `chunkWithheldUntilRuins`)), `ColumnScar` (замена блока через мир, счётчик пожаров, свет с тенью),
-  `BlockResponse` (пороги по тегам `nuke_*` или прочности), `ThermalShadow` (тень по карте высот), `CraterJob`,
-  `NuclearWorld` (фронт по сущностям и аппаратам, очереди); отметка чанка — attachment `CHUNK_SCAR`;
-- След на земле (`RuinPlanner.finish` после руин, по верхнему опорному блоку; в чанках в памяти свет встаёт раньше —
-  слоем вспышки, ниже): напор сдирает дёрн (`STRIP_PSI`), свет
-  (`RuinContext.lit` × угол падения `incidence`: склон к взрыву до ×2.5, полутень `LOW_SUN`; уклон — по ±2 столбцам;
-  у края `RuinContext.ruinRadius` — плавно к нулю, `EDGE_FADE`) выжигает растения над землёй (`PLANT_Q`, тег
-  `nuke_plants` — флаг `Blast.Props.PLANT`; со всем столбцом растений над ними; от части — сухой куст), дёрн до земли
-  (`BURN_Q`) и внутри выгоревшего гарь подзолом (`CHAR_Q`), снег тает; `snowy` у дёрна — по снегу над ним после всего.
-  Каждое — кривая поражения `model/Fragility` (логнормальная: медиана и разброс β; `Fragility.possible` отсекает места,
-  где не попасть и в крайнем хвосте, без шума), случайность места — шум мира `model/WorldNoise`
-  (FastNoiseLite 1.1.1, MIT, копия в `util/noise` с входом double; слой на последствие; крупные пятна не мельче 12
-  блоков) с хешем места, усечена до ±2.5σ — пятна вместо кольца по порогу и без одиночных клеток далеко за зоной. Шум зависит только от зерна мира и
-  места (не подрыва: план заранее строится по месту без сида подрыва, `NuclearWarhead.geometry`, а чанк, загруженный
-  после того, как руины подготовки забыты, — по подрыву; GameTest `scorchSameForAnySeed`): фоновый план = план потока
-  сервера = план с диска = план заранее.
-- След без руин (`RuinPlanner.scorch`: тот же проход по земле, `land`, по снимку одного чанка, без разломов и окна
-  соседей; земля — верхний опорный блок, не бревно, не ниже дна обрушения: на 16 под самой низкой опорой чанка,
-  вода — опора, под глубокой водой земли нет) — для LOD DH вдали (`FarLods.scorch` из `NuclearWorld.onDetonation`):
-  кольцо чанков до `RuinPlanner.scorchReach` (свет со склоном к взрыву ×2.5 ещё в хвосте кривой растений или нижней
-  ступени биома; у 15 кт — около 7,5 км) по приходу волны, ближние первыми; тяжёлая зона, к которой готовились, —
-  руинами по планам, без подготовки — тоже следом. Там, где волна ничего не сломала, след тот же, что у руин (GameTest
-  `scorchWithoutRuinsSameAsRuins`; подрыв — над углом своей площадки: свет из-за её края шёл бы сквозь постройки
-  соседних партий, а они в каждой части CI свои); стёкла и деревья в LOD стоят, пока чанк не загрузят. Тень света вдали не считается:
-  у кольца свой `RuinContext` без карт высот (лучи к земле за километры идут над рельефом в сотнях метров, а план
-  загруженного потом чанка видит только чанки в памяти).
-- Гарь вспышки на гранях (`FlashFaces`, DESIGN-nuke §3.7) — в достройке плана (`RuinPlanner.finish`, фон): уцелевшие
-  блоки с материалом (`Blast.Props.flash`: материал `FlashChar` и хеш блока — из таблицы свойств), открытые грани к шару,
-  грань под полным соседом исходного мира (`Props.full`, соседний чанк — через окно) — чистая, тень — `Grid.sees` по
-  высотам окна. Результат — `RuinPlan.flash()`, встаёт слоем вспышки (`RuinPlan.applyFlash`) и ещё раз с руинами в
-  `RuinPlan.apply` (`FlashSync.chars`, слой подрыва заменяется целиком: план на месте после плана заранее не удваивает
-  метки, а гарь руин — та, что на уцелевшем, часть гари слоя). Слой — под подрывом очереди, который `apply` получает
-  параметром, а не `ctx.d`: у руин, построенных заранее (`NuclearPrep`), `ctx.d` — геометрия подготовки без номера
-  и времени (−1, время 0), и такой слой клиент показывал бы сразу и не сводил бы с тенями того же подрыва; чанк без плана руин (`RuinPlan.EMPTY`) гари не
-  получает. Ранний выход по свету у ближней точки чанка: у дальних чанков проход стоит одного вызова.
-- Опалённые биомы (`ScorchedBiomes`, `data/incoming/worldgen/biome/singed|scorched|charred`: цвет травы, листвы, воды)
-  — по среднему свету клетки биома 4×4 (шум — свой слой), от нижней четверти земли клетки на 8 блоков вниз и до верха;
-  не трогают тег `nuke_keeps_biome` (океаны, реки, пещеры), климат без осадков или холодный (снег, пустыня) и свою
-  степень не ниже. Клетки — в плане (`RuinPlan.biomes`, входят в `differs`, отпечатков нет: биом блоков не меняет);
-  пишутся как `/fillbiome` (`fillBiomesFromNoise` по секции, `setUnsaved`), игрокам — `resendBiomesForChunks`
-  (пакет биомов), в LOD DH — копии секций (`RuinPlan.applyToCopy`: сколько клеток поменялось); план из одних биомов —
-  тоже руины чанка.
-- Слой вспышки (`FlashScorch`; решение Артёма: всё, что свет делает с миром, — со вспышкой, а не с волной; волне —
-  только напор): одна работа на подрыв в полосе ядерки (`NuclearWorld.scorches`, после очереди руин — из того, что
-  оставили руины, до которых дошла волна: слои вдали, поставленные вперёд, задерживали руины у фронта на тики, GameTest
-  `ruinsPreparedDuringFlightFallWithFront`; работы подрывов идут каждая своим ходом, ошибка — в лог, работа снимается;
-  время — своё в строке медленного ядерного тика, «flash scorch»).
-  Первая единица — чанки в памяти до `FlashScorch.reach` (след на земле, поджиг на склоне ×2.5, гарь граней на высоте
-  шара) и в радиусе очереди руин (`ScarQueue.inRange`, по земле, как и `reach`: огню слоя тики даёт только руины):
-  видимые игроку — первыми, по расстоянию до игрока (ступень `SEEN` и `ScarQueue.SEEN_BUSY_NANOS`), остальные — от
-  эпицентра; дальше единица на чанк — окно 3×3 из снимков руин подрыва (`RuinContext.flashGrid`) и слой в фоне
-  (`RuinPlanner.flash`: тот же `land` без напора — дёрн не сдирается, завала нет; пожары — все, что зажёг свет,
-  `min(1, q/20)`, а сбиваемые волной (бросок места не ниже шанса × `BLOWN_KEEP` при ≥ 2 psi) помечены — `RuinPlan.blown`;
-  биомы; гарь граней `FlashFaces`), и единица на готовый слой — запись, как у руин (`RuinPlan.applyFlash`: прямо в
-  секции, пакеты секций, LOD, `FlashSync.chars`), не раньше, чем свет у ближней к шару точки чанка набрал порог поджига
-  (`Detonation.flashTicks` — по излученной доле импульса `FireballModel.thermalFraction`; импульс — 10·t_max, у 15 кт
-  1,24 с: слой ложится за время самой вспышки). Слоя не получают: чанк, чьи руины уже стоят (волна раньше слоя, у
-  эпицентра); чанки, загруженные после подрыва (всё — с руинами); чанк у аппарата Sable без загруженных соседей (до
-  фона и перед записью — `RuinPlan.waitsNeighbours`: Sable на каждое место читает соседей, `sable.md`; GameTest
-  `flashLayerWaitsNeighboursAtCraft`, партия `nuke_flash_edge`, — проверка до фона, `flashLayerRechecksNeighboursBeforeWrite`,
-  партия `nuke_flash_edge_write`, — перед записью: соседи ушли из памяти, пока слой строился); новые чанки, пока снимки руин подрыва вместе с планами
-  слоёв (`RuinContext.shotBytes`) держат больше `NuclearPrep.PLANS_CAP` (512 МБ) или куче тесно (`HeapWatch.Tracker`, два
-  замера подряд). Фоновый слой дольше `RuinContext.TASK_AGE_LIMIT` тиков работы бросается. Встал слой, а у руин чанка
-  план уже есть (готовый заранее, отложенный, фоновый) — снимок чанка из кэша уходит. Строка «flash scorch — N of M
-  chunks … in T ticks (pulse P ticks) …», с числом чанков, ждавших соседей у аппаратов и не взятых по памяти.
-- Огонь слоя — без тиков до руин чанка (`RuinPlan.write` с `layer`): до них он не растёт, не перекидывается и не гаснет,
-  и план руин по миру до вспышки остаётся верным, когда бы руины ни встали (тики в расписании по времени волны
-  устаревали бы у поздних руин: план — заново в потоке сервера). Тик огню, который горит дальше, даёт подмена руин
-  (30–39 тиков, как `FireBlock.onPlace`). В счёт пожаров подрыва слой берёт только огонь, который волна не собьёт
-  (`RuinPlan.blown`); погасший с руинами огонь, который был в счёте, возвращается в счёт, а сбиваемый, который руины
-  оставили, — входит. Слой, зажёгший огонь, отмечает чанк (`FLASH_LAYER`, номер подрыва, сохраняется с чанком;
-  снимается подменой руин): руины, построенные без плана слоя (руины подрыва забыты после простоя `RUINS_IDLE`,
-  перезапуск), читают огонь чанка как воздух — и в памяти, и с диска: отметку снимок с диска читает в данных чанка
-  (`DiskShots.Read.flashLayer`), иначе план зависел бы от того, в памяти ли сосед (`RuinPlan.unfire` в
-  `ChunkShot.take`/`fromDisk`, `RuinPlan.current`; GameTest `diskPlanMatchesMemoryPlan`: город с досками на крышах под
-  слоем и одной отметкой), и гасят тот, что не их (точность — как у руин после перезапуска: старых блоков соседей они не
-  знают). Счёт пожаров у таких руин — по чанку: сколько огня слоя чанка взял счётчик подрыва (`ColumnScar.Budget.layer`;
-  после перезапуска счётчик новый и не брал ничего), столько уходит, а огонь, что горит дальше, входит (GameTest
-  `ruinsOverFlashWithoutShots`: после простоя — со счётчиком слоя, после перезапуска — с новым; весь счёт подрыва —
-  огонь чанков с руинами и огонь слоя в счёте, где руин нет). Загружен чанк с отметкой, а
-  подрыва уже нет ни среди идущих, ни среди прошлых (`NuclearEvents`), — руин не будет: огню — тики в тике мира
-  (`FlashScorch.forgotten`, `burnOut`), отметка снимается; руины уже стоят — снимается сразу (оба пути — GameTest
-  `ruinsOverFlashWithoutShots`).
-- Руины поверх слоя — по миру до вспышки, поэтому план руин (в фоне, на месте, заранее, с диска) тот же, что без слоя:
-  снимок чанка со слоем возвращается к миру до вспышки (`RuinPlan.unflash` в `ChunkShot.take`/`fromDisk`: огонь слоя —
-  воздух, места слоя — старыми состояниями, копией палитр `copyStates` только правленых секций; карты высот и нижние
-  источники неба столбцов слоя — заново по копии, `RuinPlan.rescanCopy`: огонь поднимает поверхность мира на блок, а
-  значения плана слоя его огня не знают — по ним `RuinWindow` брал бы `surface` на блок выше, и крыша с огнём вспышки,
-  которую волна сносит, в плане стояла бы; отпечатки и сверка `sameBlocks` — по живому чанку, с точностью до ламп только
-  у правленых секций), снимок, верный до слоя, остаётся верным (`ChunkShot.relive`), карты высот тени света — снятые до
-  записи слоя (`RuinContext.beforeFlash`); сверка мест (`RuinPlan.current`) читает живой чанк как мир до вспышки (огонь
-  слоя — воздух, место слоя — старое состояние). `RuinPlan.apply` пишет места плана поверх слоя (столбцы — заново по
-  чанку); огонь слоя остаётся, только где у руин свой огонь (состояние — руин, тик), остальной гаснет: под местом плана
-  — с ним, без места — воздухом в секции (поверхность мира, свет, игроки, Sable, LOD). Пустой план руин гасит огонь слоя
-  так же. Поэтому мир после волны — тот же, что от одних руин, и там, где волна ломает больше света (сбитая крыша с огнём
-  вспышки) (GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`, партия `nuke_flash_scorch`: план в фоне через очередь и
-  план, готовый до вспышки; `ruinsOverFlashWithoutShots`, партия `nuke_flash_unflash`: поле и деревянные дома, снимков
-  до вспышки нет — план в потоке сервера, в фоне и с диска тот же, руины по одной отметке слоя). Где руины меняют
-  землю (завал, обрушение), под ними остаётся след слоя: свет был раньше. Обломки (`RuinPlan.thrown`) — без мест,
-  которые уже сменил слой (сгоревшее со вспышкой не разлетается), и выбираются до подмены (`ScarQueue.debris`): подмена,
-  после которой стоит весь квадрат 5×5 вокруг чанка, забывает его слой (`RuinContext.applied`).
+## Structure
+- `world/` — only snapshots on the detonation tick (entities and loaded-chunk coordinates in range); all work runs
+  under the nuclear lane's deadline in the common budget (`work.md`) via `WorkClock` (a unit starts only if estimated
+  to finish by the deadline): `PulseJob` (light and prompt radiation on entities, players and nearby first, before the
+  front; players also farther out to retinal-burn range, `FlashEyes.reach`), `ScarQueue` (chunks out to
+  `Detonation.ruinRadius`, where reflected pressure still breaks glass, ~0.34 psi incident; queues snapshot chunks by
+  front-arrival time, one tick early, one chunk per work unit; player-visible chunks first (in their view, including
+  not yet sent), others afterward, and chunks requested by a player move to visible; visible chunks and their server
+  prechecks get an extra 6 ms beyond the short lane deadline when the server has no spare time
+  (`ScarQueue.SEEN_BUSY_NANOS`, `WorkClock.canStartVisible`: with a full tick as the wave crossed a player's city, a
+  2 ms lane left visible ruins up to 64 ticks behind the front, netcup 16.10); a chunk needing another unit (neighbor
+  fracture for an on-site plan, stale plan) returns to its queue's tail, not head: several-ms window fractures would
+  hold up dozens of ready visible chunks (0.2 ms replacement), 38 ticks on netcup 16.10; visible chunks are prechecked
+  `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
+  block) and chunks without plans receive a background plan now, ready by the wave (GameTest
+  `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
+  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`); trunks falling into a neighboring chunk wait
+  for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
+  within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the
+  world (Create belts remove chains up to 20 blocks) need radius 2); background plans use a 5×5 window of memory/disk
+  snapshots (`RuinContext.requestWindow`); a neighbor absent as a whole chunk on disk is a solid mass in the window,
+  like the world edge (GameTests `readyPlanSameWithoutNeighbours`, `windowWithoutNeighboursOnDisk`); at the view edge,
+  chunks would wait up to 200 ticks for neighbors and reach players intact), `RuinPlanner` (chunk ruins as section
+  deltas: two physical processes over the original 3×3-chunk world window (`RuinWindow`: for a neighbor whose ruins
+  are applied, use old blocks at its plan positions), making a chunk's plan identical in advance and on-site, in any
+  chunk order (detonation `RuinContext`: cached chunk fractures and which are applied; the window uses `ChunkShot`
+  snapshots — section palettes, heightmaps and sky sources copied on the server thread or read from disk
+  (`DiskShots`); a snapshot stays valid while chunk blocks match: section fingerprints, a lamp darkened by blackout
+  remains the same lamp; fractures and plans remember their source snapshot IDs). Thus `Blast`, `Collapse` and
+  `RuinPlanner.finish` (fires, light, rubble, trunks, heightmaps, section deltas) run on background `RuinWorkers`
+  threads (priority queue, `RuinWorkers.Priority`: player-visible chunks in the ruin queue, then other queued ruins
+  and preparation of in-memory chunks, then distant disk plans and far LODs; a priority's task limit includes higher
+  priorities: distant work keeps the pool full while the wave travels; the ruin queue promotes a chunk's queued
+  far-priority preparation task to its wave-chunk priority — GameTest `queuedFarTaskPromoted`; `ruin_threads`, 0 means
+  all cores minus three: server, own-game rendering, world I/O; active count follows server-tick time excluding mod
+  lanes (`WorkScheduler.ownNanos`): above `50 − work_ms_per_tick + 5` ms reduce by a quarter, below `… − 5` add one,
+  log it; using the full tick with our 30 ms would keep one thread). They call neither world nor block code; state
+  properties (`Blast.Props`: fire, flammability, top strength, heightmap opacity, light too) come from a table the server
+  thread fills from snapshot palettes (`Blast.publish`); light shadow uses detonation heightmaps (`RuinContext.lit`).
+  GameTest `backgroundSolversCallNoWorld` walks bytecode along the call graph from background-task roots;
+  `backgroundPlanMatchesServerPlan` and `diskPlanMatchesMemoryPlan` check equal plans; a background plan running over
+  600 ticks, measured from start rather than enqueue, is abandoned and planned on the server thread): `Blast` —
+  pressure differences break thin elements: pressure reaches only faces beside sky-connected air (above terrain tops
+  and 4 blocks into openings, then beyond breaches through all connected air in chunk columns ± 9; bunkers, sealed
+  caves and basements stay untouched); blast-facing surfaces get reflected `max(p, Pr·cos θ)` (walls horizontally,
+  Mach stem); thickness 1–3 (row of solid cubes; water at both ends is a mass, at one end not: aquarium glass breaks)
+  fails at `P ≥ threshold·k(t)` (k = 1, 2, 3.5), face-breached elements fail through their full thickness; ground
+  (terracotta, calcite, stone) only if thin with sky on both sides (ridge, wall, overhang); tall narrow elements (up to
+  6 along the blast axis, ground up to 4: cliffs and mesas stand; `H ≥ 4t`, `H` measured while air is behind: a floor
+  behind a wall pier ends the lever arm at that story) topple; rounds: second behind first-round breaches (only
+  columns at most 6 wide topple there, ground 4: core, corner), third through all neighbors' breaches (`Blast.remnants`);
+  trees fall as trunks. `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
+  window bottom and no higher than the window's lowest original surface, plus indestructible blocks, strength < 0 or
+  ≥ 50, `Props.fixed`: they neither break nor fall; upward 0, sideways/down +1, up to 8); a block holds within its span
+  (`Blast.Props.span`; ground in structures — unreinforced masonry — only if support did not lengthen; hanging masonry,
+  not on a bearing block, previously held by a row between supports on both sides on at least one axis, now on none,
+  becomes a cantilever and falls even if the nearest support is unchanged: slab beside a surviving core whose walls
+  fell, otherwise an airborne ring would remain — detonation directly above the core, GameTest `towerWithPoolFalls`;
+  its fall lengthens support paths for others — repair distances only where support passed through it,
+  `Collapse.reroute`: rescanning the whole window for each cascade would add +40–50 % collapse cost in a ground-block
+  city; row ends are only supports with a span: glass lost at 0.8 psi never supported a floor even before the strike;
+  masonry cascades farther than two spans from their chunk (rare) are invisible across chunk boundaries); falls if the
+  wave removed support (was within span or became at least 3 farther), falling blocks support nobody (cascade in one
+  traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
+  natural ground arches and overhangs stand; leaves without trunks fall; small water bodies (up to 4096 positions and
+  16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
+  breach tick; where 3 or more blocks collapsed (outside the fireball), rubble forms; light ignites/burns; all
+  randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
+  `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
+  positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install
+  planned heightmaps and sky sources (if a chunk's “before” value differs or blocks differ from the plan snapshot —
+  `RuinPlan.sameBlocks`: section fingerprints, then positions in differing sections, allowing darkened lamps; the mod
+  does not listen for chunk changes — rescan all columns with plan positions in one pass from their highest plan
+  position; AT), `checkBlock` at each column's highest changed point and below its surviving top, one light-engine task
+  per chunk (AT); section packets to players in the same tick (plus up to 24 removed positions with their blocks as
+  client debris, `ScarQueue.thrown`, `RuinPlan.thrown`, to players already holding the chunk); Distant Horizons LODs:
+  `compat/DhChunks` (`overwriteChunkDataAsync`); block entities and POIs go through the world after replacement;
+  mismatching old-state hash at plan positions means replan; lamp and blackout twin hash identically), `NuclearPrep`
+  (prebuilt ruins during ICBM flight: in-memory chunks in ruin radius (plus chunks loaded during flight, every 40 ticks)
+  with loaded `REACH` neighbors — snapshots under `WorkScheduler.PREP_SHARE` of the common budget, plan in background;
+  zone layout (chunks, outer zone without prebuilt plans, loading squares by distance, `NuclearPrep.layout`: ~33 thousand
+  chunks for 15 kt, 50–65 ms) is background too; a detonation preceding completion waits for it (`handOff`); preparation
+  loads nothing into the world (city plan 13 ms/chunk: the server thread could not plan 32 thousand zone chunks during
+  90 s flight); heavy zone outside memory (phase 2) reads disk in wave-arrival order: `ChunkStorage.read` (I/O thread),
+  data upgrade and parsing in background (`DiskShots`, only final blocks, `DiskStatus.State.blocksFinal`: whole chunks
+  and 1.17-world chunks with below-zero retrogen `below_zero_retrogen`, vanilla writes it only below zero; almost all
+  Zearth and Greenfield chunks are like this; heightmaps absent on disk, almost all chunks on editor-made maps, are
+  primed from blocks like vanilla loading, `DiskShots.Read.primed` (the ruin-queue window takes at most 4 such chunks at
+  once: `Read.cost`); unread reasons appear in “Ruins for strike #N ready”); snapshot to server thread, plan in background
+  (`RuinContext.submitDisk`), continuing after detonation (half the pool for the ruin queue); line “far rings: X of Y
+  ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB (heavy-zone LOD copies
+  for the front, `FrontLods` in `dh.md`, use the remainder after plans: taken once disk plans are ready, heap stop drops
+  them); one area, one preparation; a prepared detonation takes preparation's location, ground and visibility
+  (`NuclearPrep.planned`: weather changes during flight would leave a trace seam in later-loaded chunks); live heap is
+  old generation after full/major GC, a GC that freed it (mixed G1), or any GC leaving it over the limit (`HeapWatch`
+  via collector notifications: ZGC's young pool “after GC” includes allocations during the cycle; pool sum shows
+  9.3–10.1 GB for 6.4–6.8 live; JVMs without old-generation pools use post-GC pool sum); two consecutive measurements
+  above 75 % stop prebuilding plans (“no more ruins are pre-built”), and the zone behind the wave loads only chunks
+  with ready plans (loading nothing would waste ready plans; GameTest `heapStopZoneLoadsOnlyPlanned`); after detonation,
+  the zone behind the wave loads the ≥ 5 psi heavy zone in 5×5 squares following the front — each square's chunk whose
+  5×5 ruin window is whole on disk (`DiskStatus.State.WHOLE`: `chunkScanner` header; 1.17 retrogen chunks cannot load
+  without generation, so disk plans wait for players or distant LODs) or in memory, via its own level-33 load-only,
+  non-ticking ticket (vanilla loads it without generation, `ChunkGenerationTask.canLoadWithoutGeneration`; windows at
+  square edges come from disk; `REACH` margins would mean 81 chunks per 25 ruins, thousands of ticks behind; skipping
+  an entire square for one non-whole ring chunk would lose its chunks' disk plans; GameTest `zoneLoadsEveryChunkWithPlan`),
+  at most 6 squares at once (a square already fully in memory uses no slot and is held only if its chunks have ready
+  plans: the detonation area is released on the detonation tick, otherwise such a chunk leaves memory before the wave
+  and loses its plan); the queue builds their ruins in background; release a square when its chunks' ruins are applied
+  or the remainder wait only for neighbors — each then takes its own neighbor ticket (`ScarQueue.holdForTile`;
+  otherwise a chunk under another ticket takes none of its own, nobody loads its neighbors in an unloaded square,
+  and zone slots stall for thousands of ticks; `-Dincoming.nukeDiag=true` logs “DIAG”) (line “zone behind the wave —
+  X of Y chunks done”); preparation and ruin queue live only in memory (non-persistent `NuclearWorld`): a server restart
+  mid-detonation loses ready plans and ruins are built on-site — chunks without `CHUNK_SCAR` are processed on load;
+  log “Ruins for strike #N ready”; detonation summary: ready-plan ruin share for chunks in memory at detonation and
+  “sent to players before ruins”: a wave-reached chunk without ruins is withheld from players
+  (`mixin/net/PlayerChunkSenderMixin`, `ChunkSendGate`, up to 200 ticks after the wave; no public path, reason in the
+  mixin; GameTests `chunkSendGateApplied`, `chunkWithheldUntilRuins`)), `ColumnScar` (world-path block replacement, fire
+  counter, shadowed light), `BlockResponse` (thresholds by `nuke_*` tags or strength), `ThermalShadow` (heightmap shadow),
+  `CraterJob`, `NuclearWorld` (front on entities and craft, queues); chunk mark is attachment `CHUNK_SCAR`;
+- Ground trace (`RuinPlanner.finish` after ruins, on the highest supporting block; in-memory chunks get light earlier
+  via the flash layer below): blast strips turf (`STRIP_PSI`); light (`RuinContext.lit` × incidence angle `incidence`:
+  blast-facing slope up to ×2.5, penumbra `LOW_SUN`; slope from ±2 columns; smooth fade to zero at
+  `RuinContext.ruinRadius`, `EDGE_FADE`) burns plants above ground (`PLANT_Q`, tag `nuke_plants`, flag
+  `Blast.Props.PLANT`; entire plant column above, some leave dead bushes), turf to dirt (`BURN_Q`), and inside the burned
+  area scorches to podzol (`CHAR_Q`); snow melts; turf `snowy` follows snow above after all changes. Each uses a damage
+  curve `model/Fragility` (lognormal: median and spread β; `Fragility.possible` rejects positions unreachable even in
+  the extreme tail, without noise); spatial randomness is world noise `model/WorldNoise` (FastNoiseLite 1.1.1, MIT,
+  copy in `util/noise` with double input; one layer per consequence; large patches at least 12 blocks) with position
+  hash, truncated to ±2.5σ — patches rather than a threshold ring, without isolated cells far beyond the zone. Noise
+  depends only on world seed and position (not detonation: preplans use location without detonation seed,
+  `NuclearWarhead.geometry`; chunks loaded after preparation ruins are forgotten use the detonation; GameTest
+  `scorchSameForAnySeed`): background plan = server-thread plan = disk plan = preplan.
+- Trace without ruins (`RuinPlanner.scorch`: same ground pass, `land`, from one chunk snapshot, no fractures or neighbor
+  window; ground is the highest supporting block, not a log, no lower than collapse bottom: 16 below the chunk's
+  lowest support; water supports, no ground under deep water) serves distant DH LODs (`FarLods.scorch` from
+  `NuclearWorld.onDetonation`): a chunk ring out to `RuinPlanner.scorchReach` (light with a blast-facing slope ×2.5 still
+  in the plant-curve tail or lowest biome tier; about 7.5 km for 15 kt) on wave arrival, nearest first; a prepared heavy
+  zone gets planned ruins, an unprepared one gets trace too. Where the wave broke nothing, trace matches ruins
+  (GameTest `scorchWithoutRuinsSameAsRuins`; detonate over the platform's own corner: light from beyond its edge would
+  cross neighboring batches' structures, different in each CI shard); glass and trees in LODs stand until the chunk
+  loads. Distant light shadow is not calculated: the ring has its own `RuinContext` without heightmaps (rays to ground
+  kilometers away pass hundreds of meters above terrain; a later-loaded chunk's plan sees only in-memory chunks).
+- Flash scorch on faces (`FlashFaces`, DESIGN-nuke §3.7) is added in plan completion (`RuinPlanner.finish`, background):
+  surviving material blocks (`Blast.Props.flash`: `FlashChar` material and block hash from the properties table), open
+  faces toward the sphere; a face under a full original-world neighbor (`Props.full`, neighboring chunk via window)
+  stays clean; shadow uses `Grid.sees` over window heights. Result: `RuinPlan.flash()`, applied with the flash layer
+  (`RuinPlan.applyFlash`) and again with ruins in `RuinPlan.apply` (`FlashSync.chars`, replacing the whole detonation
+  layer: an on-site plan after a preplan does not double marks; ruin scorch is the surviving part of layer scorch).
+  The layer belongs to the queue's detonation passed into `apply`, not `ctx.d`: prebuilt ruins (`NuclearPrep`) have
+  preparation geometry in `ctx.d` without ID/time (−1, time 0); such a layer would appear immediately on the client and
+  not combine with the same detonation's shadows; chunks without a ruin plan (`RuinPlan.EMPTY`) get no scorch. Early
+  exit by light at the chunk's nearest point makes the pass cost one call for distant chunks.
+- Scorched biomes (`ScorchedBiomes`, `data/incoming/worldgen/biome/singed|scorched|charred`: grass, foliage, water color)
+  follow average light in a 4×4 biome cell (separate noise layer), from 8 blocks below the cell's lower ground quartile
+  to the top; preserve tag `nuke_keeps_biome` (oceans, rivers, caves), dry or cold climates (snow, desert), and own biomes
+  of equal or higher severity. Cells are in the plan (`RuinPlan.biomes`, included in `differs`, no fingerprints: biomes
+  do not change blocks); written like `/fillbiome` (`fillBiomesFromNoise` per section, `setUnsaved`), to players via
+  `resendBiomesForChunks` (biome packet), to DH LODs via section copies (`RuinPlan.applyToCopy`: changed-cell count);
+  a biome-only plan is still chunk ruins.
+- Flash layer (`FlashScorch`; Artem's decision: everything light does to the world happens with the flash, not the
+  wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`, after
+  the ruin queue, using what wave-reached ruins leave: prioritizing distant layers delayed front ruins by ticks,
+  GameTest `ruinsPreparedDuringFlightFallWithFront`; detonation jobs advance independently; errors log and remove the
+  job; separate “flash scorch” time in slow nuclear-tick logs). First unit collects in-memory chunks within
+  `FlashScorch.reach` (ground trace, slope ignition ×2.5, face scorch at sphere height) and ruin-queue radius
+  (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first, by player
+  distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; then one unit per chunk
+  builds a 3×3 window from detonation ruin snapshots (`RuinContext.flashGrid`) and a background layer
+  (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
+  `min(1, q/20)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
+  `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly
+  into sections, section packets, LODs, `FlashSync.chars`), no earlier than light at the chunk's point nearest the
+  sphere reaches ignition threshold (`Detonation.flashTicks`, emitted pulse fraction
+  `FireballModel.thermalFraction`; pulse is 10·t_max, 1.24 s for 15 kt: the layer is laid during the flash itself).
+  No layer for: chunks whose ruins are already applied (wave precedes layer near the epicenter); chunks loaded after
+  detonation (all with ruins); chunks near Sable craft without loaded neighbors (before background work and before
+  writing, `RuinPlan.waitsNeighbours`: Sable reads neighbors per position, `sable.md`; GameTest
+  `flashLayerWaitsNeighboursAtCraft`, batch `nuke_flash_edge`, checks before background work;
+  `flashLayerRechecksNeighboursBeforeWrite`, batch `nuke_flash_edge_write`, before writing: neighbors left memory during
+  layer build); new chunks while detonation ruin snapshots plus layer plans (`RuinContext.shotBytes`) exceed
+  `NuclearPrep.PLANS_CAP` (512 MB) or heap is tight (`HeapWatch.Tracker`, two consecutive measurements). Background
+  layers running over `RuinContext.TASK_AGE_LIMIT` ticks are abandoned. If a layer is applied and a ruin plan already
+  exists (prebuilt, deferred, background), evict the chunk snapshot from cache. Log “flash scorch — N of M chunks …
+  in T ticks (pulse P ticks) …”, including chunks waiting for craft neighbors and skipped for memory.
+- Layer fire has no ticks until chunk ruins (`RuinPlan.write` with `layer`): until then it neither grows, spreads nor
+  dies, so the pre-flash ruin plan stays valid whenever ruins are applied (ticks scheduled by wave time would stale
+  late ruins, requiring server-thread replanning). Ruin replacement schedules remaining fire (30–39 ticks, like
+  `FireBlock.onPlace`). Only fire the wave will not blow out enters the detonation's fire count from the layer
+  (`RuinPlan.blown`); counted fire extinguished by ruins is returned to the counter, while wave-blown fire retained by
+  ruins enters it. A fire-igniting layer marks its chunk (`FLASH_LAYER`, detonation ID, saved with chunk; cleared by
+  ruin replacement): ruins built without a layer plan (detonation ruins forgotten after `RUINS_IDLE`, restart) read
+  chunk fire as air, in memory and on disk: disk snapshots read the mark from chunk data (`DiskShots.Read.flashLayer`),
+  otherwise plans would depend on whether a neighbor is in memory (`RuinPlan.unfire` in `ChunkShot.take`/`fromDisk`,
+  `RuinPlan.current`; GameTest `diskPlanMatchesMemoryPlan`: city with roof planks under a layer and one mark); they
+  extinguish fire not their own (accuracy as after restart: old neighbor blocks are unknown). Such ruins count fires
+  per chunk: remove as much layer fire as the detonation counter took (`ColumnScar.Budget.layer`; after restart the
+  new counter took none), add remaining fire (GameTest `ruinsOverFlashWithoutShots`: after idle with layer counter,
+  after restart with a new one; total detonation count is fire in ruined chunks plus counted layer fire where ruins
+  are absent). If a marked chunk loads but the detonation is neither active nor past (`NuclearEvents`), no ruins will
+  arrive: schedule fire ticks on world tick (`FlashScorch.forgotten`, `burnOut`) and clear the mark; if ruins already
+  stand, clear immediately (both paths: GameTest `ruinsOverFlashWithoutShots`).
+- Ruins over a layer use the pre-flash world, so the plan (background, on-site, prebuilt, disk) matches the layer-free
+  plan: a layer-bearing snapshot reverts to the pre-flash world (`RuinPlan.unflash` in `ChunkShot.take`/`fromDisk`:
+  layer fire becomes air, layer positions restore old states, palette copies `copyStates` only for changed sections;
+  heightmaps and lower sky sources for layer columns are rescanned from the copy, `RuinPlan.rescanCopy`: fire raises
+  world surface by one block, but layer-plan values do not know its fire; using them would give `RuinWindow` a `surface`
+  one block too high and retain a flash-burning roof the wave should remove; fingerprints and `sameBlocks` compare
+  the live chunk, allowing lamps only in modified sections); a snapshot valid before the layer stays valid
+  (`ChunkShot.relive`); shadow heightmaps are taken before layer writing (`RuinContext.beforeFlash`); position checks
+  (`RuinPlan.current`) read live chunks as pre-flash (layer fire = air, layer position = old state). `RuinPlan.apply`
+  writes plan positions over the layer (columns rescanned from chunk); layer fire remains only where ruins have
+  their own fire (ruin state, tick), the rest is extinguished: under a plan position with it, elsewhere by air in the
+  section (world surface, light, players, Sable, LODs). Empty ruin plans extinguish layer fire too. Thus the post-wave
+  world equals ruins alone, including where the wave breaks more than light (a removed roof with flash fire)
+  (GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`, batch `nuke_flash_scorch`: background plan through the queue and
+  plan ready before flash; `ruinsOverFlashWithoutShots`, batch `nuke_flash_unflash`: field and wooden houses, no
+  pre-flash snapshots — server-thread, background and disk plans match, ruins from only a layer mark). Where ruins
+  change ground (rubble, collapse), the layer's trace remains underneath: light came first. Debris (`RuinPlan.thrown`)
+  excludes positions the layer already changed (flash-burned blocks do not fly) and is selected before replacement
+  (`ScarQueue.debris`): the replacement completing the entire 5×5 square around a chunk forgets its layer
+  (`RuinContext.applied`).
 
-## Подводные камни
-- Завал: руины встают мимо `setBlock`, и тело, оказавшееся в блоках, ваниль видит только удушьем. Кого засыпало — по
-  снимку живых не в блоках до подмены чанка (`BlastBody.free`) и рамке в блоках после (`ScarQueue.buried`); удар
-  завала — очередью фронта (`BlastFront.bury`) под бюджетом, как удары волны. Рамка у края чанка заходит в соседний —
-  проверка завала только при готовых чанках вокруг (`Terrain.readyAround`): `getBlockCollisions` у чанка, который ещё
-  грузится, ждёт его в потоке сервера.
-- Руины чанка встают на тик раньше фронта (`ScarQueue.EARLY`, видимые игроку — первыми), а удар по телу — когда фронт
-  до него дошёл и прошёл импульс: по миру после руин стекла уже нет (`Blast` бьёт его с 0,8 psi), и осколков не было бы.
-  Поэтому перед `RuinPlan.apply` тела у чанка (+5 блоков) запоминают окно перед собой и стену за спиной
-  (`BlastFront.remember` → `BlastBody.Before`). Сдвиг тела от запомненного места меряется к приходу фронта (`Hit`
-  берёт снимок в `advance`), а не к удару: удар ждёт импульса и бюджета, и спугнутый вспышкой моб за это время уходит.
-  Стена на пути броска — по миру как есть (что волна сносит, падает раньше, чем долетит тело).
-- Руины ядерки встают записью мест плана прямо в секции (`RuinPlan`), мимо `setBlock`: ни `onRemove`, ни POI, ни Sable,
-  ни событий блоков для них нет. Sable держит коллайдеры рельефа (воксели секций в Rapier) только у секций рядом с
-  аппаратами и обновляет их из своего миксина на `LevelChunk.setBlockState`: в чанках у аппаратов (`compat/SableTerrain`)
-  `RuinPlan` после записи сам зовёт `SableCommonEvents.handleBlockChange` на каждое место плана (он читает 6 соседей —
-  они загружены: план ждёт соседей). Поэтому всё, у чего есть блок-сущность или место POI, меняется через мир
-  (`ColumnScar.replace`) после записи. Места POI, которых нет в данных POI мира (город карты вставлен мимо `setBlock`:
-  WorldEdit, схемы), `ColumnScar.replace` сперва вносит в данные: иначе ваниль пишет ошибку PoiSection «never registered»
-  на каждый снятый блок (GameTest `poiInRuinsStayConsistent`). Секцию пишут `setBlockState` на месте, как и сам `setBlock` (поток света читает
-  чанк и тогда); не читать в живую секцию (`PalettedContainer.read` переиспользует массив) и не брать
-  `PalettedContainer.copy()` для правки (у копии палитры обработчик роста — старый контейнер: `RuinPlan.copyOf`). План
-  руин не хранит готовых секций: блэкаут гасит лампы прямо в палитре (`ChunkLights.applyInPlace`) по ходу каскада, и
-  секция, скопированная до него, зажгла бы их снова (а отпечаток всей секции «устаревал» бы у 882 чанков зоны
-  из 10881) — поэтому пишутся только места плана.
-- Медленный ядерный тик (> 50 мс) пишется в лог с разбивкой (очередь руин — с числом осмотренных за тик и ждавших работ, руины заранее — отдельно; осмотр ждущей работы — не единица часов полосы, но идёт, пока не вышел срок тика, и его время — в счёт полосы: `WorkClock.overdue`, `spent`); `INCOMING_JFR=1 tools/client_scenario.sh nuke` —
-  профиль JFR в `mod/run/scenario/logs/scenario.jfr`, паузы GC — `logs/gc.log`; для сервера стенда — `INCOMING_JFR=1 tools/stress.sh`
-  → `mod/run/stress/server/stress.jfr`.
-- `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) не считает игрока, у которого чанк ещё в очереди отправки, а чанк
-  без руин `ChunkSendGate` держит в ней: «видит ли чанк игрок» для очереди руин — `getChunkTrackingView().contains`
-  (`ScarQueue.watched`). Иначе чанки, которых игрок ждёт после телепорта, идут за невидимыми и уходят
-  игроку до руин.
+## Pitfalls
+- Burial: ruins bypass `setBlock`, so vanilla only detects a body inside blocks via suffocation. Burial uses a
+  pre-replacement snapshot of living entities not inside blocks (`BlastBody.free`) and their bounds in blocks afterward
+  (`ScarQueue.buried`); rubble injury queues through the front (`BlastFront.bury`) under the budget, like wave hits.
+  Bounds at a chunk edge enter a neighbor, so check burial only with ready surrounding chunks (`Terrain.readyAround`):
+  `getBlockCollisions` on a loading chunk waits on the server thread.
+- Chunk ruins apply one tick before the front (`ScarQueue.EARLY`, player-visible first); body hits happen when the
+  front arrives and the impulse has passed: post-ruin glass is already gone (`Blast` breaks it from 0.8 psi), so there
+  would be no shards. Before `RuinPlan.apply`, bodies near the chunk (+5 blocks) remember the window ahead and wall
+  behind (`BlastFront.remember` → `BlastBody.Before`). Body displacement from that position is measured at front
+  arrival (`Hit` snapshots in `advance`), not hit time: the hit waits for impulse and budget, during which a
+  flash-startled mob moves away. Walls along a thrown body's path use the current world (wave-demolished blocks fall
+  before the body reaches them).
+- Nuclear ruins write plan positions directly into sections (`RuinPlan`), bypassing `setBlock`: no `onRemove`, POI,
+  Sable or block events. Sable keeps terrain colliders (section voxels in Rapier) only near craft and updates them via
+  its `LevelChunk.setBlockState` mixin: near craft (`compat/SableTerrain`), after writing `RuinPlan` calls
+  `SableCommonEvents.handleBlockChange` for each plan position itself (reads 6 neighbors; loaded because the plan waits
+  for them). Thus anything with a block entity or POI changes through the world (`ColumnScar.replace`) after writing.
+  `ColumnScar.replace` first registers POIs absent from world POI data (map cities inserted bypassing `setBlock`:
+  WorldEdit, schematics); otherwise vanilla logs PoiSection “never registered” for every removed block (GameTest
+  `poiInRuinsStayConsistent`). Write sections in place with `setBlockState`, as `setBlock` itself does (the light
+  thread reads chunks then too); do not read into live sections (`PalettedContainer.read` reuses its array) or edit
+  `PalettedContainer.copy()` (the copied palette's resize handler points to the old container: `RuinPlan.copyOf`).
+  Ruin plans do not store completed sections: blackout darkens lamps directly in the palette
+  (`ChunkLights.applyInPlace`) during the cascade, and a pre-cascade section copy would relight them (while whole-section
+  fingerprints would become “stale” in 882 of 10881 zone chunks), so only plan positions are written.
+- Slow nuclear ticks (> 50 ms) log a breakdown (ruin queue includes visits and waiting jobs per tick, prebuilt ruins
+  separately; checking a waiting job is not a lane-clock unit but continues until tick deadline and its time counts
+  toward the lane: `WorkClock.overdue`, `spent`); `INCOMING_JFR=1 tools/client_scenario.sh nuke` writes JFR to
+  `mod/run/scenario/logs/scenario.jfr`, GC pauses to `logs/gc.log`; for the rig server,
+  `INCOMING_JFR=1 tools/stress.sh` → `mod/run/stress/server/stress.jfr`.
+- `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) excludes players whose chunk is still queued for sending;
+  `ChunkSendGate` holds unruined chunks there, so the ruin queue checks “player sees chunk” with
+  `getChunkTrackingView().contains` (`ScarQueue.watched`). Otherwise chunks awaited after teleport queue behind unseen
+  ones and reach players before ruins.
