@@ -1,12 +1,8 @@
 package ua.zentix.incoming.sound;
 
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.Level;
-
 /**
- * How engine sound reaches the ear outdoors, and whether audible — ISO 9613-2:1996 by octaves 63 Hz–8 kHz; no Minecraft
- * except weather ({@link Weather#of}); shared by server (who receives projectile paths, {@code strike.Hearing}) and
- * client (layer volume), hence identical ranges.
+ * Outdoor engine sound propagation and audibility: ISO 9613-2:1996, octave bands from 63 Hz to 8 kHz.
+ * The caller supplies weather; the same calculation serves server flight selection and client sound levels.
  * <ul>
  * <li>Ear band level: L = L<sub>W</sub> − A<sub>div</sub> − A<sub>atm</sub> − A<sub>gr</sub> − shadow (eqs. 3, 4):
  * spreading 20·lg d + 11 (eq. 7), air α·d ({@link Air}, world surface humidity), ground (table 3), daytime shadow zone
@@ -83,20 +79,9 @@ public final class Propagation {
     public record Weather(double day, double rain, double thunder, double shadow, double humidity) {
         public static final Weather NIGHT = new Weather(0, 0, 0, 0), NOON = new Weather(1, 0, 0, 1);
 
-        /** Weather with clear-day surface humidity ({@code util.Air#SURFACE_CLEAR}). */
+        /** Clear-weather humidity equals the recording reference conditions. */
         public Weather(double day, double rain, double thunder, double shadow) {
-            this(day, rain, thunder, shadow, ua.zentix.incoming.util.Air.SURFACE_CLEAR);
-        }
-
-        /**
-         * Current world weather: day by sun elevation (no sky or fixed time — night), shadow by stability class, humidity at
-         * ground level; all from world air ({@link ua.zentix.incoming.util.Air#of(Level)}, same as smoke and flight).
-         */
-        public static Weather of(Level level) {
-            ua.zentix.incoming.util.Air air = ua.zentix.incoming.util.Air.of(level);
-            // without sky (Nether, End), air neither heats in sunlight nor cools at night: no shadow, as before
-            return new Weather(Propagation.day(ua.zentix.incoming.util.Air.sun(level)), level.getRainLevel(1), level.getThunderLevel(1),
-                    level.dimensionType().hasSkyLight() ? refraction(air.stability()) : 0, air.surfaceHumidity());
+            this(day, rain, thunder, shadow, Air.HUMIDITY / 100);
         }
 
         /** Same weather under recording conditions ({@link Air#HUMIDITY}): air already baked into the distant recording. */

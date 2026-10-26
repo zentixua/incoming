@@ -162,7 +162,7 @@ public final class Sources {
     public static float volume(Source s, Vec3 at) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return 0;
-        return volume(s, at, mc.gameRenderer.getMainCamera().getPosition(), Propagation.Weather.of(mc.level));
+        return volume(s, at, mc.gameRenderer.getMainCamera().getPosition(), ua.zentix.incoming.util.Air.weather(mc.level));
     }
 
     /**
@@ -194,7 +194,7 @@ public final class Sources {
             return;
         }
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
-        Propagation.Weather weather = Propagation.Weather.of(mc.level);
+        Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(mc.level);
         for (Iterator<Pending> it = PENDING.iterator(); it.hasNext(); ) {
             Pending p = it.next();
             double d = ear.distanceTo(p.at), path = (ticks - p.born) * Noise.SOUND / 20;

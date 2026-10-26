@@ -32,21 +32,14 @@ public class LoiterEntity extends StrikeProjectile {
     /** Spec: speeds (≈115 km/h, dive 4 blocks/tick), turn limits, orbit height above target, catapult. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.LOITER.airframe();
     private static final WeaponSpec.Handling HANDLING = AIR.handling();
-    /** Orbit radius above the target. */
-    public static final double LOITER_RADIUS = 40;
-    /** Retargeted within this horizontal distance: dive immediately without orbiting. */
-    private static final double STRIKE_NOW = 140;
-    /** Average ticks for the dive from orbit (for time to impact). */
-    public static final int DIVE_TICKS = 25;
-    /** Missed dive: this many blocks beyond closest approach, return to orbit and approach again. */
-    private static final double MISSED_BY = 20;
+    private static final WeaponSpec.Loiter LOITER = HANDLING.loiter();
 
     private double cruiseAlt;
     /** Ticks to circle above the target (set at launch). */
     private int loiterTicks;
     /** Orbit direction: +1 or −1 (mixed within a salvo). */
     private int orbitSide = 1;
-    private double orbitRadius = LOITER_RADIUS;
+    private double orbitRadius = LOITER.radius();
     /** Operator selected a target from camera (or dive missed): dive without waiting for the orbit to end. */
     private boolean strikeNow;
     /** Closest approach to target in this dive, blocks. */
@@ -71,9 +64,9 @@ public class LoiterEntity extends StrikeProjectile {
     /** Loiter and orbit: each munition has its own (salvo spreads by height and direction, dives in sequence). */
     private void pickOrbit() {
         int seconds = IncomingConfig.SERVER.loiterTime.get();
-        loiterTicks = (int) (seconds * 20 * (0.8 + 0.4 * random.nextDouble()));
+        loiterTicks = (int) (seconds * 20 * (LOITER.variationMin() + LOITER.variationSpread() * random.nextDouble()));
         orbitSide = random.nextBoolean() ? 1 : -1;
-        orbitRadius = LOITER_RADIUS * (0.8 + 0.4 * random.nextDouble());
+        orbitRadius = LOITER.radius() * (LOITER.variationMin() + LOITER.variationSpread() * random.nextDouble());
     }
 
     /** Already airborne (approach from afar, tests): at orbit height. */
@@ -91,23 +84,23 @@ public class LoiterEntity extends StrikeProjectile {
     public void placeOnLauncher(Vec3 rail, float yaw, float elevation, int readyTicks, int hiddenTicks, Target target, Vec3 targetPoint,
                                 @Nullable UUID owner) {
         super.placeOnLauncher(rail, yaw, elevation, readyTicks, hiddenTicks, target, targetPoint, owner);
-        cruiseAlt = Math.max(rail.y + 30, targetPoint.y + AIR.cruiseHeight());
+        cruiseAlt = Math.max(rail.y + LOITER.launchClearance(), targetPoint.y + AIR.cruiseHeight());
     }
 
     /**
-     * Planned dive ticks from orbit: {@link #DIVE_TICKS} from game orbit; flight scale raises the orbit (up to
+     * Planned dive ticks from orbit: {@link WeaponSpec.Loiter#diveTicks()} from game orbit; flight scale raises the orbit (up to
      * 700 m), increasing time with path length from orbit to target and slower (or faster) dive speed.
      */
     static int diveTicks() {
         double x = FlightScale.x();
-        if (x == 0) return DIVE_TICKS;
-        double path = Math.hypot(AIR.cruiseHeight(x), LOITER_RADIUS) / Math.hypot(AIR.gameHeight(), LOITER_RADIUS);
-        return (int) Math.ceil(DIVE_TICKS * path * AIR.gameDive() / AIR.diveSpeed(x));
+        if (x == 0) return LOITER.diveTicks();
+        double path = Math.hypot(AIR.cruiseHeight(x), LOITER.radius()) / Math.hypot(AIR.gameHeight(), LOITER.radius());
+        return (int) Math.ceil(LOITER.diveTicks() * path * AIR.gameDive() / AIR.diveSpeed(x));
     }
 
     /**
      * Range also covers the orbit over the target (at cruise speed) and dive from it (at dive speed: over planned
-     * {@link #DIVE_TICKS}, faster than orbit, so cruise-speed range would not cover the dive).
+     * {@link WeaponSpec.Loiter#diveTicks()}, faster than orbit, so cruise-speed range would not cover the dive).
      */
     @Override
     protected double extraRange() {
@@ -181,7 +174,7 @@ public class LoiterEntity extends StrikeProjectile {
     protected void onRetarget() {
         // Nearby: attack immediately; far away: fly there and orbit there.
         Bearing b = bearingTo(tracker.point());
-        strikeNow = b.horizontal() < STRIKE_NOW;
+        strikeNow = b.horizontal() < LOITER.strikeNow();
         if (!strikeNow && flightPhase() == FlightPhase.LOITER) setPhase(FlightPhase.CRUISE);
         cruiseAlt = Math.max(cruiseAlt, tracker.point().y + AIR.cruiseHeight());
     }
@@ -194,24 +187,24 @@ public class LoiterEntity extends StrikeProjectile {
         Bearing b = bearingTo(aim);
         FlightPhase ph = flightPhase();
         double terrain = reliefStraightAhead(level, AIR.reliefLookahead());
-        double floor = terrain + 15;
+        double floor = terrain + LOITER.terrainClearance();
 
         if (ph == FlightPhase.CLIMB) {
             // Wings unfolded, propeller pulling: climb toward the orbit (or operator route waypoint).
             throttle(AIR.cruiseSpeed());
-            holdAltitude(Math.max(cruiseAlt, floor), 0.12, HANDLING.climb());
-            flight.steerYaw(bearingTo(navPoint(aim)).yaw(), 0.08, HANDLING.climb().turnRate(), HANDLING.climb().turnAccel());
-            if (phaseAge() > 40) setPhase(FlightPhase.CRUISE);
+            holdAltitude(Math.max(cruiseAlt, floor), LOITER.altitudeGain(), HANDLING.climb());
+            flight.steerYaw(bearingTo(navPoint(aim)).yaw(), LOITER.climbYawGain(), HANDLING.climb().turnRate(), HANDLING.climb().turnAccel());
+            if (phaseAge() > LOITER.climbTicks()) setPhase(FlightPhase.CRUISE);
         } else if (ph == FlightPhase.CRUISE) {
             throttle(AIR.cruiseSpeed());
-            holdAltitude(Math.max(cruiseAlt, floor), 0.12, HANDLING.cruise());
+            holdAltitude(Math.max(cruiseAlt, floor), LOITER.altitudeGain(), HANDLING.cruise());
             Vec3 nav = navPoint(aim);
             if (!onFinalLeg()) {
                 // Operator route: point by point, then join the orbit from the final leg.
-                flight.steerYaw(bearingTo(nav).yaw(), 0.15, HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
+                flight.steerYaw(bearingTo(nav).yaw(), LOITER.cruiseYawGain(), HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
             } else if (strikeNow) {
-                flight.steerYaw(b.yaw(), 0.15, HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
-                if (b.pitch() >= 30 || b.horizontal() <= orbitRadius + 15) setPhase(FlightPhase.TERMINAL);
+                flight.steerYaw(b.yaw(), LOITER.cruiseYawGain(), HANDLING.cruise().turnRate(), HANDLING.cruise().turnAccel());
+                if (b.pitch() >= LOITER.immediateDivePitch() || b.horizontal() <= orbitRadius + LOITER.immediateDivePad()) setPhase(FlightPhase.TERMINAL);
             } else {
                 // Approach orbit with the same heading field as on orbit: tangential entry without overshoot.
                 orbit().steer(flight, position(), aim, tracker.velocity(), speed);
@@ -219,14 +212,14 @@ public class LoiterEntity extends StrikeProjectile {
             }
         } else if (ph == FlightPhase.LOITER) {
             throttle(AIR.cruiseSpeed());
-            holdAltitude(Math.max(aim.y + AIR.cruiseHeight(), floor), 0.12, HANDLING.cruise());
+            holdAltitude(Math.max(aim.y + AIR.cruiseHeight(), floor), LOITER.altitudeGain(), HANDLING.cruise());
             orbit().steer(flight, position(), aim, tracker.velocity(), speed);
             // Enter dive when target is under the wing (40° or steeper) and time has elapsed.
             boolean due = strikeNow || phaseAge() >= loiterTicks;
-            if (due && b.pitch() >= 40) setPhase(FlightPhase.TERMINAL);
+            if (due && b.pitch() >= LOITER.divePitch()) setPhase(FlightPhase.TERMINAL);
         } else if (ph == FlightPhase.TERMINAL) {
             closest = Math.min(closest, b.distance());
-            if (b.distance() > closest + MISSED_BY) {
+            if (b.distance() > closest + LOITER.missedBy()) {
                 // Passed by (target dodged, or dive angle insufficient): do not weave around it; like a real
                 // Lancet, return to orbit and approach again as soon as the target is under the wing.
                 strikeNow = true;
@@ -261,7 +254,7 @@ public class LoiterEntity extends StrikeProjectile {
         cruiseAlt = tag.getDouble("cruise_alt");
         loiterTicks = tag.getInt("loiter_ticks");
         orbitSide = tag.getInt("orbit_side") < 0 ? -1 : 1;
-        orbitRadius = tag.contains("orbit_radius") ? tag.getDouble("orbit_radius") : LOITER_RADIUS;
+        orbitRadius = tag.contains("orbit_radius") ? tag.getDouble("orbit_radius") : LOITER.radius();
         strikeNow = tag.getBoolean("strike_now");
     }
 

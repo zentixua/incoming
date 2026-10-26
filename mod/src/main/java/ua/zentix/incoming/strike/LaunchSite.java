@@ -337,9 +337,9 @@ public final class LaunchSite {
                 path.add(rail.add(Local.horizontal(yaw).scale(reach)).add(0, reach * Math.tan(climb), 0));
             } else {
                 // Drag/wind-free parabola: before arming (tens of blocks), drag/wind path differs by less than one block.
-                Vec3 v0 = Ballistics.launchVelocity(rail, target, Ballistics.ticksFor(rail, target, elevation, RocketEntity.MIN_FLIGHT));
+                Vec3 v0 = Ballistics.launchVelocity(rail, target, Ballistics.ticksFor(rail, target, elevation, air.ballistic().rocket().minFlight()));
                 double reach = Math.min(ProximityFuse.ARM_DISTANCE, horizontal(rail, target) - NEAR_AIM);
-                for (int k = ARC_STEP; k <= RocketEntity.BURN_TICKS; k += ARC_STEP) {
+                for (int k = ARC_STEP; k <= air.ballistic().rocket().burnTicks(); k += ARC_STEP) {
                     Vec3 at = Ballistics.at(rail, v0, k);
                     if (horizontal(rail, at) > reach) break;
                     path.add(at);

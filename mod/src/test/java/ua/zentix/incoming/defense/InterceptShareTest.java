@@ -3,7 +3,6 @@ package ua.zentix.incoming.defense;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.entity.FlightPhase;
-import ua.zentix.incoming.entity.LoiterEntity;
 import ua.zentix.incoming.guidance.AltitudeHold;
 import ua.zentix.incoming.guidance.Craft;
 import ua.zentix.incoming.guidance.DroneAutopilot;
@@ -33,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *  (the radar does not cover the terrain here), there are as many rails as you like.
  * <p>
  * Targets: Shahed and the cruise missile are their real autopilots ({@link DroneAutopilot}, {@link MissileAutopilot}) with a dive
- *  and slide; “Lancet” - approach and circle over the target ({@link Orbit}, radius {@link LoiterEntity#LOITER_RADIUS}), dive at
+ *  and slide; “Lancet” - approach and circle over the target ({@link Orbit}, radius {@link WeaponSpec.Loiter#radius()}), dive at
  *  dive speed, when the target under the wing is steeper than 40° after the circle; B-2 - in a straight line at your altitude through the release point.
  * Target - a point on the ground in 0–600 blocks from SAM, approach - from any side from beyond the edge of the radar range.
  */
@@ -140,7 +139,7 @@ class InterceptShareTest {
             this.aim = aim;
             drone = weapon == WeaponType.DRONE ? new DroneAutopilot(air) : null;
             missile = weapon == WeaponType.MISSILE ? new MissileAutopilot(air) : null;
-            orbit = weapon == WeaponType.LOITER ? new Orbit(LoiterEntity.LOITER_RADIUS, r.nextBoolean() ? 1 : -1) : null;
+            orbit = weapon == WeaponType.LOITER ? new Orbit(air.handling().loiter().radius(), r.nextBoolean() ? 1 : -1) : null;
             double y = drone != null ? drone.airborneAltitude(start, aim, GROUND) : missile != null ? missile.airborneAltitude(aim, GROUND)
                     : GROUND + air.cruiseHeight();
             pos = new Vec3(start.x, y, start.z);
@@ -184,7 +183,7 @@ class InterceptShareTest {
             holdAltitude(aim.y + air.cruiseHeight(), 0.12, h, h.cruise());
             orbit.steer(flight, pos, aim, Vec3.ZERO, speed);
             if (phase == FlightPhase.CRUISE && orbit.captured(pos, aim, Vec3.ZERO, speed, flight.yaw())) setPhase(FlightPhase.LOITER);
-            double lap = 2 * Math.PI * LoiterEntity.LOITER_RADIUS / speed;
+            double lap = 2 * Math.PI * air.handling().loiter().radius() / speed;
             if (phase == FlightPhase.LOITER && phaseAge() >= lap && FlightController.anglesTo(pos, aim)[1] >= 40) setPhase(FlightPhase.TERMINAL);
         }
 

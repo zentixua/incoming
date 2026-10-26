@@ -1,0 +1,8 @@
+{
+  "values": [
+    {
+      "id": "create:metal_girder",
+      "required": false
+    }
+  ]
+}

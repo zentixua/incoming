@@ -197,7 +197,7 @@ public final class ClientSounds {
     private static List<Voice> hear(Minecraft mc) {
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
         Entity camera = mc.getCameraEntity();
-        Propagation.Weather weather = Propagation.Weather.of(mc.level);
+        Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(mc.level);
         List<Voice> voices = new ArrayList<>();
         double tick = now();
         double[] roots = new double[1];

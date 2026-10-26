@@ -83,7 +83,7 @@ public final class FarFlights {
      */
     public static List<S2C.FarFlight> sample(ServerLevel level, List<StrikeProjectile> flights, Vec3 eye, @Nullable ServerPlayer player, boolean silent) {
         double sight = silent ? range() : 0;
-        Propagation.Weather weather = Propagation.Weather.of(level);
+        Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(level);
         List<Candidate> found = new ArrayList<>();
         for (StrikeProjectile p : flights) {
             if (player != null && !p.isVirtual() && seenBy(level, p, player)) continue;

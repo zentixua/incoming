@@ -507,14 +507,6 @@ public final class DustModel {
             return K_MIX * mass();
         }
 
-        /** Mass above ground at {@code age}, kg/m². */
-        public double massAt(double age) {
-            if (age <= 0) return 0;
-            double j = settled(age), left = left(age), m = 0;
-            for (int i = 0; i < K.length; i++) m += bin(i, age, j, left);
-            return m;
-        }
-
         /** Ground deposition rate at {@code age}, kg/(m²·s): Σ v·m/h. */
         public double fallout(double age) {
             double h = height(age);

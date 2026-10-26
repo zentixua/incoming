@@ -47,14 +47,7 @@ public class BomberEntity extends StrikeProjectile {
     private static final double GAME_ALTITUDE = AIR.gameHeight();
     /** Release range divided by height above the point. */
     private static final double RELEASE_RATIO = GAME_RELEASE / GAME_ALTITUDE;
-    /** Bomb fall from game altitude to impact, ticks (estimate: ~20). */
-    private static final int FALL_TICKS = 20;
-    /** Altitude change: pitch no steeper than this, ° (B-2 climbs and descends gently). */
-    private static final double LEVEL_CHANGE_PITCH = 6;
-    /** Pitch per block of altitude error, °: smooth leveling near cruising altitude. */
-    private static final double PITCH_PER_BLOCK = 0.15;
-    /** After release, flies away and disappears after this many ticks (or earlier at the loaded-world edge). */
-    private static final int EGRESS_TICKS = 400;
+    private static final WeaponSpec.Bombing BOMBING = AIR.handling().bombing();
 
     /** Bomb released or strike recalled before release ({@link #recall}): B-2 departs. */
     private boolean released;
@@ -144,11 +137,11 @@ public class BomberEntity extends StrikeProjectile {
 
     /**
      * Bomb fall from cruising altitude to impact, ticks (estimate): path grows with altitude relative to game
-     * altitude; speed grows with the B-2's release speed. At game scale, {@link #FALL_TICKS}.
+     * altitude; speed grows with the B-2's release speed. At game scale, {@link WeaponSpec.Bombing#fallTicks}.
      */
     private static int fallTicks() {
         double x = FlightScale.x();
-        return (int) Math.round(FALL_TICKS * AIR.cruiseHeight(x) / GAME_ALTITUDE / AIR.stretch(x));
+        return (int) Math.round(BOMBING.fallTicks() * AIR.cruiseHeight(x) / GAME_ALTITUDE / AIR.stretch(x));
     }
 
     /**
@@ -186,25 +179,25 @@ public class BomberEntity extends StrikeProjectile {
                     blockPosition(), BlockPos.containing(aim), isVirtual());
         }
         // No reason to fly outside the world after release: nobody would see departure.
-        if (exhausted() || released && (phaseAge() >= EGRESS_TICKS || isVirtual())) {
+        if (exhausted() || released && (phaseAge() >= BOMBING.egressTicks() || isVirtual())) {
             discard();
             return;
         }
         WeaponSpec.Agility egress = AIR.handling().climb(), cruise = AIR.handling().cruise();
         if (released) {
             // Departure: turn 70° off course and climb.
-            flight.holdPitch(-6, 0.05, egress.pitchRate(), egress.pitchAccel());
-            if (phaseAge() < 60) flight.steerYaw(flight.yaw() + 20 * breakSide, 0.08, egress.turnRate(), egress.turnAccel());
+            flight.holdPitch(BOMBING.egressPitch(), BOMBING.egressPitchGain(), egress.pitchRate(), egress.pitchAccel());
+            if (phaseAge() < BOMBING.egressTurnTicks()) flight.steerYaw(flight.yaw() + BOMBING.egressYawLead() * breakSide, BOMBING.egressYawGain(), egress.turnRate(), egress.turnAccel());
             else flight.settleYaw(egress.turnAccel());
         } else {
-            flight.holdPitch(Mth.clamp((getY() - echelon) * PITCH_PER_BLOCK, -LEVEL_CHANGE_PITCH, LEVEL_CHANGE_PITCH), 0.1,
+            flight.holdPitch(Mth.clamp((getY() - echelon) * BOMBING.pitchPerBlock(), -BOMBING.levelChangePitch(), BOMBING.levelChangePitch()), BOMBING.cruisePitchGain(),
                     cruise.pitchRate(), cruise.pitchAccel());
         }
-        if (!released && b.horizontal() > releaseDistance() + 40) {
+        if (!released && b.horizontal() > releaseDistance() + BOMBING.turnClearance()) {
             // Release point inside the turning circle (retargeted to the side, overshot): at maximum turn rate it would
             // circle forever; fly straight until the point is outside the circle, then approach again.
             if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
-            else flight.steerYaw(b.yaw(), 0.1, AIR.turnRate(), cruise.turnAccel());
+            else flight.steerYaw(b.yaw(), BOMBING.cruiseYawGain(), AIR.turnRate(), cruise.turnAccel());
         }
         // Loses speed in the departure climb; holds cruise speed at altitude.
         throttle(AIR.cruiseSpeed());
