@@ -311,7 +311,7 @@ public final class WorkGameTests {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "queue not empty after shutdown");
             for (Blast b : blasts) {
                 // crater rim (Craters.dig, also completed by shutdown) can occupy removed positions through random whole-block addition
-                for (BlockPos p : b.blocks()) h.assertTrue(goneOrRim(level.getBlockState(p)), "not removed: " + p + " (" + level.getBlockState(p) + ") from explosion at " + b.at());
+                for (BlockPos p : b.blocks()) h.assertTrue(goneOrRim(level.getBlockState(p)), "not destroyed: " + p + " (" + level.getBlockState(p) + ") from explosion at " + b.at());
             }
             h.assertFalse(Terrain.readyAround(level, far, 32), "distant area loaded synchronously");
             // shutdown without actually stopping: strike timelines (secondary missiles, distant Shahed) must not affect other tests
@@ -736,9 +736,9 @@ public final class WorkGameTests {
                 // POI-data removal runs as a server task after the block changes
                 h.assertTrue(level.getGameTime() >= doneAt[0] + 2, "waiting for server tasks");
                 h.assertTrue(errors[0] == 0, "PoiSection errors: " + errors[0]);
-                for (BlockPos p : bare) h.assertTrue(gone(level.getBlockState(p)), "not removed: " + p.toShortString() + " " + level.getBlockState(p));
+                for (BlockPos p : bare) h.assertTrue(gone(level.getBlockState(p)), "not destroyed: " + p.toShortString() + " " + level.getBlockState(p));
                 for (BlockPos p : heads) h.assertTrue(gone(level.getBlockState(p.north())), "bed foot not removed: " + p.north().toShortString());
-                for (BlockPos p : registered) h.assertTrue(gone(level.getBlockState(p)), "not removed: " + p.toShortString());
+                for (BlockPos p : registered) h.assertTrue(gone(level.getBlockState(p)), "not destroyed: " + p.toShortString());
                 for (BlockPos p : bare) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "POI record remains " + p.toShortString());
                 for (BlockPos p : registered) h.assertTrue(level.getPoiManager().getType(p).isEmpty(), "POI record remains " + p.toShortString());
             });
