@@ -2,6 +2,7 @@ package ua.zentix.incoming.guidance;
 
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.strike.WeaponSpec;
+import ua.zentix.incoming.util.Relief;
 import java.util.Arrays;
 
 /**
@@ -200,7 +201,7 @@ public final class Autopilot {
      * и узкий дом между ними, а фильтр высоты сглаживал бы короткий пик: ракета на бреющем и шахеды залпа бились бы в них.
      */
     public static double reliefAhead(Craft c, Vec3 nav, Turn turn, WeaponSpec.Airframe air) {
-        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c::relief);
+        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c.reliefSurvey());
     }
 
     /**
@@ -208,7 +209,7 @@ public final class Autopilot {
      * ({@link #CORRIDOR_HALF_WIDTH}) над путём {@code track} — то же, что {@link #reliefAhead}, по заданному пути: место
      * пусковой ({@code LaunchSite}) проверяет им, что подъём после взведения автопилоту по силам.
      */
-    public static double climbOver(double[] track, double speed, double climbAngle, Corridor.Relief relief) {
+    public static double climbOver(double[] track, double speed, double climbAngle, Relief relief) {
         return Corridor.highest(track, CORRIDOR_HALF_WIDTH, climb(speed, climbAngle), relief);
     }
 
@@ -247,7 +248,7 @@ public final class Autopilot {
     }
 
     /** Наибольшая высота рельефа под полосой над путём {@code track} — без наклона (возврат в мир, «Ланцет»). */
-    public static double reliefAlong(double[] track, Corridor.Relief relief) {
+    public static double reliefAlong(double[] track, Relief relief) {
         return Corridor.highest(track, CORRIDOR_HALF_WIDTH, Corridor.Climb.NONE, relief);
     }
 

@@ -113,7 +113,7 @@ paths:
     (`NuclearWarhead.expose`) и волна (`BlastBody.hit`).
 - `client/nuclear/` после удара: `NukeEchoes` — эхо от рельефа (общий `client/sound/BlastEchoes`, геометрия `TerrainEcho`, сведение
   `EchoMix`, игра — `OwnSources`), `NukeAfter` — горящий город (гул — по теплу шторма `FireStorm` вдали и огня в своих
-  чанках `fx/FireWatch`, общего с дымом пожаров, законом `client/sound/FireRoar`; ветер в огонь и вторичные взрывы — по
+  чанках `fx/FireWatch` (смотрит огонь только у подрывов), законом `client/sound/FireRoar`; ветер в огонь и вторичные взрывы — по
   модели пожаров сервера `FireField`; обрушения), `NukeSounds.Schedule.clatter` — стёкла и обломки, что снесла волна у
   слушателя (`S2C.NukeDebris`: выборка мест и сколько снесено всего, закон — `client/sound/Clatter`), `AnimalSilence` —
   тишина животных.

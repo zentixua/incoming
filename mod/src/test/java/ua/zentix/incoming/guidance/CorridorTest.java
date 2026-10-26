@@ -1,6 +1,8 @@
 package ua.zentix.incoming.guidance;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.util.Relief;
+import java.util.function.IntBinaryOperator;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -76,6 +78,51 @@ class CorridorTest {
     void pointIsSquare() {
         double h = Corridor.highest(new double[] {10.5, 10.5}, HALF_WIDTH, Corridor.Climb.NONE, (x, z) -> x == 10 && z == 11 ? 90 : 64);
         assertEquals(90, h);
+    }
+
+    /** Preserve every geometric visit: a bend or revisited segment gives the same column a different climb gain. */
+    @Test
+    void surveyReusesOnlyHeightsAndChunkViews() {
+        double[][] tracks = {
+                {0.3, 0, 0.3, 256},                         // thin pillar
+                {-32.5, -32.5, 64.5, 64.5},                 // diagonal and negative chunks
+                {0.5, 0, 0.5, 50, 50.5, 50},              // turn
+                {0.5, 0, 0.5, 50, 50.5, 50, 0.5, 0},      // multiple segments and a revisited column
+                {0.5, 0, 0.5, 50, 0.5, 0},                // return along the same band
+                {-16, -16}, {0, 0, 0, 0, 16, 16}          // point and zero-length segment
+        };
+        IntBinaryOperator heights = (x, z) -> x == 1 && z == 100 ? 300 : 64 + Math.floorMod(x * 31 + z * 7, 90);
+        for (double[] track : tracks) {
+            for (Corridor.Climb climb : new Corridor.Climb[]{Corridor.Climb.NONE, new Corridor.Climb(10, 0.3)}) {
+                Set<Long> columns = new HashSet<>(), chunks = new HashSet<>();
+                int[] visits = {0}, reads = {0}, views = {0};
+                double old = Corridor.highest(track, HALF_WIDTH, climb, (x, z) -> {
+                    visits[0]++;
+                    columns.add(key(x, z));
+                    chunks.add(key(x >> 4, z >> 4));
+                    return heights.applyAsInt(x, z);
+                });
+                Relief.Survey survey = new Relief.Survey((cx, cz) -> {
+                    views[0]++;
+                    return (x, z) -> {
+                        assertEquals(cx, x >> 4);
+                        assertEquals(cz, z >> 4);
+                        reads[0]++;
+                        return heights.applyAsInt(x, z);
+                    };
+                });
+                int[] sampledVisits = {0};
+                double batched = Corridor.highest(track, HALF_WIDTH, climb, (x, z) -> {
+                    sampledVisits[0]++;
+                    return survey.at(x, z);
+                });
+                assertEquals(old, batched, 0, java.util.Arrays.toString(track));
+                assertEquals(visits[0], sampledVisits[0], "geometric visits");
+                assertEquals(chunks.size(), views[0], "one view per unique chunk");
+                assertEquals(columns.size(), reads[0], "one height read per unique column");
+                assertTrue(reads[0] < visits[0], "the band must revisit columns");
+            }
+        }
     }
 
     private static long key(int x, int z) {

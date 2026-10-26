@@ -419,14 +419,16 @@ drift away, and its flame lights the smoke around it. The bomb's blast is drawn 
 breach gives the cloud of the part of the charge that went into the air, a deeper blast a smaller cloud from the mouth of
 the hole; the dust of the impact and of a caved-in pit stays low and drifts.
 
-Whatever the blast sets on fire keeps smoking. Over every fire a column of black smoke rises, leans downwind and
-stretches out with it; a bigger fire sends it higher. Burning blocks close together, the fuel burning in a crater and an
-oil fire next to them are one fire: a burning house sends up one tall column, not several weak ones. By day it climbs higher than on a calm night, when
+Fuel left in a crater keeps burning, and so does the oil of a substation the strike knocked out. Over them a column of
+black smoke rises, leans downwind and stretches out with it; a bigger fire sends it higher. Burning craters of a salvo
+and an oil fire next to them are one fire: they send up one tall column, not several weak ones. By day it climbs higher than on a calm night, when
 it stays low and drifts flat. Near or kilometres away, the column is drawn the same way as a smoke trail: one unbroken,
 billowing tube, never a row of separate puffs; where it is narrower than about two pixels it is a thin line. At night the
 flames light the smoke from below. The column grows from the fire at the
-speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
-server: the smoke follows any fire your game shows, not only fires from strikes.
+speed of the wind, and when the fire goes out the last of the smoke drifts away. Blocks the blast sets on fire burn as
+ordinary Minecraft fire and look like any other fire in your game: vanilla, or the way a fire mod you have installed
+draws it. Incoming draws no smoke over fire on blocks, whatever started it; a nuclear detonation's burning city is part
+of the detonation and has its own firestorm.
 
 In a big raid each blast is heard as its share of the din: the nearest one sounds about as loud as it would alone, the
 far ones lie under it about as much quieter as in life and come back up once it has faded. When more blasts sound at

@@ -177,9 +177,6 @@ public final class FarBlasts {
             this.near = near;
             this.soundPending = !near;
             // топливо в воронке горит огнём на блоках сервера: его дым и звук приходят с ним пакетом (BlastEffects.fuelFire)
-            // огонь, что поджёг шар топлива, — в дым с первых секунд нынешним счётом, а не на проход обхода позже; без топлива
-            // удар сам ничего не поджигает (`Craters.ignite`)
-            if (source.fuelKg() > 0) ua.zentix.incoming.client.fx.FireWatch.hot(level, x, z);
             float[] dust = dustColour(ground);
             dustR = SmokeGrid.dustAlbedo(dust[0]);
             dustG = SmokeGrid.dustAlbedo(dust[1]);

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Обычный прямой свет, без заимствованного ядерного рассеяния (FLASH). */
+/** Ordinary direct light without borrowed nuclear scattering (FLASH). */
 class HeatLightGlslTest {
     private static String source() throws IOException {
         return Files.readString(Path.of("src/main/resources/assets/incoming/shaders/include/heat.glsl"));
@@ -33,9 +33,9 @@ class HeatLightGlslTest {
                 }
             }
         }
-        assertTrue(glsl.contains("heatBallGain(d2, b.w * b.w, sd, nv)"), "источники действительно используют проверенный закон");
-        assertFalse(glsl.contains("mushBallFace"), "у обычного шара и струи нет ядерной рассеянной добавки");
-        assertFalse(glsl.contains("around"), "у струи тоже только прямой свет");
+        assertTrue(glsl.contains("heatBallGain(d2, b.w * b.w, sd, nv)"), "sources actually use the tested law");
+        assertFalse(glsl.contains("mushBallFace"), "ordinary balls and jets have no nuclear scattering term");
+        assertFalse(glsl.contains("around"), "jets also emit direct light only");
     }
 
     @Test
@@ -45,9 +45,9 @@ class HeatLightGlslTest {
         for (double d = 100; d <= 5000; d += 10) {
             double length = Math.hypot(d, 3);
             double now = gain.call(Map.of("d2", length * length, "r2", 36.0, "sd", length * 3.912 / 20000, "nv", 3 / length));
-            assertTrue(now < previous, "горизонтальная земля, " + d + " м");
+            assertTrue(now < previous, "horizontal ground, " + d + " m");
             previous = now;
         }
-        assertEquals(0, HeatPass.ballGain(1e6, 36, 0.2, -0.5), 0, "обратная грань не получает прямой свет");
+        assertEquals(0, HeatPass.ballGain(1e6, 36, 0.2, -0.5), 0, "a back-facing surface receives no direct light");
     }
 }

@@ -88,8 +88,8 @@ public final class NukeSounds {
     }
 
     /**
-     * Петля чёрного дождя — после {@link NukeSky#tick}, который решает, идёт ли он у камеры; сирены. Огонь в своих чанках
-     * ({@link FireWatch}) смотрит тик клиента — всегда: по нему и дым над любыми пожарами.
+     * Петля чёрного дождя — после {@link NukeSky#tick}, который решает, идёт ли он у камеры; сирены. Огонь у подрывов в своих
+     * чанках ({@link FireWatch}) смотрит тик клиента.
      */
     static void tick() {
         Minecraft mc = Minecraft.getInstance();

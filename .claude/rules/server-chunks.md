@@ -13,6 +13,11 @@ paths:
   `UNKNOWN`, вызывающий выбирает допустимые — `Allowed.CHUNK` в мире, `FLIGHT` вне мира, `ORDER` для приказа,
   `RELIEF` — рельеф полёта на всём пути, `VIRTUAL_RELIEF` — вне мира и для прямой до цели за краем готовых чанков
   (без потолка Незера); прямых `getBaseHeight`/`getSeaLevel` вне `Terrain` и `TerrainSurvey` нет.
+  For a flight corridor, `Terrain.relief` returns a `util.Relief.Survey` for one synchronous measurement:
+  readiness and source selection run once per unique chunk, each column height is read once, and every geometric
+  visit and climb correction stays in `Corridor.highest`. Never retain views or heights between measurements,
+  even within a tick: blocks and readiness can change. `Terrain.choose` is shared by single-column estimates
+  and chunk views. `Craft.reliefSurvey` is created during the sensor refresh; its four-tick period is unchanged.
   `RELIEF` берёт `DISK` и `GENERATOR` только из съёмки `util/TerrainSurvey` (несохраняемый attachment мира): чанк в
   памяти, но не готов (`Terrain.inMemory`), — его карта высот сразу; иначе первый вопрос заказывает чтение поля
   `Heightmaps` файла чанка в потоке ввода-вывода чанков (`chunkScanner`, как `DiskStatus.scan`; он же отдаёт ещё не

@@ -3,6 +3,7 @@ package ua.zentix.incoming.guidance;
 import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.WeaponSpec;
+import ua.zentix.incoming.util.Relief;
 
 /**
  * Управляемый летательный аппарат, каким его видит автопилот ({@link Autopilot}): датчики (место, скорость, фаза,
@@ -29,11 +30,15 @@ public interface Craft {
     void setPhase(FlightPhase phase);
 
     /**
-     * Высота рельефа (первый воздух над препятствиями) в колонке блоков ({@link Corridor.Relief}) — на всём пути, в мире и
-     * вне его: у снаряда — готовый чанк, иначе съёмка с диска или генератора ({@code util.TerrainSurvey}). Где рельеф ещё
-     * не известен, — низ мира.
+     * Surface height (first air above obstacles) at a world column ({@link Relief}), both in-world and off-world:
+     * projectiles use ready chunks, then the background disk/generator survey. Unknown terrain returns the world's bottom.
      */
     double relief(int x, int z);
+
+    /** A fresh relief view for one measurement; projectiles reuse chunks and columns only within that measurement. */
+    default Relief reliefSurvey() {
+        return this::relief;
+    }
 
     /**
      * Сколько блоков прямой до точки {@code to} свободно от блоков: расстояние до первой закрытой клетки или

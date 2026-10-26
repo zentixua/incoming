@@ -11,7 +11,7 @@ import java.util.function.DoubleUnaryOperator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Оптический бюджет, включая хвост: регрессия света обычного удара на горе за километры (FLASH). */
+/** Optical budget including cooling: regression for ordinary impact light on hills kilometres away (FLASH). */
 class FireballRadiationTest {
     private static double integrate(double from, double to, DoubleUnaryOperator power) {
         int steps = 4000;
@@ -24,7 +24,7 @@ class FireballRadiationTest {
         return 4 * Math.PI * r * r;
     }
 
-    /** Независимо от ряда модели: интеграл закона Планка по длине волны, Симпсон через 0,5 нм. */
+    /** Independent of the model's series: integrate Planck's law over wavelength, Simpson at 0.5 nm. */
     private static double visibleNumeric(double t) {
         double h = 6.62607015e-34, c = 299792458, k = 1.380649e-23, sum = 0;
         for (int i = 0; i <= 600; i++) {
@@ -56,14 +56,14 @@ class FireballRadiationTest {
             DoubleUnaryOperator oldPower = t -> area(m.ballRadius(t)) * visibleNumeric(m.ballKelvin(t));
             DoubleUnaryOperator emitted = t -> {
                 m.emittedLight(t, light);
-                // Реальный выход CloudModel, не только вычисленный коэффициент: прежний ballLight без ε этот тест провалит.
+                // Actual CloudModel output, not only the coefficient: the old ballLight without ε fails this check.
                 return oldPower.applyAsDouble(t) * light[3] / BlackBody.luminance(m.ballKelvin(t));
             };
             double energy = integrate(0, m.heBallSeconds, emitted) + integrate(m.heBallSeconds, m.fireSeconds, emitted);
             double old = integrate(0, m.heBallSeconds, oldPower) + integrate(m.heBallSeconds, m.fireSeconds, oldPower);
-            assertTrue(old > 40 * budget, kg + " kg: прежнее чёрное тело действительно нарушало выбранный бюджет");
-            assertEquals(budget, energy, budget * 5e-4, kg + " kg: бюджет видимой полосы со всем хвостом");
-            assertTrue(energy < 0.01 * kg * 4.184e6, kg + " kg: не больше 1% энергии заряда");
+            assertTrue(old > 40 * budget, kg + " kg: the old blackbody exceeded the adopted budget");
+            assertEquals(budget, energy, budget * 5e-4, kg + " kg: visible-band budget including the whole cooling tail");
+            assertTrue(energy < 0.01 * kg * 4.184e6, kg + " kg: below 1% of the charge energy");
             assertTrue(m.radiation.he() > 0 && m.radiation.he() < 1);
         }
     }
@@ -77,11 +77,11 @@ class FireballRadiationTest {
                     * FireballRadiation.SIGMA * Math.pow(CloudModel.FUEL_BALL_K, 4));
             double tail = integrate(m.burnSeconds, m.fireSeconds, t -> area(m.ballRadius(t))
                     * FireballRadiation.SIGMA * Math.pow(m.coolKelvin(t), 4));
-            assertTrue(burning < budget, w + ": одно горение укладывалось");
-            assertTrue(burning + tail > budget, w + ": прежний хвост излучал сверх бюджета");
+            assertTrue(burning < budget, w + ": burning alone was within budget");
+            assertTrue(burning + tail > budget, w + ": the old cooling tail exceeded the budget");
             assertEquals(budget, burning * m.radiation.fuel() + tail * m.radiation.cooling(), budget * 5e-4);
-            assertEquals(m.radiation.fuel(), m.radiation.cooling(), 0, "один коэффициент, нет скачка к чёрному телу");
-            // После конца HE видимый выход реального источника использует тот же серый коэффициент.
+            assertEquals(m.radiation.fuel(), m.radiation.cooling(), 0, "one coefficient, no jump back to a blackbody");
+            // After HE ends, the actual visible source uses the same greybody coefficient.
             double t = (m.heBallSeconds + m.fuelBallSeconds) / 2;
             double[] out = new double[4];
             m.ballLight(t, out);
