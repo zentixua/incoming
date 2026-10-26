@@ -645,7 +645,7 @@ public final class BlastSounds {
         voice(blast, List.of(ClientSounds.blastShot(event, at, volume, pitch, seed, blast::factor, life(blast))), at, pitch, false);
     }
 
-    /** Осыпь выброса длится столько, с — длина записи осыпи без хвоста (⚠ оценка: выброс падает за 1–3 с). */
+    /** Окно, за которое падает выброс, с: средняя мощность осыпи — mgh за это время (⚠ оценка: выброс падает за 1–3 с). */
     static final double EJECTA_FALL_S = 2;
 
     /**
