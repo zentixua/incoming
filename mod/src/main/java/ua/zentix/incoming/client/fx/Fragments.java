@@ -75,10 +75,11 @@ public final class Fragments {
      */
     public static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
-     * Upward wind for a piece from a structure or canopy, up to this wind fraction: flow separates at a bluff-body edge, and the detached
-     * layer rises at 15–30° (flow around a ground-mounted cube: Castro and Robins, J. Fluid Mech. 79, 1977; (est.) angle from memory,
-     * 25° chosen, tan 0.47); house edges and canopies thus lift torn material. The fraction persists throughout flight, although the separation region is
-     * one to two structure heights downstream, and air displacement over the phase is of the same order (est.) (approximation).
+     * Upward wind for a piece from a structure or canopy, up to tan(25°) ≈ 0.47 (est.; model separation angle).
+     * Castro and Robins, “The flow around a surface-mounted cube in uniform and turbulent streams”,
+     * J. Fluid Mech. 79 (1977), 307–335, doi:10.1017/S0022112077000172, studies building wakes and their
+     * dependence on incoming flow; it is not a verified source for a universal 15–30° angle or canopy uplift.
+     * Keeping this fraction throughout the flight, beyond the local separation region, is an approximation (est.).
      */
     public static final double LIFT_EDGE = Math.tan(Math.toRadians(25));
     /**

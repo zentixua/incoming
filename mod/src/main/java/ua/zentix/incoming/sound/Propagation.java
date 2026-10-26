@@ -14,10 +14,10 @@ package ua.zentix.incoming.sound;
  * <li>Audible while ear sound exceeds background in at least one octave ({@link #margin}): noise masks only within its
  * band (Fletcher critical bands, 1940; narrower than octaves above 500 Hz, so octave threshold is conservative), making
  * a tonal engine audible even below background's total A-level. Quiet rural background 34 dBA at night, 40 dBA by day
- * (ANSI/ASA S12.9-2013 part 3, table C.1, category 6 “very quiet rural”, from memory — ⚠ verify; rural home at night
- * 30–35 dBA — SANS 10103 via Eskom report; quiet nighttime area 32–35 dBA — Alaska DNR). Equal A-energy per octave
- * 125 Hz–4 kHz, 63 Hz and 8 kHz 10 dB lower (estimate: leaves, insects, distant road); rain and thunderstorm +3 dB each,
- * as distant blasts.</li>
+ * (est.; model ambient levels, not verified standard-table values). ANSI/ASA S12.9-2013/Part 3, informative Annex C,
+ * table C.1 (p. 25), estimates levels from population density; its public preview does not expose the table values.
+ * Equal A-energy per octave 125 Hz–4 kHz, 63 Hz and 8 kHz 10 dB lower, and rain/thunderstorm +3 dB each are also
+ * estimates (leaves, insects, distant road), as for distant blasts.</li>
  * </ul>
  * Obstacles (hill, house) not modeled here: server does not know them; client muffles its path itself (occlusion,
  * {@code SoundFilters}) — client audibility always lies within what the server sends.

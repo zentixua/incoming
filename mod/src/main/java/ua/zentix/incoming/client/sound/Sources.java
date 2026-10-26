@@ -58,9 +58,10 @@ public final class Sources {
     /** Disabled substation arc crackle: (est.) ~115 dBA (~95 dBA at 1 m). */
     public static final Source GRID_SPARK = new Source(115, Spectra.GRID_SPARK, Spectra.GRID_SPARK_LUFS);
     /**
-     * Operating substation transformer hum: ~10 MVA power transformer around 68 dBA surface mean at 0.3 m
-     * (NEMA TR 1 level table; (est.) from memory), measurement surface area ~40 m²: L<sub>WA</sub> = 68 + 10·lg 40
-     * ≈ 84 dBA.
+     * Operating substation transformer hum: 84 dBA sound power (est.). Eaton, “Three-phase pad-mounted
+     * compartmental type transformer”, CA202003EN (April 2016), p. 3, table 4, reproduces the NEMA TR 1 average sound-level limit
+     * of 68 dB for self-cooled 7501–10000 kVA units. This is a limit, not a measurement of our transformer.
+     * Assuming that surface level and a 40 m² measurement surface (est.) gives L_WA = 68 + 10·lg 40 ≈ 84 dBA.
      */
     public static final Source GRID_HUM = new Source(84, Spectra.GRID_HUM, Spectra.GRID_HUM_LUFS);
     /** City block loses or regains power — breaker click and hum dying or starting: (est.) ~100 dBA at its centre. */
@@ -77,8 +78,10 @@ public final class Sources {
     public static final Source NUKE_LAUNCH = new Source(Double.NaN, Spectra.NUKE_LAUNCH, Spectra.NUKE_LAUNCH_LUFS, Loudness.ENGINE_LUFS);
 
     /**
-     * Flame noise: fraction of open turbulent flame heat release converted to sound, 10⁻⁶–10⁻⁵ (Strahle W. C.,
-     * “Combustion noise”, Prog. Energy Combust. Sci. 4, 1978; (est.) from memory): lower edge (est.).
+     * Flame noise: 10⁻⁶ of open-flame heat release becomes sound (est.; model efficiency, not a verified
+     * measured range). Strahle, “Combustion noise”, Prog. Energy Combust. Sci. 4 (1978), 157–176,
+     * doi:10.1016/0360-1285(78)90002-3, reviews the mechanism; its accessible abstract supplies no universal
+     * heat-to-sound efficiency for this pool fire.
      */
     public static final double FLAME_EFFICIENCY = 1e-6;
     /** Crater-fire roar: fire recording, power from pool heat ({@link #flame}). */

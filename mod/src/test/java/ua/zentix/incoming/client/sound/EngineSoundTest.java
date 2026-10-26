@@ -3,6 +3,8 @@ package ua.zentix.incoming.client.sound;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.flight.FlightTrack;
+import ua.zentix.incoming.client.ClientWeaponSpec;
+import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.guidance.Ballistics;
 import ua.zentix.incoming.net.S2C;
@@ -58,6 +60,42 @@ class EngineSoundTest {
         double g = 0;
         for (EngineSound.Layer l : MISSILE) g += Math.pow(gain(l, t, now, ear), 2);
         return Math.sqrt(g);
+    }
+
+    /** Golden values from main 55bf4e8aa, before client constants moved into the spec (CL6). */
+    @Test
+    void clientProfilesKeepMainValues() {
+        record Expected(WeaponType weapon, BlastSource.Explosive explosive, double pitch, double ceiling) {}
+        var expected = java.util.List.of(
+                new Expected(WeaponType.DRONE, BlastSource.Explosive.TNT, 1, -13.5),
+                new Expected(WeaponType.MISSILE, BlastSource.Explosive.RDX, 0.9, -13.5),
+                new Expected(WeaponType.BUNKER, BlastSource.Explosive.TNT, 1, -13.5),
+                new Expected(WeaponType.NUKE, BlastSource.Explosive.TNT, 0.7, -19),
+                new Expected(WeaponType.ROCKET, BlastSource.Explosive.TNT, 1.3, -13.5),
+                new Expected(WeaponType.LOITER, BlastSource.Explosive.TNT, 1, -13.5));
+        assertEquals(WeaponType.values().length, expected.size());
+        for (Expected row : expected) {
+            var spec = ClientWeaponSpec.of(row.weapon());
+            assertEquals(row.explosive(), spec.explosive(), row.weapon().name());
+            assertEquals(row.explosive(), BlastSource.of(row.weapon(), false).explosive());
+            assertEquals(row.pitch(), spec.booster().pitch());
+            assertEquals(row.ceiling(), spec.ceilingLufs());
+            for (boolean bomber : new boolean[]{false, true}) {
+                var track = new FlightTrack(ID, row.weapon(), bomber);
+                assertEquals(row.ceiling(), EngineSound.ceiling(track));
+                if (EngineSound.noise(track).motor() == null) continue;
+                for (double doppler : new double[]{0.5, 1, 2}) {
+                    var emission = new Emission(0, 20, 3, 0, 20, -1, 0, 0, Vec3.ZERO,
+                            0, doppler, FlightPhase.BOOST.ordinal(), 1, 3, NIGHT, false,
+                            new Emission.Heard[Noise.Part.values().length]);
+                    var tone = EngineSound.Layer.BOOSTER.tone(track, emission);
+                    assertTrue(tone.gain() > 0, row.weapon().name());
+                    assertEquals(Math.max(0.5, Math.min(2, doppler * row.pitch())), tone.pitch());
+                }
+            }
+        }
+        assertEquals(BlastSource.Explosive.TNT, BlastSource.air(10).explosive());
+        assertEquals(BlastSource.Explosive.TNT, BlastSource.buried(40, 64).explosive());
     }
 
     @Test

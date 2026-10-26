@@ -18,15 +18,18 @@ package ua.zentix.incoming.client.fx.smoke;
  * <p>
  * <b>Range.</b> Wall jet is a “puff”: impulse per radian i(φ, t) = I(t)·w(φ) (I(t) — impulse jet delivered to ground
  * by this instant, ṁ·u over feed) carries entrained air, a layer of thickness S·r for radial wall jet
- * (S = {@value #SPREAD}: plane wall jet 0.073 — Launder, Rodi, Annu. Rev. Fluid Mech. 15, 1983, (est.) from memory;
- * radial growth 1/0.83 times larger — Lin, CSME 2008), mass ρ·S·r³/3 per radian. Without ground friction
+ * (S = {@value #SPREAD}: plane half-height growth 0.073 — Launder and Rodi, Annu. Rev. Fluid Mech. 15 (1983),
+ * 429–459, doi:10.1146/annurev.fl.15.010183.002241; reproduced and compared with simulations by Zhong et al.,
+ * Adv. Civil Eng. (2021), 9993981, §3.2.1, doi:10.1155/2021/9993981). Treating half-height as layer thickness
+ * and multiplying by 1/0.83 for radial growth are estimates (est.); the prior Lin attribution for 0.83 was
+ * not verified. Mass is ρ·S·r³/3 per radian. Without ground friction
  * (est.) (upper bound), i(t) = (ρSr³/3)·dr/dt: r⁴ = r₀⁴ + 12·∫i dt/(ρS) (short impulse: ∫i dt = i·t; constant feed
  * of duration T with final impulse i, while ongoing: i·t²/(2T)). Puff pushes dust while front faster than
  * surface wind (dr/dt = 3i/(ρSr³)); afterward wind carries dust — front stops at (3i/(ρSU))^{1/3}. Puff dust
  * follows its mass (∝ r′² radially): mean at ¾ r, second moment ⅗ r².
  */
 public final class WallJet {
-    /** Radial wall-jet thickness growth: plane 0.073 (Launder, Rodi 1983) / 0.83 (Lin 2008). */
+    /** Radial wall-jet thickness growth (est.): measured plane half-height slope / estimated radial factor; see above. */
     public static final double SPREAD = 0.073 / 0.83;
     /** Equal-share directions. */
     public static final int DIRECTIONS = 32;

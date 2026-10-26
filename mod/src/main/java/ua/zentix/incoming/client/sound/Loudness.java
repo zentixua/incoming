@@ -23,15 +23,15 @@ import ua.zentix.incoming.sound.Propagation;
  * Gain {@link #gain} is relative to {@link #ENGINE_LUFS} (also used by {@link VoiceBudget} to select layers);
  * Minecraft receives {@link #volume}: the same adjusted for file loudness.
  */
-final class Loudness {
+public final class Loudness {
     /**
      * Loudness reference, LUFS (maximum momentary): sound at ear level {@link #REF} plays this loud — same value as
      * {@code ENGINE_LUFS} in {@code tools/build_sounds.py} (checked by {@code LoudnessTest}). presentation: mixing
      * reference, not SPL.
      */
-    static final double ENGINE_LUFS = -19;
+    public static final double ENGINE_LUFS = -19;
     /** Game loudness ceiling, LUFS: near blast at 1 psi ({@code BlastMix.NEAR_LUFS}, checked by {@code LoudnessTest}; presentation). */
-    static final double CEILING_LUFS = -13.5;
+    public static final double CEILING_LUFS = -13.5;
     /**
      * Engine-loop and launch one-shot file loudness, LUFS ({@code MOTOR_LUFS} in {@code tools/build_sounds.py},
      * {@code SoundAssetsTest} measures actual files): at the ceiling so game volume does not hit file limit before it.
