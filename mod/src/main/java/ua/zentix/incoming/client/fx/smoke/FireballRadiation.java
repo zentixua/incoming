@@ -5,11 +5,11 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
 import java.util.function.DoubleUnaryOperator;
 
 /**
- * Ordinary fireball radiation, separate from geometry and gas temperature. A greybody with constant effective
- * emissivity ε = budget / ∫4πR²M(T)dt, calculated once when the cloud is created, not per frame.
+ * Ordinary fireball radiation, separate from geometry and gas temperature. HE follows a normalized visible-power
+ * pulse: ε(t) = Qvis·p(t) / [4πR(t)²Mvis(T(t))]. Fuel keeps a constant effective emissivity over burning and cooling.
  * HE has a visible-band budget (400–700 nm); fuel has a whole-spectrum budget. These are different quantities.
  */
-record FireballRadiation(double he, double fuel, double cooling) {
+record FireballRadiation(double heJoules, double heTimeScale, double fuel, double cooling) {
     /**
      * Visible energy / HE energy: Khristoforov, FGV 50(1), 2014, pp.109–110, fig.2 (visible curve ×10),
      * DOI 10.1134/S0010508214010122: TG 50/50, 0.95 kg, 400–700 nm, 0.24% by t/m⅓ = 0.2 s/kg⅓.
@@ -18,6 +18,16 @@ record FireballRadiation(double he, double fuel, double cooling) {
      * R(t), T(t) remain approximate profiles; this law bounds their integral, not the distance light travels.
      */
     static final double VISIBLE_SHARE = 0.0024;
+    /**
+     * Reduced time u = t/m⅓, s/kg⅓. Fig.2b, visible curve 5: a narrow initial peak, then a weaker broad pulse.
+     * ⚠ Coarse two-triangle approximation, not a digitized waveform: 6% in the initial lobe, ending at u=0.0015;
+     * its unresolved rise is replaced by a step at zero. The broad lobe starts at u=0.002 and ends at u=0.2.
+     * The text on p.110 gives E/Q = 0.15% at u=0.1 and 0.24% at u=0.2. Those integral anchors fix the broad peak;
+     * its resulting u≈0.0734 and the early peak ≈0.80 MW/kg⅔ agree in order with the plotted, ×10 visible curve.
+     */
+    static final double PROMPT_SHARE = 0.06, PROMPT_END = 0.0015, LATE_START = 0.002, PULSE_END = 0.2;
+    private static final double LATE_PEAK = PULSE_END
+            - (1 - PROMPT_SHARE) * 0.1 * 0.1 / ((PULSE_END - LATE_START) * (1 - 0.0015 / VISIBLE_SHARE));
     /** TNT equivalent, J/kg (NIST SP 811, ton of TNT = 4.184·10⁹ J). */
     static final double TNT_J_PER_KG = 4.184e6;
     /** Stefan–Boltzmann constant and hc/k in SI (from defining h, c, k, BIPM SI Brochure). */
@@ -26,20 +36,37 @@ record FireballRadiation(double he, double fuel, double cooling) {
     private static final int STEPS = 128;
 
     static FireballRadiation of(CloudModel m) {
-        double heEnergy = integrate(0, m.heBallSeconds, t -> area(m.heBallRadius(t)) * visibleExitance(m.heBallKelvin(t)));
         double fuelEnergy = integrate(0, m.fuelBallSeconds, t -> area(m.fuelBallRadius(t)) * totalExitance(CloudModel.FUEL_BALL_K));
         boolean fuelLast = m.source.fuelKg() > 0 && m.fuelBallSeconds >= m.heBallSeconds;
-        // The cooling gas is no longer split into two balls: ⚠ assign its tail to the last burning ball, like its
-        // radius and initial T in CloudModel. It shares that budget instead of reverting to full blackbody emission.
-        double tail = integrate(m.burnSeconds, m.fireSeconds, t -> area(m.ballRadius(t))
-                * (fuelLast ? totalExitance(m.coolKelvin(t)) : visibleExitance(m.coolKelvin(t))));
-        if (fuelLast) fuelEnergy += tail;
-        else heEnergy += tail;
-        double he = emissivity(VISIBLE_SHARE * TNT_J_PER_KG * m.source.chargeKg(), heEnergy);
+        // The cooling gas is no longer split into two balls: ⚠ when fuel burns last, assign that tail to fuel,
+        // like its radius and initial T in CloudModel. HE's visible pulse already ends within the HE phase.
+        if (fuelLast) fuelEnergy += integrate(m.burnSeconds, m.fireSeconds,
+                t -> area(m.ballRadius(t)) * totalExitance(m.coolKelvin(t)));
+        double kg = m.source.chargeKg();
+        // Below 1 kg the old approximate HE lifetime is slightly shorter than 0.2 m⅓; fit the same normalized shape
+        // inside it instead of dropping energy after the HE component disappears. No geometry or lifetime changes.
+        double scale = Math.min(Math.cbrt(kg), m.heBallSeconds / PULSE_END);
         // χr = 0.3, the same estimate used for thermal buoyancy. TNO Yellow Book (2005), 6.91–6.93, 6.119:
         // Fs = 0.00325 Psv^0.32, about 0.314 at 1.6 MPa. ⚠ A crashed tank is not a measured BLEVE at that pressure.
         double fuel = emissivity(CloudModel.RADIANT * FuelFireball.ballKg(m.source.fuelKg()) * m.source.fuel().heatJPerKg, fuelEnergy);
-        return new FireballRadiation(he, fuel, fuelLast ? fuel : he);
+        return new FireballRadiation(VISIBLE_SHARE * TNT_J_PER_KG * kg, scale, fuel, fuelLast ? fuel : 0);
+    }
+
+    /** Normalized power density in reduced time; its integral is one, with 0.625 emitted by u=0.1. */
+    static double pulse(double u) {
+        if (u < 0 || u >= PULSE_END) return 0;
+        double prompt = PROMPT_SHARE * 2 / PROMPT_END * Math.max(0, 1 - u / PROMPT_END);
+        double late = (1 - PROMPT_SHARE) * 2 / (PULSE_END - LATE_START)
+                * Math.max(0, Math.min((u - LATE_START) / (LATE_PEAK - LATE_START),
+                (PULSE_END - u) / (PULSE_END - LATE_PEAK)));
+        return prompt + late;
+    }
+
+    double he(double t, double radius, double kelvin) {
+        if (heTimeScale <= 0 || radius <= 0) return 0;
+        double density = pulse(t / heTimeScale);
+        if (density <= 0) return 0;
+        return heJoules * density / (heTimeScale * area(radius) * visibleExitance(kelvin));
     }
 
     private static double emissivity(double budget, double energy) {

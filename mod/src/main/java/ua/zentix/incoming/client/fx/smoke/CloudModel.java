@@ -298,7 +298,7 @@ public final class CloudModel {
     public final double burnSeconds;
     /** Конец свечения шара, с: остывший до точки Дрейпера; дальше облако — термик. */
     public final double fireSeconds;
-    /** Степень черноты из энергетического бюджета; одна на весь цикл каждого вещества, без привыкания глаза. */
+    /** Излучение из энергетического бюджета: импульс ВВ и степень черноты топлива, без привыкания глаза. */
     final FireballRadiation radiation;
     /** Остывание шара после горения: термик MTT от шара в конец горения ({@link #burnSeconds}). */
     public final Thermal cooling;
@@ -652,7 +652,8 @@ public final class CloudModel {
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         if (he > 0) {
             BlackBody.light(heBallKelvin(t), c);
-            for (int i = 0; i < 4; i++) out[i] += c[i] * radiation.he() * he * he / (big * big);
+            double emissivity = radiation.he(t, he, heBallKelvin(t));
+            for (int i = 0; i < 4; i++) out[i] += c[i] * emissivity * he * he / (big * big);
         }
         if (fuel > 0) {
             BlackBody.light(FUEL_BALL_K, c);

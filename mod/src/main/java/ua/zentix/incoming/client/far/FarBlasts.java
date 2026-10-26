@@ -963,18 +963,19 @@ public final class FarBlasts {
         body = CloudModel.glowShare(e.model.ballKelvin(s), view.skyLuminance());
         sprite = FxAtlas.fireballAt(frame, (e.seed & 1) != 0);
         fire = FxAtlas.fireLightAt(frame) * body;
-        if (r <= 0) return;
+        // Подача и предел работы света частиц: скрытое в дыму тело не занимает FxLights, как до FLASH.
+        // Физический поток на мир и объёмный дым собирается отдельно и от этого дневного отсечения не зависит.
+        if (r <= 0 || body <= 0) return;
         // шар сносит ветром вместе с его дымом (CloudModel.ballX): картинка, свет и зарево — с того же места
         bx += e.model.ballX(s);
         bz += e.model.ballZ(s);
         double h = e.ballHeight(age), b = e.brightness(age);
         double vis = visible(h, r, line), hidden = 1 - vis * e.open;
         float[] c = e.colour(age);
-        // Поток источника на дым — тот же, что на мир: дневной контраст тела с дымом не выключает его излучение.
+        // У видимого тела поток источника на частицы — тот же, что на мир.
         // Предел яркости огня на клубе — подача из кадра огня, без дневного/ночного множителя body.
         lights.add(bx, by + h, bz, r, e.emitted(age) * view.exposure(),
                 FxAtlas.fireLightAt(frame) * CloudModel.glowShare(e.model.ballKelvin(s)), c[0], c[1], c[2]);
-        if (body <= 0) return;
         if (vis > 0) {
             // свечение огня (FxBloom): шар модели ярче своего кадра на экране во столько раз (кадр показан своей экспозицией)
             double hdr = b * view.exposure() / Math.pow(Math.max(FxAtlas.fireLightAt(frame), 1e-3), 2.2);

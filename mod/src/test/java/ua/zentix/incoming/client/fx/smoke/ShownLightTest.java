@@ -32,7 +32,8 @@ class ShownLightTest {
                     if (sky == DAY && bare[3] > 0 && body == 0 && shown[3] > 0) differentBody = true;
                 }
             }
-            assertTrue(differentBody, w + ": дым скрыл слабое свечение на дневном фоне, но энергия не исчезла");
+            if (m.source.fuelKg() > 0)
+                assertTrue(differentBody, w + ": дым скрыл слабое свечение на дневном фоне, но энергия не исчезла");
         }
     }
 }

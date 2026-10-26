@@ -22,6 +22,38 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Взрывы вдали: облако по модели (и у бомбы под землёй), клубы за гребнем. */
 class FarBlastsTest {
+    /** Скрытые днём остывающие шары не занимают слоты света частиц; физический свет на мир остаётся. */
+    @Test
+    void hiddenCoolingBallsDoNotEnterParticleLights() throws ReflectiveOperationException {
+        Class<?> eventType = Class.forName(FarBlasts.class.getName() + "$Event");
+        var constructor = eventType.getDeclaredConstructor(net.minecraft.client.multiplayer.ClientLevel.class,
+                BlastSource.class, CloudModel.class, double.class, double.class, double.class,
+                ua.zentix.incoming.warhead.GroundMaterial.class, long.class, boolean.class, BlastSource.class);
+        constructor.setAccessible(true);
+        var collect = FarBlasts.class.getDeclaredMethod("light", eventType, FarView.class, FarSprites.class,
+                ua.zentix.incoming.client.fx.layer.FxLights.class, double.class, double.class, double.class,
+                double.class, double.class, double.class);
+        collect.setAccessible(true);
+        var balls = ua.zentix.incoming.client.fx.layer.FxLights.class.getDeclaredField("balls");
+        balls.setAccessible(true);
+        FarView day = new FarView(Vec3.ZERO, null, null, null, 0, 1000, 0.001, 1, 1, 1, null,
+                Sight.CLEAR, 200, 130, 0, Sight.Air.at(0, Sight.CLEAR));
+        for (WeaponType w : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
+            CloudModel m = model(w);
+            double t = m.burnSeconds;
+            while (t < m.fireSeconds && CloudModel.glowShare(m.ballKelvin(t), 1) > 0) t += 0.005;
+            double[] physical = new double[4];
+            m.emittedLight(t, physical);
+            assertTrue(t < m.fireSeconds && physical[3] > 0, "есть скрытое тело с ненулевым потоком: " + w);
+            Object event = constructor.newInstance(null, m.source, m, 0, 0, 0,
+                    ua.zentix.incoming.warhead.GroundMaterial.DIRT, 1L, false, m.source);
+            var lights = new ua.zentix.incoming.client.fx.layer.FxLights();
+            // Настоящий путь FarBlasts.light, сто скрытых ударов: до возврата нельзя ни занимать слот, ни рисовать тело.
+            for (int i = 0; i < 100; i++) collect.invoke(null, event, day, null, lights, t * 20, 0, 0, 200, 200, 0);
+            assertEquals(new org.joml.Matrix4f().zero(), balls.get(lights), "скрытые шары не включают FxLights: " + w);
+        }
+    }
+
     /** Видимый фронт следует закону с первого кадра, а не прыгает на радиус столба; на самом краю нет тёмного обода. */
     @Test
     void waterWaveStartsAtItsOwnFrontWithASoftEdge() {

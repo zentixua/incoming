@@ -286,7 +286,9 @@ The light falling on the ground has an energy budget: 0.24% of the charge energy
 burning fuel's energy across the whole spectrum, including the cooling glow. Both are estimates: the first extends
 [a small explosive test](https://doi.org/10.1134/S0010508214010122) to larger charges; the second uses a
 [TNO fireball estimate](https://publications.tno.nl/publication/34634119/QIKv78/TNO-2005-yellow.pdf), not a measurement of
-a crashed fuel tank. The source emits the same light by day and night. Direct illumination fades with distance squared,
+a crashed fuel tank. The explosive flash has a brief bright front and a weaker tail within that same budget;
+its time shape is a coarse approximation of the measured visible pulse, scaled with the cube root of charge mass.
+The source emits the same light by day and night. Direct illumination fades with distance squared,
 air absorption and the angle of the surface; the same flash is much easier to see against dark ground. Night adaptation,
 glare and bloom are presentation. Scattered light from an ordinary flash onto the world and shadows from distant terrain
 are not yet simulated.

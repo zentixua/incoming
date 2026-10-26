@@ -64,7 +64,37 @@ class FireballRadiationTest {
             assertTrue(old > 40 * budget, kg + " kg: the old blackbody exceeded the adopted budget");
             assertEquals(budget, energy, budget * 5e-4, kg + " kg: visible-band budget including the whole cooling tail");
             assertTrue(energy < 0.01 * kg * 4.184e6, kg + " kg: below 1% of the charge energy");
-            assertTrue(m.radiation.he() > 0 && m.radiation.he() < 1);
+            for (double t = 0; t < m.heBallSeconds; t += m.heBallSeconds / 1000) {
+                double e = m.radiation.he(t, m.heBallRadius(t), m.heBallKelvin(t));
+                assertTrue(e >= 0 && e <= 1, kg + " kg: a bounded effective emissivity at " + t);
+            }
+        }
+    }
+
+    @Test
+    void pulseKeepsTheMeasuredIntegralAnchorsAndThePromptPeak() {
+        assertEquals(1, integrate(0, 0.2, FireballRadiation::pulse), 1e-6);
+        assertEquals(0.0015 / 0.0024, integrate(0, 0.1, FireballRadiation::pulse), 1e-6,
+                "Khristoforov p.110: 0.15% at reduced time 0.1, 0.24% at 0.2");
+        assertEquals(0.06, integrate(0, 0.0015, FireballRadiation::pulse), 1e-6,
+                "estimated initial lobe is part of the same budget, not extra flash energy");
+        double[] out = new double[4];
+        for (double kg : new double[]{6.4, 10, 50, 150, 450, 500}) {
+            CloudModel m = new CloudModel(BlastSource.air(kg), CloudModel.Air.STANDARD);
+            m.emittedLight(0, out);
+            assertTrue(out[3] > 32, kg + " kg: prompt daytime core exceeds Sight.WHITE without changing glare/bloom");
+            double prompt = m.radiation.he(0, m.heBallRadius(0), m.heBallKelvin(0));
+            double t = 0.05 * Math.cbrt(kg);
+            double later = m.radiation.he(t, m.heBallRadius(t), m.heBallKelvin(t));
+            assertTrue(prompt > 10 * later, kg + " kg: emissivity is not constant over the HE phase");
+            assertEquals(0, m.radiation.he(m.heBallSeconds, m.heBall, CloudModel.HE_BALL_END), 0);
+            double[] before = new double[4], after = new double[4];
+            for (double u : new double[]{0.0015, 0.002, 0.07340067340067341, 0.2}) {
+                double edge = u * Math.cbrt(kg), step = 1e-8 * Math.cbrt(kg);
+                m.ballLight(edge - step, before);
+                m.ballLight(edge + step, after);
+                assertEquals(before[3], after[3], 0.01, kg + " kg: no discontinuity at pulse knot " + u);
+            }
         }
     }
 
