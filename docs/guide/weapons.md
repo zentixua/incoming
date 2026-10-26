@@ -419,6 +419,11 @@ flames light the smoke from below. The column grows from the fire at the
 speed of the wind, and when the fire goes out the last of the smoke drifts away. Where the fire comes from is up to the
 server: the smoke follows any fire your game shows, not only fires from strikes.
 
+Burnt's custom burning blocks also feed this smoke. Cold `stage=0, hot=false` blocks stop feeding it; flames and hot
+smouldering material keep smoking. When using both mods, disable `smoke_particles` and `ground_smoke` in Burnt's
+`config/burnt_basic.json` on the client and server to avoid a second smoke layer. Burnt's flame particles, ash and fire
+mechanics can stay enabled. Vanilla campfires keep their own smoke.
+
 In a big raid each blast is heard as its share of the din: the nearest one sounds about as loud as it would alone, the
 far ones lie under it about as much quieter as in life and come back up once it has faded. When more blasts sound at
 once than the game has sound channels for, the quietest stop being separate sounds and merge into a low rumble around

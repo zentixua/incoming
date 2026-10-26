@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "#burnt:on_fire", "required": false },
+    { "id": "#burnt:fire", "required": false },
+    { "id": "burnt:smoldering_fern", "required": false }
+  ]
+}

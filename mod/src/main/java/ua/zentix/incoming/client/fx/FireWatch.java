@@ -6,7 +6,6 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -332,7 +331,7 @@ public final class FireWatch {
     }
 
     private static boolean fire(BlockState state) {
-        return state.getBlock() instanceof BaseFireBlock;
+        return FireSources.burning(state);
     }
 
     /** Чанки, которых у клиента больше нет. */
