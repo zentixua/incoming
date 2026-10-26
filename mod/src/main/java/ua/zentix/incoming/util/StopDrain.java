@@ -14,8 +14,9 @@ import java.util.concurrent.locks.LockSupport;
  * Finish generation retained by Incoming's released area tickets before vanilla's shutdown unload loop.
  * A canceled generation task can retain an unload-queued holder until server-thread chunk tasks run;
  * vanilla's unlimited unload loop would otherwise keep requeuing that holder without polling those tasks.
- * AreaLoader remembers only busy holders in its own ticket footprints, including canceled loads. No other
- * holders or idle dimensions are drained. The world attachment owns those references until generation ends.
+ * AreaLoader remembers busy holders in its own ticket footprints, including canceled loads. Waiting ends
+ * with those holders; dimensions without them are skipped. Polling vanilla's shared chunk executor may also
+ * advance unrelated tasks. The world attachment owns the retained references until generation ends.
  */
 public final class StopDrain {
     /** Wait limit for the whole server. */
