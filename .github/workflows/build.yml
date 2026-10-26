@@ -31,9 +31,12 @@ on:
         type: number
         default: 1
 
-# пуш отменяет прежнюю сборку той же ветки; ручной запуск (релиз) — в своей группе, пуш в main его не отменит
+# пуш отменяет прежнюю сборку той же ветки; ручной запуск (релиз) — в своей группе, пуш в main его не отменит.
+# Пуш в main — тоже в своей группе: следующий пуш (часто только tools/ или docs/, мод он не собирает) отменял бы сборку
+# прошлого, и у коммита main с правкой мода не оставалось бы jar (база стенда сцен — последний jar main: 25.10 так
+# отменились сборки #466, #468 и #469, и стенд сравнивал с main без них)
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.run_id) || format('build-{0}', github.ref) }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.run_id) || github.ref == 'refs/heads/main' && format('main-{0}', github.sha) || format('build-{0}', github.ref) }}
   cancel-in-progress: true
 
 permissions:
