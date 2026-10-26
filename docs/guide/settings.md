@@ -41,7 +41,7 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 |---|---|---|
 | `launch.designator_for_everyone` | on | the designator works for all players, not only operators |
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
-| `launch.max_active_per_player` | 0 | one player's rounds in flight plus unfired rounds in salvos; operators are exempt; 0: no limit |
+| `launch.max_active_per_player` | 0 | rejects a new order when the player already has this many active rounds; counts flight, rounds on launchers, unfired salvo rounds and nuclear orders waiting for a second key. One accepted salvo can exceed the limit; operators are exempt; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
@@ -50,6 +50,7 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 | `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
 | `nuclear.wave_speed` | 0.20 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
+| `air_defense.rails`, `air_defense.reload_seconds` | 4, 8 | ready SAM rails and seconds to load one missile from stock, including the first |
 | `grid.enabled` | on | [blackout](blackout.md) |
 | `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of any single outage in blocks |
 | `performance.work_ms_per_tick` | 30 | server budget for the mod's heavy work, 5–45 ms; lower makes craters and ruins finish later and leaves more tick time for other work; it does not set client graphics quality; the server also reserves time for world simulation |

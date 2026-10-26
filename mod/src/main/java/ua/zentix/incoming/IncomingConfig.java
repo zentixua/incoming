@@ -150,11 +150,9 @@ public final class IncomingConfig {
 
         Server(ModConfigSpec.Builder b) {
             b.translation("incoming.config.scale").push("scale");
-            scalePreset = b.comment("Scale for play: GAME (default) flies slower and lower than in life and slows the nuclear blast wave far",
-                            "from the fireball, so that you can watch the approach and the wave; REAL is true to life; CUSTOM takes",
-                            "flight_speed, nuclear.wave_speed and nuclear.effects_scale as they are. GAME: flight_speed 0, wave_speed 0.20,",
-                            "effects_scale 1.0; REAL: 1, 1.0, 1.0. Everything at the target (charge, crater, penetration, damage) is true",
-                            "to life with any preset.")
+            scalePreset = b.comment("GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.20 of sound speed.",
+                            "REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense use a game model.",
+                            "CUSTOM uses flight_speed, nuclear.wave_speed and nuclear.effects_scale as set; effects_scale below 1 shrinks nuclear effects.")
                     .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
             flightSpeed = b.comment("Works with scale_preset = CUSTOM. Flight speeds and altitudes: 0 is the game values (not true to life: slower",
                             "and lower, so that the approach is seen within a few hundred blocks), 1 is true to life, in between each weapon",
@@ -287,7 +285,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.grid_restore_minutes").defineInRange("restore_minutes", 15, 0, 10_080);
             gridRestoreSpread = b.comment("Seconds over which power returns to all districts, in random order.")
                     .translation("incoming.config.grid_restore_spread").defineInRange("restore_spread_seconds", 90, 0, 3600);
-            gridNuke = b.comment("A nuclear strike cuts power within its whole damage radius.")
+            gridNuke = b.comment("Nuclear blackout requires grid.enabled and works without a substation; radius is the smaller of the damage radius and grid.max_radius.")
                     .translation("incoming.config.grid_nuke").define("nuke_blackout", true);
             b.pop();
 
@@ -381,8 +379,8 @@ public final class IncomingConfig {
                             "is in the inventory or the map was opened in this world, so the map opens instantly.")
                     .translation("incoming.config.map_prefetch").define("map_prefetch", true);
             blastEffects = b.comment("Incoming shows and plays its own strike blasts: flash, fireball, smoke, dust, debris, the blast wave, its sound and echo,",
-                            "the jolt and hearing loss, and the bunker bomb's impact, ground tremor, gas vent and collapse. Turn off only when",
-                            "another mod shows explosions instead (for example Explosion Overhaul set to handle Incoming's projectiles). Only",
+                            "the jolt and hearing loss, and the bunker bomb's impact, ground tremor, gas vent and collapse. Turning this off hides these",
+                            "effects but does not make another mod replace them. Only",
                             "this player's picture and sound change: destruction and damage are the server's. Air defence hits and nuclear",
                             "blasts stay Incoming's.")
                     .translation("incoming.config.blast_effects").define("blast_effects", true);

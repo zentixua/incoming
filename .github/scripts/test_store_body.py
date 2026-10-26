@@ -71,9 +71,19 @@ class StoreBodyTest(unittest.TestCase):
                 else:
                     self.reply(404, {})
 
+            def valid_gallery_query(self):
+                # Labrinth rejects present-but-empty optional strings on POST and PATCH.
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if any(query.get(key) == [""] for key in ("title", "description")):
+                    self.reply(400, {"error": "validation", "description": "Gallery text must not be empty"})
+                    return False
+                return True
+
             def do_POST(self):
                 raw = self.rfile.read(int(self.headers["Content-Length"]))
                 if urlsplit(self.path).path.endswith("/gallery"):
+                    if not self.valid_gallery_query():
+                        return
                     writes.append({"method": "POST", "path": self.path})
                     self.reply(204, {})
                     return
@@ -85,7 +95,14 @@ class StoreBodyTest(unittest.TestCase):
 
             def do_PATCH(self):
                 if urlsplit(self.path).path.endswith("/gallery"):
-                    writes.append({"method": "PATCH", "path": self.path})
+                    if not self.valid_gallery_query():
+                        return
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    image = next(image for image in gallery if image["url"] == query["url"][0])
+                    for key in ("title", "description"):
+                        if key in query:
+                            image[key] = query[key][0]
+                    writes.append({"method": "PATCH", "path": self.path, "stored": image.copy()})
                 else:
                     writes.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
                 self.reply(204, {})
@@ -102,7 +119,7 @@ class StoreBodyTest(unittest.TestCase):
                 ru.write_text("\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442\n", encoding="utf-8")
             configured_gallery = []
             if with_gallery:
-                for index in range(2):
+                for index in range(3):
                     image = folder / f"image-{index}.jpg"
                     image.write_bytes(f"fixture image {index}".encode())
                     sha = hashlib.sha1(image.read_bytes()).hexdigest()
@@ -113,6 +130,11 @@ class StoreBodyTest(unittest.TestCase):
                     configured_gallery.append({"file": str(image), "featured": index == 0,
                                                "title": 'New "cover" & caption' if index == 0 else "Second image"})
                 configured_gallery[0]["description"] = "New description & details"
+                configured_gallery[1]["title"] = ""
+                configured_gallery[2].update(title=None, description=None)
+                image = folder / "new-image.jpg"
+                image.write_bytes(b"new fixture image")
+                configured_gallery.append({"file": str(image), "description": ""})
                 gallery.append({"url": "https://cdn.example/obsolete.jpg", "featured": True, "ordering": 0})
             (folder / "store.json").write_text(json.dumps({"slug": "fixture", "gallery": configured_gallery}))
             (folder / "fixture.jar").write_bytes(b"fixture jar")
@@ -152,17 +174,22 @@ class StoreBodyTest(unittest.TestCase):
         result, writes = self.run_page(exists=True, with_gallery=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         mutations = writes[1:]  # The first write updates the project body.
-        self.assertEqual([entry["method"] for entry in mutations], ["PATCH", "PATCH", "DELETE"])
-        for index, entry in enumerate(mutations[:2]):
+        self.assertEqual([entry["method"] for entry in mutations], ["PATCH", "PATCH", "PATCH", "POST", "DELETE"])
+        for index, entry in enumerate(mutations[:3]):
             url = urlsplit(entry["path"])
             self.assertEqual(url.path, "/project/fixture/gallery")
-            self.assertEqual(parse_qs(url.query, keep_blank_values=True), {
+            expected = {
                 "url": [f"https://cdn.example/optimized-{index}.jpg"],
                 "featured": ["true" if index == 0 else "false"], "ordering": [str(index)],
-                "title": ['New "cover" & caption' if index == 0 else "Second image"],
-                "description": ["New description & details" if index == 0 else ""],
-            })
-        self.assertEqual(parse_qs(urlsplit(mutations[2]["path"]).query),
+            }
+            if index == 0:
+                expected |= {"title": ['New "cover" & caption'], "description": ["New description & details"]}
+            self.assertEqual(parse_qs(url.query, keep_blank_values=True), expected)
+            self.assertEqual(entry["stored"]["title"], 'New "cover" & caption' if index == 0 else "Old title")
+            self.assertEqual(entry["stored"]["description"], "New description & details" if index == 0 else "Old description")
+        self.assertEqual(parse_qs(urlsplit(mutations[3]["path"]).query, keep_blank_values=True),
+                         {"ext": ["jpg"], "ordering": ["3"], "featured": ["false"]})
+        self.assertEqual(parse_qs(urlsplit(mutations[4]["path"]).query),
                          {"url": ["https://cdn.example/obsolete.jpg"]})
 
 

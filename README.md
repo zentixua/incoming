@@ -62,7 +62,8 @@ All of these are optional:
 - **[LOD Server Support](https://modrinth.com/mod/lod-server-support)** on the server and the client (with Voxy or without it): the targeting map, sight lines and
   sound around hills use the distant terrain the server sends. Not in single-player (a world opened to LAN serves it).
 - **[Distant Horizons](https://modrinth.com/mod/distanthorizons)** 3.3 or newer, with API 7: the targeting map shows distant terrain where LOD Server Support is not serving.
-  Supported distant damage updates appear without visiting the chunk, through queues and asynchronous LOD writes;
+  DH must also be installed where the world runs (single-player, the LAN host or the dedicated server) for its damage
+  updates. Supported distant damage updates appear without visiting the chunk, through queues and asynchronous LOD writes;
   [preparation and delays](docs/guide/nuke.md#what-happens) depend on the carrier and the terrain.
 - **[Voxy](https://modrinth.com/mod/voxy)** 0.2.16-beta (on NeoForge through **[Roxy](https://modrinth.com/mod/roxy)**): distant terrain hides projectiles, blasts and smoke beyond your
   render distance, with and without shaders, and strike damage far away (craters, nuclear ruins and scorch, dark
@@ -76,7 +77,7 @@ All of these are optional:
 - **Explosion mods**: every explosion of a conventional strike carries its
   projectile as the source (`incoming:drone`, `incoming:loiter`, `incoming:cruise_missile`, `incoming:rocket`,
   `incoming:bunker_buster`). [Explosion Overhaul](https://modrinth.com/mod/explosionoverhaul) 1.21.1-2.1.0 has no
-  per-source `VANILLA`/blacklist setting. Incoming's "Incoming's blast effects" switch hides its conventional
+  per-source `VANILLA`/blacklist setting. The "Incoming's blast effects" switch hides its conventional
   picture and sound; it does not guarantee replacement effects from another mod. Destruction and damage remain
   server-side; SAM and nuclear effects keep working.
 - **Iris**: the nuclear effects render with shaders.

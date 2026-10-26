@@ -37,10 +37,9 @@ version? Run `/lss clearcache` once on that server.
   Reduce simultaneous orders and avoid many far targets in unexplored terrain, which need chunk generation.
   The owner can lower [`performance.work_ms_per_tick`](settings.md#world-settings) from its 30 ms default
   (range 5–45); destruction and ruins then take longer to finish. It does not limit every other mod or chunk generation.
-- Memory depends on the modpack and the scene. Check actual usage and pauses before changing it; there is no measured
-  universal 8 GB requirement for Incoming alone.
+- Memory depends on the modpack and the scene. Check actual usage and pauses before changing the allocation.
 
-**A launcher or SAM does not fire.** RMB on it with an empty hand shows why. A SAM needs open sky, missiles in stock and
+**A launcher or SAM does not fire.** RMB on it with an empty hand shows why. A SAM needs open sky, missiles on its rails and
 a player nearby; it does not shoot down its own side's projectiles, ICBMs or Grad rockets.
 
 **The camera says "Nothing in flight".** The camera shows only your own projectiles that are already launched.

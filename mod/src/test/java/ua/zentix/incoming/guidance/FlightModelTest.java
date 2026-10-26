@@ -4,6 +4,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.sound.Noise;
 import ua.zentix.incoming.strike.WeaponSpec;
 
 import java.util.List;
@@ -117,6 +118,21 @@ class FlightModelTest {
                 assertTrue(Math.toDegrees(Math.atan2(-v.y, v.horizontalDistance())) > el, "the descent is steeper than the ascent: " + to);
             }
         }
+    }
+
+    /** Fixed launchers solve GAME exit speed for range; long shots can already be supersonic. */
+    @Test
+    void gameGradLongShotCanBeSupersonic() {
+        Vec3 from = new Vec3(0, 64, 0);
+        Ballistics.Drag drag = WeaponSpec.ROCKET.airframe().drag(0);
+        float elevation = WeaponSpec.ROCKET.rack().elevation();
+        double sound = Noise.SOUND / 20;
+        double near = Ballistics.aim(from, from.add(6000, 0, 0), elevation, drag, Ballistics.Wind.CALM).length();
+        double far = Ballistics.aim(from, from.add(7000, 0, 0), elevation, drag, Ballistics.Wind.CALM).length();
+        double atTenKm = Ballistics.aim(from, from.add(10000, 0, 0), elevation, drag, Ballistics.Wind.CALM).length();
+        assertTrue(near < sound, "GAME Grad at 6 km is subsonic");
+        assertTrue(far > sound, "GAME Grad at 7 km is supersonic");
+        assertEquals(480, atTenKm * 20, 20, "GAME Grad at 10 km leaves at about 480 m/s");
     }
 
     /** Resistance: the projectile must be launched faster than in a parabola - it would not have reached further with its weight alone. */
