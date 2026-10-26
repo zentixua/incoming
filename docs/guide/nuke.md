@@ -23,11 +23,11 @@ By default only operators can.
 
 ![Console with the nuclear warhead: yield slider and burst height](img/remote-nuke.png)
 
-The ICBM lifts off behind you; its flight timer is 90 seconds by default (`nuclear.flight_time`).
+The ICBM lifts off behind you; its flight timer is 1800 ticks (90 seconds at 20 TPS) by default (`nuclear.flight_time`, in ticks).
 
 If the world owner has allowed nuclear weapons for everyone, a player without operator rights needs a second key
 whenever someone else is online: another player within 16 blocks presses `.` within 30 seconds. Every player is told
-about such a launch. The ordinary launching player cannot call it off once confirmed; an operator or the host can
+about such a launch. Once ordered, the ordinary launching player cannot recall the nuclear strike, even while it waits for a second key; an operator or the host can
 abort it with `/incoming clear`. The alarm at the target lasts at least 90 seconds: a missile or B-2
 with a nuclear warhead takes off 90 seconds after the alarm starts.
 

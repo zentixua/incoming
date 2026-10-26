@@ -44,13 +44,14 @@ use AI assistance. Verify the current disclosure controls and saved value in the
 
 ## Optional dependencies and sides
 
-All rows are optional for Incoming. Rendering dependencies belong on clients; they are not dedicated-server requirements.
+All rows are optional for Incoming. Voxy and Roxy belong on clients. DH rendering also belongs on clients, but
+Incoming's DH damage updates need DH where the world runs, including a dedicated server.
 
 | Integration | Side and version | Upload relation |
 |---|---|---|
 | Create | Client and server; recipes use its parts when present | Optional on both stores |
 | Create Aeronautics + Sable | Client and server; Sable 2.0.6+ | Both optional on Modrinth; Sable on CurseForge; Aeronautics has no configured CurseForge alias |
-| Distant Horizons | Client rendering; 3.3+ with API 7, integration developed against 3.3.3 | Optional on both stores |
+| Distant Horizons | Clients for rendering; also where the world runs for DH damage updates; 3.3+ with API 7, developed against 3.3.3 | Optional on both stores |
 | Voxy + Roxy | Clients; original Fabric Voxy 0.2.16-beta for MC 1.21.11, translated by Roxy to NeoForge 1.21.1 | Both optional on Modrinth; Roxy on CurseForge; no verified Voxy CurseForge alias |
 | LOD Server Support | Server and clients; Incoming targets NeoForge 0.19.0 | Optional on Modrinth; no verified CurseForge alias |
 

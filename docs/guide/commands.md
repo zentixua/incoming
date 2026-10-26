@@ -40,17 +40,20 @@ number: `/incoming nuke 15 ground`.
 
 | Command | What it does |
 |---|---|
-| `/incoming clear` | abort your conventional strikes; for an operator or the host, every player's strikes, nuclear ones included |
+| `/incoming clear` | cancel your conventional salvos and recall eligible projectiles; operators or the host abort every player's strikes, including nuclear ones |
 | `/incoming menu` | console |
 | `/incoming help` | short help in chat |
 | `/incoming give [players]` | give a Strike Designator (operators only) |
 | `/incoming radiation [player]`, `radiation clear [players]` | radiation dose, clear radiation (operators only) |
 
+For ordinary players, Grad rockets already in flight and released bombs continue to their targets; nuclear orders
+cannot be recalled, including those waiting for a second key.
+
 ## Power grid
 
 Operators only. Coordinates and node IDs refer to the command's dimension, except `status` and a bare `restore`,
 which cover all dimensions. Optional coordinates default to your position; optional radii default to
-`grid.node_radius` (512 blocks). New nodes and outages are capped by `grid.max_radius` (4096 blocks by default).
+`grid.node_radius` (512 blocks by default). New nodes and outages are capped by `grid.max_radius` (4096 blocks by default).
 
 | Command | What it does |
 |---|---|

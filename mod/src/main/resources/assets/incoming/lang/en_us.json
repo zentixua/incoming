@@ -132,7 +132,7 @@
   "incoming.configuration.title": "Incoming settings",
   "incoming.config.scale": "Scale",
   "incoming.config.scale_preset": "Scale preset",
-  "incoming.config.scale_preset.tooltip": "GAME (default): game flight speeds and heights, full nuclear radii, and the distant nuclear wave at 0.20 of the speed of sound. REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense still use the game model. CUSTOM: uses flight speed here and wave speed and radius scale in Nuclear. A radius scale below 1 shrinks nuclear effects.",
+  "incoming.config.scale_preset.tooltip": "GAME (default): game flight speeds and heights, full nuclear radii, and the distant nuclear wave at 0.20 of the speed of sound. REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense use the game model. CUSTOM: uses flight speed here and wave speed and radius scale in Nuclear. A radius scale below 1 shrinks nuclear effects.",
   "incoming.config.flight_speed": "Flight speed",
   "incoming.config.flight_speed.tooltip": "Works with CUSTOM. Flight speeds and altitudes: 0 is the game values (slower and lower than in life), 1 is true to life. Turns stay game values; flight time stays, so a faster weapon starts further away",
   "incoming.config.world": "Damage and alerts",
