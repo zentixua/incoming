@@ -152,11 +152,11 @@ class FireRaysTest {
     @Test
     void heardFiresJoinTheMixOnTheirFirstTick() {
         Map<String, ToDoubleFunction<Vec3>> worlds = Map.of(
-                "всё открыто", to -> 1,
-                "всё за стеной", to -> 0,
-                "стена на востоке", to -> to.x > EAR.x ? 0 : 1);
+                "all open", to -> 1,
+                "all behind a wall", to -> 0,
+                "wall to the east", to -> to.x > EAR.x ? 0 : 1);
         for (var w : worlds.entrySet()) {
-            boolean wall = w.getKey().equals("стена на востоке");
+            boolean wall = w.getKey().equals("wall to the east");
             for (double[] r : new double[][]{{40, 40}, {1700, 1900}}) {
                 // the fire is exactly on the border of sectors (for 30 on the ring - at 270°) or in 40 m in a cage near the wall (x = x ear)
                 //  stands on the other side of the wall from its sector: the wall is half a circle - far away and without such
