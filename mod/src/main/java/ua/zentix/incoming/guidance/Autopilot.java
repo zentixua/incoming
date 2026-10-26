@@ -200,7 +200,7 @@ public final class Autopilot {
      * и узкий дом между ними, а фильтр высоты сглаживал бы короткий пик: ракета на бреющем и шахеды залпа бились бы в них.
      */
     public static double reliefAhead(Craft c, Vec3 nav, Turn turn, WeaponSpec.Airframe air) {
-        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c::relief);
+        return climbOver(track(c, nav, turn, air.attack().reattackMin(), air.reliefLookahead()), c.speed(), air.handling().climbAngle(), c.reliefSurvey());
     }
 
     /**

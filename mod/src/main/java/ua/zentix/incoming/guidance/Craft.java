@@ -35,6 +35,11 @@ public interface Craft {
      */
     double relief(int x, int z);
 
+    /** Новый вид рельефа на одно измерение; снаряд переиспользует чанки и колонки только в пределах этого вызова. */
+    default Corridor.Relief reliefSurvey() {
+        return this::relief;
+    }
+
     /**
      * Сколько блоков прямой до точки {@code to} свободно от блоков: расстояние до первой закрытой клетки или
      * {@link Double#POSITIVE_INFINITY}, если свободна вся прямая, кроме последних {@code margin} блоков у самой точки

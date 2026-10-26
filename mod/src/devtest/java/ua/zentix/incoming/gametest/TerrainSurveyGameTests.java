@@ -21,6 +21,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.entity.CruiseMissileEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.guidance.Route;
+import ua.zentix.incoming.guidance.Corridor;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.FlightTickets;
 import ua.zentix.incoming.strike.VirtualFlights;
@@ -109,6 +110,7 @@ public final class TerrainSurveyGameTests {
                 // Первый вопрос заказывает чтение и ответа сразу не даёт
                 Terrain.Surface left = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
                 h.assertTrue(left != null && left.source() == Terrain.Source.DISK && left.y() == top, "выгруженный чанк не оставил карту: " + left);
+                assertReliefBand(h, x, z);
                 survey.forget(c.toLong());
                 h.assertTrue(survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z) == null, "съёмка ответила в тике вопроса: она ждала диск");
                 stage[0] = 1;
@@ -122,6 +124,7 @@ public final class TerrainSurveyGameTests {
             h.assertTrue(s.source() == Terrain.Source.DISK && s.y() == top, "столб: " + s + " вместо " + top + " с диска");
             Terrain.Surface next = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, x + 3, z, Terrain.Allowed.RELIEF);
             h.assertTrue(next.source() == Terrain.Source.DISK && next.y() == beside, "соседняя колонка: " + next + " вместо " + beside);
+            assertReliefBand(h, x, z);
             h.assertTrue(unloaded(level, List.of(c)), "чанк загружен");
         });
     }
@@ -145,6 +148,7 @@ public final class TerrainSurveyGameTests {
             Terrain.Surface s = survey.at(level, Heightmap.Types.MOTION_BLOCKING, x, z);
             h.assertTrue(s != null, "нет ответа генератора");
             h.assertTrue(s.source() == Terrain.Source.GENERATOR && s.y() == expected, "генератор: " + s + " вместо " + expected);
+            assertReliefBand(h, x, z);
             h.assertTrue(unloaded(level, List.of(c)), "чанк появился в памяти");
         });
     }
@@ -184,6 +188,12 @@ public final class TerrainSurveyGameTests {
             Terrain.Surface roof = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
                     far.getMiddleBlockX(), far.getMiddleBlockZ(), Terrain.Allowed.RELIEF);
             h.assertTrue(roof.source() == Terrain.Source.CEILING && roof.y() > to.y, "нет потолка за разрывом: " + roof);
+            for (Terrain.Allowed allowed : new Terrain.Allowed[]{Terrain.Allowed.RELIEF, Terrain.Allowed.VIRTUAL_RELIEF}) {
+                double expected = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
+                        far.getMiddleBlockX(), far.getMiddleBlockZ(), allowed).y();
+                h.assertTrue(Terrain.relief(nether, allowed).at(far.getMiddleBlockX(), far.getMiddleBlockZ()) == expected,
+                        "пакетный датчик изменил потолок Незера");
+            }
             h.assertTrue(Double.isInfinite(missile.sightline(to)), "потолок за разрывом закрыл прямую");
             // A real block on the near ready segment must still block the in-world sensor.
             BlockPos obstacle = BlockPos.containing(from.add(2, 0, 0));
@@ -197,6 +207,35 @@ public final class TerrainSurveyGameTests {
             }
             h.assertFalse(Terrain.ready(nether, near.x + 16, near.z), "датчик загрузил разрыв");
         });
+    }
+
+    /** Новый замер видит изменение блока немедленно, даже в том же тике; старые высоты не переживают полосу. */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "survey_reuse", skyAccess = true)
+    public static void reliefBandSeesChangedChunk(GameTestHelper h) {
+        BlockPos p = h.absolutePos(CENTER).above(50);
+        ServerLevel level = h.getLevel();
+        assertReliefBand(h, p.getX(), p.getZ());
+        var before = Terrain.relief(level, Terrain.Allowed.RELIEF);
+        double old = before.at(p.getX(), p.getZ());
+        level.setBlockAndUpdate(p, Blocks.STONE.defaultBlockState());
+        h.assertTrue(p.getY() + 1 > old, "столбик не выше старой карты");
+        h.assertTrue(Terrain.relief(level, Terrain.Allowed.RELIEF).at(p.getX(), p.getZ()) == p.getY() + 1,
+                "новое измерение сохранило прежнюю высоту");
+        assertReliefBand(h, p.getX(), p.getZ());
+        level.setBlockAndUpdate(p, Blocks.AIR.defaultBlockState());
+        assertReliefBand(h, p.getX(), p.getZ());
+        h.succeed();
+    }
+
+    private static void assertReliefBand(GameTestHelper h, int x, int z) {
+        double[] track = {x - 3.5, z - 2.5, x + 0.5, z + 0.5, x + 3.5, z - 2.5, x - 3.5, z - 2.5};
+        Corridor.Climb climb = new Corridor.Climb(2, 0.3);
+        for (Terrain.Allowed allowed : new Terrain.Allowed[]{Terrain.Allowed.RELIEF, Terrain.Allowed.VIRTUAL_RELIEF}) {
+            double old = Corridor.highest(track, 1.5, climb,
+                    (cx, cz) -> Terrain.estimate(h.getLevel(), Heightmap.Types.MOTION_BLOCKING, cx, cz, allowed).y());
+            double batched = Corridor.highest(track, 1.5, climb, Terrain.relief(h.getLevel(), allowed));
+            h.assertTrue(old == batched, "максимум полосы изменился: " + old + " → " + batched);
+        }
     }
 
     /** Чанков в замере {@link #surveyNeverWaitsInTick}: квадрат 16×16. */

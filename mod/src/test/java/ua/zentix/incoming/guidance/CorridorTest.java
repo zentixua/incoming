@@ -78,6 +78,51 @@ class CorridorTest {
         assertEquals(90, h);
     }
 
+    /** Все геометрические посещения остаются: на сгибе/повторном отрезке набор до одной колонки разный. */
+    @Test
+    void surveyReusesOnlyHeightsAndChunkViews() {
+        double[][] tracks = {
+                {0.3, 0, 0.3, 256},                         // тонкий столбик
+                {-32.5, -32.5, 64.5, 64.5},                 // диагональ и отрицательные чанки
+                {0.5, 0, 0.5, 50, 50.5, 50},              // поворот
+                {0.5, 0, 0.5, 50, 50.5, 50, 0.5, 0},      // несколько отрезков и повторная колонка
+                {0.5, 0, 0.5, 50, 0.5, 0},                // возврат по той же полосе
+                {-16, -16}, {0, 0, 0, 0, 16, 16}          // точка и нулевой отрезок
+        };
+        Corridor.Relief heights = (x, z) -> x == 1 && z == 100 ? 300 : 64 + Math.floorMod(x * 31 + z * 7, 90);
+        for (double[] track : tracks) {
+            for (Corridor.Climb climb : new Corridor.Climb[]{Corridor.Climb.NONE, new Corridor.Climb(10, 0.3)}) {
+                Set<Long> columns = new HashSet<>(), chunks = new HashSet<>();
+                int[] visits = {0}, reads = {0}, views = {0};
+                double old = Corridor.highest(track, HALF_WIDTH, climb, (x, z) -> {
+                    visits[0]++;
+                    columns.add(key(x, z));
+                    chunks.add(key(x >> 4, z >> 4));
+                    return heights.at(x, z);
+                });
+                Corridor.Survey survey = new Corridor.Survey((cx, cz) -> {
+                    views[0]++;
+                    return (x, z) -> {
+                        assertEquals(cx, x >> 4);
+                        assertEquals(cz, z >> 4);
+                        reads[0]++;
+                        return heights.at(x, z);
+                    };
+                });
+                int[] sampledVisits = {0};
+                double batched = Corridor.highest(track, HALF_WIDTH, climb, (x, z) -> {
+                    sampledVisits[0]++;
+                    return survey.at(x, z);
+                });
+                assertEquals(old, batched, 0, java.util.Arrays.toString(track));
+                assertEquals(visits[0], sampledVisits[0], "геометрические отсчёты");
+                assertEquals(chunks.size(), views[0], "один вид на уникальный чанк");
+                assertEquals(columns.size(), reads[0], "одна высота на уникальную колонку");
+                assertTrue(reads[0] < visits[0], "у полосы должны быть повторные колонки");
+            }
+        }
+    }
+
     private static long key(int x, int z) {
         return ((long) x << 32) ^ (z & 0xffffffffL);
     }

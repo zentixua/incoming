@@ -12,6 +12,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.guidance.Corridor;
 
 import java.util.EnumSet;
 import java.util.Optional;
@@ -259,6 +260,30 @@ public final class Terrain {
      */
     public static Surface estimate(Level level, Heightmap.Types type, int x, int z, Allowed allowed) {
         return choose(new LevelColumn(level, type, x, z), allowed);
+    }
+
+    /**
+     * Рельеф MOTION_BLOCKING на одно синхронное измерение полосы в потоке сервера. Разрешены только наборы датчика:
+     * готовый чанк (потолок — только в мире), затем съёмка, иначе низ мира. Ни вид чанка, ни высоты не переживают
+     * измерение; фоновые ответы по-прежнему видны только после TerrainSurvey.publish в конце тика.
+     */
+    public static Corridor.Relief relief(Level level, Allowed allowed) {
+        if (allowed != Allowed.RELIEF && allowed != Allowed.VIRTUAL_RELIEF)
+            throw new IllegalArgumentException("Relief survey requires a relief source set");
+        Heightmap.Types type = Heightmap.Types.MOTION_BLOCKING;
+        return new Corridor.Survey((cx, cz) -> {
+            if (level instanceof ServerLevel server) {
+                LevelChunk chunk = server.getChunkSource().getChunkNow(cx, cz);
+                Source source = level.dimensionType().hasCeiling() ? Source.CEILING : Source.CHUNK;
+                if (chunk != null && allowed.permits(source))
+                    return (x, z) -> chunk.getHeight(type, x & 15, z & 15) + 1;
+                TerrainSurvey.View view = level.dimensionType().hasCeiling() ? null : TerrainSurvey.get(server).view(server, type, cx, cz);
+                if (view != null && allowed.permits(view.source())) return (x, z) -> view.height().applyAsInt(x, z);
+                int bottom = level.getMinBuildHeight();
+                return (x, z) -> bottom;
+            }
+            return (x, z) -> estimate(level, type, x, z, allowed).y();
+        });
     }
 
     /** Что мир знает о колонке — по источникам {@link Source}; {@link #generatorBase} дорог и зовётся, только если нужен. */
