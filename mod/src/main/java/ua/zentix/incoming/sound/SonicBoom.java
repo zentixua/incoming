@@ -1,57 +1,57 @@
 package ua.zentix.incoming.sound;
 
 /**
- * N-волна сверхзвукового корпуса у уха — упрощённый метод Карлсона (H. W. Carlson, «Simplified sonic-boom prediction»,
- * NASA TP-1122, 1978, ф. 1 и 2), без Minecraft:
+ * Supersonic body N-wave at the ear — simplified Carlson method (H. W. Carlson, “Simplified sonic-boom prediction”,
+ * NASA TP-1122, 1978, eqs. 1 and 2), without Minecraft:
  * <pre>
  * Δp = K<sub>p</sub>·K<sub>R</sub>·√(p<sub>v</sub>·p<sub>g</sub>)·(M² − 1)^⅛·h<sub>e</sub>^−¾·l^¾·K<sub>S</sub>
- * Δt = K<sub>t</sub>·(3,42 / a<sub>v</sub>)·M / (M² − 1)^⅜·h<sub>e</sub>^¼·l^¾·K<sub>S</sub>
+ * Δt = K<sub>t</sub>·(3.42 / a<sub>v</sub>)·M / (M² − 1)^⅜·h<sub>e</sub>^¼·l^¾·K<sub>S</sub>
  * </pre>
- * У земли атмосфера однородна: K<sub>p</sub> = K<sub>t</sub> = 1, p<sub>v</sub> = p<sub>g</sub>; отражение от земли
- * K<sub>R</sub> = 2 (так у Карлсона). Форма корпуса без подъёмной силы (снаряд, бомба, ракета) — по миделю:
- * K<sub>S</sub> = 0,685·√A<sub>max</sub> / (l^¾·l<sub>e</sub>^¼), l<sub>e</sub> = l (параметр формы 0,65–0,69 в
- * примерах Карлсона, рис. 2). h<sub>e</sub> — расстояние от линии полёта до уха; метод — для дальнего поля, ближе
- * длины корпуса берётся сама длина.
+ * Near ground, homogeneous atmosphere: K<sub>p</sub> = K<sub>t</sub> = 1, p<sub>v</sub> = p<sub>g</sub>;
+ * ground reflection K<sub>R</sub> = 2 (as Carlson). Non-lifting body shape (projectile, bomb, missile) from frontal area:
+ * K<sub>S</sub> = 0.685·√A<sub>max</sub> / (l^¾·l<sub>e</sub>^¼), l<sub>e</sub> = l (shape parameter 0.65–0.69 in
+ * Carlson examples, fig. 2). h<sub>e</sub> is flight-line-to-ear distance; method is far-field, using body length as
+ * minimum distance.
  */
 public final class SonicBoom {
-    /** Отражение от земли и параметр формы (TP-1122). */
+    /** Ground reflection and shape parameter (TP-1122). */
     static final double REFLECTION = 2, SHAPE = 0.685;
-    /** Давление у земли, Па. */
+    /** Ground pressure, Pa. */
     static final double PRESSURE = Air.KPA * 1000;
 
     private SonicBoom() {}
 
-    /** Скачок давления и длительность N-волны. */
+    /** Pressure jump and N-wave duration. */
     public record Wave(double pressure, double seconds) {}
 
     /**
-     * N-волна у уха.
+     * N-wave at the ear.
      *
-     * @param mach     число Маха корпуса (больше 1)
-     * @param distance расстояние от линии полёта до уха, м
-     * @param body     корпус
+     * @param mach     body Mach number (above 1)
+     * @param distance flight-line-to-ear distance, m
+     * @param body     body
      */
     public static Wave at(double mach, double distance, Noise.Body body) {
         double l = body.length();
         return signature(mach, Math.max(distance, l), l, shape(body.area(), l, l), PRESSURE, PRESSURE, Noise.SOUND, 1, 1);
     }
 
-    /** Множитель формы K<sub>S</sub> по наибольшему сечению {@code area}, м², длине {@code l} и длине до него {@code le}, м. */
+    /** Shape factor K<sub>S</sub> from maximum section {@code area}, m², length {@code l} and distance to it {@code le}, m. */
     static double shape(double area, double l, double le) {
         return SHAPE * Math.sqrt(area) / (Math.pow(l, 0.75) * Math.pow(le, 0.25));
     }
 
     /**
-     * Ф. 1 и 2 TP-1122 целиком.
+     * Full TP-1122 eqs. 1 and 2.
      *
-     * @param h  эффективная высота, м
-     * @param l  длина, м
-     * @param ks множитель формы
-     * @param pv давление у корпуса, Па
-     * @param pg давление у земли, Па
-     * @param av скорость звука у корпуса, м/с
-     * @param kp множитель давления атмосферы
-     * @param kt множитель длительности атмосферы
+     * @param h  effective height, m
+     * @param l  length, m
+     * @param ks shape factor
+     * @param pv pressure at body, Pa
+     * @param pg ground pressure, Pa
+     * @param av sound speed at body, m/s
+     * @param kp atmospheric pressure factor
+     * @param kt atmospheric duration factor
      */
     static Wave signature(double mach, double h, double l, double ks, double pv, double pg, double av, double kp, double kt) {
         double m2 = mach * mach - 1, scale = Math.pow(l, 0.75) * ks;

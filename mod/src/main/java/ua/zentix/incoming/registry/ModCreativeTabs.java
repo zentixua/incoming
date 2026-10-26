@@ -19,7 +19,7 @@ public final class ModCreativeTabs {
                 output.accept(ModItems.GEIGER_COUNTER.get());
                 output.accept(ModItems.TRINITITE.get());
                 output.accept(ModItems.SUBSTATION.get());
-                // боеприпасы — в порядке пульта (WeaponType.menu), ядерная БЧ на носитель — за МБР
+                // munitions in designator order (WeaponType.menu), carrier nuclear warhead after ICBM
                 for (WeaponType w : WeaponType.menu()) output.accept(w.spec().munition().item().get());
                 output.accept(ModItems.NUCLEAR_WARHEAD.get());
                 output.accept(ModItems.FIXED_LAUNCHER.get());

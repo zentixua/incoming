@@ -2,11 +2,10 @@
 
 #moj_import <light.glsl>
 
-// Модели снарядов вдали в плитки атласа (client/render/FarModels). Сетка детали лежит в видеопамяти как есть:
-// ModelViewMat ставит деталь в оси взгляда на модель, ProjMat — перспектива из глаза в плитку, NormalMat — поворот
-// нормали детали в оси мира. Остальное — как у ванильной сущности rendertype_entity_cutout_no_cull, без тумана и
-// вспышки урона: два направленных света по нормали в осях мира и свет неба по карте освещения; ColorModulator —
-// прозрачность размытого диска винта.
+// Distant projectile models into atlas tiles (client/render/FarModels). Part mesh stays in GPU memory as is:
+// ModelViewMat puts it in model-view axes, ProjMat projects from eye into tile, NormalMat rotates part normals into
+// world axes. Otherwise vanilla rendertype_entity_cutout_no_cull without fog or damage flash: two directional lights
+// using world-space normals and skylight from the lightmap; ColorModulator is blurred propeller-disk transparency.
 in vec3 Position;
 in vec4 Color;
 in vec2 UV0;

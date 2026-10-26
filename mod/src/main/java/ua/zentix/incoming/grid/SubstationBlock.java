@@ -23,14 +23,14 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.ClientHooks;
 
 /**
- * Трансформаторная подстанция: поставленная — узел сети радиусом {@code grid.node_radius}; удар рядом выводит её
- * из строя, и район гаснет каскадом ({@link Blackouts}). Работает — гудит; выбита — искрит и дымит, пока свет
- * не вернут. {@code powered} ставит сеть ({@link Substations#sync}), игрок его не меняет.
+ * Transformer substation: when placed, a grid node of radius {@code grid.node_radius}; a nearby strike knocks it out,
+ * and its area goes dark in a cascade ({@link Blackouts}). Working — hums; knocked out — sparks and smokes until power
+ * is restored. The grid sets {@code powered} ({@link Substations#sync}); players do not change it.
  */
 public class SubstationBlock extends HorizontalDirectionalBlock {
     public static final MapCodec<SubstationBlock> CODEC = simpleCodec(SubstationBlock::new);
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
-    /** Как модель: бетонная плита, бак с радиаторами по бокам, ряд вводов сверху (фасад — на север, повороты по 180° те же). */
+    /** As in the model: concrete slab, tank with side radiators, row of bushings on top (front faces north, same 180° rotations). */
     private static final VoxelShape SHAPE_NS = Shapes.or(Block.box(0, 0, 0, 16, 2, 16), Block.box(0.5, 2, 2, 15.5, 12, 14), Block.box(3.5, 12, 7, 12.5, 16, 9));
     private static final VoxelShape SHAPE_EW = Shapes.or(Block.box(0, 0, 0, 16, 2, 16), Block.box(2, 2, 0.5, 14, 12, 15.5), Block.box(7, 12, 3.5, 9, 16, 12.5));
 
@@ -79,19 +79,19 @@ public class SubstationBlock extends HorizontalDirectionalBlock {
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
-    /** Блок — выбитая подстанция (не под током). */
+    /** Block is a knocked-out substation (unpowered). */
     public static boolean out(BlockState state) {
         return state.getBlock() instanceof SubstationBlock && !state.getValue(POWERED);
     }
 
     /**
-     * Работает — гудит; выбита — трещит дугой и сыплет искрами, а над ней горит масло трансформатора (дым и звук —
-     * клиент, {@code ClientHooks.substation}: громкость по закону источника, дым — модель облака).
+     * Working — hums; knocked out — crackles with an arc and showers sparks, with transformer oil burning above it
+     * (smoke and sound on the client, {@code ClientHooks.substation}: volume by the source law, smoke by the cloud model).
      */
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         double x = pos.getX() + 0.5, y = pos.getY() + 0.9, z = pos.getZ() + 0.5;
-        // случайный тик блока рядом с игроком — в среднем раз в 2 с; запись гула 4 с с плавными краями, наложения не слышно
+        // random block animation near a player — once per 2 s on average; 4 s hum recording with faded ends, no audible overlap
         boolean spark = !state.getValue(POWERED) && random.nextInt(4) == 0;
         ClientHooks.get().substation(pos, state.getValue(POWERED), spark, 0.9f + random.nextFloat() * 0.2f);
         if (spark) {

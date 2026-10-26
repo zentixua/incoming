@@ -19,29 +19,29 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Ядерные события измерения (сохраняются в мире): случившиеся подрывы — по ним и сервер, и клиенты
- * считают разрушения, облако и осадки — и запланированные удары МБР (полёт — это таймер, а не сущность:
- * переживает перезапуск сервера и не держит чанков).
+ * Dimension nuclear events (saved in the world): detonations that have occurred — server and clients derive destruction,
+ * cloud and fallout from them — and scheduled ICBM strikes (flight is a timer, not an entity: survives server restarts
+ * and holds no chunks).
  */
 public final class NuclearEvents extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_nuclear";
     /**
-     * Подрыв забывается через 7 игровых суток: осадки к тому времени спадают в сотни раз. Разрушения помнятся
-     * дольше ({@link #past}): чанк, впервые загруженный через месяц, всё равно разрушен.
+     * Detonations are forgotten after 7 game days: fallout has weakened hundreds of times by then. Destruction is remembered
+     * longer ({@link #past}): a chunk first loaded a month later is still destroyed.
      */
     public static final long FORGET_AFTER = 7 * 24_000L;
 
     /**
-     * Запланированный удар: цель, мощность, подрыв, когда и откуда стартовала ракета.
+     * Scheduled strike: target, yield, burst type, when and where the missile launched.
      *
-     * @param surface цель — место на земле (с карты): подрыв на поверхности, какой бы ни была оценка высоты при пуске
+     * @param surface target is a ground position (from the map): surface detonation regardless of the launch height estimate
      */
     public record ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
                                   Vec3 launchPos, Optional<UUID> owner, boolean surface) {
         public static final Codec<ScheduledStrike> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("id").forGetter(ScheduledStrike::id),
                 Vec3.CODEC.fieldOf("target").forGetter(ScheduledStrike::target),
-                // удар, запущенный до предела 15 кт (сохранение старой версии), подрывается с пределом
+                // a strike launched before the 15 kt limit (old-version save) detonates with the limit applied
                 Codec.DOUBLE.fieldOf("yield").xmap(y -> Math.min(y, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD), y -> y)
                         .forGetter(ScheduledStrike::yieldKt),
                 Codec.BOOL.fieldOf("air_burst").forGetter(ScheduledStrike::airBurst),
@@ -54,10 +54,10 @@ public final class NuclearEvents extends SavedData {
     }
 
     private final List<Detonation> detonations = new ArrayList<>();
-    /** Забытые подрывы: ни осадков, ни картинки — только разрушения в чанках, которые загрузятся позже. */
+    /** Forgotten detonations: no fallout or visuals — only destruction in chunks loaded later. */
     private final List<Detonation> past = new ArrayList<>();
     private final List<ScheduledStrike> scheduled = new ArrayList<>();
-    /** Недорытые воронки: номер подрыва → сколько чанков уже вырыто. */
+    /** Unfinished craters: detonation number → number of chunks already dug. */
     private final Map<Integer, Integer> craters = new LinkedHashMap<>();
     private static final Codec<Map<Integer, Integer>> CRATERS_CODEC = Codec.unboundedMap(Codec.STRING.xmap(Integer::parseInt, String::valueOf), Codec.INT);
     private int nextId = 1;
@@ -75,7 +75,7 @@ public final class NuclearEvents extends SavedData {
         return detonations;
     }
 
-    /** Забытые подрывы, которые ещё разрушают загружающиеся чанки (см. {@link #prune}). */
+    /** Forgotten detonations still destroying chunks as they load (see {@link #prune}). */
     public List<Detonation> past() {
         return past;
     }
@@ -106,15 +106,15 @@ public final class NuclearEvents extends SavedData {
         return craters;
     }
 
-    /** Ход воронки: сколько чанков вырыто; {@code done} — вырыта целиком. */
+    /** Crater progress: chunks dug; {@code done} — fully dug. */
     public void craterProgress(int detonation, int chunks, boolean done) {
         Integer prev = done ? craters.remove(detonation) : craters.put(detonation, chunks);
         if (prev == null || prev != chunks || done) setDirty();
     }
 
     /**
-     * Отбой: запланированные удары отменены, подрывы забыты — нет больше ни осадков, ни разрушений в чанках,
-     * которые загрузятся потом. Разрушенное остаётся. Номера подрывов продолжают расти (отметки чанков верны).
+     * Cancel: scheduled strikes canceled, detonations forgotten — no more fallout or destruction in chunks loaded later.
+     * Existing destruction remains. Detonation numbers keep increasing (chunk marks remain valid).
      */
     public int clear() {
         int n = scheduled.size() + detonations.size();
@@ -126,7 +126,7 @@ public final class NuclearEvents extends SavedData {
         return n;
     }
 
-    /** Забыть старые подрывы: осадки и эффекты кончились, разрушения — остаются в {@link #past}. */
+    /** Forget old detonations: fallout and effects ended; destruction remains in {@link #past}. */
     public void prune(long now) {
         List<Detonation> faded = detonations.stream().filter(d -> now - d.gameTime() > FORGET_AFTER).toList();
         if (!faded.isEmpty()) {

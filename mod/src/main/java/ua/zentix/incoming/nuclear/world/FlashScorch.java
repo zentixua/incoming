@@ -29,48 +29,49 @@ import java.util.Map;
 import java.util.concurrent.Future;
 
 /**
- * Свет по земле в миг вспышки (план «ядерка уровня кино», шаг 3): всё, что световой импульс делает с миром, встаёт за
- * время самого импульса, а не с волной, — выгоревший дёрн и гарь, сгоревшие растения, растаявший снег, опалённые
- * биомы, гарь на гранях и пожары ({@link RuinPlanner#flash}: слой вспышки — часть плана руин без напора). Волна потом
- * ставит руины как прежде (по миру до вспышки) и меняет сверх слоя только то, что сделала она: содранный дёрн, завал,
- * проломы, сбитая часть пожаров ({@link RuinPlan#apply}).
+ * Ground effects at flash time (“cinema-level nuke” plan, step 3): everything thermal fluence does to the world is applied
+ * during the pulse itself, not with the wave — burned turf and char, burned plants, melted snow, scorched biomes, face
+ * char and fires ({@link RuinPlanner#flash}: flash layer is the ruin plan without dynamic pressure). The wave later
+ * applies ruins as before (from the pre-flash world), changing beyond the layer only what it causes: stripped turf,
+ * rubble, breaches, extinguished fire share ({@link RuinPlan#apply}).
  * <p>
- * Одна работа на подрыв (поток сервера, полоса ядерки общего бюджета, после руин, до которых
- * дошла волна, — из того, что они оставили: руины у фронта важнее слоя вдали, {@link NuclearWorld#tick}): в первой единице —
- * чанки в памяти, до которых дойдут руины ({@link ScarQueue#inRange}) и свет оставляет след ({@link #reach}), сперва те,
- * что видят игроки (ближние к игроку первыми), потом остальные от эпицентра; дальше по единице на чанк — снимки (из кэша
- * руин подрыва: те же снимки берут руины) и план слоя в фоне ({@link RuinWorkers}: видимые — ступенью видимых), и по
- * единице на готовый слой — запись в чанк, как руины ({@link RuinPlan#applyFlash}: прямо в секции, игрокам — пакетами
- * секций в том же тике, LOD Distant Horizons). Чанк встаёт не раньше, чем свет у его ближней к шару точки набрал порог
- * поджига ({@link Detonation#flashTicks}): у эпицентра — сразу, у края — к концу импульса (у 15 кт — 1,24 с, у 1 Мт —
- * 10 с). Огонь слоя — без тиков до руин чанка: он не растёт и не гаснет, пока их нет ({@link RuinPlan#applyFlash}).
+ * One job per detonation (server thread, shared budget nuclear lane, after ruins reached by the wave, using their
+ * remainder: front ruins matter more than distant flash layers, {@link NuclearWorld#tick}). First unit collects
+ * in-memory chunks that ruins will reach ({@link ScarQueue#inRange}) and light will mark ({@link #reach}), player-visible
+ * first (nearest player first), then others outward from epicenter; then one unit per chunk for snapshots (detonation
+ * ruin cache: same snapshots as ruins) and background layer plan ({@link RuinWorkers}: visible priority for visible
+ * chunks); one unit per ready layer writes it like ruins ({@link RuinPlan#applyFlash}: directly to sections, same-tick
+ * section packets to players, Distant Horizons LODs). A chunk is applied no earlier than light at its ground point
+ * nearest the ball reaches ignition threshold ({@link Detonation#flashTicks}): immediately near epicenter, near pulse
+ * end at the edge (15 kt — 1.24 s, 1 Mt — 10 s). Layer fire does not tick before chunk ruins: neither grows nor goes out
+ * until then ({@link RuinPlan#applyFlash}).
  * <p>
- * Слоя не получают: чанк, до которого волна дошла раньше слоя (у самого эпицентра; его руины — всё сразу, как прежде);
- * чанк у аппаратов Sable, чьи соседи не в памяти (Sable на каждое место читает соседей — запись загрузила бы их; руины
- * дождутся соседей сами); новые чанки, пока снимки и слои подрыва держат больше {@link NuclearPrep#PLANS_CAP} или куче
- * тесно ({@link HeapWatch}). Чанки, загруженные после подрыва, получают всё с руинами. Сама не сохраняется: импульс
- * длится секунды; что слой зажёг огонь, помнит сам чанк ({@link #mark}).
+ * No layer for: chunks the wave reached before the layer (at epicenter; their ruins apply everything at once as before);
+ * chunks near Sable craft without in-memory neighbors (Sable reads neighbors at every position — writing would load
+ * them; ruins wait for neighbors themselves); new chunks while detonation snapshots and layers exceed
+ * {@link NuclearPrep#PLANS_CAP} or heap is tight ({@link HeapWatch}). Chunks loaded after detonation get everything with
+ * ruins. Job is non-persistent: pulse lasts seconds; the chunk remembers that the layer lit fire ({@link #mark}).
  */
 public final class FlashScorch {
     final Detonation d;
-    /** Чанки, которые задала проверка (null — чанки в памяти в радиусе следа). */
+    /** Chunks specified by a check (null — in-memory chunks within scorch radius). */
     @Nullable
     private final long[] only;
     @Nullable
     private final ColumnScar.Budget fixedBudget;
-    /** Чанки по порядку (видимые игроку — первыми) и когда каждому вставать (игровое время); null — ещё не собраны. */
+    /** Chunks in order (player-visible first) and each application time (game time); null — not collected yet. */
     @Nullable
     private long[] order;
     private long[] due;
     private boolean[] seen;
     private int next, seenCount;
-    /** Отданные в фон слои: номер чанка в {@link #order} → задача. По порядку отдачи. */
+    /** Layers submitted to background: chunk index in {@link #order} → task. In submission order. */
     private final Map<Integer, Build> building = new LinkedHashMap<>();
     private int applied, stale, late, gone, waiting, skipped, failures, blocks, fires;
     private long nanos, lastApplied = -1;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
 
-    /** Фоновый слой: задача и когда она пошла в работу (игровое время; −1 — ещё ждёт в очереди пула). */
+    /** Background layer: task and work start time (game time; −1 — still waiting in pool queue). */
     private static final class Build {
         final Future<RuinPlan> task;
         long since = -1;
@@ -90,7 +91,7 @@ public final class FlashScorch {
         this.fixedBudget = budget;
     }
 
-    /** Для проверок: слой вспышки только этих чанков (они в памяти целиком), со своим счётчиком пожаров. */
+    /** For checks: flash layer only for these chunks (fully in memory), with its own fire counter. */
     public static FlashScorch forTest(Detonation d, long[] chunks, ColumnScar.Budget budget) {
         return new FlashScorch(d, chunks.clone(), budget);
     }
@@ -99,35 +100,35 @@ public final class FlashScorch {
         return d;
     }
 
-    /** Чанков, где слой встал (проверки). */
+    /** Chunks with layer applied (checks). */
     public int appliedChunks() {
         return applied;
     }
 
-    /** Чанков без слоя: у аппаратов Sable, чьи соседи не в памяти (проверки). */
+    /** Chunks without layer: near Sable craft whose neighbors are not in memory (checks). */
     public int waitingChunks() {
         return waiting;
     }
 
-    // ---------------------------------------------------------------- отметка на чанке
+    // ---------------------------------------------------------------- chunk mark
 
-    /** Слой вспышки подрыва {@code id} зажёг огонь в чанке (поток сервера; сохраняется с чанком). */
+    /** Detonation {@code id}'s flash layer lit fire in the chunk (server thread; saved with chunk). */
     static void mark(LevelChunk chunk, int id) {
         chunk.setData(ModAttachments.FLASH_LAYER, id);
         chunk.setUnsaved(true);
     }
 
-    /** В чанке стоит слой вспышки подрыва {@code id} с огнём, а его руин ещё нет. */
+    /** Chunk has detonation {@code id}'s flash layer with fire, but no ruins yet. */
     public static boolean marked(LevelChunk chunk, int id) {
         return marks(chunk.getExistingData(ModAttachments.FLASH_LAYER).orElse(0), id);
     }
 
-    /** Отметка {@code marker} (из чанка или его данных на диске) — слой подрыва {@code id}. */
+    /** {@code marker} (from chunk or disk data) belongs to detonation {@code id}'s layer. */
     static boolean marks(int marker, int id) {
         return id > 0 && marker == id;
     }
 
-    /** Руины подрыва {@code id} встали: отметка его слоя (и прежних) снимается. */
+    /** Detonation {@code id}'s ruins applied: remove its layer mark (and older marks). */
     static void unmark(LevelChunk chunk, int id) {
         int was = chunk.getExistingData(ModAttachments.FLASH_LAYER).orElse(0);
         if (was == 0 || was > id) return;
@@ -136,9 +137,9 @@ public final class FlashScorch {
     }
 
     /**
-     * Загружен чанк с отметкой слоя: руин не будет — подрыв забыт ({@link NuclearEvents}, ни среди идущих, ни среди
-     * прошлых), — true: огню слоя пора дать тики ({@link #burnOut}, в тике мира: при загрузке тики ещё не ставятся).
-     * Руины уже стоят — отметка снимается здесь же.
+     * Chunk loaded with layer mark but no ruins will follow — detonation forgotten ({@link NuclearEvents}, neither active
+     * nor past) — true: layer fire needs ticks ({@link #burnOut}, during world tick: ticks cannot yet be scheduled on load).
+     * If already ruined, remove mark here too.
      */
     static boolean forgotten(LevelChunk chunk, NuclearEvents events) {
         int id = chunk.getExistingData(ModAttachments.FLASH_LAYER).orElse(0);
@@ -151,8 +152,8 @@ public final class FlashScorch {
     }
 
     /**
-     * Руин подрыва, чей слой стоит в чанке, не будет: огню чанка — тики, как поставленному ({@code FireBlock.onPlace}:
-     * 30–39 тиков), отметка снимается (поток сервера, чанк в памяти целиком).
+     * The detonation whose layer is in the chunk will not produce ruins: schedule fire ticks as for placement
+     * ({@code FireBlock.onPlace}: 30–39 ticks), remove mark (server thread, chunk fully in memory).
      */
     static void burnOut(ServerLevel level, LevelChunk chunk) {
         LevelChunkSection[] sections = chunk.getSections();
@@ -174,8 +175,8 @@ public final class FlashScorch {
     }
 
     /**
-     * Для проверок: чанк с отметкой слоя загружен заново ({@link #forgotten}) — подрыв забыт: огню — тики сразу
-     * ({@link #burnOut}). false — подрыв ещё известен или отметки нет.
+     * For checks: marked chunk reloaded ({@link #forgotten}), detonation forgotten: schedule fire ticks immediately
+     * ({@link #burnOut}). false — detonation still known or no mark.
      */
     public static boolean burnOutForTest(ServerLevel level, LevelChunk chunk) {
         if (!forgotten(chunk, NuclearEvents.get(level))) return false;
@@ -183,11 +184,11 @@ public final class FlashScorch {
         return true;
     }
 
-    // ---------------------------------------------------------------- работа
+    // ---------------------------------------------------------------- work
 
     /**
-     * Докуда свет оставляет след, блоки по горизонтали от эпицентра: след на земле ({@link RuinPlanner#scorchReach}), пожары
-     * (поджиг на склоне к взрыву) и гарь на гранях (свет на высоте шара); не дальше радиуса руин — дальше их нет и у волны.
+     * Light scorch reach, horizontal blocks from epicenter: ground scorch ({@link RuinPlanner#scorchReach}), fires (ignition
+     * on slopes toward burst), face char (light at ball height); capped at ruin radius — no wave ruins beyond it.
      */
     static double reach(Detonation d) {
         double lo = 0, hi = d.ruinRadius();
@@ -202,10 +203,10 @@ public final class FlashScorch {
     }
 
     /**
-     * Сколько успеем за бюджет (поток сервера). Порядок — собрать чанки, записать готовые слои (их время пришло), отдать
-     * в фон следующие. Ошибка одного чанка — в лог, остальные идут дальше.
+     * Work fitting within budget (server thread). Order: collect chunks, write ready layers whose time has come, submit
+     * next layers to background. Log a chunk's failure and continue others.
      *
-     * @return true — слой встал во всех чанках (или им он уже не нужен)
+     * @return true — layer applied to all chunks (or no longer needed)
      */
     public boolean work(ServerLevel level, long now, WorkClock clock) {
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
@@ -252,12 +253,12 @@ public final class FlashScorch {
                 late++;
                 continue;
             }
-            // у аппарата Sable запись читает соседей: без них — руины, когда соседи будут (их ждёт очередь)
+            // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
             if (SableTerrain.watched(level, chunk) && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), 1)) {
                 waiting++;
                 continue;
             }
-            // снимки и планы слоёв держат память до волны: сверх предела или в тесной куче новые не берутся
+            // snapshots and layer plans retain memory until the wave: no new ones beyond the limit or with a tight heap
             if (ctx.shotBytes() >= NuclearPrep.PLANS_CAP || heap.tight()) {
                 skipped++;
                 continue;
@@ -284,15 +285,15 @@ public final class FlashScorch {
         return true;
     }
 
-    /** Отбой, остановка: фоновые слои больше не нужны. */
+    /** Cancel, stop: background layers no longer needed. */
     void cancel() {
         for (Build b : building.values()) b.task.cancel(false);
         building.clear();
     }
 
     /**
-     * Фоновый слой дольше {@link RuinContext#TASK_AGE_LIMIT} тиков работы (от начала работы, не от постановки в очередь)
-     * — брошен: зависшая задача иначе держала бы работу (и {@link NuclearWorld#busy}) без конца. Чанк получит всё с руинами.
+     * Background layer running over {@link RuinContext#TASK_AGE_LIMIT} ticks (from work start, not enqueue) is abandoned:
+     * otherwise a stuck task would hold work (and {@link NuclearWorld#busy}) forever. Chunk gets everything with ruins.
      */
     private boolean abandoned(Build b, int k, long now) {
         if (!RuinWorkers.started(b.task)) {
@@ -310,17 +311,17 @@ public final class FlashScorch {
         return true;
     }
 
-    /** Чанк упал с ошибкой: в лог (первые), остальные чанки идут дальше; этот получит всё с руинами. */
+    /** Chunk failed: log the first failures, continue other chunks; this one gets everything with ruins. */
     private void failed(int k, Throwable e) {
         if (failures++ < 3) Incoming.LOG.error("Nuclear detonation #{}: flash scorch of chunk {} failed", d.id(), new ChunkPos(order[k]), e);
     }
 
-    /** Руины чанка уже стоят (волна дошла раньше слоя): слой ему не нужен. */
+    /** Chunk already ruined (wave arrived before layer): no layer needed. */
     private boolean ruined(RuinContext ctx, LevelChunk chunk) {
         return ctx.applied(chunk.getPos().toLong()) != null || chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
     }
 
-    /** Готовый слой — в чанк. */
+    /** Write a ready layer to the chunk. */
     private void place(ServerLevel level, RuinContext ctx, ScarQueue scars, int k, Future<RuinPlan> task, ColumnScar.Budget budget, long now) {
         long key = order[k];
         RuinPlan plan;
@@ -341,7 +342,7 @@ public final class FlashScorch {
             late++;
             return;
         }
-        // соседи нужны записи (аппарат Sable рядом, блок-сущность у края), а их нет: руины дождутся их сами
+        // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
         if (plan.waitsNeighbours(level, chunk) > 0) {
             waiting++;
             return;
@@ -355,13 +356,13 @@ public final class FlashScorch {
         blocks += plan.changedBlocks();
         fires += lit;
         lastApplied = now;
-        // руинам чанка снимок уже не нужен (план готов или строится): до волны его держали бы только соседи — возьмут заново
+        // chunk ruins no longer need snapshot (plan ready or building): only neighbors would hold it until wave — retake it
         if (scars.hasPlan(ctx, d, key)) ctx.dropShot(key);
     }
 
     /**
-     * Чанки следа (в памяти целиком, в радиусе руин), по порядку: видимые игроком — по расстоянию до ближнего игрока,
-     * остальные — от эпицентра; когда каждому вставать.
+     * Scorched chunks (fully in memory, within ruin radius), in order: player-visible by nearest-player distance,
+     * others outward from epicenter; application time for each.
      */
     private void list(ServerLevel level) {
         LongArrayList in = new LongArrayList();
@@ -371,7 +372,7 @@ public final class FlashScorch {
             double reach = reach(d);
             for (ChunkHolder holder : level.getChunkSource().chunkMap.getChunks()) {
                 ChunkPos p = holder.getPos();
-                // руины придут только в радиус очереди руин (по земле, как и след): огонь слоя без них не получил бы тиков
+                // ruins only reach the ruin queue radius (ground range, as scorch): without them layer fire would never receive ticks
                 if (NuclearPrep.horizontal(p, d) <= reach && ScarQueue.inRange(p, d) && level.getChunkSource().getChunkNow(p.x, p.z) != null) in.add(p.toLong());
             }
         }
@@ -387,7 +388,7 @@ public final class FlashScorch {
                 best = Math.min(best, Math.hypot(p.getMiddleBlockX() + 0.5 - player.getX(), p.getMiddleBlockZ() + 0.5 - player.getZ()));
             }
             watched[i] = best < Double.MAX_VALUE || ScarQueue.seenInTest(p.toLong());
-            // видимые — раньше всех невидимых (сдвиг больше любого расстояния в мире)
+            // visible before all invisible (offset greater than any world distance)
             rank[i] = watched[i] ? (best < Double.MAX_VALUE ? best : 0) : 1e9 + NuclearPrep.horizontal(p, d);
         }
         Integer[] idx = new Integer[n];
@@ -402,7 +403,7 @@ public final class FlashScorch {
             order[j] = p.toLong();
             seen[j] = watched[i];
             if (seen[j]) seenCount++;
-            // свет у ближней к шару точки чанка на земле: там порог поджига набирается раньше всего чанка
+            // light at the chunk's ground point nearest the ball: ignition threshold reached there before the rest of the chunk
             double x = Mth.clamp(d.burst().x, p.getMinBlockX(), p.getMaxBlockX() + 1), z = Mth.clamp(d.burst().z, p.getMinBlockZ(), p.getMaxBlockZ() + 1);
             due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.IGNITE));
         }

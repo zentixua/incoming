@@ -1,56 +1,56 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Ранения ударной волной (Glasstone & Dolan 1977, гл. 12): давление на лёгкие, бросок телом — удар о твёрдое или
- * кувырки по земле, осколки стёкол, завал рухнувшим домом. Вероятности — логнормальные кривые ({@link Fragility}) по
- * таблицам; сколько здоровья это стоит в игре — {@link #lostShare}.
+ * Blast injuries (Glasstone & Dolan 1977, ch. 12): lung pressure, body throw — impact with solid objects or tumbling over
+ * ground, glass fragments, burial by a collapsed house. Probabilities are tabulated lognormal curves ({@link Fragility});
+ * their game health cost is {@link #lostShare}.
  *
- * <p>Два исхода у каждого: гибель и тяжёлое ранение (или гибель). У каждого облучённого волной своя случайность
- * {@code fate} 0..1: погиб, если она меньше вероятности гибели, а иначе теряет долю здоровья — вероятность тяжёлого
- * ранения, делённая на {@code fate}, не больше {@link #CASUALTY_SHARE}: кто ближе к своему порогу, тот ранен тяжелее, а
- * тяжело раненый остаётся едва живым.
+ * <p>Two outcomes for each: death, and severe injury (or death). Each blast-exposed subject has its own random
+ * {@code fate} 0..1: dies if below death probability; otherwise loses a health share equal to severe injury probability
+ * divided by {@code fate}, capped at {@link #CASUALTY_SHARE}: closer to their threshold means worse injury, and a severely
+ * injured subject is left barely alive.
  */
 public final class BlastInjury {
-    /** Гибель от давления на лёгкие, psi эффективного давления: 1 % при 40, 50 % при 62, ~100 % при 92 (табл. 12.38). */
+    /** Lung-pressure lethality, psi effective pressure: 1 % at 40, 50 % at 62, ~100 % at 92 (table 12.38). */
     public static final double LUNG_DEATH_PSI = 62, LUNG_DEATH_BETA = 0.19;
-    /** Тяжёлое повреждение лёгких, psi: порог 12, тяжёлое — 25 (табл. 12.38). */
+    /** Severe lung injury, psi: threshold 12, severe at 25 (table 12.38). */
     public static final double LUNG_INJURY_PSI = 25, LUNG_INJURY_BETA = 0.32;
-    /** Гибель от удара телом о твёрдое, м/с: порог 21 фут/с (6,4), 50 % — 54 (16,5), ~100 % — 138 (42) (табл. 12.49). */
+    /** Death from body impact with a solid object, m/s: threshold 21 ft/s (6.4), 50 % — 54 (16.5), ~100 % — 138 (42) (table 12.49). */
     public static final double IMPACT_DEATH = 16.5, IMPACT_DEATH_BETA = 0.40;
-    /** Перелом черепа при ударе, м/с: порог 13 фут/с (4,0), 50 % — 18 (5,5), ~100 % — 23 (7,0) (табл. 12.49). */
+    /** Skull fracture on impact, m/s: threshold 13 ft/s (4.0), 50 % — 18 (5.5), ~100 % — 23 (7.0) (table 12.49). */
     public static final double IMPACT_INJURY = 5.5, IMPACT_INJURY_BETA = 0.12;
-    /** Ранения от кувырков по открытой земле, м/с начальной скорости: 1 % при 30 фут/с (9,1), 50 % — 75 (22,9) (гл. 12, оценка). */
+    /** Injury from tumbling over open ground, m/s initial speed: 1 % at 30 ft/s (9.1), 50 % — 75 (22.9) (ch. 12, estimate). */
     public static final double TUMBLE_INJURY = 22.9, TUMBLE_INJURY_BETA = 0.40;
     /**
-     * Гибель от кувырков, м/с: данных нет (гл. 12), оценка — во столько же раз выше удара о твёрдое, во сколько у ранений
-     * (22,9 против 5,5): 69 м/с.
+     * Death from tumbling, m/s: no data (ch. 12); estimate — the same factor above solid impact as for injuries
+     * (22.9 versus 5.5): 69 m/s.
      */
     public static final double TUMBLE_DEATH = IMPACT_DEATH * TUMBLE_INJURY / IMPACT_INJURY;
     /**
-     * Скорость осколков оконного стекла, м/с на √psi: 1,9 psi — 108 фут/с, 3,8 — 168 и 140, 5,0 — 170 (табл. 12.43,
-     * в 2–4 м от окна); подгонка 80·√psi фут/с.
+     * Window glass fragment speed, m/s per √psi: 1.9 psi — 108 ft/s, 3.8 — 168 and 140, 5.0 — 170 (table 12.43,
+     * 2–4 m from the window); fit 80·√psi ft/s.
      */
     public static final double GLASS_SPEED = 24.4;
-    /** Тяжёлое ранение осколком стекла около грамма (пробивает брюшную стенку), м/с: 1 % — 140 фут/с, 50 % — 245 (табл. 12.46). */
+    /** Severe injury from a glass fragment of about a gram (penetrates abdominal wall), m/s: 1 % — 140 ft/s, 50 % — 245 (table 12.46). */
     public static final double GLASS_INJURY = 74.7, GLASS_INJURY_BETA = 0.24;
     /**
-     * Завал рухнувшим домом из камня: 20 % погибают сразу, ещё 30 % — с ранениями, опасными для жизни (Coburn & Spence
-     * 2002, M4 для кладки; оценка по землетрясениям — для ядерных ударов таких данных нет). Кто жив, остаётся под
-     * завалом: задыхается, пока не выберется.
+     * Burial by a collapsed masonry house: 20 % die immediately, another 30 % have life-threatening injuries (Coburn & Spence
+     * 2002, M4 for masonry; earthquake-based estimate — no such nuclear strike data). Survivors remain buried:
+     * suffocating until they escape.
      */
     public static final double CRUSH_DEATH = 0.2, CRUSH_INJURY = 0.5;
-    /** Тяжело раненый теряет столько здоровья. */
+    /** A severely injured subject loses this much health. */
     public static final double CASUALTY_SHARE = 0.95;
 
     /**
-     * Сопротивление тела напору: Cd·A/m человека — 0,6 м² на 70 кг. Сверка — G&D §12.44: манекен в 165 фунтов стоя,
-     * спиной к взрыву, при 5,3 psi — наибольшая скорость 21 фут/с (6,4 м/с), всего 22 фута (6,7 м) с кувырками.
-     * Мощность там не названа; модель на 20–40 кт у земли — 5,6–6,8 м/с и 6,2–9,1 м.
+     * Body drag: human Cd·A/m — 0.6 m² per 70 kg. Check — G&D §12.44: a standing 165 lb dummy, back to burst, at 5.3 psi —
+     * maximum speed 21 ft/s (6.4 m/s), total 22 ft (6.7 m) with tumbling. Yield is unspecified there; the ground-level model
+     * at 20–40 kt gives 5.6–6.8 m/s and 6.2–9.1 m.
      */
     public static final double HUMAN_DRAG_PER_KG = 0.6 / 70;
-    /** Ширина тела человека, м: тело шире — тяжелее на площадь, его бросает слабее. */
+    /** Human body width, m: a wider body has more mass per area and is thrown less. */
     public static final double HUMAN_WIDTH = 0.6;
-    /** Торможение кувырками по земле после разгона, доля g. */
+    /** Ground-tumbling deceleration after acceleration, fraction of g. */
     private static final double TUMBLE_FRICTION = 0.5;
     private static final double G = 9.81, RHO0 = 1.225;
     private static final int STEPS_PER_PHASE = 400;
@@ -58,18 +58,18 @@ public final class BlastInjury {
     private BlastInjury() {}
 
     /**
-     * Эффективное давление на лёгкие, кПа: у стены за спиной — отражённое, лицом к взрыву — с напором торможения
-     * (давление плюс скоростной напор), боком и спиной — падающее (табл. 12.38).
+     * Effective lung pressure, kPa: reflected with a wall behind the body; stagnation pressure (pressure plus dynamic
+     * pressure) when facing the burst; incident pressure sideways or back-on (table 12.38).
      *
-     * @param qKpa   скоростной напор вдоль земли, кПа
-     * @param facing насколько тело повёрнуто к взрыву: 1 — лицом, 0 — боком и спиной
+     * @param qKpa   dynamic pressure along the ground, kPa
+     * @param facing how much the body faces the burst: 1 — front, 0 — side and back
      */
     public static double effectiveKpa(double kpa, double qKpa, boolean backedByWall, double facing) {
         if (backedByWall) return reflectedKpa(kpa);
         return kpa + qKpa * Math.max(0, Math.min(1, facing));
     }
 
-    /** Отражённое давление при падении по нормали (воздух, γ = 1.4), кПа. */
+    /** Normally reflected pressure (air, γ = 1.4), kPa. */
     public static double reflectedKpa(double kpa) {
         double p0 = BlastModel.P0;
         return 2 * kpa * (7 * p0 + 4 * kpa) / (7 * p0 + kpa);
@@ -99,7 +99,7 @@ public final class BlastInjury {
         return Fragility.probability(speed, TUMBLE_INJURY, TUMBLE_INJURY_BETA);
     }
 
-    /** Скорость осколков окна, выбитого давлением {@code kpa}, м/с. */
+    /** Fragment speed of a window broken by pressure {@code kpa}, m/s. */
     public static double glassSpeed(double kpa) {
         return GLASS_SPEED * Math.sqrt(Math.max(0, BlastModel.psi(kpa)));
     }
@@ -108,7 +108,7 @@ public final class BlastInjury {
         return Fragility.probability(glassSpeed(kpa), GLASS_INJURY, GLASS_INJURY_BETA);
     }
 
-    /** Вероятность хоть одного из независимых исходов. */
+    /** Probability of at least one independent outcome. */
     public static double any(double... p) {
         double none = 1;
         for (double x : p) none *= 1 - x;
@@ -116,8 +116,8 @@ public final class BlastInjury {
     }
 
     /**
-     * Доля здоровья, которую теряет переживший волну: {@code injury / fate}, не больше {@link #CASUALTY_SHARE}
-     * (1 — погиб: {@code fate < death}).
+     * Health share lost by a blast survivor: {@code injury / fate}, capped at {@link #CASUALTY_SHARE}
+     * (1 — dead: {@code fate < death}).
      */
     public static double lostShare(double death, double injury, double fate) {
         if (fate < death) return 1;
@@ -125,14 +125,14 @@ public final class BlastInjury {
     }
 
     /**
-     * Бросок тела напором за фронтом: dv/dt = ρ(u − v)²·Cd·A/(2m), ветер u и плотность воздуха за фронтом — по
-     * Ренкину–Гюгонио, со спадом (1 − t/T)·e^(−t/T) за положительную фазу T. Тело разгоняется, пока ветер быстрее
-     * него, потом тормозит кувырками по земле ({@link #TUMBLE_FRICTION}·g).
+     * Body throw by dynamic pressure behind the front: dv/dt = ρ(u − v)²·Cd·A/(2m), wind u and post-front air density from
+     * Rankine–Hugoniot, decaying as (1 − t/T)·e^(−t/T) over positive phase T. The body accelerates while wind is faster,
+     * then decelerates by ground tumbling ({@link #TUMBLE_FRICTION}·g).
      *
-     * @param kpa       избыточное давление на фронте (плотность воздуха за ним)
-     * @param u0        скорость ветра за фронтом, м/с
-     * @param phase     положительная фаза, с
-     * @param dragPerKg Cd·A/m тела, м²/кг ({@link #HUMAN_DRAG_PER_KG} у человека); 0 — не бросает
+     * @param kpa       front overpressure (post-front air density)
+     * @param u0        post-front wind speed, m/s
+     * @param phase     positive phase, s
+     * @param dragPerKg body Cd·A/m, m²/kg ({@link #HUMAN_DRAG_PER_KG} for a human); 0 — no throw
      */
     public static Throw thrown(double kpa, double u0, double phase, double dragPerKg) {
         if (u0 <= 0 || phase <= 0 || dragPerKg <= 0) return Throw.NONE;
@@ -156,12 +156,12 @@ public final class BlastInjury {
     }
 
     /**
-     * Бросок: наибольшая скорость, весь путь до остановки (м) и разгон — скорость по пройденному пути.
+     * Throw: maximum speed, total stopping distance (m), and acceleration — speed by distance traveled.
      */
     public record Throw(double peak, double stop, double[] path, double[] speed) {
         public static final Throw NONE = new Throw(0, 0, new double[]{0}, new double[]{0});
 
-        /** Скорость тела, пролетевшего {@code metres}, м/с (0 — дальше, чем его унесёт). */
+        /** Speed of a body that traveled {@code metres}, m/s (0 — beyond its throw distance). */
         public double speedAfter(double metres) {
             if (metres <= 0) return 0;
             double accel = path[path.length - 1];

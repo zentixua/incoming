@@ -19,15 +19,15 @@ public final class ModDataComponents {
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Loadout>> LOADOUT = REGISTER.registerComponentType("loadout",
             b -> b.persistent(Loadout.CODEC).networkSynchronized(Loadout.STREAM_CODEC));
     /**
-     * Сколько снарядов осталось в начатом пакете (боеприпас, у которого в предмете их несколько, — пакет «Града»,
-     * {@code strike.Munitions}); у целого пакета компонента нет, и целые складываются в стопку.
+     * Rounds remaining in an opened pack (munition with several rounds per item — Grad pack, {@code strike.Munitions});
+     * full packs have no component and stack together.
      */
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Integer>> ROUNDS = REGISTER.registerComponentType("rounds",
             b -> b.persistent(Codec.intRange(1, Integer.MAX_VALUE)).networkSynchronized(ByteBufCodecs.VAR_INT));
 
     /**
-     * Стационарные пусковые, привязанные к пульту ({@code launcher.LauncherLinks}): «Огонь» такого пульта ставит им
-     * задачу, а не пускает сам.
+     * Fixed launchers linked to a designator ({@code launcher.LauncherLinks}): “Fire” assigns them a mission instead of
+     * launching directly.
      */
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<List<GlobalPos>>> LAUNCHERS = REGISTER.registerComponentType("launchers",
             b -> b.persistent(GlobalPos.CODEC.sizeLimitedListOf(LauncherLinks.MAX))

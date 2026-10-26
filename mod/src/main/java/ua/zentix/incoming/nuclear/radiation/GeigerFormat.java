@@ -4,14 +4,14 @@ import net.minecraft.network.chat.Component;
 
 import java.util.Locale;
 
-/** Мощность дозы для людей: Р/ч модели → мкЗв/ч … Зв/ч (1 Р ≈ 10 мЗв), три значащие цифры. */
+/** Human-readable dose rate: model R/h → µSv/h … Sv/h (1 R ≈ 10 mSv), three significant digits. */
 public final class GeigerFormat {
-    /** Естественный фон, мкЗв/ч: счётчик никогда не молчит совсем. */
+    /** Natural background, µSv/h: counter never falls entirely silent. */
     public static final double BACKGROUND_USV = 0.15;
 
     private GeigerFormat() {}
 
-    /** Мощность дозы, мкЗв/ч, с фоном. */
+    /** Dose rate, µSv/h, including background. */
     public static double microSievertsPerHour(double roentgenPerHour) {
         return roentgenPerHour * 10_000 + BACKGROUND_USV;
     }

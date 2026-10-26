@@ -5,56 +5,55 @@ import ua.zentix.incoming.entity.FlightPhase;
 import ua.zentix.incoming.strike.ThrustCurve;
 
 /**
- * Чем снаряд шумит — паспорт звука его аппарата ({@code WeaponSpec.Airframe#noise}): маршевый двигатель, стартовый
- * ускоритель (или двигатель реактивного снаряда), обтекание корпуса, бурение и разовые удары старта. Громкость каждого
- * — мощность звука L<sub>W</sub> (дБ отн. 1 пВт) по закону своего класса из чисел изделия и настоящей скорости сущности
- * ({@code StrikeProjectile#velocity}), спектр — октавы записи, которая его играет ({@link Spectra}). Слышимость на
- * сервере и громкость на клиенте считаются по одному этому паспорту ({@link Propagation}).
+ * What makes a projectile noisy — its airframe sound spec ({@code WeaponSpec.Airframe#noise}): cruise engine, launch
+ * booster (or rocket motor), body airflow, drilling and launch transients. Each part's level is sound power
+ * L<sub>W</sub> (dB re 1 pW), from its class law using article data and actual entity speed
+ * ({@code StrikeProjectile#velocity}); spectrum is the recording's octaves ({@link Spectra}). Server audibility and
+ * client volume use this same spec ({@link Propagation}).
  *
- * @param engine     маршевый двигатель; {@code null} — нет
- * @param motor      твердотопливный ускоритель или двигатель реактивного снаряда — горит, пока {@link FlightPhase#boosterLit};
- *                   {@code null} — нет
- * @param body       корпус: шум обтекания и (сверх звука) N-волна; {@code null} — не в счёт
- * @param drill      бомба бурит грунт, A-уровень мощности, дБА; {@code NaN} — не бурит
- * @param catapult   толчок катапульты, A-уровень мощности, дБА; {@code NaN} — нет
- * @param separation отстрел ускорителя (пиропатроны, лязг замков), A-уровень мощности, дБА; {@code NaN} — нет
+ * @param engine     cruise engine; {@code null} — none
+ * @param motor      solid booster or rocket motor, burns while {@link FlightPhase#boosterLit}; {@code null} — none
+ * @param body       body: airflow noise and supersonic N-wave; {@code null} — ignored
+ * @param drill      bomb drilling into soil, A-weighted sound power, dBA; {@code NaN} — not drilling
+ * @param catapult   catapult impulse, A-weighted sound power, dBA; {@code NaN} — none
+ * @param separation booster separation (pyrotechnic cartridges, lock clank), A-weighted sound power, dBA; {@code NaN} — none
  */
 public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable Body body, double drill, double catapult, double separation) {
-    /** Скорость звука, м/с. */
+    /** Sound speed, m/s. */
     public static final double SOUND = ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED;
-    /** Мощность нуля дБ, Вт. */
+    /** Zero-dB power, W. */
     static final double PW = 1e-12;
-    /** Тишина — уровень, которого нет. */
+    /** Silence — absent level. */
     public static final double SILENT = Double.NEGATIVE_INFINITY;
 
-    /** Что шумит: у каждой части свой закон и своя запись. */
+    /** Noise sources: each part has its own law and recording. */
     public enum Part { ENGINE, MOTOR, BODY, DRILL }
 
-    /** Маршевый двигатель. */
+    /** Cruise engine. */
     public sealed interface Engine permits Propeller, Jet {
-        /** Мощность звука сейчас, дБ (без взвешивания). */
+        /** Current sound power, dB (unweighted). */
         double power(FlightPhase ph, double age, double speed);
 
-        /** Обороты против номинала (тон записи — на номинале). */
+        /** RPM relative to nominal (recorded pitch at nominal). */
         double revs(FlightPhase ph, double age, double speed);
 
         Spectrum spectrum();
     }
 
     /**
-     * Поршневой мотор или электромотор с винтом фиксированного шага. Обороты — по воздушной скорости при неизменной
-     * поступи винта (J = V/nD): n = n<sub>ном</sub>·V/V<sub>ном</sub>, не меньше оборотов на месте и не больше предела;
-     * мощность на валу ∝ n³ (C<sub>P</sub>·ρ·n³·D⁵ при той же поступи), звук — постоянная доля мощности: L<sub>WA</sub> =
-     * L<sub>WA,ref</sub> + 10·lg(P/P<sub>ref</sub>) по записи аппарата того же класса с известным расстоянием. Тона —
-     * лопасти B·n/60 и вспышки в цилиндрах: в петле на номинальных оборотах ({@code tools/build_sounds.py}).
+     * Piston or electric motor with fixed-pitch propeller. RPM follows airspeed at constant advance ratio (J = V/nD):
+     * n = n<sub>nom</sub>·V/V<sub>nom</sub>, no lower than stationary RPM or higher than limit; shaft power ∝ n³
+     * (C<sub>P</sub>·ρ·n³·D⁵ at equal advance ratio); sound is a constant power share:
+     * L<sub>WA</sub> = L<sub>WA,ref</sub> + 10·lg(P/P<sub>ref</sub>), calibrated from a same-class craft recording at known
+     * distance. Tones: blade passage B·n/60 and cylinder firing, in the nominal-RPM loop ({@code tools/build_sounds.py}).
      *
-     * @param power  мощность на номинале, Вт
-     * @param rpm    номинальные обороты, об/мин
-     * @param blades лопастей винта
-     * @param speed  воздушная скорость на номинале, м/с
-     * @param idle   обороты на месте (на пусковой, полный газ) против номинала
-     * @param limit  предел оборотов (раскрутка в пике) против номинала
-     * @param refA   A-уровень мощности звука аппарата того же класса, дБА, при мощности {@code refPower}, Вт
+     * @param power  nominal power, W
+     * @param rpm    nominal RPM, rev/min
+     * @param blades propeller blade count
+     * @param speed  nominal airspeed, m/s
+     * @param idle   stationary RPM (on launcher, full throttle) relative to nominal
+     * @param limit  RPM limit (dive overspeed) relative to nominal
+     * @param refA   same-class craft A-weighted sound power, dBA, at {@code refPower}, W
      */
     public record Propeller(double power, double rpm, int blades, double speed, double idle, double limit, double refA, double refPower,
                             Spectrum spectrum) implements Engine {
@@ -70,29 +69,28 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
             return refA + 10 * Math.log10(power * n * n * n / refPower) - spectrum.aWeighting();
         }
 
-        /** Частота лопастей на номинале, Гц. */
+        /** Nominal blade passage frequency, Hz. */
         public double bladePass() {
             return blades * rpm / 60;
         }
     }
 
     /**
-     * Турбореактивный двигатель: шум струи по закону Лайтхилла — доля механической мощности струи η = K·M⁵
-     * (M — число Маха струи относительно воздуха), K = 10⁻⁴ (M. J. Lighthill, «On sound generated aerodynamically», 1952–54;
-     * ⚠ сверить по первоисточнику), скорость струи относительно воздуха — за вычетом скорости полёта (простейший
-     * учёт полёта, (V<sub>j</sub> − V)⁷: измеренный полёт снижает шум слабее — здесь шум занижен, у B-2 на ~5 дБ), а тяга —
-     * на месте (на эшелоне меньше — здесь завышен). Расход — тяга на месте / скорость струи.
-     * Запускается после отделения ускорителя, обороты ротора от малого газа к полным — за {@code spool} тиков;
-     * скорость струи — пропорционально оборотам.
+     * Jet engine: jet noise by Lighthill's law — mechanical jet power share η = K·M⁵ (M — jet Mach relative to air),
+     * K = 10⁻⁴ (M. J. Lighthill, “On sound generated aerodynamically”, 1952–54; ⚠ check primary source). Jet speed relative to
+     * air subtracts flight speed (simplest flight correction, (V<sub>j</sub> − V)⁷: measured flight reduces noise less —
+     * underestimated here, B-2 by ~5 dB), thrust is static (lower at altitude — overestimated here). Mass flow is static
+     * thrust / jet speed. Starts after booster separation; rotor RPM rises from idle to full over {@code spool} ticks;
+     * jet speed proportional to RPM.
      *
-     * @param thrust тяга одного двигателя на месте, Н
-     * @param jet    скорость струи на месте, м/с
-     * @param count  двигателей
-     * @param idle   обороты малого газа против полных
-     * @param spool  тиков раскрутки
+     * @param thrust one engine's static thrust, N
+     * @param jet    static jet speed, m/s
+     * @param count  engine count
+     * @param idle   idle RPM relative to full
+     * @param spool  spool-up ticks
      */
     public record Jet(double thrust, double jet, int count, double idle, double spool, Spectrum spectrum) implements Engine {
-        /** Коэффициент Лайтхилла. */
+        /** Lighthill coefficient. */
         static final double LIGHTHILL = 1e-4;
 
         @Override
@@ -113,15 +111,15 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
     }
 
     /**
-     * Твердотопливный двигатель: звук — доля механической мощности струи η·½·F·v<sub>e</sub>, η = 0,005 ± 0,0022
-     * (NASA SP-8072, «Acoustic loads generated by the propulsion system», 1971; значение — по Oliynik, Batutina, 2024).
-     * Тяга во времени — кривая ускорителя ({@link ThrustCurve}: выход на режим, полка, спад к отделению), скорость
-     * истечения при спаде та же, поэтому мощность струи ∝ доле тяги; без кривой — только выход на режим на поджиге
-     * ({@link ThrustCurve#ignition}), дальше полка.
+     * Solid motor: sound is mechanical jet power share η·½·F·v<sub>e</sub>, η = 0.005 ± 0.0022
+     * (NASA SP-8072, “Acoustic loads generated by the propulsion system”, 1971; value via Oliynik, Batutina, 2024).
+     * Time-varying thrust uses the booster curve ({@link ThrustCurve}: ignition ramp, plateau, tail-off to separation);
+     * exhaust velocity remains constant during tail-off, so jet power ∝ thrust share; without a curve, only the ignition
+     * ramp ({@link ThrustCurve#ignition}), then plateau.
      *
-     * @param thrust  тяга, Н
-     * @param exhaust скорость истечения, м/с
-     * @param curve   тяга стартового ускорителя во времени; null — двигатель горит всю фазу разгона полной тягой
+     * @param thrust  thrust, N
+     * @param exhaust exhaust velocity, m/s
+     * @param curve   launch booster thrust over time; null — motor at full thrust throughout boost phase
      */
     public record Rocket(double thrust, double exhaust, Spectrum spectrum, @Nullable ThrustCurve curve) {
         static final double EFFICIENCY = 0.005;
@@ -138,13 +136,13 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
     }
 
     /**
-     * Корпус в потоке: шум обтекания — диполь Кёрла (N. Curle, 1955), W = K·ρ·U⁶·A/c³ (A — миделево сечение), где
-     * K = C′²·St²·π²/48 из силы, которую срыв вихрей с частотой St·U/D даёт корпусу: C′ = 0,1, St = 0,2 — оценка,
-     * одна на все корпуса (≈ 8·10⁻⁵). Тон — по числу Струхаля: ∝ U, запись звучит на {@code reference}.
+     * Body in airflow: Curle dipole noise (N. Curle, 1955), W = K·ρ·U⁶·A/c³ (A — frontal area), with
+     * K = C′²·St²·π²/48 from vortex-shedding force on the body at frequency St·U/D: C′ = 0.1, St = 0.2 — estimate,
+     * shared by all bodies (≈ 8·10⁻⁵). Pitch follows Strouhal number: ∝ U, recording at {@code reference}.
      *
-     * @param diameter  калибр (диаметр корпуса), м
-     * @param length    длина, м
-     * @param reference скорость, на которой звучит запись, м/с (оценка по записи)
+     * @param diameter  caliber (body diameter), m
+     * @param length    length, m
+     * @param reference recording speed, m/s (estimated from recording)
      */
     public record Body(double diameter, double length, double reference, Spectrum spectrum) {
         static final double CURLE = 0.1 * 0.1 * 0.2 * 0.2 * Math.PI * Math.PI / 48;
@@ -160,23 +158,23 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
             return 10 * Math.log10(w / PW);
         }
 
-        /** Тон обтекания против записи. */
+        /** Airflow pitch relative to recording. */
         public double pitch(double v) {
             return v * 20 / reference;
         }
     }
 
     /**
-     * A-уровень мощности звука источника со спектром {@code shape}, дБА, у которого на пути {@code path} закон
-     * распространения мода ({@link Propagation#level}) даёт замеренный A-уровень {@code measured}. Обратный ход того же
-     * закона, а не формула разлёта со своей поправкой на землю: иначе источник, выведенный из замера, на месте самого
-     * замера звучал бы не так, как замерено (шахед — на 4,9 дБ тише своего опорного сверхлёгкого над лугом, F4).
+     * A-weighted sound power of a source with spectrum {@code shape}, dBA, whose {@code path} produces measured A-level
+     * {@code measured} under the mod's propagation law ({@link Propagation#level}). Inverse of the same law, not spreading
+     * with its own ground correction: otherwise a measurement-derived source would not reproduce its measurement there
+     * (Shahed 4.9 dB quieter than its reference ultralight over a meadow, F4).
      */
     public static double fromMeasured(double measured, Spectrum shape, Propagation.Path path) {
         return measured - Propagation.level(0, shape, path, null) + shape.aWeighting();
     }
 
-    /** Мощность звука части сейчас, дБ (без взвешивания); не шумит — {@link #SILENT}. */
+    /** Current part sound power, dB (unweighted); not emitting — {@link #SILENT}. */
     public double power(Part part, FlightPhase ph, double age, double speed, boolean drilling) {
         return switch (part) {
             case ENGINE -> engine == null || drilling ? SILENT : engine.power(ph, age, speed);
@@ -186,7 +184,7 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
         };
     }
 
-    /** Спектр части. */
+    /** Part spectrum. */
     public Spectrum spectrum(Part part) {
         return switch (part) {
             case ENGINE -> engine == null ? Spectra.DRONE_ENGINE : engine.spectrum();
@@ -197,10 +195,11 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
     }
 
     /**
-     * Что от всего, что шумит сейчас, доходит до уха по пути {@code path} (без преград): октавы (A) в {@code bands}.
+     * What reaches the ear from all currently emitting parts over {@code path} (without obstacles): A-weighted octaves
+     * in {@code bands}.
      *
-     * @param speed скорость, блоков/тик
-     * @return A-уровень всего, дБА ({@link #SILENT} — не шумит)
+     * @param speed speed, blocks/tick
+     * @return total A-weighted level, dBA ({@link #SILENT} — no sound)
      */
     public double hear(FlightPhase ph, double age, double speed, boolean drilling, Propagation.Path path, double[] bands) {
         double[] sum = new double[Propagation.BANDS], part = new double[Propagation.BANDS];
@@ -220,9 +219,9 @@ public record Noise(@Nullable Engine engine, @Nullable Rocket motor, @Nullable B
         return any ? 10 * Math.log10(total) : SILENT;
     }
 
-    /** Насколько всё, что шумит сейчас, громче фона у уха в самой выгодной октаве, дБ (меньше нуля — не слышно). */
+    /** How far current combined noise exceeds the ear's background in the most favorable octave, dB (negative — inaudible). */
     public double margin(FlightPhase ph, double age, double speed, boolean drilling, Propagation.Path path) {
-        // сверху: вся мощность в одной октаве, без воздуха, с наибольшей прибавкой земли и A — не слышно и так
+        // upper bound: all power in one octave, no air, maximum ground and A boost — still inaudible
         double sum = 0;
         for (Part p : Part.values()) {
             double lw = power(p, ph, age, speed, drilling);

@@ -1,14 +1,14 @@
 #version 150
 
-// Пробы видимости источников (client/fx/layer/SourceProbes): квадрат ровно на пиксель своей пробы.
-// середина источника от глаза
+// Source visibility probes (client/fx/layer/SourceProbes): quad exactly one probe pixel.
+// source center relative to eye
 in vec3 Position;
-// x: радиус источника, блоков; y: номер пробы (с 0)
+// x: source radius, blocks; y: probe index (from 0)
 in vec2 UV0;
-// угол квадрата: ±1, ±1
+// quad corner: ±1, ±1
 in vec3 Normal;
 
-// пикселей текстуры проб: в строке, строк
+// probe texture pixels: per row, rows
 uniform vec2 ProbeSize;
 
 out vec3 center;

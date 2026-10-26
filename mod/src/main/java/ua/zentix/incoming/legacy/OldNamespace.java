@@ -17,13 +17,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Миры с id {@code airstrike}. Блоки, предметы, сущности, блок-сущности, эффекты, attachments и компоненты в них
- * записаны именами {@code airstrike:*}: реестры находят их по псевдонимам {@code airstrike:*} → {@code incoming:*}
- * ({@link DeferredRegister#addAlias}, механизм NeoForge для переименованных записей). Сохранённые данные мира
- * ({@code data/airstrike_*.dat}: ядерные подрывы, энергосеть, залпы, полёты вне мира) переезжают под новое имя до
- * загрузки миров: номера подрывов, по которым чанки помнят применённые повреждения, продолжаются, а не начинаются
- * заново. Настройки ({@code serverconfig/airstrike-server.toml}) NeoForge читает раньше любого события мода — их
- * переименовывают руками (заметки к выпуску 3.0.0).
+ * Worlds with the {@code airstrike} ID. Blocks, items, entities, block entities, effects, attachments and components are
+ * stored under {@code airstrike:*} names: registries find them via {@code airstrike:*} → {@code incoming:*} aliases
+ * ({@link DeferredRegister#addAlias}, NeoForge's mechanism for renamed entries). Saved world data
+ * ({@code data/airstrike_*.dat}: nuclear detonations, power grid, salvos, flights outside the world) moves to the new name
+ * before worlds load: detonation numbers used by chunks to remember applied damage continue instead of restarting.
+ * NeoForge reads settings ({@code serverconfig/airstrike-server.toml}) before any mod event — rename them manually
+ * (3.0.0 release notes).
  */
 public final class OldNamespace {
     public static final String ID = "airstrike";
@@ -31,14 +31,14 @@ public final class OldNamespace {
 
     private OldNamespace() {}
 
-    /** До {@code register(modBus)}: записи регистров уже созданы их статическими полями. */
+    /** Before {@code register(modBus)}: registry entries have already been created by their static fields. */
     public static <T> void alias(DeferredRegister<T> register) {
         for (DeferredHolder<T, ? extends T> entry : register.getEntries()) {
             register.addAlias(ResourceLocation.fromNamespaceAndPath(ID, entry.getId().getPath()), entry.getId());
         }
     }
 
-    /** {@link ServerAboutToStartEvent} идёт до загрузки миров: их данные читаются уже под новым именем. */
+    /** {@link ServerAboutToStartEvent} precedes world load: their data is read under the new name. */
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         MinecraftServer server = event.getServer();
         try {
@@ -49,8 +49,8 @@ public final class OldNamespace {
     }
 
     /**
-     * Папки {@code data} измерений мира там, где их держит игра ({@link DimensionType#getStorageFolder}): верхний мир —
-     * корень, Незер — {@code DIM-1}, Энд — {@code DIM1}, измерения модов — {@code dimensions/<ns>/<path>}.
+     * Dimension {@code data} directories where the game keeps them ({@link DimensionType#getStorageFolder}): Overworld —
+     * root, Nether — {@code DIM-1}, End — {@code DIM1}, modded dimensions — {@code dimensions/<ns>/<path>}.
      */
     public static List<Path> dataFolders(MinecraftServer server) {
         Path root = server.getWorldPath(LevelResource.ROOT);
@@ -58,7 +58,7 @@ public final class OldNamespace {
                 .map(stem -> DimensionType.getStorageFolder(Registries.levelStemToLevel(stem), root).resolve("data")).toList();
     }
 
-    /** {@code airstrike_<имя>.dat} → {@code incoming_<имя>.dat}, если нового файла ещё нет. */
+    /** {@code airstrike_<name>.dat} → {@code incoming_<name>.dat}, if the new file does not exist yet. */
     static void adoptSavedData(Path folder) throws IOException {
         if (!Files.isDirectory(folder)) return;
         List<Path> old;

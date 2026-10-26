@@ -20,9 +20,9 @@ import ua.zentix.incoming.strike.Loadout;
 import java.util.List;
 
 /**
- * Пульт наведения. ПКМ (держать) — бинокль; колесо — оружие; ЛКМ — пуск по точке под прицелом;
- * Shift+ПКМ — экран пульта (открывает клиент через ClientHooks.openRemote); ПКМ по стационарной пусковой — привязать
- * её ({@link LauncherLinks}): тогда «Огонь» ставит задачу привязанным. Пуск всегда проверяет сервер.
+ * Target designator. Hold right-click — binoculars; wheel — weapon; left-click — launch at the crosshair point;
+ * Shift+right-click — designator screen (client opens it through ClientHooks.openRemote); right-click a fixed launcher —
+ * link it ({@link LauncherLinks}): “Fire” then assigns missions to linked launchers. The server always validates launches.
  */
 public class DesignatorItem extends Item {
     public DesignatorItem(Properties properties) {
@@ -37,7 +37,7 @@ public class DesignatorItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player.isShiftKeyDown()) {
-            // экран пульта — клиентский; пуск с него всё равно проверяет сервер
+            // designator screen is client-side; the server still validates launches from it
             if (level.isClientSide) ClientHooks.get().openRemote();
             return InteractionResultHolder.success(stack);
         }

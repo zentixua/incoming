@@ -1,18 +1,18 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Время прихода фронта ударной волны по наклонной дальности от подрыва: на землю — по Броуду ({@link HobBlast#arrivalSeconds},
- * дальность по земле при той же наклонной), ближе высоты подрыва (в воздухе под ним) — свободный воздух
- * ({@link HobBlast#freeAirArrivalSeconds}, сшито с Броудом под подрывом). Узлы — логарифмическая сетка (1000 от 1 м),
- * между ними — линейно, за таблицей — скорость звука.
+ * Shock front arrival time by slant range from detonation: at the ground — Brode ({@link HobBlast#arrivalSeconds}, ground
+ * range at the same slant range); closer than burst height (in air beneath it) — free air
+ * ({@link HobBlast#freeAirArrivalSeconds}, joined to Brode beneath the burst). Nodes use a logarithmic grid (1000 from
+ * 1 m), linear interpolation between them; beyond the table — sound speed.
  */
 public final class ArrivalTable {
     private static final int NODES = 1000;
     private static final double FIRST_NODE_M = 1.0;
 
-    /** Дальности, м (первый узел — 0), по возрастанию. */
+    /** Ranges, m (first node — 0), increasing. */
     private final double[] range;
-    /** Время прихода в узлы, с, по возрастанию. */
+    /** Arrival times at nodes, s, increasing. */
     private final double[] time;
 
     private ArrivalTable(double[] range, double[] time) {
@@ -21,14 +21,14 @@ public final class ArrivalTable {
     }
 
     /**
-     * @param hobM высота подрыва над землёй, м (0 — наземный)
+     * @param hobM height of burst above ground, m (0 — surface burst)
      */
     public static ArrivalTable of(double yieldKt, double hobM, double maxRangeM) {
         double hob = Math.max(0, hobM), max = Math.max(maxRangeM, FIRST_NODE_M * 2);
         double[] r = new double[NODES + 1];
         double[] t = new double[NODES + 1];
         double step = Math.log(max / FIRST_NODE_M) / (NODES - 1);
-        // свободный воздух под подрывом сшит с приходом на землю под ним (расходятся на доли процента)
+        // free air beneath the burst joins ground arrival beneath it (difference of fractions of a percent)
         double stitch = hob <= 0 ? 1 : HobBlast.arrivalSeconds(0, hob, yieldKt) / HobBlast.freeAirArrivalSeconds(hob, yieldKt);
         for (int i = 1; i <= NODES; i++) {
             r[i] = FIRST_NODE_M * Math.exp(step * (i - 1));
@@ -39,19 +39,19 @@ public final class ArrivalTable {
         return new ArrivalTable(r, t);
     }
 
-    /** Дальность последнего узла, м. */
+    /** Last node's range, m. */
     public double maxRange() {
         return range[NODES];
     }
 
-    /** Время прихода фронта на дальность R, с. */
+    /** Front arrival time at range R, s. */
     public double arrivalSeconds(double rangeM) {
         if (rangeM <= 0) return 0;
         if (rangeM >= range[NODES]) return time[NODES] + (rangeM - range[NODES]) / BlastModel.SOUND_SPEED;
         return interpolate(range, time, rangeM);
     }
 
-    /** Радиус фронта в момент t, с (обратная к {@link #arrivalSeconds}). */
+    /** Front radius at time t, s (inverse of {@link #arrivalSeconds}). */
     public double radiusAt(double seconds) {
         if (seconds <= 0) return 0;
         if (seconds >= time[NODES]) return range[NODES] + (seconds - time[NODES]) * BlastModel.SOUND_SPEED;

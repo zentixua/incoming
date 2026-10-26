@@ -18,65 +18,66 @@ import org.jetbrains.annotations.Nullable;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
- * Исходные блоки чанка для руин — снимок, снятый в потоке сервера: копии палитр секций ({@code PalettedContainer.copy},
- * живые секции только читаются), карты высот и источники неба; у чанка с руинами — старые блоки мест его плана. Снимок
- * бывает и с диска ({@link DiskShots}): чанк, которого нет в памяти, прочитан из файла региона в фоне. Из снимков окно
- * чанка ({@link RuinWindow}) и план ({@link RuinPlanner#finish}) строятся в любом потоке: снимок больше не читает мир и
- * не меняется.
+ * Original chunk blocks for ruins — server-thread snapshot: section palette copies ({@code PalettedContainer.copy},
+ * live sections only read), heightmaps and skylight sources; for an already ruined chunk, old blocks at its plan
+ * positions. Snapshots also come from disk ({@link DiskShots}): a chunk absent from memory read from a region file in
+ * the background. A chunk window ({@link RuinWindow}) and plan ({@link RuinPlanner#finish}) can be built from snapshots
+ * on any thread: the snapshot no longer reads the world and is immutable.
  * <p>
- * Свойства блоков ({@link Blast.Props}) по местам секции берутся через её палитру: у палитры копии (до 256 состояний)
- * — массив свойств по номеру в палитре, место читает номер из хранилища секции, лишней памяти на место нет. Все
- * состояния палитр поток сервера заносит в таблицу ({@link Blast#ensure}), когда снимок создаётся.
+ * Block properties ({@link Blast.Props}) at section positions use its palette: a copied palette (up to 256 states) has a
+ * property array by palette index; a position reads its index from section storage, no extra memory per position.
+ * The server thread publishes all palette states into the table ({@link Blast#ensure}) when taking the snapshot.
  * <p>
- * По чему снят — {@code identityHashCode} чанка, его блоки ({@link #prints}: отпечатки секций) и стояли ли руины:
- * снимок верен, пока чанк тот же, блоки в нём те же (погашенная блэкаутом лампа — та же лампа), руины те же и таблицу
- * свойств не сбрасывали ({@link #current}). Изменения чанка мод не подслушивает: снимок сверяется с чанком сам. У снимка
- * с диска чанка нет (номер 0): план по нему сверяется с чанком при подмене так же, по отпечаткам секций.
+ * Snapshot origin: chunk {@code identityHashCode}, blocks ({@link #prints}: section fingerprints), and whether ruins
+ * were applied. Valid while chunk, blocks (a blackout-darkened lamp counts as the same lamp), ruins and property table
+ * generation remain the same ({@link #current}). The mod does not listen for chunk changes: the snapshot checks itself
+ * against the chunk. A disk snapshot has no chunk (number 0): its plan checks against the chunk at application using
+ * the same section fingerprints.
  * <p>
- * Номер снимка ({@link #serial}) — по нему разлом и план знают, по каким снимкам построены ({@link RuinWindow.Stamp}):
- * новый снимок берётся, только когда старый неверен.
+ * Snapshot number ({@link #serial}) tells the fracture and plan which snapshots built them ({@link RuinWindow.Stamp}):
+ * a new snapshot is taken only when the old one is invalid.
  */
 final class ChunkShot {
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
     private static final java.util.concurrent.atomic.AtomicLong SERIALS = new java.util.concurrent.atomic.AtomicLong();
-    /** Отпечаток секции из одного воздуха (в снимке её нет). */
+    /** Fingerprint of an all-air section (absent from the snapshot). */
     private static final long AIR_PRINT = 0x5DEECE66DL;
 
     final int x, z;
     final int id;
-    /** Номер снимка (от 1): разлом и план построены по этому снимку ({@link RuinWindow.Stamp}). */
+    /** Snapshot number (from 1): fracture and plan built from this snapshot ({@link RuinWindow.Stamp}). */
     final long serial = SERIALS.incrementAndGet();
     /**
-     * Отпечатки секций по номеру ({@link #rawPrint}): по ним снимок сверяется с живым чанком. Отпечаток, у которого
-     * блоки те же с точностью до погашенных ламп ({@link #normalPrint}), заменяется живым (поток сервера).
+     * Section fingerprints by index ({@link #rawPrint}): compare snapshot to live chunk. A fingerprint with identical blocks
+     * up to unlit lamp counterparts ({@link #normalPrint}) is replaced by the live one (server thread).
      */
     final long[] prints;
-    /** Сброс таблицы свойств, после которого снят ({@link Blast#generation}). */
+    /** Property table reset after which this snapshot was taken ({@link Blast#generation}). */
     private final int generation = Blast.generation;
-    /** Руины чанка уже стояли: исходные блоки — старые блоки мест плана ({@link #old}), огонь и текущая вода — воздух. */
+    /** Chunk already ruined: original blocks are old plan-position blocks ({@link #old}); fire and flowing water count as air. */
     final boolean ruined;
     @Nullable
     private final RuinPlan old;
-    /** Верх столбцов по старым блокам плана ({@link RuinPlan#oldTops}): посчитан здесь, в потоке сервера. */
+    /** Column tops from old plan blocks ({@link RuinPlan#oldTops}): computed here on the server thread. */
     @Nullable
     final int[] oldTops;
     final int minY, sections;
-    /** Копии секций; null — секция из одного воздуха. */
+    /** Section copies; null — all-air section. */
     private final PalettedContainer<BlockState>[] states;
-    /** Верхний блок ({@code getHeight}) карт {@code WORLD_SURFACE} и {@code MOTION_BLOCKING_NO_LEAVES} (индекс {@code lz << 4 | lx}). */
+    /** Top block ({@code getHeight}) of {@code WORLD_SURFACE} and {@code MOTION_BLOCKING_NO_LEAVES} maps (index {@code lz << 4 | lx}). */
     final int[] surface = new int[256], solid = new int[256];
-    /** Первый свободный по картам {@link RuinPlan#HEIGHTMAP_TYPES}: {@code вид * 256 + столбец}. */
+    /** First free position from {@link RuinPlan#HEIGHTMAP_TYPES}: {@code type * 256 + column}. */
     final int[] heights;
-    /** Нижний источник неба столбца ({@code ChunkSkyLightSources}); null — посчитать по блокам (снимок с диска). */
+    /** Lowest column skylight source ({@code ChunkSkyLightSources}); null — compute from blocks (disk snapshot). */
     @Nullable
     final int[] sky;
-    /** Свойства мест секции, по мере чтения. */
+    /** Section position properties, populated as read. */
     private final AtomicReferenceArray<Sec> props;
-    /** Сколько байт занимают копии палитр и карты (память подрыва). */
+    /** Bytes occupied by palette copies and maps (detonation memory). */
     final long bytes;
 
-    /** Свойства мест одной секции: по номеру в палитре или (руины, глобальная палитра) по месту. */
+    /** Properties of one section's positions: by palette index or (ruins, global palette) by position. */
     static final class Sec {
         @Nullable
         private final BitStorage storage;
@@ -91,17 +92,17 @@ final class ChunkShot {
             this.full = full;
         }
 
-        /** Свойства места секции ({@code y << 8 | z << 4 | x}). */
+        /** Section position properties ({@code y << 8 | z << 4 | x}). */
         Blast.Props get(int i) {
             return full != null ? full[i] : local[storage.get(i)];
         }
     }
 
     /**
-     * Снимок мира до вспышки чанка, где стоит слой вспышки подрыва ({@link RuinPlan#unflash}, {@link RuinPlan#unfire}):
-     * отпечатки живых секций с точностью до погашенных ламп у секций, которые правка снимка меняла ({@link #liveKnown}), —
-     * сверка с чанком идёт по ним, а не по блокам снимка; у остальных секций снимок и чанк одно и то же. null — снимок
-     * как есть.
+     * Pre-flash world snapshot for a chunk with the detonation's flash layer ({@link RuinPlan#unflash},
+     * {@link RuinPlan#unfire}): live section fingerprints normalized for unlit lamps in sections changed by snapshot
+     * adjustment ({@link #liveKnown}) — compare against those, not snapshot blocks; elsewhere snapshot and chunk are
+     * identical. null — unmodified snapshot.
      */
     @Nullable
     private long[] liveNormals;
@@ -152,8 +153,8 @@ final class ChunkShot {
     }
 
     /**
-     * Все состояния палитры — в таблицу, пока мы в потоке сервера (у глобальной палитры, больше 256 состояний в секции,
-     * список не перебрать — по всем местам); у брёвен — и все оси (руины кладут стволы лёжа).
+     * Publish all palette states while on the server thread (global palette, over 256 states per section, cannot be
+     * enumerated — scan all positions); for logs, all axes too (ruins lay trunks horizontally).
      */
     private static void register(PalettedContainer<BlockState> c) {
         boolean[] listed = {false};
@@ -174,10 +175,10 @@ final class ChunkShot {
     }
 
     /**
-     * Снимок чанка в памяти (поток сервера): {@code applied} — руины чанка уже стоят (их план — или null, если отпущен);
-     * {@code flash} — в чанке стоит слой вспышки подрыва ({@link RuinPlan#applyFlash}): снимок — мир до вспышки
-     * ({@link RuinPlan#unflash}), сверка с чанком — по живым секциям; {@code unfire} — слой стоит, а его плана нет
-     * ({@link FlashScorch#marked}): огонь чанка в снимке — воздух ({@link RuinPlan#unfire}).
+     * In-memory chunk snapshot (server thread): {@code applied} — chunk ruins already applied (their plan, or null if
+     * released); {@code flash} — detonation flash layer present ({@link RuinPlan#applyFlash}): snapshot is pre-flash world
+     * ({@link RuinPlan#unflash}), chunk comparison uses live sections; {@code unfire} — layer present without its plan
+     * ({@link FlashScorch#marked}): snapshot treats chunk fire as air ({@link RuinPlan#unfire}).
      */
     @SuppressWarnings("unchecked")
     static ChunkShot take(LevelChunk chunk, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire) {
@@ -186,7 +187,7 @@ final class ChunkShot {
         boolean[] own = flash != null || unfire ? new boolean[live.length] : null;
         for (int i = 0; i < live.length; i++) {
             if (live[i].hasOnlyAir()) continue;
-            // копию, которую правит слой вспышки, — свою (у copy() обработчик роста палитры — живая секция)
+            // own copy for flash layer edits (copy() retains the live section's palette resize handler)
             boolean edit = flash != null ? flash.touches(i) : unfire && ua.zentix.incoming.util.Palettes.contains(live[i].getStates(), FIRE);
             states[i] = edit ? RuinPlan.copyStates(live[i].getStates()) : live[i].getStates().copy();
             if (own != null) own[i] = edit;
@@ -201,7 +202,7 @@ final class ChunkShot {
         for (int c = 0; c < 256; c++) sky[c] = sources.get(c);
         long[] livePrints = null, liveNormals = null;
         if (own != null) {
-            // отпечатки — живых секций; с точностью до ламп — только у правленых (у остальных снимок и есть чанк)
+            // fingerprints from live sections; normalize lamps only in modified sections (elsewhere snapshot is the chunk)
             livePrints = new long[live.length];
             liveNormals = new long[live.length];
             for (int i = 0; i < live.length; i++) {
@@ -219,11 +220,10 @@ final class ChunkShot {
     private static final java.util.function.Predicate<BlockState> FIRE = s -> s.getBlock() instanceof BaseFireBlock;
 
     /**
-     * Снимок чанка с диска (поток сервера: его состояния — в таблицу), см. {@link DiskShots}; {@code applied} — руины
-     * чанка уже стоят (чанк был в памяти после подрыва и ушёл ниже полной загрузки): исходный мир мест его плана — из
-     * плана, как у снимка из памяти; {@code flash} — слой вспышки стоял, когда чанк был в памяти: мир до вспышки;
-     * {@code unfire} — слой стоит (отметка в данных чанка), а его плана нет: огонь — воздух, как у снимка из памяти
-     * ({@link #take}).
+     * Disk chunk snapshot (server thread: publish its states), see {@link DiskShots}; {@code applied} — ruins already stood
+     * (chunk was in memory after detonation and dropped below full loading): original world at plan positions comes from
+     * the plan, as in a memory snapshot; {@code flash} — flash layer stood while chunk was in memory: pre-flash world;
+     * {@code unfire} — layer present (mark in chunk data), no plan: fire is air, as in a memory snapshot ({@link #take}).
      */
     static ChunkShot fromDisk(DiskShots.Read read, @Nullable RuinContext.Applied applied, @Nullable RuinPlan flash, boolean unfire) {
         PalettedContainer<BlockState>[] states = read.states();
@@ -244,9 +244,9 @@ final class ChunkShot {
     }
 
     /**
-     * Слой вспышки {@code flash} встал в чанк этого снимка (поток сервера; снимок был верен до него): снимок остаётся миром
-     * до вспышки, а сверка с чанком у секций слоя — по ним после слоя (остальные слой не трогал). Номер снимка тот же:
-     * разломы и планы по нему остаются верны.
+     * Flash layer {@code flash} applied to this snapshot's chunk (server thread; snapshot valid before it): snapshot remains
+     * pre-flash world, but layer sections compare against their post-layer state (other sections untouched). Same snapshot
+     * number: fractures and plans built from it remain valid.
      */
     void relive(LevelChunk chunk, RuinPlan flash) {
         LevelChunkSection[] live = chunk.getSections();
@@ -263,8 +263,8 @@ final class ChunkShot {
     }
 
     /**
-     * Снимок по тому же чанку и руинам, что и сейчас (поток сервера). У чанка без руин — и по тем же блокам; у чанка
-     * с руинами блоки дальше меняют сами руины (огонь, текущая вода, брёвна), а исходный мир его мест — из плана.
+     * Snapshot from the same chunk and ruins as now (server thread). Without ruins, same blocks too; with ruins, ruins
+     * themselves keep changing blocks (fire, flowing water, logs), but original world at plan positions comes from the plan.
      */
     boolean current(LevelChunk chunk, @Nullable RuinContext.Applied applied) {
         if (System.identityHashCode(chunk) != id || !fresh() || ruined != (applied != null)) return false;
@@ -272,8 +272,9 @@ final class ChunkShot {
     }
 
     /**
-     * Блоки живого чанка те же, что в снимке: отпечатки секций, а где они разошлись — блоки с точностью до погашенных
-     * ламп (блэкаут меняет их прямо в секциях); такой отпечаток заменяется живым, и следующая сверка снова дешёвая.
+     * Live chunk blocks match the snapshot: section fingerprints, then where they differ, blocks normalized for unlit
+     * lamps (blackout changes them directly in sections); replace such a fingerprint with the live one, making the next
+     * comparison cheap again.
      */
     private boolean sameBlocks(LevelChunk chunk) {
         LevelChunkSection[] live = chunk.getSections();
@@ -289,21 +290,21 @@ final class ChunkShot {
         return true;
     }
 
-    /** Отпечатки секций снимка с точностью до погашенных ламп (любой поток: состояния — через таблицу свойств). */
+    /** Snapshot section fingerprints normalized for unlit lamps (any thread: states through the property table). */
     long[] normalPrints(Blast.PropsView view) {
         long[] out = new long[sections];
         for (int i = 0; i < sections; i++) out[i] = normalPrint(states[i], st -> view.get(st).normal());
         return out;
     }
 
-    /** Отпечаток секции мира как есть ({@link #rawPrint(PalettedContainer)}). */
+    /** World section fingerprint as is ({@link #rawPrint(PalettedContainer)}). */
     static long rawPrint(LevelChunkSection s) {
         return rawPrint(s.hasOnlyAir() ? null : s.getStates());
     }
 
     /**
-     * Отпечаток секции как есть: состояния палитры по номерам и хранилище номеров (сотни {@code long}, дёшево). Те же
-     * блоки дают другой отпечаток, когда палитру перестроили или лампу погасили; тогда решает {@link #normalPrint}.
+     * Section fingerprint as is: indexed palette states and index storage (hundreds of {@code long}, cheap). Identical
+     * blocks give a different fingerprint after palette rebuild or lamp darkening; {@link #normalPrint} then decides.
      */
     static long rawPrint(@Nullable PalettedContainer<BlockState> c) {
         if (c == null) return AIR_PRINT;
@@ -317,15 +318,15 @@ final class ChunkShot {
         return h;
     }
 
-    /** Отпечаток секции мира по местам с точностью до погашенных ламп (поток сервера). */
+    /** World section fingerprint by position, normalized for unlit lamps (server thread). */
     static long normalPrint(LevelChunkSection s) {
         return normalPrint(s.hasOnlyAir() ? null : s.getStates(), RuinPlan::normal);
     }
 
     /**
-     * Отпечаток секции по местам: состояние каждого места, приведённое {@code normal} (лампа и её двойник — одно).
-     * Состояние — по {@code identityHashCode} (состояния — одиночки), не {@code Block.getId}: отпечатки считают и фоновые
-     * потоки руин, а им код блоков нельзя ({@code backgroundSolversCallNoWorld}).
+     * Section fingerprint by position: each position's state transformed by {@code normal} (lamp and counterpart identical).
+     * State uses {@code identityHashCode} (states are singletons), not {@code Block.getId}: background ruin threads also
+     * compute fingerprints and cannot call block code ({@code backgroundSolversCallNoWorld}).
      */
     static long normalPrint(@Nullable PalettedContainer<BlockState> c, java.util.function.Function<BlockState, BlockState> normal) {
         if (c == null) return AIR_PRINT;
@@ -350,12 +351,12 @@ final class ChunkShot {
         return (h ^ v) * 0x9E3779B97F4A7C15L + 1;
     }
 
-    /** Снимок с диска, а не из памяти. */
+    /** Snapshot from disk, not memory. */
     boolean fromDisk() {
         return id == 0;
     }
 
-    /** Таблицу свойств после снимка не сбрасывали. */
+    /** Property table has not reset since the snapshot. */
     boolean fresh() {
         return generation == Blast.generation;
     }
@@ -368,7 +369,7 @@ final class ChunkShot {
         return minY + (sections << 4);
     }
 
-    /** Исходное состояние места (y — мира, внутри высоты мира). */
+    /** Original state at a position (y in world coordinates, within world height). */
     BlockState get(int lx, int y, int lz) {
         if (ruined) {
             if (old != null) {
@@ -376,27 +377,27 @@ final class ChunkShot {
                 if (o != null) return o;
             }
             BlockState now = raw(lx, y, lz);
-            // последствия руин: огонь и растёкшаяся вода — на месте воздуха
+            // ruin aftermath: fire and spread water occupy former air
             if (now.getBlock() instanceof BaseFireBlock || !now.getFluidState().isEmpty() && !now.getFluidState().isSource()) return AIR;
             return now;
         }
         return raw(lx, y, lz);
     }
 
-    /** Состояние места в чанке при снимке (с руинами, если они стояли). */
+    /** State at a chunk position when snapshotted (including ruins if present). */
     BlockState raw(int lx, int y, int lz) {
         int i = (y - minY) >> 4;
         if (i < 0 || i >= sections) return AIR;
         return states[i] == null ? AIR : states[i].get(lx, y & 15, lz);
     }
 
-    /** Свойства мест секции {@code i} (номер от низа мира). */
+    /** Position properties of section {@code i} (index from world bottom). */
     Sec props(int i, Blast.PropsView view) {
         Sec p = props.get(i);
         if (p != null) return p;
         PalettedContainer<BlockState> c = states[i];
         if (ruined || c != null && c.data.palette() instanceof GlobalPalette) {
-            // по месту: старые блоки плана поверх секции, или глобальная палитра (номер — во всём реестре)
+            // by position: old plan blocks overlaid on section, or global palette (index in the whole registry)
             Blast.Props[] full = new Blast.Props[4096];
             int y0 = minY + (i << 4);
             for (int y = 0; y < 16; y++) {
@@ -416,7 +417,7 @@ final class ChunkShot {
         return props.compareAndSet(i, null, p) ? p : props.get(i);
     }
 
-    /** Может ли в секции быть состояние из {@code test} (по палитре копии). */
+    /** Whether the section may contain a state matching {@code test} (from copied palette). */
     boolean mayHave(int i, java.util.function.Predicate<BlockState> test) {
         if (i < 0 || i >= sections) return false;
         if (ruined && old != null && old.anyOld(i, test)) return true;

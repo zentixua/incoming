@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Световой импульс и проникающая радиация по сущностям (DESIGN-nuke §1.4, §1.5) — под общим бюджетом тика,
- * игроки и ближние к подрыву первыми. Импульс и в жизни не мгновенный: максимум у 15 кт через 0.04·W^0.44 ≈ 0.14 с, основная
- * энергия приходит за десяток таких времён (Glasstone §7.85), так что пара тиков на сотни сущностей — честно.
- * Разом в тике подрыва (ожоги, смерти, лут) сервер вставал бы на сотни миллисекунд.
+ * Thermal pulse and prompt radiation on entities (DESIGN-nuke §1.4, §1.5) under shared tick budget, players and entities
+ * nearest the burst first. The pulse is not instantaneous in reality: 15 kt maximum after 0.04·W^0.44 ≈ 0.14 s,
+ * main energy over about ten such intervals (Glasstone §7.85), so a couple ticks for hundreds of entities is fair.
+ * Doing burns, deaths and loot at once in the detonation tick would stall the server for hundreds of milliseconds.
  * <p>
- * Список — снимок ({@code getEntitiesOfClass}: смерть моба добавляет лут в живую карту сущностей), его первая
- * единица работы: в тике подрыва ничего тяжёлого. Кто потом умер или выгрузился, пропускается ({@link LivingEntity#isAlive}).
+ * List is a snapshot ({@code getEntitiesOfClass}: mob death adds loot to the live entity map), taken as its first work
+ * unit: nothing heavy in the detonation tick. Entities later dead or unloaded are skipped ({@link LivingEntity#isAlive}).
  */
 final class PulseJob {
     private final Detonation d;
@@ -48,8 +48,8 @@ final class PulseJob {
     }
 
     /**
-     * Живые сущности в радиусе света и радиации и игроки в пределах ожога сетчатки: игроки первыми (пятно сетчатки — по
-     * взгляду как можно ближе к мигу вспышки, где и послеобраз у клиента), потом ближние.
+     * Living entities within thermal/radiation range and players within retinal burn range: players first (retinal scar
+     * from gaze as close as possible to flash time, also used by the client's afterimage), then nearest entities.
      */
     private static List<LivingEntity> inRange(ServerLevel level, Detonation d) {
         double range = NuclearWarhead.exposureRange(d), eyes = FlashEyes.reach(d);
@@ -63,7 +63,7 @@ final class PulseJob {
         return in;
     }
 
-    /** Сколько успеем за бюджет; true — импульс прошёл по всем. */
+    /** Work fitting within budget; true — pulse processed everyone. */
     boolean work(ServerLevel level, WorkClock clock) {
         Entity ownerEntity = owner == null ? null : level.getPlayerByUUID(owner);
         while ((targets == null || next < targets.size()) && clock.canStart()) {

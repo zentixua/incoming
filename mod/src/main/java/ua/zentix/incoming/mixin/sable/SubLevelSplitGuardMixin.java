@@ -7,10 +7,10 @@ import org.spongepowered.asm.mixin.Pseudo;
 import ua.zentix.incoming.compat.SplitGuard;
 
 /**
- * Дробление аппарата Sable не роняет мир — см. {@link SplitGuard}. Без Sable миксин просто не применяется; с другой
- * версией Sable, где {@code split} нет или он другой, — тоже ({@code require = 0}: иначе Mixin бросает
- * {@code InjectionError}, а его {@code "required": false} конфига не ловит, и игра падает при загрузке класса).
- * Что обёртка встала на сборке с Sable, проверяет GameTest {@code sableSplitGuardApplied}.
+ * Splitting a Sable craft does not crash the world — see {@link SplitGuard}. Without Sable the mixin simply does not
+ * apply; likewise with another Sable version where {@code split} is absent or different ({@code require = 0}: otherwise
+ * Mixin throws {@code InjectionError}, which the config's {@code "required": false} does not catch, crashing the game on
+ * class load). GameTest {@code sableSplitGuardApplied} verifies that the wrapper was applied in the pack with Sable.
  */
 @Pseudo
 @Mixin(targets = "dev.ryanhcode.sable.sublevel.plot.heat.SubLevelHeatMapManager", remap = false)

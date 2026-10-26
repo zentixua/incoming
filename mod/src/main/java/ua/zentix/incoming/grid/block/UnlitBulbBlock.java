@@ -17,8 +17,8 @@ import net.minecraft.world.phys.HitResult;
 import java.util.function.Supplier;
 
 /**
- * Двойник медной лампы: хранит её «горит» и «под сигналом», на сигнал не переключается и не окисляется, пока
- * света нет, — после блэкаута лампа та же, что была.
+ * Copper bulb counterpart: retains “lit” and “powered”, does not toggle on signals or oxidize while power is out —
+ * after blackout the bulb is as it was.
  */
 public class UnlitBulbBlock extends Block implements Unlit {
     private final Supplier<Block> lit;
@@ -34,7 +34,7 @@ public class UnlitBulbBlock extends Block implements Unlit {
         builder.add(BlockStateProperties.LIT, BlockStateProperties.POWERED);
     }
 
-    /** Компаратор читает лампу, как медную: «горит» — 15, хоть света и нет (схема вокруг не меняется от блэкаута). */
+    /** The comparator reads it like a copper bulb: “lit” gives 15 despite no light (surrounding circuitry does not change in blackout). */
     @Override
     protected boolean hasAnalogOutputSignal(BlockState state) {
         return true;

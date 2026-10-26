@@ -14,17 +14,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ua.zentix.incoming.nuclear.world.ChunkSendGate;
 
 /**
- * Чанки, чьи руины уже должны стоять, а не стоят, не уходят игроку ({@link ChunkSendGate}): на время отбора чанков
- * для отправки они убраны из очереди игрока и возвращаются в неё после — уйдут, когда руины встанут.
+ * Chunks whose ruins are due but not applied are withheld from the player ({@link ChunkSendGate}): while selecting
+ * chunks to send, remove them from the player's queue and restore them afterward — they go out once ruins are applied.
  * <p>
- * Почему миксин. Отложить отправку чанка публичным путём нельзя: {@code ChunkWatchEvent.Watch} NeoForge приходит, когда
- * чанк уже в очереди игрока, и убрать его оттуда можно ({@code PlayerChunkSender.dropChunk}), но тогда ваниль считает,
- * что чанк у игрока есть ({@code ChunkMap.isChunkTracked}: в обзоре и не в очереди), — и шлёт ему сущности и изменения
- * блоков чанка, которого у клиента нет, для всех модов сборки. Отдать чанк целым, а руины пакетами после — игрок видит
- * целый город, который у него на глазах разом становится руинами. Поставить руины до того, как чанк станет полным,
- * тоже нельзя: план читает соседей (с диска) и строится в фоновых потоках. Миксин не меняет отправку остальных чанков:
- * без подрыва — одна проверка пустой очереди руин; убирает он только чанки, до которых волна дошла, а руины мод ещё
- * не поставил, и не дольше {@code ScarQueue.WITHHOLD_LIMIT} тиков, — в очереди игрока они остаются.
+ * Why a mixin. There is no public way to defer a chunk send: NeoForge's {@code ChunkWatchEvent.Watch} fires when the chunk
+ * is already in the player's queue; it can be removed ({@code PlayerChunkSender.dropChunk}), but vanilla then considers
+ * the player to have the chunk ({@code ChunkMap.isChunkTracked}: in view and not queued) — and sends entities and block
+ * changes for a chunk absent from the client, for every mod in the pack. Sending an intact chunk followed by ruin packets
+ * shows a whole city suddenly turning into ruins before the player's eyes. Applying ruins before the chunk becomes full
+ * is also impossible: the plan reads neighbors (from disk) and is built on background threads. The mixin does not change
+ * other chunk sends: without a detonation, one empty ruin queue check; it removes only chunks reached by the wave whose
+ * ruins the mod has not yet applied, for at most {@code ScarQueue.WITHHOLD_LIMIT} ticks — they remain in the player's queue.
  */
 @Mixin(PlayerChunkSender.class)
 public abstract class PlayerChunkSenderMixin implements ChunkSendGate.Gated {
@@ -37,7 +37,7 @@ public abstract class PlayerChunkSenderMixin implements ChunkSendGate.Gated {
 
     @Inject(method = "sendNextChunks", at = @At("HEAD"))
     private void incoming$withhold(ServerPlayer player, CallbackInfo ci) {
-        // прошлый вызов не дошёл до конца (исключение между HEAD и RETURN): убранные тогда чанки — назад в очередь
+        // previous call did not finish (exception between HEAD and RETURN): restore chunks removed then to the queue
         if (incoming$held != null) pendingChunks.addAll(incoming$held);
         incoming$held = ChunkSendGate.withhold(player.serverLevel(), pendingChunks);
     }

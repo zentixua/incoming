@@ -1,9 +1,10 @@
 #version 150
 
-// Свечение (client/fx/layer/FxBloom): уровень пирамиды вверх — шатёр 3×3 по пикселям мельчайшего уровня (Jimenez 2014);
-// свой спуск уровня прибавляет смешивание. Пиксель (x, y) — точка ((x + ½)/2, (y + ½)/2) мельчайшего. Веса в сумме — 1.
+// Bloom (client/fx/layer/FxBloom): pyramid upsample — 3×3 tent over the smaller level's pixels (Jimenez 2014);
+// blending adds this level's downsample. Pixel (x, y) corresponds to ((x + ½)/2, (y + ½)/2) in the smaller level.
+// Weights sum to 1.
 uniform sampler2D Sampler0;
-// xy — 1 / размер мельчайшего уровня
+// xy — 1 / smaller-level size
 uniform vec4 BloomStep;
 
 out vec4 fragColor;

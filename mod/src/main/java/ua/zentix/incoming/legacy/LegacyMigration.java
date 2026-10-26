@@ -18,12 +18,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Переход с датапака на мод (один раз на мир, при запуске сервера):
+ * Migration from datapack to mod (once per world, on server startup):
  * <ul>
- *   <li>датапаки {@code airstrike} и {@code shahed} выключаются (файлы не трогаем — можно вернуть {@code /datapack enable});</li>
- *   <li>настройки из {@code storage airstrike:cfg} переезжают в конфиг мира (serverconfig/incoming-server.toml);</li>
- *   <li>служебные objectives и storage датапака удаляются;</li>
- *   <li>его сущности (маркеры, block/item_display, стойки) с тегами airstrike/shahed не загружаются.</li>
+ *   <li>disable {@code airstrike} and {@code shahed} datapacks (leave files untouched — reversible with {@code /datapack enable});</li>
+ *   <li>move settings from {@code storage airstrike:cfg} to world config (serverconfig/incoming-server.toml);</li>
+ *   <li>remove the datapack's internal objectives and storage;</li>
+ *   <li>do not load its entities (markers, block/item_display, armor stands) tagged airstrike/shahed.</li>
  * </ul>
  */
 public final class LegacyMigration {
@@ -84,7 +84,7 @@ public final class LegacyMigration {
         if (!legacy.isEmpty()) Incoming.LOG.info("Removed objectives of the old datapack: {}", legacy.size());
     }
 
-    /** Сущности датапака (маркеры, детали моделей, обломки) никто не обслуживает — не загружаем их. */
+    /** Nothing services datapack entities (markers, model parts, debris) — do not load them. */
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         if (event.getLevel().isClientSide()) return;
         Entity e = event.getEntity();

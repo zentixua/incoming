@@ -205,7 +205,7 @@ class NukeExposureTest {
                     medium *= cover / shownCover; } medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
                     return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover; }
                     """),
-            new Block("mushAt (свечение)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Шаг грибов в месте t луча", """
+            new Block("mushAt (свечение)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Mushroom step at ray t", """
                     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape)); vec3 source = w * light;
                     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet); hot = st * thermal * (1.0 - fromCarpet);
                     float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);

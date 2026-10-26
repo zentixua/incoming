@@ -16,8 +16,8 @@ import net.minecraft.world.phys.HitResult;
 import java.util.function.Supplier;
 
 /**
- * Двойник невидимого блока света (им карты освещают улицы и комнаты): уровень хранится, чтобы вернуться, но свет
- * не идёт. Выбор блока, как у ванильного, даёт блок света с тем же уровнем.
+ * Invisible light block counterpart (maps use it to light streets and rooms): retains level for restoration but emits
+ * no light. As with vanilla, pick block gives a light block with the same level.
  */
 public class UnlitLightBlock extends LightBlock implements Unlit {
     private final Supplier<Block> lit;

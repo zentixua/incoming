@@ -7,76 +7,76 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Слух после ударной волны: временный сдвиг порога слышимости (TTS), его восстановление, разрыв барабанных перепонок.
+ * Hearing after blast: temporary threshold shift (TTS), recovery, eardrum rupture.
  * <ul>
- * <li>Вред уху — не пик давления, а энергия в полосе слуха. У далёкой волны почти вся энергия — инфразвук, а слышимое
- * несёт один фронт: скачок давления p (нарастание доли миллисекунды, {@code client.sound.BlastPulse}). Энергия
- * скачка с A-коррекцией (МЭК 61672) — пик минус {@link #STEP_A} дБ, от длины фазы (дольше 50 мс) не зависит:
- * LAE = Lпик − 38,7 дБ. Звуковые удары самолётов до 144 фунт/фут² (~1 psi) людям слуха не портили (DTIC AD0680800,
- * обзоры NASA); там же и порог: суточная доза шума — 85 дБА за 8 ч (ISO 1999, NIOSH), LAE 129,6 дБ, — у фронта ~0,75
- * psi. Предел пика 140 дБ (CHABA, NIOSH) — для выстрелов, у которых вся энергия в слышимом, — к долгой волне не
- * подходит.</li>
- * <li>Один закон для любой волны: энергия слышимого — A-энергия самой волны у уха, импульса Фридлендера с пиком p и
- * положительной фазой t₊ ({@link #exposure(double, double)}). У далёкой ядерной волны (фаза в секунды) спектр выше
- * 100 Гц — спектр скачка, и это ровно «пик − 38,7 дБ» ({@link #exposure(double)} — её предел при t₊ → ∞; у фазы 0,2 с
- * разница меньше 0,01 дБ). У обычного взрыва фаза — миллисекунды: слышна вся волна, энергия меньше, чем у скачка того
- * же пика (у 50 кг в 100 м — на 0,2 дБ, у 3 кг в 1 км — на 7 дБ). Порог — тот же: равная энергия, 85 дБА за 8 ч. Предел
- * пика 140 дБ (CHABA, NIOSH) — допуск для сотни выстрелов в день, а не порог сдвига от одной волны: у шахеда начало
- * сдвига (LAE 129,6 дБ) — в ~75 м, пик там ~168 дБ.</li>
- * <li>Сдвиг через 2 минуты у верхов (4 кГц): от нуля на пороге до {@link #TRAUMA_SHIFT} дБ у порога разрыва перепонок
- * (5 psi — акустическая травма), между — прямая в децибелах энергии (~3 дБ сдвига на дБ). Приближение: данных о TTS
- * от одной долгой волны мало, опоры — порог и травма. На низах (до 1 кГц) импульс сдвигает порог меньше —
- * {@link #LOW_SHARE} сдвига верхов (приближение по форме «выемки» у 4 кГц).</li>
- * <li>Восстановление — прямая по логарифму времени от 2 минут (Ward 1960): сдвиг до 40 дБ проходит за 16 часов, больше —
- * дольше, вдвое на каждые 10 дБ сверх (приближение: такие сдвиги у людей часто оставляют постоянную потерю, её в игре
- * нет). Раньше 2 минут сдвиг больше — той же прямой, от 12 с.</li>
- * <li>Перепонки рвутся по логнормальному закону: 1 % при 5 psi, 50 % при 15 psi (DTIC; Glasstone &amp; Dolan, табл.
- * 12.38), 99 % — при 45 psi. Разрыв — кондуктивная потеря {@link #RUPTURE_LOW}/{@link #RUPTURE_HIGH} дБ на низах и
- * верхах (перфорация средней величины, Mehta et al. 2006); перфорация зарастает за 4–8 недель.</li>
- * <li>Глуше, чем порог: сдвиг порога в улитке у громких звуков почти не слышен (рекрутмент — громкость догоняет
- * обычную к {@link #DISCOMFORT} дБ), поэтому звук игры (~{@link #LEVEL} дБ) тише на {@link #loudnessLoss}, а не на весь
- * сдвиг; кондуктивная потеря глушит всё — ровно на себя.</li>
+ * <li>Ear damage depends on energy in the audible band, not peak pressure. A distant blast's energy is almost entirely
+ * infrasound; audible energy comes from the front: a pressure step p (rise in fractions of a millisecond,
+ * {@code client.sound.BlastPulse}). A-weighted step energy (IEC 61672) is peak minus {@link #STEP_A} dB, independent of
+ * phase duration (above 50 ms): LAE = L_peak − 38.7 dB. Aircraft sonic booms up to 144 lb/ft² (~1 psi) caused no human
+ * hearing damage (DTIC AD0680800, NASA reviews); the threshold is there too: daily noise dose 85 dBA for 8 h
+ * (ISO 1999, NIOSH), LAE 129.6 dB — a front of ~0.75 psi. The 140 dB peak limit (CHABA, NIOSH) applies to gunshots,
+ * whose energy is entirely audible, not to a long blast.</li>
+ * <li>One law for any blast: audible energy is the A-energy of the wave at the ear, a Friedlander pulse with peak p and
+ * positive phase t₊ ({@link #exposure(double, double)}). For a distant nuclear wave (seconds-long phase), the spectrum
+ * above 100 Hz is the step spectrum, exactly “peak − 38.7 dB” ({@link #exposure(double)} — limit as t₊ → ∞; at 0.2 s phase,
+ * difference below 0.01 dB). A conventional blast's phase is milliseconds: the whole wave is audible, with less energy
+ * than a step of equal peak (50 kg at 100 m — by 0.2 dB; 3 kg at 1 km — by 7 dB). Same threshold: equal energy,
+ * 85 dBA for 8 h. The 140 dB peak limit (CHABA, NIOSH) allows a hundred shots daily, rather than defining threshold shift
+ * from one blast: Shahed shift onset (LAE 129.6 dB) is at ~75 m, peak ~168 dB.</li>
+ * <li>High-frequency shift (4 kHz) after 2 minutes: zero at threshold to {@link #TRAUMA_SHIFT} dB at eardrum rupture
+ * threshold (5 psi — acoustic trauma), linear in energy dB between (~3 dB shift per dB). Approximation: little TTS data
+ * for one long blast; anchors are threshold and trauma. At low frequencies (up to 1 kHz), impulse causes less shift —
+ * {@link #LOW_SHARE} of the high-frequency shift (approximation from the 4 kHz “notch” shape).</li>
+ * <li>Recovery is linear in log time from 2 minutes (Ward 1960): shifts up to 40 dB recover in 16 hours; larger ones take
+ * longer, doubling per extra 10 dB (approximation: such shifts often leave permanent loss in humans, absent in the game).
+ * Before 2 minutes, shift is greater — the same line, from 12 s.</li>
+ * <li>Eardrum rupture follows a lognormal law: 1 % at 5 psi, 50 % at 15 psi (DTIC; Glasstone &amp; Dolan, table 12.38),
+ * 99 % at 45 psi. Rupture causes conductive loss {@link #RUPTURE_LOW}/{@link #RUPTURE_HIGH} dB at low/high frequencies
+ * (medium perforation, Mehta et al. 2006); perforation heals in 4–8 weeks.</li>
+ * <li>Less muffling than threshold shift: cochlear threshold shift barely affects loud sounds (recruitment — loudness
+ * catches normal by {@link #DISCOMFORT} dB), so game sound (~{@link #LEVEL} dB) is quieter by {@link #loudnessLoss}, not
+ * the full shift; conductive loss attenuates everything by its full amount.</li>
  * </ul>
  */
 public final class HearingModel {
-    /** Опора звукового давления, Па. */
+    /** Reference sound pressure, Pa. */
     public static final double REFERENCE_PA = 2e-5;
-    /** Энергия скачка с A-коррекцией против пика, дБ: 10·lg(2∫A²(f)/(2πf)² df), с. */
+    /** A-weighted step energy relative to peak, dB: 10·lg(2∫A²(f)/(2πf)² df), s. */
     public static final double STEP_A = -38.74;
-    /** С какой энергии слышимого фронта начинается сдвиг порога, дБ·с (85 дБА за 8 часов). */
+    /** Audible front energy at threshold-shift onset, dB·s (85 dBA for 8 hours). */
     public static final double ONSET_EXPOSURE = 85 + 10 * Math.log10(8 * 3600);
-    /** Сдвиг у верхов при 5 psi, дБ. */
+    /** High-frequency shift at 5 psi, dB. */
     static final double TRAUMA_SHIFT = 50;
-    /** Давление порога разрыва перепонок, кПа (5 psi). */
+    /** Eardrum rupture threshold pressure, kPa (5 psi). */
     static final double RUPTURE_ONSET_KPA = BlastModel.kpa(5);
-    /** Доля сдвига верхов на низах. */
+    /** Low-frequency fraction of high-frequency shift. */
     static final double LOW_SHARE = 1 / 3.0;
-    /** С какого часа идёт прямая восстановления (2 минуты); волны в пределах стольких часов — одна доза ({@link Ear}). */
+    /** Hour when the recovery line starts (2 minutes); blasts within this many hours form one dose ({@link Ear}). */
     public static final double FIRST_HOURS = 2 / 60.0;
-    /** Восстановление: за сколько часов проходит сдвиг до {@code SLOW_FROM} дБ. */
+    /** Recovery: hours for a shift up to {@code SLOW_FROM} dB to resolve. */
     static final double FULL_HOURS = 16, SLOW_FROM = 40;
-    /** Перепонки: медиана, psi; 1 % — при 5 psi (z = −2,326). */
+    /** Eardrums: median, psi; 1 % at 5 psi (z = −2.326). */
     static final double RUPTURE_MEDIAN_PSI = 15, RUPTURE_SIGMA = Math.log(3) / 2.326;
-    /** Кондуктивная потеря при разрыве, дБ: низы и верха. */
+    /** Conductive rupture loss, dB: lows and highs. */
     static final double RUPTURE_LOW = 25, RUPTURE_HIGH = 15;
-    /** Перфорация зарастает: с какого дня потеря уходит и к какому её нет. */
+    /** Perforation healing: day when loss starts fading and day when it is gone. */
     static final double HEAL_FROM_DAYS = 28, HEAL_DAYS = 56;
-    /** Громкость звуков игры и порог дискомфорта, дБ: между ними — рекрутмент. */
+    /** Game sound loudness and discomfort threshold, dB: recruitment between them. */
     static final double LEVEL = 70, DISCOMFORT = 100;
 
-    /** Фон тихой ночью за городом, дБА (оценка: сельская местность ночью — 25–35 дБА). */
+    /** Quiet rural night background, dBA (estimate: rural nights — 25–35 dBA). */
     static final double QUIET_NIGHT_A = 30;
-    /** Время, за которое слух складывает энергию короткого звука, с (временная суммация, ~200 мс). */
+    /** Time over which hearing sums short-sound energy, s (temporal integration, ~200 ms). */
     static final double INTEGRATION_S = 0.2;
     /**
-     * Поглощение воздухом по ISO 9613-1 при 20 °C и 70 % влажности, дБ/км, на 63 Гц … 8 кГц — та же таблица, что в
-     * {@code tools/build_sounds.py} ({@code AIR_DB_KM}); между — по логарифмам, ниже 63 и выше 8 кГц — как f².
+     * ISO 9613-1 air absorption at 20 °C and 70 % humidity, dB/km, at 63 Hz … 8 kHz — same table as
+     * {@code tools/build_sounds.py} ({@code AIR_DB_KM}); logarithmic interpolation; below 63 Hz and above 8 kHz, f².
      */
     private static final double[] AIR_HZ = {63, 125, 250, 500, 1000, 2000, 4000, 8000}, AIR_DB_KM = {0.1, 0.3, 1.1, 2.8, 5.0, 9.0, 22.9, 76.6};
-    /** Частоты интеграла энергии, Гц: от инфразвука до верха слуха, по логарифму. */
+    /** Energy integral frequencies, Hz: infrasound to upper hearing limit, logarithmic. */
     private static final double[] F = new double[480];
     private static final double[] A2 = new double[F.length], DF = new double[F.length];
-    /** Дальность слышимости по заряду: закон дорогой, а зарядов в игре несколько. */
+    /** Audible range by charge: expensive law, only a few charges in the game. */
     private static final Map<Double, Double> AUDIBLE = new ConcurrentHashMap<>();
 
     static {
@@ -85,7 +85,7 @@ public final class HearingModel {
         for (int i = 0; i < F.length; i++) {
             double a = aWeight(F[i]);
             A2[i] = a * a;
-            // трапеции по логарифмической сетке
+            // trapezoids on the logarithmic grid
             DF[i] = 0.5 * ((i + 1 < F.length ? F[i + 1] : F[i]) - (i > 0 ? F[i - 1] : F[i]));
         }
     }
@@ -94,8 +94,8 @@ public final class HearingModel {
     }
 
     /**
-     * A-коррекция (МЭК 61672-1), доля амплитуды: R_A(f) = 12194²·f⁴ / ((f² + 20,6²)·√((f² + 107,7²)(f² + 737,9²))·(f² +
-     * 12194²)), +2,00 дБ — 1 на 1 кГц.
+     * A-weighting (IEC 61672-1), amplitude ratio: R_A(f) = 12194²·f⁴ / ((f² + 20.6²)·√((f² + 107.7²)(f² + 737.9²))·(f² +
+     * 12194²)), +2.00 dB — 1 at 1 kHz.
      */
     public static double aWeight(double f) {
         double f2 = f * f;
@@ -104,19 +104,19 @@ public final class HearingModel {
     }
 
     /**
-     * A-энергия волны у уха, дБ·с (LAE): импульс Фридлендера (1 − t/t₊)·e^(−t/t₊) с пиком {@code pa} Па (фронт —
-     * скачок: нарастание в доли миллисекунды у давлений, где энергия вредит, на неё не влияет), спектр
+     * A-energy of the wave at the ear, dB·s (LAE): Friedlander pulse (1 − t/t₊)·e^(−t/t₊) with peak {@code pa} Pa
+     * (front is a step: fractional-millisecond rise at harmful pressures does not affect energy), spectrum
      * |P(ω)| = p·t₊·ωt₊ / (1 + (ωt₊)²), E = 2∫A²(f)|P(f)|² df.
      *
-     * @param tPlus положительная фаза у уха, с
+     * @param tPlus positive phase at the ear, s
      */
     public static double exposure(double pa, double tPlus) {
         return 20 * Math.log10(Math.max(pa, 1e-9) / REFERENCE_PA) + 10 * Math.log10(shape(tPlus, 0));
     }
 
     /**
-     * Доля энергии волны с единичным пиком и фазой {@code tPlus}, что слух берёт (с A-коррекцией), с·Па²/Па²; путь
-     * {@code metres} ест верха по ISO 9613-1 (0 — у источника).
+     * Energy share of a unit-peak wave with phase {@code tPlus} received by hearing (A-weighted), s·Pa²/Pa²;
+     * path {@code metres} absorbs high frequencies by ISO 9613-1 (0 — at source).
      */
     private static double shape(double tPlus, double metres) {
         double sum = 0, t = Math.max(1e-6, tPlus);
@@ -128,7 +128,7 @@ public final class HearingModel {
         return 2 * sum;
     }
 
-    /** Поглощение воздухом на частоте f, дБ/км (ISO 9613-1, {@link #AIR_DB_KM}). */
+    /** Air absorption at frequency f, dB/km (ISO 9613-1, {@link #AIR_DB_KM}). */
     static double airDbPerKm(double f) {
         if (f <= AIR_HZ[0]) return AIR_DB_KM[0] * (f / AIR_HZ[0]) * (f / AIR_HZ[0]);
         int n = AIR_HZ.length - 1;
@@ -140,9 +140,9 @@ public final class HearingModel {
     }
 
     /**
-     * A-энергия волны наземного взрыва заряда {@code tntKg} кг ТНТ на расстоянии {@code metres}, дБ·с: давление и фаза
-     * — Кинни–Грэхем ({@link BlastModel}), по дороге воздух ест верха (ISO 9613-1). Земли, рельефа и ветра нет — их
-     * считает путь у слушателя ({@code client.sound.Outdoor}).
+     * A-energy of a surface blast from charge {@code tntKg} kg TNT at {@code metres}, dB·s: pressure and phase —
+     * Kinney–Graham ({@link BlastModel}); air absorbs high frequencies along the path (ISO 9613-1). No ground, terrain or
+     * wind — handled by the listener path ({@code client.sound.Outdoor}).
      */
     public static double blastExposureAt(double tntKg, double metres) {
         double pa = 1000 * BlastModel.surfaceOverpressureKpa(metres, tntKg), tPlus = BlastModel.chemicalPhaseSeconds(metres, tntKg, true);
@@ -150,10 +150,10 @@ public final class HearingModel {
     }
 
     /**
-     * Докуда слышно наземный взрыв заряда {@code tntKg} кг ТНТ тихой ночью, м: там его A-энергия падает до энергии
-     * фона ({@link #QUIET_NIGHT_A}) за время суммации слуха ({@link #INTEGRATION_S}) — 23 дБ·с. Это R0 дальней модели
-     * звука (запас слышимости 20·lg(R0/d) минус потери пути) и дальность, до которой сервер шлёт пакет взрыва. Верхняя
-     * оценка: мир плоский, без турбулентности и волновода; днём зона тени, холмы, дождь — у слушателя. 0 — заряда нет.
+     * Audible surface blast range for charge {@code tntKg} kg TNT on a quiet night, m: its A-energy falls to background
+     * energy ({@link #QUIET_NIGHT_A}) over auditory integration time ({@link #INTEGRATION_S}) — 23 dB·s. This is R0 of the
+     * distant sound model (audibility margin 20·lg(R0/d) minus path losses) and server blast packet range. Upper estimate:
+     * flat world, no turbulence or waveguide; daytime shadow, hills and rain handled at the listener. 0 — no charge.
      */
     public static double audibleRangeM(double tntKg) {
         if (!(tntKg > 0)) return 0;
@@ -172,30 +172,30 @@ public final class HearingModel {
     }
 
     /**
-     * Энергия слышимого фронта долгой волны с пиком {@code pa} Па, дБ·с (LAE): предел {@link #exposure(double, double)}
-     * при положительной фазе много дольше слышимого (t₊ → ∞) — скачок.
+     * Audible front energy of a long wave with peak {@code pa} Pa, dB·s (LAE): {@link #exposure(double, double)} limit
+     * when positive phase is much longer than audible timescales (t₊ → ∞) — a step.
      */
     public static double exposure(double pa) {
         return 20 * Math.log10(Math.max(pa, 1e-9) / REFERENCE_PA) + STEP_A;
     }
 
-    /** Сдвиг порога у верхов через 2 минуты, дБ, по энергии слышимого фронта {@code exposure}, дБ·с. */
+    /** High-frequency threshold shift after 2 minutes, dB, by audible front energy {@code exposure}, dB·s. */
     public static double shift(double exposure) {
         double trauma = exposure(1000 * RUPTURE_ONSET_KPA);
         return Math.max(0, TRAUMA_SHIFT * (exposure - ONSET_EXPOSURE) / (trauma - ONSET_EXPOSURE));
     }
 
-    /** Сдвиг на низах при сдвиге верхов {@code high}, дБ. */
+    /** Low-frequency shift for high-frequency shift {@code high}, dB. */
     public static double low(double high) {
         return LOW_SHARE * high;
     }
 
-    /** За сколько часов проходит сдвиг {@code first} (через 2 минуты), дБ. */
+    /** Hours for shift {@code first} (at 2 minutes), dB, to resolve. */
     public static double recoveryHours(double first) {
         return FULL_HOURS * Math.pow(2, Math.max(0, first - SLOW_FROM) / 10);
     }
 
-    /** Сдвиг через {@code hours} часов после волны, дБ; {@code first} — через 2 минуты. */
+    /** Shift {@code hours} hours after the blast, dB; {@code first} is the shift at 2 minutes. */
     public static double shiftAfter(double first, double hours) {
         if (first <= 0) return 0;
         double end = recoveryHours(first), t = Math.max(hours, 0.1 * FIRST_HOURS);
@@ -203,29 +203,29 @@ public final class HearingModel {
         return first * (1 - Math.log10(t / FIRST_HOURS) / Math.log10(end / FIRST_HOURS));
     }
 
-    /** Вероятность разрыва перепонок при давлении {@code kpa} кПа. */
+    /** Eardrum rupture probability at pressure {@code kpa} kPa. */
     public static double ruptureProbability(double kpa) {
         double psi = BlastModel.psi(kpa);
         if (psi <= 0) return 0;
         return normal(Math.log(psi / RUPTURE_MEDIAN_PSI) / RUPTURE_SIGMA);
     }
 
-    /** Кондуктивная потеря от разорванных перепонок через {@code days} дней, дБ: верха или низы. */
+    /** Conductive loss from ruptured eardrums after {@code days} days, dB: highs or lows. */
     public static double rupturedLoss(boolean high, double days) {
         double t = Math.max(0, Math.min(1, (days - HEAL_FROM_DAYS) / (HEAL_DAYS - HEAL_FROM_DAYS)));
         return (high ? RUPTURE_HIGH : RUPTURE_LOW) * (1 - t * t * (3 - 2 * t));
     }
 
     /**
-     * На сколько тише звук игры при сдвиге порога {@code shift} в улитке, дБ: громкость растёт от сдвинутого порога и к
-     * {@link #DISCOMFORT} дБ догоняет обычную (рекрутмент, прямая в дБ — приближение).
+     * How much quieter game sound is with cochlear threshold shift {@code shift}, dB: loudness rises from the shifted
+     * threshold, catching normal at {@link #DISCOMFORT} dB (recruitment, linear in dB — approximation).
      */
     public static double loudnessLoss(double shift) {
         double s = Math.max(0, Math.min(shift, LEVEL));
         return (DISCOMFORT - LEVEL) * s / (DISCOMFORT - s);
     }
 
-    /** Функция распределения стандартного нормального (Абрамовиц–Стиган 26.2.17, ошибка до 7,5·10⁻⁸). */
+    /** Standard normal cumulative distribution (Abramowitz–Stegun 26.2.17, error up to 7.5·10⁻⁸). */
     static double normal(double z) {
         double t = 1 / (1 + 0.2316419 * Math.abs(z));
         double poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
@@ -234,18 +234,18 @@ public final class HearingModel {
     }
 
     /**
-     * Волны у одного уха. Волны в пределах 2 минут (часов {@link #FIRST_HOURS}) — одна доза: энергии складываются (равная
-     * энергия, ISO 1999), сдвиг — от суммы и с последней. Дальше у каждой дозы своя прямая восстановления, а сдвиг —
-     * наибольший из них: вторая доза поверх ещё не прошедшего сдвига его не сокращает и не складывается с ним
-     * (приближение: данных о сложении сдвигов от разных доз нет).
+     * Blasts at one ear. Blasts within 2 minutes ({@link #FIRST_HOURS} hours) form one dose: energies add (equal energy,
+     * ISO 1999), shift from the sum and latest blast. Afterward each dose has its own recovery line, and shift is their
+     * maximum: a second dose over an unresolved shift neither shortens nor adds to it (approximation: no data on summing
+     * shifts from separate doses).
      */
     public static final class Ear {
-        /** Больше стольких доз не держим: уходит та, у которой сдвиг сейчас меньше. */
+        /** Maximum retained doses: discard the one with the smallest current shift. */
         private static final int MOST = 16;
-        /** Доза: энергия, дБ·с, и час её последней волны. */
+        /** Dose: energy, dB·s, and hour of its last blast. */
         private final List<double[]> doses = new ArrayList<>();
 
-        /** Волна с энергией слышимого фронта {@code exposure}, дБ·с, в час {@code hour} часов слуха. */
+        /** Blast with audible front energy {@code exposure}, dB·s, at hearing-clock {@code hour}. */
         public void blast(double exposure, double hour) {
             double e = exposure;
             for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
@@ -262,7 +262,7 @@ public final class HearingModel {
             }
         }
 
-        /** Сдвиг верхов в час {@code hour}, дБ; прошедшие дозы уходят (кроме тех, с которыми ещё сложится новая волна). */
+        /** High-frequency shift at {@code hour}, dB; resolved doses are removed (except those still able to combine with a new blast). */
         public double shift(double hour) {
             double most = 0;
             for (Iterator<double[]> it = doses.iterator(); it.hasNext(); ) {
@@ -274,7 +274,7 @@ public final class HearingModel {
             return most;
         }
 
-        /** Есть ли ещё дозы. */
+        /** Whether any doses remain. */
         public boolean any() {
             return !doses.isEmpty();
         }

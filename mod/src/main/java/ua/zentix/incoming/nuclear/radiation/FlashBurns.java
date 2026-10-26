@@ -32,41 +32,42 @@ import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
 
 /**
- * Ожоги светом шара по телу ({@link BurnInjury}, DESIGN-nuke §4): обжигается сторона тела к шару — половина его кожи
- * (§12.60), открытая кожа — по своей степени, одежда — только когда загорится (тогда тело горит, вода тушит). Место
- * тела — слот брони: шлем — голова, нагрудник — туловище и руки, поножи — ноги, ботинки — ступни. Пустой слот у людей
- * (игрок, жители, разбойники, ведьма) — одежда: лицо и кисти с предплечьями открыты, рубашка и брюки — тонкая ткань,
- * обувь — плотная; у животных и чудищ — кожа. Кожаная броня — плотная ткань, элитры — тонкая перепонка, остальная —
- * металл. Под водой свет не обжигает (вода поглощает его в первых сантиметрах), у големов и шулкеров нет живой кожи.
+ * Fireball light burns across the body ({@link BurnInjury}, DESIGN-nuke §4): the side facing the ball burns — half the
+ * skin (§12.60); exposed skin by its burn degree, clothing only when ignited (then the body burns; water extinguishes).
+ * Body region is an armor slot: helmet — head, chestplate — torso and arms, leggings — legs, boots — feet. Empty slots
+ * on humans (player, villagers, illagers, witch) mean clothing: face and hands with forearms exposed, shirt and trousers
+ * thin fabric, footwear heavy fabric; animals and monsters have skin. Leather armor is heavy fabric, elytra thin
+ * membrane, other armor metal. No thermal burns underwater (water absorbs light in the first centimeters); golems and
+ * shulkers have no living skin.
  *
- * <p>Ожоги 2-й и 3-й степени отнимают ту долю здоровья, какую составляют от порога шока (§12.62), и не дают ей
- * вернуться, пока заживают ({@link BurnsEffect}); от порога — шок через 0,5–12 игровых часов, без лечения смертельный.
- * Одетого человека вспышка обжигает только по лицу и рукам — до шока далеко; загоревшаяся одежда жжёт, как всякий
- * огонь, пока её не потушить (§12.60: ожоги пламенем под одеждой).
+ * <p>Second- and third-degree burns remove the health share they represent of shock threshold (§12.62), keeping it from
+ * returning while healing ({@link BurnsEffect}); at threshold, shock follows after 0.5–12 game hours, fatal untreated.
+ * A clothed person's flash burns affect only face and arms — far below shock; ignited clothing burns like any fire
+ * until extinguished (§12.60: flame burns beneath clothing).
  *
- * <p>Второй подрыв обжигает ту же сторону тела: отнятая доля — большая из двух, а не сумма, рана — только прибавка;
- * каждый ожог заживает своим сроком (предел — от самого тяжёлого из незаживших), шок, который уже идёт, — прежним.
- * Игрока, которого правила не дают ранить (без PvP, своя команда), вспышка подрыва игрока, и своего, не трогает
- * вовсе — ни кожу, ни одежду, как стрела.
+ * <p>A second burst burns the same body side: health share removed is the larger of the two, not their sum; wound is
+ * only the increase. Each burn heals on its own schedule (cap set by the worst unhealed burn); ongoing shock keeps its
+ * original schedule. A player protected by damage rules (no PvP, same team) is wholly unaffected by a player's flash,
+ * including their own — skin and clothing, as with an arrow.
  */
 public final class FlashBurns {
-    /** Доля кожи по слотам стороной к шару, % (правило девяток, половина): голова, туловище с руками, ноги, ступни. */
+    /** Skin share per slot on the ball-facing side, % (half the rule of nines): head, torso with arms, legs, feet. */
     private static final double HEAD = 4.5, BODY = 27, LEGS = 16.5, FEET = 1.5;
-    /** Открытые у одетого кисти и предплечья (рубашка с коротким рукавом), % тела стороной к шару. */
+    /** Clothed person's exposed hands and forearms (short-sleeved shirt), % of ball-facing body. */
     private static final double FOREARMS = 5.4;
-    /** Сколько горит загоревшаяся одежда, если её не потушить, с (оценка: тонкая ткань прогорает быстрее). */
+    /** Ignited clothing burn duration if not extinguished, s (estimate: thin fabric burns through sooner). */
     private static final int THIN_FIRE_S = 10, HEAVY_FIRE_S = 20;
     private static final int TICKS_PER_HOUR = 1000, TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
     private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
     private FlashBurns() {}
 
-    /** Ожоги от импульса {@code q} кал/см² у глаз сущности, которая видит шар. */
+    /** Burns from fluence {@code q} cal/cm² at the eyes of an entity seeing the ball. */
     public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
         if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || underWater(level, e)
                 || e.hasEffect(MobEffects.FIRE_RESISTANCE) || q < BurnInjury.lowest(d.yieldKt())) return;
         if (e instanceof Player victim && owner instanceof Player attacker && !victim.canHarmPlayer(attacker)) return;
-        // своя кожа у каждого и у каждого подрыва, одна на все степени
+        // individual skin per subject and burst, shared across all burn degrees
         long h = HashCommon.mix(e.getUUID().getMostSignificantBits() ^ HashCommon.mix(e.getUUID().getLeastSignificantBits() ^ d.id() * 0x9E3779B97F4A7C15L));
         double z = Fragility.inverse(unit(h));
         boolean dressed = dressed(e);
@@ -92,20 +93,20 @@ public final class FlashBurns {
         int ticks = amplifier == BurnsEffect.SHOCK
                 ? (int) Math.round(BurnInjury.shockHours(unit(HashCommon.mix(h))) * TICKS_PER_HOUR)
                 : (int) Math.round(BurnInjury.HEAL_DAYS[degree - 1] * TICKS_PER_DAY);
-        // сперва рана, потом предел здоровья: иначе предел срезал бы здоровье, и рана отняла бы ту же долю второй раз.
-        // Рана — до предела, который ожоги оставят вместе с прежними: прежние свою долю уже отняли
+        // wound first, health cap second: otherwise the cap cuts health and the wound removes the same share again.
+        // Wound is down to the cap from new and previous burns together: previous burns already removed their share
         float dmg = (float) (BurnInjury.wound(before, amplifier) * unburned(e));
         if (dmg >= 0.5f && !(e instanceof Player p && p.getAbilities().invulnerable)) {
             e.hurt(ModDamageTypes.source(level, ModDamageTypes.NUCLEAR_THERMAL, null, owner), dmg);
         }
-        // свой срок у каждого ожога: эффект слабее прежнего и дольше ваниль держит под ним и открывает, когда тот кончится.
-        // Без частиц вокруг (в первом лице они лезут в глаза), только значок
+        // each burn has its own duration: vanilla keeps a weaker, longer effect underneath, exposing it when the stronger ends.
+        // No surrounding particles (obscure the eyes in first person), icon only
         if (e.isAlive()) e.addEffect(new MobEffectInstance(ModEffects.BURNS, ticks, amplifier, false, false, true));
     }
 
     /**
-     * Предел здоровья без ожогов: нынешний, делённый на долю, что ожоги оставили, у мелких мобов был бы больше — ваниль
-     * не опускает предел ниже единицы (курица в 4 единицы с уровнем 9 — 1, а не 0,4).
+     * Health cap without burns: dividing the current cap by the share burns left would overestimate it for small mobs —
+     * vanilla never lowers the cap below one (a 4-health chicken at level 9 has 1, not 0.4).
      */
     private static double unburned(LivingEntity e) {
         AttributeInstance health = e.getAttribute(Attributes.MAX_HEALTH);
@@ -117,8 +118,8 @@ public final class FlashBurns {
     }
 
     /**
-     * Глаза под водой — по самому миру, как {@code Entity.updateFluidOnEyes}: признак воды у сущности ставит только её
-     * тик, а импульс берёт и тех, кто ещё не тикал (свежий чанк, чанк без тика сущностей).
+     * Eyes underwater are checked in the world itself, as {@code Entity.updateFluidOnEyes}: an entity's water flag is set
+     * only by its tick, whereas the pulse includes entities not yet ticked (fresh chunk, chunk without entity ticking).
      */
     private static boolean underWater(ServerLevel level, LivingEntity e) {
         double y = e.getEyeY();
@@ -128,12 +129,12 @@ public final class FlashBurns {
         return water.is(FluidTags.WATER) && pos.getY() + water.getHeight(level, pos) > y;
     }
 
-    /** Одеты ли люди: игрок, жители и торговец, разбойники, ведьма. */
+    /** Whether humans wear clothing: player, villagers and trader, illagers, witch. */
     private static boolean dressed(LivingEntity e) {
         return e instanceof Player || e instanceof Npc || e instanceof AbstractIllager || e instanceof Witch;
     }
 
-    /** Чем закрыто место тела: предмет в слоте или, если слот пуст, одежда у людей и кожа у остальных. */
+    /** Body region cover: slot item, or if empty, clothing for humans and skin for others. */
     static Cover cover(ItemStack stack, EquipmentSlot slot, boolean dressed) {
         if (stack.isEmpty()) {
             if (!dressed) return Cover.SKIN;
@@ -157,7 +158,7 @@ public final class FlashBurns {
         };
     }
 
-    /** Число 0..1 (без краёв) из хеша. */
+    /** Number 0..1 (excluding endpoints) from a hash. */
     private static double unit(long h) {
         return ((h >>> 11) + 0.5) * 0x1.0p-53;
     }

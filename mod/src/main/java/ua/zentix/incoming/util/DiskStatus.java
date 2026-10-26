@@ -14,40 +14,41 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Что за чанк на диске — одно правило на весь мод. Блоки окончательные ({@link State#blocksFinal}) — по нему строится
- * план руин с диска ({@code nuclear.world.DiskShots}, фаза 2 подготовки {@code nuclear.world.NuclearPrep}) и копия с руинами для LOD вдали
- * ({@code nuclear.world.FarLods}: иначе чанк берёт в мир {@code nuclear.world.FarZone}). Целый ({@link State#WHOLE}) — зона за волной берёт его
- * в мир ({@code nuclear.world.NuclearPrep}: чанк, чьё окно руин целое), ничего не генерируя. Разница — чанки мира 1.17, обновлённого
- * до 1.21: блоки на месте, но при загрузке ваниль догенерирует низ мира под нулём. Их план с диска верен (сверка —
- * по старым состояниям мест плана, низ мира и бедрок в них не входят), до волны их не грузит зона, а после — грузит
- * игрок или LOD; план держится до конца зоны. На старых картах таких чанков почти все (Zearth — 77974 из 86392
- * чанков на диске, Greenfield — 295718 из 295936): «не целые», они не получали бы плана с диска, а LOD вдали грузил
- * бы их в мир с генерацией.
+ * Disk chunk status — one rule for the whole mod. Final blocks ({@link State#blocksFinal}) allow a disk ruin plan
+ * ({@code nuclear.world.DiskShots}, preparation phase 2 in {@code nuclear.world.NuclearPrep}) and a ruined disk copy for
+ * distant LODs ({@code nuclear.world.FarLods}: otherwise {@code nuclear.world.FarZone} loads it into the world).
+ * Whole ({@link State#WHOLE}) allows the post-wave zone to load it without generation
+ * ({@code nuclear.world.NuclearPrep}: chunk whose ruin window is whole). Difference: 1.17 worlds upgraded to 1.21 have
+ * blocks in place, but vanilla generates the below-zero world bottom on load. Their disk plan is valid (checks old
+ * states at plan positions, excluding world bottom and bedrock); zone does not load them before the wave, player or
+ * LODs do afterward; plan retained until zone end. Almost all chunks in old maps are such (Zearth — 77974 of 86392 disk
+ * chunks, Greenfield — 295718 of 295936): classified “not whole”, they would get no disk plan and distant LODs would
+ * load them into the world with generation.
  */
 public final class DiskStatus {
-    /** Имя полной генерации в поле {@code Status}. */
+    /** Full-generation name in {@code Status}. */
     private static final ResourceLocation FULL = ResourceLocation.withDefaultNamespace("full");
     /**
-     * Статусы, после которых блоки чанка окончательные: украшения соседей в радиусе 1 (они пишут и в этот чанк) уже
-     * поставлены — свет у ванили ждёт их ({@code ChunkPyramid}). У чанков 1.17 полная генерация в
-     * {@code below_zero_retrogen} записана как {@code heightmaps}, после переименования — {@code spawn}.
+     * Statuses after which chunk blocks are final: decorations from radius-1 neighbors (also writing into this chunk) have
+     * been placed — vanilla lighting waits for them ({@code ChunkPyramid}). For 1.17 chunks, full generation in
+     * {@code below_zero_retrogen} is recorded as {@code heightmaps}, renamed to {@code spawn}.
      */
     private static final Set<ResourceLocation> FINISHED = Set.of(ResourceLocation.withDefaultNamespace("light"),
             ResourceLocation.withDefaultNamespace("spawn"), ResourceLocation.withDefaultNamespace("heightmaps"), FULL);
 
-    /** Что за чанк на диске. */
+    /** Disk chunk status. */
     public enum State {
-        /** Нет на диске, недогенерированный (кольца у края исследованного мира, начала структур), ошибка чтения. */
+        /** Absent on disk, incomplete (rings at explored-world edge, structure starts), or read error. */
         PARTIAL,
         /**
-         * Блоки окончательные, но в мир без генерации не войдёт: догенерация под нулём ({@code below_zero_retrogen})
-         * или формат до 1.18 ({@code Status} внутри {@code Level}: что выйдет при обновлении, зависит от измерения).
+         * Final blocks, but cannot enter the world without generation: below-zero retrogen ({@code below_zero_retrogen}) or
+         * pre-1.18 format ({@code Status} inside {@code Level}: upgrade result depends on dimension).
          */
         FINAL,
-        /** Полная генерация без догенерации: ваниль грузит его, ничего не генерируя. */
+        /** Full generation without retrogen: vanilla loads without generating anything. */
         WHOLE;
 
-        /** Годится ли для плана руин и копии LOD с диска. */
+        /** Suitable for a disk ruin plan and LOD copy. */
         public boolean blocksFinal() {
             return this != PARTIAL;
         }
@@ -56,11 +57,10 @@ public final class DiskStatus {
     private DiskStatus() {}
 
     /**
-     * Что за чанк — по данным, как на диске, до обновления версии. Имя статуса без пространства имён (как в старых
-     * сохранениях) — из {@code minecraft}, как читает ваниль ({@code ChunkStatus.byName}). Реестр статусов не нужен:
-     * проверяется и в фоновых потоках.
+     * Chunk status from disk data before version upgrade. Unnamespaced status names (old saves) are {@code minecraft}, as
+     * vanilla reads them ({@code ChunkStatus.byName}). No status registry needed: checked on background threads too.
      *
-     * @param fields данные чанка или только поля {@link #fields}; {@code null} — чанка нет
+     * @param fields chunk data or only {@link #fields}; {@code null} — chunk absent
      */
     public static State of(@Nullable CompoundTag fields) {
         if (fields == null) return State.PARTIAL;
@@ -74,17 +74,17 @@ public final class DiskStatus {
     }
 
     private static boolean finished(String status) {
-        // имя с недопустимыми знаками не разбирается (null): не статус ванили
+        // name with invalid characters does not parse (null): not a vanilla status
         ResourceLocation name = ResourceLocation.tryParse(status);
         return name != null && FINISHED.contains(name);
     }
 
-    /** Поля, по которым {@link #of} решает, — без разбора всего чанка ({@code chunkScanner}). */
+    /** Fields used by {@link #of}, without decoding the whole chunk ({@code chunkScanner}). */
     private static CollectFields fields() {
         return fields(new FieldSelector[0]);
     }
 
-    /** Поля {@link #of} и ещё {@code extra} — одним чтением заголовка ({@link TerrainSurvey}: и карта высот). */
+    /** {@link #of} fields plus {@code extra} in one header read ({@link TerrainSurvey}: heightmap too). */
     static CollectFields fields(FieldSelector... extra) {
         java.util.List<FieldSelector> all = new java.util.ArrayList<>(java.util.List.of(new FieldSelector(StringTag.TYPE, "Status"),
                 new FieldSelector(CompoundTag.TYPE, "below_zero_retrogen"), new FieldSelector("Level", StringTag.TYPE, "Status")));
@@ -93,8 +93,8 @@ public final class DiskStatus {
     }
 
     /**
-     * Что за чанк на диске — по его заголовку, в потоке ввода-вывода чанков ({@code chunkScanner}: не загружая и не
-     * разбирая чанк). Ответ приходит в потоке ввода-вывода; ошибка чтения — {@link State#PARTIAL}.
+     * Disk chunk status from its header on the chunk I/O thread ({@code chunkScanner}: without loading or decoding the
+     * chunk). Completion arrives on the I/O thread; read error — {@link State#PARTIAL}.
      */
     public static CompletableFuture<State> scan(ServerLevel level, ChunkPos pos) {
         CollectFields fields = fields();

@@ -12,28 +12,27 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.List;
 
 /**
- * Осадки у мобов (DESIGN-nuke §4). У игроков доза идёт раз в секунду; мобов в загруженном мире тысячи, поэтому
- * раз в {@link #PERIOD} тиков — снимок мобов уровня, и каждому доза за прошедшее время по мощности осадков в его
- * точке с защитой стенами и крышей ({@link Shielding#fallout}). И снимок, и каждый моб — единицы работы под общим
- * бюджетом ядерной работы ({@link WorkClock}), как свет и разрушения. Заражение одеждой и чёрный дождь — только у
- * игроков.
+ * Mob fallout (DESIGN-nuke §4). Players receive dose once a second; the loaded world has thousands of mobs, so every
+ * {@link #PERIOD} ticks snapshot the level's mobs, then give each elapsed-time dose from local fallout rate with wall
+ * and roof shielding ({@link Shielding#fallout}). The snapshot and each mob are work units under the shared nuclear
+ * work budget ({@link WorkClock}), as light and destruction are. Clothing contamination and black rain are player-only.
  */
 public final class MobFallout {
-    /** Раз в сколько тиков мобы получают дозу осадков (10 с — 0.2 игрового часа). */
+    /** Ticks between mob fallout doses (10 s — 0.2 game hour). */
     public static final int PERIOD = 200;
-    /** Мощность меньше этой (Р/ч) — фон: дозы от неё нет, защиту не считаем (у игроков так же). */
+    /** Rate below this (R/h) is background: adds no dose, skip shielding (same for players). */
     static final double BACKGROUND = 0.01;
 
     @Nullable
     private List<? extends Mob> mobs;
     private int next;
-    /** Прошлого снимка не было: после загрузки мира или простоя без осадков. */
+    /** No previous snapshot: after world load or idle time without fallout. */
     private static final long NONE = Long.MIN_VALUE;
-    /** Когда сделан прошлый снимок: доза нового обхода — за всё время между снимками. */
+    /** Previous snapshot time: new pass dose spans the full time between snapshots. */
     private long lastSnapshot = NONE;
     private double hours;
 
-    /** Сколько успеем за бюджет. */
+    /** How much fits within the budget. */
     public void work(ServerLevel level, List<Detonation> detonations, WorkClock clock) {
         long now = level.getGameTime();
         if (mobs == null) {
@@ -43,10 +42,10 @@ public final class MobFallout {
             }
             if ((lastSnapshot != NONE && now - lastSnapshot < PERIOD) || !clock.canStart()) return;
             long t0 = clock.begin();
-            // снимок, а не живая карта: моб может умереть от дозы, и лут добавится в карту сущностей
+            // snapshot, not the live map: a mob may die from dose and add loot to the entity map
             mobs = level.getEntities(EntityTypeTest.forClass(Mob.class), RadiationTicker::affectsMob);
-            // обход, растянутый бюджетом дольше периода (очередь занята разрушениями), не теряет часов: доза — за всё
-            // время с прошлого снимка; первый обход (после загрузки мира или простоя без осадков) — за один период
+            // a budget-stretched pass longer than the period (queue busy with destruction) loses no hours: dose covers all time
+            // since the previous snapshot; first pass (after world load or idle without fallout) covers one period
             hours = (lastSnapshot == NONE ? PERIOD : now - lastSnapshot) / 1000.0;
             lastSnapshot = now;
             next = 0;
@@ -61,7 +60,7 @@ public final class MobFallout {
     }
 
     private void expose(ServerLevel level, List<Detonation> detonations, Mob mob, long now) {
-        // снимок старше тика: чанк моба мог уйти из полной загрузки, а защита читается блоками
+        // snapshot older than a tick: the mob's chunk may have dropped below full loading, while shielding reads blocks
         if (!mob.isAlive() || !Terrain.ready(level, mob.blockPosition())) return;
         double field = 0;
         for (Detonation d : detonations) field += d.falloutRate(mob.getX(), mob.getZ(), now - d.gameTime());
@@ -74,7 +73,7 @@ public final class MobFallout {
         return IncomingConfig.SERVER.nukeMobRadiation.get() && detonations.stream().anyMatch(Detonation::hasFallout);
     }
 
-    /** Отбой: текущий обход прерван. */
+    /** Cancel: current pass interrupted. */
     public void clear() {
         mobs = null;
     }

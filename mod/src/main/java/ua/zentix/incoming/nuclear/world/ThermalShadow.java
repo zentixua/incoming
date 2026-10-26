@@ -7,9 +7,9 @@ import net.minecraft.world.phys.Vec3;
 import ua.zentix.incoming.util.Terrain;
 
 /**
- * Видит ли точка огненный шар (DESIGN-nuke §3.4): 16 выборок карты высот вдоль горизонтальной проекции луча —
- * если рельеф или постройка в выборке выше луча, точка в тени. Одно чтение массива на выборку, без {@code clip};
- * отсюда «хиросимские тени» и уцелевшие склоны за холмом.
+ * Whether a point sees the fireball (DESIGN-nuke §3.4): 16 heightmap samples along the ray's horizontal projection —
+ * terrain or building above the ray puts the point in shadow. One array read per sample, no {@code clip}; produces
+ * “Hiroshima shadows” and surviving slopes behind hills.
  */
 public final class ThermalShadow {
     private static final int SAMPLES = 16;
@@ -20,7 +20,7 @@ public final class ThermalShadow {
         return visible(fireball, point, (x, z) -> Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z));
     }
 
-    /** То же по своей карте высот (первый воздух над {@code MOTION_BLOCKING}): руины видят мир до волны. */
+    /** The same with a supplied heightmap (first air above {@code MOTION_BLOCKING}): ruins see the pre-burst world. */
     static boolean visible(Vec3 fireball, Vec3 point, java.util.function.IntBinaryOperator height) {
         for (int i = 1; i <= SAMPLES; i++) {
             double f = i / (SAMPLES + 1.0);

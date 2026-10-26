@@ -10,35 +10,33 @@ import ua.zentix.incoming.Incoming;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Остановка сервера: генерация и загрузка чанков, начатые до выхода, доводятся до конца ещё в
- * {@code ServerStoppingEvent} — до ванильного цикла выгрузки в {@code MinecraftServer.stopServer}.
+ * Server shutdown: chunk generation and loading begun before exit are drained in {@code ServerStoppingEvent}, before
+ * vanilla's unload loop in {@code MinecraftServer.stopServer}.
  * <p>
- * Зачем. Задача генерации ({@code ChunkGenerationTask}) держит держатели всех чанков своего окна
- * ({@code acquireGeneration}: {@code getGenerationRefCount() > 0}), пока не дождётся своих слоёв, — и отменённая тоже;
- * а слой (разбор чанка с диска, шаг FULL) кончается только задачей потока сервера ({@code ServerChunkCache.pollTask}).
- * Ванильный цикл остановки зовёт {@code ServerChunkCache.tick(() -> true, false)}: в {@code ChunkMap.processUnloads}
- * очередь выгрузки разбирается без предела, а задача выгрузки держателя, которого держит генерация
- * ({@code isReadyForSaving} ложно), кладёт себя в ту же очередь сразу же ({@code scheduleUnload}). Вызов не
- * возвращается, задачи потока сервера не выполняются, генерация не кончается — выход висит на «Saving worlds» (после
- * ядерки — 632 с в {@code processUnloads}). Генерацию запускают и тикеты игрока, но районы и зона мода
- * (руины, подготовка, районы целей, полосы подлёта, вход игрока) делают случай частым.
+ * Why. A generation task ({@code ChunkGenerationTask}) holds every chunk holder in its window ({@code acquireGeneration}:
+ * {@code getGenerationRefCount() > 0}) until its stages complete, even when canceled; a stage (disk chunk decoding, FULL
+ * step) completes only through a server-thread task ({@code ServerChunkCache.pollTask}). Vanilla shutdown calls
+ * {@code ServerChunkCache.tick(() -> true, false)}: {@code ChunkMap.processUnloads} drains the unload queue without limit,
+ * while an unload task for a generation-held holder ({@code isReadyForSaving} false) immediately requeues itself
+ * ({@code scheduleUnload}). The call never returns, server-thread tasks do not run, generation never ends — exit hangs
+ * at “Saving worlds” (after a nuclear strike, 632 s in {@code processUnloads}). Player tickets also start generation,
+ * but mod areas and zones (ruins, preparation, target areas, approach corridors, player arrival) make this frequent.
  * <p>
- * Что делает. После того как мод отпустил свои тикеты и работу (обработчики обычного приоритета; районы — {@code StrikeWorld.releaseAreas}), этот обработчик
- * (последним, {@code LOWEST}) выполняет задачи чанков каждого мира ({@code pollTask}: он же применяет снятые тикеты —
- * {@code runDistanceManagerUpdates} — и будит свет), пока ни один держатель карты чанков не занят генерацией
- * ({@link #inFlight}), но не дольше {@link #LIMIT_NANOS} (тогда — строка в лог, и выход идёт как у ванили). Новой
- * генерации после этого никто не просит: цикл остановки тикеты только снимает. Ванильный код не меняется.
- * Проверка — GameTest {@code stopDrainLetsVanillaUnloadFinish}.
+ * What it does. After mod tickets and work are released (normal-priority handlers; areas via {@code StrikeWorld.releaseAreas}),
+ * this handler (last, {@code LOWEST}) polls each world's chunk tasks ({@code pollTask}: also applies removed tickets via
+ * {@code runDistanceManagerUpdates} and wakes lighting) until no chunk-map holder is generating ({@link #inFlight}),
+ * at most {@link #LIMIT_NANOS} (then logs and proceeds with vanilla shutdown). Nobody requests new generation afterward:
+ * shutdown only removes tickets. Vanilla code is unchanged. Checked by GameTest {@code stopDrainLetsVanillaUnloadFinish}.
  */
 public final class StopDrain {
-    /** Предел ожидания на весь сервер. */
+    /** Wait limit for the whole server. */
     public static final long LIMIT_NANOS = 30_000_000_000L;
-    /** Как часто писать, что ожидание идёт. */
+    /** How often to log ongoing waiting. */
     private static final long REPORT_NANOS = 5_000_000_000L;
 
     private StopDrain() {}
 
-    /** {@code ServerStoppingEvent}, приоритет {@code LOWEST}: после того как мод снял свои тикеты и работу. */
+    /** {@code ServerStoppingEvent}, {@code LOWEST} priority: after the mod releases its tickets and work. */
     public static void onServerStopping(ServerStoppingEvent event) {
         MinecraftServer server = event.getServer();
         if (!server.isSameThread()) return;
@@ -53,10 +51,10 @@ public final class StopDrain {
     }
 
     /**
-     * Выполнять задачи чанков миров, пока у них идёт генерация или загрузка.
+     * Run world chunk tasks while generation or loading is active.
      *
-     * @param deadline {@code System.nanoTime()}, после которого бросить
-     * @return генерации больше нет ни в одном мире
+     * @param deadline {@code System.nanoTime()} after which to stop
+     * @return no generation remains in any world
      */
     public static boolean drain(Iterable<ServerLevel> levels, long deadline) {
         long report = System.nanoTime() + REPORT_NANOS;
@@ -78,16 +76,15 @@ public final class StopDrain {
                 for (ServerLevel level : levels) n += inFlight(level);
                 Incoming.LOG.info("Shutdown: waiting for chunk generation started before exit (holders busy {})", n);
             }
-            // слои генерации идут в потоках генерации, ввода-вывода и света; задачи потоку сервера они пришлют сами
+            // generation stages run on generation, I/O and light threads; they submit server-thread tasks themselves
             LockSupport.parkNanos(1_000_000L);
         }
     }
 
     /**
-     * Держателей карты чанков мира, занятых генерацией или загрузкой (задача генерации берёт центр и всё окно и отпускает
-     * их, только дождавшись своих слоёв). Сперва применяет тикеты ({@code runDistanceManagerUpdates}), чтобы видимая
-     * карта совпала с рабочей; держатель, занятый генерацией, из рабочей карты не уходит ({@code processUnloads} его
-     * пропускает).
+     * World chunk-map holders busy generating or loading (generation task takes center and whole window, releases only
+     * after its stages complete). Apply tickets first ({@code runDistanceManagerUpdates}) so visible map matches working
+     * map; a generation-busy holder remains in the working map ({@code processUnloads} skips it).
      */
     public static int inFlight(ServerLevel level) {
         ServerChunkCache cache = level.getChunkSource();

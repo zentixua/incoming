@@ -1,7 +1,7 @@
 #version 150
 
-// Контузия на экране (client/fx/Concussion) — подача: Гаусс по оси BlurDir (σ = Radius, пикселей), во втором проходе
-// (Final = 1) ещё потеря цвета к серому той же яркости (Grey) и тёмные края (Edge).
+// On-screen concussion (client/fx/Concussion), presentation: Gaussian along BlurDir (σ = Radius, pixels), with second
+// pass (Final = 1) also desaturating toward equal-luminance gray (Grey) and darkening edges (Edge).
 
 uniform sampler2D DiffuseSampler;
 
@@ -16,8 +16,8 @@ uniform float Final;
 
 out vec4 fragColor;
 
-// Гаусс до 3σ, пары соседних пикселей — одной выборкой между ними (линейная выборка): вес — сумма пары, место — по их
-// весам. σ непрерывна: размытие гаснет без ступенек.
+// Gaussian to 3σ, adjacent pixel pairs in one interpolated sample (linear): pair-summed weight, weighted position.
+// Continuous σ makes blur fade without steps.
 vec3 blurred() {
     vec3 centre = texture(DiffuseSampler, texCoord).rgb;
     if (Radius < 0.2) {
@@ -40,12 +40,12 @@ vec3 blurred() {
 
 void main() {
     vec3 c = blurred();
-    // яркость по Rec. 709; серость — к ней, не к среднему каналов (зелень темнела бы); яркий цвет (огонь, небо) серость
-    // почти не трогает: тускнеет то, что вокруг, а не сам взрыв
+    // Rec. 709 luminance; gray toward it, not channel mean (would darken greenery); bright colors (fire, sky) barely
+    // desaturate: surroundings dim, not the explosion itself
     float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
     float bright = smoothstep(0.6, 1.0, max(c.r, max(c.g, c.b)));
     vec3 grey = mix(c, vec3(luma), Grey * (1.0 - bright));
-    // края: от середины к углу кадра (с поправкой на его стороны), темнеют плавно с трети пути
+    // edges: center toward frame corner (aspect-corrected), smoothly darkening from one third of the path
     vec2 p = (texCoord - 0.5) * vec2(OutSize.x / OutSize.y, 1.0);
     float r = length(p) / length(vec2(0.5 * OutSize.x / OutSize.y, 0.5));
     vec3 graded = grey * (1.0 - Edge * smoothstep(0.35, 1.0, r));

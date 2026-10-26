@@ -15,15 +15,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Лампы сети и их обесточенные двойники ({@link ModBlocks#UNLIT}). Перевод — в обе стороны с переносом всех свойств
- * состояния (подвешен, в воде, направление, ось, уровень, «горит», «под сигналом»): после блэкаута каждая лампа
- * возвращается ровно такой, какой была. Двойника игрок не получит (предмета нет), поэтому любой двойник в мире —
- * погашенная нами лампа, и возврат не требует записей о том, что где стояло.
+ * Grid lamps and their unpowered counterparts ({@link ModBlocks#UNLIT}). Conversion works both ways, carrying every
+ * state property (hanging, waterlogged, facing, axis, level, “lit”, “powered”): after a blackout each lamp returns exactly
+ * as it was. Players cannot obtain counterparts (no item), so any counterpart in the world is a lamp we darkened, and
+ * restoration needs no record of what stood where.
  */
 public final class GridLights {
-    /** Состояние лампы → состояние двойника и обратно (все состояния всех пар; перевод — один поиск, без копирования свойств). */
+    /** Lamp state → counterpart state and back (all states of every pair; one lookup, no property copying). */
     private static volatile Map<BlockState, BlockState> toUnlit, toLit;
-    /** Пары состояний, которые нельзя менять прямо в палитре секции (см. {@link #inPlace}); у ламп сети таких нет. */
+    /** State pairs that cannot change directly in a section palette (see {@link #inPlace}); grid lamps have none. */
     private static volatile Set<BlockState> notInPlace;
 
     private GridLights() {}
@@ -49,10 +49,10 @@ public final class GridLights {
     }
 
     /**
-     * Для мира лампа и двойник — один и тот же блок, кроме света: ни блок-сущности, ни другой формы (столкновения,
-     * контура, затенения), ни другого воздуха, ни другой непрозрачности, ни другого пропуска неба, ни другого места
-     * в картах высот. Тогда их можно менять прямо в палитре секции, без {@code setBlock} (он же обновляет карты высот
-     * и источники неба чанка): соседям, картам высот, физике аппаратов и столкновениям знать не о чем, остаётся свет.
+     * For the world, a lamp and counterpart are identical except for light: no block entity, different shape (collision,
+     * outline, shading), air, opacity, skylight propagation or heightmap position. They can therefore change directly in the
+     * section palette without {@code setBlock} (which also updates chunk heightmaps and skylight sources): neighbors,
+     * heightmaps, craft physics and collisions need no updates; only light remains.
      */
     private static boolean sameInWorld(BlockState a, BlockState b) {
         var at = EmptyBlockGetter.INSTANCE;
@@ -69,45 +69,45 @@ public final class GridLights {
                 && a.getOcclusionShape(at, BlockPos.ZERO).toAabbs().equals(b.getOcclusionShape(at, BlockPos.ZERO).toAabbs());
     }
 
-    /** Перевод {@code state} (лампы или двойника) можно делать прямо в палитре ({@link #sameInWorld}). */
+    /** Conversion of {@code state} (lamp or counterpart) can happen directly in the palette ({@link #sameInWorld}). */
     public static boolean inPlace(BlockState state) {
         init();
         return !notInPlace.contains(state);
     }
 
-    /** Горящая лампа сети (гаснет при блэкауте). */
+    /** Lit grid lamp (goes dark in a blackout). */
     public static boolean isLit(BlockState state) {
         init();
         return toUnlit.containsKey(state);
     }
 
-    /** Погашенная лампа (двойник). */
+    /** Unlit lamp (counterpart). */
     public static boolean isUnlit(BlockState state) {
         init();
         return toLit.containsKey(state);
     }
 
-    /** Двойник лампы с теми же свойствами; null — не лампа сети. */
+    /** Lamp counterpart with the same properties; null — not a grid lamp. */
     @Nullable
     public static BlockState unlit(BlockState state) {
         init();
         return toUnlit.get(state);
     }
 
-    /** Лампа по двойнику с теми же свойствами; null — не двойник. */
+    /** Lamp from counterpart with the same properties; null — not a counterpart. */
     @Nullable
     public static BlockState lit(BlockState state) {
         init();
         return toLit.get(state);
     }
 
-    /** Перевод к нужному состоянию сети: {@code dark} — погасить, иначе зажечь; null — менять нечего. */
+    /** Convert to the desired grid state: {@code dark} — darken, otherwise light; null — nothing to change. */
     @Nullable
     public static BlockState toward(BlockState state, boolean dark) {
         return dark ? unlit(state) : lit(state);
     }
 
-    /** Лампа, которую надо перевести к состоянию сети ({@code dark} — горящая, иначе погашенная). */
+    /** Lamp needing conversion to grid state ({@code dark} — lit, otherwise unlit). */
     public static boolean needs(BlockState state, boolean dark) {
         return dark ? isLit(state) : isUnlit(state);
     }

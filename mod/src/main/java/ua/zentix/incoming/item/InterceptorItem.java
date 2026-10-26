@@ -9,8 +9,8 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.List;
 
 /**
- * Зенитная ракета — запас ЗРК ({@link ua.zentix.incoming.defense.SamBlock}): кладётся рукой (ПКМ по ЗРК), воронкой
- * или воронкой Create (способность предметов блок-сущности). Сама по себе ничего не делает — подсказка говорит куда.
+ * Surface-to-air missile — SAM stock ({@link ua.zentix.incoming.defense.SamBlock}): inserted by hand (right-click the SAM),
+ * hopper or Create funnel (block entity item capability). Does nothing on its own — the tooltip says where it goes.
  */
 public class InterceptorItem extends Item {
     public InterceptorItem(Properties properties) {

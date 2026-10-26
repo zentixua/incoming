@@ -11,9 +11,8 @@ import ua.zentix.incoming.strike.Munitions;
 import java.util.List;
 
 /**
- * Боеприпас: пуск с пульта снимает его из инвентаря ({@link Munitions}); какой у оружия — его паспорт
- * ({@code WeaponSpec.munition}). У пакета (несколько снарядов в предмете, «Град») начатый пакет показывает полосой,
- * сколько в нём осталось.
+ * Munition: a designator launch consumes it from inventory ({@link Munitions}); the weapon's spec selects it
+ * ({@code WeaponSpec.munition}). A partly used pack (several rounds per item, Grad) shows its remaining count as a bar.
  */
 public class MunitionItem extends Item {
     private static final int BAR_COLOR = 0xE0A030;
