@@ -1,0 +1,34 @@
+name: Crash report
+description: Report a crash with its log and reproduction steps.
+body:
+  - type: markdown
+    attributes:
+      value: Search existing issues first. Remove personal data from logs. For security issues, follow [SECURITY.md](https://github.com/zentixua/incoming/blob/main/SECURITY.md).
+  - type: input
+    id: versions
+    attributes:
+      label: Incoming, Minecraft, NeoForge and Java versions
+      placeholder: Incoming 3.8.0, Minecraft 1.21.1, NeoForge 21.1.264, Java 21
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce and context
+      description: Say whether this is singleplayer, LAN or a dedicated server, and what happened before the crash.
+    validations:
+      required: true
+  - type: input
+    id: report
+    attributes:
+      label: Crash report and complete latest.log links
+      description: Upload both files to a paste service or attach them in the issue. If no crash report was generated, say so; if attaching, write "attached" here.
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods and shaders
+      description: Include versions and whether the crash also happens with only Incoming and NeoForge.
+    validations:
+      required: true

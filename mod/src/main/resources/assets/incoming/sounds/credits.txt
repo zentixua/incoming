@@ -1,63 +1,63 @@
 Incoming sounds are built from the recordings below (cut, mixed, filtered, resampled)
 plus synthesis. CC0 = public domain; CC BY = used with attribution, modified.
 
-221Beimesche - "Glass Shattering and Falling" - CC0 1.0 - https://freesound.org/s/336425/
-alienistcog - "merrimack-st-demolition.aif" - CC0 1.0 - https://freesound.org/s/125937/
-bastipictures - "peal of thunder - distant" - CC0 1.0 - https://freesound.org/s/243782/
-craigsmith - "G09-18-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437910/
-craigsmith - "G10-02-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437917/
-craigsmith - "G26-27-Huge Storm Sequence.wav" - CC0 1.0 - https://freesound.org/s/438346/
-craigsmith - "G32-10-Massive Electrical Discharges.wav" - CC0 1.0 - https://freesound.org/s/438494/
-craigsmith - "G33-32-Distant Bomb Explosion.wav" - CC0 1.0 - https://freesound.org/s/438538/
-craigsmith - "G43-14-25 Distant Explosions.wav" - CC0 1.0 - https://freesound.org/s/438693/
-craigsmith - "G56-25-Low Wind.wav" - CC0 1.0 - https://freesound.org/s/438880/
-craigsmith - "R01-04-Catapult Launch.wav" - CC0 1.0 - https://freesound.org/s/479922/
-craigsmith - "R30-12-Large Gun Shells Fly By and Explode.wav" - CC0 1.0 - https://freesound.org/s/483296/
-craigsmith - "R09-58-Large Fire with Debris.wav" - CC0 1.0 - https://freesound.org/s/483304/
-craigsmith - "R30-09-Fires Burns Wood and Metal Crackling.wav" - CC0 1.0 - https://freesound.org/s/483323/
-craigsmith - "R12-02-Large Explosions.wav" - CC0 1.0 - https://freesound.org/s/486018/
-craigsmith - "S18-01 Incoming shells; explosions.wav" - CC0 1.0 - https://freesound.org/s/674897/
-craigsmith - "S32-27 Titan missile launch; long.wav" - CC0 1.0 - https://freesound.org/s/675750/
-craigsmith - "S10-19 Falling wooden beam; big interior crash; house collapses; long.wav" - CC0 1.0 - https://freesound.org/s/675967/
-csengeri - "Close lightning strike 2018 07 07" - CC0 1.0 - https://freesound.org/s/434359/
-deleted_user_9900733 - "UAV explosion in the city" - CC0 1.0 - https://freesound.org/s/811474/
-dobroide - "20110212_paraglider.02.wav" - CC BY 4.0 - https://freesound.org/s/114628/
-felix.blume - "Dynamite explosion in the mountain" - CC0 1.0 - https://freesound.org/s/251401/
-felix.blume - "Big dynamite explosion in an open mine (Chile)" - CC0 1.0 - https://freesound.org/s/475780/
-felix.blume - "Rocket Launch Rumble at Canaveral" - CC0 1.0 - https://freesound.org/s/613855/
-jensfelger - "Jacob's ladder.wav" - CC0 1.0 - https://freesound.org/s/367456/
-jessepash - "Switch.Big.Power.wav" - CC0 1.0 - https://freesound.org/s/139970/
-juskiddink - "Quarry blasting.wav" - CC BY 4.0 - https://freesound.org/s/82682/
-KVV_Audio - "ALRMMisc_Air Raid Siren In Time Of War_KVV AUDIO_FREE" - CC0 1.0 - https://freesound.org/s/727588/
-KVV_Audio - "RAIN_Heavy Rain Outdoor 01_KVV_FREE" - CC BY 4.0 - https://freesound.org/s/860133/
-kyles - "switch big breaker metal click on, off" - CC0 1.0 - https://freesound.org/s/451933/
-kyles - "neon tube smash explode shatter glass debris.flac" - CC0 1.0 - https://freesound.org/s/453499/
-LukaCafuka - "Glass panel shattering" - CC0 1.0 - https://freesound.org/s/758207/
-minian89 - "four_jet_engines.wav" - CC0 1.0 - https://freesound.org/s/152567/
-nicotep - "EDF_Electrical_substation" - CC0 1.0 - https://freesound.org/s/547900/
-Nox_Sound - "Foley_Stones_Falls_Debris_Stereo_DR05.wav" - CC0 1.0 - https://freesound.org/s/550342/
-OBXJohn - "Gym Lights Powering Up" - CC0 1.0 - https://freesound.org/s/262509/
-Profispiesser - "FX SaSc Glass Tiles Shatter Crash.wav" - CC0 1.0 - https://freesound.org/s/583065/
-qubodup - "Jet Plane Wind Noise Loop of a KC-135 Stratotanker 1.flac" - CC0 1.0 - https://freesound.org/s/162417/
-qubodup - "Explosive 1 v2 [DOD 130303].flac" - CC0 1.0 - https://freesound.org/s/182431/
-qubodup - "Rocket Launch.flac" - CC0 1.0 - https://freesound.org/s/182794/
-qubodup - "Launching Anti-Tank Missiles.flac [US DoD]" - CC0 1.0 - https://freesound.org/s/184274/
-qubodup - "Huge Explosion" - CC0 1.0 - https://freesound.org/s/741174/
-qubodup - "Massive Explosion" - CC0 1.0 - https://freesound.org/s/741175/
-qubodup - "Quadcopter Drone Flyby" - CC0 1.0 - https://freesound.org/s/854352/
-qubodup - "M142 HIMARS Rocket Launch 8 [US DoD]" - CC0 1.0 - https://freesound.org/s/854476/
-Romaner66 - "Air raid siren in Kyiv" - CC BY 4.0 - https://freesound.org/s/676589/
-Sanderboah - "Geiger counter (dry)" - CC0 1.0 - https://freesound.org/s/674113/
-Sclolex - "highvoltagearc.wav" - CC0 1.0 - https://freesound.org/s/210878/
-sidohzen - "Explosion with debris - authentic. 4kg TNT" - CC0 1.0 - https://freesound.org/s/165808/
-skowix - "house on fire" - CC BY 4.0 - https://freesound.org/s/871765/
-Spennnyyy - "Extremely Close THUNDER! (no rain)" - CC BY 4.0 - https://freesound.org/s/350506/
-TheLittleCrow - "Rocket Launch Boost and Burning (Version B)" - CC0 1.0 - https://freesound.org/s/774270/
-tim.kahn - "EXPLReal_Centennial Mills Watertower Demolition" - CC BY 4.0 - https://freesound.org/s/866989/
-TRP - "Fridge hum whirl stops loud clunk bang" - CC0 1.0 - https://freesound.org/s/573936/
-YleArkisto - "Tulipalo, talo palaa / Big fire, a house burning, flames humming and crackling" - CC BY 4.0 - https://freesound.org/s/257371/
-Yoyodaman234 - "Thunder2" - CC0 1.0 - https://freesound.org/s/267551/
-Zagge28 - "Incoming mortar 4" - CC0 1.0 - https://freesound.org/s/241837/
-Zagge28 - "Incoming mortar 3" - CC0 1.0 - https://freesound.org/s/241838/
-Zagge28 - "Incoming mortar 2" - CC0 1.0 - https://freesound.org/s/241839/
-Zagge28 - "Incoming mortar 1" - CC0 1.0 - https://freesound.org/s/241840/
+221Beimesche - "Glass Shattering and Falling" - CC0 1.0 - https://freesound.org/s/336425/ - https://creativecommons.org/publicdomain/zero/1.0/
+alienistcog - "merrimack-st-demolition.aif" - CC0 1.0 - https://freesound.org/s/125937/ - https://creativecommons.org/publicdomain/zero/1.0/
+bastipictures - "peal of thunder - distant" - CC0 1.0 - https://freesound.org/s/243782/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G09-18-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437910/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G10-02-Constant Jet Noise.wav" - CC0 1.0 - https://freesound.org/s/437917/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G26-27-Huge Storm Sequence.wav" - CC0 1.0 - https://freesound.org/s/438346/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G32-10-Massive Electrical Discharges.wav" - CC0 1.0 - https://freesound.org/s/438494/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G33-32-Distant Bomb Explosion.wav" - CC0 1.0 - https://freesound.org/s/438538/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G43-14-25 Distant Explosions.wav" - CC0 1.0 - https://freesound.org/s/438693/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "G56-25-Low Wind.wav" - CC0 1.0 - https://freesound.org/s/438880/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "R01-04-Catapult Launch.wav" - CC0 1.0 - https://freesound.org/s/479922/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "R30-12-Large Gun Shells Fly By and Explode.wav" - CC0 1.0 - https://freesound.org/s/483296/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "R09-58-Large Fire with Debris.wav" - CC0 1.0 - https://freesound.org/s/483304/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "R30-09-Fires Burns Wood and Metal Crackling.wav" - CC0 1.0 - https://freesound.org/s/483323/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "R12-02-Large Explosions.wav" - CC0 1.0 - https://freesound.org/s/486018/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "S18-01 Incoming shells; explosions.wav" - CC0 1.0 - https://freesound.org/s/674897/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "S32-27 Titan missile launch; long.wav" - CC0 1.0 - https://freesound.org/s/675750/ - https://creativecommons.org/publicdomain/zero/1.0/
+craigsmith - "S10-19 Falling wooden beam; big interior crash; house collapses; long.wav" - CC0 1.0 - https://freesound.org/s/675967/ - https://creativecommons.org/publicdomain/zero/1.0/
+csengeri - "Close lightning strike 2018 07 07" - CC0 1.0 - https://freesound.org/s/434359/ - https://creativecommons.org/publicdomain/zero/1.0/
+deleted_user_9900733 - "UAV explosion in the city" - CC0 1.0 - https://freesound.org/s/811474/ - https://creativecommons.org/publicdomain/zero/1.0/
+dobroide - "20110212_paraglider.02.wav" - CC BY 4.0 - https://freesound.org/s/114628/ - https://creativecommons.org/licenses/by/4.0/
+felix.blume - "Dynamite explosion in the mountain" - CC0 1.0 - https://freesound.org/s/251401/ - https://creativecommons.org/publicdomain/zero/1.0/
+felix.blume - "Big dynamite explosion in an open mine (Chile)" - CC0 1.0 - https://freesound.org/s/475780/ - https://creativecommons.org/publicdomain/zero/1.0/
+felix.blume - "Rocket Launch Rumble at Canaveral" - CC0 1.0 - https://freesound.org/s/613855/ - https://creativecommons.org/publicdomain/zero/1.0/
+jensfelger - "Jacob's ladder.wav" - CC0 1.0 - https://freesound.org/s/367456/ - https://creativecommons.org/publicdomain/zero/1.0/
+jessepash - "Switch.Big.Power.wav" - CC0 1.0 - https://freesound.org/s/139970/ - https://creativecommons.org/publicdomain/zero/1.0/
+juskiddink - "Quarry blasting.wav" - CC BY 4.0 - https://freesound.org/s/82682/ - https://creativecommons.org/licenses/by/4.0/
+KVV_Audio - "ALRMMisc_Air Raid Siren In Time Of War_KVV AUDIO_FREE" - CC0 1.0 - https://freesound.org/s/727588/ - https://creativecommons.org/publicdomain/zero/1.0/
+KVV_Audio - "RAIN_Heavy Rain Outdoor 01_KVV_FREE" - CC BY 4.0 - https://freesound.org/s/860133/ - https://creativecommons.org/licenses/by/4.0/
+kyles - "switch big breaker metal click on, off" - CC0 1.0 - https://freesound.org/s/451933/ - https://creativecommons.org/publicdomain/zero/1.0/
+kyles - "neon tube smash explode shatter glass debris.flac" - CC0 1.0 - https://freesound.org/s/453499/ - https://creativecommons.org/publicdomain/zero/1.0/
+LukaCafuka - "Glass panel shattering" - CC0 1.0 - https://freesound.org/s/758207/ - https://creativecommons.org/publicdomain/zero/1.0/
+minian89 - "four_jet_engines.wav" - CC0 1.0 - https://freesound.org/s/152567/ - https://creativecommons.org/publicdomain/zero/1.0/
+nicotep - "EDF_Electrical_substation" - CC0 1.0 - https://freesound.org/s/547900/ - https://creativecommons.org/publicdomain/zero/1.0/
+Nox_Sound - "Foley_Stones_Falls_Debris_Stereo_DR05.wav" - CC0 1.0 - https://freesound.org/s/550342/ - https://creativecommons.org/publicdomain/zero/1.0/
+OBXJohn - "Gym Lights Powering Up" - CC0 1.0 - https://freesound.org/s/262509/ - https://creativecommons.org/publicdomain/zero/1.0/
+Profispiesser - "FX SaSc Glass Tiles Shatter Crash.wav" - CC0 1.0 - https://freesound.org/s/583065/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Jet Plane Wind Noise Loop of a KC-135 Stratotanker 1.flac" - CC0 1.0 - https://freesound.org/s/162417/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Explosive 1 v2 [DOD 130303].flac" - CC0 1.0 - https://freesound.org/s/182431/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Rocket Launch.flac" - CC0 1.0 - https://freesound.org/s/182794/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Launching Anti-Tank Missiles.flac [US DoD]" - CC0 1.0 - https://freesound.org/s/184274/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Huge Explosion" - CC0 1.0 - https://freesound.org/s/741174/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Massive Explosion" - CC0 1.0 - https://freesound.org/s/741175/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "Quadcopter Drone Flyby" - CC0 1.0 - https://freesound.org/s/854352/ - https://creativecommons.org/publicdomain/zero/1.0/
+qubodup - "M142 HIMARS Rocket Launch 8 [US DoD]" - CC0 1.0 - https://freesound.org/s/854476/ - https://creativecommons.org/publicdomain/zero/1.0/
+Romaner66 - "Air raid siren in Kyiv" - CC BY 4.0 - https://freesound.org/s/676589/ - https://creativecommons.org/licenses/by/4.0/
+Sanderboah - "Geiger counter (dry)" - CC0 1.0 - https://freesound.org/s/674113/ - https://creativecommons.org/publicdomain/zero/1.0/
+Sclolex - "highvoltagearc.wav" - CC0 1.0 - https://freesound.org/s/210878/ - https://creativecommons.org/publicdomain/zero/1.0/
+sidohzen - "Explosion with debris - authentic. 4kg TNT" - CC0 1.0 - https://freesound.org/s/165808/ - https://creativecommons.org/publicdomain/zero/1.0/
+skowix - "house on fire" - CC BY 4.0 - https://freesound.org/s/871765/ - https://creativecommons.org/licenses/by/4.0/
+Spennnyyy - "Extremely Close THUNDER! (no rain)" - CC BY 4.0 - https://freesound.org/s/350506/ - https://creativecommons.org/licenses/by/4.0/
+TheLittleCrow - "Rocket Launch Boost and Burning (Version B)" - CC0 1.0 - https://freesound.org/s/774270/ - https://creativecommons.org/publicdomain/zero/1.0/
+tim.kahn - "EXPLReal_Centennial Mills Watertower Demolition" - CC BY 4.0 - https://freesound.org/s/866989/ - https://creativecommons.org/licenses/by/4.0/
+TRP - "Fridge hum whirl stops loud clunk bang" - CC0 1.0 - https://freesound.org/s/573936/ - https://creativecommons.org/publicdomain/zero/1.0/
+YleArkisto - "Tulipalo, talo palaa / Big fire, a house burning, flames humming and crackling" - CC BY 4.0 - https://freesound.org/s/257371/ - https://creativecommons.org/licenses/by/4.0/
+Yoyodaman234 - "Thunder2" - CC0 1.0 - https://freesound.org/s/267551/ - https://creativecommons.org/publicdomain/zero/1.0/
+Zagge28 - "Incoming mortar 4" - CC0 1.0 - https://freesound.org/s/241837/ - https://creativecommons.org/publicdomain/zero/1.0/
+Zagge28 - "Incoming mortar 3" - CC0 1.0 - https://freesound.org/s/241838/ - https://creativecommons.org/publicdomain/zero/1.0/
+Zagge28 - "Incoming mortar 2" - CC0 1.0 - https://freesound.org/s/241839/ - https://creativecommons.org/publicdomain/zero/1.0/
+Zagge28 - "Incoming mortar 1" - CC0 1.0 - https://freesound.org/s/241840/ - https://creativecommons.org/publicdomain/zero/1.0/

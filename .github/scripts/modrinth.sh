@@ -6,7 +6,7 @@
 #   modrinth.sh submit              черновик (или отклонённый) — на проверку: status processing
 # page пишет в GITHUB_OUTPUT id проекта и upload=true, если этого jar (по sha1) в проекте ещё нет.
 # Поля — docs/store/modrinth.json (ключа нет — поле на сайте не трогаем, null — очищаем), текст страницы —
-# docs/store/description.md. Иконка и картинки галереи, которых ещё нет в репозитории, пропускаются, уже выложенные
+# docs/store/description.md. Required media must all exist before the page is changed. Already published images
 # (sha1 файла есть в их адресе на CDN Modrinth) — тоже: повторный запуск дописывает только новое, а картинки на
 # сайте, которых в списке больше нет, убирает.
 # Проект ищется по slug с токеном: черновик виден только его команде.
@@ -83,6 +83,16 @@ submit() {
 
 page() {
   local step=$1 jar=$2 id sha file i n q
+  # Validate every configured image before creating/editing the page or deleting any gallery entry.
+  while IFS= read -r file; do
+    if [ ! -f "$file" ]; then
+      echo "::error::Modrinth: required media file is missing: $file"
+      exit 1
+    fi
+    image "$file" 5242880
+  done < <(jq -r '(.icon // empty), (.gallery[]?.file)' "$STORE_JSON")
+  file=$(jq -r '.icon // empty' "$STORE_JSON")
+  if [ -n "$file" ]; then image "$file" 524288; fi
   case "$step:$status" in
     draft:none)
       # новый — только черновиком: без версий Modrinth иначе не создаёт, и до проверки его видит лишь команда
@@ -92,6 +102,7 @@ page() {
         | with_entries(select(.value != null))' "$STORE_JSON" > "$tmp/data.json"
       call POST /project 200 -F "data=<$tmp/data.json;type=application/json"
       cp "$tmp/body" "$tmp/project.json"
+      status=$(jq -r .status "$tmp/project.json")
       echo "::notice::Modrinth: создан черновик $slug"
       ;;
     draft:draft | draft:rejected | draft:processing | release:approved | release:unlisted | release:private | \
@@ -163,10 +174,25 @@ page() {
     fi
   done < <(jq -r '.gallery[]?.url // empty' "$tmp/project.json")
 
-  # версия: этот jar в проекте уже есть — второй раз не выкладываем (повторный запуск после сбоя)
+  version "$jar" "$step"
+}
+
+version() {
+  local jar=$1 step=${2:-release} id sha upload=true
+  if [ "$status" = none ]; then
+    echo "::error::Modrinth: project $slug does not exist; run draft first"
+    exit 1
+  fi
+  if [ "$step" = release ]; then
+    case $status in
+      approved|unlisted|private|archived|processing) ;;
+      *) echo "::error::Modrinth: $slug is $status; finish submission before releasing"; exit 1 ;;
+    esac
+  fi
+  id=$(jq -r .id "$tmp/project.json")
+  # An existing jar is not uploaded again when a run is retried.
   sha=$(sha1sum "$jar" | cut -d' ' -f1)
   call GET "/version_file/$sha?algorithm=sha1" "200 404"
-  local upload=true
   if [ "$code" = 200 ]; then
     if [ "$(jq -r .project_id "$tmp/body")" != "$id" ]; then
       echo "::error::$(basename "$jar") уже выложен на Modrinth в другом проекте: $(jq -r .project_id "$tmp/body")"
@@ -183,5 +209,6 @@ page() {
 case ${1:-} in
   page) page "${2:?draft или release}" "${3:?jar}" ;;
   submit) submit ;;
+  version) version "${2:?jar}" ;;
   *) echo "использование: $0 page draft|release <jar> | submit" >&2; exit 2 ;;
 esac
