@@ -16,6 +16,12 @@ title and summary in English.
   Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
 - Edit both description languages and their CurseForge exports together.
 
+To assemble the complete CurseForge body locally, without contacting a store:
+
+```sh
+bash .github/scripts/store_body.sh docs/store/curseforge.md docs/store/curseforge.ru.md
+```
+
 | Field | Value |
 |---|---|
 | Title | Incoming: Air Strikes and Air Defense |
