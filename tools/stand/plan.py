@@ -190,17 +190,24 @@ def build(scenes, only=None):
         cams = s["cameras"]
         hit = s.get("hit")
         eye, look = camera(scenes, hit["camera"] if hit else cams[0], site, spread)
-        steps.append(salvo_step(s))
+        # камера с готовой землёй — до залпа: перенос вместе с залпом грузил чанки камеры наперегонки со 100 снарядами
+        # вне мира, и встроенный сервер вставал на 50 мс/тик — земля у камеры не дорисовывалась за 30 с (#471, 25.10)
         steps.append(tp(eye, look))
+        steps.append(salvo_step(s))
         if hit:
             # миг прилёта: окно от n-го попадания (шар, вспышка, волна, обломки в полёте), пока залп ещё ложится; не от
             # первого: шахед, пришедший раньше залпа на 6 с, сдвигал окно, и в него падала половина ударов (smb, 25.10)
             steps.append({"do": "impact_window", "name": f"{s['id']}-hit", "salvo": s["id"], "n": hit["nth"], "s": hit["window_s"],
                           "shots": hit.get("shots", []), "prefix": f"{s['id']}-hit", "timeout_s": scenes["await_timeout_s"]})
         steps.append({"do": "await", "salvo": s["id"], "timeout_s": scenes["await_timeout_s"], "quiet_s": scenes["quiet_s"]})
-        for cam in cams:
+        for k, cam in enumerate(cams):
             eye, look = camera(scenes, cam, site, spread)
             steps.append(tp(eye, look))
+            # кадр и окно — в один и тот же миг от последнего взрыва залпа у каждого прогона: конец залпа («all» сразу,
+            # «quiet» — через quiet_s) и перенос камеры плавают, а дым за десятки секунд меняется (#466: кадр с края
+            # то через 3 с, то через 35 с после последнего взрыва)
+            steps.append({"do": "since", "salvo": s["id"],
+                          "s": scenes["since_last_s"] + k * (scenes["after_shot_s"] + s["window_s"] + scenes["tp_gap_s"])})
             steps.append({"do": "shot", "name": f"{s['id']}_{cam}"})
             steps.append({"do": "wait", "s": scenes["after_shot_s"]})
             steps.append({"do": "window", "name": f"{s['id']}/{cam}", "s": s["window_s"]})

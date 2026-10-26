@@ -63,6 +63,13 @@ record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> 
      */
     record ImpactWindow(String name, String salvo, int n, double seconds, double[] shots, String prefix, double timeoutS) implements Step {}
 
+    /**
+     * Ждать, пока от последнего попадания залпа {@code salvo} пройдёт {@code seconds} (попадание позже сдвигает срок);
+     * если шаг кончился позже срока больше чем на {@link Director#LATE_S} — событие {@code late}, прогон не годен (годность
+     * results.py ещё сверяет срок со всеми попаданиями прогона).
+     */
+    record Since(String salvo, double seconds) implements Step {}
+
     /** Отметка в событиях. */
     record Mark(String name) implements Step {}
 
@@ -96,6 +103,7 @@ record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> 
             case "impact_window" -> new ImpactWindow(s.get("name").getAsString(), s.get("salvo").getAsString(), s.has("n") ? s.get("n").getAsInt() : 1,
                     s.get("s").getAsDouble(), s.has("shots") ? doubles(s.getAsJsonArray("shots")) : new double[0],
                     s.has("prefix") ? s.get("prefix").getAsString() : s.get("name").getAsString(), num(s, "timeout_s", 240));
+            case "since" -> new Since(s.get("salvo").getAsString(), s.get("s").getAsDouble());
             case "mark" -> new Mark(s.get("name").getAsString());
             default -> throw new IllegalArgumentException("unknown step: " + type);
         };

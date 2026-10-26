@@ -16,7 +16,9 @@
   "after_shot_s": 0.5,
   "await_timeout_s": 300,
   "tail_timeout_s": 90,
-  "quiet_s": 30,
+  "quiet_s": 10,
+  "since_last_s": 15,
+  "tp_gap_s": 10,
   "probes": [
     "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
     "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"

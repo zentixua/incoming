@@ -139,9 +139,10 @@ class SmokeFillTest {
             if (q.veil > 0.004f) face(f.x * SmokePuffs.VEIL_AT, f.y * SmokePuffs.VEIL_AT, f.z * SmokePuffs.VEIL_AT, SmokePuffs.VEIL_AT * 4, q.veil);
             if (q.capAlpha > 0) face(q.mx, q.my, q.mz, q.halfW * FarSprites.GLOW, q.capAlpha);
             if (strip) {
+                // [13], [14] — непрозрачность у a и у b (полоса — линейно между ними)
                 polygons.add(new double[]{q.x0 - q.px * q.ha, q.y0 - q.py * q.ha, q.z0 - q.pz * q.ha, q.x0 + q.px * q.ha, q.y0 + q.py * q.ha,
                         q.z0 + q.pz * q.ha, q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb,
-                        q.z1 - q.nz * q.hb, 0.5 * (Math.min(1, q.alphaA) + Math.min(1, q.alphaB))});
+                        q.z1 - q.nz * q.hb, 0.5 * (Math.min(1, q.alphaA) + Math.min(1, q.alphaB)), Math.min(1, q.alphaA), Math.min(1, q.alphaB)});
                 joint[0] = q.nx;
                 joint[1] = q.ny;
                 joint[2] = q.nz;

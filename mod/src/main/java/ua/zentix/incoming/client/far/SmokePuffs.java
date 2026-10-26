@@ -197,9 +197,9 @@ final class SmokePuffs {
      */
     static final int BLOBS = 2000;
     /**
-     * Мест трубок в кадре — не больше (план, слияние и квадраты — процессор на каждое): сверх — отрезок лентой целиком
-     * ({@link #tube}); в среднем их держит {@code FarFlightView.CLUB_BUDGET} порогом ширины по прошлым кадрам, а это — в
-     * каждом кадре, и в первом кадре налёта тоже.
+     * Мест трубок в кадре — не больше (план, слияние и квадраты — процессор на каждое): сверх — у отрезка мест в этом кадре нет
+     * ({@link #tube}); в среднем их держит {@code FarFlightView.CLUB_BUDGET} шагом мест по прошлым кадрам, а это — в каждом
+     * кадре, и в первом кадре налёта тоже.
      */
     static final int PLACES = FarFlightView.CLUB_BUDGET;
     /** Номера трубок облаков кадра — с этого (у следов — номер снаряда). */
@@ -439,6 +439,16 @@ final class SmokePuffs {
         return DRAW.lastPlaces;
     }
 
+    /** Мест трубок, которых в последнем кадре не дали ({@link #PLACES}): у их отрезков доли клубов в кадре не было. */
+    static int lastRefused() {
+        return DRAW.lastRefused;
+    }
+
+    /** Вещество мест трубок последнего кадра: ослабление всей массы клубов, м² (толща поперёк оси × √(2π)σ × кусок оси). */
+    static double lastPlaceMatter() {
+        return DRAW.lastPlaceMatter;
+    }
+
     /** Бюджет заново: план и уровень слияния (проверки, что строят кадры с разным бюджетом подряд). */
     static void resetBudget() {
         DRAW.plans = 0;
@@ -675,7 +685,8 @@ final class SmokePuffs {
          * бюджета), и пол до слияния и вуали; доля кучек; уровень слияния; гауссов вуали; кучек-квадратов.
          */
         double lastFill, lastFloor, lastRaw, lastShare = 1;
-        int level, lastVeils, lastItems, lastBlobs, lastPlaces;
+        int level, lastVeils, lastItems, lastBlobs, lastPlaces, lastRefused, refused;
+        double lastPlaceMatter, placeMatter;
         /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
         private double share = 1;
@@ -751,6 +762,8 @@ final class SmokePuffs {
             lastRaw = floor;
             lastBlobs = holding;
             lastPlaces = placeCount;
+            lastRefused = refused;
+            lastPlaceMatter = placeMatter;
             int was = level;
             level = 0;
             // уровень прошлого кадра держится и тогда, когда пол чуть под бюджетом (до {@link #HYSTERESIS} от него): иначе у
@@ -852,7 +865,8 @@ final class SmokePuffs {
 
         /** Ждущие клубы, места, источники и план — заново (конец кадра, выход из мира). */
         void forget() {
-            holding = from = contexts = placeCount = placeContexts = materialCount = plans = ribbonCount = 0;
+            holding = from = contexts = placeCount = placeContexts = materialCount = plans = ribbonCount = refused = 0;
+            placeMatter = 0;
             java.util.Arrays.fill(ctxSource, null);
             java.util.Arrays.fill(ctxOut, null);
             java.util.Arrays.fill(ctxView, null);
@@ -1360,6 +1374,7 @@ final class SmokePuffs {
             placeTube[placeCount] = tube;
             placeGone[placeCount] = false;
             placeCount++;
+            placeMatter += tau * Math.sqrt(2 * Math.PI) * sigma * along;
             return near ? 2 : 1;
         }
 
@@ -1887,34 +1902,37 @@ final class SmokePuffs {
      * ({@link #TUBE_LEVELS}): места уровня k — часть мест уровня k + 1, и новые (нечётные) проявляются долей, пока трубка
      * сужается на экране, — без скачков, когда σ растёт.
      *
-     * @param wa     ширина трубки у конца a для порога клубов ({@code FarFlightView.puffShare}: на половине непрозрачности, с
-     *               множителем бюджета), у b — wb: доля вещества, что рисуют клубы, — у каждого клуба по его расстоянию
-     *               (остальное — лента, её доля у концов — та же)
+     * @param wa     ширина трубки у конца a ({@code FarFlightView.puffShare}: на половине непрозрачности), у b — wb: доля
+     *               вещества, что рисуют клубы, — у каждого клуба по его ширине и расстоянию (остальное — лента, её доля у
+     *               концов — та же); от бюджета мест доля не зависит
      * @param cr     цвет толстого слоя вещества на экране по каналам (cr, cg, cb; {@link #thick}; у следа — серый {@link #tubeColour})
      * @param shade  степень тени карт клуба ({@link #shade}; у следа — {@link #tubeShade})
      * @param sigma0 σ при рождении следа: кадр клуба — по росту σ с него ({@link FxAtlas#puffFrame})
-     * @param whole  отрезок без ленты (проходит у самого глаза): клубы рисуют всё его вещество
+     * @param stride шаг мест — во столько раз шире закона ({@link #tubeStep}; ≥ 1, бюджет мест {@code FarFlightView.CLUB_BUDGET}):
+     *               мест на отрезок меньше, вещество отрезка у них то же — каждое стоит за свой, более длинный кусок оси
      * @param tube   трубка (след снаряда, шлейф источника): её места ждут плана кадра ({@link Draw#holdPlace}) и между собой
      *               не сливаются
      * @return мест клубов и вуалей (бюджет клубов трубок); мест кадра уже нет ({@link #PLACES}) — −(мест отрезка + 1): мест не
-     *         взято, отрезок рисует лента целиком
+     *         взято, доли клубов у отрезка в этом кадре нет (бюджет на следующих кадрах растит шаг)
      */
     static int tube(FarView view, Out out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
-                    double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, boolean whole, double shown,
+                    double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, double stride, double shown,
                     long tube) {
         if (ea + eb <= 0 || !(sa > 0) || !(sb > 0)) return 0;
         double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
         if (!(len > 0)) return 0;
-        double shareA = whole ? 1 : FarFlightView.puffShare(wa, Math.sqrt(ax * ax + ay * ay + az * az), view.pixel());
-        double shareB = whole ? 1 : FarFlightView.puffShare(wb, Math.sqrt(bx * bx + by * by + bz * bz), view.pixel());
-        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep}); край клуба — у всей трубки
-        // (лента и клубы рисуют одно вещество, видимая ширина — его), доля клубов — только в непрозрачности
-        double step = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb)));
+        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep}), с бюджетом мест — в stride
+        // раз реже; край клуба — у всей трубки (лента и клубы рисуют одно вещество, видимая ширина — его), доля клубов — только в
+        // непрозрачности
+        double step = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb))) * stride;
         double level = tubeLevel(len, step / SEGMENT_STEP);
         int k = tubeDepth(level), n = 1 << k;
-        // мест кадра больше не взять ({@link #PLACES}): отрезок — лентой целиком (вещество то же), а его места идут в бюджет
-        // клубов трубок, и на следующих кадрах порог ширины растёт
-        if (DRAW.placeCount + n > PLACES) return -(n + 1);
+        // мест кадра больше не взять ({@link #PLACES}): мест у отрезка нет, а его места идут в бюджет клубов трубок, и на следующих
+        // кадрах шаг мест растёт
+        if (DRAW.placeCount + n > PLACES) {
+            DRAW.refused += n;
+            return -(n + 1);
+        }
         double total = tubeTotal(level);
         int drawn = 0;
         for (int j = 0; j < n; j++) {
@@ -1922,7 +1940,7 @@ final class SmokePuffs {
             if (weight <= 0) continue;
             double u = (double) j / n, sigma = sa + (sb - sa) * u, e = ea + (eb - ea) * u;
             double cx = ax + tx * u, cy = ay + ty * u, cz = az + tz * u;
-            double share = whole ? 1 : FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
+            double share = FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
             if (share <= 0) continue;
             // толща трубки поперёк оси — e/(√(2π)σ) (доля клубов — share); место стоит за свой кусок оси len/total (с долей места)
             double full = e / (Math.sqrt(2 * Math.PI) * sigma), tau = share * full, along = len * weight / total;
