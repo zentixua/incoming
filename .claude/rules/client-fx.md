@@ -740,7 +740,8 @@ paths:
   ⌈кучки⌉ квадратов — последний с долей альфы заливает всю свою площадь, — размер 0,8–1,2 и сдвиг по зерну, у места трубки
   и одиночный клуб со своим размером, у лежащего — по проекции четырёх вершин квадрата на горизонтали, `polygonFill`: на
   глубине середины слой пыли в 40 м под глазом на 5 м выходил 15,4 экрана против 36,7, `lyingDustIsMeasuredByItsCorners`);
-  Above budget, reduce the share. Keep the previous frame's share while its actual fill fits; detail grows only
+  Above budget, reduce the share. Measure the previous share's actual fill once per flush and reuse it for both
+  hysteresis decisions. Keep the previous frame's share while its actual fill fits; detail grows only
   with 20% headroom, which is also retained after overflow (hysteresis). The old plan used fractional clump counts
   and mean size: 12 overlapping Gaussians planned as 8 screens actually filled 11.3. Now drawn fill never exceeds
   the plan (`SmokeRaidTest.drawnFillNeverExceedsThePlan`). A 16-strike raid fits unchanged (`SmokeFillTest`).
@@ -759,19 +760,32 @@ paths:
   каждый кадр у каждого источника: ~2 мс процессора на 100 ударов. Одиночный клуб — без разброса размера.
   STEADY replaces the 32×18 screen occlusion grid with a world-direction field. In the original frozen 100-strike
   ablation, 0.5° yaw gave mean |ΔT| 0.002915 inside; removing only that grid gave 0.000106 (−96.4%) at the same fill cap.
-  The grid also changed veil priority, so merely fading rejected records would not suffice. The new field has 24×24
-  cells per cube face, shared seam nodes and bilinear sampling. Nearby cores add optical depth with a smooth edge;
+  The grid also changed veil priority, so merely fading rejected records would not suffice. The new field has
+  world-aligned cube faces and shared seam nodes. Resolution follows the actual projection's diagonal angle
+  (`view.edge`): it targets 24 cells across that diagonal, with a 48-cell minimum and 48/96/192/256-cell tiers.
+  Coarsening needs 20% headroom;
+  buffers retain their largest capacity, so animated FOV and repeated binocular zoom do not allocate every frame.
+  Only the four nodes needed by each core query are deposited into (at most 36 nodes per plan entry), so zoom
+  does not require dense whole-cube deposition. Before deposition, erode the normalized ellipse radius by its
+  angular derivative bound times the node's bilinear footprint (`2*sqrt(2)/cells`). Each node then underestimates
+  the original core throughout that footprint, including cube seams; ordinary bilinear sampling remains continuous.
+  This prevents a tiny dense core on one node from concealing a physically clear neighboring ray while retaining
+  the flat inner profile of resolved cores. Unresolved cores remain in the ordinary budget plan.
+  `SmokeOcclusionTest` checks that exposed neighbors survive at normal and 4× zoom, while fully covered cores still
+  disappear, including between grid nodes. Nearby cores add optical depth with a smooth edge;
   nine rays through a distant core take its minimum, fading the clump between depths 2 and 3 (old full cutoff).
   Deposit uses unnormalized cube rays: ray length cancels in the plane ratios. Scaled puff axes and a squared
-  ellipse rejection leave one division only at contributing nodes. This preserves the field and its resolution.
+  ellipse rejection leave one division and square root only at contributing nodes.
   Ring sampling stops once the minimum is at most 2, since further rays cannot enable concealment.
-  `SmokeOcclusionTest` compares the actual
-  deposit with normalized ray/plane intersections at every node, including cube seams, poles and overlapping cores.
+  `SmokeOcclusionTest` compares deposited nodes with normalized ray/plane intersections and the conservative
+  footprint, including cube seams, poles and overlapping cores.
   Partial concealment enters the rendering record's visibility (`held`/`places`) and priority before merging.
   A separate partial-hide flag prevented merging, leaving about two extra screens of floor and giving nearly
   invisible places their original budget priority.
   Camera yaw cannot rotate these directions. Concealment ramps between one and 1.25 budgets of floor and is absent
-  with spare budget; flat clumps and matter at the eye are retained. Node traversal is bounded by the clump sphere's
+  with spare budget; fit priority uses the same strength (`1 - strength * (1 - exp(-depth))`) so crossing the budget
+  cannot abruptly reorder selected puffs (`SmokeOcclusionTest`). Flat clumps and matter at the eye are retained.
+  Node traversal is bounded by the clump sphere's
   intersection with each face pyramid: without this bound, horizon clumps traversed two extra faces in full
   (about 10 ms versus 0.9 ms CPU at the 100-strike edge camera). Upright planes face the eye position with world-up;
   flat planes keep a seeded world angle (`PuffGeometry`, shared by GPU, plan and tests). `lyingShare` divides optical
@@ -785,6 +799,10 @@ paths:
   её лучу через все гауссы вуали (`sightDepth`), между вершинами — линейно, шум в полступени у вывода `fx.fsh` (иначе
   плавная вуаль на 8 битах ступенями); гауссов в ней — не больше `VEIL_MAX` (48: ~0,3 мс процессора), больше — близкие
   сливаются тем же законом (направление от глаза по граням куба, октавы расстояния и размера, цвет — средний по видимому).
+  Veil coarsening retains the previous level until the finer representation has 20% headroom, while keeping the
+  48-Gaussian cap. A frozen 0.5° yaw changed finer counts from 50 to 48 and previously removed an entire merge pass
+  (24 -> 48 final Gaussians), causing a transmittance jump despite stable quad detail and place spacing.
+  Budget/world reset and an empty veil frame clear this history.
   У вершины — мягкость к миру (`Veil.soft`): вершина тает к миру тем же `fx.fsh`, что и мягкий край квадрата, и половину
   вуали мир берёт там, где по лучу набирается половина её непрозрачности (`Veil.half`: вещество — отрезок по среднему и
   разбросу по толще, `sightMoments`, усечённый гаусс; у густого — ближе к началу): дом перед далёким облаком в вуали в

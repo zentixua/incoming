@@ -500,6 +500,7 @@ final class SmokePuffs {
     static void resetBudget() {
         DRAW.plans = 0;
         DRAW.level = 0;
+        DRAW.veilLevel = 0;
         DRAW.shareReady = false;
     }
 
@@ -723,7 +724,7 @@ final class SmokePuffs {
         /** Вуаль кадра: гауссы вещества у глаза ({@link #VEIL_FIELDS} чисел на гаусс); толщу по лучам считает {@link #veilFlush}. */
         private double[] veils = new double[8 * VEIL_FIELDS];
         private boolean[] veilGone = new boolean[8];
-        private int veilCount;
+        private int veilCount, veilLevel;
         @Nullable
         private Out veilOut;
         private FarView veilView;
@@ -829,7 +830,8 @@ final class SmokePuffs {
             // Detail stays between two fill thresholds. Turning within the remaining capacity does not rebuild clusters;
             // after overflow, leave headroom to the next threshold. The limit is still checked against actual quads in this
             // frame, including transitions between horizontal and upright puffs.
-            double target = shareReady && drawn(lastShare) > budget ? Math.max(floor, HYSTERESIS * budget) : budget;
+            double previousFill = shareReady ? drawn(lastShare) : 0;
+            double target = shareReady && previousFill > budget ? Math.max(floor, HYSTERESIS * budget) : budget;
             double s = 1;
             if (planned(1) > target) {
                 double lo = 0, hi = 1;
@@ -842,7 +844,7 @@ final class SmokePuffs {
             }
             // оценка — по краю кучки; настоящие квадраты (их разброс размера и места) — проверка: больше бюджета — доля меньше
             for (int it = 0; it < 24 && s > 0 && drawn(s) > target; it++) s = it < 23 ? 0.8 * s : 0;
-            if (shareReady && drawn(lastShare) <= budget && (s <= lastShare || drawn(s) > HYSTERESIS * budget)) s = lastShare;
+            if (shareReady && previousFill <= budget && (s <= lastShare || drawn(s) > HYSTERESIS * budget)) s = lastShare;
             planning = false;
             share = s;
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
@@ -1074,24 +1076,45 @@ final class SmokePuffs {
         private long[] order = new long[64];
 
         /**
-         * World-direction grid: 24 cells per cube face bound occlusion work, not visual detail.
-         * Nodes coincide at face boundaries, so bilinear sampling is continuous there too. The camera sets only the ray origin.
+         * World-direction grid. Narrower projections refine it without rotating its rays with the camera.
+         * Nodes coincide at face boundaries; conservative bilinear sampling is continuous there too.
          */
-        private static final int OCCLUSION_CELLS = 24, OCCLUSION_SIDE = OCCLUSION_CELLS + 1,
-                OCCLUSION_FACE = OCCLUSION_SIDE * OCCLUSION_SIDE;
+        private static final int OCCLUSION_BASE_CELLS = 48, OCCLUSION_VIEW_CELLS = 24, OCCLUSION_MAX_CELLS = 256;
+        private int occlusionCells = OCCLUSION_BASE_CELLS, occlusionSide = occlusionCells + 1,
+                occlusionFace = occlusionSide * occlusionSide;
         /** Presentation: map core and smooth edge band, like the previous 0.6 half-size used for screen-space occlusion. */
         private static final double OCCLUSION_CORE = 0.6, OCCLUSION_INNER = 0.8;
-        private final double[] occlusion = new double[6 * OCCLUSION_FACE];
-        private final double[] occlusionRays = occlusionRays();
+        private double[] occlusion = new double[6 * occlusionFace];
+        private double[] occlusionRays = occlusionRays();
+        private final java.util.BitSet occlusionNodes = new java.util.BitSet();
         private static final double[] RING_X = {1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476},
                 RING_Y = {0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476};
 
-        private static double[] occlusionRays() {
-            double[] rays = new double[18 * OCCLUSION_FACE];
-            for (int face = 0; face < 6; face++) for (int j = 0; j < OCCLUSION_SIDE; j++) for (int i = 0; i < OCCLUSION_SIDE; i++) {
-                double u = 2.0 * i / OCCLUSION_CELLS - 1, v = 2.0 * j / OCCLUSION_CELLS - 1;
+        private void configureOcclusion() {
+            // Target 24 cells across the projected diagonal, with a 48-cell floor for conservative core coverage.
+            // Only queried nodes are deposited into; the cap also bounds storage at extreme zoom.
+            double needed = OCCLUSION_VIEW_CELLS / Math.tan(view.edge());
+            int cells = OCCLUSION_BASE_CELLS;
+            while (cells < OCCLUSION_MAX_CELLS && cells < needed) cells = Math.min(OCCLUSION_MAX_CELLS, 2 * cells);
+            // Animated FOV must not rebuild arrays every frame or alternate tiers near their boundary.
+            if (cells < occlusionCells && needed > HYSTERESIS * cells) return;
+            if (cells == occlusionCells) return;
+            occlusionCells = cells;
+            occlusionSide = cells + 1;
+            occlusionFace = occlusionSide * occlusionSide;
+            if (occlusion.length < 6 * occlusionFace) {
+                occlusion = new double[6 * occlusionFace];
+            }
+            occlusionRays = occlusionRays();
+        }
+
+        private double[] occlusionRays() {
+            double[] rays = occlusionRays;
+            if (rays == null || rays.length < 18 * occlusionFace) rays = new double[18 * occlusionFace];
+            for (int face = 0; face < 6; face++) for (int j = 0; j < occlusionSide; j++) for (int i = 0; i < occlusionSide; i++) {
+                double u = 2.0 * i / occlusionCells - 1, v = 2.0 * j / occlusionCells - 1;
                 double sign = (face & 1) == 0 ? 1 : -1;
-                int axis = face / 2, q = 3 * (face * OCCLUSION_FACE + j * OCCLUSION_SIDE + i);
+                int axis = face / 2, q = 3 * (face * occlusionFace + j * occlusionSide + i);
                 rays[q] = axis == 0 ? sign : u;
                 rays[q + 1] = axis == 0 ? u : axis == 1 ? sign : v;
                 rays[q + 2] = axis == 2 ? sign : v;
@@ -1101,17 +1124,43 @@ final class SmokePuffs {
 
         /** Optical depth in a direction, including between nodes and across cube-face boundaries. */
         private double occlusion(double x, double y, double z) {
+            return occlusion(x, y, z, false);
+        }
+
+        private double occlusion(double x, double y, double z, boolean reserve) {
             double ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z), m = Math.max(ax, Math.max(ay, az));
             if (!(m > 0)) return 0;
             int face = m == ax ? (x > 0 ? 0 : 1) : m == ay ? (y > 0 ? 2 : 3) : (z > 0 ? 4 : 5);
             double u = (face < 2 ? y : x) / m, v = (face < 4 ? z : y) / m;
-            double s = Math.clamp((u + 1) * 0.5 * OCCLUSION_CELLS, 0, OCCLUSION_CELLS),
-                    t = Math.clamp((v + 1) * 0.5 * OCCLUSION_CELLS, 0, OCCLUSION_CELLS);
-            int i = Math.min((int) s, OCCLUSION_CELLS - 1), j = Math.min((int) t, OCCLUSION_CELLS - 1);
+            double s = Math.clamp((u + 1) * 0.5 * occlusionCells, 0, occlusionCells),
+                    t = Math.clamp((v + 1) * 0.5 * occlusionCells, 0, occlusionCells);
+            int i = Math.min((int) s, occlusionCells - 1), j = Math.min((int) t, occlusionCells - 1);
             double du = s - i, dv = t - j;
-            int q = face * OCCLUSION_FACE + j * OCCLUSION_SIDE + i;
-            return (1 - dv) * ((1 - du) * occlusion[q] + du * occlusion[q + 1])
-                    + dv * ((1 - du) * occlusion[q + OCCLUSION_SIDE] + du * occlusion[q + OCCLUSION_SIDE + 1]);
+            int q = face * occlusionFace + j * occlusionSide + i;
+            if (reserve) {
+                occlusionNodes.set(q, q + 2);
+                occlusionNodes.set(q + occlusionSide, q + occlusionSide + 2);
+                return 0;
+            }
+            return Math.min(12, (1 - dv) * ((1 - du) * occlusion[q] + du * occlusion[q + 1])
+                    + dv * ((1 - du) * occlusion[q + occlusionSide] + du * occlusion[q + occlusionSide + 1]));
+        }
+
+        /** Reserve only the four nodes of each possible query: at most 36 nodes per planned puff at any zoom. */
+        private void reserveOcclusion(int e) {
+            int o = 6 * e;
+            double x = plan[o], y = plan[o + 1], z = plan[o + 2];
+            occlusion(x, y, z, true);
+            if (planNear[e] || planFlat[e] > 0) return;
+            double h = Math.hypot(x, z), d = Math.hypot(h, y), fx = x / d, fy = y / d, fz = z / d;
+            double hx = h > 1e-9 ? z / h : 1, hz = h > 1e-9 ? -x / h : 0;
+            double ux = fy * hz, uy = fz * hx - fx * hz, uz = -fy * hx;
+            double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
+            double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
+            for (int j = 0; j < 8; j++) {
+                double a = ra * RING_X[j], b = rb * RING_Y[j];
+                occlusion(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz, true);
+            }
         }
 
         /**
@@ -1121,6 +1170,8 @@ final class SmokePuffs {
          * near the eye are not discarded. Cost is covered angular cells times a bounded number of plan entries.
          */
         private void conceal(double budget) {
+            configureOcclusion();
+            occlusionNodes.clear();
             // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching the whole frame.
             double strength = smoothstep(budget, 1.25 * budget, lastRaw);
             int n = 0;
@@ -1129,11 +1180,12 @@ final class SmokePuffs {
                 int o = 6 * e;
                 double d2 = plan[o] * plan[o] + plan[o + 1] * plan[o + 1] + plan[o + 2] * plan[o + 2];
                 if (!(d2 > 0)) continue;
+                reserveOcclusion(e);
                 if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
                 order[n++] = (long) Float.floatToIntBits((float) d2) << 32 | e;
             }
             java.util.Arrays.sort(order, 0, n);
-            java.util.Arrays.fill(occlusion, 0);
+            java.util.Arrays.fill(occlusion, 0, 6 * occlusionFace, 0);
             for (int k = 0; k < n; k++) {
                 int e = (int) order[k], o = 6 * e;
                 double x = plan[o], y = plan[o + 1], z = plan[o + 2], h = Math.hypot(x, z), d = Math.hypot(h, y);
@@ -1143,7 +1195,7 @@ final class SmokePuffs {
                 double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
                 double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
                 double least = occlusion(x, y, z);
-                planSeen[e] = Math.exp(-least);
+                planSeen[e] = 1 - strength * (1 - Math.exp(-least));
                 double hidden = 0;
                 if (!planNear[e] && planFlat[e] == 0) {
                     for (int j = 0; j < 8 && least > 2; j++) {
@@ -1174,6 +1226,14 @@ final class SmokePuffs {
                 double sa = d / ra, sb = d / rb;
                 double ax = sa * hx, az = sa * hz, bx = sb * ux, by = sb * uy, bz = sb * uz;
                 double radius = Math.max(ra, rb);
+                // The normalized ellipse radius changes by at most (d + radius^2/d)/min(ra,rb) per radian
+                // while inside the core (ray/plane Jacobian d*sec(theta)^2). A node influences directions at
+                // most 2*sqrt(2)/cells radians away, on either side of a cube seam. Erode by that footprint:
+                // every deposited value then bounds the original kernel from below throughout its bilinear support.
+                double margin = (d + radius * radius / d) / Math.min(ra, rb) * (2 * Math.sqrt(2) / occlusionCells);
+                if (margin >= 1) continue;
+                double remaining2 = (1 - margin) * (1 - margin);
+                radius *= 1 - margin;
                 // Core-sphere bounds on each face only limit traversal; the actual plane determines the contribution.
                 for (int face = 0; face < 6; face++) {
                     int axis = face / 2;
@@ -1191,20 +1251,24 @@ final class SmokePuffs {
                         v0 = Math.min((v - radius) / near, (v - radius) / far);
                         v1 = Math.max((v + radius) / near, (v + radius) / far);
                     }
-                    int i0 = Math.max(0, (int) Math.floor((u0 + 1) * 0.5 * OCCLUSION_CELLS)),
-                            i1 = Math.min(OCCLUSION_CELLS, (int) Math.ceil((u1 + 1) * 0.5 * OCCLUSION_CELLS)),
-                            j0 = Math.max(0, (int) Math.floor((v0 + 1) * 0.5 * OCCLUSION_CELLS)),
-                            j1 = Math.min(OCCLUSION_CELLS, (int) Math.ceil((v1 + 1) * 0.5 * OCCLUSION_CELLS));
-                    for (int j = j0; j <= j1; j++) for (int i = i0; i <= i1; i++) {
-                        int q = face * OCCLUSION_FACE + j * OCCLUSION_SIDE + i, r = 3 * q;
-                        double rx = occlusionRays[r], ry = occlusionRays[r + 1], rz = occlusionRays[r + 2];
-                        double den = fx * rx + fy * ry + fz * rz;
-                        if (!(den > 0)) continue;
-                        double a = ax * rx + az * rz, b = bx * rx + by * ry + bz * rz;
-                        double numerator = a * a + b * b, denominator = den * den;
-                        if (numerator >= denominator) continue;
-                        double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, numerator / denominator);
-                        occlusion[q] = Math.min(12, occlusion[q] + tau * weight);
+                    int i0 = Math.max(0, (int) Math.floor((u0 + 1) * 0.5 * occlusionCells)),
+                            i1 = Math.min(occlusionCells, (int) Math.ceil((u1 + 1) * 0.5 * occlusionCells)),
+                            j0 = Math.max(0, (int) Math.floor((v0 + 1) * 0.5 * occlusionCells)),
+                            j1 = Math.min(occlusionCells, (int) Math.ceil((v1 + 1) * 0.5 * occlusionCells));
+                    for (int j = j0; j <= j1; j++) {
+                        int first = face * occlusionFace + j * occlusionSide + i0, last = first + i1 - i0;
+                        for (int q = occlusionNodes.nextSetBit(first); q >= first && q <= last; q = occlusionNodes.nextSetBit(q + 1)) {
+                            int r = 3 * q;
+                            double rx = occlusionRays[r], ry = occlusionRays[r + 1], rz = occlusionRays[r + 2];
+                            double den = fx * rx + fy * ry + fz * rz;
+                            if (!(den > 0)) continue;
+                            double a = ax * rx + az * rz, b = bx * rx + by * ry + bz * rz;
+                            double numerator = a * a + b * b, denominator = den * den;
+                            if (numerator >= denominator * remaining2) continue;
+                            double rho = Math.sqrt(numerator / denominator) + margin;
+                            double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, rho * rho);
+                            occlusion[q] += tau * weight;
+                        }
                     }
                 }
             }
@@ -1697,10 +1761,10 @@ final class SmokePuffs {
          */
         private void veilFlush() {
             if (veilOut != null && veilCount > 0) {
-                if (veilCount > VEIL_MAX) veilMerge();
+                if (veilCount > VEIL_MAX || veilLevel > 0) veilMerge();
                 veil.fill(veilView, veils, veilCount);
                 if (veil.any()) veilOut.veil(veil, OPEN_SKY);
-            }
+            } else veilLevel = 0;
             lastVeils = veilOut != null ? veilCount : 0;
             veilClear();
         }
@@ -1712,7 +1776,11 @@ final class SmokePuffs {
          * расстояния и октава размера; с каждым уровнем крупнее, последний — по грани: их не больше семи.
          */
         private void veilMerge() {
-            for (int level = 0; veilCount > VEIL_MAX; level++) {
+            // Keep the previous coarsening until the finer level has headroom, just like the quad budget.
+            // Otherwise 50 -> 48 finer groups removed a whole merge pass, changing 24 Gaussians to 48 at once.
+            int was = veilLevel;
+            veilLevel = 0;
+            for (int level = 0; veilCount > VEIL_MAX || level < was && veilCount > HYSTERESIS * VEIL_MAX; level++) {
                 int n = Math.max(1, 8 >> level), coarse = Math.max(0, level - 1);
                 boolean last = level >= 5;
                 if (veilGone.length < veilCount) veilGone = new boolean[2 * veilCount];
@@ -1762,6 +1830,7 @@ final class SmokePuffs {
                     k++;
                 }
                 veilCount = k;
+                veilLevel = level + 1;
             }
         }
 
