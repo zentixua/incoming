@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -21,11 +22,16 @@ public final class SurfaceFrontGameTests {
     @GameTest(template = "range", timeoutTicks = 80, batch = "blast_front_loading", skyAccess = true)
     public static void expandedCraftAreaUsesReadinessAndHasAFiniteDeadline(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Vec3 centre = h.absolutePos(new BlockPos(32, 12, 32)).getCenter();
+        // Previous batches may have loaded the whole test grid. Only the initial chunk should be ready here.
+        BlockPos remote = h.absolutePos(new BlockPos(32, 12, 32)).offset(16_384, 0, 16_384);
+        ChunkPos chunk = new ChunkPos(remote);
+        Vec3 centre = new Vec3(chunk.getMiddleBlockX(), remote.getY() + 0.5, chunk.getMiddleBlockZ());
+        level.getChunk(chunk.x, chunk.z);
         int areasBefore = ua.zentix.incoming.strike.StrikeWorld.get(level).areas().size();
         BlastArea initial = BlastArea.hold(level, centre, 1);
         StagedExplosion job = new StagedExplosion(initial, List.of(), centre, 2, false, false, null, null, null);
         try {
+            h.assertTrue(job.ready(level), "test's initial area was not ready before expansion");
             // As when a larger craft enters between impact start and scan: radius grows beyond the held metre.
             job.holdFrontArea(level, 60);
             try {
