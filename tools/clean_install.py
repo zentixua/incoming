@@ -6,6 +6,7 @@ Server + client: the same command with --client, on a GitHub runner (software re
 All files and logs are retained under mod/run/clean-install-*. No launcher instance is read.
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -80,7 +81,9 @@ def smoke(jar, client=False):
     (server / "server.properties").write_text(
         f"server-ip=127.0.0.1\nserver-port={port}\nonline-mode=false\nview-distance=2\n"
         "simulation-distance=2\nlevel-type=minecraft:flat\ngenerate-structures=false\n"
-        "spawn-protection=0\n")
+        "spawn-protection=0\ngenerator-settings=" + json.dumps({"biome": "minecraft:plains", "layers": [
+            {"height": 1, "block": "minecraft:bedrock"}, {"height": 2, "block": "minecraft:dirt"},
+            {"height": 1, "block": "minecraft:grass_block"}]}) + "\n")
     config = server / "config"
     config.mkdir(exist_ok=True)
     (config / "neoforge-server.toml").write_text("advertiseDedicatedServerToLan=false\n")
@@ -92,10 +95,14 @@ def smoke(jar, client=False):
                                               env=launch_env, start_new_session=True)
         server_log = server / "logs/latest.log"
         wait_for(server_process, server_log, r'Done \([0-9.,]+s\)!', 240)
+        print("Clean production server: ready", flush=True)
         if client:
             client_dir = work / "client"
             (client_dir / "mods").mkdir(parents=True)
             shutil.copy2(jar, client_dir / "mods" / jar.name)
+            # The first-run accessibility screen otherwise blocks Quick Play before it connects.
+            (client_dir / "options.txt").write_text("onboardAccessibility:false\nskipMultiplayerWarning:true\n")
+            print("Preparing and starting the clean production client", flush=True)
             # PortableMC installs the production loader and libraries; it adds no test mods or dev classpath.
             command = ["xvfb-run", "-a", "uv", "run", "--with", "portablemc[certifi]==4.4.1", "portablemc",
                        "--main-dir", str(work / "launcher"), "--work-dir", str(client_dir), "start",
