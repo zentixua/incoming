@@ -11,58 +11,63 @@ paths:
   - "mod/src/devtest/java/ua/zentix/incoming/gametest/FixedLauncherGameTests.java"
 ---
 
-# Стационарная пусковая (`launcher/`)
+# Fixed launcher (`launcher/`)
 
-## Устройство
-- Пусковая — одна логика у прицепа и блока: `entity/Launcher` (пакет `LauncherRack` на опоре `LauncherMount`: прицеп
-  `TRAILER` — ось на 1.6 над землёй и 2.2 позади центра, блок `PAD` — на 1.25 над низом блока, над серединой; курс,
-  подъём пакета, очередь пусков `LaunchQueue`, доворот только молчащего пакета и только больше чем на 15°).
-  `LauncherEntity` (прицеп) и `FixedLauncherBlockEntity` (блок) её реализуют; ячейки, сектор пуска
-  (`LaunchSite.clearAhead`/`pickOn` с опорой) и картинка пакета (`LauncherRenderer.renderRack`) — общие.
-- `FixedLauncherBlock` + `FixedLauncherBlockEntity`: хозяин — кто поставил (`setPlacedBy`; механизм Create ставит от
-  имени своего хозяина — у его `FakePlayer` тот же UUID); запас — `util/Magazine` (тот же, что у ЗРК) на 9 открытых ячеек под
-  боеприпасы оружия, которое берёт пусковая (`Mission.accepts`: у оружия есть пакет в паспорте — шахед, «Ланцет»,
-  ракета, «Град»; B-2 и МБР — нет), снаружи — только загрузка с любой
-  стороны и для `null` (`Capabilities.ItemHandler.BLOCK`: воронка, воронка и жёлоб Create; механическая рука и лента —
-  через воронку), сломан — роняет запас; компаратор — по открытым ячейкам. Ещё одна запасная ячейка снаружи не видна:
-  туда ложится остаток вскрытого пакета «Града» и возврат (`Magazine.stow`), когда воронка держит открытые полными, —
-  иначе каждый снаряд вскрывал бы новый пакет, а остаток падал бы на землю (`Munitions.take` берёт сперва начатые
-  пакеты, потом одиночные целые, стопку вскрывает последней). Задача (`Mission`): оружие, число, разброс, место
-  (`Target.Point`/`Ground`; сущность, аппарат, замеченная цель — место, где были при постановке) и точки маршрута.
-  Клиенту уходят только оружие пакета, курс и тик подъёма (`getUpdateTag`; задача и запас — только сервер).
-- Редстоун — как у раздатчика: передний фронт (`hasNeighborSignal` своего места или над ним) ставит `TRIGGERED` и тик
-  через 4 тика, тик — один приказ (`LauncherOrders.fire`); отказ — щелчок `levelEvent(1001)` и причина в строке
-  состояния (ПКМ пустой рукой; что сказал сам пуск, например «сектор закрыт», — `report`, точнее общего отказа).
-- Пульт: ПКМ пультом по блоку (`useItemOn`, без Shift) — привязать/отвязать (`LauncherLinks`, компонент
-  `incoming:launchers` — список `GlobalPos`, до 16). Пока список не пуст, «Огонь» пульта (`ServerActions.fire`) ставит
-  задачу привязанным (`LauncherOrders.assign`): цель — по правилам игрока (`ServerActions.ruled`), каждой — в этом
-  мире, в готовом чанке (не грузить ради задачи), своей или своей команды, не занятой, цель не дальше `map_range` от
-  неё, маршрут — в дальности оружия от неё (`routeProblem` с местом пуска `LaunchOrigin.Fixed`). Пусковой нет на месте
-  (чанк готов, блока нет) — она отвязывается (`LauncherLinks.forget`): иначе пульт навсегда остался бы в режиме задач.
-- Пуск — путь приказа игрока (`ServerActions.fromLauncher`): одиночный — `StrikeService.launch`, залп — `SalvoData`;
-  откуда — `strike/LaunchOrigin` (`Place` — место пуска `/incoming salvo … from x z`, `Fixed` — пусковая; залп хранит
-  его, место — ключом `from`, пусковую — `from_launcher`). С `Fixed` пуск идёт только с её пакета
-  (`StrikeService.Stand`): курс шахеда и ракеты — `aimFixed` (молчащий пакет доворачивается на путь или поворотом
-  `LaunchSite.pickOn` на её опоре, занятый пускает своим курсом), РСЗО и «Ланцета» — `aimedFixed`; сектор закрыт, чанк
-  не готов, блока нет — пуск не удался (без захода издалека), причина — `report`. Снаряды — от имени хозяина (свои по
-  `/team`, его «Отбой», его предел снарядов в работе); строк и полосы залпа хозяину нет (`Salvo.reporter`).
-  Правила хозяина (`designator_for_everyone` или оператор — по профилю, хозяин может быть не в сети; предел
-  `max_active_per_player`; цель не дальше `map_range` от пусковой); ничья (поставлена командой) — без правил.
-  Запас должен покрывать весь приказ (`Munitions.shortage`), а снимается по снаряду, когда тот встаёт на направляющую
-  (`Munitions.pay(Store, Bill)` в `StrikeService`): отменённый залп и неудачный пуск в запасе и остаются, возвращать
-  в чанк, который может быть не загружен, нечего. Пусковая занята, пока идёт её залп (`SalvoData.busy`) или пакет не
-  молчит (`LaunchQueue.silent`) — `LauncherOrders.busy`: ни приказа, ни новой задачи (задача меняет пакет, а снаряды
-  залпа стартуют с пакета своего оружия; `StrikeService` пускает только оружие пакета на круге).
-- Ведущему и скриптам — `/incoming launcher <x y z>` (оператор, `IncomingCommand.launcher`): состояние, `fire`,
-  `mission` (без правил игрока; цель — `x z`, место на земле, или `x y z`, точка; маршрут — `routeProblem` от
-  пусковой), `clear`, `load N`, `owner`; место — только в готовом чанке; `mission` и `clear` занятой — отказ.
+## Structure
+- Launchers share trailer and block logic: `entity/Launcher` (`LauncherRack` on a `LauncherMount`: trailer `TRAILER`
+  pivot 1.6 above ground and 2.2 behind center; block `PAD` pivot 1.25 above the block bottom, over its center; heading,
+  rack elevation, `LaunchQueue`, turning only a silent rack and only by more than 15°). `LauncherEntity` (trailer) and
+  `FixedLauncherBlockEntity` (block) implement it; slots, launch sector (`LaunchSite.clearAhead`/`pickOn` with the mount)
+  and rack visuals (`LauncherRenderer.renderRack`) are shared.
+- `FixedLauncherBlock` + `FixedLauncherBlockEntity`: owner is the placer (`setPlacedBy`; a Create mechanism places on
+  behalf of its owner — its `FakePlayer` has the same UUID); stock is `util/Magazine` (same as SAM), 9 exposed slots for
+  ammunition the launcher accepts (`Mission.accepts`: weapons with a rack in the spec — Shahed, Lancet, missile, Grad;
+  not B-2 or ICBM); external access inserts only, from any side and for `null` (`Capabilities.ItemHandler.BLOCK`:
+  hopper, Create funnel and chute; mechanical arm and belt via a funnel); breaking drops stock; comparator reads
+  exposed slots. One extra reserve slot is hidden externally: it holds the remainder of an opened Grad pack and
+  returns (`Magazine.stow`) when a hopper keeps exposed slots full — otherwise each rocket would open a new pack,
+  dropping the remainder on the ground (`Munitions.take` takes opened packs first, then single whole packs, opening
+  a stack last). Mission (`Mission`): weapon, count, spread, location (`Target.Point`/`Ground`; entity, craft or spotted
+  target means its location when assigned), and waypoints. Only rack weapon, heading and elevation tick go to the
+  client (`getUpdateTag`; mission and stock stay server-side).
+- Redstone works like a dispenser: rising edge (`hasNeighborSignal` at its position or above) sets `TRIGGERED` and
+  schedules a tick 4 ticks later; that tick issues one order (`LauncherOrders.fire`); failure means click
+  `levelEvent(1001)` and reason in the status line (empty-hand right click; the launch's own reason, e.g. “sector
+  blocked”, is in `report`, more specific than a generic refusal).
+- Remote: right-click the block with the remote (`useItemOn`, no Shift) to link/unlink (`LauncherLinks`, component
+  `incoming:launchers`: `GlobalPos` list, up to 16). While the list is nonempty, the remote's “Fire”
+  (`ServerActions.fire`) assigns missions to linked launchers (`LauncherOrders.assign`): target follows player rules
+  (`ServerActions.ruled`); each launcher must be in this world, in a ready chunk (do not load for a mission), owned by
+  the player or their team, idle; target within `map_range` of it, route within weapon range from it (`routeProblem`
+  with launch origin `LaunchOrigin.Fixed`). Missing launcher (chunk ready, block absent) is unlinked
+  (`LauncherLinks.forget`): otherwise the remote would remain in mission mode forever.
+- Launch follows the player-order path (`ServerActions.fromLauncher`): single via `StrikeService.launch`, salvo via
+  `SalvoData`; origin is `strike/LaunchOrigin` (`Place`: launch location `/incoming salvo … from x z`, `Fixed`: launcher;
+  the salvo stores it, location under `from`, launcher under `from_launcher`). `Fixed` launches only from its rack
+  (`StrikeService.Stand`): Shahed/missile heading via `aimFixed` (a silent rack turns onto the route or via
+  `LaunchSite.pickOn` rotation on its mount; a busy one launches on its heading), MLRS/Lancet via `aimedFixed`; blocked
+  sector, unready chunk, missing block mean failed launch (no distant approach), reason in `report`. Projectiles act
+  for the owner (friendly by `/team`, their “Cancel”, their active-projectile limit); no salvo lines or bar to the
+  owner (`Salvo.reporter`). Owner rules apply (`designator_for_everyone` or operator by profile, owner may be offline;
+  `max_active_per_player`; target within `map_range` of the launcher); ownerless (placed by command) has no rules.
+  Stock must cover the entire order (`Munitions.shortage`), but is charged per projectile when it enters the rail
+  (`Munitions.pay(Store, Bill)` in `StrikeService`): canceled salvos and failed launches stay in stock, so nothing
+  needs returning to a possibly unloaded chunk. The launcher is busy while its salvo runs (`SalvoData.busy`) or its
+  rack is not silent (`LaunchQueue.silent`) — `LauncherOrders.busy`: neither orders nor new missions (a mission changes
+  the rack, whereas salvo projectiles start from their weapon's rack; `StrikeService` launches only the rack's weapon
+  on a round).
+- For the game master and scripts: `/incoming launcher <x y z>` (operator, `IncomingCommand.launcher`): status, `fire`,
+  `mission` (no player rules; target `x z` is a ground location, `x y z` a point; route via `routeProblem` from the
+  launcher), `clear`, `load N`, `owner`; position must be in a ready chunk; `mission` and `clear` refuse a busy launcher.
 
-## Подводные камни
-- Пакет больше блока: у `FixedLauncherRenderer` свой `getRenderBoundingBox` (иначе его отсекает по кубу блока) и
-  `getViewDistance` 160; блок непрозрачный — свет пакета берётся над блоком (`LevelRenderer.getLightColor(pos.above())`).
-- Залп с пусковой ждёт, пока её чанк не готов (`Terrain.ready`), и грузит его в фоне (`strike/LaunchPlaces`: район
-  `AreaLoader`, пока залп идёт), и кончается, если блока на месте нет: сломанная пусковая уже уронила запас.
-- В сетке плотов Sable (`SubLevels.inPlotGrid`) пусковая не стреляет: блок аппарата стоит в далёком плоте, и снаряд
-  ушёл бы оттуда.
-- `getUpdateTag` пишет только то, что видит клиент, а `loadAdditional` читает хозяина, запас и задачу, только если они
-  есть в теге: пакет обновления их не стирает.
+## Pitfalls
+- The rack is larger than a block: `FixedLauncherRenderer` has its own `getRenderBoundingBox` (otherwise it is culled
+  by the block cube) and `getViewDistance` 160; the block is opaque, so rack light is sampled above it
+  (`LevelRenderer.getLightColor(pos.above())`).
+- A launcher salvo waits while its chunk is unready (`Terrain.ready`), loads it in the background
+  (`strike/LaunchPlaces`: `AreaLoader` area for the duration of the salvo), and ends if the block is absent: a broken
+  launcher has already dropped its stock.
+- Launchers do not fire in Sable's plot grid (`SubLevels.inPlotGrid`): a craft's block sits in a distant plot, and the
+  projectile would leave from there.
+- `getUpdateTag` writes only what the client sees; `loadAdditional` reads owner, stock and mission only when present
+  in the tag: update packets do not erase them.

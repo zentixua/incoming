@@ -11,64 +11,70 @@ paths:
   - "mod/src/test/java/me/cortex/voxy/**"
 ---
 
-# Voxy (через Roxy)
+# Voxy (via Roxy)
 
-## Подводные камни
-- На NeoForge 1.21.1 Voxy есть только через Roxy (MIT): игрок кладёт официальный jar Voxy 0.2.16 для 1.21.11, Roxy
-  переводит его байт-код при загрузке; в `ModList` он — мод `voxy`, классы `me.cortex.voxy.*` грузятся тем же
-  загрузчиком, что и наши. API у Voxy нет (лицензия ARR: его код не копировать, только звать): всё — отражением, только
-  чтение, без миксинов; не нашлись классы или поля — одна строка в лог, и возможность выключена, игра идёт как без Voxy.
-  Версия на 1.21.1 застыла на 0.2.16, читаем её устройство (исходники Voxy на GitHub — уже 0.2.20, у них другое:
-  сверять с jar 0.2.16). В тестах — подделки классов Voxy тех же имён (`src/test/java/me/cortex/voxy`), только то, что
-  читает мод.
-- Глубина для слоя эффектов (`client/render/VoxyDepth` за `LodDepth`, рядом с DH): текстура — `pipeline.fb.getDepthTex()`
-  (непрозрачные LOD), проекция — `getViewport().projection` (ближняя 8–16 блоков, дальняя 48 км, прямая, NDC −1..1 в
-  0.2.16), рисовал ли кадр — `frameId`. Под шейдерпаком вершины LOD ставит сам Voxy той же проекцией (`vxProj` пака),
-  поэтому чужих плоскостей, как у DH под Iris, нет. Где рисовал Minecraft, Voxy кладёт в свою глубину **ближнюю
-  плоскость** (без шейдерпака; под шейдерпаком потом возвращает очистку) — это метка «здесь мир», а не LOD в 16 блоках:
-  прочитанная как LOD, она закрыла бы весь дым дальше 16 блоков (`LodDepth.View.world`, `fx_depth`: `LodWorld`). Без
-  шейдерпака (и у пака с `renderToVanillaDepth`) Voxy переносит LOD и в глубину Minecraft, а дальние — прижимает к её
-  дальней плоскости (на шаг 24 бит ниже 1): такой пиксель — LOD, его расстояние — по глубине Voxy (`pinsWorldDepth`,
-  `PINNED`). Complementary — `excludeLodsFromVanillaDepth`. LOD читать ближайшим текселем: смесь соседних на краю холма
-  даёт расстояние, которого в кадре нет. Тот же кадр без глубины Voxy — `-Dincoming.lodDepth.voxy=false`. Как читается —
-  строка «Voxy depth for the effects layer» в логе и `SCENARIO … depth:`; сценарий клиента с Voxy —
-  `tools/client_scenario.sh <сценарий> voxy` (Sodium, Roxy, Voxy и Forgified Fabric API из каталога модов).
-- Дальний рельеф карты, лучей и звука из базы LOD Voxy (`client/map/VoxyTerrain`, за `TerrainSource` между DH и LSS,
-  `dh.md`): тем же путём, что читает LSS (`compat/VoxyTerrainProbe`, MIT) — `WorldIdentifier.ofEngineNullable(Level)`
-  (в потоке игры, не чаще раза в секунду; null — Voxy мира не держит, слой молчит), `WorldEngine.acquireRef` →
-  `acquireIfExists(уровень, x, y, z)` (null — секции нет: воздух или не видел) → `WorldSection.copyDataTo` →
-  `release()` сразу → `releaseRef`. Секции нет в памяти — Voxy читает свою базу в вызывающем потоке: только фоновые
-  потоки (плитки карты и обход `Incoming Voxy terrain`). Уровни Voxy (воксель 1–16 блоков) = уровни плиток: плитка
-  уровня L читает секции уровня L. Воксель уровня > 0 — непрозрачнейший из восьми, при равных верхний (`Mipper`), воздух
-  — только если все воздух: верх столбца — самый высокий блок клетки, высота — середина вокселя (`VoxyColumns.height`,
-  ±2^L/2); вода мельче вокселя над твёрдым дном выходит дном (у дна непрозрачность выше) — реки на грубых уровнях
-  «сухие». Перечитанная грубая сводка стала другой — подробные под ней из памяти долой (`dropFiner`): `peek` берёт
-  подробную первой и отдавал бы лучам рельеф до воронки. Мир закрылся под чтением — `IllegalStateException` и
-  `isLive() == false`: забыть мир, найти заново (не выкл.); другое `IllegalStateException` у живого — сбой в счётчик и лог.
-  Список блоков `Mapper` растёт без замка: номер, которого ещё нет, — как воздух, без кэша. Событий изменения для нас
-  нет (`setDirtyCallback` один и занят рендером): обход вокруг игрока перечитывает уровень 4 до 8 км раз в минуту,
-  сводка стала другой — плитки над ней устаревают. База Voxy — только то, что Voxy видел (и что прислали LSS и наши
-  `S2C.VoxyChunk`); в одиночной игре всё сохранение — `/voxy import current`. Как читается — `TerrainTiles.stats()`
-  (`Voxy (world …): section columns read …`).
-- Изменения мира вдали (воронки, руины и след ядерки, лампы блэкаута) — тем же путём, что в DH (`compat/DhUpdates`:
-  отметки, копии `FarLods`, копии тяжёлой зоны `FrontLods`), рядом с DH: `compat/VoxyLods` шлёт чанк игрокам с Voxy
-  (`C2S.LodMods` при входе) пакетом `S2C.VoxyChunk`, кроме тех, кто этот чанк видит (его Voxy перестроит сам), не
-  дальше `FarLods.FAR_CHUNKS`; клиент кладёт секции статическим `VoxelIngestService.rawIngest(WorldIdentifier, section,
-  x, y, z, blockLight, skyLight)` по `MethodHandle` (`client/VoxyIngest`; так же делает LOD Server Support,
-  `compat/VoxyCompat`) в потоке сети. Voxy — только клиент: на выделенном сервере его нет, поэтому пакет, а не вызов на
-  сервере. Свет секций — его, Voxy его не считает: null — темно (LOD чёрные); у загруженного чанка — движок света мира
-  (нет слоя неба над рельефом — 15), у копии — `compat/CopyLight` по её блокам внутри чанка (свет с диска оставил бы
-  гореть погашенный квартал). Все секции, и пустые: воздух снесённой башни стирает её. Темп — 128 КиБ в тик игроку (хост,
-  открывший мир друзьям, отдаёт их со своего канала), очередь до 48 МиБ (`VoxyLods.room` держит `DhUpdates`, `FarLods` и
-  `FrontLods`, и при DH: иначе лишнее игрокам с Voxy пропало бы); слой света движка — копией (`getData` у однородного
-  заполняет живой слой); копия тяжёлой зоны идёт DH за
-  `DhUpdates.LEAD` до фронта, а Voxy кладёт сразу — ей срок «не раньше фронта» (`VoxyLods.send(…, notBefore)`).
-- LOD Server Support (сервер) рассылает чанк по сохранению (хэш, раз в 200 тиков) — живым или с диска, то есть уже с
-  руинами, — а клиенту при входе отвечает «не изменился» по отметке времени: копии мода он не трогает. Перепишет
-  только при первой сверке клиента (или после сброса его хранилища) — чанком с диска, где руин вдали нет: клиент
-  замечает это своим подписчиком LSS (`client/LssVoxyWatch`, подписка — только при Voxy: подписчик без Voxy заставил
-  бы LSS качать LOD) и называет чанки серверу (`C2S.VoxyStale`: клиент — 12 в тик, сервер принимает до 256 в секунду от игрока), сервер шлёт копию
-  заново **только ему** и только если она отличается от диска (`FarLods.refresh`: план руин, след вне тяжёлой зоны,
-  тьма квартала). Не всем и не в DH: у них LOD верный, а план руин живёт недолго (`ZONE_HOLD`, перезапуск) — копия без
-  плана, разосланная всем, вернула бы целый город поверх руин в базе DH (ревью #391). Игрок, которого не было в мире во время удара, дальних руин в Voxy не увидит, пока не
-  подойдёт (у DH их хранит база DH сервера). В повторе Flashback пакеты не кладутся (Voxy там показывает живую базу).
+## Pitfalls
+- On NeoForge 1.21.1, Voxy is available only through Roxy (MIT): the player installs the official Voxy 0.2.16 jar for
+  1.21.11, Roxy translates its bytecode on load; it is mod `voxy` in `ModList`, and `me.cortex.voxy.*` classes use the
+  same loader as ours. Voxy has no API (ARR license: do not copy its code, only call it): everything uses reflection,
+  read-only, no mixins; missing classes or fields produce one log line and disable the feature; the game runs as if
+  Voxy were absent. The 1.21.1 version is frozen at 0.2.16; study that version's structure (Voxy sources on GitHub are
+  already 0.2.20 and differ: check against the 0.2.16 jar). Tests use fake Voxy classes with the same names
+  (`src/test/java/me/cortex/voxy`), only what the mod reads.
+- Depth for the effects layer (`client/render/VoxyDepth` behind `LodDepth`, alongside DH): texture is
+  `pipeline.fb.getDepthTex()` (opaque LODs), projection is `getViewport().projection` (near 8–16 blocks, far 48 km,
+  forward, NDC −1..1 in 0.2.16); `frameId` indicates whether it rendered this frame. Under a shaderpack, Voxy itself
+  places LOD vertices with the same projection (the pack's `vxProj`), so there are no foreign planes as with DH under
+  Iris. Where Minecraft rendered, Voxy writes the **near plane** into its depth (without a shaderpack; with one it
+  restores the clear value later) — a “world here” marker, not a LOD at 16 blocks: read as a LOD, it would hide all
+  smoke beyond 16 blocks (`LodDepth.View.world`, `fx_depth`: `LodWorld`). Without a shaderpack (and for packs with
+  `renderToVanillaDepth`), Voxy also copies LODs into Minecraft's depth, clamping distant ones to its far plane (one
+  24-bit step below 1): such a pixel is a LOD, its distance comes from Voxy depth (`pinsWorldDepth`, `PINNED`).
+  Complementary uses `excludeLodsFromVanillaDepth`. Read LODs by nearest texel: mixing neighbors on a hill edge gives
+  a distance absent from the frame. The same frame without Voxy depth: `-Dincoming.lodDepth.voxy=false`. Readout:
+  “Voxy depth for the effects layer” in the log and `SCENARIO … depth:`; client scenario with Voxy:
+  `tools/client_scenario.sh <scenario> voxy` (Sodium, Roxy, Voxy and Forgified Fabric API from the mods directory).
+- Distant terrain for the map, rays and sound from Voxy's LOD database (`client/map/VoxyTerrain`, behind `TerrainSource`
+  between DH and LSS, `dh.md`): the same path LSS reads (`compat/VoxyTerrainProbe`, MIT) —
+  `WorldIdentifier.ofEngineNullable(Level)` (on the game thread, at most once per second; null means Voxy holds no world,
+  the layer stays silent), `WorldEngine.acquireRef` → `acquireIfExists(level, x, y, z)` (null: section absent, air or
+  unseen) → `WorldSection.copyDataTo` → `release()` immediately → `releaseRef`. If the section is not in memory, Voxy
+  reads its database on the calling thread: background threads only (map tiles and the `Incoming Voxy terrain` scan).
+  Voxy levels (voxel 1–16 blocks) = tile levels: a level L tile reads level L sections. A level > 0 voxel is the most
+  opaque of eight, the upper one on ties (`Mipper`); air only if all are air: column top is the cell's highest block,
+  height is the voxel midpoint (`VoxyColumns.height`, ±2^L/2); water shallower than a voxel over a solid bed becomes
+  the bed (more opaque) — rivers are “dry” at coarse levels. If a reread coarse summary changes, evict finer ones
+  underneath from memory (`dropFiner`): `peek` takes fine data first and would give rays pre-crater terrain. World closed
+  during read: `IllegalStateException` and `isLive() == false`: forget the world, find it again (do not disable);
+  other `IllegalStateException`s in a live world go to the error counter and log. The `Mapper` block list grows without
+  a lock: an ID not yet present is treated as air, without caching. There are no change events for us
+  (`setDirtyCallback` is single and used by rendering): the scan around the player rereads level 4 out to 8 km once
+  a minute; changed summaries invalidate tiles above them. Voxy's database holds only what Voxy has seen (and what LSS
+  and our `S2C.VoxyChunk` sent); in single-player, the entire save is `/voxy import current`. Readout:
+  `TerrainTiles.stats()` (`Voxy (world …): section columns read …`).
+- Distant world changes (craters, ruins and nuclear traces, blackout lamps) use the same path as DH (`compat/DhUpdates`:
+  marks, `FarLods` copies, heavy-zone `FrontLods` copies), alongside DH: `compat/VoxyLods` sends chunks to Voxy players
+  (`C2S.LodMods` on entry) via `S2C.VoxyChunk`, except players viewing that chunk (their Voxy rebuilds it itself), no
+  farther than `FarLods.FAR_CHUNKS`; the client submits sections with static
+  `VoxelIngestService.rawIngest(WorldIdentifier, section, x, y, z, blockLight, skyLight)` via `MethodHandle`
+  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the network thread. Voxy is client-only:
+  dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
+  calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
+  terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
+  lit). All sections, including empty ones: air from a demolished tower erases it. Rate: 128 KiB per tick per player
+  (a host opening the world to friends sends it over their own connection), queue up to 48 MiB (`VoxyLods.room` gates
+  `DhUpdates`, `FarLods` and `FrontLods`, even with DH: otherwise excess updates for Voxy players would be lost); copy
+  engine light layers (`getData` fills the live layer for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD`
+  before the front, but Voxy ingests immediately — give it a “not before front” deadline
+  (`VoxyLods.send(…, notBefore)`).
+- LOD Server Support (server) broadcasts chunks on save (hash, every 200 ticks), live or from disk, thus already with
+  ruins, and on client entry replies “unchanged” by timestamp: it leaves the mod's copies alone. Only the client's
+  first check (or after clearing its storage) overwrites them with disk chunks lacking distant ruins: the client
+  detects this through its LSS subscriber (`client/LssVoxyWatch`, subscribes only with Voxy: a subscriber without Voxy
+  would make LSS download LODs) and names the chunks to the server (`C2S.VoxyStale`: client 12 per tick, server accepts
+  up to 256 per second per player); the server resends a copy **only to that player**, and only if it differs from disk
+  (`FarLods.refresh`: ruin plan, trace outside the heavy zone, district darkness). Not to everyone or to DH: their LODs
+  are correct, and the ruin plan is short-lived (`ZONE_HOLD`, restart) — broadcasting a copy without a plan would
+  restore the intact city over ruins in DH's database (review #391). A player absent from the world during the strike
+  will not see distant ruins in Voxy until approaching (DH stores them in the server's DH database). Packets are not
+  ingested during Flashback replay (Voxy shows the live database there).
