@@ -43,10 +43,13 @@ public final class FirePlume {
      */
     public static final double LUMINOUS_K = Math.pow(140e3 / 5.670374e-8, 0.25);
     /**
-     * Luminous flame temperature fluctuation scale, K (est.; model value). Gritzo, Sivathanu and Gill,
-     * “Transient Measurements of Radiative Properties, Soot Volume Fraction and Soot Temperature in a Large
-     * Pool Fire”, Combust. Sci. Technol. 139 (1998), 113–136, doi:10.1080/00102209808952083, studies transient
-     * pool-fire radiation; the previously claimed 200–300 K range could not be verified in the accessible record.
+     * Luminous flame temperature fluctuation scale, K. Gritzo, Sivathanu and Gill, “Transient Measurements
+     * of Radiative Properties, Soot Volume Fraction and Soot Temperature in a Large Pool Fire”,
+     * Combust. Sci. Technol. 139 (1998), 113–136, doi:10.1080/00102209808952083, reports in its abstract
+     * an approximately normal temperature distribution: mean 1400 K, standard deviation about 67 K,
+     * measured in a 6 m × 6 m JP-8 pool fire. Here the Gaussian standard deviation remains 200 K
+     * (est.; presentation: roughly three times that measurement), about {@link #LUMINOUS_K} (~1250 K).
+     * Assessing this presentation choice requires a separate visual comparison; it is not a measured 200 K spread.
      * Visible brightness rises steeply with T (Wien ∝ e^(−c₂/λT)), so mean flame brightness is that of its hot regions.
      */
     public static final double FLUCTUATION_K = 200;
