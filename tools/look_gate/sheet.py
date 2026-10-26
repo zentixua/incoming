@@ -1,10 +1,10 @@
 # /// script
 # dependencies = ["Pillow"]
 # ///
-"""Лист кадров пробы: строки — варианты, столбцы — моменты сцены.
+"""Probe frame sheet: variant rows, scene-moment columns.
 
-  uv run sheet.py <out-корень> <сцена> <файл.png> <вариант>[=подпись] ... [--w 480]
-Кадры — <out-корень>/<вариант>/screenshots/probe_<сцена>_<момент>.png; моменты — из первого варианта, по времени.
+  uv run sheet.py <out-root> <scene> <file.png> <variant>[=caption] ... [--w 480]
+Frames: <out-root>/<variant>/screenshots/probe_<scene>_<moment>.png; moments from the first variant, in time order.
 """
 import re
 import sys
@@ -49,6 +49,6 @@ for i, (name, label) in enumerate(labels):
         if p.exists():
             sheet.paste(Image.open(p).convert("RGB").resize((w, h), Image.LANCZOS), (left + j * (w + pad), y))
         else:
-            d.text((left + j * (w + pad) + 20, y + h // 2), "нет кадра", fill=(200, 80, 80), font=font)
+            d.text((left + j * (w + pad) + 20, y + h // 2), "no frame", fill=(200, 80, 80), font=font)
 sheet.save(out, quality=88)
 print(out, sheet.size)

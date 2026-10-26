@@ -17,25 +17,25 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Эталон траекторий ({@code scenario-baseline.json} в ресурсах devtest): у каждого сценария эталона — чем кончился
- * полёт, на каком тике, где (от середины площадки) и хеш положений снаряда по тикам. Сценарий сравнивает свой полёт
- * с эталоном точно: любое изменение полёта видно. Менять эталон — только в PR, где сдвиг объяснён по каждому
- * сценарию. Записать заново — {@code ./gradlew runScenarioRecord} (пишет сюда же, в исходники).
+ * Trajectory reference ({@code scenario-baseline.json} in the devtest resources): for each reference scenario - how the
+ *  flight ended, on what tick, where (from the middle of the site) and a hash of the projectile positions by tick. The script compares its flight
+ *  with the reference exactly: any change in flight is visible. Change the reference only in PR, where the shift is explained for each
+ *  scenario. Write again - {@code ./gradlew runScenarioRecord} (writes here, in the source code).
  */
 final class Baseline {
     private static final String RESOURCE = "/scenario-baseline.json";
-    /** Куда писать эталон (задача {@code runScenarioRecord}); без неё — сравнивать. */
+    /** Where to write the reference (task {@code runScenarioRecord}); without it - compare. */
     private static final String RECORD = System.getProperty("incoming.scenario.record");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     /**
-     * Итог полёта.
+     * Result flight.
      *
-     * @param end  чем кончился: {@code blast} — взрыв снаряда сценария, {@code entry} — бомба вошла в грунт,
-     *             {@code gone} — снаряд убран без взрыва
-     * @param tick тик от пуска
-     * @param x    место от середины площадки, с точностью до 0,01 блока
-     * @param hash хеш положений и фаз по тикам ({@link FlightTrace})
+     * @param end how it ended: {@code blast} - scenario shell explosion, {@code entry} - bomb entered the ground,
+     *             {@code gone} - the projectile was removed without explosion
+     * @param tick tick from launch
+     * @param x place from the middle of the site, accurate to 0,01 block
+     * @param hash hash of positions and phases by tick ({@link FlightTrace})
      */
     record Entry(String end, int tick, double x, double y, double z, String hash) {}
 
@@ -53,7 +53,7 @@ final class Baseline {
         return EXPECTED.get(id);
     }
 
-    /** Записать итог сценария (весь файл заново: какой тест кончится последним, заранее не знать). */
+    /** Write down the outcome of the scenario (the entire file again: which test will end last, you don’t know in advance). */
     static synchronized void record(String id, Entry entry) {
         RECORDED.put(id, entry);
         JsonObject root = new JsonObject();
@@ -69,7 +69,7 @@ final class Baseline {
         Map<String, Entry> out = new TreeMap<>();
         try (InputStream in = Baseline.class.getResourceAsStream(RESOURCE)) {
             if (in == null) {
-                Incoming.LOG.warn("Эталона траекторий {} нет: сценарии эталона упадут — записать ./gradlew runScenarioRecord", RESOURCE);
+                Incoming.LOG.warn("There is no reference trajectories {}: the reference scenarios will fall - write ./gradlew runScenarioRecord", RESOURCE);
                 return out;
             }
             JsonObject root = GSON.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);

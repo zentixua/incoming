@@ -10,19 +10,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArrivalTableTest {
     private static final ArrivalTable T15 = ArrivalTable.of(15, 0, 20000), AIR = ArrivalTable.of(15, 592, 20000);
 
-    /** Время прихода фронта наземного 15 кт из раздела 1.1 (Броуд, PT; стандарт DNA для 2W даёт те же 0.07 с на 200 м), допуск 15%. */
+    /** Arrival time of the ground front 15 kt from section 1.1 (Broad, PT; standard DNA for 2W gives the same 0.07 s to 200 m), tolerance 15%. */
     @ParameterizedTest
     @CsvSource({"200, 0.07", "1000, 1.6", "2000, 4.3", "5000, 12.8", "10000, 27"})
     void arrivalTimes15kt(double rangeM, double seconds) {
         assertEquals(seconds, T15.arrivalSeconds(rangeM), seconds * 0.15);
     }
 
-    /** Воздушный 15 кт на 592 м: на землю — по Броуду на той же наклонной дальности, под подрывом — свободный воздух. */
+    /** Air 15 kt on 592 m: to the ground - along Broad at the same slant range, under the detonation - free air. */
     @Test
     void airBurstReachesTheGroundByBrode() {
         for (double g : new double[]{0, 300, 1000, 5000}) {
             double s = Math.hypot(g, 592);
-            assertEquals(HobBlast.arrivalSeconds(g, 592, 15), AIR.arrivalSeconds(s), 0.005, g + " м");
+            assertEquals(HobBlast.arrivalSeconds(g, 592, 15), AIR.arrivalSeconds(s), 0.005, g + " m");
         }
         assertEquals(HobBlast.freeAirArrivalSeconds(300, 15), AIR.arrivalSeconds(300), 0.01);
     }

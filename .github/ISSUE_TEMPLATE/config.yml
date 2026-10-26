@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Player guide
+    url: https://github.com/zentixua/incoming/blob/main/docs/guide/README.md
+    about: Installation, controls, commands and settings.
+  - name: Security policy
+    url: https://github.com/zentixua/incoming/blob/main/SECURITY.md
+    about: Arrange a private report without posting sensitive details.

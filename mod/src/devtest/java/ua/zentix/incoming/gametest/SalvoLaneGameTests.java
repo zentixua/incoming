@@ -26,8 +26,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Залп летит волной, а не ниткой ({@link WeaponSpec.Lanes}): снаряды одного маршрута оператора — каждый в своей полосе
- * сбоку от пути, к цели полосы сходятся, прилёты разнесены.
+ * A salvo flies as a wave, not a thread ({@link WeaponSpec.Lanes}): projectiles on one operator route each have
+ * their own lane beside the path; lanes converge at the target, arrivals are spaced out.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -39,10 +39,10 @@ public final class SalvoLaneGameTests {
     private SalvoLaneGameTests() {}
 
     /**
-     * Пять шахедов по одному маршруту оператора (без пусковой — издалека, вне мира, к полосе): на середине маршрута каждый —
-     * в своей полосе, той, что даёт зерно залпа (одно зерно — одни пути), полосы — на ширину волны; в 60 блоках до
-     * своей точки прицеливания сдвиг сошёл до пятой части; каждый попал в свою точку, прилёты — по одному, не разом.
-     * Маршрут заходит с +Z и +X: там соседних партий ещё нет.
+     * Five Shahed along one operator route (without launcher - from afar, out of the world, to the strip): in the middle of the route, each -
+     *  in his own lane, the one that gives the salvo seed (one seed - one path), stripes - the width of the wave; in 60 blocks up to
+     *  of its aiming point, the shift decreased to a fifth; everyone got to their point, arrivals - one at a time, not at once.
+     *  The route enters from +Z and +X: there are no neighboring batches there yet.
      */
     @GameTest(template = "runway", timeoutTicks = 2400, batch = "salvo_lanes", skyAccess = true)
     public static void salvoFliesAsWave(GameTestHelper h) {
@@ -59,7 +59,7 @@ public final class SalvoLaneGameTests {
             VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
             level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> owner.equals(p.ownerId())).forEach(StrikeProjectile::discard);
         });
-        // по порядку пуска: след каждого снаряда, его точка прицеливания и тик, когда его не стало
+        // in launch order: the trail of each projectile, its aiming point and tick when it is gone
         Map<UUID, Round> rounds = new LinkedHashMap<>();
         int[] tick = {0};
         h.onEachTick(() -> {
@@ -74,35 +74,35 @@ public final class SalvoLaneGameTests {
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(rounds.size() == ROUNDS && SalvoData.get(level).size() == 0, "пущено " + rounds.size() + " из " + ROUNDS);
-            h.assertTrue(rounds.values().stream().allMatch(r -> r.seen < tick[0] - 1), "ещё летят");
+            h.assertTrue(rounds.size() == ROUNDS && SalvoData.get(level).size() == 0, "launched " + rounds.size() + " from " + ROUNDS);
+            h.assertTrue(rounds.values().stream().allMatch(r -> r.seen < tick[0] - 1), "still flying");
             List<Round> order = List.copyOf(rounds.values());
             double[] mid = new double[ROUNDS];
             for (int i = 0; i < ROUNDS; i++) {
                 Round r = order.get(i);
-                // середина участка между точками оператора: далеко и от выхода в полосу, и от схождения
+                // the middle of the section between the operator’s points: far from both the exit to the lane and the convergence
                 mid[i] = r.lateral(a, b, a.add(b).scale(0.5));
                 double lane = lanes.offset(SEED, i, ROUNDS);
                 h.assertTrue(Math.abs(mid[i] - lane) <= 4, String.format(Locale.ROOT,
-                        "снаряд %d на середине маршрута в %.1f блоках от пути, его полоса по зерну — %.1f", i, mid[i], lane));
-                // у своей точки прицеливания: сдвиг сошёл (полоса сходится за converge до неё)
+                        "projectile %d in the middle of the route in %.1f blocks from the path, its seed stripe is %.1f", i, mid[i], lane));
+                // at its aiming point: lateral offset is gone (lane converges converge before it)
                 Vec3 aim = flat(r.aim);
                 Vec3 near = r.at(aim, 60);
                 double close = r.lateral(b, aim, near);
                 h.assertTrue(Math.abs(close) <= 0.3 * Math.abs(lane) + 3, String.format(Locale.ROOT,
-                        "снаряд %d в 60 блоках до точки прицеливания в %.1f блоках от прямой на неё (полоса %.1f)", i, close, lane));
+                        "projectile %d in 60 blocks to the aiming point in %.1f blocks from the direct line to it (band %.1f)", i, close, lane));
                 Vec3 last = r.trace.getLast();
-                h.assertTrue(flat(last).distanceTo(aim) <= 8, "снаряд " + i + " кончил полёт не у своей точки: " + h.relativeVec(last)
-                        + " против " + h.relativeVec(r.aim));
+                h.assertTrue(flat(last).distanceTo(aim) <= 8, "projectile " + i + " ended the flight not at its point: " + h.relativeVec(last)
+                        + " against " + h.relativeVec(r.aim));
             }
             double lo = java.util.Arrays.stream(mid).min().orElseThrow(), hi = java.util.Arrays.stream(mid).max().orElseThrow();
-            h.assertTrue(hi - lo >= lanes.halfWidth(), String.format(Locale.ROOT, "волна на середине маршрута шириной %.1f, полосы ±%.0f",
+            h.assertTrue(hi - lo >= lanes.halfWidth(), String.format(Locale.ROOT, "wave in the middle of the route, width %.1f, lanes ±%.0f",
                     hi - lo, lanes.halfWidth()));
             List<Integer> ends = order.stream().map(r -> r.seen).sorted().toList();
             for (int i = 1; i < ends.size(); i++) {
-                h.assertTrue(ends.get(i) - ends.get(i - 1) >= 5, "прилёты разом: тики " + ends);
+                h.assertTrue(ends.get(i) - ends.get(i - 1) >= 5, "arrivals at once: tick " + ends);
             }
-            h.assertTrue(ends.getLast() - ends.getFirst() >= (ROUNDS - 1) * spec.salvo().gapMin() / 2, "прилёты не разнесены: тики " + ends);
+            h.assertTrue(ends.getLast() - ends.getFirst() >= (ROUNDS - 1) * spec.salvo().gapMin() / 2, "arrivals are not spaced: tick " + ends);
         });
     }
 
@@ -110,7 +110,7 @@ public final class SalvoLaneGameTests {
         return new Vec3(p.x, 0, p.z);
     }
 
-    /** Снаряд залпа в проверке: точка прицеливания, след по тикам, последний тик в полёте. */
+    /** Volley projectile in check: aiming point, trace by tick, last tick in flight. */
     private static final class Round {
         final Vec3 aim;
         final List<Vec3> trace = new ArrayList<>();
@@ -121,8 +121,8 @@ public final class SalvoLaneGameTests {
         }
 
         /**
-         * Сдвиг вбок от прямой {@code from} → {@code to} (в сторону {@code side} = +1 у {@code Route.plan}, как у полос) там,
-         * где след пересекает перпендикуляр к ней в точке {@code across}.
+         * Lateral shift from the straight line {@code from} → {@code to} (towards {@code side} = +1 for {@code Route.plan}, like for stripes) there,
+         * , where the trace intersects the perpendicular to it at point {@code across}.
          */
         double lateral(Vec3 from, Vec3 to, Vec3 across) {
             double ux = to.x - from.x, uz = to.z - from.z, len = Math.hypot(ux, uz);
@@ -140,7 +140,7 @@ public final class SalvoLaneGameTests {
             return (best.x - across.x) * -uz + (best.z - across.z) * ux;
         }
 
-        /** Точка следа на расстоянии ближе всего к {@code distance} от {@code aim} по горизонтали. */
+        /** The trace point at the distance is closest to {@code distance} from {@code aim} horizontally. */
         Vec3 at(Vec3 aim, double distance) {
             Vec3 best = trace.getFirst();
             for (Vec3 p : trace) {

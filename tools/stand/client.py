@@ -1,11 +1,10 @@
-"""Клиент стенда: каталог игры и запуск — то, от чего зависят числа (входит в версию стенда — stand.py, контекст).
-
-Каталог игры собирается с нуля на каждый пак: Incoming, Sodium, Iris, шейдерпак, настройки, план. Клиент идёт во
-вложенном KWin (tools/nested_kwin.sh: без окна на рабочем столе, без звука хоста, аренда видеокарты) своей сессией
-процессов с меткой в окружении: остановка гасит всё с меткой (TERM, через 20 с KILL) — и обёртки, и JVM, — не только
-группу обёртки (JVM — внук dbus-run-session и kwin). Рядом с клиентом пишется нагрузка машины (host.jsonl): процессор
-каждые 5 с (`Host`: чужое — всё, что не своя cgroup задачи) и видеокарта циклами по ~1 с подряд (`GpuWatch`); перед
-клиентом — ждать тишины. Только стандартная библиотека.
+"""Scene bench client: game directory and launch settings affect measurements (part of bench version,
+stand.py context). Rebuild the game directory per pack: Incoming, Sodium, Iris, shader pack, settings,
+plan. Run client in nested KWin (tools/nested_kwin.sh: no desktop window, no host audio, GPU lease), in a
+tagged process session. Shutdown stops all tagged processes (TERM, then KILL after 20 s), wrappers and
+JVM, not just wrapper group (JVM is a grandchild of dbus-run-session and kwin). Record machine load
+alongside (host.jsonl): CPU every 5 s (`Host`, foreign means outside job cgroup) and consecutive ~1 s
+GPU cycles (`GpuWatch`); wait for quiet before client. Standard library only.
 """
 import json
 import os
@@ -24,10 +23,10 @@ import results
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 SOCKET = "wayland-incoming-stand"
-# запас высоты экрана вложенного KWin на рамку окна
+# Extra nested-KWin screen height for window decorations
 DECOR = 40
 
-# настройки игры — одни у всех версий: без vsync и предела к/с, прорисовка 12, частицы «все», красивая графика
+# Identical game settings for all versions: vsync off, unlimited fps, render distance 12, particles all, fancy graphics
 OPTIONS = """onboardAccessibility:false
 pauseOnLostFocus:false
 renderDistance:12
@@ -48,8 +47,8 @@ narrator:0
 
 
 def launch_script(game, size):
-    """Скрипт клиента без Gradle (`standLaunch` в build.gradle): каталог игры — game, окно — size (Ш×В); назад — путь.
-    Тот же java, аргументы, classpath и окружение, что у runClient; Gradle выходит до замера."""
+    """Client script without Gradle (`standLaunch` in build.gradle): game directory game, window size (W×H); return path.
+Same Java, arguments, classpath and environment as runClient; Gradle exits before measurement."""
     w, h = size.split("x")
     env = dict(os.environ)
     env.setdefault("JAVA_HOME", str(Path.home() / ".var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta"))
@@ -59,8 +58,8 @@ def launch_script(game, size):
 
 
 def java_of(script):
-    """Java, на которой идёт клиент (из скрипта standLaunch): версия из файла release рядом с ней — в контекст прогона
-    (JDK лаунчера обновляется сам, а с ним и время кадра)."""
+    """Client Java (from standLaunch script): version from adjacent release file enters run context
+(launcher JDK auto-updates, changing frame time too)."""
     try:
         words = shlex.split(Path(script).read_text().splitlines()[-1])
         java = next(Path(x) for x in words if x.endswith("/bin/java"))
@@ -72,8 +71,7 @@ def java_of(script):
 
 
 def server_toml(cfg):
-    """Правила мира стенда ({раздел: {ключ: значение}}) в TOML настроек сервера Incoming: недостающие ключи NeoForge
-    допишет значениями по умолчанию."""
+    """Bench world rules ({section: {key: value}}) in Incoming server TOML: NeoForge adds missing keys with defaults."""
     lines = []
     for section, values in cfg.items():
         lines.append(f"[{section}]")
@@ -82,7 +80,7 @@ def server_toml(cfg):
 
 
 def prepare_game(game, jar, pack_file, mods, scenes_sel):
-    """Каталог игры с нуля: моды, шейдерпак (None — Iris без пака), настройки игры и правила мира, план; план — назад."""
+    """Fresh game directory: mods, shader pack (None for Iris without pack), game settings/world rules, plan; return plan."""
     if game.exists():
         for sub in ("saves", "stand-out", "mods", "shaderpacks", "config", "logs", "crash-reports", "screenshots"):
             shutil.rmtree(game / sub, ignore_errors=True)
@@ -101,7 +99,7 @@ def prepare_game(game, jar, pack_file, mods, scenes_sel):
         iris = "enableShaders=false\ndisableUpdateMessage=true\n"
     (game / "config" / "iris.properties").write_text(iris)
     scenes = plan.load()
-    # настройки сервера NeoForge 21.1 — в config/ каталога игры (serverconfig мира их только переопределяет)
+    # NeoForge 21.1 server settings live in game config/ (world serverconfig only overrides them)
     (game / "config" / "incoming-server.toml").write_text(server_toml(scenes.get("server_config", {})))
     (game / "options.txt").write_text(OPTIONS)
     (game / "alsoft.conf").write_text(f"[general]\ndrivers = wave\nfrequency = 48000\nchannels = stereo\nsample-type = int16\n"
@@ -116,7 +114,7 @@ def artem_playing():
 
 
 def tagged(tag):
-    """Процессы с меткой стенда в окружении."""
+    """Processes carrying the bench environment tag."""
     out = []
     for d in Path("/proc").iterdir():
         if not d.name.isdigit():
@@ -130,7 +128,7 @@ def tagged(tag):
 
 
 def kill_tagged(tag, grace=20):
-    """Всё с меткой: TERM, ждать до grace секунд, остальным KILL; назад — сколько осталось (0 — все ушли)."""
+    """All tagged processes: TERM, wait up to grace seconds, KILL survivors; return remaining count (0 means all exited)."""
     for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 5)):
         pids = tagged(tag)
         if not pids:
@@ -147,17 +145,17 @@ def kill_tagged(tag, grace=20):
 
 
 SAMPLE_S = 5
-# перед клиентом ждать тишины: столько выборок подряд без тяжёлой чужой нагрузки (10 с: долгая задача видна сразу), не
-# дольше QUIET_WAIT_S — аренда видеокарты держится; в паре ждёт только A1 пака, B и A2 идут сразу за ним (stand.py), от
-# ровной чужой нагрузки шлагбаум защищает сама пара (gate.py)
+# Wait for quiet before client: this many consecutive samples without heavy foreign load (10 s, long
+# jobs show immediately), at most QUIET_WAIT_S while holding GPU lease; pair waits only before pack A1,
+# B/A2 follow immediately (stand.py); the pair itself protects from steady foreign load (gate.py)
 QUIET_SAMPLES, QUIET_WAIT_S = 2, 120
-# цикл nvidia-smi pmon (-d 1): SM каждого процесса — среднее за цикл, циклы идут подряд; между концами соседних циклов
-# больше PMON_GAP_S — пропуск (pmon вставал), а не один длинный цикл
+# nvidia-smi pmon cycle (-d 1): per-process SM is cycle mean, cycles are consecutive; neighbouring ends
+# over PMON_GAP_S apart indicate a gap (pmon stalled), not one long cycle
 PMON_S, PMON_GAP_S = 1.0, 2.5
 
 
 def power_profile():
-    """Профиль питания ноутбука (platform_profile: тихий ночью — другие частоты и время кадра); нет — unknown."""
+    """Laptop power profile (platform_profile: quiet at night changes clocks/frame time); absent means unknown."""
     try:
         return Path("/sys/firmware/acpi/platform_profile").read_text().strip()
     except OSError:
@@ -165,17 +163,17 @@ def power_profile():
 
 
 class PmonCycles:
-    """Строки `nvidia-smi pmon -d 1 -s u -o DT` → циклы видеокарты: {"kind": "gpu", "epoch" (конец цикла, настенные с),
-    "dt" (его длина), "foreign_sm" (% SM чужих процессов, сумма), "who", "own_sm" (% SM своего рисующего клиента — JVM
-    игры; None — числа нет: число его KWin или Xwayland замера не подтверждает)}. Чей процесс — classify(pid, имя) →
-    CLIENT, OWN (своя cgroup, не клиент) или FOREIGN — решается, когда строка пришла, и помнится по паре (pid, имя): цикл
-    кончается только со строкой следующего, а свой клиент к тому времени мог уже выйти (его /proc нет), и тогда он стал
-    бы чужим; тот же pid с другим именем — другой процесс, решается заново.
-    Цикл — строки с одним временем; кончается, когда пришла строка следующего (другое время или процесс, что в цикле уже
-    был: два цикла в одной секунде); последний, недописанный, — не цикл.
-    Время в pmon — до секунды: конец цикла — середина его секунды; длина — до конца прошлого цикла (циклы подряд), после
-    пропуска и у первого — PMON_S. «-» у процесса — за цикл у него нет отсчёта SM: так у всех простаивающих (композитор
-    рабочего стола, plasmashell, Xwayland), это 0. Есть ли у цикла замер, решает разбор по own_sm (results.host_in)."""
+    """`nvidia-smi pmon -d 1 -s u -o DT` lines → GPU cycles: {"kind": "gpu", "epoch" (cycle end, wall seconds),
+"dt" (duration), "foreign_sm" (foreign % SM sum), "who", "own_sm" (rendering client/game JVM % SM;
+None if absent; its KWin or Xwayland number does not confirm measurement)}. classify(pid, name) returns
+CLIENT, OWN (our cgroup, not client), FOREIGN when a line arrives, caching by (pid, name): a cycle closes
+only on a later cycle line; our client may already have exited (/proc gone), otherwise becoming foreign.
+Same PID with another name means a different process, reclassify. A cycle groups equal-time lines;
+a next timestamp or repeated process (two cycles in one second) closes it. Last unfinished cycle is
+excluded. pmon time has one-second precision: cycle end is its second midpoint; duration reaches previous
+cycle end, except first/after-gap cycles use PMON_S. Process "-" means no SM sample this cycle, normal
+for idle desktop compositor, plasmashell, Xwayland; count 0. Parser determines measured cycles using own_sm
+(results.host_in)."""
 
     def __init__(self, classify):
         self.classify = classify
@@ -185,7 +183,7 @@ class PmonCycles:
         self.prev_end = None
 
     def feed(self, line):
-        """Строка pmon → законченный цикл (её строка начала следующий) или None."""
+        """pmon line → completed cycle (this line started the next), or None."""
         f = line.split()
         if len(f) < 7 or f[0].startswith("#") or not (f[0].isdigit() and f[3].isdigit()):
             return None
@@ -227,8 +225,8 @@ CLIENT, OWN, FOREIGN = "client", "own", "foreign"
 
 
 class GpuWatch:
-    """Видеокарта непрерывно: `nvidia-smi pmon -d 1` своим процессом, циклы (PmonCycles) копятся до `drain`. Нет
-    nvidia-smi или он упал — циклов нет: окна без них разбор не примет (замера нет — не ноль)."""
+    """Continuous GPU: own `nvidia-smi pmon -d 1` process, cycles (PmonCycles) accumulate until `drain`. Missing
+or failed nvidia-smi means no cycles; parser rejects windows without them (no measurement is not zero)."""
 
     def __init__(self, classify):
         self.cycles, self.lock, self.proc, self.thread = [], threading.Lock(), None, None
@@ -272,10 +270,10 @@ class GpuWatch:
 
 
 class Host:
-    """Нагрузка машины за время между выборками: ядра процессора всего и своей cgroup (задача ноутбука: в ней клиент,
-    его KWin и JVM), чужие = всё − свои, по службам рядом (кто), профиль питания, load average; видеокарта — циклы
-    GpuWatch за то же время (чужие процессы — вне своей cgroup) и её температура и частота. В выборке процессора
-    видеокарта — только сводка для ожидания тишины и лога; разбор берёт сами циклы."""
+    """Machine load between samples: whole-machine/job-cgroup CPU cores (laptop job includes client, KWin,
+JVM), foreign = all − own; neighbouring services (who), power profile, load average; GpuWatch cycles for
+the same interval (foreign outside job cgroup), GPU temperature/frequency. CPU sample GPU fields only
+summarize for quiet waits/logs; parsing uses cycles themselves."""
 
     def __init__(self, gpu=None):
         self.cg = self._own_cgroup()
@@ -294,7 +292,7 @@ class Host:
 
     @staticmethod
     def _busy_s():
-        """Процессор, занятый всей машиной с загрузки, с (user+nice+system+irq+softirq+steal)."""
+        """Whole-machine CPU time since boot, s (user+nice+system+irq+softirq+steal)."""
         v = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:9]]
         return (v[0] + v[1] + v[2] + v[5] + v[6] + v[7]) / os.sysconf("SC_CLK_TCK")
 
@@ -309,7 +307,7 @@ class Host:
         return None
 
     def _units(self):
-        """Службы рядом со своей (app.slice): имя → процессор с их запуска, с."""
+        """Services alongside ours (app.slice): name → CPU seconds since startup."""
         out = {}
         if self.cg is None:
             return out
@@ -321,7 +319,7 @@ class Host:
         return out
 
     def own_pid(self, pid):
-        """Процесс — в своей cgroup (путь его cgroup v2 совпадает со своим)."""
+        """Process belongs to our cgroup (cgroup v2 path matches ours)."""
         try:
             path = Path(f"/proc/{pid}/cgroup").read_text().split("::", 1)[1].strip().lstrip("/")
         except (OSError, IndexError):
@@ -329,8 +327,8 @@ class Host:
         return self.cg is not None and bool(path) and self.cg == Path("/sys/fs/cgroup") / path
 
     def classify(self, pid, name):
-        """Процесс видеокарты: рисующий клиент (JVM игры в своей cgroup — «java» у pmon), другой свой (вложенный KWin,
-        его Xwayland) или чужой."""
+        """GPU process: rendering client (game JVM in our cgroup, pmon "java"), other own process (nested KWin,
+its Xwayland), or foreign."""
         if not self.own_pid(pid):
             return FOREIGN
         return CLIENT if name == "java" else OWN
@@ -348,8 +346,8 @@ class Host:
         return _num(f[0]), _num(f[1]) if len(f) > 1 else None
 
     def sample(self, phase):
-        """Выборка за время с прошлой (первая — только точка отсчёта: None) и циклы видеокарты за это время:
-        (выборка, [циклы])."""
+        """Sample since previous call (first is only a reference point: None), plus GPU cycles for the interval:
+(sample, [cycles])."""
         now = (time.time(), self._busy_s(), self._usage_s(self.cg) if self.cg else None, self._units())
         cycles = self.gpu.drain() if self.gpu else []
         prev, self.prev = self.prev, now
@@ -376,30 +374,30 @@ def _num(s):
 
 
 def heavy(s):
-    """Выборка с тяжёлой чужой нагрузкой (пороги — results.FOREIGN_CPU, FOREIGN_GPU, FOREIGN_GPU_PEAK)."""
+    """Sample with heavy foreign load (results.FOREIGN_CPU, FOREIGN_GPU, FOREIGN_GPU_PEAK thresholds)."""
     g = s.get("gpu") or {}
     return (s["cpu_foreign"] > results.FOREIGN_CPU or (g.get("foreign_mean") or 0) > results.FOREIGN_GPU
             or (g.get("foreign_sm") or 0) > results.FOREIGN_GPU_PEAK)
 
 
 def _term(*_):
-    # TERM задачи (laptop_job останавливают) — как Ctrl+C: finally ниже гасит клиента
+    # Job TERM (stopping laptop_job) acts like Ctrl+C: finally below stops the client
     raise KeyboardInterrupt
 
 
 def run(game, script, size, limit_s, logf, log, quiet=True):
-    """Клиент во вложенном KWin (quiet — сперва ждать тишины); игра Артёма запустилась — гасим, 75; не уложился в срок — гасим, 124. В конце (и при
-    исключении, Ctrl+C, TERM задачи) — ни одного процесса с меткой."""
+    """Client in nested KWin (quiet waits for quiet first); Artem's game starts: stop, 75; timeout: stop, 124.
+On completion, exception, Ctrl+C or job TERM, no tagged processes remain."""
     w, h = size.split("x")
     tag = uuid.uuid4().hex
     env = dict(os.environ, ALSOFT_CONF=str(game / "alsoft.conf"), STAND_TAG=tag,
-               # кэш шейдеров драйвера выключен: первый удар у каждого прогона — со сборкой шейдеров, как у свежей
-               # игры, а не с тем, что оставил прошлый прогон
+               # Driver shader cache disabled: every run first strike compiles shaders, like a fresh game,
+               # not using the previous run cache
                __GL_SHADER_DISK_CACHE="0")
-    # драйвер ждёт видеокарту, как у игрока (по умолчанию): внутри RenderFrameEvent.Pre → Post он её не ждёт — процессор
-    # потока равен настенному Pre → Post с точностью 0,5 % и при __GL_YIELD=USLEEP (поток спал бы в ожидании), и без
-    # него (крутился бы), и под чужой нагрузкой в 6 ядер (A/B 25.10, сцена 100, Photon): упор в видеокарту ждёт обмен
-    # буферов, вне замера. Своё значение из окружения вызывающего клиенту не передаётся
+    # Driver waits for GPU as for the player (default): not inside RenderFrameEvent.Pre → Post; thread CPU
+    # equals wall-clock Pre → Post within 0,5 %, with __GL_YIELD=USLEEP (sleeping wait), without it (spinning),
+    # and under 6-core foreign load (A/B 25.10, scene 100, Photon). GPU-bound wait is buffer swap, outside
+    # measurement. Caller environment override is not forwarded to the client
     env.pop("__GL_YIELD", None)
     old = signal.signal(signal.SIGTERM, _term)
     hostf = proc = watch = None
@@ -420,8 +418,8 @@ def run(game, script, size, limit_s, logf, log, quiet=True):
             write(cycles + ([s] if s is not None else []))
             return s
 
-        # перед клиентом — тишина: чужие тяжёлые задачи (сборка, GameTest, клиент другой сессии) мешали бы замеру; ждём не
-        # дольше QUIET_WAIT_S — дальше идём (нагрузка в окнах — в отчёте)
+        # Wait for quiet: heavy foreign jobs (build, GameTest, another session client) affect measurement; wait
+        # at most QUIET_WAIT_S, then continue (window load is reported)
         sample("wait")
         calm, until, told = 0, time.time() + QUIET_WAIT_S, 0.0
         while quiet and calm < QUIET_SAMPLES:
@@ -432,41 +430,41 @@ def run(game, script, size, limit_s, logf, log, quiet=True):
             calm = 0 if heavy(s) else calm + 1
             if calm == 0 and time.time() - told >= 60:
                 told = time.time()
-                log(f"жду тишины: чужие {s['cpu_foreign']} ядра, видеокарта {(s.get('gpu') or {}).get('who')}, службы {s['units']}")
+                log(f"waiting for quiet: foreign {s['cpu_foreign']} cores, GPU {(s.get('gpu') or {}).get('who')}, services {s['units']}")
             if time.time() > until:
-                log(f"тишины нет {QUIET_WAIT_S // 60} мин — иду так (нагрузка в окнах — в отчёте)")
+                log(f"not quiet after {QUIET_WAIT_S // 60} min — proceeding (window load is reported)")
                 break
-        # экран вложенного KWin выше окна на рамку: окно 2560×1600 с заголовком (28 px у Breeze) помещается целиком, и
-        # кадр игры — ровно заданный (на экране той же высоты KWin ужимал окно до 2560×1572)
+        # Nested KWin screen includes decoration height: window 2560×1600 plus title (28 px in Breeze) fits
+        # fully, leaving exactly requested game dimensions (same-height screen shrank it to 2560×1572)
         proc = subprocess.Popen([str(ROOT / "tools" / "nested_kwin.sh"), SOCKET, w, str(int(h) + DECOR), f"bash {script}"], stdout=logf,
                                 stderr=subprocess.STDOUT, env=env, start_new_session=True)
         deadline = time.time() + limit_s + 600
         while True:
             try:
                 code = proc.wait(timeout=SAMPLE_S)
-                # заключительная выборка: без неё хвост последнего окна остался бы без записи
+                # Final sample: without it, the last window tail lacks a record
                 sample("end")
                 return code
             except subprocess.TimeoutExpired:
                 pass
             sample("run")
             if artem_playing():
-                log("игра Артёма запустилась — гашу клиент")
+                log("Artem's game started — stopping client")
                 return 75
             if time.time() > deadline:
-                log("клиент не уложился в срок — гашу")
+                log("client timed out — stopping")
                 return 124
     finally:
         if proc is not None:
             left = kill_tagged(tag)
             if left:
-                log(f"после клиента осталось процессов с меткой: {left}")
+                log(f"tagged processes remaining after client: {left}")
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
         if watch is not None:
-            # циклы после выхода клиента замером не станут (у них нет его числа), но и не теряются
+            # Cycles after client exit cannot measure it (no client number), but are still retained
             rest = watch.stop()
             if hostf is not None:
                 write(rest)

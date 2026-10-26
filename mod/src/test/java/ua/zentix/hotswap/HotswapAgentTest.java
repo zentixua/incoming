@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-/** Агент горячей замены: изменения отдаются одной партией, когда компиляция кончилась, с именами классов. */
+/** Hot swap agent: changes are given to one batch when compilation is finished, with class names. */
 class HotswapAgentTest {
     @Test
     void namesClassesByPath() {
@@ -25,18 +25,18 @@ class HotswapAgentTest {
     void batchWaitsUntilWritingStops(@TempDir Path dir) throws Exception {
         Path a = write(dir.resolve("x/A.class"), 1000);
         HotswapAgent.Watcher w = new HotswapAgent.Watcher(List.of(dir));
-        assertNull(w.poll(), "ничего не менялось");
-        assertTrue(w.idle(), "ничего не ждёт");
+        assertNull(w.poll(), "nothing has changed");
+        assertTrue(w.idle(), "waits for nothing");
         write(a, 2000);
-        assertNull(w.poll(), "пишется");
-        assertFalse(w.idle(), "изменение ждёт замены");
+        assertNull(w.poll(), "is written");
+        assertFalse(w.idle(), "change awaits replacement");
         Path b = write(dir.resolve("x/B$1.class"), 3000);
-        assertNull(w.poll(), "ещё пишется");
-        assertNull(w.poll(), "тихо один опрос");
+        assertNull(w.poll(), "still being written");
+        assertNull(w.poll(), "quietly one poll");
         Map<String, Path> batch = w.poll();
         assertEquals(Map.of("x.A", a, "x.B$1", b), batch);
-        assertNull(w.poll(), "партия отдана");
-        assertTrue(w.idle(), "догнал");
+        assertNull(w.poll(), "batch given");
+        assertTrue(w.idle(), "caught up");
     }
 
     private static Path write(Path p, long time) throws Exception {

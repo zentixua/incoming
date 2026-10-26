@@ -1,17 +1,18 @@
-"""Разбор прогона стенда: frames.csv и events.jsonl одного клиента (версия × пак) → числа по окнам замера.
+"""Parse a scene bench run: one client (version × pack), frames.csv and events.jsonl → measurement-window metrics.
 
-Окно — отрезок времени из событий `window` (начало и конец); кадр входит в окно, если начался в нём (у первого удара —
-и кадр, который шёл в миг попадания: его худший кадр и есть замер). Кадр со снимком и следующий за ним (его интервал
-включает чтение кадра) в замер не идут. Все окна плана обязательны: нет окна или в нём мало кадров — прогон не годен.
-Только стандартная библиотека: разбор и шлагбаум идут в CI без пакетов (test_gate.py).
+A window is an interval from `window` events (start and end); a frame belongs if it started within the
+window (first strike also includes the frame spanning the impact: the worst such frame is the measurement).
+Exclude the screenshot frame and the following frame (its interval includes screenshot readback). Every
+plan window is required: missing windows or too few frames invalidate a run. Standard library only:
+parsing and look gate run in CI without packages (test_gate.py).
 
-Величины кадра (мс):
-- `interval` — от начала кадра до начала следующего, как видит игрок (1000 / к/с): в строке обвязки — время от начала
-  прошлого кадра (`prev_interval_ms`), поэтому кадру достаётся число из строки следующего;
-- `thread` — время процессора потока отрисовки за кадр (RenderFrameEvent.Pre → Post: мир, слои модов, интерфейс; без
-  обмена буферов, вытеснения чужими задачами и сна драйвера) — величина шлагбаума;
-- `cpu` — то же настенными часами (в нём и ожидания: драйвер, вытеснение) — в отчёт;
-- `gpu` — видеокарта от первой до последней метки кадра (glQueryCounter); стадии — отрезки между метками.
+Frame metrics (ms):
+- `interval`: start to next start, as seen by the player (1000 / fps); the harness row reports time since
+  the previous start (`prev_interval_ms`), so a frame takes the number from the next row;
+- `thread`: render-thread CPU per frame (RenderFrameEvent.Pre → Post: world, mod layers, GUI; excludes
+  buffer swap, preemption by other jobs and driver sleep), the gated metric;
+- `cpu`: same interval in wall-clock time (includes driver and preemption waits), report only;
+- `gpu`: first to last GPU timestamp of the frame (glQueryCounter); stages are intervals between timestamps.
 """
 import csv
 import json
@@ -22,7 +23,7 @@ import plan
 
 
 def percentile(values, q):
-    """Процентиль с линейной интерполяцией (как numpy по умолчанию); пусто — None."""
+    """Percentile with linear interpolation (numpy default); empty gives None."""
     v = sorted(values)
     if not v:
         return None
@@ -56,7 +57,7 @@ def read_frames(path):
                         "cpu": _num(row["cpu_ms"]), "thread": _num(row.get("cpu_thread_ms")), "gpu": _num(row["gpu_ms"]),
                         "shot": int(row["shot"] or 0), "stages": stages})
     out.sort(key=lambda f: f["frame"])
-    # длительность кадра — время до начала следующего: оно в строке следующего кадра (последний кадр — без неё)
+    # Frame duration is time until next start, stored in the next row (unavailable for the last frame)
     for a, b in zip(out, out[1:] + [None]):
         a["interval"] = b["prev"] if b is not None and b["frame"] == a["frame"] + 1 else None
     return out
@@ -68,7 +69,7 @@ def read_events(path):
 
 
 def read_host(path):
-    """Нагрузка машины (client.Host, host.jsonl); нет файла — None."""
+    """Machine load (client.Host, host.jsonl); absent file gives None."""
     try:
         return read_events(path)
     except FileNotFoundError:
@@ -76,14 +77,15 @@ def read_host(path):
 
 
 def host_in(host, events, t0, t1):
-    """Нагрузка машины в окне [t0, t1) (мс стенда) по записям host.jsonl, чей отрезок [epoch − dt, epoch] задевает окно:
-    выборки процессора (`kind` cpu, client.Host) и циклы видеокарты (`kind` gpu, client.PmonCycles); часы стенда и
-    настенные сводит отметка epoch_ms событий srv. Замер видеокарты — только цикл, в котором есть число SM своего клиента:
-    он рисует каждый кадр, и без его числа «-» у чужих не значит «простаивал» (драйвер не считал по процессам). Назад —
-    {"samples", "covered" (доля окна под выборками процессора), "gpu_covered" (доля под циклами с замером),
-    "cpu_foreign_max" (худшая выборка, ядра), "cpu_foreign" (среднее по перекрытию — в отчёт), "gpu_foreign" (худший цикл,
-    % SM; None — циклов нет), "gpu_foreign_mean" (среднее по циклам окна), "units" (худшие по службам), "load1",
-    "profiles"} или None, если свести не с чем."""
+    """Machine load in bench window [t0, t1) (ms), using host.jsonl records whose interval [epoch − dt, epoch]
+intersects it: CPU samples (`kind` cpu, client.Host) and GPU cycles (`kind` gpu, client.PmonCycles); srv
+event epoch_ms aligns bench and wall clocks. A GPU cycle is measured only when it has an SM number for
+our client: it renders every frame, and without its number, foreign "-" does not mean idle (the driver did
+not measure per process). Return {"samples", "covered" (window fraction covered by CPU samples),
+"gpu_covered" (fraction covered by measured cycles), "cpu_foreign_max" (worst sample, cores),
+"cpu_foreign" (overlap-weighted mean, report only), "gpu_foreign" (worst cycle, % SM; None if no cycles),
+"gpu_foreign_mean" (mean over window cycles), "units" (worst by service), "load1", "profiles"},
+or None if clock alignment is unavailable."""
     offs = sorted(e["epoch_ms"] - e["t_ms"] for e in events if e["type"] == "srv" and e.get("epoch_ms") is not None)
     if not host or not offs:
         return None
@@ -115,7 +117,7 @@ def host_in(host, events, t0, t1):
         for n, c in (s.get("units") or {}).items():
             units[n] = max(units.get(n, 0), c)
     span = max(t1 - t0, 1e-9)
-    # циклы pmon идут подряд, но их концы — до секунды: соседние могут заходить друг на друга, доля — не больше 1
+    # pmon cycles are consecutive, but ends have one-second precision: neighbours can overlap; cap coverage at 1
     return {"samples": got, "covered": round(weight / span, 3), "gpu_covered": round(min(1.0, gpu_weight / span), 3),
             "cpu_foreign_max": cpu_max, "cpu_foreign": round(cpu / weight, 2) if weight else None, "gpu_foreign": gpu,
             "gpu_foreign_mean": round(gpu_sum / gpu_seen, 2) if gpu_seen else None,
@@ -123,7 +125,7 @@ def host_in(host, events, t0, t1):
 
 
 def windows(events):
-    """Окна замера: имя → (начало, конец), мс."""
+    """Measurement windows: name → (start, end), ms."""
     begin, out = {}, {}
     for e in events:
         if e["type"] != "window":
@@ -140,13 +142,13 @@ def in_range(frames, t0, t1):
 
 
 def overlapping(frames, t0, t1):
-    """Кадры, которые шли в окне хоть миг: начатые в нём и тот, что начался раньше и шёл в его начало."""
+    """Frames overlapping the window at all: starts inside it plus the earlier frame spanning its start."""
     return [f for f in frames if f["shot"] == 0 and f["t"] < t1
             and (f["t"] >= t0 or (f["interval"] is not None and f["t"] + f["interval"] > t0))]
 
 
 def summarize(frames, events, t0, t1):
-    """Числа окна: кадры, процессор, видеокарта, стадии (p50 и среднее), тик сервера, упор, строки проб."""
+    """Window metrics: frames, CPU, GPU, stages (p50 and mean), server tick, bottleneck, probe lines."""
     fr = in_range(frames, t0, t1)
     if not fr:
         return None
@@ -171,7 +173,7 @@ def summarize(frames, events, t0, t1):
 
 
 def buckets(frames, t0, t1, size_s):
-    """Корзины по size_s секунд: среднее и p95 интервала, p50 видеокарты, p95 процессора."""
+    """Bins of size_s seconds: mean and p95 interval, p50 GPU, p95 CPU."""
     out = []
     n = int(round((t1 - t0) / 1000 / size_s))
     for i in range(n):
@@ -185,7 +187,7 @@ def buckets(frames, t0, t1, size_s):
 
 
 def growth(bks, minute_s=60):
-    """Накопление: последняя минута против первой (среднее интервала): отношение и обе величины."""
+    """Accumulation: last minute against first (mean interval), ratio and both values."""
     if not bks:
         return None
     size = bks[1]["t_s"] - bks[0]["t_s"] if len(bks) > 1 else minute_s
@@ -201,9 +203,9 @@ def growth(bks, minute_s=60):
 
 
 def acc_load(events, scene, t0, t1):
-    """Нагрузка накопления в окне: попадания волн в первую и последнюю минуту окна и после него (план — `planned` в
-    минуту), опоздание команд волн от их расписания по выполнению сервером (событие cmd: сервер начал `ran_ms`, должна —
-    `due_ms`): вставший сервер выполнил бы их пачкой, хоть клиент и слал вовремя."""
+    """Accumulation load in the window: wave hits in its first and last minutes and after it (`planned` per
+minute); lateness of wave commands against schedule by server execution (cmd event: server began at
+`ran_ms`, due at `due_ms`): a stalled server would execute them in a batch even when the client sent on time."""
     w = scene["waves"]
     hits = sorted(e["t_ms"] for e in events if e["type"] == "impact" and e["salvo"] == scene["id"])
     cmds = [e for e in events if e["type"] == "cmd" and e.get("tag") == scene["id"]]
@@ -216,8 +218,8 @@ def acc_load(events, scene, t0, t1):
 
 
 def analyze(run_dir, scenes, only=None, power=None):
-    """Один клиент (версия × пак): окна, первый удар, накопление, проверки годности (only — сцены выборки, None — все;
-    power — профиль питания в начале прогона: его смена в окнах — в отчёт)."""
+    """One client (version × pack): windows, first strike, accumulation, validity checks (only: scene subset,
+None for all; power: initial power profile, whose changes in windows are reported)."""
     run_dir = Path(run_dir)
     frames = read_frames(run_dir / "frames.csv")
     events = read_events(run_dir / "events.jsonl")
@@ -234,14 +236,14 @@ def analyze(run_dir, scenes, only=None, power=None):
         fr = overlapping(frames, first[0], first[1])
         iv = [f["interval"] for f in fr if f["interval"] is not None]
         gp = [f["gpu"] for f in fr if f["gpu"] is not None]
-        # нагрузка — по границам окна, а не по кадрам в нём: кадр, вставший на всё окно, — тоже замер (worst_ms)
+        # Load follows window boundaries, not its frame starts: a frame stalled across the whole window also measures it (worst_ms)
         res["first"] = {"worst_ms": max(iv) if iv else None, "worst_gpu_ms": max(gp) if gp else None,
                         "host": host_in(host, events, first[0], first[1])}
     acc_scene = next((s for s in scenes["scenes"] if s.get("waves")), None)
     if acc_scene and acc_scene["id"] in wins:
         t0, t1 = wins[acc_scene["id"]]
         bks = buckets(frames, t0, t1, acc_scene.get("bucket_s", 10))
-        # нагрузка машины — в минутах, по которым считается рост
+        # Machine load in the minutes used to calculate growth
         res["acc"] = {"buckets": bks, "growth": growth(bks), "load": acc_load(events, acc_scene, t0, t1),
                       "host": {"first": host_in(host, events, t0, t0 + 60_000), "last": host_in(host, events, t1 - 60_000, t1)}}
     gl = [e for e in events if e["type"] == "gl"]
@@ -265,8 +267,9 @@ def analyze(run_dir, scenes, only=None, power=None):
 
 
 def shot_plan(run_dir, scenes, only=None):
-    """Окна и залпы без ожидания конца — из плана, с которым снят прогон (stand-plan.json рядом), а не из нынешнего
-    scenes.json: новая сцена или окно иначе делали бы негодными все старые прогоны. Нет файла — по scenes.json."""
+    """Windows and salvos without completion waits come from the plan used to capture the run (stand-plan.json
+alongside it), not current scenes.json; otherwise a new scene/window would invalidate all older runs.
+Without that file, use scenes.json."""
     f = Path(run_dir) / "stand-plan.json"
     if not f.exists():
         return plan.windows(scenes, only), plan.launch_ids(scenes)
@@ -277,157 +280,160 @@ def shot_plan(run_dir, scenes, only=None):
 
 
 def verdict_hosts(res, acc_scene=None):
-    """Нагрузка машины во всех окнах, что решают вердикт: «100», первый удар (по границам окна), первая и последняя минута
-    накопления (acc_scene — сцена накопления плана) → [(где, host_in)]. Одна на все проверки окна по машине (нагрузка,
-    профиль питания): новое окно вердикта не обойдёт ни одну."""
-    out = [(f"окно {name}", w.get("host")) for name, w in res.get("windows", {}).items() if name.startswith(GATED)]
+    """Machine load in every verdict window: "100", first strike (by window boundaries), first and last
+accumulation minutes (acc_scene: plan accumulation scene) → [(where, host_in)]. One list for all machine
+checks (load, power profile), so no new verdict window bypasses either."""
+    out = [(f"window {name}", w.get("host")) for name, w in res.get("windows", {}).items() if name.startswith(GATED)]
     if res.get("first"):
-        out.append((f"окно {FIRST}", res["first"].get("host")))
+        out.append((f"window {FIRST}", res["first"].get("host")))
     if acc_scene and (res.get("acc") or {}).get("host"):
-        out += [(f"накопление {acc_scene['id']}, {what} минута", res["acc"]["host"][part]) for part, what in (("first", "первая"), ("last", "последняя"))]
+        out += [(f"accumulation {acc_scene['id']}, {what} minute", res["acc"]["host"][part]) for part, what in (("first", "first"), ("last", "last"))]
     return out
 
 
 def checks(events, res, expected=(), acc_scene=None, unawaited=()):
-    """Годен ли прогон для сравнения: строки «что не так» (пусто — годен). expected — окна плана (все обязательны),
-    acc_scene — сцена накопления плана (её нагрузка должна прийтись на окно), unawaited — залпы пуска вблизи (конца не
-    ждут, plan.launch_ids). Нагрузка машины годность не решает
-    (load_notes): от неё шлагбаум защищает пара в одном сеансе (gate.py)."""
+    """Run validity for comparison: problem lines (empty means valid). expected: plan windows (all required),
+acc_scene: plan accumulation scene (its load must fall within the window), unawaited: nearby launch salvos
+(no wait for completion, plan.launch_ids). Machine load does not decide validity (load_notes): a same-session
+pair protects the look gate against it (gate.py)."""
     bad = []
     if not res["meta"]["done"]:
-        bad.append("прогон не дошёл до конца (нет события done)")
+        bad.append("run did not finish (no done event)")
     if any(e["type"] == "limit" for e in events):
-        bad.append("прогон упёрся в предел времени")
+        bad.append("run reached the time limit")
     for e in events:
         if e["type"] == "cmd" and not e["ok"] and e["tag"] != "setup":
-            bad.append(f"команда не прошла: {e['cmd']}")
+            bad.append(f"command failed: {e['cmd']}")
         if e["type"] == "tp-timeout":
-            why = f" (ждала: {e['waiting']})" if e.get("waiting") else ""
-            bad.append(f"камера не дошла до {e['eye']}{why}")
+            why = f" (expected: {e['waiting']})" if e.get("waiting") else ""
+            bad.append(f"camera did not reach {e['eye']}{why}")
         if e["type"] == "late":
-            bad.append(f"кадр после залпа {e['salvo']} позже срока: {e['late_s']:.1f} с сверх {e['s']:g} с от последнего взрыва")
+            bad.append(f"frame after salvo {e['salvo']} past deadline: {e['late_s']:.1f} s beyond {e['s']:g} s after last explosion")
         if e["type"] == "since":
-            # по всем попаданиям прогона, а не по тем, что Director знал в миг шага: попадание после срока (залп кончился
-            # «тишиной», а снаряд ещё летел вне мира) сдвинуло бы кадр к свежему взрыву
+            # Use all run hits, not just those known to Director at the step: a late hit (salvo ended by "silence"
+            # while a projectile still flew off-world) would move the frame nearer a fresh explosion
             last = max((i["t_ms"] for i in events if i["type"] == "impact" and i["salvo"] == e["salvo"]), default=None)
             after = None if last is None else (e["t_ms"] - last) / 1000
             if after is None or not e["s"] - SINCE_EARLY_S <= after <= e["s"] + SINCE_LATE_S:
-                got = "попаданий нет" if after is None else f"{after:.1f} с"
-                bad.append(f"кадр после залпа {e['salvo']} не в срок: {got} от последнего взрыва вместо {e['s']:g} с")
+                got = "no hits" if after is None else f"{after:.1f} s"
+                bad.append(f"frame after salvo {e['salvo']} late: {got} after last explosion instead of {e['s']:g} s")
         if e["type"] == "impact-timeout":
-            bad.append(f"окно {e['name']}: нет попадания залпа {e['salvo']}")
+            bad.append(f"window {e['name']}: no hit from salvo {e['salvo']}")
     for salvo, i in res["meta"]["impacts"].items():
         if i["why"] != "all" and not (i["why"] == "quiet" and i["expect"] - i["got"] <= i["expect"] * LOST_SHARE):
-            bad.append(f"залп {salvo}: {i['got']} попаданий из {i['expect']} ({i['why']})")
+            bad.append(f"salvo {salvo}: {i['got']} hits out of {i['expect']} ({i['why']})")
     salvos = {e["id"] for e in events if e["type"] == "salvo"}
     for salvo in sorted(salvos - set(res["meta"]["impacts"]) - set(unawaited)):
-        bad.append(f"залп {salvo}: конца нет (нет события await)")
+        bad.append(f"salvo {salvo}: no end (no await event)")
     if not any(e["type"] == "gl" for e in events):
-        bad.append("нет строки видеокарты")
+        bad.append("no GPU line")
     begun = {e["name"] for e in events if e["type"] == "window" and e["edge"] == "begin"}
     for name in expected:
         if name not in res.get("windows", {}) and name != FIRST:
-            bad.append(f"окно {name}: " + ("нет кадров" if name in begun else "не снято"))
+            bad.append(f"window {name}: " + ("no frames" if name in begun else "not captured"))
     for name, w in res.get("windows", {}).items():
         if name == FIRST:
             continue
         if not w.get("gpu"):
-            bad.append(f"окно {name}: нет меток видеокарты")
+            bad.append(f"window {name}: no GPU timestamps")
         if not w.get("thread"):
-            bad.append(f"окно {name}: нет времени процессора потока")
+            bad.append(f"window {name}: no render-thread CPU time")
         if w["frames"] < MIN_FRAMES:
-            bad.append(f"окно {name}: {w['frames']} кадров (меньше {MIN_FRAMES})")
+            bad.append(f"window {name}: {w['frames']} frames (less than {MIN_FRAMES})")
 
-    # первый удар: замер — худший кадр, шедший в окне; клиент, вставший на всё окно, — тоже число, а не пустота
+    # First strike: measure the worst frame overlapping the window; a client stalled for the whole window still gives a number
     if FIRST in expected and (res.get("first") or {}).get("worst_ms") is None:
-        bad.append("первый удар: нет числа (окна нет или ни один кадр не шёл в нём)")
+        bad.append("first strike: no number (no window or no frame overlapped it)")
     if acc_scene:
         load = (res.get("acc") or {}).get("load")
         name = acc_scene["id"]
         if not load:
-            bad.append(f"накопление {name}: окна нет — нагрузку не проверить")
+            bad.append(f"accumulation {name}: no window — cannot check load")
         else:
             if load["after"]:
-                bad.append(f"накопление {name}: {load['after']} попаданий после окна — последняя минута мерила не весь план")
+                bad.append(f"accumulation {name}: {load['after']} hits after window — last minute did not measure the full plan")
             want = next((e["commands"] for e in events if e["type"] == "salvo" and e["id"] == name), None)
             if load["commands"] != want:
-                bad.append(f"накопление {name}: прошло команд волн {load['commands']} из {want}")
+                bad.append(f"accumulation {name}: wave commands {load['commands']} out of {want}")
             if load["late_max_ms"] is None:
-                bad.append(f"накопление {name}: у команд волн нет срока или времени выполнения (due_ms, ran_ms) — расписание не проверить")
+                bad.append(f"accumulation {name}: wave commands lack deadline or execution time (due_ms, ran_ms) — cannot check schedule")
             elif load["late_max_ms"] > LATE_MS:
-                bad.append(f"накопление {name}: команды волн не по расписанию (опоздание до {load['late_max_ms']:.0f} мс, можно {LATE_MS})")
+                bad.append(f"accumulation {name}: wave commands off schedule (late by up to {load['late_max_ms']:.0f} ms, allowed {LATE_MS})")
             for part in ("first", "last"):
                 if abs(load[part] - load["planned"]) > load["wave"]:
-                    bad.append(f"накопление {name}: в {'первую' if part == 'first' else 'последнюю'} минуту окна {load[part]} попаданий, "
-                               f"по плану {load['planned']:g} ± волна ({load['wave']})")
+                    bad.append(f"accumulation {name}: in the {'first' if part == 'first' else 'last'} window minute {load[part]} hits, "
+                               f"planned {load['planned']:g} ± wave ({load['wave']})")
         if not (res.get("acc") or {}).get("growth"):
-            bad.append(f"накопление {name}: нет числа роста")
+            bad.append(f"accumulation {name}: no growth number")
     return bad
 
 
 def foreign(h):
-    """Чужая нагрузка в окне (host_in; пусто — тихо): она меняет время кадра без правки кода. Процессор судит худшая
-    выборка, а не среднее: задача в 3 ядра на 5 с из 20 в среднем дала бы меньше порога, а работала внутри окна.
-    Видеокарту — среднее по окну и худший цикл, оба выше фона рабочего стола (FOREIGN_GPU)."""
+    """Foreign load in a window (host_in; empty means quiet): changes frame time without code changes.
+Use the worst CPU sample, not the mean: a 3-core job for 5 s out of 20 averages below threshold but did
+run inside the window. For GPU, use both window mean and worst cycle, above desktop background (FOREIGN_GPU)."""
     bad = []
     if h["cpu_foreign_max"] > FOREIGN_CPU:
-        bad.append(f"чужие задачи — до {h['cpu_foreign_max']} ядра (можно {FOREIGN_CPU}): {h['units']}")
+        bad.append(f"foreign jobs — up to {h['cpu_foreign_max']} cores (allowed {FOREIGN_CPU}): {h['units']}")
     peak, mean = h["gpu_foreign"] or 0, h.get("gpu_foreign_mean") or 0
     if peak > FOREIGN_GPU_PEAK or mean > FOREIGN_GPU:
-        bad.append(f"видеокарта у чужих процессов — {peak} % SM в худшем цикле (можно {FOREIGN_GPU_PEAK}), {mean:g} % в среднем "
-                   f"(можно {FOREIGN_GPU})")
+        bad.append(f"GPU used by foreign processes — {peak} % SM in worst cycle (allowed {FOREIGN_GPU_PEAK}), {mean:g} % mean "
+                   f"(allowed {FOREIGN_GPU})")
     return bad
 
 
 def load_checks(where, h):
-    """Нагрузка машины в окне — для отчёта: запись есть и покрывает окно (с замером видеокарты), чужой нагрузки нет."""
+    """Machine load in a window, for reporting: record exists, covers the window (with GPU measurement), no foreign load."""
     if h is None or not h["samples"]:
-        return [f"{where}: нет записи нагрузки машины (host.jsonl)"]
+        return [f"{where}: no machine load record (host.jsonl)"]
     bad = []
     if h["covered"] < COVER_MIN:
-        bad.append(f"{where}: нагрузка машины записана на {h['covered']:.0%} окна")
+        bad.append(f"{where}: machine load coverage is {h['covered']:.0%} of window")
     if h["gpu_covered"] < COVER_MIN:
-        bad.append(f"{where}: видеокарта чужими процессами записана на {h['gpu_covered']:.0%} окна (nvidia-smi)")
+        bad.append(f"{where}: foreign-process GPU coverage is {h['gpu_covered']:.0%} of window (nvidia-smi)")
     return bad + [f"{where}: {x}" for x in foreign(h)]
 
 
 def load_notes(res, acc_scene=None, power=None):
-    """Чужая нагрузка и смена профиля питания в окнах, что решают вердикт (verdict_hosts) — строки для отчёта, не
-    годность: запись машины (опрос процессора раз в 5 с, циклы nvidia-smi) не доказывает тишину каждого мгновения, а
-    шлагбаум и так сравнивает пару одного сеанса; строки объясняют шумную пару или провал, который не повторился."""
+    """Foreign load and power-profile changes in verdict windows (verdict_hosts): report lines, not validity.
+Machine recording (CPU poll every 5 s, nvidia-smi cycles) does not prove quiet at every instant, and the
+look gate already compares a same-session pair; lines explain a noisy pair or a failure that did not recur."""
     out = []
     for where, h in verdict_hosts(res, acc_scene):
         out += load_checks(where, h)
         seen = sorted(set((h or {}).get("profiles") or []) - {power}) if power is not None else []
         if seen:
-            out.append(f"{where}: профиль питания {', '.join(seen)}, а в начале был {power}")
+            out.append(f"{where}: power profile {', '.join(seen)}, initially {power}")
     return out
 
 
 FIRST = "first"
 GATED = "100/"
-# чужая нагрузка в окне (отчёт и ожидание тишины перед клиентом) — не больше: фон ноутбука без задач — 0,2–0,4 ядра (приложения Claude, браузер), одна
-# тяжёлая задача — от 1,5 (клиент песочницы другой сессии) до 7 ядер (сборка, ревью с тестами) (замер 25.10). Видеокарта
-# (циклы pmon по 1 с): фон — рабочий стол хоста (kwin_wayland, plasmashell, экран заблокирован) — в 15 % циклов 1–18 % SM,
-# пока рисует клиент стенда — до 12 % (прогон 25.10, 705 циклов), в среднем по окну 20 с — до ~3 %; чужой клиент игры
-# держит 37–39 % всё время. Поэтому среднее по окну — не больше 5 %, худший цикл — не больше 25 %: выше фона, ниже
-# чужого клиента; короткий всплеск меньше 25 % на p50 видеокарты за 20 с почти не влияет
+# Foreign load in a window (report and pre-client quiet wait): limits. Idle laptop background is 0,2–0,4
+# cores (Claude app, browser); one heavy job uses 1,5 (another session sandbox client) to 7 cores (build,
+# review with tests), measured 25.10. GPU (1 s pmon cycles): host desktop (kwin_wayland, plasmashell, locked
+# screen) uses 1–18 % SM in 15 % of cycles, up to 12 % while the bench client renders (run 25.10, 705 cycles),
+# window mean over 20 s up to ~3 %; another game client holds 37–39 % continuously. Therefore window mean
+# must stay at most 5 %, worst cycle at most 25 %: above background, below another client; a short spike
+# below 25 % barely affects GPU p50 over 20 s.
 FOREIGN_CPU, FOREIGN_GPU, FOREIGN_GPU_PEAK = 1.0, 5, 25
-# окно должно быть под выборками нагрузки (они идут подряд, каждая — от прошлой): пробел — сбой записи или хвост без
-# заключительной выборки
+# The window must be covered by consecutive load samples, each starting at the previous one; a gap is
+# a recording failure or a tail without a final sample
 COVER_MIN = 0.95
-# окно с меньшим числом кадров — не замер (клиент стоял)
+# A window with fewer frames is not a measurement (client was stalled)
 MIN_FRAMES = 20
-# команда волны позже расписания больше чем на столько — волны пошли пачкой (тик клиента 50 мс, снимок кадра ~0,5 с)
+# Wave command lateness beyond this means waves batched up (client tick 50 ms, screenshot ~0,5 s)
 LATE_MS = 2000
-# кадр камеры после залпа (шаг since): от последнего попадания не раньше срока (минус шаг часов клиента) и не позже срока
-# + 2 с (Director.LATE_S)
+# Camera frame after salvo (since step): no earlier than due after the last hit (minus client clock step),
+# no later than deadline + 2 s (Director.LATE_S)
 SINCE_EARLY_S, SINCE_LATE_S = 0.1, 2.0
-# доля ударов залпа, что может не дойти (конец «quiet»: снарядов в мире нет, тишина): шахед над чужим взрывом гибнет в
-# воздухе — так в моде и есть, от прогона к прогону по-разному (ворота #457: 98 и 99 из 100; #460: 95–96 и у принятого
-# v3.7.0, и у кандидата); 10 из 100 — нагрузка того же порядка, а пропавший залп (сломанный пуск) всё равно виден
+# Allowed missing salvo-hit share ("quiet" end: no world projectiles, silence): a Shahed over another
+# explosion dies in air, normal mod behaviour varying between runs (gate #457: 98 and 99 out of 100; #460:
+# 95–96 for both accepted v3.7.0 and candidate). Losing 10 of 100 keeps load of the same order, while a
+# missing salvo (broken launch) remains detectable.
 LOST_SHARE = 0.10
-# попаданий в первую и последнюю минуту окна накопления — по плану (strikes × 60 / every_s) ± одна волна: одна минута
-# против другой сравнима, только если в обе пришлась одна нагрузка. Допуск — волна, а не доля: окно начинается с первого
-# попадания (одного шахеда волны 0), полёт шахедов гуляет на ±3 с, и через каждую границу минуты переходит часть волны
-# (v3.7.0: 35/25, 31/28, 32/28 при плане 30). Пачку волн ловит расписание (LATE_MS), волны за окном — `after`
+# First/last accumulation-minute hits follow the plan (strikes × 60 / every_s) ± one wave: minutes are
+# comparable only with equal load. Tolerance is a wave, not a fraction: the window begins at the first
+# hit (one Shahed of wave 0), flight varies by ±3 s, and part of a wave crosses each minute boundary
+# (v3.7.0: 35/25, 31/28, 32/28 for planned 30). Schedule catches batched waves (LATE_MS), `after` catches waves
+# outside the window.

@@ -10,13 +10,15 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
   signal at the block does the same as fire.
 - Strikes load their own areas: there is no need to load the place in advance.
-- Routes: drone (shahed) flies 45 blocks above the launch site and the target, loiter (lancet) circles 45 blocks above
+- Routes at the default GAME scale: drone (shahed) flies 45 blocks above the launch site and the target, loiter (lancet) circles 45 blocks above
   the target, missile flies 12 blocks above the terrain; all three follow via. rocket (grad) is ballistic and bunker is
   a bomb from a B-2: they take no via, and a command with via fails.
 - incoming clear removes all launchers and every projectile in flight at once: an emergency stop. To stop a campaign,
   remove its rule first.
-- A campaign (a salvo every N seconds) is a tick rule with name, every (at least 100 ticks) and limit (rule runs; pauses
-  count too). In the script, gm.command with the whole command as one string, numbers as numbers. Pause while mspt ≥ 35
-  or ≥ 12 000 chunks are loaded (server.overworld().getChunkSource().getLoadedChunksCount()); every 20 salvos, kill the
-  item entities within 200 blocks of the target. Stop it with rule remove.
-- The server handles about 200 projectiles at once without noticeable lag; 750 landing at once can crash a player's client.
+- A campaign (a salvo every N seconds) is a tick rule with a name, interval and run limit; pauses count toward the
+  limit too. In the script, pass the whole command as one string to gm.command and pass numbers as numbers. Stop the
+  campaign with rule remove before using incoming clear, or the next rule run will launch again.
+- Measure server tick time and client frame time for the actual scene before increasing the rate or salvo size.
+  Reduce or pause new orders when either becomes too slow. Incoming budgets its own heavy work with
+  performance.work_ms_per_tick; lowering it makes destruction finish later. There is no scene-independent safe
+  projectile count. Do not delete nearby item entities to control load: they may belong to players or other mods.

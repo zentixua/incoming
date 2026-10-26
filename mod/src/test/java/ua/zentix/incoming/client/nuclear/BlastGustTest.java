@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlastGustTest {
-    /** 15 кт у земли на высоте 64, блок — метр; волна как в жизни или игровая (0,2 звука). */
+    /** 15 kt near the ground at a height of 64, block - meter; wave like in life or in a game (0,2 sound). */
     private static Detonation ground(float wave) {
         return new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 0, 20_000, 7, 1f, false, wave);
     }
@@ -16,9 +16,9 @@ class BlastGustTest {
     private static final double[] RANGES = {150, 300, 600, 1000, 2000, 4000};
 
     /**
-     * Ветер — Фридлендер на месте: до фронта ноль, сразу за ним — ветер Ренкина–Гюгонио модели, к концу фазы ноль и потом
-     * обратный; путь воздуха — его интеграл (тот же, что несёт пыль головы стены: доля {@link BlastWall#carriedShare}), к
-     * концу фазы U·t₊/e.
+     * Wind - Friedlander in place: zero before the front, immediately behind it - the wind of the Rankine-Hugoniot model, zero towards the end of the phase and then
+     * reverse; the path of the air is its integral (the same one that carries the dust of the head of the wall: the share of {@link BlastWall#carriedShare}), to the
+     *  end of the phase U·t₊/e.
      */
     @Test
     void windIsFriedlanderAtThePlace() {
@@ -26,21 +26,21 @@ class BlastGustTest {
         for (double r : RANGES) {
             Vec3 at = new Vec3(r, 65, 0);
             BlastGust g = BlastGust.of(d, at, () -> 0);
-            assertEquals(0, g.speed(g.arrival - 1), 0, r + ": до фронта");
-            assertEquals(d.blastWind(at) / 20, g.speed(g.arrival + 1e-6), 1e-6 * g.u0 + 1e-9, r + ": сразу за фронтом");
-            assertEquals(0, g.speed(g.arrival + g.phase), 1e-12, r + ": конец фазы");
-            assertTrue(g.speed(g.arrival + 2 * g.phase) < 0, r + ": фаза разрежения");
+            assertEquals(0, g.speed(g.arrival - 1), 0, r + ": to the front");
+            assertEquals(d.blastWind(at) / 20, g.speed(g.arrival + 1e-6), 1e-6 * g.u0 + 1e-9, r + ": just behind the front");
+            assertEquals(0, g.speed(g.arrival + g.phase), 1e-12, r + ": end of phase");
+            assertTrue(g.speed(g.arrival + 2 * g.phase) < 0, r + ": rarefaction phase");
             double end = g.u0 * g.phase * Math.exp(-1);
-            assertEquals(end, g.path(g.arrival + g.phase), 1e-6 * end, r + ": путь за фазу");
+            assertEquals(end, g.path(g.arrival + g.phase), 1e-6 * end, r + ": path per phase");
             for (double x = 0.1; x <= 1; x += 0.1)
-                assertEquals(BlastWall.carriedShare(x) * end, g.path(g.arrival + x * g.phase), 1e-6 * end, r + ": путь как у пыли головы");
+                assertEquals(BlastWall.carriedShare(x) * end, g.path(g.arrival + x * g.phase), 1e-6 * end, r + ": path like dust heads");
         }
     }
 
     /**
-     * Ничто не опережает фронт волны: клок листвы и доска, сорванные в покое у места, летят с ветром (сопротивление по своей
-     * скорости падения, ветер — в точке куска, вверх — наибольшая доля) и не уходят дальше фронта в игре — и при игровой
-     * волне 0,2 звука, где настоящий ветер вблизи быстрее фронта.
+     * Nothing is ahead of the front of the wave: a piece of foliage and a board, torn off at rest near the place, fly with the wind (resistance according to its
+     *  speed of fall, the wind is at the point of the piece, upward is the largest share) and does not go further than the front in the game - and with the game
+     *  wave 0,2 of sound, where the real wind nearby is faster than the front.
      */
     @Test
     void piecesStayBehindTheFront() {
@@ -65,7 +65,7 @@ class BlastGustTest {
         }
     }
 
-    /** Путь воздуха не уходит дальше фронта в игре; пройденный путь не убывает; без часов подрыва ветра нет. */
+    /** The air path does not go further than the front in the game; the distance traveled does not decrease; Without a watch there is no wind blowing. */
     @Test
     void airPathBehindTheFront() {
         for (float wave : new float[]{1f, 0.2f}) {
@@ -79,23 +79,23 @@ class BlastGustTest {
                 double travel = 0;
                 for (double t = g.arrival; t < g.arrival + 4 * g.phase; t += g.phase / 50) {
                     assertTrue(slant + g.path(t) <= d.frontRadius(t) + 1e-6, wave + " " + r + " at " + t);
-                    assertTrue(g.travel(t) >= travel - 1e-9, wave + " " + r + ": путь туда и обратно не убывает");
+                    assertTrue(g.travel(t) >= travel - 1e-9, wave + " " + r + ": the path there and back does not decrease");
                     travel = g.travel(t);
                     now[0] = t;
                     double ahead = d.frontRadius(t) + 1;
                     g.at(ahead, 64, 0, into);
-                    assertEquals(0, into[1], 0, wave + " " + r + ": впереди фронта ветра нет");
+                    assertEquals(0, into[1], 0, wave + " " + r + ": there is no wind ahead of the front");
                 }
             }
         }
         double[] into = new double[3];
         BlastGust.of(ground(1), new Vec3(1000, 65, 0), () -> Double.NaN).at(1000, 65, 0, into);
-        assertEquals(0, into[1], 0, "подрыва у клиента нет — ветра нет");
+        assertEquals(0, into[1], 0, "the client has no explosion - no wind");
     }
 
     /**
-     * Полоса пыли пролома: первая пыль — дальше всех, на путь воздуха с прихода; последняя — у пролома, пока дует фаза;
-     * до фронта пыли нет; слой, в котором она растворяется, у фронта нулевой и растёт.
+     * A streak of dust breaks: the first dust is the farthest, on the path of the air from the arrival; the last one is at the break, while the phase is blowing;
+     *  there is no dust before the front; the layer in which it dissolves is zero at the front and grows.
      */
     @Test
     void breachDustLiesAlongTheWind() {
@@ -104,17 +104,17 @@ class BlastGustTest {
         BlastGust g = BlastGust.of(d, at, () -> 0);
         double[] head = new double[4], tail = new double[4];
         BlastDust.parcel(g, g.arrival, g.arrival - 5, head);
-        assertEquals(0, head[0], 0, "до фронта");
+        assertEquals(0, head[0], 0, "to the front");
         for (double x = 0.2; x <= 1; x += 0.2) {
             double t = g.arrival + x * g.phase;
             BlastDust.parcel(g, g.arrival, t, head);
             BlastDust.parcel(g, t, t, tail);
-            assertEquals(g.path(t), head[0], 1e-9, "первая пыль — на путь воздуха");
-            assertEquals(0, tail[0], 1e-9, "последняя — у пролома");
-            assertTrue(head[1] > 0 && head[3] > 0, "поднимается и расплывается");
+            assertEquals(g.path(t), head[0], 1e-9, "the first dust is on the path of air");
+            assertEquals(0, tail[0], 1e-9, "the last one is at the break");
+            assertTrue(head[1] > 0 && head[3] > 0, "rises and blurs");
         }
-        // полоса уходит в слой, когда слой её перерастает: вся — пока слоя нет, половина — при σ слоя, равном её, потом
-        // на нет; доля не растёт с верхом слоя
+        // the strip goes into the layer when the layer outgrows it: all of it - while there is no layer, half - when σ of the layer is equal to it, then
+        //  to no longer; the share does not increase with the top of the layer
         assertEquals(1, BlastDust.apart(2, 0), 0);
         assertEquals(0.5, BlastDust.apart(2, 2 * Math.sqrt(12)), 1e-12);
         assertTrue(BlastDust.apart(2, 100) < 0.02);

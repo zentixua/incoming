@@ -44,8 +44,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * След светового импульса на земле: выжженная трава, гарь, сгоревшие растения и опалённые биомы — ступенями от центра к
- * краю, с рваным краем (кривые поражения с шумом мира), а не кольцом по порогу.
+ * A trace of the light pulse on the ground: scorched grass, smoke, burnt plants and scorched biomes - in steps from the center to the
+ *  edge, with a torn edge (curves of defeat with the noise of the world), and not a ring along the threshold.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -54,13 +54,13 @@ public final class ScorchGameTests {
 
     private static final ResourceKey<Biome> SINGED = key("singed"), SCORCHED = key("scorched"), CHARRED = key("charred");
     /**
-     * Эпицентр — у западного края площадки, на уровне её земли (блок структуры под шаблоном: дёрн шаблона — y 11, верх
-     * — 12): стена барьеров вокруг площадки иначе закрывала бы ближнюю землю от шара.
+     * The epicenter is at the western edge of the site, at the level of its ground (structure block under the template: template turf - y 11, top
+     *  - 12): the wall of barriers around the site would otherwise cover the nearby ground from the ball.
      */
     private static final BlockPos GROUND_ZERO = new BlockPos(2, 12, 32);
-    /** Кольца по расстоянию от эпицентра, блоки: от 0 до 72. */
+    /** Rings by distance from the epicenter, blocks: from 0 to 72. */
     private static final int RING = 8, RINGS = 9, FIRST = 0;
-    /** Высота проверки биома под землёй: клетка там целиком ниже {@code ScorchedBiomes.BELOW} от верха дёрна. */
+    /** The height of checking the biome underground: the cell there is entirely below {@code ScorchedBiomes.BELOW} from the top of the turf. */
     private static final int DEEP = -1;
 
     private static ResourceKey<Biome> key(String name) {
@@ -68,23 +68,23 @@ public final class ScorchGameTests {
     }
 
     /**
-     * 15 кт на оптимальной высоте в масштабе, где площадка — от эпицентра (свет ~100 кал/см², дёрн содран) до ~3.5 км
-     * (~3 кал/см²). Дёрн выгорает у центра и уцелел у края, а между — пятнами (кольцо, где есть и трава, и земля); гарь —
-     * только ближе к центру; трава и цветы над землёй сгорели у центра (верхние половины высоких — вместе с нижними,
-     * от части остался сухой куст), у края стоят. Биом — ступенями от обугленного к опалённому, моря-реки, пустыня и
-     * снежные равнины не тронуты, под землёй — тоже; в данных чанка — новые биомы.
+     * 15 kt at the optimal height on a scale where the site is from the epicenter (light ~100 cal/cm², the turf is torn off) to ~3.5 km
+     * (~3 cal/cm²). The turf burns out at the center and survives at the edge, and in between there are spots (a ring where there is both grass and earth); burning —
+     *  only closer to the center; the grass and flowers above the ground were burned at the center (the upper halves of the tall ones - together with the lower ones,
+     *  part of it was a dry bush), standing at the edge. Biome - in steps from charred to scorched, seas, rivers, desert and
+     * snowy plains are untouched, underground - too; in the chunk data there are new biomes.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_scorch", skyAccess = true)
     public static void scorchFadesOutwardInPatches(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // биомы: ближние ряды — равнина (её свет меняет), дальние полосы — снег, река, пустыня (их — нет)
+        // biomes: near rows - plain (its light changes), distant stripes - snow, river, desert (there are none)
         fillBiome(h, 0, 39, Biomes.PLAINS);
         fillBiome(h, 40, 47, Biomes.SNOWY_PLAINS);
         fillBiome(h, 48, 55, Biomes.RIVER);
         fillBiome(h, 56, 63, Biomes.DESERT);
         plants(h);
-        // биом в 12 блоках под землёй (под камнем площадки) — до удара; равнина ли у земли: клетки биома — 4×4 по сетке
-        // мира, а площадка стоит как придётся — у границы полос в «равнинном» ряду бывает клетка снега
+        // biome in 12 blocks underground (under the platform stone) - before impact; Is the ground flat: the cells of the biome are 4×4 according to the
+        //  world grid, and the site stands as it should - at the border of the stripes in the “plain” row there is a snow cell
         int[] deep = new int[64 * 64];
         for (int x = 0; x < 64; x += 4) for (int z = 0; z < 64; z += 4) deep[x * 64 + z] = biomeAt(h, x, DEEP, z).hashCode();
         boolean[] plains = new boolean[64 * 64];
@@ -110,16 +110,16 @@ public final class ScorchGameTests {
                 plants[ring]++;
                 if (above.is(Blocks.SHORT_GRASS) || above.is(Blocks.TALL_GRASS)) plantsLeft[ring]++;
                 if (above.is(Blocks.DEAD_BUSH)) bushes++;
-                // верхняя половина без нижней висела бы в воздухе
+                // the top half without the bottom would hang in the air
                 if (upper.is(Blocks.TALL_GRASS) && !above.is(Blocks.TALL_GRASS)) {
-                    h.fail("верх высокой травы без низа в " + x + ", " + z + " (внизу " + above + ")");
+                    h.fail("top of tall grass with no bottom in " + x + ", " + z + " (below " + above + ")");
                 }
                 net.minecraft.world.phys.Vec3 at = net.minecraft.world.phys.Vec3.atCenterOf(h.absolutePos(new BlockPos(x, 12, z)));
                 fluence[ring] = Math.max(fluence[ring], d.fluence(at));
                 psi[ring] = Math.max(psi[ring], d.psi(at));
                 if (top.is(Blocks.COARSE_DIRT)) coarse[ring]++;
                 if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d.burst(), at.add(0, -0.5, 0))) seen[ring]++;
-                // биом — у равнины, без клеток у края площадки (в них и столбцы за стеной барьеров, в тени)
+                // biome - near the plain, without cells at the edge of the site (there are also columns behind the barrier wall, in the shadows)
                 if (plains[x * 64 + z] && z >= 4 && x >= 4 && x < 60) {
                     cells[ring]++;
                     levels[ring] += level(biomeAt(h, x, 12, z));
@@ -129,42 +129,42 @@ public final class ScorchGameTests {
         StringBuilder table = new StringBuilder();
         for (int r = 0; r < RINGS; r++) {
             int n = grass[r] + burnt[r] + charred[r];
-            table.append(String.format(Locale.ROOT, "%n  %d–%d блоков, свет до %.1f, давление до %.1f, видят шар %d: дёрн %d, земля %d (крупн. %d), гарь %d; растения %d из %d; биом %.2f",
+            table.append(String.format(Locale.ROOT, "%n %d–%d blocks, light up to %.1f, pressure up to %.1f, see ball %d: turf %d, earth %d (large %d), burnt %d; plants %d of %d; biome %.2f",
                     FIRST + r * RING, FIRST + (r + 1) * RING, fluence[r], psi[r], seen[r], grass[r], burnt[r], coarse[r], charred[r], plantsLeft[r], plants[r],
                     cells[r] == 0 ? 0 : levels[r] / (double) cells[r]));
-            h.assertTrue(n == plants[r], "в кольце " + r + " верх площадки не дёрн и не земля: " + (plants[r] - n) + table);
+            h.assertTrue(n == plants[r], "in the ring " + r + " the top of the platform is not turf or earth: " + (plants[r] - n) + table);
         }
         String why = table.toString();
-        Incoming.LOG.info("След света по кольцам:{}", why);
+        Incoming.LOG.info("Light trail along the rings:{}", why);
         double first = 1 - grass[0] / (double) plants[0], last = 1 - grass[RINGS - 1] / (double) plants[RINGS - 1];
-        h.assertTrue(first >= 0.8, "у центра дёрн уцелел: " + why);
-        h.assertTrue(last <= 0.05, "у края дёрн выгорел: " + why);
+        h.assertTrue(first >= 0.8, "near the center the turf survived: " + why);
+        h.assertTrue(last <= 0.05, "the turf at the edge is burnt out: " + why);
         boolean patchy = false;
         double prev = 1;
         for (int r = 0; r < RINGS; r++) {
             double share = 1 - grass[r] / (double) plants[r];
             if (share >= 0.1 && share <= 0.9) patchy = true;
-            h.assertTrue(share <= prev + 0.1, "выгоревшего дальше от центра больше, чем ближе (кольцо " + r + "): " + why);
+            h.assertTrue(share <= prev + 0.1, "there is more burnt out further from the center than closer (ring " + r + "): " + why);
             prev = share;
         }
-        h.assertTrue(patchy, "край выжженного — кольцом по порогу, без пятен: " + why);
-        h.assertTrue(charred[1] + charred[2] + charred[3] > 0, "у центра нет гари: " + why);
-        h.assertTrue(charred[RINGS - 1] + charred[RINGS - 2] + charred[RINGS - 3] == 0, "гарь у края: " + why);
-        h.assertTrue(plantsLeft[0] <= plants[0] * 0.1, "трава у центра не сгорела: " + why);
-        h.assertTrue(plantsLeft[RINGS - 1] + plantsLeft[RINGS - 2] >= (plants[RINGS - 1] + plants[RINGS - 2]) * 0.75, "трава у края сгорела: " + why);
-        h.assertTrue(bushes > 0, "ни одного сухого куста: " + why);
-        // биом: обугленный у центра, к краю — ступенями слабее
+        h.assertTrue(patchy, "the edge of the burnt - in a ring along the threshold, without stains: " + why);
+        h.assertTrue(charred[1] + charred[2] + charred[3] > 0, "the center has no burning: " + why);
+        h.assertTrue(charred[RINGS - 1] + charred[RINGS - 2] + charred[RINGS - 3] == 0, "burning at the edge: " + why);
+        h.assertTrue(plantsLeft[0] <= plants[0] * 0.1, "the grass near the center did not burn: " + why);
+        h.assertTrue(plantsLeft[RINGS - 1] + plantsLeft[RINGS - 2] >= (plants[RINGS - 1] + plants[RINGS - 2]) * 0.75, "the grass at the edge was burnt: " + why);
+        h.assertTrue(bushes > 0, "not a single dry bush: " + why);
+        // biome: charred at the center, gradually weaker towards the edge
         double prevLevel = 4;
         for (int r = 0; r < RINGS; r++) {
             if (cells[r] < 16) continue;
             double mean = levels[r] / (double) cells[r];
-            h.assertTrue(mean <= prevLevel + 0.3, "биом дальше от центра опалён сильнее (кольцо " + r + "): " + why);
+            h.assertTrue(mean <= prevLevel + 0.3, "the biome further from the center is more scorched (ring " + r + "): " + why);
             prevLevel = mean;
         }
-        h.assertTrue(levels[0] >= cells[0] * 2.5, "у центра биом не обуглен: " + why);
-        h.assertTrue(levels[RINGS - 2] <= cells[RINGS - 2] * 1.5, "у края биом опалён сильно: " + why);
-        // полосы, которые свет не перекрашивает, и биомы под землёй; клетки биома у края площадки берут и столбцы за её
-        // стеной (площадка стоит в чанках как придётся) — их земля и биом не те, что у площадки, поэтому от края отступ
+        h.assertTrue(levels[0] >= cells[0] * 2.5, "near the center the biome is not charred: " + why);
+        h.assertTrue(levels[RINGS - 2] <= cells[RINGS - 2] * 1.5, "near the edge the biome is heavily scorched: " + why);
+        // stripes that light does not recolor, and biomes underground; biome cells at the edge of the site are taken and columns behind its
+        //  wall (the site stands in chunks as necessary) - their land and biome are not the same as those at the site, so there is an indentation from the edge
         for (int x = 4; x < 60; x += 2) {
             assertBiome(h, x, 44, Biomes.SNOWY_PLAINS);
             assertBiome(h, x, 51, Biomes.RIVER);
@@ -172,20 +172,20 @@ public final class ScorchGameTests {
         }
         for (int x = 4; x < 60; x += 4) {
             for (int z = 4; z < 60; z += 4) {
-                if (biomeAt(h, x, DEEP, z).hashCode() != deep[x * 64 + z]) h.fail("биом под землёй изменился в " + x + ", " + z + ": " + biomeAt(h, x, DEEP, z));
+                if (biomeAt(h, x, DEEP, z).hashCode() != deep[x * 64 + z]) h.fail("the underground biome has changed to " + x + ", " + z + ": " + biomeAt(h, x, DEEP, z));
             }
         }
-        // в данных чанка у центра — новые биомы (к сохранению чанк руин помечен отметкой руин)
+        // in the data of the chunk near the center there are new biomes (for saving the ruin chunk is marked with a ruins mark)
         LevelChunk chunk = level.getChunkAt(h.absolutePos(new BlockPos(2, 11, 32)));
         String saved = net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, chunk).toString();
-        h.assertTrue(saved.contains(CHARRED.location().toString()), "в данных чанка нет обугленного биома");
+        h.assertTrue(saved.contains(CHARRED.location().toString()), "there is no charred biome in the chunk data");
         h.succeed();
     }
 
     /**
-     * След света — свойство местности, а не подрыва: руины заранее строятся по месту подрыва без его сида
-     * ({@code NuclearWarhead.geometry}), а чанк, загруженный после того, как руины подготовки забыты, — по самому
-     * подрыву; пятна и биомы у них одни и те же, иначе на границе таких чанков след обрывался бы прямой.
+     * The trace of light is a property of the terrain, not the detonation: the ruins are built in advance at the site of the detonation without its seed
+     *  ({@code NuclearWarhead.geometry}), and the chunk loaded after the ruins of preparation are forgotten is based on the
+     *  detonation itself; their spots and biomes are the same, otherwise at the border of such chunks the trail would end straight.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_scorch_seed", skyAccess = true)
     public static void scorchSameForAnySeed(GameTestHelper h) {
@@ -198,22 +198,21 @@ public final class ScorchGameTests {
         for (LevelChunk chunk : NuclearGameTests.chunks(h)) {
             RuinPlan a = RuinPlanner.plan(level, d, chunk), b = RuinPlanner.plan(level, other, chunk);
             String diff = b.differs(a);
-            if (diff != null) h.fail("чанк " + chunk.getPos() + ": след другого сида не тот (другой | этот; y — от низа мира): " + diff);
+            if (diff != null) h.fail("chunk " + chunk.getPos() + ": the trace of another seed is not the same (another | this; y - from the bottom of the world): " + diff);
             changed += a.changedBlocks();
         }
-        h.assertTrue(changed > 0, "след не лёг");
+        h.assertTrue(changed > 0, "there's no trace");
         h.succeed();
     }
 
     /**
-     * След без руин ({@code RuinPlanner.scorch}: LOD вдали за тяжёлой зоной) — тот же, что у плана руин, там, где волна
-     * ничего не сломала: поле травы на ровной земле за тяжёлой зоной, от ~1,4 км (дёрн выгорает) до ~6 км. Свет, склон,
-     * пятна, растения, пожары и биомы — одни и те же; план без руин — по снимку одного чанка, без окна соседей. Подрыв —
-     * над дальним от блока структуры углом площадки: свет от подрыва за её краем шёл бы сквозь постройки соседних партий
-     * (их порядок и место в каждой части CI свои — тень на всю площадку). Сравниваются чанки целиком на площадке (в
-     * крайних — стена барьеров и соседи), где волна не ломает и растений: у ближнего столба давление ниже того, от
-     * которого отражённое на открытой грани достаёт до их порога (~3,1 psi, у 15 кт — 2,1 км). Масштаб (1 блок — 71 м) —
-     * чтобы таких чанков было не меньше 5 при любом сдвиге площадки к сетке чанков (место площадки случайное).
+     * The trail without ruins ({@code RuinPlanner.scorch}: LOD in the distance behind the heavy zone) is the same as the plan of the ruins, where the wave
+     *  did not break anything: a field of grass on flat ground behind the heavy zone, from ~1,4 km (the turf burns out) to ~6 km. Light, slope,
+     * spots, plants, fires and biomes are the same; plan without ruins - based on a photo of one chunk, without the neighbors' window. Detonation -
+     * over the corner of the site farthest from the block of the structure: the light from the detonation beyond its edge would go through the buildings of neighboring batches
+     *  (their order and place in each part of CI is different - a shadow on the entire site). The chunks are compared entirely on the site (at the extreme
+     *  - the wall of barriers and neighbors), where the wave does not break even the plants: at the nearest column the pressure is lower than that from which the reflection on the open face reaches their threshold (~3,1 psi, at 15 kt - 2,1 km). Scale (1 block - 71 m) -
+     *  so that there are at least 5 such chunks for any shift of the site to the grid of chunks (the location of the site is random).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_scorch_far", skyAccess = true)
     public static void scorchWithoutRuinsSameAsRuins(GameTestHelper h) {
@@ -234,36 +233,37 @@ public final class ScorchGameTests {
             compared++;
             RuinPlan ruins = RuinPlanner.plan(level, d, chunk), scorch = RuinPlanner.testScorch(level, d, chunk);
             String diff = scorch.differs(ruins);
-            if (diff != null) h.fail("чанк " + chunk.getPos() + ": след без руин не тот, что у руин (след | руины; y — от низа мира): " + diff);
+            if (diff != null) h.fail("chunk " + chunk.getPos() + ": the trail without the ruins is not the same as the one with the ruins (trail | ruins; y - from the bottom of the world): " + diff);
             changed += ruins.changedBlocks();
             if (ruins.recolours()) biomes++;
         }
-        h.assertTrue(compared >= 4 && changed > 0 && biomes > 0, "след не лёг: чанков " + compared + ", мест " + changed + ", чанков с биомами " + biomes);
-        Incoming.LOG.info("След без руин совпал с руинами: чанков {}, мест {}, чанков с биомами {}", compared, changed, biomes);
+        h.assertTrue(compared >= 4 && changed > 0 && biomes > 0, "the trail is not clear: chunks " + compared + ", places " + changed + ", chunks with biomes " + biomes);
+        Incoming.LOG.info("The trail without ruins coincided with the ruins of: chunks {}, places {}, chunks with biomes {}", compared, changed, biomes);
         h.succeed();
     }
 
     /**
-     * Свет — со вспышкой, волна — потом: чанк A при ~15 кал/см² выжжен и горит раньше, чем до него дойдёт волна (слой
-     * вспышки {@code FlashScorch}), а после волны в нём тот же мир, что дал бы один план руин по миру до вспышки, — через
-     * очередь руин (план в фоне по снимкам чанков, на которых уже стоит слой). Чанк B, ближний к эпицентру из тех, до
-     * кого волна доходит после слоя (сильнее волна — сбивает часть огня), — планом, готовым до вспышки в руинах подрыва
-     * (как у подготовки руин за полёт МБР): он не устаревает от слоя и даёт тот же мир. Подрыв — за углом трёх на три чанков
-     * площадки, место — от сетки чанков ({@link #gridSide});
-     * масштаб — такой, чтобы у земли в середине A было 15 кал/см². Слой — только чанкам целиком на площадке: огонь за
-     * её краем горел бы у соседних партий.
+     * Light - with a flash, wave - then: chunk A at ~15 cal/cm² is scorched and burns before the wave reaches it (layer
+     *  of {@code FlashScorch} flash), and after the wave there is the same world in it, which would give one plan of ruins for the world before the flash - via
+     * queue of ruins (plan in the background based on pictures of chunks on which there is already a layer). Chunk B, closest to the epicenter of those to which the wave reaches
+     *  after the layer (a stronger wave knocks down part of the fire), is a plan ready before the outbreak in the ruins of the explosion
+     *  (like the preparation of ruins during the ICBM flight): it does not become obsolete from the layer and gives the same world. Detonation - around the corner of three by three chunks
+     *  platform, place - from the grid of chunks ({@link #gridSide});
+     *  scale - such that the ground in the middle A has 15 cal/cm². Layer - only chunks entirely on the site: the fire behind
+     *  its edge would burn in the neighboring batch.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_scorch", skyAccess = true)
     public static void flashScorchesBeforeTheWaveAndRuinsMatch(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         fillBiome(h, 0, 63, Biomes.PLAINS);
         plants(h);
-        // Чанки и подрыв — от сетки чанков, а не от площадки: площадка встаёт где угодно относительно сетки, а в масштабе
-        // проверки слой у A встаёт на 1-м тике (свет набирает порог за 0,1 тика), волна к чанкам — через 1–3 тика, и
-        // срок волны в тиках (ScarQueue.due) у соседей A то 1, то 2: при ~5 % сдвигов площадки (CI 19.10, выпуск 3.4.1)
-        // ни один чанк, кроме A, не получал волну позже слоя. От сетки картина одна при любой раскладке партий: 3 × 3
-        // чанка целиком на площадке и подрыв на их диагонали в 5–6 блоках за углом: B получает волну через 2,0 тика, двое
-        // соседей A — через 2,3, A — через 2,8.
+        // Chunks and detonation are aligned to the chunk grid, not the test platform: the platform can start anywhere
+        // relative to the grid. At the test scale, the layer at A appears on tick 1 (light reaches the threshold in
+        // 0,1 tick), the wave reaches chunks after 1–3 ticks, and the wave deadline (ScarQueue.due) for A neighbours
+        // is either 1 or 2: for ~5 % of platform offsets (CI 19.10, release 3.4.1), no chunk except A received the wave
+        // after the layer. Alignment to the grid gives the same layout for every batch arrangement: 3 × 3 chunks
+        // fully inside the platform and a detonation on their diagonal 5–6 blocks beyond the corner: B receives the
+        // wave after 2,0 ticks, two A neighbours after 2,3, and A after 2,8.
         BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
         int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
         int[] sz = gridSide(Math.min(lo.getZ(), hi.getZ()), Math.max(lo.getZ(), hi.getZ()));
@@ -275,7 +275,7 @@ public final class ScorchGameTests {
         inside.sort(Comparator.comparingDouble(c -> Math.hypot(c.getPos().getMiddleBlockX() - g.getX(), c.getPos().getMiddleBlockZ() - g.getZ())));
         LevelChunk a = inside.get(inside.size() - 1);
         Vec3 midA = new Vec3(a.getPos().getMiddleBlockX() + 0.5, g.getY() + 1, a.getPos().getMiddleBlockZ() + 0.5);
-        // масштаб: 15 кал/см² у земли в середине A (меньше масштаб — больше метров в блоке, меньше света)
+        // scale: 15 cal/cm² near the ground in the middle A (smaller scale - more meters in a block, less light)
         double sLo = 0.002, sHi = 1;
         for (int i = 0; i < 50; i++) {
             double s = Math.sqrt(sLo * sHi);
@@ -285,12 +285,12 @@ public final class ScorchGameTests {
             else sLo = s;
         }
         Detonation d = NuclearGameTests.detonationAt(h, g, Yield.optimalBurstHeight(15) * sHi, 15, (float) sHi);
-        // слой A встаёт, когда свет у ближней к шару точки A набрал порог поджига (как в FlashScorch); ближние чанки — не позже
+        // layer A appears when the light at the point A closest to the ball reaches the ignition threshold (as in FlashScorch); nearby chunks - no later
         double nx = Mth.clamp(d.burst().x, a.getPos().getMinBlockX(), a.getPos().getMaxBlockX() + 1);
         double nz = Mth.clamp(d.burst().z, a.getPos().getMinBlockZ(), a.getPos().getMaxBlockZ() + 1);
         long flashAt = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(nx, d.groundY() + 1, nz)), ThermalModel.IGNITE));
-        // B — ближний к эпицентру чанк, до которого волна доходит после слоя (в игре до ближних она доходит раньше конца
-        // импульса, и они получают всё с руинами; масштаб проверки сжимает время в тики)
+        // B - the chunk closest to the epicenter, to which the wave reaches after the layer (in the game it reaches the closest ones before the end of the
+        //  pulse, and they get everything in ruins; the scale of the check compresses the time into a tick)
         LevelChunk b = null;
         for (LevelChunk c : inside) {
             if (c != a && ScarQueue.due(d, c.getPos()) > flashAt) {
@@ -298,15 +298,15 @@ public final class ScorchGameTests {
                 break;
             }
         }
-        h.assertTrue(b != null, "нет чанка, до которого волна доходит после слоя");
+        h.assertTrue(b != null, "there is no chunk to which the wave reaches after the layer");
         Vec3 midB = new Vec3(b.getPos().getMiddleBlockX() + 0.5, g.getY() + 1, b.getPos().getMiddleBlockZ() + 0.5);
-        // окна руин A и B — в памяти сразу: за краем площадки чанки грузятся в фоне
+        // windows of the ruins A and B - in memory immediately: behind the edge of the site, chunks are loaded in the background
         for (LevelChunk c : List.of(a, b)) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
             }
         }
-        // мир до вспышки: каким его сделали бы одни руины (с чистого листа, свои руины подрыва)
+        // the world before the outbreak: what ruins alone would have made it (from scratch, your own ruins of an explosion)
         LevelChunkSection[] expectA = RuinPlanner.planFresh(level, d, a, false).testAppliedCopy(level, a);
         LevelChunkSection[] expectB = RuinPlanner.planFresh(level, d, b, false).testAppliedCopy(level, b);
         RuinPlan preparedB = RuinPlanner.plan(level, d, b);
@@ -314,61 +314,61 @@ public final class ScorchGameTests {
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
         WorkClock clock = WorkClock.counting(1_000_000L);
         long waveA = ScarQueue.due(d, a.getPos()), waveB = ScarQueue.due(d, b.getPos());
-        String setup = String.format(Locale.ROOT, "масштаб %.4f, свет у A %.1f, у B %.1f кал/см², давление у A %.2f, у B %.2f psi; импульс %.2f тика, слой A на %d, волна у A %d, у B %d",
+        String setup = String.format(Locale.ROOT, "scale %.4f, light for A %.1f, for B %.1f cal/cm², pressure for A %.2f, for B %.2f psi; impulse %.2f tick, layer A on %d, wave at A %d, at B %d",
                 sHi, d.fluence(midA), d.fluence(midB), d.psi(midA), d.psi(midB), d.pulseTicks(), flashAt - d.gameTime(), waveA - d.gameTime(), waveB - d.gameTime());
-        h.assertTrue(Math.abs(d.fluence(midA) - 15) < 0.5, "свет у A не тот: " + setup);
-        h.assertTrue(flashAt < waveA, "волна у A раньше слоя — проверка ни о чём: " + setup);
+        h.assertTrue(Math.abs(d.fluence(midA) - 15) < 0.5, "the light on the A is not the same: " + setup);
+        h.assertTrue(flashAt < waveA, "the wave of A is before the layer - the check means nothing: " + setup);
         ScarQueue q = new ScarQueue();
         try {
-            // слой всех чанков, чьё время пришло к слою A (дальних, кроме A, нет: остальные — не позже)
+            // layer of all chunks whose time has come to layer A (there are no further ones, except for A: the rest - not later)
             boolean done = false;
             for (int i = 0; i < 20 && !done; i++) {
                 clock.start(10_000_000_000L);
                 done = flash.work(level, flashAt, clock);
                 if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
             }
-            h.assertTrue(flash.appliedChunks() >= 2, "слой вспышки встал в " + flash.appliedChunks() + " чанках из " + keys.length + "; " + setup);
+            h.assertTrue(flash.appliedChunks() >= 2, "the flash layer is stuck in " + flash.appliedChunks() + " chunks of " + keys.length + "; " + setup);
             int[] before = new int[2];
             for (int k = 0; k < 2; k++) {
                 LevelChunk c = k == 0 ? a : b;
                 String name = k == 0 ? "A" : "B";
-                h.assertTrue(c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) < d.id(), "руины " + name + " встали со вспышкой");
+                h.assertTrue(c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) < d.id(), "ruins " + name + " stood up with a flash");
                 int[] n = surface(h, c);
                 before[k] = n[1];
-                h.assertTrue(n[0] > 0, "до волны в " + name + " нет выжженной земли; " + setup);
-                h.assertTrue(n[1] > 0, "до волны в " + name + " нет пожаров; " + setup);
-                h.assertTrue(n[2] < 256, "до волны в " + name + " трава цела; " + setup);
-                // огонь слоя — без тиков до руин: не растёт и не гаснет, пока план руин по миру до вспышки ждёт волну
+                h.assertTrue(n[0] > 0, "before the wave in " + name + " no scorched earth; " + setup);
+                h.assertTrue(n[1] > 0, "before the wave in " + name + " no fires; " + setup);
+                h.assertTrue(n[2] < 256, "before the wave in " + name + " the grass is intact; " + setup);
+                // layer fire - no tick until ruins: does not grow and does not go out while the plan of ruins around the world waits for a wave before the outbreak
                 int[] f = fires(h, c, 4);
-                h.assertTrue(f[1] == 0, "до волны у " + f[1] + " из " + f[0] + " пожаров в " + name + " уже есть тик");
-                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).orElse(0) == d.id(), "у " + name + " нет отметки слоя вспышки");
+                h.assertTrue(f[1] == 0, "before the wave " + f[1] + " from " + f[0] + " fires in " + name + " there is already a tick");
+                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).orElse(0) == d.id(), "at " + name + " no flash layer marker");
             }
-            // волна: A — очередью руин (план в фоне), B — планом, готовым до вспышки
+            // wave: A - a queue of ruins (plan in the background), B - a plan ready before the outbreak
             q.offer(a, d);
             for (long now = waveA - 1; now < waveA + 20 && a.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(); now++) {
                 clock.start(10_000_000_000L);
                 q.work(level, now, clock);
                 RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
             }
-            h.assertTrue(a.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "руин A нет: " + q.diagState(a.getPos().toLong(), waveA + 20));
-            h.assertTrue(preparedB.apply(level, b, d, new ColumnScar.Budget(true)), "план B, готовый до вспышки, устарел от слоя вспышки");
+            h.assertTrue(a.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "there are no ruins A: " + q.diagState(a.getPos().toLong(), waveA + 20));
+            h.assertTrue(preparedB.apply(level, b, d, new ColumnScar.Budget(true)), "plan B, ready before flash, outdated from flash layer");
             String diffA = differ(a, expectA), diffB = differ(b, expectB);
-            if (diffA != null) h.fail("A после волны не тот, что от одних руин (мир | руины): " + diffA + "; " + setup);
-            if (diffB != null) h.fail("B после волны не тот, что от одних руин (мир | руины): " + diffB + "; " + setup);
+            if (diffA != null) h.fail("A after the wave is not the same as from some ruins (world | ruins): " + diffA + "; " + setup);
+            if (diffB != null) h.fail("B after the wave is not the same as from some ruins (world | ruins): " + diffB + "; " + setup);
             int[] afterA = surface(h, a), afterB = surface(h, b);
-            h.assertTrue(afterA[1] <= before[0] && afterB[1] <= before[1], "после волны пожаров больше, чем со вспышкой: A " + afterA[1] + " из " + before[0]
-                    + ", B " + afterB[1] + " из " + before[1]);
-            if (d.psi(midB) >= 2.5) h.assertTrue(afterB[1] < before[1], "волна не сбила огонь в B: " + afterB[1] + " из " + before[1] + "; " + setup);
-            // с руинами огонь горит дальше: тик — каждому, отметка слоя снята
+            h.assertTrue(afterA[1] <= before[0] && afterB[1] <= before[1], "after a wave of fires more than with an outbreak: A " + afterA[1] + " from " + before[0]
+                    + ", B " + afterB[1] + " from " + before[1]);
+            if (d.psi(midB) >= 2.5) h.assertTrue(afterB[1] < before[1], "the wave did not knock down the fire in B: " + afterB[1] + " from " + before[1] + "; " + setup);
+            // with ruins the fire burns further: tick - to each, the layer is unchecked
             for (LevelChunk c : List.of(a, b)) {
                 int[] f = fires(h, c, 4);
-                h.assertTrue(f[0] == f[1], "после руин в " + c.getPos() + " без тика " + (f[0] - f[1]) + " из " + f[0] + " пожаров");
-                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "после руин у " + c.getPos() + " осталась отметка слоя вспышки");
+                h.assertTrue(f[0] == f[1], "after the ruins in " + c.getPos() + " without tick " + (f[0] - f[1]) + " from " + f[0] + " fires");
+                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "after the ruins " + c.getPos() + " flash layer mark remains");
             }
-            Incoming.LOG.info("Слой вспышки до волны, руины после — тот же мир: {}; пожаров в A {} → {}, в B {} → {}", setup, before[0], afterA[1], before[1], afterB[1]);
+            Incoming.LOG.info("Flash layer before the wave, ruins after - the same world: {}; fires in A {} → {}, in B {} → {}", setup, before[0], afterA[1], before[1], afterB[1]);
         } finally {
             q.clear(level);
-            // огонь площадки — прочь: дальше он горел бы и тикал в соседних партиях
+            // fire of the platform - away: then it would burn and tick in the neighboring batch
             for (LevelChunk c : inside) {
                 for (int x = c.getPos().getMinBlockX(); x <= c.getPos().getMaxBlockX(); x++) {
                     for (int z = c.getPos().getMinBlockZ(); z <= c.getPos().getMaxBlockZ(); z++) {
@@ -382,18 +382,18 @@ public final class ScorchGameTests {
     }
 
     /**
-     * Руины поверх слоя вспышки, когда снимков до вспышки у руин подрыва уже нет (вытеснены, взяты заново): снимки окна —
-     * по миру со слоем, который правка снимка возвращает к миру до вспышки ({@code RuinPlan.unflash}: огонь — воздух,
-     * места слоя — старые, карты высот столбцов — по копии). Поле травы и деревянные дома (огонь вспышки на крышах; у
-     * эпицентра волна крыши сносит) во всех чанках целиком на площадке; слой — во всех сразу. План каждого чанка — в
-     * потоке сервера, в фоне и с диска — тот же, что по миру до вспышки (с диска — что с диска до вспышки), а мир после
-     * руин — тот же, что дали бы одни руины: огонь слоя, которого нет у руин, погас, остальной горит с тиком; место,
-     * которого руины не меняют, — как после слоя (свет у стены, которую потом снесла волна), ступени биома — не слабее
-     * слоя. Чанк, у которого руины подрыва забыты совсем (после простоя, перезапуска), знает о слое по отметке: огонь в
-     * снимке — воздух, руины встают, весь огонь — с тиком, отметка снята; в счёте пожаров подрыва — огонь, что горит
-     * дальше (после простоя счётчик жив, и огонь слоя чанка, что он взял, из счёта уходит; после перезапуска счётчик
-     * новый). Весь счёт — огонь чанков с руинами и огонь слоя в счёте там, где руин нет. Чанк с отметкой, чей подрыв
-     * забыт и руин не будет, отдаёт огню тики сам.
+     * Ruins on top of the flash layer, when the ruins of the explosion no longer have pictures before the flash (displaced, taken again): window shots -
+     *  over the world with a layer that editing the image returns to the world before the flash ({@code RuinPlan.unflash}: fire - air,
+     *  layer places - old, column height maps - from a copy). A field of grass and wooden houses (fire flashes on the roofs; at the
+     *  epicenter the wave blows off the roofs) in all chunks entirely on the site; layer - in all at once. The plan of each chunk - in the
+     *  server stream, in the background and from the disk - is the same as in the world before the outbreak (from the disk - as from the disk before the outbreak), and the world after the
+     *  ruins is the same as what the ruins alone would have given: the fire of the layer that the ruins do not have has gone out, the rest is burning with a tick; a place
+     *  which the ruins do not change - like after a layer (light near the wall, which was then demolished by a wave), the stages of the biome - no weaker than the
+     *  layer. Chunk, for whom the ruins of the explosion are completely forgotten (after an idle time, a restart), knows about the layer by the mark: fire in the
+     *  image is air, the ruins stand up, all the fire is ticked, the mark is removed; in the count of explosion fires - the fire that burns
+     *  further (after idle time, the counter is alive, and the fire of the chunk layer that it took leaves the count; after a restart, the counter
+     *  is new). The whole score is the fire of chunks with ruins and the fire of the layer in the score where there are no ruins. A chunk with a mark, whose detonation
+     *  is forgotten and there will be no ruins, gives the tick itself to the fire.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_unflash", skyAccess = true)
     public static void ruinsOverFlashWithoutShots(GameTestHelper h) {
@@ -403,8 +403,8 @@ public final class ScorchGameTests {
         BlockPos zero = new BlockPos(60, 12, 60), g = h.absolutePos(zero);
         int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
         List<LevelChunk> inside = inside(h, g);
-        h.assertTrue(inside.size() >= 4, "чанков целиком на площадке " + inside.size());
-        // дом 6×6 посреди каждого чанка: стены в три блока, крыша из досок, внутри пусто
+        h.assertTrue(inside.size() >= 4, "chunks entirely on site " + inside.size());
+        // house 6×6 in the middle of each chunk: walls of three blocks, roof made of boards, empty inside
         for (LevelChunk c : inside) {
             for (int lx = 5; lx <= 10; lx++) {
                 for (int lz = 5; lz <= 10; lz++) {
@@ -424,7 +424,7 @@ public final class ScorchGameTests {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
             }
         }
-        // руины по миру до вспышки: план, мир после него, план с диска
+        // ruins around the world before the outbreak: the plan, the world after it, the plan from the disk
         int n = inside.size();
         RuinPlan[] before = new RuinPlan[n], beforeDisk = new RuinPlan[n];
         LevelChunkSection[][] expect = new LevelChunkSection[n][];
@@ -434,12 +434,12 @@ public final class ScorchGameTests {
             expect[i] = before[i].testAppliedCopy(level, c);
             beforeDisk[i] = RuinPlanner.testPlanOverFlash(level, d, c, 2);
             String same = beforeDisk[i].differs(before[i]);
-            if (same != null) Incoming.LOG.info("Чанк {}: план с диска до вспышки не тот, что из памяти (диск | память): {}", c.getPos(), same);
+            if (same != null) Incoming.LOG.info("Chunk {}: plan from disk before flash is not the same as from memory (disk | memory): {}", c.getPos(), same);
         }
         int[][] world = new int[n][];
         for (int i = 0; i < n; i++) world[i] = blocks(inside.get(i));
         long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
-        // счётчик пожаров подрыва — один на слой и руины, как в игре (ScarQueue.budget)
+        // explosion fire counter - one per layer and ruins, as in the game (ScarQueue.budget)
         ColumnScar.Budget budget = new ColumnScar.Budget(true);
         FlashScorch flash = FlashScorch.forTest(d, keys, budget);
         WorkClock clock = WorkClock.counting(1_000_000L);
@@ -450,12 +450,12 @@ public final class ScorchGameTests {
                 done = flash.work(level, d.gameTime() + 10_000, clock);
                 if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
             }
-            h.assertTrue(done && flash.appliedChunks() == n, "слой вспышки встал в " + flash.appliedChunks() + " чанках из " + n);
+            h.assertTrue(done && flash.appliedChunks() == n, "the flash layer is stuck in " + flash.appliedChunks() + " chunks of " + n);
             int roofFires = 0, lit = 0;
             LevelChunk marked = null, forgotten = null, idle = null;
             for (LevelChunk c : inside) {
                 int[] f = fires(h, c, 8);
-                h.assertTrue(f[1] == 0, "огонь слоя с тиком до руин в " + c.getPos() + ": " + f[1] + " из " + f[0]);
+                h.assertTrue(f[1] == 0, "fire layer with tick to ruins in " + c.getPos() + ": " + f[1] + " from " + f[0]);
                 lit += f[0];
                 for (int lx = 5; lx <= 10; lx++) {
                     for (int lz = 5; lz <= 10; lz++) {
@@ -468,79 +468,79 @@ public final class ScorchGameTests {
                     marked = c;
                 }
             }
-            h.assertTrue(roofFires > 0, "огня вспышки на крышах нет: дома ни о чём (пожаров всего " + lit + ")");
-            // ступени биома после слоя: руины их не понижают (свет был раньше), где волна сменила землю — остаются
+            h.assertTrue(roofFires > 0, "there are no fire flashes on the roofs: there is nothing at home (there are only fires " + lit + ")");
+            // stages of the biome after the layer: ruins do not lower them (there was light before), where the wave replaced the ground - they remain
             int[][] flashBiomes = new int[n][], flashed = new int[n][];
             for (int i = 0; i < n; i++) {
                 flashBiomes[i] = biomeLevels(inside.get(i).getSections());
                 flashed[i] = blocks(inside.get(i));
             }
-            h.assertTrue(idle != null, "слой вспышки зажёг огонь меньше чем в трёх чанках");
+            h.assertTrue(idle != null, "the flash layer lit the fire in less than three chunks");
             String roofs = roofs(inside, ground, expect);
-            // план каждого чанка без снимков до вспышки — тремя путями
+            // plan of each chunk without pictures before the flash - in three ways
             RuinPlan[] background = new RuinPlan[n];
-            String[] ways = {"в потоке сервера", "в фоне", "с диска"};
+            String[] ways = {"in the server thread", "in the background", "from disk"};
             for (int i = 0; i < n; i++) {
                 LevelChunk c = inside.get(i);
                 for (int way = 0; way < 3; way++) {
                     RuinPlan p = RuinPlanner.testPlanOverFlash(level, d, c, way);
                     String diff = p.differs(way == 2 ? beforeDisk[i] : before[i]);
-                    if (diff != null) h.fail("чанк " + c.getPos() + ": план поверх слоя " + ways[way] + " не тот, что по миру до вспышки (поверх | до; y — от низа мира): "
+                    if (diff != null) h.fail("chunk " + c.getPos() + ": plan on top of layer " + ways[way] + " not the one around the world before the flash (above | to; y - from the bottom of the world): "
                             + diff + "; " + roofs);
                     if (way == 1) background[i] = p;
                 }
             }
-            // руины: все чанки, кроме трёх, — планами в фоне; ещё два — когда руины подрыва забыты (только отметка):
-            // после простоя и после перезапуска; последний — подрыв забыт совсем
+            // ruins: all chunks, except three, are plans in the background; two more - when the ruins of the explosion are forgotten (only a mark):
+            //  after idle time and after a restart; the last one is completely forgotten
             int[] kept = new int[1];
             for (int i = 0; i < n; i++) {
                 LevelChunk c = inside.get(i);
                 if (c == marked || c == forgotten || c == idle) continue;
-                h.assertTrue(background[i].apply(level, c, d, budget), "план " + c.getPos() + " поверх слоя устарел");
-                // место, которого руины не меняют, а слой сменил (свет у стены, которую потом снесла волна, — склон к
-                // шару по земле до волны), остаётся следом слоя; огонь слоя — нет
+                h.assertTrue(background[i].apply(level, c, d, budget), "plan " + c.getPos() + " on top of layer is obsolete");
+                // the place that the ruins do not change, but the layer has changed (the light near the wall, which was then demolished by the wave - the slope towards the
+                //  ball on the ground before the wave), remains a trace of the layer; layer fire - no
                 String diff = overFlash(c, expect[i], world[i], flashed[i], kept), biomes = differ(c, expect[i], flashBiomes[i], false);
                 if (biomes != null) diff = (diff == null ? "" : diff + "; ") + biomes;
-                if (diff != null) h.fail("чанк " + c.getPos() + " после руин поверх слоя не тот, что от одних руин (мир | руины): " + diff + "; " + roofs);
+                if (diff != null) h.fail("chunk " + c.getPos() + " after the ruins on top of the layer is not the same as from the ruins alone (world | ruins): " + diff + "; " + roofs);
                 int[] f = fires(h, c, 8);
-                h.assertTrue(f[0] == f[1], "после руин в " + c.getPos() + " без тика " + (f[0] - f[1]) + " из " + f[0] + " пожаров");
-                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "после руин у " + c.getPos() + " осталась отметка слоя");
+                h.assertTrue(f[0] == f[1], "after the ruins in " + c.getPos() + " without tick " + (f[0] - f[1]) + " from " + f[0] + " fires");
+                h.assertTrue(c.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "after the ruins " + c.getPos() + " layer mark remains");
             }
             NuclearWorld.get(level).forgetRuinsForTest(d.id());
-            // руины подрыва забыты после простоя (RUINS_IDLE), а счётчик пожаров подрыва жив: огонь слоя чанка, что он взял,
-            // уходит из счёта, входит тот, что горит дальше (иначе оставшийся огонь слоя считался бы дважды, и предел
-            // резал бы новые пожары раньше срока)
-            h.assertTrue(FlashScorch.marked(idle, d.id()), "у чанка с огнём слоя нет отметки");
+            // the ruins of the explosion are forgotten after being idle (RUINS_IDLE), and the counter of explosion fires is alive: the fire of the layer of the chunk that he took,
+            // , leaves the count, the one that burns further enters (otherwise the remaining fire of the layer would be counted twice, and the limit
+            //  would cut out new fires ahead of schedule)
+            h.assertTrue(FlashScorch.marked(idle, d.id()), "the layer fire chunk has no mark");
             int layerIdle = budget.layerForTest(idle.getPos()), others = budget.firesForTest() - layerIdle;
-            h.assertTrue(layerIdle > 0, "у " + idle.getPos() + " огня слоя в счёте пожаров нет: проверять нечего");
-            h.assertTrue(RuinPlanner.plan(level, d, idle).apply(level, idle, d, budget), "план чанка с отметкой слоя (руины забыты, счётчик жив) устарел");
+            h.assertTrue(layerIdle > 0, "at " + idle.getPos() + " there is no layer fire in the fire count: there is nothing to check");
+            h.assertTrue(RuinPlanner.plan(level, d, idle).apply(level, idle, d, budget), "chunk plan with layer mark (ruins forgotten, counter alive) is outdated");
             int[] f = fires(h, idle, 8);
-            h.assertTrue(f[0] == f[1], "руины по отметке слоя при живом счётчике: без тика " + (f[0] - f[1]) + " из " + f[0] + " пожаров");
-            h.assertTrue(budget.firesForTest() - others == f[0], "руины по отметке слоя при живом счётчике: горит " + f[0] + ", в счёте пожаров подрыва за чанк "
-                    + (budget.firesForTest() - others) + " (слой взял " + layerIdle + ")");
-            h.assertFalse(FlashScorch.marked(idle, d.id()), "руины по отметке слоя при живом счётчике: отметка осталась");
-            // весь счёт подрыва — то, что горит в чанках с руинами, и огонь слоя, что он взял, где руин ещё нет
+            h.assertTrue(f[0] == f[1], "ruins by layer mark with live counter: no tick " + (f[0] - f[1]) + " from " + f[0] + " fires");
+            h.assertTrue(budget.firesForTest() - others == f[0], "ruins by layer mark with live counter: lit " + f[0] + ", in the count of explosion fires per chunk "
+                    + (budget.firesForTest() - others) + " (layer taken " + layerIdle + ")");
+            h.assertFalse(FlashScorch.marked(idle, d.id()), "ruins according to the layer mark with a live counter: the mark remains");
+            // the entire account of the detonation is what burns in the chunks with ruins, and the fire of the layer that he took, where there are no ruins yet
             int counted = 0;
             for (LevelChunk c : inside) counted += c == marked || c == forgotten ? budget.layerForTest(c.getPos()) : fires(h, c, 8)[0];
-            h.assertTrue(budget.firesForTest() == counted, "в счёте пожаров подрыва " + budget.firesForTest() + ", а горит в чанках с руинами "
-                    + "вместе с огнём слоя в счёте там, где руин нет, " + counted);
-            h.assertTrue(FlashScorch.marked(marked, d.id()), "у чанка с огнём слоя нет отметки");
+            h.assertTrue(budget.firesForTest() == counted, "counting explosion fires " + budget.firesForTest() + ", but burns in cans of ruins "
+                    + "together with the fire of the layer in the account where there are no ruins, " + counted);
+            h.assertTrue(FlashScorch.marked(marked, d.id()), "the layer fire chunk has no mark");
             RuinPlan alone = RuinPlanner.plan(level, d, marked);
-            // счётчик пожаров подрыва после перезапуска — новый: огонь слоя, что горит дальше, входит в него
+            // the counter for explosion fires after a restart is new: the fire of the layer that burns next is included in it
             ColumnScar.Budget restarted = new ColumnScar.Budget(true);
-            h.assertTrue(alone.apply(level, marked, d, restarted), "план чанка с отметкой слоя (руины забыты) устарел");
+            h.assertTrue(alone.apply(level, marked, d, restarted), "chunk plan with layer mark (ruins forgotten) is outdated");
             f = fires(h, marked, 8);
-            h.assertTrue(f[0] == f[1], "руины по отметке слоя: без тика " + (f[0] - f[1]) + " из " + f[0] + " пожаров");
-            h.assertTrue(f[0] > 0 && restarted.firesForTest() == f[0], "руины по отметке слоя: горит " + f[0] + ", в счёте пожаров подрыва "
+            h.assertTrue(f[0] == f[1], "ruins by layer mark: no tick " + (f[0] - f[1]) + " from " + f[0] + " fires");
+            h.assertTrue(f[0] > 0 && restarted.firesForTest() == f[0], "ruins by layer mark: lit " + f[0] + ", counting explosion fires "
                     + restarted.firesForTest());
-            h.assertFalse(FlashScorch.marked(marked, d.id()), "руины по отметке слоя: отметка осталась");
-            // чанк с отметкой, чей подрыв забыт (у проверки подрыва нет в NuclearEvents): руин не будет — огню тики сразу
-            h.assertTrue(FlashScorch.burnOutForTest(level, forgotten), "чанк с отметкой слоя забытого подрыва не отдал огню тики");
+            h.assertFalse(FlashScorch.marked(marked, d.id()), "ruins by layer mark: mark left");
+            // chunk with a mark whose detonation is forgotten (the detonation check does not have in NuclearEvents): there will be no ruins - tick fire immediately
+            h.assertTrue(FlashScorch.burnOutForTest(level, forgotten), "the chunk with the mark of the layer of the forgotten explosion did not give the fire a tick");
             f = fires(h, forgotten, 8);
-            h.assertTrue(f[0] > 0 && f[0] == f[1], "огонь слоя забытого подрыва: без тика " + (f[0] - f[1]) + " из " + f[0]);
-            h.assertTrue(forgotten.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "огонь слоя забытого подрыва: отметка осталась");
-            Incoming.LOG.info("Руины поверх слоя вспышки без снимков до вспышки — те же: {} чанков, пожаров слоя {} (на крышах {}), мест со следом слоя, которых руины не меняют, {}; "
-                    + "руины по отметке при живом счётчике: слой взял {}, горит {}; {}", n, lit, roofFires, kept[0], layerIdle, budget.firesForTest() - others, roofs);
+            h.assertTrue(f[0] > 0 && f[0] == f[1], "fire layer of forgotten detonation: no tick " + (f[0] - f[1]) + " from " + f[0]);
+            h.assertTrue(forgotten.getExistingData(ModAttachments.FLASH_LAYER).isEmpty(), "fire of the forgotten explosion layer: the mark remains");
+            Incoming.LOG.info("Ruins on top of the flash layer without pictures before the flash are the same: {} chunks, fires of the {} layer (on the roofs of {}), places with a trace of the layer that the ruins do not change, {}; "
+                    + "ruins according to the mark with a live counter: the layer took {}, {} is on; {}", n, lit, roofFires, kept[0], layerIdle, budget.firesForTest() - others, roofs);
         } finally {
             NuclearWorld.get(level).forgetRuinsForTest(d.id());
             unfire(level, inside, ground, 8);
@@ -549,9 +549,9 @@ public final class ScorchGameTests {
     }
 
     /**
-     * Блоки чанка после руин поверх слоя: каждое место — как в {@code expected} (одни руины) или, если руины его не
-     * меняют ({@code expected} = {@code world}, мир до вспышки), — как после слоя ({@code flashed}), кроме огня. null —
-     * так; {@code kept} — сколько мест со следом слоя.
+     * Chunk blocks after ruins on top of the layer: each place - as in {@code expected} (only ruins) or, if the ruins do not change it
+     *  ({@code expected} = {@code world}, world before the outbreak), - as after the layer ({@code flashed}), except fire. null —
+     * so; {@code kept} - how many places with a layer trace.
      */
     @Nullable
     private static String overFlash(LevelChunk chunk, LevelChunkSection[] expected, int[] world, int[] flashed, int[] kept) {
@@ -566,14 +566,14 @@ public final class ScorchGameTests {
                 kept[0]++;
                 continue;
             }
-            if (n++ < 4) out.append(String.format(Locale.ROOT, " [x %d y %d z %d: %s | %s, до вспышки %s, после слоя %s]", c & 15,
+            if (n++ < 4) out.append(String.format(Locale.ROOT, " [x %d y %d z %d: %s | %s, before flash %s, after layer %s]", c & 15,
                     chunk.getMinBuildHeight() + (i << 4) + (c >> 8), (c >> 4) & 15, Block.stateById(live[k]), Block.stateById(want),
                     Block.stateById(world[k]), Block.stateById(flashed[k])));
         }
-        return n == 0 ? null : n + " мест:" + out;
+        return n == 0 ? null : n + " places:" + out;
     }
 
-    /** Все места чанка (номера состояний), снизу вверх по секциям. */
+    /** All chunk locations (state numbers), from bottom to top in sections. */
     private static int[] blocks(LevelChunk chunk) {
         LevelChunkSection[] sections = chunk.getSections();
         int[] out = new int[sections.length * 4096];
@@ -583,7 +583,7 @@ public final class ScorchGameTests {
         return out;
     }
 
-    /** Чанки целиком на площадке, от ближнего к {@code g}. */
+    /** Chunks are entirely on the site, from the closest one to {@code g}. */
     private static List<LevelChunk> inside(GameTestHelper h, BlockPos g) {
         BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
         List<LevelChunk> inside = new ArrayList<>();
@@ -596,7 +596,7 @@ public final class ScorchGameTests {
         return inside;
     }
 
-    /** Масштаб 15 кт на оптимальной высоте над {@code g}, при котором у земли в середине чанка {@code c} — {@code cal} кал/см². */
+    /** The scale is 15 kt at the optimal height above {@code g}, at which near the ground in the middle of the chunk {@code c} is {@code cal} cal/cm². */
     private static double scaleFor(BlockPos g, LevelChunk c, double cal) {
         Vec3 mid = new Vec3(c.getPos().getMiddleBlockX() + 0.5, g.getY() + 1, c.getPos().getMiddleBlockZ() + 0.5);
         double lo = 0.002, hi = 1;
@@ -610,9 +610,9 @@ public final class ScorchGameTests {
         return hi;
     }
 
-    /** Сколько досок крыш сносят одни руины ({@code expect} — чанки после них), по чанкам: строка для лога и сообщений. */
+    /** How many roof boards are demolished by one ruin ({@code expect} - chunks after them), by chunk: line for log and messages. */
     private static String roofs(List<LevelChunk> inside, int ground, LevelChunkSection[][] expect) {
-        StringBuilder out = new StringBuilder("крыши снесены:");
+        StringBuilder out = new StringBuilder("roofs demolished:");
         for (int i = 0; i < inside.size(); i++) {
             LevelChunk c = inside.get(i);
             LevelChunkSection[] after = expect[i];
@@ -628,7 +628,7 @@ public final class ScorchGameTests {
         return out.toString();
     }
 
-    /** Огонь в чанке от верха площадки до {@code up} блоков над ним: всего и сколько с тиком в расписании. */
+    /** Fire in a chunk from the top of the site to {@code up} blocks above it: total and how many with tick in the schedule. */
     private static int[] fires(GameTestHelper h, LevelChunk c, int up) {
         ServerLevel level = h.getLevel();
         int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
@@ -647,7 +647,7 @@ public final class ScorchGameTests {
         return n;
     }
 
-    /** Огонь чанков — прочь (дальше он горел бы и тикал в соседних партиях). */
+    /** The fire of the chunks is gone (then it would burn and tick in the neighboring batches). */
     private static void unfire(ServerLevel level, List<LevelChunk> chunks, int ground, int up) {
         for (LevelChunk c : chunks) {
             for (int x = c.getPos().getMinBlockX(); x <= c.getPos().getMaxBlockX(); x++) {
@@ -662,9 +662,9 @@ public final class ScorchGameTests {
     }
 
     /**
-     * По одной оси площадки {@code [a, b]}: первый из трёх чанков целиком на ней и место подрыва в 5–6 блоках за ними — со
-     * стороны, где у площадки запас больше (из 16 блоков сверх трёх чанков на эту сторону приходится не меньше 8). Отступы
-     * 6 и 5 — одно расстояние до середин чанков с обеих сторон ({@code getMiddleBlockX} + 0,5 — не середина чанка).
+     * Along one axis of the {@code [a, b]} site: the first of the three chunks is entirely on it and the place of detonation in the 5–6 blocks behind them is on the
+     *  side, where the site has a larger reserve (of the 16 blocks in excess of three chunks, there are at least 8 on this side). Indents
+     * 6 and 5 - the same distance to the middle of the chunks on both sides ({@code getMiddleBlockX} + 0,5 - not the middle of the chunk).
      */
     private static int[] gridSide(int a, int b) {
         int first = (a + 15) >> 4, last = ((b + 1) >> 4) - 1;
@@ -672,7 +672,7 @@ public final class ScorchGameTests {
         return after >= before ? new int[]{first, ((first + 3) << 4) + 5} : new int[]{last - 2, ((last - 2) << 4) - 5};
     }
 
-    /** Верх площадки в чанке: выжженной земли (земля, гарь), пожаров над ней, уцелевших растений. */
+    /** The top of the site in a chunk: scorched earth (earth, burning), fires above it, surviving plants. */
     private static int[] surface(GameTestHelper h, LevelChunk c) {
         ServerLevel level = h.getLevel();
         int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
@@ -688,13 +688,13 @@ public final class ScorchGameTests {
         return n;
     }
 
-    /** Места и клетки биома, где чанк не тот, что секции {@code expected} (до 4 примеров), или null. */
+    /** Places and cells of the biome where the chunk is not the same as sections {@code expected} (before 4 examples), or null. */
     @Nullable
     private static String differ(LevelChunk chunk, LevelChunkSection[] expected) {
         return differ(chunk, expected, null, true);
     }
 
-    /** Ступени опалённого биома ({@link #level}) клеток секций: секция × 64 + клетка. */
+    /** Stages of the scorched biome ({@link #level}) section cells: section × 64 + cell. */
     private static int[] biomeLevels(LevelChunkSection[] sections) {
         int[] out = new int[sections.length * 64];
         for (int i = 0; i < sections.length; i++) {
@@ -704,9 +704,9 @@ public final class ScorchGameTests {
     }
 
     /**
-     * То же; {@code floor} — ступени биома, что уже стоят (слой вспышки): клетка — не слабее их и того, что в
-     * {@code expected} (руины ступень не понижают), а без ступени — биом {@code expected}. {@code withBlocks} — false:
-     * только клетки биома.
+     * Same; {@code floor} - stages of the biome that are already standing (flare layer): the cell is no weaker than them and the one in
+     * {@code expected} (ruins do not lower the level), and without a stage - biome {@code expected}. {@code withBlocks} - false:
+     * biome cells only.
      */
     @Nullable
     private static String differ(LevelChunk chunk, LevelChunkSection[] expected, @Nullable int[] floor, boolean withBlocks) {
@@ -729,17 +729,17 @@ public final class ScorchGameTests {
                         Holder<Biome> was = live[i].getNoiseBiome(x, y, z), want = expected[i].getNoiseBiome(x, y, z);
                         int least = floor == null ? 0 : Math.max(level(want), floor[i * 64 + (y << 4 | z << 2 | x)]);
                         boolean same = least == 0 ? was.equals(want) : level(was) == least;
-                        if (!same && biomes++ < 4) out.append(String.format(Locale.ROOT, " [биом x %d y %d z %d: %s | %s%s]", x * 4, y0 + y * 4, z * 4,
+                        if (!same && biomes++ < 4) out.append(String.format(Locale.ROOT, " [biome x %d y %d z %d: %s | %s%s]", x * 4, y0 + y * 4, z * 4,
                                 was.unwrapKey().map(k -> k.location().toString()).orElse("?"), want.unwrapKey().map(k -> k.location().toString()).orElse("?"),
-                                least > level(want) ? ", слой — ступень " + least : ""));
+                                least > level(want) ? ", layer - step " + least : ""));
                     }
                 }
             }
         }
-        return blocks + biomes == 0 ? null : blocks + " мест, " + biomes + " клеток биома:" + out;
+        return blocks + biomes == 0 ? null : blocks + " places, " + biomes + " biome cells:" + out;
     }
 
-    /** Растения над дёрном площадки: трава, через два — высокая трава в два блока. */
+    /** Plants above the turf of the site: grass, after two - tall grass in two blocks. */
     private static void plants(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         for (int x = 0; x < 64; x++) {
@@ -755,7 +755,7 @@ public final class ScorchGameTests {
         }
     }
 
-    /** Биом клеток рядов {@code z0..z1} площадки во всю высоту — как {@code /fillbiome}. */
+    /** The cell biome of the {@code z0..z1} rows of the platform at full height is like {@code /fillbiome}. */
     static void fillBiome(GameTestHelper h, int z0, int z1, ResourceKey<Biome> key) {
         ServerLevel level = h.getLevel();
         Holder<Biome> biome = level.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(key);
@@ -784,6 +784,6 @@ public final class ScorchGameTests {
 
     private static void assertBiome(GameTestHelper h, int x, int z, ResourceKey<Biome> key) {
         Holder<Biome> b = biomeAt(h, x, 12, z);
-        if (!b.is(key)) h.fail("биом в " + x + ", " + z + " — " + b.unwrapKey().map(k -> k.location().toString()).orElse("?") + ", а не " + key.location());
+        if (!b.is(key)) h.fail("biome in " + x + ", " + z + " — " + b.unwrapKey().map(k -> k.location().toString()).orElse("?") + ", not " + key.location());
     }
 }

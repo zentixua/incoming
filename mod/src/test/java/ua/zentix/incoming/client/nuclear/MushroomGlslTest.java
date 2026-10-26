@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Законы гриба в шейдере ({@code shaders/include/mushroom.glsl}) — те же, что в Java ({@link MushroomModel},
- * {@link MushroomField}): функции и константы шейдера читаются из файла и считаются разбором выражений GLSL
- * ({@link GlslFunction}). Правка закона только в одном месте ломает этот тест.
+ * The laws of the mushroom in the shader ({@code shaders/include/mushroom.glsl}) are the same as in Java ({@link MushroomModel},
+ * {@link MushroomField}): shader functions and constants are read from the file and are considered expression parsing GLSL
+ * ({@link GlslFunction}). Changing the law in just one place breaks this test.
  */
 class MushroomGlslTest {
     private static final String GLSL = read("include/mushroom.glsl");
@@ -38,7 +38,7 @@ class MushroomGlslTest {
         }
     }
 
-    /** Все числовые константы шейдера ({@code const float} и {@code const int}), выражения — по уже прочитанным. */
+    /** All shader numeric constants ({@code const float} and {@code const int}), expressions are based on those already read. */
     private static Map<String, Double> constants() {
         Map<String, Double> out = new HashMap<>();
         Matcher m = Pattern.compile("const\\s+(?:float|int)\\s+(\\w+)\\s*=\\s*([^;]+);").matcher(GLSL);
@@ -49,19 +49,19 @@ class MushroomGlslTest {
         return out;
     }
 
-    /** Подача огненного шара ({@code mushBallGain}, {@code mushFilm}, {@code mushFilmWhite}) — та же, что {@link NukeExposure}. */
+    /** presentation of fireball ({@code mushBallGain}, {@code mushFilm}, {@code mushFilmWhite}) - the same as {@link NukeExposure}. */
     @Test
     void ballExposureMatchesJava() {
         GlslFunction gain = GlslFunction.parse(GLSL, "mushBallGain"), film = GlslFunction.parse(GLSL, "mushFilm");
         GlslFunction white = GlslFunction.parse(GLSL, "mushFilmWhite");
         for (double adapt : new double[]{1, 1200}) {
             for (double key = 0; key < 1e8; key = key * 1.3 + 0.001) {
-                assertEquals(NukeExposure.gain(key, adapt), gain.call(Map.of("key", key, "adapt", adapt)), 1e-9, "ключ " + key);
+                assertEquals(NukeExposure.gain(key, adapt), gain.call(Map.of("key", key, "adapt", adapt)), 1e-9, "key " + key);
             }
         }
         GlslFunction share = GlslFunction.parse(GLSL, "mushFilmShare");
         for (double roll = -0.1; roll < 1.1; roll += 0.005) {
-            assertEquals(NukeExposure.filmShare(roll), share.call(Map.of("roll", roll)), 1e-12, "доля кольца " + roll);
+            assertEquals(NukeExposure.filmShare(roll), share.call(Map.of("roll", roll)), 1e-12, "share of the ring " + roll);
         }
         for (double x = -0.5; x < 30; x += 0.01) {
             assertEquals(NukeExposure.film(x), film.call(Map.of("x", x)), 1e-12, "x " + x);
@@ -75,12 +75,12 @@ class MushroomGlslTest {
         for (double flare : new double[]{0, 15, 59}) {
             for (double w = -0.2; w <= 1.2; w += 0.01) {
                 assertEquals(MushroomModel.stemRadius(w, 37, flare), f.call(Map.of("w", w, "stemR", 37.0, "flare", flare)), 1e-9,
-                        "w = " + w + ", раструб " + flare);
+                        "w = " + w + ", bell " + flare);
             }
         }
     }
 
-    /** Подсос у основания ножки ({@code mushFoot*}, профиль слоя — {@code pallProfile}) — тот же, что в Java ({@link MushroomField#footDensity}). */
+    /** The suction at the base of the stem ({@code mushFoot*}, layer profile - {@code pallProfile}) is the same as in Java ({@link MushroomField#footDensity}). */
     @Test
     void footMatchesJava() {
         String both = read("include/pall.glsl") + GLSL;
@@ -105,7 +105,7 @@ class MushroomGlslTest {
         }
     }
 
-    /** Отражение стенок ложбин шапки ({@code mushWallR}) — то же, что в Java ({@link MushroomField#wallReflectance}). */
+    /** The reflection of the walls of the valleys cap ({@code mushWallR}) is the same as in Java ({@link MushroomField#wallReflectance}). */
     @Test
     void wallReflectanceMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "mushWallR");
@@ -126,7 +126,7 @@ class MushroomGlslTest {
         }
     }
 
-    /** Строка света чёрного тела: те же узлы, температура узла i — место i в строке. */
+    /** Line of light of a black body: the same nodes, temperature of the node i - place i in the line. */
     @Test
     void blackBodyNodesMatchJava() {
         Map<String, Double> c = constants();
@@ -139,11 +139,11 @@ class MushroomGlslTest {
         for (int i = 0; i < MushroomField.BB_NODES; i++) {
             Map<String, Double> args = new HashMap<>(c);
             args.put("kelvin", MushroomField.nodeKelvin(i));
-            assertEquals(i, u.call(args) * (MushroomField.BB_NODES - 1), 1e-6, "узел " + i);
+            assertEquals(i, u.call(args) * (MushroomField.BB_NODES - 1), 1e-6, "node " + i);
         }
     }
 
-    /** Карта тени: та же плитка и та же низшая высота солнца; свет над точкой по трём слоям — как в Java. */
+    /** Shadow map: same tile and same low sun height; light above the point in three layers - as in Java. */
     @Test
     void shadowLawsMatchJava() {
         Map<String, Double> c = constants();
@@ -155,7 +155,7 @@ class MushroomGlslTest {
         for (double top : new double[]{0.5, 320, 384}) {
             for (double h = -60; h <= 460; h += 3.7) {
                 assertEquals(MushroomField.shadowLayer(h, top, 0.3, 0.6, 0.95), layer.call(Map.of("h", h, "top", top, "t0", 0.3, "t1", 0.6, "t2", 0.95)),
-                        1e-9, "верх " + top + ", высота " + h);
+                        1e-9, "top " + top + ", height " + h);
             }
         }
         GlslFunction seen = GlslFunction.parse(GLSL, "mushSeen"), across = GlslFunction.parse(GLSL, "mushAcross");
@@ -163,13 +163,13 @@ class MushroomGlslTest {
             for (double w : new double[]{1, 30, 300}) {
                 for (double d : new double[]{0, 10, 500, 5000}) {
                     assertEquals(MushroomField.seen(w, d, mu), seen.call(Map.of("w", w, "d", d, "mu", mu)), 1e-9,
-                            "μ " + mu + ", ширина " + w + ", расстояние " + d);
+                            "μ " + mu + ", width " + w + ", distance " + d);
                     assertEquals(MushroomField.across(w, d, mu), across.call(Map.of("r", w, "h", d, "mu", mu)), 1e-6 * MushroomField.across(w, d, mu),
-                            "μ " + mu + ", радиус " + w + ", высота " + d);
+                            "μ " + mu + ", radius " + w + ", height " + d);
                 }
             }
         }
-        // свет к слою в проходе карты: с двумя потоками пелены (pallDiffuse) — как в Java
+        // light to layer in map pass: with two pall threads (pallDiffuse) - as in Java
         GlslFunction through = GlslFunction.parse(read("include/pall.glsl") + GLSL + read("core/fx_mush_shadow.fsh"), "through");
         for (double tau : new double[]{0, 0.3, 2, 9, 64}) {
             for (double w : new double[]{0.5, 0.9, 0.99}) {
@@ -177,9 +177,9 @@ class MushroomGlslTest {
                     for (double width : new double[]{20, 150, 900}) {
                         for (double g : new double[]{0.375, 0.7}) {
                             Map<String, Double> args = Map.of("tau", tau, "d", d, "width", width, "w", w, "g", g, "mu", 0.3);
-                            // −2/3 в шейдере — семью знаками
+                            // −2/3 in the shader - seven characters
                             assertEquals(MushroomField.shadowThrough(tau, d, width, w, g, 0.3), through.call(args), 1e-7,
-                                    "толща " + tau + ", альбедо " + w + ", расстояние " + d + ", ширина " + width + ", g " + g);
+                                    "thickness " + tau + ", albedo " + w + ", distance " + d + ", width " + width + ", g " + g);
                         }
                     }
                 }
@@ -188,10 +188,10 @@ class MushroomGlslTest {
     }
 
     /**
-     * Рассеянное грибом вперёд на землю: облако во всё полушарие — как слой без края (на горизонтальную землю (1 + μ)/2
-     * его потока), узкое и далёкое — как пучок с неба у солнца (v·μ). Поэтому тонкая ножка в сотнях блоков от земли тень
-     * даёт почти прямым пучком (рассеянное ею вперёд приходит из малой доли неба), а широкий слой низко над землёй — как
-     * два потока слоя. Ширина облака — по площади его тени поперёк солнца: сверху — круг, сбоку — во всю высоту.
+     * Scattered like a mushroom forward onto the earth: a cloud throughout the entire hemisphere - like a layer without an edge (on the horizontal earth (1 + μ) / 2
+     *  of its flow), narrow and distant - like a beam from the sky near the sun (v·μ). Therefore, a thin stem hundreds of blocks from the ground gives the shadow of
+     *  as an almost straight beam (what it scatters forward comes from a small fraction of the sky), and a wide layer low above the ground - like
+     *  - two layer streams. The width of the cloud is the area of ​​its shadow across the sun: from above - a circle, from the side - in full height.
      */
     @Test
     void forwardLightSeenLikeTheCloud() {
@@ -200,32 +200,32 @@ class MushroomGlslTest {
             assertEquals(1e-8, MushroomField.seen(1, 1e4, mu), 1e-14);
             for (double v = 0.01; v < 1; v += 0.01) {
                 double w = Math.sqrt(v / (1 - v));
-                assertTrue(MushroomField.seen(w + 0.01, 1, mu) > MushroomField.seen(w, 1, mu), "шире — виднее");
+                assertTrue(MushroomField.seen(w + 0.01, 1, mu) > MushroomField.seen(w, 1, mu), "wider - more visible");
             }
-            assertEquals(40 * Math.sqrt(mu), MushroomField.across(40, 0, mu), 1e-9, "плоское — круг, сжатый наклоном");
+            assertEquals(40 * Math.sqrt(mu), MushroomField.across(40, 0, mu), 1e-9, "flat - a circle compressed by an inclination");
         }
-        assertEquals(40, MushroomField.across(40, 900, 1), 1e-9, "солнце над головой — круг сверху");
-        assertEquals(Math.sqrt(2 / Math.PI * 40 * 900), MushroomField.across(40, 900, 0), 1e-9, "солнце у горизонта — столб сбоку");
+        assertEquals(40, MushroomField.across(40, 900, 1), 1e-9, "sun overhead - circle above");
+        assertEquals(Math.sqrt(2 / Math.PI * 40 * 900), MushroomField.across(40, 900, 0), 1e-9, "the sun is on the horizon - the pillar is on the side");
         double stem = PallLight.albedo(PallLight.linear(((MushroomField.DUST >> 8) & 0xFF) / 255.0), PallLight.truncated(MushroomField.G));
-        // ножка: толща 2 поперёк, полуширина 60 блоков, в 400 блоках по прямой к солнцу на высоте 30°
+        // stem: thickness 2 across, half-width 60 blocks, in 400 blocks straight to the sun at height 30°
         double g = PallLight.truncated(MushroomField.G);
         double t = MushroomField.shadowThrough(2, 400, 60, stem, g, 0.5);
-        assertTrue(t < Math.exp(-2) + 0.02, String.format(Locale.ROOT, "ножка пропускает %.3f", t));
-        // слой шире в тысячу раз, чем расстояние до него, — как слой без края
+        assertTrue(t < Math.exp(-2) + 0.02, String.format(Locale.ROOT, "stem skips %.3f", t));
+        // a layer is a thousand times wider than the distance to it - like a layer without an edge
         double slab = Math.exp(-2) + PallLight.diffuse(stem, g, 2, 2, 0, 1, 1, 1, 0, 0, 0, -2.0 / 3) * 1.5 / (2 * 0.5);
         assertEquals(slab, MushroomField.shadowThrough(2, 50, 5e4, stem, g, 0.5), 1e-5);
     }
 
     /**
-     * Прямую карты тени дальше толщи MUSH_SHADOW_DARK не считают, и вывод на кадр берёт свет под ней как под этой толщей:
-     * сквозь неё и у самого белого вещества гриба (водяная пыль юбки, капли и пар шапки) проходит меньше процента света солнца —
-     * прямым пучком и рассеянным вперёд, даже если облако закрывает всё полушарие у низкого солнца (косинус пучка у вывода
-     * на кадр — не меньше 0,12).
+     * The direct shadow map beyond the MUSH_SHADOW_DARK thickness is not considered, and the output to the frame takes the light under it as under this thickness:
+     *  through it and at the very white matter of the mushroom (water dust of the skirt, drops and steam cap) less than a percent of the light of the sun passes through -
+     *  in a direct beam and scattered forward, even if the cloud covers the entire hemisphere of the low sun (cosine beam at output
+     *  per frame - no less than 0,12).
      */
     @Test
     void shadowCutLosesUnderAPercent() {
         double dark = constants().get("MUSH_SHADOW_DARK"), dust = PallLight.truncated(MushroomField.G);
-        // вещество гриба — с асимметрией пыли пелены, столб воды — капель
+        // mushroom substance - with asymmetry of dust pall, column of water - drops
         double[][] matter = {{MushroomField.CAP_DUSTY, dust}, {MushroomField.DUST, dust},
                 {MushroomField.STEAM, dust}, {CloudPuffs.SPRAY, dust}, {CloudPuffs.SPRAY, PallLight.truncated(MushroomField.G_WATER)}};
         for (double[] at : matter) {
@@ -233,7 +233,7 @@ class MushroomGlslTest {
             double g = at[1];
             assertDark(dark, PallLight.albedo(PallLight.linear(((rgb >> 8) & 0xFF) / 255.0), g), g, String.format(Locale.ROOT, "%06X", rgb));
         }
-        // шапка — капли и NO₂ (карта тени берёт зелёный): самая белая по мощностям и времени
+        // cap - drops and NO₂ (shadow map takes green): the whitest in power and time
         double[] w = new double[4];
         double white = 0, g = 0;
         for (double kt : new double[] {0.1, 1, 15, 100, 1000, 10_000}) {
@@ -247,17 +247,17 @@ class MushroomGlslTest {
                 }
             }
         }
-        assertDark(dark, white, g, String.format(Locale.ROOT, "шапка, ω' %.4f", white));
+        assertDark(dark, white, g, String.format(Locale.ROOT, "cap, ω' %.4f", white));
     }
 
     private static void assertDark(double dark, double w, double g, String what) {
         for (double mu = 0.12; mu <= 1; mu += 0.01) {
             double through = MushroomField.shadowThrough(dark, 0, 1, w, g, mu);
-            assertTrue(through < 0.01, String.format(Locale.ROOT, "%s, g %.3f, солнце %.2f: %.4f", what, g, mu, through));
+            assertTrue(through < 0.01, String.format(Locale.ROOT, "%s, g %.3f, sun %.2f: %.4f", what, g, mu, through));
         }
     }
 
-    /** Свет шара на грани мира ({@code mushBallFace}) — закон {@link MushroomField#ballFace}. */
+    /** Light of the ball on the edge of the world ({@code mushBallFace}) - law {@link MushroomField#ballFace}. */
     @Test
     void ballFaceMatchesJava() {
         GlslFunction f = GlslFunction.parse(GLSL, "mushBallFace");
@@ -276,12 +276,12 @@ class MushroomGlslTest {
     }
 
     /**
-     * 15 кт в воздухе, зритель в 4 км, ясно (жалоба 18.10: в первые секунды «второе солнце» даёт резкие тени по всей
-     * карте). По физике шар во втором максимуме — диск в ~6° на высоте ~9°, свет на грань к нему — в ~250 раз ярче полудня
-     * (Glasstone и Dolan: P_max = 4·W^0,56 кт/с — то же), через 2 с — в ~2,6 раза. Грань, отвёрнутая от шара, видит
-     * освещённую им землю, боковая и верх — ещё и небо вокруг шара, рассеянное воздухом: во втором максимуме и они
-     * в разы ярче полудня (на экране белые, как и грань к шару), а не при одном дневном свете в 200 раз темнее
-     * грани к шару; через 2 с — грань к шару ярче боковой в 5–6 раз.
+     * 15 kt in the air, viewer at 4 km, clear (complaint 18.10: in the first seconds the “second sun” gives sharp shadows across the entire
+     *  map). According to physics, the ball in the second maximum is a disk at ~6° at a height of ~9°, the light on the edge of it is ~250 times brighter than noon
+     * (Glasstone and Dolan: P_max = 4·W^0,56 kt/s - the same), through 2 s - ~2,6 times. The face turned away from the ball sees
+     *  the ground illuminated by it, the side and top also see the sky around the ball, scattered by air: at the second maximum they are
+     *  times brighter than midday (on the screen they are white, like the face to the ball), and not in daylight alone 200 times darker
+     * face to ball; through 2 s - the face to the ball is brighter than the side by a factor of 5–6.
      */
     @Test
     void ballLightsWhatFacesAway() {
@@ -292,7 +292,7 @@ class MushroomGlslTest {
             double e = BlackBody.luminance(MushroomModel.edgeTemperature(t, kt, false)) * s.capR() * s.capR() / (d * d);
             double toward = e * MushroomField.ballFace(flat, vy, 0, sd, 0.2, 1, 0), away = e * MushroomField.ballFace(-flat, vy, 0, sd, 0.2, 1, 0);
             double side = e * MushroomField.ballFace(0, vy, 0, sd, 0.2, 1, 0), top = e * MushroomField.ballFace(vy, vy, 1, sd, 0.2, 1, 0);
-            String at = String.format(Locale.ROOT, "%.2f с: к шару %.1f, прочь %.2f, вбок %.2f, верх %.2f полудня", t, toward, away, side, top);
+            String at = String.format(Locale.ROOT, "%.2f s: to the ball %.1f, away %.2f, sideways %.2f, top %.2f noon", t, toward, away, side, top);
             if (t < 1) {
                 assertTrue(toward > 150 && toward < 300, at);
                 assertTrue(away > 3 && side > 20 && top > 20, at);
@@ -304,10 +304,10 @@ class MushroomGlslTest {
     }
 
     /**
-     * Свет шара на мире ({@code fx_pall_composite}): спад от середины — как у {@link MushroomModel#light}; пиксель мира под
-     * ним — как {@link MushroomField#relit}. Без света шара пиксель тот же (тень — та же доля на экране); свет ложится по
-     * цвету блока: тёмный блок светлеет меньше, а пиксель темнее открытого неба (пещера, дом) — во столько же раз меньше;
-     * цвет блока не белее белого.
+     * Light of the ball on the world ({@code fx_pall_composite}): decline from the middle - like {@link MushroomModel#light}; the world pixel under
+     *  is like {@link MushroomField#relit}. Without the light of the ball, the pixel is the same (the shadow is the same fraction on the screen); the light falls according to the
+     *  color of the block: a dark block brightens less, and a pixel darker than the open sky (cave, house) is the same number of times less;
+     *  the color of a block is no whiter than white.
      */
     @Test
     void ballLightMatchesJava() {
@@ -329,20 +329,20 @@ class MushroomGlslTest {
                 }
             }
         }
-        // без света шара — тот же пиксель с той же тенью
+        // without the ball light - the same pixel with the same shadow
         assertEquals(0.3 * 0.7, PallLight.display(MushroomField.relit(0.3, 0.7, 0.31, 0)), 1e-9);
-        // свет — по цвету блока: тёмный светлеет меньше светлого, пиксель в доме вдвое темнее неба — вдвое меньше
+        // light - according to the color of the block: the dark one brightens less than the light one, the pixel in the house is twice as dark as the sky - half as much
         double open = 0.31, light = 0.5;
         double bright = MushroomField.relit(0.3, 1, open, light) - PallLight.linear(0.3);
         double dark = MushroomField.relit(0.1, 1, open, light) - PallLight.linear(0.1);
         assertTrue(dark < bright, dark + " ≥ " + bright);
         double inside = MushroomField.relit(PallLight.display(PallLight.linear(0.3) / 2), 1, open, light) - PallLight.linear(0.3) / 2;
         assertEquals(bright / 2, inside, 1e-9);
-        // у факела пиксель ярче открытого неба — цвет блока не белее белого
+        // the torch has a pixel brighter than the open sky - the block color is no whiter than white
         assertEquals(PallLight.linear(0.9) + light, MushroomField.relit(0.9, 1, open, light), 1e-9);
     }
 
-    /** Таблица грибов: шейдер читает тексели 0..TEXELS−1 строки гриба (номером или константой). */
+    /** Mushroom table: The shader reads texels 0..TEXELS−1 of the mushroom string (by number or constant). */
     @Test
     void tableLayoutMatchesJava() {
         Map<String, Double> c = constants();
@@ -361,9 +361,9 @@ class MushroomGlslTest {
     }
 
     /**
-     * Клубы и край — те же числа, что у рамки гриба в Java; на расстоянии, до которого рамка берёт вещество (в единицах
-     * клубов части), край, сдвинутый наружу самым сильным клубом, уже не даёт вещества, а глубже края, сдвинутого внутрь
-     * так же сильно, — вся густота.
+     * billows and edge are the same numbers as the mushroom frame in Java; at the distance to which the frame takes the substance (in units of
+     *  billows of the part), the edge shifted outward by the strongest billows no longer provides substance, and deeper than the edge shifted inward
+     *  just as strongly - all the density.
      */
     @Test
     void edgeLawsMatchJava() {
@@ -383,8 +383,8 @@ class MushroomGlslTest {
         assertEquals(MushroomField.REACH_SKIRT, c.get("MUSH_SKIRT_REACH"), 1e-12);
         assertEquals(MushroomField.REACH_COLUMN, c.get("MUSH_COLUMN_REACH"), 1e-12);
         GlslFunction edge = GlslFunction.parse(GLSL, "mushEdge");
-        // у шапки и столба рамка берёт ещё четверть сглаживания объединения кольца и купола, стенки и короны: мягкий
-        // минимум опускает край
+        // at the cap and pillar, the frame takes another quarter of the smoothing of the union of the ring and dome, wall and crown: soft
+        // minimum lowers the edge
         double[][] parts = {{MushroomField.LOBES_CAP, MushroomField.EDGE_CAP, MushroomField.REACH_CAP - MushroomField.BLEND / 4},
                 {MushroomField.LOBES_STEM, MushroomField.EDGE_STEM, MushroomField.REACH_STEM},
                 {MushroomField.LOBES_SKIRT, MushroomField.EDGE_SKIRT, MushroomField.REACH_SKIRT},
@@ -397,12 +397,12 @@ class MushroomGlslTest {
     }
 
     /**
-     * Кипение шапки ({@code mushCapLobes}): два слоя узора со сдвигом на полжизни, доли в сумме — 1. Узор слоя сменяется
-     * только там, где слоя нет (доля 0), а слой без доли весь ниже самого низкого места живого: смена не видна. Жизнь
-     * слоя — подъём и уход клуба в полсечения, по Колмогорову (время оборота вихря ∝ размер^⅔). Поправка на среднее —
-     * среднее верхнего из двух слоёв (клубы ±1/2, равномерно) с их сдвигами со знаком минус: шапка за жизнь слоя в
-     * среднем не садится и не растёт, а верх клубов не выше {@link MushroomField#LOBES_MAX} (по нему рамка гриба).
-     * Обращение у оси гриба сходит на нет, у оси кольца — полное.
+     * Boiling cap ({@code mushCapLobes}): two layers of a pattern with a half-life shift, shares in the total - 1. The layer pattern changes to
+     *  only where there is no layer (share 0), and the layer without a lobe is entirely below the lowest living place: the change is not visible. The life of the
+     *  layer is the rise and departure of billows in half a section, according to Kolmogorov (vortex rotation time ∝ size^⅔). Correction for the average—
+     * average of the upper of the two layers (billows ±1/2, uniformly) with their shifts with a minus sign: the cap for the life of the layer in the
+     * average does not shrink or grow, and the top of the billows is not higher than {@link MushroomField#LOBES_MAX} (the frame according to it mushroom).
+     * The rotation at the fade mushroom axis is zero, at the ring axis it is complete.
      */
     @Test
     void capBoilsWithoutJumps() {
@@ -411,9 +411,9 @@ class MushroomGlslTest {
         double sink = c.get("MUSH_SINK"), cycle = c.get("MUSH_CYCLE");
         double top = c.get("MUSH_LOBES_TOP"), deep = c.get("MUSH_LOBES_DEEP");
         assertEquals(2 * Math.pow(0.5, 2.0 / 3), cycle, 0.005);
-        assertEquals(0.5 + 0.35 * 0.5, top, 1e-12, "верх клубов одного слоя (mushLobes)");
+        assertEquals(0.5 + 0.35 * 0.5, top, 1e-12, "top billows single layer (mushLobes)");
         assertTrue(top <= MushroomField.LOBES_MAX);
-        assertTrue(top - sink <= -top, "уходящий слой выступает над живым");
+        assertTrue(top - sink <= -top, "the retiring layer protrudes above the living one");
         GlslFunction age = GlslFunction.parse(GLSL, "mushLayerAge"), weight = GlslFunction.parse(GLSL, "mushLayerWeight");
         GlslFunction seed = GlslFunction.parse(GLSL, "mushLayerSeed"), rise = GlslFunction.parse(GLSL, "mushRise");
         GlslFunction taper = GlslFunction.parse(GLSL, "mushTaper");
@@ -426,13 +426,13 @@ class MushroomGlslTest {
                 a.put("j", (double) j);
                 double w = weight.call(Map.of("age", age.call(a))), s = seed.call(a);
                 if (psi > 0 && s != lastSeed[j]) {
-                    assertTrue(w < 0.01 && lastW[j] < 0.01, "слой " + j + " сменил узор на виду: " + psi + " рад");
+                    assertTrue(w < 0.01 && lastW[j] < 0.01, "layer " + j + " changed the pattern in sight: " + psi + " rad");
                 }
                 lastSeed[j] = s;
                 lastW[j] = w;
                 sum += w;
             }
-            assertEquals(1, sum, 1e-9, psi + " рад");
+            assertEquals(1, sum, 1e-9, psi + " rad");
         }
         int n = 400;
         for (double low = 0; low <= 0.5 + 1e-9; low += 0.05) {
@@ -447,10 +447,10 @@ class MushroomGlslTest {
             Map<String, Double> a = new HashMap<>(c);
             a.put("low", low);
             double r = rise.call(a);
-            assertEquals(0, mean + r, 1e-3, "доля " + low);
-            // верх: верхний клуб сильного слоя с поправкой — не выше рамки гриба; низ: нижний клуб сильного слоя с поправкой
-            assertTrue(top - low * sink + r <= MushroomField.LOBES_MAX + 1e-12, "доля " + low);
-            assertTrue(-top - low * sink + r >= -deep - 1e-12, "доля " + low + ": ложбина глубже MUSH_LOBES_DEEP");
+            assertEquals(0, mean + r, 1e-3, "share " + low);
+            // top: top billows of a strong layer with amendment - not higher than the mushroom frame; bottom: bottom billows of strong layer with adjustment
+            assertTrue(top - low * sink + r <= MushroomField.LOBES_MAX + 1e-12, "share " + low);
+            assertTrue(-top - low * sink + r >= -deep - 1e-12, "share " + low + ": hollow deeper MUSH_LOBES_DEEP");
         }
         assertEquals(0, taper.call(Map.of("rho", 0.0, "ringR", 300.0)), 0);
         assertEquals(1, taper.call(Map.of("rho", 300.0, "ringR", 300.0)), 0);
@@ -458,30 +458,30 @@ class MushroomGlslTest {
     }
 
     /**
-     * Обращение шапки ({@code mushFlow}): вещество, что сейчас на верху сечения кольца, пришло от оси гриба, снаружи —
-     * сверху, внутри — снизу, внизу — снаружи (вихрь Тёрнера: внутри вверх, по верху наружу, снаружи вниз). Ядро сечения
-     * обращается целиком, снаружи — как 1/r² (вихрь Рэнкина): у края сечения без скачка.
+     * Reversal cap ({@code mushFlow}): the substance that is now at the top of the ring section came from the axis of the mushroom, outside -
+     *  top, inside - bottom, bottom - outside (Turner vortex: inside up, along the top out, outside down). The core of the section
+     *  rotates entirely, from the outside - like 1/r² (Rankine vortex): at the edge of the section without a jump.
      */
     @Test
     void capRollsUpTheMiddleAndDownTheOutside() {
         GlslFunction wasU = GlslFunction.parse(GLSL, "mushWasU"), wasV = GlslFunction.parse(GLSL, "mushWasV");
         GlslFunction swirl = GlslFunction.parse(GLSL, "mushSwirl");
         double ang = 0.3;
-        // {u, v} сейчас → откуда: знак сдвига по u и по v
+        // {u, v} now → from where: shift sign along u and along v
         double[][] cases = {{0, 1, -1, 0}, {1, 0, 0, 1}, {-1, 0, 0, -1}, {0, -1, 1, 0}};
         for (double[] k : cases) {
             Map<String, Double> a = Map.of("u", k[0], "v", k[1], "ang", ang);
             double du = wasU.call(a) - k[0], dv = wasV.call(a) - k[1];
             if (k[2] != 0) assertEquals(k[2], Math.signum(du), 0, "u = " + k[0] + ", v = " + k[1]);
             if (k[3] != 0) assertEquals(k[3], Math.signum(dv), 0, "u = " + k[0] + ", v = " + k[1]);
-            assertEquals(1, Math.hypot(wasU.call(a), wasV.call(a)), 1e-12, "по эллипсу сечения");
+            assertEquals(1, Math.hypot(wasU.call(a), wasV.call(a)), 1e-12, "along an ellipse section");
         }
         assertEquals(1, swirl.call(Map.of("u", 0.3, "v", -0.4)), 0);
         assertEquals(1, swirl.call(Map.of("u", 0.6, "v", 0.8)), 1e-12);
         assertEquals(0.25, swirl.call(Map.of("u", 0.0, "v", 2.0)), 1e-12);
     }
 
-    /** Карта узора поверхности шара в шейдере ({@code mushOctU}, {@code mushOctV}) — та же, что в Java ({@link NukeBallSurface}). */
+    /** The ball surface pattern map in the shader ({@code mushOctU}, {@code mushOctV}) is the same as in Java ({@link NukeBallSurface}). */
     @Test
     void ballSurfaceMapMatchesJava() {
         GlslFunction u = GlslFunction.parse(GLSL, "mushOctU"), v = GlslFunction.parse(GLSL, "mushOctV");
@@ -495,8 +495,8 @@ class MushroomGlslTest {
     }
 
     /**
-     * Узор поверхности проступает в шейдере ({@code mushBallContrast}) так, как его открывает фронт ({@link
-     * FireballModel#unmasked}): место кадра до отрыва — доля открытого − 1 ({@link MushroomField#ballSurface}).
+     * The surface pattern appears in the shader ({@code mushBallContrast}) as it is opened by the front ({@link
+     * FireballModel#unmasked}): the place of the frame before the tear is the share of the open one - 1 ({@link MushroomField#ballSurface}).
      */
     @Test
     void ballSurfaceContrastMatchesTheBreakaway() {

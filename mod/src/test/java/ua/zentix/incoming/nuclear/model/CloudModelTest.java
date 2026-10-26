@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CloudModelTest {
     /**
-     * «Грейбл», 15 кт на 160 м: верх над землёй (Hawthorne 1979, красные линии рис. 2 Blakeley et al., сняты с графика
-     * 300 dpi, ±0,1 км). Закон — одна экспонента: на 15-й секунде она ниже замера на 11 %, с 30-й — в пределах 6 %.
+     * “Grable”, 15 kt on 160 m: top above the ground (Hawthorne 1979, red lines Fig. 2 Blakeley et al., taken from graphics
+     * 300 dpi, ±0,1 km). The law is one exponential: at the 15 second it is below the measurement by 11%, with the 30 second it is within 6%.
      */
     @Test
     void grableRise() {
@@ -18,18 +18,18 @@ class CloudModelTest {
                 {300, 9030}, {360, 9480}, {420, 9770}, {480, 9920}, {570, 9970}};
         for (double[] p : seen) {
             double top = CloudModel.top(p[0], hob, y, false);
-            assertEquals(p[1], top, p[1] * (p[0] < 30 ? 0.12 : 0.06), () -> p[0] + " с: " + top);
+            assertEquals(p[1], top, p[1] * (p[0] < 30 ? 0.12 : 0.06), () -> p[0] + " s: " + top);
         }
         double end = CloudModel.top(1e5, hob, y, false);
-        assertEquals(10_000, end, 100, "верх после стабилизации");
-        // низ шапки с 5-й по 6,5-ю минуту — 6,1–6,2 км
-        assertEquals(6_150, CloudModel.capBottom(1e5, hob, y, false), 300, "низ шапки");
-        assertEquals(6_090, CloudModel.capBottom(390, hob, y, false), 6_090 * 0.06, "низ шапки на 6,5-й минуте");
+        assertEquals(10_000, end, 100, "top after stabilization");
+        // bottom cap from 5-th to 6,5-th minute - 6,1–6,2 km
+        assertEquals(6_150, CloudModel.capBottom(1e5, hob, y, false), 300, "bottom cap");
+        assertEquals(6_090, CloudModel.capBottom(390, hob, y, false), 6_090 * 0.06, "bottom cap at 6,5 minute");
     }
 
     /**
-     * «Уосп», 1 кт на 232 м: верх над землёй по тем же замерам — в пределах 5 % с 15-й секунды до 8-й минуты; через 8
-     * минут он ещё растёт — за последнюю минуту на ~4 м/с (5,02 → 5,27 км), а низ шапки на 6,5-й минуте — 3,2 км.
+     * “Wasp”, 1 kt on 232 m: top above the ground according to the same measurements - within 5% from 15 second to 8 minute; after 8
+     *  minutes it is still growing - in the last minute by ~4 m/s (5,02 → 5,27 km), and the bottom of the cap at the 6,5 minute is 3,2 km.
      */
     @Test
     void waspStillRisingAtEightMinutes() {
@@ -38,17 +38,17 @@ class CloudModelTest {
                 {300, 4380}, {360, 4740}, {420, 5020}, {480, 5270}};
         for (double[] p : seen) {
             double top = CloudModel.top(p[0], hob, y, false);
-            assertEquals(p[1], top, p[1] * 0.05, () -> p[0] + " с: " + top);
+            assertEquals(p[1], top, p[1] * 0.05, () -> p[0] + " s: " + top);
         }
         double v = CloudModel.riseSpeed(480, hob, y, false);
-        assertTrue(v > 2 && v < 6, "через 8 минут ещё растёт: " + v + " м/с");
-        assertEquals(3_190, CloudModel.capBottom(390, hob, y, false), 3_190 * 0.08, "низ шапки");
-        assertTrue(CloudModel.stabilizationSeconds(y) > 480, "к 8-й минуте не стабилизировалось");
+        assertTrue(v > 2 && v < 6, "after 8 minutes it still grows: " + v + " m/s");
+        assertEquals(3_190, CloudModel.capBottom(390, hob, y, false), 3_190 * 0.08, "bottom cap");
+        assertTrue(CloudModel.stabilizationSeconds(y) > 480, "by 8 minute it did not stabilize");
     }
 
     /**
-     * 1 Мт (Glasstone и Dolan, табл. 2.12, «грубые средние»): верх через 0,3; 0,7; 1,1; 2,5 и 3,8 минуты — 2, 4, 6, 10 и
-     * 12 миль над точкой подрыва. Там подъём почти ровный и встаёт у тропопаузы — экспонента расходится с ним до 18 %.
+     * 1 Mt (Glasstone and Dolan, table 2.12, “rough average”): top through 0,3; 0,7; 1,1; 2,5 and 3,8 minutes - 2, 4, 6, 10 and
+     * 12 miles above the detonation point. There the rise is almost flat and comes up at the tropopause - the exponential diverges from it to 18%.
      */
     @Test
     void megatonRise() {
@@ -56,25 +56,25 @@ class CloudModelTest {
         double[][] table = {{18, 2}, {42, 4}, {66, 6}, {150, 10}, {228, 12}};
         for (double[] p : table) {
             double top = CloudModel.top(p[0], 0, 1000, false), seen = p[1] * mile;
-            assertEquals(seen, top, seen * 0.2, () -> p[0] + " с: " + top);
+            assertEquals(seen, top, seen * 0.2, () -> p[0] + " s: " + top);
         }
-        // в первую минуту — в среднем ~134 м/с (300 миль в час)
+        // in the first minute - on average ~134 m/s (300 miles per hour)
         assertEquals(134, (CloudModel.top(60, 0, 1000, false) - CloudModel.top(0, 0, 1000, false)) / 60, 134 * 0.2);
     }
 
     @Test
     void stabilizedTop() {
-        // над точкой подрыва: «Грейбл» и «Уосп» за вычетом высоты подрыва, мегатонны — Glasstone и Dolan (рис. 2.16)
+        // above the detonation point: “Grable” and “Wasp” minus the detonation height, megatons - Glasstone and Dolan (Fig. 2.16)
         assertEquals(9_840, CloudModel.stabilizedTop(15), 1);
         assertEquals(5_660, CloudModel.stabilizedTop(1), 1);
         double mt = CloudModel.stabilizedTop(1000);
-        assertTrue(mt >= 20_000 && mt <= 22_000, "1 Мт: " + mt);
+        assertTrue(mt >= 20_000 && mt <= 22_000, "1 Mt: " + mt);
         double tenMt = CloudModel.stabilizedTop(10_000);
-        assertTrue(tenMt >= 28_000 && tenMt <= 32_000, "10 Мт: " + tenMt);
+        assertTrue(tenMt >= 28_000 && tenMt <= 32_000, "10 Mt: " + tenMt);
         double prev = 0;
         for (double y = 0.01; y < 1e5; y *= 1.2) {
             double h = CloudModel.stabilizedTop(y);
-            assertTrue(h > prev, y + " кт");
+            assertTrue(h > prev, y + " kt");
             prev = h;
         }
     }
@@ -87,17 +87,17 @@ class CloudModelTest {
     }
 
     /**
-     * 15 кт — ~6 минут (к 7 минутам «Грейбл» в пределах 3 % от последнего верха), 1 Мт к 10 минутам — в пределах 2 %
-     * («около 10 минут», Glasstone и Dolan, §2.15).
+     * 15 kt - ~6 minutes (to 7 minutes "Grable" within 3 % from the last top), 1 MT to 10 minutes - within 2 %
+     * ("about 10 minutes", Glasstone and Dolan, §2.15).
      */
     @Test
     void stabilizationTime() {
         double s15 = CloudModel.stabilizationSeconds(15);
-        assertTrue(s15 >= 330 && s15 <= 450, "15 кт: " + s15);
-        assertTrue(CloudModel.top(600, 0, 1000, false) > 0.98 * CloudModel.top(1e5, 0, 1000, false), "1 Мт к 10 минутам");
+        assertTrue(s15 >= 330 && s15 <= 450, "15 kt: " + s15);
+        assertTrue(CloudModel.top(600, 0, 1000, false) > 0.98 * CloudModel.top(1e5, 0, 1000, false), "1 Mt to 10 minutes");
         for (double y = 0.01; y < 1e5; y *= 1.2) {
             double ts = CloudModel.stabilizationSeconds(y);
-            assertTrue(ts >= 3 * 121 - 1e-9 && ts <= 3 * 227 + 1e-9, y + " кт: " + ts);
+            assertTrue(ts >= 3 * 121 - 1e-9 && ts <= 3 * 227 + 1e-9, y + " kt: " + ts);
         }
     }
 
@@ -107,13 +107,13 @@ class CloudModelTest {
             for (double hob : new double[] {0, 240 * Math.cbrt(y)}) {
                 boolean surface = hob == 0;
                 double ts = CloudModel.stabilizationSeconds(y), top = hob + CloudModel.stabilizedTop(y);
-                // в миг подрыва — верх шара наибольшего размера
+                // at the moment of detonation - the top of the largest ball
                 assertEquals(hob + 1.3 * FireballModel.maxRadius(y, surface), CloudModel.top(0, hob, y, surface), 1e-9);
-                assertEquals(top, CloudModel.top(ts, hob, y, surface), top * 0.06, () -> y + " кт");
+                assertEquals(top, CloudModel.top(ts, hob, y, surface), top * 0.06, () -> y + " kt");
                 double prev = -1;
                 for (double t = 0; t < 4 * ts; t += 5) {
                     double h = CloudModel.top(t, hob, y, surface);
-                    assertTrue(h > prev, y + " кт, " + t + " с");
+                    assertTrue(h > prev, y + " kt, " + t + " s");
                     assertTrue(CloudModel.capBottom(t, hob, y, surface) < h);
                     prev = h;
                 }

@@ -15,11 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Дрожание воздуха над огнём, огненным шаром и в струе сопла ({@link HeatPass}): на экране видно там, где его видит глаз
- * (жалоба FX 23.10: «дрожания нет нигде» — было 0,01–0,1 пикселя), и не сильнее того, что видит глаз.
+ * Air trembling above the fire, fireball and in the nozzle stream ({@link HeatPass}): visible on the screen where the eye can see it
+ *  (complaint FX 23.10: “there is no trembling anywhere” - there were 0,01–0,1 pixels), and not stronger than that what the eye sees.
  */
 class HazeTest {
-    /** Пиксель при поле зрения 70° по вертикали и 1080 строках, рад. */
+    /** Pixel with field of view 70° vertically and 1080 lines, rad. */
     static final double PIXEL = Math.toRadians(70) / 1080;
     private static final CloudModel DRONE = new CloudModel(BlastSource.of(WeaponType.DRONE, false), CloudModel.Air.STANDARD);
 
@@ -30,7 +30,7 @@ class HazeTest {
         return f;
     }
 
-    /** Сдвиг самого заметного столба кадра, пиксели (СКО по оси). */
+    /** Shift of the most noticeable column of the frame, pixels (RMS along the axis). */
     static double shift(HeatPass.Frame f) {
         double most = 0;
         for (double s : f.hotShift) most = Math.max(most, s);
@@ -44,9 +44,9 @@ class HazeTest {
     }
 
     /**
-     * При обычном поле зрения огонь Minecraft и шар шахеда в 20–100 блоках сбоку дрожат на пиксель (СКО ≥ 0,5; размах —
-     * вдвое-втрое), струя ускорителя ракеты, ушедшей на 100 блоков вверх за 2 с, — на доли пикселя (газ быстрый, глаз
-     * сливает его вихри), и ничто — не на «космические» пиксели.
+     * With a normal field of view, the Minecraft fire and the Shahed ball in the 20–100 blocks on the side tremble per pixel (RMS ≥ 0,5; range -
+     *  two to three times), the rocket accelerator jet has gone up 100 blocks for 2 s, - for fractions of a pixel (the gas is fast, the eye
+     *  merges its vortices), and nothing - not for “cosmic” pixels.
      */
     @Test
     void fireBallAndJetShimmerOnScreen() {
@@ -60,19 +60,19 @@ class HazeTest {
             b.hot(d, Math.max(0, DRONE.height(t) - cr) - 1.6, 0, 2 * cr, cr, DRONE.kelvin(t), DRONE.rise(t));
             HeatPass.Frame j = frame(PIXEL);
             j.exhaust(d, 100, 0, 0, -1, 0, boost, 100, 2, 100);
-            // огонь и шар — заметный пиксель; газ струи быстрый, глаз сливает его вихри — доли пикселя
+            // fire and ball - noticeable pixel; the jet gas is fast, the eye merges its vortices - fractions of a pixel
             double[] least = {0.5, 0.5, 0.15};
             HeatPass.Frame[] all = {f, b, j};
             for (int k = 0; k < 3; k++) {
                 double s = shift(all[k]);
-                assertTrue(s >= least[k] && s <= 4, "в " + d + " блоках, " + k + ": " + s + " px");
+                assertTrue(s >= least[k] && s <= 4, "in " + d + " blocks, " + k + ": " + s + " px");
             }
         }
     }
 
     /**
-     * Подача — только в долях того, что различает глаз: при обычном пикселе сдвиг на экране — угол / острота зрения (усиление
-     * пиксель/острота, не больше), в бинокль (пиксель мельче остроты) — угол / пиксель, как есть.
+     * presentation - only in fractions of what the eye distinguishes: with a regular pixel, the shift on the screen is the angle / visual acuity (gain
+     * pixel / acuity, no more), in binoculars (a pixel smaller than the acuity) - the angle / pixel, as is.
      */
     @Test
     void presentationIsTheEyesResolutionOnly() {
@@ -87,8 +87,8 @@ class HazeTest {
     }
 
     /**
-     * Закон: сильнее всего дрожит газ при T = 2T₀ (δn ∝ (T₀/T)(1 − T₀/T)); длиннее путь — сильнее (√L); дальше газ (пятно,
-     * что различает глаз, крупнее) — не сильнее; быстрые вихри глаз сливает.
+     * Law: gas trembles most strongly at T = 2T₀ (δn ∝ (T₀/T)(1 − T₀/T)); longer path - stronger (√L); further on the gas (spot,
+     * , which is visible to the eye, larger) is not stronger; quick whirlwinds of the eyes merge.
      */
     @Test
     void lawIsMonotonic() {
@@ -103,14 +103,14 @@ class HazeTest {
         prev = Double.POSITIVE_INFINITY;
         for (double d = 1; d < 5000; d *= 1.3) {
             double s = HeatPass.hazeShift(dn, 4, 0.4, d, PIXEL, 3);
-            assertTrue(s <= prev + 1e-12, d + " блоков");
+            assertTrue(s <= prev + 1e-12, d + " blocks");
             prev = s;
         }
         assertEquals(1, HeatPass.hazeSeen(0.4, 3), 1e-12);
         assertTrue(HeatPass.hazeSeen(0.02, 2000) < 0.1);
     }
 
-    /** Без горячего газа столба нет: газ холоднее воздуха + COOL, факел без скорости газа. */
+    /** Without hot gas there is no column: gas is colder than air + COOL, torch without gas velocity. */
     @Test
     void nothingWithoutHotGas() {
         HeatPass.Frame f = frame(PIXEL);
@@ -120,15 +120,15 @@ class HazeTest {
                 b.flameLuminance(), b.tailLuminance(), b.coreColor(), b.flameColor(), b.tailColor(), b.temperature(), b.flameTemperature(),
                 b.emissivity(), b.sheath(), b.middle(), b.tailMiddle(), 0), Double.POSITIVE_INFINITY, 10, 100);
         assertEquals(0, shift(f));
-        // струя, что ушла в землю у среза, — не дрожит; на поджиге газа ещё нет
+        // the stream that went into the ground at the cut does not tremble; there is no gas for ignition yet
         f.exhaust(20, 1.5, 0, 0, -1, 0, b, 0, 10, 100);
         f.exhaust(20, 1.5, 0, 0, -1, 0, b, Double.POSITIVE_INFINITY, 0, 0);
         assertEquals(0, shift(f));
     }
 
     /**
-     * Горячий газ струи — не дальше, чем дошёл с поджига: за t секунд в ядре — со скоростью среза, дальше x² растёт
-     * линейно (скорость на оси ∝ 1/x); столб кадра — не длиннее этого и пути снаряда с места поджига.
+     * The hot gas of the jet is no further than it reached from ignition: for t seconds in the core - with a cutoff speed, then x² grows
+     *  linearly (velocity on the axis ∝ 1/x); the frame post is no longer than this and the path of the projectile from the place of ignition.
      */
     @Test
     void jetGasGoesNoFurtherThanItGot() {
@@ -138,18 +138,18 @@ class HazeTest {
         double prev = b.core();
         for (double t = inCore * 1.01; t < 30; t *= 1.5) {
             double x = b.gasReach(t), dt = 1e-6, u = (b.gasReach(t + dt) - x) / dt;
-            assertEquals(b.speed() * b.core() / x, u, 1e-3 * u, t + " с");
+            assertEquals(b.speed() * b.core() / x, u, 1e-3 * u, t + " s");
             assertTrue(x > prev);
             prev = x;
         }
         for (double t : new double[]{0.1, 1, 3}) {
             HeatPass.Frame f = frame(PIXEL);
             f.exhaust(50, 100, 0, 0, -1, 0, b, Double.POSITIVE_INFINITY, t, 20);
-            assertTrue(f.shape.m00() > 0 && f.shape.m00() <= 20 + b.gasReach(t) + 1e-3, t + " с: " + f.shape.m00());
+            assertTrue(f.shape.m00() > 0 && f.shape.m00() <= 20 + b.gasReach(t) + 1e-3, t + " s: " + f.shape.m00());
         }
     }
 
-    /** Луч в усечённом конусе ({@link HeatPass#coneSpan}) — то же, что выборка точек луча по самому конусу. */
+    /** A ray in a truncated cone ({@link HeatPass#coneSpan}) is the same as sampling ray points along the cone itself. */
     @Test
     void coneSpanIsWhereTheRayIsInside() {
         java.util.Random rnd = new java.util.Random(11);
@@ -174,7 +174,7 @@ class HazeTest {
             }
             double R0 = r0 - g * ba, G = g * c;
             double[] span = HeatPass.coneSpan(dot(dp, dp) - G * G, dot(dp, bp) + R0 * G, dot(bp, bp) - R0 * R0, t0, t1);
-            // выборка: точки луча в конусе
+            // sampling: ray points in a cone
             double lo = Double.NaN, hi = Double.NaN;
             int n = 20000;
             for (int k = 0; k <= n; k++) {
@@ -187,10 +187,10 @@ class HazeTest {
             }
             double step = 2 * (t1 - t0) / n;
             if (Double.isNaN(lo)) {
-                assertTrue(span[1] - span[0] <= step, "случай " + i + ": " + span[0] + ".." + span[1]);
+                assertTrue(span[1] - span[0] <= step, "case " + i + ": " + span[0] + ".." + span[1]);
             } else {
-                assertEquals(lo, span[0], step, "случай " + i);
-                assertEquals(hi, span[1], step, "случай " + i);
+                assertEquals(lo, span[0], step, "case " + i);
+                assertEquals(hi, span[1], step, "case " + i);
             }
         }
     }
@@ -204,7 +204,7 @@ class HazeTest {
         return new double[]{x / l, y / l, z / l};
     }
 
-    /** Почти вдоль a (взгляд вдоль струи), разброс spread. */
+    /** Almost along a (looking along the stream), scatter spread. */
     private static double[] unit(double[] a, java.util.Random r, double spread) {
         double x = a[0] + r.nextGaussian() * spread, y = a[1] + r.nextGaussian() * spread, z = a[2] + r.nextGaussian() * spread;
         double l = Math.sqrt(x * x + y * y + z * z), s = r.nextBoolean() ? 1 : -1;

@@ -16,13 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FlashMarksTest {
-    /** Ступень гари растёт со светом и случайностью, у кладки — не выше {@code SOOT_MAX} от черноты. */
+    /** The level of burning increases with light and randomness; in masonry it is no higher than {@code SOOT_MAX} from blackness. */
     @Test
     void levelGrowsWithLight() {
         int prev = 0;
         for (double q = 0.5; q < 500; q *= 1.3) {
             int l = FlashChar.level(q, FlashChar.CHARS, 0);
-            assertTrue(l >= prev, "ступень упала при " + q);
+            assertTrue(l >= prev, "the step fell when " + q);
             prev = l;
             assertTrue(FlashChar.level(q, FlashChar.CHARS, 1) >= l);
             assertTrue(FlashChar.level(q, FlashChar.SOOTS, 3) <= Math.round(FlashChar.SOOT_MAX * FlashChar.LEVELS));
@@ -32,7 +32,7 @@ class FlashMarksTest {
         assertEquals(0, FlashChar.level(100, FlashChar.NONE, 0));
     }
 
-    /** {@code possible} и {@code saturated} согласны с самой ступенью на краях случайности. */
+    /** {@code possible} and {@code saturated} agree on the very step at the edges of randomness. */
     @Test
     void possibleAndSaturatedMatchLevel() {
         for (double q = 0.5; q < 500; q *= 1.1) {
@@ -43,7 +43,7 @@ class FlashMarksTest {
         }
     }
 
-    /** Метка хранит место, сторону, ступень и хеш. */
+    /** The label stores the location, side, stage and hash. */
     @Test
     void markRoundTrip() {
         for (Direction f : Direction.values()) {
@@ -60,7 +60,7 @@ class FlashMarksTest {
         assertEquals(319, FlashChar.y(FlashChar.key(0, 319, 0, Direction.UP)));
     }
 
-    /** Две тени на одной грани — поклеточный максимум; новые грани — в конец. */
+    /** Two shadows on one face - cell-by-cell maximum; new facets - to the end. */
     @Test
     void shadowsMerge() {
         int a = FlashChar.mark(FlashChar.key(1, 70, 1, Direction.WEST), 6, 3), b = FlashChar.mark(FlashChar.key(2, 70, 1, Direction.WEST), 6, 3);
@@ -77,8 +77,8 @@ class FlashMarksTest {
     }
 
     /**
-     * Тела одной пачки перед одной гранью (силуэты за тик пишутся вместе, и это — первая запись слоя): одна запись грани
-     * с поклеточным максимумом, а не две, которые клиент сложил бы так, что тени гасили бы друг друга.
+     * The bodies of one pack in front of one face (the silhouettes behind the tick are written together, and this is the first record of the layer): one record of the face
+     *  with a cell-by-cell maximum, and not two, which the client would add so that the shadows would cancel each other out.
      */
     @Test
     void shadowsMergeInFirstBatch() {
@@ -94,15 +94,15 @@ class FlashMarksTest {
         assertEquals(3, l.shade(0, 1, 0));
         assertEquals(1, l.shade(1, 0, 0));
         assertEquals(3, l.shade(1, 1, 0));
-        // повтор граней не тратит предел силуэтов
+        // repeating faces does not waste silhouettes limit
         int[] same = new int[FlashMarks.MAX_SHADOWS + 10];
         Arrays.fill(same, a);
         assertEquals(1, FlashMarks.EMPTY.withShadows(8, 100, same, new long[same.length * FlashMarks.MASK_LONGS]).layers().getFirst().shadows().length);
     }
 
     /**
-     * Слоёв не больше {@link FlashMarks#MAX_LAYERS}: каждый удар заново метит чанки в своём радиусе, сверх предела уходят
-     * самые старые подрывы — и пакет следов чанка после любого числа ударов разбирается клиентом.
+     * There are no more layers than {@link FlashMarks#MAX_LAYERS}: each blow re-marks chunks in its radius, the oldest explosions go beyond the limit
+     *  - and the package of chunk traces is disassembled by the client after any number of blows.
      */
     @Test
     void layersCappedForPacket() {
@@ -117,7 +117,7 @@ class FlashMarksTest {
         assertEquals(FlashMarks.MAX_LAYERS, m.layers().size());
         assertEquals(strikes - FlashMarks.MAX_LAYERS + 1, m.layers().getFirst().detonation());
         assertEquals(strikes, m.layers().getLast().detonation());
-        // слой, старше всех оставшихся, не встаёт (чанк, загруженный позже, получает руины старого подрыва)
+        // the layer older than all the remaining ones does not rise (a chunk loaded later gets the ruins of the old explosion)
         assertEquals(m.layers(), m.withChars(1, 1000, new int[]{FlashChar.mark(1, 2, 5)}).layers());
 
         ByteBuf buf = Unpooled.buffer();
@@ -134,7 +134,7 @@ class FlashMarksTest {
             assertArrayEquals(a.masks(), b.masks());
         }
 
-        // запись с чанком сверх предела (прежняя сборка) читается в пределах
+        // a record with a chunk over the limit (previous build) is read within
         List<FlashMarks.Layer> many = new java.util.ArrayList<>();
         for (int id = strikes; id >= 1; id--) many.add(new FlashMarks.Layer(id, id, new int[]{FlashChar.mark(id, 1, 0)}, new int[0], new long[0]));
         var json = FlashMarks.CODEC.encodeStart(JsonOps.INSTANCE, new FlashMarks(many)).getOrThrow();
@@ -143,7 +143,7 @@ class FlashMarksTest {
         assertEquals(strikes, read.layers().getLast().detonation());
     }
 
-    /** Сверх предела остаются самые тёмные грани; старые слои уступают новому. */
+    /** Beyond the limit, the darkest edges remain; the old layers give way to the new. */
     @Test
     void capKeepsStrongest() {
         int[] old = new int[FlashMarks.MAX_CHARS];
@@ -159,7 +159,7 @@ class FlashMarksTest {
         assertTrue(Arrays.stream(strongest).allMatch(c -> FlashChar.level(c) >= 3));
     }
 
-    /** Пакет читается обратно тем же. */
+    /** The packet is read back the same way. */
     @Test
     void streamCodecRoundTrip() {
         long[] mask = new long[FlashMarks.MASK_LONGS];

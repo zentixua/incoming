@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Стенд сцен: версия Incoming × шейдерпаки, время кадра и кадры; шлагбаум — пара с принятым в одном сеансе (README.md).
+"""Scene bench: Incoming version × shader packs, frame time and captures; look gate compares a same-session
+pair against accepted (README.md).
 
-  stand.py prepare <jar> [--size WxH]                 jar, Sodium, Iris, паки, скрипт клиента (без видеокарты)
-  stand.py play <имя> <jar> [--packs …] [--scenes …]  клиенты по пакам подряд (внутри tools/laptop_job.sh --gpu)
-           [--against <jar принятого>]                … парой: на каждый пак принятый, кандидат, принятый (A1, B, A2);
-                                                      пак без прохода — второй парой; вердикт → verdict.json
-  stand.py analyze <имя>                              results.json прогона (у пары — каждого из A1, B, A2) из сырых данных
-  stand.py gate <имя>                                 вердикт пары заново из сырых данных → verdict.json
-  stand.py pr <номер> [--post] [--against <база>]     PR: jar CI головы парой с main, сцена «100», вердикт;
-                                                      --post — статус «Стенд сцен» и комментарий
+  stand.py prepare <jar> [--size WxH]               jar, Sodium, Iris, packs, client script (no GPU)
+  stand.py play <name> <jar> [--packs …] [--scenes …] clients by pack in sequence (inside tools/laptop_job.sh --gpu)
+           [--against <accepted jar>]              … paired: accepted, candidate, accepted (A1, B, A2) per pack;
+                                                    failed pack gets a second pair; verdict → verdict.json
+  stand.py analyze <name>                           results.json from raw data (each A1/B/A2 for pairs)
+  stand.py gate <name>                              rejudge raw pair data → verdict.json
+  stand.py pr <number> [--post] [--against <base>]    PR: head CI jar paired against main, scene "100", verdict;
+                                                    --post: "Стенд сцен" status and comment
 
-<jar> — выпуск (v3.7.0), `ci:<ветка или SHA>` (артефакт incoming-jar прогона build), путь к jar.
-Паки: none (Iris без шейдерпака), complementary, photon — по умолчанию все три. Сцены — id из scenes.json (по умолчанию
-все; у pr — «100», окна шлагбаума). Каталоги — mod/run/stand/{dl,game,out} основной копии репозитория, общие для всех её
-деревьев git (INCOMING_STAND_ROOT переопределяет; имя с INCOMING_ — его видит и задача ноутбука). Только стандартная
-библиотека.
+<jar>: release (v3.7.0), `ci:<branch or SHA>` (build run incoming-jar artifact), or jar path.
+Packs: none (Iris without shader pack), complementary, photon; all three by default. Scenes: scenes.json IDs
+(default all; pr uses "100", gated windows). Directories: mod/run/stand/{dl,game,out} in the main repo copy,
+shared by all git worktrees (override with INCOMING_STAND_ROOT; INCOMING_ also reaches the laptop job).
+Standard library only.
 """
 import argparse
 import hashlib
@@ -44,7 +45,7 @@ import results  # noqa: E402
 
 
 def _main_checkout():
-    """Основная копия репозитория (у дерева git — та, чей .git общий); не git — это дерево."""
+    """Main repo copy (for a git worktree, the one sharing .git); outside git, this tree."""
     try:
         common = subprocess.run(["git", "-C", str(HERE), "rev-parse", "--path-format=absolute", "--git-common-dir"],
                                 capture_output=True, text=True, check=True).stdout.strip()
@@ -56,13 +57,13 @@ def _main_checkout():
 STAND = Path(os.environ.get("INCOMING_STAND_ROOT") or _main_checkout() / "mod" / "run" / "stand")
 DL, GAME, OUT = STAND / "dl", STAND / "game", STAND / "out"
 REPO, PACK_REPO = "zentixua/incoming", "zentixua/open-skies"
-# пак стенда → файл pw.toml в pack/shaderpacks сборки (None — Iris без шейдерпака)
+# Bench pack → pw.toml in modpack pack/shaderpacks (None means Iris without shader pack)
 PACKS = {"none": None, "complementary": "complementary-unbound", "photon": "photon-shader"}
 MODS = ("sodium", "iris")
 STATUS = "Стенд сцен"
-# сцены шлагбаума PR: окна «100» (условие влития — время кадра при 100 ударах)
+# PR look gate scenes: "100" windows (merge condition: frame time at 100 strikes)
 GATE_SCENES = ["100"]
-# пары на пак: вторая — если первая не прошла (gate.decide)
+# Pairs per pack: second if first failed (gate.decide)
 PAIR_TRIES = 2
 DEFAULT_SIZE = "2560x1600"
 UA = {"User-Agent": "zentixua/incoming stand (github.com/zentixua/incoming)"}
@@ -87,48 +88,48 @@ def gh(*args, json_out=False) -> Any:
     return json.loads(r.stdout) if json_out else r.stdout
 
 
-# ---------------------------------------------------------------- моды и паки сборки
+# ---------------------------------------------------------------- modpack mods and packs
 
 def pw_toml(kind, name):
-    """pack/<kind>/<name>.pw.toml сборки open-skies (репозиторий закрытый — через gh)."""
+    """open-skies pack/<kind>/<name>.pw.toml (private repo, access through gh)."""
     import base64
     data = gh("api", f"repos/{PACK_REPO}/contents/pack/{kind}/{name}.pw.toml", "--jq", ".content")
     return tomllib.loads(base64.b64decode(data).decode())
 
 
 def fetch_file(meta, into):
-    """Файл из pw.toml (url, sha512) в каталог into; есть и совпал — не качать."""
+    """pw.toml file (url, sha512) into directory into; skip download if already present and matching."""
     into.mkdir(parents=True, exist_ok=True)
     path = into / meta["filename"]
     want = meta["download"]["hash"]
     if meta["download"]["hash-format"] != "sha512":
-        raise SystemExit(f"{meta['filename']}: хеш {meta['download']['hash-format']}, жду sha512")
+        raise SystemExit(f"{meta['filename']}: hash {meta['download']['hash-format']}, expected sha512")
     if path.exists() and sha(path, "sha512") == want:
         return path
     with urllib.request.urlopen(urllib.request.Request(meta["download"]["url"], headers=UA), timeout=120) as r:
         data = r.read()
     if hashlib.sha512(data).hexdigest() != want:
-        raise SystemExit(f"{meta['filename']}: sha512 не совпал")
+        raise SystemExit(f"{meta['filename']}: sha512 mismatch")
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_bytes(data)
     tmp.replace(path)
-    log(f"скачан {meta['filename']} ({len(data) // 1024} КБ)")
+    log(f"downloaded {meta['filename']} ({len(data) // 1024} KB)")
     return path
 
 
 def fetch_pack(packs, offline=False):
-    """Sodium, Iris и шейдерпаки сборки — по sha512 из её pw.toml: {имя: (путь, sha512)}. Что взяли — в DL/pack-lock.json:
-    offline (внутри задачи ноутбука) берёт файлы по нему и сверяет sha512, без сети."""
+    """Modpack Sodium, Iris and shader packs by pw.toml sha512: {name: (path, sha512)}. Save selections in
+DL/pack-lock.json; offline mode (inside laptop job) reads it and verifies sha512 without network."""
     lock_file = DL / "pack-lock.json"
     lock = json.loads(lock_file.read_text()) if lock_file.exists() else {}
     out = {}
     for name in [*MODS, *(p for p in packs if PACKS[p])]:
         if offline:
             if name not in lock:
-                raise SystemExit(f"{name}: нет в {lock_file} — сначала stand.py prepare")
+                raise SystemExit(f"{name}: missing from {lock_file} — run stand.py prepare first")
             path = DL / ("mods" if name in MODS else "shaderpacks") / lock[name]["filename"]
             if not path.exists() or sha(path, "sha512") != lock[name]["sha512"]:
-                raise SystemExit(f"{path}: нет или sha512 не тот — stand.py prepare")
+                raise SystemExit(f"{path}: missing or sha512 mismatch — stand.py prepare")
             out[name] = (path, lock[name]["sha512"])
             continue
         meta = pw_toml("mods", name) if name in MODS else pw_toml("shaderpacks", PACKS[name])
@@ -143,7 +144,7 @@ def fetch_pack(packs, offline=False):
 # ---------------------------------------------------------------- jar Incoming
 
 def resolve_jar(spec):
-    """Выпуск vX.Y.Z (GitHub), ci:<ветка|SHA> (артефакт incoming-jar прогона build) или путь → (путь, подпись)."""
+    """Release vX.Y.Z (GitHub), ci:<branch|SHA> (build incoming-jar artifact), or path → (path, label)."""
     p = Path(spec)
     if p.is_file():
         return p.resolve(), p.stem.removeprefix("incoming-")
@@ -155,18 +156,18 @@ def resolve_jar(spec):
             gh("release", "download", spec, "-R", REPO, "-p", "incoming-*.jar", "-D", str(d), "--clobber")
             jars = sorted(d.glob("incoming-*.jar"))
         if len(jars) != 1:
-            raise SystemExit(f"{spec}: jar выпуска не один: {jars}")
+            raise SystemExit(f"{spec}: release has multiple jars: {jars}")
         return jars[0], spec
     if spec.startswith("ci:"):
         ref = spec[3:]
-        # ветка → её голова сейчас; прогон build — по SHA (у веток PR он pull_request, у main — push)
+        # Branch resolves to current head; build run by SHA (pull_request for PR branches, push for main)
         head = ref if len(ref) >= 7 and all(c in "0123456789abcdef" for c in ref.lower()) \
             else gh("api", f"repos/{REPO}/commits/{ref}", "--jq", ".sha").strip()
         runs = gh("run", "list", "-R", REPO, "-w", "build", "--status", "success", "-L", "100", "--json",
                   "databaseId,headSha", json_out=True)
         run = next((r for r in runs if r["headSha"].startswith(head)), None)
         if not run:
-            raise SystemExit(f"{spec}: нет успешного прогона build у {head[:12]} (jar — артефакт incoming-jar)")
+            raise SystemExit(f"{spec}: no successful build run for {head[:12]} (jar is artifact incoming-jar)")
         d = DL / "jars" / f"ci-{run['headSha'][:12]}"
         jars = sorted(d.glob("incoming-*.jar")) if d.is_dir() else []
         if not jars:
@@ -174,20 +175,20 @@ def resolve_jar(spec):
             gh("run", "download", str(run["databaseId"]), "-R", REPO, "-n", "incoming-jar", "-D", str(d))
             jars = sorted(d.glob("incoming-*.jar"))
         if len(jars) != 1:
-            raise SystemExit(f"{spec}: jar артефакта не один: {jars}")
+            raise SystemExit(f"{spec}: artifact has multiple jars: {jars}")
         return jars[0], f"{ref[:12]}@{run['headSha'][:8]}"
-    raise SystemExit(f"не понял jar: {spec} (vX.Y.Z, ci:<ветка|SHA> или путь)")
+    raise SystemExit(f"unrecognized jar: {spec} (vX.Y.Z, ci:<branch|SHA> or path)")
 
 
-# ---------------------------------------------------------------- версия стенда и контекст
+# ---------------------------------------------------------------- bench version and context
 
 def stand_hash():
-    """Версия стенда: исходники обвязки, её сборка (build.gradle с подготовкой запуска standLaunch, settings.gradle,
-    Gradle мода, которым она собирается, с wrapper), сцены, план, каталог игры и запуск клиента (client.py: настройки
-    игры, окружение, скрипт standLaunch; nested_kwin.sh и его шина — окружение и экран клиента) — то, от чего зависит,
-    что снимается. Java клиента и KWin — отдельно в контексте. gpu_lease.sh, который nested_kwin.sh зовёт до запуска
-    KWin (аренда), — нет: клиент он не трогает. Разбор (results.py, gate.py) в неё не входит: вердикт считается из сырых
-    данных заново (stand.py gate)."""
+    """Bench version: harness source/build (build.gradle including standLaunch preparation, settings.gradle,
+mod Gradle and wrapper used to build it), scenes, plan, game directory and client launch (client.py:
+game settings, environment, standLaunch script; nested_kwin.sh and its bus: client environment/display),
+everything affecting the captured scene. Client Java and KWin go separately into context. Exclude
+gpu_lease.sh, called by nested_kwin.sh before KWin (lease only, no client changes). Exclude parsing
+(results.py, gate.py): verdicts reparse raw data (stand.py gate)."""
     h = hashlib.sha256()
     for f in stand_files():
         h.update(str(f.relative_to(ROOT)).encode())
@@ -196,7 +197,7 @@ def stand_hash():
 
 
 def stand_files():
-    """Файлы версии стенда (stand_hash), по порядку."""
+    """Bench version files (stand_hash), in order."""
     files = [*(HERE / "src" / "main").rglob("*"), HERE / "build.gradle", HERE / "gradle.properties", HERE / "settings.gradle",
              HERE / "scenes.json", HERE / "plan.py", HERE / "client.py",
              ROOT / "mod" / "gradlew", ROOT / "mod" / "gradle" / "wrapper" / "gradle-wrapper.properties",
@@ -215,7 +216,7 @@ def gpu_info():
 
 
 def kwin_version():
-    """Версия композитора, во вложенном экземпляре которого идёт клиент (пакет системы обновляется сам)."""
+    """Version of the compositor hosting the client (system package updates automatically)."""
     try:
         return subprocess.run(["kwin_wayland", "--version"], capture_output=True, text=True, timeout=20).stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
@@ -223,8 +224,8 @@ def kwin_version():
 
 
 def context(packs, scenes_sel, size, files):
-    """Всё, кроме jar, от чего зависят числа: стенд, паки и моды (sha512), сцены, видеокарта и драйвер, окно, java
-    клиента (скрипт запуска — уже подготовлен), KWin, профиль питания."""
+    """Everything beyond the jar affecting measurements: bench, packs/mods (sha512), scenes, GPU/driver, window,
+client Java (launch script already prepared), KWin, power profile."""
     name, driver = gpu_info()
     return {"stand": stand_hash(), "mods": {m: files[m][1] for m in MODS},
             "packs": {p: files[p][1] if PACKS[p] else "none" for p in packs}, "scenes": scenes_sel or "all",
@@ -232,7 +233,7 @@ def context(packs, scenes_sel, size, files):
             "power": client.power_profile()}
 
 
-# ---------------------------------------------------------------- клиент
+# ---------------------------------------------------------------- client
 
 SCRIPT = HERE / "build" / "launch" / "client.sh"
 
@@ -241,8 +242,8 @@ def cmd_prepare(a):
     jar, label = resolve_jar(a.jar)
     fetch_pack(a.packs)
     script = client.launch_script(GAME, a.size)
-    log(f"скрипт клиента {script}")
-    # последняя строка — для run.sh: что отдать play
+    log(f"client script {script}")
+    # Last line is for run.sh: what to pass to play
     print(f"JAR\t{jar}\t{a.label or label}")
 
 
@@ -251,11 +252,11 @@ def jar_info(jar, label, spec):
 
 
 def shoot(out, pack, jar, files, scenes_sel, size, log_name, quiet=True):
-    """Один клиент: версия jar × пак → сырые данные в out/<пак>; назад — (код выхода, минуты видеокарты). quiet — ждать
-    тишины перед клиентом (client.run)."""
+    """One client: jar version × pack → raw data in out/<pack>; return (exit code, GPU minutes). quiet waits
+for quiet before the client (client.run)."""
     p = client.prepare_game(GAME, jar, files[pack][0] if PACKS[pack] else None, [files[m][0] for m in MODS], scenes_sel)
     t0 = time.time()
-    log(f"{log_name}: пак {pack}, {len(p['steps'])} шагов")
+    log(f"{log_name}: pack {pack}, {len(p['steps'])} steps")
     out.mkdir(parents=True, exist_ok=True)
     with open(out / f"client-{pack}.out", "w") as logf:
         code = client.run(GAME, SCRIPT, size, p["limit_s"], logf, log, quiet)
@@ -272,12 +273,12 @@ def shoot(out, pack, jar, files, scenes_sel, size, log_name, quiet=True):
         shutil.copytree(GAME / "crash-reports", dst / "crash-reports")
     (GAME / "audio.wav").unlink(missing_ok=True)
     took = (time.time() - t0) / 60
-    log(f"{log_name}: пак {pack} — выход {code}, {took:.1f} мин")
+    log(f"{log_name}: pack {pack} — exit {code}, {took:.1f} min")
     return code, took
 
 
 def add_pack(out, meta, pack, code, took, files):
-    """Пак в meta.json прогона (пишется после каждого пака: прерванный прогон разбирается тем, что снято)."""
+    """Pack entry in run meta.json (written after every pack so interrupted runs can parse available data)."""
     meta["packs"][pack] = {"exit": code, "gpu_minutes": round(took, 2), "file": files[pack][0].name if PACKS[pack] else None}
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False))
@@ -292,7 +293,7 @@ def cmd_play(a):
     jar = Path(a.jar).resolve()
     files = fetch_pack(a.packs, offline=True)
     if not SCRIPT.exists():
-        raise SystemExit("нет build/launch/client.sh — сначала stand.py prepare")
+        raise SystemExit("no build/launch/client.sh — run stand.py prepare first")
     out = OUT / a.name
     if out.exists():
         shutil.rmtree(out)
@@ -310,11 +311,11 @@ def cmd_play(a):
             return 75
         worst = worst or code
     analyze(out)
-    log(f"{a.name}: итог в {out}")
+    log(f"{a.name}: results in {out}")
     return 1 if worst else 0
 
 
-# роли прогонов пары: принятый, кандидат, принятый; у второй пары — с суффиксом
+# Pair roles: accepted, candidate, accepted; second pair adds a suffix
 ROLES = ("A1", "B", "A2")
 
 
@@ -323,8 +324,8 @@ def role_dir(out, role, attempt):
 
 
 def play_pair(a, out, jar, cand, files, ctx):
-    """Пара: прогрев видеокарты принятым на первом паке, затем на каждый пак A1, B, A2 подряд; пак, который не прошёл
-    (gate.compare_pack: провал по числам или негодный прогон), — следующей парой сразу же (--tries). Итог — verdict.json (judge_pair)."""
+    """Pair: warm GPU with accepted version on the first pack, then consecutive A1/B/A2 for each pack; failed
+pack (gate.compare_pack: metric failure or invalid run) immediately gets the next pair (--tries). Output: verdict.json (judge_pair)."""
     base_jar = Path(a.against).resolve()
     base = jar_info(base_jar, a.against_label or base_jar.stem.removeprefix("incoming-"), a.against_spec or a.against)
     jars = {"A1": (base_jar, base), "B": (jar, cand), "A2": (base_jar, base)}
@@ -332,10 +333,10 @@ def play_pair(a, out, jar, cand, files, ctx):
             "started": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     (out / "pair.json").write_text(json.dumps(pair, indent=1, ensure_ascii=False))
     metas = {}
-    # прогрев: холодная видеокарта первого прогона шла бы на большей частоте, чем горячая в A2 (85–88 °C в окнах), —
-    # расхождение пары от нагрева, а не от шума; прогон прогрева в вердикт не идёт
+    # Warm-up: a cold GPU in the first run would clock higher than hot A2 (85–88 °C in windows), causing pair
+    # difference from heating rather than noise; exclude warm-up from verdict
     if not a.no_warmup and a.packs:
-        code, _ = shoot(out / "warmup", a.packs[0], base_jar, files, a.scenes, a.size, f"{a.name} прогрев")
+        code, _ = shoot(out / "warmup", a.packs[0], base_jar, files, a.scenes, a.size, f"{a.name} warm-up")
         if code == 75:
             return 75
     for pack in a.packs:
@@ -344,26 +345,26 @@ def play_pair(a, out, jar, cand, files, ctx):
                 d = role_dir(out, role, attempt)
                 j, info = jars[role]
                 meta = metas.setdefault(d.name, run_meta(f"{a.name}/{d.name}", info, ctx))
-                # тишины ждать только перед A1: B и A2 идут сразу за ним, в тех же условиях, а аренда не стоит впустую
+                # Wait for quiet only before A1: B/A2 follow immediately in the same conditions, without wasting the lease
                 code, took = shoot(d, pack, j, files, a.scenes, a.size, f"{a.name} {d.name}", quiet=role == "A1")
                 add_pack(d, meta, pack, code, took, files)
                 if code == 75:
                     return 75
             rs = [analyze(role_dir(out, r, attempt), write=False)["packs"][pack] for r in ROLES]
             v = gate.compare_pack(pack, rs[1], [rs[0], rs[2]])
-            log(f"{a.name}: пак {pack}, пара {attempt} — {v['state']}" + "".join(f"\n  {x}" for x in v["fails"]))
+            log(f"{a.name}: pack {pack}, pair {attempt} — {v['state']}" + "".join(f"\n  {x}" for x in v["fails"]))
             if v["state"] == gate.PASS:
                 break
     for d in sorted(metas):
         analyze(out / d)
     v = judge_pair(out)
-    log(f"{a.name}: {v['state']}; итог в {out}")
+    log(f"{a.name}: {v['state']}; results in {out}")
     return 0 if v["pass"] else 1
 
 
 def analyze(out, write=True):
-    """results.json прогона из сырых данных: числа по пакам + meta. Вердикт (gate, pr, report.py) всегда разбирает сырые
-    данные заново (write=False): числа — по нынешнему разбору, а не по тому, что был при съёмке."""
+    """Run results.json from raw data: pack metrics + meta. Verdicts (gate, pr, report.py) always reparse raw
+data (write=False): current parser metrics, not capture-time parser metrics."""
     out = Path(out)
     meta = json.loads((out / "meta.json").read_text())
     scenes = plan.load()
@@ -373,34 +374,34 @@ def analyze(out, write=True):
     for pack, info in meta["packs"].items():
         d = out / pack
         if not (d / "frames.csv").exists() or not (d / "events.jsonl").exists():
-            res["packs"][pack] = {"windows": {}, "checks": [f"нет данных клиента (выход {info['exit']})"], "meta": {}, "load": []}
+            res["packs"][pack] = {"windows": {}, "checks": [f"no client data (exit {info['exit']})"], "meta": {}, "load": []}
             continue
         r = results.analyze(d, scenes, only, meta["context"].get("power"))
         r["meta"]["exit"] = info["exit"]
         r["meta"]["gpu_minutes"] = info["gpu_minutes"]
-        # шейдерпак, который Iris включил на самом деле (иначе кадры «под паком» были бы без него)
+        # Shader pack actually enabled by Iris (otherwise "under pack" frames would lack it)
         got = str(r["meta"]["once"].get("net.irisshaders.iris.Iris#getCurrentPackName"))
         want = info.get("file")
         if want and want not in got:
-            r["checks"].append(f"шейдерпак в игре — {got}, а не {want}")
+            r["checks"].append(f"in-game shader pack is {got}, not {want}")
         if not want and ".zip" in got:
-            r["checks"].append(f"пак none, а Iris включил {got}")
-        # имя пака Iris держит и тогда, когда конвейер пака не собрался и рисует ваниль (ошибка шейдера): работает ли
-        # пак — только по конвейеру (isPackInUseQuick: IrisRenderingPipeline, проверено по Iris 1.8.14)
+            r["checks"].append(f"pack none, but Iris enabled {got}")
+        # Iris keeps the pack name even if its pipeline failed and vanilla renders (shader error): only the
+        # pipeline proves activity (isPackInUseQuick: IrisRenderingPipeline, verified on Iris 1.8.14)
         live = str(r["meta"]["once"].get("net.irisshaders.iris.Iris#isPackInUseQuick"))
         if want and live != "true":
-            r["checks"].append(f"шейдерпак {want} не рисует (конвейер Iris — {'ваниль' if live == 'false' else live})")
+            r["checks"].append(f"shader pack {want} is not rendering (Iris pipeline is {'vanilla' if live == 'false' else live})")
         w, h = meta["context"]["size"].split("x")
         gl = r["meta"].get("gl") or {}
         if gl and (gl.get("width") != int(w) or gl.get("height") != int(h)):
-            # заливка растёт с площадью кадра: снятое не тем размером с принятым не сравнить
-            r["checks"].append(f"кадр {gl.get('width')}×{gl.get('height')} вместо {w}×{h}")
+            # Fill scales with frame area: a wrong-size capture cannot be compared with accepted
+            r["checks"].append(f"frame {gl.get('width')}×{gl.get('height')} instead of {w}×{h}")
         res["packs"][pack] = r
     if write:
         (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
         for pack, r in res["packs"].items():
             bad = r["checks"]
-            log(f"{out.name} {pack}: {'годен' if not bad else 'НЕ ГОДЕН: ' + '; '.join(bad)}")
+            log(f"{out.name} {pack}: {'valid' if not bad else 'INVALID: ' + '; '.join(bad)}")
     return res
 
 
@@ -409,36 +410,35 @@ def is_pair(out):
 
 
 def pair_runs(out):
-    """Прогоны пары из сырых данных: {каталог роли: results} (A1, B, A2 и вторая пара, где снималась)."""
+    """Raw pair runs: {role directory: results} (A1, B, A2, plus second pair where captured)."""
     out = Path(out)
     return {d.name: analyze(d, write=False) for d in sorted(out.iterdir()) if d.is_dir() and (d / "meta.json").exists() and d.name != "warmup"}
 
 
 def judge_pair(out, write=True):
-    """Вердикт пары заново из сырых данных: на каждый пак — пары по порядку до первой прошедшей (вторая — где снималась),
-    gate.decide;
-    → verdict.json. Пак, где пара неполна (прервано), — провал «не снято»."""
+    """Rejudge raw pair data: for each pack, pairs in order until first pass (second where captured),
+gate.decide; → verdict.json. Incomplete/interrupted pairs fail as "not captured"."""
     out = Path(out)
     info = json.loads((out / "pair.json").read_text())
     runs = pair_runs(out)
     packs = {}
     for pack in info["packs"]:
         tries = []
-        # пары — все снятые (--tries), до первой прошедшей
+        # All captured pairs (--tries), through the first pass
         for attempt in itertools.count(1):
             names = [role_dir(out, r, attempt).name for r in ROLES]
             got = [runs.get(n, {}).get("packs", {}).get(pack) for n in names]
             if all(g is None for g in got):
                 break
             if any(g is None for g in got):
-                tries.append({"state": gate.FAIL, "fails": [f"{pack}: пара {attempt} не снята целиком ({', '.join(n for n, g in zip(names, got) if g is None)})"],
+                tries.append({"state": gate.FAIL, "fails": [f"{pack}: pair {attempt} not fully captured ({', '.join(n for n, g in zip(names, got) if g is None)})"],
                               "rows": [], "notes": []})
                 break
             tries.append(gate.compare_pack(pack, got[1], [got[0], got[2]]))
-            # как play_pair: пак, прошедший пару, больше не снимается — пара, снятая под старым правилом, не в счёт
+            # As in play_pair, packs passing a pair are not captured again; ignore pairs captured under old rules
             if tries[-1]["state"] == gate.PASS:
                 break
-        packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: пара не снята"], "rows": [],
+        packs[pack] = gate.decide(tries) if tries else {"state": gate.FAIL, "fails": [f"{pack}: pair not captured"], "rows": [],
                                                         "notes": [], "tries": 0, "earlier": []}
     v = gate.summary(packs)
     v["cand"], v["base"] = info["cand"], info["base"]
@@ -459,9 +459,9 @@ def cmd_analyze(a):
 def cmd_gate(a):
     out = OUT / a.name
     if not is_pair(out):
-        raise SystemExit(f"{out}: не пара (stand.py play … --against <принятый>)")
+        raise SystemExit(f"{out}: not a pair (stand.py play … --against <accepted>)")
     v = judge_pair(out)
-    log(f"{a.name}: {v['cand']['label']} против {v['base']['label']}: {STATE_WORD[v['state']]}")
+    log(f"{a.name}: {v['cand']['label']} versus {v['base']['label']}: {STATE_WORD[v['state']]}")
     for f in v["fails"]:
         log("  " + f)
     for n in v["notes"]:
@@ -469,13 +469,13 @@ def cmd_gate(a):
     return 0 if v["pass"] else 1
 
 
-STATE_WORD = {gate.PASS: "ПРОХОДИТ", gate.FAIL: "ПРОВАЛ"}
+STATE_WORD = {gate.PASS: "PASS", gate.FAIL: "FAIL"}
 
 
 def main_base():
-    """База PR — `main` (CLAUDE.md, «Картинка и звук»): последняя голова main с успешным build (push), у которого есть
-    jar (артефакт incoming-jar), — ci:<SHA>. Правка только tools/, docs/ и *.md проходит build без сборки мода и без jar:
-    такая голова базой не годится, берётся прежняя."""
+    """PR baseline is `main` (CLAUDE.md, "Visuals and sound"): newest main head with successful build (push)
+and a jar (incoming-jar artifact), ci:<SHA>. Tools/docs/*.md-only changes pass build without building
+the mod or a jar; those heads cannot be baselines, so use the previous one."""
     runs = gh("run", "list", "-R", REPO, "-w", "build", "-b", "main", "-e", "push", "--status", "success", "-L", "30",
               "--json", "databaseId,headSha", json_out=True)
     for r in runs:
@@ -483,14 +483,14 @@ def main_base():
                    ".artifacts[] | select(.expired | not) | .name").split()
         if "incoming-jar" in names:
             return f"ci:{r['headSha']}", f"main@{r['headSha'][:8]}"
-    raise SystemExit("нет успешного build на main с jar (incoming-jar) — базы для PR нет")
+    raise SystemExit("no successful main build with jar (incoming-jar) — no PR baseline")
 
 
 # ---------------------------------------------------------------- PR
 
 def pr_paths(records):
-    """Пути файлов PR из API (pulls/<n>/files): новое имя и у переноса прежнее — перенос из того, что видит игрок, —
-    тоже правка видимого."""
+    """PR file paths from API (pulls/<n>/files): new path and old path on rename; moving out of player-visible
+code/resources is also a visible change."""
     out = []
     for r in records:
         out.append(r["filename"])
@@ -500,62 +500,62 @@ def pr_paths(records):
 
 
 def cmd_pr(a):
-    """PR с картинкой: jar CI его головы парой с main (сцена «100»; --against — другая база); --post — статус «Стенд
-    сцен» и комментарий."""
+    """PR with visuals: head CI jar paired against main (scene "100"; --against overrides base); --post adds
+"Стенд сцен" status and comment."""
     pr = gh("pr", "view", str(a.number), "-R", REPO, "--json", "headRefOid,url,number", json_out=True)
     head = pr["headRefOid"]
     files = gh("api", "--paginate", f"repos/{REPO}/pulls/{a.number}/files", "--jq", ".[] | {filename, previous_filename}")
     hit = facing.player_facing(pr_paths(json.loads(line) for line in files.splitlines() if line.strip()))
     if not hit and not a.force:
-        log(f"PR {a.number} не меняет того, что видит игрок: стенд не нужен")
+        log(f"PR {a.number} does not change what players see: bench not needed")
         if a.post:
-            post_status(head, "success", "Стенд не нужен: PR не меняет того, что видит игрок", None)
+            post_status(head, "success", "Bench not needed: PR does not change what players see", None)
         return 0
     base, version = (a.against, a.against) if a.against else main_base()
     name = f"pr{a.number}-{head[:8]}"
     scenes = a.scenes if a.scenes is not None else GATE_SCENES
-    full = "--post — только со всеми паками, со сценой «100» и окном по умолчанию; выборка — без --post"
+    full = "--post requires all packs, scene \"100\" and default window; subsets run without --post"
 
     def partial(packs, sel, size):
-        # лишние сцены (одиночный удар и т. п.) вердикт не трогают: он судит только окна «100»
+        # Extra scenes (single strike etc.) do not affect verdict: only "100" windows are judged
         has = sel == "all" or set(GATE_SCENES) <= set(sel)
         return packs != list(PACKS) or not has or size != DEFAULT_SIZE
 
     if a.post and partial(a.packs, scenes, a.size):
-        # статус влития — только у полного шлагбаума: выборка паков пропустила бы регрессию в остальных
+        # Merge status only for the full look gate: a pack subset could miss regressions in omitted packs
         raise SystemExit(full)
     out = OUT / name
     if a.rejudge:
-        # пара этой головы уже снята: вердикт заново из сырых данных (правка разбора не требует пересъёмки)
+        # Pair for this head already captured: rejudge raw data (parser changes need no recapture)
         if not is_pair(out):
-            raise SystemExit(f"{out}: пары этой головы нет — снять без --rejudge")
+            raise SystemExit(f"{out}: no pair for this head — capture without --rejudge")
         info = json.loads((out / "pair.json").read_text())
         ctx = info["context"]
-        # полнота — у снятой пары, а не у этой команды
+        # Completeness refers to the captured pair, not this command
         if a.post and partial(info["packs"], ctx["scenes"], ctx["size"]):
-            raise SystemExit(f"{full} (снятая пара: {','.join(info['packs'])}, сцены {ctx['scenes']}, {ctx['size']})")
+            raise SystemExit(f"{full} (captured pair: {','.join(info['packs'])}, scenes {ctx['scenes']}, {ctx['size']})")
         code = 0
     else:
         if a.post:
-            post_status(head, "pending", f"Стенд идёт: парой с {version}", None)
+            post_status(head, "pending", f"Bench running: paired against {version}", None)
         code = subprocess.run([str(HERE / "run.sh"), name, f"ci:{head}", "--against", base, "--packs", ",".join(a.packs), "--size", a.size,
                                "--label", f"PR {a.number}", "--against-label", version, "--scenes", ",".join(scenes)]).returncode
     if not is_pair(out) or code not in (0, 1):
         if a.post:
-            post_status(head, "error", f"Стенд не снял пару (код {code})", None)
+            post_status(head, "error", f"Bench did not capture a pair (code {code})", None)
         return code or 1
     v = judge_pair(out)
     version = v["base"].get("label") or version
-    # отчёт — тем же путём (judge_pair): его вердикт тот же
+    # Report follows the same path (judge_pair), with the same verdict
     subprocess.run(["uv", "run", str(HERE / "report.py"), name])
-    log(f"PR {a.number}: {STATE_WORD[v['state']]}; отчёт {out / 'report.md'}")
+    log(f"PR {a.number}: {STATE_WORD[v['state']]}; report {out / 'report.md'}")
     if a.post:
         body = (out / "comment.md").read_text() if (out / "comment.md").exists() else "\n".join(v["fails"])
         comment = gh("api", f"repos/{REPO}/issues/{a.number}/comments", "-f", f"body={body}", "--jq", ".html_url").strip()
         if v["state"] == gate.PASS:
-            state, desc = "success", f"Время кадра при 100 ударах — не хуже {version}"
+            state, desc = "success", f"Frame time at 100 strikes no worse than {version}"
         else:
-            state, desc = "failure", f"Хуже {version}: " + v["fails"][0]
+            state, desc = "failure", f"Worse than {version}: " + v["fails"][0]
         post_status(head, state, desc[:140], comment)
     return 0 if v["pass"] else 1
 
@@ -570,7 +570,7 @@ def post_status(sha_, state, desc, url):
 def positive(text):
     n = int(text)
     if n < 1:
-        raise argparse.ArgumentTypeError("не меньше 1")
+        raise argparse.ArgumentTypeError("at least 1")
     return n
 
 
@@ -582,26 +582,26 @@ def main():
         p.add_argument("--packs", default=",".join(PACKS), type=lambda s: [x for x in s.split(",") if x])
         p.add_argument("--scenes", default=None, type=lambda s: None if s == "all" else s.split(","))
         p.add_argument("--size", default=DEFAULT_SIZE)
-        p.add_argument("--label", help="подпись версии в отчёте")
+        p.add_argument("--label", help="version label in report")
 
     p = sub.add_parser("prepare"); p.add_argument("jar"); common(p); p.set_defaults(fn=cmd_prepare)
     p = sub.add_parser("play"); p.add_argument("name"); p.add_argument("jar"); p.add_argument("--spec")
-    p.add_argument("--against", help="jar принятого: снять парой A1, B, A2 на каждый пак")
+    p.add_argument("--against", help="accepted jar: capture A1/B/A2 pair for every pack")
     p.add_argument("--against-label"); p.add_argument("--against-spec")
-    p.add_argument("--no-warmup", action="store_true", help="без прогрева видеокарты перед парой")
-    p.add_argument("--tries", type=positive, default=PAIR_TRIES, help="пар на пак, пока не прошёл (1 — без повторной: приёмка)")
+    p.add_argument("--no-warmup", action="store_true", help="skip GPU warm-up before pair")
+    p.add_argument("--tries", type=positive, default=PAIR_TRIES, help="pairs per pack until pass (1 disables repeat, for acceptance)")
     common(p); p.set_defaults(fn=cmd_play)
     p = sub.add_parser("analyze"); p.add_argument("name"); p.set_defaults(fn=cmd_analyze)
     p = sub.add_parser("gate"); p.add_argument("name"); p.set_defaults(fn=cmd_gate)
     p = sub.add_parser("pr"); p.add_argument("number", type=int); p.add_argument("--post", action="store_true")
     p.add_argument("--force", action="store_true")
-    p.add_argument("--rejudge", action="store_true", help="не снимать: вердикт по уже снятой паре этой головы")
-    p.add_argument("--against", help="база вместо main: выпуск (v3.7.0), ci:<ветка|SHA> или путь")
+    p.add_argument("--rejudge", action="store_true", help="do not capture: rejudge the already captured pair for this head")
+    p.add_argument("--against", help="baseline instead of main: release (v3.7.0), ci:<branch|SHA> or path")
     common(p); p.set_defaults(fn=cmd_pr)
     a = ap.parse_args()
     for pk in getattr(a, "packs", []) or []:
         if pk not in PACKS:
-            raise SystemExit(f"нет пака {pk}: {', '.join(PACKS)}")
+            raise SystemExit(f"no pack {pk}: {', '.join(PACKS)}")
     sys.exit(a.fn(a) or 0)
 
 

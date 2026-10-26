@@ -24,19 +24,19 @@ class InterceptorTrackTest {
             FlightTracks.receive(sample(id, 31, false), 100);
             FlightTrack t = FlightTracks.interceptor(id);
             assertNotNull(t);
-            assertNull(t.weapon, "это ЗРК, а не шахед с неизвестным id оружия");
+            assertNull(t.weapon, "this is SAM, not Shahed with an unknown id weapon");
             Map<UUID, FlightTrack> tracks = new HashMap<>();
             tracks.put(id, t);
             FlightTracks.expire(tracks, 103);
-            assertFalse(t.isDead(), "между пакетами раз в четыре тика путь не обрывается");
+            assertFalse(t.isDead(), "between packets every four ticks the path does not break");
             FlightTracks.receive(sample(id, 35, false), 104);
-            assertSame(t, FlightTracks.interceptor(id), "одна цепочка дыма после ухода сущности");
-            assertTrue(t.covers(102), "путь между пакетами восстановлен");
+            assertSame(t, FlightTracks.interceptor(id), "one chain of smoke after the entity leaves");
+            assertTrue(t.covers(102), "the path between the packages is restored");
             FlightTracks.receive(sample(id, 37, true), 106);
             assertTrue(t.isDead());
-            assertEquals(106, t.deathTick(), "конец по сообщению разрыва, не спустя тайм-аут");
+            assertEquals(106, t.deathTick(), "end by break message, not after timeout");
             FlightTracks.receive(sample(id, 36, false), 107);
-            assertSame(t, FlightTracks.interceptor(id), "запоздалый отсчёт не создаёт новый дым после разрыва");
+            assertSame(t, FlightTracks.interceptor(id), "delayed sample does not create new smoke after breaking");
             assertTrue(t.isDead());
         } finally {
             FlightTracks.reset();

@@ -26,7 +26,7 @@ class OldNamespaceTest {
         Files.writeString(end.resolve("airstrike_nuclear.dat"), "end");
         Files.writeString(modded.resolve("airstrike_grid.dat"), "sky");
 
-        // где игра держит данные каждого измерения, решает DimensionType.getStorageFolder (GameTest oldNamespaceResolves)
+        // where the game holds the data of each dimension, solves DimensionType.getStorageFolder (GameTest oldNamespaceResolves)
         for (Path folder : List.of(overworld, nether, end, modded)) OldNamespace.adoptSavedData(folder);
 
         assertEquals("old", Files.readString(overworld.resolve("incoming_nuclear.dat")));

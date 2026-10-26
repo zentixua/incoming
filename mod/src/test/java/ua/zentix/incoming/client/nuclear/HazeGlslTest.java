@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Закон дрожания в шейдере ({@code fx_heat.fsh}: {@code haze*}) — тот же, что в Java ({@link HeatPass}). */
+/** The jitter law in the shader ({@code fx_heat.fsh}: {@code haze*}) is the same as in Java ({@link HeatPass}). */
 class HazeGlslTest {
     private static final String GLSL = read();
 
@@ -69,14 +69,14 @@ class HazeGlslTest {
             double[] span = HeatPass.coneSpan(a, b, c, t0, t1);
             double lo = in.call(Map.of("a", a, "b", b, "c", c, "t0", t0)), hi = out.call(Map.of("a", a, "b", b, "c", c, "t0", t0, "t1", t1));
             if (span[1] <= span[0]) {
-                assertTrue(hi <= lo, "случай " + i);
+                assertTrue(hi <= lo, "case " + i);
             } else {
-                assertEquals(span[0], lo, 1e-9 * Math.max(1, Math.abs(lo)), "случай " + i);
-                assertEquals(span[1], hi, 1e-9 * Math.max(1, Math.abs(hi)), "случай " + i);
+                assertEquals(span[0], lo, 1e-9 * Math.max(1, Math.abs(lo)), "case " + i);
+                assertEquals(span[1], hi, 1e-9 * Math.max(1, Math.abs(hi)), "case " + i);
             }
         }
         for (double sp = 0.1; sp < 3000; sp *= 1.9) {
-            assertEquals(HeatPass.hazeSeen(0.1, sp), seen.call(Map.of("eddy", 0.1, "speed", sp)), 1e-12, sp + " м/с");
+            assertEquals(HeatPass.hazeSeen(0.1, sp), seen.call(Map.of("eddy", 0.1, "speed", sp)), 1e-12, sp + " m/s");
         }
     }
 }

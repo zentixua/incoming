@@ -39,27 +39,26 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Взрыв боевой части по заряду (S3): блоки ломаются до радиусов Джаррета своего порога, газы выбивают комнату,
- * воронка — по закону заряда, огонь — только в шаре топлива, тела — по давлению. Радиусы — из паспорта
- * ({@code WeaponSpec.charge}) и закона ({@link BlastDamage}), допуск ±20 % (разброс порогов блоков — ±15 %).
+ * Explosion of a warhead according to charge (S3): blocks break down to the Jarrett radii of their threshold, gases knock out the room,
+ *  crater - according to the law of charge, fire - only in a ball of fuel, bodies - according to pressure. Radii - from the spec
+ *  ({@code WeaponSpec.charge}) and the law ({@link BlastDamage}), tolerance ±20% (dispersion of block thresholds - ±15%).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BlastGameTests {
     /**
-     * Середина площадки «range»: блок травы (пол — 11 слоёв: камень, земля, трава; GameTest ставит шаблон на блок выше)
-     * и первый воздух над ним.
+     * Middle of the site “range”: grass block (floor – 11 layers: stone, earth, grass; GameTest places the template on the block above)
+     *  and the first air above it.
      */
     private static final BlockPos GRASS = new BlockPos(32, 11, 32), CENTER = GRASS.above();
 
     private BlastGameTests() {}
 
     /**
-     * Столбики из одного материала, каждый на своём луче (сломанный блок гасит часть волны — за ним проверять открытое
-     * поле нельзя), на 0,6–1,35 радиуса Джаррета своего порога: дальний сломанный и ближний уцелевший — в ±20 % от
-     * него. Порог у каждого блока свой — разброс ±15 % по хэшу места ({@link BlockResponse#jitterAt}), а площадка
-     * GameTest каждый раз в новом месте: радиус Джаррета считается по порогу самого столбика, а места выбираются так,
-     * чтобы столбики стояли на одних и тех же долях своего радиуса при любом месте площадки.
+     * Columns of the same material, each on its own beam (a broken block extinguishes part of the wave - it is impossible to check the open
+     *  field behind it), at 0,6–1,35 Jarrett's radius of its own threshold: the far broken one and the near surviving one are ±20% of
+     *  it. Each block has its own threshold - the spread is ±15 % according to the hash of the place ({@link BlockResponse#jitterAt}), and the site
+     * GameTest is in a new place each time: Jarrett's radius is calculated according to the threshold of the column itself, and the places are chosen so that the columns stand at the same fractions of their radius at any place sites.
      */
     private static void radiusTest(GameTestHelper h, Block material, double psi, double tnt) {
         ServerLevel level = h.getLevel();
@@ -67,8 +66,8 @@ public final class BlastGameTests {
         Vec3 at = Vec3.atCenterOf(c);
         double nominal = BlastDamage.breakRange(BlastModel.kpa(psi), tnt);
         List<Post> posts = layPosts(c, at, psi, tnt, nominal, List.of(), b -> true);
-        h.assertTrue(posts.size() == POST_AT.length, "места для столбиков на своих лучах не нашлось: " + posts.size());
-        // трава вокруг (до 1,7 радиуса): уцелевшая трава волну не держит — столбики за ней ломаются так же
+        h.assertTrue(posts.size() == POST_AT.length, "there was no room for columns on their rays: " + posts.size());
+        // grass around (up to 1,7 radius): the surviving grass does not hold the wave - the columns behind it break the same way
         int n = (int) Math.ceil(nominal * 1.7);
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-n, 0, -n), c.offset(n, 0, n))) {
             if (level.getBlockState(p).isAir()) level.setBlock(p, Blocks.SHORT_GRASS.defaultBlockState(), 2);
@@ -76,8 +75,8 @@ public final class BlastGameTests {
         for (Post p : posts) level.setBlock(p.pos(), material.defaultBlockState(), 2);
         Warheads.Probe blast = Warheads.testCharge(level, at, tnt);
         h.succeedWhen(() -> {
-            h.assertTrue(blast.done(), "взрыв не кончился");
-            // доли радиуса Джаррета своего порога; сломан — материала на месте нет (вал воронки может лечь на снесённое)
+            h.assertTrue(blast.done(), "the explosion didn't end");
+            // fractions of the Jarrett radius of its threshold; broken - there is no material in place (the crater shaft can lie on the demolished one)
             double broken = 0, kept = Double.MAX_VALUE;
             StringBuilder rows = new StringBuilder();
             for (Post p : posts) {
@@ -86,7 +85,7 @@ public final class BlastGameTests {
                 else kept = Math.min(kept, p.share());
                 rows.append(String.format(Locale.ROOT, " %.2f%s", p.share(), gone ? "x" : "|"));
             }
-            String got = String.format(Locale.ROOT, "%s, %.1f кг: сломан до %.2f, цел с %.2f своего радиуса Джаррета (%.1f м без разброса); столбики:%s",
+            String got = String.format(Locale.ROOT, "%s, %.1f kg: broken to %.2f, intact from %.2f of its Jarrett radius (%.1f m without spread); columns:%s",
                     material, tnt, broken, kept, nominal, rows);
             Incoming.LOG.info("BLASTBENCH {}", got);
             h.assertTrue(broken >= 0.7 && broken <= 1.2, got);
@@ -95,18 +94,18 @@ public final class BlastGameTests {
     }
 
     /**
-     * Доли радиуса Джаррета своего порога, на которых стоят столбики: по обе стороны от краёв допуска (0,7 и 1,2–1,3),
-     * глубоко в зоне и за ней. Край модели — 0,9–1,11 радиуса своего порога (закон давление–импульс делит на разброс и
-     * давление, и импульс). Места выбираются в этом порядке: на тесном круге кладки у шахеда (столбики в 2–4,5 м,
-     * каждый закрывает 12–28° азимута) лучшие места достаются столбикам у краёв допуска.
+     * Fractions of the Jarrett radius of its threshold, on which the columns stand: on both sides of the tolerance edges (0,7 and 1,2–1,3),
+     * deep in the zone and beyond it. The edge of the model is 0,9–1,11 of the radius of its threshold (the pressure-momentum law divides into the spread of both
+     *  pressure and impulse). Places are selected in this order: on the close circle of masonry at Shahed (columns in 2–4,5 m,
+     * each covers 12–28° azimuth) the best places go to columns at the edges of the tolerance.
      */
     static final double[] POST_AT = {0.75, 1.25, 0.8, 1.2, 0.7, 1.35, 0.6, 0.9, 1.0, 1.1};
-    /** Зазор между столбиками по азимуту сверх их угловых полуширин, рад: луч к дальнему не задевает ближний. */
+    /** The gap between the columns in azimuth is in excess of their angular half-widths, rad: the beam to the far one does not touch the near one. */
     private static final double POST_GAP = Math.toRadians(3);
 
     /**
-     * Столбик: место, расстояние от заряда до ближней точки блока (луч ломает блок, войдя в него), радиус Джаррета его
-     * порога, азимут и угловая полуширина блока от заряда.
+     * Column: location, distance from the charge to the nearest point of the block (the beam breaks the block upon entering it), Jarrett's radius of its
+     * threshold, azimuth and angular half-width of the block from the charge.
      */
     record Post(BlockPos pos, double distance, double jarrett, double bearing, double halfWidth) {
         double share() {
@@ -115,10 +114,10 @@ public final class BlastGameTests {
     }
 
     /**
-     * Места столбиков в слое заряда: для каждой доли {@link #POST_AT} — блок, у которого расстояние, делённое на радиус
-     * Джаррета его порога, ближе всего к ней, и который по азимуту не перекрывает уже выбранные. Зависит только от
-     * порогов мест, а их разброс — от места площадки: доли выходят одни и те же везде. {@code taken} — уже стоящие
-     * столбики другого материала: новые не перекрывают и их; {@code side} — какие азимуты (рад, от +x к +z) годятся.
+     * Places of columns in the charge layer: for each fraction {@link #POST_AT} - a block whose distance divided by the
+     * Jarrett radius of its threshold is closest to it, and which does not overlap the already selected ones in azimuth. It depends only on the
+     * thresholds of the places, and their spread depends on the place of the site: the shares are the same everywhere. {@code taken} - already standing
+     *  columns of a different material: new ones do not overlap them either; {@code side} - which azimuths (rad, from +x to +z) are suitable.
      */
     static List<Post> layPosts(BlockPos c, Vec3 at, double psi, double tnt, double nominal, List<Post> taken,
                                java.util.function.DoublePredicate side) {
@@ -184,27 +183,27 @@ public final class BlastGameTests {
         return sampled;
     }
 
-    /** Шахед (50 кг): кладка ломается до ~3,4 м (Джаррет A). */
+    /** Shahed (50 kg): masonry breaks up to ~3,4 m (Jarrett A). */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_brick", skyAccess = true)
     public static void droneBreaksBrickToJarrettA(GameTestHelper h) {
         radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.DRONE.spec().charge());
     }
 
-    /** Шахед: доски (лёгкие постройки, 4 psi) ломаются до ~6 м. */
+    /** Shahed: planks (light buildings, 4 psi) break up to ~6 m. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_wood", skyAccess = true)
     public static void droneBreaksWoodToJarrettB(GameTestHelper h) {
         radiusTest(h, Blocks.OAK_PLANKS, 4, WeaponType.DRONE.spec().charge());
     }
 
-    /** «Томагавк» (150 кг): кладка — до ~7 м. */
+    /** "Tomahawk" (150 kg): masonry - up to ~7 m. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_radius_missile", skyAccess = true)
     public static void missileBreaksBrickToJarrettA(GameTestHelper h) {
         radiusTest(h, Blocks.STONE_BRICKS, 12, WeaponType.MISSILE.spec().charge());
     }
 
     /**
-     * Заряд у пола высокой закрытой комнаты (кладка, 5×7×5 воздуха): газы держат давление на всех стенах (UFC 3-340-02) — стены
-     * выбиты целиком, хотя волна в открытом поле сломала бы кладку лишь в метре от 10 кг.
+     * Charge at the floor of a high closed room (masonry, 5×7×5 air): gases maintain pressure on all walls (UFC 3-340-02) - the walls
+     *  are knocked out entirely, although a wave in an open field would break the masonry only a meter away from 10 kg.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_room", skyAccess = true)
     public static void roomBlastBlowsOutWalls(GameTestHelper h) {
@@ -219,7 +218,7 @@ public final class BlastGameTests {
             level.setBlock(p, wall ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
             if (wall && y > 0) walls.add(p);
         }
-        // стены — блоки, к которым газы прилегают гранью (рёбра и углы коробки остаются столбами)
+        // walls are blocks to which the gases are adjacent (the edges and corners of the box remain pillars)
         walls.removeIf(p -> {
             for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
                 BlockPos n = p.relative(d);
@@ -229,22 +228,23 @@ public final class BlastGameTests {
             return true;
         });
         Vec3 at = Vec3.atCenterOf(base.offset(3, 2, 3));
-        h.assertTrue(BlastDamage.breakRange(BlastModel.kpa(12), 10) < 1.5, "в открытом поле 10 кг ломают кладку дальше метра — проверка пустая");
+        h.assertTrue(BlastDamage.breakRange(BlastModel.kpa(12), 10) < 1.5, "in an open field 10 kg break masonry further than a meter - check is empty");
         Warheads.Probe blast = Warheads.testCharge(level, at, 10);
         h.succeedWhen(() -> {
-            h.assertTrue(blast.done(), "взрыв не кончился");
+            h.assertTrue(blast.done(), "the explosion didn't end");
             int gone = 0;
             for (BlockPos p : walls) if (level.getBlockState(p).isAir()) gone++;
-            h.assertTrue(gone >= walls.size() * 0.9, "газы выбили " + gone + " из " + walls.size() + " блоков стен и потолка");
+            h.assertTrue(gone >= walls.size() * 0.9, "gases knocked out " + gone + " from " + walls.size() + " wall and ceiling blocks");
         });
     }
 
     /**
-     * Воронка ракеты — по закону заряда (D = 0,65·∛W, глубина — четверть) в своём грунте: сухой (почва, песок, гравий
-     * насыпи) — множитель 1 (жалоба 23.10: гравий под путями считался скалой, ×0,7, песок — насыщенным водой, ×1,3).
-     * Одна воронка ракеты — ~4 м³ блоками со случайной добавкой (1–8 блоков), поэтому девять воронок сеткой через 12 м и
-     * сумма: в среднем 9 × 4,0 = 36 м³; скала дала бы 12, насыщенный грунт — 79. Обломки на время проверки не ложатся
-     * блоками — считается только снятый грунт; каждая яма — не дальше вала (2 r + 1).
+     * The missile crater follows the charge law (D = 0,65·∛W, depth is a quarter) in its own soil: dry soil
+     * (earth, sand, gravel embankments) has multiplier 1 (complaint 23.10: gravel under tracks was treated as rock,
+     * ×0,7, and sand as water-saturated, ×1,3). One missile crater removes ~4 m³ in whole blocks with a random
+     * fractional addition (1–8 blocks), so use nine craters on a grid 12 m apart and their sum: average
+     * 9 × 4,0 = 36 m³; rock would give 12, saturated soil 79. Debris does not settle as blocks during the check:
+     * only removed soil is counted; each hole stays within the rim (2 r + 1).
      */
     private static void craterTest(GameTestHelper h, Block ground, CraterModel.Soil soil) {
         ServerLevel level = h.getLevel();
@@ -252,8 +252,8 @@ public final class BlastGameTests {
         IncomingConfig.SERVER.debrisStay.set(false);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
         BlockPos grass = h.absolutePos(GRASS);
-        h.assertTrue(ua.zentix.incoming.warhead.GroundMaterial.of(ground.defaultBlockState()).soil() == soil, ground + " — не " + soil);
-        // три верхних слоя — проверяемый грунт: воронка ракеты глубиной меньше метра целиком в нём
+        h.assertTrue(ua.zentix.incoming.warhead.GroundMaterial.of(ground.defaultBlockState()).soil() == soil, ground + " - not " + soil);
+        // the top three layers are the soil being tested: a rocket crater less than a meter deep is entirely in it
         for (BlockPos p : BlockPos.betweenClosed(grass.offset(-18, -2, -18), grass.offset(18, 0, 18))) level.setBlock(p, ground.defaultBlockState(), 2);
         List<BlockPos> soilBlocks = new ArrayList<>();
         for (BlockPos p : BlockPos.betweenClosed(grass.offset(-18, -4, -18), grass.offset(18, 0, 18))) soilBlocks.add(p.immutable());
@@ -265,11 +265,11 @@ public final class BlastGameTests {
         for (Vec3 at : hits) Warheads.detonate(level, WeaponType.MISSILE, at, null, null);
         double law = hits.size() * CraterModel.chargeVolume(tnt, soil);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "hit queue is not empty");
             int dug = 0;
             double far = 0;
             for (BlockPos p : soilBlocks) {
-                // снятое — пустое место; в нём может гореть топливо воронки (FuelFires), огонь — тоже пустота
+                // removed - empty space; crater fuel (FuelFires) can burn in it, fire is also emptiness
                 BlockState now = level.getBlockState(p);
                 if (!now.isAir() && !(now.getBlock() instanceof BaseFireBlock)) continue;
                 dug++;
@@ -277,9 +277,9 @@ public final class BlastGameTests {
                 for (Vec3 at : hits) near = Math.min(near, Math.hypot(p.getX() + 0.5 - at.x, p.getZ() + 0.5 - at.z));
                 far = Math.max(far, near);
             }
-            String got = String.format(Locale.ROOT, "%s: снято %d блоков в %d воронках до %.1f м (закон: %.1f м³, r %.1f)",
+            String got = String.format(Locale.ROOT, "%s: removed %d blocks in %d crater up to %.1f m (law: %.1f m³, r %.1f)",
                     ground, dug, hits.size(), far, law, rc);
-            Incoming.LOG.info("BLASTBENCH воронка {}", got);
+            Incoming.LOG.info("BLASTBENCH crater {}", got);
             h.assertTrue(dug >= 0.6 * law && dug <= 1.45 * law, got);
             h.assertTrue(far <= 2 * rc + 1, got);
         });
@@ -301,15 +301,15 @@ public final class BlastGameTests {
     }
 
     /**
-     * Огонь после шара топлива (жалоба 23.10: после ракеты горел почти каждый блок в круге — крыши, песок, рельсы).
-     * Вокруг удара на траве: столбы брёвен (толстое дерево) на лучах 3–20 м, столбы листвы и сена (тонкое) на своих лучах
-     * внутри шара, бревно у самой воронки, трава и маки на траве (горят на своём месте). Огонь шара ставится только у
-     * горючего: у листвы и сена — с долей их порога ({@link PulseIgnition}), у брёвен — нет; ни один огонь шара не стоит на
-     * полу, что сам не горит (пол — трава-дёрн; так «горели» песок и рельсы), и все — в шаре. Топливо, что осталось в
-     * воронке, горит на полу у удара своими клетками ({@link FuelFires}: столько, сколько площадь закона), — это огонь
-     * топлива, не огонь шара; у бревна огонь — только такой. Шар всплывает к 0,75·D: крона из листвы над ударом на высоте D
-     * (вне прежней полусферы D/2) загорается (BLASTSEQ D18). У «Града» топлива нет — огня нет. Огонь ванили на время
-     * проверки не растёт ({@code doFireTick}), волна блоков не ломает: считается только поджиг.
+     * Fire after the ball of fuel (complaint 23.10: after the rocket, almost every block in the circle burned - roofs, sand, rails).
+     * Around the impact on the grass: pillars of logs (thick wood) on the beams 3–20 m, pillars of foliage and hay (thin) on their rays
+     *  inside the ball, a log near the crater, grass and poppies on the grass (burning in their place). The fire of the ball is set only for
+     * fuel: for leaves and hay - with a share of their threshold ({@link PulseIgnition}), for logs - not; not a single fire of the ball stands on a
+     *  floor that itself does not burn (the floor is grass and turf; this is how sand and rails “burned”), and everything is in the ball. The fuel that remains in the
+     *  crater burns on the floor at the impact with its cells ({@link FuelFires}: as much as the area of ​​the law) - this is the fire of the
+     *  fuel, not the fire of the ball; the log has only this kind of fire. The ball floats to 0,75·D: a crown of foliage above the impact at a height of D
+     *  (outside the previous hemisphere D/2) lights up (BLASTSEQ D18). “Grad” has no fuel - no fire. Fire vanilla does not grow during the
+     *  check ({@code doFireTick}), the wave of blocks does not break: only ignition is considered.
      */
     private static void fireTest(GameTestHelper h, WeaponType weapon) {
         ServerLevel level = h.getLevel();
@@ -319,16 +319,16 @@ public final class BlastGameTests {
         double ballKg = FuelFireball.ballKg(spec.fuelAtImpact());
         double r = FuelFireball.diameter(ballKg) / 2, wet = Math.sqrt(spec.pool().cells() / Math.PI);
         BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
-        // брёвна: 16 лучей, 3–20 м; тонкое — между ними, 2,5 м до края шара
+        // logs: 16 rays, 3–20 m; thin - between them, 2,5 m to the edge of the ball
         for (int i = 0; i < 16; i++) {
             double a = i * Math.PI / 8, d = 3 + i * 17 / 15.0;
             column(level, at, a, d, Blocks.OAK_LOG.defaultBlockState());
             double thin = 2.5 + (Math.max(r, 3) - 3) * i / 15.0;
             column(level, at, a + Math.PI / 16, thin, i % 2 == 0 ? leaves : Blocks.HAY_BLOCK.defaultBlockState());
         }
-        // бревно у самой воронки — в круге горящего топлива
+        // log near the crater - in a circle of burning fuel
         level.setBlock(BlockPos.containing(at.x + 1, at.y, at.z), Blocks.OAK_LOG.defaultBlockState(), 2);
-        // растения на траве (трава, цветы) по кругу в 2,5 м до края шара: горят на своём месте
+        // plants on the grass (grass, flowers) in a circle 2,5 m to the edge of the ball: they burn in their place
         java.util.Set<BlockPos> plants = new java.util.HashSet<>();
         for (int i = 0; i < 24; i++) {
             double a = (i + 0.25) * Math.PI / 12, d = 2.5 + (Math.max(r, 3) - 3) * (i % 6) / 5.0;
@@ -337,7 +337,7 @@ public final class BlastGameTests {
             level.setBlock(p, (i % 2 == 0 ? Blocks.SHORT_GRASS : Blocks.POPPY).defaultBlockState(), 2);
             plants.add(p.immutable());
         }
-        // крона над шаром: на высоте D (не выше площадки), вне прежней полусферы D/2 у точки удара — шар всплывает к ней
+        // crown above the ball: at a height of D (not higher than the platform), outside the previous hemisphere D/2 at the point of impact - the ball floats up to it
         int crownY = (int) Math.min(Math.round(2 * r), 26), crownR = 6;
         java.util.List<BlockPos> crown = new java.util.ArrayList<>();
         if (r > 0) {
@@ -358,7 +358,7 @@ public final class BlastGameTests {
         });
         Warheads.detonate(level, weapon, at, null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "hit queue is not empty");
             int canopy = 0;
             for (BlockPos p : crown) {
                 if (level.getBlockState(p.above()).getBlock() instanceof BaseFireBlock) canopy++;
@@ -370,11 +370,11 @@ public final class BlastGameTests {
             double far = 0;
             for (BlockPos p : BlockPos.betweenClosed(h.absolutePos(CENTER.offset(-24, -1, -24)), h.absolutePos(CENTER.offset(24, 6, 24)))) {
                 if (!(level.getBlockState(p).getBlock() instanceof BaseFireBlock)) continue;
-                // огонь топлива воронки — на полу у удара, на своих клетках: он и должен стоять на земле
+                // fire fuel crater - on the floor at the impact, on its cells: it should stand on the ground
                 if (fuelCells.contains(p)) {
                     fuel++;
                     h.assertTrue(Vec3.atCenterOf(p).distanceTo(at) <= wet + 1.5,
-                            String.format(Locale.ROOT, "%s: клетка топлива в %.1f м — дальше его круга %.1f м", weapon, Vec3.atCenterOf(p).distanceTo(at), wet));
+                            String.format(Locale.ROOT, "%s: fuel cell at %.1f m - further than its circle %.1f m", weapon, Vec3.atCenterOf(p).distanceTo(at), wet));
                     continue;
                 }
                 fires++;
@@ -385,8 +385,8 @@ public final class BlastGameTests {
                     if (n.is(Blocks.OAK_LEAVES) || n.is(Blocks.HAY_BLOCK)) byThin = true;
                     else if (n.is(Blocks.OAK_LOG)) bySolid = true;
                 }
-                // огонь на месте растения — растение горит само; иначе огонь на твёрдом полу, что сам не горит (песок,
-                // камень, дёрн), — огонь «на земле» рядом с горючим
+                // fire in place of the plant - the plant itself burns; otherwise, a fire on a hard floor that does not burn itself (sand,
+                //  stone, turf) is a fire “on the ground” next to the fuel
                 BlockPos below = p.below();
                 BlockState under = level.getBlockState(below);
                 if (plants.contains(p)) plant++;
@@ -396,31 +396,31 @@ public final class BlastGameTests {
                 else floor++;
 
             }
-            String got = String.format(Locale.ROOT, "%s: огня шара %d (у тонкого %d, растений %d, у брёвен %d, на пустом полу %d) до %.1f м (шар %.1f м), в кроне на %d м — %d, топлива %d клеток (закон %d)",
+            String got = String.format(Locale.ROOT, "%s: fire ball %d (for a thin %d, plants %d, for logs %d, on an empty floor %d) up to %.1f m (ball %.1f m), in the crown on %d m - %d, fuel cells %d (law %d)",
                     weapon, fires, thin, plant, solid, floor, far, r, crownY, canopy, fuel, spec.pool().cells());
             Incoming.LOG.info("BLASTBENCH {}", got);
             h.assertTrue(floor == 0, got);
-            // толстое дерево импульс шара не поджигает: у бревна — только огонь топлива
+            // a thick tree does not ignite the ball's impulse; a log has only fuel fire
             h.assertTrue(solid == 0, got);
             h.assertTrue(fuel == spec.pool().cells(), got);
             if (r > 0) {
                 h.assertTrue(thin >= 4, got);
-                // растений в шаре — 24: у ракеты загораются больше половины (14–15); у шахеда у земли — пятая часть травы и меньше к краю
-                // шара (шар всплывает), в среднем 2–3 — для проверки мало
+                // plants in the ball - 24: more than half of the rocket lights up (14–15); for Shahed near the ground - a fifth of grass and less towards the edge of the ball
+                //  (the ball floats up), on average 2–3 - not enough to check
                 if (weapon == WeaponType.MISSILE) h.assertTrue(plant >= 6, got);
                 h.assertTrue(far <= r + 1.5, got);
-                // обход доходит до края шара у земли: прежде предел клеток кончал его в небе над всплывшим шаром ракеты
-                // (на импульсе 10 кал/см², ревью #467), и листва у края не загоралась
+                // the bypass reaches the edge of the ball near the ground: before, the limit of cells ended it in the sky above the surfaced ball of the rocket
+                //  (on the pulse 10 cal/cm², review #467), and the foliage at the edge did not light up
                 h.assertTrue(far >= r - 2.5, got);
-                // крону над поднявшимся шаром он жжёт (BLASTSEQ D18: прежде шар сервера стоял полусферой D/2 у удара)
+                // it burns the crown above the rising ball (BLASTSEQ D18: before the server’s ball stood as a hemisphere D/2 at the impact)
                 h.assertTrue(canopy >= 5, got);
             } else h.assertTrue(fires == 0, got);
         });
     }
 
     /**
-     * На время проверки считается только поджиг: волна блоков не ломает (листву и сено взрыв снёс бы раньше шара), обломки
-     * не остаются, огонь ванили не растёт ({@code doFireTick}).
+     * For the duration of the check, only ignition is considered: the wave of blocks does not break (the explosion would have blown away foliage and hay before the ball), debris
+     *  does not remain, the vanilla fire does not grow ({@code doFireTick}).
      */
     private static void onlyIgnition(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -438,7 +438,7 @@ public final class BlastGameTests {
     }
 
     /**
-     * Столбы листвы в три блока по кругу в {@code d} м от {@code at} ({@code n} штук); возвращает их блоки. Огня у них —
+     * Columns of foliage in three blocks in a circle in {@code d} m from {@code at} ({@code n} pieces); returns their blocks. Their fire is
      * {@link #firesAt}.
      */
     private static List<BlockPos> leafRing(ServerLevel level, Vec3 at, double d, int n) {
@@ -455,7 +455,7 @@ public final class BlastGameTests {
         return placed;
     }
 
-    /** Сколько клеток огня у блоков {@code fuel} (по грани). */
+    /** How many fire cells do the {@code fuel} blocks have (along the edge). */
     private static int firesAt(ServerLevel level, List<BlockPos> fuel) {
         Set<BlockPos> fires = new HashSet<>();
         for (BlockPos p : fuel) {
@@ -468,10 +468,10 @@ public final class BlastGameTests {
     }
 
     /**
-     * Ракета под широким навесом (камень 63×63 на высоте 30 м — над всплывшим шаром): под ним — 120 тыс. клеток воздуха с
-     * импульсом выше {@code PulseIgnition.FLOOR}, втрое больше предела обхода. Обход идёт от ближних клеток к дальним и
-     * доходит до листвы у земли в 23 м, где импульс — 6 кал/см² (половина листвы). Прежде он шёл от большего импульса и
-     * кончался пределом в воздухе под навесом на 9 кал/см², до земли за краем шара не доходя (ревью #467).
+     * A rocket under a wide canopy (stone 63×63 at a height of 30 m - above the floating ball): under it - 120 thousand air cells with
+     *  an impulse higher than {@code PulseIgnition.FLOOR}, three times the bypass limit. The bypass goes from near cells to far ones and
+     *  reaches the foliage near the ground in 23 m, where the impulse is 6 cal/cm² (half of the foliage). Previously, it came from a larger impulse and
+     *  ended in the air under a canopy at 9 cal/cm², not reaching the ground beyond the edge of the ball (review #467).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "blast_fire_roof", skyAccess = true)
     public static void missileFireReachesTheGroundUnderAWideRoof(GameTestHelper h) {
@@ -492,17 +492,17 @@ public final class BlastGameTests {
         });
         Warheads.detonate(level, WeaponType.MISSILE, at, null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "hit queue is not empty");
             int fires = firesAt(level, leaves);
-            Incoming.LOG.info("BLASTBENCH MISSILE под навесом: огня у листвы в 23 м — {}", fires);
-            h.assertTrue(fires >= 6, "под навесом у листвы в 23 м огня " + fires);
+            Incoming.LOG.info("BLASTBENCH MISSILE under a canopy: fire near the foliage in 23 m - {}", fires);
+            h.assertTrue(fires >= 6, "under a canopy near the foliage in 23 m fire " + fires);
         });
     }
 
     /**
-     * Ракета рвётся в воздухе, в 6 м над землёй (неконтактный подрыв, пролом крыши): точка подрыва выше всего в столбцах
-     * рядом, а обход не выше неё идёт и выше потолка столбцов — до листвы у земли в 6 м. Прежде потолок отрезал точку
-     * подрыва от земли: обход кончался на одной клетке (ревью #467).
+     * A rocket explodes in the air, 6 m above the ground (non-contact detonation, roof breach): the detonation point is highest in the columns
+     *  nearby, and the bypass does not go above it and above the ceiling of the columns - to the foliage near the ground in 6 m. Previously, the ceiling cut off the detonation point
+     *  from the ground: bypass ended on one cell (review #467).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "blast_fire_air", skyAccess = true)
     public static void missileAirburstLightsTheGroundBelow(GameTestHelper h) {
@@ -512,14 +512,14 @@ public final class BlastGameTests {
         List<BlockPos> leaves = leafRing(level, ground, 6, 8);
         Warheads.detonate(level, WeaponType.MISSILE, ground.add(0, 6, 0), null, null);
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "очередь попаданий не пуста");
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "hit queue is not empty");
             int fires = firesAt(level, leaves);
-            Incoming.LOG.info("BLASTBENCH MISSILE в воздухе: огня у листвы на земле в 6 м — {}", fires);
-            h.assertTrue(fires >= 4, "подрыв в 6 м над землёй: огня у листвы " + fires);
+            Incoming.LOG.info("BLASTBENCH MISSILE in the air: fire near the foliage on the ground in 6 m - {}", fires);
+            h.assertTrue(fires >= 4, "explosion at 6 m above the ground: fire near the foliage " + fires);
         });
     }
 
-    /** Столб в три блока на луче под углом {@code a} в {@code d} м от {@code at}. */
+    /** A pillar of three blocks on a beam at an angle {@code a} in {@code d} m from {@code at}. */
     private static void column(ServerLevel level, Vec3 at, double a, double d, BlockState state) {
         BlockPos p = BlockPos.containing(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d);
         for (int y = 0; y < 3; y++) level.setBlock(p.above(y), state, 2);
@@ -540,7 +540,7 @@ public final class BlastGameTests {
         fireTest(h, WeaponType.ROCKET);
     }
 
-    /** Тела — по давлению волны ({@code BlastBody}): свинья в 2 м от шахеда погибает, в 30 м цела. */
+    /** Bodies - according to wave pressure ({@code BlastBody}): a pig in 2 m from Shahed dies, in 30 m it is intact. */
     @GameTest(template = "range", timeoutTicks = 200, batch = "blast_bodies", skyAccess = true)
     public static void bodiesHurtByPressure(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -551,9 +551,9 @@ public final class BlastGameTests {
         far.setNoAi(true);
         Warheads.Probe blast = Warheads.testCharge(level, at, WeaponType.DRONE.spec().charge());
         h.succeedWhen(() -> {
-            h.assertTrue(blast.done(), "взрыв не кончился");
-            h.assertTrue(!near.isAlive(), "в 2 м жива: " + near.getHealth());
-            h.assertTrue(far.isAlive() && far.getHealth() >= far.getMaxHealth() - 0.5f, "в 30 м ранена: " + far.getHealth());
+            h.assertTrue(blast.done(), "the explosion didn't end");
+            h.assertTrue(!near.isAlive(), "in 2 m alive: " + near.getHealth());
+            h.assertTrue(far.isAlive() && far.getHealth() >= far.getMaxHealth() - 0.5f, "in 30 m wounded: " + far.getHealth());
         });
     }
 }

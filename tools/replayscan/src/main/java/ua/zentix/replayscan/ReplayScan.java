@@ -17,15 +17,15 @@ import ua.zentix.replayscan.film.Film;
 import java.nio.file.Path;
 
 /**
- * Разбор повтора Flashback без окна (README.md): после загрузки клиент открывает повтор, пускает его с
- * {@link Settings#speed} и не рисует; сервер повтора в конце каждого тика отдаёт мир {@link Scan}; дошёл до конца —
- * таблицы закрыты, игра выходит. С {@code -Dreplayscan.film} — съёмка по плану ({@link Film}); без этих свойств мод
- * ничего не делает.
+ * Analysis of a Flashback replay without a window (README.md): after loading, the client opens a replay, starts it with
+ * {@link Settings#speed} and does not draw; the replay server at the end of each tick gives the world {@link Scan}; reached the end -
+ *  tables are closed, the game exits. With {@code -Dreplayscan.film} - shooting according to plan ({@link Film}); without these properties, the
+ *  mod does nothing.
  */
 @Mod(value = "replayscan", dist = Dist.CLIENT)
 public final class ReplayScan {
     static final Logger LOG = LogUtils.getLogger();
-    /** Сколько секунд без хода повтора — конец с ошибкой (meta.json: complete — false). */
+    /** How many seconds without a replay progress - end with an error (meta.json: complete - false). */
     private static final int STALL_SECONDS = 300;
 
     private enum Phase { WAIT, OPENING, PLAYING, CLOSING }
@@ -39,7 +39,7 @@ public final class ReplayScan {
     private int lastTick = -1;
 
     public ReplayScan(IEventBus modBus) {
-        // съёмка по плану (README.md, «Съёмка») — вместо разбора
+        // shooting according to plan (README.md, “Shooting”) - instead of analysis
         String film = System.getProperty("replayscan.film");
         if (film != null && !film.isBlank()) {
             settings = null;
@@ -63,7 +63,7 @@ public final class ReplayScan {
         }
         settings = read;
         if (settings == null) {
-            // клиент без окна сам не выйдет: разбор не начнётся — выход, как только игра загрузилась
+            // a client without a window will not exit on its own: parsing will not begin - exit as soon as the game has loaded
             NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
                 if (Minecraft.getInstance().getOverlay() == null) Minecraft.getInstance().stop();
             });
@@ -72,7 +72,7 @@ public final class ReplayScan {
         LOG.info("Replay scan: {} -> {} at {} ticks/s", settings.replay(), settings.out(), settings.speed());
         NeoForge.EVENT_BUS.addListener(this::clientTick);
         NeoForge.EVENT_BUS.addListener(this::serverTick);
-        // падение игры (своё или любого мода) выходит через System.exit: таблицы и meta.json дописываются на выходе
+        // a game crash (your own or any mod) comes out via System.exit: tables and meta.json are added to the output
         Runtime.getRuntime().addShutdownHook(new Thread(this::closeScan, "replayscan-exit"));
     }
 
@@ -81,8 +81,8 @@ public final class ReplayScan {
         try {
             switch (phase) {
                 case WAIT -> {
-                    // загрузка кончилась: заглавие или экран поверх него (первый запуск — экран специальных
-                    // возможностей, у модов — свои), повтор их сменит
+                    // loading has ended: the title or the screen on top of it (the first launch is a screen of special
+                    //  capabilities, mods have their own), a replay will replace them
                     if (mc.getOverlay() != null || mc.screen == null || mc.level != null) {
                         stall(mc, "title screen did not appear");
                         if (failure != null) {
@@ -91,7 +91,7 @@ public final class ReplayScan {
                         }
                         return;
                     }
-                    // без паузы при потере фокуса (окна под xvfb нет), прорисовка — как у записи и не меньше
+                    // without a pause when focus is lost (there is no window under the xvfb), rendering is the same as the recording and no less
                     mc.options.onboardAccessibility = false;
                     mc.options.pauseOnLostFocus = false;
                     mc.options.renderDistance().set(32);
@@ -160,20 +160,20 @@ public final class ReplayScan {
     private void serverTick(ServerTickEvent.Post e) {
         MinecraftServer s = e.getServer();
         if (phase != Phase.PLAYING || !link.isReplayServer(s) || failure != null) return;
-        // под тем же замком, что и закрытие: закрытые таблицы новый разбор не начнёт заново (он стёр бы их)
+        // under the same lock as closing: closed tables will not be parsed again (it would erase them)
         synchronized (this) {
             if (phase != Phase.PLAYING) return;
             try {
                 if (scan == null) scan = new Scan(settings, link, LOG);
                 if (!scan.done()) scan.tick(s, link.tick(s));
             } catch (Throwable ex) {
-                // любая ошибка разбора (и нехватка памяти) — конец разбора с записанными таблицами, а не падение игры
+                // any parsing error (and lack of memory) means the end of parsing with the tables recorded, not the game crashing
                 failure = ex;
             }
         }
     }
 
-    /** Таблицы и meta.json — в потоке сервера повтора (там же их писал разбор); потом клиент выходит. */
+    /** Tables and meta.json - in the replay server thread (the analysis wrote them there); then the client leaves. */
     private void finish() {
         closeScan();
         Minecraft.getInstance().execute(() -> Minecraft.getInstance().stop());

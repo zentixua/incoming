@@ -17,15 +17,15 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Камеры плана: кандидаты по его описанию ({@link Plan.Camera}) и их оценка по миру повтора до вывода — объект в кадре
- * и не за домом, события видны, камера не в блоках, дым прежних ударов не на линии взгляда, размер в кадре не мельче
- * порога. Вывод потом проверяет то же по каждому кадру ({@link FrameLog}) теми же лучами и тем же кадром ({@link View},
- * {@link #open}, {@link #keySeen}): оценка предсказывает его итог, а не догадывается о нём.
+ * Cameras of the plan: candidates according to its description ({@link Plan.Camera}) and their assessment in the world of replay before output - the object is in the frame
+ *  and not behind the house, the events are visible, the camera is not in the blocks, the smoke of previous attacks is not in the line of sight, the size in the frame is not smaller than the
+ *  threshold. The output then checks the same for each frame ({@link FrameLog}) with the same rays and the same frame ({@link View},
+ * {@link #open}, {@link #keySeen}): the evaluation predicts its outcome, rather than guessing about it.
  */
 final class Cameras {
     private Cameras() {}
 
-    /** Поза камеры: место глаза, поворот как у игрока (yaw 0 — юг, pitch вниз — плюс), угол кадра по вертикали. */
+    /** Camera pose: position of the eye, rotation like the player (yaw 0 - south, pitch down - plus), vertical frame angle. */
     record Pose(Vec3 pos, float yaw, float pitch, double fov) {
         static Pose look(Vec3 eye, Vec3 at, double fov) {
             Vec3 d = at.subtract(eye);
@@ -35,7 +35,7 @@ final class Cameras {
         }
     }
 
-    /** Камера по тикам повтора (с долей); крен — градусы, плюс — влево (ключ камеры Flashback). */
+    /** Camera by tick replay (with share); roll - degrees, plus - left (camera key Flashback). */
     interface Path {
         Pose at(double t);
 
@@ -45,30 +45,30 @@ final class Cameras {
     }
 
     /**
-     * Кандидат: камера по ключевым кадрам ({@code path}) или глаза игрока ({@code player}, пути нет — камера Flashback
-     * становится этим игроком). {@code designed} — камера задана планом и выводится первой, если не отвергнута;
-     * {@code roam} — путь задан планом и идёт и там, где у клиента нет чанков (в блоках камера — только где чанк есть).
+     * Candidate: keyframe camera ({@code path}) or player's eyes ({@code player}, no way - camera Flashback
+     *  becomes that player). {@code designed} - the camera is specified by the plan and is displayed first, if not rejected;
+     * {@code roam} - the path is specified by the plan and goes where the client does not have chunks (in blocks, the camera is only where there is a chunk).
      */
     record Candidate(String name, @Nullable Path path, @Nullable String player, boolean gui, double fov, boolean designed, boolean roam) {}
 
     /**
-     * Оценка кандидата: итог (меньше нуля — не годится), из чего он и пройдёт ли вывод пороги плана ({@code pass}: объект
-     * до события, за последнюю секунду и события — не меньше долей {@link Plan.Need}).
+     * Candidate assessment: the result (less than zero is not good), what it is from and whether the conclusion will pass the thresholds of the plan ({@code pass}: object
+     *  before the event, for the last second and the event - no less than shares of {@link Plan.Need}).
      */
     record Score(double total, double approach, double near, double keys, double after, double size, double smoke, boolean pass, String why) {
         static final Score DESIGNED = new Score(1, 1, 1, 1, 1, 1, 0, true, "designed camera");
     }
 
-    /** Толщина слоя облаков, блоков. */
+    /** Thickness of the layer of clouds, blocks. */
     static final double CLOUD_DEPTH = 6;
-    /** Доля дальности прорисовки, дальше которой объект в тумане у её края (у шейдерпака туман раньше и плавнее). */
+    /** The fraction of the rendering distance beyond which an object in the fog at its edge (in the shader pack the fog is earlier and smoother). */
     static final double FOG = 0.8;
-    /** Поле кадра, в котором оценка держит объект (вывод — {@link FrameLog}: 0.92): камера ведёт путь, а не сущность. */
+    /** Frame field in which the score holds the object (output - {@link FrameLog}: 0.92): The camera leads the path, not the entity. */
     static final double SAFE = 0.85;
 
     /**
-     * Кадр камеры: глаз, оси (вперёд, вправо, вверх) и тангенсы половины угла по ширине и высоте. Вывод строит его по
-     * камере и проекции кадра, оценка — по позе и сторонам кадра.
+     * Camera frame: eye, axes (forward, right, up) and tangents of half the angle in width and height. The output is based on the
+     *  camera and the projection of the frame, the assessment is based on the pose and sides of the frame.
      */
     record View(Vec3 eye, Vec3 fwd, Vec3 right, Vec3 up, double tanX, double tanY) {
         static View of(Pose p, double aspect) {
@@ -80,8 +80,8 @@ final class Cameras {
         }
 
         /**
-         * Кадр с креном (градусы, плюс — влево, как у ключа Flashback): Flashback поворачивает поворот камеры вокруг её
-         * оси вперёд ({@code rotateZ}) после того, как камера посчитала свои векторы, — у них крена нет.
+         * Frame with roll (degrees, plus - to the left, like the Flashback key): Flashback rotates the camera around its forward
+         *  axis ({@code rotateZ}) after the camera has calculated its vectors - they have no roll.
          */
         View rolled(double roll) {
             if (roll == 0) return this;
@@ -89,14 +89,14 @@ final class Cameras {
             return new View(eye, fwd, right.scale(c).add(up.scale(s)), up.scale(c).subtract(right.scale(s)), tanX, tanY);
         }
 
-        /** Точка в кадре (доля полукадра {@code safe}: 1 — до края). */
+        /** Point in the frame (half-frame fraction {@code safe}: 1 - to the edge). */
         boolean in(Vec3 at, double safe) {
             Vec3 d = at.subtract(eye);
             double z = d.dot(fwd);
             return z > 0.1 && Math.abs(d.dot(right) / z) <= tanX * safe && Math.abs(d.dot(up) / z) <= tanY * safe;
         }
 
-        /** Доля ширины кадра, которую занимает предмет поперечником {@code size} в точке {@code at}. */
+        /** The fraction of the frame width occupied by an object with a diameter of {@code size} at point {@code at}. */
         double share(Vec3 at, double size) {
             double z = at.subtract(eye).dot(fwd);
             return z <= 0.1 ? 0 : size / (2 * z * tanX);
@@ -104,9 +104,9 @@ final class Cameras {
     }
 
     /**
-     * Доля открытых лучей от глаза к предмету поперечником {@code size}: к середине и к краям поперёк взгляда ({@code rays}
-     * — 3: середина и бока, 5: ещё верх и низ); последние {@code max(1.5, 0.4·size)} блоков у предмета не в счёт. Лучи —
-     * по блокам клиента: где у него нет чанка (за чанками повтора), там воздух, а рельеф дальше рисует Distant Horizons.
+     * The proportion of open rays from the eye to an object with a diameter of {@code size}: to the middle and to the edges across the gaze ({@code rays}
+     * — 3: middle and sides, 5: top and bottom); the last {@code max(1.5, 0.4·size)} blocks of an item do not count. Rays -
+     *  on the client's blocks: where he does not have a chunk (behind the replay chunks), there is air, and the relief is then drawn by Distant Horizons.
      */
     static double open(ClientLevel level, Vec3 eye, Vec3 at, Vec3 right, Vec3 up, double size, int rays) {
         Vec3 r = right.scale(size * 0.35), u = up.scale(size * 0.35);
@@ -127,42 +127,42 @@ final class Cameras {
         return (double) open / pts.length;
     }
 
-    /** Дальше {@link #FOG} прорисовки по горизонтали (туман у ванили — цилиндр вокруг камеры). */
+    /** Then {@link #FOG} draws horizontally (the fog in vanilla is a cylinder around the camera). */
     static boolean beyondFog(Vec3 eye, Vec3 p) {
         return Math.hypot(p.x - eye.x, p.z - eye.z) > FOG * Minecraft.getInstance().gameRenderer.getRenderDistance();
     }
 
     /**
-     * Событие поперечником {@code size} в точке {@code p} видно в кадре {@code v}: в кадре до края, открыты не меньше 0.6
-     * лучей к середине и бокам, не сквозь облака низом {@code clouds} и не в тумане у края прорисовки (дальнее — без
-     * тумана). Так его считает и вывод, и оценка.
+     * An event with a diameter of {@code size} at point {@code p} is visible in frame {@code v}: in the frame to the edge, at least 0.6
+     *  rays are open to the middle and sides, not through the clouds at the bottom {@code clouds} and not in the fog at the edge of the rendering (distant - without
+     * fog). This is how both the conclusion and the assessment consider it.
      */
     static boolean keySeen(ClientLevel level, double clouds, boolean far, View v, Vec3 p, double size) {
         return v.in(p, 1) && open(level, v.eye(), p, v.right(), v.up(), size, 3) >= 0.6 && !throughClouds(clouds, v.eye(), p) && (far || !beyondFog(v.eye(), p));
     }
 
-    /** Где событие в тик {@code t}: огненный шар поднимается на 0.4 поперечника за 40 тиков. */
+    /** Where is the event at tick {@code t}: the fireball rises by 0.4 in diameter for 40 tick. */
     static Vec3 keyPoint(Subject.Key k, double t) {
         return k.pos().add(0, Math.min(1, (t - k.t()) / 40.0) * k.size() * 0.4, 0);
     }
 
-    /** Низ облаков в кадре: из плана (слой шейдерпака), иначе облака измерения; облака выключены — NaN. */
+    /** Bottom of clouds in the frame: from the plan (shaderpack layer), otherwise dimension clouds; clouds off - NaN. */
     static double cloudHeight(Plan plan) {
         if (!Double.isNaN(plan.clouds())) return plan.clouds();
         Minecraft mc = Minecraft.getInstance();
         return mc.options.getCloudsType() == CloudStatus.OFF ? Double.NaN : mc.level.effects().getCloudHeight();
     }
 
-    /** Отрезок взгляда проходит слоем облаков низом {@code clouds} (или камера в нём). */
+    /** The segment of view passes through a layer of clouds at the bottom of {@code clouds} (or the camera in it). */
     static boolean throughClouds(double clouds, Vec3 from, Vec3 to) {
         if (Double.isNaN(clouds)) return false;
         return Math.max(from.y, to.y) >= clouds - 1 && Math.min(from.y, to.y) <= clouds + CLOUD_DEPTH;
     }
 
-    /** Мир повтора у клиента: лучи и высоты только по готовым чанкам (у клиента чанка нет — нет и блоков), облака. */
+    /** The client's world of replay: rays and heights only for ready-made chunks (the client has no chunks - no blocks), clouds. */
     static final class World {
         final ClientLevel level = Minecraft.getInstance().level;
-        /** Низ облаков ({@link #cloudHeight}). */
+        /** Bottom of clouds ({@link #cloudHeight}). */
         final double clouds;
 
         World(double clouds) {
@@ -173,24 +173,24 @@ final class Cameras {
             return level.getChunkSource().getChunkNow(Mth.floor(p.x) >> 4, Mth.floor(p.z) >> 4) != null;
         }
 
-        /** Высота земли (верх блоков, что держат движение, с листвой); NaN — чанка нет. */
+        /** The height of the ground (the top of the blocks that hold the movement, with foliage); NaN - no chunk. */
         double ground(double x, double z) {
             if (!loaded(new Vec3(x, 0, z))) return Double.NaN;
             return level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z));
         }
 
-        /** Камера не в блоке и вокруг неё полблока воздуха; чанка нет — не знаем. */
+        /** Camera is outside blocks with half a block of air around it; absent chunk means unknown. */
         boolean free(Vec3 p) {
             return loaded(p) && !inBlocks(level, p);
         }
 
-        /** Доля открытых лучей из глаза кадра к предмету ({@link Cameras#open}). */
+        /** The proportion of open rays from the eye of the frame to the subject ({@link Cameras#open}). */
         double open(View v, Vec3 at, double size, int rays) {
             return Cameras.open(level, v.eye(), at, v.right(), v.up(), size, rays);
         }
     }
 
-    /** Камера в блоке: ближе полублока от неё есть блок (по чанкам клиента: чанка нет — блоков нет). */
+    /** Camera in a block: there is a block closer than half a block from it (according to client chunks: no chunk - no blocks). */
     static boolean inBlocks(ClientLevel level, Vec3 p) {
         for (double dx : new double[]{-0.5, 0.5}) {
             for (double dy : new double[]{-0.5, 0.5}) {
@@ -205,15 +205,15 @@ final class Cameras {
     }
 
     /**
-     * Угол кадра по вертикали, при котором предмет поперечником {@code size} в {@code dist} блоках занимает {@code share}
-     * ширины кадра со сторонами {@code aspect} (ширина к высоте), не уже 6° и не шире 70°.
+     * The vertical frame angle at which an object with a diameter of {@code size} in {@code dist} blocks occupies {@code share}
+     *  of the width of the frame with sides {@code aspect} (width to height), is not narrower than 6° and not wider than 70°.
      */
     static double fovFor(double size, double dist, double share, double aspect) {
         double tanX = size / (2 * dist * share);
         return Mth.clamp(Math.toDegrees(2 * Math.atan(tanX / aspect)), 6, 70);
     }
 
-    /** Кандидаты одной камеры плана. */
+    /** Single camera plan candidates. */
     static List<Candidate> of(Plan.Camera c, Plan.Shot shot, double aspect, World w) {
         Subject s = shot.subject();
         int a = shot.a(), b = shot.b();
@@ -223,7 +223,7 @@ final class Cameras {
             case "fixed" -> {
                 Vec3 at = c.aim() != null ? c.aim() : s.anchor(a, b);
                 if (c.eye() == null || at == null && !c.follow()) return out;
-                // над глазом, где задано: место игрока бывает в доме или метро, а над крышами — горизонт
+                // above the eye, where it is set: the player’s place is in a house or subway, and above the roofs is the horizon
                 for (double rise : c.rise()) {
                     Vec3 eye = settle(lift(c.eye(), rise, w), at, w);
                     Path p = c.follow() ? follow(t -> eye, s, a, b, 3, c.fov()) : t -> Pose.look(eye, at, c.fov());
@@ -241,14 +241,14 @@ final class Cameras {
                     for (double side = 0; side < 360; side += c.azStep()) {
                         for (double elev : c.elev()) {
                             double r = Math.toRadians(side);
-                            // от места назад по курсу подлёта, повёрнутое на side: 0 — камера на пути подлёта, снаряд
-                            // летит от неё к месту; 90 — поперёк кадра; 180 — летит в камеру
+                            // from the place back along the approach course, rotated to side: 0 - camera on the approach path, the projectile
+                            //  flies from it to the place; 90 - across the frame; 180 - flies into the camera
                             Vec3 dir = new Vec3(-h.x * Math.cos(r) + h.z * Math.sin(r), 0, -h.z * Math.cos(r) - h.x * Math.sin(r));
                             Vec3 spot = k.add(dir.scale(dist));
                             double g = w.ground(spot.x, spot.z);
                             if (Double.isNaN(g)) continue;
                             Vec3 eye = new Vec3(spot.x, Math.max(g + 2, k.y + dist * Math.tan(Math.toRadians(elev))), spot.z);
-                            // над облаками событий не видно
+                            // events are not visible above the clouds
                             if (!Double.isNaN(w.clouds) && eye.y >= w.clouds - 2) continue;
                             Path p = c.follow() ? follow(t -> eye, s, a, b, 6, fov) : t -> Pose.look(eye, k.add(0, size * 0.25, 0), fov);
                             out.add(new Candidate(String.format(Locale.ROOT, "tripod-f%.0f-d%.0f-a%.0f-e%.0f", fov, dist, side, elev), p, null,
@@ -258,7 +258,7 @@ final class Cameras {
                 }
             }
             case "path" -> {
-                // и выше на rise, где задано: путь, проложенный по карте, бывает сквозь высотку
+                // and higher on rise, where it is specified: the path laid out on the map goes through a high-rise building
                 for (double rise : c.keys().isEmpty() ? new double[0] : c.rise()) {
                     List<Plan.PathKey> keys = c.keys().stream().map(k -> new Plan.PathKey(k.t(), k.eye().add(0, rise, 0), k.aim().add(0, rise, 0), k.roll())).toList();
                     String name = String.format(Locale.ROOT, "path-%.0f", c.fov()) + (rise > 0 ? String.format(Locale.ROOT, "-r%.0f", rise) : "");
@@ -271,14 +271,14 @@ final class Cameras {
         return out;
     }
 
-    /** Полётов пилота на план (лучшие разные). */
+    /** The pilot's flights on the plan (the best are different). */
     static final int PILOT_FLIGHTS = 3;
-    /** Рельеф для пилота — квадрат стольких блоков от удара в каждую сторону (проход и лучи низа кадра в нём). */
+    /** The relief for the pilot is the square of so many blocks from the impact in each direction (the passage and the rays of the bottom of the frame in it). */
     static final int PILOT_REACH = 400;
 
     /**
-     * Камера FPV пилота ({@link Pilot}): полёты мимо удара плана по миру повтора у клиента и дыму ударов
-     * ({@link Plume}), с руками оператора и толчками взрывов ({@link Hands}); удара в окне нет — кандидатов нет.
+     * Pilot's camera FPV ({@link Pilot}): flights past the impact of the plan on the client's replay world and the smoke of impacts
+     *  ({@link Plume}), with the operator's hands and the shocks of explosions ({@link Hands}); There is no knock on the window - there are no candidates.
      */
     static List<Candidate> pilot(Plan.Camera c, Plan.Shot shot, double aspect, World w) {
         Subject s = shot.subject();
@@ -291,7 +291,7 @@ final class Cameras {
         List<Plume> plumes = new ArrayList<>();
         for (double[] row : shot.live()) {
             Plume p = Plume.of(row);
-            // удар плана — со своим огненным шаром
+            // strike the plan - with your fireball
             Subject.Key k = s.keys.stream().filter(o -> Math.abs(o.t() - p.t()) <= 2 && Plume.beside(o.pos(), p.pos(), 4)).findFirst().orElse(null);
             plumes.add(k == null ? p : new Plume(p.t(), p.pos(), k.size(), p.look()));
         }
@@ -314,8 +314,8 @@ final class Cameras {
     }
 
     /**
-     * Камера летит по ключам плана: глаз и точка взгляда — по прямой между соседними ключами (ровный ход, курс без
-     * рывков), до первого ключа — в первом, после последнего — в последнем.
+     * The camera flies along the keys of the plan: the eye and the point of view - in a straight line between adjacent keys (smooth course, course without
+     *  jerks), before the first key - in the first, after the last - in the last.
      */
     static Path along(List<Plan.PathKey> keys, double fov) {
         return new Path() {
@@ -348,7 +348,7 @@ final class Cameras {
         };
     }
 
-    /** Глаз на {@code rise} блоков выше земли под ним (не ниже самого глаза); 0 — сам глаз. */
+    /** The eye is {@code rise} blocks higher than the ground below it (not lower than the eye itself); 0 - the eye itself. */
     static Vec3 lift(Vec3 eye, double rise, World w) {
         if (rise <= 0) return eye;
         double g = w.ground(eye.x, eye.z);
@@ -356,9 +356,9 @@ final class Cameras {
     }
 
     /**
-     * Ближайшее к глазу место в воздухе ({@link World#free}): глаз игрока стоит у стены или под потолком ближе полублока —
-     * вверх до 2 блоков и к цели ({@code toward}; null — только вверх) до 3 по горизонтали; не нашлось — сам глаз (оценка
-     * его отвергнет).
+     * The place closest to the eye in the air ({@link World#free}): the player's eye is at the wall or under the ceiling closer than half a block -
+     *  up to 2 blocks and towards the target ({@code toward}; null - only up) up to 3 horizontally; not found - the eye itself (the rating
+     *  will reject it).
      */
     static Vec3 settle(Vec3 eye, @Nullable Vec3 toward, World w) {
         if (w.free(eye)) return eye;
@@ -374,8 +374,8 @@ final class Cameras {
     }
 
     /**
-     * Камера в {@code place(t)} ведёт взгляд за объектом, как оператор: взгляд догоняет цель с запаздыванием {@code lag}
-     * тиков (таблица с шагом в тик от окна с запасом — одинаково в оценке и выводе).
+     * The camera in {@code place(t)} follows the object like an operator: the gaze catches up with the target with a delay of {@code lag}
+     *  ticks (table with a tick step from the window with a margin - the same in evaluation and output).
      */
     static Path follow(java.util.function.DoubleFunction<Vec3> place, Subject s, int a, int b, double lag, double fov) {
         int from = a - 60;
@@ -396,12 +396,12 @@ final class Cameras {
     }
 
     /**
-     * Оценка кандидата до вывода теми же лучами и кадром, что у вывода ({@link FrameLog}): до события — доля тиков, когда
-     * объект в кадре (с полями {@link #SAFE}), виден (лучи к середине и краям — не меньше 0.4, не сквозь облака и не в
-     * тумане), не мельче {@code share} ширины кадра и не в дыму прежних ударов, — за всё время и за последнюю секунду;
-     * каждое событие плана — в кадре и видно хотя бы в половине первых 12 тиков ({@link #keySeen}); после событий —
-     * объект виден; камера в воздухе по всему пути (путь плана, {@code roam}, — там, где у клиента есть чанк). {@code pass} —
-     * эти доли не меньше порогов плана.
+     * Evaluation of the candidate before the output with the same rays and frame as the output ({@link FrameLog}): before the event - the tick fraction, when the
+     *  object in the frame (with fields {@link #SAFE}) is visible (rays to the middle and edges - no less than 0.4, not through clouds and not in
+     *  fog), no smaller {@code share} frame width and not in the smoke of previous strikes - for the entire time and for the last second;
+     *  each event of the plan - in the frame and visible in at least half of the first 12 tick ({@link #keySeen}); after events -
+     * object visible; the camera is in the air along the entire path (the plan path, {@code roam}, is where the client has a chunk). {@code pass} -
+     * these shares are not less than the plan thresholds.
      */
     static Score score(Candidate c, Subject s, Plan.Shot shot, double aspect, World w) {
         if (c.path() == null) return Score.DESIGNED;
@@ -418,7 +418,7 @@ final class Cameras {
             if (aim == null) continue;
             Subject.Key k = s.keyAt(t);
             boolean before = first < 0 || t < first;
-            // первые тики событий — в счёте событий ниже
+            // the first tick of events is in the count of events below
             if (!before && k != null && t <= k.t() + FrameLog.KEY_CHECK) continue;
             samples++;
             double size = s.aimSize(t);
@@ -442,7 +442,7 @@ final class Cameras {
                 if (seen) afterOk++;
             }
         }
-        // события плана, как их считает вывод: каждое — в кадре и видно хотя бы в половине своих первых тиков
+        // plan events, as the output considers them: each is in the frame and visible in at least half of its first tick
         int keysIn = 0, keysOk = 0;
         for (Subject.Key k : s.keys) {
             if (k.t() < shot.a() || k.t() > shot.b()) continue;
@@ -466,8 +466,8 @@ final class Cameras {
     }
 
     /**
-     * Дым ударов плана ({@code [t, x, y, z]} и поперечник шара, где известен) на линии взгляда — по модели дыма удара
-     * ({@link Plume}): столб удара, который ещё дымит, и не свой дым цели.
+     * The smoke of the impact of the plan ({@code [t, x, y, z]} and the diameter of the ball, where known) on the line of sight - according to the model of the smoke of the impact
+     *  ({@link Plume}): the impact column, which is still smoking, and not the smoke of the target.
      */
     static boolean smokeOnLine(Vec3 from, Vec3 to, List<double[]> smoke, int t) {
         for (double[] h : smoke) {

@@ -8,11 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Что за чанк на диске ({@link DiskStatus#of}): целый — полная генерация (имя с пространством имён или без, как в старых
- * сохранениях) без догенерации под нулём; с окончательными блоками — и чанк мира 1.17 после обновления (статус «пусто»,
- * догенерация под нулём до полной генерации 1.17) или ещё в формате до 1.18; нет на диске и недогенерированный (с блоками
- * или без) — одинаково нет. Чанки как в копиях мира Артёма «Newisle 2.3.0»: нет на диске, начала структур без блоков,
- * биомы, {@code structure_starts} без пространства имён.
+ * What kind of chunk is on the disk ({@link DiskStatus#of}): whole - full generation (name with or without namespace, as in old
+ *  saves) without additional generation under zero; with the final blocks - and the chunk of the world 1.17 after the update (status “empty”,
+ *  pre-generation from zero to the full generation of 1.17) or in the format up to 1.18; not on disk and under-generated (with or without
+ *  blocks) - equally not. Chunks are like in copies of the Artem world “Newisle 2.3.0”: not on disk, beginning of structures without blocks,
+ *  biomes, {@code structure_starts} without namespace.
  */
 class DiskStatusTest {
     private static CompoundTag status(String status) {
@@ -21,7 +21,7 @@ class DiskStatusTest {
         return tag;
     }
 
-    /** Как оставляет чанк обновление мира 1.17 ({@code ChunkHeightAndBiomeFix}): статус «пусто», цель догенерации. */
+    /** How the update of the world 1.17 ({@code ChunkHeightAndBiomeFix}) leaves the chunk: the status is “empty”, the purpose of regeneration. */
     private static CompoundTag retrogen(String target) {
         CompoundTag tag = status("minecraft:empty");
         CompoundTag retrogen = new CompoundTag();
@@ -34,23 +34,23 @@ class DiskStatusTest {
     @Test
     void fullWithoutRetrogenIsWhole() {
         assertEquals(DiskStatus.State.WHOLE, DiskStatus.of(status("minecraft:full")));
-        // старое сохранение: ваниль читает имя без пространства имён как minecraft:full и грузит чанк без генерации
-        assertEquals(DiskStatus.State.WHOLE, DiskStatus.of(status("full")), "full без пространства имён");
+        // old save: vanilla reads the name without namespace as minecraft:full and loads the chunk without generation
+        assertEquals(DiskStatus.State.WHOLE, DiskStatus.of(status("full")), "full without namespace");
     }
 
     @Test
     void finishedRetrogenHasFinalBlocks() {
-        // полная генерация 1.17 — heightmaps, после переименования статусов — spawn
+        // full generation 1.17 - heightmaps, after renaming the statuses - spawn
         for (String s : new String[] {"minecraft:spawn", "minecraft:heightmaps", "minecraft:light", "spawn", "heightmaps"}) {
             assertEquals(DiskStatus.State.FINAL, DiskStatus.of(retrogen(s)), s);
             assertTrue(DiskStatus.of(retrogen(s)).blocksFinal(), s);
         }
-        // загружался до соседей и сохранён раньше цели: блоки над нулём те же
+        // loaded to its neighbors and saved before the target: the blocks above zero are the same
         CompoundTag partly = retrogen("minecraft:spawn");
         partly.putString("Status", "minecraft:carvers");
-        assertEquals(DiskStatus.State.FINAL, DiskStatus.of(partly), "статус ниже цели догенерации");
-        // украшения соседей ещё не встали: они пишут и в этот чанк
-        // имя с недопустимыми знаками (испорченные или чужие данные) — не статус ванили, а не ошибка разбора
+        assertEquals(DiskStatus.State.FINAL, DiskStatus.of(partly), "status below the pregeneration goal");
+        // the neighbors' decorations have not yet risen: they also write in this chunk
+        //  a name with invalid characters (corrupted or someone else's data) - not vanilla status, not a parsing error
         for (String s : new String[] {"minecraft:features", "minecraft:carvers", "minecraft:noise", "minecraft:structure_starts", "", "Full", "minecraft:Spawn"}) {
             assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(retrogen(s)), s);
         }
@@ -58,8 +58,8 @@ class DiskStatusTest {
 
     @Test
     void absentAndProtoChunksAreTheSame() {
-        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(null), "нет на диске");
-        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(new CompoundTag()), "заголовок без Status");
+        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(null), "not on disk");
+        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(new CompoundTag()), "header without Status");
         for (String s : new String[] {"minecraft:structure_starts", "minecraft:biomes", "minecraft:carvers", "minecraft:initialize_light", "minecraft:light",
                 "minecraft:spawn", "structure_starts", "other:full", ""}) {
             assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(status(s)), s);
@@ -69,13 +69,13 @@ class DiskStatusTest {
 
     @Test
     void oldFormatByItsStatus() {
-        // формат до 1.18: Status внутри Level, сверху его нет; что выйдет при загрузке, зависит от измерения — не целый
+        // format up to 1.18: Status inside Level, not on top; what comes out when loading depends on the measurement - not whole
         CompoundTag old = new CompoundTag();
         old.put("Level", status("full"));
-        assertEquals(DiskStatus.State.FINAL, DiskStatus.of(old), "формат до 1.18, полная генерация");
+        assertEquals(DiskStatus.State.FINAL, DiskStatus.of(old), "format up to 1.18, full generation");
         old.put("Level", status("features"));
-        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(old), "формат до 1.18, без украшений соседей");
+        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(old), "format up to 1.18, without neighboring decorations");
         old.put("Level", status("Full"));
-        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(old), "формат до 1.18, статус не разбирается");
+        assertEquals(DiskStatus.State.PARTIAL, DiskStatus.of(old), "format up to 1.18, status is not understood");
     }
 }

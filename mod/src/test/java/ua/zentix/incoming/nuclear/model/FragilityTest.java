@@ -26,7 +26,7 @@ class FragilityTest {
         assertEquals(0, Fragility.probability(0, 8, 0.3));
     }
 
-    /** Порог со случайностью места z ~ N(0, 1) даёт ту же долю, что и кривая. */
+    /** A threshold with a random location z ~ N(0, 1) gives the same share as the curve. */
     @Test
     void hitMatchesProbability() {
         Random r = new Random(1);
@@ -36,14 +36,14 @@ class FragilityTest {
         assertFalse(Fragility.hit(0, 15, 0.35, 10));
     }
 
-    /** Хвост усечён: далеко за медианой последствия нет при любой случайности места. */
+    /** The tail is truncated: far beyond the median there is no consequence for any randomness of place. */
     @Test
     void tailTruncated() {
         assertFalse(Fragility.hit(3, 15, 0.35, 6));
         assertTrue(Fragility.hit(15 * Math.exp(-0.35 * Fragility.TAIL) * 1.001, 15, 0.35, 6));
     }
 
-    /** «Возможно» — ровно «случится хоть при какой-то случайности места». */
+    /** “It’s possible” - exactly “it will happen at least due to some chance of the place.” */
     @Test
     void possibleBoundsHit() {
         for (double x = 0.5; x < 40; x *= 1.07) {

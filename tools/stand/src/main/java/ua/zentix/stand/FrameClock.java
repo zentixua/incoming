@@ -24,20 +24,20 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Время каждого кадра без ожидания видеокарты. Процессор — время процессора потока отрисовки от {@code RenderFrameEvent.Pre}
- * до {@code Post} ({@code cpu_thread_ms}, {@link ThreadMXBean#getCurrentThreadCpuTime}, как {@code FxLayer.cpuNanos} мода:
- * своя работа кадра — мир, слои модов, интерфейс; без обмена буферов и без ожидания процессора, пока поток вытеснен
- * чужими задачами; видеокарту драйвер ждёт в обмене буферов, а не здесь — A/B в client.py), то
- * же настенными часами ({@code cpu_ms}: в нём и ожидания) и интервал Pre → Pre (что видит игрок): в строке кадра — время
- * от начала прошлого кадра ({@code prev_interval_ms}, оно известно в начале этого), длительность самого кадра — в строке
- * следующего (сдвиг делает разбор, results.py). Видеокарта — метки
- * {@code glQueryCounter(GL_TIMESTAMP)}: в начале и в конце кадра и на каждой стадии {@code RenderLevelStageEvent} дважды —
- * до всех обработчиков стадии (первым, {@code HIGHEST}) и после них ({@code LOWEST}); отрезок до первой метки стадии —
- * работа игры до неё, между метками — обработчики модов на ней (у Incoming слой эффектов — на {@code AFTER_LEVEL}). Не
- * {@code GL_TIME_ELAPSED}: такой запрос у OpenGL один на всех, его держит Minecraft (F3) и сам Incoming. Метки читаются
- * через кадры, когда готовы (кольцо {@link #RING} кадров, как {@code GpuTimer} мода); строки кадров пишутся по порядку.
- * Разность меток — время видеокарты по её часам от первой до последней команды кадра: когда упор в неё, это её работа,
- * когда в процессор — с простоями между командами.
+ * Measure every frame without GPU waits. CPU means render-thread CPU from {@code RenderFrameEvent.Pre}
+ * to {@code Post} ({@code cpu_thread_ms}, {@link ThreadMXBean#getCurrentThreadCpuTime}, like mod
+ * {@code FxLayer.cpuNanos}): frame work (world, mod layers, GUI), excluding buffer swap and CPU waits when
+ * preempted by other jobs. Driver waits for GPU at buffer swap, not here (A/B in client.py). Also record
+ * wall-clock duration ({@code cpu_ms}, including waits) and Pre → Pre interval (player view): a frame row
+ * contains time since previous start ({@code prev_interval_ms}, known now); its own duration is in the
+ * next row (results.py shifts it). GPU uses {@code glQueryCounter(GL_TIMESTAMP)} at frame start/end and
+ * at every {@code RenderLevelStageEvent} twice, before handlers ({@code HIGHEST}) and afterward
+ * ({@code LOWEST}); interval before first stage timestamp is preceding game work, between timestamps is
+ * mod handler work (Incoming effects layer: {@code AFTER_LEVEL}). Do not use {@code GL_TIME_ELAPSED}:
+ * OpenGL has one shared query, held by Minecraft (F3) and Incoming. Read ready timestamps several frames
+ * later ({@link #RING}-frame ring, like mod {@code GpuTimer}); write frame rows in order. Timestamp
+ * difference is GPU-clock time from first to last frame command: GPU work when GPU-bound, including gaps
+ * between commands when CPU-bound.
  */
 final class FrameClock {
     private static final int RING = 8, MAX_STAMPS = 48;
@@ -48,39 +48,39 @@ final class FrameClock {
     private final long[] frameNo = new long[RING];
     private final double[] tMs = new double[RING], interval = new double[RING], cpu = new double[RING], cpuThread = new double[RING];
     private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
-    /** Время процессора потока в начале кадра, нс (−1 — JVM его не даёт: колонка пуста). */
+    /** Thread CPU time at frame start, ns (−1 if JVM does not provide it; column empty). */
     private long preThread = -1;
     private final int[] shot = new int[RING];
     private final boolean[] pending = new boolean[RING];
     private int head, tail;
-    /** Метки времени видеокарты: 0 — не проверяли, 1 — есть, −1 — нет. */
+    /** GPU timestamp support: 0 unchecked, 1 available, −1 unavailable. */
     private int timer;
     private long frame, pre, lastPre;
     private boolean inFrame;
     private long lastGpuStart = -1;
     private final Set<Object> stagesThisFrame = new HashSet<>();
-    /** Стадия, у которой стоит первая метка, а второй (после обработчиков) ещё нет. */
+    /** Stage with first timestamp but no second/post-handler timestamp yet. */
     @Nullable
     private Object open;
-    /** Кадр, который снять в конце этого кадра, и что сделать по записи. */
+    /** Shot requested at this frame end and completion callback. */
     @Nullable
     private Path shotFile;
     @Nullable
     private Consumer<Long> shotDone;
     private boolean afterShot;
-    /** Повторные стадии в кадре (проход теней и т. п.): метки ставятся только у первой. */
+    /** Repeated stages in a frame (shadow pass etc.): timestamp only the first. */
     long repeatedStages;
 
     FrameClock(Out out) {
         this.out = out;
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, this::onPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, this::onPost);
-        // у лямбды шина тип события не выводит — класс явно
+        // The bus cannot infer a lambda event type; specify its class
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, false, RenderLevelStageEvent.class, e -> onStage(e, false));
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, RenderLevelStageEvent.class, e -> onStage(e, true));
     }
 
-    /** Снять кадр в конце ближайшего кадра; {@code done} получает его номер. */
+    /** Capture at the next frame end; {@code done} receives frame number. */
     void requestShot(Path file, Consumer<Long> done) {
         shotFile = file;
         shotDone = done;
@@ -110,8 +110,8 @@ final class FrameClock {
         frame++;
         int s = head;
         if (timerAvailable()) {
-            // кольцо полно (видеокарта позади больше чем на RING кадров — не бывает у драйверов, но не терять строки):
-            // самый старый — дождаться
+            // Full ring (GPU more than RING frames behind; not normal for drivers, but retain all rows):
+            // wait for the oldest
             if (pending[s]) drain(true);
             used[s] = 0;
             stamp(s, "start");
@@ -154,8 +154,8 @@ final class FrameClock {
         long thread = threadCpu();
         cpuThread[s] = preThread >= 0 && thread >= 0 ? (thread - preThread) / 1e6 : Double.NaN;
         inFrame = false;
-        // кадр — после метки конца: ожидание чтения кадра у видеокарты не входит во время кадра, но этот кадр и
-        // следующий (его интервал) в замер не идут
+        // Capture after end timestamp: GPU readback wait is outside frame time, but exclude this frame
+        // and the following interval from measurement
         if (shotFile != null) {
             takeShot(shotFile, shotDone, frame);
             shotFile = null;
@@ -179,7 +179,7 @@ final class FrameClock {
         used[slot]++;
     }
 
-    /** Готовые кадры по порядку — в строки; {@code block} — самый старый дождаться. */
+    /** Write ready frames in order; {@code block} waits for the oldest. */
     private void drain(boolean block) {
         while (pending[tail]) {
             int last = queries[tail][used[tail] - 1];
@@ -221,7 +221,7 @@ final class FrameClock {
         return THREADS.isCurrentThreadCpuTimeSupported() ? THREADS.getCurrentThreadCpuTime() : -1;
     }
 
-    /** Имя стадии: «neoforge:after_level» → «after_level». */
+    /** Stage name: "neoforge:after_level" → "after_level". */
     private static String name(Object stage) {
         String s = stage.toString();
         int colon = s.indexOf(':');

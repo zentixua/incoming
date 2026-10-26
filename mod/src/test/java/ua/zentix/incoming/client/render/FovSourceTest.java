@@ -14,23 +14,22 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Размер и место на экране того, что привязано к миру, — только из матрицы кадра ({@link ScreenProjection}): моды зума
- * (Ok Zoomer — на выходе {@code GameRenderer.getFov}) меняют поле зрения после события {@code ComputeFov} и мимо
- * {@code options.fov}, и размер, взятый оттуда, при зуме врёт (жалоба 23.10: метки при зуме). Поле зрения из настроек
- * или события читают только места из списка ниже — у каждого причина, почему зум им не нужен.
+ * The size and place on the screen of what is attached to the world is only from the frame matrix ({@link ScreenProjection}): zoom modes
+ *  (Ok Zoomer - at the output {@code GameRenderer.getFov}) change the field of view after the event {@code ComputeFov} and past
+ * {@code options.fov}, and the size taken from there lies when zoomed in (complaint 23.10: marks on zoom). Field of view from settings
+ * or events read only places from the list below - each has a reason why they don't need a zoom.
  */
 class FovSourceTest {
     private static final Path CLIENT = Path.of("src/main/java/ua/zentix/incoming/client");
-    /** Чтение поля зрения в обход матрицы кадра: настройка, событие {@code ComputeFov}, сам {@code getFov}. */
+    /** Reading the field of view bypassing the frame matrix: setting, event {@code ComputeFov}, {@code getFov} itself. */
     private static final Pattern FOV = Pattern.compile("options\\.fov\\(\\)|\\.getFOV\\(\\)|gameRenderer\\.getFov|\\.fov\\(\\)\\.get\\(\\)");
 
     /**
-     * Разрешённые места: файл → сколько раз.
+     * Allowed places: file → how many times.
      * <ul>
-     * <li>{@code nuclear/NukeFlash.java} — сетчатка игрока: послеобраз, когда кадр не его глазами (камера снаряда, вид от
-     * третьего лица), и ожоги сетчатки, которые лежат на ней самой, — поле зрения его глаза из настроек; от его глаз
-     * послеобраз берёт матрицу кадра.</li>
-     * <li>{@code cam/ProjectileCamera.java} — камера снаряда задаёт поле зрения (в событии), а не меряет им экран.</li>
+     * <li>{@code nuclear/NukeFlash.java} - player's retina: afterimage, when the frame is not through his eyes (projectile camera, third-person view), and retinal burns that lie on itself - field seeing his eyes from the settings; from his eyes
+     * the afterimage takes the frame matrix.</li>
+     * <li>{@code cam/ProjectileCamera.java} - the projectile camera sets the field of view (in the event), and does not measure the screen with it.</li>
      * </ul>
      */
     private static final Map<String, Integer> ALLOWED = Map.of("nuclear/NukeFlash.java", 2, "cam/ProjectileCamera.java", 3);
@@ -46,6 +45,6 @@ class FovSourceTest {
                 if (n > 0) found.put(CLIENT.relativize(p).toString().replace('\\', '/'), n);
             }
         }
-        assertEquals(new TreeMap<>(ALLOWED), found, "поле зрения не из матрицы кадра: размер на экране при зуме разойдётся с миром");
+        assertEquals(new TreeMap<>(ALLOWED), found, "the field of view is not from the frame matrix: the size on the screen with zoom will be different from the world");
     }
 }

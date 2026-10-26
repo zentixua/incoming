@@ -8,9 +8,9 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 
 /**
- * Flashback — мод Fabric (через Sinytra Connector), API для модов у него нет: открытые члены — отражением, как
- * в {@code compat/FlashbackReplay} Incoming. Имена — Flashback 0.39 (ветка 1.21). Сервер повтора и клиент — в одной
- * JVM; члены сервера повтора зовёт его поток, кроме {@link #goTo} и {@link #setSpeed} (так их зовёт и окно Flashback).
+ * Flashback is a mod of Fabric (via Sinytra Connector), it does not have API for mods: public members are reflected, like
+ *  in {@code compat/FlashbackReplay} Incoming. Names - Flashback 0.39 (branch 1.21). Replay server and client - in one
+ * JVM; members of the replay server are called by its thread, except for {@link #goTo} and {@link #setSpeed} (the window Flashback also calls them that way).
  */
 final class FlashbackLink {
     private static final String P = "com.moulberry.flashback.";
@@ -32,7 +32,7 @@ final class FlashbackLink {
         fastForwarding = server.getField("fastForwarding");
     }
 
-    /** Flashback с нужными членами или исключение с именем недостающего. */
+    /** Flashback with the required members or an exception with the name of the missing one. */
     static FlashbackLink find() throws ReflectiveOperationException {
         return new FlashbackLink();
     }
@@ -58,7 +58,7 @@ final class FlashbackLink {
         goToTick.invoke(s, tick);
     }
 
-    /** Скорость повтора: тиков сервера повтора в секунду (ручная скорость окна Flashback, 20 — как в игре). */
+    /** Replay speed: replay server tick per second (manual window speed Flashback, 20 - as in the game). */
     void setSpeed(MinecraftServer s, float ticksPerSecond) throws ReflectiveOperationException {
         setTickRate.invoke(s, ticksPerSecond, true);
     }
@@ -75,7 +75,7 @@ final class FlashbackLink {
         return fastForwarding.getBoolean(s);
     }
 
-    /** id сущности записавшего игрока в мире повтора ({@code -1}, пока её нет). */
+    /** id entity of the recording player in the replay world ({@code -1}, it doesn't exist yet). */
     int localPlayerId(MinecraftServer s) throws ReflectiveOperationException {
         return (int) localPlayerId.invoke(s);
     }

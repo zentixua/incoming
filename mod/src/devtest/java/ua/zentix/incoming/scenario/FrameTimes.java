@@ -12,9 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Время кадров клиента сценария ({@code -Dincoming.frametimes=true}): каждый кадр в игре — строка «тик мс» в
- * logs/frametimes.txt (тик — игровое время мира, по нему видно, что шло в кадре). Сводку (средний FPS, 1% худших,
- * худший кадр) считают по файлу, например за время залпа.
+ * Script client frame time ({@code -Dincoming.frametimes=true}): each frame in the game is the line “tick ms” in
+ * logs/frametimes.txt (tick is the game time of the world, it shows what happened in the frame). The summary (average FPS, 1% worst,
+ *  worst frame) is calculated according to the file, for example, for the salvo time.
  */
 final class FrameTimes {
     private final Writer out;
@@ -33,7 +33,7 @@ final class FrameTimes {
             NeoForge.EVENT_BUS.addListener(f::onFrame);
             Runtime.getRuntime().addShutdownHook(new Thread(f::close));
         } catch (IOException e) {
-            Incoming.LOG.warn("SCENARIO frametimes: не открыть {}", file, e);
+            Incoming.LOG.warn("SCENARIO frametimes: does not open {}", file, e);
         }
     }
 
@@ -44,7 +44,7 @@ final class FrameTimes {
             try {
                 out.write(mc.level.getGameTime() + " " + (now - last) / 1000 / 1000.0 + "\n");
             } catch (IOException ignored) {
-                // запись по кадрам — проверка, не игра: пропущенная строка не важна
+                // recording by frame is a test, not a game: the missing line is not important
             }
         }
         last = now;
@@ -54,7 +54,7 @@ final class FrameTimes {
         try {
             out.close();
         } catch (IOException ignored) {
-            // выход из игры
+            // exit the game
         }
     }
 }

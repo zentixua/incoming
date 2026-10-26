@@ -14,63 +14,62 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * План прогона ({@code stand-plan.json}): мир, что считать снарядом, пробы и шаги по порядку. План пишет stand.py из
- * scenes.json — вся геометрия сцен (где камера, куда залп, откуда пуск) уже в числах, обвязка их только исполняет.
+ * Run plan ({@code stand-plan.json}): world, projectile definition, probes and ordered steps. stand.py
+ * writes it from scenes.json; scene geometry (camera, target, launch point) is already numeric, harness
+ * only executes it.
  *
- * @param seed       сид плоского мира
- * @param dayTime    время суток мира (6000 — полдень)
- * @param settleS    после входа в мир — столько секунд до первого шага (сетки чанков у точки появления)
- * @param limitS     весь прогон — не дольше (потом выход с событием {@code limit})
- * @param projectiles типы сущностей-снарядов ({@code incoming:drone}): по их уходу из мира у цели считаются попадания
- * @param warheads   типы урона подрыва боевой части ({@code incoming:strike}): только такой взрыв снаряда — попадание
- * @param probes     «класс#метод» статических методов без аргументов, чья строка пишется раз в секунду, если есть
- * @param once       то же, один раз после входа в мир (шейдерпак Iris и т. п.)
+ * @param seed flat-world seed
+ * @param dayTime world time of day (6000 noon)
+ * @param settleS seconds after world entry before first step (spawn chunk meshes)
+ * @param limitS maximum run seconds, then exit with {@code limit}
+ * @param projectiles projectile entity types ({@code incoming:drone}), whose target removals count hits
+ * @param warheads warhead damage types ({@code incoming:strike}); only these projectile explosions count
+ * @param probes "class#method" static no-argument methods returning strings, logged each second if present
+ * @param once same, once after world entry (Iris shader pack etc.)
  */
 record Plan(long seed, long dayTime, double settleS, double limitS, Set<String> projectiles, Set<String> warheads,
             List<String> probes, List<String> once, List<Step> steps) {
 
-    /** Шаг плана. */
+    /** Plan step. */
     sealed interface Step {}
 
-    /** Камера-наблюдатель в точку {@code eye} (глаз), взгляд на {@code look}; потом {@code settleS} на сетки чанков. */
+    /** Move spectator camera eye to {@code eye}, looking at {@code look}; then {@code settleS} for chunk meshes. */
     record Tp(double[] eye, double[] look, double settleS) implements Step {}
 
-    /** Команда серверу (оператор, консоль): итог — событие {@code cmd}. */
+    /** Server command (operator, console): {@code cmd} result event. */
     record Cmd(String command) implements Step {}
 
-    /** Ждать столько секунд. */
+    /** Wait this many seconds. */
     record Wait(double seconds) implements Step {}
 
-    /** Кадр PNG в {@code shots/<name>.png} (кадр с ним в замер не идёт). */
+    /** PNG shot in {@code shots/<name>.png}; exclude its frame from measurement. */
     record Shot(String name) implements Step {}
 
-    /** Окно замера: кадры от начала шага столько секунд — окно {@code name}. */
+    /** Measurement window {@code name}: frames for this many seconds from step start. */
     record Window(String name, double seconds) implements Step {}
 
     /**
-     * Залп: цель (x, z) и радиус, в котором уход снаряда из мира — попадание этого залпа; команды — со сдвигом
-     * {@code delays} секунд от начала шага каждая (шаг не ждёт: ждёт {@link AwaitSalvo}); {@code expect} — сколько
-     * попаданий у залпа.
+     * Salvo: target (x, z), radius where projectile removal counts its hit; commands offset by each
+     * {@code delays} seconds from step start (step does not wait; {@link AwaitSalvo} does); {@code expect} hits.
      */
     record Salvo(String id, double x, double z, double radius, int expect, List<String> commands, double[] delays) implements Step {}
 
-    /** Ждать конца залпа: попаданий — сколько ждали; или нет снарядов в мире и попаданий {@code quietS} секунд; или срок. */
+    /** Wait for expected hits, or no world projectiles/hits for {@code quietS} seconds, or timeout. */
     record AwaitSalvo(String id, double timeoutS, double quietS) implements Step {}
 
     /**
-     * Окно от n-го попадания залпа {@code salvo} (1 — первое) на {@code seconds}; кадры — через {@code shots} секунд от
-     * попадания (имена {@code <prefix>_<с>s}). Ждёт попадания не дольше {@code timeoutS}.
+     * Window from nth hit of {@code salvo} (1 first), lasting {@code seconds}; shots {@code shots} seconds
+     * after impact (names {@code <prefix>_<s>s}). Wait at most {@code timeoutS} for impact.
      */
     record ImpactWindow(String name, String salvo, int n, double seconds, double[] shots, String prefix, double timeoutS) implements Step {}
 
     /**
-     * Ждать, пока от последнего попадания залпа {@code salvo} пройдёт {@code seconds} (попадание позже сдвигает срок);
-     * если шаг кончился позже срока больше чем на {@link Director#LATE_S} — событие {@code late}, прогон не годен (годность
-     * results.py ещё сверяет срок со всеми попаданиями прогона).
+     * Wait until {@code seconds} after last hit of {@code salvo} (later hit moves deadline). Finish more
+     * than {@link Director#LATE_S} late: emit {@code late}, run invalid (results.py also checks against all run hits).
      */
     record Since(String salvo, double seconds) implements Step {}
 
-    /** Отметка в событиях. */
+    /** Event mark. */
     record Mark(String name) implements Step {}
 
     static Plan read(Path file) throws IOException {

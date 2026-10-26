@@ -33,19 +33,19 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 /**
- * Замер потока сервера вокруг ударов на копии мира игрока ({@code tools/prod_client.py strike-profile --world …
- * --prop incoming.profile.steps=…}, полная сборка, JFR — {@code --jvm -XX:StartFlightRecording=…}): шаги через «;»,
- * каждый — {@code tp x y z} (перенос игрока, как телепорт в игре) или {@code оружие сколько разброс x y z} (удар от
- * имени игрока, как с пульта: за 5 с до него — подсказка карты по той же точке, как клик по карте). Первый шаг —
- * через 30 с после входа, следующие — через {@code incoming.profile.gap} тиков (по умолчанию 2400). В лог: каждый
- * тик сервера дольше 50 мс ({@code SCENARIO strike-profile tick}), промежуток между началами тиков дольше 100 мс
- * ({@code … period}: туда входят и задачи потока сервера между тиками — разбор чанков с диска, перевод в FULL — и
- * ожидание до следующего тика, поэтому порог выше) и раз в секунду средний тик, самый долгий и сколько настенного
- * времени заняли 20 тиков ({@code … second}) — с тиками сервера и настенными мс от последнего шага. На первый взрыв
- * каждого снаряда — {@code … hit}: где он был при попадании, фаза, взведён ли, курс, точка цели и блок, в который он
- * попал (удар далеко от точки — врезался по пути или нет). Первой строкой — {@code … clock utc …}: настоящее время
- * в UTC рядом с временем строки лога. Часы лога, GC-лога и JFR у одного клиента бывают в разных поясах (ноутбук хоста:
- * лог +3, gc.log +2); выжимка сопоставляет их в UTC, а сдвиг лога берёт из этой строки.
+ * Measure the server thread around impacts in a copy of the player's world
+ * ({@code tools/prod_client.py strike-profile --world … --prop incoming.profile.steps=…}, full modpack,
+ * JFR via {@code --jvm -XX:StartFlightRecording=…}): semicolon-separated steps, each {@code tp x y z} (player teleport,
+ * as in game) or {@code weapon count spread x y z} (strike as that player, as from the console: map hint at the same
+ * point 5 s before it, like clicking the map). First step 30 s after joining, later steps every
+ * {@code incoming.profile.gap} ticks (default 2400). Log: each server tick longer than 50 ms
+ * ({@code SCENARIO strike-profile tick}), tick-start interval longer than 100 ms ({@code … period}: includes server-thread
+ * work between ticks — parsing disk chunks, transition to FULL — and waiting for the next tick, hence the higher
+ * threshold), and once per second mean tick, longest tick, and wall time of 20 ticks ({@code … second}), with server
+ * ticks and wall-clock ms since the last step. For each projectile's first explosion, {@code … hit}: position at hit,
+ * phase, armed state, heading, target point and hit block (impact far from target: collision en route or not).
+ * First line {@code … clock utc …}: actual UTC beside log-line time. One client can have different time zones in its
+ * log, GC log and JFR (host laptop: log +3, gc.log +2); extract aligns them in UTC and takes log offset from this line.
  */
 final class StrikeProfile {
     private static final long SLOW_NANOS = 50_000_000L, SLOW_PERIOD_NANOS = 100_000_000L;
@@ -54,13 +54,13 @@ final class StrikeProfile {
     private final List<String[]> steps = new ArrayList<>();
     private final int gap = Integer.getInteger("incoming.profile.gap", 2400);
     private int tick;
-    /** Серверный тик последнего шага и его имя (для строк лога). */
+    /** Server tick of the last step and its name (for log lines). */
     private volatile long stepServerTick = -1, stepNanos;
     private volatile String stepName = "-";
-    // поток сервера
+    // server thread
     private long tickStart, secondStart, secondNanos, secondMax;
     private int secondTicks;
-    /** Снаряды, чей первый взрыв уже в логе (у боевой части несколько взрывов). */
+    /** Shells whose first explosion is already in the log (the warhead has several explosions). */
     private final Set<UUID> hit = new HashSet<>();
 
     StrikeProfile() {
@@ -69,7 +69,7 @@ final class StrikeProfile {
         for (String s : spec.split(";")) {
             String[] a = s.strip().split("\\s+");
             if (a.length == 4 && a[0].equals("tp") || a.length == 6) steps.add(a);
-            else if (!s.isBlank()) Incoming.LOG.warn("SCENARIO strike-profile: шаг «{}» пропущен — нужно «tp x y z» или «оружие сколько разброс x y z»", s);
+            else if (!s.isBlank()) Incoming.LOG.warn("SCENARIO strike-profile: step “{}” is skipped - you need “tp x y z” or “weapon how much spread x y z\"", s);
         }
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
         NeoForge.EVENT_BUS.addListener(this::onServerTickPre);
@@ -82,7 +82,7 @@ final class StrikeProfile {
         MinecraftServer server = mc.getSingleplayerServer();
         if (mc.player == null || server == null) return;
         tick++;
-        // неуязвим: удар по месту игрока — тоже шаг замера
+        // invulnerable: hitting the player's place is also a measuring step
         if (tick == 20) server.execute(() -> server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
                 "gamemode creative " + player(server).getGameProfile().getName()));
         for (int i = 0; i < steps.size(); i++) {
@@ -129,7 +129,7 @@ final class StrikeProfile {
         tickStart = now;
     }
 
-    /** От шага: тиков сервера и настенных миллисекунд (сервер позади — тиков меньше, чем мс / 50). */
+    /** From step: server tick and wall milliseconds (server behind - tick less than ms / 50). */
     private String since(MinecraftServer server, long now) {
         return stepServerTick < 0 ? "-" : String.format(Locale.ROOT, "+%d ticks +%d ms", server.getTickCount() - stepServerTick, (now - stepNanos) / 1_000_000);
     }
@@ -152,8 +152,8 @@ final class StrikeProfile {
     }
 
     /**
-     * Первый взрыв снаряда: снаряд — источник урона взрыва, уже убранный из мира, с местом, фазой и курсом на тик
-     * попадания. Блок — в точке взрыва на полшага по курсу (точка столкновения лежит на грани блока).
+     * First projectile explosion: the projectile is the source of explosion damage, already removed from the world, with the location, phase and course of the hit tick
+     * . Block - at the point of explosion half a step along the course (the point of collision lies on the edge of the block).
      */
     private void onBlast(ExplosionEvent.Start e) {
         if (!(e.getLevel() instanceof ServerLevel level)) return;
@@ -162,8 +162,8 @@ final class StrikeProfile {
         try {
             logHit(level, p, e.getExplosion().center());
         } catch (RuntimeException x) {
-            // строка для сведения: замер не должен падать из-за неё
-            Incoming.LOG.warn("SCENARIO strike-profile hit: строка не записана", x);
+            // line for information: the measurement should not fall because of it
+            Incoming.LOG.warn("SCENARIO strike-profile hit: line not written", x);
         }
     }
 
@@ -182,7 +182,7 @@ final class StrikeProfile {
         return String.format(Locale.ROOT, "%.0f %.0f %.0f", v.x, v.y, v.z);
     }
 
-    /** Блок в точке взрыва или на шаг дальше по курсу; в неготовый чанк не заглядывает. */
+    /** Block at the point of explosion or one step further along the course; does not look into an unready chunk. */
     private static String block(ServerLevel level, Vec3 at, Vec3 dir) {
         for (double d : new double[] {0.3, 1.0}) {
             BlockPos b = BlockPos.containing(at.add(dir.scale(d)));
@@ -193,7 +193,7 @@ final class StrikeProfile {
         return "air";
     }
 
-    /** {@code StrikeProjectile.armed()} (защищённый); нет такого метода — в строке «armed ?», а не падение замера. */
+    /** {@code StrikeProjectile.armed()} (protected); there is no such method - in the line “armed?”, and not a measurement drop. */
     private static final Method ARMED = armedMethod();
 
     private static Method armedMethod() {
@@ -202,7 +202,7 @@ final class StrikeProfile {
             m.setAccessible(true);
             return m;
         } catch (ReflectiveOperationException | RuntimeException e) {
-            Incoming.LOG.warn("SCENARIO strike-profile: метода StrikeProjectile.armed() нет ({}) — в строках hit «armed ?»", e.toString());
+            Incoming.LOG.warn("SCENARIO strike-profile: there is no method StrikeProjectile.armed() ({}) - in the lines hit “armed ?”", e.toString());
             return null;
         }
     }
@@ -217,8 +217,8 @@ final class StrikeProfile {
     }
 
     /**
-     * Раз в 5 с, пока летят снаряды: сколько их в мире и вне его по фазам полёта — удар без единого попадания
-     * (прогон 740eec9) иначе не отличить от снарядов, застрявших в полёте или на пусковой.
+     * Once every 5 s, while the shells are flying: how many of them are in the world and outside of it by flight phase - a strike without a single hit
+     *  (run 740eec9) otherwise it cannot be distinguished from shells stuck in flight or on the launcher.
      */
     private void logFlights(ServerLevel level) {
         Map<String, Integer> in = new TreeMap<>(), off = new TreeMap<>();

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Синтез для звуков мода Incoming (numpy, фиксированный сид — результат воспроизводим): библиотека для
-tools/build_sounds.py, который смешивает эти слои с настоящими записями и пишет файлы.
+"""Synthesis for Incoming mod sounds (numpy, fixed seed for reproducible output): library for
+tools/build_sounds.py, which mixes these layers with real recordings and writes the files.
 
-Синтез даёт то, чего нет в записях или что в них срезано: инфранизкий «удар в грудь» взрывов, удар и лязг
-ядерного фронта, скрежет бурения бетона, звон в ушах, сигнал захвата цели; остальное — подмес к записям.
+Synthesis supplies what recordings lack or cut off: infrabass explosion "chest hit", nuclear front impact and clang,
+concrete drilling grind, tinnitus, target-lock signal; the rest is mixed into recordings.
 """
 import numpy as np
 from scipy.signal import lfilter
@@ -12,10 +12,10 @@ SR = 32000
 rng = np.random.default_rng(42)
 
 
-# ---------------------------------------------------------------- инструменты
+# ---------------------------------------------------------------- utilities
 
 def F(x, lo=None, hi=None, bells=()):
-    """Фильтр в частотной области: срез снизу/сверху и «колокола» (частота, дБ, ширина в октавах)."""
+    """Frequency-domain filter: low/high cuts and bells (frequency, dB, width in octaves)."""
     X = np.fft.rfft(x)
     f = np.fft.rfftfreq(len(x), 1 / SR)
     H = np.ones_like(f)
@@ -47,19 +47,19 @@ def reverb(x, t60=1.2, mix=0.3, pre=0.02, hi=3000):
 def norm(x, rms_db=-12, peak=0.9):
     x = x - np.mean(x)
     x = x * (10 ** (rms_db / 20) / max(np.sqrt(np.mean(x ** 2)), 1e-9))
-    x = np.tanh(x * 1.2) / np.tanh(1.2)  # мягкий лимитер
+    x = np.tanh(x * 1.2) / np.tanh(1.2)  # soft limiter
     return x * min(1.0, peak / np.max(np.abs(x)))
 
 
 def env_noise(n, rate, depth):
-    """Медленная «турбулентная» модуляция громкости."""
+    """Slow "turbulent" volume modulation."""
     m = F(rng.standard_normal(n), hi=rate)
     m /= np.max(np.abs(m))
     return 1 + depth * m
 
 
 def loop(sig, seconds, fade=0.5):
-    """Бесшовная петля длиной seconds: хвост сигнала плавно (равная мощность) вклеивается в начало."""
+    """Seamless loop of length seconds: signal tail crossfades into the start (equal power)."""
     L, Fd = int(seconds * SR), int(fade * SR)
     assert len(sig) >= L + Fd
     out = sig[:L].copy()
@@ -68,7 +68,7 @@ def loop(sig, seconds, fade=0.5):
     return out
 
 
-# ---------------------------------------------------------------- шахед: двухтактный «мопед» и толкающий винт
+# ---------------------------------------------------------------- Shahed: two-stroke "moped" and pusher propeller
 
 def drone_engine(dur=7.0, f_rot=100.0):
     n = int(dur * SR)
@@ -95,7 +95,7 @@ def drone_engine(dur=7.0, f_rot=100.0):
     return F(np.tanh(x * 1.6), lo=55, hi=5000)
 
 
-# ---------------------------------------------------------------- крылатая ракета: турбореактивный двигатель
+# ---------------------------------------------------------------- cruise missile: turbojet
 
 def turbojet(dur=7.0, tone=3100.0, whine_amt=1.0, roar_amt=1.0, hiss_amt=0.4):
     n = int(dur * SR)
@@ -113,7 +113,7 @@ def turbojet(dur=7.0, tone=3100.0, whine_amt=1.0, roar_amt=1.0, hiss_amt=0.4):
 
 
 def whistle(dur=6.0, f0=1150.0):
-    """Свист падающего боеприпаса: тон с дрожанием и «дыхание» воздуха; высоту меняет клиент."""
+    """Falling munition whistle: wavering tone and air "breathing"; client changes pitch."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     vib = 1 + 0.006 * np.sin(2 * np.pi * 5.3 * t) + 0.004 * F(rng.standard_normal(n), hi=6) / 0.02
@@ -123,7 +123,7 @@ def whistle(dur=6.0, f0=1150.0):
     return tone / np.std(tone) + 0.5 * air / np.std(air)
 
 
-# ---------------------------------------------------------------- B-2 и бомба
+# ---------------------------------------------------------------- B-2 and bomb
 
 def jet(dur=8.0):
     n = int(dur * SR)
@@ -152,7 +152,7 @@ def drill(dur=6.0):
     return F(grind / np.std(grind) * env_noise(n, 6, 0.5) + 1.3 * knocks / np.std(knocks), hi=1200)
 
 
-# ---------------------------------------------------------------- разовые
+# ---------------------------------------------------------------- one-shots
 
 def blast_near(dur=4.0):
     n = int(dur * SR)
@@ -179,7 +179,7 @@ def blast_far(dur=8.0):
     t = np.arange(n) / SR
     boom = F(rng.standard_normal(n), lo=25, hi=400) * np.exp(-t / 0.5)
     x = boom.copy()
-    for d, g in [(0.35, 0.5), (0.8, 0.35), (1.4, 0.28), (2.3, 0.2), (3.5, 0.12)]:  # эхо от рельефа и домов
+    for d, g in [(0.35, 0.5), (0.8, 0.35), (1.4, 0.28), (2.3, 0.2), (3.5, 0.12)]:  # echoes from terrain and buildings
         k = int(d * SR)
         x[k:] += g * F(boom, hi=250)[:n - k]
     x = reverb(x, t60=3.0, mix=0.5)
@@ -187,7 +187,7 @@ def blast_far(dur=8.0):
 
 
 def siren(dur=13.0):
-    """Механическая сирена воздушной тревоги: разгон ротора, вой с «плаванием» тона, спад; эхо улиц."""
+    """Mechanical air-raid siren: rotor spin-up, wavering howl, decay; street echoes."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     rise, hold = 3.5, 4.5
@@ -195,7 +195,7 @@ def siren(dur=13.0):
                  np.where(t < rise + hold, 480 + 6 * np.sin(2 * np.pi * 0.35 * (t - rise)),
                           480 - 290 * (1 - np.exp(-(t - rise - hold) / 2.2))))
     ph = np.cumsum(f) / SR
-    # ротор даёт почти прямоугольный сигнал: нечётные гармоники; второй ротор — «аккорд» 6:5
+    # rotor produces an almost square wave: odd harmonics; second rotor forms a 6:5 "chord"
     tone = sum(np.sin(2 * np.pi * k * ph) / k for k in (1, 3, 5, 7, 9))
     tone += 0.55 * sum(np.sin(2 * np.pi * k * 1.2 * ph) / k for k in (1, 3, 5, 7))
     amp = np.minimum(1, t / 0.6) * np.minimum(1, (dur - t) / 2.5)
@@ -247,7 +247,7 @@ def bomb_cave():
 
 
 def lock_beep():
-    """Захват цели: два коротких сигнала прибора."""
+    """Target lock: two short instrument beeps."""
     n = int(0.25 * SR)
     x = np.zeros(n)
     for t0 in (0.0, 0.12):
@@ -257,11 +257,11 @@ def lock_beep():
     return norm(x, -16, 0.6)
 
 
-# ---------------------------------------------------------------- ядерный удар
+# ---------------------------------------------------------------- nuclear strike
 
 def nuke_alarm(cycles=3, cyc=10.0, tail=2.5):
-    """Сирена гражданской обороны «ракетное нападение»: ниже воздушной тревоги, три цикла разгон — вой — спад,
-    роторы в малую терцию и суб-октава дают тревожное «дрожание»; эхо улиц."""
+    """Civil-defense "missile attack" siren: lower than the air-raid siren, three spin-up–howl–decay cycles;
+rotors a minor third apart and a sub-octave create anxious "trembling"; street echoes."""
     n = int((cycles * cyc + tail) * SR)
     t = np.arange(n) / SR
     tc = np.mod(t, cyc)
@@ -270,22 +270,22 @@ def nuke_alarm(cycles=3, cyc=10.0, tail=2.5):
     top = hi + 6 * np.sin(np.pi * (tc - rise) / hold)
     down = hi - (hi - lo) * (1 - np.exp(-(tc - rise - hold) / 1.3)) / (1 - np.exp(-(cyc - rise - hold) / 1.3))
     f = np.where(tc < rise, up, np.where(tc < rise + hold, top, down))
-    lvl = 0.25 + 0.75 * np.clip((f - lo) / (hi - lo), 0, 1)  # медленный ротор тише
+    lvl = 0.25 + 0.75 * np.clip((f - lo) / (hi - lo), 0, 1)  # slow rotor is quieter
     ph = np.cumsum(f * (1 + 0.01 * np.sin(2 * np.pi * 5.5 * t))) / SR
     tone = sum(np.sin(2 * np.pi * k * ph) / k for k in (1, 3, 5, 7, 9))
-    tone += 0.6 * sum(np.sin(2 * np.pi * k * 1.194 * ph) / k for k in (1, 3, 5, 7))  # второй ротор чуть расстроен: биения
+    tone += 0.6 * sum(np.sin(2 * np.pi * k * 1.194 * ph) / k for k in (1, 3, 5, 7))  # second rotor slightly detuned: beats
     tone += 0.35 * sum(np.sin(2 * np.pi * k * 0.5 * ph) / k for k in (1, 3, 5))
     amp = np.minimum(1, t / 0.8) * np.clip(cycles * cyc - t, 0, 1) * (1 + 0.25 * np.sin(2 * np.pi * 7.3 * t))
     x = F(tone * lvl * amp, lo=90, hi=2200)
     dull = F(x, hi=1500)
-    for d, g in [(0.23, 0.35), (0.51, 0.25), (0.94, 0.18)]:  # отражения от домов
+    for d, g in [(0.23, 0.35), (0.51, 0.25), (0.94, 0.18)]:  # building reflections
         k = int(d * SR)
         x[k:] += g * dull[:n - k]
     return norm(reverb(x, t60=3.0, mix=0.5, pre=0.07, hi=2000), -14, 0.85)
 
 
 def nuke_launch(dur=22.0):
-    """Пуск МБР: рёв твердотопливной ступени с треском; ракета уходит вверх — тише и глуше за ~20 с."""
+    """ICBM launch: roaring, crackling solid-fuel stage; missile climbs away, quieter and duller over ~20 s."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     roar = F(rng.standard_normal(n), lo=25, hi=6000, bells=[(80, 8, 1.0), (250, 5, 1.2)])
@@ -293,7 +293,7 @@ def nuke_launch(dur=22.0):
     imp = (rng.random(n) < 300 / SR) * rng.lognormal(0, 0.8, n) * np.sign(rng.standard_normal(n))
     crackle = F(imp, lo=700, hi=9000)
     full = roar + 0.6 * crackle / np.std(crackle)
-    near = np.exp(-np.maximum(0, t - 2) / 4)  # доля полного спектра: верха «съедает» расстояние
+    near = np.exp(-np.maximum(0, t - 2) / 4)  # full-spectrum fraction: distance absorbs treble
     g = np.exp(-np.maximum(0, t - 2.5) / 5.5) * np.clip((dur - t) / 2, 0, 1) * np.minimum(1, t / 0.15)
     ign = np.sin(2 * np.pi * (40 * t - 8 * t * t)) * np.exp(-t / 0.5)
     x = (near * full + (1 - near) * 1.3 * F(full, hi=350)) * g + 1.2 * ign
@@ -301,7 +301,7 @@ def nuke_launch(dur=22.0):
 
 
 def nuke_crack(dur=6.5):
-    """Приход фронта вблизи: удар Фридлендера, лязг, огромный низ; нарочно перегружен (клиппинг)."""
+    """Front arrival nearby: Friedlander impact, clang, huge bass; deliberately overloaded (clipping)."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     s = np.maximum(t - 0.05, 0)
@@ -315,12 +315,12 @@ def nuke_crack(dur=6.5):
     debris = F(rng.standard_normal(n), lo=800, hi=6000) * (rng.random(n) < 0.015) * np.exp(-s / 1.2) * on
     x = 2.5 * slam + 1.4 * body + 0.9 * rumble / np.std(rumble) + 0.8 * front / np.std(front) \
         + 0.35 * clang + 0.2 * debris / np.std(debris)
-    x = F(np.clip(3 * x / np.max(np.abs(x)), -1, 1), hi=8000)  # срез верхов: у ступеньки клиппинга Vorbis даёт выброс
+    x = F(np.clip(3 * x / np.max(np.abs(x)), -1, 1), hi=8000)  # treble cut: Vorbis overshoots at the clipping step
     return norm(reverb(x, t60=2.4, mix=0.3, hi=3500), -11, 0.6)
 
 
 def nuke_boom_far(dur=14.0):
-    """Далёкий подрыв: глухой удар, затем долгий катящийся гром (отражения от рельефа)."""
+    """Distant detonation: muffled impact, then long rolling thunder (terrain reflections)."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     boom = F(rng.standard_normal(n), lo=20, hi=180) * np.exp(-t / 0.6) * np.minimum(1, t / 0.04)
@@ -336,7 +336,7 @@ def nuke_boom_far(dur=14.0):
 
 
 def hurricane(dur=9.0):
-    """Ураганный ветер: порывы, завывание на нескольких узких полосах, низкий гул, шелест."""
+    """Hurricane wind: gusts, howling in several narrow bands, low rumble, rustling."""
     n = int(dur * SR)
     body = F(rng.standard_normal(n), lo=60, hi=1800, bells=[(350, 5, 1.2)])
     x = body / np.std(body) * env_noise(n, 0.8, 0.55)
@@ -349,7 +349,7 @@ def hurricane(dur=9.0):
 
 
 def nuke_glass(dur=3.0, count=180):
-    """Рой бьющегося стекла: общий треск и сотни осколков (неармоничные высокие призвуки), всё реже."""
+    """Swarm of breaking glass: overall crackle and hundreds of shards (inharmonic high overtones), increasingly sparse."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     x = F(rng.standard_normal(n), lo=1500, hi=12000) * np.exp(-t / 0.08) * 0.5
@@ -369,9 +369,9 @@ def nuke_glass(dur=3.0, count=180):
 
 
 def nuke_tinnitus(dur=10.0):
-    """Звон в ушах — петля: чистый тон 4870 Гц (у выемки сдвига порога после импульса, 4 кГц) с лёгким плаванием и
-    биениями, ровный — громкость ведёт игра по сдвигу порога. За dur = 10 с у тона, биений и плавания (0,1 Гц) целое
-    число периодов: склейка петли без щелчка. Тихий: −29 плюс ~3 дБ лимитера norm ≈ −26."""
+    """Tinnitus loop: pure 4870 Hz tone (near the post-impulse threshold-shift notch, 4 kHz), with slight wobble and
+beating, steady; the game controls loudness by threshold shift. With dur = 10 s, the tone, beats and wobble (0.1 Hz)
+have integer cycle counts: loop seam without a click. Quiet: −29 plus ~3 dB from the norm limiter ≈ −26."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     ph = 4870 * (t - 0.0008 / (2 * np.pi * 0.1) * (np.cos(2 * np.pi * 0.1 * t) - 1))
@@ -380,7 +380,7 @@ def nuke_tinnitus(dur=10.0):
 
 
 def black_rain(dur=7.0):
-    """Тяжёлые жирные капли: удар, «бульк» пузырька (тон растёт), глухой шлепок; мелочь и шелест фоном."""
+    """Heavy, fat drops: impact, bubble "plop" (rising tone), muffled slap; small drops and rustling in the background."""
     n = int(dur * SR)
     heavy = np.zeros(n)
     L = int(0.06 * SR)
@@ -399,7 +399,7 @@ def black_rain(dur=7.0):
 
 
 def geiger_click():
-    """Один щелчок счётчика Гейгера — Мюллера: ~15 мс и крошечный хвост."""
+    """One Geiger–Müller counter click: ~15 ms and a tiny tail."""
     n = int(0.025 * SR)
     t = np.arange(n) / SR
     x = np.sin(2 * np.pi * 2900 * t) * np.exp(-t / 0.0012) + 0.6 * np.sin(2 * np.pi * 1100 * t) * np.exp(-t / 0.003) \
@@ -408,15 +408,14 @@ def geiger_click():
     return norm(x * np.clip((0.025 - t) / 0.003, 0, 1), -18, 0.85)
 
 
-# ---------------------------------------------------------------- после удара: хлопок вдали, город горит
+# ---------------------------------------------------------------- after the impact: distant bang, burning city
 
 def nuke_crack_far(dur=4.0, t_plus=1.2, pa=345.0):
-    """Удар фронта ядерного подрыва за километры — запись на случай, когда игре нечем сыграть дорожку из модели
-    (client/sound/BlastPulse: у неё давление и фаза — у слушателя, здесь — типичные). Слабая ударная волна: один
-    скачок давления pa, плавный спад положительной фазы t_plus и разрежение (импульс Фридлендера); хвостового скачка
-    N-волны нет — он вырастает лишь за сотню километров. Нарастание фронта 0,17/pa с (крутизну держит сама волна,
-    по замерам звуковых ударов), ниже 20 Гц слух не слышит — срез Баттерворта второго порядка, причинный: у удара
-    ничего до фронта."""
+    """Nuclear detonation front impact kilometers away: recording for when the game cannot play the model-generated track
+(client/sound/BlastPulse: its pressure and phase are at the listener; here they are typical values). Weak shock wave:
+one pressure jump pa, smooth positive-phase decay t_plus and rarefaction (Friedlander pulse); no N-wave tail shock,
+which develops only beyond a hundred kilometers. Front rise time 0.17/pa s (wave itself maintains steepness, per sonic-boom
+measurements); hearing does not detect below 20 Hz, so a second-order Butterworth cut, causal: nothing before the front."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     theta = max(0.5 / SR, 0.17 / pa / (2 * np.arctanh(0.8)))
@@ -431,18 +430,18 @@ def nuke_crack_far(dur=4.0, t_plus=1.2, pa=345.0):
 
 
 def nuke_collapse(dur=4.5):
-    """Обрушение в руинах: треск ломающейся опоры, каскад тяжёлых ударов кладки и балок, осыпь мелочи, которая
-    затихает."""
+    """Collapse in ruins: cracking support, cascade of heavy masonry and beam impacts, a shower of small debris
+that fades away."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     x = np.zeros(n)
-    # треск опоры
+    # support crack
     a = 0.02 + rng.uniform(0, 0.03)
     s = t - a
     snap = F(rng.standard_normal(n), lo=600, hi=6000) * np.exp(-np.maximum(s, 0) / 0.02) * (s > 0)
     creak = F(rng.standard_normal(n), lo=150, hi=900, bells=[(320, 8, 0.3)]) * np.exp(-np.maximum(s, 0) / 0.15) * (s > 0)
     x += 0.8 * snap / np.max(np.abs(snap)) + 0.3 * creak / np.max(np.abs(creak))
-    # каскад ударов: всё реже и тише
+    # cascade of impacts: increasingly sparse and quiet
     t1 = a + rng.uniform(0.15, 0.35)
     for k in range(rng.integers(4, 8)):
         s = t - t1
@@ -451,7 +450,7 @@ def nuke_collapse(dur=4.5):
         hit *= np.minimum(1, np.maximum(s, 0) / 0.004)
         x += rng.uniform(0.5, 1.0) * np.exp(-k / 3) * hit / np.max(np.abs(hit))
         t1 += rng.exponential(0.18) + 0.04
-    # осыпь: мелкие камешки, всё реже
+    # debris shower: small stones, increasingly sparse
     rate = 60 * np.exp(-np.maximum(t - a - 0.3, 0) / 1.0) * (t > a + 0.2)
     pebbles = F((rng.random(n) < rate / SR) * rng.lognormal(-1, 0.6, n), lo=1500, hi=7000)
     x += 0.4 * pebbles / max(np.max(np.abs(pebbles)), 1e-9)

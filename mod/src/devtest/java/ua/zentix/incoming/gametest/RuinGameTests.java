@@ -46,9 +46,9 @@ import static ua.zentix.incoming.gametest.NuclearGameTests.scarAll;
 import static ua.zentix.incoming.gametest.NuclearGameTests.surface;
 
 /**
- * Руины ядерного удара на физике ({@code Blast}, {@code Collapse}): трудные случаи — пролёты шире пролёта блока,
- * давление в глубине постройки, опоры, навесное, вода, неразрушимое, край загруженного мира, границы квадратов
- * подготовки. Площадка и масштаб — как в {@link NuclearGameTests}: дёрн на y = 11, поверхность y = 12.
+ * Ruins of a nuclear strike in physics ({@code Blast}, {@code Collapse}): difficult cases - spans wider than the span of the block,
+ *  pressure in the depths of the building, supports, suspended, water, indestructible, edge of a busy world, boundaries of squares
+ *  preparation. The area and scale are the same as in {@link NuclearGameTests}: turf on y = 11, surface y = 12.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -60,10 +60,10 @@ public final class RuinGameTests {
     }
 
     /**
-     * Стеклянные залы с крышей при ~2 psi: стёкла выбиты, и крыше не на чем стоять. У зала 17×17 крыша каменная
-     * (середина — в 8 блоках от стены, дальше пролёта камня: 7 и 8 падают по правилу «опора дальше на 3»), у зала
-     * 21×21 — бетонная (середина дальше обхода опор: опоры не было видно и до удара, падает каскадом от краёв). От крыш
-     * не остаётся ни блока.
+     * Glass halls with a roof at ~2 psi: the glass is broken, and there is nothing for the roof to stand on. The hall 17×17 has a stone roof
+     *  (the middle is 8 blocks from the wall, further than the span of the stone: 7 and 8 fall according to the rule “support further on 3”), hall
+     * 21×21 - concrete (the middle is further than the bypass of the supports: the support was not visible before the impact, it falls in a cascade from the edges). Not a block remains from the roofs of
+     * .
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_hall", skyAccess = true)
     public static void glassHallRoofFalls(GameTestHelper h) {
@@ -77,7 +77,7 @@ public final class RuinGameTests {
         h.succeed();
     }
 
-    /** Зал (2r+1)×(2r+1): стеклянные стены в 5 блоков, крыша на 5-м из {@code roof}. */
+    /** Hall (2r+1)×(2r+1): glass walls in 5 blocks, roof on 5-m from {@code roof}. */
     private static void hall(GameTestHelper h, BlockPos c, int r, Block roof) {
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
@@ -99,18 +99,18 @@ public final class RuinGameTests {
                         left++;
                         any = c.offset(dx, y, dz);
                     }
-                    if (h.getBlockState(c.offset(dx, y, dz)).is(Blocks.GLASS)) h.fail("стекло зала цело в " + c.offset(dx, y, dz).toShortString());
+                    if (h.getBlockState(c.offset(dx, y, dz)).is(Blocks.GLASS)) h.fail("the glass of the hall is intact " + c.offset(dx, y, dz).toShortString());
                 }
             }
         }
-        if (left > 0) h.fail("от крыши зала " + (2 * r + 1) + "×" + (2 * r + 1) + " осталось " + left + " блоков, например " + any.toShortString() + " (" + psi(d, h, c.above(5)) + ")");
+        if (left > 0) h.fail("from the roof of the hall " + (2 * r + 1) + "×" + (2 * r + 1) + " left " + left + " blocks, for example " + any.toShortString() + " (" + psi(d, h, c.above(5)) + ")");
     }
 
     /**
-     * Чанк на краю загруженного мира: его руины встают без загрузки соседей (окно фонового плана — с диска, соседа нет
-     * на диске — сплошной массив). Если план всё же держит соседей тикетом радиуса 1 ({@code RuinPlan.needsNeighbours}),
-     * чанки, которые загрузил этот тикет, сами тикетов не берут — иначе загрузка расползалась бы от края на весь радиус.
-     * Каждый держащий тикет чанк был в памяти полным ещё до подрыва.
+     * Chunk on the edge of a busy world: its ruins rise without loading its neighbors (the background window is from the disk, there is no neighbor
+     *  on the disk - a solid array). If the plan still holds neighbors with a ticket of radius 1 ({@code RuinPlan.needsNeighbours}),
+     * , the chunks that loaded this ticket do not take the ticket themselves - otherwise the loading would spread from the edge to the entire radius.
+     *  Each chunk holding a ticket was full in memory even before the detonation.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_hold_spread", skyAccess = true)
     public static void edgeHoldDoesNotSpread(GameTestHelper h) {
@@ -128,7 +128,7 @@ public final class RuinGameTests {
             long[] held = NuclearWorld.get(level).scarHolds();
             most[0] = Math.max(most[0], held.length);
             for (long k : held) {
-                if (spread[0] == null && !loaded.contains(k)) spread[0] = new ChunkPos(k) + " (держат " + held.length + ")";
+                if (spread[0] == null && !loaded.contains(k)) spread[0] = new ChunkPos(k) + " (hold " + held.length + ")";
             }
         });
         Runnable done = () -> {
@@ -136,12 +136,12 @@ public final class RuinGameTests {
             NuclearStrikes.clear(level);
         };
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(chunks.getChunkNow(e.x, e.z) != null, "E грузится"))
+                .thenWaitUntil(() -> h.assertTrue(chunks.getChunkNow(e.x, e.z) != null, "E is loading"))
                 .thenExecute(() -> {
                     glass[0] = surface(level, e);
                     level.setBlock(glass[0], Blocks.GLASS.defaultBlockState(), 3);
                     for (ChunkHolder holder : chunks.chunkMap.getChunks()) {
-                        // в памяти полным (и опущенные у края видимости — снимок подрыва берёт и их)
+                        // in memory complete (and lowered at the edge of visibility - the photo of the explosion takes them too)
                         if (holder.getChunkIfPresentUnchecked(net.minecraft.world.level.chunk.status.ChunkStatus.FULL) instanceof net.minecraft.world.level.chunk.LevelChunk) {
                             loaded.add(holder.getPos().toLong());
                         }
@@ -151,28 +151,28 @@ public final class RuinGameTests {
                 .thenWaitUntil(() -> {
                     if (spread[0] != null) {
                         done.run();
-                        throw new GameTestAssertException("тикет взял чанк, загруженный чужим тикетом: " + spread[0]);
+                        throw new GameTestAssertException("ticket took a chunk loaded by someone else's ticket: " + spread[0]);
                     }
-                    h.assertFalse(level.getBlockState(glass[0]).is(Blocks.GLASS), "стекло в E цело");
+                    h.assertFalse(level.getBlockState(glass[0]).is(Blocks.GLASS), "glass in E is intact");
                 })
-                // и после руин E: загруженные его тикетом чанки дальше ничего не тянут
+                // and after the ruins of E: his loaded ticket chunks don’t carry anything further
                 .thenIdle(100)
                 .thenExecute(() -> {
                     var chunk = chunks.getChunkNow(e.x, e.z);
                     boolean scarred = chunk != null && chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) > 0;
                     done.run();
-                    if (spread[0] != null) throw new GameTestAssertException("тикет взял чанк, загруженный чужим тикетом: " + spread[0]);
-                    h.assertTrue(scarred, "у E нет отметки руин");
-                    h.assertTrue(most[0] <= 9, "край держал больше своего квадрата 3×3: " + most[0]);
+                    if (spread[0] != null) throw new GameTestAssertException("ticket took a chunk loaded by someone else's ticket: " + spread[0]);
+                    h.assertTrue(scarred, "e does not have a ruin mark");
+                    h.assertTrue(most[0] <= 9, "the edge held more than its square 3×3: " + most[0]);
                 })
                 .thenSucceed();
     }
 
     /**
-     * Башня 21×21×80 у эпицентра (15 кт в воздухе, 1 блок = 3.3 м): стены из бетона с окнами, перекрытия через 4 блока,
-     * ядро 5×5 из бетона. Давление входит в пробитые окна и доходит по этажам до ядра (затекает во весь воздух за
-     * проломами, а не на несколько блоков): ядро опрокидывается, башня рушится — не больше 5 % блоков выше завала,
-     * ничего не висит.
+     * Tower 21×21×80 at the epicenter (15 kt in the air, 1 block = 3.3 m): concrete walls with windows, ceilings through 4 block,
+     *  core 5×5 made of concrete. The pressure enters the broken windows and reaches the floors up to the core (flows into the entire air behind the
+     *  breaks, and not onto several blocks): the core overturns, the tower collapses - no more than 5% of the blocks above the rubble,
+     *  nothing hangs.
      */
     @GameTest(template = "range", timeoutTicks = 80, batch = "nuke_wide_tower", skyAccess = true)
     public static void wideTowerWithCoreFalls(GameTestHelper h) {
@@ -207,25 +207,25 @@ public final class RuinGameTests {
                         standing++;
                         if (st.is(Blocks.CYAN_CONCRETE)) core++;
                     }
-                    if (air >= 3) h.fail("висит в воздухе " + st + " в " + c.offset(dx, y, dz).toShortString() + " над пустотой в " + air + " блоков");
+                    if (air >= 3) h.fail("hanging in the air " + st + " in " + c.offset(dx, y, dz).toShortString() + " over the void in " + air + " blocks");
                     air = 0;
                 }
             }
         }
-        h.assertTrue(standing * 20 <= built, "башня 21×21 стоит: выше завала " + standing + " блоков из " + built + ", из них ядра " + core
-                + " (у основания ядра " + psi(d, h, c.above(1)) + ")");
+        h.assertTrue(standing * 20 <= built, "tower 21×21 stands: above the rubble " + standing + " blocks of " + built + ", of which the kernels " + core
+                + " (at the base of the core " + psi(d, h, c.above(1)) + ")");
         h.succeed();
     }
 
     /**
-     * Причал на озере 20×20 (вода — большая, не бассейн): столбы из забора в воде (в блоке вода), настил из досок над
-     * водой. При ~7 psi причал рушится, вода блоков над озером не висит, ничего не висит в воздухе, озеро на месте.
+     * Pier on the lake 20×20 (water is large, not a swimming pool): fence posts in the water (there is water in the block), flooring made of boards over the
+     *  water. At ~7 psi the pier collapses, the water blocks do not hang over the lake, nothing hangs in the air, the lake is still there.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_dock", skyAccess = true)
     public static void dockOverLakeFalls(GameTestHelper h) {
-        BlockPos lake = new BlockPos(40, 9, 22); // дно — y = 8, вода — 9…11
+        BlockPos lake = new BlockPos(40, 9, 22); // bottom - y = 8, water - 9...11
         for (BlockPos p : BlockPos.betweenClosed(lake, lake.offset(19, 2, 19))) h.setBlock(p, Blocks.WATER);
-        BlockPos deck = lake.offset(8, 4, 2); // настил на y = 13, 3 × 12 от берега
+        BlockPos deck = lake.offset(8, 4, 2); // flooring on y = 13, 3 × 12 from the shore
         BlockState post = Blocks.OAK_FENCE.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true);
         for (int dz = 0; dz < 12; dz += 3) {
             for (int dx : new int[] {0, 2}) {
@@ -244,27 +244,27 @@ public final class RuinGameTests {
                 for (int y = 12; y <= 20; y++) {
                     BlockPos p = new BlockPos(lake.getX() + dx, y, lake.getZ() + dz);
                     BlockState st = h.getBlockState(p);
-                    if (!st.getFluidState().isEmpty()) h.fail("вода над озером: " + st + " в " + p.toShortString() + " (" + psi(d, h, deck) + ")");
+                    if (!st.getFluidState().isEmpty()) h.fail("water over the lake: " + st + " in " + p.toShortString() + " (" + psi(d, h, deck) + ")");
                     if (st.isAir()) {
                         air++;
                         continue;
                     }
                     if (air > 0 || y > 12 && h.getBlockState(p.below()).getFluidState().is(Fluids.WATER)) {
-                        h.fail("висит над водой: " + st + " в " + p.toShortString() + " (" + psi(d, h, deck) + ")");
+                        h.fail("hanging over the water: " + st + " in " + p.toShortString() + " (" + psi(d, h, deck) + ")");
                     }
                 }
             }
         }
         for (BlockPos p : BlockPos.betweenClosed(deck.offset(0, 0, -2), deck.offset(2, 0, 11))) {
-            if (h.getBlockState(p).is(Blocks.OAK_PLANKS)) h.fail("настил стоит в " + p.toShortString() + " (" + psi(d, h, deck) + ")");
+            if (h.getBlockState(p).is(Blocks.OAK_PLANKS)) h.fail("the flooring is in " + p.toShortString() + " (" + psi(d, h, deck) + ")");
         }
-        h.assertTrue(water >= 20 * 20 * 3 * 9 / 10, "озеро ушло: воды " + water);
+        h.assertTrue(water >= 20 * 20 * 3 * 9 / 10, "lake gone: water " + water);
         h.succeed();
     }
 
     /**
-     * Бассейн на крыше кирпичного дома 7×7×8 при ~15 psi: дом рушится, вода бассейна (малая) уходит с ним — ни одного
-     * блока воды над пустотой.
+     * A pool on the roof of a brick house 7×7×8 at ~15 psi: the house collapses, the pool water (small) goes with it - not a single
+     *  block of water above the void.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_roof_pool", skyAccess = true)
     public static void rooftopPoolDrainsWithHouse(GameTestHelper h) {
@@ -286,22 +286,22 @@ public final class RuinGameTests {
                 for (int y = 0; y <= 10; y++) {
                     BlockPos p = c.offset(dx, y, dz);
                     if (!h.getBlockState(p).getFluidState().isEmpty() && h.getBlockState(p.below()).isAir()) {
-                        h.fail("вода бассейна висит: " + p.toShortString() + " (" + psi(d, h, c.offset(3, 8, 3)) + ")");
+                        h.fail("pool water hanging: " + p.toShortString() + " (" + psi(d, h, c.offset(3, 8, 3)) + ")");
                     }
                 }
             }
         }
-        h.assertFalse(roof, "крыша дома с бассейном стоит (" + psi(d, h, c.offset(3, 8, 3)) + "): тест ничего не проверил");
+        h.assertFalse(roof, "the roof of the house with a swimming pool stands (" + psi(d, h, c.offset(3, 8, 3)) + "): the test did not check anything");
         h.succeed();
     }
 
     /**
-     * Перекрытие с одной дырой (стеклянный блок в плите, волна выбивает его сверху) при ~3 psi: дыра не режет щелей.
-     * Плита из кирпича 9×9 — выпадает только стекло; такая же 15×15, где у середины опора дальше пролёта кирпича, —
-     * тоже (опора стала длиннее меньше чем на 3); каменная 9×9 (грунт в постройке — кладка без арматуры, держится,
-     * только пока опора не удлинилась) — выпадает не больше соседей дыры. Подрыв у земли: воздушный на площадке
-     * (масштаб ~0.02) — в 12 блоках над ней, и низ ближней стены коробки был бы под 5 psi (отражённое 12 — кладка
-     * ломается, плита теряет опору), а у настоящего дома в 2 км от воздушного 15 кт давление по высоте почти одно.
+     * Overlap with one hole (a glass block in a slab, a wave knocks it out from above) at ~3 psi: the hole does not cut any cracks.
+     *  Brick slab 9×9 - only glass falls out; the same 15×15, where in the middle the support is further than the span of the brick, -
+     * , too (the support has become less longer than 3); stone 9×9 (soil in the building - masonry without reinforcement, holds,
+     *  only until the support is lengthened) - no more falls out than the neighbors of the hole. Detonation near the ground: airborne on the site
+     *  (scale ~0.02) - in 12 blocks above it, and the bottom of the near wall of the box would be under 5 psi (reflected 12 - the masonry
+     *  breaks, the slab loses support), and in a real house 2 km from the air 15 kt the altitude pressure is almost the same.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_floor_hole", skyAccess = true)
     public static void floorWithHoleHasNoSlits(GameTestHelper h) {
@@ -312,13 +312,13 @@ public final class RuinGameTests {
         floor(h, stone, 9, Blocks.STONE, 2, 4);
         scarAll(h, d, new ColumnScar.Budget(false));
         String at = " (" + psi(d, h, wide.offset(7, 5, 7)) + ")";
-        slab(h, masonry, 9, Blocks.STONE_BRICKS, 2, 4, 1, "кирпичное 9×9" + at);
-        slab(h, wide, 15, Blocks.STONE_BRICKS, 6, 7, 1, "кирпичное 15×15" + at);
-        slab(h, stone, 9, Blocks.STONE, 2, 4, 2, "каменное 9×9" + at);
+        slab(h, masonry, 9, Blocks.STONE_BRICKS, 2, 4, 1, "brick 9×9" + at);
+        slab(h, wide, 15, Blocks.STONE_BRICKS, 6, 7, 1, "brick 15×15" + at);
+        slab(h, stone, 9, Blocks.STONE, 2, 4, 2, "stone 9×9" + at);
         h.succeed();
     }
 
-    /** Коробка n×n: стены из каменного кирпича в 5 блоков, плита на 5-м из {@code slab}, стекло в плите в (hx, hz). */
+    /** Box n×n: walls made of stone bricks in 5 blocks, slab on 5 from {@code slab}, glass in slab in (hx, hz). */
     private static void floor(GameTestHelper h, BlockPos c, int n, Block slab, int hx, int hz) {
         for (int dx = 0; dx < n; dx++) {
             for (int dz = 0; dz < n; dz++) {
@@ -330,21 +330,21 @@ public final class RuinGameTests {
         }
     }
 
-    /** Плита стоит вся, кроме дыры и мест ближе {@code keep} к ней (по сторонам). */
+    /** The whole slab remains except the hole and positions within {@code keep} of it (on either side). */
     private static void slab(GameTestHelper h, BlockPos c, int n, Block slab, int hx, int hz, int keep, String what) {
-        h.assertFalse(h.getBlockState(c.offset(hx, 5, hz)).is(Blocks.GLASS), "стекло в перекрытии " + what + " цело");
+        h.assertFalse(h.getBlockState(c.offset(hx, 5, hz)).is(Blocks.GLASS), "glass in the ceiling " + what + " whole");
         for (int dx = 0; dx < n; dx++) {
             for (int dz = 0; dz < n; dz++) {
                 if (Math.abs(dx - hx) + Math.abs(dz - hz) < keep) continue;
                 BlockPos p = c.offset(dx, 5, dz);
-                if (!h.getBlockState(p).is(slab)) h.fail("перекрытие " + what + " с дырой в " + hx + "," + hz + " потеряло " + dx + "," + dz + ": " + h.getBlockState(p));
+                if (!h.getBlockState(p).is(slab)) h.fail("overlap " + what + " with a hole in " + hx + "," + hz + " lost " + dx + "," + dz + ": " + h.getBlockState(p));
             }
         }
     }
 
     /**
-     * Навесное уходит с тем, на чём держалось: деревянный дом при ~8 psi рушится, и ни факел на стене, ни дверь, ни
-     * ковёр на перекрытии не остаются висеть в воздухе — каждый оставшийся стоит на своём.
+     * The attachment leaves with what it was holding on: the wooden house at ~8 psi collapses, and neither the torch on the wall, nor the door, nor the
+     *  carpet on the ceiling remains hanging in the air - each one that remains stands on its own.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_attached", skyAccess = true)
     public static void attachedBlocksGoWithSupport(GameTestHelper h) {
@@ -358,7 +358,7 @@ public final class RuinGameTests {
                 if (!wall) h.setBlock(c.offset(dx, 4, dz), Blocks.RED_CARPET);
             }
         }
-        // дверь в западной стене, факелы снаружи на восточной и на северной
+        // door in the western wall, torches outside on the eastern and northern
         BlockPos door = c.offset(0, 0, 3);
         BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.WEST);
         h.getLevel().setBlock(h.absolutePos(door), lower, 2);
@@ -373,16 +373,16 @@ public final class RuinGameTests {
             BlockState st = h.getBlockState(p);
             if (st.is(Blocks.OAK_PLANKS) && p.getY() - c.getY() >= 3) planks++;
             boolean attached = st.is(BlockTags.WOOL_CARPETS) || st.is(BlockTags.DOORS) || st.is(Blocks.WALL_TORCH) || st.is(Blocks.TORCH);
-            if (attached && !st.canSurvive(level, h.absolutePos(p))) h.fail("висит без опоры: " + st + " в " + p.toShortString() + " (" + psi(d, h, c) + ")");
+            if (attached && !st.canSurvive(level, h.absolutePos(p))) h.fail("hanging without support: " + st + " in " + p.toShortString() + " (" + psi(d, h, c) + ")");
         }
-        h.assertTrue(planks < 20, "дом стоит (" + psi(d, h, c.offset(2, 3, 3)) + ", досок выше 3-го блока " + planks + "): тест ничего не проверил");
+        h.assertTrue(planks < 20, "the house is standing (" + psi(d, h, c.offset(2, 3, 3)) + ", boards above 3 block " + planks + "): the test did not check anything");
         h.succeed();
     }
 
     /**
-     * Песчаный навес над обрывом из песчаника (природный: опоры под ним не было и до удара) при ~3 psi стоит — волна
-     * его не сломала и опоры не отняла. Рядом с навесом волна выбивает стекло: обрушение считается, и навес проходит
-     * его проверку, а не пропускается.
+     * The sandy canopy over the sandstone cliff (natural: there was no support under it even before the impact) at ~3 psi stands - the wave
+     *  did not break it and did not take away the support. Near the canopy, a wave breaks the glass: the collapse is considered, and the canopy passes
+     *  its check, and is not skipped.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_sand", skyAccess = true)
     public static void sandOverhangStays(GameTestHelper h) {
@@ -394,21 +394,21 @@ public final class RuinGameTests {
         h.setBlock(glass, Blocks.GLASS);
         Detonation d = atPsi(h, CENTER.west(10), true, overhang, 3);
         scarAll(h, d, new ColumnScar.Budget(false));
-        h.assertFalse(h.getBlockState(glass).is(Blocks.GLASS), "стекло у навеса цело: обрушение не считалось (" + psi(d, h, overhang) + ")");
+        h.assertFalse(h.getBlockState(glass).is(Blocks.GLASS), "the glass of the canopy is intact: collapse was not considered (" + psi(d, h, overhang) + ")");
         for (BlockPos p : BlockPos.betweenClosed(overhang, overhang.offset(6, 0, 4))) {
-            if (!h.getBlockState(p).is(Blocks.SAND)) h.fail("песчаный навес упал в " + p.toShortString() + ": " + h.getBlockState(p) + " (" + psi(d, h, overhang) + ")");
+            if (!h.getBlockState(p).is(Blocks.SAND)) h.fail("sand canopy fell into " + p.toShortString() + ": " + h.getBlockState(p) + " (" + psi(d, h, overhang) + ")");
         }
         h.succeed();
     }
 
     /**
-     * Вода за стеклом перепада не снимает: стенка аквариума из стекла, за ней вода, лицом к взрыву — воздух, при ~2 psi
-     * лопается (давление на лицо, за хрупким стеклом ничего твёрдого). Стекло, со всех сторон окружённое водой, —
-     * цело: давлению не к чему приложиться.
+     * The water behind the glass does not remove the difference: the wall of the aquarium is made of glass, behind it there is water, facing the explosion there is air, at ~2 psi
+     *  it bursts (pressure on the face, there is nothing solid behind the fragile glass). Glass, surrounded on all sides by water, is
+     *  whole: there is nothing to apply pressure to.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_aquarium", skyAccess = true)
     public static void glassBackedByWaterBreaks(GameTestHelper h) {
-        BlockPos front = new BlockPos(44, 12, 28); // стекло на x = 44, вода — 45…47, задняя стенка — 48
+        BlockPos front = new BlockPos(44, 12, 28); // glass on x = 44, water - 45...47, back wall - 48
         for (int dz = -1; dz <= 5; dz++) {
             for (int y = 0; y < 3; y++) {
                 for (int dx = 0; dx <= 4; dx++) {
@@ -418,23 +418,23 @@ public final class RuinGameTests {
                 }
             }
         }
-        BlockPos sunk = front.offset(2, 0, 2); // на дне: и когда вода стечёт, стоит на грунте
+        BlockPos sunk = front.offset(2, 0, 2); // at the bottom: and when the water drains, it stands on the ground
         h.setBlock(sunk, Blocks.GLASS);
         Detonation d = atPsi(h, CENTER.west(10), true, front.offset(0, 1, 2), 2);
         scarAll(h, d, new ColumnScar.Budget(false));
         String at = " (" + psi(d, h, front.offset(0, 1, 2)) + ")";
         for (int dz = 0; dz < 5; dz++) {
             for (int y = 0; y < 3; y++) {
-                if (h.getBlockState(front.offset(0, y, dz)).is(Blocks.GLASS)) h.fail("стекло аквариума с водой за ним цело в " + front.offset(0, y, dz).toShortString() + at);
+                if (h.getBlockState(front.offset(0, y, dz)).is(Blocks.GLASS)) h.fail("the glass of the aquarium with water behind it is intact " + front.offset(0, y, dz).toShortString() + at);
             }
         }
-        h.assertTrue(h.getBlockState(sunk).is(Blocks.GLASS), "стекло в толще воды разбито" + at);
+        h.assertTrue(h.getBlockState(sunk).is(Blocks.GLASS), "glass in the water is broken" + at);
         h.succeed();
     }
 
     /**
-     * Неразрушимое (коренная порода, обсидиан, барьер, блок света) не падает и не отрывается даже в воздухе без опоры и
-     * держит, как земля: бетон на висящей коренной породе стоит, хотя рядом волна выбила стекло.
+     * Indestructible (bedrock, obsidian, barrier, block of light) does not fall or come off even in the air without support and
+     *  holds like the earth: concrete stands on hanging bedrock, although a nearby wave knocked out the glass.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_fixed", skyAccess = true)
     public static void indestructibleBlocksStandAndHold(GameTestHelper h) {
@@ -449,19 +449,19 @@ public final class RuinGameTests {
         Detonation d = atPsi(h, CENTER.west(10), true, rock, 2);
         scarAll(h, d, new ColumnScar.Budget(false));
         String where = " (" + psi(d, h, rock) + ")";
-        for (int y = 0; y < 6; y++) h.assertTrue(h.getBlockState(at.offset(0, y, 0)).is(Blocks.BARRIER), "барьер упал на " + y + where);
-        h.assertTrue(h.getBlockState(at.offset(0, 6, 0)).is(Blocks.LIGHT), "блок света снят" + where);
-        h.assertTrue(h.getBlockState(at.offset(3, 8, 0)).is(Blocks.OBSIDIAN), "висящий обсидиан упал" + where);
-        h.assertTrue(h.getBlockState(rock).is(Blocks.BEDROCK), "висящая коренная порода упала" + where);
-        h.assertFalse(h.getBlockState(rock.above().east()).is(Blocks.GLASS), "стекло цело: тест ничего не проверил" + where);
-        h.assertTrue(h.getBlockState(rock.above()).is(Blocks.WHITE_CONCRETE), "бетон на коренной породе упал" + where);
+        for (int y = 0; y < 6; y++) h.assertTrue(h.getBlockState(at.offset(0, y, 0)).is(Blocks.BARRIER), "the barrier fell on " + y + where);
+        h.assertTrue(h.getBlockState(at.offset(0, 6, 0)).is(Blocks.LIGHT), "light block removed" + where);
+        h.assertTrue(h.getBlockState(at.offset(3, 8, 0)).is(Blocks.OBSIDIAN), "hanging obsidian fell" + where);
+        h.assertTrue(h.getBlockState(rock).is(Blocks.BEDROCK), "hanging bedrock fell" + where);
+        h.assertFalse(h.getBlockState(rock.above().east()).is(Blocks.GLASS), "the glass is intact: the test did not check anything" + where);
+        h.assertTrue(h.getBlockState(rock.above()).is(Blocks.WHITE_CONCRETE), "concrete on bedrock fell" + where);
         h.succeed();
     }
 
     /**
-     * Тики жидкости: волна выбивает стеклянные блоки шахматкой над разливом воды 32×32 (большая вода — не стекает;
-     * в воде стекло не ломается: вода за ним не даёт перепада) при ~3 psi — воде под каждым тик. План чанка ставит тики не больше предела за секунду, остальные — в
-     * следующие секунды; хотя бы у одного чанка их больше предела.
+     * tick liquid: a wave knocks out glass blocks in a checkerboard pattern over a water spill 32×32 (large water - does not drain;
+     *  glass does not break in water: the water behind it does not give a drop) with ~3 psi - water under each tick. The chunk plan sets tick no more than the limit per second, the rest - in
+     *  the next seconds; at least one chunk has more than the limit.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_fluid_ticks", skyAccess = true)
     public static void fluidTicksStayUnderLimit(GameTestHelper h) {
@@ -478,25 +478,25 @@ public final class RuinGameTests {
         int most = 0;
         for (RuinPlan p : plans) {
             most = Math.max(most, p.fluidTickCount());
-            h.assertTrue(p.maxFluidTicksPerSecond() <= 64, "тиков жидкости за секунду " + p.maxFluidTicksPerSecond() + " из " + p.fluidTickCount());
+            h.assertTrue(p.maxFluidTicksPerSecond() <= 64, "tick liquid per second " + p.maxFluidTicksPerSecond() + " from " + p.fluidTickCount());
         }
-        h.assertTrue(most > 64, "у чанков не больше 64 тиков жидкости (" + most + ", " + psi(d, h, a.offset(16, 0, 16)) + "): предел не проверен");
+        h.assertTrue(most > 64, "chunks have no more than 64 tick of liquid (" + most + ", " + psi(d, h, a.offset(16, 0, 16)) + "): limit not checked");
         h.succeed();
     }
 
     /**
-     * Руины заранее на границе квадратов подготовки (каждый 5-й чанк): глухая стена из терракоты в последнем столбце
-     * чанка одного квадрата, дом с перекрытиями — в соседнем квадрате (15 кт в воздухе, 1 блок = 20 м). Квадраты
-     * готовятся порознь, а руины у их границы — те же, что и в середине: стена рушится с домом. Если на площадке нет
-     * границы квадратов (1 раз из 25 по её месту), стена стоит на обычной границе чанков. Когда чанки зоны уже на диске
-     * (их выгрузили тесты до этого), после подрыва работает зона за волной: заголовки и чанки с диска и планы — по
-     * настенным часам, поэтому ожидание руин идёт в темпе игры (на CI сервер GameTest тикает без пауз, ~2000 тиков/с, и
-     * 850 тиков после подрыва кончаются раньше, чем зона отпускает квадраты).
+     * Ruins in advance on the border of the preparation squares (each 5-th chunk): a blank terracotta wall in the last column of the
+     *  chunk of one square, a house with ceilings in the adjacent square (15 kt in the air, 1 block = 20 m). The squares
+     *  are prepared separately, and the ruins at their border are the same as in the middle: the wall is collapsing along with the house. If there is no
+     *  border of squares on the site (1 times from 25 in its place), the wall stands on the usual border of chunks. When the zone chunks are already on the disk
+     *  (the tests unloaded them before), after the detonation the zone behind the wave works: headers and chunks from the disk and plans - according to the
+     *  wall clock, so the wait for the ruins goes on at the pace of the game (on CI the server GameTest ticks without pauses, ~2000 tick/s, and
+     * 850 tick after detonation ends before the zone releases squares).
      */
     @GameTest(template = "range", timeoutTicks = 3000, batch = "nuke_prep_border", skyAccess = true)
     public static void wallOnPrepTileBorderFalls(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // граница квадратов по x: чанк cx ≡ 0 (mod 5), дом — в нём, стена — в последнем столбце чанка cx − 1
+        // border of squares along x: chunk cx ≡ 0 (mod 5), the house is in it, the wall is in the last column of the chunk cx − 1
         BlockPos wall = null;
         boolean alongX = true;
         for (int rx = 8; rx <= 50 && wall == null; rx++) {
@@ -515,7 +515,7 @@ public final class RuinGameTests {
         for (int y = 0; y < height; y++) {
             for (int u = 0; u <= 6; u++) {
                 for (int v = 0; v <= 6; v++) {
-                    // u — поперёк границы (0 — стена), v — вдоль
+                    // u - across the border (0 - wall), v - along
                     boolean edge = u == 0 || u == 6 || v == 0 || v == 6;
                     BlockState st = null;
                     if (u == 0) st = Blocks.BROWN_TERRACOTTA.defaultBlockState();
@@ -527,7 +527,7 @@ public final class RuinGameTests {
         }
         BlockPos wallAt = wall;
         boolean x = alongX;
-        detonation(h, CENTER, 0, 15, 0.05f); // только засыпка слоя под площадкой: подрыв — по расписанию
+        detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
         double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
         IncomingConfig.SERVER.nukeEffectsScale.set(0.05);
         NuclearWorld w = NuclearWorld.get(level);
@@ -557,15 +557,15 @@ public final class RuinGameTests {
                 if (!scarred || w.plannedChunks() > 0 || w.prepTiles() > 0) {
                     RuinBackgroundGameTests.gamePace(tickAt);
                     if (level.getGameTime() < d.gameTime() + 2400) return;
-                    failure = "руины у стены не встали за 2400 тиков после подрыва: осталось " + w.plannedChunks() + ", квадратов " + w.prepTiles();
+                    failure = "the ruins near the wall did not stand behind 2400 tick after the explosion: left " + w.plannedChunks() + ", squares " + w.prepTiles();
                 } else if (w.ruinStats()[0] == 0) {
-                    failure = "ни один чанк не встал по готовому плану";
+                    failure = "not a single chunk fell into place according to a ready-made plan";
                 } else {
                     for (int v = 0; v <= 6 && failure == null; v++) {
                         for (int y = 5; y < height; y++) {
                             BlockPos p = x ? wallAt.offset(0, y, v) : wallAt.offset(v, y, 0);
                             if (!h.getBlockState(p).isAir()) {
-                                failure = "стена на границе квадратов стоит: " + h.getBlockState(p) + " в " + p.toShortString();
+                                failure = "the wall on the border of the squares stands: " + h.getBlockState(p) + " in " + p.toShortString();
                                 break;
                             }
                         }
@@ -576,7 +576,7 @@ public final class RuinGameTests {
                 h.succeed();
             } else if (level.getGameTime() > now + 1150) {
                 restore.run();
-                throw new GameTestAssertException("подрыва не было");
+                throw new GameTestAssertException("there was no explosion");
             }
         });
     }

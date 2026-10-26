@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Команды песочницы эффектов: из чата ({@code /fx …}) и из файла — одна строка, ошибка — до того, как что-то сыграло. */
+/** Sandbox effects commands: from chat ({@code /fx …}) and from file - one line, error - before anything played. */
 class SandboxCommandTest {
     @Test
     void parsesEffectsFromChatAndFile() {
@@ -36,7 +36,7 @@ class SandboxCommandTest {
         assertFalse(SandboxCommand.parse("flight drone 600").own());
         assertTrue(SandboxCommand.parse("surface 0.01 black").effect());
         assertEquals(0.9, SandboxCommand.parse("surface 0.9 gray").number(0));
-        // налёт: оружие и пруд — по желанию; в пруд — не шире полупруда
+        // raid: weapons and pond - optional; into a pond - no wider than a half-pond
         SandboxCommand salvo = SandboxCommand.parse("raid 12 15 1 rocket water");
         assertTrue(salvo.effect());
         assertTrue(salvo.water());
@@ -50,10 +50,10 @@ class SandboxCommandTest {
     }
 
     /**
-     * Пролёт идёт по прямой над точкой: у оружия с маршрутом оператора точка маршрута — сама точка, на одной прямой
-     * между местом пуска и целью, и путь в его дальности (иначе сервер отклонил бы приказ, {@code routeProblem}); у
-     * оружия без маршрута точек нет (с {@code via} приказ не прошёл бы). Без точки шахед и ракета летели петлёй и
-     * проходили в 200–350 блоках от точки — песочница их не дожидалась.
+     * The flight goes in a straight line over a point: for a weapon with an operator’s route, the route point is the point itself, on one straight line
+     *  between the launch site and the target, and the path is in its range (otherwise the server would reject the order, {@code routeProblem});
+     *  has no weapons without a point route (with {@code via} the order would not have gone through). Without a point, Shahed and the rocket flew in a loop and
+     *  passed in 200–350 blocks from the point - the sandbox did not wait for them.
      */
     @Test
     void flightPassesOverThePointInAStraightLine() {
@@ -68,8 +68,8 @@ class SandboxCommandTest {
                     assertEquals(path + " via " + x + " " + z, order, c.toString());
                     Vec3 site = new Vec3(x, 0, z), start = new Vec3(x, 0, z + from), aim = new Vec3(x, 0, z - from);
                     Waypoints via = new Waypoints(List.of(site));
-                    assertEquals(2.0 * from, via.length(start, aim), 1e-6, "по прямой: " + c);
-                    assertTrue(via.within(w, start, aim), "в дальности маршрута: " + c);
+                    assertEquals(2.0 * from, via.length(start, aim), 1e-6, "in a straight line: " + c);
+                    assertTrue(via.within(w, start, aim), "in route distance: " + c);
                 } else {
                     assertEquals(path, order, c.toString());
                 }
@@ -86,7 +86,7 @@ class SandboxCommandTest {
         assertEquals(4, c.number(2, 0));
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots a 1,0.5"));
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots ../x 1"));
-        // до начала эффекта — не раньше −10 с (у nuke … near начало — приход фронта к домам)
+        // before the start of the effect - not earlier than −10 s (for nuke ... near the beginning is the arrival of the front to the houses)
         assertArrayEquals(new double[]{-0.5, 0.1, 1}, SandboxCommand.parse("shots wall -0.5,0.1,1 3").times());
         assertThrows(IllegalArgumentException.class, () -> SandboxCommand.parse("shots wall -11,0 3"));
     }
@@ -109,7 +109,7 @@ class SandboxCommandTest {
         }
     }
 
-    /** Настоящий взрыв в середину моста: настил из камня 1–6 м над руслом (пробой плиты). */
+    /** A real explosion in the middle of the bridge: stone flooring 1–6 m above the riverbed (breach of the slab). */
     @Test
     void realTakesBridgeDeck() {
         assertEquals(0, SandboxCommand.parse("real missile").deck());

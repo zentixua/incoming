@@ -18,17 +18,17 @@ import ua.zentix.incoming.nuclear.world.RuinPlanner;
 import java.util.Locale;
 
 /**
- * Цена плана руин на плотном городе: площадка застроена домами 12×12 высотой 12–60 (бетон, окна, перекрытия через 4,
- * ядро), планы строятся по чанкам, чьи соседи тоже на площадке, — как очередь на месте. Время — только в лог
- * (строка «Цена руин»): на общих раннерах CI настенные часы не мерят. Тест проверяет, что план построен и что-то
- * разрушил, а замер цены — по строке в логе, локально и с профилем JFR.
+ * The price of a plan for ruins in a dense city: the site is built up with houses 12×12 with a height of 12–60 (concrete, windows, floors through 4,
+ * core), plans are built in chunks, whose neighbors are also on the site - like a queue on the spot. Time - only in log
+ *  (line “Price of ruins”): on general runners CI the wall clock is not measured. The test checks that the plan was built and something
+ *  was destroyed, and the price is measured by a line in the log, locally and with the profile JFR.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RuinCostGameTests {
     private RuinCostGameTests() {}
 
-    /** Дом в квартале {@code (i, j)} площадки 4×4 кварталов по 16 блоков. */
+    /** House in block {@code (i, j)} site 4×4 blocks along 16 blocks. */
     private static int height(int i, int j) {
         return 12 + Math.floorMod(i * 73 + j * 151 + i * j * 37, 49);
     }
@@ -60,10 +60,10 @@ public final class RuinCostGameTests {
 
     private static void cost(GameTestHelper h, double psi) {
         city(h);
-        // подрыв в стороне: у квартала — заданное давление, как в средней зоне настоящего удара
+        // explosion to the side: at the block there is a given pressure, as in the middle zone of a real blow
         Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 32), true, new BlockPos(32, 1, 32), psi);
         ServerLevel level = h.getLevel();
-        // чанки в середине площадки (под точками 24 и 40 по x и z): их окно 3×3 — почти целиком город
+        // chunks in the middle of the site (under points 24 and 40 by x and z): their window 3×3 is almost the entire city
         java.util.LinkedHashSet<ChunkPos> inner = new java.util.LinkedHashSet<>();
         for (int rx : new int[]{24, 40}) for (int rz : new int[]{24, 40}) inner.add(new ChunkPos(h.absolutePos(new BlockPos(rx, 1, rz))));
         for (ChunkPos c : inner) {
@@ -91,12 +91,12 @@ public final class RuinCostGameTests {
             cells += plan.changedBlocks();
             bytes += plan.bytes();
         }
-        Incoming.LOG.info("Цена руин ({} psi): {} планов, {} мест; разломы {} шт. за {} мс, планы (опора, земля, свет) {} мс, "
-                        + "в среднем {} мс на чанк, самый долгий {} мс, план в среднем {} КБ", psi, plans, cells, blasts, ms(blastNanos), ms(planNanos),
+        Incoming.LOG.info("Price of ruins ({} psi): {} plans, {} places; faults {} pcs. for {} ms, plans (support, ground, light) {} ms, "
+                        + "average {} ms per chunk, longest {} ms, average plan {} KB", psi, plans, cells, blasts, ms(blastNanos), ms(planNanos),
                 ms(plans == 0 ? 0 : (blastNanos + planNanos) / plans), ms(worst), plans == 0 ? 0 : bytes / plans / 1024);
-        Incoming.LOG.info("Цена руин ({} psi): обрушение в среднем {} мс, достройка в потоке сервера {} мс на чанк", psi,
+        Incoming.LOG.info("Price of ruins ({} psi): collapse on average {} ms, completion in the server thread {} ms per chunk", psi,
                 ms(plans == 0 ? 0 : collapseNanos / plans), ms(plans == 0 ? 0 : finishNanos / plans));
-        h.assertTrue(plans > 0 && cells > 0, "город не разрушен: " + plans + " планов, " + cells + " мест");
+        h.assertTrue(plans > 0 && cells > 0, "the city is not destroyed: " + plans + " plans, " + cells + " places");
         h.succeed();
     }
 

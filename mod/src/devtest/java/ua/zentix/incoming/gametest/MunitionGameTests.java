@@ -61,10 +61,10 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Боеприпасы из инвентаря ({@link Munitions}): приказ оплачивается целиком при отдаче, не хватает — отказ без пуска,
- * творческий режим и команда оператора не платят, неудачный пуск и невыпущенное из отменённого залпа возвращаются,
- * рецепты боеприпасов загружены. Стреляющий — {@code FakePlayer} NeoForge, который запоминает строки себе: в список
- * игроков он не входит, поэтому возврат получает список «в сети» сам ({@link SalvoData#cancel}).
+ * Ammunition from inventory ({@link Munitions}): the order is paid in full when returned, if there is not enough - refusal without launch,
+ *  creative mode and operator command do not pay, unsuccessful launch and not fired from a canceled salvo are returned,
+ *  ammunition recipes are loaded. The shooter is {@code FakePlayer} NeoForge, who remembers the lines for himself: he is not included in the list of
+ *  players, so the list “online” itself receives the return ({@link SalvoData#cancel}).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -74,10 +74,10 @@ public final class MunitionGameTests {
     private MunitionGameTests() {}
 
     /**
-     * Залп оплачивается сразу и целиком; на второй не хватает — отказ, строка «нужно 3, есть 2», ничего не снято и залпа
-     * нет. Пакет «Града» начинается (12 из 40 — остаток 28 в том же предмете). Ядерная БЧ на носителе — отдельный
-     * предмет: без неё ракета не снимается (всё или ничего). Отбой залпов возвращает невыпущенное: шахеды — предметами,
-     * снаряды «Града» — в начатый пакет, и он снова целый.
+     * The salvo is paid for immediately and in full; on the second there is not enough - refusal, the line “need 3, there is 2”, nothing was removed and there is no salvo
+     * . The "Grad" package begins (12 from 40 - the remainder of 28 in the same item). The nuclear warhead on the carrier is a separate
+     *  item: without it, the missile cannot be removed (all or nothing). The release of volleys returns the unfired: Shahed - with items,
+     *  "Grad" shells - to the started package, and it is whole again.
      */
     @GameTest(template = "range", batch = "munitions", skyAccess = true)
     public static void orderPaysUpFrontOrRefuses(GameTestHelper h) {
@@ -85,54 +85,54 @@ public final class MunitionGameTests {
         boolean opsOnly = IncomingConfig.SERVER.nukeOpsOnly.get();
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.nukeOpsOnly.set(opsOnly));
         Listener p = player(h, "munitions_buyer");
-        // упавший тест не должен оставить залп, который выстрелит по площадке после него
+        // a fallen test must not leave a volley that will fire across the court after it
         StrikeGameTests.afterTest(h, () -> SalvoData.get(level).cancel(level, p.getUUID(), List.of()));
         ServerActions.Aim aim = aim(h);
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 5);
 
-        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "залп из 3 шахедов не принят");
-        h.assertValueEqual(held(p, shahed), 2, "шахедов после залпа из 3");
-        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 3, "невыпущенных в залпе");
+        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "salvo of 3 Shahed was not accepted");
+        h.assertValueEqual(held(p, shahed), 2, "shahed after a volley of 3");
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 3, "unreleased in salvo");
 
-        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "залп без боеприпасов принят");
-        h.assertValueEqual(held(p, shahed), 2, "отказ снял шахеды");
-        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 3, "отказ всё же начал залп");
-        h.assertValueEqual(args(p.last("incoming.munitions.short")), List.of(shahed.getDescription(), 3, 2), "строка отказа");
+        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "salvo without ammunition accepted");
+        h.assertValueEqual(held(p, shahed), 2, "refusal removed by Shahed");
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 3, "the refusal still began to fire");
+        h.assertValueEqual(args(p.last("incoming.munitions.short")), List.of(shahed.getDescription(), 3, 2), "failure line");
 
         Item grad = ModItems.GRAD_ROCKETS.get();
         give(p, grad, 1);
-        h.assertTrue(ServerActions.strike(p, WeaponType.ROCKET, 12, 15, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "залп «Града» не принят");
-        h.assertValueEqual(held(p, grad), 28, "снарядов в пакете после залпа из 12");
-        h.assertValueEqual(count(p, grad), 1, "начатый пакет — не тот же предмет");
+        h.assertTrue(ServerActions.strike(p, WeaponType.ROCKET, 12, 15, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "\"Grad\" salvo was not accepted");
+        h.assertValueEqual(held(p, grad), 28, "shells in a package after a salvo of 12");
+        h.assertValueEqual(count(p, grad), 1, "started package is not the same item");
 
-        // ядерная БЧ на ракете: без неё ракета не снимается
+        // nuclear warhead on a rocket: without it the rocket cannot be removed
         IncomingConfig.SERVER.nukeOpsOnly.set(false);
         Item missile = ModItems.CRUISE_MISSILE.get(), warhead = Munitions.warhead();
         give(p, missile, 1);
         Loadout.Nuke onCarrier = new Loadout.Nuke(15, true, true);
-        h.assertFalse(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim, onCarrier, Waypoints.NONE, null, true), "ядерная ракета без БЧ принята");
-        h.assertValueEqual(held(p, missile), 1, "без БЧ ракета снята");
-        h.assertValueEqual(args(p.last("incoming.munitions.short")), List.of(warhead.getDescription(), 1, 0), "строка отказа без БЧ");
-        // с БЧ счёт — ракета и БЧ (сам пуск ядерной ракеты в тестовом мире не нужен)
+        h.assertFalse(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim, onCarrier, Waypoints.NONE, null, true), "nuclear missile without warhead accepted");
+        h.assertValueEqual(held(p, missile), 1, "the missile was removed without a warhead");
+        h.assertValueEqual(args(p.last("incoming.munitions.short")), List.of(warhead.getDescription(), 1, 0), "refusal line without warhead");
+        // with a warhead, the account is a missile and a warhead (the launch of a nuclear missile itself is not needed in the test world)
         give(p, warhead, 1);
         Loadout nuclear = new Loadout(WeaponType.MISSILE, 1, 0, TargetMode.LOOK, "", onCarrier);
-        h.assertTrue(Munitions.pay(p, Munitions.Bill.of(nuclear)), "ракета с БЧ не оплачена");
-        h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "оплата ядерной ракеты: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
+        h.assertTrue(Munitions.pay(p, Munitions.Bill.of(nuclear)), "missile with warhead not paid for");
+        h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "payment for nuclear missile: missiles " + held(p, missile) + ", warhead " + held(p, warhead));
 
-        // отбой залпов: невыпущенное — владельцу
-        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 2, "отменено залпов");
-        h.assertValueEqual(held(p, shahed), 5, "шахедов после отбоя");
-        h.assertValueEqual(held(p, grad), 40, "снарядов «Града» после отбоя");
+        // salvo release: unfired - to the owner
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 2, "volleys canceled");
+        h.assertValueEqual(held(p, shahed), 5, "shahed after lights out");
+        h.assertValueEqual(held(p, grad), 40, "\"Grad\" shells after lights out");
         ItemStack pack = find(p, grad);
-        h.assertTrue(pack.getCount() == 1 && !pack.has(ModDataComponents.ROUNDS.get()), "пакет после отбоя не целый: " + pack + " " + pack.getComponents());
-        h.assertTrue(p.last("incoming.munitions.refunded") != null && p.last("incoming.munitions.refunded.rounds") != null, "нет строки о возврате");
+        h.assertTrue(pack.getCount() == 1 && !pack.has(ModDataComponents.ROUNDS.get()), "the package is not intact after lights out: " + pack + " " + pack.getComponents());
+        h.assertTrue(p.last("incoming.munitions.refunded") != null && p.last("incoming.munitions.refunded.rounds") != null, "no return line");
         h.succeed();
     }
 
     /**
-     * Бесплатно: творческий режим (и с пульта) и команда оператора ({@code rules = false}); в выживании с пульта без
-     * боеприпасов — отказ. Неоплаченный залп при отбое ничего не возвращает.
+     * Free: creative mode (and remote control) and operator command ({@code rules = false}); in survival from the remote control without
+     *  ammunition - failure. An unpaid salvo upon clearing returns nothing.
      */
     @GameTest(template = "range", batch = "munitions", skyAccess = true)
     public static void creativeAndOperatorCommandAreFree(GameTestHelper h) {
@@ -140,27 +140,27 @@ public final class MunitionGameTests {
         ServerActions.Aim aim = aim(h);
         Listener creative = player(h, "munitions_creative");
         creative.setGameMode(GameType.CREATIVE);
-        h.assertTrue(creative.hasInfiniteMaterials(), "творческий режим без бесконечных материалов");
-        h.assertTrue(ServerActions.strike(creative, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "в творческом залп не принят");
+        h.assertTrue(creative.hasInfiniteMaterials(), "creative mode without endless materials");
+        h.assertTrue(ServerActions.strike(creative, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "creative salvo is not accepted");
         Listener op = player(h, "munitions_op");
         StrikeGameTests.afterTest(h, () -> {
             SalvoData.get(level).cancel(level, creative.getUUID(), List.of());
             SalvoData.get(level).cancel(level, op.getUUID(), List.of());
         });
-        h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, false), "команда оператора не принята");
+        h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, false), "operator command not accepted");
         Listener survival = player(h, "munitions_survival");
-        h.assertFalse(ServerActions.strike(survival, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "без боеприпасов залп принят");
+        h.assertFalse(ServerActions.strike(survival, WeaponType.DRONE, 2, 10, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "without ammunition the salvo was accepted");
 
         SalvoData salvos = SalvoData.get(level);
-        h.assertTrue(salvos.cancel(level, creative.getUUID(), List.of(creative)) == 1 && salvos.cancel(level, op.getUUID(), List.of(op)) == 1, "залпов нет");
-        h.assertTrue(creative.getInventory().isEmpty() && op.getInventory().isEmpty(), "неоплаченный залп вернул боеприпасы");
-        h.assertTrue(creative.last("incoming.munitions.refunded") == null && op.last("incoming.munitions.refunded") == null, "строка о возврате без оплаты");
+        h.assertTrue(salvos.cancel(level, creative.getUUID(), List.of(creative)) == 1 && salvos.cancel(level, op.getUUID(), List.of(op)) == 1, "no volleys");
+        h.assertTrue(creative.getInventory().isEmpty() && op.getInventory().isEmpty(), "unpaid salvo returned ammunition");
+        h.assertTrue(creative.last("incoming.munitions.refunded") == null && op.last("incoming.munitions.refunded") == null, "line about return without payment");
         h.succeed();
     }
 
     /**
-     * Залп, отменённый на середине: выпущенные не возвращаются, невыпущенные — владельцу. Шахеды заходят издалека
-     * (стреляющего нет в списке игроков — пусковой у него нет), и их убирают, не дав долететь.
+     * A salvo canceled in the middle: those fired are not returned, those not fired are returned to the owner. Shahed come from afar
+     *  (the shooter is not on the list of players - he does not have a launcher), and they are removed before they can reach them.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "munitions_salvo", skyAccess = true)
     public static void cancelledSalvoRefundsUnlaunched(GameTestHelper h) {
@@ -173,28 +173,28 @@ public final class MunitionGameTests {
         });
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 4);
-        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 4, 20, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "залп не принят");
-        h.assertValueEqual(held(p, shahed), 0, "залп из 4 не снял все 4");
+        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 4, 20, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "the salvo was not received");
+        h.assertValueEqual(held(p, shahed), 0, "a salvo of 4 did not remove all 4");
         boolean[] done = {false};
         h.onEachTick(() -> {
             if (done[0] || SalvoData.get(level).remaining(id) > 2) return;
             done[0] = true;
-            // вне мира и в мире: шахед, вошедший в чужие загруженные чанки, тоже выпущен
+            // out of the world and in the world: Shahed, included in other people's downloaded chunks, is also released
             int launched = (int) StrikeWorld.projectiles(level).stream().filter(f -> id.equals(f.ownerId())).count();
             int cancelled = SalvoData.get(level).cancel(level, id, List.of(p));
             removeFlights(level, id);
-            if (launched != 2 || cancelled != 1) throw new GameTestAssertException("выпущено " + launched + ", отменено залпов " + cancelled);
-            if (held(p, shahed) != 2) throw new GameTestAssertException("после отбоя шахедов " + held(p, shahed) + " вместо 2 невыпущенных");
+            if (launched != 2 || cancelled != 1) throw new GameTestAssertException("released " + launched + ", canceled volleys " + cancelled);
+            if (held(p, shahed) != 2) throw new GameTestAssertException("after lights out Shahed " + held(p, shahed) + " instead of 2 unreleased");
             if (!List.of(shahed.getDescription(), 2).equals(args(p.last("incoming.munitions.refunded")))) {
-                throw new GameTestAssertException("строка о возврате: " + p.last("incoming.munitions.refunded"));
+                throw new GameTestAssertException("return line: " + p.last("incoming.munitions.refunded"));
             }
             h.succeed();
         });
     }
 
     /**
-     * Владелец погиб и ещё не возродился (экран смерти: в списке игроков, но инвентарь без {@code keepInventory} при
-     * возрождении не переносится) — отбой залпа кладёт невыпущенное не в инвентарь, а на место гибели.
+     * The owner died and has not yet been reborn (death screen: in the list of players, but inventory without {@code keepInventory} is not transferred during
+     *  rebirth) - the release of the salvo puts the unreleased item not in the inventory, but at the place of death.
      */
     @GameTest(template = "range", batch = "munitions", skyAccess = true)
     public static void deadOwnerRefundDropsAtDeathSpot(GameTestHelper h) {
@@ -203,26 +203,26 @@ public final class MunitionGameTests {
         StrikeGameTests.afterTest(h, () -> SalvoData.get(level).cancel(level, p.getUUID(), List.of()));
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 3);
-        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "залп не принят");
-        h.assertTrue(!level.getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY), "в мире GameTest keepInventory");
+        h.assertTrue(ServerActions.strike(p, WeaponType.DRONE, 3, 20, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "the salvo was not received");
+        h.assertTrue(!level.getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY), "in the world GameTest keepInventory");
         p.setHealth(0);
-        h.assertFalse(p.isAlive(), "владелец жив");
-        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "отменено залпов");
-        h.assertValueEqual(count(p, shahed), 0, "погибшему боеприпасы положены в инвентарь");
+        h.assertFalse(p.isAlive(), "the owner is alive");
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "volleys canceled");
+        h.assertValueEqual(count(p, shahed), 0, "the deceased is given ammunition in his inventory");
         List<ItemEntity> dropped = level.getEntitiesOfClass(ItemEntity.class,
                 p.getBoundingBox().inflate(4), e -> e.getItem().is(shahed));
         int n = dropped.stream().mapToInt(e -> e.getItem().getCount()).sum();
         dropped.forEach(Entity::discard);
-        h.assertValueEqual(n, 3, "шахедов на месте гибели");
-        h.assertTrue(p.last("incoming.munitions.refunded.dead") != null, "нет строки о месте гибели");
+        h.assertValueEqual(n, 3, "shahed at the scene of death");
+        h.assertTrue(p.last("incoming.munitions.refunded.dead") != null, "there is no line about the place of death");
         h.succeed();
     }
 
     /**
-     * Неудачный пуск возвращает оплаченное: снаряд у пусковой стреляющего не вошёл в мир (событие входа отменено —
-     * так делают моды защиты территорий) — шахед и МБР снова в инвентаре, ядерного удара нет. Пуск, упавший с ошибкой
-     * (здесь — обработчик того же события), тоже неудачный: шахед возвращается. Тикеты чанков, взятые снарядом до входа
-     * в мир, не вошедший отпускает в обоих случаях.
+     * An unsuccessful launch returns what was paid for: the projectile from the shooter’s launcher did not enter the world (the entry event was canceled -
+     *  this is what territory defense mods do) - Shahed and ICBM are again in the inventory, there is no nuclear strike. launch, which crashed with error
+     *  (here is a handler for the same event), was also unsuccessful: Shahed returns. ticket chunks taken by the projectile before entering
+     *  into the world, those who did not enter are released in both cases.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "munitions_failed", skyAccess = true)
     public static void failedLaunchRefunds(GameTestHelper h) {
@@ -239,7 +239,7 @@ public final class MunitionGameTests {
                 vetoed[0]++;
                 tried.add(proj.getUUID());
                 if (ChunkTickets.held(level, proj.getUUID()) > 0) heldOnEntry[0]++;
-                if (crash[0]) throw new IllegalStateException("проверка: пуск падает с ошибкой");
+                if (crash[0]) throw new IllegalStateException("check: launch crashes with an error");
                 e.setCanceled(true);
             }
         };
@@ -258,36 +258,36 @@ public final class MunitionGameTests {
 
         Item shahed = ModItems.SHAHED.get();
         give(p, shahed, 1);
-        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "пуск без входа в мир удался");
-        h.assertValueEqual(vetoed[0], 1, "шахед не пытался войти в мир у пусковой");
-        h.assertValueEqual(held(p, shahed), 1, "шахед после неудачного пуска");
-        h.assertTrue(p.last("incoming.launch_failed") != null && p.last("incoming.munitions.refunded") != null, "нет строк о неудаче и возврате");
+        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "launch without entering the world was a success");
+        h.assertValueEqual(vetoed[0], 1, "shahed did not try to enter the world at the launcher");
+        h.assertValueEqual(held(p, shahed), 1, "shahed after a failed launch");
+        h.assertTrue(p.last("incoming.launch_failed") != null && p.last("incoming.munitions.refunded") != null, "no lines about failure and return");
 
         IncomingConfig.SERVER.nukeOpsOnly.set(false);
         Item icbm = ModItems.ICBM.get();
         give(p, icbm, 1);
         int scheduled = NuclearEvents.get(level).scheduled().size();
-        h.assertFalse(ServerActions.strike(p, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true), "пуск МБР без входа в мир удался");
-        h.assertValueEqual(vetoed[0], 2, "МБР не пыталась войти в мир");
-        h.assertValueEqual(held(p, icbm), 1, "МБР после неудачного пуска");
-        h.assertValueEqual(NuclearEvents.get(level).scheduled().size(), scheduled, "неудачный пуск записал ядерный удар");
+        h.assertFalse(ServerActions.strike(p, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true), "launch ICBM without entering the world was a success");
+        h.assertValueEqual(vetoed[0], 2, "ICBM did not try to enter the world");
+        h.assertValueEqual(held(p, icbm), 1, "ICBM after unsuccessful launch");
+        h.assertValueEqual(NuclearEvents.get(level).scheduled().size(), scheduled, "failed launch recorded nuclear strike");
 
         crash[0] = true;
         p.said.clear();
-        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "пуск с ошибкой удался");
-        h.assertValueEqual(vetoed[0], 3, "шахед не пытался войти в мир");
-        h.assertValueEqual(held(p, shahed), 1, "шахед после пуска с ошибкой");
-        h.assertTrue(p.last("incoming.munitions.refunded") != null, "нет строки о возврате после ошибки");
-        // снаряд берёт тикеты своих чанков до входа в мир (оба шахеда; МБР — нет): не вошедший их отпускает, и упавший тоже
-        h.assertValueEqual(heldOnEntry[0], 2, "шахедов с тикетами чанков при входе в мир");
-        for (UUID id : tried) h.assertValueEqual(ChunkTickets.held(level, id), 0, "тикеты чанков не вошедшего в мир снаряда " + id);
+        h.assertFalse(ServerActions.strike(p, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, true), "launch failed with an error");
+        h.assertValueEqual(vetoed[0], 3, "shahed didn't try to enter the world");
+        h.assertValueEqual(held(p, shahed), 1, "shahed after launch with an error");
+        h.assertTrue(p.last("incoming.munitions.refunded") != null, "no return line after error");
+        // the projectile takes the ticket of its chunks before entering the world (both Shahed; ICBM - no): the one who did not enter lets them go, and the one who fell also
+        h.assertValueEqual(heldOnEntry[0], 2, "shahed with ticket chunks upon entering the world");
+        for (UUID id : tried) h.assertValueEqual(ChunkTickets.held(level, id), 0, "ticket chunks of a projectile not included in the world " + id);
         h.succeed();
     }
 
     /**
-     * Ядерная ракета оператора с далёкого места пуска ждёт его залпом из одного снаряда ({@link LaunchPlaces}): залп
-     * несёт её ядерную БЧ (у залпов из нескольких снарядов её нет); не ядерный отбой его не снимает, а ядерный, пока место
-     * грузится, возвращает и ракету, и БЧ — обе оплачены предметами.
+     * The operator's nuclear missile from a distant launch site awaits him with a salvo of one projectile ({@link LaunchPlaces}): the salvo of
+     *  carries its nuclear warhead (salvos of several projectiles do not have one); It’s not the nuclear shutdown that doesn’t remove it, but the nuclear shutdown, while the space
+     *  is loading, returns both the missile and the warhead - both are paid for in items.
      */
     @GameTest(template = "range", batch = "munitions_place", skyAccess = true)
     public static void nuclearMissileWaitingForPlaceRefundsWarhead(GameTestHelper h) {
@@ -304,34 +304,34 @@ public final class MunitionGameTests {
         give(p, missile, 1);
         give(p, warhead, 1);
         LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-20_000, 0, 0));
-        h.assertTrue(LaunchPlaces.waits(level, WeaponType.MISSILE, far), "далёкое место пуска уже готово");
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.MISSILE, far), "the distant launch site is ready");
         h.assertTrue(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim(h), new Loadout.Nuke(15, true, true), Waypoints.NONE, far, true),
-                "ядерная ракета с далёкого места пуска не принята");
-        h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "оплата: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
-        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "ракета не ждёт места залпом");
+                "nuclear missile from a distant launch site was not accepted");
+        h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "payment: rockets " + held(p, missile) + ", warhead " + held(p, warhead));
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "the rocket does not wait for a place in one gulp");
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         h.assertTrue(saved.getList("salvos", Tag.TAG_COMPOUND).stream().map(t -> ((CompoundTag) t).getCompound("nuke"))
-                .anyMatch(n -> n.getBoolean("on_carrier")), "залп из одной ракеты потерял ядерную БЧ: " + saved);
-        // отбой игрока и обычный отбой ядерный залп не снимают, как и ядерный снаряд
-        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), false), 0, "не ядерный отбой снял ядерный залп");
-        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "отменено залпов");
-        h.assertTrue(held(p, missile) == 1 && held(p, warhead) == 1, "возврат: ракет " + held(p, missile) + ", БЧ " + held(p, warhead));
+                .anyMatch(n -> n.getBoolean("on_carrier")), "a salvo from one missile lost its nuclear warhead: " + saved);
+        // the player's release and the normal release of a nuclear salvo are not removed, just like a nuclear projectile
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), false), 0, "not a nuclear release removed a nuclear salvo");
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p)), 1, "volleys canceled");
+        h.assertTrue(held(p, missile) == 1 && held(p, warhead) == 1, "return: rockets " + held(p, missile) + ", warhead " + held(p, warhead));
         h.succeed();
     }
 
     /**
-     * Рецепты боеприпасов загружены — по одному на предмет: с Create — с его точным механизмом и винтом, без него —
-     * ванильная замена (условия NeoForge {@code neoforge:mod_loaded}); каждый собирается из своих ингредиентов на верстаке.
+     * Ammo recipes are loaded - one per item: with Create - with its exact mechanism and screw, without it -
+     *  vanilla replacement (conditions NeoForge {@code neoforge:mod_loaded}); each one is assembled from its own ingredients on a workbench.
      */
     @GameTest(template = "range", batch = "munitions")
     public static void munitionRecipesLoad(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         var recipes = level.getServer().getRecipeManager();
         boolean create = ModList.get().isLoaded("create");
-        // предмет → есть ли у рецепта вариант без Create
+        // item → does the recipe have an option without Create
         Map<Item, Boolean> munitions = Map.of(ModItems.SHAHED.get(), true, ModItems.LANCET.get(), true, ModItems.CRUISE_MISSILE.get(), true,
                 ModItems.GRAD_ROCKETS.get(), false, ModItems.BUNKER_BUSTER.get(), false, ModItems.ICBM.get(), true, ModItems.NUCLEAR_WARHEAD.get(), false);
-        for (WeaponType w : WeaponType.values()) h.assertTrue(munitions.containsKey(w.spec().munition().item().get()), "боеприпас " + w + " без проверки рецепта");
+        for (WeaponType w : WeaponType.values()) h.assertTrue(munitions.containsKey(w.spec().munition().item().get()), "ammunition " + w + " without checking a prescription");
         for (Map.Entry<Item, Boolean> e : munitions.entrySet()) {
             Item item = e.getKey();
             List<RecipeHolder<CraftingRecipe>> found = new ArrayList<>();
@@ -340,26 +340,26 @@ public final class MunitionGameTests {
             }
             String name = BuiltInRegistries.ITEM.getKey(item).getPath();
             ResourceLocation expected = Incoming.id(e.getValue() && !create ? name + "_vanilla" : name);
-            h.assertTrue(found.size() == 1 && found.getFirst().id().equals(expected), name + ": рецепты " + found.stream().map(RecipeHolder::id).toList()
-                    + " вместо " + expected);
-            if (!(found.getFirst().value() instanceof ShapedRecipe shaped)) throw new GameTestAssertException(name + ": рецепт не по форме");
+            h.assertTrue(found.size() == 1 && found.getFirst().id().equals(expected), name + ": recipes " + found.stream().map(RecipeHolder::id).toList()
+                    + " instead of " + expected);
+            if (!(found.getFirst().value() instanceof ShapedRecipe shaped)) throw new GameTestAssertException(name + ": recipe has the wrong shape");
             List<ItemStack> grid = new ArrayList<>();
             for (Ingredient i : shaped.getIngredients()) {
-                if (!i.isEmpty() && i.hasNoItems()) throw new GameTestAssertException(name + ": ингредиент без предметов");
+                if (!i.isEmpty() && i.hasNoItems()) throw new GameTestAssertException(name + ": ingredient without items");
                 grid.add(i.isEmpty() ? ItemStack.EMPTY : i.getItems()[0].copy());
             }
             var crafted = recipes.getRecipeFor(RecipeType.CRAFTING, CraftingInput.of(shaped.getWidth(), shaped.getHeight(), grid), level);
-            h.assertTrue(crafted.isPresent() && crafted.get().id().equals(expected), name + ": верстак не собирает свой рецепт: " + crafted.map(RecipeHolder::id));
+            h.assertTrue(crafted.isPresent() && crafted.get().id().equals(expected), name + ": the workbench does not collect its recipe: " + crafted.map(RecipeHolder::id));
         }
         h.succeed();
     }
 
-    // ---------------------------------------------------------------- помощники
+    // ---------------------------------------------------------------- assistants
 
-    /** {@code FakePlayer}, который запоминает строки над хотбаром и в чате (NeoForge их глушит). */
+    /** {@code FakePlayer}, which remembers lines above the hotbar and in chat (NeoForge mutes them). */
     static final class Listener extends FakePlayer {
         final List<Component> said = new ArrayList<>();
-        /** Права (оператор — 2). */
+        /** Rights (operator - 2). */
         private final int permission;
 
         Listener(ServerLevel level, String name) {
@@ -386,7 +386,7 @@ public final class MunitionGameTests {
             said.add(message);
         }
 
-        /** Последняя строка с ключом перевода {@code key}, или null. */
+        /** The last line with the translation key is {@code key}, or null. */
         @Nullable
         TranslatableContents last(String key) {
             for (int i = said.size() - 1; i >= 0; i--) {
@@ -403,8 +403,8 @@ public final class MunitionGameTests {
     }
 
     /**
-     * Цель — середина площадки (её район уже загружен: снаряды не грузят свежих районов); стреляющего нет в списке
-     * игроков, поэтому выпущенные шахеды заходят издалека, в 2 км, и их убирают задолго до подлёта.
+     * The target is the middle of the site (its area is already loaded: shells do not load fresh areas); the shooter is not on the list of
+     *  players, so the released Shahed come from afar, 2 km, and are removed long before approaching.
      */
     private static ServerActions.Aim aim(GameTestHelper h) {
         Vec3 point = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 0.5, 0);
@@ -415,7 +415,7 @@ public final class MunitionGameTests {
         p.getInventory().placeItemBackInInventory(new ItemStack(item, n));
     }
 
-    /** Снарядов в инвентаре (у пакета — по пакетам). */
+    /** Shells in inventory (for a package - in packages). */
     static int held(FakePlayer p, Item item) {
         return Munitions.held(Munitions.of(p).items(), item, Munitions.perItem(item));
     }
@@ -431,13 +431,13 @@ public final class MunitionGameTests {
         return ItemStack.EMPTY;
     }
 
-    /** Аргументы строки: компоненты — как есть, числа — числами. */
+    /** String arguments: components as is, numbers as numbers. */
     @Nullable
     static List<Object> args(@Nullable TranslatableContents t) {
         return t == null ? null : List.of(t.getArgs());
     }
 
-    /** Снаряды владельца — вне мира и в мире — убрать без взрыва. */
+    /** The owner's shells - out of the world and in the world - can be removed without exploding. */
     static void removeFlights(ServerLevel level, UUID owner) {
         VirtualFlights.get(level).clear(level, f -> owner.equals(f.ownerId()));
         for (StrikeProjectile e : level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), f -> owner.equals(f.ownerId()))) {

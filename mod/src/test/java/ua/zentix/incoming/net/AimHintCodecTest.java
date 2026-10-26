@@ -17,14 +17,14 @@ class AimHintCodecTest {
         try {
             C2S.AimHint.CODEC.encode(buf, hint);
             C2S.AimHint back = C2S.AimHint.CODEC.decode(buf);
-            assertFalse(buf.isReadable(), "лишние байты после подсказки");
+            assertFalse(buf.isReadable(), "extra bytes after the hint");
             return back;
         } finally {
             buf.release();
         }
     }
 
-    /** Верх по карте клиента доходит до сервера: без него сервер берёт рельеф генератора (63 под крышей на 107). */
+    /** The top of the client's map reaches the server: without it, the server takes the generator relief (63 under the roof on 107). */
     @Test
     void mapPlaceCarriesMapSurface() {
         C2S.AimHint hint = C2S.AimHint.ground(250.5, -146.5, OptionalInt.of(108));

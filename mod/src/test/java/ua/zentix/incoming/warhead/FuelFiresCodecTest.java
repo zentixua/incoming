@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Горящее топливо сохраняется с миром (ревью FV): после перезапуска сервера клетки догорают в свой срок закона и
- * гаснут — с doFireTick = false ванильный огонь без учёта стоял бы вечно.
+ * The burning fuel is preserved in peace (review FV): after restarting the server, the cells burn out within their legal time and
+ *  go out - with doFireTick = false the vanilla fire without accounting would last forever.
  */
 class FuelFiresCodecTest {
     @Test
@@ -33,11 +33,11 @@ class FuelFiresCodecTest {
         assertArrayEquals(a.cells, b.cells);
         assertEquals(a.smothered, b.smothered);
         assertEquals(a.done, b.done);
-        // срок каждой клетки — из оружия и тика удара: тот же, и последняя гаснет в срок закона
+        // the duration of each cell is from the weapon and the tick of the blow: the same, and the last one goes out at the time of the law
         assertArrayEquals(a.out, b.out);
         assertEquals(123_456L + Math.round(20 * WeaponType.DRONE.spec().pool().seconds()), b.out[0]);
         assertTrue(fires.state().getFirst().equals(back.state().getFirst()));
-        // пустое не пишется
+        // blank is not written
         assertTrue(new FuelFires().isEmpty());
     }
 }

@@ -4,15 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Список команд сценария {@code commands} ({@code incoming.commands}): пункты через «;». Точка с запятой внутри
- * скобок и кавычек — часть команды, а не разделитель: в NBT она разделяет тип и элементы массива
- * ({@code UUID:[I;1,2,3,4]}), в строке — просто знак. Двойная кавычка открывает строку везде, одинарная — только
- * там, где SNBT ждёт значение или ключ (после {@code { [ , :}): апостроф в тексте ({@code say it's}) — просто знак.
+ * List of script commands {@code commands} ({@code incoming.commands}): items separated by “;”. The semicolon inside
+ *  parentheses and quotes is part of the command, not a separator: in NBT it separates the type and elements of the array
+ * ({@code UUID:[I;1,2,3,4]}), in a line it is just a sign. A double quote opens a string everywhere, a single quote only opens
+ *  where SNBT is waiting for a value or key (after {@code { [ , :}): the apostrophe in the text ({@code say it's}) is just a sign.
  */
 public final class ScenarioCommands {
     private ScenarioCommands() {}
 
-    /** Пункты по «;» верхнего уровня, без пробелов по краям и без пустых. */
+    /** Items by ";" top level, no spaces around the edges and no empty ones. */
     public static List<String> split(String spec) {
         List<String> out = new ArrayList<>();
         StringBuilder item = new StringBuilder();
@@ -42,7 +42,7 @@ public final class ScenarioCommands {
         return out;
     }
 
-    /** Последний непробельный знак пункта — начало значения или ключа SNBT. */
+    /** The last non-blank character of the clause is the beginning of the value or key SNBT. */
     private static boolean opensValue(StringBuilder item) {
         for (int i = item.length() - 1; i >= 0; i--) {
             char c = item.charAt(i);

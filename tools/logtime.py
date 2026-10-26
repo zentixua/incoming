@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Время строк лога Minecraft — один разбор для выжимок заданий ноутбука (tools/laptop-jobs/*.md).
+"""Minecraft log-line times: shared parser for laptop-job extracts (tools/laptop-jobs/*.md).
 
-Строка начинается с «[ЧЧ:ММ:СС]», «[ЧЧ:ММ:СС.ммм]» или «[01Oct2026 ЧЧ:ММ:СС.ммм]» (дата — у боевого клиента
-prod_client.py, формат log4j сборки). Строки без времени (стек исключения, продолжение сообщения) времени не имеют.
-Через полночь время идёт дальше 24 ч: лог шага — одна непрерывная запись (full.log из архивов и latest.log).
+A line starts with "[HH:MM:SS]", "[HH:MM:SS.mmm]" or "[01Oct2026 HH:MM:SS.mmm]" (date in production client
+prod_client.py, modpack log4j format). Lines without a timestamp (exception stack, message continuation) have no time.
+Across midnight, time continues beyond 24 h: a step log is one continuous recording (full.log from archives and latest.log).
 
-Модулем: ``sys.path.insert(0, "tools"); import logtime`` — ``timeline(lines)``, ``stamp``, ``body``.
-Из оболочки: ``python3 tools/logtime.py LOG РЕГВЫР [--since РЕГВЫР]`` — строки, где есть РЕГВЫР, как
-«ЧЧ:ММ:СС.ммм +С.с текст»: +С.с — секунды от первой строки с ``--since`` (без неё — от первой найденной строки);
-строки до неё — с минусом.
+As a module: ``sys.path.insert(0, "tools"); import logtime`` — ``timeline(lines)``, ``stamp``, ``body``.
+From the shell: ``python3 tools/logtime.py LOG REGEX [--since REGEX]`` — lines containing REGEX, formatted as
+"HH:MM:SS.mmm +S.s text": +S.s is seconds from the first ``--since`` line (without it, the first matched line);
+earlier lines have negative offsets.
 """
 import re
 import sys
@@ -18,7 +18,7 @@ _BODY = re.compile(r"^\[[^\]]*\](?: \[[^\]]*\])*?: ")
 
 
 def seconds(line):
-    """Секунды от полуночи у строки лога или None, если у строки нет времени."""
+    """Seconds from midnight for the log line or None if the line has no time."""
     m = _TIME.match(line)
     if not m:
         return None
@@ -26,18 +26,18 @@ def seconds(line):
 
 
 def stamp(t):
-    """«ЧЧ:ММ:СС.ммм» для секунд из timeline (время суток, без дней)."""
+    """"HH:MM:SS.mmm" for seconds from timeline (time of day, no days)."""
     t %= 86400
     return f"{int(t // 3600):02d}:{int(t % 3600 // 60):02d}:{t % 60:06.3f}"
 
 
 def body(line):
-    """Текст сообщения без времени, потока и источника."""
+    """Message text without time, flow or source."""
     return _BODY.sub("", line, count=1)
 
 
 def timeline(lines):
-    """[(секунды, строка)] строк со временем по порядку; переход через полночь — +86400 (назад больше чем на 12 ч)."""
+    """[(seconds, string)] lines with time in order; transition through midnight - +86400 (back more than 12 hours)."""
     out, day, prev = [], 0, None
     for line in lines:
         s = seconds(line)
@@ -63,7 +63,7 @@ def main(argv):
     rows = timeline(read(path))
     zero = next((t for t, l in rows if (since or pattern).search(l)), None)
     if zero is None:
-        print(f"нет опорной строки: {(since or pattern).pattern}")
+        print(f"no reference line: {(since or pattern).pattern}")
         return
     for t, l in rows:
         if pattern.search(l):

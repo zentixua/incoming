@@ -5,14 +5,14 @@ import me.cortex.voxy.common.world.other.Mapper;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Подделка класса Voxy 0.2.16 для юнит-тестов: только то, что читает мод (имена и сигнатуры). */
+/** Fake class Voxy 0.2.16 for unit tests: only what the mod reads (names and signatures). */
 public class WorldEngine {
-    /** Мир, который отдаёт {@code WorldIdentifier.ofEngineNullable}; null — Voxy мира не держит. */
+    /** A world that gives {@code WorldIdentifier.ofEngineNullable}; null - Voxy does not hold peace. */
     public static WorldEngine current;
     public final Map<String, long[]> sections = new HashMap<>();
     public final Mapper mapper = new Mapper();
     public boolean live = true;
-    /** Живой мир, а секция не читается (сбой хранилища). */
+    /** Living world, but the section is not readable (storage failure). */
     public boolean broken;
     public int refs, acquired, released;
 

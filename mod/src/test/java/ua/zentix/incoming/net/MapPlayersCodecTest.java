@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MapPlayersCodecTest {
     /**
-     * Метки карты проходят через буфер без потерь: UUID, имя (и не латиницей), координаты с дробью и за минусом, что это,
-     * свой ли, давность; рисует ли их карта.
+     * Map marks pass through the buffer without loss: UUID, name (and not in Latin), coordinates with a fraction and minus, what is it,
+     * , is it old; whether the map draws them.
      */
     @Test
     void roundTrip() {
@@ -27,14 +27,14 @@ class MapPlayersCodecTest {
         S2C.MapPlayers.CODEC.encode(buf, sent);
         S2C.MapPlayers got = S2C.MapPlayers.CODEC.decode(buf);
         assertEquals(sent, got);
-        assertEquals(0, buf.readableBytes(), "прочитано всё, что записано");
+        assertEquals(0, buf.readableBytes(), "everything written down has been read");
 
         ByteBuf empty = Unpooled.buffer();
         S2C.MapPlayers.CODEC.encode(empty, new S2C.MapPlayers(List.of(), false));
         assertEquals(new S2C.MapPlayers(List.of(), false), S2C.MapPlayers.CODEC.decode(empty));
     }
 
-    /** Имя длиннее предела не уходит в пакет (кодек строки бросает, а не режет молча). */
+    /** A name longer than the limit does not go into the packet (the codec throws the line, but does not cut it silently). */
     @Test
     void nameLimit() {
         S2C.MapPlayers tooLong = new S2C.MapPlayers(List.of(new S2C.MapPlayer(UUID.randomUUID(), "x".repeat(S2C.MapPlayer.MAX_NAME + 1), 0, 0,

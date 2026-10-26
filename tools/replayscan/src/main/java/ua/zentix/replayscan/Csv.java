@@ -13,9 +13,9 @@ import java.util.Locale;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Таблица CSV в gzip: заголовок, строки по полям ({@link #add} по порядку, {@link #end} — конец строки). Числа —
- * с точкой ({@code Locale.ROOT}), дробные — до тысячных; текст — в кавычках, если в нём есть запятая, кавычка или
- * перевод строки. Пишет поток сервера повтора, буфер — 1 МБ.
+ * Table CSV in gzip: header, rows by fields ({@link #add} in order, {@link #end} - end of row). Numbers -
+ *  with a dot ({@code Locale.ROOT}), fractions - up to thousandths; text is in quotes if it contains a comma, quotation mark or
+ *  line feed. Writes replay server stream, buffer - 1 MB.
  */
 public final class Csv implements Closeable {
     private final Writer out;
@@ -51,7 +51,7 @@ public final class Csv implements Closeable {
             row.append(String.format(Locale.ROOT, "%.3f", v));
             return this;
         }
-        // до тысячных без String.format: строк — миллионы
+        // up to thousandths without String.format: lines - millions
         long m = Math.round(v * 1000);
         if (m < 0) {
             row.append('-');
@@ -75,7 +75,7 @@ public final class Csv implements Closeable {
         return this;
     }
 
-    /** Пустое поле ({@code null} в DuckDB). */
+    /** Empty field ({@code null} to DuckDB). */
     public Csv empty() {
         sep();
         return this;

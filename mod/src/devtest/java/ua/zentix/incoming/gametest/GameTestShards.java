@@ -25,17 +25,17 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * GameTest по частям на нескольких машинах CI ({@code ./gradlew runGameTestServer -PgametestShard=i/n},
- * {@code .github/workflows/build.yml}): каждая машина гоняет свою часть партий, вместе — все тесты ровно по разу.
- * Партия целиком в одной части: её тесты идут одновременно и могут быть на это рассчитаны. Части равняются по времени
- * партий в прошлых прогонах CI ({@code gametest-durations.json} в ресурсах devtest, пишет
- * {@code tools/gametest_durations.py} по логам GameTest); партии, которой в таблице нет, — медиана таблицы. Без
- * свойства {@code incoming.gametest.shard} — все тесты.
+ * GameTest sharded across several CI machines ({@code ./gradlew runGameTestServer -PgametestShard=i/n},
+ * {@code .github/workflows/build.yml}): each machine runs its share of batches; together they run every test exactly once.
+ * A whole batch stays in one shard: its tests run concurrently and may rely on this. Shards are balanced using batch
+ * times from past CI runs ({@code gametest-durations.json} in devtest resources, written by
+ * {@code tools/gametest_durations.py} from GameTest logs); batches absent from the table use its median. Without
+ * {@code incoming.gametest.shard}, run all tests.
  * <p>
- * Список тестов сервер GameTest получает до любых событий мода ({@code GameTestRegistry.getAllTestFunctions()} в
- * {@code Main}) и копирует себе, а партии из этой копии собирает в {@code initServer} после
- * {@link ServerAboutToStartEvent} — здесь копия и сужается до своей части (и до партий {@code -PgametestOnly=<регвыр>}
- * при прогоне своих тестов локально). В jar мода не входит (devtest).
+ * The GameTest server obtains and copies the test list before any mod events ({@code GameTestRegistry.getAllTestFunctions()}
+ * in {@code Main}), then assembles batches from that copy in {@code initServer} after {@link ServerAboutToStartEvent}.
+ * Here the copy is narrowed to its shard (and to {@code -PgametestOnly=<regex>} batches for local runs of selected tests).
+ * Not included in the mod jar (devtest).
  */
 @Mod(Incoming.MOD_ID)
 public final class GameTestShards {
@@ -51,14 +51,14 @@ public final class GameTestShards {
         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
     }
 
-    /** Только партии, чьё имя подходит под регулярное выражение ({@code -PgametestOnly=…}: прогон своих тестов локально). */
+    /** Only batch whose name matches the regular expression ({@code -PgametestOnly=…}: run your tests locally). */
     private static void only(ServerAboutToStartEvent e, String regex) {
         if (!(e.getServer() instanceof GameTestServer server)) return;
         List<TestFunction> tests = ObfuscationReflectionHelper.getPrivateValue(GameTestServer.class, server, "testFunctions");
         int total = tests.size();
         java.util.regex.Pattern p = java.util.regex.Pattern.compile(regex);
         tests.removeIf(t -> !p.matcher(t.batchName()).matches());
-        Incoming.LOG.info("GameTest: только партии «{}» — тестов {} из {}", regex, tests.size(), total);
+        Incoming.LOG.info("GameTest: only batch “{}” - tests {} from {}", regex, tests.size(), total);
     }
 
     private static void select(ServerAboutToStartEvent e, String spec) {
@@ -66,7 +66,7 @@ public final class GameTestShards {
         String[] parts = spec.split("/");
         int part = parts.length == 2 ? Integer.parseInt(parts[0].trim()) : 0;
         int count = parts.length == 2 ? Integer.parseInt(parts[1].trim()) : 0;
-        if (count < 1 || part < 1 || part > count) throw new IllegalArgumentException("incoming.gametest.shard=" + spec + ": ожидается i/n, 1 ≤ i ≤ n");
+        if (count < 1 || part < 1 || part > count) throw new IllegalArgumentException("incoming.gametest.shard=" + spec + ": expected i/n, 1 ≤ i ≤ n");
 
         List<TestFunction> tests = ObfuscationReflectionHelper.getPrivateValue(GameTestServer.class, server, "testFunctions");
         int total = tests.size();
@@ -76,16 +76,16 @@ public final class GameTestShards {
 
         Map<String, Double> mine = new TreeMap<>();
         for (TestFunction t : tests) mine.put(t.batchName(), weights.get(t.batchName()));
-        Incoming.LOG.info("GameTest: часть {} из {} — тестов {} из {}, партий {}, по прошлым прогонам ~{} с; партии: {}",
+        Incoming.LOG.info("GameTest: shard {} of {} — {} of {} tests, {} batches, ~{} s based on previous runs; batches: {}",
                 part, count, tests.size(), total, mine.size(),
                 String.format(Locale.ROOT, "%.0f", mine.values().stream().mapToDouble(Double::doubleValue).sum()), String.join(", ", mine.keySet()));
     }
 
     /**
-     * Время каждой партии: из таблицы прошлых прогонов, а партии без времени — медиана таблицы (новая партия обычно
-     * короткая); пустая таблица — по секунде.
+     * The time of each batch: from the table of past runs, and a batch without time is the median of the table (the new batch is usually
+     *  short); empty table - by second.
      *
-     * @param batches имена партий тестов (с повторами — по тесту на имя)
+     * @param batches names of batch tests (with repetitions - by test per name)
      */
     static Map<String, Double> weights(Collection<String> batches, Map<String, Double> seconds) {
         double[] known = seconds.values().stream().mapToDouble(Double::doubleValue).sorted().toArray();
@@ -96,13 +96,12 @@ public final class GameTestShards {
     }
 
     /**
-     * Раскладка партий по частям: самые долгие — первыми, каждая — в часть, где пока меньше всего времени (при
-     * равенстве — в меньшую по номеру). Итог не зависит от порядка партий на входе: каждая машина считает его сама
-     * и получает тот же.
+     * Assign batches to shards: longest first, each to the shard with the least time so far (ties go to the
+     * lower shard number). The result does not depend on input batch order: every machine computes the same result itself.
      *
-     * @param weights партия → время
-     * @param count   сколько частей
-     * @return партия → номер части от 0
+     * @param weights batch → time
+     * @param count number of shards
+     * @return batch → shard number starting at 0
      */
     static Map<String, Integer> assign(Map<String, Double> weights, int count) {
         List<String> names = new ArrayList<>(weights.keySet());
@@ -121,7 +120,7 @@ public final class GameTestShards {
     private static Map<String, Double> durations() {
         try (InputStream in = GameTestShards.class.getResourceAsStream(RESOURCE)) {
             if (in == null) {
-                Incoming.LOG.warn("GameTest: нет {} — части равняются по числу партий", RESOURCE);
+                Incoming.LOG.warn("GameTest: no {} - parts are equal in number batch", RESOURCE);
                 return Map.of();
             }
             return new Gson().fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), new TypeToken<Map<String, Double>>() {}.getType());

@@ -16,8 +16,8 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
- * Тикеты чанков в очереди ванили ({@code DistanceManager.tickets}): сколько их с данным ключом. Тикеты мода держат
- * ключ — UUID снаряда (или игрока); у тикета загрузки {@link AreaLoader} значение — сам район, ключ — его.
+ * ticket chunks in the vanilla queue ({@code DistanceManager.tickets}): how many of them there are with this key. ticket mod hold
+ * key - UUID projectile (or player); for the download ticket {@link AreaLoader} the value is the area itself, the key is its.
  */
 public final class TicketProbe {
     private static final Field TICKETS, KEY;
@@ -35,12 +35,12 @@ public final class TicketProbe {
 
     private TicketProbe() {}
 
-    /** Тикеты типа с именем {@code type} и ключом {@code key} во всём мире. */
+    /** ticket type with the name {@code type} and the key {@code key} throughout the world. */
     public static int count(ServerLevel level, String type, UUID key) {
         return count(level, t -> t.toString().equals(type), key);
     }
 
-    /** Тикеты любого типа под {@code type} с ключом {@code key} во всём мире. */
+    /** ticket of any type under {@code type} with key {@code key} all over the world. */
     @SuppressWarnings("unchecked")
     public static int count(ServerLevel level, Predicate<TicketType<?>> type, UUID key) {
         try {
@@ -57,7 +57,7 @@ public final class TicketProbe {
         }
     }
 
-    /** Тикеты типа с именем {@code type} во всём мире, с любым значением. */
+    /** ticket type with the name {@code type} all over the world, with any value. */
     @SuppressWarnings("unchecked")
     public static int count(ServerLevel level, String type) {
         try {
@@ -72,7 +72,7 @@ public final class TicketProbe {
         }
     }
 
-    /** Типы тикетов с ключом {@code key} во всём мире, по одному на тикет (для сообщений проверок). */
+    /** Ticket types with key {@code key} all over the world, one per ticket (for check messages). */
     @SuppressWarnings("unchecked")
     public static List<String> types(ServerLevel level, UUID key) {
         try {
@@ -89,7 +89,7 @@ public final class TicketProbe {
         }
     }
 
-    /** Ключ тикета (у тикета загрузки района — ключ района). */
+    /** Ticket key (region loading ticket has the district key). */
     public static Object key(Ticket<?> t) throws IllegalAccessException {
         Object k = KEY.get(t);
         return k instanceof AreaLoader.Area a ? a.key() : k;

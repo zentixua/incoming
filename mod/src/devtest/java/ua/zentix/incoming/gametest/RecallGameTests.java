@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/** Свой отбой ({@link ServerActions#recall}): только свои удары, самоликвидацией; ядерный и неуправляемые — не отзываются. */
+/** Own release ({@link ServerActions#recall}): only own strikes, self-destruction; nuclear and unguided - do not respond. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RecallGameTests {
@@ -36,9 +36,9 @@ public final class RecallGameTests {
     private RecallGameTests() {}
 
     /**
-     * Отбой игрока A: его ракета в полёте самоликвидируется, B-2 до сброса отворачивает, ракета на направляющей снята
-     * вместе с его пусковой, ракета вне мира пропадает, его залп отменён. Ракета с ядерной БЧ того же игрока, удары
-     * игрока B и его пусковая — как были; ракете РСЗО и сброшенной бомбе отзываться нечем.
+     * Player A cancels: his rocket self-destructs in flight, B-2 turns away before release, the rocket on the rail is removed
+     *  along with his launcher, the off-world rocket disappears, his salvo is cancelled. A missile with a nuclear warhead from the same player, strikes by
+     *  of player B and his launcher - as they were; the MLRS missile and the dropped bomb have nothing to respond to.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "recall", skyAccess = true)
     public static void recallStopsOnlyOwnStrikes(GameTestHelper h) {
@@ -78,26 +78,26 @@ public final class RecallGameTests {
             if (line.startsWith("Stand down")) lines.add(line);
         }));
 
-        ServerActions.Recalled r = ServerActions.recall(level.getServer(), a, "проверка");
-        h.assertTrue(mine.isRemoved(), "своя ракета в полёте не самоликвидировалась");
-        h.assertTrue(!bomber.isRemoved() && bomber.hasReleased(), "B-2 до сброса не отвернул: убран " + bomber.isRemoved());
-        h.assertTrue(onRail.isRemoved() && launcher.isRemoved(), "своя ракета на направляющей или пусковая остались");
-        h.assertTrue(outside.isRemoved() && !VirtualFlights.get(level).flights().contains(outside), "своя ракета вне мира осталась");
-        h.assertTrue(SalvoData.get(level).remaining(a) == 0, "свой залп не отменён");
-        h.assertFalse(nuclear.isRemoved(), "свой отбой отозвал ядерный удар");
-        h.assertTrue(!theirs.isRemoved() && !otherLauncher.isRemoved() && SalvoData.get(level).remaining(b) == 5, "свой отбой задел чужие удары");
-        h.assertTrue(r.projectiles() == 4 && r.salvos() == 1, "итог: " + r);
-        h.assertValueEqual(lines, List.of("Stand down — проверка: self-destructed 1, turned away 1, taken off launchers 1 (launchers 1), "
-                + "off-world 1, salvos 1"), "строка в лог");
+        ServerActions.Recalled r = ServerActions.recall(level.getServer(), a, "check");
+        h.assertTrue(mine.isRemoved(), "own missile did not self-destruct in flight");
+        h.assertTrue(!bomber.isRemoved() && bomber.hasReleased(), "B-2 did not turn away before release: removed " + bomber.isRemoved());
+        h.assertTrue(onRail.isRemoved() && launcher.isRemoved(), "own missile on the rail or launcher remained");
+        h.assertTrue(outside.isRemoved() && !VirtualFlights.get(level).flights().contains(outside), "own missile remained outside the world");
+        h.assertTrue(SalvoData.get(level).remaining(a) == 0, "own salvo was not cancelled");
+        h.assertFalse(nuclear.isRemoved(), "own Recall cancelled a nuclear strike");
+        h.assertTrue(!theirs.isRemoved() && !otherLauncher.isRemoved() && SalvoData.get(level).remaining(b) == 5, "own Recall affected other owners' strikes");
+        h.assertTrue(r.projectiles() == 4 && r.salvos() == 1, "result: " + r);
+        h.assertValueEqual(lines, List.of("Stand down — check: self-destructed 1, turned away 1, taken off launchers 1 (launchers 1), "
+                + "off-world 1, salvos 1"), "log line");
 
-        // неуправляемым свернуть нечем: летят дальше
+        // uncontrollable ones have nothing to turn to: they fly further
         for (StrikeProjectile p : List.of(ModEntities.ROCKET.get().create(level), ModEntities.BUNKER_BUSTER.get().create(level))) {
-            h.assertTrue(!p.recallable() && !p.recall(level) && !p.isRemoved(), "отбой остановил " + p.getType().getDescriptionId());
+            h.assertTrue(!p.recallable() && !p.recall(level) && !p.isRemoved(), "Recall stopped " + p.getType().getDescriptionId());
         }
         h.succeed();
     }
 
-    /** Крылатая ракета в полёте в мире. */
+    /** Cruise missile in flight around the world. */
     private static CruiseMissileEntity flying(ServerLevel level, Vec3 at, Vec3 target, UUID owner, @Nullable Loadout.Nuke warhead) {
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.launch(at, new Target.Point(target), target, owner);

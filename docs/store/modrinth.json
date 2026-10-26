@@ -1,7 +1,7 @@
 {
   "slug": "incoming",
   "title": "Incoming: Air Strikes and Air Defense",
-  "description": "Modern air strikes on a real scale: Shahed drones, Lancets, cruise missiles, Grad rocket salvos, a B-2 bomber and a nuclear ICBM, aimed with one designator. A surface-to-air missile system shoots down drones, cruise missiles and bombers.",
+  "description": "Air strikes and air defense: Shaheds, Lancets, cruise missiles, Grad salvos, a B-2 and nuclear weapons, aimed with one designator. Includes a SAM, fixed launchers and blackout.",
   "categories": [
     "equipment",
     "technology",
@@ -17,41 +17,45 @@
   "icon": "docs/media/icon.png",
   "gallery": [
     {
-      "file": "docs/media/still-2.jpg",
-      "title": "Cruise missile in flight over a city",
+      "file": "docs/media/still-5.jpg",
+      "title": "Cruise missiles strike a factory",
       "featured": true
     },
     {
-      "file": "docs/media/still-1.jpg",
-      "title": "Cruise missile flying low over the terrain toward its target"
+      "file": "docs/guide/img/remote.gif",
+      "title": "Strike Designator console: weapon, salvo and target"
     },
     {
-      "file": "docs/media/still-3.jpg",
-      "title": "Cruise missile in its final dive onto a burning factory"
+      "file": "docs/guide/img/map.gif",
+      "title": "Targeting map and flight route"
     },
     {
-      "file": "docs/media/still-4.jpg",
-      "title": "The warhead explodes inside the factory"
+      "file": "docs/guide/img/weapon-shahed.jpg",
+      "title": "Shahed-136 in flight"
     },
     {
-      "file": "docs/media/still-5.jpg",
-      "title": "Cruise missiles dive onto a factory: the first one has just hit"
+      "file": "docs/guide/img/weapon-lancet-launcher.jpg",
+      "title": "Lancet on its launcher"
     },
     {
-      "file": "docs/media/still-6.jpg",
-      "title": "More hits on the factory as another cruise missile comes in"
+      "file": "docs/guide/img/weapon-grad.jpg",
+      "title": "Grad rocket launcher"
+    },
+    {
+      "file": "docs/guide/img/sam.webp",
+      "title": "SAM and radar during a drone raid"
+    },
+    {
+      "file": "docs/guide/img/launcher.webp",
+      "title": "Fixed cruise missile launcher"
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "Fireball and blast wave of a 15 kt airburst over a city"
-    },
-    {
-      "file": "docs/guide/img/nuke.jpg",
-      "title": "Mushroom cloud; the dust wall of the blast wave below"
+      "title": "Fireball and blast wave over a city"
     },
     {
       "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "A city after a 15 kt strike: ruins and fires"
+      "title": "Ruins and fires after a nuclear strike"
     }
   ]
 }

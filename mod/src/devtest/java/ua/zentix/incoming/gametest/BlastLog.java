@@ -14,12 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Подрывы боевых частей по заряду ({@code ExplosionEvent.Start} с зарядом, {@link Warheads#chargeOf}) за весь прогон
- * GameTest: тест полёта проверяет, что снаряд взорвался у цели, не завязываясь на размер воронки (она — по закону
- * заряда и грунта, у шахеда на камне её нет), и что источник взрыва — сам снаряд. Слушатель ставит {@link GameTestShards}.
+ * Explosions of warheads by charge ({@code ExplosionEvent.Start} with charge, {@link Warheads#chargeOf}) for the entire run
+ * GameTest: the flight test checks that the projectile exploded at the target, without being tied to the size of the crater (it is according to the law of
+ *  charge and soil, Shahed does not have it on the stone), and that the source explosion - the projectile itself. The listener puts {@link GameTestShards}.
  */
 public final class BlastLog {
-    /** {@code source} — тип сущности-источника взрыва ({@code getDirectSourceEntity}), null — без источника. */
+    /** {@code source} - type of explosion source entity ({@code getDirectSourceEntity}), null - without source. */
     record Blast(Level level, Vec3 at, double charge, long gameTime, @Nullable EntityType<?> source) {}
 
     private static final List<Blast> BLASTS = new ArrayList<>();
@@ -36,12 +36,12 @@ public final class BlastLog {
         }
     }
 
-    /** Был ли с начала теста подрыв по заряду не дальше {@code radius} от {@code at} в мире теста. */
+    /** Since the beginning of the test, has there been a charge explosion no further than {@code radius} from {@code at} in the world of the test. */
     static boolean near(GameTestHelper h, BlockPos at, double radius) {
         return !around(h, at, radius).isEmpty();
     }
 
-    /** Подрывы по заряду с начала теста не дальше {@code radius} от {@code at} в мире теста. */
+    /** Charge explosions from the beginning of the test are no further than {@code radius} from {@code at} in the world of the test. */
     static List<Blast> around(GameTestHelper h, BlockPos at, double radius) {
         Vec3 c = Vec3.atCenterOf(h.absolutePos(at));
         long since = h.getLevel().getGameTime() - h.getTick();

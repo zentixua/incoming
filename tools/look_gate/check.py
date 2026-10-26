@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Годен ли прогон шлагбаума для сравнения с эталоном — по логу клиента (latest.log сценария probe).
+"""Is the look gate run valid for comparison with the standard - according to the client log (latest.log script probe).
 
-  python3 tools/look_gate/check.py <latest.log>   → 0 — годен; 1 — нет (причины в stderr)
+  python3 tools/look_gate/check.py <latest.log> → 0 - valid; 1 - no (reasons in stderr)
 
-Не годен, если:
-  - слух оглушается (строки «SCENARIO probe hearing damage off» нет или там «on»): сцены идут подряд одним игроком, и
-    глухота от взрыва в 50 м глушит хвосты следующих сцен (F2b7, F2b8 22.10);
-  - сцена идёт в другом воздухе, чем в своё эталонное время игры (ProbeScenario.START): ветер и класс устойчивости —
-    функция времени игры, и сцена выборки, начатая не в своё время, шла в чужом воздухе (F2b8, F2b9 22.10: дым пожара
-    полосой вместо столба); проба сама сравнивает воздух (ProbeScenario.sameAir: «same», «differs», «none» — у версии
-    без воздуха мира); лог без этого сравнения — по допуску LATE тиков;
-  - прогон сам остановился строкой «SCENARIO probe FAIL»;
-  - кадр снят не с той точки, куда сцена поставила глаз (строка «SCENARIO probe shot <кадр> camera … off <блоков>»
-    дальше ProbeScenario.CAMERA_SLIP): сервер вернул игрока назад — камера сзади старта до 23.10 стояла ногами на 2 см
-    в полу, и кадр 0,5 с снимался с места до старта, без пусковой и облака (LNB 23.10).
+ Not valid if:
+  - hearing is stunned (lines “SCENARIO probe hearing damage off" no or there is "on"): scenes go in a row by one player, and
+     deafness from the explosion in 50 m suppresses the tails of the following scenes (F2b7, F2b8 22.10);
+   - the scene goes in different air than in its reference game time (ProbeScenario.START): wind and stability class -
+     function of game time, and the sampling scene, started at the wrong time, was in foreign air (F2b8, F2b9 22.10: fire smoke
+     stripe instead of a pillar); sample itself compares the air (ProbeScenario.sameAir: “same”, “differs”, “none” - for the version
+     without world air); log without this comparison - according to the tolerance LATE tick;
+   - the run itself stopped with the line “SCENARIO” probe FAIL";
+   - the frame was taken from a different point where the scene placed the eye (line "SCENARIO probe shot <frame> camera ... off <blocks>»
+    further ProbeScenario.CAMERA_SLIP): the server returned the player back - the camera behind the start before 23.10 stood with its feet on 2 cm
+     in the floor, and the frame 0,5 was filmed from the place before the start, without launcher and clouds (LNB 23.10).
 """
 import re
 import sys
 
-LATE = 200  # лог пробы без сравнения воздуха (до F4): сцена позже своего времени больше этого — другой воздух
-EARLY = 5   # ProbeScenario.begin: догоняет до START − 5
-SLIP = 1.0  # ProbeScenario.CAMERA_SLIP, блоков
+LATE = 200  # sample log without air comparison (up to F4): scene later than its time, more than this - different air
+EARLY = 5   # ProbeScenario.begin: catches up to START − 5
+SLIP = 1.0  # ProbeScenario.CAMERA_SLIP, blocks
 
 HEARING = re.compile(r"SCENARIO probe hearing damage (on|off)")
 START = re.compile(r"SCENARIO probe (\S+) game (-?\d+) \(reference start (null|-?\d+)(?:, air ([^)]*))?\)")
@@ -30,7 +30,7 @@ CAMERA = re.compile(r"SCENARIO probe shot (\S+) camera (.*) off (\d+(?:\.\d+)?)"
 
 
 def problems(lines):
-    """Причины, по которым прогон не годится (пусто — годен)."""
+    """Reasons why the run is not good (empty - good)."""
     out = []
     hearing = None
     scenes = 0
@@ -41,37 +41,37 @@ def problems(lines):
             continue
         m = FAIL.search(line)
         if m:
-            out.append("прогон остановлен: " + m.group(1).strip())
+            out.append("run stopped: " + m.group(1).strip())
             continue
         m = CAMERA.search(line)
         if m:
             if float(m.group(3)) > SLIP:
-                out.append(f"{m.group(1)}: кадр снят в {m.group(3)} блоках от места камеры сцены (сервер вернул игрока назад?)")
+                out.append(f"{m.group(1)}: shot taken in {m.group(3)} blocks from the scene camera location (server brought the player back?)")
             continue
         m = END.search(line)
         if m:
             if m.group(4).startswith("differs"):
-                out.append(f"{m.group(1)}: к концу сцены другой воздух, чем у эталона: {m.group(4)}")
+                out.append(f"{m.group(1)}: towards the end of the scene there is a different air than the standard: {m.group(4)}")
             continue
         m = START.search(line)
         if m:
             scenes += 1
             case, game, ref, air = m.group(1), int(m.group(2)), m.group(3), m.group(4)
             if ref == "null":
-                out.append(f"{case}: у сцены нет времени эталона (ProbeScenario.START)")
+                out.append(f"{case}: scene has no reference time (ProbeScenario.START)")
             elif game < int(ref) - EARLY - 1:
-                out.append(f"{case}: началась в игре {game}, раньше эталона {ref}")
+                out.append(f"{case}: started in game {game}, earlier than the standard {ref}")
             elif air is not None:
                 if air.startswith("differs"):
-                    out.append(f"{case}: другой воздух, чем в эталонное время {ref} (игра {game}): {air}")
+                    out.append(f"{case}: different air than at reference time {ref} (game {game}): {air}")
             elif game > int(ref) + LATE:
-                out.append(f"{case}: началась в игре {game}, эталон {ref} — другой воздух (допуск {LATE} тиков)")
+                out.append(f"{case}: started in game {game}, standard {ref} - other air (tolerance {LATE} tick)")
     if hearing is None:
-        out.append("нет строки «SCENARIO probe hearing damage»: слух не проверен (старый класс ProbeScenario?)")
+        out.append("no line \"SCENARIO probe hearing damage\": hearing not checked (old class ProbeScenario?)")
     elif hearing == "on":
-        out.append("слух оглушается (nuke_tinnitus = true): хвосты сцен заглушены прошлыми взрывами")
+        out.append("hearing is deafened (nuke_tinnitus = true): scene tails are muffled by past explosions")
     if scenes == 0:
-        out.append("ни одна сцена не началась")
+        out.append("no scene started")
     return out
 
 

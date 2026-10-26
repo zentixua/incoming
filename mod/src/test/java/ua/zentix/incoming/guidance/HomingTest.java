@@ -11,25 +11,25 @@ class HomingTest {
         return Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, a.normalize().dot(b.normalize())))));
     }
 
-    /** Цель сбоку: поворот ровно на предел, в плоскости обоих направлений, к цели. */
+    /** Target from the side: turn exactly to the limit, in the plane of both directions, towards the target. */
     @Test
     void turnIsLimitedAndTowardsWant() {
         Vec3 dir = new Vec3(1, 0, 0), want = new Vec3(0, 0, 1);
         Vec3 got = Homing.turn(dir, want, 9);
         assertEquals(9, angle(dir, got), 1e-9);
         assertEquals(81, angle(got, want), 1e-9);
-        assertEquals(0, got.y, 1e-12, "поворот вышел из плоскости");
+        assertEquals(0, got.y, 1e-12, "the rotation is out of plane");
         assertEquals(1, got.length(), 1e-12);
     }
 
-    /** Цель в пределах поворота — курс прямо на неё. */
+    /** The target is within the turn - heading straight towards it. */
     @Test
     void smallTurnReachesWant() {
         Vec3 want = new Vec3(1, 0.1, 0).normalize();
         assertEquals(want, Homing.turn(new Vec3(1, 0, 0), want, 9));
     }
 
-    /** Цель точно сзади — поворот через верх, у вертикального курса — через +X; не застревает. */
+    /** The target is directly behind - turn through the top, at the vertical course - through +X; doesn't get stuck. */
     @Test
     void oppositeTurnsSomewhere() {
         Vec3 got = Homing.turn(new Vec3(1, 0, 0), new Vec3(-1, 0, 0), 9);
@@ -40,7 +40,7 @@ class HomingTest {
         assertTrue(up.x > 0, up.toString());
     }
 
-    /** Повтор поворотов приводит курс к цели за угол / предел тиков. */
+    /** Repeating turns brings the course to the target beyond the corner/tick limit. */
     @Test
     void repeatedTurnsConverge() {
         Vec3 dir = new Vec3(0, 1, 0), want = new Vec3(0.3, -0.2, -1).normalize();
@@ -49,13 +49,13 @@ class HomingTest {
         while (!dir.equals(want)) {
             dir = Homing.turn(dir, want, 9);
             ticks++;
-            assertTrue(ticks <= Math.ceil(start / 9), "за " + ticks + " тиков курс не вышел на цель");
+            assertTrue(ticks <= Math.ceil(start / 9), "for " + ticks + " tick course did not reach target");
         }
     }
 
     /**
-     * Быстрая ракета проходит цель насквозь за тик: в концах тика они в 5 блоках друг от друга, а посреди тика —
-     * встречаются.
+     * A fast missile passes through the target within a tick: at the ends of the tick they are 5 blocks apart, and in the middle of the tick -
+     *  they meet.
      */
     @Test
     void closestApproachInsideTick() {
@@ -66,7 +66,7 @@ class HomingTest {
         assertTrue(a0.distanceTo(b0) > 6 && a1.distanceTo(b1) > 6);
     }
 
-    /** Расходятся или стоят — ближе всего в начале тика; сближение после конца тика — в конце. */
+    /** Diverging or standing - closest at the beginning of the tick; approaching after the end tick - at the end. */
     @Test
     void closestIsClampedToTick() {
         Vec3 o = Vec3.ZERO;

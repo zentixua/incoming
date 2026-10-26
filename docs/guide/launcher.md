@@ -12,7 +12,7 @@ button.
 
 Place it in the open: buildings in front of the rack block the launch. Munitions go in with a right click or through a
 hopper (and so from Create machines too); the stock has 9 slots. They come back out only when the block is broken. It
-does not launch B-2s or ICBMs.
+does not launch B-2s or ICBMs, and does not accept a nuclear warhead on a cruise missile.
 
 ## Mission
 
@@ -22,8 +22,10 @@ does not launch B-2s or ICBMs.
 3. The launcher turns toward the target and waits for a signal.
 
 A mission target is a place no more than 10,000 blocks from the launcher; a player or an aircraft becomes the place
-where it was at that moment. You can link only your own launcher or one belonging to your team (`/team`). To make the
-designator fire by itself again, unlink all launchers.
+where it was at that moment. You can link only your own launcher or one belonging to your team (`/team`). One designator can link up to 16 launchers. A mission can only be assigned in the same dimension, while the
+launcher's chunk is ready; a far target can be outside loaded chunks, but the launcher itself must be loaded.
+If assignment fails, go near the launcher, wait for its chunk to load and check the message: it may be busy, belong
+to another side, or be too far from the target. To make the designator fire by itself again, unlink all launchers.
 
 ## Firing
 
@@ -38,4 +40,5 @@ previous order still running, or buildings blocking the launch sector.
 
 ![Fixed launcher recipe](img/recipe-fixed_launcher.png)
 
-Without Create, a clock takes the place of the precision mechanism.
+Ingredients: 4 iron ingots, 1 dispenser, 2 pistons, 1 precision mechanism and 1 iron block. Makes 1 launcher.
+Without Create, use a clock instead of the precision mechanism.

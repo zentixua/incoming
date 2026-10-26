@@ -1,9 +1,9 @@
 # /// script
 # dependencies = ["numpy", "scipy"]
 # ///
-"""Разбор прогонов пробы: время кадра, звук по сценам, гребёнка эха, спектр шахеда.
+"""Analyze probe runs: frame time, scene audio, echo comb, Shahed spectrum.
 
-  uv run analyze.py <out-корень> <вариант> ...   → <out>/<вариант>/wav/*.wav, <out>/analysis.json, таблица в stdout
+  uv run analyze.py <out-root> <variant> ...   → <out>/<variant>/wav/*.wav, <out>/analysis.json, table in stdout
 """
 import json
 import re
@@ -14,7 +14,7 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.signal import welch
 
-RATE_BYTES = 4  # стерео int16
+RATE_BYTES = 4  # stereo int16
 HEADER = 44
 
 
@@ -53,7 +53,7 @@ def stats(ms):
 
 
 def comb(x, rate):
-    """Гребёнка: пик кепстра (2–40 мс) против его медианы — у копий одного звука с задержкой τ пик на τ."""
+    """Comb: cepstrum peak (2–40 ms) against its median - for copies of the same sound with a delay τ peak at τ."""
     if len(x) < rate:
         return None
     n = 4096
@@ -69,7 +69,7 @@ def comb(x, rate):
 
 
 def tone(x, rate):
-    """Спектр пролёта: частота самого сильного тона 50–2000 Гц и центроид 50–8000 Гц."""
+    """Flight spectrum: frequency of the strongest tone 50–2000 Hz and centroid 50–8000 Hz."""
     f, p = welch(x, rate, nperseg=8192)
     band = (f > 50) & (f < 2000)
     peak = float(f[band][np.argmax(p[band])])

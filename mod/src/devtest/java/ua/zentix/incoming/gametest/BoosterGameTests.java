@@ -12,7 +12,7 @@ import ua.zentix.incoming.entity.BoosterLifetime;
 import ua.zentix.incoming.entity.SpentBoosterEntity;
 import ua.zentix.incoming.registry.ModEntities;
 
-/** Очистка ускорителя: настоящая сущность, момент удаления и позднее начало отслеживания. */
+/** Accelerator cleanup: present entity, timing of removal, and late start of tracking. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BoosterGameTests {
@@ -29,11 +29,11 @@ public final class BoosterGameTests {
             if (landed[0] && !e.landed()) lostContact[0] = true;
             if (e.landed()) landed[0] = true;
             if (e.visibility(0) > 0 && e.visibility(0) < 1) faded[0] = true;
-            if (e.remainingTicks() <= 1) h.assertTrue(e.visibility(0) == 0 && e.visibility(0.99f) == 0, "свет в последнем кадре");
-            h.assertTrue(e.isRemoved(), "ускоритель ещё лежит");
-            h.assertTrue(landed[0] && faded[0], "падение или плавное исчезновение пропущено");
-            h.assertFalse(lostContact[0], "onGround сбросился в покое: поза и сопло мигают");
-            h.assertTrue(e.age() < BoosterLifetime.MAX_AGE, "общий предел вместо очистки после падения");
+            if (e.remainingTicks() <= 1) h.assertTrue(e.visibility(0) == 0 && e.visibility(0.99f) == 0, "light in the last frame");
+            h.assertTrue(e.isRemoved(), "the accelerator is still there");
+            h.assertTrue(landed[0] && faded[0], "drop or fade missed");
+            h.assertFalse(lostContact[0], "onGround reset at rest: pose and nozzle flashing");
+            h.assertTrue(e.age() < BoosterLifetime.MAX_AGE, "general limit instead of clearing after a fall");
         });
     }
 
@@ -46,14 +46,14 @@ public final class BoosterGameTests {
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(32, 30, 32)));
         e.moveTo(at.x, at.y, at.z, 0, 0);
         h.getLevel().addFreshEntity(e);
-        // Начальные данные нового наблюдателя — те же часы, а не age=0 нового объекта.
+        // The initial data of the new observer is the same clock, and not age=0 of the new object.
         SpentBoosterEntity late = ModEntities.SPENT_BOOSTER.get().create(h.getLevel());
         late.getEntityData().assignValues(e.getEntityData().getNonDefaultValues());
-        h.assertTrue(late.age() == e.age() && late.visibility(0) == 0, "поздний наблюдатель заново видит горячее сопло");
+        h.assertTrue(late.age() == e.age() && late.visibility(0) == 0, "the late observer re-sees the hot nozzle");
         h.succeedWhen(() -> {
-            h.assertTrue(e.visibility(0) == 0, "свет перед общим пределом");
-            h.assertTrue(e.isRemoved(), "общий предел не удалил ускоритель");
-            h.assertFalse(e.landed(), "вместо общего предела сработало падение");
+            h.assertTrue(e.visibility(0) == 0, "light before the general limit");
+            h.assertTrue(e.isRemoved(), "general limit did not remove accelerator");
+            h.assertFalse(e.landed(), "instead of the general limit, the fall worked");
         });
     }
 
@@ -66,9 +66,9 @@ public final class BoosterGameTests {
         boolean[] faded = {false};
         h.succeedWhen(() -> {
             if (e.visibility(0) > 0 && e.visibility(0) < 1) faded[0] = true;
-            h.assertTrue(e.isRemoved(), "ускоритель ещё летит под миром");
-            h.assertTrue(faded[0] && e.visibility(0) == 0, "удаление под миром оборвало свечение");
-            h.assertTrue(e.age() < BoosterLifetime.LIE_TICKS, "очистка под миром не назначила срок");
+            h.assertTrue(e.isRemoved(), "the accelerator is still flying under the world");
+            h.assertTrue(faded[0] && e.visibility(0) == 0, "removal under the world cut off the glow");
+            h.assertTrue(e.age() < BoosterLifetime.LIE_TICKS, "the cleansing under the world has not set a deadline");
         });
     }
 }

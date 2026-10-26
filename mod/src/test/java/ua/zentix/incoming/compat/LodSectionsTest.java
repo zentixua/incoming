@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Свет копии чанка не из мира ({@link CopyLight}) и её байты для Voxy ({@link LodSections}): руины открывают небо
- * комнатам, погашенная лампа не светит, секции и свет доходят до клиента теми же, а воздух снесённой башни — воздухом.
+ * The light of a copy of a chunk not from the world ({@link CopyLight}) and its bytes for Voxy ({@link LodSections}): the ruins open the sky to
+ *  rooms, the extinguished lamp does not shine, the sections and light reach the client the same, and the air of the demolished tower is air.
  */
 class LodSectionsTest {
     private static Registry<Biome> biomes;
@@ -59,7 +59,7 @@ class LodSectionsTest {
         biomes = r.freeze();
     }
 
-    /** Чанк в 4 секции (y 0–63) по образцу: что поставить в каждое место. */
+    /** Chunk in the 4 section (y 0–63) according to the model: what to put in each place. */
     private interface Fill {
         BlockState at(int x, int y, int z);
     }
@@ -76,7 +76,7 @@ class LodSectionsTest {
         return s;
     }
 
-    /** Пол из камня на y 0–9, дом: стены и крыша на y 20 над квадратом 4..11, внутри — воздух. */
+    /** Stone floor on y 0–9, house: walls and roof on y 20 above the square 4..11, air inside. */
     private static BlockState house(int x, int y, int z, boolean roof) {
         if (y < 10) return Blocks.STONE.defaultBlockState();
         boolean inside = x >= 4 && x <= 11 && z >= 4 && z <= 11;
@@ -89,16 +89,16 @@ class LodSectionsTest {
     void ruinsOpenTheSkyToRooms() {
         CopyLight whole = CopyLight.of(sections((x, y, z) -> house(x, y, z, true)), true);
         CopyLight ruined = CopyLight.of(sections((x, y, z) -> house(x, y, z, false)), true);
-        assertEquals(15, whole.sky(0, 30, 0), "над домом — небо");
-        assertEquals(15, whole.sky(0, 10, 0), "у земли вне дома — небо");
-        assertEquals(0, whole.sky(8, 12, 8), "в закрытом доме неба нет");
-        assertEquals(0, whole.sky(8, 5, 8), "в камне неба нет");
-        assertEquals(15, ruined.sky(8, 12, 8), "крыши нет — в доме небо");
+        assertEquals(15, whole.sky(0, 30, 0), "above the house is the sky");
+        assertEquals(15, whole.sky(0, 10, 0), "the earth outside the house is the sky");
+        assertEquals(0, whole.sky(8, 12, 8), "there is no sky in a closed house");
+        assertEquals(0, whole.sky(8, 5, 8), "there is no sky in stone");
+        assertEquals(15, ruined.sky(8, 12, 8), "there is no roof - there is sky in the house");
     }
 
     @Test
     void skyLightSpreadsSidewaysUnderAnOverhang() {
-        // навес на y 20 над всем x ≥ 8: под ним свет неба падает на 1 за блок от края
+        // canopy on y 20 over all x ≥ 8: below it the light of the sky falls on 1 a block from the edge
         CopyLight l = CopyLight.of(sections((x, y, z) -> y < 10 ? Blocks.STONE.defaultBlockState()
                 : y == 20 && x >= 8 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState()), true);
         assertEquals(15, l.sky(7, 15, 8));
@@ -125,8 +125,8 @@ class LodSectionsTest {
         assertEquals(15, on.block(8, 30, 8));
         assertEquals(14, on.block(9, 30, 8));
         assertEquals(10, on.block(8, 35, 8));
-        assertEquals(0, off.block(9, 30, 8), "погашенная лампа квартала не светит");
-        assertEquals(0, on.sky(8, 40, 8), "без неба у измерения света неба нет");
+        assertEquals(0, off.block(9, 30, 8), "the extinguished lamp of the quarter does not shine");
+        assertEquals(0, on.sky(8, 40, 8), "without sky the dimension of light has no sky");
     }
 
     @Test
@@ -143,16 +143,16 @@ class LodSectionsTest {
             assertEquals(i, b.y());
             for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                 assertEquals(s[i].getBlockState(x, y, z), b.blocks().getBlockState(x, y, z));
-                assertEquals(light.sky(x, i * 16 + y, z), b.skyLight() == null ? 0 : b.skyLight().get(x, y, z), "небо " + x + " " + (i * 16 + y) + " " + z);
+                assertEquals(light.sky(x, i * 16 + y, z), b.skyLight() == null ? 0 : b.skyLight().get(x, y, z), "sky " + x + " " + (i * 16 + y) + " " + z);
             }
         }
-        // верхняя секция — воздух под открытым небом: без блоков, свет неба 15 без слоя в байтах
+        // top section - open air: no blocks, sky light 15 no layer in bytes
         assertTrue(back.get(3).blocks().hasOnlyAir());
         DataLayer top = back.get(3).skyLight();
         assertNotNull(top);
         assertEquals(15, top.get(3, 3, 3));
         assertNull(back.get(3).blockLight());
-        // дом в 4 секции: камень, стены и свет — меньше 20 КБ (свет — только там, где он не однороден)
-        assertTrue(data.length < 20_000, data.length + " байт");
+        // house in 4 section: stone, walls and light - less than 20 KB (light - only where it is not uniform)
+        assertTrue(data.length < 20_000, data.length + " byte");
     }
 }

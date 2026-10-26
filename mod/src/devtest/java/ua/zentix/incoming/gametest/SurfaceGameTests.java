@@ -43,54 +43,59 @@ import java.util.HashSet;
 import java.util.function.Consumer;
 
 /**
- * Удар целиком против опубликованных данных: каждое оружие по каждой поверхности — что остаётся в мире (воронка,
- * снятые блоки, пробой плиты, стены и стёкла рядом), а не каждая формула отдельно. Жалоба 23.10 («удары слабые»):
- * формулы были верны поодиночке, а итог удара в мире никто не сверял с данными.
+ * The complete strike against published data: every weapon on every surface, checking what remains in the
+ * world (crater, removed blocks, slab breach, nearby walls and glass), rather than each formula separately.
+ * Complaint 23.10 ("the strikes are weak"): individual formulas were correct, but nobody compared the strike
+ * result in the world against the data.
  * <p>
- * Путь удара — тот же, что у снаряда в игре: шахед, «Ланцет», ракета и «Град» — {@link Warheads#detonate} с сущностью
- * своего оружия (как {@code StrikeProjectile.impact}: точка — верх блока, ось — угол удара из паспорта
- * {@link Article.Impact}); бомба B-2 — настоящая сущность, сброшенная как с B-2 (170 блоков над целью, 145 до неё,
- * скорость B-2): удар о землю, путь в грунте, подрыв, подземный взрыв.
+ * The strike uses the same path as a projectile in the game: Shahed, Lancet, missile and Grad use
+ * {@link Warheads#detonate} with their weapon entity (as in {@code StrikeProjectile.impact}: point at the block
+ * top, axis from the spec impact angle {@link Article.Impact}); the B-2 bomb is a real entity dropped as from
+ * a B-2 (170 blocks above the target, 145 before it, at B-2 speed): ground impact, penetration path,
+ * detonation, underground explosion.
  * <p>
- * Ожидания — законы с источниками, которые мод уже держит, и их разброс по данным:
+ * Expectations are the sourced laws already used by the mod and their variation in the data:
  * <ul>
- * <li>воронка заряда на грунте — {@link CraterModel#chargeRadius} (EMRTC, Ambrosini и др. 2003, Кинни–Грэхем; грунт —
- * TM 23-200): снятый объём 0,6–1,45 закона (как в {@code BlastGameTests.craterTest}, #417) плюс разброс целых блоков
- * (воронка роет столбцы целыми блоками со случайной добавкой по дробной части — 2σ этой добавки);</li>
- * <li>плита над пустотой — не меньше пробоя FM 5-250 (1992), табл. B-3: K = R³·M·C, M по ступеням R (скала, хорошая
- * кладка, бетонный блок), C = 1,8 (внешний заряд без забивки), ± округление FM 0,25 м; пробита — R больше толщины, всё в
- * радиусе R снесено; не пробита — по FM сносить нечего; и не больше круга, где волна ломает кладку (плита над пустотой —
- * панель, как стена). Заряд, который метра не пробьёт («Ланцет»), не должен открывать плиту;</li>
- * <li>бетон на грунте (асфальт дороги) — плиту держит грунт за ней, свободной грани нет: не пробой и не панель, а
- * воронка в среде не мягче скалы (TM 23-200: скала ×0,7) и не больше воронки того же заряда в грунте;
- * доля блока в связном материале — повреждённая глубина, а не сквозная дыра;</li>
- * <li>стены и стёкла рядом — пороги давления мода ({@link BlockResponse}: кладка 12 psi, доски 4 psi, стекло 0,8 psi;
- * DESIGN-nuke §3.3) по Джаррету и Кинни–Грэхему: всё ближе 0,8 радиуса своего порога сломано, дальше 1,25 — цело;</li>
- * <li>бомба — путь по Янгу (SAND97-2426, {@link Penetration}: в грунте ~15 %, у скалы до двух раз) и воронка выброса по
- * приведённой глубине ({@link BuriedBlast}, TM 5-855-1; глубже λ = 1 — камуфлет без воронки).</li>
+ * <li>Charge crater in soil: {@link CraterModel#chargeRadius} (EMRTC, Ambrosini et al. 2003, Kinney–Graham;
+ * soil: TM 23-200): removed volume 0,6–1,45 of the law (as in {@code BlastGameTests.craterTest}, #417), plus
+ * whole-block variation (crater columns remove whole blocks with a random addition for the fractional part:
+ * 2σ of that addition);</li>
+ * <li>Slab over a void: at least the FM 5-250 (1992) breach, table B-3: K = R³·M·C, M by R ranges (rock, good
+ * masonry, concrete block), C = 1,8 (external untamped charge), ± FM rounding of 0,25 m; breached when R exceeds
+ * the thickness, everything within radius R removed; otherwise FM predicts no removal. No larger than the
+ * circle where the wave breaks masonry (a slab over a void is a panel, like a wall). A charge that cannot
+ * breach one metre (Lancet) must not open the slab;</li>
+ * <li>Concrete on soil (road pavement): soil behind the slab supports it, with no free face; neither a breach
+ * nor a panel, but a crater in material no softer than rock (TM 23-200: rock ×0,7) and no larger than the same
+ * charge crater in soil; a block fraction in cohesive material is damaged depth, not a through hole;</li>
+ * <li>Nearby walls and glass: mod pressure thresholds ({@link BlockResponse}: masonry 12 psi, boards 4 psi,
+ * glass 0,8 psi; DESIGN-nuke §3.3), from Jarrett and Kinney–Graham: everything closer than 0,8 of its threshold
+ * radius breaks, beyond 1,25 stays intact;</li>
+ * <li>Bomb: Young penetration (SAND97-2426, {@link Penetration}: ~15 % in soil, up to a factor of two in rock)
+ * and an ejecta crater by scaled depth ({@link BuriedBlast}, TM 5-855-1; beyond λ = 1, a camouflet without a crater).</li>
  * </ul>
- * Отчёт — строки {@code SURFACEBENCH} «оружие × поверхность → должно / есть» и таблица партии целиком, когда кончились
- * все её проверки ({@code grep SURFACEBENCH} по логу части).
+ * Report: {@code SURFACEBENCH} lines "weapon × surface → expected / actual" and the complete batch table
+ * when all its checks finish ({@code grep SURFACEBENCH} in the shard log).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SurfaceGameTests {
-    /** Верх поверхности на площадке «range» (дёрн шаблона) и квадрат, где она своя. */
+    /** The top of the surface on the “range” site (template turf) and the square where it belongs. */
     private static final int TOP = 11, LO = 8, HI = 55, MID = 32;
-    /** Низ своих слоёв: слой 1 шаблона — камень над воздухом под площадкой (песок на воздухе осыпался бы). */
+    /** The bottom of your layers: layer 1 of the template - a stone above the air under the platform (sand would crumble in the air). */
     private static final int BASE = 2;
 
     private SurfaceGameTests() {}
 
-    /** Поверхность: что лежит в столбце на {@code depth} блоков под верхом (0 — верхний блок). */
+    /** Surface: what lies in the column on {@code depth} blocks under the top (0 is the top block). */
     enum Surface {
-        SOIL("почва: подзол на земле"),
-        SAND("песок"),
-        GRAVEL("гравий (насыпь)"),
-        PAVED("асфальт: 1 м чёрного бетона на земле"),
-        ROCK("камень толщей"),
-        DECK("настил: 1 м камня над пустотой 6 м"),
-        ROOF("крыша: 1 м бетона над помещением 3 м");
+        SOIL("soil: podzol on the ground"),
+        SAND("sand"),
+        GRAVEL("gravel (embankment)"),
+        PAVED("asphalt: 1 m of black concrete on the ground"),
+        ROCK("thicker stone"),
+        DECK("flooring: 1 m stone over void 6 m"),
+        ROOF("roof: 1 m concrete above the room 3 m");
 
         final String title;
 
@@ -111,12 +116,12 @@ public final class SurfaceGameTests {
             };
         }
 
-        /** Плита над пустотой (1 м). */
+        /** Slab above void (1 m). */
         boolean slab() {
             return this == DECK || this == ROOF;
         }
 
-        /** Грунт воронки по закону: насыщенного здесь нет, камень — скала. */
+        /** The soil is a crater according to the law: there is no saturated soil here, the stone is a rock. */
         CraterModel.Soil soil() {
             return this == ROCK ? CraterModel.Soil.ROCK : CraterModel.Soil.DRY;
         }
@@ -124,10 +129,10 @@ public final class SurfaceGameTests {
 
     }
 
-    /** Пустота под настилом и высота помещения под крышей, блоков. */
+    /** The void under the flooring and the height of the room under the roof, blocks. */
     private static final int VOID = 6, ROOM = 3;
 
-    /** Выложить поверхность в квадрате {@code lo..hi} (координаты площадки) от {@link #BASE} до {@code top}. */
+    /** Lay out the surface in the square {@code lo..hi} (site coordinates) from {@link #BASE} to {@code top}. */
     private static void build(GameTestHelper h, Surface s, int lo, int hi, int loZ, int hiZ, int top) {
         ServerLevel level = h.getLevel();
         for (int x = lo; x <= hi; x++) {
@@ -135,7 +140,7 @@ public final class SurfaceGameTests {
                 boolean edge = x == lo || x == hi || z == loZ || z == hiZ;
                 for (int y = BASE; y <= top; y++) {
                     BlockState state = s.layer(top - y);
-                    // стены помещения под крышей — кладка по краю квадрата
+                    // walls of the room under the roof - masonry along the edge of the square
                     if (s == Surface.ROOF && edge && state.isAir()) state = Blocks.STONE_BRICKS.defaultBlockState();
                     level.setBlock(h.absolutePos(new BlockPos(x, y, z)), state, Block.UPDATE_CLIENTS);
                 }
@@ -143,21 +148,20 @@ public final class SurfaceGameTests {
         }
     }
 
-    // ---------------------------------------------------------------- отчёт
-
-    /** Строка отчёта: проверена ли ({@code checked}) и прошла ли. */
+    // ---------------------------------------------------------------- report
+    /** Report line: checked ({@code checked}) and passed. */
     private record Row(String weapon, String surface, String should, String got, boolean checked, boolean ok, String note) {
         String line() {
-            String verdict = !checked ? "—  " + note : ok ? "ок" : "НЕТ";
-            return String.format(Locale.ROOT, "%-8s | %-38s | должно %-46s | есть %-46s | %s", weapon, surface, should, got, verdict);
+            String verdict = !checked ? "—  " + note : ok ? "ok" : "NO";
+            return String.format(Locale.ROOT, "%-8s | %-38s | should %-46s | yes %-46s | %s", weapon, surface, should, got, verdict);
         }
     }
 
-    /** Строки по партиям: таблица партии печатается, когда отчитались все её проверки. */
+    /** Lines for batch: The batch table is printed when all its checks have been reported. */
     private static final Map<String, List<Row>> TABLES = new TreeMap<>();
     private static final Map<String, Integer> CALLS = new TreeMap<>();
 
-    /** Проверок в партии: поверхности одного оружия — по одной на поверхность, «рядом» — одна. */
+    /** Checks in batch: surfaces of one weapon - one per surface, “next to” - one. */
     private static int tests(String batch) {
         return batch.endsWith("_nearby") ? 1 : Surface.values().length;
     }
@@ -168,7 +172,7 @@ public final class SurfaceGameTests {
         for (Row r : rows) Incoming.LOG.info("SURFACEBENCH {}", r.line());
         int calls = CALLS.merge(batch, 1, Integer::sum);
         if (calls >= tests(batch)) {
-            StringBuilder out = new StringBuilder("SURFACEBENCH таблица ").append(batch).append(" (оружие × поверхность → должно / есть):");
+            StringBuilder out = new StringBuilder("SURFACEBENCH table ").append(batch).append(" (weapon × surface → should/is):");
             for (Row r : table) out.append("\nSURFACEBENCH | ").append(r.line());
             Incoming.LOG.info(out.toString());
             TABLES.remove(batch);
@@ -180,14 +184,14 @@ public final class SurfaceGameTests {
         return String.format(Locale.ROOT, "%.1f", x);
     }
 
-    /** Проверок партии, которые держат обломки выключенными, и что было до первой из них. */
+    /** Batch checks that keep the wreckage off, and what happened before the first one. */
     private static int debrisHolders;
     private static boolean debrisBefore;
 
     /**
-     * Обломки не ложатся блоками, пока идёт проверка. Настройка — на весь сервер, а проверок в партии семь: выключает
-     * первая, возвращает последняя (каждая своё «до» вернула бы чужое «выключено», и {@code debrisLandsAsBlocks} в той же
-     * части CI падал бы).
+     * The debris does not fall in blocks while the inspection is underway. The setting is for the entire server, and there are seven checks in the batch: the first one turns off
+     * , the last one returns (each of its “before” would return someone else’s “turned off”, and {@code debrisLandsAsBlocks} in the same
+     *  part CI would fall).
      */
     private static synchronized void noDebris(GameTestHelper h) {
         if (debrisHolders++ == 0) {
@@ -201,9 +205,8 @@ public final class SurfaceGameTests {
         });
     }
 
-    // ---------------------------------------------------------------- удар снаряда
-
-    /** Сущность оружия с осью удара из паспорта: угол к горизонту {@link Article.Impact#angle}, курс на +z. */
+    // ---------------------------------------------------------------- projectile impact
+    /** The entity of a weapon with an impact axis from the spec: angle to the horizon {@link Article.Impact#angle}, heading to +z. */
     private static Entity striker(ServerLevel level, WeaponType weapon) {
         EntityType<? extends Entity> type = switch (weapon) {
             case DRONE -> ModEntities.DRONE.get();
@@ -220,9 +223,9 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Блоков, что снимает воронка закона радиусом {@code rc} и глубиной {@code depth} в одном ударе (в середине столбца),
-     * и дисперсия случайной добавки целых блоков ({@code CraterJob.digColumn}, режим DIG: дробная часть — с её
-     * вероятностью): {ожидание, дисперсия}.
+     * Blocks removed by a model crater of radius {@code rc} and depth {@code depth} in one impact (at the column center),
+     * and variance of the random whole-block addition ({@code CraterJob.digColumn}, DIG mode: fractional part is added
+     * with its corresponding probability): {expectation, variance}.
      */
     static double[] lawBlocks(double rc, double depth) {
         double mean = 0, var = 0;
@@ -241,22 +244,22 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Радиус пробоя по FM 5-250, м: K = R³·M·C, внешний заряд без забивки; M — табл. B-3 по ступеням радиуса, группа
-     * «скала, хорошая кладка, бетонный блок» — камень настила и бетон крыши ({@link BreachModel}).
+     * breach radius according to FM 5-250, m: K = R³·M·C, external charge without tamping; M - tab. B-3 by radius steps, group
+     *  “rock, good masonry, concrete block” - flooring stone and roof concrete ({@link BreachModel}).
      */
     static double breachRadius(double tntKg) {
         return BreachModel.Material.ROCK.radius(tntKg, BreachModel.UNTAMPED);
     }
 
-    /** FM округляет радиус пробоя наружного заряда вверх до ½ фута (~0,25 м, 3-12b): допуск закона в обе стороны, м. */
+    /** FM rounds the breach radius of the external charge up to ½ foot (~0,25 m, 3-12b): legal tolerance in both directions, m. */
     static final double FM_ROUND = 0.25;
 
-    /** Объём плиты толщиной {@code t} в радиусе {@code r} от заряда на её грани, м³. */
+    /** Volume of a slab with thickness {@code t} within a radius of {@code r} from the charge on its face, m³. */
     static double slabVolume(double r, double t) {
         return r >= t ? Math.PI * (r * r * t - t * t * t / 3) : 2.0 / 3 * Math.PI * r * r * r;
     }
 
-    /** Шаг сетки ударов: соседние не задевают друг друга ни воронкой, ни волной по кладке и бетону. */
+    /** The pitch of the impact grid: adjacent ones do not touch each other either with a crater or a wave on masonry and concrete. */
     private static int spacing(WeaponType weapon) {
         double tnt = weapon.spec().charge();
         double reach = Math.max(2 * CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY) + 1,
@@ -265,17 +268,17 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Удары оружия сеткой по всей поверхности {@code s} (шаг — {@link #spacing}: у ракеты 3×3, у шахеда 5×5, у «Ланцета»
-     * и «Града» 6×6 — их воронка доля блока, поэтому сумма), замер в квадрате каждого удара: снятые блоки поверхности,
-     * отверстие (столбцы со снятым верхом), глубина; у плит — сквозные пробои.
+     * Weapon strikes with a grid over the entire surface of {@code s} (step - {@link #spacing}: for the rocket 3×3, for Shahed 5×5, for “Lancet”
+     *  and “Grad” 6×6 - their crater share of the block, therefore the sum), measurement in the square of each blow: surface blocks removed,
+     *  hole (top removed columns), depth; slabs have through holes.
      */
     private static void craterCell(GameTestHelper h, WeaponType weapon, Surface s) {
         ServerLevel level = h.getLevel();
-        // обломки на время проверки не ложатся блоками: считается только снятое
+        // during the inspection, debris does not lie in blocks: only those removed are considered
         noDebris(h);
         build(h, s, LO, HI, LO, HI, TOP);
         int step = spacing(weapon), n = (HI - LO + 1) / step, first = MID - (n - 1) * step / 2;
-        h.assertTrue(n >= 3, weapon + ": меньше трёх ударов в ряд, шаг " + step);
+        h.assertTrue(n >= 3, weapon + ": less than three hits in a row, step " + step);
         List<BlockPos> hits = new ArrayList<>();
         for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) hits.add(new BlockPos(first + step * i, TOP, first + step * k));
         for (BlockPos hit : hits) {
@@ -285,13 +288,13 @@ public final class SurfaceGameTests {
         }
         Row[] row = {null};
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).idle(), "работа ударов идёт");
+            h.assertTrue(StrikeWorld.get(level).idle(), "the work of the blows is progressing");
             if (row[0] == null) row[0] = craterRow(h, weapon, s, hits, step);
             if (row[0].checked) h.assertTrue(row[0].ok, row[0].line());
         });
     }
 
-    /** Замер ударов {@code hits} по поверхности {@code s} против закона — строка отчёта (печатается один раз). */
+    /** Measuring impacts of {@code hits} on the surface of {@code s} is against the law - report line (printed once). */
     private static Row craterRow(GameTestHelper h, WeaponType weapon, Surface s, List<BlockPos> hits, int step) {
         ServerLevel level = h.getLevel();
         int removed = 0, maxDepth = 0, holes = 0, through = 0;
@@ -316,7 +319,7 @@ public final class SurfaceGameTests {
                     BlockState cap = level.getBlockState(h.absolutePos(new BlockPos(hit.getX() + dx, TOP, hit.getZ() + dz)));
                     boolean open = cap.isAir() || cap.is(Blocks.FIRE);
                     if (open) opening++;
-                    // у плиты верх снят — дыра насквозь: под ней пустота
+                    // the top of the stove has been removed - there is a hole right through it: there is emptiness underneath
                     if (s.slab() && open) holeCols++;
                     maxDepth = Math.max(maxDepth, depth);
                 }
@@ -328,69 +331,68 @@ public final class SurfaceGameTests {
         double tnt = weapon.spec().charge(), count = hits.size();
         double dEq = 2 * Math.sqrt(area / hits.size() / Math.PI);
         String got = s.slab()
-                ? String.format(Locale.ROOT, "%d бл. плиты за %d (%s/удар), пробой %d, дыра %s м", removed, hits.size(), f(removed / count), through,
+                ? String.format(Locale.ROOT, "%d bl. slabs for %d (%s/impact), breach %d, hole %s m", removed, hits.size(), f(removed / count), through,
                 f(2 * Math.sqrt(holes / count / Math.PI)))
-                : String.format(Locale.ROOT, "%d бл. за %d (%s/удар), Ø %s м, глуб. %d", removed, hits.size(), f(removed / count), f(dEq), maxDepth);
+                : String.format(Locale.ROOT, "%d bl. for %d (%s/impact), Ø %s m, depth. %d", removed, hits.size(), f(removed / count), f(dEq), maxDepth);
         String should;
         boolean ok;
         if (s.slab()) {
-            // FM 5-250: снесено всё в радиусе пробоя, пробой — радиус больше толщины (1 м); плита над пустотой ещё и
-            // панель — дальше пробоя её ломает волна не дальше, чем кладку (12 psi, Джаррет): верхняя граница
-            // радиус по ступеням табл. B-3 ± округление FM; не пробита — сносить по FM нечего (только воронка сверху)
+            // FM 5-250: everything within the radius of the breach is demolished, the breach is a radius greater than the thickness (1 m); the slab above the void is also a
+//  panel - beyond the breach, the wave breaks it no further than the masonry (12 psi, Jarrett): upper limit
+//  radius along the steps of the table. B-3 ± rounding FM; not broken - there is nothing to demolish along FM (only the crater on top)
             double r = breachRadius(tnt), rLo = Math.max(0, r - FM_ROUND), rHi = r + FM_ROUND;
             double rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
             boolean breach = rLo > 1, none = rHi < 1;
             double vLo = breach ? count * slabVolume(rLo, 1) : 0, vHi = count * slabVolume(rHi, 1);
-            // край дыры — целыми блоками: ±2√V блоков на шум края
+            // edge of the hole - in whole blocks: ±2√V blocks for edge noise
             int lo = (int) Math.max(0, Math.floor(0.6 * vLo - 2 * Math.sqrt(vLo))), hi = (int) Math.ceil(1.45 * vHi + 2 * Math.sqrt(vHi));
-            should = String.format(Locale.ROOT, "%d–%d бл., пробой %s (FM R %s–%s м, кладка %s м)", lo, hi,
-                    breach ? "у всех" : none ? "нет" : "любой", f(rLo), f(rHi), f(rPanel));
+            should = String.format(Locale.ROOT, "%d–%d block, breach %s (FM R %s–%s m, masonry %s m)", lo, hi,
+                    breach ? "everyone" : none ? "no" : "any", f(rLo), f(rHi), f(rPanel));
             ok = removed >= lo && removed <= hi && (!breach || through == hits.size()) && (!none || through == 0);
         } else {
-            // воронка в своей среде; бетон дороги — среда не мягче скалы и не больше воронки в грунте
+            // crater in its environment; concrete roads - the environment is no softer than rock and no more than a crater in the ground
             CraterModel.Soil soil = s == Surface.PAVED ? CraterModel.Soil.ROCK : s.soil();
             double rc = CraterModel.chargeRadius(tnt, soil), depth = CraterModel.chargeDepth(tnt, soil);
             double[] one = lawBlocks(rc, depth);
-            // данные — 0,6–1,45 объёма закона; целые блоки — ещё 2σ случайной добавки
+            // data - 0,6–1,45 of the scope of the law; whole blocks - another 2σ random addition
             double mean = count * one[0], sigma = Math.sqrt(count * one[1]);
             double upper = s == Surface.PAVED ? count * lawBlocks(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY),
                     CraterModel.chargeDepth(tnt, CraterModel.Soil.DRY))[0] : mean;
             int lo = (int) Math.max(0, Math.floor(0.6 * mean - 2 * sigma)), hi = (int) Math.ceil(1.45 * upper + 2 * sigma);
             int deepest = Mth.ceil(1.3 * depth);
-            should = String.format(Locale.ROOT, "%d–%d бл. (закон %s), Ø %s м, глуб. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
+            should = String.format(Locale.ROOT, "%d–%d bl. (law %s), Ø %s m, depth. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
             ok = removed + damaged >= lo && removed + damaged <= hi && maxDepth <= Math.max(1, deepest);
-            got += ", повреждено долями " + f(damaged) + " м³";
+            got += ", damaged by lobes " + f(damaged) + " m³";
         }
         Row row = new Row(weapon.name(), s.title, should, got, true, ok, "");
         report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
         return row;
     }
 
-    // ---------------------------------------------------------------- рядом: стены и стёкла
-
-    /** Кладка, доски, стекло. */
+    // ---------------------------------------------------------------- next: walls and glass
+    /** Masonry, boards, glass. */
     private static final double BRICK_PSI = 12, WOOD_PSI = 4;
-    /** Доли радиуса своего порога у стёкол: ближние выбиты, дальние целы (край модели 0,9–1,11). */
+    /** Fractions of the radius of the threshold of the glass: the near ones are knocked out, the distant ones are intact (edge of the model 0,9–1,11). */
     private static final double[] GLASS_AT = {0.7, 0.8, 1.25, 1.4};
 
     /**
-     * Удар по дёрну площадки: столбики кладки и досок на своих лучах (как {@code BlastGameTests.radiusTest}) и стёкла над
-     * площадкой на долях радиуса своего порога (стекло — по давлению Кинни–Грэхема, без импульса; вверх — вне пояса
-     * осколков у оси удара сверху). Всё ближе 0,8 своего радиуса — сломано, дальше 1,25 — цело.
+     * Impact on the turf of the site: columns of masonry and boards on their beams (like {@code BlastGameTests.radiusTest}) and glass above the
+     *  platform at fractions of the radius of its threshold (glass - according to Kinney-Graham pressure, without impulse; upward - outside the belt of
+     *  fragments at the axis of the impact from above). Any closer 0,8 to its radius is broken, further 1,25 is intact.
      */
     private static void nearby(GameTestHelper h, WeaponType weapon) {
         ServerLevel level = h.getLevel();
         double tnt = weapon.spec().charge();
         BlockPos c = h.absolutePos(new BlockPos(MID, TOP + 1, MID));
         Vec3 at = Vec3.atBottomCenterOf(c);
-        // кладка — к −z, доски — к +z: каждому материалу своя половина азимутов, и доски у шахеда стоят и на малых долях
+        // masonry - to −z, boards - to +z: each material has its own half of the azimuths, and Shahed’s boards stand in small fractions
         List<BlastGameTests.Post> bricks = BlastGameTests.layPosts(c, at, BRICK_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt),
                 List.of(), b -> b < 0);
         List<BlastGameTests.Post> planks = BlastGameTests.layPosts(c, at, WOOD_PSI, tnt, BlastDamage.breakRange(BlastModel.kpa(WOOD_PSI), tnt),
                 bricks, b -> b > 0);
         for (BlastGameTests.Post p : bricks) level.setBlock(p.pos(), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         for (BlastGameTests.Post p : planks) level.setBlock(p.pos(), Blocks.OAK_PLANKS.defaultBlockState(), Block.UPDATE_CLIENTS);
-        // стёкла: по одному в воздухе над площадкой, место — ближайшее к доле своего радиуса
+        // glasses: one at a time in the air above the site, the place is closest to a fraction of its radius
         List<double[]> glass = new ArrayList<>();
         List<BlockPos> panes = new ArrayList<>();
         int i = 0;
@@ -410,24 +412,24 @@ public final class SurfaceGameTests {
             level.setBlock(best, Blocks.GLASS.defaultBlockState(), Block.UPDATE_CLIENTS);
             panes.add(best);
             BlockPos pane = best;
-            // стёкла выше стены площадки — прочь после проверки, как башня бомбы
+            // glass above the wall of the site - away after inspection, like a bomb tower
             StrikeGameTests.afterTest(h, () -> level.setBlock(pane, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS));
             glass.add(new double[]{bestShare});
         }
         Warheads.detonate(level, weapon, at, striker(level, weapon), null);
         List<Row> rows = new ArrayList<>();
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(level).idle(), "работа удара идёт");
+            h.assertTrue(StrikeWorld.get(level).idle(), "the impact is in progress");
             if (rows.isEmpty()) nearbyRows(level, weapon, tnt, bricks, planks, panes, glass, rows);
             for (Row row : rows) h.assertTrue(row.ok, row.line());
         });
     }
 
-    /** Строки «рядом»: столбики кладки и досок, стёкла (печатаются один раз). */
+    /** Rows “nearby”: columns of masonry and boards, glass (printed once). */
     private static void nearbyRows(ServerLevel level, WeaponType weapon, double tnt, List<BlastGameTests.Post> bricks,
                                    List<BlastGameTests.Post> planks, List<BlockPos> panes, List<double[]> glass, List<Row> rows) {
-        rows.add(posts(level, weapon, "стены: каменный кирпич 12 psi", bricks, Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, tnt, BRICK_PSI));
-        rows.add(posts(level, weapon, "стены: доски 4 psi", planks, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, tnt, WOOD_PSI));
+        rows.add(posts(level, weapon, "walls: stone brick 12 psi", bricks, Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, tnt, BRICK_PSI));
+        rows.add(posts(level, weapon, "walls: boards 4 psi", planks, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, tnt, WOOD_PSI));
         StringBuilder got = new StringBuilder();
         boolean ok = true;
         for (int k = 0; k < panes.size(); k++) {
@@ -437,32 +439,31 @@ public final class SurfaceGameTests {
             if (sh <= 0.8 && !gone || sh >= 1.25 && gone) ok = false;
         }
         double r = BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI), tnt);
-        rows.add(new Row(weapon.name(), "стёкла 0,8 psi (R " + f(r) + " м)", "≤0,8 R выбиты, ≥1,25 R целы", "доли R:" + got, true, ok, ""));
+        rows.add(new Row(weapon.name(), "glass 0,8 psi (R " + f(r) + " m)", "≤0,8 R knocked out, ≥1,25 R intact", "shares R:" + got, true, ok, ""));
         report("surface_" + weapon.name().toLowerCase(Locale.ROOT) + "_nearby", rows);
     }
 
-    /** Строка столбиков одного материала: доли радиуса Джаррета своего порога, сломан (x) или цел (|). */
+    /** A row of columns of one material: fractions of the Jarrett radius of its threshold, broken (x) or intact (|). */
     private static Row posts(ServerLevel level, WeaponType weapon, String what, List<BlastGameTests.Post> posts, Block material, Block cracked,
                              double tnt, double psi) {
         StringBuilder got = new StringBuilder();
         boolean ok = true;
         for (BlastGameTests.Post p : posts) {
             BlockState now = level.getBlockState(p.pos());
-            // выбоина осколка (треснувшая кладка) — стоит
+            // splinter pothole (cracked masonry) - worth
             boolean gone = !now.is(material) && !now.is(cracked);
             got.append(String.format(Locale.ROOT, " %.2f%s", p.share(), gone ? "x" : "|"));
             if (p.share() <= 0.8 && !gone || p.share() >= 1.25 && gone) ok = false;
         }
-        String title = what + " (R " + f(BlastDamage.breakRange(BlastModel.kpa(psi), tnt)) + " м)";
-        return new Row(weapon.name(), title, "≤0,8 R сломаны, ≥1,25 R целы", "доли R:" + got, true, ok, "");
+        String title = what + " (R " + f(BlastDamage.breakRange(BlastModel.kpa(psi), tnt)) + " m)";
+        return new Row(weapon.name(), title, "≤0,8 R broken, ≥1,25 R intact", "shares R:" + got, true, ok, "");
     }
 
-    // ---------------------------------------------------------------- бомба B-2
-
-    /** Цель бомбы на полосе (как у {@code bunkerBusterDrillsAndDetonatesUnderground}) и квадрат её поверхности. */
+    // ---------------------------------------------------------------- bomb B-2
+    /** The target of the bomb is on the strip (like {@code bunkerBusterDrillsAndDetonatesUnderground}) and the square of its surface. */
     private static final int BOMB_X = 16, BOMB_Z = 200, BOMB_HALF = 15;
 
-    /** Верх поверхности под бомбой: толща глубже её пути по Янгу и зоны дробления. */
+    /** The top of the surface under the bomb: the thickness is deeper than its path along Young and the crushing zone. */
     private static int bombTop(Surface s) {
         return switch (s) {
             case SOIL, PAVED -> 72;
@@ -473,7 +474,7 @@ public final class SurfaceGameTests {
         };
     }
 
-    /** Среда пути по Янгу (карта данных {@code incoming:penetration}) для слоя поверхности на глубине {@code depth}. */
+    /** Young path environment (data map {@code incoming:penetration}) for the surface layer at depth {@code depth}. */
     private static Penetration.Kind kind(BlockState s) {
         if (s.is(Blocks.STONE)) return Penetration.Kind.ROCK;
         if (s.is(Blocks.BLACK_CONCRETE) || s.is(Blocks.GRAY_CONCRETE) || s.is(Blocks.STONE_BRICKS)) return Penetration.Kind.CONCRETE;
@@ -489,9 +490,9 @@ public final class SurfaceGameTests {
     }
 
     /**
-     * Бомба B-2 по поверхности: настоящая сущность со сброса B-2. Путь в грунте от входа до подрыва — по Янгу для слоёв
-     * поверхности (по скорости и углу удара самой бомбы); воронка выброса — по приведённой глубине подрыва; у плит —
-     * бомба прошла насквозь (подрыв глубже плиты), датчик пустоты не взвёлся (до него — 4 м твёрдого).
+     * Bomb B-2 on the surface: the real entity from the release B-2. The path in the ground from the entrance to the explosion is according to Young for layers
+     *  of the surface (according to the speed and angle of impact of the bomb itself); ejection crater - according to the scaled depth of the explosion; for slabs -
+     *  the bomb went through (the explosion was deeper than the slab), the void sensor did not arm (before it - 4 m of solid).
      */
     private static void bomb(GameTestHelper h, Surface s) {
         ServerLevel level = h.getLevel();
@@ -499,7 +500,7 @@ public final class SurfaceGameTests {
         noDebris(h);
         int lo = BOMB_X - BOMB_HALF, hi = BOMB_X + BOMB_HALF, loZ = BOMB_Z - BOMB_HALF, hiZ = BOMB_Z + BOMB_HALF;
         StrikeGameTests.afterTest(h, () -> {
-            // башня выше стены площадки — прочь: соседние партии летают над миром теста
+            // the tower is higher than the wall of the site - away: neighboring batches fly over the world of dough
             for (BlockPos p : BlockPos.betweenClosed(new BlockPos(lo - 4, 9, loZ - 4), new BlockPos(hi + 4, top + 12, hiZ + 4))) {
                 BlockPos a = h.absolutePos(p);
                 if (!level.getBlockState(a).isAir()) level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
@@ -545,24 +546,24 @@ public final class SurfaceGameTests {
         Row[] row = {null};
         int[] settled = {0};
         h.succeedWhen(() -> {
-            h.assertTrue(entry[0] != null, "бомба не вошла в грунт");
-            h.assertTrue(bomb.isRemoved() && charge[0] != null, "бомба не взорвалась");
+            h.assertTrue(entry[0] != null, "the bomb did not penetrate the ground");
+            h.assertTrue(bomb.isRemoved() && charge[0] != null, "the bomb didn't explode");
             boolean idle = StrikeWorld.get(level).idle() && level.getEntitiesOfClass(net.minecraft.world.entity.item.FallingBlockEntity.class,
                     new net.minecraft.world.phys.AABB(surface, surface).inflate(BOMB_HALF, top + 20, BOMB_HALF)).isEmpty();
             settled[0] = idle ? settled[0] + 1 : 0;
             // A timeline schedules chimney collapse after an empty-queue gap. Then allow two vanilla falling-block
             // update delays (2 ticks each), so a scheduled sand/gravel fall cannot hide between measurements.
-            h.assertTrue(settled[0] >= 4, "подрыв или осыпание ещё идут");
+            h.assertTrue(settled[0] >= 4, "detonation or collapse is still ongoing");
             if (row[0] == null) row[0] = bombRow(level, s, top, last[1], speed[0], entry[0], charge[0], fallen);
             h.assertTrue(row[0].ok, row[0].line());
         });
     }
 
-    /** Строка бомбы: путь против Янга, воронка против приведённой глубины (печатается один раз). */
+    /** Bomb line: path vs Young, crater vs scaled depth (printed once). */
     private static Row bombRow(ServerLevel level, Surface s, int top, Vec3 step, double v, Vec3 entry, Vec3 charge, Set<BlockPos> fallen) {
         Vec3 dir = step.normalize();
         double sin = Math.max(0.05, -dir.y);
-        // путь по Янгу через слои поверхности по оси бомбы
+        // young's path through surface layers along the bomb axis
         Penetration.Run run = new Penetration.Run(BunkerBusterEntity.body(), v);
         double young = 0;
         for (int d = 0; d <= top - BASE && !run.stopped(); d++) {
@@ -577,7 +578,7 @@ public final class SurfaceGameTests {
         double path = charge.distanceTo(entry);
         boolean rocky = s == Surface.ROCK;
         double lo2 = rocky ? 0.5 : 0.8, hi2 = rocky ? 2 : 1.2;
-        // воронка выброса по глубине подрыва под верхом
+        // ejection crater along the depth of the explosion under the top
         double depth = entry.y - charge.y;
         BuriedBlast law = new BuriedBlast(WeaponType.BUNKER.spec().warheadTnt(), depth);
         CraterModel.Soil soil = s == Surface.ROCK ? CraterModel.Soil.ROCK : CraterModel.Soil.DRY;
@@ -588,7 +589,7 @@ public final class SurfaceGameTests {
             for (int dz = -BOMB_HALF + 1; dz < BOMB_HALF; dz++) {
                 boolean col = false;
                 for (int dy = 0; dy < 3; dy++) {
-                    // вход — верх блока поверхности: сам блок — под ним
+                    // entrance - top of the surface block: the block itself - below it
                     BlockPos a = new BlockPos(ent.getX() + dx, ent.getY() - 1 - dy, ent.getZ() + dz);
                     if (s.layer(dy).isAir()) continue;
                     BlockState now = level.getBlockState(a);
@@ -604,26 +605,26 @@ public final class SurfaceGameTests {
                 if (col) columns++;
             }
         }
-        // воронка выброса — по радиусу отверстия: закон BuriedBlast — оценка формы (сказано в нём), допуск ±50 %; камуфлет —
-        // наверху только ход бомбы (Ø 0,8 м, блок по оси): в верхних трёх слоях — не больше трёх столбцов
+        // ejection crater - along the radius of the hole: law BuriedBlast - shape assessment (as stated in it), tolerance ±50 %; camouflage -
+        // at the top only the bomb path (Ø 0,8 m, block along the axis): in the top three layers - no more than three columns
         double lawR = law.breaches() ? law.craterRadius(soil) : 0, gotR = Math.sqrt(columns / Math.PI);
         boolean pathOk = path >= lo2 * young && path <= hi2 * young;
         boolean craterOk = law.breaches() ? gotR >= 0.5 * lawR && gotR <= 1.5 * lawR
                 : removedTop >= 1 && columns <= 3 && (!loose || fallenTop > 0);
         boolean throughSlab = !s.slab() || depth > 1 + (s == Surface.DECK ? VOID : ROOM);
-        String should = String.format(Locale.ROOT, "путь %s м (Янг, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
-                f(law.scaledDepth()), law.breaches() ? "воронка R " + f(lawR) + " м (" + f(0.5 * lawR) + "–" + f(1.5 * lawR) + ")"
-                        : "камуфлет, наверху только ход (без осыпания)")
-                + (s.slab() ? ", подрыв под плитой" : "");
-        String got = String.format(Locale.ROOT, "удар %s м/с под %s°, путь %s м, глубина %s м, наверху %d бл. в %d столбцах (R %s м)",
+        String should = String.format(Locale.ROOT, "path %s m (Young, %s–%s), λ %s: %s", f(young), f(lo2 * young), f(hi2 * young),
+                f(law.scaledDepth()), law.breaches() ? "crater R " + f(lawR) + " m (" + f(0.5 * lawR) + "–" + f(1.5 * lawR) + ")"
+                        : "camouflage, only movement at the top (no shedding)")
+                + (s.slab() ? ", explosion under the slab" : "");
+        String got = String.format(Locale.ROOT, "impact %s m/s under %s°, path %s m, depth %s m, at the top %d bl. in %d columns (R %s m)",
                 f(v), f(Math.toDegrees(Math.asin(sin))), f(path), f(depth), removedTop, columns, f(gotR))
-                + (loose && !law.breaches() ? ", осыпалось " + fallenTop + " бл." : "");
+                + (loose && !law.breaches() ? ", crumbled " + fallenTop + " blocks" : "");
         Row row = new Row("BOMB", s.title, should, got, true, pathOk && craterOk && throughSlab, "");
         report("surface_bomb", List.of(row));
         return row;
     }
 
-    // ---------------------------------------------------------------- проверки
+    // ---------------------------------------------------------------- checks
 
     @GameTest(template = "range", timeoutTicks = 400, batch = "surface_drone", skyAccess = true)
     public static void droneOnSoil(GameTestHelper h) {

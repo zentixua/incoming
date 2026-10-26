@@ -13,12 +13,12 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 /**
- * Кинокамера трейлера: камера — отдельная сущность, которой нет в мире (игрок при этом виден как актёр или спрятан),
- * её место и взгляд каждый кадр берутся из {@link Path} по времени плана с долей тика — движение плавное при любой
- * скорости игры. Крен и фокусное расстояние — через события камеры.
+ * Trailer movie camera: the camera is a separate entity that does not exist in the world (the player is visible as an actor or hidden),
+ *  its place and view of each frame are taken from {@link Path} according to the time of the shot with a tick share - the movement is smooth at any
+ *  game speed. Roll and focal length - through camera events.
  */
 final class CineCamera {
-    /** Положение камеры: место, курс и тангаж (как у Minecraft), крен, поле зрения по вертикали. */
+    /** Camera position: location, heading and pitch (like Minecraft), roll, vertical field of view. */
     record Pose(Vec3 pos, float yaw, float pitch, float roll, double fov) {
         static Pose look(Vec3 from, Vec3 at, float roll, double fov) {
             Vec3 d = at.subtract(from);
@@ -29,7 +29,7 @@ final class CineCamera {
         }
     }
 
-    /** Движение камеры за план: {@code t} — тики от начала плана (с долей). */
+    /** Camera movement per shot: {@code t} - tick from the beginning of the shot (with a fraction). */
     interface Path {
         Pose at(double t);
     }
@@ -39,7 +39,7 @@ final class CineCamera {
     @Nullable
     private static Path path;
     private static Pose pose;
-    /** Угол кадра для вида игрока (NaN — как в настройках). */
+    /** Frame angle for the player's view (NaN - as in the settings). */
     static double viewFov = Double.NaN;
 
     private CineCamera() {}
@@ -68,7 +68,7 @@ final class CineCamera {
         return path == null ? null : pose;
     }
 
-    /** Поставить камеру в момент {@code t}: старое положение = новому, так что интерполяция игры не мешает. */
+    /** Place the camera at the moment {@code t}: old position = new, so the interpolation of the game does not interfere. */
     static void apply(double t) {
         if (path == null || eye == null) return;
         pose = path.at(t);
@@ -90,29 +90,29 @@ final class CineCamera {
         if (path != null && pose != null) {
             e.setFOV(pose.fov());
         } else if (!Double.isNaN(viewFov) && e.usedConfiguredFov()) {
-            // вид игрока: угол плана поверх настроек, приближение бинокля (модификатор) сохраняется
+            // player view: shot angle on top of settings, binocular zoom (modifier) preserved
             e.setFOV(e.getFOV() * viewFov / Minecraft.getInstance().options.fov().get());
         }
     }
 
-    // ---------------------------------------------------------------- готовые движения
+    // ---------------------------------------------------------------- ready-made movements
 
     static double smooth(double x) {
         x = Mth.clamp(x, 0, 1);
         return x * x * (3 - 2 * x);
     }
 
-    /** Проезд от {@code a} к {@code b} за {@code ticks} с плавным разгоном и торможением, взгляд — на {@code at}. */
+    /** Travel from {@code a} to {@code b} for {@code ticks} with smooth acceleration and braking, look at {@code at}. */
     static Path dolly(Vec3 a, Vec3 b, double ticks, Supplier<Vec3> at, double fov) {
         return t -> Pose.look(a.lerp(b, smooth(t / ticks)), at.get(), 0, fov);
     }
 
-    /** Проезд с постоянной скоростью (для длинных пролётов, где разгон заметен). */
+    /** Travel at a constant speed (for long spans where acceleration is noticeable). */
     static Path glide(Vec3 a, Vec3 b, double ticks, Supplier<Vec3> at, double fov) {
         return t -> Pose.look(a.lerp(b, Mth.clamp(t / ticks, 0, 1)), at.get(), 0, fov);
     }
 
-    /** Облёт точки: радиус, высота над ней, начальный угол (градусы, 0 — к +Z) и скорость (градусы за тик). */
+    /** Flying around a point: radius, height above it, initial angle (degrees, 0 - to +Z) and speed (degrees per tick). */
     static Path orbit(Supplier<Vec3> center, double radius, double height, double startDeg, double degPerTick, double fov) {
         return t -> {
             Vec3 c = center.get();
@@ -123,16 +123,16 @@ final class CineCamera {
     }
 
     /**
-     * Погоня: камера позади сущности по её курсу ({@code back}), выше ({@code up}) и сбоку ({@code side}), взгляд —
-     * чуть впереди неё. Положение сущности — с долей тика, как её рисует игра.
+     * Chase: camera behind the entity along its course ({@code back}), above ({@code up}) and to the side ({@code side}), looking at
+     *  slightly ahead of it. The position of the entity is with a tick, as the game draws it.
      */
     static Path chase(Supplier<Entity> target, double back, double up, double side, double lead, float roll, double fov) {
         return chase(target, Vec3.ZERO, new Vec3(0, 0, 1), back, up, side, lead, roll, fov);
     }
 
     /**
-     * То же, но пока цели нет, камера стоит у {@code start} (курс {@code heading}): за камерой ходит невидимка,
-     * и без этого он уходил бы к нулю мира — чанки у цели выгружались бы, и снаряд не вернулся бы в мир.
+     * The same, but there is no target yet, the camera is at {@code start} (course {@code heading}): an invisible person walks behind the camera,
+     * , and without this he would go to the zero of the world - the chunks at the target would be unloaded, and the projectile would not return to the world.
      */
     static Path chase(Supplier<Entity> target, Vec3 start, Vec3 heading, double back, double up, double side, double lead,
                       float roll, double fov) {
@@ -155,17 +155,17 @@ final class CineCamera {
         };
     }
 
-    /** Неподвижная камера, следящая за точкой (например, за снарядом). */
+    /** A fixed camera that tracks a point (for example, a projectile). */
     static Path track(Vec3 from, Supplier<Vec3> at, double fov) {
         return t -> Pose.look(from, at.get(), 0, fov);
     }
 
-    /** То же с переменным полем зрения (например, «зум» за далёким снарядом). */
+    /** The same with a variable field of view (for example, “zoom” behind a distant projectile). */
     static Path track(Vec3 from, Supplier<Vec3> at, DoubleSupplier fov) {
         return t -> Pose.look(from, at.get(), 0, fov.getAsDouble());
     }
 
-    /** Взгляд плавно переходит с одной точки на другую за {@code ticks}, камера едет от {@code a} к {@code b}. */
+    /** The view smoothly moves from one point to another behind {@code ticks}, the camera moves from {@code a} to {@code b}. */
     static Path pan(Vec3 a, Vec3 b, Supplier<Vec3> lookA, Supplier<Vec3> lookB, double ticks, double fov) {
         return t -> {
             double s = smooth(t / ticks);
@@ -173,7 +173,7 @@ final class CineCamera {
         };
     }
 
-    /** Та же траектория с медленным «зумом» (поле зрения от {@code fovA} к {@code fovB}). */
+    /** The same trajectory with a slow “zoom” (field of view from {@code fovA} to {@code fovB}). */
     static Path zoom(Path p, double fovA, double fovB, double ticks) {
         return t -> {
             Pose q = p.at(t);

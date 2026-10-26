@@ -54,8 +54,8 @@ class FrontDustTest {
     }
 
     /**
-     * Клуб у бегущего края, ещё сжатый фронтом, — не непрозрачная точка: толща одного клуба не больше EDGE_TAU, запас
-     * площадки он отдаёт по мере роста и весь — когда вырос; середина клуба — не ниже земли и не выше своего σ над ней.
+     * The billows at the running edge, still compressed by the front, is not an opaque point: the thickness of one billows is no more than EDGE_TAU, it gives up the reserve of the
+     *  platform as it grows, and all of it when it grows; the middle of the billows is not lower than the earth and not higher than its σ above it.
      */
     @Test
     void edgePuffsAreBoundedAndGrowFromTheGround() {
@@ -69,18 +69,18 @@ class FrontDustTest {
                 Blob b = emit(p, age, front.radiusAt(arrival + age));
                 if (b.dust <= 0) continue;
                 double tau = k * b.dust / (2 * Math.PI * b.h * b.v), most = Math.max(FrontDust.EDGE_TAU, FrontDust.fullTau(p.area(), p.contrast(), p.sigma()));
-                assertTrue(tau <= most + 1e-9, r + " м, " + age + " с: толща клуба " + tau);
-                assertTrue(b.y - 64 >= 0 && b.y - 64 <= b.v + 1e-12, "клуб стоит на земле");
+                assertTrue(tau <= most + 1e-9, r + " m, " + age + " s: billow depth " + tau);
+                assertTrue(b.y - 64 >= 0 && b.y - 64 <= b.v + 1e-12, "billows stands on the ground");
                 full = Math.max(full, k * b.dust / (FrontDust.COLUMN_TAU * p.area() * p.contrast() * FrontDust.envelope(age, phase)));
             }
-            assertEquals(1, full, 1e-9, r + " м: выросший клуб несёт весь запас площадки");
+            assertEquals(1, full, 1e-9, r + " m: grown billows carries the entire stock of the site");
         }
     }
 
     /**
-     * Цена кадра: площадок не больше {@code PATCHES} (с округлением по кольцам) у любого заряда, шаг поперёк кольца не
-     * мельче шага вдоль; площадка, чей клуб уже прозрачнее того, что рисуется, отдаёт пустой клуб, и источник кончается
-     * вместе с последней — а не через 20 с оседания до 10⁻⁵.
+     * Frame price: areas no larger than {@code PATCHES} (rounded by rings) for any charge, the step across the ring is not
+     *  smaller than the step along; the site, whose billows are already more transparent than what is being drawn, returns an empty billows, and the source ends
+     *  together with the latter - and not through 20 s settling to 10⁻⁵.
      */
     @Test
     void patchesAreFewAndStopWhenInvisible() {
@@ -91,8 +91,8 @@ class FrontDustTest {
             int rings = FrontDust.rings(inner, outer), count = 0;
             double dr = (outer - inner) / rings;
             for (int j = 0; j < rings; j++) count += FrontDust.spokes(inner + dr * (j + 0.5), arc);
-            assertTrue(count <= FrontDust.PATCHES, kg + " кг: " + count + " площадок");
-            assertTrue(dr <= arc + 1e-9 && arc >= FrontDust.STEP, kg + " кг: шаг поперёк " + dr + ", вдоль " + arc);
+            assertTrue(count <= FrontDust.PATCHES, kg + " kg: " + count + " sites");
+            assertTrue(dr <= arc + 1e-9 && arc >= FrontDust.STEP, kg + " kg: step across " + dr + ", along " + arc);
         }
         ChemicalFront front = ChemicalFront.cached(50, true);
         double r = 30, arrival = front.arrivalSeconds(r), phase = BlastModel.chemicalPhaseSeconds(r, 50, true);
@@ -100,15 +100,15 @@ class FrontDustTest {
         double k = SmokeGrid.dustK(FrontDust.ALBEDO_R, FrontDust.ALBEDO_G, FrontDust.ALBEDO_B);
         Blob before = emit(p, p.until() - arrival - 1e-3, 1e3), after = emit(p, p.until() - arrival + 1e-3, 1e3);
         double tau = k * before.dust / (2 * Math.PI * before.h * before.v);
-        assertTrue(tau > 0.5 * FrontDust.FAINTEST && tau <= FrontDust.FAINTEST * 1.01, "у конца клуб уже не рисуется: " + tau);
-        assertEquals(0, after.dust, "после — пустой клуб");
-        assertTrue(p.until() < arrival + 10, "площадка видна " + (p.until() - arrival) + " с");
+        assertTrue(tau > 0.5 * FrontDust.FAINTEST && tau <= FrontDust.FAINTEST * 1.01, "billows is no longer drawn at the end: " + tau);
+        assertEquals(0, after.dust, "after - empty billows");
+        assertTrue(p.until() < arrival + 10, "the platform is visible " + (p.until() - arrival) + " s");
     }
 
     /**
-     * Общий предел: после каждого взрыва залпа или серии видимых площадок у всех не больше {@code ALL_PATCHES}; прореживание
-     * не теряет и не создаёт массы (Σ площадь × контраст у каждого взрыва та же) и не открывает кольцо: каждая точка
-     * кольца срыва — в пределах 2σ от середины рисуемого клуба. Пока есть кого прореживать, пыль есть у каждого.
+     * General limit: after each explosion of a salvo or series of visible areas, everyone has no more than {@code ALL_PATCHES}; thinning
+     *  does not lose or create mass (Σ area × contrast is the same for each explosion) and does not open the ring: each point
+     *  of the disruption ring is within 2σ from the middle of the drawn billows. As long as there is someone to thin out, everyone has dust.
      */
     @Test
     void sharedLimitHoldsWithoutLosingTheRings() {
@@ -135,10 +135,10 @@ class FrontDustTest {
                 FrontDust.share(live, d, now, eye);
                 int total = 0;
                 for (FrontDust x : live) total += x.visible(now);
-                assertTrue(total <= FrontDust.ALL_PATCHES, kg + " кг × " + (k + 1) + ": видимых площадок " + total);
+                assertTrue(total <= FrontDust.ALL_PATCHES, kg + " kg × " + (k + 1) + ": visible areas " + total);
                 for (FrontDust x : live) {
-                    if (every == 0) assertTrue(x.visible(now) > 0, kg + " кг × " + (k + 1) + ": у взрыва нет пыли");
-                    assertEquals(mass.get(x), mass(x.shown()), 1e-9 * mass.get(x), "прореживание сохраняет массу");
+                    if (every == 0) assertTrue(x.visible(now) > 0, kg + " kg × " + (k + 1) + ": explosion has no dust");
+                    assertEquals(mass.get(x), mass(x.shown()), 1e-9 * mass.get(x), "thinning preserves mass");
                 }
             }
             for (FrontDust x : live) {
@@ -148,7 +148,7 @@ class FrontDustTest {
                     for (double a = 0; a < 2 * Math.PI; a += Math.PI / 36) {
                         double px = c.x + r * Math.cos(a), pz = c.z + r * Math.sin(a), best = Double.MAX_VALUE;
                         for (FrontDust.Patch p : shown) if (p != null) best = Math.min(best, Math.hypot(p.x() - px, p.z() - pz) / p.sigma());
-                        assertTrue(best <= 2, kg + " кг: место кольца в " + best + " σ от ближайшего клуба");
+                        assertTrue(best <= 2, kg + " kg: ring place in " + best + " σ from the nearest billows");
                     }
                 }
             }

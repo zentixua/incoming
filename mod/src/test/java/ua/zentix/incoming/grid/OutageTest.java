@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OutageTest {
-    /** Подстанция в 0 0, район 512 блоков, каскад 3 блока за тик, свет через 1000 тиков за 200. */
+    /** Substation in 0 0, area 512 blocks, cascade 3 block per tick, light through 1000 tick per 200. */
     private static final Outage O = new Outage(1, 0, 0, 512, 100, 3, 1100, 200, 7);
 
     @Test
@@ -19,8 +19,8 @@ class OutageTest {
                 if (!O.covers(d)) continue;
                 double r = Math.hypot(Districts.seedX(d), Districts.seedZ(d));
                 long at = O.darkAt(d);
-                // ±25 % от прихода каскада
-                assertTrue(at >= 100 + Math.floor(r / 3 * 0.75) && at <= 100 + Math.ceil(r / 3 * 1.25), "квартал в " + r + ": " + at);
+                // ±25 % of cascade arrival
+                assertTrue(at >= 100 + Math.floor(r / 3 * 0.75) && at <= 100 + Math.ceil(r / 3 * 1.25), "quarter in " + r + ": " + at);
                 assertTrue(at <= O.lastDark());
                 assertFalse(O.dark(d, at - 1));
                 assertTrue(O.dark(d, at) || O.lightAt(d) <= at);
@@ -57,7 +57,7 @@ class OutageTest {
         assertFalse(o.over(Long.MAX_VALUE - 1));
     }
 
-    /** Возврат по команде раньше, чем каскад дошёл: квартал так и не гаснет. */
+    /** Return on command before the cascade has reached: the block never goes out. */
     @Test
     void earlyRestoreSkipsDistrictsNotYetDark() {
         Outage o = new Outage(3, 0, 0, 512, 0, 0.5, Outage.NEVER, 0, -1).restoring(10, 0);

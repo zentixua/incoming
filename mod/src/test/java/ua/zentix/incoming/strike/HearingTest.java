@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Докуда слышно каждое оружие — выводится из его паспорта звука и пути до уха, а не задаётся. Скорости и высоты —
- * нынешнего полёта (паспорт {@link WeaponSpec.Airframe}), слушатель на земле под эшелоном.
+ * How far each weapon can be heard is derived from its sound spec and the path to the ear, and is not specified. Speeds and altitudes—
+ *  of the current flight (spec {@link WeaponSpec.Airframe}), listener on the ground below flight level.
  */
 class HearingTest {
     private static final Propagation.Weather NIGHT = Propagation.Weather.NIGHT, NOON = Propagation.Weather.NOON;
@@ -19,7 +19,7 @@ class HearingTest {
         return Hearing.range(a.noise(), ph, age(ph), speed, false, height, w);
     }
 
-    /** Возраст фазы для замера: на разгоне — тик полки тяги (ускоритель шахеда догорает к 38-му), иначе — давно идёт. */
+    /** Phase age for measurement: during acceleration - tick of the thrust plateau (the Shahed accelerator burns out by 38), otherwise - it’s been going on for a long time. */
     private static int age(FlightPhase ph) {
         return ph == FlightPhase.BOOST ? 10 : 200;
     }
@@ -33,18 +33,18 @@ class HearingTest {
         WeaponSpec.Airframe drone = WeaponSpec.DRONE.airframe();
         double night = cruise(drone, NIGHT), day = cruise(drone, NOON);
         System.out.printf("shahed heard: night %.0f m, day %.0f m%n", night, day);
-        // в тихую погоду мотор шахеда слышно дальше 10 км (computingonline.net 2024, очевидцы): ночью — порядок этого
-        assertTrue(night > 8000 && night < 14_000, "ночью " + night);
-        assertTrue(day < night * 0.8, "днём " + day + ", ночью " + night);
-        // звук обгоняет шахед: с края слышимости ночью его слышно задолго до прихода
+        // in calm weather the Shahed engine can be heard further than 10 km (computingonline.net 2024, eyewitnesses): at night - the order of this
+        assertTrue(night > 8000 && night < 14_000, "at night " + night);
+        assertTrue(day < night * 0.8, "during the day " + day + ", at night " + night);
+        // the sound overtakes Shahed: from the edge of audibility at night it can be heard long before it arrives
         double lead = night * (1 / drone.cruiseSpeed() - 1 / (Noise.SOUND / 20)) / 20;
-        assertTrue(lead > 30, "за " + lead + " с до прихода");
+        assertTrue(lead > 30, "for " + lead + " s before arrival");
     }
 
     /**
-     * Источник, выведенный из замера, на месте самого замера звучит, как замерено: опорный сверхлёгкий (своя мощность,
-     * с глушителем, номинал оборотов) в 150 м над лугом — 70 дБА. Прежний вывод (поправка «+3 дБ у микрофона» при земле
-     * ISO 9613-2 в распространении) давал там 65 дБА, и шахед в игре был на 4,9 дБ тише своих данных (F4).
+     * The source derived from the measurement, at the site of the measurement itself, sounds as measured: reference ultra-light (its own power,
+     *  with a muffler, nominal speed) at 150 m above the meadow - 70 dBA. The previous output (correction “+3 dB at the microphone” with ground
+     * ISO 9613-2 in distribution) gave 65 dBA there, and Shahed in the game was 4,9 dB quieter than his data (F4).
      */
     @Test
     void shahedSourceReproducesItsReferenceMeasurement() {
@@ -52,29 +52,29 @@ class HearingTest {
         double lw = d.refA() - WeaponSpec.OPEN_EXHAUST - d.spectrum().aWeighting();
         double at = Propagation.level(lw, d.spectrum(), new Propagation.Path(WeaponSpec.UL_REF_M, WeaponSpec.UL_REF_M, WeaponSpec.UL_REF_MIC,
                 Propagation.MEADOW, NOON), null);
-        assertEquals(WeaponSpec.UL_REF_DBA, at, 0.05, "опорный сверхлёгкий на месте замера");
-        // шахед в игре над зрителем в 54 м (сцена пролёта шлагбаума): по классу ~92 дБА на настоящем крейсере
+        assertEquals(WeaponSpec.UL_REF_DBA, at, 0.05, "support ultra-light at the measurement site");
+        // shahed in the game above the viewer at 54 m (look gate flyover scene): according to class ~92 dBA on a real cruise
         Noise noise = WeaponSpec.DRONE.airframe().noise();
         double cruise = noise.power(Noise.Part.ENGINE, FlightPhase.CRUISE, 200, d.speed() / 20, false);
         double l54 = Propagation.level(cruise, d.spectrum(), new Propagation.Path(54, 52, Propagation.EAR, Propagation.MEADOW, NOON), null);
         assertEquals(70 + WeaponSpec.OPEN_EXHAUST + 10 * Math.log10(WeaponSpec.DRONE_PISTON.power() / WeaponSpec.UL_REF_W) + 20 * Math.log10(150.0 / 54), l54, 1.5,
-                "в 54 м — по классу с разлётом от 150 м");
+                "in 54 m - according to class with spread from 150 m");
     }
 
     @Test
     void lancetIsGoneBeyondAFewHundredMetres() {
         WeaponSpec.Airframe loiter = WeaponSpec.LOITER.airframe();
         double night = range(loiter, FlightPhase.LOITER, loiter.cruiseSpeed(), 45, NIGHT);
-        assertTrue(night > 150 && night < 1000, "ночью " + night);
-        // в пике воздух и винт громче
+        assertTrue(night > 150 && night < 1000, "at night " + night);
+        // at the peak the air and the propeller are louder
         assertTrue(range(loiter, FlightPhase.TERMINAL, loiter.diveSpeed(), 20, NIGHT) > night);
     }
 
     @Test
     void rangesKeepTheOrderOfTheOldCutoffsWhereTheyWereRight() {
-        // прежние срезы: «Ланцет» 200 < мотор шахеда 300; ускоритель 600 > мотор; сход снаряда РСЗО 900 > его вой 500;
-        // ступень МБР — дальше всех. Гул турбины ракеты (1500) — уже не дальше шахеда: двухтакт без глушителя слышно
-        // дальше 10 км, а ТРДД ракеты на бреющем — за несколько километров
+        // previous cuts: “Lancet” 200 < Shahed motor 300; accelerator 600 > motor; launch rail exit of the MLRS projectile 900 > its howl 500;
+        // ICBM stage is the farthest. The hum of a rocket turbine (1500) is no longer further than Shahed: a two-stroke engine without a muffler can be heard
+        //  further than 10 km, and a low-level turbofan rocket engine can be heard several kilometers away
         double lancet = range(WeaponSpec.LOITER.airframe(), FlightPhase.LOITER, WeaponSpec.LOITER.airframe().cruiseSpeed(), 45, NIGHT);
         double shahed = cruise(WeaponSpec.DRONE.airframe(), NIGHT);
         double missile = cruise(WeaponSpec.MISSILE.airframe(), NIGHT);
@@ -85,31 +85,31 @@ class HearingTest {
         double icbm = range(WeaponSpec.NUKE.airframe(), FlightPhase.BOOST, 5, 50, NIGHT);
         assertTrue(lancet < shahed && lancet < missile, lancet + " < " + shahed + ", " + missile);
         assertTrue(shahed < bomber, "B-2 " + bomber);
-        assertTrue(booster > shahed, "ускоритель " + booster);
-        assertTrue(gradLaunch > gradAir, "сход " + gradLaunch + ", вой " + gradAir);
-        // ракетные двигатели слышно дальше, чем клиент помнит путь (Hearing.RANGE): их порядок — по запасу над фоном
-        // на одном расстоянии
+        assertTrue(booster > shahed, "accelerator " + booster);
+        assertTrue(gradLaunch > gradAir, "launch rail exit " + gradLaunch + ", howl " + gradAir);
+        // rocket engines can be heard further than the client remembers the path (Hearing.RANGE): their order is by margin above the background
+        //  at the same distance
         double boosterAt = margin(WeaponSpec.DRONE.airframe(), FlightPhase.BOOST, 1), gradAt = margin(WeaponSpec.ROCKET.airframe(), FlightPhase.BOOST, 2);
         double icbmAt = margin(WeaponSpec.NUKE.airframe(), FlightPhase.BOOST, 5), missileAt = margin(WeaponSpec.MISSILE.airframe(), FlightPhase.CRUISE, 4);
-        assertTrue(icbmAt > gradAt && icbmAt > boosterAt && icbmAt > missileAt, "МБР " + icbmAt + ", «Град» " + gradAt + ", ускоритель " + boosterAt);
+        assertTrue(icbmAt > gradAt && icbmAt > boosterAt && icbmAt > missileAt, "ICBM " + icbmAt + ", \"grad\" " + gradAt + ", accelerator " + boosterAt);
         assertTrue(icbm >= gradLaunch && icbm >= booster && icbm >= missile);
-        // дальность — там, где звук тонет в фоне, а не предел памяти пути: у моторов на маршруте она меньше предела
-        for (double r : new double[] {lancet, shahed, gradAir}) assertTrue(r < Hearing.RANGE, "дальность " + r);
+        // range is where the sound drowns in the background, and not the limit of the path memory: for motors on the route it is less than the limit
+        for (double r : new double[] {lancet, shahed, gradAir}) assertTrue(r < Hearing.RANGE, "range " + r);
     }
 
-    /** Насколько шум громче фона ночью в 15 км, дБ. */
+    /** How much louder is the noise than the background at night in 15 km, dB. */
     private static double margin(WeaponSpec.Airframe a, FlightPhase ph, double speed) {
         return a.noise().margin(ph, age(ph), speed, false, Propagation.Path.over(15_000, 50, NIGHT));
     }
 
     @Test
     void silentPartsAreSilent() {
-        // турбина ракеты не работает на пусковой, барражирующий без ускорителя
+        // the rocket turbine does not work on the launcher loitering without an accelerator
         Noise missile = WeaponSpec.MISSILE.airframe().noise();
         assertTrue(missile.power(Noise.Part.ENGINE, FlightPhase.BOOST, 10, 2, false) == Noise.SILENT);
         assertTrue(missile.power(Noise.Part.MOTOR, FlightPhase.CRUISE, 10, 4, false) == Noise.SILENT);
         assertTrue(WeaponSpec.LOITER.airframe().noise().power(Noise.Part.MOTOR, FlightPhase.BOOST, 10, 1, false) == Noise.SILENT);
-        // бомба, пока бурит, — только бурение
+        // the bomb is still drilling - only drilling
         Noise bomb = WeaponSpec.BUNKER.payload().noise();
         assertTrue(bomb.power(Noise.Part.BODY, FlightPhase.DRILL, 10, 1, true) == Noise.SILENT);
         assertTrue(bomb.power(Noise.Part.DRILL, FlightPhase.DRILL, 10, 1, true) > Noise.SILENT);

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Мультиплеер без окон: выделенный сервер с модом (Create, Sable, Aeronautics) и два клиента, каждый во вложенном
-# KWin (tools/nested_kwin.sh). Alpha (оператор) бьёт по игроку Bravo и по точке и посреди подлёта выходит и заходит
-# снова; Bravo выходит, пока снаряды к нему летят, и возвращается (сценарий — src/devtest/.../MultiplayerScenario).
-#   tools/mp_scenario.sh   → mod/run/mp-server/logs/latest.log, mod/run/mp-a|mp-b/logs/latest.log, сводка в конце
-# Gradle только собирает и готовит запуски (rigLaunch → mod/build/rig/mp-*.sh) и выходит до старта: у живого Gradle
-# UDP-сокет блокировок на 0.0.0.0, а в проверке в сеть не смотрит ничего — сервер и клиенты идут прямо из файлов MDG.
+# Multiplayer without windows: dedicated server with mod (Create, Sable, Aeronautics) and two clients, each in a nested
+# KWin (tools/nested_kwin.sh). Alpha (operator) hits the player Bravo and at the point and in the middle of the approach he leaves and enters
+# again; Bravo leaves while the shells are flying towards him and returns (scenario - src/devtest/.../MultiplayerScenario).
+#   tools/mp_scenario.sh → mod/run/mp-server/logs/latest.log, mod/run/mp-a|mp-b/logs/latest.log, summary at the end
+# Gradle only collects and prepares launches (rigLaunch → mod/build/rig/mp-*.sh) and goes out before the start: live Gradle
+# UDP is a blocking socket on 0.0.0.0, but in the check it does not look into the network - the server and clients go directly from the MDG files.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MOD="$ROOT/mod"
 RUN="$MOD/run"
-# сервер слушает только петлю и свободный порт (сторож LoopbackGuard роняет сервер, если сокет не на петле)
+# the server listens only on the loopback and a free port (the LoopbackGuard guard drops the server if the socket is not on a loopback)
 PORT="${INCOMING_MP_PORT:-$(python3 "$ROOT/tools/free_port.py")}"
 export INCOMING_MP_PORT=$PORT
 export JAVA_HOME="${JAVA_HOME:-$(python3 "$ROOT/tools/paths.py" JAVA)}"
@@ -32,9 +32,9 @@ view-distance=8
 simulation-distance=8
 motd=incoming-mp
 PROPS
-# NeoForge объявляет выделенный сервер в LAN (UDP-сокет на 0.0.0.0, рассылка MOTD и порта) — у проверок выключено
+# NeoForge announces a dedicated server in LAN (UDP socket on 0.0.0.0, broadcasting MOTD and port) - checks are disabled
 python3 "$ROOT/tools/rig_config.py" "$SERVER"
-# ops.json: Alpha — оператор (офлайн-UUID, как его считает сервер без авторизации)
+# ops.json: Alpha - operator (offline-UUID, as the server considers it without authorization)
 python3 - "$SERVER/ops.json" <<'PY'
 import hashlib, json, sys, uuid
 def offline(name):
@@ -46,8 +46,8 @@ json.dump([{"uuid": offline("Alpha"), "name": "Alpha", "level": 4, "bypassesPlay
 PY
 
 cd "$MOD"
-# каталог, ник и сценарий клиента Gradle читает при подготовке (-P и окружение), у каждого клиента свой скрипт;
-# --no-daemon: без живого Gradle после подготовки, даже если ~/.gradle/gradle.properties или GRADLE_OPTS включают демона
+# the directory, nickname and script of the client Gradle are read during preparation (-P and environment), each client has its own script;
+# --no-daemon: no live Gradle after preparation, even if ~/.gradle/gradle.properties or GRADLE_OPTS include daemon
 ./gradlew --no-daemon --console=plain -q rigLaunch -PrigRun=runServer -PserverDir=run/mp-server -PrigOut=mp-server
 for c in "Alpha mp-a" "Bravo mp-b"; do
   read -r name dir <<< "$c"
@@ -55,9 +55,9 @@ for c in "Alpha mp-a" "Bravo mp-b"; do
     -PscenarioDir="run/$dir" -PscenarioUser="$name" -PrigOut="$dir"
 done
 RIG="$MOD/build/rig"
-# сервер и клиенты — каждый в своей сессии; выход скрипта (и Ctrl+C) гасит их целиком, с JVM под обёртками
-# на рабочем столе клиенты идут на видеокарте (nested_kwin.sh): аренда и замок клиента — один раз на всю работу, её
-# клиенты наследуют замок (tools/gpu_lease.sh); до rig_procs.sh — продлевателю не достаётся его fd сообщений
+# server and clients - each in their own session; the script output (and Ctrl+C) extinguishes them entirely, with JVM under the wrappers
+# on the desktop, clients go to the video card (nested_kwin.sh): rent and lock the client - once for the entire work, its
+# clients inherit the lock (tools/gpu_lease.sh); up to rig_procs.sh - the extender does not receive his fd messages
 if command -v kwin_wayland >/dev/null; then
   source "$ROOT/tools/gpu_lease.sh"
   who=$(gpu_client_busy) && { echo "$who" >&2; exit 75; }
@@ -71,12 +71,12 @@ rig_spawn "$RIG/mp-server.sh" > "$RUN/mp-server.out" 2>&1
 SERVER_PID=$RIG_LAST
 for _ in $(seq 600); do
   grep -q 'Done (' "$SERVER/logs/latest.log" 2>/dev/null && break
-  kill -0 $SERVER_PID 2>/dev/null || { echo "сервер не запустился: $RUN/mp-server.out" >&2; exit 1; }
+  kill -0 $SERVER_PID 2>/dev/null || { echo "the server did not start: $RUN/mp-server.out" >&2; exit 1; }
   sleep 1
 done
-grep -q 'Done (' "$SERVER/logs/latest.log" || { echo "сервер не поднялся за 10 минут" >&2; exit 1; }
+grep -q 'Done (' "$SERVER/logs/latest.log" || { echo "the server did not come up in 10 minutes" >&2; exit 1; }
 
-client() { # каталог (он же сценарий)
+client() { # directory (aka script)
   local dir="$RUN/$1"
   rm -rf "$dir/logs" "$dir/screenshots"
   mkdir -p "$dir/logs"
@@ -85,7 +85,7 @@ client() { # каталог (он же сценарий)
 }
 client mp-b
 B_PID=$RIG_LAST
-# Alpha заходит, когда Bravo уже в мире: сценарий Alpha бьёт по нему
+# Alpha comes when Bravo is already in the world: script Alpha hits him
 for _ in $(seq 600); do
   grep -q 'SCENARIO mp joined' "$RUN/mp-b/logs/latest.log" 2>/dev/null && break
   kill -0 $B_PID 2>/dev/null || break
@@ -96,7 +96,7 @@ A_PID=$RIG_LAST
 wait $A_PID $B_PID || true
 rig_stop $SERVER_PID
 
-echo "== сервер"
+echo "== server"
 grep -E "joined the game|left the game|Strike|Projectile|ERROR|Exception|at ua\.zentix" "$SERVER/logs/latest.log" | cut -c1-200 || true
 for c in mp-a mp-b; do
   echo "== $c"
