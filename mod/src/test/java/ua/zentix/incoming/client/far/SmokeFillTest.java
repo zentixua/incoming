@@ -5,18 +5,26 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.layer.FxAtlas;
+import ua.zentix.incoming.client.fx.layer.PuffGeometry;
 import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.GroundDust;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Stability;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -75,17 +83,19 @@ class SmokeFillTest {
     }
 
     /**
-     * Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр клуба, лежит ли; вершины лежащих
-     * клубов и полос лент от глаза (заливка — по ним); вуали.
+     * Клубы в мире: заливка по четырём вершинам, непрозрачность — по пересечению луча с их настоящей плоскостью.
+     * quads сохраняет экранные сведения для проверок количества и размера; сам кадр по ним не измеряется.
      */
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
+        final List<Puff> puffs = new ArrayList<>();
         /** Многоугольники кадра: 4 вершины от глаза (12 чисел) и непрозрачность — лежащие клубы и полосы лент. */
         final List<double[]> polygons = new ArrayList<>();
         /** Квадраты лент лицом к камере (круг торца, вуаль «глаз в трубке»): середина, полуразмеры в тангенсах, непрозрачность. */
         final List<double[]> faces = new ArrayList<>();
         private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
+        private final double[] hit = new double[2];
         /** Вуаль кадра (сетка по экрану); null — её нет. */
         SmokePuffs.Veil veil;
 
@@ -97,31 +107,30 @@ class SmokeFillTest {
         public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                           float b, float a) {
             if (a < 0.002f) return;
-            Vector3f f = view.forward(), l = view.left(), up = view.up();
-            // квадрат лицом к камере — весь на глубине своей середины: позади глаза его нет, у самого глаза он тает (fx.fsh)
-            double depth = dx * f.x + dy * f.y + dz * f.z, near = Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
-            if (near <= 0) return;
-            quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / depth, (dx * up.x + dy * up.y + dz * up.z) / depth, halfA / depth, halfB / depth,
-                    Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite), 0});
+            double[] p = new double[13];
+            PuffGeometry.face(dx, dy, dz, halfA, halfB, p);
+            puff(p, dx, dy, dz, halfA, halfB, sprite, mix, a, false);
         }
 
         @Override
-        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a) {
             if (a < 0.002f) return;
-            // пропускание — по проекции диска на глубине середины (приближение для частей кадра); заливка — по четырём
-            // вершинам квадрата на горизонтали, как его кладёт FxQuads.flat (оси — «влево» экрана на горизонтали и поперёк)
-            double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            int at = quads.size();
-            puff6(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, mix, shade, r, g, b, a);
-            if (quads.size() > at) quads.get(at)[6] = 1;
-            Vector3f l = view.left();
-            double lx = l.x, lz = l.z, len = Math.hypot(lx, lz);
-            lx = len < 1e-6 ? 1 : lx / len;
-            lz = len < 1e-6 ? 0 : lz / len;
-            double ax = lx * halfA, az = lz * halfA, bx = -lz * halfB, bz = lx * halfB;
-            polygons.add(new double[]{dx - ax - bx, dy, dz - az - bz, dx - ax + bx, dy, dz - az + bz, dx + ax + bx, dy, dz + az + bz, dx + ax - bx, dy,
-                    dz + az - bz, Math.min(1, a)});
+            double[] p = new double[13];
+            PuffGeometry.flat(dx, dy, dz, halfA, halfB, angle, p);
+            puff(p, dx, dy, dz, halfA, halfB, sprite, mix, a, true);
+            polygons.add(p);
+        }
+
+        private void puff(double[] p, double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float a,
+                          boolean flat) {
+            p[12] = Math.min(1, a);
+            puffs.add(new Puff(p, sprite, mix));
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double depth = dx * f.x + dy * f.y + dz * f.z, safeDepth = Math.max(SmokePuffs.NEAR_FROM, depth);
+            double near = Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
+            quads.add(new double[]{(dx * l.x + dy * l.y + dz * l.z) / safeDepth, (dx * up.x + dy * up.y + dz * up.z) / safeDepth,
+                    halfA / safeDepth, halfB / safeDepth, Math.min(1, a) * near, PlumeContinuityTest.frameOf(sprite), flat ? 1 : 0});
         }
 
         @Override
@@ -175,6 +184,7 @@ class SmokeFillTest {
         /** Новый кадр: квадраты, многоугольники и вуаль — заново. */
         void clear() {
             quads.clear();
+            puffs.clear();
             polygons.clear();
             faces.clear();
             veil = null;
@@ -188,38 +198,229 @@ class SmokeFillTest {
             faces.add(new double[]{(x * l.x + y * l.y + z * l.z) / depth, (x * up.x + y * up.y + z * up.z) / depth, half / depth, half / depth, Math.min(1, a)});
         }
 
-        /** Сколько экранов закрывают квадраты (с перекрытием): лицом к камере — прямоугольником, лежащие и полосы лент — по вершинам. */
+        /** Сколько экранов закрывает геометрия (с перекрытием): каждый клуб и лента учитываются ровно один раз. */
         double fill() {
             double sum = 0;
-            for (double[] q : quads) {
-                if (q[6] > 0.5) continue;
-                double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
-                if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
-            }
+            for (Puff p : puffs) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p.vertices, 12));
             for (double[] q : faces) {
                 double x0 = Math.max(-W, q[0] - q[2]), x1 = Math.min(W, q[0] + q[2]), y0 = Math.max(-H, q[1] - q[3]), y1 = Math.min(H, q[1] + q[3]);
                 if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) / (4 * W * H);
             }
-            for (double[] p : polygons) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p, 12));
+            // Лежащие клубы сохранены и в polygons для прежних проверок лент, но уже посчитаны выше.
+            for (double[] p : polygons) if (p.length >= 15) sum += SmokePuffs.polygonFill(view, java.util.Arrays.copyOf(p, 12));
             return sum;
         }
 
         /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
         double transmittance(double u, double v, double[][] prof) {
-            double clear = veil == null ? 1 : veil.through(u, v);
-            for (double[] q : faces) if (Math.abs(u - q[0]) <= q[2] && Math.abs(v - q[1]) <= q[3]) clear *= 1 - q[4];
-            for (double[] p : polygons) {
-                // полосы лент — ровной непрозрачностью внутри; лежащие клубы — профилем (ниже, по квадратам)
-                if (p[12] <= 0 || isFlat(p)) continue;
-                if (insideProjected(p, u, v)) clear *= 1 - p[12];
-            }
-            for (double[] q : quads) {
-                double r = Math.hypot((u - q[0]) / q[2], (v - q[1]) / q[3]);
-                int k = (int) (r / PlumeContinuityTest.BIN);
-                if (k < prof[0].length) clear *= 1 - q[4] * prof[(int) q[5]][k];
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            return transmittanceRay(f.x + u * l.x + v * up.x, f.y + u * l.y + v * up.y, f.z + u * l.z + v * up.z, prof);
+        }
+
+        /** Тот же луч мира при разных поворотах камеры: пересечение и UV задаёт плоскость клуба, а не экран. */
+        double transmittanceRay(double rx, double ry, double rz, double[][] prof) {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double depth = rx * f.x + ry * f.y + rz * f.z;
+            double u = (rx * l.x + ry * l.y + rz * l.z) / depth, v = (rx * up.x + ry * up.y + rz * up.z) / depth;
+            double clear = surroundings(u, v);
+            for (Puff p : puffs) {
+                double alpha = p.hit(rx, ry, rz, f, hit);
+                if (alpha <= 0) continue;
+                double radius = Math.hypot(hit[0], hit[1]);
+                double a0 = profile(prof[p.frame], radius), a1 = profile(prof[Math.min(p.frame + 1, prof.length - 1)], radius);
+                clear *= 1 - alpha * (a0 + (a1 - a0) * p.mix);
             }
             return clear;
         }
+
+        /** Дополнительный замер по настоящей 2D-альфе и векторам движения (билинейно, без уменьшенных копий). */
+        double texturedTransmittanceRay(double rx, double ry, double rz) throws IOException {
+            Vector3f f = view.forward(), l = view.left(), up = view.up();
+            double depth = rx * f.x + ry * f.y + rz * f.z;
+            double u = (rx * l.x + ry * l.y + rz * l.z) / depth, v = (rx * up.x + ry * up.y + rz * up.z) / depth;
+            double clear = surroundings(u, v);
+            for (Puff p : puffs) {
+                double alpha = p.hit(rx, ry, rz, f, hit);
+                if (alpha > 0) clear *= 1 - alpha * Baked.get(p.sprite).alpha(hit[0], hit[1], p.mix);
+            }
+            return clear;
+        }
+
+        private double surroundings(double u, double v) {
+            double clear = veil == null ? 1 : veil.through(u, v);
+            for (double[] q : faces) if (Math.abs(u - q[0]) <= q[2] && Math.abs(v - q[1]) <= q[3]) clear *= 1 - q[4];
+            for (double[] p : polygons) {
+                // Полосы лент — ровной непрозрачностью внутри; клубы — ниже, по пересечению с плоскостью.
+                if (p[12] <= 0 || p.length < 15) continue;
+                if (insideProjected(p, u, v)) clear *= 1 - p[12];
+            }
+            return clear;
+        }
+
+        /** Профиль задан средними колец: линейно между их серединами, без скачка на каждом BIN. */
+        private static double profile(double[] profile, double radius) {
+            double at = Math.max(0, radius / PlumeContinuityTest.BIN - 0.5);
+            int bin = (int) at;
+            if (bin >= profile.length) return 0;
+            double next = bin + 1 < profile.length ? profile[bin + 1] : 0;
+            return profile[bin] + (next - profile[bin]) * (at - bin);
+        }
+    }
+
+    /** Исходные карты клуба: та же 2D-альфа, отражение и сдвиг кадров, что в sixPlaces/sixAlpha шейдера. */
+    private record Baked(BufferedImage a, BufferedImage next, BufferedImage flow, boolean mirror) {
+        private static final Map<FxAtlas.Sprite, Baked> CACHE = new HashMap<>();
+
+        static Baked get(FxAtlas.Sprite sprite) throws IOException {
+            Baked found = CACHE.get(sprite);
+            if (found != null) return found;
+            for (int frame = 0; frame < FxAtlas.PUFF6_FRAMES; frame++) {
+                for (boolean mirror : new boolean[]{false, true}) {
+                    String prefix = null;
+                    for (SmokeGrid.Look look : SmokeGrid.Look.values()) {
+                        if (!FxAtlas.club(look, frame, mirror).equals(sprite)) continue;
+                        prefix = switch (look) {
+                            case SMOKE -> "puff";
+                            case EJECTA -> "eject";
+                            case CRUSH -> "crush";
+                            case AIRBURST -> "air";
+                        };
+                    }
+                    if (FxAtlas.spray6(frame, mirror).equals(sprite)) prefix = "spray";
+                    if (prefix == null) continue;
+                    Baked baked = new Baked(image(prefix, 'a', frame), image(prefix, 'a', Math.min(frame + 1, FxAtlas.PUFF6_FRAMES - 1)),
+                            image(prefix, 'v', frame), mirror);
+                    CACHE.put(sprite, baked);
+                    return baked;
+                }
+            }
+            throw new IllegalArgumentException("not a baked puff: " + sprite);
+        }
+
+        private static BufferedImage image(String prefix, char map, int frame) throws IOException {
+            String path = String.format(Locale.ROOT, "/assets/incoming/textures/fx/particle/%s6%c_%02d.png", prefix, map, frame);
+            try (InputStream in = SmokeFillTest.class.getResourceAsStream(path)) {
+                if (in == null) throw new IOException("missing puff map " + path);
+                return ImageIO.read(in);
+            }
+        }
+
+        double alpha(double x, double y, double mix) {
+            double u = (1 + (mirror ? x : -x)) * 0.5, v = (1 - y) * 0.5;
+            double fa = channel(flow, u, v, 24), scale = 2 * FxAtlas.PUFF6_FLOW / flow.getWidth();
+            double fu = (channel(flow, u, v, 16) / Math.max(fa, 1e-3) - 0.5) * scale;
+            double fv = (channel(flow, u, v, 8) / Math.max(fa, 1e-3) - 0.5) * scale;
+            double a0 = channel(a, u - fu * mix, v - fv * mix, 24);
+            double a1 = channel(next, u + fu * (1 - mix), v + fv * (1 - mix), 24);
+            return a0 + (a1 - a0) * mix;
+        }
+
+        /** Билинейная выборка с полутекселем у края; цвет — с умноженной альфой, как на листе FxAtlas. */
+        private static double channel(BufferedImage image, double u, double v, int shift) {
+            double x = Math.clamp(u * image.getWidth() - 0.5, 0, image.getWidth() - 1);
+            double y = Math.clamp(v * image.getHeight() - 0.5, 0, image.getHeight() - 1);
+            int x0 = (int) x, y0 = (int) y, x1 = Math.min(x0 + 1, image.getWidth() - 1), y1 = Math.min(y0 + 1, image.getHeight() - 1);
+            double a = pixel(image, x0, y0, shift), b = pixel(image, x1, y0, shift);
+            double c = pixel(image, x0, y1, shift), d = pixel(image, x1, y1, shift);
+            return (a + (b - a) * (x - x0)) * (1 - y + y0) + (c + (d - c) * (x - x0)) * (y - y0);
+        }
+
+        private static double pixel(BufferedImage image, int x, int y, int shift) {
+            int pixel = image.getRGB(x, y);
+            double alpha = (pixel >>> 24) / 255.0;
+            return shift == 24 ? alpha : ((pixel >>> shift) & 255) / 255.0 * alpha;
+        }
+    }
+
+    /** Плоскость клуба и преобразование точки попадания в его UV; только тестовая модель приёмника слоя. */
+    static final class Puff {
+        final double[] vertices;
+        final FxAtlas.Sprite sprite;
+        final int frame;
+        final double mix;
+        private final double nx, ny, nz, plane, ux, uy, uz, vx, vy, vz, cu, cv;
+
+        Puff(double[] p, FxAtlas.Sprite sprite, double mix) {
+            this.vertices = p;
+            this.sprite = sprite;
+            this.frame = PlumeContinuityTest.frameOf(sprite);
+            this.mix = mix;
+            double cx = 0.5 * (p[0] + p[6]), cy = 0.5 * (p[1] + p[7]), cz = 0.5 * (p[2] + p[8]);
+            double ax = 0.5 * (p[9] - p[0]), ay = 0.5 * (p[10] - p[1]), az = 0.5 * (p[11] - p[2]);
+            double bx = 0.5 * (p[3] - p[0]), by = 0.5 * (p[4] - p[1]), bz = 0.5 * (p[5] - p[2]);
+            nx = ay * bz - az * by;
+            ny = az * bx - ax * bz;
+            nz = ax * by - ay * bx;
+            plane = cx * nx + cy * ny + cz * nz;
+            double aa = ax * ax + ay * ay + az * az, bb = bx * bx + by * by + bz * bz;
+            ux = ax / aa;
+            uy = ay / aa;
+            uz = az / aa;
+            vx = bx / bb;
+            vy = by / bb;
+            vz = bz / bb;
+            cu = cx * ux + cy * uy + cz * uz;
+            cv = cx * vx + cy * vy + cz * vz;
+        }
+
+        /** Непрозрачность вершины с near-fade шейдера; out — местные координаты попадания (−1…1). */
+        double hit(double rx, double ry, double rz, Vector3f forward, double[] out) {
+            double facing = rx * nx + ry * ny + rz * nz;
+            if (Math.abs(facing) < 1e-12) return 0;
+            double t = plane / facing;
+            if (t <= 0) return 0;
+            double u = t * (rx * ux + ry * uy + rz * uz) - cu, v = t * (rx * vx + ry * vy + rz * vz) - cv;
+            if (Math.abs(u) > 1 || Math.abs(v) > 1) return 0;
+            out[0] = u;
+            out[1] = v;
+            double depth = t * (rx * forward.x + ry * forward.y + rz * forward.z);
+            return vertices[12] * Math.clamp((depth - SmokePuffs.NEAR_FROM) / SmokePuffs.NEAR_FADE, 0, 1);
+        }
+    }
+
+    /** Один и тот же мировой луч попадает в те же UV клуба при повороте взгляда, включая крен камеры. */
+    @Test
+    void fixedPuffKeepsWorldRayTransmittanceWhenCameraTurns() throws IOException {
+        double[][] profile = PlumeContinuityTest.profiles();
+        for (boolean flat : new boolean[]{false, true}) {
+            Screen first = fixedPuff(view(new Vec3(0, 80, 0), new Vector3f(0, 0, 1)), flat);
+            double[] vertices = first.puffs.getFirst().vertices;
+            double[] center = {12, -8, 90};
+            double least = 1, most = 0;
+            for (int turn = -3; turn <= 3; turn++) {
+                Vector3f f = new Vector3f(0, 0, 1).rotateY(turn * 0.23f).rotateX(turn * 0.09f);
+                FarView v = view(new Vec3(0, 80, 0), f);
+                v.left().rotateAxis(turn * 0.19f, f.x, f.y, f.z);
+                v.up().rotateAxis(turn * 0.19f, f.x, f.y, f.z);
+                Screen moved = fixedPuff(v, flat);
+                assertArrayEquals(vertices, moved.puffs.getFirst().vertices, 0, "мировые вершины клуба");
+                assertEquals(SmokePuffs.polygonFill(v, java.util.Arrays.copyOf(vertices, 12)), moved.fill(), 1e-12,
+                        "площадь клуба считается один раз, по его вершинам");
+                for (int y = -4; y <= 4; y++) {
+                    for (int x = -4; x <= 4; x++) {
+                        double[] ray = center.clone();
+                        for (int k = 0; k < 3; k++) {
+                            ray[k] += 0.1 * x * (vertices[9 + k] - vertices[k]) + 0.1 * y * (vertices[3 + k] - vertices[k]);
+                        }
+                        double radial = first.transmittanceRay(ray[0], ray[1], ray[2], profile);
+                        double textured = first.texturedTransmittanceRay(ray[0], ray[1], ray[2]);
+                        least = Math.min(least, textured);
+                        most = Math.max(most, textured);
+                        assertEquals(radial, moved.transmittanceRay(ray[0], ray[1], ray[2], profile), 1e-12, "радиальный профиль, поворот " + turn);
+                        assertEquals(textured, moved.texturedTransmittanceRay(ray[0], ray[1], ray[2]), 1e-12, "2D-альфа, поворот " + turn);
+                    }
+                }
+            }
+            assertTrue(most - least > 0.2, "проверены и прозрачный край, и плотная середина");
+        }
+    }
+
+    private static Screen fixedPuff(FarView view, boolean flat) {
+        Screen out = new Screen(view);
+        FxAtlas.Sprite sprite = FxAtlas.puff6(7, true);
+        if (flat) out.puff6Flat(12, -8, 90, 34, 26, 5, 0.73, sprite, 0.37f, 0, 1, 1, 1, 0.8f);
+        else out.puff6(12, -8, 90, 24, 17, sprite, 0.37f, 1, 1, 1, 1, 0.8f);
+        return out;
     }
 
     /** Лежит ли многоугольник (все вершины на одной высоте — лежащий клуб, а не полоса ленты). */

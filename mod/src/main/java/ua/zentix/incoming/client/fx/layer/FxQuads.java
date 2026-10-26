@@ -67,6 +67,8 @@ public final class FxQuads {
     private final FarFirst sort = new FarFirst();
     private final ByteBufferBuilder out = new ByteBufferBuilder(QUAD * 256);
     private Vector3f left = new Vector3f(1, 0, 0), up = new Vector3f(0, 1, 0);
+    /** Вершины клуба в мировых осях; одна память на весь кадр, как у остальных квадратов. */
+    private final double[] puff = new double[12];
     private byte nearest, opacity, emit;
     private short probe;
     /** В кадре есть квадраты со свечением ({@link #emission}). */
@@ -431,6 +433,28 @@ public final class FxQuads {
         vertex(x - ax + bx, y, z - az + bz, s.u1(), s.v0(), r, g, b, a, soft, unfold, light, fog);
         vertex(x + ax + bx, y, z + az + bz, s.u0(), s.v0(), r, g, b, a, soft, unfold, light, fog);
         vertex(x + ax - bx, y, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
+    }
+
+    /** Клуб лицом к положению глаза с верхом мира ({@link PuffGeometry#face}); поворот камеры его не поворачивает. */
+    public void facePosition(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
+                             float soft, float unfold, int light, float fog) {
+        PuffGeometry.face(x, y, z, halfA, halfB, puff);
+        puff(key, s, r, g, b, a, soft, unfold, light, fog);
+    }
+
+    /** Клуб на горизонтали с постоянным углом от зерна; обычный {@link #flat} сохраняет оси своих прежних вызовов. */
+    public void flat(float x, float y, float z, float key, float halfA, float halfB, double angle, FxAtlas.Sprite s, float r, float g, float b, float a,
+                     float soft, float unfold, int light, float fog) {
+        PuffGeometry.flat(x, y, z, halfA, halfB, angle, puff);
+        puff(key, s, r, g, b, a, soft, unfold, light, fog);
+    }
+
+    private void puff(float key, FxAtlas.Sprite s, float r, float g, float b, float a, float soft, float unfold, int light, float fog) {
+        quad(key);
+        for (int i = 0; i < 4; i++) {
+            vertex((float) puff[3 * i], (float) puff[3 * i + 1], (float) puff[3 * i + 2], i < 2 ? s.u1() : s.u0(),
+                    i == 0 || i == 3 ? s.v1() : s.v0(), r, g, b, a, soft, unfold, light, fog);
+        }
     }
 
     /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */

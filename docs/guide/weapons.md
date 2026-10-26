@@ -282,6 +282,9 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+Turning your head leaves the smoke clumps and ground dust anchored in the world. Their detail changes gradually as
+you approach, and distant clumps keep their own shapes instead of repeating the same outline across a raid.
+
 Near the ground the wind also depends on what stands around. Between houses and under trees it is several times weaker
 than over an open field; on a hilltop it is stronger, and in a hollow weaker. So the dust, the haze and the smoke of a
 fire linger in a street for a minute or two, and blow off a hill sooner. The game reads this from the blocks around the

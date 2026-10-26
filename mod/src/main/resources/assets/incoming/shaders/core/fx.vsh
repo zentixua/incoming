@@ -54,7 +54,7 @@ out float opacity;
 // сколько пропускает пелена между глазом и квадратом (её свет — в fx.fsh, по пелене на кадре)
 out float pallFront;
 // запечённый клуб: доля прямого света (солнце или луна) в свете неба; свет огненных шаров против света у глаза (rgb);
-// направления на прямой свет и на шары в осях экрана (x — вправо, y — вверх, z — к глазу)
+// направления на прямой свет и на шары в мире (fx.fsh переводит их в оси фактической геометрии и UV клуба)
 out float sixKey;
 out vec3 sixBall;
 out vec3 sixKeyDir;
@@ -133,12 +133,11 @@ void main() {
     sixBallDir = vec3(0.0, 1.0, 0.0);
     if (Normal.y < -0.1 && Normal.y > -0.4) {
         // цвет вершины клуба — вещество в свете неба под открытым небом (SmokePuffs, FarView.sky); по сторонам его делят карты кадра (fx.fsh)
-        mat3 rot = mat3(ModelViewMat);
         sixKey = FxSun.w;
-        sixKeyDir = normalize(rot * FxSun.xyz);
+        sixKeyDir = normalize(FxSun.xyz);
         vec3 bd;
         sixBall = ballsToward(Position / unfold, bd);
-        sixBallDir = rot * bd;
+        sixBallDir = bd;
         if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
     }
     // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно

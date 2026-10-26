@@ -31,7 +31,7 @@ class LayerPartsTest {
         sprites.begin(view, quads, probes);
         double[] light = new double[5];
         expect(EnumSet.of(FxQuads.Part.CLUBS), () -> sprites.puff6(0, 2, -40, 4, 3, FxAtlas.puff6(0, false), 0, 1, 0.5f, 0.5f, 0.5f, 0.8f));
-        expect(EnumSet.of(FxQuads.Part.CLUBS), () -> sprites.puff6Flat(0, -3, -30, 6, 6, 2, FxAtlas.puff6(1, false), 0, 1, 0.5f, 0.5f, 0.5f, 0.6f));
+        expect(EnumSet.of(FxQuads.Part.CLUBS), () -> sprites.puff6Flat(0, -3, -30, 6, 6, 2, 0, FxAtlas.puff6(1, false), 0, 1, 0.5f, 0.5f, 0.5f, 0.6f));
         expect(EnumSet.of(FxQuads.Part.CLUBS), () -> sprites.puff(3, 1, -60, 5, 0, 0, 0.4f, 0.4f, 0.4f, 0.7f));
         expect(EnumSet.of(FxQuads.Part.VEIL), () -> sprites.veil(0, 0, -1, 4, 0.5f, 0.5f, 0.5f, 0.5f));
         expect(EnumSet.of(FxQuads.Part.RIBBONS), () -> sprites.ribbon(-30, 5, -80, 1.5, 0.6f, LightTexture.FULL_BRIGHT, 30, 8, -90, 1.5, 0.6f,
