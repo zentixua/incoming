@@ -581,6 +581,12 @@ public final class WorkGameTests {
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_area_order", skyAccess = true)
     public static void areaExplosionsPickTogether(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // Round-robin rays can finish both blasts in the same tick at 30 ms. One unit per tick keeps this a
+        // cross-tick dependency test: weakening peersPicking must still remove blocks before the other Detonate.
+        int budget = IncomingConfig.SERVER.workBudgetMs.get();
+        // Deliberately below the public 5-ms minimum: one counting-clock unit keeps Detonate events on separate ticks.
+        IncomingConfig.SERVER.workBudgetMs.set(1);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.workBudgetMs.set(budget));
         for (BlockPos p : BlockPos.betweenClosed(CENTER.offset(-10, -10, -10), CENTER.offset(10, 0, 10))) {
             level.setBlock(h.absolutePos(p), Blocks.STONE.defaultBlockState(), 2);
         }
@@ -605,6 +611,7 @@ public final class WorkGameTests {
             if (e.getLevel() != level || e.getExplosion().radius() < 12 || e.getExplosion().center().distanceTo(charge) > 16) return;
             if (first[0] < 0) first[0] = level.getGameTime();
             last[0] = level.getGameTime();
+            if (blasts.stream().filter(b -> b.radius() >= 12).count() == 2) IncomingConfig.SERVER.workBudgetMs.set(budget);
             for (int i = 0; i < blasts.size() - 1; i++) {
                 if (blasts.get(i).radius() < 12) continue;
                 for (BlockPos p : blasts.get(i).blocks()) {
