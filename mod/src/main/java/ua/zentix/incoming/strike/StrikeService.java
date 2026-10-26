@@ -48,10 +48,10 @@ import java.util.UUID;
  * scheme. B-2 always approaches from afar.
  * <p>
  * Order with launch site ({@code /incoming salvo … from x z} or designator map) places launcher there regardless
- * of issuer ({@link LaunchSite.Post}); no suitable placement or unready chunk starts projectile virtually from
- * site. Fixed-launcher order ({@link LaunchOrigin.Fixed}) uses its rack/inventory, one projectile paid as it
- * takes rail; unavailable (unready chunk, missing block, empty inventory, blocked sector) means failed launch,
- * without distant-approach fallback.
+ * of issuer ({@link LaunchSite.Post}); if no suitable placement exists or the chunk is unready, the projectile
+ * starts from the site outside the loaded world. Fixed-launcher order ({@link LaunchOrigin.Fixed}) uses its
+ * rack/inventory, one projectile paid as it takes rail; unavailable (unready chunk, missing block, empty
+ * inventory, blocked sector) means failed launch, without distant-approach fallback.
  */
 public final class StrikeService {
     /** Radius of audible siren and visible warning. */
@@ -76,9 +76,9 @@ public final class StrikeService {
      * @param via operator points: Shahed, missile, Lancet use these instead of detour ({@code approachYaw} unused
      * then); other weapons have no route
      * @param from launch origin ({@link LaunchOrigin}). Ordered horizontal site (launch resolves height): Shahed,
-     * missile, MLRS, Lancet start on launcher there, or virtually from it without suitable placement; B-2
-     * approaches from its side at {@code approachYaw}, ICBM from its own pad. Fixed launcher accepts only
-     * rack-launched weapons, from itself only. Null means near shooter or from afar
+     * missile, MLRS, Lancet start on launcher there, or from that site outside the loaded world if no suitable
+     * placement exists; B-2 approaches from its side at {@code approachYaw}, ICBM from its own pad. Fixed
+     * launcher accepts only rack-launched weapons, from itself only. Null means near shooter or from afar
      */
     public static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                 @Nullable UUID owner, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from) {
@@ -204,7 +204,8 @@ public final class StrikeService {
      *
      * @param post mobile firing position (near shooter or ordered site); null means none
      * @param fixed fixed launcher, only from itself, no shooter launcher/distant approach
-     * @param from horizontal launch site: without launcher, start virtually here and approach from behind it
+     * @param from horizontal launch site: without a launcher, start here outside the loaded world and approach
+     * from behind it
      */
     private record Stand(@Nullable LaunchSite.Post post, @Nullable FixedLauncherBlockEntity fixed, @Nullable Vec3 from) {
         static Stand fixed(FixedLauncherBlockEntity be) {
@@ -527,8 +528,9 @@ public final class StrikeService {
     }
 
     /**
-     * No launcher: projectile starts virtually at {@code from}, otherwise afar on approach line at flight-time
-     * distance from target, or before first operator waypoint (loaded site enters world immediately).
+     * Without a launcher, the projectile starts outside the loaded world at {@code from}. Without that site, it
+     * starts far away on the approach line at the flight-time distance from the target, or before the first
+     * operator waypoint (at a loaded site it enters the world immediately).
      */
     private static StrikeProjectile fromAfar(ServerLevel level, WeaponType weapon, Target target, Vec3 point, Course course,
                                              @Nullable UUID owner, @Nullable Vec3 from, double lane) {
@@ -654,7 +656,7 @@ public final class StrikeService {
         return e;
     }
 
-    /** Flight starts virtually; at loaded site, projectile materializes next tick. */
+    /** Flight starts outside the loaded world; at a loaded site, the projectile materializes on the next tick. */
     private static void startVirtual(ServerLevel level, StrikeProjectile p) {
         VirtualFlights.launch(level, p);
     }

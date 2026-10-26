@@ -69,8 +69,8 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
     }
 
     /**
-     * Interceptor missile specifications. SI units; “E” means an estimate derived by a law from other values,
-     * with a range.
+     * Interceptor missile specifications use SI units; the marker (est.) identifies an estimate derived by a law
+     * from other values, with a range.
      *
      * @param launchMass launch mass, kg
      * @param length length, m
@@ -97,14 +97,14 @@ public record InterceptorSpec(double radarRange, double engageRange, int railTic
      * altitude; cold vertical launch ejects it by gas to ~30 m, then ignition and gas-dynamic turning (Wikipedia
      * “S-350”, “S-400”, Russian “Redut (surface-to-air missile system)”). Load exceeds 20 g at altitudes up to 30
      * km (“about 20 g in 0.025 s” by gas dynamics, Russian Wikipedia citing paralay.com). Warhead: 24 kg,
-     * directional with multipoint initiation; explosive mass is unpublished. E: ~10 kg explosive (40% of mass, as
-     * in fragmentation SAM warheads), ~10 kg TNT, casing and preformed fragments ~14 kg. Fuze: public claim
-     * “about 70% direct hits on the target warhead, the rest within several meters”; E: 5 m. Engine: single-mode
-     * solid rocket motor (dual mode unconfirmed), burns 10–12 s (legion.wplus.net, low confidence); thrust
-     * unpublished. E: 15 kg/s at exhaust velocity 2350 m/s (composite propellant, ~240 s), giving 35 kN, 11 s,
-     * 165 kg propellant: Tsiolkovsky gives ~1100 m/s without losses. Open data give no sustain mode for the 9M96:
-     * game flight accelerates for 1.5 s then burns in a weak 3 kg/s mode, not physical, pending physical flight
-     * (air-defense step).
+     * directional with multipoint initiation; explosive mass is unpublished. (est.) ~10 kg explosive (40% of
+     * mass, as in fragmentation SAM warheads), ~10 kg TNT, casing and preformed fragments ~14 kg. Fuze: public
+     * claim “about 70% direct hits on the target warhead, the rest within several meters”; (est.) 5 m. Engine:
+     * single-mode solid rocket motor (dual mode unconfirmed), burns 10–12 s (legion.wplus.net, low confidence);
+     * thrust is unpublished. (est.) 15 kg/s at exhaust velocity 2350 m/s (composite propellant, ~240 s), giving
+     * 35 kN, 11 s, 165 kg propellant: Tsiolkovsky gives ~1100 m/s without losses. Open data give no sustain mode
+     * for the 9M96: game flight accelerates for 1.5 s then burns in a weak 3 kg/s mode, not physical, pending
+     * physical flight (air-defense step).
      */
     static final Passport M96 = new Passport(420, 5.65, 0.24, 1000, 20, 1000, 120_000, 5, 30_000,
             new Article.Charge(10, 10, 14, 0.24), 5, new Article.SolidMotor(15 * 2350, 2350, 11, 0), new Article.SolidMotor(3 * 2350, 2350, (300 - 30) / 20.0, 0));

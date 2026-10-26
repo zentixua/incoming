@@ -21,24 +21,25 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * Unguided MLRS rocket (122 mm, like Grad). Waits in a rack tube, ignites, exits, then uses only ballistics
- * ({@link Ballistics}): gravity, air drag, and world wind ({@link WeaponSpec.Ballistic}, game coefficient). Fire
- * solution ({@link Ballistics#aim}) gives launch rail exit speed and heading at rack elevation. Firing data
- * belong to the order ({@link #fireData}): player orders know only ground wind (stronger wind aloft drifts the
- * salvo downwind), and each rocket has spec launch rail exit dispersion. Without firing data (tests), exact
- * launch rail exit with full wind. Thus, a 500-block shot takes ~10 s, rises a hundred blocks, descends more
- * steeply than it rose, and the salvo lands with dispersion and wind drift. Engine burns for the first {@link
- * #BURN_TICKS} (plume and dense smoke; launch rail exit speed is immediate, not physical: acceleration in the
- * tube and first meters is not calculated), then coasts; descending flight is the attack phase.
+ * An unguided MLRS rocket (122 mm, like Grad). It waits in a rack tube, ignites, exits, then follows only
+ * ballistics ({@link Ballistics}): gravity, air drag, and world wind ({@link WeaponSpec.Ballistic}, game
+ * coefficient). The fire solution ({@link Ballistics#aim}) gives launch rail exit speed and heading at rack
+ * elevation. The firing data belong to the order ({@link #fireData}): the fire solution for a player order knows
+ * only ground wind (stronger wind aloft drifts the salvo downwind), and each rocket uses the launch rail exit
+ * dispersion from its spec. Without firing data (tests), the launch rail exit is exact and uses the full wind
+ * profile. Thus, a 500-block shot takes ~10 s, rises a hundred blocks, descends more steeply than it rose, and
+ * the salvo lands with dispersion and wind drift. The engine burns for the first {@link #BURN_TICKS} (plume and
+ * dense smoke; launch rail exit speed is immediate, not physical: acceleration in the tube and first meters is
+ * not calculated), then coasts; descending flight is the attack phase.
  * <p>
  * The entire flight path is calculated at launch rail exit ({@link Ballistics#fly}) and traversed by ticks. If
- * displaced (materialization raises it above terrain), solve again from the current position at the same path
- * inclination. Target is not tracked: it lands where aimed at launch (map-site height is refined once, {@link
- * #settleImpact}).
+ * the rocket is displaced (materialization raises it above terrain), solve again from the current position at the
+ * same path inclination. The target is not tracked: the rocket lands where it was aimed at launch (map-site
+ * height is refined once, {@link #settleImpact}).
  * <p>
- * The impact area loads from tube placement; the rocket exits immediately. If it approaches virtually while the
- * area is unready, the trajectory end is stretched in time ({@link #stretch}) rather than freezing in air near
- * the target.
+ * The impact area starts loading when the rocket is placed in a tube, and the rocket exits immediately. If it
+ * flies outside the loaded world toward the target while the area is unready, the end of the trajectory stretches
+ * in time ({@link #stretch}) so the rocket does not freeze in the air near the target.
  */
 public class RocketEntity extends StrikeProjectile {
     /** Engine burns for this many ticks after launch rail exit. */
@@ -48,8 +49,8 @@ public class RocketEntity extends StrikeProjectile {
     /** Do not fire with shorter flight time: raise tubes more steeply (mortar trajectory). */
     public static final int MIN_FLIGHT = 50;
     /**
-     * Outside the world while the target area is unready, slow the trajectory's last this many ticks (5 s, longer
-     * than area loading).
+     * The number of final trajectory ticks slowed while the rocket is outside the loaded world and the target
+     * area is unready (5 s, longer than area loading).
      */
     public static final double STRETCH_TICKS = 100;
     /** Virtual flight rate changes no faster than this per tick. */
@@ -62,7 +63,7 @@ public class RocketEntity extends StrikeProjectile {
     /** Range beyond the trajectory arc, ticks at cruise speed: a rocket missing its point continues downward. */
     private static final int OVERSHOOT_TICKS = 200;
 
-    /** Unpowered flight from the spec: launch rail exit dispersion. */
+    /** The spec for unpowered flight provides the launch rail exit dispersion. */
     private static final WeaponSpec.Ballistic FLIGHT = WeaponSpec.ROCKET.airframe().ballistic();
 
     /** 9M22U drag on the world flight scale ({@link WeaponSpec.Airframe#drag()}): game at 0, real with f(M) at 1. */
@@ -78,7 +79,10 @@ public class RocketEntity extends StrikeProjectile {
     private Vec3 impactAt;
     /** This tick's correction to the nose step ({@link #drift}); zero outside the step. */
     private Vec3 correction = Vec3.ZERO;
-    /** Current trajectory by ticks (not saved: recalculated from origin and launch rail exit velocity). */
+    /**
+     * The current trajectory is indexed by tick (not saved: recalculated from its origin and launch rail exit
+     * velocity).
+     */
     @Nullable
     private Ballistics.Path path;
     /**
@@ -87,7 +91,7 @@ public class RocketEntity extends StrikeProjectile {
      */
     @Nullable
     private Vec3 landing;
-    /** Current trajectory origin, velocity there, and flight ticks from it. */
+    /** Origin, initial velocity, and flight duration of the current trajectory. */
     @Nullable
     private Vec3 start;
     private Vec3 v0 = Vec3.ZERO;

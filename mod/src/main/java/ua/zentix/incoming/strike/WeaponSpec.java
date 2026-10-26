@@ -707,53 +707,54 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     }
 
     // ---- article engines ({@link Article}): one value for server, sound ({@link Noise}), client plumes
-    // ({@code client.ClientWeaponSpec}); “E” is a law-derived estimate from other values, with a range.
+    // ({@code client.ClientWeaponSpec}); (est.) marks a law-derived estimate from other values, with a range.
 
     /**
      * Shahed MD-550 copies Limbach L550E: two-stroke flat-four, 548 cm³, 37 kW (50 hp) at 7500 rpm (Wikipedia
-     * “Limbach L550E”), direct-shaft two-blade pusher; cruise propeller efficiency 0.7 (E, 0.6–0.75); specific
-     * fuel consumption 0.45 kg/(kW·h) for this two-stroke class (E, 0.4–0.5: article unpublished), giving 4.6 g/s
-     * gasoline.
+     * “Limbach L550E”), direct-shaft two-blade pusher; cruise propeller efficiency 0.7 (est.) (0.6–0.75);
+     * specific fuel consumption 0.45 kg/(kW·h) for this two-stroke class (est.) (0.4–0.5: article unpublished),
+     * giving 4.6 g/s gasoline.
      */
     public static final Article.Propeller DRONE_PISTON = new Article.Propeller(37_000, 7500, 2, 0.7, 37_000 * 0.45 / 3.6e6);
 
     /**
-     * Shahed booster (jettisoned solid motor under tail): ~2–3 s burn (launch videos, Militarnyi), thrust
-     * unpublished. E: 4.2 kN (3–6 kN), ~215 kg including booster to ~35 m/s in 2.5 s at 15°; exhaust 2100 m/s
-     * (small solid motor ~215 s specific impulse); whole booster ~15 kg (E).
+     * Shahed booster (jettisoned solid motor under tail): ~2–3 s burn (launch videos, Militarnyi), thrust is
+     * unpublished. (est.) 4.2 kN (3–6 kN), ~215 kg including booster to ~35 m/s in 2.5 s at 15°; exhaust 2100 m/s
+     * (small solid motor ~215 s specific impulse); whole booster ~15 kg (est.).
      */
     public static final Article.SolidMotor DRONE_BOOSTER = new Article.SolidMotor(4200, 2100, 2.5, 15);
 
     /**
      * Tomahawk Williams F107-WR-402 cruise turbofan: 3.1 kN (700 lb), specific consumption 0.683 lb/(lb·h)
-     * (Wikipedia “Williams F107”), giving 0.060 kg/s; airflow unpublished. E: 6.1 kg/s at ~510 m/s jet (bypass
-     * ratio ~1, thrust ≈ flow × jet).
+     * (Wikipedia “Williams F107”), giving 0.060 kg/s; airflow is unpublished. (est.) 6.1 kg/s at ~510 m/s jet
+     * (bypass ratio ~1, thrust ≈ flow × jet).
      */
     public static final Article.Turbofan MISSILE_TURBOFAN = new Article.Turbofan(1, 3100, 6.1, 510, 3100 / Article.G * 0.683 / 3600);
 
     /**
      * Tomahawk Atlantic Research Mk 106 booster: 26.7 kN for 12 s (designation-systems.net, “Raytheon BGM-109
-     * Tomahawk”); exhaust ~2350 m/s (E: composite propellant ~240 s specific impulse), 136 kg propellant; whole
-     * booster ~270 kg (E: 1.6 t with vs 1.3 t without, Wikipedia “Tomahawk (missile)”).
+     * Tomahawk”); exhaust ~2350 m/s (est.) (composite propellant ~240 s specific impulse), 136 kg propellant; the
+     * whole booster ~270 kg (est.) (1.6 t with vs 1.3 t without, Wikipedia “Tomahawk (missile)”).
      */
     public static final Article.SolidMotor MISSILE_BOOSTER = new Article.SolidMotor(26_700, 2350, 12, 270);
 
     /**
      * B-2: four F118-GE-100 turbofans, 77 kN each (17300 lb, Wikipedia “Northrop B-2 Spirit”); static airflow
-     * ~135 kg/s, jet ~570 m/s (E: bypass 0.76, thrust ≈ flow × jet); cruise kerosene ~0.25 kg/s each (E).
+     * ~135 kg/s, jet ~570 m/s (est.) (bypass 0.76, thrust ≈ flow × jet); cruise kerosene ~0.25 kg/s each (est.).
      */
     public static final Article.Turbofan BOMBER_TURBOFANS = new Article.Turbofan(4, 77_000, 135, 570, 0.25);
 
     /**
-     * Grad 9M22U motor: burn time, impulse, propellant unpublished. E: 20 kg propellant (66.6 → 46.6 kg; modern
-     * replacement EDePro G-2000 uses 27 kg composite, 62.5 kN·s over 2.7 s), exhaust 2000 m/s (690 m/s burnout
-     * per Tsiolkovsky requires at least 1930; double-base 200–230 s), burn 1.9 s (1.5–2.5), giving 21 kN.
+     * Grad 9M22U motor: burn time, impulse, and propellant are unpublished. (est.) 20 kg propellant (66.6 → 46.6
+     * kg; modern replacement EDePro G-2000 uses 27 kg composite, 62.5 kN·s over 2.7 s), exhaust 2000 m/s (690 m/s
+     * burnout per Tsiolkovsky requires at least 1930; double-base 200–230 s), burn 1.9 s (1.5–2.5), giving 21 kN.
      */
     public static final Article.SolidMotor ROCKET_MOTOR = new Article.SolidMotor(20 / 1.9 * 2000, 2000, 1.9, 0);
 
     /**
-     * Lancet-3: electric two-blade pusher motor; power unpublished. E: drag at 110 km/h ~0.5 kW, shaft ~0.8 kW at
-     * propeller efficiency ~0.65; ~9000 rpm (E: ~0.36 m propeller tips at 0.5 M). Battery, no fuel flow.
+     * Lancet-3: electric two-blade pusher motor; power is unpublished. (est.) drag at 110 km/h ~0.5 kW, shaft
+     * ~0.8 kW at propeller efficiency ~0.65; ~9000 rpm (est.) (~0.36 m propeller tips at 0.5 M). The battery
+     * supplies power, so there is no fuel flow.
      */
     public static final Article.Propeller LOITER_MOTOR = new Article.Propeller(800, 9000, 2, 0.65, 0);
 
@@ -764,16 +765,16 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Shahed-136: 200 kg (Geran-2 up to 240), length 3.5 m, span 2.5 m, maximum ~185 km/h = 51 m/s at full power
-     * (Wikipedia “HESA Shahed 136”); body Ø ~0.5 m (E from photos). Launch fuel E: ~50 kg (30–70; 71 l tank
-     * stated only for 90 kg warhead variant). Open data conflict: full-power 50 kg lasts ~550 km (4.6 g/s);
+     * (Wikipedia “HESA Shahed 136”); body Ø ~0.5 m (est.) (from photos). Launch fuel (est.) ~50 kg (30–70; 71 l
+     * tank stated only for 90 kg warhead variant). Open data conflict: full-power 50 kg lasts ~550 km (4.6 g/s);
      * claimed 2000–2500 km requires triple fuel or low-throttle flight. Flight step (S2) derives range from
-     * consumption; unspecified here. CdA 0.3 m² (E, 0.27–0.34: 37 kW × 0.7 propeller at sea-level 51 m/s).
+     * consumption; unspecified here. CdA 0.3 m² (est.) (0.27–0.34: 37 kW × 0.7 propeller at sea-level 51 m/s).
      * Altitude since 2025: cruise 1.5–2.8 km, dive from 2–2.5 km; claimed 60–4000 m (Defence Intelligence of
-     * Ukraine, Euromaidan Press 06.2025 analyses, Gwara Media); use 2000 m. Dive E: vertical ~105 m/s, 60° impact
-     * ~99 m/s (propeller thrust, weight, drag balance, {@code WeaponSpecTest}). Warhead 50 kg (estimates 30–50;
-     * later Gerans 90, Wikipedia, ISIS): Artem chose original Shahed with 50 kg TNT. Explosive fraction
-     * unpublished; E: ~40 kg explosive × 1.25, ~10 kg casing, warhead casing Ø ~0.4 m (E: in 0.5 m fuselage
-     * nose). Impact fuel E: 30 kg gasoline (10–50, by path traveled).
+     * Ukraine, Euromaidan Press 06.2025 analyses, Gwara Media); use 2000 m. Dive (est.) vertical ~105 m/s, 60°
+     * impact ~99 m/s (propeller thrust, weight, drag balance, {@code WeaponSpecTest}). Warhead 50 kg (estimates
+     * 30–50; later Gerans 90, Wikipedia, ISIS): Artem chose original Shahed with 50 kg TNT. Explosive fraction
+     * unpublished; (est.) ~40 kg explosive × 1.25, ~10 kg casing, warhead casing Ø ~0.4 m (est.) (in 0.5 m
+     * fuselage nose). Impact fuel (est.) 30 kg gasoline (10–50, by path traveled).
      */
     static final Article DRONE_ARTICLE = new Article(150, 200, 3.5, 0.5, 2.5, 0.3, DRONE_PISTON, DRONE_BOOSTER,
             new Article.Envelope(51.4, 105, 2000), new Article.Impact(99, 60), new Article.Charge(50, 40, 10, 0.4), 30, null);
@@ -781,35 +782,36 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * BGM-109 Tomahawk Block IV: 1.3 t without booster, 5.56 m, Ø 0.52 m, span 2.67 m, M0.74 ≈ 250 m/s (880
      * km/h), terrain-hugging 30–50 m (Wikipedia “Tomahawk (missile)”, designation-systems.net). Fuel (TH-dimer
-     * like JP-10) unpublished; E: ~385 kg (1600 km × 0.060 kg/s ÷ 250 m/s). CdA 0.078 m² (E: 3.1 kN thrust equals
-     * drag at sea-level 250 m/s). WDU-36/B warhead 310 kg (designation-systems 340), including 120 kg PBXN-107
-     * (Wikipedia citing PEO U&W): Artem, 18.10 chose ~150 kg TNT (E: PBXN-107 relative strength ~1.25); casing
-     * ~190 kg steel, Ø ~0.5 m (E inside 0.52 m missile body). Terminal popup/dive or straight; angle unpublished,
-     * E: 45° at cruise speed. Impact fuel E: 275 kg (200–350, hundreds of kg and fireball size).
+     * like JP-10) unpublished; (est.) ~385 kg (1600 km × 0.060 kg/s ÷ 250 m/s). CdA 0.078 m² (est.) (3.1 kN
+     * thrust equals drag at sea-level 250 m/s). WDU-36/B warhead 310 kg (designation-systems 340), including 120
+     * kg PBXN-107 (Wikipedia citing PEO U&W): Artem, 18.10 chose ~150 kg TNT (est.) (PBXN-107 relative strength
+     * ~1.25); casing ~190 kg steel, Ø ~0.5 m (est.) (inside 0.52 m missile body). Terminal popup/dive or
+     * straight; angle unpublished, (est.) 45° at cruise speed. Impact fuel (est.) 275 kg (200–350, hundreds of kg
+     * and fireball size).
      */
     static final Article MISSILE_ARTICLE = new Article(925, 1310, 5.56, 0.52, 2.67, 0.078, MISSILE_TURBOFAN, MISSILE_BOOSTER,
             new Article.Envelope(250, 250, 40), new Article.Impact(250, 45), new Article.Charge(150, 120, 190, 0.5), 275, null);
 
     /**
      * B-2 Spirit: empty 71.7 t, takeoff up to 170.6 t, length 21 m, height 5.2 m, span 52.4 m, cruise M0.85 (~250
-     * m/s at 12 km), ceiling 15.2 km (Wikipedia “Northrop B-2 Spirit”); release height E: 12 km (high-altitude
-     * bomber 9–12 km). CdA E: ~4 m² (flying-wing C<sub>d0</sub> ~0.008 over 478 m²). No direct impact: bomb
-     * strikes.
+     * m/s at 12 km), ceiling 15.2 km (Wikipedia “Northrop B-2 Spirit”); release height (est.) 12 km
+     * (high-altitude bomber 9–12 km). CdA (est.) ~4 m² (flying-wing C<sub>d0</sub> ~0.008 over 478 m²). The
+     * bomber does not strike directly; its bomb does.
      */
     static final Article BOMBER_ARTICLE = new Article(71_700, 170_600, 21, 5.2, 52.4, 4, BOMBER_TURBOFANS, null,
             new Article.Envelope(250, 250, 12_000), null, null, 0, null);
 
-    /** GBU-57 ogive nose, calibers (E, {@link #BOMB_ARTICLE}). */
+    /** GBU-57 ogive nose, calibers (est.) ({@link #BOMB_ARTICLE}). */
     static final double BOMB_NOSE_CRH = 6;
 
     /**
      * GBU-57A/B MOP: 30000 lb class (13.6 t; BLU-127 casing with explosive 12304 kg), 6.2 × 0.8 m, explosive 2423
-     * kg: 2082 kg AFX-757, 341 kg PBXN-114 (Wikipedia “GBU-57A/B MOP” citing DTRA). TNT equivalent E: explosive
-     * mass (AFX-757 relative strength unpublished), casing ~9.9 t steel. Release/impact unpublished; E: from 12
-     * km at 250 m/s with C<sub>d</sub> 0.3 (0.2–0.35, CdA 0.15 m²), falls ~50 s, strikes at 511 m/s (506–522),
-     * 64° (point mass in standard atmosphere, {@code WeaponSpecTest}). No fuel. Nose E: {@value
-     * #BOMB_NOSE_CRH}-caliber ogive (Young nose coefficient N ≈ 0.99; nose geometry unpublished, penetrating
-     * bodies 6–9 calibers); at 511 m/s gives MOP 8.4–9.3 m rock penetration (S ≈ 0.84).
+     * kg: 2082 kg AFX-757, 341 kg PBXN-114 (Wikipedia “GBU-57A/B MOP” citing DTRA). TNT equivalent (est.)
+     * explosive mass (AFX-757 relative strength unpublished), casing ~9.9 t steel. Release/impact unpublished;
+     * (est.) from 12 km at 250 m/s with C<sub>d</sub> 0.3 (0.2–0.35, CdA 0.15 m²), falls ~50 s, strikes at 511
+     * m/s (506–522), 64° (point mass in standard atmosphere, {@code WeaponSpecTest}). No fuel. Nose (est.)
+     * {@value #BOMB_NOSE_CRH}-caliber ogive (Young nose coefficient N ≈ 0.99; nose geometry unpublished,
+     * penetrating bodies 6–9 calibers); at 511 m/s gives MOP 8.4–9.3 m rock penetration (S ≈ 0.84).
      */
     static final Article BOMB_ARTICLE = new Article(13_600, 13_600, 6.2, 0.8, 0.8, 0.15, null, null,
             new Article.Envelope(250, 511, 12_000), new Article.Impact(511, 64), new Article.Charge(2423, 2423, 9_900, 0.8), 0,
@@ -817,9 +819,9 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * LGM-30G Minuteman III: 36030 kg, 18.2 × 1.67 m (USAF Fact Sheet); mod models only first stage ({@link
-     * #ICBM_ASCENT}), mass without its propellant 15250 kg. CdA E: 0.66 m² (C<sub>d</sub> ~0.3 over 2.19 m²).
-     * First-stage burnout E: ~1680 m/s (Tsiolkovsky minus gravity, no drag). Warhead reentry E: ~7.2 km/s at
-     * 22.5° to horizon (minimum energy over ~10000 km: γ = (180° − 90°)/4, v from Kepler); Wikipedia “LGM-30
+     * #ICBM_ASCENT}), mass without its propellant 15250 kg. CdA (est.) 0.66 m² (C<sub>d</sub> ~0.3 over 2.19 m²).
+     * First-stage burnout (est.) ~1680 m/s (Tsiolkovsky minus gravity, no drag). Warhead reentry (est.) ~7.2 km/s
+     * at 22.5° to horizon (minimum energy over ~10000 km: γ = (180° − 90°)/4, v from Kepler); Wikipedia “LGM-30
      * Minuteman” states terminal 7.83 km/s. Nuclear warhead, no conventional.
      */
     static final Article ICBM_ARTICLE = new Article(ICBM_ASCENT.launchMass() - ICBM_ASCENT.propellant(), ICBM_ASCENT.launchMass(), 18.2, 1.67, 1.67, 0.66, null, null,
@@ -827,7 +829,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Grad 9M22U: 66.6 kg, 2.87 m, 122 mm, range 5–20.38 km, ~690 m/s (Wikipedia “BM-21 Grad”); motor {@link
-     * #ROCKET_MOTOR}. Subsonic CdA E: 0.0034 m² (C<sub>d</sub> 0.29); with {@link Article#machFactor} curve,
+     * #ROCKET_MOTOR}. Subsonic CdA (est.) 0.0034 m² (C<sub>d</sub> 0.29); with {@link Article#machFactor} curve,
      * maximum range 20.4 km at 53°, burnout 683 m/s, flight 77 s, apogee 7.2 km, impact 337 m/s at 62° ({@code
      * WeaponSpecTest}). Warhead 18.4 kg, including 6.4 kg explosive (Wikipedia, Russian “Grad (MLRS)”); TNT
      * equals explosive mass (as before), casing 12 kg, Ø 122 mm caliber.
@@ -837,18 +839,18 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Lancet-3: 12 kg, warhead 3 kg, 80–110 km/h, dive up to ~300 km/h from 600–800 m (Wikipedia “ZALA Lancet”,
-     * Army Recognition); length 1.65 m (source); Ø ~0.2, span ~1.2 m (E from model). CdA E: 0.028 m² (vertical
-     * dive 300 km/h at 12 kg). Impact E: 70° at ~82 m/s (weight/thrust/drag balance, {@code WeaponSpecTest}).
-     * Warhead explosive fraction unpublished; E: ~2.3 kg explosive × 1.3 = 3 kg TNT, casing 0.7 kg, Ø ~0.12 m (E
-     * inside 0.2 m body). No fuel (battery).
+     * Army Recognition); length 1.65 m (source); Ø ~0.2, span ~1.2 m (est.) (from model). CdA (est.) 0.028 m²
+     * (vertical dive 300 km/h at 12 kg). Impact (est.) 70° at ~82 m/s (weight/thrust/drag balance, {@code
+     * WeaponSpecTest}). Warhead explosive fraction unpublished; (est.) ~2.3 kg explosive × 1.3 = 3 kg TNT, casing
+     * 0.7 kg, Ø ~0.12 m (est.) (inside 0.2 m body). No fuel (battery).
      */
     static final Article LOITER_ARTICLE = new Article(12, 12, 1.65, 0.2, 1.2, 0.028, LOITER_MOTOR, null,
             new Article.Envelope(30.6, 83, 700), new Article.Impact(82, 70), new Article.Charge(3, 2.3, 0.7, 0.12), 0, null);
 
-    // ---- sound specs ({@link Noise}): source laws from engine values above; “E” is class-based estimate.
+    // ---- sound specs ({@link Noise}): source laws from engine values above; (est.) marks a class-based estimate.
 
     /**
-     * Unmuffled two-stroke louder than same muffled engine, dB (E: small two-stroke muffler insertion loss
+     * Unmuffled two-stroke louder than same muffled engine, dB (est.) (small two-stroke muffler insertion loss
      * 10–20).
      */
     static final double OPEN_EXHAUST = 10;
@@ -872,13 +874,13 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * Shahed ({@link #DRONE_PISTON}): blades 250 Hz, shaft 125 Hz; sound nominal at cruise 185 km/h = 51 m/s
      * (Wikipedia “HESA Shahed 136”). Loudness by class ({@link #UL_REF_DBA}: ~126.4 dBA at 16.4 kW). Ultralights
      * have mufflers; MD-550 has open exhaust (short unmuffled pipes on wreckage): add {@value #OPEN_EXHAUST} dB,
-     * small two-stroke muffler insertion loss (E, 10–20 dB; large diesel mufflers 20–30 dB, TRB Special Report
-     * 152, 1975). Reality check: Shahed engine audible beyond 10 km in quiet weather (computingonline.net,
+     * small two-stroke muffler insertion loss (est.) (10–20 dB; large diesel mufflers 20–30 dB, TRB Special
+     * Report 152, 1975). Reality check: Shahed engine audible beyond 10 km in quiet weather (computingonline.net,
      * “Intelligent analysis of sound patterns of UAVs”, 2024; Ukrainian witnesses likewise); this value gives
      * model night ~12.6 km, day ~5.9 km ({@code HearingTest}); muffled ultralight level alone gave 4.3 km, 20 dB
      * quieter than 3.4.1. At 54 m overhead, ~92 dBA at real cruise (~90 game: RPM follows speed). Static full
-     * throttle 0.8 nominal RPM, dive spinup capped at 1.1 (E). Body from {@link #DRONE_ARTICLE}; airflow
-     * recording at its cruise. Booster separation ~125 dBA (E).
+     * throttle 0.8 nominal RPM, dive spinup capped at 1.1 (est.). Body from {@link #DRONE_ARTICLE}; airflow
+     * recording at its cruise. Booster separation ~125 dBA (est.).
      */
     static final Noise DRONE_NOISE = new Noise(
             new Noise.Propeller(DRONE_PISTON.power(), DRONE_PISTON.rpm(), DRONE_PISTON.blades(), DRONE_ARTICLE.real().cruise(), 0.8, 1.1,
@@ -888,8 +890,8 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             new Noise.Body(DRONE_ARTICLE.diameter(), DRONE_ARTICLE.length(), DRONE_ARTICLE.real().cruise(), Spectra.BOMB_FALL), Double.NaN, Double.NaN, 125);
 
     /**
-     * Tomahawk ({@link #MISSILE_TURBOFAN}, {@link #MISSILE_BOOSTER}): spoolup from 0.55 idle over 2.5 s (E). Body
-     * {@link #MISSILE_ARTICLE}.
+     * Tomahawk ({@link #MISSILE_TURBOFAN}, {@link #MISSILE_BOOSTER}): spoolup from 0.55 idle over 2.5 s (est.).
+     * Body {@link #MISSILE_ARTICLE}.
      */
     static final Noise MISSILE_NOISE = new Noise(
             new Noise.Jet(MISSILE_TURBOFAN.thrust(), MISSILE_TURBOFAN.jet(), MISSILE_TURBOFAN.count(), 0.55, 50, Spectra.MISSILE_ENGINE_REAR),
@@ -901,8 +903,8 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
             Spectra.BOMBER_ENGINE), null, null, Double.NaN, Double.NaN, Double.NaN);
 
     /**
-     * GBU-57 MOP: 6.2 × 0.8 m (Wikipedia); fall recording is KC-135 wind (~230 m/s, E). Rock drilling ~125 dBA
-     * (E: stronger than heavy jackhammer).
+     * GBU-57 MOP: 6.2 × 0.8 m (Wikipedia); fall recording is KC-135 wind (~230 m/s) (est.). Rock drilling ~125 dBA
+     * (est.) (stronger than heavy jackhammer).
      */
     static final Noise BOMB_NOISE = new Noise(null, null, new Noise.Body(BOMB_ARTICLE.diameter(), BOMB_ARTICLE.length(), 230, Spectra.BOMB_FALL), 125, Double.NaN, Double.NaN);
 
@@ -915,7 +917,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
 
     /**
      * Grad ({@link #ROCKET_MOTOR}): 122 mm × 2.87 m (Wikipedia “BM-21 Grad”); howl recording is incoming mortar
-     * (~150 m/s, E).
+     * (~150 m/s) (est.).
      */
     static final Noise ROCKET_NOISE = new Noise(null, new Noise.Rocket(ROCKET_MOTOR.thrust(), ROCKET_MOTOR.exhaust(), Spectra.BOOSTER_ENGINE),
             new Noise.Body(ROCKET_ARTICLE.diameter(), ROCKET_ARTICLE.length(), 150, Spectra.ROCKET_INCOMING), Double.NaN, Double.NaN, Double.NaN);
@@ -923,8 +925,8 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * Lancet-3 ({@link #LOITER_MOTOR}): 110 km/h = 30.6 m/s (Wikipedia “ZALA Lancet”); blades ~300 Hz.
      * Class-based loudness: hobby to heavy multicopters, hover sound power 72.8–97.5 dB (eight-type measurements,
-     * Korea); ~0.8 kW near upper end, 95 dBA (E). Catapult 0.85 nominal RPM, dive spinup to 1.15 (E). Body ~0.2 ×
-     * 1.65 m (E); dive recording RC aircraft pass ~40 m/s (E). Catapult ~120 dBA (E).
+     * Korea); ~0.8 kW near upper end, 95 dBA (est.). Catapult 0.85 nominal RPM, dive spinup to 1.15 (est.). Body
+     * ~0.2 × 1.65 m (est.); dive recording RC aircraft pass ~40 m/s (est.). Catapult ~120 dBA (est.).
      */
     static final Noise LOITER_NOISE = new Noise(new Noise.Propeller(LOITER_MOTOR.power(), LOITER_MOTOR.rpm(), LOITER_MOTOR.blades(), LOITER_ARTICLE.real().cruise(), 0.85, 1.15,
             95, 800, Spectra.LOITER_ENGINE), null, new Noise.Body(LOITER_ARTICLE.diameter(), LOITER_ARTICLE.length(), 40, Spectra.LOITER_DIVE), Double.NaN, 120, Double.NaN);

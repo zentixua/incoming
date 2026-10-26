@@ -490,7 +490,7 @@ public final class ServerActions {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
         float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
         // Unready launch site: even one projectile uses a salvo, which loads/waits for site (LaunchPlaces), rather than starting
-        // virtually already cruising, where launch is invisible.
+        // outside the loaded world, already cruising, where launch is invisible.
         if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {
             SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
             return true;

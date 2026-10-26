@@ -3,11 +3,12 @@ package ua.zentix.incoming.strike;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Real article specifications: mass, dimensions, drag, engines, real flight speeds and altitudes, impact
- * conditions, and warhead of one flight entity ({@link WeaponSpec.Airframe#article}). One record per article,
- * shared by server and client: sound ({@code sound.Noise}) and plumes ({@code client.ClientWeaponSpec}) take
- * engine values here. SI units (kg, m, s, N); each value's source is in article spec Javadoc ({@link
- * WeaponSpec}); “E” means a law-derived estimate from other values, with a range.
+ * The real article specifications describe the mass, dimensions, drag, engines, real flight speeds and altitudes,
+ * impact conditions, and warhead of one flight entity ({@link WeaponSpec.Airframe#article}). Each article has one
+ * record shared by the server and client. Sound ({@code sound.Noise}) and plumes ({@code
+ * client.ClientWeaponSpec}) take their engine values from it. Values use SI units (kg, m, s, N); each value's
+ * source is in article spec Javadoc ({@link WeaponSpec}); the marker (est.) identifies a law-derived estimate
+ * from other values, with a range.
  * <p>
  * Game speeds and altitudes are in {@link WeaponSpec.Airframe} (blocks/tick, blocks): not physical, slower and
  * lower so approach is visible over game distances of hundreds of blocks; real ones are here ({@link #real}).
@@ -147,9 +148,9 @@ public record Article(double dryMass, double launchMass, double length, double d
     }
 
     /**
-     * Mach drag multiplier f(M) for finned slender bodies without published wind-tunnel data (E, typical curve
-     * shape, {@code formulas.md} §2): 1 through M0.8; rises to 1.8 at M1.05; 1.8 through M1.2; then falls by 0.45
-     * per Mach, no lower than 1.1. Approximate law: every real body has its own curve.
+     * Mach drag multiplier f(M) for finned slender bodies without published wind-tunnel data (est.) (typical
+     * curve shape, {@code formulas.md} §2): 1 through M0.8; rises to 1.8 at M1.05; 1.8 through M1.2; then falls
+     * by 0.45 per Mach, no lower than 1.1. Approximate law: every real body has its own curve.
      */
     public static double machFactor(double mach) {
         if (mach < 0.8) return 1;

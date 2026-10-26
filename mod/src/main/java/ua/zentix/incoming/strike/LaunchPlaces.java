@@ -12,13 +12,14 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
- * Ordered launch-site area ({@link LaunchOrigin}): salvo loads it in background ({@link AreaLoader}, like
- * projectile target area) and holds it while running, so launcher stands at the actual site and projectile
- * launches and accelerates in-world. Launch is visible afar (plume, launch cloud, trail, {@link FarFlights} to
- * {@code far_range}), so an unloaded site is no reason to skip launch: without the area, projectile would start
- * virtually already cruising (missile at cruise height above site, MLRS on descent), and nobody would see launch.
- * Area lives {@link #KEEP} ticks after last renewal; salvo renews each tick; canceled or failed salvo releases it
- * itself.
+ * A salvo loads the area around its ordered launch site ({@link LaunchOrigin}) in the background
+ * ({@link AreaLoader}, like a projectile's target area) and holds it while running. The launcher stands at the
+ * actual site, where the projectile launches and accelerates in the loaded world. The launch is visible from
+ * afar (plume, launch cloud, trail, {@link FarFlights} to {@code far_range}), so an unloaded site is no reason
+ * to skip it. Without the area, the projectile would start outside the loaded world, already cruising (missile
+ * at cruise height above the site, MLRS on descent), and nobody would see the launch. The area lives for
+ * {@link #KEEP} ticks after its last renewal. The salvo renews it each tick and releases it if canceled or
+ * failed.
  */
 public final class LaunchPlaces {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_launch_place", Comparator.<UUID>naturalOrder());
@@ -26,7 +27,8 @@ public final class LaunchPlaces {
     static final int KEEP = 100;
     /**
      * Salvo wait for launch-site area, ticks (30 s): fresh area ready in 0.7–4.6 s (target-area measurement,
-     * {@code RocketEntity#preloadDistance}). Timeout launches virtually without launcher, as before.
+     * {@code RocketEntity#preloadDistance}). On timeout, launch outside the loaded world without a launcher, as
+     * before.
      */
     public static final int WAIT = 600;
 
