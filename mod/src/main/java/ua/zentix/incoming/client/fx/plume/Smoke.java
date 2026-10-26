@@ -13,14 +13,14 @@ package ua.zentix.incoming.client.fx.plume;
  */
 public enum Smoke {
     /**
-     * Al₂O₃ from aluminized solid propellant: ω ≈ 0.99 (white); particles ~1.5 μm (⚠ estimate: solid-motor nozzle exit mean
+     * Al₂O₃ from aluminized solid propellant: ω ≈ 0.99 (white); particles ~1.5 μm (est.) (solid-motor nozzle exit mean
      * size 1–4 μm), ρ 3 950, Q ≈ 2.2 → σ_m ≈ 550 m²/kg (range 300–1 000). Incandescent liquid alumina
-     * absorbs more than cold alumina: ⚠ estimate 0.1.
+     * absorbs more than cold alumina: (est.) 0.1.
      */
     ALUMINA(550, 0.99, 0.1),
     /**
      * Double-base (ballistite) propellant salts — stabilizers and flash suppressants (potassium and lead salts), submicron:
-     * ⚠ estimate d ≈ 0.3 μm, ρ ~2 700, Q ~1 → σ_m ≈ 2 000 m²/kg; ω ≈ 0.95 (grey-white); hot — ⚠ 0.1.
+     * (est.) d ≈ 0.3 μm, ρ ~2 700, Q ~1 → σ_m ≈ 2 000 m²/kg; ω ≈ 0.95 (grey-white); hot — (est.) 0.1.
      */
     SALTS(2_000, 0.95, 0.1),
     /**
@@ -29,11 +29,11 @@ public enum Smoke {
      */
     SOOT(10_000, 0.25, 0.75),
     /**
-     * Contrail ice: young crystals ~2 μm (⚠ estimate, 1–3 μm), ρ 917, Q ≈ 2 → σ_m ≈ 1 600 m²/kg; ω ≈ 0.999.
+     * Contrail ice: young crystals ~2 μm (est.) (1–3 μm), ρ 917, Q ≈ 2 → σ_m ≈ 1 600 m²/kg; ω ≈ 0.999.
      */
     ICE(1_600, 0.999, 0);
 
-    /** Forward-scattering asymmetry (Henyey–Greenstein): smoke and clouds 0.6–0.8, ⚠ estimate 0.7. */
+    /** Forward-scattering asymmetry (Henyey–Greenstein): smoke and clouds 0.6–0.8, (est.) 0.7. */
     public static final double ASYMMETRY = 0.7;
 
     /** Mass extinction, m²/kg. */

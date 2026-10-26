@@ -607,7 +607,7 @@ public final class BlastSounds {
 
     /**
      * Ground rumble when a ground wave with peak velocity {@code ppvMps}, m/s, reaches the feet: pressure ρ₀c₀·v at
-     * the ground under the ear (the surroundings move in phase — radiator much larger than wavelength; ⚠ estimate:
+     * the ground under the ear (the surroundings move in phase — radiator much larger than wavelength; (est.)
      * radiation coefficient 1, lower for a tens-of-metres wave on soft ground), volume from pressure at the ear as for blasts.
      */
     public static void quake(double ppvMps) {
@@ -650,7 +650,7 @@ public final class BlastSounds {
         voice(blast, List.of(ClientSounds.blastShot(event, at, volume, pitch, seed, blast::factor, life(blast))), at, pitch, false);
     }
 
-    /** Ejecta fall window, s: mean fall power is mgh over this time (⚠ estimate: ejecta falls over 1–3 s). */
+    /** Ejecta fall window, s: mean fall power is mgh over this time (est.) (ejecta falls over 1–3 s). */
     static final double EJECTA_FALL_S = 2;
 
     /**

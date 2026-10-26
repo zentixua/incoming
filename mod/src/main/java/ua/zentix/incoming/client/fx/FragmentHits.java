@@ -43,7 +43,7 @@ final class FragmentHits {
     private static long budgetTick = Long.MIN_VALUE;
     private static int budgetLeft;
     /**
-     * Sparks on hard material start at this impact speed, m/s (estimate: steel sparks against stone even at tens of m/s; bright
+     * Sparks on hard material start at this impact speed, m/s (est.) (steel sparks against stone even at tens of m/s; bright
      * impact flashes start at hundreds).
      */
     static final double SPARK_SPEED = 300;
@@ -98,7 +98,7 @@ final class FragmentHits {
         Vec3 n = h.face == null ? Vec3.ZERO : Vec3.atLowerCornerOf(h.face.getNormal());
         Vec3 at = h.point.add(n.scale(0.05));
         BlockParticleOption dust = new BlockParticleOption(ParticleTypes.BLOCK, h.state);
-        // block piece count by impact energy (estimate: a puff per ~200 J, from 1 to 6)
+        // block piece count by impact energy (est.) (a puff per ~200 J, from 1 to 6)
         int bits = Mth.clamp((int) (h.joules / 200), 1, 6);
         for (int i = 0; i < bits; i++) {
             Vec3 d = n.scale(0.05 + 0.1 * rnd.nextDouble()).add(rnd.nextGaussian() * 0.04, 0.03 + 0.06 * rnd.nextDouble(), rnd.nextGaussian() * 0.04);

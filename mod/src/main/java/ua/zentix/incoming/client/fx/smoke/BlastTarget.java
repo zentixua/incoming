@@ -44,7 +44,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /**
      * Target matter for visuals: bulk density (destroyed volume mass), ejecta grain size seen by light, and dry fine
-     * dust colour. ⚠ All estimated from material composition, not measured ejecta of these charges:
+     * dust colour. (est.) All estimated from material composition, not measured ejecta of these charges:
      * <ul>
      * <li>density: reference bulk/apparent values: soil and sand 1600 (as {@link CloudModel#SOIL_DENSITY}), gravel 1700,
      * snow 400 (compacted 300–500), concrete and stone 2500 (concrete 2400, granite 2650, one value per class),
@@ -81,7 +81,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         public final double grainDensity;
         /** Ballistic ejecta share travelling as clods (nearby particles), rather than curtain grains. */
         public final double clods;
-        /** Destroyed share for DustModel bin mixture (size distribution estimated) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
+        /** Destroyed share for DustModel bin mixture (est.) (size distribution) ({@link #FINES_LOOSE}, {@link #FINES_CRUSHED}). */
         public final double fines;
         /** Loose matter: crater throws it as a curtain. */
         public final boolean loose;
@@ -131,13 +131,13 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * PM10 fines from contact explosion on concrete per specimen mass: Costa, Bodiot, Lecysyn et al., "Analyse des
      * particules produites par explosion au contact d'éprouvettes en béton", 38e Congrès Français sur les Aérosols
      * (2025), pp. 116–119, figs. 5–6, DOI 10.25576/ASFERA-CFA2025-43915: filter 0–2 g/kg (upper uncertainty ~2.4),
-     * order 1 g/kg. ⚠ Estimate: experiment denominator is entire specimen, not destroyed mass; collected material
+     * order 1 g/kg. (est.) experiment denominator is entire specimen, not destroyed mass; collected material
      * includes settled dust; assume all airborne.
      */
     static final double PM10_CONTACT = 0.001;
     /**
      * Same for cohesive matter (rock, concrete, masonry): full {@link ua.zentix.incoming.nuclear.model.DustModel} bin
-     * mixture with PM10 {@link #PM10_CONTACT}, namely PM10 / mixture share ({@code DustModel.PM10_SHARE}). ⚠ Estimate:
+     * mixture with PM10 {@link #PM10_CONTACT}, namely PM10 / mixture share ({@code DustModel.PM10_SHARE}). (est.)
      * experiments on concrete, stone and masonry by analogy; prior 0.1 unsupported by measurements (20 times more,
      * a wall at the eye in the street).
      */
@@ -198,14 +198,14 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
         return face == null ? null : face.add(normal.scale(slab));
     }
 
-    /** Rear spall spread about hole axis, degrees (⚠ estimate). */
+    /** Rear spall spread about hole axis, degrees (est.). */
     public static final double SPALL_CONE_DEG = 30;
 
     /**
      * {@code n} rear spall pieces: from rear-face hole ({@link #exit}: disc of radius {@link #hole} across hole axis,
      * piece 0.3 m beyond face) along breached face normal {@link #normal}, rather than world down or warhead heading:
      * product pressure pushes slab along normal (Gurney sandwich is one-dimensional; warhead momentum, Shahed
-     * ~200 kg × 50 m/s versus plug ~3.5 t × 29 m/s in a metre of boards, is an order smaller, ⚠ neglected), and server
+     * ~200 kg × 50 m/s versus plug ~3.5 t × 29 m/s in a metre of boards, is an order smaller, (est.) neglected), and server
      * hole lies about normal. Speed is Gurney plug speed ({@link #plugSpeed}) ±30 % (⚠ presentation: spread), direction
      * in a ±{@value #SPALL_CONE_DEG}° cone, outward from axis on piece's side of hole. Particle handles gravity.
      * Non-slab emits nothing.
@@ -244,7 +244,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
 
     /**
      * Rear spall speed of breached slab, m/s: breach plug mass M ({@link #mass}) under charge C, open Gurney sandwich
-     * (Kennedy 1970): v = √(2E)·[((1 + 2M/C)³ + 1)/(6(1 + M/C)) + M/C]^(−½). ⚠ Formula assumes an explosive layer covering
+     * (Kennedy 1970): v = √(2E)·[((1 + 2M/C)³ + 1)/(6(1 + M/C)) + M/C]^(−½). (est.) Formula assumes an explosive layer covering
      * the whole slab; a charge smaller than breach pushes only part downward, and real spall is slower (sources do
      * not quantify). Shahed (50 kg) in a metre of boards ~29 m/s, in a metre of stone ~6 m/s. Non-slab 0.
      */
@@ -260,7 +260,7 @@ public record BlastTarget(Family family, GroundMaterial material, double slab, d
      * Contact explosion tests on 0.3 m ordinary reinforced concrete slab breached through (Zhang W. et al., "The impacts
      * of contact explosions on ultra-high performance reinforced concrete slabs", Sci. Rep. 14:25700 (2024), table 3,
      * NRCS-3…5: 2.2–5 kg TNT): crater volume / crater plus spall volume (diameter² × depth, same shape) 0.17, 0.21, 0.46,
-     * increasing with breach strength. ⚠ Estimate 0.3: experiments smaller than our charges and slabs, same shape assumed.
+     * increasing with breach strength. (est.) 0.3: experiments smaller than our charges and slabs, same shape assumed.
      */
     public static final double SLAB_FRONT = 0.3;
 

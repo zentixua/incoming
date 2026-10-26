@@ -5,14 +5,14 @@ import ua.zentix.incoming.util.StandardAtmosphere;
 /**
  * Body vapour collar near sound speed — no Minecraft dependencies. Transonic flow above the body has a low-pressure zone:
  * air expands and cools there, and in humid air vapour condenses into a cloud (Prandtl–Glauert
- * singularity in photos — around M 0.9–1.1). Nothing in dry air or at lower speed. Bounds are estimates: accurate values
+ * singularity in photos — around M 0.9–1.1). Nothing in dry air or at lower speed. Bounds are estimates (est.): accurate values
  * need a flow solution for the specific body and dew point, which we do not have.
  */
 public final class VapourCollar {
-    /** Transonic: lower and upper Mach bounds (estimate from photos). */
+    /** Transonic: lower and upper Mach bounds (est.) (from photos). */
     static final double MACH_MIN = 0.9, MACH_MAX = 1.1;
     /**
-     * Above this humidity, cooling in the low-pressure zone is sufficient for vapour condensation (estimate: near ground it cools by degrees; dew point
+     * Above this humidity, cooling in the low-pressure zone is sufficient for vapour condensation (est.) (near ground it cools by degrees; dew point
      * is within a few degrees at relative humidity above ~0.7).
      */
     static final double HUMIDITY = 0.7;

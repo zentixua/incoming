@@ -45,7 +45,7 @@ public final class PallField {
     /**
      * Dust-layer top unevenness: top above a point is (1 ± this) of table top (shader: {@code PALL_BUMPS}, tile noise).
      * Thermals make the mixed-layer top over heated ground bumpy — a convective entrainment zone 0.2–0.4
-     * of layer height (Stull 1988, ch. 11; Deardorff, Willis and Stockton 1980), half of it — 0.3 (estimate). Same layer profile
+     * of layer height (Stull 1988, ch. 11; Deardorff, Willis and Stockton 1980), half of it — 0.3 (est.). Same layer profile
      * up to its own top, so optical depth above a point for light matches density: a hollow between bumps lies at layer top,
      * not deep within mean pall.
      */
@@ -53,7 +53,7 @@ public final class PallField {
     /**
      * Mixed layer: internal density differs from the mean by this fraction of its previous variation (young layer near front has patches with
      * gaps, Kuhl §3.5: density jumps by a factor of 7). Scalar fluctuations in a mixed convective layer are 10–20 % of the mean
-     * (Willis and Deardorff 1976, tank; estimate — 0.2): dense continuous pall from above is one blanket, not patches with holes
+     * (Willis and Deardorff 1976, tank; (est.) — 0.2): dense continuous pall from above is one blanket, not patches with holes
      * down to ground.
      */
     public static final double MIXED = 0.2;
@@ -113,12 +113,12 @@ public final class PallField {
     static final double SPRAY_S = 30;
     /**
      * Spray top falls to this fraction of stripping height while large drops settle (over {@link #SPRAY_S}): fine mist
-     * remains lower down (estimate: drops hundreds of microns across fall a meter per second; fine drops, centimeters).
+     * remains lower down (est.) (drops hundreds of microns across fall a meter per second; fine drops, centimeters).
      */
     static final double SPRAY_SINK = 0.6;
     /**
      * Visibility in the densest base surge, m ({@link WaterModel#surgeDensity} = 1): fog of fallen water-column drops,
-     * a solid white wall at Baker (Glasstone &amp; Dolan, §2.47–2.65; estimate, like the fractions in {@link WaterModel}).
+     * a solid white wall at Baker (Glasstone &amp; Dolan, §2.47–2.65; (est.), like the fractions in {@link WaterModel}).
      */
     static final double SURGE_VISIBILITY_M = 50;
 
@@ -475,7 +475,7 @@ public final class PallField {
     /**
      * Layer mixing {@code afterS} model seconds after wave phase, 0..1: patches and gaps in the young layer
      * (torn by boundary-layer eddies near the front) disperse over a layer-eddy turnover h/w*. The layer rises over heated ground at
-     * speed w* over {@link DustModel#RISE_S} to height h — this is the eddy turnover time (estimate: w* = 1.5–4 m/s,
+     * speed w* over {@link DustModel#RISE_S} to height h — this is the eddy turnover time (est.) (w* = 1.5–4 m/s,
      * h = 70–400 m for 15 kt, review §5), e-folding.
      */
     static double mixed(double afterS) {

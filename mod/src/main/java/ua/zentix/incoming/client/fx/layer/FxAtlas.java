@@ -401,7 +401,7 @@ public final class FxAtlas extends SimplePreparableReloadListener<NativeImage[]>
 
     /**
      * Fine frame structure (puff6.json “detail”, {@code tools/bake_fx/pack.py}) in a turbulent frame is at least this fraction
-     * of its maximum (⚠ estimate: later frames look like a smooth blurry ball).
+     * of its maximum (est.) (later frames look like a smooth blurry ball).
      */
     static final double TURBULENT = 2.0 / 3;
 

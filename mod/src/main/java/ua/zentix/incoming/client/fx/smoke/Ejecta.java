@@ -9,13 +9,13 @@ import net.minecraft.world.phys.Vec3;
  * <ul>
  * <li><b>Speed</b>: Housen, Schmidt, Holsapple, "Crater ejecta scaling laws", J. Geophys. Res. 88(B3), 1983: element
  * ejected at distance x from centre has v = C₂·√(g·R)·(x/R)^(−1/μ); dry porous soil μ ≈ {@value #MU} (same target class,
- * Housen, Holsapple, Icarus 211, 2011, physics.md [S07]); ⚠ C₂ = {@value #C2} estimated from their sand plots;
- * ⚠ no ejecta within {@value #FROM} R from centre (fast tail sensitive to cutoff, mass a few percent, made almost
+ * Housen, Holsapple, Icarus 211, 2011, physics.md [S07]); (est.) C₂ = {@value #C2} estimated from their sand plots;
+ * (est.) no ejecta within {@value #FROM} R from centre (fast tail sensitive to cutoff, mass a few percent, made almost
  * transparent by the law itself). Mass uniform by hemisphere volume at radius x: share u = (x/R)³.</li>
- * <li><b>Angle</b>: {@value #ANGLE_DEG}° ± {@value #SPREAD_DEG}° above horizontal, uniform (⚠ code estimate: sources lack
+ * <li><b>Angle</b>: {@value #ANGLE_DEG}° ± {@value #SPREAD_DEG}° above horizontal, uniform (est.) (code estimate: sources lack
  * contact-charge angular distribution, physics.md), uniform azimuth; instantaneous ejection at explosion (excavation
  * lasts milliseconds to tens of milliseconds versus seconds of flight).</li>
- * <li><b>Flight</b>: no drag, g = 9.81 (⚠ submillimetre grains at tens of m/s already have significant drag: curtain
+ * <li><b>Flight</b>: no drag, g = 9.81 (est.) (submillimetre grains at tens of m/s already have significant drag: curtain
  * slightly higher and farther than real; magnitude not estimated, mod has no grain-curtain drag law);
  * an element returning to ejection height is on ground.</li>
  * <li><b>Light</b>: curtain visible through grains ({@link BlastTarget.Matter#extinction}); tens-of-centimetre clods
@@ -29,11 +29,11 @@ import net.minecraft.world.phys.Vec3;
  * travelled path, no thinner than a quarter crater radius.
  */
 public final class Ejecta {
-    /** Housen et al. 1983 law for dry soil: μ and C₂ (estimate). */
+    /** Housen et al. 1983 law for dry soil: μ and C₂ (est.). */
     public static final double MU = 0.41, C2 = 0.55;
-    /** No ejecta inside this fraction of crater radius from centre (⚠ estimate). */
+    /** No ejecta inside this fraction of crater radius from centre (est.). */
     public static final double FROM = 0.2;
-    /** Ejection angle above horizontal and spread to either side, degrees (⚠ estimate). */
+    /** Ejection angle above horizontal and spread to either side, degrees (est.). */
     public static final double ANGLE_DEG = 45, SPREAD_DEG = 10;
     static final double G = 9.80665;
     /** Curtain jets around circle and segments per jet. */

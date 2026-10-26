@@ -58,13 +58,13 @@ public final class Fragments {
     static final double CD_PLATE = 1.17, CD_CUBE = 1.05;
     /**
      * Foliage mass per area, kg/m²: dry tree foliage — 0.03–0.15 (Poorter et al., New Phytologist 182, 2009); a living
-     * leaf with water is two to three times heavier (⚠ estimate 0.2). Terminal speed is ~1.7 m/s, like falling leaves.
+     * leaf with water is two to three times heavier (est.) (0.2). Terminal speed is ~1.7 m/s, like falling leaves.
      */
     static final double LEAF_AREAL = 0.2;
     /**
      * A canopy piece is a 0.2–0.35 m foliage tuft with a twig, rather than an individual leaf: the wave tears both leaves and branches, while the drawing
      * samples a few pieces per canopy block that contains hundreds of real leaves; a 10 cm leaf at 60 blocks is subpixel, so
-     * a sample of leaves would vanish entirely. Tuft mass per area matches leaves (thin twig, ⚠ estimate).
+     * a sample of leaves would vanish entirely. Tuft mass per area matches leaves (thin twig) (est.).
      */
     static final float SPRIG_MIN = 0.2f, SPRIG_MAX = 0.35f;
     /** Plank thickness, m (2.5 cm — a normal cladding or floor plank). */
@@ -76,9 +76,9 @@ public final class Fragments {
     public static final double LIFT_MIN = 0.02, LIFT_MAX = 0.12;
     /**
      * Upward wind for a piece from a structure or canopy, up to this wind fraction: flow separates at a bluff-body edge, and the detached
-     * layer rises at 15–30° (flow around a ground-mounted cube: Castro and Robins, J. Fluid Mech. 79, 1977; ⚠ angle from memory,
+     * layer rises at 15–30° (flow around a ground-mounted cube: Castro and Robins, J. Fluid Mech. 79, 1977; (est.) angle from memory,
      * 25° chosen, tan 0.47); house edges and canopies thus lift torn material. The fraction persists throughout flight, although the separation region is
-     * one to two structure heights downstream, and air displacement over the phase is of the same order (⚠ approximation).
+     * one to two structure heights downstream, and air displacement over the phase is of the same order (est.) (approximation).
      */
     public static final double LIFT_EDGE = Math.tan(Math.toRadians(25));
     /**

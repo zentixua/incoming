@@ -370,7 +370,7 @@ public final class Exhaust {
     static final int SPENT_SMOKE_TICKS = 70;
 
     /**
-     * Falling spent booster: thin smoke from hot nozzle insulation smouldering (⚠ quantity is not computed: previous
+     * Falling spent booster: thin smoke from hot nozzle insulation smouldering (est.) (quantity is not computed: previous
      * appearance, first 3.5 s of falling), via the effects layer rather than vanilla particles: vanilla writes depth, so the hot nozzle
      * ({@code NozzleGlow}) behind the smoke vanished completely. No fire: thrust decayed to zero before separation ({@code ThrustCurve}).
      */

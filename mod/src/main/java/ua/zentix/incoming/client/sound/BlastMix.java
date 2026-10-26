@@ -34,7 +34,7 @@ public final class BlastMix {
     /** Perspective file loudness, LUFS (maximum momentary) — the same numbers as in {@code tools/build_sounds.py}. */
     static final double NEAR_LUFS = -13.5, MID_LUFS = -13.5, FAR_LUFS = -15;
     /**
-     * Charge for which the perspective recordings play as recorded, kg TNT. Estimate: perspectives are assembled and
+     * Charge for which the perspective recordings play as recorded, kg TNT. (est.): perspectives are assembled and
      * mixed as a Shahed blast (near: 8 ms phase, “~50 kg charge at a couple of dozen metres”, {@code build_sounds.py});
      * the recordings themselves range from 4 kg detonations to quarry blasts.
      */

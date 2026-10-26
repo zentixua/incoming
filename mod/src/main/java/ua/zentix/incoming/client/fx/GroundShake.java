@@ -25,7 +25,7 @@ public final class GroundShake {
     /**
      * Body sway duration after the impulse, s: a standing human vertically is a system with 4–6 Hz resonance and damping
      * of 0.3–0.5 critical (ISO 2631-1; Griffin, “Handbook of Human Vibration”, 1990); an impulse shorter than its period takes
-     * 2–3 periods to settle — ⚠ estimate. Otherwise a 70 ms rock impulse would last less than a quarter camera nod.
+     * 2–3 periods to settle — (est.). Otherwise a 70 ms rock impulse would last less than a quarter camera nod.
      */
     static final double BODY_RING_S = 0.4;
     /**

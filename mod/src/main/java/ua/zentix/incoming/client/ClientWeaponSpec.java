@@ -199,14 +199,14 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     //
     // Thrust, flow and exhaust velocity come from the article spec ({@link Article}: one value for server and client,
     // source there); only visual needs live here: temperature, product composition, smoke. Values use open data where
-    // available (source alongside); missing data are ⚠ estimates with ranges. A nozzle whose dimensions are not
+    // available (source alongside); missing data are estimates marked (est.) with ranges. A nozzle whose dimensions are not
     // published is calculated: exit pressure equals ambient pressure at its design altitude (ground level for
     // boosters, a few kilometres for first stages). Rocket fuel heat in air is
     // c_p·(T₀ − 288 K); rocket efficiency at launch (thrust × speed against heat) is below 0.1, taken as 0.
 
     /**
      * Combustible products at the exit (afterburn in air), mass fractions: aluminized composite CO ~0.22, H₂ ~0.02;
-     * double-base CO ~0.40, H₂ ~0.01 (⚠ typical equilibrium exit compositions, not published for the articles).
+     * double-base CO ~0.40, H₂ ~0.01 (est.) (typical equilibrium exit compositions, not published for the articles).
      */
     private static final double COMPOSITE_CO = 0.22, COMPOSITE_H2 = 0.02, DOUBLE_BASE_CO = 0.40, DOUBLE_BASE_H2 = 0.01;
 
@@ -247,52 +247,52 @@ public record ClientWeaponSpec(ClientAirframe airframe, @Nullable ClientAirframe
     private static final double AIR_MOLAR = 0.028_96;
 
     /**
-     * Shahed booster ({@link WeaponSpec#DRONE_BOOSTER}): composite fuel with ~10 % aluminium (⚠), 3 000 K, γ 1.15,
+     * Shahed booster ({@link WeaponSpec#DRONE_BOOSTER}): composite fuel with ~10 % aluminium (est.), 3 000 K, γ 1.15,
      * 27 g/mol; nozzle designed for ground level.
      */
     static final Motor DRONE_BOOSTER = solid("drone booster", WeaponSpec.DRONE_BOOSTER, 3_000, 1.15, 0.027, 0, Smoke.ALUMINA, alumina(0.10), COMPOSITE_CO, COMPOSITE_H2, 0.09);
     /**
-     * Tomahawk booster ({@link WeaponSpec#MISSILE_BOOSTER}): composite with ~16 % aluminium (⚠), 3 200 K, γ 1.14
+     * Tomahawk booster ({@link WeaponSpec#MISSILE_BOOSTER}): composite with ~16 % aluminium (est.), 3 200 K, γ 1.14
      * (two-phase; aluminized fuels have 1.13–1.18), 28 g/mol; nozzle designed for ground level.
      */
     static final Motor MISSILE_BOOSTER = solid("missile booster", WeaponSpec.MISSILE_BOOSTER, 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
     /**
-     * Tomahawk cruise turbofan ({@link WeaponSpec#MISSILE_TURBOFAN}: air flow, jet, fuel): mixed exhaust ~700 K (⚠);
-     * JP-10 (C₁₀H₁₆): 1.06 kg water per kg and 42.1 MJ/kg; soot ~0.03 g/kg (⚠); efficiency 0.33 (thrust × 245 m/s
+     * Tomahawk cruise turbofan ({@link WeaponSpec#MISSILE_TURBOFAN}: air flow, jet, fuel): mixed exhaust ~700 K (est.);
+     * JP-10 (C₁₀H₁₆): 1.06 kg water per kg and 42.1 MJ/kg; soot ~0.03 g/kg (est.); efficiency 0.33 (thrust × 245 m/s
      * against fuel heat).
      */
     static final Motor MISSILE_SUSTAINER = breathing("missile turbofan", WeaponSpec.MISSILE_TURBOFAN.airflow(),
             WeaponSpec.MISSILE_TURBOFAN.fuelFlow(), WeaponSpec.MISSILE_TURBOFAN.jet(), 700, 1.38, 3e-5, 1.06, 42.1e6, 0.33);
     /**
      * Shahed two-stroke MD-550 (petrol flow: {@link WeaponSpec#DRONE_PISTON}): exhaust ~70 g/s at ~1 000 K and
-     * ~50 m/s (⚠); two-stroke soot and oil ~1 g/kg (⚠); water ~1.35 kg/kg petrol, 43.5 MJ/kg; efficiency ~0.13
+     * ~50 m/s (est.); two-stroke soot and oil ~1 g/kg (est.); water ~1.35 kg/kg petrol, 43.5 MJ/kg; efficiency ~0.13
      * (propeller 0.7 × 37 kW against fuel heat).
      */
     static final Motor DRONE_ENGINE = breathing("drone piston", 0.07, WeaponSpec.DRONE_PISTON.fuelFlow(), 50, 1_000, 1.35, 1e-3, 1.35, 43.5e6, 0.13);
     /**
      * Each of the B-2's four F118-GE-100 engines ({@link WeaponSpec#BOMBER_TURBOFANS}: static thrust, cruise fuel flow):
-     * at cruise altitude ~60 kg/s exhaust at ~450 m/s and ~700 K (⚠ estimates: air is four times less dense than at
+     * at cruise altitude ~60 kg/s exhaust at ~450 m/s and ~700 K (est.) (air is four times less dense than at
      * ground level, so flow and jet speed are below the static spec); kerosene: 1.25 kg water per kg and 43.2 MJ/kg
-     * (Schumann 1996), efficiency 0.3 (same source, engines of that generation), soot ~0.04 g/kg (⚠).
+     * (Schumann 1996), efficiency 0.3 (same source, engines of that generation), soot ~0.04 g/kg (est.).
      */
     static final Motor BOMBER_ENGINE = breathing("bomber turbofan", 60, WeaponSpec.BOMBER_TURBOFANS.fuelFlow(), 450, 700, 1.38, 4e-5, 1.25, 43.2e6, 0.3);
     /**
-     * 9M22U rocket motor (flow and exhaust velocity: {@link WeaponSpec#ROCKET_MOTOR}): double-base (ballistite, ⚠ Soviet
-     * practice), ~2 800 K, γ 1.22, 24 g/mol; smoke is stabilizer salts ~2 % (⚠); nozzle fits the 122 mm calibre,
-     * exit radius 5.5 cm (⚠): a ground-pressure nozzle would not fit (~10 cm needed), so the jet is underexpanded.
+     * 9M22U rocket motor (flow and exhaust velocity: {@link WeaponSpec#ROCKET_MOTOR}): double-base (ballistite, (est.) Soviet
+     * practice), ~2 800 K, γ 1.22, 24 g/mol; smoke is stabilizer salts ~2 % (est.); nozzle fits the 122 mm calibre,
+     * exit radius 5.5 cm (est.): a ground-pressure nozzle would not fit (~10 cm needed), so the jet is underexpanded.
      */
     static final Motor ROCKET_MOTOR = solidWithExit("grad motor", 1, WeaponSpec.ROCKET_MOTOR.flow(), WeaponSpec.ROCKET_MOTOR.exhaust(), 2_800, 1.22, 0.024, 0.055, Smoke.SALTS, 0.02, DOUBLE_BASE_CO, DOUBLE_BASE_H2, 0.12);
     /**
      * Minuteman III first stage (M55, composite: ammonium perchlorate, aluminium, PBAA binder; thrust, fuel and burn
-     * time: ICBM {@link WeaponSpec.Ascent}): 340.7 kg/s at 2 652 m/s; four nozzles, ⚠ designed for ~3 km
-     * (overexpanded at ground level); ~3 300 K, γ 1.14, 28 g/mol, ~16 % aluminium (⚠).
+     * time: ICBM {@link WeaponSpec.Ascent}): 340.7 kg/s at 2 652 m/s; four nozzles, (est.) designed for ~3 km
+     * (overexpanded at ground level); ~3 300 K, γ 1.14, 28 g/mol, ~16 % aluminium (est.).
      */
     static final Motor ICBM_STAGE = solid("icbm stage", 4, WeaponSpec.NUKE.ascent().flow(), WeaponSpec.NUKE.ascent().exhaust(), 3_300, 1.14, 0.028, 3_000,
             Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);
 
     /**
      * 9M96 SAM solid-fuel motor (flow and exhaust velocity: {@link InterceptorSpec.Passport}; the second, cruise mode
-     * is not physical: no open data show it for the 9M96): composite with ~16 % aluminium (⚠), nozzle designed for
+     * is not physical: no open data show it for the 9M96): composite with ~16 % aluminium (est.), nozzle designed for
      * ground level; cruise mode uses the same charge and nozzle at lower chamber pressure, so the jet is overexpanded.
      */
     public static final Motor SAM_BOOST = solid("sam boost", InterceptorSpec.SAM.passport().boost(), 3_200, 1.14, 0.028, 0, Smoke.ALUMINA, alumina(0.16), COMPOSITE_CO, COMPOSITE_H2, 0.09);

@@ -58,7 +58,7 @@ public record Flame(double core, double flame, double length, double width, bool
 
     /**
      * Jet gas distance from the exit after seconds seconds since ignition, m: exit speed in the core; axial speed beyond it
-     * speed·core/x (Pope), so x² grows linearly with time. ⚠ Starting jet head travels slower than the established
+     * speed·core/x (Pope), so x² grows linearly with time. (est.) Starting jet head travels slower than the established
      * axis (about half speed) — an upper estimate.
      */
     public double gasReach(double seconds) {

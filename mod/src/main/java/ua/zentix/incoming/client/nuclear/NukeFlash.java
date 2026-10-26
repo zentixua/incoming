@@ -71,7 +71,7 @@ public final class NukeFlash {
     private static long ticks, endTick;
     /**
      * Frame overexposure at which lens-scattered light whitens the entire frame (white share = overexposure / VEIL_X: the lens
-     * scatters about a percent of frame light, ⚠ estimate), and maximum on-screen frame gain (above this the frame
+     * scatters about a percent of frame light) (est.), and maximum on-screen frame gain (above this the frame
      * is already white). Presentation.
      */
     private static final double VEIL_X = 100, GAIN_MAX = 16;
@@ -79,14 +79,14 @@ public final class NukeFlash {
     private static final double SETTLED = 1.004;
     /**
      * Sky glare at full air transmittance, fraction of a white screen, and glare threshold for flash lighting the world
-     * ({@link #lightUpWorld}). <b>Estimates</b>, not derived: both are screen fractions, not light; glare has no yield or
+     * ({@link #lightUpWorld}). (est.), not derived: both are screen fractions, not light; glare has no yield or
      * 1/d² term, limited only by air (Glasstone, fig. 7.104; beyond half the visibility range — extrapolated tuning). Thus
      * the world flashes out to ~5.3 visibility ranges at any yield, while ball light at the second maximum there ({@code MushroomModel.light}
      * through the same air) is 0.5 % of noon light for 1 kt, 4.5 % for 15 kt, 90 % for 1 Mt: at night (dark-adapted eye,
      * {@code Sight.adapted}) this is a flash; by day, glare from small yields at distance exceeds physics.
      */
     private static final double SKY_GLARE = 0.6, WORLD_FLASH = 0.05;
-    /** Fraction of the pulse scattered by the sky toward someone who cannot see the ball (estimate). */
+    /** Fraction of the pulse scattered by the sky toward someone who cannot see the ball (est.). */
     private static final double SCATTERED = 0.15;
     /** Initial dazzle veil (almost nothing discernible in the field) and time for the bright afterimage to darken, s. */
     private static final float VEIL = 0.9f, AFTERGLOW_S = 2;

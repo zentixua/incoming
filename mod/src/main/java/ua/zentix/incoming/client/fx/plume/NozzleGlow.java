@@ -11,13 +11,13 @@ import ua.zentix.incoming.util.StandardAtmosphere;
  * motor casing has internal thermal protection; over the burn its exterior heats by tens of degrees (Sutton, Biblarz,
  * “Rocket Propulsion Elements”, ch. 15); glow begins at ~800 K (Draper point).
  * <p>
- * Walls — typical tactical solid-motor nozzle (Sutton, Biblarz, ch. 15; ⚠ no drawings for Tomahawk Mk 106 or Shahed
+ * Walls — typical tactical solid-motor nozzle (Sutton, Biblarz, ch. 15; (est.) no drawings for Tomahawk Mk 106 or Shahed
  * boosters): throat — graphite insert ({@link Material#GRAPHITE}), divergent section — carbon-phenolic composite
- * ({@link Material#CARBON_PHENOLIC}, char after firing). Each is a flat wall (⚠ curvature ignored) with an
+ * ({@link Material#CARBON_PHENOLIC}, char after firing). Each is a flat wall (est.) (curvature ignored) with an
  * insulated rear face (behind it — insulation and steel: almost no heat reaches them in tens of seconds); through-thickness conduction
  * uses a grid ({@link #surface}). During firing, gas convection by Bartz heats it
  * ({@link #bartz}: h ∝ p_c^0.8 — falls with pressure during thrust decay, {@link ThrustCurve}) toward wall recovery
- * temperature ({@link #recovery}); ⚠ no ablation, alumina deposition or hot-wall correction (σ = 1). After
+ * temperature ({@link #recovery}); (est.) no ablation, alumina deposition or hot-wall correction (σ = 1). After
  * firing, wall heat is lost by outward radiation through the exit (fraction {@link #VIEW_OUT}) and air convection
  * ({@link #AIR_H}); internal conduction supplies surface heat. Visible surface light: ε × black body at its
  * temperature ({@link BlackBody}).
@@ -26,7 +26,7 @@ import ua.zentix.incoming.util.StandardAtmosphere;
  * the in-game acceleration plateau maps to the real plateau ({@link #seconds}), decay to real duration (as in
  * {@link ThrustCurve}). At separation, walls are heated as after real 12 s for Tomahawk and 2.5 s for Shahed.
  * Visible result: toward decay end, incandescent divergent section near exit (~2 500 K, yellow-white), fading over 10–30 s through orange
- * to dark red; the more massive graphite throat keeps red light inside the nozzle for minutes (⚠ no post-firing nozzle cooling
+ * to dark red; the more massive graphite throat keeps red light inside the nozzle for minutes (est.) (no post-firing nozzle cooling
  * measurements — order of magnitude from the law). These are cooling-model times; the game cleans up the spent booster earlier:
  * mesh and glow fade together before removal (not physical, {@code BoosterLifetime}), so players never see the throat
  * cool over minutes.
@@ -36,16 +36,16 @@ public final class NozzleGlow {
     static final double SIGMA = 5.670374e-8;
     /**
      * Wall radiation fraction escaping through the exit: the rest exchanges with other nozzle walls and the empty
-     * casing at roughly the same temperature (⚠ cavity view-factor estimate).
+     * casing at roughly the same temperature (est.) (cavity view factor).
      */
     static final double VIEW_OUT = 0.5;
-    /** Air convection in a falling booster nozzle, W/(m²·K) (⚠ estimate: base region, 10–100). */
+    /** Air convection in a falling booster nozzle, W/(m²·K) (est.) (base region, 10–100). */
     static final double AIR_H = 25;
     /** Conical divergent section half-angle: standard 15° (Sutton, Biblarz, ch. 3). */
     static final double CONE_HALF_ANGLE = Math.toRadians(15);
-    /** Graphite insert thickness in throat radii (⚠ typical inserts: outer diameter ~2 throat diameters). */
+    /** Graphite insert thickness in throat radii (est.) (typical inserts: outer diameter ~2 throat diameters). */
     static final double INSERT = 1.0;
-    /** Carbon-phenolic divergent section thickness in throat radii (⚠ estimate: 1–2 cm for nozzles of this size). */
+    /** Carbon-phenolic divergent section thickness in throat radii (est.) (1–2 cm for nozzles of this size). */
     static final double LINER = 0.4;
     /** Temperature table step, s. */
     static final double SAMPLE = 0.05;
@@ -65,15 +65,15 @@ public final class NozzleGlow {
     public enum Material {
         /**
          * Fine-grain graphite throat inserts (ATJ grade): ρ 1 760 kg/m³; heat capacity — JANAF (graphite, C(ref)); conductivity
-         * across grain ~125 W/(m·K) at 300 K, falling to ~33 at 2 500 K (⚠ ATJ reference curves, ±20 %);
-         * ε 0,85 (0,8–0,9).
+         * across grain ~125 W/(m·K) at 300 K, falling to ~33 at 2 500 K (est.) (ATJ reference curves, ±20 %);
+         * ε 0.85 (0.8–0.9).
          */
         GRAPHITE(1760, 0.85, new double[]{250, 298.15, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000, 3500},
                 massHeat(6.816, 8.517, 8.581, 11.817, 14.623, 16.844, 18.537, 19.827, 20.824, 21.610, 23.904, 25.094, 25.926, 26.611, 27.225),
                 new double[]{300, 1000, 1500, 2000, 2500, 3000}, new double[]{125, 60, 45, 38, 33, 30}),
         /**
          * Carbon-phenolic char (solid-motor divergent sections, MX-4926 grade): ρ 1 300 kg/m³, heat capacity ~1 500 J/(kg·K),
-         * conductivity ~1 W/(m·K) (⚠ char 0.6–1.7 by temperature), ε 0.85.
+         * conductivity ~1 W/(m·K) (est.) (char 0.6–1.7 by temperature), ε 0.85.
          */
         CARBON_PHENOLIC(1300, 0.85, new double[]{298, 3000}, new double[]{1500, 1500}, new double[]{298, 3000}, new double[]{1.0, 1.0});
 
@@ -186,9 +186,9 @@ public final class NozzleGlow {
         throatRadius = throatRadius(motor);
         depth = Math.max(0, exitRadius - throatRadius) / Math.tan(CONE_HALF_ANGLE);
         double ratio = Math.max(1, exitRadius * exitRadius / (throatRadius * throatRadius));
-        // divergent section as one wall at side-area midpoint (⚠): heat transfer and recovery there
+        // divergent section as one wall at side-area midpoint (est.): heat transfer and recovery there
         double mid = (1 + ratio) / 2;
-        // nozzle gas emissivity from jet core across the exit (⚠ gas denser inside nozzle: lower estimate)
+        // nozzle gas emissivity from jet core across the exit (est.) (gas denser inside nozzle: lower estimate)
         Flame plateau = FlameModel.at(motor, 0);
         double gas = plateau == null ? 0 : plateau.emissivity();
         throatWall = new Wall(Material.GRAPHITE, INSERT * throatRadius, bartz(motor, 1), recovery(motor, 1), gas);
@@ -278,7 +278,7 @@ public final class NozzleGlow {
 
     /**
      * Gas-to-wall heat transfer at area ratio ratio = A/A_t (1 — throat), W/(m²·K): Bartz (1957),
-     * h = 0.026/D_t^0.2 · μ^0.2·c_p/Pr^0.6 · (p_c/c*)^0.8 · (A_t/A)^0.9 (throat curvature radius ~ D_t, σ = 1 — ⚠).
+     * h = 0.026/D_t^0.2 · μ^0.2·c_p/Pr^0.6 · (p_c/c*)^0.8 · (A_t/A)^0.9 (throat curvature radius ~ D_t, σ = 1 — (est.)).
      */
     static double bartz(Motor m, double ratio) {
         double d = 2 * throatRadius(m);

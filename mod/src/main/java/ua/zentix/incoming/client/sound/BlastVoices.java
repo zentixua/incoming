@@ -21,7 +21,7 @@ import java.util.List;
  * <li>blast rumble — {@link Rumble#QUADRANTS} loops, crater-fire roar — {@link Quarters#N} (sum of all fires,
  * {@link CraterFire});</li>
  * <li>the nuke ({@link #NUKE}): four fire-roar loops and wind feeding the fire ({@code NukeAfter}), tinnitus, two sirens;</li>
- * <li>the rest of the world ({@link #WORLD}, estimate): vanilla (rain, mobs, footsteps, blocks), other mods (Create
+ * <li>the rest of the world ({@link #WORLD}) (est.): vanilla (rain, mobs, footsteps, blocks), other mods (Create
  * machines), our unbudgeted world sounds ({@link Sources}: ruins, substations, sirens) — their count is unlimited,
  * so beyond the estimate, use free engine channels at impact ({@link #admit}, {@code free}) and reserve for the
  * loudest ({@link #reserve}). Crater ejecta fall is a blast one-shot within this budget;</li>
@@ -65,8 +65,8 @@ final class BlastVoices {
     /** Nuke channels: four fire-roar loops, wind feeding the fire, tinnitus, two sirens. */
     static final int NUKE = 4 + 1 + 1 + 2;
     /**
-     * Rest of the world, estimate: vanilla during combat — rain (new sound every few ticks, lasting 1–2 s), footsteps
-     * and mobs; Create machines; our world sounds and crater fires. Estimate, not measurement: free-channel check
+     * Rest of the world, (est.): vanilla during combat — rain (new sound every few ticks, lasting 1–2 s), footsteps
+     * and mobs; Create machines; our world sounds and crater fires. (est.), not measurement: free-channel check
      * handles anything beyond it.
      */
     static final int WORLD = 64;

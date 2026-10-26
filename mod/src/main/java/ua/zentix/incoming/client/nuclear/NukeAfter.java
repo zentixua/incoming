@@ -44,7 +44,7 @@ import java.util.Optional;
 final class NukeAfter {
     static final int QUADRANTS = FireRoar.QUADRANTS;
     /**
-     * Storm-cell fire source height above ground, m: estimate — flame from burning houses above low-rise roofs (the
+     * Storm-cell fire source height above ground, m: (est.) — flame from burning houses above low-rise roofs (the
      * Hamburg storm reached tens of meters); source height only changes ground effect and daytime shadow along the path.
      */
     static final double STORM_FLAME_M = 5;

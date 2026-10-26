@@ -256,12 +256,12 @@ public final class FlashAftermath {
      * places fire (flash layer). Probes — {@link #SMOKE_PROBES} equal-area locations in a sector ahead of the camera out to
      * {@link #SMOKE_RANGE} blocks; smoking locations emit through the cloud model ({@link Puffs}):
      * <ul>
-     * <li>volatiles — α·(q − q₀)·S / L<sub>g</sub>: absorption α = {@value #ABSORB} (estimate: wood and foliage 0.6–0.9), light above
+     * <li>volatiles — α·(q − q₀)·S / L<sub>g</sub>: absorption α = {@value #ABSORB} (est.) (wood and foliage 0.6–0.9), light above
      * threshold q₀ = {@link #SMOKE_Q} cal/cm², S — area represented by the probe, heat of wood gasification
-     * L<sub>g</sub> = {@value #GASIFY} J/kg (Tewarson, SFPE Handbook, table 3-4.x: 1.8 MJ/kg for Douglas fir; ⚠ from memory);</li>
-     * <li>smoke from them — {@value #SMOKE_YIELD} kg per kg (estimate: smoldering wood aerosol yield 0.01–0.1), extinction
-     * {@value #SMOKE_K} m²/kg (~4.4 m²/g for smoldering smoke, Mulholland, SFPE Handbook; ⚠ from memory), gray-brown color;</li>
-     * <li>heat into air — {@value #TO_AIR} of absorbed heat (estimate), gas ~{@value #SMOKE_K_GAS} K (wood pyrolysis 500–700 K).</li>
+     * L<sub>g</sub> = {@value #GASIFY} J/kg (Tewarson, SFPE Handbook, table 3-4.x: 1.8 MJ/kg for Douglas fir; (est.) from memory);</li>
+     * <li>smoke from them — {@value #SMOKE_YIELD} kg per kg (est.) (smoldering wood aerosol yield 0.01–0.1), extinction
+     * {@value #SMOKE_K} m²/kg (~4.4 m²/g for smoldering smoke, Mulholland, SFPE Handbook; (est.) from memory), gray-brown color;</li>
+     * <li>heat into air — {@value #TO_AIR} of absorbed heat (est.), gas ~{@value #SMOKE_K_GAS} K (wood pyrolysis 500–700 K).</li>
      * </ul>
      * A wisp remains visible until the wave reaches the location (its dust wall sweeps it away).
      */

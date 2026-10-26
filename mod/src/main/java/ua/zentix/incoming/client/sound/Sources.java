@@ -23,7 +23,7 @@ import java.util.List;
  * {@link Loudness#ENGINE_LUFS} reference. No manual ranges: power, path and background decide audibility. Sound
  * arrives at sound speed ({@link #play}).
  * <p>
- * Numbers have sources; without measurements, marked order-of-magnitude estimates.
+ * Numbers have sources; without measurements, marked (est.) as order-of-magnitude estimates.
  */
 public final class Sources {
     /**
@@ -44,31 +44,31 @@ public final class Sources {
     /**
      * Civil-defense siren (electromechanical, outdoor): outdoor warning sirens give 100–130 dB(C) at 100 feet
      * (30.5 m) on axis (FEMA CPG 1-17, “Outdoor Warning Systems Guide”, 1980); use 115 dB(C), middle of large-city
-     * class; siren tone (400–600 Hz) A ≈ C − 3: L<sub>WA</sub> = 112 + 20·lg 30.5 + 11 ≈ 153 dBA (estimate: mod
+     * class; siren tone (400–600 Hz) A ≈ C − 3: L<sub>WA</sub> = 112 + 20·lg 30.5 + 11 ≈ 153 dBA (est.) (mod
      * city's siren type unspecified). Rotor rotates — louder on axis, quieter aside; here on-axis, no averaging.
      */
     public static final Source SIREN = new Source(153, Spectra.SIREN, Spectra.SIREN_LUFS);
     /** Nuclear alarm siren — same outdoor siren ({@link #SIREN}), own recording. */
     public static final Source NUKE_ALARM = new Source(153, Spectra.NUKE_ALARM, Spectra.NUKE_ALARM_LUFS, Loudness.ENGINE_LUFS);
     /**
-     * Substation arc short circuit: estimate ~140 dBA (~120 dBA at 10 m; no public sound measurements found for
+     * Substation arc short circuit: (est.) ~140 dBA (~120 dBA at 10 m; no public sound measurements found for
      * distribution-substation arc faults — order of nearby thunder, whose recording was used to build it).
      */
     public static final Source GRID_FAIL = new Source(140, Spectra.GRID_FAIL, Spectra.GRID_FAIL_LUFS);
-    /** Disabled substation arc crackle: estimate ~115 dBA (~95 dBA at 1 m). */
+    /** Disabled substation arc crackle: (est.) ~115 dBA (~95 dBA at 1 m). */
     public static final Source GRID_SPARK = new Source(115, Spectra.GRID_SPARK, Spectra.GRID_SPARK_LUFS);
     /**
      * Operating substation transformer hum: ~10 MVA power transformer around 68 dBA surface mean at 0.3 m
-     * (NEMA TR 1 level table; ⚠ from memory), measurement surface area ~40 m²: L<sub>WA</sub> = 68 + 10·lg 40
+     * (NEMA TR 1 level table; (est.) from memory), measurement surface area ~40 m²: L<sub>WA</sub> = 68 + 10·lg 40
      * ≈ 84 dBA.
      */
     public static final Source GRID_HUM = new Source(84, Spectra.GRID_HUM, Spectra.GRID_HUM_LUFS);
-    /** City block loses or regains power — breaker click and hum dying or starting: estimate ~100 dBA at its centre. */
+    /** City block loses or regains power — breaker click and hum dying or starting: (est.) ~100 dBA at its centre. */
     public static final Source GRID_POWER_DOWN = new Source(100, Spectra.GRID_POWER_DOWN, Spectra.GRID_POWER_DOWN_LUFS);
     public static final Source GRID_POWER_UP = new Source(100, Spectra.GRID_POWER_UP, Spectra.GRID_POWER_UP_LUFS);
-    /** House collapse in nuclear ruins: estimate ~125 dBA (building demolition ~100–110 dBA at 100 m around it). */
+    /** House collapse in nuclear ruins: (est.) ~125 dBA (building demolition ~100–110 dBA at 100 m around it). */
     public static final Source NUKE_COLLAPSE = new Source(125, Spectra.NUKE_COLLAPSE, Spectra.NUKE_COLLAPSE_LUFS, Loudness.ENGINE_LUFS);
-    /** Debris fall in ruins: estimate ~110 dBA. */
+    /** Debris fall in ruins: (est.) ~110 dBA. */
     public static final Source RUIN_DEBRIS = new Source(110, Spectra.DEBRIS_FALL, Spectra.DEBRIS_FALL_LUFS, Loudness.ENGINE_LUFS);
     /**
      * ICBM launch — recording of pad launch; power from first-stage solid motor law in spec
@@ -78,14 +78,14 @@ public final class Sources {
 
     /**
      * Flame noise: fraction of open turbulent flame heat release converted to sound, 10⁻⁶–10⁻⁵ (Strahle W. C.,
-     * “Combustion noise”, Prog. Energy Combust. Sci. 4, 1978; ⚠ from memory): lower edge, estimate.
+     * “Combustion noise”, Prog. Energy Combust. Sci. 4, 1978; (est.) from memory): lower edge (est.).
      */
     public static final double FLAME_EFFICIENCY = 1e-6;
     /** Crater-fire roar: fire recording, power from pool heat ({@link #flame}). */
     public static final Source BLAST_FIRE = new Source(Double.NaN, Spectra.BLAST_FIRE, Spectra.BLAST_FIRE_LUFS);
     /**
      * This fraction of debris and ground falling energy becomes sound: stone impacts on ground and each other —
-     * estimate 10⁻⁴ (solid-body impacts 10⁻⁴–10⁻³, order of magnitude).
+     * (est.) 10⁻⁴ (solid-body impacts 10⁻⁴–10⁻³, order of magnitude).
      */
     public static final double IMPACT_EFFICIENCY = 1e-4;
     /** Crater ejecta fall: recording, power from mass and fall height ({@link #fall}). */

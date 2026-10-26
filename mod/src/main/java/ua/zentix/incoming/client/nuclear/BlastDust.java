@@ -27,14 +27,14 @@ final class BlastDust implements SmokeGrid.Source {
     /**
      * Fraction of demolished masonry mass (brick, cobblestone, concrete, dressed stone) lofted as fine dust: the model's 0.1 kg/m² of debris
      * dust represents clay walls and plaster in a city where houses occupy half the land and contain ~400 kg of clay, plaster and tile
-     * per square meter of built area (two-story house) — ⚠ estimate. Wood, foliage, glass and metal do not crumble into dust:
+     * per square meter of built area (two-story house) — (est.). Wood, foliage, glass and metal do not crumble into dust:
      * boards and trunks break into pieces.
      */
     static final double FINES = DustModel.Surface.REFERENCE.debris() / (0.5 * 400);
     /**
      * Dust streak rises and spreads with air distance traveled: upward — 0.02–0.08 of the distance (Kuhl et al. 1992, §3.4:
      * vertical layer speed is 0.02 of wind at the bottom and 0.04–0.12 at the top; same share as head dust, {@link BlastWall#origin}),
-     * sideways — eddies at the same speed, streak middle 0.04–0.12 (⚠ midpoint estimate).
+     * sideways — eddies at the same speed, streak middle 0.04–0.12 (est.) (midpoint).
      */
     static final double RISE = 0.05, SPREAD = 0.07;
     /** Dust from a one-block breach forms a billow of this half-size, blocks. */
@@ -140,7 +140,7 @@ final class BlastDust implements SmokeGrid.Source {
     /**
      * Share of a streak with σ {@code sigma} not yet mixed into a dust layer with top {@code top} (blocks): a layer of height h is uniformly
      * mixed, with σ = h/√12; a streak outgrown by the layer is already its dust, drawn by the pall (like the wall head handing over to
-     * the pall, {@link BlastWall#handoff}): share = σ²/(σ² + σ_layer²) (⚠ estimated transition shape). Do not expand the streak to the layer:
+     * the pall, {@link BlastWall#handoff}): share = σ²/(σ² + σ_layer²) (est.) (transition shape). Do not expand the streak to the layer:
      * the frame would show a second dust over the pall — sky-lit, without the wall head's shadow above it ({@code film} scene:
      * a uniform beige veil over the whole frame).
      */

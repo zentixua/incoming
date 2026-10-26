@@ -15,9 +15,9 @@ import ua.zentix.incoming.client.nuclear.NukePall;
  * {@link FarBlasts#fireballs}).
  */
 public final class SmokeFrame {
-    /** Two-phase billow-noise period, s ({@code fx_pall}: {@code smokeClumps}): billows travel speed × period over it (estimate). */
+    /** Two-phase billow-noise period, s ({@code fx_pall}: {@code smokeClumps}): billows travel speed × period over it (est.). */
     static final float PERIOD = 2;
-    /** Altitude for billow-noise wind, blocks (clouds hundreds of blocks above ground; estimate). */
+    /** Altitude for billow-noise wind, blocks (clouds hundreds of blocks above ground) (est.). */
     static final double NOISE_WIND_HEIGHT = 100;
 
     /** This frame's grid ({@link #build}). */

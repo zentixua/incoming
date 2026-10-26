@@ -5,12 +5,12 @@ import ua.zentix.incoming.util.Stability;
 /**
  * Smoke above fire: continuous heat and soot source, Briggs plume, without Minecraft. Metres, seconds, watts.
  * <ul>
- * <li><b>Source.</b> Fire block is a burning ~1 m² face: ⚠ estimate {@value #BLOCK_WATTS} W (wood peak heat release
+ * <li><b>Source.</b> Fire block is a burning ~1 m² face: (est.) {@value #BLOCK_WATTS} W (wood peak heat release
  * 100–250 kW/m², Babrauskas, SFPE Handbook, 5th ed., ch. 26, midpoint). Convection carries {@value #CONVECTIVE}
- * (radiation 0.3, wood flame radiative fraction, same source; ⚠ from memory). Soot yield 0.015 kg per kg burned at
- * effective heat 12.4 MJ/kg (red oak, Tewarson's SFPE Handbook table; ⚠ from memory).</li>
+ * (radiation 0.3, wood flame radiative fraction, same source; (est.) from memory). Soot yield 0.015 kg per kg burned at
+ * effective heat 12.4 MJ/kg (red oak, Tewarson's SFPE Handbook table; (est.) from memory).</li>
  * <li><b>Rise</b>: Briggs (Briggs G. A., "Plume Rise Predictions", 1975; formulas as EPA ISC3, vol. 2, §1.1.4;
- * ⚠ verify): buoyancy flux F = g·Q_c/(π·c_p·ρ·T); rise path Δh(x) = 1.6·F^⅓·x^⅔/u until final rise: neutral and unstable
+ * (est.) verify): buoyancy flux F = g·Q_c/(π·c_p·ρ·T); rise path Δh(x) = 1.6·F^⅓·x^⅔/u until final rise: neutral and unstable
  * air 21.425·F^¾/u (F &lt; 55) or 38.71·F^⅗/u, stable air 2.6·(F/(u·s))^⅓, s = N², calm air 5.0·F^¼·s^(−⅜)
  * (MTT; smaller of the two). Smooth between classes D and E.</li>
  * <li><b>Spread</b>: Pasquill–Gifford along wind path ({@link Stability}), rise (σ = Δh/3.5, Pasquill 1976), and source
@@ -18,13 +18,13 @@ import ua.zentix.incoming.util.Stability;
  * <li><b>Mass</b>: soot per metre of wind path ṁ/u. Plume visible while centre chord optical depth exceeds Koschmieder
  * threshold (0.02).</li>
  * <li><b>Temperature</b> near source: Heskestad axis excess, ΔT = 9.1·(T/(g·c_p²·ρ²))^⅓·Q_c^⅔·z^(−5/3) (SFPE Handbook,
- * ch. 13; ⚠ from memory), capped at flame ({@link #FLAME_K}: surface emissive power of small fires 50–100 kW/m²,
- * midpoint; ⚠ estimate); visible flame light comes from luminous soot ({@link #flameLight}).</li>
+ * ch. 13; (est.) from memory), capped at flame ({@link #FLAME_K}: surface emissive power of small fires 50–100 kW/m²,
+ * midpoint) (est.); visible flame light comes from luminous soot ({@link #flameLight}).</li>
  * </ul>
  * Below wind {@value #CALM} m/s, plume formulas fail: use that value (as for trails).
  */
 public final class FirePlume {
-    /** Heat release per fire block, W (⚠ estimate). */
+    /** Heat release per fire block, W (est.). */
     public static final double BLOCK_WATTS = 175e3;
     /** Heat fraction carried by convection. */
     public static final double CONVECTIVE = 0.7;
@@ -39,14 +39,14 @@ public final class FirePlume {
      */
     public static final double LUMINOUS_K = Math.pow(140e3 / 5.670374e-8, 0.25);
     /**
-     * Luminous flame temperature fluctuations, K (⚠ from memory: JP-8 pool flame 200–300 K, Gritzo et al., 1998).
+     * Luminous flame temperature fluctuations, K (est.) (from memory: JP-8 pool flame 200–300 K, Gritzo et al., 1998).
      * Visible brightness rises steeply with T (Wien ∝ e^(−c₂/λT)), so mean flame brightness is that of its hot regions.
      */
     public static final double FLUCTUATION_K = 200;
     /**
      * Visible flame light (linear r, g, b, luminance Y; noon white wall 1, as {@code BlackBody.light}): black-body mean
      * over {@link #FLUCTUATION_K} fluctuations about {@link #LUMINOUS_K}, like black body ~1450 K, ~0.1 white wall
-     * (~3·10³ cd/m²; ⚠ estimate: candle ~10⁴). Using only {@link #FLAME_K} made daytime flame black (3·10⁻⁴ wall),
+     * (~3·10³ cd/m²; (est.) candle ~10⁴). Using only {@link #FLAME_K} made daytime flame black (3·10⁻⁴ wall),
      * and at night 300 m away a dark red point.
      */
     private static final double[] FLAME_LIGHT = visibleFlame();
@@ -177,7 +177,7 @@ public final class FirePlume {
 
     /**
      * Heskestad axis gas speed at height z above source, m/s: u = 3.4·(g/(c_p·ρ·T))^⅓·Q_c^⅓·z^(−⅓) (SFPE Handbook,
-     * ch. 13; ⚠ from memory, as {@link #excess}).
+     * ch. 13; (est.) from memory, as {@link #excess}).
      */
     public double axisSpeed(double z) {
         double c = 3.4 * Math.cbrt(CloudModel.G / (CloudModel.CP * CloudModel.RHO * CloudModel.T_AIR));

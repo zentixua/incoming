@@ -17,13 +17,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  * (isentropic, no losses). Underexpanded jet beyond exit is wider than the nozzle; overexpanded — narrower.</li>
  * <li><b>Core</b> — supersonic centre where gas has not mixed with air: L_c = 3.45·d_j·(1 + 0.38·M_j)²
  * (Eldred, NASA SP-8072, 1971, fully expanded jet; formula and analysis — James et al., Trans. JSASS 14,
- * 2016, Po_2_17: at M = 3 it is 15.8 d; Varnier, AIAA J. 39(10), 2001, measures half as long — ⚠ factor-of-2 accuracy).</li>
+ * 2016, Po_2_17: at M = 3 it is 15.8 d; Varnier, AIAA J. 39(10), 2001, measures half as long — (est.) factor-of-2 accuracy).</li>
  * <li><b>Afterburning</b>: solid propellant products are fuel-rich (CO, H₂ — {@link Motor#monoxide}, {@link Motor#hydrogen}) and
- * burn in entrained air. Beyond the core the axial product fraction decays like a round jet, ∝ 1/x (estimate: velocity and
+ * burn in entrained air. Beyond the core the axial product fraction decays like a round jet, ∝ 1/x (est.) (velocity and
  * admixture decay this way in the far jet); flame ends where the axial mixture is stoichiometric: x_f = L_c/f_st
  * (Burke–Schumann: jet flame is the stoichiometric mixture surface), f_st = 1/(1 + air per kg of products: CO —
  * 2.46 kg, H₂ — 34.5 kg). Flame temperature is adiabatic at f_st: products/air mixture plus heat of
- * combustion (CO 10.1 MJ/kg, H₂ 120 MJ/kg) divided by heat capacity {@link #CP_FLAME} (⚠ no dissociation or radiation — upper
+ * combustion (CO 10.1 MJ/kg, H₂ 120 MJ/kg) divided by heat capacity {@link #CP_FLAME} (est.) (no dissociation or radiation — upper
  * estimate, real temperature 10–20 % lower).</li>
  * <li><b>Tail</b>: beyond the flame, gas cools by the same ∝ 1/x law and remains visible while above the Draper point (798 K —
  * incandescent matter becomes visible in darkness).</li>
@@ -33,12 +33,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * mass, path grows as x, density falls as x²). Sheath luminance (flame and tail) sampled along the axis
  * ({@link Flame#sheath}: drawn by nearby jet); part luminance is side-area mean (distant and world light).</li>
  * <li><b>Diamonds</b> — shocks when exit pressure differs from ambient (both underexpansion and
- * overexpansion); visible beyond a ratio of {@link #DIAMONDS} (⚠ estimate: weak shocks do not heat gas enough to
+ * overexpansion); visible beyond a ratio of {@link #DIAMONDS} (est.) (weak shocks do not heat gas enough to
  * glow).</li>
  * </ol>
  * No plume ({@code null}) if exit gas is below the Draper point or its light is invisible to the eye at night (piston,
  * turbofan: almost no particles, no exhaust fuel). Width — mixing layer grows inward from the nozzle lip to the axis by the core
- * end and equally outward (⚠ estimate: real layer grows outward more).
+ * end and equally outward (est.) (real layer grows outward more).
  */
 public final class FlameModel {
     /** Draper point, K. */
@@ -49,7 +49,7 @@ public final class FlameModel {
     static final double AIR_CO = 2.46, AIR_H2 = 34.5;
     /** CO and H₂ lower heating values, J/kg. */
     static final double HEAT_CO = 10.1e6, HEAT_H2 = 120e6;
-    /** Hot products/air mixture heat capacity, J/(kg·K) (⚠ estimate: 1.2–1.4 kJ/(kg·K) at 1 500–2 500 K). */
+    /** Hot products/air mixture heat capacity, J/(kg·K) (est.) (1.2–1.4 kJ/(kg·K) at 1 500–2 500 K). */
     static final double CP_FLAME = 1_300;
     /** Eldred core length coefficient. */
     static final double ELDRED = 3.45, ELDRED_MACH = 0.38;

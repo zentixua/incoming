@@ -74,7 +74,7 @@ final class FrontDust implements SmokeGrid.Source {
     static final double HEIGHT = 1.3, COLUMN_TAU = 0.5, EDGE_TAU = 0.8;
     /**
      * Screen colour of a thick grit layer — dry light soil dust: ω' ≈ 0.9 in red (mineral dust in visible light
-     * 0.85–0.95, ⚠ estimate for turf grit), and albedo derived from it ({@link SmokeGrid#dustAlbedo}). A billow takes albedo, rather than
+     * 0.85–0.95, (est.) for turf grit), and albedo derived from it ({@link SmokeGrid#dustAlbedo}). A billow takes albedo, rather than
      * screen colour: screen colour used as albedo produced a grey thick layer, while dark dust (ω' ≈ 0.8) in a billow of 0.8 depth
      * under overhead sun darkened at the centre against its bright translucent rim (“doughnuts”).
      */

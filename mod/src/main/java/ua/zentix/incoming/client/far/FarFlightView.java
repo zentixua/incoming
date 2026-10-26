@@ -100,7 +100,7 @@ public final class FarFlightView {
     private static final int HEAD = TrailPoints.CAPACITY;
     /**
      * Point wind-drift lag, ticks: products leave jet without wind velocity and acquire it over 0.9/(1 − 0.9)
-     * ticks (⚠ estimate: smoke-particle acceleration time with 0.9 drag per tick; ribbon and its volume move alike).
+     * ticks (est.) (smoke-particle acceleration time with 0.9 drag per tick; ribbon and its volume move alike).
      */
     static final double LAG = 0.9 / (1 - 0.9);
     /** Air for new points and frame (tick takes it from {@link ClientAir}; unit tests supply their own). */

@@ -74,7 +74,7 @@ public record BlastSource(@Nullable WeaponType weapon, double chargeKg, double f
 
     /**
      * Explosive composition: Tomahawk — RDX-based PBXN-107 (ref/passport.md); for Shahed, Lancet, Grad and anti-aircraft
-     * missile bursts the composition is unpublished — TNT, as in warheads of their families (estimate; smoke in strike footage is
+     * missile bursts the composition is unpublished — TNT, as in warheads of their families (est.) (smoke in strike footage is
      * black).
      */
     public Explosive explosive() {

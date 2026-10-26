@@ -18,9 +18,9 @@ package ua.zentix.incoming.client.fx.smoke;
  * <p>
  * <b>Range.</b> Wall jet is a “puff”: impulse per radian i(φ, t) = I(t)·w(φ) (I(t) — impulse jet delivered to ground
  * by this instant, ṁ·u over feed) carries entrained air, a layer of thickness S·r for radial wall jet
- * (S = {@value #SPREAD}: plane wall jet 0.073 — Launder, Rodi, Annu. Rev. Fluid Mech. 15, 1983, ⚠ from memory;
+ * (S = {@value #SPREAD}: plane wall jet 0.073 — Launder, Rodi, Annu. Rev. Fluid Mech. 15, 1983, (est.) from memory;
  * radial growth 1/0.83 times larger — Lin, CSME 2008), mass ρ·S·r³/3 per radian. Without ground friction
- * (⚠ upper bound), i(t) = (ρSr³/3)·dr/dt: r⁴ = r₀⁴ + 12·∫i dt/(ρS) (short impulse: ∫i dt = i·t; constant feed
+ * (est.) (upper bound), i(t) = (ρSr³/3)·dr/dt: r⁴ = r₀⁴ + 12·∫i dt/(ρS) (short impulse: ∫i dt = i·t; constant feed
  * of duration T with final impulse i, while ongoing: i·t²/(2T)). Puff pushes dust while front faster than
  * surface wind (dr/dt = 3i/(ρSr³)); afterward wind carries dust — front stops at (3i/(ρSU))^{1/3}. Puff dust
  * follows its mass (∝ r′² radially): mean at ¾ r, second moment ⅗ r².

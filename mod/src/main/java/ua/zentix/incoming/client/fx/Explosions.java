@@ -27,7 +27,7 @@ final class Explosions {
      * Instantaneous part of a surface blast (t = 0) — solids: explosive products sparks and, if the tank held fuel, fuel-soaked burning
      * casing pieces with smoky tails (their smoke is thinner than a grid cell — particles). Warhead casing fragments themselves
      * do not glow (≈500–700 K, {@code warhead.FragmentModel}) or smoke — nothing to burn: they are visible through hits
-     * ({@link FragmentHits}). Burning piece and spark counts follow fireball radius r (estimate, as previously by visual radius).
+     * ({@link FragmentHits}). Burning piece and spark counts follow fireball radius r (est.) (as previously by visual radius).
      */
     static void solids(ClientLevel level, Vec3 c, float r, boolean fuel, RandomSource rnd) {
         float k = Fx.density(c);

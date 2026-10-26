@@ -323,9 +323,9 @@ public final class BlastEffects {
 
         /**
          * Breach debris from a slab over a void: front chips leave the charge face outward, opposite the hole axis, under the same ejecta law
-         * as a crater of the breach radius (⚠ the mod has no dedicated law for front-face chips); rear spall leaves the hole on the rear
+         * as a crater of the breach radius (est.) (the mod has no dedicated law for front-face chips); rear spall leaves the hole on the rear
          * face along the hole axis ({@link BlastTarget#spall}: pierced face normal — down for a roof, sideways for a wall; plug speed by
-         * Gurney). Pieces carry all breach ejecta except dust ({@link BlastTarget#clodVolume}), half at each face (⚠ sources give no
+         * Gurney). Pieces carry all breach ejecta except dust ({@link BlastTarget#clodVolume}), half at each face (est.) (sources give no
          * split: front F physics.md — front crushing and rear spall, without numbers). No charge position on the face (no support in
          * the packet) — chips from the blast point, no spall.
          */
@@ -378,7 +378,7 @@ public final class BlastEffects {
             }
         }
 
-        /** Column water per clump particle, kg (E). */
+        /** Column water per clump particle, kg (est.). */
         static final double SPLASH_PER_KG = 5;
 
         /** Soil fountain at bomb ground entry (the bunker buster uses its own law in S5). */
@@ -392,7 +392,7 @@ public final class BlastEffects {
         }
     }
 
-    /** Ejecta soil clod volume, m³ (~25 cm clod; estimate), and the maximum clod count per blast (particle budget). */
+    /** Ejecta soil clod volume, m³ (~25 cm clod) (est.), and the maximum clod count per blast (particle budget). */
     static final double CLOD_M3 = 0.25 * 0.25 * 0.25;
     static final int MAX_CLODS = 1200;
     /** Gravity, m/s², and the same in blocks per tick². */

@@ -63,7 +63,7 @@ public final class NearLitter {
     /** Grit density, kg/m³ (dry soil clod). */
     static final double GRAIN_DENSITY = 1600;
     /**
-     * Real loose soil grain, m (estimate: 1–5 mm grit lies on top and is launched by the front): the law's launch and
+     * Real loose soil grain, m (est.) (1–5 mm grit lies on top and is launched by the front): the law's launch and
      * settling belong to it; it is drawn larger ({@link #GRAIN_MIN}…{@link #GRAIN_MAX}, presentation): a 10 cm clod falls at
      * ~50 m/s, and the front barely affects it in milliseconds.
      */
@@ -75,7 +75,7 @@ public final class NearLitter {
      * 0.027: its fine grains are visible and barely settle; the puff spreads and drifts instead of falling.
      */
     static final double DUST_SETTLE_MPS = 0.027;
-    /** Puff area grows fourfold over its life, fades from midlife, disperses over 4–6 s (presentation, estimate). */
+    /** Puff area grows fourfold over its life, fades from midlife, disperses over 4–6 s (presentation) (est.). */
     static final float PUFF_GROWTH = 2f;
     static final int PUFF_LIFE = 80, PUFF_LIFE_SPREAD = 40;
     /** Last emission near the camera (client scenario line). */

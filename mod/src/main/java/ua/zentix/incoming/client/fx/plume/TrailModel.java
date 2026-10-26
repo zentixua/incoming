@@ -42,7 +42,7 @@ import ua.zentix.incoming.util.StandardAtmosphere;
  * B = g·H/(v·ρ·c_p·T), H — engine heat left in air ({@link Motor#heatFlow}); billow radius α·z,
  * momentum π·α²·z²·ż grows by B, while stable air (frequency N) consumes B through lifted ambient air:
  * d(z²ż)/dt = B/(πα²) − N²z³/3. One nondimensional equation for all ({@link #rise}); after its peak, the billow stays
- * there (equilibrium oscillations damp out — not drawn). α = 0.5 (⚠ estimate: line thermals 0.3–0.6).</li>
+ * there (equilibrium oscillations damp out — not drawn). α = 0.5 (est.) (line thermals 0.3–0.6).</li>
  * <li><b>Contrail</b>: ice from exhaust vapour if the mixture exceeds saturation ({@link Contrail}); same law
  * with ice extinction. In ice-supersaturated air, excess vapour from entrained air also deposits on trail ice —
  * ρ_excess·2πσ² per metre: trail thickens as it spreads, lasting while supersaturation persists (up to {@link #LONGEST}); otherwise ice
@@ -71,7 +71,7 @@ public final class TrailModel {
      */
     static final double RICHARDSON = 0.5;
     /**
-     * Near-surface turbulent energy dissipation rate by Pasquill class A–F, m²/s³. <b>Estimate</b> from AMS Glossary orders of magnitude
+     * Near-surface turbulent energy dissipation rate by Pasquill class A–F, m²/s³. (est.) from AMS Glossary orders of magnitude
      * (“dissipation rate”: daytime convection 10⁻³–10⁻², night 10⁻⁶–10⁻⁴): A 10⁻², B 5·10⁻³, C 2·10⁻³,
      * D 10⁻³ (neutral: u*³/(κz) at u* ≈ 0.3 m/s around 30–70 m), E 10⁻⁴, F 10⁻⁵; logarithmic between classes. No distinction between height
      * within the layer and free troposphere above it (10⁻⁵–10⁻⁴).
@@ -137,7 +137,7 @@ public final class TrailModel {
      * ({@link Flame#flame}; no flame — 0): inside it, products are the flame itself (incandescent particles shine tens of times
      * brighter than white, {@code FlameModel}); drawing them as smoke on top counts twice: at night — a dark lump where fire should be.
      * Cooling tail beyond it to the Draper point barely lights the screen — already smoke there. Smooth from flame end to
-     * 1.5 flame lengths. ⚠ Flame assumed straight along the path.
+     * 1.5 flame lengths. (est.) Flame assumed straight along the path.
      */
     public static double emerged(double behind, double flame) {
         if (flame <= 0) return 1;
@@ -291,7 +291,7 @@ public final class TrailModel {
      * walk; variance contribution v²·t·min(t, T). Octave λ = 4·2^k m — smooth noise along path (s/λ) and time (t/T):
      * eddy-length bends; small eddies change quickly, large ones over minutes. Eddies smaller than the trail itself (σ_r) or
      * {@link #POINTS_PER_EDDY} point steps spacing (m) are not rendered — their variance goes to larger eddies (same total).
-     * ⚠ Octave decomposition estimates shape; only total variance follows the law.
+     * (est.) Octave decomposition estimates shape; only total variance follows the law.
      */
     public static void wander(long seed, double s, double age, double stability, double wind, double spacing, double clearance, double[] out) {
         out[0] = out[1] = out[2] = 0;

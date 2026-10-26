@@ -15,15 +15,15 @@ import ua.zentix.incoming.nuclear.model.DustModel;
  * (half-width 0.094 of length — Pope, “Turbulent Flows”, 2000, table 5.1), it spreads along ground as a wall jet,
  * and products remain by launcher as cloud; farther, trail ({@code TrailModel}). Rocket ground launch clouds
  * work this way in REEDM too (Bjorklund et al., NASA CR-3646, 1982: ground cloud is exhaust while rocket is below
- * cloud-formation height; ⚠ from memory), but criterion here is jet length, not height: Grad and Shahed leave at an angle.
+ * cloud-formation height; (est.) from memory), but criterion here is jet length, not height: Grad and Shahed leave at an angle.
  * <p>
  * <b>Heat</b> is engine heat released into air ({@link Motor#heatFlow}), like trail; <b>initial state</b> is jet
  * at ground: radius is its half-width there, temperature is axial excess, ΔT = ΔT₀·{@value #DECAY}·d′/ℓ
- * (d′ = d·√(ρ_exit/ρ) — variable-density diameter, Chen and Rodi 1980; ⚠ decay constant 5 is for a scalar in a
+ * (d′ = d·√(ρ_exit/ρ) — variable-density diameter, Chen and Rodi 1980; (est.) decay constant 5 is for a scalar in a
  * round jet, from memory). Feed is shorter than rise (fractions of seconds to seconds vs minutes): cloud is
  * one thermal containing all heat since feed start.
  * <p>
- * <b>Dust</b> is an ⚠ order-of-magnitude estimate: {@value #DUST_PER_KG} kg dust per kg exhaust striking loose
+ * <b>Dust</b> is an order-of-magnitude estimate (est.): {@value #DUST_PER_KG} kg dust per kg exhaust striking loose
  * soil (Apollo landings: tonnes of regolith per ~tonne fuel in final tens of seconds, Metzger et al., 2011),
  * × soil looseness (porosity, as for ground sound: stone and concrete 0). Half the dust rises with cloud, half
  * stays near ground — same estimate as blast cloud ({@link CloudModel#CLOUD_SHARE}); settles by {@link DustModel} bins.
@@ -36,9 +36,9 @@ import ua.zentix.incoming.nuclear.model.DustModel;
 public final class LaunchCloud implements SmokeGrid.Source {
     /** Round-jet half-width per length (Pope 2000, table 5.1). */
     public static final double SPREAD = 0.094;
-    /** Axial jet temperature-excess decay: ΔT/ΔT₀ = DECAY·d′/x (⚠ Chen, Rodi 1980 — from memory). */
+    /** Axial jet temperature-excess decay: ΔT/ΔT₀ = DECAY·d′/x (est.) (Chen, Rodi 1980 — from memory). */
     static final double DECAY = 5;
-    /** Dust per kg exhaust striking loose soil, kg (⚠ order-of-magnitude estimate). */
+    /** Dust per kg exhaust striking loose soil, kg (est.) (order of magnitude). */
     public static final double DUST_PER_KG = 1;
     /** Round-jet axial speed decay: u/u₀ = B·d′/x, B = 5.8 (Pope 2000, table 5.1; Hussein et al. 1994). */
     static final double JET_DECAY = 5.8;

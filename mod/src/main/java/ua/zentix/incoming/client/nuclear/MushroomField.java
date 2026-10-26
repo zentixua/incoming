@@ -90,7 +90,7 @@ public final class MushroomField {
      */
     static final int DUST = display(NukePall.DUST);
     /**
-     * Steam share of cap extinction with full water beneath the burst and a rolled ring ({@link #capMatter}). <b>Estimate</b>:
+     * Steam share of cap extinction with full water beneath the burst and a rolled ring ({@link #capMatter}). (est.):
      * sources do not give how much water the ball lofts over water; value is the previous steam share in layer color.
      */
     static final double STEAM_SHARE = 0.45;
@@ -269,7 +269,7 @@ public final class MushroomField {
      * Ball light on a world face ({@code mushBallFace} in {@code mushroom.glsl}), fraction of ball light on a white wall facing it
      * without air: direct beam e^(−σd) by face cosine {@code nv}; air-scattered light is combined direct and
      * scattered transmission ({@link ThermalModel#transmittance}, Glasstone fig. 7.104) minus direct, from sky around the ball, onto
-     * the face by (1 + nv)/2 (estimate: forward scatter lights from the ball side); ball light reflected by ground of albedo {@code albedo}
+     * the face by (1 + nv)/2 (est.) (forward scatter lights from the ball side); ball light reflected by ground of albedo {@code albedo}
      * onto horizontal (ball elevation sine {@code vy}) uses the face's visible ground share, (1 − ny)/2. Under
      * pall — direct and scattered near the ball through pall ({@code through}), and pall-scattered light downward onto horizontal
      * ({@code diffuse} per unit light above pall), onto face by (1 + ny)/2; without pall — 1 and 0. {@code sd} is air σd to
@@ -679,7 +679,7 @@ public final class MushroomField {
      * Inflow band beyond the stem wall at height {@code h} above ground, for a layer of height {@code top} (same units;
      * {@code mushFootWidth}): ground-level wind toward the stem carries wave dust into it and turns upward along its wall —
      * flow in a "ground–wall" corner (stream function ψ = x·z): the streamline along the distant layer top turns upward
-     * at the wall, x·z → top². Smoothed near ground: top/√(1 + (h/top)²). ⚠ Planar corner, while stem radius is of the same order as the layer.
+     * at the wall, x·z → top². Smoothed near ground: top/√(1 + (h/top)²). (est.) Planar corner, while stem radius is of the same order as the layer.
      */
     static double footWidth(double h, double top) {
         double t = Math.max(top, 1), u = h / t;
@@ -688,7 +688,7 @@ public final class MushroomField {
 
     /**
      * Fraction of ground-level layer extinction carried by inflow at height {@code h} ({@code mushFootShare}): a thinner band means
-     * 1/(1 + (h/top)²), also diluted by the stem (⚠ estimate).
+     * 1/(1 + (h/top)²), also diluted by the stem (est.).
      */
     static double footShare(double h, double top) {
         double u = h / Math.max(top, 1);
@@ -717,7 +717,7 @@ public final class MushroomField {
      * Inflow band beyond the stem wall at height {@code h} ({@code mushFootBand}): {@link #footWidth} × inflow share; from layer
      * top (or half merge height if lower), narrows toward the wall up to merge height {@code merge}
      * ({@link #footMerge}): above it, layer dust is mixed into the stem (carried by the stem, {@code StemDust}). Thus the inflow surface
-     * merges into the stem surface rather than ending at a ledge (⚠ narrowing shape is an estimate).
+     * merges into the stem surface rather than ending at a ledge (est.) (narrowing shape).
      */
     static double footBand(double h, double top, double share, double merge) {
         if (share <= 0) return 0;
@@ -747,14 +747,14 @@ public final class MushroomField {
         return f * f * (3 - 2 * f);
     }
 
-    /** Where around the stem the mushroom samples the underlying dust layer, in stem radii ({@link #groundUnder}). ⚠ Estimate. */
+    /** Where around the stem the mushroom samples the underlying dust layer, in stem radii ({@link #groundUnder}). (est.). */
     static final double GROUND_AT = 2;
     private static final double[] GROUND = new double[3];
 
     /**
      * Ground reflectance beneath mushroom per channel (rgb into {@code out}, linear, in diffuse light): what stem, skirt and cap
      * underside see below is not bare ground ({@code PALL_LAND}, {@code PALL_SEA} over water), but the top of the wave dust layer
-     * lying on it ({@link PallField#dustTau}: dust and spray optical depth, no haze, at {@link #GROUND_AT} stem radii from ground zero; ⚠ location
+     * lying on it ({@link PallField#dustTau}: dust and spray optical depth, no haze, at {@link #GROUND_AT} stem radii from ground zero; (est.) location
      * is estimated: stem bottom mostly sees nearby ground). Layer above ground uses two streams: ground at τ = 0 toward dust R∞
      * (thick-layer color is dust color itself, {@link NukePall#DUST}; spray over water), as e^(−2kτ) ({@link #slabOver}).
      */
@@ -769,7 +769,7 @@ public final class MushroomField {
     /**
      * Diffuse-light reflectance of a layer of optical depth tau above ground of albedo ground: thin layer gives ground, thick layer gives its R∞
      * (linear thick-layer color r), between them e^(−2kτ) (two streams: light to ground and back decays as e^(−kτ)
-     * on each trip; ⚠ no multiple reflection between layer and ground — upper estimate of ground share).
+     * on each trip; (est.) no multiple reflection between layer and ground — upper estimate of ground share).
      */
     static double slabOver(double r, double g, double tau, double ground) {
         double k = PallLight.k(PallLight.albedo(r, g), g);
@@ -806,7 +806,7 @@ public final class MushroomField {
      * soil absorbs like a cap of color {@link #CAP_DUSTY} without NO₂. After forward-peak truncation, scattering is σ·(1 − g²), while
      * absorption remains: ω' = σ(1 − g²) / (σ(1 − g²) + Σ absorption) — same as (1 − f)ω/(1 − fω).
      * <p>
-     * <b>Estimate</b>: soil shifts asymmetry from drops toward pall dust ({@link #G} = 0.6) by soil fraction — no scattering measurements
+     * (est.): soil shifts asymmetry from drops toward pall dust ({@link #G} = 0.6) by soil fraction — no scattering measurements
      * for a dusty cap. After truncation, scattering is σ(1 − 0.36) versus σ(1 − 0.72): a surface-burst cap has
      * σ' 2.3 times that of a drop-only cap of equal water content.
      * <p>

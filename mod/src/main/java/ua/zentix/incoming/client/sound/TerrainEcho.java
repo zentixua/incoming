@@ -41,11 +41,11 @@ public final class TerrainEcho {
     static final double NEAR = 24;
     /** Ray step: fraction of distance, with minimum and maximum, blocks (budget). */
     static final double STEP_SHARE = 0.03, STEP_MIN = 8, STEP_MAX = 96;
-    /** Low-band ground reflectance (63–250 Hz): grass, forest, rocks — 0.7–0.9 (⚠ estimate). */
+    /** Low-band ground reflectance (63–250 Hz): grass, forest, rocks — 0.7–0.9 (est.). */
     static final double ALBEDO = 0.8;
-    /** Flat-ground scattering fraction; slopes steeper than {@link #STEEP} (sin² slope) scatter fully (⚠ estimate). */
+    /** Flat-ground scattering fraction; slopes steeper than {@link #STEEP} (sin² slope) scatter fully (est.). */
     static final double FLAT = 0.1, STEEP = 0.25;
-    /** A slope behind a ridge receives this front-energy fraction around it (⚠ estimate). */
+    /** A slope behind a ridge receives this front-energy fraction around it (est.). */
     static final double SHADOW = 0.25;
     /** Echo boost over diffuse model and maximum reflection relative to direct sound, dB (presentation). */
     static final double LIFT_DB = 12, CAP_DB = -3;
