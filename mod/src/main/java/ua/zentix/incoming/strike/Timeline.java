@@ -2,11 +2,11 @@ package ua.zentix.incoming.strike;
 
 import net.minecraft.server.level.ServerLevel;
 
-/** То, что длится несколько тиков на сервере (таймлайн взрыва наземного или подземного). */
+/** Something lasting several server ticks (surface/underground explosion timeline). */
 public interface Timeline {
-    /** Один тик. false — закончилось, убрать. */
+    /** One tick. false means finished, remove. */
     boolean tick(ServerLevel level);
 
-    /** Таймлайн убран — закончился или упал с ошибкой: отпустить то, что он держит (тикеты чанков). */
+    /** Timeline removed, finished or failed: release resources (chunk tickets). */
     default void end(ServerLevel level) {}
 }

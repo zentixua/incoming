@@ -5,36 +5,38 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayDeque;
 
 /**
- * Места снаряда от сервера у клиента — по одному на тик клиента. Сервер шлёт место каждый свой тик, а пакеты тика сервера
- * приходят то в один тик клиента, то в соседний (сервер не успел и догоняет; повтор Flashback хранит их так же, по тикам
- * клиента): с местом «последний пакет — за тик» снаряд то стоит тик, то прыгает на два шага, и камера, которая его
- * ведёт, дёргается вместе с ним (например, шахед в плане погони «подтормаживает»).
+ * Projectile positions from server to client, one per client tick. The server sends a position each server tick,
+ * but packets can arrive in either of two adjacent client ticks (the server falls behind and catches up;
+ * Flashback recordings store them by client tick too). Taking “the last packet per tick” makes the projectile
+ * stand still for a tick then jump two steps, jerking the tracking camera along with it (for example, a Shahed
+ * stutters in a chase shot).
  * <p>
- * Очередь отдаёт по месту на тик. Пусто — снаряд идёт прогнозом от последнего пришедшего места его шагом за тик сервера
- * (тик в долг, не больше {@link #MAX_DEBT} тиков вперёд: дальше стоит), а места, пришедшие потом за тики в
- * долг, в очередь не встают — их уже показали прогнозом, — но прогноз считается от них: снаряд не дальше
- * {@link #MAX_DEBT} шагов от сервера и при сервере медленнее 20 тиков в секунду (тогда пакетов меньше, чем тиков
- * клиента, и долг не гасится) идёт его путём, а не по прямой. В очереди больше {@link #MAX_QUEUE} — старые
- * пропускаются: снаряд не отстаёт от сервера больше чем на тик. Место дальше {@link #JUMP} от прошлого (возврат в мир,
- * телепорт) — сразу, очередь и долг снимаются.
+ * The queue yields one position per tick. When empty, predict from the last received position using its step per
+ * server tick (a borrowed tick, at most {@link #MAX_DEBT} ticks ahead; then stop). Positions received later for
+ * borrowed ticks are not queued because prediction already showed them, but prediction starts from them: the
+ * projectile stays within {@link #MAX_DEBT} steps of the server and follows its path even below 20 server ticks/s
+ * (fewer packets than client ticks, so debt never clears), rather than a straight line. If the queue exceeds
+ * {@link #MAX_QUEUE}, skip older entries: the projectile stays at most one tick behind the server. A position
+ * farther than {@link #JUMP} from the previous one (materialization, teleport) applies immediately and clears the
+ * queue and debt.
  */
 public final class ArrivalQueue {
     static final int MAX_QUEUE = 2, MAX_DEBT = 2;
     static final double JUMP = 64;
 
-    /** Место и поворот: x, y, z, курс, тангаж. */
+    /** Position and rotation: x, y, z, yaw, pitch. */
     public record Sample(double x, double y, double z, float yRot, float xRot) {}
 
     private final ArrayDeque<Sample> queue = new ArrayDeque<>();
-    /** Тиков, показанных прогнозом сверх последнего пришедшего места. */
+    /** Ticks shown by prediction beyond the last received position. */
     private int debt;
-    /** Последнее пришедшее место и место перед ним: шаг прогноза — между ними. */
+    /** Last received position and the one before it: their difference is the prediction step. */
     @Nullable
     private Sample last, before;
-    /** Шаг последнего тика, блоков: прогноз, пока пришло одно место. */
+    /** Last tick's step, blocks: prediction while only one position has arrived. */
     private double stepX, stepY, stepZ;
 
-    /** Пакет места пришёл. */
+    /** A position packet arrived. */
     public void add(Sample s) {
         if (last != null && Math.abs(s.x() - last.x()) + Math.abs(s.y() - last.y()) + Math.abs(s.z() - last.z()) > JUMP) {
             queue.clear();
@@ -45,7 +47,7 @@ public final class ArrivalQueue {
         before = last;
         last = s;
         if (debt > 0) {
-            // это место уже показано прогнозом
+            // Prediction has already shown this position.
             debt--;
             return;
         }
@@ -54,14 +56,14 @@ public final class ArrivalQueue {
     }
 
     /**
-     * Куда снаряду в этот тик клиента из места {@code x, y, z}: место из очереди, прогноз от последнего пришедшего места
-     * (тик в долг) или null — стоять.
+     * Where the projectile goes this client tick from {@code x, y, z}: a queued position, prediction from the
+     * last received position (borrowed tick), or null to stay still.
      */
     @Nullable
     public Sample next(double x, double y, double z, float yRot, float xRot) {
         Sample s = queue.poll();
         if (s != null) {
-            // после скачка (возврат в мир) прогноз — стоять, пока не придёт второе место
+            // After a jump (materialization), prediction stays still until a second position arrives.
             boolean jump = Math.abs(s.x() - x) + Math.abs(s.y() - y) + Math.abs(s.z() - z) > JUMP;
             stepX = jump ? 0 : s.x() - x;
             stepY = jump ? 0 : s.y() - y;
@@ -78,7 +80,7 @@ public final class ArrivalQueue {
         return new Sample(last.x() + stepX * debt, last.y() + stepY * debt, last.z() + stepZ * debt, last.yRot(), last.xRot());
     }
 
-    /** Последнее пришедшее место (куда снаряд идёт); null — ничего не приходило. */
+    /** Last received position (where the projectile is heading); null if none arrived. */
     @Nullable
     public Sample latest() {
         return last;

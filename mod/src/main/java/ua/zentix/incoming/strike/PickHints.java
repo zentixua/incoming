@@ -20,21 +20,21 @@ import java.util.Comparator;
 import java.util.UUID;
 
 /**
- * Подсказка карты наведения: место выбрано кликом, приказа ещё нет — район начинает грузиться уже сейчас (в фоне,
- * по чанкам, {@link AreaLoader}, как район цели у снаряда), и к пуску он чаще всего готов. У игрока один такой
- * район: следующий клик заменяет его; новый район — не чаще раза в секунду (клик чаще запоминается и берётся, когда
- * можно); район живёт {@link #LIFESPAN} тиков и отпускается сам, даже если игрок вышел.
+ * Designator map hint: site clicked, no order yet; area starts loading now (background, by chunks, {@link
+ * AreaLoader}, like projectile target area), usually ready by launch. One per player: next click replaces it; new
+ * area at most once per second (faster click remembered and acquired when allowed); lives {@link #LIFESPAN}
+ * ticks, releases itself even if player logs out.
  */
 public final class PickHints {
-    /** Район подсказки отпускается сам через 30 с. */
+    /** Hint area releases automatically after 30 s. */
     public static final int LIFESPAN = 600;
-    /** Новый район — не чаще раза в секунду с игрока. */
+    /** New area at most once per second per player. */
     public static final int MIN_INTERVAL = 20;
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_pick", Comparator.<UUID>naturalOrder());
 
     private PickHints() {}
 
-    /** Район подсказки игрока (несохраняемый attachment): взятый и отложенный клик. */
+    /** Player hint area (non-persistent attachment): acquired and deferred click. */
     public static final class Slot {
         @Nullable
         ResourceKey<Level> dimension;
@@ -53,8 +53,8 @@ public final class PickHints {
     }
 
     /**
-     * Клик по карте. Те же проверки, что у приказа по карте ({@link ServerActions#groundInRange}), плюс пульт в руке
-     * (карта открывается только с него) и не наблюдатель.
+     * Map click. Same checks as map order ({@link ServerActions#groundInRange}), plus designator in hand
+     * (required to open map), not spectator.
      */
     public static void pick(C2S.Pick p, IPayloadContext ctx) {
         if (!(ctx.player() instanceof ServerPlayer player) || player.isSpectator() || !ServerActions.mayUse(player)) return;
@@ -65,8 +65,8 @@ public final class PickHints {
     }
 
     /**
-     * Взять район вокруг (x, z) вместо прежнего. Тот же район (соседний чанк) — только продлить срок; новый раньше
-     * {@link #MIN_INTERVAL} после прошлого — запомнить, его возьмёт {@link #onPlayerTick}.
+     * Acquire area around (x, z), replacing previous. Same area (adjacent chunk) only extends expiry; new before
+     * {@link #MIN_INTERVAL} since last is remembered for {@link #onPlayerTick}.
      */
     public static void pick(ServerLevel level, UUID who, Slot slot, double x, double z) {
         ChunkPos pos = new ChunkPos(BlockPos.containing(x, 0, z));
@@ -98,7 +98,7 @@ public final class PickHints {
         slot.dimension = null;
     }
 
-    /** Отложенный клик — когда пройдёт {@link #MIN_INTERVAL}; и в тестах, где игрока нет. */
+    /** Deferred click after {@link #MIN_INTERVAL}; also tests without player. */
     public static void tick(ServerLevel level, UUID who, Slot slot) {
         if (slot.pending == null || level.getGameTime() - slot.takenAt < MIN_INTERVAL) return;
         ServerLevel at = level.getServer().getLevel(slot.pendingDimension);
@@ -115,12 +115,12 @@ public final class PickHints {
         return new AreaLoader.Area(TYPE, pos, FlightTickets.DISTANCE, who);
     }
 
-    /** Сколько районов подсказки у игрока взято или догружается (проверки). */
+    /** Player hint areas acquired or loading (tests). */
     public static int areas(ServerLevel level, UUID who) {
         return StrikeWorld.get(level).areas().count(TYPE, who);
     }
 
-    /** Тикет подсказки карты (тесты и стенд считают районы подсказок). */
+    /** Map hint ticket (tests and scene bench count hint areas). */
     public static boolean isPickTicket(TicketType<?> type) {
         return type == TYPE;
     }

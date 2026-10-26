@@ -1,24 +1,24 @@
 package ua.zentix.incoming.entity;
 
 /**
- * Очередь пусков с пакета пусковой ({@link Launcher}): когда освободится каждая ячейка и когда назначен последний
- * поджиг. Только сервер и не сохраняется: снаряды, уже стоящие на направляющих, сохраняются сами и после загрузки
- * стартуют в свой тик, а новые встают в очередь заново.
+ * Launcher rack launch queue ({@link Launcher}): when each cell becomes free and when the last ignition is
+ * scheduled. Server only, not saved: projectiles already on rails save themselves and launch at their tick after
+ * loading; new ones queue again.
  */
 public final class LaunchQueue {
-    /** После последнего поджига пакет столько тиков не молчит: доворачивать его нельзя ({@link Launcher#turnedYaw}). */
+    /** The rack is not quiet for this many ticks after the last ignition: no turning ({@link Launcher#turnedYaw}). */
     static final int SETTLE_TICKS = 20;
 
     private long[] slotFreeAt = new long[0];
     private long lastStart = Long.MIN_VALUE / 2;
 
     /**
-     * Занять ячейку под пуск.
+     * Reserve a launch cell.
      *
-     * @param raised    когда пакет поднят и готов к первому пуску
-     * @param minReady  через сколько тиков после приказа поджиг, не раньше
-     * @param busyTicks сколько тиков снаряд простоит в ячейке после готовности (поджиг и сход)
-     * @return [ячейка, через сколько тиков поджиг] — не раньше, чем пакет поднимется и освободится ячейка
+     * @param raised when the rack is raised and ready for its first launch
+     * @param minReady minimum ticks from order to ignition
+     * @param busyTicks ticks the projectile occupies the cell after readiness (ignition and launch rail exit)
+     * @return [cell, ticks until ignition], no earlier than rack raised and cell free
      */
     public int[] reserve(LauncherRack rack, long now, long raised, int minReady, int busyTicks) {
         if (slotFreeAt.length != rack.slots()) slotFreeAt = new long[rack.slots()];
@@ -27,14 +27,14 @@ public final class LaunchQueue {
             if (slotFreeAt[i] < slotFreeAt[best]) best = i;
         }
         long start = Math.max(now + minReady, Math.max(slotFreeAt[best], raised));
-        // пуски, заказанные, пока пакет поднимался, не срываются разом: очередь с интервалом
+        // Launches ordered while the rack was raising do not all depart together: queue them with spacing.
         start = Math.max(start, lastStart + rack.spacing());
         lastStart = start;
         slotFreeAt[best] = start + busyTicks;
         return new int[]{best, (int) (start - now)};
     }
 
-    /** Пакет молчит: последний поджиг был не меньше {@link #SETTLE_TICKS} тиков назад (и впереди поджигов нет). */
+    /** Rack quiet: last ignition was at least {@link #SETTLE_TICKS} ticks ago (and none are pending). */
     public boolean silent(long now) {
         return now >= lastStart + SETTLE_TICKS;
     }

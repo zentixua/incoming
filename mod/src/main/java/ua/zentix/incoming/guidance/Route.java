@@ -10,16 +10,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Маршрут полёта: точки поворота по горизонтали (высоту держит сам снаряд), после последней — цель.
- * Как у настоящих шахедов и крылатых ракет: не по прямой от пусковой, а петлёй в обход и заход на цель
- * с выбранного направления — отсюда полёт на десятки секунд и удар «из-за спины».
+ * Flight route: horizontal turn points (projectile holds its own altitude), then target after the last one. Like
+ * real Shaheds and cruise missiles: a detour loop and chosen approach direction rather than a straight line from
+ * launcher, giving tens of seconds of flight and a strike “from behind”.
  */
 public final class Route {
     private final List<Vec3> points;
-    /** Откуда начат маршрут: начало первого участка (для проверки «проскочил» уже на нём). */
+    /** Route origin: first leg start (for “passed” checks even on that leg). */
     @Nullable
     private final Vec3 origin;
-    /** Точки поставил оператор на карте ({@code strike/Waypoints}), а не пуск: последний участок до цели бывает любым. */
+    /**
+     * Operator placed the points on the map ({@code strike/Waypoints}), rather than launch logic: final target
+     * leg can be anything.
+     */
     private final boolean operator;
     private int next;
 
@@ -37,7 +40,7 @@ public final class Route {
         this.operator = operator;
     }
 
-    /** Маршрут по точкам оператора. */
+    /** Route through operator waypoints. */
     public static Route operator(List<Vec3> points, Vec3 origin) {
         return new Route(points, new Vec3(origin.x, 0, origin.z), true);
     }
@@ -50,7 +53,7 @@ public final class Route {
         return new Route(List.of());
     }
 
-    /** Следующая точка поворота или null — дальше только цель. */
+    /** Next turn point, or null if only the target remains. */
     @Nullable
     public Vec3 current() {
         return next < points.size() ? points.get(next) : null;
@@ -61,8 +64,8 @@ public final class Route {
     }
 
     /**
-     * Этот маршрут (оставшиеся точки) с точкой {@code first} перед ними; первый участок начинается в {@code origin}
-     * (пуск с пусковой: сначала ровно по курсу пусковой — {@code StrikeService}).
+     * This route's remaining points preceded by {@code first}; first leg starts at {@code origin} (launcher
+     * start: initially exactly along launcher heading, {@code StrikeService}).
      */
     public Route after(Vec3 first, Vec3 origin) {
         List<Vec3> pts = new ArrayList<>();
@@ -71,15 +74,15 @@ public final class Route {
         return new Route(pts, new Vec3(origin.x, 0, origin.z), operator);
     }
 
-    /** Бросить оставшиеся точки: прямо на цель (перенацеливание из камеры). */
+    /** Skip remaining points: straight to target (camera retargeting). */
     public void skip() {
         next = points.size();
     }
 
     /**
-     * Точка пройдена, если до неё ближе {@code capture} по горизонтали или она уже позади по ходу участка
-     * (при большом радиусе разворота снаряд не кружит вокруг точки, а идёт дальше). Для первой точки участок
-     * начинается в точке пуска: точка входа позади старта (короткий полёт) иначе ловила бы шахед на вечный круг.
+     * Point passed if within {@code capture} horizontally or already behind along the leg (a large turning radius
+     * does not make the projectile circle it forever). First leg starts at launch: otherwise an entry point
+     * behind launch (short flight) would trap Shahed in an endless orbit.
      */
     public void update(Vec3 pos, double capture) {
         while (next < points.size()) {
@@ -88,7 +91,7 @@ public final class Route {
             double dx = wp.x - pos.x, dz = wp.z - pos.z;
             boolean reached = dx * dx + dz * dz <= capture * capture;
             if (!reached && from != null) {
-                // перешли через перпендикуляр к участку в точке поворота
+                // Crossed the perpendicular to the leg at the turn point.
                 double lx = wp.x - from.x, lz = wp.z - from.z;
                 reached = lx * dx + lz * dz < 0 && dx * dx + dz * dz < 4 * capture * capture;
             }
@@ -97,7 +100,7 @@ public final class Route {
         }
     }
 
-    /** Длина оставшегося пути по горизонтали: до следующей точки, по точкам и от последней до цели. */
+    /** Remaining horizontal path length: to next point, through points, then last point to target. */
     public double remaining(Vec3 pos, Vec3 target) {
         double len = 0;
         Vec3 at = pos;
@@ -126,12 +129,12 @@ public final class Route {
     }
 
     /**
-     * Маршрут длиной около {@code length}: пуск → (точка обхода сбоку) → точка входа → цель.
-     * Точка входа — в {@code entry} блоках до цели по направлению захода; если прямой путь короче нужного,
-     * добавляется точка обхода сбоку от середины участка «пуск — вход», вынесенная так, чтобы путь стал нужной длины.
+     * Route about {@code length} long: launch → (lateral detour point) → entry point → target. Entry is {@code
+     * entry} blocks before target along approach direction; if the direct path is too short, add a lateral detour
+     * from the “launch–entry” midpoint, far enough to give the required length.
      *
-     * @param approach горизонтальное направление захода на цель (единичный вектор, «куда летит» на последнем участке)
-     * @param side     +1 — обход слева, -1 — справа
+     * @param approach horizontal target approach direction (unit vector, direction of flight on final leg)
+     * @param side +1 detour left, -1 right
      */
     public static Route plan(Vec3 launch, Vec3 target, Vec3 approach, double length, double entry, double side) {
         Vec3 dir = new Vec3(approach.x, 0, approach.z);
@@ -154,17 +157,18 @@ public final class Route {
     }
 
     /**
-     * Этот маршрут (оставшиеся точки) в полосе снаряда залпа ({@code WeaponSpec.Lanes}): путь сдвинут вбок на
-     * {@code offset} блоков (знак — сторона, как {@code side} у {@link #plan}), плавно — сдвиг на пути равен offset · min(1, s / exit) · min(1, r / converge),
-     * где s — путь от начала маршрута, r — путь до цели. В начале и у цели сдвига нет: снаряд выходит в полосу с
-     * курса пуска и сходится к своей точке прицеливания (сама цель не сдвигается). Сдвиг ставится в точках маршрута
-     * (на поворотах — по биссектрисе, чтобы оба участка шли в полосе; поворот круче 120° — двумя точками, каждая сбоку от
-     * своего участка: биссектриса ушла бы дальше 2·offset вдоль пути, а на развороте полоса перешла бы на другую сторону), а
-     * там, где на участке кончается выход в полосу (s = exit) или начинается схождение (r = converge), добавляется точка:
-     * между ними снаряд идёт ровно параллельно пути. Нужен начальный пункт маршрута ({@link #origin}): без него — как есть.
-     * Только на пуске: первый участок — от {@link #origin} к ближайшей непройденной точке, а это верно, пока ни одна не взята.
+     * This route's remaining points in a salvo projectile's lane ({@code WeaponSpec.Lanes}): shift path sideways
+     * {@code offset} blocks (sign gives side, like {@code side} in {@link #plan}), smoothly: path offset = offset
+     * · min(1, s / exit) · min(1, r / converge), where s is path from route start, r is path to target. No shift
+     * at start or target: projectile exits launch heading into its lane and converges on its own aim point
+     * (target itself does not move). Offset route points (at turns use the bisector so both legs stay in lane;
+     * above 120° use two points, one beside each leg: bisector would extend beyond 2·offset along path and swap
+     * lane sides on a reversal). Add a point where lane entry ends (s = exit) or convergence begins (r =
+     * converge) within a leg: between these, fly exactly parallel to the path. Requires route {@link #origin};
+     * otherwise unchanged. Launch only: first leg runs from {@link #origin} to nearest unpassed point, valid only
+     * before any point is captured.
      *
-     * @param target точка прицеливания: после последней точки маршрута снаряд идёт на неё
+     * @param target aim point: projectile heads here after the last waypoint
      */
     public Route inLane(double offset, double exit, double converge, Vec3 target) {
         if (offset == 0 || origin == null) return this;
@@ -174,7 +178,7 @@ public final class Route {
         path.add(new Vec3(target.x, 0, target.z));
         double total = 0;
         for (int i = 1; i < path.size(); i++) total += horizontal(path.get(i - 1), path.get(i));
-        // точки, где сдвиг перестаёт расти и начинает убывать: на участке, не ближе блока к его концам
+        // Points where offset stops growing and starts shrinking: within the leg, at least one block from its ends.
         double[] breaks = {Math.min(exit, total - converge), Math.max(exit, total - converge)};
         List<Vec3> pts = new ArrayList<>();
         List<Double> along = new ArrayList<>();
@@ -207,9 +211,9 @@ public final class Route {
     }
 
     /**
-     * Сдвиги вбок на единицу в точке {@code p} между участками prev → p → next ({@link #across}): на повороте до 120° —
-     * один, по биссектрисе и длиннее (1 / cos половины угла, не больше 2), чтобы оба участка шли на единице от пути;
-     * круче — два, по одному сбоку от каждого участка (на развороте биссектрисы нет, а полоса не должна менять сторону).
+     * Unit lateral offsets at {@code p} between legs prev → p → next ({@link #across}): up to 120°, one along the
+     * bisector, longer (1 / cos half-angle, at most 2) to keep both legs one unit from path; steeper, two, one
+     * beside each leg (a reversal has no bisector and the lane must not switch sides).
      */
     private static List<Vec3> sides(Vec3 prev, Vec3 p, Vec3 next) {
         Vec3 in = across(prev, p), out = across(p, next);
@@ -218,12 +222,12 @@ public final class Route {
         if (in == null) return List.of(Vec3.ZERO);
         Vec3 sum = in.add(out);
         double len = sum.length();
-        // |in + out| = 2·cos(θ/2): меньше 1 — поворот круче 120°
+        // |in + out| = 2·cos(θ/2): less than 1 means a turn above 120°.
         if (len < 1) return List.of(in, out);
         return List.of(sum.scale(2 / (len * len)));
     }
 
-    /** Единица вбок от хода a → b по горизонтали, в сторону {@code side} = +1 у {@link #plan}; null — точки совпадают. */
+    /** Horizontal unit sideways from a → b, toward {@code side} = +1 in {@link #plan}; null if points coincide. */
     @Nullable
     private static Vec3 across(Vec3 a, Vec3 b) {
         double dx = b.x - a.x, dz = b.z - a.z, len = Math.sqrt(dx * dx + dz * dz);

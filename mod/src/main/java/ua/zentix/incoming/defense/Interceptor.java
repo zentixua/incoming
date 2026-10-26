@@ -18,39 +18,42 @@ import ua.zentix.incoming.util.Terrain;
 import java.util.UUID;
 
 /**
- * Полёт зенитной ракеты — своя игровая модель (не по физике): сход с направляющей вверх под углом паспорта (у ЗРК —
- * отвесно, из контейнера), разгон и погоня — каждый тик курс на нынешнее место цели с пределом поворота по боковому
- * ускорению ({@link Homing}, {@link InterceptorSpec#turnLimit}). Неконтактный взрыватель рвёт её в момент
- * ближайшего сближения с целью, если оно в радиусе взрывателя ({@link #fuze}): разрыв — цель сбита. Броска кубика
- * нет: промах — это пролёт дальше радиуса; цель летит дальше, ракета разворачивается за ней, пока есть топливо.
- * Цель пропала, на ней кто-то сидит, кончилось топливо — самоликвидация в воздухе. Цель — только снаряд мода
- * ({@link StrikeProjectile}) по его UUID.
+ * Interceptor missile flight: our own game model (not physical). Rail exit is upward at the spec's angle
+ * (vertically from a canister for the SAM); acceleration and pursuit aim at the target's current position every
+ * tick, with a lateral-acceleration turn limit ({@link Homing}, {@link InterceptorSpec#turnLimit}). The proximity
+ * fuze bursts it at closest approach if within fuze radius ({@link #fuze}): a burst shoots the target down. There
+ * is no die roll: a miss passes outside that radius; the target keeps flying and the missile turns after it while
+ * fuel lasts. If the target disappears, gains a rider, or fuel runs out, the missile self-destructs in the air.
+ * Targets are only mod projectiles ({@link StrikeProjectile}), identified by UUID.
  * <p>
- * Полёт ведёт {@link DefenseWorld} — и в загруженном мире, и вне его, одним кодом: в тикающих чанках у полёта есть
- * вид ({@link InterceptorEntity}), вне них — нет. Блоки читаются только в готовых чанках ({@link Terrain#readyUntil}),
- * дальше землёй считается только карта высот готового чанка ({@link Terrain#estimate}); тикетов полёт не берёт и чанков
- * не грузит.
+ * {@link DefenseWorld} runs flight with the same code inside and outside the loaded world: in ticking chunks
+ * flight has a visual entity ({@link InterceptorEntity}); elsewhere it does not. Blocks are read only in ready
+ * chunks ({@link Terrain#readyUntil}); beyond them, only ready-chunk heightmaps count as ground ({@link
+ * Terrain#estimate}). Flight takes no tickets and loads no chunks.
  */
 public final class Interceptor {
-    /** Чем кончился полёт. */
+    /** How flight ended. */
     public enum End {
-        /** Разорвалась у цели в радиусе взрывателя и сбила. */
+        /** Burst near the target within fuze radius and shot it down. */
         KILL,
-        /** Цель пропала (взорвалась, отбой, ушла из мира) или на ней кто-то сидит: самоликвидация. */
+        /** Target disappeared (detonation, abort, left the world) or gained a rider: self-destruct. */
         LOST,
-        /** Кончилось топливо: самоликвидация. */
+        /** Fuel ran out: self-destruct. */
         FUEL,
-        /** Задела землю или постройку. */
+        /** Hit ground or a structure. */
         GROUND
     }
 
-    /** Постоянный UUID вида: сущность может исчезать и появляться у тикающих чанков, дымный путь — один. */
+    /**
+     * Persistent visual UUID: the entity may disappear and reappear at ticking chunks, but the smoke track stays
+     * the same.
+     */
     private final UUID id = UUID.randomUUID();
     private final InterceptorSpec spec;
     private final UUID target;
     @Nullable
     private final UUID owner;
-    /** Откуда пущена (для лога). */
+    /** Launch location (for the log). */
     private final String launcher;
     private Vec3 pos, dir;
     private double speed;
@@ -78,12 +81,12 @@ public final class Interceptor {
         return pos;
     }
 
-    /** Курс, единичный вектор. */
+    /** Heading, unit vector. */
     public Vec3 direction() {
         return dir;
     }
 
-    /** Скорость, блоков/тик. */
+    /** Speed, blocks/tick. */
     public double speed() {
         return speed;
     }
@@ -101,12 +104,12 @@ public final class Interceptor {
         return owner;
     }
 
-    /** Полёт кончился. */
+    /** Flight has ended. */
     public boolean done() {
         return end != null;
     }
 
-    /** Вид полёта в мире (null — его нет: полёт вне тикающих чанков). */
+    /** Flight visual in the world (null means absent: flight is outside ticking chunks). */
     @Nullable
     public InterceptorEntity view() {
         return view;
@@ -116,7 +119,10 @@ public final class Interceptor {
         this.view = view;
     }
 
-    /** Курс схода с направляющей: вверх под углом паспорта в сторону цели (90° — отвесно; цель над самой пусковой — на юг). */
+    /**
+     * Rail exit heading: upward at the spec's angle toward the target (90° is vertical; south if directly over
+     * the launcher).
+     */
     static Vec3 railDirection(Vec3 rail, Vec3 target, InterceptorSpec spec) {
         Vec3 to = target.subtract(rail);
         Vec3 flat = new Vec3(to.x, 0, to.z);
@@ -125,7 +131,7 @@ public final class Interceptor {
         return flat.scale(Math.cos(e)).add(0, Math.sin(e), 0);
     }
 
-    /** Тик полёта: вызывает {@link DefenseWorld}. */
+    /** Flight tick: called by {@link DefenseWorld}. */
     void tick(ServerLevel level, DefenseWorld world) {
         StrikeProjectile t = world.find(level, target);
         if (t == null || !Radar.airborne(t) || t.isVehicle()) {
@@ -136,7 +142,7 @@ public final class Interceptor {
             world.burst(level, this, pos, null, End.FUEL);
             return;
         }
-        // цель в этом тике уже сдвинулась (сущности и полёты вне мира тикают раньше): её отрезок — от прошлого места
+        // The target has already moved this tick (entities and virtual flights tick earlier): its segment starts at its previous position.
         Vec3 tNow = t.position(), tPrev = tNow.subtract(t.getDeltaMovement());
         Vec3 next = steer(tNow);
         double s = fuze(next, tPrev, tNow, t.airframe().noseLength());
@@ -154,10 +160,10 @@ public final class Interceptor {
     }
 
     /**
-     * Тик погони без мира: возраст, после направляющей — доворот на нынешнее место цели не круче паспорта на этой
-     * скорости ({@link InterceptorSpec#turnLimit}), скорость — по закону полёта на моторе ({@link InterceptorSpec#speed}:
-     * мотор, обмен высоты на скорость). Возвращает, где ракета будет в конце
-     * тика; сдвигает её {@link #moveTo} после проверки преград.
+     * World-independent pursuit tick: age; after leaving the rail, turn toward the current target position within
+     * the spec's limit at this speed ({@link InterceptorSpec#turnLimit}); speed follows the powered-flight law
+     * ({@link InterceptorSpec#speed}: engine and altitude/speed exchange). Returns the missile's end-of-tick
+     * position; {@link #moveTo} moves it after obstacle checks.
      */
     Vec3 steer(Vec3 targetNow) {
         age++;
@@ -170,11 +176,11 @@ public final class Interceptor {
     }
 
     /**
-     * Неконтактный взрыватель на отрезке тика ракеты ({@code position() → next}) против отрезка цели
-     * ({@code tPrev → tNow}): доля отрезка ракеты в момент ближайшего сближения, если оно в этом тике и в радиусе
-     * взрывателя сверх полудлины цели, иначе −1. Сближение ещё идёт к концу тика (ближайшая точка отрезков — его
-     * конец) — взрыватель ждёт следующего тика: в радиус ракета входит раньше, чем ближе всего подходит к цели.
-     * На направляющей взрыватель не взведён.
+     * Proximity fuze on the missile's tick segment ({@code position() → next}) against the target segment ({@code
+     * tPrev → tNow}): fraction of the missile segment at closest approach if that occurs this tick within fuze
+     * radius plus half the target length; otherwise −1. If still closing at tick end (closest segment points are
+     * at the end), the fuze waits for the next tick: the missile enters the radius before reaching closest
+     * approach. The fuze is not armed on the rail.
      */
     double fuze(Vec3 next, Vec3 tPrev, Vec3 tNow, double targetHalfLength) {
         if (age <= spec.railTicks()) return -1;
@@ -196,9 +202,10 @@ public final class Interceptor {
     }
 
     /**
-     * Где отрезок полёта за тик задевает землю или постройку; null — нигде. До первого неготового чанка — луч по блокам,
-     * дальше — карта высот, если чанк конца отрезка готов. Уровень моря землёй не считается: это догадка, а цель бывает
-     * и ниже него (долина вне загрузки); ракета там идёт за целью в воздухе, и её всё равно кончит топливо.
+     * Where this tick's flight segment hits ground or a structure; null if nowhere. Trace blocks up to the first
+     * unready chunk, then use the heightmap if the segment's end chunk is ready. Sea level does not count as
+     * ground: it is a guess, and targets can be below it (an unloaded valley); the missile follows its target
+     * through air there and will still run out of fuel.
      */
     @Nullable
     static Vec3 obstacle(ServerLevel level, Vec3 from, Vec3 to) {

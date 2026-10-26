@@ -1,288 +1,284 @@
-# Как мы разрабатываем: ретроспектива, что исправлено, что дальше
+# How we develop: retrospective, fixes, next steps
 
-Разбор на 22.10.2026 (сессия D): что пошло не так с 01.10, почему, что уже исправлено и что в плане. Числа — из
-истории GitHub, журнала ноутбука, транскриптов сессий и замеров; оценки помечены.
+Analysis as of 22.10.2026 (session D): what went wrong since 01.10, why, what is fixed and planned. Numbers come from
+GitHub history, laptop journal, session transcripts and measurements; estimates are marked `(est.)`.
 
-## Коротко
+## Summary
 
-- **CI не узкое место.** Полная проверка идёт 4,5 мин, PR вливается в среднем через 0,5 ч после открытия.
-- **Время уходило на ноутбуке и в ожидании.**
-  - Съёмки со всей сборкой заняли 11,4 ч за сутки 21–22.10. Эталон 3.4.1 из них снимали заново 12 раз.
-  - Локальные повторы GameTest заняли 8,6 ч.
-  - Тяжёлые задачи 5,7 ч шли одновременно и мешали друг другу.
-  - Сессии 17,5 ч ждали циклами.
-  - Сессии, закончившие ход посреди работы, продолжали вручную 13+ раз.
-- **Главная потеря — переделка 3.5.0.** Картинку и звук влили без сравнения с прошлым выпуском. Почти весь пакет
-  21–22.10 (~$635 по счётчику сессий, ~15 ч ноутбука, оценка) ушёл на возврат к уровню 3.4.1 и выше.
-- **Корень у всех случаев один.** Правило появлялось после жалобы Артёма и держалось текстом в памяти. Ничто в
-  инструментах его не выполняло. Поэтому исправления ниже сделаны в инструментах, а не новыми строками в правилах.
+- **CI is not the bottleneck.** Full checks take 4.5 min; PRs merge on average 0.5 h after opening.
+- **Time went to the laptop and waiting.**
+  - Full-pack recording took 11.4 h over 21–22.10. The 3.4.1 reference was rerecorded 12 times.
+  - Local GameTest reruns took 8.6 h.
+  - Heavy jobs overlapped for 5.7 h, interfering with each other.
+  - Sessions spent 17.5 h polling.
+  - Sessions ending turns mid-job were manually resumed 13+ times.
+- **Main loss: reworking 3.5.0.** Visuals and sound merged without comparison to the previous release. Almost all of the
+  21–22.10 batch (~$635 by session counters, ~15 laptop hours, (est.)) went to restoring 3.4.1 quality or better.
+- **All cases share one root.** Rules followed Artem's complaints and lived as text in memory. No tool enforced them.
+  Thus the fixes below are in tools, not new rule lines.
 
-## 1. Как мерил
+## 1. Measurement method
 
 - **GitHub:**
-  - PR трёх репозиториев с 01.10;
-  - 1000 запусков `build` в incoming (с 01.10 15:31);
-  - задачи и шаги 688 запусков с 12.10 (`gh api`).
-- **Журнал systemd ноутбука** (с 21.10 20:28): 248 задач `incoming-job-*` с временем, процессором и памятью.
-- **Транскрипты сессий и их итоги:**
-  - транскрипты `~/.claude/projects/-mnt-data-projects-airstrike/*.jsonl` (27.09–02.10 и 21–22.10);
-  - итоги `mod/run/incoming-sessions/*.json`;
-  - 37 файлов памяти.
-- **Пробел в данных.** Сессии 03.10–20.10 из рабочих деревьев по транскриптам не разобраны: этот период — по памяти и
-  GitHub.
-- **Свои замеры сборки** — на ноутбуке при нагрузке 12–33 (рядом шли съёмки и GameTest других сессий).
-  - Абсолютные секунды поэтому завышены.
-  - «До» и «после» мерил при одинаковой нагрузке.
+  - PRs across three repositories since 01.10;
+  - 1000 incoming `build` runs (since 01.10 15:31);
+  - jobs and steps of 688 runs since 12.10 (`gh api`).
+- **Laptop systemd journal** (since 21.10 20:28): 248 `incoming-job-*` jobs with time, CPU and memory.
+- **Session transcripts and results:**
+  - `~/.claude/projects/-mnt-data-projects-airstrike/*.jsonl` transcripts (27.09–02.10 and 21–22.10);
+  - `mod/run/incoming-sessions/*.json` results;
+  - 37 memory files.
+- **Data gap.** Worktree session transcripts for 03.10–20.10 were not analyzed; this period relies on memory and GitHub.
+- **Own build measurements** on the laptop at load 12–33 (other sessions recording/running GameTest alongside).
+  - Absolute seconds are therefore inflated.
+  - Before/after measured at equal load.
 
-## 2. Ретроспектива: что пошло не так и почему
+## 2. Retrospective: what went wrong and why
 
-### 2.1. Регрессия 3.5.0 дошла до Артёма (21.10 14:04)
+### 2.1. The 3.5.0 regression reached Artem (21.10 14:04)
 
-**Что случилось.** Прилёты стали хуже, чем в 3.4.1: дым кубами, нет огня, шахед «мухой». Сборку откатили на 3.4.1.
+**What happened.** Strikes looked/sounded worse than 3.4.1: cubic smoke, missing fire, Shahed like a “fly”. Pack rolled
+back to 3.4.1.
 
-**Цена.** Пробу P, сессии V, A, F, C, F2a/b/c и перестройку S-сессий на новой основе оцениваю в бо́льшую часть пакета
-21–22.10.
+**Cost.** I estimate probe P, sessions V, A, F, C, F2a/b/c and rebuilding S sessions on the new base as most of the
+21–22.10 batch.
 
-**Почему.**
-1. Почему стало хуже? Дым перевели на сетку ядерного масштаба, оборвали свет шара и ускорили запись.
-2. Почему это прошло? PR #350–#354 проверяли тесты законов, юнит-тесты и ревью кода.
-3. Почему не сравнили картинку? Облачные сессии не рендерят под Iris, а кадры сценариев смотрели как доказательство
-   работы, а не рядом с прошлым выпуском.
-4. Почему так было можно? Шага «не хуже прошлого выпуска» в процессе не было.
-5. Почему его не было? Проверки держали законы, а вид и звук считались следствием законов. Модель была верной, а
-   рисовала она плохо.
+**Why.**
+1. Why worse? Smoke moved to a nuclear-scale grid, sphere light was cut off, recording sped up.
+2. Why did it pass? PRs #350–#354 checked law tests, unit tests and code review.
+3. Why no visual comparison? Cloud sessions do not render under Iris; scenario frames were checked as proof of
+   operation, not beside the previous release.
+4. Why was that allowed? Process had no “no worse than previous release” step.
+5. Why absent? Checks guarded laws; look/sound were considered consequences of laws. Model was correct, rendering bad.
 
-**Что исправлено раньше.**
-- Сравнение с 3.4.1 до влития (`tools/look_gate`).
-- Проверка «Записка» (`note.yml`).
-- Раздел «Как работаем» в CLAUDE.md.
+**Previously fixed.**
+- Comparison with 3.4.1 before merge (`tools/look_gate`).
+- “Записка” check (`note.yml`).
+- “How we work” section in CLAUDE.md.
 
-**Что осталось.** Сравнение стоит 25–77 мин видеокарты на версию и не автоматическое (план, п. 5.2 и 5.6).
+**Remaining.** Comparison costs 25–77 GPU minutes per version and is not automatic (plan 5.2, 5.6).
 
-### 2.2. Сессии останавливала защита (21.10 18:58–21:01)
+### 2.2. Protection stopped sessions (21.10 18:58–21:01)
 
-**Что случилось.** Около 10 запусков S2 и S6 упали на фильтре.
+**What happened.** About 10 S2/S6 launches failed at the filter.
 
-**Цена.** ~$38 и ~2 ч задержки. Артёму пришлось заново решать рамку («своя игровая модель»).
+**Cost.** ~$38 and ~2 h delay. Artem had to redefine scope (“our own game model”).
 
-**Почему.** Спеки писали в треде «настоящая физика»: настоящие данные ЗРК, вероятность поражения, баллистика. Правило
-«настоящую логику полёта не писать в промпты» было в памяти, но применялось только к облачным промптам.
+**Why.** Specs in the thread described “real physics”: real SAM data, kill probability, ballistics. The rule “do not
+put real flight logic in prompts” was in memory but applied only to cloud prompts.
 
-**Что исправлено раньше.** Решение «Полёт и ПВО — своя игровая модель» (раздел «Принципы» в CLAUDE.md).
+**Previously fixed.** “Flight and air defense use our own game model” decision (“Principles” in CLAUDE.md).
 
-### 2.3. Тяжёлые задачи мешали друг другу
+### 2.3. Heavy jobs interfered with each other
 
-**Сколько.** За 20 ч (21.10 20:28 → 22.10 16:32) прошло 248 задач на 33,9 ч, ноутбук был занят 15,1 ч:
-- съёмки: 72 запуска, 11,4 ч;
-- прогоны полёта, эталоны и шлагбаумы: 34 запуска, 9,7 ч;
-- локальные GameTest: 41 запуск, 8,6 ч.
+**How much.** In 20 h (21.10 20:28 → 22.10 16:32), 248 jobs totaled 33.9 h; laptop busy 15.1 h:
+- recording: 72 runs, 11.4 h;
+- flight runs, baselines and look gates: 34 runs, 9.7 h;
+- local GameTest: 41 runs, 8.6 h.
 
-**Задачи по 6+ ГБ памяти шли одновременно.** 45 пар пересекались дольше минуты, всего 5,7 ч. Примеры:
-- две съёмки F2a5 и F2b3 шли вместе 14 мин;
-- съёмки V шли поверх прогона S7 и шлагбаума S2.
+**Jobs using 6+ GB ran simultaneously.** 45 pairs overlapped for over a minute, totaling 5.7 h. Examples:
+- F2a5 and F2b3 recordings overlapped 14 min;
+- V recording overlapped S7 run and S2 look gate.
 
-**Что это стоило.** При нагрузке 40+ сервер пробы подвисает, камера теряет ракету, и сцену снимают заново (F2c).
+**Cost.** At load 40+, the probe server stalls, camera loses the missile, scene rerecorded (F2c).
 
-**Почему.** Правило «одна тяжёлая задача за раз» было фразой в CLAUDE.md:
-- `laptop_job.sh` запускал сразу;
-- `look_gate` раз в 30 с смотрел на чужие клиенты, и две ждущие съёмки стартовали вместе.
+**Why.** “One heavy job at a time” was a sentence in CLAUDE.md:
+- `laptop_job.sh` launched immediately;
+- `look_gate` checked other clients every 30 s, so two waiting recordings started together.
 
-**Исправлено:** #381.
+**Fixed:** #381.
 
-### 2.4. Съёмку повторяли после каждой правки, новое правило не доходило
+### 2.4. Recording repeated after every edit; new rule did not reach sessions
 
-**Что случилось.** Артём 22.10 14:24: «после каждого мелкого изменения всё заново снимается, серьёзно?». Правило
-«снимать один раз в конце» записали в бриф сессий (`mod/run/incoming-sessions/context.md`, вне git) в 14:26.
+**What happened.** Artem, 22.10 14:24: “everything is recorded again after every tiny change, seriously?” The rule
+“record once at the end” entered session brief (`mod/run/incoming-sessions/context.md`, outside git) at 14:26.
 
-**Почему оно не сработало.** `context.md` прикладывается только при старте, и идущие сессии его не увидели:
-- F2a сняла ещё 7 версий (~1,7 ч);
-- H прогнала ~2 ч GameTest на ноутбуке.
+**Why ineffective.** `context.md` attaches only at startup; running sessions never saw it:
+- F2a recorded 7 more versions (~1.7 h);
+- H ran ~2 h of GameTest on the laptop.
 
-Эталон 3.4.1 каждая сессия снимала заново: 12 раз, 1,4 ч.
+Each session rerecorded 3.4.1: 12 times, 1.4 h.
 
-**Исправлено:**
-- новые решения для идущих сессий — #382 (`live.md`);
-- повторы GameTest на GitHub — #385;
-- быстрый просмотр одного эффекта — песочница X (#379, в работе).
+**Fixed:**
+- new decisions for running sessions: #382 (`live.md`);
+- GameTest reruns on GitHub: #385;
+- quick single-effect preview: sandbox X (#379, in progress).
 
-Хранение эталона — в плане (п. 5.2).
+Reference storage is planned (5.2).
 
-### 2.5. Жизнь фоновых сессий хрупкая
+### 2.5. Background-session lifecycle is fragile
 
-**Сессии погибли вместе с родителем** (22.10 01:16). S5 и S8 погасли вместе с сессией, которая их запустила, и ~3 ч
-стояли. Исправлено раньше: `go.sh` запускает сессию своей службой systemd.
+**Sessions died with parent** (22.10 01:16). S5/S8 stopped with their launching session, stalled ~3 h. Previously fixed:
+`go.sh` launches sessions as separate systemd services.
 
-**Правка `run.sh` на ходу стёрла итоги P и S3.** bash дочитывает изменённый файл со старого места.
+**Editing `run.sh` live erased P/S3 results.** Bash resumes reading the edited file at the old offset.
 
-**Сессии заканчивали ход, пока их задача на ноутбуке шла.** Координатор продолжал вручную:
-- S5 — 6 раз;
-- S6 — 7 раз;
-- S4 и F2b — по 2 раза.
+**Sessions ended turns while laptop jobs ran.** Coordinator manually resumed:
+- S5: 6 times;
+- S6: 7 times;
+- S4 and F2b: 2 times each.
 
-Одно лишнее продолжение S6 стоило $18,6.
+One unnecessary S6 continuation cost $18.6.
 
-Проверил: сессия `-p` ждёт свою фоновую команду в том же ходе. Ход кончается, когда задача запущена отвязанной или
-фоновую команду остановил её `timeout` (по умолчанию 10 мин, а съёмка идёт 25–77 мин).
+Verified: a `-p` session waits for its background command within the same turn. Turn ends when job is detached or its
+background command's `timeout` stops it (default 10 min, recording takes 25–77 min).
 
-**Ожидание циклами.** 249 вызовов `sleep` и опросов — 17,5 ч. Ещё 1,5 ч ушло на наблюдение за CI.
+**Polling.** 249 `sleep`/poll calls, 17.5 h. Another 1.5 h watching CI.
 
-**Исправлено:** #382 (запуск в git, сам продолжает сессию, правило про `timeout`), #383 (ожидание CI одной командой).
+**Fixed:** #382 (launcher in git, auto-resume, `timeout` rule), #383 (one-command CI wait).
 
-### 2.6. Параллельные PR в одной подсистеме
+### 2.6. Parallel PRs in one subsystem
 
-**Конфликты.** 21–22.10 перебазирование упиралось в конфликты у V, S5, S2, S6 (дважды), G, H и W. Из 17 PR этих суток:
-- `docs/guide/weapons.md` правили 10 PR (и столько же — русский);
-- `WeaponSpec.java` — 8;
-- файлы языка, `StrikeGameTests` и `CLAUDE.md` — по 7.
+**Conflicts.** Rebases conflicted on 21–22.10 for V, S5, S2, S6 (twice), G, H, W. Of 17 PRs that day:
+- `docs/guide/weapons.md` changed in 10 PRs (same for Russian);
+- `WeaponSpec.java` in 8;
+- language files, `StrikeGameTests`, `CLAUDE.md` in 7 each.
 
-**CI молча не стартует.** GitHub не запускает проверки PR с конфликтом. V и S5 ждали такой CI по 10–20 мин.
+**CI silently never starts.** GitHub does not run checks on conflicted PRs. V/S5 waited 10–20 min for such CI.
 
-**Почему.** 8–10 сессий шли сразу по одной подсистеме, и правила требуют, чтобы каждый PR правил ещё паспорт,
-руководство и заметки.
+**Why.** 8–10 sessions worked simultaneously in one subsystem; rules require each PR to also update spec, guide and
+notes.
 
-**Исправлено:** #383 (конфликт виден сразу). Порядок пакетов — в плане (п. 5.5).
+**Fixed:** #383 (conflict immediately visible). Batch order planned (5.5).
 
-### 2.7. Нестабильные GameTest
+### 2.7. Flaky GameTest
 
-**Сколько.** С 12.10 упал 51 полный прогон GameTest из 506 (10 %), 9 из них на `main` сразу после влития. Причины две:
-флак или PR, проверенный на старой базе.
+**How much.** Since 12.10, 51 of 506 full GameTest runs failed (10 %), 9 on `main` immediately after merge. Two causes:
+flakes or PRs tested on old bases.
 
-**Какие тесты.** `stopFinishesQueue`, `radiusTest`, `craterFallsShareWorldCap`, `mobsFleeTheBlastAndCalmDown`,
+**Tests.** `stopFinishesQueue`, `radiusTest`, `craterFallsShareWorldCap`, `mobsFleeTheBlastAndCalmDown`,
 `droneBreaksWoodToJarrett`, `loiter_rail.player.none.0`.
 
-**Цена.** Каждая сессия, упавшая на них, перезапускала части CI. H ловит их 7+ ч.
+**Cost.** Every affected session reran CI shards. H has been chasing them for 7+ h.
 
-**Почему так дорого.** Повторить один тест было можно только полным прогоном CI или на ноутбуке.
+**Why expensive.** One test could be repeated only via full CI or on the laptop.
 
-**Исправлено:** #385. Карантин и актуальная база — в плане (п. 5.3, 5.4).
+**Fixed:** #385. Quarantine/current base planned (5.3, 5.4).
 
-### 2.8. Локальная сборка медленнела незаметно
+### 2.8. Local builds slowed unnoticed
 
-**Сколько.** `./gradlew build` в свежем дереве шёл 2 мин 46 с, из них юнит-тесты — 2 мин 29 с. Один тест
-`AutopilotPropertiesTest.randomFlightsHitWithoutCircling` — 117 с из 140 (84 %).
+**How much.** `./gradlew build` in a fresh tree took 2 min 46 s, unit tests 2 min 29 s. One test,
+`AutopilotPropertiesTest.randomFlightsHitWithoutCircling`, took 117 of 140 s (84 %).
 
-**Почему.** Его комментарий обещал «десять тысяч сценариев за секунды». После S7 (#363, 21.10) каждый тик полёта
-считает полосу рельефа впереди. Профиль JFR: 82 % — `Autopilot.reliefAhead → Corridor.highest → GridWalk`. Тест шёл в
-одном потоке, и время тестов никто не смотрел.
+**Why.** Its comment promised “ten thousand scenarios in seconds”. Since S7 (#363, 21.10), every flight tick surveys
+terrain ahead. JFR profile: 82 % `Autopilot.reliefAhead → Corridor.highest → GridWalk`. Test was single-threaded;
+nobody watched test durations.
 
-**Исправлено:**
-- #380 — тест на всех ядрах;
-- #384 — тёплый демон для правки.
+**Fixed:**
+- #380: test on all cores;
+- #384: warm daemon for edits.
 
-Время тестов в итоге CI — в плане (п. 5.7).
+Test duration in CI summary planned (5.7).
 
-### 2.9. Уроки из памяти (01–18.10)
+### 2.9. Lessons from memory (01–18.10)
 
-- Готовую задачу не замечали ~1 ч.
-- `pgrep -f` находил сам себя: шлагбаум ждал ~50 мин зря.
-- Вложенный KWin сломал Prism Артёма.
-- Трейлер 24 мин крутился по кругу через 13 клиентов.
-- Пять превью TikTok переделали целиком.
-- Два лишних полных прогона GameTest (#290).
-- Уборка диска удалила `film-war` и музыку трейлера.
-- Локальный сервер собрали вместо Crafty.
-- Координатор 28.09–02.10 шёл 92 ч ($518): 685 пробуждений, 553 из них «ответ не нужен».
+- A finished job went unnoticed for ~1 h.
+- `pgrep -f` matched itself: look gate waited ~50 min needlessly.
+- Nested KWin broke Artem's Prism.
+- Trailer looped for 24 min through 13 clients.
+- Five TikTok previews completely redone.
+- Two unnecessary full GameTest runs (#290).
+- Disk cleanup deleted `film-war` and trailer music.
+- Built a local server instead of Crafty.
+- Coordinator ran 92 h over 28.09–02.10 ($518): 685 wakeups, 553 “no reply needed”.
 
-**Общее:** правило после жалобы, держится памятью. Там, где правило стало инструментом (`nested_kwin.sh`, проверки
-«Итог» и «Записка»), ошибка больше не повторялась. `laptop_job.sh` до #381 держал только службу, но не очередь — и
-тяжёлые задачи пересекались (п. 2.3).
+**Common pattern:** rule follows complaint, held by memory. Once a rule became a tool (`nested_kwin.sh`, “Итог” and
+“Записка” checks), the error did not recur. Before #381, `laptop_job.sh` managed the service but not the queue, so heavy
+jobs overlapped (2.3).
 
-## 3. Где уходит время: по звеньям
+## 3. Where time goes: by stage
 
-| Звено | Замер | Оценка |
+| Stage | Measurement | Assessment |
 |---|---|---|
-| CI, полная проверка | 4,5 мин (медиана), p90 5,2; 23 мин машин на прогон; правки `docs/`, `tools/` мод не собирают | хорошо |
-| Часть GameTest в CI | 4 мин 16 с: подготовка 30 с, компиляция 31 с, сервер 21 с, тесты 2 мин 51 с | хорошо |
-| Флаки CI | 10 % прогонов GameTest, 9 красных `main` | плохо → #385, план 5.3–5.4 |
-| Локальная сборка без изменений | 13–16 с без демона, 2 с с тёплым | → #384 |
-| Правка → компиляция | 15–18 с → 3–6 с с демоном | → #384 |
-| Правка → `build` с тестами | 220 с → 103 с (#380) → 75–92 с (и демон); нагрузка 25–33 | → #380, #384 |
-| Настройка Gradle | 1,3 с; компиляция в новом дереве — из общего кэша сборки | кэш настройки дал бы ~1 с — не стоит |
-| Прогон полёта, 16 зёрен | ≈2,7 ч | нужен редко целиком |
-| Съёмка со всей сборкой | 25–77 мин на версию | главный расход → песочница X, план 5.2 |
-| Звук | сборка — секунды; сравнение — та же съёмка | хорошо |
-| Ревью и влитие | медиана 0,5 ч, p90 2,6 ч | хорошо |
-| Выпуск и сборка | 21 выпуск за октябрь, `release=true` и PR сборки — минуты | хорошо |
-| Фоновые сессии | 17,5 ч ожидания, 13+ ручных продолжений | → #382, #383 |
-| Бриф сессии | `context.md` 63 КБ (~16 тыс. токенов) в каждой сессии и продолжении | план 5.6 |
+| CI, full check | 4.5 min median, p90 5.2; 23 machine-minutes/run; `docs/`, `tools/` edits skip mod build | good |
+| CI GameTest shard | 4 min 16 s: setup 30 s, compile 31 s, server 21 s, tests 2 min 51 s | good |
+| CI flakes | 10 % of GameTest runs, 9 red `main` runs | bad → #385, plan 5.3–5.4 |
+| Local no-change build | 13–16 s without daemon, 2 s warm | → #384 |
+| Edit → compile | 15–18 s → 3–6 s with daemon | → #384 |
+| Edit → `build` with tests | 220 s → 103 s (#380) → 75–92 s (also daemon); load 25–33 | → #380, #384 |
+| Gradle configuration | 1.3 s; new-tree compilation from shared build cache | configuration cache would save ~1 s, not worth it |
+| Flight sweep, 16 seeds | ≈2.7 h | rarely needed in full |
+| Full-pack recording | 25–77 min/version | main expense → sandbox X, plan 5.2 |
+| Sound | build seconds, comparison uses same recording | good |
+| Review/merge | median 0.5 h, p90 2.6 h | good |
+| Release/pack | 21 releases in October, `release=true` and pack PR take minutes | good |
+| Background sessions | 17.5 h waiting, 13+ manual resumptions | → #382, #383 |
+| Session brief | `context.md` 63 KB (~16 thousand tokens) per session/continuation | plan 5.6 |
 
-## 4. Что сделано (22.10)
+## 4. Completed (22.10)
 
-Каждое — отдельным PR, с замером до и после.
+Each in a separate PR, with before/after measurements.
 
-| PR | Что | До | После |
+| PR | Change | Before | After |
 |---|---|---|---|
-| [#380](https://github.com/zentixua/incoming/pull/380) | 10 000 полётов `AutopilotPropertiesTest` на всех ядрах; итог тот же (10 000 попаданий, 757 закрытых рельефом) | тест 76,5 с (нагрузка 12) / 117 с (нагрузка 24); правка → `build` 220 с | 11,1 с / 19 с; правка → `build` 103 с |
-| [#381](https://github.com/zentixua/incoming/pull/381) | `laptop_job.sh`: тяжёлые задачи по одной (замок внутри службы), `--gpu` ждёт и закрытой игры Артёма, `--light` без очереди, `--status`, строка с кодом в конце | 45 пересечений тяжёлых задач, 5,7 ч | вторая задача ждёт первую; пересечений нет по устройству |
-| [#382](https://github.com/zentixua/incoming/pull/382) | `tools/sessions/go.sh`: запуск сессии из git, итог хода строкой в `sessions.log`, сам продолжает сессию, когда кончились её задачи; `live.md` — новые решения для идущих сессий | 13+ ручных продолжений; правило 14:26 не дошло до F2a и H | пробная сессия закончила ход при идущей задаче и продолжилась сама по её концу |
-| [#383](https://github.com/zentixua/incoming/pull/383) | `tools/pr_ci.sh <PR>`: ждать «Итог» и «Записку», код 3 на конфликте, хвост лога упавшего | 1,5 ч наблюдения за CI; 10–20 мин «тихого» CI на конфликте | одна фоновая команда; #380 — «зелёные, 3 мин ожидания»; задачу, которую GitHub после конца оставил «идущей» (так было с «Итогом» самого #383), берёт по её итогу |
-| [#384](https://github.com/zentixua/incoming/pull/384) | правка и тесты на тёплом демоне Gradle (`./gradlew --daemon build`), запуски игры без него; демон гаснет через 10 мин | без изменений 13–16 с, компиляция 15–18 с | 2 с, 3–6 с |
-| [#385](https://github.com/zentixua/incoming/pull/385) | ручной запуск CI «только эти партии GameTest, N раз на шести машинах» и `tools/ci_repeat.sh` | повторы флака на ноутбуке (H: 41 прогон, 8,6 ч) или полным CI | 18 прогонов партии за 2,6 мин на GitHub, ноутбук свободен; выражение, под которое не подошла ни одна партия, — падение, а не «0 из 0 прошло» |
+| [#380](https://github.com/zentixua/incoming/pull/380) | 10 000 `AutopilotPropertiesTest` flights on all cores; same result (10 000 hits, 757 terrain-blocked) | test 76.5 s (load 12) / 117 s (load 24); edit → `build` 220 s | 11.1 s / 19 s; edit → `build` 103 s |
+| [#381](https://github.com/zentixua/incoming/pull/381) | `laptop_job.sh`: heavy jobs one at a time (lock inside service), `--gpu` also waits for Artem's game to close, `--light` bypasses queue, `--status`, final exit-code line | 45 heavy-job overlaps, 5.7 h | second job waits for first; no overlap by design |
+| [#382](https://github.com/zentixua/incoming/pull/382) | `tools/sessions/go.sh`: session launcher in git, turn result in `sessions.log`, auto-resumes after its jobs end; `live.md` for new decisions reaching running sessions | 13+ manual resumptions; 14:26 rule missed F2a/H | trial session ended turn with running job and resumed automatically on completion |
+| [#383](https://github.com/zentixua/incoming/pull/383) | `tools/pr_ci.sh <PR>` waits for “Итог”/“Записка”, code 3 on conflict, failed-log tail | 1.5 h watching CI; 10–20 min of “silent” CI on conflicts | one background command; #380: “green, waited 3 min”; uses conclusion for jobs GitHub leaves “running” after completion (as happened to #383's own “Итог”) |
+| [#384](https://github.com/zentixua/incoming/pull/384) | edits/tests on warm Gradle daemon (`./gradlew --daemon build`), game runs without it; daemon exits after 10 min | no changes 13–16 s, compile 15–18 s | 2 s, 3–6 s |
+| [#385](https://github.com/zentixua/incoming/pull/385) | manual CI “only these GameTest batches, N repeats on six machines” and `tools/ci_repeat.sh` | laptop flake reruns (H: 41 runs, 8.6 h) or full CI | 18 batch runs in 2.6 min on GitHub, laptop free; no matching batch fails instead of “0 of 0 passed” |
 
-## 5. План: что дальше
+## 5. Plan: next steps
 
-Порядок — по выигрышу на усилие. Выигрыш — оценка по замерам выше.
+Ordered by gain per effort. Gains estimated from measurements above.
 
-**5.1. Новые сессии — только через `tools/sessions/go.sh`, а не через `mod/run/incoming-sessions/*.sh`.**
-- Выигрыш: меньше ручных продолжений и итогов, затёртых правкой.
-- Цена: правка у координатора, минуты.
+**5.1. New sessions only via `tools/sessions/go.sh`, not `mod/run/incoming-sessions/*.sh`.**
+- Gain: fewer manual resumptions and edit-erased results.
+- Cost: coordinator change, minutes.
 
-**5.2. Эталон снимается один раз.** `look_gate` кладёт кадры в `look-gate/ref/<ключ>/<сцена>`. Ключ — хэш кода мода
-дерева + хэш `ProbeScenario` + размер кадра + слух. Есть кадры с таким ключом — сцена не снимается. То же для `main`
-(его снимали как `Cmain`, `S6main`, `Fmain`).
-- Выигрыш: 25–40 мин видеокарты на сессию (1,4 ч на 3.4.1 за сутки).
-- Цена: ~2 ч.
-- Ждёт #369 (переименование папок трогает `look_gate/run.sh`) и песочницы X (она тоже снимает).
+**5.2. Record reference once.** `look_gate` stores frames in `look-gate/ref/<key>/<scene>`. Key is tree's mod-code hash +
+`ProbeScenario` hash + frame size + hearing state. Existing key means scene skipped. Same for `main` (recorded as
+`Cmain`, `S6main`, `Fmain`).
+- Gain: 25–40 GPU minutes/session (1.4 h on 3.4.1 in one day).
+- Cost: ~2 h.
+- Waits for #369 (folder rename touches `look_gate/run.sh`) and sandbox X (also records).
 
-**5.3. Карантин флака.** Известно нестабильный GameTest — `required = false` и строка в `gametest.md`: тест, кто
-чинит, до какого числа. Сессии перестанут перезапускать чужой флак.
-- Выигрыш: красных прогонов из-за флака почти не будет.
-- Цена: правило + по строке на тест.
-- Риск: флак, ставший настоящей ошибкой, не остановит слияние. Поэтому только со сроком.
+**5.3. Flake quarantine.** Known unstable GameTest gets `required = false` and a `gametest.md` line: test, fixer, deadline.
+Sessions stop rerunning others' flakes.
+- Gain: almost no red runs from flakes.
+- Cost: rule + one line per test.
+- Risk: a flake becoming a real bug will not block merge. Therefore deadline required.
 
-**5.4. Влитие только с актуальной базой.** PR проверен на текущем `main`. Merge queue GitHub, насколько знаю, только у
-репозиториев организаций (не проверял). Значит, это либо настройка ветки «Require branches to be up to date», либо
-проверка в скрипте влития.
-- Выигрыш: 9 красных `main` за 10 дней → 0.
-- Цена: +1 прогон CI (4,5 мин), когда `main` ушёл вперёд.
+**5.4. Merge only with current base.** PR tested on current `main`. As far as I know, GitHub merge queues are only for
+organization repositories (not checked). Thus either branch setting “Require branches to be up to date” or merge-script
+check.
+- Gain: 9 red `main` runs in 10 days → 0.
+- Cost: +1 CI run (4.5 min) when `main` advances.
 
-**5.5. Пакет сессий без столкновений.** Сессии одной подсистемы — цепочкой. Если параллельно, то руководство, паспорт и
-заметки правил — одним итоговым PR пакета.
-- Выигрыш: конфликты 8 из 17 PR → редкие.
-- Цена: меняет правило «руководство в том же PR» — решение Артёма.
+**5.5. Session batches without collisions.** Same-subsystem sessions in a chain. If parallel, guide, spec and rule notes
+in one final batch PR.
+- Gain: conflicts in 8 of 17 PRs → rare.
+- Cost: changes “guide in same PR” rule, Artem's decision.
 
-**5.6. Короткий бриф и картинка без видеокарты.**
-- Бриф — правила и ссылки, подробности файлами по запросу: ~16 тыс. токенов на каждую сессию и продолжение → ~3 тыс.
-  (оценка).
-- Картинка без видеокарты — после песочницы X:
-  - эталонные кадры одного эффекта в фиксированные моменты (0,1/1/10/60 с) с порогом сравнения (SSIM/FLIP, как в
-    студиях);
-  - повтор удара из Flashback вместо нового полёта, чтобы сравнивать версии на одной траектории.
-- Цена: бриф — час; картинка — большая работа.
+**5.6. Short brief and visuals without GPU.**
+- Brief: rules/links, details in on-demand files: ~16 thousand tokens per session/continuation → ~3 thousand (est.).
+- Visuals without GPU, after sandbox X:
+  - reference frames of one effect at fixed times (0.1/1/10/60 s) with comparison threshold (SSIM/FLIP, as studios use);
+  - Flashback strike replay instead of new flight, comparing versions on one trajectory.
+- Cost: brief one hour; visuals a large task.
 
-**5.7. Время тестов на виду.** Тесты дольше 10 с — строкой в итог шага CI, чтобы медленный тест не копился молча, как
-в п. 2.8.
-- Цена: ~10 строк в `build.yml`.
+**5.7. Visible test durations.** Tests over 10 s appear in CI step summary, preventing silent accumulation as in 2.8.
+- Cost: ~10 lines in `build.yml`.
 
-**Не берём:**
-- **Кэш настройки Gradle:** настройка 1,3 с, а сценарий сборки пришлось бы переписать.
-- **Больше частей GameTest:** у каждой ~1 мин постоянных расходов, CI и так 4,5 мин.
-- **Параллельные классы JUnit:** остальные тесты вместе ~20 с, а общий статический код рискует флаками.
+**Not taking:**
+- **Gradle configuration cache:** configuration 1.3 s, would require rewriting build script.
+- **More GameTest shards:** each has ~1 min overhead, CI already 4.5 min.
+- **Parallel JUnit classes:** other tests total ~20 s, shared static code risks flakes.
 
-## 6. Что работает и остаётся
+## 6. What works and stays
 
 - **CI:**
-  - выбор проверок по изменённым путям;
-  - 6 частей GameTest по таблице длительностей;
-  - «Итог» как единая отметка;
-  - медиана 4,5 мин.
-- **Общий кэш сборки Gradle:** компиляция в новом дереве — из кэша.
-- **Небольшие PR:** медиана 467 строк, 0,5 ч до влития.
-- **Выпуск:** ручной запуск `release=true` и PR сборки в open-skies за минуты.
-- **Сессии и задачи в своих службах systemd.**
-- **Ворота:** «не хуже прошлого выпуска» и «Записка».
-- **Ревью свежим контекстом.** На этих шести PR оно нашло четыре ошибки, которые прошли бы CI:
-  - съёмка, ждущая игру, держала очередь;
-  - задача ушедшего запустившего стартовала бы позже без присмотра;
-  - `go.sh` не работал из основной копии;
-  - повтор по имени теста вместо партии давал «всё прошло», хотя не шло ничего.
+  - checks selected by changed paths;
+  - 6 GameTest shards by duration table;
+  - “Итог” as single status;
+  - median 4.5 min.
+- **Shared Gradle build cache:** new-tree compilation from cache.
+- **Small PRs:** median 467 lines, 0.5 h to merge.
+- **Release:** manual `release=true` and open-skies pack PR in minutes.
+- **Sessions/jobs in separate systemd services.**
+- **Gates:** “no worse than previous release” and “Записка”.
+- **Fresh-context review.** Across these six PRs it found four errors CI would miss:
+  - recording waiting for game held the queue;
+  - a departed launcher's job would start later unattended;
+  - `go.sh` failed from main checkout;
+  - repeating by test instead of batch name reported success while running nothing.

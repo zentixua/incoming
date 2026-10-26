@@ -5,56 +5,56 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 /**
- * Очередь работ одной полосы в одном мире ({@link WorkScheduler}): каждая работа — цепочка коротких единиц.
+ * One lane's queue in one world ({@link WorkScheduler}); each job is a chain of short units.
+ * Heads run their first unit in enqueue order before any continuations. Continuations take one unit per turn,
+ * retaining their rotation between windows and ticks, so an old fire sweep cannot monopolize a new blast front.
  * <p>
- * Две очереди. В первой — работы, которые ещё не начаты: их первая единица (у взрыва — лучи, урон и события: то, что
- * видно и чувствуется сразу) идёт по порядку постановки раньше всего остального. Работа, у которой после первой
- * единицы ещё есть работа (порции блоков взрыва, секции стёкол), переходит во вторую очередь и доделывается там по
- * порядку в оставшемся сроке — иначе бомба силы 20 с сотнями порций держала бы на секунды начало следующих ударов.
- * <p>
- * Работа, чей район ещё не готов ({@link Job#ready}), пропускается, пока не станет готов, а следующие за ней идут;
- * ждёт не дольше {@link #GIVE_UP_TICKS}. Работа, которая ждёт другую ({@link Job#blocked}: огненный шар и стёкла удара
- * — его главный взрыв целиком; блоки взрыва — лучи других взрывов того же тика), тоже пропускается; спрашивается перед
- * каждой единицей. Не сохраняется (как таймлайны взрывов); при остановке сервера
- * доделывается ({@link #finish(ServerLevel)}).
+ * Unready areas wait up to {@link #GIVE_UP_TICKS}; jobs waiting on dependencies are skipped. Continuation readiness
+ * and dependencies are sampled once per work window, after heads have run: a first unit can introduce a dependency.
+ * A later window, including Post in the same world tick, refreshes that sample. Jobs are not saved; shutdown drains
+ * available work through {@link #finish(ServerLevel)} and releases the rest.
  */
 public final class UnitQueue {
-    /** Работа: единицы по одной, пока {@link #step} отвечает {@code true}. */
+    /** A chain of units, continuing while {@link #step} returns true. */
     public interface Job {
-        /** Можно ли делать единицу сейчас (район готов). */
+        /** Is the area ready for a unit? */
         default boolean ready(ServerLevel level) {
             return true;
         }
 
-        /** Ждёт другую работу (та ещё не кончилась). */
+        /** Is this job waiting for another job to finish? */
         default boolean blocked() {
             return false;
         }
 
-        /** Вид следующей единицы — у каждого вида своя оценка часов ({@link WorkClock#canStart(int)}). */
+        /** Next unit kind, with its own clock estimate ({@link WorkClock#canStart(int)}). */
         default int unitKind() {
             return 0;
         }
 
-        /** Одна единица работы; {@code false} — работа кончилась. */
+        /** Execute one unit; false means the job is complete. */
         boolean step(ServerLevel level);
 
-        /** Работа убрана — кончилась, отменена или упала: отпустить то, что она держит (тикеты). */
+        /** Release held resources, including tickets, when completed, cancelled or failed. */
         default void end(ServerLevel level) {}
 
-        /** Для строки в лог: что за работа. */
+        /** Job description for logs. */
         String describe();
     }
 
-    /** Сколько работа ждёт готовности района, тиков; дальше отменяется (мир не грузится). */
+    /** Maximum wait for area readiness, in ticks, before cancellation. */
     public static final int GIVE_UP_TICKS = 6000;
 
     private static final class Entry {
         final Job job;
         final long added;
+        long checkedWindow = -1;
+        Outcome availability;
 
         Entry(Job job, long added) {
             this.job = job;
@@ -62,18 +62,19 @@ public final class UnitQueue {
         }
     }
 
-    private enum Outcome { SKIPPED, OUT_OF_TIME, MORE, PAUSED, DONE }
+    private enum Outcome { SKIPPED, OUT_OF_TIME, MORE, DONE }
 
-    /** Не начатые работы. */
+    /** Jobs whose first unit has not run. */
     private final List<Entry> heads = new ArrayList<>();
-    /** Начатые, с работой после первой единицы. */
-    private final List<Entry> tails = new ArrayList<>();
+    /** Started jobs with remaining units. */
+    private final Deque<Entry> tails = new ArrayDeque<>();
+    private long window;
 
     public void add(ServerLevel level, Job job) {
         add(level.getGameTime(), job);
     }
 
-    /** То же со временем постановки (проверки без мира). */
+    /** Enqueue with an explicit world time for tests without a world. */
     public void add(long now, Job job) {
         heads.add(new Entry(job, now));
     }
@@ -86,27 +87,28 @@ public final class UnitQueue {
         return heads.size() + tails.size();
     }
 
-    /** Сколько тиков ждёт самая старая работа. */
+    /** Age of the oldest queued job in ticks. */
     public long oldestWaitTicks(ServerLevel level) {
         long oldest = Long.MAX_VALUE;
         if (!heads.isEmpty()) oldest = heads.getFirst().added;
-        if (!tails.isEmpty()) oldest = Math.min(oldest, tails.getFirst().added);
+        for (Entry entry : tails) oldest = Math.min(oldest, entry.added);
         return oldest == Long.MAX_VALUE ? 0 : level.getGameTime() - oldest;
     }
 
-    /** Единицы, пока часы разрешают: сначала первые единицы новых работ, потом продолжения начатых. */
+    /** Work until the clock stops it: new heads first, then continuations. */
     public void work(ServerLevel level, WorkClock clock) {
         work(level, level.getGameTime(), clock);
     }
 
     /**
-     * То же со временем мира {@code now} ({@code level} только передаётся работам). Работа может поставить новую (взрыв
-     * будит обработчики модов, те — свои взрывы): она встаёт в конец и идёт в этом же обходе, если хватит срока.
+     * Explicit world time for tests; level is passed through to jobs. A job can enqueue another job through a mod
+     * callback. That head joins the end of the list and can run in the same head pass if time permits.
      */
     public void work(ServerLevel level, long now, WorkClock clock) {
+        long currentWindow = ++window;
         for (int i = 0; i < heads.size(); ) {
             Entry e = heads.get(i);
-            Outcome o = run(level, now, e, clock, 1);
+            Outcome o = run(level, now, e, clock, currentWindow, false);
             if (o == Outcome.OUT_OF_TIME) return;
             if (o == Outcome.SKIPPED) {
                 i++;
@@ -116,48 +118,49 @@ public final class UnitQueue {
             if (o == Outcome.MORE) tails.add(e);
             else finish(level, e);
         }
-        for (int i = 0; i < tails.size(); ) {
-            Entry e = tails.get(i);
-            Outcome o = run(level, now, e, clock, Integer.MAX_VALUE);
-            // срок вышел посреди работы: следующие ждут её конца
-            if (o == Outcome.OUT_OF_TIME || o == Outcome.MORE) return;
-            if (o == Outcome.SKIPPED || o == Outcome.PAUSED) {
-                i++;
-                continue;
-            }
-            tails.remove(i);
-            finish(level, e);
+        int missed = 0;
+        while (!tails.isEmpty() && missed < tails.size()) {
+            if (clock.workedThisTick() && clock.overdue()) return;
+            Entry e = tails.removeFirst();
+            Outcome o = run(level, now, e, clock, currentWindow, true);
+            if (o == Outcome.DONE) finish(level, e);
+            else tails.addLast(e);
+            // A full circle without progress: all wait, or none of their estimates fits the remaining time.
+            if (o == Outcome.SKIPPED || o == Outcome.OUT_OF_TIME) missed++;
+            else missed = 0;
         }
     }
 
-    /** До {@code max} единиц работы {@code e}, пока часы разрешают. */
-    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, int max) {
+    /** One unit; continuation readiness and dependencies are sampled once per work window. */
+    private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
         try {
-            if (e.job.blocked()) return Outcome.SKIPPED;
-            if (!e.job.ready(level)) {
-                if (now - e.added < GIVE_UP_TICKS) return Outcome.SKIPPED;
-                Incoming.LOG.warn("{} cancelled: area did not load within {} ticks", e.job.describe(), GIVE_UP_TICKS);
-                return Outcome.DONE;
+            if (!continuation || e.checkedWindow != window) {
+                e.availability = availability(level, now, e);
+                // The first step can introduce a dependency (e.g. blast blocks waiting for sibling rays).
+                // Sample again on entering the continuation queue, after all heads have had their turn.
+                if (continuation) e.checkedWindow = window;
             }
-            for (int n = 0; n < max; n++) {
-                // между единицами работа могла дойти до того, что ждёт другую: следующие идут
-                if (n > 0 && e.job.blocked()) return Outcome.PAUSED;
-                int kind = e.job.unitKind();
-                if (!clock.canStart(kind)) return n == 0 ? Outcome.OUT_OF_TIME : Outcome.MORE;
-                long c0 = clock.begin();
-                boolean more;
-                try {
-                    more = e.job.step(level);
-                } finally {
-                    clock.end(c0, kind);
-                }
-                if (!more) return Outcome.DONE;
+            if (e.availability != Outcome.MORE) return e.availability;
+            int kind = e.job.unitKind();
+            if (!clock.canStart(kind)) return Outcome.OUT_OF_TIME;
+            long c0 = clock.begin();
+            try {
+                return e.job.step(level) ? Outcome.MORE : Outcome.DONE;
+            } finally {
+                clock.end(c0, kind);
             }
-            return Outcome.MORE;
         } catch (RuntimeException ex) {
             Incoming.LOG.error("{} failed with an exception and was removed", e.job.describe(), ex);
             return Outcome.DONE;
         }
+    }
+
+    private static Outcome availability(ServerLevel level, long now, Entry e) {
+        if (e.job.blocked()) return Outcome.SKIPPED;
+        if (e.job.ready(level)) return Outcome.MORE;
+        if (now - e.added < GIVE_UP_TICKS) return Outcome.SKIPPED;
+        Incoming.LOG.warn("{} cancelled: area did not load within {} ticks", e.job.describe(), GIVE_UP_TICKS);
+        return Outcome.DONE;
     }
 
     private static void finish(ServerLevel level, Entry e) {
@@ -169,15 +172,14 @@ public final class UnitQueue {
     }
 
     /**
-     * Сервер останавливается: доделать сразу и без срока всё, что можно (начатый взрыв не остаётся снятым наполовину,
-     * поставленный не пропадает), по тем же правилам — неготовые районы не читаются. Что так и не пошло (неготовый
-     * район или ждёт такую работу), отпускается.
+     * On shutdown, complete available work without a deadline. Unready areas are still never read, and jobs that
+     * remain unavailable or depend on unavailable jobs are released.
      */
     public void finish(ServerLevel level) {
         finish(level, level.getGameTime());
     }
 
-    /** То же со временем мира {@code now} (проверки без мира). */
+    /** Explicit world time for tests without a world. */
     public void finish(ServerLevel level, long now) {
         WorkClock unlimited = new WorkClock();
         for (int before = -1; !isEmpty() && size() != before; ) {
@@ -188,7 +190,7 @@ public final class UnitQueue {
         clear(level);
     }
 
-    /** Отпустить всё без работы (работа не сохраняется). */
+    /** Release all jobs without doing work; jobs are not saved. */
     public void clear(ServerLevel level) {
         List<Entry> all = new ArrayList<>(heads);
         all.addAll(tails);

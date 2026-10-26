@@ -3,19 +3,18 @@ package ua.zentix.incoming.warhead;
 import java.util.Arrays;
 
 /**
- * Сколько породы (или постройки) над зарядом бетонобойной бомбы — без Minecraft, чтобы проверить тестом.
- * Карта высот в колонке заряда — это дно пробитого бомбой хода (ход до блока вбок), поэтому верх берётся по кольцу
- * колонок в 2 блоках вокруг: крыша постройки, грунт. Прорвётся ли взрыв наружу — по приведённой глубине
- * ({@link BuriedBlast#breaches}).
+ * Rock/structure cover above bunker-buster charge, without Minecraft for testing. Charge-column heightmap is bomb
+ * bore bottom (bore extends up to one block sideways), so top comes from column ring 2 blocks around: structure
+ * roof, ground. Surface breakout uses scaled depth ({@link BuriedBlast#breaches}).
  */
 public final class BunkerCover {
-    /** Колонки кольца: сдвиги (dx, dz) от колонки заряда. */
+    /** Ring columns: (dx, dz) offsets from charge column. */
     static final int[][] RING = {{-2, -2}, {-2, 0}, {-2, 2}, {0, -2}, {0, 2}, {2, -2}, {2, 0}, {2, 2}};
     private BunkerCover() {}
 
     /**
-     * Верх над зарядом по высотам колонок кольца (карта высот: первый свободный блок над верхом) — нижняя медиана:
-     * до трёх колонок выше или ниже остальных (ствол, край стены, провал рядом) верх не сдвигают.
+     * Top above charge from ring column heights (heightmap first air above top), lower median: up to three
+     * high/low columns (trunk, wall edge, nearby hole) do not shift it.
      */
     public static int surface(int[] ring) {
         int[] h = ring.clone();
@@ -23,7 +22,7 @@ public final class BunkerCover {
         return h[(h.length - 1) / 2];
     }
 
-    /** Глубина заряда под верхом, блоки. */
+    /** Charge depth below top, blocks. */
     public static int depth(int surface, double chargeY) {
         return (int) Math.floor(surface - chargeY);
     }

@@ -22,14 +22,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Всё, что длится несколько тиков, но не является сущностью в мире: таймлайны взрывов (живут секунды, не
- * сохраняются), залпы ({@link SalvoData}) и полёты вне загруженного мира ({@link VirtualFlights}) — последние два
- * сохраняются в мире. Тикает в конце тика мира.
+ * Everything lasting several ticks without a world entity: explosion timelines (seconds, unsaved), salvos ({@link
+ * SalvoData}), virtual flights ({@link VirtualFlights}); latter two saved with world. Ticks at world tick end.
  * <p>
- * Мир без игроков через 300 тиков перестаёт тикать сущности ({@code ServerLevel.tick}, {@code emptyTime}), если в нём
- * нет принудительно загруженных чанков, а тикеты регионов ({@link ChunkTickets}, {@link FlightTickets}) ими не считаются:
- * снаряды повисли бы в воздухе, пока залпы и полёты вне мира шли бы дальше. Пока в мире идёт удар, он не засыпает —
- * так же, как ванильный переход сущности между мирами ({@code Entity.changeDimension}) будит мир назначения.
+ * Playerless world stops entity ticking after 300 ticks ({@code ServerLevel.tick}, {@code emptyTime}) without
+ * forced chunks; region tickets ({@link ChunkTickets}, {@link FlightTickets}) do not count. Projectiles would
+ * hang while salvos/virtual flights continue. Active strike keeps world awake, like vanilla dimension transfer
+ * ({@code Entity.changeDimension}) wakes destination.
  */
 public final class StrikeWorld {
     private final List<Timeline> timelines = new ArrayList<>();
@@ -37,55 +36,55 @@ public final class StrikeWorld {
     private final AreaLoader areas = new AreaLoader();
     private final ImpactCost impactCost = new ImpactCost();
     private final FlightLog flightLog = new FlightLog();
-    /** Единицы работы попаданий — полоса {@link WorkScheduler.Lane#IMPACT} общего бюджета тика. */
+    /** Impact work units: {@link WorkScheduler.Lane#IMPACT} lane of shared tick budget. */
     private final UnitQueue impacts = new UnitQueue();
-    /** Районы полос подлёта ({@link FlightTickets#holdApproach}): центр → снаряды, чьи полосы через него проходят. */
+    /** Approach-strip areas ({@link FlightTickets#holdApproach}): center → projectiles whose strips cross it. */
     private final Map<ChunkPos, Set<UUID>> approach = new HashMap<>();
     /**
-     * Отказы в месте пусковой в нынешнем приказе ({@link StrikeService}): «владелец оружие» → чанк огневой позиции
-     * (игрока или места пуска из приказа), где места не нашлось. Новый приказ (одиночный удар, первый снаряд залпа)
-     * ищет заново, ушедший с того чанка — тоже; строка игроку — раз на приказ. Владелец null — консоль и командный блок.
+     * Launcher-site failures for current order ({@link StrikeService}): “owner weapon” → firing-position chunk
+     * (player/ordered site) lacking placement. New order (single strike, first salvo shot) searches anew, as does
+     * moving to another chunk; player line once per order. Null owner means console/command block.
      */
     private final Map<String, Long> noLaunchSite = new HashMap<>();
-    /** Ядерные приказы не операторов, которые ждут второго ключа или пуска после тревоги. */
+    /** Non-operator nuclear orders awaiting second key or post-warning launch. */
     private final NuclearKeys keys = new NuclearKeys();
 
-    /** Для {@link ModAttachments#STRIKE_WORLD}: своё у каждого мира, живёт, пока мир загружен, не сохраняется. */
+    /** For {@link ModAttachments#STRIKE_WORLD}: per-world, lives while loaded, unsaved. */
     public StrikeWorld() {}
 
     public static StrikeWorld get(ServerLevel level) {
         return level.getData(ModAttachments.STRIKE_WORLD);
     }
 
-    /** Районы, которые мод грузит заранее: районы целей и взрывов, чанки снарядов, подсказки карты, ядерный удар. */
+    /** Mod preloaded areas: targets/blasts, projectile chunks, map hints, nuclear strike. */
     public AreaLoader areas() {
         return areas;
     }
 
-    /** Ядерные приказы не операторов: второй ключ и тревога перед пуском носителя. */
+    /** Non-operator nuclear orders: second key and carrier pre-launch warning. */
     NuclearKeys keys() {
         return keys;
     }
 
-    /** Районы полос подлёта и снаряды, которые их держат ({@link FlightTickets}). */
+    /** Approach-strip areas and holding projectiles ({@link FlightTickets}). */
     Map<ChunkPos, Set<UUID>> approach() {
         return approach;
     }
 
-    /** Сколько потока сервера заняли попадания в этом тике (строка в лог о медленном). */
+    /** Server-thread time used by impacts this tick (slow-tick log). */
     public ImpactCost impactCost() {
         return impactCost;
     }
 
     /**
-     * Работа попаданий (взрывы, стёкла, обломки): таймлайн в свой тик ставит сюда единицы, а делает их планировщик
-     * ({@link WorkScheduler}) под общим бюджетом тика — в том же тике, если очередь пуста.
+     * Impact work (explosions, glass, debris): timeline queues units on its tick; {@link WorkScheduler} executes
+     * under shared tick budget, same tick if queue empty.
      */
     public UnitQueue impacts() {
         return impacts;
     }
 
-    /** Полоса попаданий в этом мире: единицы, пока часы разрешают. */
+    /** This world's impact lane: work units while clock permits. */
     public void workImpacts(ServerLevel level, WorkClock clock) {
         if (impacts.isEmpty()) return;
         long t0 = System.nanoTime();
@@ -93,23 +92,23 @@ public final class StrikeWorld {
         impactCost.step(System.nanoTime() - t0);
     }
 
-    /** Конец тика сервера для попаданий этого мира: медленный тик и долгая очередь — в лог. */
+    /** Server tick end for this world's impacts: log slow ticks/long queues. */
     public void endImpactTick(ServerLevel level) {
         impactCost.endTick(level, impacts);
     }
 
-    /** Место пусковой у владельца в этом приказе на этом чанке уже не нашлось: остаток приказа — без пусковой. */
+    /** Owner order already found no launcher site in this chunk: remainder without launcher. */
     boolean noLaunchSite(@Nullable UUID owner, WeaponType weapon, ChunkPos at) {
         Long chunk = noLaunchSite.get(noSiteKey(owner, weapon));
         return chunk != null && chunk == at.toLong();
     }
 
-    /** Места пусковой нет; true — впервые в этом приказе (строка игроку). */
+    /** No launcher site; true first time this order (player line). */
     boolean rememberNoLaunchSite(@Nullable UUID owner, WeaponType weapon, ChunkPos at) {
         return noLaunchSite.put(noSiteKey(owner, weapon), at.toLong()) == null;
     }
 
-    /** Новый приказ владельца этим оружием: место пусковой ищется заново. */
+    /** New owner order with this weapon: search site anew. */
     void newOrder(@Nullable UUID owner, WeaponType weapon) {
         noLaunchSite.remove(noSiteKey(owner, weapon));
     }
@@ -118,12 +117,12 @@ public final class StrikeWorld {
         return owner + " " + weapon.getSerializedName();
     }
 
-    /** Концы полётов не по плану за этот тик: в лог — в конце тика мира. */
+    /** Unplanned flight endings this tick: log at world tick end. */
     public FlightLog flightLog() {
         return flightLog;
     }
 
-    /** Добавить таймлайн; первый тик — в конце текущего тика мира. */
+    /** Add timeline; first tick at end of current world tick. */
     public void add(Timeline timeline) {
         pending.add(timeline);
     }
@@ -131,9 +130,9 @@ public final class StrikeWorld {
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         if (level.players().isEmpty() && busy(level)) level.resetEmptyTime();
-        // загрузка районов — не симуляция: идёт и в замороженном мире (трейлер ждёт прогрузки плана)
+        // Area loading is not simulation: runs in frozen world (trailer waits for shot loading).
         if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).areas.tick(level);
-        // «/tick freeze» останавливает сущности — снаряды вне мира, залпы и взрывы стоят вместе с ними
+        // “/tick freeze” stops entities: virtual projectiles, salvos, explosions stop with them.
         if (!level.tickRateManager().runsNormally()) return;
         SalvoData.get(level).tick(level);
         VirtualFlights.get(level).tick(level);
@@ -145,7 +144,7 @@ public final class StrikeWorld {
         }
     }
 
-    /** В мире идёт удар: снаряды в мире и вне его, залпы, взрывы. */
+    /** Active world strike: in-world/virtual projectiles, salvos, explosions. */
     private static boolean busy(ServerLevel level) {
         if (SalvoData.get(level).size() > 0 || VirtualFlights.get(level).size() > 0) return true;
         if (level.hasData(ModAttachments.STRIKE_WORLD) && !get(level).idle()) return true;
@@ -178,8 +177,8 @@ public final class StrikeWorld {
     }
 
     /**
-     * Убрать всё без работы: таймлайны и очередь попаданий отпускают свои районы. Для проверок, которые изображают
-     * остановку сервера ({@code WorkGameTests.stopFinishesQueue}): их остатки не должны доставаться следующим.
+     * Clear everything without work: timelines/impact queue release areas. For server-stop tests ({@code
+     * WorkGameTests.stopFinishesQueue}); leftovers must not reach later tests.
      */
     public void dropAll(ServerLevel level) {
         timelines.addAll(pending);
@@ -190,7 +189,7 @@ public final class StrikeWorld {
         impacts.clear(level);
     }
 
-    /** Все снаряды мира: в мире и вне его ({@link VirtualFlights}). */
+    /** All world projectiles, in-world and virtual ({@link VirtualFlights}). */
     public static List<StrikeProjectile> projectiles(ServerLevel level) {
         List<StrikeProjectile> all = new ArrayList<>(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved()));
         all.addAll(VirtualFlights.get(level).flights());
@@ -198,9 +197,8 @@ public final class StrikeWorld {
     }
 
     /**
-     * Сколько снарядов игрока в работе во всех мирах: в полёте (в мире и вне его), ещё не выпущенных в залпах и в
-     * ядерных приказах, которые ждут второго ключа или конца тревоги ({@link NuclearKeys}), — для предела
-     * {@code max_active_per_player}.
+     * Player's active projectiles across worlds: flying in-world/virtual, unlaunched salvo rounds, nuclear orders
+     * awaiting second key/warning end ({@link NuclearKeys}), for {@code max_active_per_player}.
      */
     public static int active(MinecraftServer server, UUID owner) {
         int n = 0;
@@ -215,28 +213,27 @@ public final class StrikeWorld {
     }
 
     /**
-     * Отбой: взрывы в процессе доигрываются (это уже случилось), залпы отменяются, а их невыпущенные оплаченные снаряды
-     * возвращаются владельцам в сети ({@link Munitions}).
+     * Abort: finish ongoing explosions (already happened), cancel salvos and refund online owners' paid
+     * unlaunched rounds ({@link Munitions}).
      *
-     * @param nuclear и ядерные (ядерный отбой)
-     * @return сколько залпов отменено
+     * @param nuclear include nuclear (nuclear abort)
+     * @return canceled salvo count
      */
     public static int clearSalvos(ServerLevel level, boolean nuclear) {
         return SalvoData.get(level).cancel(level, null, level.getServer().getPlayerList().getPlayers(), nuclear);
     }
 
     /**
-     * Сервер останавливается (в том числе «Сохранить и выйти» в одиночной игре): снаряды в мире уходят в полёт вне
-     * мира и сохраняются с ним, а после запуска летят дальше сами — иначе они ждали бы в файлах чанков, пока кто-то
-     * не придёт туда снова, и тикеты района цели после запуска были бы потеряны. Очередь попаданий доделывается
-     * до этого, без бюджета ({@link UnitQueue#finish(ServerLevel)}).
+     * Server stop (including singleplayer “Save and Quit”): in-world projectiles go virtual and save with world,
+     * resuming after startup; otherwise they wait in chunk files until someone returns, losing target-area
+     * tickets after restart. Finish impact queue first without budget ({@link UnitQueue#finish(ServerLevel)}).
      */
     public static void onServerStopping(ServerStoppingEvent event) {
-        // ждущие ядерные приказы не сохраняются: оплаченное — владельцам, пока они ещё в сети (сохранение игроков — после)
+        // Pending nuclear orders unsaved: refund owners while still online (players saved afterward).
         NuclearKeys.cancelAll(event.getServer(), event.getServer().getPlayerList().getPlayers(), null, "server stopping");
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            // работа попаданий не сохраняется: начатое и поставленное доделать сейчас, иначе в мире остались бы взрывы,
-            // снятые наполовину (таймлайны, которые ещё не поставили свои подрывы, теряются)
+            // Impact work unsaved: finish started/queued work now, otherwise world would retain explosions
+            // half removed (timelines not yet queuing detonations are lost).
             if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).impacts.finish(level);
             for (StrikeProjectile p : level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> !p.isRemoved())) {
                 p.parkForShutdown(level);
@@ -246,9 +243,9 @@ public final class StrikeWorld {
     }
 
     /**
-     * Остановка: отпустить все районы мода в мире (цели, полосы подлёта, вход игрока, подсказки карты, взрывы).
-     * Они не сохраняются — после запуска их берут заново владельцы (снаряды вне мира, игроки), — а взятые при остановке
-     * запускали бы генерацию, которую ждёт {@code util/StopDrain} (после залпа — дольше его предела).
+     * Stop: release all mod world areas (targets, approach strips, player arrival, map hints, blasts). Unsaved;
+     * owners reacquire after startup (virtual projectiles, players). Keeping them during stop would launch
+     * generation awaited by {@code util/StopDrain} (after salvo, beyond its limit).
      */
     public static void releaseAreas(ServerLevel level) {
         if (level.hasData(ModAttachments.STRIKE_WORLD)) get(level).areas.releaseAll(level);

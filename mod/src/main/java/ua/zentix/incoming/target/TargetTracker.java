@@ -14,38 +14,37 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
- * Слежение за целью в полёте: текущая мировая точка цели и запас на погоню. Снаряд догоняет сдвиг цели
- * (ушла, телепортировалась, перенацелена) не дальше {@link #CHASE_BUDGET} блоков сверх плана полёта: это
- * запас топлива или батареи, и он же — предел, дальше которого цель не преследуется. Пропавшая цель или цель,
- * которая ушла дальше запаса, потеряна — снаряд идёт в последнюю точку. Неподвижная цель ({@link Target.Point})
- * не сдвигается, поэтому не теряется, как бы далеко ни стартовал снаряд. Замеченная цель ({@link Target.Sighted})
- * сдвигается, только пока её видно ({@link #tick}): иначе её точка — где её видели в последний раз.
+ * In-flight target tracking: current world point and chase budget. Projectile follows target displacement
+ * (movement, teleport, retarget) up to {@link #CHASE_BUDGET} blocks beyond flight plan: fuel/battery reserve and
+ * pursuit limit. Missing target or excess displacement loses target; fly to last point. Stationary {@link
+ * Target.Point} never moves/lost however distant launch. Sighted {@link Target.Sighted} moves only while visible
+ * ({@link #tick}), otherwise stays last-seen.
  */
 public final class TargetTracker {
-    /** Сколько блоков сдвига цели снаряд догоняет сверх плана полёта. */
+    /** Target displacement blocks pursued beyond flight plan. */
     public static final double CHASE_BUDGET = 3000;
-    /** Быстрее этого (блоков за тик) цель не движется — это скачок. */
+    /** Target cannot move faster than this blocks/tick: treat as jump. */
     private static final double MAX_SPEED = 10;
-    /** Сдвиг меньше этого — не сдвиг (дрожание позиции сущности). */
+    /** Smaller displacement ignored (entity position jitter). */
     private static final double MIN_MOVE = 0.01;
 
-    /** Сглаживание скорости цели: доля нового сдвига за тик. */
+    /** Target velocity smoothing: fraction of new per-tick displacement. */
     private static final double VELOCITY_SMOOTHING = 0.3;
 
     private Target target;
     private Vec3 point;
-    /** Скорость цели, блоков за тик (сглаженная; не сохраняется — за несколько тиков набирается заново). */
+    /** Target velocity, blocks/tick (smoothed, unsaved, rebuilt over a few ticks). */
     private Vec3 velocity = Vec3.ZERO;
     private double chased;
     private boolean lost;
-    /** Замеченную цель в этот тик было видно и снаряд шёл за ней (не сохраняется: видно ли, решается каждый тик). */
+    /** Sighted target visible/followed this tick (unsaved: visibility decided each tick). */
     private boolean inSight;
-    /** Потеряна, потому что ушла дальше запаса на погоню, а не пропала (для строки в лог; не сохраняется). */
+    /** Lost by exceeding chase budget rather than disappearing (log reason, unsaved). */
     private boolean outOfReach;
     /**
-     * Сущность-цель, за которой шли в прошлый тик (не сохраняется: после загрузки — первая найденная). Другая сущность
-     * с тем же UUID — это уже не она: игрок, умерший и возрождённый между двумя тиками снаряда ({@code doImmediateRespawn}),
-     * — новый {@code ServerPlayer}, и смерти снаряд иначе не заметил бы.
+     * Entity followed previous tick (unsaved: first found after load). Another same-UUID entity is not it: player
+     * dying/respawning between projectile ticks ({@code doImmediateRespawn}) is a new {@code ServerPlayer};
+     * otherwise projectile would miss death.
      */
     @Nullable
     private WeakReference<Entity> followed;
@@ -56,12 +55,11 @@ public final class TargetTracker {
     }
 
     /**
-     * Пересчитать точку цели. Замеченную цель ({@link Target.Sighted}) снаряд ведёт, только пока {@code visible}
-     * принимает её точку; не принимает — точка остаётся, где цель видели в последний раз, а пропавшая цель
-     * теряется так же, как незамеченная.
+     * Update target point. Follow sighted {@link Target.Sighted} only while {@code visible} accepts its point;
+     * otherwise retain last-seen position. Missing target is lost as for unsighted targets.
      *
-     * @param visible видна ли замеченная цель в своей точке сейчас (у остальных целей не спрашивается)
-     * @return на сколько блоков снаряду пришлось догонять цель за этот тик (0 — цель на месте, не видна или потеряна)
+     * @param visible whether sighted target visible at its point now (not queried for other targets)
+     * @return blocks chased this tick (0 stationary, unseen, or lost)
      */
     public double tick(ServerLevel level, Predicate<Vec3> visible) {
         inSight = false;
@@ -103,16 +101,15 @@ public final class TargetTracker {
         }
         chased += moved;
         point = now.get();
-        // скачок (телепорт, смена измерения) — не скорость
+        // Jump (teleport/dimension change) is not velocity.
         velocity = moved > MAX_SPEED ? Vec3.ZERO : velocity.lerp(step, VELOCITY_SMOOTHING);
         return moved;
     }
 
     /**
-     * Новая цель (оператор перенацелил снаряд): её снаряд принимает всегда, но на перелёт к ней расходует тот же
-     * запас на погоню — сколько его осталось.
+     * New target (operator retarget): always accepted, but transfer uses same remaining chase budget.
      *
-     * @return на сколько блоков перелёта к новой цели хватило запаса
+     * @return transfer blocks covered by budget
      */
     public double retarget(Target target, Vec3 point) {
         double moved = Math.min(this.point.distanceTo(point), CHASE_BUDGET - chased);
@@ -127,8 +124,8 @@ public final class TargetTracker {
     }
 
     /**
-     * Точка цели уточнилась, цель та же (место с карты, чья высота стала известна): дальше это неподвижная точка
-     * {@code point}. Не перенацеливание — запас на погоню не тратится.
+     * Refined same target point (map-site height became known): stationary {@code point} afterward. Not
+     * retargeting; spends no chase budget.
      */
     public void settle(Vec3 point) {
         this.target = new Target.Point(point);
@@ -141,12 +138,12 @@ public final class TargetTracker {
         velocity = Vec3.ZERO;
     }
 
-    /** Текущая точка цели. */
+    /** Current target point. */
     public Vec3 point() {
         return point;
     }
 
-    /** Скорость цели, блоков за тик: для упреждения на подлёте (у неподвижной и потерянной — ноль). */
+    /** Target velocity, blocks/tick, for approach lead (zero for stationary/lost). */
     public Vec3 velocity() {
         return velocity;
     }
@@ -159,12 +156,12 @@ public final class TargetTracker {
         return lost;
     }
 
-    /** Замеченную цель в последний тик было видно, и снаряд шёл за ней ({@link #tick}). */
+    /** Sighted target visible/followed last tick ({@link #tick}). */
     public boolean inSight() {
         return inSight;
     }
 
-    /** Цель потеряна, потому что ушла дальше запаса на погоню {@link #CHASE_BUDGET} (а не пропала). */
+    /** Target lost by exceeding {@link #CHASE_BUDGET}, rather than disappearing. */
     public boolean outOfReach() {
         return outOfReach;
     }
@@ -186,7 +183,7 @@ public final class TargetTracker {
                 : new Target.Point(p);
         TargetTracker tracker = new TargetTracker(t, p);
         tracker.chased = tag.getDouble("chased");
-        // неподвижная цель не теряется: флаг lost у неё — из сохранений до 2.1.3
+        // Stationary target cannot be lost: its lost flag comes from pre-2.1.3 saves.
         tracker.lost = tag.getBoolean("lost") && !(t instanceof Target.Point);
         return tracker;
     }

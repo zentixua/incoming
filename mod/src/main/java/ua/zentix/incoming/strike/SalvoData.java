@@ -33,21 +33,20 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Залпы: N снарядов с разбросом вокруг цели, по одному через случайную паузу (шахеды 20–40 тиков, ракеты 15–30,
- * B-2 60–80) — с одной пусковой по ячейкам. Цель может двигаться — каждый снаряд целится со своим смещением
- * относительно неё; маршруты разные (обход слева или справа, курс захода ±35°), и каждый снаряд идёт по своему
- * маршруту в своей полосе ({@link WeaponSpec.Lanes}: сдвиг вбок по зерну залпа, к цели полосы сходятся), поэтому залп
- * летит и приходит волной с разных сторон, а не ниткой. По точкам оператора ({@link Waypoints}) весь залп идёт одним
- * маршрутом — каждый снаряд в своей полосе, с места пуска из приказа — с одной пусковой на нём, со стационарной пусковой
- * ({@link LaunchOrigin.Fixed}) — с неё. Место пуска залп грузит в фоне
- * и держит, пока идёт ({@link LaunchPlaces}): пока оно не готово, залп ждёт — место из приказа не дольше
- * {@link LaunchPlaces#WAIT}, стационарная пусковая — сколько нужно; блока пусковой на месте нет — залп кончен; строк и
- * полосы залпа хозяину у стационарной нет — её залпы идут по сигналу, когда хозяин может быть где угодно.
- * Хранится в мире: незаконченный залп продолжится после перезахода.
+ * Salvos: N projectiles scattered around target, one per random pause (Shahed 20–40 ticks, missiles 15–30, B-2
+ * 60–80), from one launcher by cells. Target may move; each projectile aims at its own relative offset. Different
+ * routes (left/right detour, approach heading ±35°), each in its own lane ({@link WeaponSpec.Lanes}: lateral
+ * shift from salvo seed, converging at target), make salvo fly and arrive as a wave from different directions
+ * rather than a thread. Operator waypoints ({@link Waypoints}) give one route to entire salvo, each projectile in
+ * its own lane; ordered launch site uses one launcher there, fixed launcher ({@link LaunchOrigin.Fixed}) launches
+ * from itself. Salvo loads and holds launch site ({@link LaunchPlaces}) while running; waits until ready, up to
+ * {@link LaunchPlaces#WAIT} for ordered site, indefinitely for fixed launcher; missing launcher block ends salvo.
+ * Fixed-launcher owner gets no salvo lines/bar: signal may launch while owner is anywhere. Saved in world:
+ * unfinished salvo resumes after rejoining.
  * <p>
- * Залп, оплаченный боеприпасами ({@link Munitions}), возвращает владельцу то, что не вылетело: невыпущенные снаряды
- * отменённого залпа (отбой, ошибка) и снаряды, чей пуск не удался, — в конце залпа; у залпа из одного ядерного снаряда
- * (ядерный приказ ждёт места пуска) — и его ядерную БЧ.
+ * Munition-paid salvo ({@link Munitions}) refunds unlaunched canceled rounds (abort, error) and failed launches
+ * to owner at salvo end; a one-projectile nuclear salvo (nuclear order awaiting launch site) also refunds nuclear
+ * warhead.
  */
 public final class SalvoData extends SavedData {
     private static final String NAME = Incoming.MOD_ID + "_salvos";
@@ -64,18 +63,18 @@ public final class SalvoData extends SavedData {
     }
 
     /**
-     * Отменить залпы владельца {@code owner} (null — все): невыпущенные оплаченные снаряды — владельцу, если он среди
-     * {@code online} ({@link Munitions#refund}).
+     * Cancel salvos of {@code owner} (null means all): refund paid unlaunched rounds if owner is among {@code
+     * online} ({@link Munitions#refund}).
      *
-     * @return сколько залпов отменено
+     * @return canceled salvo count
      */
     public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online) {
         return cancel(level, owner, online, true);
     }
 
     /**
-     * То же; {@code nuclear} — и ядерный залп ({@link Salvo#nuclear}): его, как ядерный снаряд, снимает только ядерный
-     * отбой, а не отбой игрока и не обычный.
+     * Same; {@code nuclear} includes nuclear salvo ({@link Salvo#nuclear}): like nuclear projectile, only nuclear
+     * abort cancels it, not player or ordinary abort.
      */
     public int cancel(ServerLevel level, @Nullable UUID owner, Collection<? extends ServerPlayer> online, boolean nuclear) {
         int n = 0;
@@ -94,7 +93,7 @@ public final class SalvoData extends SavedData {
         return salvos.size();
     }
 
-    /** Идёт залп с пусковой {@code origin} (стационарной: занята, пока он не кончится). */
+    /** Salvo running from {@code origin} (fixed launcher busy until completion). */
     public static boolean busy(ServerLevel level, LaunchOrigin origin) {
         for (Salvo s : get(level).salvos) {
             if (origin.equals(s.from)) return true;
@@ -102,7 +101,7 @@ public final class SalvoData extends SavedData {
         return false;
     }
 
-    /** Цели залпов этого игрока (для проверок). */
+    /** Player's salvo targets (tests). */
     public List<Target> centers(UUID owner) {
         List<Target> out = new ArrayList<>();
         for (Salvo s : salvos) {
@@ -111,7 +110,7 @@ public final class SalvoData extends SavedData {
         return out;
     }
 
-    /** Сколько снарядов ещё не выпущено в залпах этого игрока. */
+    /** Projectiles not yet launched in this player's salvos. */
     public int remaining(UUID owner) {
         int n = 0;
         for (Salvo s : salvos) {
@@ -121,13 +120,13 @@ public final class SalvoData extends SavedData {
     }
 
     /**
-     * Залп уходит из списка: оплаченный возвращает владельцу (если он среди {@code online}) невыпущенные снаряды и те,
-     * чей пуск не удался ({@link Munitions#refund}). Единственное место возврата: его зовёт каждый путь, которым залп
-     * убирается, — отмена, ошибка, конец залпа. Ядерная БЧ бывает только у залпа из одного снаряда.
+     * Salvo leaves list: paid salvo refunds online owner ({@code online}) unlaunched rounds and failed launches
+     * ({@link Munitions#refund}). Sole refund location, called by every removal path: cancel, error, completion.
+     * Nuclear warhead only occurs in one-projectile salvo.
      */
     private static void refund(Salvo s, Collection<? extends ServerPlayer> online, String why) {
         if (s.paid) {
-            // ядерная БЧ на носителе оплачена предметом на снаряд, как в Munitions.Bill.of
+            // Carrier nuclear warhead paid per projectile, as in Munitions.Bill.of.
             int shots = s.remaining + s.failed;
             boolean carrier = s.nuclear() && !s.weapon.spec().warhead().always();
             Munitions.refund(online, s.owner, new Munitions.Bill(s.weapon, shots, carrier ? shots : 0), why);
@@ -150,22 +149,22 @@ public final class SalvoData extends SavedData {
     }
 
     /**
-     * Начать залп.
+     * Start salvo.
      *
-     * @param center      цель (точка, сущность или аппарат)
-     * @param centerPoint где цель сейчас
-     * @param yaw         курс захода
-     * @param owner       кто пустил (ему — сообщения о залпе), null — консоль или командный блок
-     * @param via         точки оператора: весь залп летит по ним
-     * @param from        место пуска из приказа или стационарная пусковая: весь залп — оттуда ({@link StrikeService#launch})
-     * @param paid        залп оплачен боеприпасами владельца: что не вылетит, вернётся ему ({@link Munitions})
+     * @param center target (point, entity, craft)
+     * @param centerPoint current target position
+     * @param yaw approach heading
+     * @param owner launching player (receives salvo messages), null for console/command block
+     * @param via operator waypoints for entire salvo
+     * @param from ordered launch site or fixed launcher for entire salvo ({@link StrikeService#launch})
+     * @param paid owner munition payment: unlaunched rounds refunded ({@link Munitions})
      */
     public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid) {
         start(level, weapon, count, radius, center, centerPoint, yaw, owner, nuke, via, from, paid, level.random.nextLong());
     }
 
-    /** То же с зерном залпа {@code seed}: по нему полосы снарядов ({@link WeaponSpec.Lanes#offset}; проверки — со своим). */
+    /** Same with salvo {@code seed}: determines lanes ({@link WeaponSpec.Lanes#offset}; tests supply their own). */
     public static void start(ServerLevel level, WeaponType weapon, int count, int radius, Target center, Vec3 centerPoint,
                              float yaw, @Nullable UUID owner, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from, boolean paid,
                              long seed) {
@@ -184,20 +183,21 @@ public final class SalvoData extends SavedData {
         final int total;
         int remaining;
         final int radius;
-        /** Цель залпа; погибла цель-сущность — её последняя точка ({@link #watchCenter}). */
+        /** Salvo target; dead entity target becomes last position ({@link #watchCenter}). */
         Target center;
         Vec3 lastCenter;
         /**
-         * Неподвижный центр в воздухе: решается по первому снаряду вокруг него ({@link #around}) и держится до конца залпа
-         * (null — ещё не решено). Иначе залп делился бы: чанк центра готов не с пуска, а когда район цели загрузится, и
-         * яма от первых попаданий под центром на земле — тоже воздух, так что остаток рвался бы на высоте центра.
+         * Stationary center airborne: decide from first surrounding projectile ({@link #around}) and retain until
+         * salvo end (null means undecided). Otherwise salvo would split: center chunk loads after launch, when
+         * target area becomes ready; crater from first hits under ground center is also air, making remaining
+         * shots burst at center height.
          */
         @Nullable
         Boolean aloft;
         /**
-         * Сущность-цель, за которой залп шёл в прошлый тик (не сохраняется: после загрузки — первая найденная). Игрок,
-         * погибший и возрождённый, — новый {@code ServerPlayer} с тем же UUID: без неё залп переходил бы на место
-         * возрождения и бил туда. Слабая ссылка, как в {@code TargetTracker}: выгруженную или ушедшую сущность залп не держит.
+         * Entity followed last tick (unsaved: first found after loading). Dead/respawned player is a new {@code
+         * ServerPlayer} with same UUID; otherwise salvo would follow to respawn site and strike there. Weak
+         * reference like {@code TargetTracker}: do not retain unloaded/departed entity.
          */
         @Nullable
         private WeakReference<Entity> followed;
@@ -206,20 +206,20 @@ public final class SalvoData extends SavedData {
         final UUID owner;
         int cooldown;
         final Loadout.Nuke nuke;
-        /** Точки оператора: у всего залпа одни. */
+        /** Operator waypoints shared by salvo. */
         final Waypoints via;
-        /** Место пуска из приказа или стационарная пусковая: у всего залпа одно. */
+        /** Ordered launch site or fixed launcher shared by salvo. */
         @Nullable
         final LaunchOrigin from;
-        /** Оплачен боеприпасами владельца ({@link Munitions}): что не вылетело, вернётся ему. */
+        /** Paid by owner munitions ({@link Munitions}): unlaunched rounds refunded. */
         final boolean paid;
-        /** Сколько пусков залпа не удалось: возвращаются владельцу в конце залпа (одной строкой, а не на каждый). */
+        /** Failed salvo launches: refunded at salvo end (one line, not per projectile). */
         int failed;
-        /** Ключ района места пуска ({@link LaunchPlaces}; не сохраняется, как и тикеты: после загрузки залп возьмёт его заново). */
+        /** Launch-site area key ({@link LaunchPlaces}; unsaved like tickets: reacquired after loading). */
         final UUID placeKey = UUID.randomUUID();
-        /** Сколько тиков залп ждёт района места пуска (не сохраняется). */
+        /** Ticks salvo has waited for launch-site area (unsaved). */
         int waited;
-        /** Зерно залпа: по нему у каждого снаряда своя полоса на маршруте ({@link WeaponSpec.Lanes#offset}). */
+        /** Salvo seed: each projectile's route lane ({@link WeaponSpec.Lanes#offset}). */
         final long seed;
 
         Salvo(WeaponType weapon, int total, int remaining, int radius, Target center, Vec3 lastCenter, float yaw, @Nullable UUID owner, int cooldown,
@@ -233,8 +233,8 @@ public final class SalvoData extends SavedData {
             this.yaw = yaw;
             this.owner = owner;
             this.cooldown = cooldown;
-            // ядерных залпов нет (ServerActions.clamp): снаряды залпа ядерной БЧ не несут; залп из одного снаряда — ядерный
-            // приказ, который ждёт места пуска (LaunchPlaces), — несёт её
+            // No nuclear salvos (ServerActions.clamp): salvo projectiles carry no nuclear warhead; a one-projectile salvo, a nuclear
+            // order awaiting launch site (LaunchPlaces), does carry it.
             this.nuke = total == 1 ? nuke : nuke.withOnCarrier(false);
             this.via = via;
             this.from = from;
@@ -244,12 +244,12 @@ public final class SalvoData extends SavedData {
         }
 
 
-        /** Залп несёт ядерную БЧ (залп из одного снаряда — ядерный приказ, который ждёт места пуска). */
+        /** Salvo carries nuclear warhead (one-projectile salvo: nuclear order awaiting launch site). */
         boolean nuclear() {
             return nuke.onCarrier() && Loadout.carriesNuke(weapon);
         }
 
-        /** Кому строки и полоса залпа: владельцу в сети, если залп не со стационарной пусковой. */
+        /** Salvo lines/bar recipient: online owner, unless from fixed launcher. */
         @Nullable
         ServerPlayer reporter(ServerLevel level) {
             return owner == null || from instanceof LaunchOrigin.Fixed ? null : level.getServer().getPlayerList().getPlayer(owner);
@@ -258,9 +258,9 @@ public final class SalvoData extends SavedData {
         boolean tick(ServerLevel level) {
             watchCenter(level);
             if (from != null && LaunchPlaces.fromPad(weapon)) {
-                // место пуска грузится и тикает, пока идёт залп: там стоит пусковая, и с неё уходят снаряды
+                // Launch site loads/ticks while salvo runs: launcher stands there and projectiles depart from it.
                 LaunchPlaces.hold(level, from, placeKey);
-                // не готово — ждать (пауза залпа не идёт); место из приказа — не дольше WAIT, потом старт без пусковой
+                // Unready: wait (salvo pause stops); ordered site waits at most WAIT, then starts without launcher.
                 if (!LaunchPlaces.ready(level, from)) {
                     if (from instanceof LaunchOrigin.Fixed || waited < LaunchPlaces.WAIT) {
                         waited++;
@@ -273,7 +273,7 @@ public final class SalvoData extends SavedData {
                 }
             }
             if (from instanceof LaunchOrigin.Fixed fixed) {
-                // стационарная пусковая: блока нет — залп кончен
+                // Fixed launcher: missing block ends salvo.
                 if (fixed.launcher(level) == null) {
                     Incoming.LOG.info("Salvo: {} — launcher {} is gone, remaining {} cancelled", weapon.getSerializedName(),
                             fixed.pos().toShortString(), remaining);
@@ -299,9 +299,9 @@ public final class SalvoData extends SavedData {
         }
 
         /**
-         * Каждый тик, не только к пуску: цель-сущность погибла — остаток залпа бьёт по её последней точке, а не по
-         * возродившейся или новой сущности с тем же UUID. Сущность, сменившая измерение или пропавшая из мира, не
-         * погибла: залп по-прежнему идёт за ней (а пока её нет — по последней точке).
+         * Every tick, not just launch: dead entity target makes remaining salvo strike last point rather than
+         * respawned/new same-UUID entity. An entity changing dimension or disappearing from world has not died:
+         * salvo still follows it (last point while absent).
          */
         private void watchCenter(ServerLevel level) {
             if (!(center instanceof Target.OfEntity target)) return;
@@ -327,7 +327,7 @@ public final class SalvoData extends SavedData {
             center.resolve(level).ifPresent(p -> lastCenter = p);
             int dx = 0, dz = 0;
             if (radius > 0) {
-                // равномерно в круге: до 8 попыток выбросить точку из квадрата
+                // Uniform circle: up to 8 attempts rejecting square points.
                 for (int i = 0; i < 9; i++) {
                     dx = level.random.nextIntBetweenInclusive(-radius, radius);
                     dz = level.random.nextIntBetweenInclusive(-radius, radius);
@@ -337,37 +337,37 @@ public final class SalvoData extends SavedData {
             Target shot;
             Vec3 point;
             if (!(center instanceof Target.Point) && !(center instanceof Target.Sighted)) {
-                // движущаяся цель или место на земле: своё смещение относительно неё (у места — своя высота земли)
+                // Moving target or ground site: own relative offset (ground site has its own ground height).
                 shot = center.offset(new Vec3(dx, 0, dz));
                 point = shot.resolve(level).orElse(lastCenter.add(dx, 0, dz));
             } else {
-                // неподвижный центр: точка, или замеченная цель — там, где её видели (снаряд залпа ведёт её только камерой)
+                // Stationary center: point, or sighted target where seen (salvo projectile follows it only by camera).
                 Target place = around(level, dx, dz);
                 point = place.resolve(level).orElseThrow();
                 shot = center instanceof Target.Sighted sighted ? sighted.at(point) : place;
             }
             float shotYaw = yaw + (level.random.nextInt(7001) - 3500) / 100f;
             double lane = weapon.spec().lanes().offset(seed, total - remaining, total);
-            // сирена одна на залп: её включит первый снаряд, когда его «увидят» на подлёте
+            // One siren per salvo: first projectile enables it when “seen” approaching.
             return StrikeService.launch(level, weapon, shot, point, shotYaw, owner, remaining == total, nuke, via, from, lane);
         }
 
         /**
-         * Цель снаряда залпа со смещением (dx, dz) от неподвижного центра. Центр на земле — место на земле в своей колонке
-         * ({@link Target.Ground}): высоту снаряд берёт из чанка, как только тот готов (район цели загрузится на подлёте), а
-         * до того — оценка по высоте центра. Точка на высоте центра у далёкой цели (чанк не готов к пуску) висела бы над
-         * улицей у высотки, над низиной, и снаряд взрывался бы в воздухе.
+         * Salvo projectile target offset (dx, dz) from stationary center. Ground center uses ground site in its
+         * own column ({@link Target.Ground}): projectile takes height from chunk once ready (target area loads on
+         * approach); until then, estimate from center height. A point at center height for distant unready target
+         * would hang above street near tower or above lowland, causing airburst.
          */
         private Target around(ServerLevel level, int dx, int dz) {
             if (aloft == null) aloft = inAir(level, lastCenter);
-            // бомба — на глубине центра (найдёт пещеру под игроком), центр в воздухе — на его высоте
+            // Bomb at center depth (finds cave under player); airborne center at its height.
             if (weapon.spec().penetrates() || radius == 0 || aloft) return new Target.Point(lastCenter.add(dx, 1, dz));
             return new Target.Ground(lastCenter.add(dx, 0, dz));
         }
 
         /**
-         * Центр залпа в воздухе (игрок на аппарате, в полёте): бьём по высоте центра, а не по земле под ним. Чанк центра не
-         * готов — не в воздухе: залп с разбросом по далёкому месту — удар по земле вокруг него.
+         * Salvo center airborne (player on craft, flying): strike at center height, not ground below. Unready
+         * center chunk means not airborne: dispersed salvo at distant site strikes ground around it.
          */
         private static boolean inAir(ServerLevel level, Vec3 c) {
             BlockPos p = BlockPos.containing(c);
@@ -406,11 +406,11 @@ public final class SalvoData extends SavedData {
             if (last == null) last = Vec3.ZERO;
             Target c = Target.CODEC.parse(NbtOps.INSTANCE, t.get("center")).resultOrPartial(Incoming.LOG::error).orElse(new Target.Point(last));
             Loadout.Nuke nuke = Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, t.get("nuke")).result().orElse(Loadout.Nuke.DEFAULT);
-            // залп, сохранённый до маршрутов оператора, — без точек
+            // Salvo saved before operator routes has no waypoints.
             Waypoints via = t.contains("route") ? Waypoints.CODEC.parse(NbtOps.INSTANCE, t.get("route")).resultOrPartial(Incoming.LOG::error)
                     .orElse(Waypoints.NONE) : Waypoints.NONE;
-            // залп, сохранённый до места пуска в приказе, — без него; до боеприпасов — не оплачен: возвращать нечего; до
-            // полос — с зерном 0: остаток идёт в полосах этого зерна
+            // Salvo saved before ordered launch sites has none; before munitions is unpaid, nothing to refund; before
+            // lanes has seed 0: remainder uses its lanes.
             Salvo s = new Salvo(w, t.getInt("total"), t.getInt("remaining"), t.getInt("radius"), c, last, t.getFloat("yaw"),
                     t.hasUUID("owner") ? t.getUUID("owner") : null, t.getInt("cooldown"), nuke, via, LaunchOrigin.load(t), t.getBoolean("paid"),
                     t.getInt("failed"), t.getLong("seed"));

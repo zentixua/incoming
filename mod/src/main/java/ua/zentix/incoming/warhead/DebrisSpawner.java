@@ -13,21 +13,21 @@ import ua.zentix.incoming.entity.DebrisEntity;
 import java.util.List;
 
 /**
- * Обломки взрыва: грунт воронки, обгоревшие куски, горящие головни и детали корпуса.
- * Шахед разбрасывает на 55–75 блоков (до 1.5 блока/тик по горизонтали), ракета — на 90–120 (до 2.1).
+ * Explosion debris: crater soil, charred pieces, burning brands, casing parts. Shahed throws 55–75 blocks
+ * (horizontal up to 1.5 blocks/tick), missile 90–120 (up to 2.1).
  */
 public final class DebrisSpawner {
     private static List<BlockState> embers, ash, wreckDrone, wreckMissile, burnStates;
 
     private DebrisSpawner() {}
 
-    /** Обгоревшие куски — летят раскалёнными. */
+    /** Charred pieces fly glowing hot. */
     private static List<BlockState> embers() {
         if (embers == null) embers = GroundMaterial.states("blackstone", "basalt", "magma_block", "coal_block", "blackstone", "magma_block");
         return embers;
     }
 
-    /** Пепел (если есть Supplementaries) — просто летит. */
+    /** Ash (if Supplementaries present) simply flies. */
     private static List<BlockState> ash() {
         if (ash == null) ash = GroundMaterial.states("supplementaries:ash", "supplementaries:ash");
         return ash;
@@ -55,7 +55,7 @@ public final class DebrisSpawner {
         return burnStates;
     }
 
-    /** Обломки шахеда; возвращает, сколько их. */
+    /** Shahed debris; returns count. */
     public static int drone(ServerLevel level, Vec3 at, GroundMaterial mat) {
         return spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
                 + spawnGround(level, at, mat.debris(), false, 1.5, 0.5, 1.6)
@@ -64,7 +64,7 @@ public final class DebrisSpawner {
                 + spawnBurning(level, at, 1.5, 0.5, 1.6);
     }
 
-    /** Обломки ракеты; возвращает, сколько их. */
+    /** Missile debris; returns count. */
     public static int missile(ServerLevel level, Vec3 at, GroundMaterial mat) {
         int n = 0;
         for (int i = 0; i < 4; i++) n += spawnGround(level, at, mat.debris(), false, 2.1, 0.6, 2.2);
@@ -76,11 +76,11 @@ public final class DebrisSpawner {
     }
 
     /**
-     * Обломки снаряда, сбитого в воздухе зенитной ракетой: детали корпуса, горящие и обгоревшие куски летят дальше по
-     * ходу цели с её скоростью (импульс корпуса остаётся у кусков; толчок разрыва — малая добавка в разные стороны),
-     * теряя её о воздух, и падают — полосой по курсу, тем длиннее, чем быстрее шла цель. Сколько — по размеру корпуса
-     * ({@code noseLength}): «Ланцет» и шахед — горсть, ракета — больше, B-2 — дождь деталей. Грунта нет — взрыв был
-     * в воздухе. Возвращает, сколько обломков.
+     * Debris of projectile shot down in air by interceptor: casing parts, burning/charred pieces continue along
+     * target heading at its speed (pieces retain body momentum; burst gives small random-direction addition),
+     * lose speed to air, and fall in a heading-aligned strip, longer for faster targets. Count follows body size
+     * ({@code noseLength}): Lancet/Shahed handful, missile more, B-2 rain of parts. No ground: burst airborne.
+     * Returns debris count.
      */
     public static int wreck(ServerLevel level, Vec3 at, Vec3 velocity, double noseLength) {
         RandomSource r = level.random;

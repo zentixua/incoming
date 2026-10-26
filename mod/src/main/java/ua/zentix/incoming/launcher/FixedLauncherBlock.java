@@ -31,16 +31,16 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.item.DesignatorItem;
 
 /**
- * Стационарная пусковая установка ({@link FixedLauncherBlockEntity}): тумба с поворотным кругом, на круге — пакет
- * оружия задачи. Помнит, кто поставил. Боеприпасы кладутся рукой (ПКМ ими), воронкой и Create; ПКМ пультом —
- * привязать пусковую к пульту или отвязать ({@link LauncherLinks}): «Огонь» привязанного пульта ставит ей задачу.
- * Пустой рукой — строка состояния. Сигнал редстоуна (как у раздатчика: передний фронт, свой или блока над ней) —
- * один приказ по задаче. Сломанная или взорванная — выпадает сама (таблица добычи) вместе с запасом.
+ * Fixed launcher ({@link FixedLauncherBlockEntity}): pedestal with a turntable carrying the mission weapon's
+ * rack. Remembers the placer. Load munitions by hand (right-click), hopper, or Create; right-click with a
+ * designator to link or unlink ({@link LauncherLinks}): “Fire” on a linked designator assigns a mission. Empty
+ * hand shows status. Redstone signal (like a dispenser: rising edge, at this block or above it) issues one
+ * mission order. Broken or exploded, drops itself (loot table) and inventory.
  */
 public class FixedLauncherBlock extends BaseEntityBlock {
     public static final MapCodec<FixedLauncherBlock> CODEC = simpleCodec(FixedLauncherBlock::new);
     public static final BooleanProperty TRIGGERED = BlockStateProperties.TRIGGERED;
-    /** Сигнал — пуск через столько тиков, как у раздатчика. */
+    /** Signal launches after this many ticks, like a dispenser. */
     private static final int DELAY = 4;
     private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 16, 16);
 
@@ -64,7 +64,7 @@ public class FixedLauncherBlock extends BaseEntityBlock {
         return SHAPE;
     }
 
-    /** У блока с блок-сущностью ваниль по умолчанию модель не рисует. */
+    /** Vanilla does not render a model for a block with a block entity by default. */
     @Override
     protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.MODEL;
@@ -79,9 +79,9 @@ public class FixedLauncherBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
         if (level.isClientSide || !(level.getBlockEntity(pos) instanceof FixedLauncherBlockEntity be)) return;
-        // хозяин — поставивший; механизм Create ставит от имени своего хозяина (у его FakePlayer тот же UUID)
+        // Owner is the placer; a Create mechanism places as its owner (its FakePlayer has the same UUID).
         if (placer instanceof Player p) be.setOwner(p.getUUID());
-        // пакет смотрит от ставящего, как раздатчик
+        // Rack faces away from the placer, like a dispenser.
         if (placer != null) be.setYaw(placer.getYRot());
     }
 

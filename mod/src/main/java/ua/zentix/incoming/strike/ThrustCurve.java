@@ -3,54 +3,60 @@ package ua.zentix.incoming.strike;
 import ua.zentix.incoming.entity.FlightPhase;
 
 /**
- * Тяга стартового твердотопливного ускорителя во времени — доля тяги полки, один закон у пламени, света, облака старта
- * и звука ускорителя (сам разгон — игровая модель полёта, {@link WeaponSpec.LaunchProfile#boost}). Три участка:
+ * Launch solid-booster thrust over time, fraction of plateau thrust: one law for flame, light, launch cloud, and
+ * booster sound (acceleration itself is game flight model, {@link WeaponSpec.LaunchProfile#boost}). Three
+ * sections:
  * <ol>
- * <li><b>Выход на режим</b> после поджига — за {@link #RISE} тиков: давление в камере РДТТ растёт за 0,1–0,3 с (⚠ оценка).</li>
- * <li><b>Полка</b>.</li>
- * <li><b>Спад</b> (tail-off): свод заряда прогорел, догорают его остатки, и площадь горения S падает до нуля за {@link #tail}.
- * Давление в камере — равновесное: приход газа S·ρ·a·pⁿ (закон скорости горения Сен-Робера r = a·pⁿ) равен расходу
- * через критическое сечение p·S_кр/c*, поэтому p ∝ (S/S_кр)^(1/(1 − n)) (Sutton, Biblarz, «Rocket Propulsion Elements»,
- * гл. 12). Площадь остатков убывает линейно (⚠ оценка: настоящая — по геометрии заряда). Сопло в критике — расход и тяга
- * ∝ давлению (⚠ коэффициент тяги при падении давления не меняется). Значение без скачка: на входе в спад — 1, в конце —
- * 0 с нулевым наклоном (показатель больше 1).</li>
+ * <li><b>Rise</b> after ignition over {@link #RISE} ticks: solid-motor chamber pressure rises in 0.1–0.3 s (⚠
+ * estimate).</li>
+ * <li><b>Plateau</b>.</li>
+ * <li><b>Tail-off</b>: grain web has burned through, remnants burn out, and burning area S falls to zero over
+ * {@link #tail}. Equilibrium chamber pressure: gas supply S·ρ·a·pⁿ (Saint-Robert burn-rate law r = a·pⁿ) equals
+ * throat flow p·S_throat/c*, hence p ∝ (S/S_throat)^(1/(1 − n)) (Sutton, Biblarz, “Rocket Propulsion Elements”,
+ * ch. 12). Remnant area decreases linearly (⚠ estimate: real area follows grain geometry). Choked nozzle: flow
+ * and thrust ∝ pressure (⚠ thrust coefficient assumed unchanged as pressure falls). Continuous: 1 at tail-off
+ * start, 0 at end with zero slope (exponent > 1).</li>
  * </ol>
- * Отделение ускорителя — в конце фазы {@link FlightPhase#BOOST} ({@code StrikeProjectile.launchTick}), то есть после спада:
- * когда корпус отходит, огня уже нет.
+ * Booster separates at {@link FlightPhase#BOOST} end ({@code StrikeProjectile.launchTick}), after tail-off: flame
+ * is gone when casing departs.
  *
- * @param rise  выход на режим после поджига, тиков
- * @param burn  тиков фазы {@link FlightPhase#BOOST} до отделения (игровые, {@link WeaponSpec.LaunchProfile#boostTicks})
- * @param tail  спад в конце неё, тиков
+ * @param rise thrust rise after ignition, ticks
+ * @param burn {@link FlightPhase#BOOST} ticks until separation (game value, {@link
+ * WeaponSpec.LaunchProfile#boostTicks})
+ * @param tail tail-off at its end, ticks
  */
 public record ThrustCurve(double rise, double burn, double tail) {
-    /** Выход на тягу после поджига, тиков. */
+    /** Thrust rise after ignition, ticks. */
     public static final double RISE = 6;
-    /** Показатель n закона Сен-Робера у смесевого топлива на перхлорате аммония: 0,2–0,5 (Sutton, Biblarz, гл. 12) — ⚠ 0,35. */
+    /**
+     * Saint-Robert exponent n for ammonium-perchlorate composite propellant: 0.2–0.5 (Sutton, Biblarz, ch. 12); ⚠
+     * 0.35.
+     */
     public static final double EXPONENT = 0.35;
     /**
-     * Спад — эта доля настоящего времени работы ({@link Article.SolidMotor#burn}). ⚠ Оценка: остатки свода горят с той же
-     * скоростью, что весь свод, поэтому спад к работе — как толщина остатков к своду, у зарядов ракет — единицы процентов;
-     * у ускорителя «Томагавка» (12 с) — 0,6 с, у шахеда (2,5 с) — 0,13 с.
+     * Tail-off fraction of real burn time ({@link Article.SolidMotor#burn}). ⚠ Estimate: web remnants burn at the
+     * same rate as full web, so tail/burn ratio follows remnant/web thickness, a few percent for rocket grains;
+     * Tomahawk booster (12 s) 0.6 s, Shahed (2.5 s) 0.13 s.
      */
     public static final double TAIL_SHARE = 0.05;
 
     /**
-     * Кривая ускорителя m с пусковой lp: спад — настоящей длительности (доля {@link #TAIL_SHARE} настоящей работы, в тиках
-     * по 20 в секунду), полка — остаток игровой фазы разгона (она короче настоящей — не по физике, {@code WeaponSpec});
-     * спад — не больше половины фазы.
+     * Curve for booster m with launch profile lp: real-duration tail-off ({@link #TAIL_SHARE} of real burn, at 20
+     * ticks/s), plateau is remaining game boost phase (shorter than real, not physical, {@code WeaponSpec});
+     * tail-off at most half the phase.
      */
     public static ThrustCurve of(WeaponSpec.LaunchProfile lp, Article.SolidMotor m) {
         return new ThrustCurve(RISE, lp.boostTicks(), Math.min(TAIL_SHARE * m.burn() * 20, lp.boostTicks() / 2.0));
     }
 
-    /** Доля тяги на поджиге: выход на режим за {@link #RISE} тиков (у всех РДТТ, и без кривой). */
+    /** Ignition thrust fraction: rise over {@link #RISE} ticks (all solid motors, including without curve). */
     public static double ignition(double age) {
         return Math.min(1, Math.max(age, 0.5) / RISE);
     }
 
     /**
-     * Доля тяги полки в фазе ph на age тиков фазы (с долей тика): на поджиге — выход на режим, в разгоне — полка и спад к
-     * отделению, в остальных фазах ускоритель не горит.
+     * Plateau-thrust fraction at age ticks (fractional) of phase ph: ignition rise, boost plateau/tail-off before
+     * separation, no booster burn in other phases.
      */
     public double share(FlightPhase ph, double age) {
         if (ph == FlightPhase.IGNITION) return Math.min(1, Math.max(age, 0.5) / rise);

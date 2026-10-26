@@ -19,23 +19,25 @@ import ua.zentix.incoming.target.Target;
 import java.util.UUID;
 
 /**
- * Крылатая ракета: 80 м/с (4 блока/тик, ≈290 км/ч). Старт из наклонного контейнера: стартовый ускоритель выносит её
- * вверх (~2 с), отделяется, запускается турбореактивный двигатель — разгон до маршевой, снижение на бреющий
- * полёт в 12 блоках над рельефом и маршрут в обход. На последнем участке в 160 блоках от цели — горка и
- * пикирование по дуге с разгоном до 5 блоков/тик. С ядерной БЧ при воздушном подрыве срабатывает над целью.
+ * Cruise missile: 80 m/s (4 blocks/tick, ≈290 km/h). Launch from an inclined canister: a launch booster carries
+ * it upward (~2 s), separates, and the turbojet starts, accelerating to cruise, descending to terrain-hugging
+ * flight 12 blocks above terrain, and following a detour route. On the final leg, 160 blocks from the target, it
+ * pops up and dives in an arc, accelerating to 5 blocks/tick. With a nuclear warhead in airburst mode, it
+ * detonates above the target.
  *
- * <p>Скорость медленнее настоящей (у «Томагавка» ~250 м/с) ради того, чтобы подлёт было видно: настоящую ракету
- * очевидец видит за километры, а в игре она появляется в пределах прорисовки (12 чанков — 192 блока). На 11.5 блока/тик
- * она пролетала бы их меньше чем за секунду, а при 12 TPS сервера — рывками по 11 блоков; на 4 блоках/тик подлёт от края
- * прорисовки с горкой и пикированием длится ~2.5 с (при 12 TPS ~4 с), пролёт поперёк поля зрения — ~5 с. Время
- * полёта до удара задаёт настройка {@code missile_flight_time}: путь маршрута — скорость × время. Последние
- * {@link WeaponSpec.Airframe#visibleLeg} блоков ракета летит в мире (полоса подлёта), когда у цели есть игрок, а не вне его: иначе она
- * появлялась бы только в пределах дистанции симуляции сервера у игрока. Закон полёта после старта — {@link MissileAutopilot}.
+ * <p>Speed is slower than real (Tomahawk ~250 m/s) so the approach is visible: witnesses see a real missile
+ * kilometers away, whereas in game it appears within render distance (12 chunks, 192 blocks). At 11.5 blocks/tick
+ * it would cross that in under a second, and at 12 server TPS in 11-block jumps; at 4 blocks/tick the approach
+ * from render distance with popup and dive lasts ~2.5 s (~4 s at 12 TPS), a pass across the field of view ~5 s.
+ * The {@code missile_flight_time} setting determines time to impact: route length is speed × time. The last
+ * {@link WeaponSpec.Airframe#visibleLeg} blocks fly in the world (approach strip) when a player is at the target,
+ * rather than outside it; otherwise it would appear only within server simulation distance of the player.
+ * Post-launch flight law: {@link MissileAutopilot}.
  */
 public class CruiseMissileEntity extends StrikeProjectile {
-    /** Паспорт: маршевая и в пике скорости, пределы поворота, высота бреющего полёта, старт, полоса подлёта. */
+    /** Spec: cruise and dive speeds, turn limits, terrain-hugging height, launch, approach strip. */
     private static final WeaponSpec.Airframe AIR = WeaponSpec.MISSILE.airframe();
-    /** Маршевая скорость ракеты, сохранённой в полёте без ключа {@code cruise_speed} (2.3.0 и раньше). */
+    /** Cruise speed for a missile saved in flight without the {@code cruise_speed} key (2.3.0 and earlier). */
     private static final double LEGACY_CRUISE_SPEED = 11.5;
 
     private final MissileAutopilot autopilot = new MissileAutopilot(AIR);
@@ -49,7 +51,10 @@ public class CruiseMissileEntity extends StrikeProjectile {
         return WeaponType.MISSILE;
     }
 
-    /** Уже в воздухе (заход издалека, тесты): бреющий полёт, 12 блоков над рельефом и не ниже цели+12. */
+    /**
+     * Already airborne (approach from afar, tests): terrain-hugging flight, 12 blocks above terrain and no lower
+     * than target+12.
+     */
     @Override
     public void launch(Vec3 pos, Target target, Vec3 targetPoint, @Nullable UUID owner) {
         double y = autopilot.airborneAltitude(targetPoint, surfaceY(level(), pos.x, pos.z));
@@ -66,7 +71,7 @@ public class CruiseMissileEntity extends StrikeProjectile {
         autopilot.retarget(craft, tracker.point());
     }
 
-    /** Маршрут пройден: горка — только если на последнем участке до цели на неё хватает места (у точек оператора он бывает коротким). */
+    /** Route complete: popup only if the final leg to target has room (operator waypoints can leave a short leg). */
     @Override
     protected void onRouteDone(Vec3 aim) {
         autopilot.approach(bearingTo(aim).horizontal());
@@ -77,7 +82,7 @@ public class CruiseMissileEntity extends StrikeProjectile {
         Vec3 aim = updateTarget(level);
         if (launchTick(level)) return;
         Vec3 nav = navPoint(aim);
-        // ядерная БЧ, воздушный подрыв: над целью, не долетая до земли (высоту подрыва задаёт сама БЧ)
+        // Nuclear warhead, airburst: above the target before reaching ground (the warhead sets burst height).
         if (nuclear != null && nuclear.airBurst() && onFinalLeg() && armed() && bearingTo(aim).horizontal() <= speed * 2 + 12
                 && (!isVirtual() || Terrain.ready(level, BlockPos.containing(aim)))) {
             impact(level, aim, null);
@@ -101,12 +106,12 @@ public class CruiseMissileEntity extends StrikeProjectile {
     protected void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         autopilot.setPopUp(!tag.contains("pop_up") || tag.getBoolean("pop_up"));
-        // сохранена на большей маршевой (2.3.0 и раньше): летит уже с новой — на маршруте скорость сама падает
-        // до маршевой, а на горке осталась бы старой. Остаток пути в блоках от скорости не зависит (запас хода)
+        // Saved at a higher cruise speed (2.3.0 and earlier): now flies at the new one; route speed drops automatically
+        // to cruise, but popup would retain the old speed. Remaining path in blocks is speed-independent (range).
         if (savedCruiseSpeed(tag) > AIR.cruiseSpeed()) speed = Math.min(speed, AIR.cruiseSpeed());
     }
 
-    /** Маршевая скорость сохранения; без ключа {@code cruise_speed} — 2.3.0 и раньше. */
+    /** Saved cruise speed; without {@code cruise_speed}, 2.3.0 and earlier. */
     @Override
     protected double savedCruiseSpeed(CompoundTag tag) {
         return tag.contains("cruise_speed") ? tag.getDouble("cruise_speed") : LEGACY_CRUISE_SPEED;

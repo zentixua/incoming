@@ -23,9 +23,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Раз в 5 тиков каждому, у кого есть снаряды в полёте (во всех мирах, в том числе вне загруженных чанков), —
- * список: фаза, время до удара, где снаряд. Когда всё долетело — один пустой список, чтобы HUD погас.
- * МБР сюда не входит (её отсчёт ведёт ядерный HUD), ушедший после сброса B-2 — тоже.
+ * Every 5 ticks, each player with airborne projectiles (across worlds, including outside loaded chunks) receives
+ * a list: phase, time to impact, position. Once all arrive, send one empty list to clear HUD. Excludes ICBM
+ * (nuclear HUD owns countdown) and B-2 departing after release.
  */
 public final class FlightStatus {
     private static final int PERIOD = 5;

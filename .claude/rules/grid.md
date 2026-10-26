@@ -5,43 +5,46 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/grid/**"
 ---
 
-# Блэкаут (`grid/`)
+# Blackout (`grid/`)
 
-## Устройство
-- `grid/` — блэкаут: `PowerGrid` (SavedData: узлы сети, отключения `Outage`, докуда прошли каскады), `Districts`
-  (кварталы — ячейки Вороного по сетке 5×5 чанков, всё из координат), `Outage` (каскад и возврат света — функции квартала
-  и времени), `GridLights`/`ChunkLights` (лампа ↔ двойник без света `grid/block/Unlit*`, все свойства состояния),
-  `BlackoutWorld` (несохраняемый attachment мира: каскады под долей блэкаута в общем бюджете (`WorkScheduler.GRID_SHARE`), чанки вне мира не грузит —
-  переводит при загрузке; единица работы — `UNIT_WORK` работы по нескольким чанкам (лампа в палитре — 1, проход секций —
-  `SCAN_COST`), проход останавливается на лампе сверх лимита и продолжается с неё (`ChunkLights.Pass`: палитра помнит
-  и переведённые состояния, конец чанка по ней не виден); чанки у игроков (`NEAR_CHUNKS`) — своей очередью, первыми
-  (и чанки общей очереди, к которым подошёл игрок, — раз в секунду туда же); часы — `Blackouts.newClock`, оценка тает
-  к каждому тику, иначе один всплеск держит очередь на единице за тик; скорость — `/incoming grid status`; единица дольше
-  10 мс — строка в лог «Blackout (…): work unit (queue|relight|cascade)» с разбивкой по видам работы и временем
-  «outside kinds» (GC, вытеснение потока — не работа блэкаута; больше половины единицы — INFO, иначе WARN)), `Blackouts`
-  (входы: взрыв у узла, ядерка, команда `GridCommand`; события), `SubstationBlock`/`Substations` (узел-блок, «под током»),
-  `ChunkSaves` (двойников на диске не бывает: `ChunkDataEvent.Save` пишет секции с лампами и `isLightOn=false`,
-  `ChunkDataEvent.Load` гасит лампы тёмного квартала в палитре до входа чанка в мир, их свет с диска убирает
-  `BlackoutWorld` через `checkBlock`, когда загружены соседи). Двойник вместо `lit=false`: шейдеры (Complementary) светят
-  лампы по id блока, DH — по светимости блока; у двойника нет предмета, поэтому любой двойник в мире — погашенная лампа
-  (сдвинутый поршнем или аппаратом в светлый квартал зажигается сам, `Unlit.placed`; в плотах Sable — обход плотов раз
-  в 5 с `BlackoutWorld.relightPlots`: сборка ставит блоки прямо в секции, тиков блоков в плоте нет, плот Sable сохраняет
-  сам; двойник в плоте зажигается уже от обновления соседа при сборке, `Unlit.neighborChanged`: автосохранение идёт
-  раньше конца тика сервера, а события сохранения плота у Sable нет). Лампы меняются прямо в палитре секции
-  (`ChunkLights.applyInPlace`, свет — `checkBlock`, клиентам — `blockChanged`): пара лампа/двойник для мира один блок,
-  кроме света (`GridLights.inPlace`, GameTest), а `setBlock` со сборкой хоста стоит ≈10 мкс на лампу — в городе
-  Greenfield 2.5 млн невидимых `minecraft:light` (до 7400 на чанк), очередь шла бы минутами. Через `setBlock` — только плоты
-  Sable. Чанк на краю загруженного мира (соседи не загружены) переводится так же сразу: ждать соседей нельзя — на
-  выделенном сервере они не приходят, и чанк оставался бы тёмным; лампы от сигнала, зажжённые там, сверяются с сигналом,
-  когда загрузится сосед (`BlackoutWorld.neighbourLoaded`), в остальных чанках — сразу.
+## Structure
+- `grid/` — blackout: `PowerGrid` (SavedData: grid nodes, `Outage`s, cascade progress), `Districts` (districts are
+  Voronoi cells on a 5×5-chunk grid, all derived from coordinates), `Outage` (cascade and light restoration as functions
+  of district and time), `GridLights`/`ChunkLights` (lamp ↔ unlit twin `grid/block/Unlit*`, all state properties),
+  `BlackoutWorld` (non-persistent world attachment: cascades under the blackout share of the common budget
+  (`WorkScheduler.GRID_SHARE`); does not load chunks outside the world, converts them on load; a work unit is
+  `UNIT_WORK` of work across several chunks (lamp in palette = 1, section scan = `SCAN_COST`); the scan stops at a lamp
+  beyond the limit and resumes there (`ChunkLights.Pass`: the palette also remembers converted states, so it cannot
+  indicate chunk completion). Chunks near players (`NEAR_CHUNKS`) have a separate priority queue (chunks in the common
+  queue that a player approaches move there once per second too); clock: `Blackouts.newClock`, estimate decays each
+  tick, otherwise one spike keeps the queue at one unit per tick; rate: `/incoming grid status`; a unit over 10 ms logs
+  “Blackout (…): work unit (queue|relight|cascade)” with a breakdown by work kind and “outside kinds” time (GC, thread
+  preemption are not blackout work; over half the unit = INFO, otherwise WARN)), `Blackouts` (entry points: explosion
+  near a node, the nuke, `GridCommand`; events), `SubstationBlock`/`Substations` (node block, “live”), `ChunkSaves` (no
+  twins on disk: `ChunkDataEvent.Save` writes sections with lamps and `isLightOn=false`, `ChunkDataEvent.Load` turns
+  off dark-district lamps in the palette before the chunk enters the world; `BlackoutWorld` removes their disk light
+  via `checkBlock` when neighbors load). A twin replaces `lit=false`: shaders (Complementary) light lamps by block ID,
+  DH by block luminance; twins have no item, so any twin in the world is an extinguished lamp (moved by a piston or craft
+  to a lit district, it relights itself, `Unlit.placed`; Sable plots are scanned every 5 s by `BlackoutWorld.relightPlots`:
+  assembly writes blocks straight into sections, blocks do not tick in a plot, Sable saves the plot itself; a twin in
+  a plot relights on a neighbor update during assembly, `Unlit.neighborChanged`: autosave precedes the end of the server
+  tick, and Sable has no plot-save event). Lamps change directly in the section palette (`ChunkLights.applyInPlace`,
+  light via `checkBlock`, clients via `blockChanged`): the lamp/twin pair is one block to the world except for light
+  (`GridLights.inPlace`, GameTest), whereas `setBlock` with the host's pack costs ≈10 µs per lamp — Greenfield has
+  2.5 million invisible `minecraft:light` blocks (up to 7400 per chunk), so the queue would take minutes. Only Sable plots
+  use `setBlock`. A chunk at the edge of the loaded world (neighbors unloaded) is converted immediately too: waiting
+  for neighbors is not allowed — they never arrive on a dedicated server, leaving the chunk dark; signal-driven lamps
+  lit there are checked against the signal when a neighbor loads (`BlackoutWorld.neighbourLoaded`), immediately in
+  other chunks.
 
-## Подводные камни
-- Модели и состояния двойников ламп — `tools/gen_grid_assets.py` из ванильного jar (не править руками); текстуры
-  подстанции — `tools/gen_textures.py`. Слой «вырезка» фонарям и стержню края ваниль задаёт в коде
-  (`ItemBlockRenderTypes`), не в модели — двойнику он нужен в модели (`render_type`). `ofFullCopy` не переносит таблицу
-  добычи по имени блока — двойнику `lootFrom(лампа)`.
-- Свет чанка с диска: `ChunkSerializer.read` ставит в очередь сохранённые массивы света до `ChunkDataEvent.Load`, а
-  `lightChunk(…, isLighted=false)` только добавляет свет от источников — старый свет убранной в палитре лампы остаётся.
-  Убирать его — `LightEngine.checkBlock` по месту лампы (снижение уровня расходится и в соседние чанки).
-- Звуки подстанции и кварталов — по закону источника на клиенте (`ClientHooks.substation` из `SubstationBlock.animateTick`,
-  `GridEffects`, `client/sound/Sources`); дым выбитой — масло трансформатора `FireSmoke.substation`.
+## Pitfalls
+- Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
+  substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code
+  (`ItemBlockRenderTypes`), not the model — twins need it in the model (`render_type`). `ofFullCopy` does not transfer
+  the loot table by block name — twins need `lootFrom(lamp)`.
+- Chunk light from disk: `ChunkSerializer.read` queues saved light arrays before `ChunkDataEvent.Load`, and
+  `lightChunk(…, isLighted=false)` only adds source light — old light from a lamp removed in the palette remains.
+  Remove it with `LightEngine.checkBlock` at the lamp position (the level decrease also propagates to adjacent chunks).
+- Substation and district sounds follow the source law on the client (`ClientHooks.substation` from
+  `SubstationBlock.animateTick`, `GridEffects`, `client/sound/Sources`); smoke from a knocked-out substation is
+  transformer oil, `FireSmoke.substation`.

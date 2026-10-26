@@ -3,27 +3,27 @@ package ua.zentix.incoming.guidance;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * Запас хода снаряда в блоках, а не срок жизни в тиках: полёт кончается, когда пройден весь запас, а не когда
- * вышло время. Расход — путь, который снаряд на деле прошёл ({@link #spend}), поэтому стоянка на пусковой, ожидание
- * района цели и растянутый полёт РСЗО вне мира запаса почти не тратят сами собой, а скорость участка (медленный
- * набор, быстрое пике) на него не влияет: блоки есть блоки. У ожидания района свой предел
- * ({@code StrikeProjectile.AREA_WAIT_LIMIT}). Чистый код без мира Minecraft.
+ * Projectile range in blocks rather than lifetime in ticks: flight ends when range is spent, not when time
+ * expires. Consumption is actual distance traveled ({@link #spend}), so waiting on the launcher, waiting for the
+ * target area, and stretched virtual MLRS flight inherently spend almost none; leg speed (slow climb, fast dive)
+ * does not affect it: blocks are blocks. Area waiting has its own limit ({@code
+ * StrikeProjectile.AREA_WAIT_LIMIT}). Pure code without the Minecraft world.
  * <p>
- * Запас = путь по плану × {@link #PATH_MARGIN} + резерв. Резерв задаётся в тиках на маршевой скорости
- * ({@link #RESERVE_TICKS}, {@link #LOST_RESERVE_TICKS}). Участок, который план считает в тиках и который быстрее
- * маршевой (пике «Ланцета»), переводится в блоки по своей скорости.
+ * Range = planned path × {@link #PATH_MARGIN} + reserve. Reserve is in ticks at cruise speed ({@link
+ * #RESERVE_TICKS}, {@link #LOST_RESERVE_TICKS}). A leg planned in ticks that exceeds cruise speed (Lancet dive)
+ * converts to blocks at its own speed.
  */
 public final class Mission {
-    /** Запас на путь по плану: извилины маршрута, повторный заход, горка. */
+    /** Planned path margin: route bends, repeated approach, popup. */
     public static final double PATH_MARGIN = 1.5;
-    /** Резерв сверх плана полёта, тиков на маршевой скорости. */
+    /** Reserve beyond flight plan, ticks at cruise speed. */
     public static final int RESERVE_TICKS = 600;
-    /** Резерв после потери цели сверх пути до её последней точки, тиков на маршевой скорости ({@link #lose}). */
+    /** Reserve after target loss beyond path to its last point, ticks at cruise speed ({@link #lose}). */
     public static final int LOST_RESERVE_TICKS = 200;
 
-    /** Сколько блоков ещё можно пролететь. */
+    /** Blocks still available to fly. */
     private double range;
-    /** Запас уже урезан до полёта в последнюю точку потерянной цели ({@link #lose}). */
+    /** Range already reduced to flight toward lost target's last point ({@link #lose}). */
     private boolean lostCapped;
 
     private Mission(double range, boolean lostCapped) {
@@ -31,61 +31,61 @@ public final class Mission {
         this.lostCapped = lostCapped;
     }
 
-    /** Запас {@code range} блоков без плана (снаряд, которому путь не задан: паспортный запас). */
+    /** Range of {@code range} blocks without a plan (projectile with no assigned path: spec range). */
     public static Mission of(double range) {
         return new Mission(range, false);
     }
 
     /**
-     * План полёта: путь {@code path} блоков с запасом {@link #PATH_MARGIN} и резерв {@link #RESERVE_TICKS} на маршевой
-     * скорости {@code cruise}.
+     * Flight plan: {@code path} blocks with {@link #PATH_MARGIN} plus {@link #RESERVE_TICKS} reserve at {@code
+     * cruise} speed.
      */
     public static Mission plan(double path, double cruise) {
         return new Mission(path * PATH_MARGIN + RESERVE_TICKS * cruise, false);
     }
 
-    /** Добавить к запасу участок, которого нет в пути по плану (круг барража и пике «Ланцета»), блоков. */
+    /** Add a leg absent from the planned path (Lancet orbit and dive), blocks. */
     public Mission extend(double blocks) {
         range += blocks;
         return this;
     }
 
-    /** Сколько блоков ещё можно пролететь (≤ 0 — запас кончился). */
+    /** Blocks still available to fly (≤ 0 means exhausted). */
     public double range() {
         return range;
     }
 
-    /** Запас кончился: снаряд так и не дошёл до цели. */
+    /** Range exhausted: projectile never reached target. */
     public boolean exhausted() {
         return range <= 0;
     }
 
-    /** Снаряд пролетел {@code moved} блоков. */
+    /** Projectile traveled {@code moved} blocks. */
     public void spend(double moved) {
         range -= moved;
     }
 
     /**
-     * Цель сдвинулась на {@code moved} блоков (ушла, телепортировалась): запас растёт на пролёт этого сдвига с тем же
-     * запасом, что у плана. Сдвиг уже ограничен запасом на погоню ({@code TargetTracker.CHASE_BUDGET}): цель, которая
-     * всё время уходит, не держит снаряд вечно.
+     * Target moved {@code moved} blocks (walked, teleported): add range to cover this displacement with the same
+     * margin as the plan. Displacement is already limited by the chase budget ({@code
+     * TargetTracker.CHASE_BUDGET}): a continuously fleeing target cannot keep a projectile alive forever.
      */
     public void chase(double moved) {
         if (moved > 0) range += moved * PATH_MARGIN;
     }
 
-    /** Перенацелили: сдвиг точки — как у погони ({@link #chase}), и новая цель ещё не потеряна. */
+    /** Retargeted: point displacement handled as pursuit ({@link #chase}), and the new target is not lost yet. */
     public void retarget(double moved) {
         chase(moved);
         lostCapped = false;
     }
 
     /**
-     * Цель потеряна: запас — только на путь {@code path} до её последней точки (с тем же запасом, что у плана) и
-     * {@link #LOST_RESERVE_TICKS} на маршевой скорости {@code cruise}, один раз. Запас, набранный погоней за целью, пока
-     * она уходила, снаряду больше не нужен: с ним шахеды, чья цель умерла, кружили бы над точкой её смерти минутами.
+     * Target lost: range covers only {@code path} to its last point (same margin as plan) plus {@link
+     * #LOST_RESERVE_TICKS} at {@code cruise}, once. Range accumulated while chasing a fleeing target is no longer
+     * needed: with it, Shaheds whose target died would circle the death point for minutes.
      *
-     * @return запас урезан сейчас (false — уже был урезан раньше)
+     * @return range reduced now (false if already reduced earlier)
      */
     public boolean lose(double path, double cruise) {
         if (lostCapped) return false;
@@ -106,9 +106,9 @@ public final class Mission {
     }
 
     /**
-     * Снаряд, сохранённый со сроком жизни (2.3.0 и раньше): остаток срока {@code ticksLeft} и дробные тики погони
-     * {@code credit} — полёт на маршевой скорости {@code cruise}, с которой его сохранили (ракета 2.3.0 летела 11.5
-     * блока/тик: её остаток пути в блоках от новой скорости не зависит). Флаг «урезан после потери цели» переносится.
+     * Projectile saved with lifetime (2.3.0 and earlier): remaining {@code ticksLeft} plus fractional chase ticks
+     * {@code credit} mean flight at saved {@code cruise} speed (2.3.0 missile flew at 11.5 blocks/tick: remaining
+     * path in blocks is independent of new speed). Preserve the “reduced after target loss” flag.
      */
     public static Mission fromLifetime(double ticksLeft, double credit, boolean lostCapped, double cruise) {
         return new Mission((ticksLeft + credit) * cruise, lostCapped);

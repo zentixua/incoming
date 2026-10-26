@@ -5,32 +5,35 @@ import net.minecraft.network.chat.Component;
 import java.util.Locale;
 
 /**
- * Фаза полёта снаряда — общая для всех носителей и синхронизированная с клиентом: по ней клиент рисует факел,
- * дым и конденсацию и выбирает звук (рёв ускорителя, раскрутка мотора, свист в пике).
+ * Projectile flight phase, shared by all carriers and synchronized to the client: drives plume, smoke,
+ * condensation, and sound selection (booster roar, engine spinup, dive whistle).
  * <p>
- * Типичный путь: шахед и ракета — READY → IGNITION → BOOST → CLIMB → CRUISE → (POP_UP) → TERMINAL;
- * B-2 — CRUISE → EGRESS, его бомба — TERMINAL → DRILL; МБР — IGNITION → BOOST.
+ * Typical path: Shahed and missile, READY → IGNITION → BOOST → CLIMB → CRUISE → (POP_UP) → TERMINAL; B-2, CRUISE
+ * → EGRESS, its bomb, TERMINAL → DRILL; ICBM, IGNITION → BOOST.
  */
 public enum FlightPhase {
-    /** Стоит на пусковой, ускоритель ещё не горит. */
+    /** On the launcher, booster not burning yet. */
     READY,
-    /** Ускоритель зажжён, снаряд ещё на направляющей: облако дыма и пламя у пусковой. */
+    /** Booster ignited, projectile still on the rail: smoke cloud and flame at the launcher. */
     IGNITION,
-    /** Ускоритель горит: сход с направляющей, разгон и подъём. */
+    /** Booster burning: launch rail exit, acceleration, and climb. */
     BOOST,
-    /** Ускоритель сброшен; маршевый двигатель (винт шахеда, турбина ракеты) набирает обороты, набор высоты и доворот на курс. */
+    /**
+     * Booster dropped; cruise engine (Shahed propeller, missile turbine) spools up, climbs, and turns onto
+     * course.
+     */
     CLIMB,
-    /** Маршевый полёт по маршруту. */
+    /** Cruise flight along the route. */
     CRUISE,
-    /** Горка перед пикированием (крылатая ракета). */
+    /** Popup before the dive (cruise missile). */
     POP_UP,
-    /** Конечный участок: пикирование на цель. */
+    /** Final leg: dive at the target. */
     TERMINAL,
-    /** Бетонобойная бомба бурит грунт. */
+    /** Bunker-buster bomb drilling into ground. */
     DRILL,
-    /** Бомбардировщик после сброса уходит от цели. */
+    /** Bomber departing the target after release. */
     EGRESS,
-    /** Барражирование над районом цели: круги в ожидании цели. */
+    /** Loitering above the target area: circles while waiting for a target. */
     LOITER;
 
     private static final FlightPhase[] VALUES = values();
@@ -50,22 +53,22 @@ public enum FlightPhase {
         return name().toLowerCase(Locale.ROOT);
     }
 
-    /** Название фазы для игрока (HUD, камера снаряда, карта оператора). */
+    /** Player-facing phase name (HUD, projectile camera, operator map). */
     public Component displayName() {
         return Component.translatable("incoming.phase." + getSerializedName());
     }
 
-    /** Горит стартовый ускоритель (пламя, густой дым, рёв). */
+    /** Launch booster burning (flame, thick smoke, roar). */
     public boolean boosterLit() {
         return this == IGNITION || this == BOOST;
     }
 
-    /** Ещё на пусковой. */
+    /** Still on the launcher. */
     public boolean onLauncher() {
         return this == READY || this == IGNITION;
     }
 
-    /** Стартовый участок на ускорителе: столкновения с блоками не считаются (сход с направляющей сквозь листву). */
+    /** Booster launch leg: block collisions ignored (launch rail exit through foliage). */
     public boolean launching() {
         return ordinal() <= BOOST.ordinal();
     }

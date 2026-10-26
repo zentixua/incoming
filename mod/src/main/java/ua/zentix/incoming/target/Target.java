@@ -19,26 +19,25 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * Цель удара. Движущиеся цели (сущность, аппарат) каждый тик пересчитываются в мировую точку;
- * если цель пропала (умерла, ушла в другой мир, аппарат разобран) — {@link #resolve} пуст,
- * и снаряд летит в последнюю известную точку.
+ * Strike target. Moving entity/craft resolves to world point every tick; if gone (dead, other world, craft
+ * disassembled), {@link #resolve} is empty and projectile flies to last known point.
  */
 public sealed interface Target permits Target.Point, Target.Ground, Target.OfEntity, Target.OfSubLevel, Target.Sighted {
     Codec<Target> CODEC = Kind.CODEC.dispatch(Target::kind, Kind::codec);
 
     Optional<Vec3> resolve(ServerLevel level);
 
-    /** Та же цель со сдвигом (разброс залпа). */
+    /** Same target shifted (salvo dispersion). */
     Target offset(Vec3 delta);
 
     Kind kind();
 
-    /** Что это за цель (для подписей и взрывателя): сама цель, а у замеченной — та, кого заметили ({@link Sighted#quarry}). */
+    /** Target identity (labels/fuze): target itself, or sighted quarry ({@link Sighted#quarry}). */
     default Target subject() {
         return this;
     }
 
-    /** Неподвижная точка мира. */
+    /** Stationary world point. */
     record Point(Vec3 pos) implements Target {
         static final MapCodec<Point> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
                 Vec3.CODEC.fieldOf("pos").forGetter(Point::pos)
@@ -61,27 +60,29 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
     }
 
     /**
-     * Место на земле по координатам x и z (точка с карты): высота — поверхность в этом месте, как только её чанк готов
-     * (район цели грузится заранее), а до того — оценка {@code pos.y}. Цель не движется и не теряется.
+     * Ground site at x/z (map point): height becomes local surface once chunk ready (target area preloaded);
+     * before that, {@code pos.y} estimate. Neither moves nor becomes lost.
      */
     record Ground(Vec3 pos) implements Target {
         static final MapCodec<Ground> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
                 Vec3.CODEC.fieldOf("pos").forGetter(Ground::pos)
         ).apply(i, Ground::new));
 
-        /** Место без карты клиента (команда, сервер): оценка до загрузки чанка — рельеф генератора ({@link Terrain.Source}). */
+        /**
+         * Site without client map (command/server): generator terrain estimate before chunk loads ({@link
+         * Terrain.Source}).
+         */
         public static Ground at(ServerLevel level, double x, double z) {
             return at(level, x, z, Optional.empty());
         }
 
         /**
-         * Место на карте (x, z): высоту знает только сервер. Чанк готов — верх, как его рисует карта (кроны деревьев,
-         * крыши: снаряд, идущий к земле под кронами, взорвался бы в них, не долетев). Иначе оценка — верх по карте
-         * клиента {@code mapSurface} (Distant Horizons или чанки клиента: карта, на которой выбрано место), а если карта
-         * там пуста — рельеф генератора (источники — {@link Terrain.Source}). Когда чанк у цели загрузится,
-         * {@link #surface} уточнит.
+         * Map site (x, z): only server knows height. Ready chunk gives top as map renders it (canopy, roofs:
+         * projectile toward ground under canopy would burst there before arrival). Otherwise estimate from client
+         * {@code mapSurface} (Distant Horizons/client chunks: map used to select site); if map empty there,
+         * generator terrain (sources {@link Terrain.Source}). Once target chunk loads, {@link #surface} refines.
          *
-         * @param mapSurface первый воздух над землёй по карте клиента; вне высот мира не в счёт
+         * @param mapSurface first air above ground from client map; ignore outside world height
          */
         public static Ground at(ServerLevel level, double x, double z, Optional<Integer> mapSurface) {
             Terrain.Surface estimate = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z),
@@ -94,7 +95,7 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
             return Optional.of(surface(level));
         }
 
-        /** Середина верхнего блока (с листвой, как на карте); чанк не готов — оценка из {@link #at}. */
+        /** Top block center (including leaves, like map); unready chunk uses {@link #at} estimate. */
         public Vec3 surface(ServerLevel level) {
             Terrain.Surface top = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(pos.x), Mth.floor(pos.z), Terrain.Allowed.CHUNK);
             return top.known() ? new Vec3(pos.x, top.y() - 0.5, pos.z) : pos;
@@ -112,10 +113,10 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
     }
 
     /**
-     * Сущность (игрок, моб, поезд, механизм Create) и точка попадания относительно её позиции. {@code spread} —
-     * смещение снаряда залпа по горизонтали: у цели на земле его точка — на земле в этом месте (цель на краю
-     * обрыва — точка внизу, а не в воздухе над обрывом, куда снаряд пикировал бы без конца), у цели в воздухе
-     * (на аппарате, в полёте) — на её высоте, как у залпа по точке.
+     * Entity (player, mob, train, Create contraption), hit point relative to its position. {@code spread} is
+     * salvo horizontal offset: ground target point lies on ground at offset (cliff-edge target gets point below
+     * rather than hanging over cliff and causing endless dives); airborne target (craft, flight) keeps target
+     * height, like point salvo.
      */
     record OfEntity(UUID uuid, Vec3 offset, Vec3 spread) implements Target {
         static final MapCodec<OfEntity> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
@@ -132,7 +133,7 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
             return new OfEntity(entity.getUUID(), hit.subtract(entity.position()));
         }
 
-        /** Центр тела — для ударов по игроку по нику. */
+        /** Body center for username player strikes. */
         public static OfEntity center(Entity entity) {
             return new OfEntity(entity.getUUID(), new Vec3(0, entity.getBbHeight() * 0.5, 0));
         }
@@ -142,13 +143,13 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
             return resolve(level, level.getEntity(uuid));
         }
 
-        /** Точка цели у уже найденной сущности с её UUID ({@code null} — её нет в этом мире). */
+        /** Target point for already found same-UUID entity ({@code null} absent from this world). */
         public Optional<Vec3> resolve(ServerLevel level, @Nullable Entity e) {
             if (e == null || !e.isAlive()) return Optional.empty();
             Vec3 at = e.position().add(offset);
             if (spread.equals(Vec3.ZERO)) return Optional.of(at);
             double x = at.x + spread.x, z = at.z + spread.z;
-            // высота земли — только из готового чанка (район цели грузится заранее); иначе — на высоте цели
+            // Ground height only from ready chunk (target area preloaded); otherwise target height.
             if (!e.onGround()) return Optional.of(new Vec3(x, at.y, z));
             Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z), Terrain.Allowed.CHUNK);
             return Optional.of(new Vec3(x, ground.known() ? ground.y() - 0.5 : at.y, z));
@@ -165,7 +166,7 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
         }
     }
 
-    /** Точка на летательном аппарате Sable в координатах его плота: следуем за аппаратом, как бы он ни летел. */
+    /** Sable aircraft point in plot coordinates: follows craft however it flies. */
     record OfSubLevel(Vec3 plotPos) implements Target {
         static final MapCodec<OfSubLevel> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
                 Vec3.CODEC.fieldOf("plot_pos").forGetter(OfSubLevel::plotPos)
@@ -189,11 +190,11 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
     }
 
     /**
-     * Движущаяся цель (сущность, аппарат), которую игрок выбрал, видя её: снаряд бьёт туда, где её видели
-     * ({@code seen}), а за ней самой ({@code quarry}) идёт, только пока оператор держит её в кадре камеры этого снаряда
-     * и оружие это умеет ({@code WeaponSpec.Tracking#CAMERA}, {@link TargetTracker#tick}). Так бьёт приказ игрока;
-     * без этого игрок по нику бил бы в любой точке карты, и снаряд вёл бы его до конца (сотни шахедов по одному
-     * игроку). Разброс залпа сдвигает место, а не цель: ведомый камерой снаряд идёт в саму цель.
+     * Moving entity/craft selected while visible: projectile strikes last-seen {@code seen}; follows {@code
+     * quarry} itself only while operator holds it in this projectile camera and weapon supports it ({@code
+     * WeaponSpec.Tracking#CAMERA}, {@link TargetTracker#tick}). Used by player orders; otherwise username would
+     * allow anywhere-map strikes and tracking to end (hundreds of Shaheds on one player). Salvo spread shifts
+     * position, not quarry: camera-guided projectile follows actual target.
      */
     record Sighted(Target quarry, Vec3 seen) implements Target {
         static final MapCodec<Sighted> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
@@ -201,7 +202,7 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
                 Vec3.CODEC.fieldOf("seen").forGetter(Sighted::seen)
         ).apply(i, Sighted::new));
 
-        /** Где цель видели; дальше — только по камере ({@link TargetTracker}). */
+        /** Where target was seen; further tracking only via camera ({@link TargetTracker}). */
         @Override
         public Optional<Vec3> resolve(ServerLevel level) {
             return Optional.of(seen);
@@ -212,7 +213,7 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
             return new Sighted(quarry, seen.add(delta));
         }
 
-        /** Та же цель, видели её в {@code point} (место снаряда залпа). */
+        /** Same target seen at {@code point} (salvo projectile site). */
         public Sighted at(Vec3 point) {
             return new Sighted(quarry, point);
         }
@@ -229,10 +230,9 @@ public sealed interface Target permits Target.Point, Target.Ground, Target.OfEnt
     }
 
     /**
-     * Вид цели в сохранении. Кодеки видов берутся при чтении и записи, а не при создании перечисления: у интерфейса
-     * есть метод по умолчанию ({@link #subject}), поэтому первое обращение к любой записи-цели сперва
-     * инициализирует сам {@code Target} (JLS 12.4.2), а с ним {@link #CODEC} и это перечисление, — и кодек ещё не
-     * инициализированной записи был бы здесь {@code null}.
+     * Saved target kind. Kind codecs obtained at read/write, not enum creation: interface has default method
+     * ({@link #subject}), so first access to any target record initializes {@code Target} first (JLS 12.4.2),
+     * including {@link #CODEC} and this enum; not-yet-initialized record codec would be {@code null} here.
      */
     enum Kind implements StringRepresentable {
         POINT("point", () -> Point.CODEC),

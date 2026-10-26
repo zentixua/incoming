@@ -18,10 +18,9 @@ import ua.zentix.incoming.strike.WeaponType;
 import ua.zentix.incoming.util.Local;
 
 /**
- * Отработавший стартовый ускоритель: отделяется от шахеда или ракеты, кувыркаясь, падает по баллистике,
- * первые секунды дымит, сопло светится по остыванию, падает с глухим стуком. Перед очисткой модель и свечение
- * вместе плавно исчезают (не по физике, {@link BoosterLifetime}).
- * Никого не калечит (корпус пустой и лёгкий) и блоков не ломает.
+ * Spent launch booster: separates from Shahed or missile, tumbles, falls ballistically, smokes for the first
+ * seconds, nozzle glows as it cools, and lands with a dull thud. Before cleanup, model and glow fade together
+ * (not physical, {@link BoosterLifetime}). Injures nobody (empty, light casing) and breaks no blocks.
  */
 public class SpentBoosterEntity extends Entity {
     private static final EntityDataAccessor<Byte> DATA_WEAPON = SynchedEntityData.defineId(SpentBoosterEntity.class, EntityDataSerializers.BYTE);
@@ -29,7 +28,7 @@ public class SpentBoosterEntity extends Entity {
     private static final EntityDataAccessor<Long> DATA_REMOVE_AT = SynchedEntityData.defineId(SpentBoosterEntity.class, EntityDataSerializers.LONG);
 
     private int landedAt = -1;
-    /** Клиент: кувыркание, градусов за тик. */
+    /** Client: tumbling, degrees per tick. */
     public final float spin;
 
     public SpentBoosterEntity(EntityType<? extends SpentBoosterEntity> type, Level level) {
@@ -38,7 +37,7 @@ public class SpentBoosterEntity extends Entity {
         if (!level.isClientSide) setLifetime(0, BoosterLifetime.MAX_AGE);
     }
 
-    /** Отделить ускоритель от снаряда: у хвоста, со скоростью снаряда, чуть вниз и в сторону. */
+    /** Separate booster at projectile tail with its velocity, slightly downward and sideways. */
     public static void spawn(ServerLevel level, StrikeProjectile from, double tail) {
         SpentBoosterEntity b = new SpentBoosterEntity(ModEntities.SPENT_BOOSTER.get(), level);
         Vec3 at = Local.at(from.position(), from.getYRot(), from.getXRot(), 0, -0.5, -tail * 0.8);
@@ -57,7 +56,7 @@ public class SpentBoosterEntity extends Entity {
         return (int) Math.clamp(level().getGameTime() - entityData.get(DATA_BORN_AT), 0, Integer.MAX_VALUE);
     }
 
-    /** Те же часы у обеих сторон: поздняя загрузка сущности не начинает нагрев и очистку заново. */
+    /** Same clock on both sides: late entity loading does not restart heating or cleanup. */
     public float visibility(float partialTick) {
         return BoosterLifetime.visibility(remainingTicks() - partialTick);
     }
@@ -80,23 +79,23 @@ public class SpentBoosterEntity extends Entity {
         super.tick();
         Vec3 v = getDeltaMovement();
         if (!onGround()) {
-            // тяжёлый корпус: гравитация сильнее, чем у предметов, сопротивление слабое
+            // Heavy casing: gravity stronger than for items, weak drag.
             v = v.scale(0.985).add(0, -0.06, 0);
         } else {
-            // Вес прижимает корпус к земле и в покое: move(0 по Y) сбрасывает onGround,
-            // и рендерер через тик снова кувыркал уже упавший ускоритель, мигая соплом.
+            // Weight presses the casing to ground even at rest: move(0 on Y) resets onGround,
+            // so next tick the renderer would tumble the landed booster again, flashing its nozzle.
             v = v.multiply(0.5, 0, 0.5).add(0, -0.06, 0);
         }
         setDeltaMovement(v);
         move(MoverType.SELF, v);
-        // дым и горячее сопло у клиента — слой эффектов (Exhaust.spent, NozzleGlow)
+        // Client smoke and hot nozzle use the effects layer (Exhaust.spent, NozzleGlow).
         if (level().isClientSide) return;
         if (onGround() && landedAt < 0) {
             landedAt = age();
             entityData.set(DATA_REMOVE_AT, Math.min(entityData.get(DATA_REMOVE_AT), level().getGameTime() + BoosterLifetime.LIE_TICKS));
             level().playSound(null, BlockPos.containing(position()), SoundEvents.ANVIL_LAND, SoundSource.NEUTRAL, 1.2f, 0.5f);
         }
-        // За дном мира — та же плавная очистка: наблюдатель в режиме зрителя тоже может видеть сопло.
+        // Below world bottom, same smooth cleanup: a spectator can still see the nozzle.
         if (getY() < level().getMinBuildHeight() - 32) {
             entityData.set(DATA_REMOVE_AT, Math.min(entityData.get(DATA_REMOVE_AT),
                     level().getGameTime() + BoosterLifetime.FADE_TICKS + BoosterLifetime.HIDDEN_TICKS));

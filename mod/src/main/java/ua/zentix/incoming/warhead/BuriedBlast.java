@@ -3,89 +3,92 @@ package ua.zentix.incoming.warhead;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 
 /**
- * Взрыв заряда под землёй — без Minecraft, общий у сервера (полость, дробление, обрушения, воронка) и клиента (облако,
- * звук). Всё — по приведённой глубине λ = d/W^⅓ (м/кг^⅓) и радиусам, кратным W^⅓ (TM 5-855-1; Westine); W — кг ТНТ.
- * Законы запертого взрыва известны грубо: каждое число ниже — оценка с диапазоном, и это сказано прямо.
+ * Underground charge explosion, without Minecraft, shared by server (cavity, crushing, collapse, crater) and
+ * client (cloud, sound). Scaled depth λ = d/W^⅓ (m/kg^⅓), radii proportional to W^⅓ (TM 5-855-1; Westine); W kg
+ * TNT. Confined-blast laws are only roughly known: each value below explicitly an estimate with range.
  *
- * @param tnt   заряд, кг ТНТ
- * @param depth глубина заряда под верхом над ним, м
+ * @param tnt charge, kg TNT
+ * @param depth charge depth below overlying top, m
  */
 public record BuriedBlast(double tnt, double depth) {
     /**
-     * Радиус полости, ·W^⅓ м: 0,12–0,5 (между данными подземных ядерных и химических взрывов, TM 5-855-1 — широкая
-     * оценка); взята середина по логарифму, 0,25: у 2,4 т — 3,4 м.
+     * Cavity radius, ·W^⅓ m: 0.12–0.5 (between underground nuclear/chemical data, TM 5-855-1, broad estimate);
+     * logarithmic midpoint 0.25: 2.4 t gives 3.4 m.
      */
     static final double CAVITY = 0.25;
-    /** Зона дробления — столько радиусов полости (по обзору «несколько радиусов»; оценка). */
+    /** Crushing zone in cavity radii (review says “several radii”, estimate). */
     static final double CRUSH = 3;
-    /** Трещины и обрушения ходов и пещер — до столько ·W^⅓ м (по обзору «десятки метров»; оценка): у 2,4 т — 27 м. */
+    /**
+     * Cracking/tunnel and cave collapse up to this ·W^⅓ m (review says “tens of meters”, estimate): 2.4 t gives
+     * 27 m.
+     */
     static final double FRACTURE = 2;
-    /** Мельче этой приведённой глубины взрыв выбрасывает грунт наружу — воронка (TM 5-855-1: ~1 м/кг^⅓). */
+    /** Below this scaled depth, explosion ejects ground outward, forming crater (TM 5-855-1: ~1 m/kg^⅓). */
     static final double BREACH = 1;
     /**
-     * Обрушение свода полости поднимается трубой на столько радиусов полости (оценка по трубам обрушения подземных ядерных
-     * испытаний — 4–6 радиусов полости): ближе к верху — провал на поверхности.
+     * Cavity roof collapses upward in chimney this many cavity radii (estimate from underground nuclear test
+     * chimneys, 4–6 radii); near top causes surface subsidence.
      */
     static final double CHIMNEY = 5;
 
-    /** Плотность породы над полостью, кг/м³ (оценка: грунт 1600–2000, камень 2600–2700). */
+    /** Overburden density, kg/m³ (estimate: soil 1600–2000, rock 2600–2700). */
     static final double ROCK_DENSITY = 2400;
 
     /**
-     * Энергия обрушения свода над полостью объёмом {@code volume} м³, кг ТНТ: порода объёма полости падает на высоту
-     * трубы обрушения ({@link #CHIMNEY} радиусов полости) — m·g·h.
+     * Roof collapse energy above cavity {@code volume} m³, kg TNT: cavity-volume rock falls chimney height
+     * ({@link #CHIMNEY} cavity radii), m·g·h.
      */
     public static double collapseTnt(double volume) {
         double r = Math.cbrt(3 * volume / (4 * Math.PI));
         return volume * ROCK_DENSITY * 9.80665 * CHIMNEY * r / BunkerImpact.TNT_J;
     }
 
-    /** W^⅓, кг^⅓. */
+    /** W^⅓, kg^⅓. */
     public double cube() {
         return Math.cbrt(tnt);
     }
 
-    /** Приведённая глубина λ, м/кг^⅓. */
+    /** Scaled depth λ, m/kg^⅓. */
     public double scaledDepth() {
         return depth / cube();
     }
 
-    /** Взрыв выбрасывает грунт наружу (λ < {@value #BREACH}): воронка выброса и облако, как у наземного. */
+    /** Explosion ejects ground outward (λ < {@value #BREACH}): ejecta crater/cloud like surface burst. */
     public boolean breaches() {
         return scaledDepth() < BREACH;
     }
 
-    /** Радиус полости, м. */
+    /** Cavity radius, m. */
     public double cavity() {
         return CAVITY * cube();
     }
 
-    /** Радиус зоны дробления, м. */
+    /** Crushing-zone radius, m. */
     public double crush() {
         return CRUSH * cavity();
     }
 
-    /** Докуда рушатся своды ходов и пещер, м. */
+    /** Tunnel/cave roof collapse reach, m. */
     public double fracture() {
         return FRACTURE * cube();
     }
 
-    /** Высота трубы обрушения над центром полости, м. */
+    /** Chimney height above cavity center, m. */
     public double chimney() {
         return CHIMNEY * cavity();
     }
 
-    /** Свод рушится до верха: на поверхности провал (взрыв не прорвался наружу, но труба обрушения достаёт до верха). */
+    /** Roof collapse reaches top: surface subsidence (blast did not break out, but chimney reaches top). */
     public boolean subsides() {
         return !breaches() && depth <= chimney();
     }
 
     /**
-     * Радиус видимой воронки выброса в грунте {@code soil}, м: у самой поверхности — воронка наземного заряда
-     * ({@link CraterModel#chargeRadius}), с глубиной сперва шире (заряд выбрасывает больше грунта), к границе прорыва
-     * (λ = {@value #BREACH}) сходит на нет — дальше полость без воронки (камуфлет). Форма — R₀·(1 + 2λ)·(1 − λ²): наибольшая,
-     * ~1,5 R₀, около λ ≈ 0,5 (оценка формы по обзорам глубины подрыва — кривые воронок по приведённой глубине; числа с
-     * первоисточником не сверены). 0 — воронки нет.
+     * Visible ejecta-crater radius in {@code soil}, m: at surface, surface-charge crater ({@link
+     * CraterModel#chargeRadius}); initially wider with depth (more ground ejected), vanishing at breakout
+     * boundary (λ = {@value #BREACH}), beyond which only contained cavity. Shape R₀·(1 + 2λ)·(1 − λ²): maximum
+     * ~1.5 R₀ near λ ≈ 0.5 (shape estimate from burst-depth reviews, scaled-depth crater curves; values not
+     * checked against primary source). 0 means no crater.
      */
     public double craterRadius(CraterModel.Soil soil) {
         if (!breaches()) return 0;
@@ -93,28 +96,28 @@ public record BuriedBlast(double tnt, double depth) {
         return CraterModel.chargeRadius(tnt, soil) * (1 + 2 * l) * (1 - l * l);
     }
 
-    /** Глубина видимой воронки выброса, м: четверть диаметра, как у воронки наземного заряда. */
+    /** Visible ejecta-crater depth, m: quarter diameter like surface-charge crater. */
     public double craterDepth(CraterModel.Soil soil) {
         return 0.5 * craterRadius(soil);
     }
 
-    /** Объём чаши воронки выброса (параболоид π/2·r²·h), м³: столько грунта выброшено. */
+    /** Ejecta-crater bowl volume (paraboloid π/2·r²·h), m³: ground ejected. */
     public double craterVolume(CraterModel.Soil soil) {
         double r = craterRadius(soil);
         return Math.PI / 2 * r * r * craterDepth(soil);
     }
 
     /**
-     * Какая доля энергии заряда уходит в воздух волной ({@code hole} — сечение хода в грунте, м²; 0 — хода нет). Глубокий —
-     * только газы через ход: доля сечения хода в стенке полости, hole / (4π·R²) (оценка: у 2,4 т и хода 0,8 м — 0,35 %).
-     * Прорыв наружу — 1 − λ (у самой поверхности — весь заряд, на границе прорыва — доля хода; оценка).
+     * Charge energy fraction entering air as wave ({@code hole} is bore cross-section, m²; 0 absent). Deep burst
+     * vents only bore gases: bore share of cavity wall, hole / (4π·R²) (estimate: 2.4 t, 0.8 m bore gives 0.35%).
+     * Breakout gives 1 − λ (full charge at surface, bore share at boundary; estimate).
      */
     public double airShare(double hole) {
         double r = cavity(), through = Math.min(1, hole / (4 * Math.PI * r * r));
         return breaches() ? Math.max(through, 1 - Math.max(0, scaledDepth()) / BREACH) : through;
     }
 
-    /** Заряд, который слышно и видно над землёй, кг ТНТ: {@link #airShare} от заряда. */
+    /** Charge heard/seen above ground, kg TNT: {@link #airShare} of charge. */
     public double airCharge(double hole) {
         return tnt * airShare(hole);
     }

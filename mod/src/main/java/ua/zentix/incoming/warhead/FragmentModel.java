@@ -9,95 +9,98 @@ import ua.zentix.incoming.strike.WeaponSpec;
 import java.util.SplittableRandom;
 
 /**
- * Осколки корпуса боевой части ({@code formulas.md} §7). Без Minecraft, общий для сервера ({@link FragmentStrike}: урон,
- * стёкла, выбоины) и клиента (пыль и искры там, куда осколки попали): один закон и одно зерно у обоих.
+ * Warhead casing fragments ({@code formulas.md} §7). Without Minecraft, shared by server ({@link FragmentStrike}:
+ * damage, glass, chips) and client (dust/sparks at hits): same law/seed.
  * <ul>
- *   <li><b>Корпус</b> — цилиндр ВВ в стальной оболочке наружного диаметра {@link Article.Charge#diameter}: из масс ВВ и
- *   корпуса и их плотностей выходят толщина стенки и длина (оценка формы: настоящие БЧ — с днищем, конусом и готовыми
- *   насечками).</li>
- *   <li><b>Скорость</b> — Гарни для цилиндра: V₀ = √(2E)·√(β/(1 + β/2)), β = C/M (Cooper, «Explosives Engineering»,
- *   1996, гл. 27). Постоянная Гарни тротила √(2E) = 2440 м/с, состава B — 2700 м/с (Cooper, табл. 27.1; в таблице
- *   Ahmed et al. — 2499 и 2774); у прочих ВВ — между ними по относительной силе ВВ (паспорт: ТНТ / масса ВВ; состав B —
- *   1,33): оценка, точнее — только по составу ВВ. При больших β (у шахеда 4) Гарни — верхняя оценка: тонкий корпус
- *   рвётся раньше, чем продукты разгонят его до конца.</li>
- *   <li><b>Массы</b> — Мотт: N(&gt;m) = N₀·exp(−√(m/μ)), N₀ = M/(2μ), средняя масса 2μ; √μ = B·t<sup>5/6</sup>·d<sup>1/3</sup>·(1
- *   + t/d), t и d — толщина стенки и внутренний диаметр, м; B — 3,31 кг<sup>½</sup>·м<sup>−7/6</sup> у тротила, 2,70 у
- *   состава B (Mott 1943; таблица — Ahmed et al., Eng. Math. Lett. 2021), между ними — так же по силе ВВ.</li>
- *   <li><b>Направления</b> — пояс поперёк оси: нормаль к стенке, наклонённая углом Тейлора θ = V₀/(2·D) (D — скорость
- *   детонации: тротил 6900 м/с, состав B 7980) в сторону бега детонации — от носа (взрыватель удара) к хвосту, разброс
- *   нормалью ±{@link #BELT_SIGMA} (оценка: торцы и неровный фронт). К скорости осколка прибавляется скорость самой БЧ
- *   у удара по паспорту ({@link Article.Impact#speed}, настоящая при любом масштабе): пояс уходит вперёд по курсу.</li>
- *   <li><b>Торможение</b> — v(x) = V₀·e<sup>−x/L</sup>, L = 2m/(ρ·C<sub>d</sub>·A), A = {@link #AREA_SHAPE}·(m/ρ<sub>ст</sub>)<sup>2/3</sup>
- *   — средняя площадь кувыркающегося тела, четверть его поверхности (теорема Коши; брусок 1:2:4 — 1,75; куб — 1,5);
- *   C<sub>d</sub> = 1,21 у неправильных осколков на сверхзвуке (Ahmed et al.); ниже звука настоящий C<sub>d</sub> меньше,
- *   и медленные осколки летят чуть дальше. Тяжесть не в счёт: опасный осколок долетает за доли секунды, опускаясь
- *   меньше чем на метр.</li>
- *   <li><b>Нагрев</b>: сталь корпуса греет ударная волна детонации (остаточный нагрев за 20–30 ГПа — 100–200 K) и
- *   пластическое растяжение до разрыва (0,5–1 ГПа × деформация ~0,6 — 80–170 K): осколок — ~500–700 K, ниже точки
- *   Дрейпера (798 K), и сам в полёте не светится (оценка; накалены лишь тонкие поверхности разрыва — микросекунды).
- *   Видно, куда осколки попали: искры о камень и металл, пыль из грунта.</li>
+ * <li><b>Casing</b>: explosive cylinder in steel shell of outer {@link Article.Charge#diameter}; masses/densities
+ * give wall thickness/length (shape estimate: real warheads have endcaps, cones, preformed grooves).</li>
+ * <li><b>Speed</b>: cylindrical Gurney, V₀ = √(2E)·√(β/(1 + β/2)), β = C/M (Cooper, “Explosives Engineering”,
+ * 1996, ch. 27). TNT constant √(2E) = 2440 m/s, Composition B 2700 m/s (Cooper table 27.1; Ahmed et al. table
+ * 2499/2774); other explosives interpolate by relative strength (spec TNT/explosive mass; Composition B 1.33):
+ * estimate, greater accuracy requires explosive composition. Large β (Shahed 4) makes Gurney upper estimate: thin
+ * casing ruptures before products fully accelerate it.</li>
+ * <li><b>Masses</b>: Mott, N(&gt;m) = N₀·exp(−√(m/μ)), N₀ = M/(2μ), mean mass 2μ; √μ =
+ * B·t<sup>5/6</sup>·d<sup>1/3</sup>·(1 + t/d), t/d wall thickness/inner diameter, m; B = 3.31
+ * kg<sup>½</sup>·m<sup>−7/6</sup> for TNT, 2.70 for Composition B (Mott 1943; table Ahmed et al., Eng. Math.
+ * Lett. 2021), interpolating likewise by strength.</li>
+ * <li><b>Directions</b>: belt across axis, wall normal tilted by Taylor angle θ = V₀/(2·D) (D detonation speed:
+ * TNT 6900 m/s, Composition B 7980) along detonation travel, nose (impact fuze) to tail, normal spread ±{@link
+ * #BELT_SIGMA} (estimate: endcaps/uneven front). Add spec warhead impact velocity ({@link Article.Impact#speed},
+ * real at any scale), shifting belt forward.</li>
+ * <li><b>Deceleration</b>: v(x) = V₀·e<sup>−x/L</sup>, L = 2m/(ρ·C<sub>d</sub>·A), A = {@link
+ * #AREA_SHAPE}·(m/ρ<sub>steel</sub>)<sup>2/3</sup>, mean tumbling projected area, quarter surface (Cauchy's
+ * theorem; 1:2:4 cuboid 1.75, cube 1.5); C<sub>d</sub> = 1.21 for irregular supersonic fragments (Ahmed et al.);
+ * real subsonic C<sub>d</sub> lower, slow fragments travel slightly farther. Ignore gravity: dangerous fragments
+ * arrive within fractions of a second, falling under a meter.</li>
+ * <li><b>Heating</b>: detonation shock heats casing steel (residual heating after 20–30 GPa, 100–200 K), plus
+ * plastic stretching to rupture (0.5–1 GPa × strain ~0.6, 80–170 K): fragment ~500–700 K, below Draper point (798
+ * K), so no in-flight glow (estimate; only thin rupture surfaces glow for microseconds). Visible hits: sparks
+ * from stone/metal, soil dust.</li>
  * </ul>
- * Урон — по энергии удара: {@link #injury}, {@link #death}. Счёт — {@link StrictMath}: у хоста и у друга на другом
- * процессоре осколки одни до бита.
+ * Damage from impact energy: {@link #injury}, {@link #death}. Use {@link StrictMath}: host/friend on different
+ * CPUs get bit-identical fragments.
  *
- * @param count       осколков N₀
- * @param mu          масса Мотта μ, кг (средняя — 2μ)
- * @param speed       начальная скорость Гарни V₀ относительно БЧ, м/с
- * @param taylor      угол Тейлора, рад
- * @param impactSpeed скорость БЧ у удара, м/с
- * @param wall        толщина стенки, м
- * @param inner       внутренний диаметр, м
- * @param length      длина цилиндра ВВ, м
+ * @param count fragment count N₀
+ * @param mu Mott mass μ, kg (mean 2μ)
+ * @param speed initial Gurney V₀ relative to warhead, m/s
+ * @param taylor Taylor angle, rad
+ * @param impactSpeed warhead impact speed, m/s
+ * @param wall wall thickness, m
+ * @param inner inner diameter, m
+ * @param length explosive cylinder length, m
  */
 public record FragmentModel(double count, double mu, double speed, double taylor, double impactSpeed, double wall, double inner,
                             double length) {
-    /** Плотность стали корпуса, кг/м³. */
+    /** Casing steel density, kg/m³. */
     public static final double STEEL = 7850;
-    /** Средняя площадь кувыркающегося осколка — столько (m/ρ)<sup>2/3</sup>: брусок 1:2:4 (оценка формы). */
+    /** Mean tumbling fragment area as multiple of (m/ρ)<sup>2/3</sup>: 1:2:4 cuboid (shape estimate). */
     public static final double AREA_SHAPE = 1.75;
-    /** Сопротивление неправильного осколка на сверхзвуке (Ahmed et al. 2021). */
+    /** Irregular supersonic fragment drag (Ahmed et al. 2021). */
     public static final double CD = 1.21;
-    /** Плотность воздуха у земли, кг/м³ (МСА). */
+    /** Sea-level air density, kg/m³ (ISA). */
     public static final double AIR = 1.225;
-    /** Разброс направлений поперёк пояса (σ), рад: оценка, у цилиндрических БЧ пояс — 20–30° в ширину. */
+    /** Across-belt direction spread (σ), rad: estimate, cylindrical warhead belt 20–30° wide. */
     public static final double BELT_SIGMA = Math.toRadians(10);
 
-    /** Постоянные Гарни √(2E), м/с: тротил и состав B (Cooper 1996, табл. 27.1). */
+    /** Gurney constants √(2E), m/s: TNT, Composition B (Cooper 1996, table 27.1). */
     static final double GURNEY_TNT = 2440, GURNEY_COMP_B = 2700;
-    /** Постоянные Мотта B, кг<sup>½</sup>·м<sup>−7/6</sup> (Mott 1943; Ahmed et al. 2021). */
+    /** Mott constants B, kg<sup>½</sup>·m<sup>−7/6</sup> (Mott 1943; Ahmed et al. 2021). */
     static final double MOTT_TNT = 3.31, MOTT_COMP_B = 2.70;
-    /** Скорость детонации, м/с: литой тротил и состав B. */
+    /** Detonation speed, m/s: cast TNT, Composition B. */
     static final double DETONATION_TNT = 6900, DETONATION_COMP_B = 7980;
-    /** Плотность ВВ, кг/м³: литой тротил 1,65, состав B 1,72 г/см³. */
+    /** Explosive density, kg/m³: cast TNT 1.65, Composition B 1.72 g/cm³. */
     static final double DENSITY_TNT = 1650, DENSITY_COMP_B = 1720;
-    /** Относительная сила состава B (RDX/TNT 60/40) по тротилу. */
+    /** Composition B (RDX/TNT 60/40) strength relative to TNT. */
     static final double RE_COMP_B = 1.33;
 
-    /** Осколок слабее этого никого не ранит и стекла не бьёт — дальше его не ведут, Дж. */
+    /** Below this energy fragments injure nobody/break no glass; stop tracing, J. */
     public static final double STOP_J = 3;
-    /** Стекло окна: бьёт осколок от столька, Дж (оценка: стальной шарик в несколько джоулей бьёт отожжённое стекло 4 мм). */
+    /**
+     * Window glass breaks at this fragment energy, J (estimate: steel ball of a few joules breaks 4 mm annealed
+     * glass).
+     */
     public static final double GLASS_J = 3;
     /**
-     * Опасный осколок — от 79 Дж (58 фут·фунт, DoD 6055.09-M, DDESB): медиана тяжёлого ранения при попадании (оценка:
-     * у DDESB — порог, разброс β 0,5 — оценка).
+     * Hazardous fragment ≥79 J (58 ft·lb, DoD 6055.09-M, DDESB): median severe injury on hit (estimate: DDESB
+     * uses threshold, β 0.5 spread estimated).
      */
     public static final double HAZARD_J = 79, HAZARD_BETA = 0.5;
     /**
-     * Гибель от одного попадания: доля жизненно важного в силуэте (голова, грудь, живот, ~45 %, оценка) × вероятность,
-     * что осколок проходит вглубь (медиана 150 Дж, β 0,5 — оценка).
+     * Single-hit death: vital silhouette share (head, chest, abdomen, ~45%, estimate) × penetration probability
+     * (median 150 J, β 0.5 estimated).
      */
     public static final double VITAL_SHARE = 0.45, DEEP_J = 150, DEEP_BETA = 0.5;
     /**
-     * Выбоина в кладке: осколок выбивает ямку глубиной 1 см и больше, когда его энергия на площадь больше прочности
-     * кладки на сжатие × 1 см (50 МПа: кирпич 10–50, камень 100–200 — оценка), Дж/м².
+     * Masonry chip: ≥1 cm pit if energy per area exceeds compressive strength × 1 cm (50 MPa: brick 10–50, stone
+     * 100–200, estimate), J/m².
      */
     public static final double CHIP_J_PER_M2 = 50e6 * 0.01;
-    /** Больше осколков на взрыв не ведут лучами: остальные — вес ({@link #weight}). */
+    /** Maximum ray-traced fragments per blast; remainder represented by weight ({@link #weight}). */
     public static final int MAX_TRACED = 8192;
-    /** Дальше осколок не ведут, м. */
+    /** Maximum fragment tracing distance, m. */
     public static final double MAX_RANGE = 1000;
 
-    /** Осколки боевой части оружия, которое бьёт; null — нет наземного взрыва или корпуса (бомба под землёй, ядерка). */
+    /** Striking weapon's warhead fragments; null if no ground explosion/casing (underground bomb, the nuke). */
     public static @Nullable FragmentModel of(WeaponSpec spec) {
         if (spec.charge() <= 0) return null;
         Article a = spec.striker().article();
@@ -106,13 +109,13 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         return of(w, a.impact() == null ? 0 : a.impact().speed());
     }
 
-    /** Осколки заряда {@code w} при скорости удара {@code impactSpeed}, м/с. */
+    /** Fragments of charge {@code w} at {@code impactSpeed}, m/s. */
     public static FragmentModel of(Article.Charge w, double impactSpeed) {
-        // доля пути от тротила к составу B по относительной силе ВВ
+        // Interpolation from TNT to Composition B by relative explosive strength.
         double k = Math.clamp((w.tnt() / w.explosive() - 1) / (RE_COMP_B - 1), 0, 1);
         double gurney = lerp(k, GURNEY_TNT, GURNEY_COMP_B), mott = lerp(k, MOTT_TNT, MOTT_COMP_B);
         double detonation = lerp(k, DETONATION_TNT, DETONATION_COMP_B), rhoHe = lerp(k, DENSITY_TNT, DENSITY_COMP_B);
-        // цилиндр: объём корпуса к объёму ВВ = (R/r)² − 1
+        // Cylinder: casing/explosive volume ratio = (R/r)² − 1.
         double vHe = w.explosive() / rhoHe, vCase = w.caseMass() / STEEL;
         double outer = w.diameter() / 2, inner = outer / Math.sqrt(1 + vCase / vHe);
         double t = outer - inner, d = 2 * inner;
@@ -128,76 +131,76 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         return a + (b - a) * k;
     }
 
-    /** Средняя масса осколка, кг. */
+    /** Mean fragment mass, kg. */
     public double meanMass() {
         return 2 * mu;
     }
 
-    /** Доля осколков тяжелее {@code m} кг. */
+    /** Fraction heavier than {@code m} kg. */
     public double shareAbove(double m) {
         return StrictMath.exp(-Math.sqrt(Math.max(0, m) / mu));
     }
 
-    /** Средняя площадь осколка массой {@code m}, м². */
+    /** Mean projected area of {@code m} fragment, m². */
     public static double area(double m) {
         return AREA_SHAPE * StrictMath.pow(m / STEEL, 2.0 / 3);
     }
 
-    /** Путь, на котором скорость осколка массой {@code m} падает в e раз, м. */
+    /** Distance reducing {@code m} fragment speed by factor e, m. */
     public static double dragLength(double m) {
         return 2 * m / (AIR * CD * area(m));
     }
 
-    /** Скорость осколка массой {@code m}, начавшего с {@code v}, через {@code s} м, м/с. */
+    /** Speed of {@code m} fragment starting at {@code v} after {@code s} m, m/s. */
     public static double speedAt(double v, double m, double s) {
         return v * StrictMath.exp(-s / dragLength(m));
     }
 
-    /** Время, за которое осколок пролетает {@code s} м, с: v = V·e^(−x/L) ⇒ t = L/V·(e^(s/L) − 1). */
+    /** Time to travel {@code s} m, s: v = V·e^(−x/L) ⇒ t = L/V·(e^(s/L) − 1). */
     public static double timeTo(double v, double m, double s) {
         double l = dragLength(m);
         return l / v * StrictMath.expm1(s / l);
     }
 
-    /** Путь, на котором энергия осколка падает до {@code joules}, м (0 — уже ниже). */
+    /** Distance until fragment energy falls to {@code joules}, m (0 already below). */
     public static double rangeTo(double v, double m, double joules) {
         double ve = Math.sqrt(2 * joules / m);
         return v <= ve ? 0 : dragLength(m) * StrictMath.log(v / ve);
     }
 
-    /** Энергия осколка, Дж. */
+    /** Fragment energy, J. */
     public static double energy(double m, double v) {
         return 0.5 * m * v * v;
     }
 
-    /** Выбьет ли осколок ямку в кладке ({@link #CHIP_J_PER_M2}). */
+    /** Whether fragment chips masonry ({@link #CHIP_J_PER_M2}). */
     public static boolean chips(double m, double v) {
         return energy(m, v) / area(m) >= CHIP_J_PER_M2;
     }
 
-    /** Вероятность тяжёлого ранения (или гибели) от попадания с энергией {@code joules}. */
+    /** Severe injury (or death) probability at {@code joules} impact energy. */
     public static double injury(double joules) {
         return Fragility.probability(joules, HAZARD_J, HAZARD_BETA);
     }
 
-    /** Вероятность гибели от попадания с энергией {@code joules}. */
+    /** Death probability at {@code joules} impact energy. */
     public static double death(double joules) {
         return VITAL_SHARE * Fragility.probability(joules, DEEP_J, DEEP_BETA);
     }
 
-    /** Сколько осколков ведут лучами. */
+    /** Ray-traced fragment count. */
     public int traced() {
         return (int) Math.min(MAX_TRACED, Math.ceil(count));
     }
 
-    /** Скольких настоящих осколков стоит один луч (≥ 1). */
+    /** Real fragments represented by one ray (≥ 1). */
     public double weight() {
         return count / traced();
     }
 
     /**
-     * Докуда долетает самый тяжёлый осколок (в среднем один на взрыв: доля 1/N₀ по Мотту) с энергией {@link #STOP_J}, м;
-     * дальше осколков нет.
+     * Heaviest fragment reach at {@link #STOP_J}, m (one per blast on average: Mott fraction 1/N₀); no fragments
+     * beyond.
      */
     public double reach() {
         double lnN = StrictMath.log(Math.max(2, count));
@@ -206,21 +209,21 @@ public record FragmentModel(double count, double mu, double speed, double taylor
     }
 
     /**
-     * Опасная плотность DDESB: один осколок от {@link #HAZARD_J} на 600 кв. футов (55,7 м²) — по ней считается
-     * опасное расстояние осколков (DoD 6055.09-M).
+     * DDESB hazard density: one fragment ≥{@link #HAZARD_J} per 600 square feet (55.7 m²), determining hazard
+     * distance (DoD 6055.09-M).
      */
     public static final double HAZARD_DENSITY = 1 / 55.7;
 
     /**
-     * Осколков с энергией от {@code joules} на м² поперёк луча посреди пояса в {@code r} м (без скорости самой БЧ):
-     * N·P(m ≥ m*)·g(0)/(2π·r²), g(0) — плотность пояса по углу в его середине.
+     * Fragments ≥{@code joules} per m² across ray at belt center {@code r} m away (ignoring warhead velocity):
+     * N·P(m ≥ m*)·g(0)/(2π·r²), g(0) angular belt density at center.
      */
     public double peakDensity(double r, double joules) {
         double peak = 1 / (BELT_SIGMA * Math.sqrt(2 * Math.PI)) / (2 * Math.PI);
         return count * shareAbove(lightest(r, joules)) * peak / (r * r);
     }
 
-    /** Самый лёгкий осколок, у которого на {@code r} м энергия не меньше {@code joules} (энергия растёт с массой), кг. */
+    /** Lightest fragment retaining ≥{@code joules} at {@code r} m (energy increases with mass), kg. */
     double lightest(double r, double joules) {
         double lo = 1e-9, hi = 1e4 * mu;
         if (energy(hi, speedAt(speed, hi, r)) < joules) return hi;
@@ -232,7 +235,7 @@ public record FragmentModel(double count, double mu, double speed, double taylor
         return hi;
     }
 
-    /** Опасное расстояние осколков по DDESB (плотность {@link #HAZARD_DENSITY} посреди пояса), м. */
+    /** DDESB fragment hazard distance (density {@link #HAZARD_DENSITY} at belt center), m. */
     public double hazardDistance() {
         double lo = 1, hi = MAX_RANGE;
         if (peakDensity(hi, HAZARD_J) >= HAZARD_DENSITY) return hi;
@@ -245,15 +248,15 @@ public record FragmentModel(double count, double mu, double speed, double taylor
     }
 
     /**
-     * Осколок {@code i} взрыва с зерном {@code seed} и осью БЧ {@code axis} (единичный вектор, нос по курсу): направление
-     * (единичное), масса, скорость в мире. Один и тот же у сервера и клиента.
+     * Fragment {@code i} of blast {@code seed} with warhead {@code axis} (unit vector, nose along heading): unit
+     * direction, mass, world speed. Identical server/client.
      */
     public Fragment fragment(long seed, int i, Vec3 axis) {
         SplittableRandom r = new SplittableRandom(seed ^ (0x9E3779B97F4A7C15L * (i + 1)));
         double u = 1 - r.nextDouble();
         double ln = -StrictMath.log(u);
         double m = mu * ln * ln;
-        // нормаль к стенке, наклонённая к хвосту углом Тейлора, с разбросом пояса
+        // Wall normal tilted tailward by Taylor angle, with belt spread.
         double polar = Math.PI / 2 + taylor + BELT_SIGMA * gaussian(r);
         double az = r.nextDouble() * 2 * Math.PI;
         Vec3 a = axis.lengthSqr() < 1e-12 ? new Vec3(0, -1, 0) : axis.normalize();
@@ -271,14 +274,14 @@ public record FragmentModel(double count, double mu, double speed, double taylor
     }
 
     /**
-     * Осколок.
+     * Fragment.
      *
-     * @param dir   направление полёта (единичное)
-     * @param mass  масса, кг
-     * @param speed скорость в мире, м/с
+     * @param dir unit flight direction
+     * @param mass mass, kg
+     * @param speed world speed, m/s
      */
     public record Fragment(Vec3 dir, double mass, double speed) {
-        /** Путь до {@link #STOP_J}, м (не дальше {@link #MAX_RANGE}). */
+        /** Distance until {@link #STOP_J}, m (capped at {@link #MAX_RANGE}). */
         public double range() {
             return Math.min(MAX_RANGE, rangeTo(speed, mass, STOP_J));
         }

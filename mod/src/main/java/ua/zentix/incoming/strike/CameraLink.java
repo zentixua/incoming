@@ -14,33 +14,37 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Камера снаряда у оператора ({@code client.cam.ProjectileCamera}): с борта какого своего снаряда он смотрит и куда
- * повёрнута камера на подвесе. Клиент шлёт это каждый тик, пока смотрит с борта ({@code net.C2S.CameraView}); вид старше
- * {@link #FRESH} тиков — камеру закрыли или переключили на карту. Направление приходит здесь, а не поворотом игрока:
- * пока камера не на игроке, ванильный клиент поворот на сервер не шлёт ({@code LocalPlayer#sendPosition}).
+ * Operator projectile camera ({@code client.cam.ProjectileCamera}): which owned projectile they view from and
+ * where the gimballed camera points. Client sends this each tick while aboard ({@code net.C2S.CameraView}); view
+ * older than {@link #FRESH} ticks means camera closed or switched to map. Direction arrives here rather than via
+ * player rotation: while camera is off-player, vanilla client does not send rotation to server ({@code
+ * LocalPlayer#sendPosition}).
  * <p>
- * По этому виду снаряд с камерой ({@link WeaponSpec.Tracking#CAMERA}) идёт за замеченной целью
- * ({@link Target.Sighted}): только пока оператор держит её в кадре ({@link #holds}). Вид у игрока один — и ведомый
- * снаряд у него один. Тот же вид замечает чужих за сторону оператора ({@code target.Sightings}).
+ * Camera-guided projectile ({@link WeaponSpec.Tracking#CAMERA}) follows a sighted target ({@link Target.Sighted})
+ * through this view only while operator holds it in frame ({@link #holds}). One view per player means one guided
+ * projectile. The same view spots hostiles for operator's side ({@code target.Sightings}).
  *
- * @param projectile снаряд, с борта которого смотрит оператор
- * @param look       куда смотрит камера, единичный вектор
- * @param tick       игровое время, когда пришёл вид
+ * @param projectile projectile viewed from
+ * @param look camera direction, unit vector
+ * @param tick game time when view arrived
  */
 public record CameraLink(UUID projectile, Vec3 look, long tick) {
-    /** Вид держится столько тиков после пакета: клиент шлёт каждый тик, запас — на задержку сети. */
+    /** View persists this many ticks after packet: client sends every tick; margin covers network delay. */
     private static final int FRESH = 10;
     /**
-     * Кадр — конус вокруг направления камеры, полуугол в градусах. Камера с борта сужает угол зрения клиента на
-     * четверть: при обычных 70° в кадре ±26° по вертикали и ±41° по горизонтали на экране 16:9 — конус в 25° лежит
-     * в кадре и по вертикали.
+     * Frame is a cone around camera direction, half-angle in degrees. Onboard camera reduces client FOV by a
+     * quarter: at normal 70°, frame is ±26° vertically and ±41° horizontally on 16:9; a 25° cone fits vertically
+     * too.
      */
     private static final double FRAME_DEGREES = 25;
     private static final double FRAME_COS = Math.cos(Math.toRadians(FRAME_DEGREES));
-    /** Дальше этого камера снаряда цель не различает: столько же видит камера для перенацеливания ({@link ServerActions#retarget}). */
+    /**
+     * Projectile camera cannot distinguish targets beyond this: same retargeting camera reach ({@link
+     * ServerActions#retarget}).
+     */
     public static final double REACH = 1024;
 
-    /** Вид от клиента игрока {@code player}: принят, если снаряд его и в его мире. */
+    /** View from {@code player}'s client: accepted if projectile belongs to them and is in their world. */
     public static void receive(ServerPlayer player, UUID projectile, float yaw, float pitch) {
         if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) return;
         if (!(player.serverLevel().getEntity(projectile) instanceof StrikeProjectile p) || !player.getUUID().equals(p.ownerId())) return;
@@ -48,13 +52,16 @@ public record CameraLink(UUID projectile, Vec3 look, long tick) {
                 player.serverLevel().getGameTime())));
     }
 
-    /** Вид игрока {@code player}, если он смотрит с борта своего снаряда сейчас: пакет пришёл не раньше {@link #FRESH} тиков назад. */
+    /**
+     * {@code player}'s view if currently aboard their own projectile: packet received within {@link #FRESH}
+     * ticks.
+     */
     public static Optional<CameraLink> current(ServerPlayer player) {
         long now = player.serverLevel().getGameTime();
         return player.getData(ModAttachments.CAMERA_LINK).filter(v -> now - v.tick <= FRESH);
     }
 
-    /** Точка {@code at} в кадре этого вида с борта снаряда в точке {@code eye} и не дальше {@link #REACH}. */
+    /** Point {@code at} is in this view's frame from projectile {@code eye} and within {@link #REACH}. */
     public boolean frames(Vec3 eye, Vec3 at) {
         Vec3 to = at.subtract(eye);
         double distance = to.length();
@@ -62,17 +69,20 @@ public record CameraLink(UUID projectile, Vec3 look, long tick) {
     }
 
     /**
-     * Оператор снаряда {@code p} держит цель {@code subject} в её точке {@code at} в кадре камеры этого снаряда: смотрит
-     * с его борта сейчас, точка в кадре и не дальше {@link #REACH}, его клиент её получает ({@link Sight#within}), а
-     * камера её видит: сущность — {@link Sight#sees(ServerPlayer, Vec3, Entity)} из камеры, аппарат — луч до точки
-     * может упереться только в сам аппарат ({@link SubLevels#visibleFrom}), место — {@link Sight#clear}.
+     * Operator of projectile {@code p} holds {@code subject} at {@code at} in this projectile camera's frame:
+     * currently aboard, point in frame and within {@link #REACH}, their client receives it ({@link
+     * Sight#within}), and camera sees it. Entity uses {@link Sight#sees(ServerPlayer, Vec3, Entity)} from camera;
+     * craft ray may hit only that craft ({@link SubLevels#visibleFrom}); position uses {@link Sight#clear}.
      */
     public static boolean holds(ServerLevel level, StrikeProjectile p, Target subject, Vec3 at) {
         ServerPlayer operator = p.ownerPlayer();
         return operator != null && operator.serverLevel() == level && holds(operator, p, subject, at);
     }
 
-    /** То же для уже найденного оператора {@code operator} в мире снаряда (см. {@link #holds(ServerLevel, StrikeProjectile, Target, Vec3)}). */
+    /**
+     * Same with already found {@code operator} in projectile world (see {@link #holds(ServerLevel,
+     * StrikeProjectile, Target, Vec3)}).
+     */
     public static boolean holds(ServerPlayer operator, StrikeProjectile p, Target subject, Vec3 at) {
         ServerLevel level = operator.serverLevel();
         Optional<CameraLink> view = current(operator);

@@ -37,76 +37,76 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Где поставить пусковую: позади и сбоку от стреляющего, а у приказа с местом пуска — на нём самом, а нет там места —
- * на ближайшем годном в его районе ({@link Post}, {@link #PLACE_AREA}), на ровной твёрдой земле под открытым небом,
- * только в готовых чанках (место пуска из приказа загружает залп, {@link LaunchPlaces}). Своя пусковая
- * того же оружия рядом ({@link #REUSE_RADIUS} от стреляющего, {@link #PLACE_REUSE} от места пуска) — берём её: залп
- * идёт с одной установки. Больше {@link #MAX_PER_OWNER} установок, что идут за игроком, у него не бывает — старая
- * убирается; на местах пуска из приказа они стоят до «Отбоя».
+ * Where to place a launcher: behind and beside the shooter; for an ordered site, at the site or nearest suitable
+ * place in its area ({@link Post}, {@link #PLACE_AREA}), on flat solid ground under open sky, only in ready
+ * chunks (salvo loads ordered site, {@link LaunchPlaces}). Reuse a nearby owned launcher of the same weapon
+ * ({@link #REUSE_RADIUS} from shooter, {@link #PLACE_REUSE} from site): salvo uses one launcher. A player has at
+ * most {@link #MAX_PER_OWNER} following launchers, removing the oldest; ordered-site launchers stay until
+ * “Abort”.
  * <p>
- * Пакет шахедов и ракет ставится только туда и так, чтобы сектор пуска был свободен ({@link #clearAhead}): на разгоне и
- * наборе до взведения взрывателя снаряд, встретив дом, разбивается без подрыва — в городе весь залп с пусковой, смотрящей
- * в дом, пропадал бы молча. И не между высотками,
- * выше которых снаряд после взведения набрать не успевает: место без такого подъёма не годится, берётся другое
- * или заход издалека.
+ * Shahed and missile racks are placed only where and facing such that launch sector is clear ({@link
+ * #clearAhead}): during boost/climb before arming, hitting a building crashes without detonation, so a city salvo
+ * from a launcher facing a building would silently vanish. Also exclude sites between towers too high to clear
+ * after arming: choose another site or approach from afar.
  */
 public final class LaunchSite {
     public static final double REUSE_RADIUS = 96;
     public static final int MAX_PER_OWNER = 3;
-    /** Ближе этого к другой пусковой новую не ставим. */
+    /** Do not place a new launcher closer than this to another. */
     private static final double CLEARANCE = 9;
     /**
-     * Район места пуска из приказа, блоков: место с карты — точка, а расчёт получает район и ставит машину на ближайшую
-     * годную огневую позицию в нём — ровную твёрдую площадку под открытым небом со свободным сектором (поляна, дорога,
-     * опушка, берег), а не в воде, не под кронами и не между стволами. Сто метров ехать — минута по грунту; район огневых
-     * позиций батареи — сотни метров (⚠ оценка, не закон: дальше — новое место, его выбирает оператор). На Newisle ближайшее
-     * годное у мест, где пусковой не было (#394), — 7 блоков у берега, 19 и 72 в лесу, 50 у озера (по картам высот мира).
-     * Цена — район, который грузит залп ({@link LaunchPlaces}): 15×15 чанков.
+     * Ordered launch-site area, blocks: map gives a point, crew gets an area and places the vehicle at its
+     * nearest suitable firing position: flat solid site under open sky with clear sector (clearing, road, forest
+     * edge, shore), not water, under canopy, or between trunks. Driving a hundred meters takes a minute on dirt;
+     * a battery firing-position area spans hundreds of meters (⚠ estimate, not a law: farther means a new site
+     * chosen by operator). On Newisle, nearest suitable positions for sites lacking a launcher (#394) were 7
+     * blocks at shore, 19 and 72 in forest, 50 by lake (world heightmaps). Cost is the area loaded by salvo
+     * ({@link LaunchPlaces}): 15×15 chunks.
      */
     public static final double PLACE_AREA = 96;
-    /** Шаг мест в районе места пуска, блоков: проверка места смотрит квадрат 5×5 вокруг, шаг 2 его не пропускает. */
+    /** Candidate spacing within launch-site area, blocks: site check covers 5×5; spacing 2 misses none. */
     static final int PLACE_STEP = 2;
     /**
-     * Своя пусковая места пуска из приказа — та, что встала по той же отметке ({@link LauncherEntity#mark}: не дальше
-     * зазора {@link #CLEARANCE}), где бы в районе она ни стояла; у пусковой без отметки (поставленной до того, как её
-     * стали помнить) — не дальше этого от места. Отметку, перенесённую дальше, обслуживает новая пусковая: старая стоит
-     * в районе прежней и смотрит на прежнюю цель.
+     * Owned launcher for an ordered site is one placed for the same mark ({@link LauncherEntity#mark}: within
+     * {@link #CLEARANCE}), wherever it stands in the area; without mark (placed before marks were remembered),
+     * within this distance of site. Moving a mark farther uses a new launcher: old one stays in the old area
+     * facing the old target.
      */
     public static final double PLACE_REUSE = 40;
 
-    /** Места относительно игрока: [назад, влево] в блоках, по порядку предпочтения. */
+    /** Positions relative to player: [back, left] in blocks, preference order. */
     private static final double[][] CANDIDATES = {
             {18, 11}, {18, -11}, {24, 0}, {13, 17}, {13, -17}, {30, 13}, {30, -13}, {4, 22}, {4, -22}, {38, 0}, {24, 24}, {24, -24}
     };
-    /** Места в районе места пуска из приказа: [восток, юг] от него, блоков, от ближних к дальним; первое — оно само. */
+    /** Positions within ordered site area: [east, south] offsets, blocks, nearest first; first is site itself. */
     private static final int[][] AREA = area(PLACE_AREA, PLACE_STEP);
     /**
-     * Дальше этого от места пуска из приказа пусковая не встаёт и не смотрит: район и зазор до соседней пусковой, блоков.
-     * Столько вокруг места должно быть готово к пуску ({@link LaunchPlaces#ready}).
+     * Maximum search/placement distance from ordered site: area plus clearance to neighboring launcher, blocks.
+     * This much around site must be ready ({@link LaunchPlaces#ready}).
      */
     public static final double PLACE_REACH = PLACE_AREA + CLEARANCE;
 
     private LaunchSite() {}
 
     /**
-     * Огневая позиция: вокруг чего искать место пусковой и чьи пусковые там свои.
+     * Firing position: center for launcher search and whose launchers count as owned there.
      *
-     * @param center  где стоит стреляющий; у места пуска из приказа — оно само, на земле
-     * @param yaw     «вперёд» для мест вокруг: взгляд стреляющего, у места пуска — курс на цель (запасные места —
-     *                позади него)
-     * @param owner   чьи пусковые (null — консоли и командного блока)
-     * @param ordered место пуска задано приказом ({@code /incoming salvo … from x z}): пусковая — на нём, а нет там
-     *                ровного места — рядом; у стреляющего она встаёт позади и сбоку, а не на нём
+     * @param center shooter position, or ordered site itself on ground
+     * @param yaw “forward” for surrounding positions: shooter view, or target heading from ordered site (fallback
+     * sites behind it)
+     * @param owner launcher owner (null for console/command block)
+     * @param ordered order specifies site ({@code /incoming salvo … from x z}): launcher there, or nearby if no
+     * flat place; at shooter, behind and beside rather than on them
      */
     public record Post(Vec3 center, float yaw, @Nullable UUID owner, boolean ordered) {
-        /** У стреляющего игрока: позади и сбоку от него по взгляду. */
+        /** At shooting player: behind and beside, relative to view. */
         public static Post of(ServerPlayer player) {
             return new Post(player.position(), player.getYRot(), player.getUUID(), false);
         }
 
         /**
-         * Место пуска {@code place} (по горизонтали) из приказа по цели {@code target}; null — чанк места не готов (его
-         * грузит залп, {@link LaunchPlaces}; здесь ничего не грузится).
+         * Ordered horizontal launch {@code place} toward {@code target}; null if site chunk unready (salvo loads
+         * it, {@link LaunchPlaces}; nothing loaded here).
          */
         @Nullable
         public static Post ordered(ServerLevel level, Vec3 place, Vec3 target, @Nullable UUID owner) {
@@ -122,14 +122,14 @@ public final class LaunchSite {
     }
 
     /**
-     * Ближайшая своя пусковая этого оружия у огневой позиции {@code post}, которая годится ({@code fits}: например,
-     * сектор пуска свободен). Проверяются от ближней, до первой годной: проверка сектора недешёвая.
+     * Nearest suitable owned launcher of this weapon at {@code post} ({@code fits}: e.g. launch sector clear).
+     * Check nearest first until suitable: sector checks are costly.
      */
     @Nullable
     public static LauncherEntity existing(ServerLevel level, Post post, WeaponType weapon, Predicate<LauncherEntity> fits) {
-        // пусковая по отметке стоит в её районе, а отметка могла сдвинуться на зазор: коробка — на весь охват района
+        // Marked launcher stands within mark area; mark may have moved by clearance: box covers whole area.
         double reach = post.ordered() ? PLACE_REACH : REUSE_RADIUS;
-        // по высоте у места пуска — весь мир: место в долине, а пусковая — на круче над ней
+        // Ordered-site vertical search spans whole world: site in valley, launcher on steep slope above.
         double up = post.ordered() ? level.getHeight() : 64;
         AABB box = new AABB(post.center(), post.center()).inflate(reach, up, reach);
         return level.getEntitiesOfClass(LauncherEntity.class, box, l -> l.isAlive() && l.weapon() == weapon && Objects.equals(post.owner(), l.ownerId())
@@ -137,7 +137,10 @@ public final class LaunchSite {
                 .stream().sorted(Comparator.comparingDouble(l -> l.distanceToSqr(post.center()))).filter(fits).findFirst().orElse(null);
     }
 
-    /** Пусковая {@code l} в коробке поиска — огневой позиции {@code post}: у стреляющего — любая, у места пуска — {@link #PLACE_REUSE}. */
+    /**
+     * Whether launcher {@code l} in search box belongs to firing {@code post}: any at shooter, {@link
+     * #PLACE_REUSE} for ordered site.
+     */
     private static boolean serves(LauncherEntity l, Post post) {
         if (!post.ordered()) return true;
         Vec3 mark = l.mark();
@@ -145,37 +148,41 @@ public final class LaunchSite {
     }
 
     /**
-     * Место и курс пусковой.
+     * Launcher position and heading.
      *
-     * @param preferred номер курса из предложенных, или −1 — пришлось повернуть: предложенные упирались в постройку
+     * @param preferred index of proposed heading, or −1 if turned because proposed headings hit structures
      */
     public record Pick(Vec3 site, float yaw, int preferred) {}
 
-    /** Повороты от первого предложенного курса, если ни один предложенный не свободен, °. */
+    /** Turns from first proposed heading if no proposal is clear, °. */
     private static final float[] TURNS = {30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180};
-    /** Шаг ломаной по дуге РСЗО, тиков: 2 тика — до ~10 блоков на ускорителе. */
+    /** MLRS arc polyline step, ticks: 2 ticks, up to ~10 blocks on booster. */
     private static final int ARC_STEP = 2;
-    /** Ближе к цели по горизонтали дуга РСЗО не проверяется: крыша самой цели не закрывает сектор, блоков. */
+    /**
+     * Do not check MLRS arc within this horizontal distance of target: target's own roof does not block sector,
+     * blocks.
+     */
     private static final double NEAR_AIM = 8;
-    /** Корпус снаряда ниже оси на столько блоков: над блоками должен пройти и он. */
+    /** Projectile hull this many blocks below axis: it must clear blocks too. */
     private static final double HULL = 1;
 
     /**
-     * Предел цены одного выбора пусковой (проверка своей и поиск места) в клетках мира: клетка луча {@code Level.clip}
-     * ({@link #traversed}), колонка карты высот, колонка полосы подъёма ({@link #climbOut}). Без предела поиск в плотном
-     * городе — до 12 мест по нескольку курсов, по тысячам клеток каждый, — стоил бы сотни миллисекунд в одном тике. Вышел
-     * предел — «места нет»: удар идёт издалека, как без места (раз на приказ, {@link StrikeWorld#noLaunchSite}). Одна
-     * проверка без единого отсева по карте высот: шахед и ракета — до ~6 000 клеток с подъёмом, РСЗО по цели в 400 блоках —
-     * ~15 000; дальше 600 блоков косым курсом — до ~22 000, и тогда предел (только среди башен выше всей дуги).
+     * Cost limit per launcher selection (owned check and site search), world cells: {@code Level.clip} ray cell
+     * ({@link #traversed}), heightmap column, climb-strip column ({@link #climbOut}). Without limit, dense city
+     * search, up to 12 sites with several headings and thousands of cells each, would cost hundreds of
+     * milliseconds in one tick. Exhaustion means “no site”: strike approaches from afar as without a site (once
+     * per order, {@link StrikeWorld#noLaunchSite}). One check with no heightmap rejection: Shahed/missile up to
+     * ~6000 cells including climb, MLRS at 400 blocks ~15000; beyond 600 on an oblique heading up to ~22000, then
+     * limit (only amid towers above the entire arc).
      */
     public static final class Budget {
         /**
-         * Предел по умолчанию, клеток: ≈8–16 мс (клетка луча — как шаг луча взрыва, у хоста ~0,4 мкс и больше).
+         * Default limit, cells: ≈8–16 ms (ray cell like blast ray step, host ~0.4 μs or more).
          */
         public static final int CELLS = 20_000;
         /**
-         * Колонок полосы подъёма на блок пути: полоса шириной 3 блока — до 5 проходов сетки, на косом курсе ~1,4 колонки
-         * на блок каждый.
+         * Climb-strip columns per path block: 3-block width, up to 5 grid traversals, each ~1.4 columns/block on
+         * oblique heading.
          */
         static final double CLIMB_COLUMNS_PER_BLOCK = 8;
 
@@ -191,7 +198,7 @@ public final class LaunchSite {
             this.limit = limit;
         }
 
-        /** Списать {@code cells} клеток; не помещаются — предел вышел: false, и дальше ничего не берётся. */
+        /** Charge {@code cells}; if they do not fit, budget exhausted: false, take nothing further. */
         public boolean take(int cells) {
             if (out || cells > limit - spent) {
                 out = true;
@@ -201,22 +208,22 @@ public final class LaunchSite {
             return true;
         }
 
-        /** Предел вышел: проверка, которой он не хватил, ответила «занято», не досмотрев. */
+        /** Limit exhausted: check lacking budget returned “occupied” before finishing. */
         public boolean out() {
             return out;
         }
 
-        /** Сколько клеток списано. */
+        /** Cells charged. */
         public int spent() {
             return spent;
         }
     }
 
     /**
-     * Место под новую пусковую у огневой позиции {@code post} с свободным сектором пуска: на каждом месте по порядку
-     * ({@link Post#candidates}) — предложенные курсы ({@code yaws} от места), потом повороты от первого, не дальше
-     * {@code maxOff}° от направления на цель {@code target} (дальше — залп уходил бы от цели, это выглядит поломкой).
-     * Null — нигде или вышел предел {@code budget}: снаряд заходит без пусковой.
+     * New launcher site at {@code post} with clear launch sector: each site in order ({@link Post#candidates}),
+     * proposed headings ({@code yaws} from site), then turns from first heading no farther than {@code maxOff}°
+     * from {@code target} direction (farther would send salvo away from target, looking broken). Null if none or
+     * {@code budget} exhausted: projectile approaches without launcher.
      */
     @Nullable
     public static Pick findClear(ServerLevel level, Post post, WeaponType weapon, Vec3 target, Function<Vec3, float[]> yaws,
@@ -242,22 +249,24 @@ public final class LaunchSite {
         return null;
     }
 
-    /** {@link #pickOn(ServerLevel, Vec3, WeaponType, float[], Vec3, float, Budget)} со своим пределом по умолчанию. */
+    /** {@link #pickOn(ServerLevel, Vec3, WeaponType, float[], Vec3, float, Budget)} with its own default budget. */
     @Nullable
     public static Pick pickOn(ServerLevel level, Vec3 site, WeaponType weapon, float[] want, Vec3 target, float maxOff) {
         return pickOn(level, site, weapon, want, target, maxOff, new Budget());
     }
 
-    /** Курс прицепа на месте {@code site} ({@link #pickOn(ServerLevel, LauncherMount, Vec3, WeaponType, float[], Vec3, float, Budget)}). */
+    /**
+     * Trailer heading at {@code site} ({@link #pickOn(ServerLevel, LauncherMount, Vec3, WeaponType, float[],
+     * Vec3, float, Budget)}).
+     */
     @Nullable
     public static Pick pickOn(ServerLevel level, Vec3 site, WeaponType weapon, float[] want, Vec3 target, float maxOff, Budget budget) {
         return pickOn(level, LauncherMount.TRAILER, site, weapon, want, target, maxOff, budget);
     }
 
     /**
-     * Курс пакета на опоре {@code mount} на месте {@code site}: первый свободный из предложенных {@code want}, потом
-     * повороты от первого не дальше {@code maxOff}° от курса на цель {@code target}; null — все заняты или вышел
-     * предел {@code budget}.
+     * Rack heading on {@code mount} at {@code site}: first clear {@code want}, then turns from first heading no
+     * farther than {@code maxOff}° from {@code target} heading; null if all blocked or {@code budget} exhausted.
      */
     @Nullable
     public static Pick pickOn(ServerLevel level, LauncherMount mount, Vec3 site, WeaponType weapon, float[] want, Vec3 target, float maxOff,
@@ -276,36 +285,40 @@ public final class LaunchSite {
         return null;
     }
 
-    /** Сектор пуска стоящей пусковой (с её нынешним курсом) по цели {@code target} свободен. */
+    /** Standing launcher's sector (current heading) toward {@code target} is clear. */
     public static boolean clearAhead(ServerLevel level, Launcher launcher, Vec3 target, Budget budget) {
         return clearAhead(level, launcher.mount(), launcher.position(), launcher.yaw(), launcher.weapon(), target, budget);
     }
 
-    /** {@link #clearAhead(ServerLevel, Vec3, float, WeaponType, Vec3, Budget)} со своим пределом по умолчанию. */
+    /** {@link #clearAhead(ServerLevel, Vec3, float, WeaponType, Vec3, Budget)} with its own default budget. */
     public static boolean clearAhead(ServerLevel level, Vec3 site, float yaw, WeaponType weapon, Vec3 target) {
         return clearAhead(level, site, yaw, weapon, target, new Budget());
     }
 
-    /** Сектор пуска прицепа ({@link #clearAhead(ServerLevel, LauncherMount, Vec3, float, WeaponType, Vec3, Budget)}). */
+    /**
+     * Trailer launch sector ({@link #clearAhead(ServerLevel, LauncherMount, Vec3, float, WeaponType, Vec3,
+     * Budget)}).
+     */
     public static boolean clearAhead(ServerLevel level, Vec3 site, float yaw, WeaponType weapon, Vec3 target, Budget budget) {
         return clearAhead(level, LauncherMount.TRAILER, site, yaw, weapon, target, budget);
     }
 
     /**
-     * Сектор пуска пусковой на опоре {@code mount}, стоящей в {@code site} с курсом {@code yaw}, свободен — из каждой ячейки пакета: залп идёт
-     * со всех, и снаряд, которому блок стоит только на пути его ячейки, разбивается до взведения. Путь снаряда от
-     * направляющей до взведения взрывателя ({@link ProximityFuse#ARM_DISTANCE} по горизонтали) не упирается в блоки.
-     * У снаряда с разгоном (паспорт, {@code LaunchProfile}) — и его путь носа на разгоне ({@link #boostSweep}: тот же
-     * закон, что в полёте), и луч под углом набора: меньшим из угла направляющей и тангажа к концу разгона
-     * ({@code boostEndPitch}) — ниже него снаряд до взведения не опускается, а разгон идёт выше, под навес, крону или
-     * край дома над лучом. У РСЗО — его настоящая дуга из трубы на цель {@code target} (скорость
-     * задаёт дальность, {@link RocketEntity}): до конца работы двигателя (дальше он взведён) и не ближе {@link #NEAR_AIM}
-     * к цели — у самой цели блоки — это цель. Два луча: ось и на {@link #HULL} ниже (корпус). У шахеда и ракеты ещё
-     * и подъём после взведения по силам их автопилоту ({@link #climbOut}). Неготовые чанки не читаются: путь по ним
-     * считается свободным (там снаряд уйдёт в полёт вне мира).
+     * Launch sector of launcher on {@code mount} at {@code site} with {@code yaw} is clear from every rack cell:
+     * salvo uses all cells, and a block in just one cell's path crashes its projectile before arming.
+     * Rail-to-arming path ({@link ProximityFuse#ARM_DISTANCE} horizontally) hits no blocks. Boosted projectile
+     * (spec {@code LaunchProfile}) checks both nose path during boost ({@link #boostSweep}: same flight law) and
+     * a climb-angle ray at the lesser of rail angle and end-of-boost pitch ({@code boostEndPitch}): projectile
+     * never drops below it before arming, while boost goes above it under awnings, canopy, or building edges over
+     * the ray. MLRS uses its actual tube-to-{@code target} arc (range sets speed, {@link RocketEntity}) until
+     * motor burnout (armed thereafter), excluding {@link #NEAR_AIM} near target where blocks are the target. Two
+     * rays: axis and {@link #HULL} lower (hull). Shahed/missile also check feasible post-arming autopilot climb
+     * ({@link #climbOut}). Unready chunks are unread; their path is considered clear (projectile goes virtual
+     * there).
      * <p>
-     * Цена — из предела {@code budget} ({@link Budget}): не помещается — false. Сначала крайние ячейки пакета (путь после
-     * разгона, потом разгон), потом средние: в городе чаще упирается длинный луч, а крайние обычно закрывают и средние.
+     * Cost comes from {@code budget} ({@link Budget}): false if insufficient. Check outer rack cells first
+     * (post-boost path, then boost), then middle: city's long ray more often hits, and outer cells usually block
+     * the middle too.
      */
     public static boolean clearAhead(ServerLevel level, LauncherMount mount, Vec3 site, float yaw, WeaponType weapon, Vec3 target, Budget budget) {
         float elevation = LauncherEntity.elevation(weapon);
@@ -323,7 +336,7 @@ public final class LaunchSite {
                 double reach = ProximityFuse.ARM_DISTANCE;
                 path.add(rail.add(Local.horizontal(yaw).scale(reach)).add(0, reach * Math.tan(climb), 0));
             } else {
-                // парабола без сопротивления и ветра: до взведения (десятки блоков) путь с ними расходится с ней меньше чем на блок
+                // Drag/wind-free parabola: before arming (tens of blocks), drag/wind path differs by less than one block.
                 Vec3 v0 = Ballistics.launchVelocity(rail, target, Ballistics.ticksFor(rail, target, elevation, RocketEntity.MIN_FLIGHT));
                 double reach = Math.min(ProximityFuse.ARM_DISTANCE, horizontal(rail, target) - NEAR_AIM);
                 for (int k = ARC_STEP; k <= RocketEntity.BURN_TICKS; k += ARC_STEP) {
@@ -343,19 +356,19 @@ public final class LaunchSite {
                 && climbOut(level, paths.getFirst().getLast()[1], yaw, air);
     }
 
-    /** Первая и последняя ячейки пакета. */
+    /** First and last rack cells. */
     private static <T> List<T> edges(List<T> cells) {
         return cells.size() <= 2 ? cells : List.of(cells.getFirst(), cells.getLast());
     }
 
-    /** Ячейки пакета между первой и последней. */
+    /** Rack cells between first and last. */
     private static <T> List<T> middle(List<T> cells) {
         return cells.size() <= 2 ? List.of() : cells.subList(1, cells.size() - 1);
     }
 
     /**
-     * Путь носа на разгоне из ячейки {@code rail} — по отрезку за тик, как его заметает снаряд в полёте: закон разгона
-     * паспорта ({@link WeaponSpec.LaunchProfile#boost}) и шаг носа ({@link StrikeProjectile#noseSweep}).
+     * Boost nose path from {@code rail}, one swept segment per tick as in flight: spec boost law ({@link
+     * WeaponSpec.LaunchProfile#boost}) and nose step ({@link StrikeProjectile#noseSweep}).
      */
     private static List<Vec3[]> boostSweep(Vec3 rail, float yaw, float elevation, WeaponSpec.LaunchProfile lp, double noseLength) {
         FlightController flight = new FlightController(yaw, -elevation);
@@ -372,12 +385,11 @@ public final class LaunchSite {
     }
 
     /**
-     * Пути ячеек {@code cells} (у каждой — отрезки по порядку) не упираются в блоки ни осью, ни корпусом ({@link #HULL}
-     * ниже); дальше первого неготового чанка путь не смотрим. Отрезки с одним номером у всех ячеек, которые целиком
-     * выше верхнего блока своих колонок ({@link #aboveBlocks}), лучами не проверяются: там лучу задеть нечего, а у пакета
-     * РСЗО это 80 лучей на отрезок — над открытой местностью дуга почти вся такая. Блоки аппарата Sable в карте высот
-     * мира не стоят — рядом с аппаратом лучи идут везде. Каждый луч и каждая колонка карты высот списываются с предела
-     * {@code budget} до того, как их прочесть; не поместились — false.
+     * Paths of {@code cells} (segments in order for each) hit no blocks at axis or hull ({@link #HULL} below);
+     * stop checking beyond first unready chunk. Same-index segments entirely above their columns' top blocks
+     * ({@link #aboveBlocks}) need no rays: nothing to hit; MLRS has 80 rays per segment, and most open-terrain
+     * arc qualifies. Sable craft blocks are absent from world heightmaps, so near craft trace everywhere. Charge
+     * each ray and heightmap column to {@code budget} before reading; false if insufficient.
      */
     private static boolean clear(ServerLevel level, List<List<Vec3[]>> cells, Budget budget) {
         AABB all = null;
@@ -419,25 +431,25 @@ public final class LaunchSite {
     }
 
     /**
-     * Клеток, через которые идёт луч {@code Level.clip} от {@code from} до {@code to}: он обходит сетку блоков, по клетке
-     * на каждую пересечённую грань. Сдвиг на целое число блоков (корпус, {@link #HULL}) их не меняет.
+     * Cells traversed by {@code Level.clip} from {@code from} to {@code to}: block grid, one cell per crossed
+     * face. Integer block offset (hull, {@link #HULL}) does not change count.
      */
     private static int traversed(Vec3 from, Vec3 to) {
         return 1 + Math.abs(Mth.floor(to.x) - Mth.floor(from.x)) + Math.abs(Mth.floor(to.y) - Mth.floor(from.y))
                 + Math.abs(Mth.floor(to.z) - Mth.floor(from.z));
     }
 
-    /** Коробка, которую заметают ось и корпус на отрезке {@code leg}. */
+    /** Box swept by axis and hull on {@code leg}. */
     private static AABB swept(Vec3[] leg) {
         return new AABB(leg[0], leg[1]).expandTowards(0, -HULL, 0);
     }
 
     /**
-     * Отрезки номер {@code k} всех ячеек целиком выше верхнего блока (любого, и без столкновений: карта высот
-     * {@code WORLD_SURFACE}) каждой колонки под ними, чанки колонок готовы. Луч {@code Level.clip} проверяет только
-     * клетки, через которые идёт, — выше карты высот это воздух, и ответ тот же, что у лучей. Колонок коробки больше,
-     * чем клеток у самих лучей {@code rays} (длинный косой луч: коробка 68×68 — 4 600 колонок против ~600 клеток), или
-     * не помещаются в предел {@code budget} — false без чтения карты: дешевле лучи.
+     * Segment {@code k} of every cell lies entirely above every column's top block (any block, including
+     * non-colliding: {@code WORLD_SURFACE}), with ready column chunks. {@code Level.clip} checks only traversed
+     * cells, which are air above heightmap, giving identical result. If box columns exceed {@code rays} cells
+     * (long diagonal: 68×68 box, 4600 columns vs ~600 cells), or exceed {@code budget}, return false without
+     * reading: rays are cheaper.
      */
     private static boolean aboveBlocks(ServerLevel level, List<List<Vec3[]>> cells, int k, int rays, Budget budget) {
         AABB box = null;
@@ -457,12 +469,11 @@ public final class LaunchSite {
     }
 
     /**
-     * Подъём после взведения по силам автопилоту шахеда и ракеты: прямо по курсу пусковой от точки взведения {@code gate}
-     * (конец проверенного луча — снаряд не ниже неё) на {@link WeaponSpec.Airframe#reliefLookahead} блоков — столько
-     * впереди видит его датчик рельефа — снаряд, набирая высоту по закону автопилота ({@link Autopilot#climbOver}) на
-     * маршевой скорости, проходит корпусом над рельефом полосы. Дальше рельеф ведёт сам автопилот, но только с места,
-     * откуда набор успевает: пусковая на улице между высотками проходит проверку до взведения, а шахед в 40 блоках после
-     * неё врезался бы в башню выше своего набора.
+     * Post-arming climb feasible for Shahed/missile autopilot: straight along launcher heading from arming {@code
+     * gate} (checked ray end, projectile no lower) for {@link WeaponSpec.Airframe#reliefLookahead} blocks, its
+     * sensor reach; climbing at cruise speed under autopilot law ({@link Autopilot#climbOver}), hull clears strip
+     * terrain. Autopilot handles farther terrain, but must start where climb is possible: launcher on a street
+     * between towers passes pre-arming check, yet Shahed would hit a tower 40 blocks later above its climb.
      */
     private static boolean climbOut(ServerLevel level, Vec3 gate, float yaw, WeaponSpec.Airframe air) {
         Vec3 end = gate.add(Local.horizontal(yaw).scale(air.reliefLookahead()));
@@ -476,28 +487,31 @@ public final class LaunchSite {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    /** Рядом уже стоит пусковая (своя другого оружия или чужая): прицеп 7.6 м, пакеты выше 4 м — не ставить внахлёст. */
+    /**
+     * Another launcher nearby (owned different weapon or another owner's): 7.6 m trailer, racks over 4 m; do not
+     * overlap.
+     */
     private static boolean taken(ServerLevel level, Vec3 site) {
         return !level.getEntitiesOfClass(LauncherEntity.class, new AABB(site, site).inflate(CLEARANCE, 8, CLEARANCE), LauncherEntity::isAlive).isEmpty();
     }
 
     /**
-     * Земля, на которой ищется место пусковой: готовность чанка, карты высот и блок под ногами. У мира — {@link #of};
-     * проверки выбора места — на своей.
+     * Ground used for launcher site search: chunk readiness, heightmaps, block underfoot. World uses {@link #of};
+     * site-selection tests use their own.
      */
     interface Ground {
         boolean ready(int x, int z);
 
-        /** Первый воздух над верхним блоком без листвы ({@code MOTION_BLOCKING_NO_LEAVES}). */
+        /** First air above top block excluding leaves ({@code MOTION_BLOCKING_NO_LEAVES}). */
         int ground(int x, int z);
 
-        /** Первый воздух над верхним блоком с листвой ({@code MOTION_BLOCKING}). */
+        /** First air above top block including leaves ({@code MOTION_BLOCKING}). */
         int top(int x, int z);
 
-        /** Блок под ногами в (x, y, z) — твёрдый сверху и не жидкость. */
+        /** Block underfoot at (x, y, z) has solid top and no fluid. */
         boolean firm(int x, int y, int z);
 
-        /** Блок в (x, y, z) — опора (есть форма столкновения: и тропинка, и пашня) и не жидкость. */
+        /** Block at (x, y, z) supports (collision shape: includes dirt paths and farmland) and has no fluid. */
         boolean dry(int x, int y, int z);
 
         int minY();
@@ -546,11 +560,10 @@ public final class LaunchSite {
     }
 
     /**
-     * Ровно (±1 блок в квадрате 5×5), твёрдо под серединой, опора и не вода под всем квадратом (прицеп 7,6 м: у кромки
-     * воды поверхность воды и берег расходятся на блок, и ровным квадрат вышел бы наполовину над водой; тропинка и пашня
-     * по краям — опора), над головой пусто (листва тоже мешает).
-     * Сначала то, что отсеивает чаще и дешевле: крона над самим местом и вода под ним (лес и озеро в районе места пуска),
-     * потом квадрат.
+     * Flat (±1 block in 5×5), solid below center, supported and not water across entire square (7.6 m trailer:
+     * water surface and shore differ by one block, so a “flat” square could be half over water; edge
+     * paths/farmland support), clear overhead (leaves block too). Check cheapest, most frequent rejections first:
+     * canopy over site and water below it (forest/lake in launch area), then square.
      */
     @Nullable
     static Vec3 check(Ground g, int x, int z) {
@@ -576,12 +589,12 @@ public final class LaunchSite {
     }
 
     /**
-     * Чтений на клетку предела {@link Budget}: чтение готовности чанка или карты высот — десятки наносекунд, клетка луча —
-     * ~0,4 мкс (⚠ оценка порядка); блок под ногами (состояние и форма его верха) — как {@link #BLOCK_READS} чтений.
+     * Reads per {@link Budget} cell: chunk readiness/heightmap read takes tens of ns, ray cell ~0.4 μs (⚠
+     * order-of-magnitude estimate); underfoot block (state/top shape) costs {@link #BLOCK_READS} reads.
      */
     static final int READS_PER_CELL = 8, BLOCK_READS = 4;
 
-    /** Земля, что считает свои чтения: цена проверки места — в предел выбора пусковой. */
+    /** Ground counting its own reads: site check costs charged to launcher-selection limit. */
     private static final class Counted implements Ground {
         private final Ground g;
         int reads;
@@ -627,10 +640,10 @@ public final class LaunchSite {
     }
 
     /**
-     * Ближайшее к месту (x, z) годное место пусковой в его районе ({@link #PLACE_AREA}), которое принимает {@code fits}
-     * (свободно и сектор пуска открыт); null — нет или вышел предел {@code budget}. Место с закрытым сектором закрывает
-     * и соседние в {@link #CLEARANCE}: их сектор упирается в те же деревья и дома, а проверка сектора — самое дорогое.
-     * Проверка места списывается с предела по своим чтениям ({@link #READS_PER_CELL}).
+     * Nearest suitable launcher site to (x, z) within its area ({@link #PLACE_AREA}) accepted by {@code fits}
+     * (free and clear sector); null if none or {@code budget} exhausted. Blocked-sector site also excludes
+     * neighbors within {@link #CLEARANCE}: same trees/buildings block their sectors, and sector check is most
+     * costly. Charge site checks by reads ({@link #READS_PER_CELL}).
      */
     @Nullable
     static Vec3 nearest(Ground ground, int x, int z, Budget budget, Predicate<Vec3> fits) {
@@ -653,7 +666,7 @@ public final class LaunchSite {
         return false;
     }
 
-    /** Места круга радиуса reach с шагом step: [восток, юг], от ближних к дальним (при равной дальности — по порядку обхода). */
+    /** Circle sites of radius reach at spacing step: [east, south], nearest first (ties in traversal order). */
     static int[][] area(double reach, int step) {
         List<int[]> out = new ArrayList<>();
         int n = (int) Math.floor(reach / step);
@@ -667,8 +680,8 @@ public final class LaunchSite {
     }
 
     /**
-     * Новая пусковая огневой позиции {@code post}; у стреляющего лишние старые установки, что шли за ним, убираются
-     * (на местах пуска из приказа они стоят до «Отбоя»).
+     * New launcher for {@code post}; at shooter, remove excess old following launchers (ordered-site launchers
+     * stay until “Abort”).
      */
     public static LauncherEntity deploy(ServerLevel level, Vec3 site, float yaw, WeaponType weapon, Post post) {
         if (!post.ordered()) {

@@ -7,50 +7,52 @@ paths:
   - "mod/src/test/java/ua/zentix/incoming/net/**"
 ---
 
-# Повтор Flashback
+# Flashback replay
 
-## Подводные камни
-- Повтор Flashback: перематывая, сервер повтора за один свой тик ставит снимок куска записи и читает пакеты до места,
-  а пакеты модов отдаёт клиенту сразу, как прочёл, — разом; Flashback NeoForge Fixed ещё и кладёт в каждый снимок
-  последний пакет каждого вида мода. Пакет разового события (взрыв, звук, вспышка, тряска) — через `Replay.event`
-  в `IncomingClient.Hooks`, иначе он повторяется при каждой перемотке. Живое ли событие, решает метка конца тика
-  сервера повтора (`compat/FlashbackReplay` в `ServerTickEvent.Post`: место в записи, `doClientRendering`, при выводе
-  видео — `fastForwarding`): пакеты одного соединения клиент разбирает по порядку (Flashback отдаёт пакет мода обёрткой,
-  Forgified Fabric API и NeoForge разбирают её и пакет внутри в потоке игры без второй очереди). Живое — только после
-  трёх меток хода подряд (`Replay.Markers.SETTLE`): Flashback NeoForge Fixed с начала снимка копит пакеты и отдаёт их
-  в конце тика сервера повтора (`catchUpNewViewers`), после меток всех чтений перемотки: по одной метке взрывы
-  перемотки доставались бы следующему тику живыми. По тикам клиента
-  перемотку не узнать: клиент тикает и посреди неё (Flashback не даёт только рисовать, на паузе ещё и тикает клиент
-  из пакета), а при выводе видео сервер стоит между шагами и отметку снимка не снимает. Часы клиента в повторе — по
-  пакету времени записи раз в секунду (`ClientNuclear.TIME_SYNC_TICKS`). Проверка — сценарий `replay` (строки
-  `SCENARIO replay seek`), модель сервера повтора — `ReplayTest`.
-- Состояние чанка пакетом (`S2C.NukeFlashMarks` — следы вспышки): снимок Flashback несёт только последний пакет вида,
-  а не по пакету на чанк, и выгрузка чанка при перемотке стёрла бы метки, которых в снимке нет. Поэтому клиент в повторе
-  метки при выгрузке чанка не забывает, а показывает слой подрыва по своим часам (`FlashMarksClient.index`: время
-  слоя не позже часов + 20 тиков): перемотка назад до подрыва прячет следы, вперёд — показывает. Перемотка далеко вперёд
-  в запись, где чанк пришёл до снимка, может их не показать (известный пробел).
-- Вывод видео (`FlashbackReplay.exporting` — `Flashback.EXPORT_JOB` не пуст): кадры идут не в реальном времени, и что
-  держит бюджет кадра, качества не снижает (подробность пелены ядерного удара прибита к настройке, `PallPass.Detail.pin`).
-  Кадр игры при выводе — размера видео (Flashback 0.39: `ExportJob` меняет размер кадра и отдаёт его окном), и всё, что
-  берёт размер кадра, берёт его: цели пелены, `SceneDepth`, `ScreenSize` шейдеров слоя (проверка без окна —
+## Pitfalls
+- Flashback replay: during seeking, the replay server applies a recording-chunk snapshot and reads packets to the
+  destination in one tick, delivering mod packets to the client immediately as read, all at once; Flashback NeoForge
+  Fixed also puts the last packet of each mod type into every snapshot. One-shot event packets (explosion, sound,
+  flash, shake) must pass through `Replay.event` in `IncomingClient.Hooks`, otherwise they repeat on every seek.
+  A replay-server end-of-tick marker decides whether an event is live (`compat/FlashbackReplay` in `ServerTickEvent.Post`:
+  recording position, `doClientRendering`, and `fastForwarding` during video export): the client processes one
+  connection's packets in order (Flashback wraps mod packets; Forgified Fabric API and NeoForge decode the wrapper and
+  inner packet on the game thread without a second queue). Live only after three consecutive advancing markers
+  (`Replay.Markers.SETTLE`): Flashback NeoForge Fixed accumulates packets from snapshot start and delivers them at replay
+  server tick end (`catchUpNewViewers`), after markers for all seek reads; with one marker, seek explosions would reach
+  the next tick as live. Client ticks cannot identify a seek: the client ticks during it (Flashback only suppresses
+  rendering, and on pause also ticks the client from a packet); during video export the server stops between steps
+  without clearing the snapshot marker. The replay client clock follows the recording's time packet once per second
+  (`ClientNuclear.TIME_SYNC_TICKS`). Check: `replay` scenario (`SCENARIO replay seek` lines); replay-server model:
+  `ReplayTest`.
+- Chunk-state packets (`S2C.NukeFlashMarks`, flash traces): a Flashback snapshot contains only the last packet of a
+  type, not one per chunk, so unloading chunks during seek would erase marks absent from the snapshot. Thus replay
+  clients retain marks on chunk unload and show the detonation layer by their own clock (`FlashMarksClient.index`:
+  layer time no later than clock + 20 ticks): seeking before detonation hides traces, forward shows them. Seeking far
+  ahead to a recording section where the chunk arrived before the snapshot may fail to show them (known gap).
+- Video export (`FlashbackReplay.exporting`: `Flashback.EXPORT_JOB` non-null): frames are not real-time, so frame-budget
+  controls do not reduce quality (nuclear pall detail pinned to the setting, `PallPass.Detail.pin`). During export, the
+  game frame has the video's dimensions (Flashback 0.39: `ExportJob` resizes the frame and provides it as the window);
+  everything using frame size uses that: pall targets, `SceneDepth`, effects-layer shader `ScreenSize` (headless check:
   `INCOMING_EXPORT`, `client-scenario.md`).
 
-## Формат пакетов сервер → клиент
-- Повтор Flashback хранит каждый пакет мода байтами и через версии читает их нынешним кодеком. Кадр — ровно один
-  пакет (`ReplayReader` режет запись по длине действия, у соединения — кадр Netty; пакет мода — до конца кадра, ваниль
-  после разбора проверяет, что байтов не осталось), поэтому формат пакета, ушедший в игру, только растёт с конца, как
-  у protobuf. Новое поле — в конец пакета, `StreamCodecs.trailing(кодек, значение «как до поля»)`: в старом повторе
-  байтов нет — значение по умолчанию. Не в конец вложенной записи, за которой в пакете идут другие поля (подрыв в
-  списке `NukeSync`): своей длины у записи нет, байты разъедутся — такое поле пакет дописывает в свой конец (скорость
-  стены и время суток подрывов `NukeSync` — списками в конце). Убрать поле, сменить тип или порядок — новый id пакета; прежний остаётся
-  зарегистрированным у клиента со своим кодеком в новую запись. Дописанное поле меняет и формат живого соединения
-  (старый клиент на лишних байтах отключается) — `IncomingNetwork.PROTOCOL` поднимается как всегда.
-- Сторож — `S2CGoldenTest`: у каждого пакета клиенту образцы байтов каждого его формата (`src/test/resources/s2c-golden`,
-  `<id>.<n>.hex`, последний — нынешний; нет файла нынешнего — тест пишет его сам и падает: проверить и закоммитить),
-  нынешний кодек обязан прочесть каждый в ожидаемое значение и писать ровно последний. Образец формата, ушедшего в
-  выпуск, не правят и не удаляют: тест перепишет удалённый нынешним кодеком, и сторож пропустит поломку — изменённый
-  или удалённый `.hex` в диффе и есть поломка формата.
-- До правила (после выпуска 3.1.0) настройка `wave_speed` вписала `wave` внутрь подрыва в списке `NukeSync`; это
-  исправлено до выпуска: список — снова подрывы выпуска 3.1.0, `wave` — списком в конце. Повторы сборок с `main` от
-  #296 (16.10), где `NukeSync` несёт подрывы (вход в мир, смена измерения, возрождение при действующем подрыве), не
-  читаются: форматы сборок без выпуска не поддерживаются, правило — для ушедших в выпуск.
+## Server → client packet format
+- Flashback stores each mod packet as bytes and reads it across versions with the current codec. One frame is exactly
+  one packet (`ReplayReader` splits recordings by action length; connections use Netty frames; a mod packet extends to
+  frame end, and vanilla checks for no remaining bytes after decoding), so a packet format shipped to players can
+  only grow at the end, like protobuf. Append fields with `StreamCodecs.trailing(codec, pre-field default)`: old
+  replays have no bytes, so use the default. Not at the end of a nested record followed by other packet fields
+  (detonations in the `NukeSync` list): records have no length and bytes would misalign — append such fields at the
+  packet's end instead (wall speed and detonation time of day in `NukeSync` are trailing lists). Removing fields or
+  changing type/order requires a new packet ID; keep the old one registered on the client with its codec decoding
+  into the new record. Appending a field also changes the live connection format (old clients disconnect on extra
+  bytes), so bump `IncomingNetwork.PROTOCOL` as usual.
+- Guard: `S2CGoldenTest`: each client packet has byte samples for every format (`src/test/resources/s2c-golden`,
+  `<id>.<n>.hex`, last is current; if current file is absent, the test writes it and fails: verify and commit it).
+  The current codec must decode each to the expected value and write exactly the latest. Never edit or delete a
+  shipped format's sample: the test would replace a deleted one with the current codec's output and miss a break —
+  a changed or deleted `.hex` in the diff is itself a format break.
+- Before this rule (after 3.1.0), `wave_speed` inserted `wave` inside detonations in the `NukeSync` list; fixed before
+  release: the list is again 3.1.0 detonations, `wave` a trailing list. Replays of `main` builds from #296 (16.10) carrying
+  detonations in `NukeSync` (world entry, dimension change, respawn during an active detonation) cannot be read:
+  unreleased-build formats are unsupported; this rule covers shipped releases.

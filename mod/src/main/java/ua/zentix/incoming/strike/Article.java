@@ -3,152 +3,154 @@ package ua.zentix.incoming.strike;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Изделие по ТТХ: масса, размеры, сопротивление, двигатели, настоящие скорости и высоты полёта, условия удара и боевая
- * часть одной сущности полёта ({@link WeaponSpec.Airframe#article}). Одна запись на изделие, общая для сервера и
- * клиента: звук ({@code sound.Noise}) и факелы ({@code client.ClientWeaponSpec}) берут числа двигателей отсюда.
- * Единицы — СИ (кг, м, с, Н); источник каждого числа — в Javadoc паспорта изделия ({@link WeaponSpec}); «О» — оценка,
- * выведенная законом из других чисел, с диапазоном.
+ * The real article specifications describe the mass, dimensions, drag, engines, real flight speeds and altitudes,
+ * impact conditions, and warhead of one flight entity ({@link WeaponSpec.Airframe#article}). Each article has one
+ * record shared by the server and client. Sound ({@code sound.Noise}) and plumes ({@code
+ * client.ClientWeaponSpec}) take their engine values from it. Values use SI units (kg, m, s, N); each value's
+ * source is in article spec Javadoc ({@link WeaponSpec}); the marker (est.) identifies a law-derived estimate
+ * from other values, with a range.
  * <p>
- * Игровые скорости и высоты — в {@link WeaponSpec.Airframe} (блоки/тик, блоки): они не по физике, медленнее и ниже
- * настоящих, чтобы подлёт было видно на сотнях блоков игры; настоящие — здесь ({@link #real}). Всё у цели — заряд,
- * корпус БЧ, скорость и угол удара — настоящее при любой настройке. Полёт эти числа пока не читает (кроме данных
- * двигателей у звука и картинки): их берут шаги физики полёта и взрыва, тесты сверяют их с законами
- * ({@code WeaponSpecTest}).
+ * Game speeds and altitudes are in {@link WeaponSpec.Airframe} (blocks/tick, blocks): not physical, slower and
+ * lower so approach is visible over game distances of hundreds of blocks; real ones are here ({@link #real}).
+ * Everything at the target, charge, warhead casing, impact speed and angle, is real under any setting. Flight
+ * does not read these values yet (except engine data for sound and visuals): flight and explosion physics steps
+ * use them; tests check against laws ({@code WeaponSpecTest}).
  *
- * @param dryMass    масса без топлива и без сбрасываемого ускорителя, кг
- * @param launchMass масса на старте без сбрасываемого ускорителя ({@link SolidMotor#jettison}), кг: с топливом (у
- *                   РСЗО — с топливом двигателя)
- * @param length     длина корпуса, м
- * @param diameter   диаметр корпуса (у B-2 — высота), м
- * @param span       размах крыла (у бескрылых — диаметр), м
- * @param cda        площадь сопротивления C<sub>d</sub>·S до звука, м²: D = ½·ρ·v²·CdA·{@link #machFactor}(M)
- * @param sustainer  маршевый двигатель; null — нет
- * @param booster    твердотопливный ускоритель (сбрасывается) или двигатель реактивного снаряда; null — нет
- * @param real       настоящие скорости и высота полёта
- * @param impact     настоящие условия удара (у МБР — входа боеголовки в атмосферу); null — сам не бьёт (B-2)
- * @param warhead    обычная боевая часть; null — её нет (B-2 — носитель, у МБР — ядерная)
- * @param fuelAtImpact топливо в баке к удару, кг: сгорает огненным шаром взрыва (картинка и звук клиента)
- * @param penetrator корпус, который пробивает грунт и бетон ({@code warhead.Penetration}); null — изделие не пробивает
+ * @param dryMass mass without fuel or jettisoned booster, kg
+ * @param launchMass launch mass without jettisoned booster ({@link SolidMotor#jettison}), kg: includes fuel (MLRS
+ * includes motor propellant)
+ * @param length body length, m
+ * @param diameter body diameter (B-2 height), m
+ * @param span wingspan (diameter if wingless), m
+ * @param cda subsonic drag area C<sub>d</sub>·S, m²: D = ½·ρ·v²·CdA·{@link #machFactor}(M)
+ * @param sustainer cruise engine; null if absent
+ * @param booster solid booster (jettisoned) or rocket motor; null if absent
+ * @param real real flight speeds and altitude
+ * @param impact real impact conditions (ICBM warhead atmospheric entry); null if no direct impact (B-2)
+ * @param warhead conventional warhead; null if absent (B-2 carrier, ICBM nuclear)
+ * @param fuelAtImpact tank fuel at impact, kg: burns in explosion fireball (client visuals and sound)
+ * @param penetrator body penetrating ground and concrete ({@code warhead.Penetration}); null if article does not
+ * penetrate
  */
 public record Article(double dryMass, double launchMass, double length, double diameter, double span, double cda,
                       @Nullable Propulsion sustainer, @Nullable SolidMotor booster, Envelope real, @Nullable Impact impact,
                       @Nullable Charge warhead, double fuelAtImpact, @Nullable Penetrator penetrator) {
 
-    /** Ускорение свободного падения, м/с². */
+    /** Gravitational acceleration, m/s². */
     public static final double G = 9.80665;
 
-    /** Маршевый двигатель. */
+    /** Cruise engine. */
     public sealed interface Propulsion permits Propeller, Turbofan {
-        /** Расход топлива на номинале (на крейсере), кг/с; 0 — электромотор. */
+        /** Nominal fuel flow (at cruise), kg/s; 0 means electric motor. */
         double fuelFlow();
     }
 
     /**
-     * Мотор с толкающим винтом: тяга T = η·P/v ({@code formulas.md} §2), на месте — не больше, чем даёт мощность.
+     * Pusher propeller motor: thrust T = η·P/v ({@code formulas.md} §2); at rest, limited by power.
      *
-     * @param power      мощность на валу на номинале, Вт
-     * @param rpm        номинальные обороты винта, об/мин
-     * @param blades     лопастей винта
-     * @param efficiency КПД винта на крейсере
-     * @param fuelFlow   расход топлива на номинале, кг/с (0 — электромотор на батарее)
+     * @param power nominal shaft power, W
+     * @param rpm nominal propeller speed, rpm
+     * @param blades propeller blades
+     * @param efficiency propeller cruise efficiency
+     * @param fuelFlow nominal fuel flow, kg/s (0 means battery electric motor)
      */
     public record Propeller(double power, double rpm, int blades, double efficiency, double fuelFlow) implements Propulsion {
-        /** Тяга на воздушной скорости v, Н. */
+        /** Thrust at airspeed v, N. */
         public double thrust(double v) {
             return efficiency * power / v;
         }
     }
 
     /**
-     * Турбовентиляторный двигатель (ТРДД).
+     * Turbofan engine.
      *
-     * @param count       двигателей
-     * @param thrust      тяга одного на месте у земли, Н
-     * @param airflow     расход воздуха одного на месте, кг/с
-     * @param jet         скорость смешанной струи на месте, м/с (тяга ≈ расход × скорость струи)
-     * @param fuelFlow    расход топлива одного на крейсере, кг/с
+     * @param count engine count
+     * @param thrust one engine's static sea-level thrust, N
+     * @param airflow one engine's static airflow, kg/s
+     * @param jet static mixed-jet speed, m/s (thrust ≈ flow × jet speed)
+     * @param fuelFlow one engine's cruise fuel flow, kg/s
      */
     public record Turbofan(int count, double thrust, double airflow, double jet, double fuelFlow) implements Propulsion {}
 
     /**
-     * Твердотопливный двигатель: тяга постоянна всё время работы (у настоящих кривая тяги — по форме заряда; открытых
-     * кривых нет, взята средняя), расход ṁ = T / v<sub>e</sub>, топливо — ṁ·t.
+     * Solid motor: constant thrust throughout burn (real thrust curves depend on grain geometry; no public
+     * curves, so use average), flow ṁ = T / v<sub>e</sub>, propellant ṁ·t.
      *
-     * @param thrust  средняя тяга, Н
-     * @param exhaust эффективная скорость истечения, м/с (удельный импульс × g₀)
-     * @param burn    время работы, с
-     * @param jettison масса сбрасываемого ускорителя целиком (топливо и корпус), кг; 0 — двигатель в корпусе снаряда
-     *                (РСЗО, ЗРК): топливо выгорает из массы снаряда
+     * @param thrust average thrust, N
+     * @param exhaust effective exhaust velocity, m/s (specific impulse × g₀)
+     * @param burn burn time, s
+     * @param jettison entire jettisoned booster mass (propellant and casing), kg; 0 means motor within projectile
+     * body (MLRS, SAM): propellant burns out of projectile mass
      */
     public record SolidMotor(double thrust, double exhaust, double burn, double jettison) {
-        /** Расход топлива, кг/с. */
+        /** Fuel flow, kg/s. */
         public double flow() {
             return thrust / exhaust;
         }
 
-        /** Масса топлива, кг. */
+        /** Propellant mass, kg. */
         public double propellant() {
             return flow() * burn;
         }
 
-        /** Полный импульс, Н·с. */
+        /** Total impulse, N·s. */
         public double impulse() {
             return thrust * burn;
         }
     }
 
     /**
-     * Настоящие скорости и высота полёта (игровые — в {@link WeaponSpec.Airframe}, не по физике).
+     * Real flight speeds and altitude (game values in {@link WeaponSpec.Airframe}, not physical).
      *
-     * @param cruise   маршевая скорость, м/с (у РСЗО — к выгоранию двигателя, у МБР — к концу первой ступени)
-     * @param dive     наибольшая скорость в пикировании или на конечном участке, м/с
-     * @param altitude высота полёта над рельефом на маршруте, м (у B-2 — высота сброса; 0 — у баллистических — не задана)
+     * @param cruise cruise speed, m/s (MLRS at burnout, ICBM at first-stage end)
+     * @param dive maximum dive or terminal speed, m/s
+     * @param altitude route height above terrain, m (B-2 release height; 0 for unspecified ballistic altitude)
      */
     public record Envelope(double cruise, double dive, double altitude) {}
 
     /**
-     * Настоящие условия удара — сброс или пуск с настоящей высоты и дальности (сверка законов, {@code WeaponSpecTest}).
-     * В игре полёт — своя модель с игровыми высотами и скоростями: пробитие берёт скорость и угол удара сущности в конце
-     * её полёта в мире, а не эти.
+     * Real impact conditions: release or launch from real height and range (law checks, {@code WeaponSpecTest}).
+     * In game, flight uses its own model with game altitudes and speeds: penetration takes entity impact speed
+     * and angle at world flight end, rather than these.
      *
-     * @param speed скорость, м/с
-     * @param angle угол траектории к горизонту, ° (90 — отвесно)
+     * @param speed speed, m/s
+     * @param angle trajectory angle to horizon, ° (90 vertical)
      */
     public record Impact(double speed, double angle) {}
 
     /**
-     * Обычная боевая часть.
+     * Conventional warhead.
      *
-     * @param tnt       заряд в тротиловом эквиваленте, кг: волна, стёкла, воронка
-     * @param explosive масса ВВ, кг (тротиловый эквивалент — она × относительная сила ВВ)
-     * @param caseMass  масса корпуса БЧ, кг: осколки ({@code warhead.FragmentModel})
-     * @param diameter  наружный диаметр корпуса БЧ, м: цилиндр ВВ в стальной оболочке — толщина стенки и длина выходят
-     *                  из масс ВВ и корпуса ({@code FragmentModel})
+     * @param tnt TNT-equivalent charge, kg: blast wave, glass, crater
+     * @param explosive explosive mass, kg (TNT equivalent is this × relative explosive strength)
+     * @param caseMass warhead casing mass, kg: fragments ({@code warhead.FragmentModel})
+     * @param diameter outer warhead casing diameter, m: explosive cylinder in steel shell; wall thickness and
+     * length follow from explosive and casing masses ({@code FragmentModel})
      */
     public record Charge(double tnt, double explosive, double caseMass, double diameter) {}
 
     /**
-     * Корпус-пробиватель: его масса, диаметр и длина — у изделия, здесь — нос.
+     * Penetrating body: mass, diameter, and length belong to the article; here only the nose.
      *
-     * @param crh радиус дуги оживальной головной части в калибрах (CRH): коэффициент носа по Янгу —
-     *            {@code warhead.Penetration#ogive}
+     * @param crh ogive arc radius in calibers (CRH): Young nose coefficient via {@code warhead.Penetration#ogive}
      */
     public record Penetrator(double crh) {}
 
     /**
-     * Путь, который изделие проходит, пока горит двигатель в его корпусе (РСЗО: {@link SolidMotor#jettison} 0, скорость
-     * {@link Envelope#cruise} — к выгоранию), м: разгон от схода до неё за {@link SolidMotor#burn} — v·t/2 (⚠ тяга
-     * постоянна, масса убывает — настоящий разгон к концу круче, путь короче на ~10 %; скорость схода из трубы, ~50 м/с у
-     * РСЗО, не берётся). У «Града» — 683 · 1,9 / 2 ≈ 650 м. 0 — двигателя в корпусе нет или он сбрасывается.
+     * Distance traveled while a body-mounted motor burns (MLRS: {@link SolidMotor#jettison} 0, {@link
+     * Envelope#cruise} speed at burnout), m: accelerate from launch rail exit to it over {@link SolidMotor#burn},
+     * v·t/2 (⚠ constant thrust, declining mass: actual late acceleration is steeper, distance ~10% shorter; tube
+     * launch rail exit speed, ~50 m/s for MLRS, ignored). Grad: 683 · 1.9 / 2 ≈ 650 m. 0 means no body-mounted
+     * motor or it is jettisoned.
      */
     public double burnPath() {
         return booster == null || booster.jettison() > 0 ? 0 : real.cruise() * booster.burn() / 2;
     }
 
     /**
-     * Множитель сопротивления по числу Маха f(M) для оперённых тонких тел без опубликованных продувок (О, типовая
-     * форма кривой, {@code formulas.md} §2): 1 до М0,8; рост до 1,8 к М1,05; 1,8 до М1,2; дальше спадает на 0,45 на
-     * единицу Маха, но не ниже 1,1. Закон приближённый: настоящая кривая у каждого корпуса своя.
+     * Mach drag multiplier f(M) for finned slender bodies without published wind-tunnel data (est.) (typical
+     * curve shape, {@code formulas.md} §2): 1 through M0.8; rises to 1.8 at M1.05; 1.8 through M1.2; then falls
+     * by 0.45 per Mach, no lower than 1.1. Approximate law: every real body has its own curve.
      */
     public static double machFactor(double mach) {
         if (mach < 0.8) return 1;
