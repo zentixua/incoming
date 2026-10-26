@@ -7,6 +7,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkLevel;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
@@ -34,9 +35,11 @@ import ua.zentix.incoming.util.Terrain;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -150,6 +153,106 @@ public final class ArrivalGameTests {
                     distance, tick[0] - arrivedAt[0], pending(level, targets, distance), pendingAtArrival[0]);
             h.assertTrue(ArrivalTickets.count(level, who) == 1, "тикет входа снят раньше срока");
             h.succeed();
+        });
+    }
+
+    /**
+     * Прыжок игрока ({@link ArrivalTickets#moved}): шаг меньше {@link ArrivalTickets#JUMP} чанков и место, которое держат
+     * тикеты игроков, тикета не ставят; прыжок на свободное место — ставит, вместо прежнего; первый тик в мире только
+     * запоминает место.
+     */
+    @GameTest(template = "range", batch = "arrival_jump")
+    public static void jumpHoldsArrivalTicket(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO));
+        UUID who = UUID.randomUUID();
+        ArrivalTickets.Slot slot = new ArrivalTickets.Slot();
+        int r = ArrivalTickets.DISTANCE - 2, playerLevel = ChunkLevel.byStatus(FullChunkStatus.ENTITY_TICKING);
+        var distances = level.getChunkSource().chunkMap.getDistanceManager();
+        ChunkPos covered = new ChunkPos(c.x + 60, c.z);
+        StrikeGameTests.afterTest(h, () -> {
+            ArrivalTickets.release(level.getServer(), who, slot);
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    ChunkPos pos = new ChunkPos(covered.x + dx, covered.z + dz);
+                    distances.removeTicket(TicketType.PLAYER, pos, playerLevel, pos);
+                }
+            }
+        });
+        h.assertFalse(ArrivalTickets.moved(level, c, who, slot, 32), "первый тик в мире поставил тикет");
+        h.assertFalse(ArrivalTickets.moved(level, new ChunkPos(c.x + ArrivalTickets.JUMP - 1, c.z), who, slot, 32),
+                "шаг меньше прыжка поставил тикет");
+        ChunkPos far = new ChunkPos(c.x + 30, c.z - 30);
+        h.assertTrue(ArrivalTickets.moved(level, far, who, slot, 32), "прыжок на свободное место не поставил тикет");
+        h.assertTrue(far.equals(ArrivalTickets.held(slot)) && ArrivalTickets.count(level, who) == 1, "тикет прыжка не на новом месте");
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                ChunkPos pos = new ChunkPos(covered.x + dx, covered.z + dz);
+                distances.addTicket(TicketType.PLAYER, pos, playerLevel, pos);
+            }
+        }
+        h.assertFalse(ArrivalTickets.moved(level, covered, who, slot, 32), "прыжок туда, где стоят тикеты игроков, поставил тикет");
+        h.assertTrue(far.equals(ArrivalTickets.held(slot)), "прыжок без тикета снял прежний");
+        h.succeed();
+    }
+
+    /**
+     * Телепорт на свежее место: NeoForge грузит чанк назначения синхронно ({@code Entity.setPosRaw → Level.getChunk},
+     * тикет {@code UNKNOWN}), через тик тикет снимается. Тикет прыжка, поставленный в том же тике, держит кольцо этой загрузки:
+     * ни один держатель на 11 чанков вокруг не уходит в выгрузку, пока тикеты игрока не встали (здесь их нет совсем).
+     * Иначе держатель кольца, которого потом поднимут тикеты игрока, а соседи ещё генерируются, крутит ванильную задачу
+     * выгрузки до конца каждого тика ({@link ArrivalTickets}, стенд: 50 мс/тик). Вторая проверка — то же без тикета: кольцо
+     * уходит в выгрузку (иначе первая ничего не доказывала бы).
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "arrival_teleport", skyAccess = true)
+    public static void teleportRingStaysLoaded(GameTestHelper h) {
+        teleportRing(h, 260, true);
+    }
+
+    @GameTest(template = "range", timeoutTicks = 200, batch = "arrival_teleport_bare", skyAccess = true)
+    public static void teleportRingDropsWithoutArrival(GameTestHelper h) {
+        teleportRing(h, -260, false);
+    }
+
+    private static void teleportRing(GameTestHelper h, int offset, boolean arrival) {
+        ServerLevel level = h.getLevel();
+        ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
+        ChunkPos p = new ChunkPos(base.x + offset, base.z + offset);
+        UUID who = UUID.randomUUID();
+        ArrivalTickets.Slot slot = new ArrivalTickets.Slot();
+        StrikeGameTests.afterTest(h, () -> ArrivalTickets.release(level.getServer(), who, slot));
+        var map = level.getChunkSource().chunkMap;
+        h.assertTrue(map.getVisibleChunkIfPresent(p.toLong()) == null, "место телепорта уже загружено");
+        ArrivalTickets.moved(level, base, who, slot, 32);
+        // телепорт: синхронная загрузка назначения, как у NeoForge, и в том же тике — конец тика мира
+        level.getChunk(p.x, p.z);
+        if (arrival) h.assertTrue(ArrivalTickets.moved(level, p, who, slot, 32), "прыжок не поставил тикет");
+        // держатели, которые подняла синхронная загрузка: уходят в выгрузку — уровень выше загрузки или держателя уже нет
+        // (выгрузка свежего чанка проходит toDrop и pendingUnloads в одном тике)
+        Map<Long, ChunkHolder> ring = new HashMap<>();
+        for (int dx = -11; dx <= 11; dx++) {
+            for (int dz = -11; dz <= 11; dz++) {
+                long c = ChunkPos.asLong(p.x + dx, p.z + dz);
+                ChunkHolder holder = map.getVisibleChunkIfPresent(c);
+                if (holder != null) ring.put(c, holder);
+            }
+        }
+        h.assertTrue(ring.size() > 1, "синхронная загрузка не подняла кольцо");
+        int[] tick = {0};
+        h.onEachTick(() -> {
+            tick[0]++;
+            int dropped = 0;
+            for (Map.Entry<Long, ChunkHolder> e : ring.entrySet()) {
+                ChunkHolder now = map.getVisibleChunkIfPresent(e.getKey());
+                if (now != e.getValue() || !ChunkLevel.isLoaded(now.getTicketLevel())) dropped++;
+            }
+            if (arrival && dropped > 0) {
+                throw new GameTestAssertException(dropped + " держателей кольца синхронной загрузки ушли в выгрузку через " + tick[0] + " тиков");
+            }
+            if (!arrival && dropped > 0) h.succeed();
+            if (tick[0] < 20) return;
+            if (arrival) h.succeed();
+            else throw new GameTestAssertException("без тикета прыжка кольцо синхронной загрузки за 20 тиков не ушло в выгрузку");
         });
     }
 
