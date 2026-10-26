@@ -83,7 +83,7 @@ submit() {
 }
 
 page() {
-  local step=$1 jar=$2 id sha file i n q
+  local step=$1 jar=$2 id sha file i n q existing_url
   # Validate every configured image before creating/editing the page or deleting any gallery entry.
   while IFS= read -r file; do
     if [ ! -f "$file" ]; then
@@ -137,7 +137,8 @@ page() {
     echo "::notice::Modrinth: иконки $file в репозитории ещё нет"
   fi
 
-  # галерея: только новые картинки (одну и ту же Modrinth дважды не берёт); подписи выложенных — на сайте
+  # Upload new images once; update retained images before removing obsolete entries.
+  # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
   for ((i = 0; i < n; i++)); do
     file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
@@ -146,35 +147,37 @@ page() {
       continue
     fi
     sha=$(sha1sum "$file" | cut -d' ' -f1)
-    if jq -e --arg s "$sha" 'any(.gallery[]?; ((.url // "") + " " + (.raw_url // "")) | contains($s))' \
-        "$tmp/project.json" > /dev/null; then
-      echo "галерея: $file уже есть"
+    q=$(jq -r --argjson i "$i" '.gallery[$i] | "ordering=\($i)&featured=\(.featured // false)"
+      + "&title=\((.title // "") | @uri)&description=\((.description // "") | @uri)"' "$STORE_JSON")
+    existing_url=$(jq -r --arg s "$sha" '[.gallery[]?
+      | select(((.url // "") + " " + (.raw_url // "")) | contains($s)) | .url][0] // empty' \
+      "$tmp/project.json")
+    if [ -n "$existing_url" ]; then
+      call PATCH "/project/$id/gallery?url=$(jq -rn --arg u "$existing_url" '$u | @uri')&$q" 204
+      echo "Gallery metadata updated: $file"
       continue
     fi
     image "$file" 5242880
-    q=$(jq -r --argjson i "$i" '.gallery[$i] | "featured=\(.featured // false)"
-      + (if .title then "&title=\(.title | @uri)" else "" end)
-      + (if .description then "&description=\(.description | @uri)" else "" end)' "$STORE_JSON")
-    call POST "/project/$id/gallery?ext=$ext&ordering=$i&$q" 204 -H "Content-Type: $ctype" --data-binary @"$file"
+    call POST "/project/$id/gallery?ext=$ext&$q" 204 -H "Content-Type: $ctype" --data-binary @"$file"
     echo "галерея: $file"
   done
 
   # галерея на сайте — ровно список modrinth.json: картинку, чьего sha1 нет среди его файлов, убираем
-  local keep=() url k found
+  local keep=() url raw_url k found
   for ((i = 0; i < n; i++)); do
     file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
     if [ -f "$file" ]; then keep+=("$(sha1sum "$file" | cut -d' ' -f1)"); fi
   done
-  while IFS= read -r url; do
+  while IFS=$'\t' read -r url raw_url; do
     found=false
     for k in "${keep[@]}"; do
-      case $url in *"$k"*) found=true ;; esac
+      case "$url $raw_url" in *"$k"*) found=true ;; esac
     done
     if [ "$found" = false ]; then
       call DELETE "/project/$id/gallery?url=$(jq -rn --arg u "$url" '$u | @uri')" 204
       echo "галерея: убрана $url"
     fi
-  done < <(jq -r '.gallery[]?.url // empty' "$tmp/project.json")
+  done < <(jq -r '.gallery[]? | select(.url != null) | [.url, (.raw_url // "")] | @tsv' "$tmp/project.json")
 
   version "$jar" "$step"
 }
