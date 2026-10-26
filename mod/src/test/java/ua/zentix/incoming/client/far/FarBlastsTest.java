@@ -123,12 +123,13 @@ class FarBlastsTest {
         for (CloudModel m : MODELS) {
             // днём зарево на облаках — только пока светят продукты детонации (~3000 K); шар топлива (~1500 K) их не светит
             for (double t = 0; t < m.fireSeconds; t += 0.05) {
-                m.ballLight(t, light);
+                m.emittedLight(t, light);
                 boolean lit = FarBlasts.SKY_PEAK * FarBlasts.cloudGlow(light[3], m.ballRadius(t), h, day) >= Sight.THRESHOLD;
                 assertTrue(!lit || t < m.heBallSeconds, m.source + ": днём зарево на " + t + " с, вспышка до " + m.heBallSeconds);
             }
-            m.ballLight(0, light);
-            assertTrue(FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) > 0.5, m.source + ": ночью низ облаков над взрывом вспыхивает");
+            m.emittedLight(0, light);
+            assertTrue(FarBlasts.SKY_PEAK * FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) > Sight.THRESHOLD,
+                    m.source + ": ночью низ облаков над взрывом видимо светлеет; бюджет не требует полубелого неба от любого заряда");
             assertTrue(FarBlasts.cloudGlow(light[3], m.ballRadius(0), h, night) <= 1, "не ярче белого");
         }
     }

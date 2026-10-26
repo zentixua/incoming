@@ -275,7 +275,7 @@ class CloudModelTest {
         m.ballLight(0.1, both);
         m.ballLight(1.0, late);
         assertTrue(both[3] > late[3], "вспышка ярче");
-        assertEquals(BlackBody.luminance(CloudModel.FUEL_BALL_K), late[3], 1e-9, "после вспышки — шар топлива");
+        assertEquals(BlackBody.luminance(CloudModel.FUEL_BALL_K) * m.radiation.fuel(), late[3], 1e-9, "после вспышки — шар топлива в своём бюджете");
     }
 
     /**
