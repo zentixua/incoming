@@ -19,7 +19,8 @@ English · [Русский](ru/faq.md)
 ## Troubleshooting
 
 **A server will not let you in: different mod versions.** Download the same jar the server has from the
-[Releases](https://github.com/zentixua/incoming/releases/latest) page.
+[Releases](https://github.com/zentixua/incoming/releases) list: choose the exact version used by the server.
+The latest release is for updating the server and all clients together.
 
 **The map is empty far away.** Far terrain needs LOD Server Support on the server and your client, Voxy, or Distant
 Horizons; without them only loaded chunks are shown. Voxy shows only what you have seen: in single-player run
@@ -28,8 +29,16 @@ version? Run `/lss clearcache` once on that server.
 
 **No sound from the mod.** Check the Ambient/Environment slider.
 
-**The game stutters during a nuclear explosion.** Set "Mushroom cloud, dust wall and pall" to LOW and give the game at
-least 8 GB of memory.
+**The game stutters during a strike.** First distinguish a slow frame from a slow server tick:
+
+- If the view stutters while the world keeps moving normally, lower "Mushroom cloud, dust wall and pall" to LOW,
+  reduce shader quality or try without shaders. Client graphics settings affect frame cost.
+- If mobs, redstone and impacts slow down for everyone, the server is behind: 20 TPS needs ticks within 50 ms.
+  Reduce simultaneous orders and avoid many far targets in unexplored terrain, which need chunk generation.
+  The owner can lower [`performance.work_ms_per_tick`](settings.md#world-settings) from its 30 ms default
+  (range 5–45); destruction and ruins then take longer to finish. It does not limit every other mod or chunk generation.
+- Memory depends on the modpack and the scene. Check actual usage and pauses before changing it; there is no measured
+  universal 8 GB requirement for Incoming alone.
 
 **A launcher or SAM does not fire.** RMB on it with an empty hand shows why. A SAM needs open sky, missiles in stock and
 a player nearby; it does not shoot down its own side's projectiles, ICBMs or Grad rockets.
