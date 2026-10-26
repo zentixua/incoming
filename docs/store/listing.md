@@ -106,17 +106,22 @@ Repository settings used by an authorized publishing run:
 - `MODRINTH_TOKEN`: secret with project read/write/create and version read/create scopes.
 - `CURSEFORGE_TOKEN`: secret for CurseForge file uploads.
 - `CURSEFORGE_ID`: repository variable containing the existing project's ID.
+- `CURSEFORGE_API_KEY`: separate read API key used to check existing files before uploading.
 
-Without the relevant token/ID the corresponding store is skipped. The version input selects an existing GitHub
-release without `v`; empty means latest. Changelog comes from `docs/releases/<version>.md`, or the release body if
-that file is absent.
+A store with no configuration is disabled; a partially configured store fails before mutations. The version input
+selects an existing GitHub release without `v`; empty means latest. The jar must match its GitHub SHA256 digest
+and embedded version. Changelog and client/server environment come from that release tag, rather than the current
+workflow revision.
 
-- `draft`: creates or updates a hidden Modrinth project, its text, icon, gallery and jar. It skips an already uploaded jar.
+- `draft`: creates or updates a hidden Modrinth project, its bilingual text, icon, gallery and jar. It skips an already uploaded jar.
 - `submit`: sends the Modrinth draft for review and uploads the jar to CurseForge, where a first file can trigger review.
-- `release`: updates the approved Modrinth page and uploads a later version to both stores.
+- `release`: uploads a later version; the Modrinth page/media change only when `update_page` is explicitly enabled.
 
-Removed gallery entries are removed remotely on the next applicable update. Repeating `submit` or `release` can
-upload a duplicate CurseForge file. A CurseForge project is created in the account, not by this workflow.
+All configured media must exist before a page changes. Removed gallery entries are removed remotely on an
+applicable page update. The stores handle upload results independently. CurseForge checks file hashes and a durable
+GitHub deployment receipt before uploading; an uncertain prior submission stops for owner reconciliation instead
+of uploading again during moderation. Automatic CurseForge upload retries are disabled. A CurseForge project is
+created in the account, not by this workflow.
 
 ## Needs Artem before a public store step
 

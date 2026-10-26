@@ -129,6 +129,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
 
       # запуск GameTest (classpath сервера, ассеты) готовится и здесь: что задача не тронула, setup-gradle из кэша убирает
+      - name: Store draft regression checks
+        run: python3 -m unittest discover -s ../.github/scripts -p 'test_store*.py' -v
+
       - name: Сборка и юнит-тесты
         run: ./gradlew build prepareGameTestServerRun --console=plain
 
