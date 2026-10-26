@@ -26,21 +26,148 @@ curseforge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(curseforge)
 
 
+class BuildFixture:
+    """GitHub responses for a release and the CI run that created it."""
+
+    def __init__(self, jar=b"checked jar"):
+        self.jar = jar
+        self.sha = "a" * 40
+        self.release = {"author": {"login": "github-actions[bot]"}, "target_commitish": self.sha,
+                        "published_at": "2026-10-26T04:35:34Z"}
+        self.asset = {"name": "incoming-1.2.3.jar", "uploader": {"login": "github-actions[bot]"},
+                      "created_at": "2026-10-26T04:35:32Z"}
+        self.runs = [{"id": 42, "head_sha": self.sha, "event": "workflow_dispatch", "head_branch": "main",
+                      "path": ".github/workflows/build.yml", "status": "completed", "conclusion": "success"}]
+        self.jobs = [{"name": name, "head_sha": self.sha, "status": "completed", "conclusion": "success",
+                      "started_at": "2026-10-26T04:35:23Z", "completed_at": "2026-10-26T04:35:36Z"}
+                     for name in ("Итог", "Релиз")]
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as zipped:
+            zipped.writestr(self.asset["name"], jar)
+        self.archive = archive.getvalue()
+        self.artifacts = [{"id": 99, "name": "incoming-jar", "expired": False,
+                           "digest": "sha256:" + hashlib.sha256(self.archive).hexdigest(),
+                           "workflow_run": {"head_sha": self.sha, "id": 42}}]
+
+    @staticmethod
+    def key(path):
+        return "workflow_runs" if "/workflows/" in path else "jobs" if "/jobs?" in path else "artifacts"
+
+    def items(self, path):
+        return {"workflow_runs": self.runs, "jobs": self.jobs, "artifacts": self.artifacts}[self.key(path)]
+
+    def verify(self, sha256=None):
+        with patch.object(prepare_publish, "api_pages", side_effect=lambda path, key: self.items(path)), \
+                patch("subprocess.check_output", return_value=self.archive):
+            return prepare_publish.verify_build(self.release, self.asset, self.sha,
+                                                sha256 or hashlib.sha256(self.jar).hexdigest())
+
+
+class BuildProvenanceTests(unittest.TestCase):
+    def test_checked_jar_from_successful_release_dispatch_is_accepted(self):
+        self.assertEqual(42, BuildFixture().verify())
+
+    def test_manual_release_and_clobbered_asset_are_rejected(self):
+        for owner in ("release", "asset"):
+            with self.subTest(owner=owner):
+                fixture = BuildFixture()
+                (fixture.release["author"] if owner == "release" else fixture.asset["uploader"])["login"] = "maintainer"
+                with self.assertRaisesRegex(ValueError, "GitHub Actions release job"):
+                    fixture.verify()
+
+    def test_swapped_jar_is_rejected_even_with_bot_uploader_and_matching_release_digest(self):
+        with self.assertRaisesRegex(ValueError, "differs from the successful CI build artifact"):
+            BuildFixture().verify(hashlib.sha256(b"unchecked local jar").hexdigest())
+
+    def test_moved_tag_is_rejected_even_if_new_commit_has_a_successful_build(self):
+        fixture = BuildFixture()
+        fixture.release["target_commitish"] = "b" * 40
+        with self.assertRaisesRegex(ValueError, "tag moved"):
+            fixture.verify()
+
+    def test_run_and_both_jobs_must_be_successful_and_for_the_tag_commit(self):
+        for part, field, value in itertools.product(("run", "gate", "release"), ("status", "conclusion", "head_sha"),
+                                                    ("failure", "cancelled", "skipped", "in_progress", "b" * 40)):
+            with self.subTest(part=part, field=field, value=value):
+                fixture = BuildFixture()
+                target = {"run": fixture.runs[0], "gate": fixture.jobs[0], "release": fixture.jobs[1]}[part]
+                target[field] = value
+                with self.assertRaisesRegex(ValueError, "No successful release build"):
+                    fixture.verify()
+
+    def test_other_workflows_events_branches_and_missing_jobs_are_rejected(self):
+        for field, value in (("event", "pull_request"), ("path", ".github/workflows/other.yml"),
+                             ("head_branch", "unreviewed-branch")):
+            with self.subTest(field=field):
+                fixture = BuildFixture()
+                fixture.runs[0][field] = value
+                with self.assertRaisesRegex(ValueError, "No successful release build"):
+                    fixture.verify()
+        for removed in (0, 1):
+            fixture = BuildFixture()
+            fixture.jobs.pop(removed)
+            with self.assertRaisesRegex(ValueError, "No successful release build"):
+                fixture.verify()
+
+    def test_bot_release_or_asset_created_outside_the_release_job_is_rejected(self):
+        for part, field in (("release", "published_at"), ("asset", "created_at")):
+            fixture = BuildFixture()
+            getattr(fixture, part)[field] = "2026-10-26T05:00:00Z"
+            with self.assertRaisesRegex(ValueError, "No successful release build"):
+                fixture.verify()
+
+    def test_missing_expired_wrong_run_and_corrupt_artifacts_fail_closed(self):
+        for case in ("missing", "duplicate", "expired", "sha", "run", "archive"):
+            with self.subTest(case=case):
+                fixture = BuildFixture()
+                if case == "missing":
+                    fixture.artifacts.clear()
+                elif case == "duplicate":
+                    fixture.artifacts *= 2
+                elif case == "expired":
+                    fixture.artifacts[0]["expired"] = True
+                elif case in ("sha", "run"):
+                    fixture.artifacts[0]["workflow_run"]["head_sha" if case == "sha" else "id"] = "other"
+                else:
+                    fixture.archive = b"corrupt archive"
+                with self.assertRaises(ValueError):
+                    fixture.verify()
+
+    def test_paginated_github_responses_are_not_truncated(self):
+        with patch.object(prepare_publish, "gh", return_value='[{"jobs":[1]},{"jobs":[2]}]') as api:
+            self.assertEqual([1, 2], prepare_publish.api_pages("actions/runs/42/jobs?per_page=100", "jobs"))
+            self.assertEqual(("api", "--paginate", "--slurp"), api.call_args.args[:3])
+
+
 class ReleaseTests(unittest.TestCase):
     def test_partial_store_configuration_fails_before_any_upload(self):
         for token, project, key in itertools.product(("", "set"), repeat=3):
             env = {"MODRINTH_TOKEN": "test", "CURSEFORGE_TOKEN": token,
                    "CURSEFORGE_ID": "123" if project else "", "CURSEFORGE_API_KEY": key}
             with self.subTest(token=bool(token), project=bool(project), key=bool(key)):
-                if bool(token) == bool(project) == bool(key):
-                    self.assertEqual((True, bool(token)), release_checks.store_config("release", env))
-                else:
-                    with self.assertRaises(ValueError):
-                        release_checks.store_config("release", env)
+                for step in ("draft", "submit", "release"):
+                    if project and not (token and key):
+                        with self.assertRaises(ValueError):
+                            release_checks.store_config(step, env)
+                    else:
+                        self.assertEqual((True, bool(project)), release_checks.store_config(step, env))
         with self.assertRaises(ValueError):
             release_checks.store_config("release", {})
         with self.assertRaises(ValueError):
             release_checks.store_config("draft", {"CURSEFORGE_TOKEN": "x", "CURSEFORGE_ID": "1", "CURSEFORGE_API_KEY": "x"})
+
+    def test_unapproved_curseforge_does_not_block_modrinth_and_warns_in_summary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            summary = Path(temp) / "summary"
+            env = os.environ | {"MODRINTH_TOKEN": "test", "CURSEFORGE_TOKEN": "test",
+                                "CURSEFORGE_ID": "", "CURSEFORGE_API_KEY": "", "GITHUB_STEP_SUMMARY": str(summary)}
+            for step in ("draft", "submit", "release"):
+                result = subprocess.run(["python3", str(ROOT / "tools/release_checks.py"), "stores", step],
+                                        env=env, capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("Modrinth: configured", result.stdout)
+                self.assertIn("::warning::CurseForge is disabled", result.stdout)
+            self.assertEqual(3, summary.read_text().count("**Warning:** CurseForge is disabled"))
 
     def test_semver_rejects_empty_or_leading_zero_identifiers(self):
         for version in ("3.8.1", "1.0.0-rc.1", "0.0.1+build.001"):
@@ -83,12 +210,18 @@ class ReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(contents, "w") as jar:
                 jar.writestr("META-INF/neoforge.mods.toml", '[[mods]]\nmodId="incoming"\nversion="1.2.3"\n')
             digest = "sha256:" + hashlib.sha256(contents.getvalue()).hexdigest()
+            ci = BuildFixture(contents.getvalue())
             calls = []
 
             def output(args, **kwargs):
                 calls.append(args)
+                if args[0] == "gh" and "/actions/" in args[-1]:
+                    if args[-1].endswith("/zip"):
+                        return ci.archive
+                    return json.dumps([{ci.key(args[-1]): ci.items(args[-1])}])
                 if args[:2] == ["gh", "api"]:
-                    return json.dumps({"draft": False, "assets": [{"name": "incoming-1.2.3.jar", "digest": digest}]})
+                    release = ci.release | {"draft": False, "assets": [ci.asset | {"digest": digest}]}
+                    return json.dumps(release)
                 if args[:2] == ["git", "rev-parse"]:
                     return "a" * 40
                 if args[-1].endswith("gradle.properties"):
@@ -109,6 +242,7 @@ class ReleaseTests(unittest.TestCase):
                 prepare_publish.prepare("1.2.3", destination)
                 self.assertEqual(b"Notes from tag\n", (destination / "changelog.md").read_bytes())
                 self.assertIn(["git", "show", "a" * 40 + ":docs/releases/1.2.3.md"], calls)
+                self.assertIn("successful build run `42`", (Path(temp) / "summary").read_text())
                 digest = "sha256:" + "0" * 64
                 with self.assertRaisesRegex(ValueError, "SHA256"):
                     prepare_publish.prepare("1.2.3", destination)
