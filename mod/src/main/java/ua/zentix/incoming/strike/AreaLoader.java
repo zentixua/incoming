@@ -163,7 +163,35 @@ public final class AreaLoader {
             releasing.put(area, release);
         }
         removeTickets(level, area, taken);
+        if (!hasOtherThan(ArrivalTickets.TYPE)) releaseAll(level, ArrivalTickets.TYPE);
         apply(level);
+    }
+
+    /** Active Incoming loads, excluding the tickets that only protect players from those loads. */
+    boolean hasOtherThan(TicketType<?> type) {
+        for (Area area : requests.keySet()) if (area.type() != type) return true;
+        return false;
+    }
+
+    /** End dependent tickets immediately, including any already waiting in the release queue. */
+    private void releaseAll(ServerLevel level, TicketType<?> type) {
+        var held = requests.entrySet().iterator();
+        while (held.hasNext()) {
+            var entry = held.next();
+            Area area = entry.getKey();
+            if (area.type() != type) continue;
+            removeTickets(level, area, entry.getValue());
+            expiring.remove(area);
+            held.remove();
+        }
+        var queued = releasing.entrySet().iterator();
+        while (queued.hasNext()) {
+            var entry = queued.next();
+            Area area = entry.getKey();
+            if (area.type() != type) continue;
+            distances(level).removeTicket(RELEASE, area.centre(), area.level(), entry.getValue());
+            queued.remove();
+        }
     }
 
     /**

@@ -73,12 +73,17 @@ paths:
   (`ChunkTaskPriorityQueue`); levels > 33 do not initiate generation. Tested on rig, unsuitable: cap loading-chunk
   count, wait whole area before ticket, grow rings with level-33 tickets (areas miss projectile deadlines); lower
   priority too (level-32 nuclear site not ready in 90 s ICBM flight while salvos hold level-29 areas). Sync loads share
-  queue (`UNKNOWN` 33): mid-salvo joiner would wait 0.55–0.8 s for place on first tick; `ArrivalTickets` uses load level
+  queue (`UNKNOWN` 33): mid-salvo joiner would wait 0.55–0.8 s for place on first tick. `ArrivalTickets` only runs while
+  the destination dimension has active non-arrival `AreaLoader` requests. Arrival tickets and queued releases do not
+  count as competing work. Releasing or expiring the last own area removes both live and queued arrival tickets;
+  idle player events allocate no tracking (`ArrivalScopeGameTests`). Check the respawn destination, not the dimension
+  where the player died. While needed, `ArrivalTickets` uses load level
   26, below any mod-area center (Lancet center 27, disk load waits radius-1 neighbors, level 28 would wait entire Lancet
   salvo). Non-ticking, removed once any players' `PLAYER` tickets hold radius-5 square (`DistanceManager.tickets`, AT,
   read-only), ≤ 200 ticks; `arrivalLoadsBefore{Salvo,Loiter}Areas`, `arrivalReleasedWhenPlayersHoldPlace`. Respawn
   (`PlayerList.respawn`) reads bed/anchor synchronously before own events: same ticket on death (`LivingDeathEvent`,
-  `LOWEST`) at respawn place, 100-tick lease renewed by dead-player tick, removed on respawn/logout/live tick/expiry
+  `LOWEST`) at respawn place, 100-tick lease renewed by dead-player tick (also acquired if work starts after death),
+  removed on respawn/logout/live tick/expiry
   (player no longer ticks); slot transfers in `PlayerEvent.Clone` (`respawnTicketWaitsForRespawn`,
   `respawnTicketLeaseExpires`, `respawnEventsMoveTicket`, handlers with NeoForge `FakePlayer`). Sable-craft bed is plot-
   grid point (Sable respawns at own world point): no load tickets there (`SubLevels.inPlotGrid`,

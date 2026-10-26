@@ -163,6 +163,7 @@ public final class ArrivalGameTests {
      */
     @GameTest(template = "range", batch = "arrival_jump")
     public static void jumpHoldsArrivalTicket(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         UUID who = UUID.randomUUID();
@@ -215,6 +216,7 @@ public final class ArrivalGameTests {
     }
 
     private static void teleportRing(GameTestHelper h, int offset, boolean arrival) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos base = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         ChunkPos p = new ChunkPos(base.x + offset, base.z + offset);
@@ -259,6 +261,7 @@ public final class ArrivalGameTests {
     /** Тикет входа снимается сам через {@link ArrivalTickets#LIFESPAN} тиков, новый вход заменяет прежний. */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LIFESPAN + 100, batch = "arrival_lifespan")
     public static void arrivalTicketExpires(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         UUID who = UUID.randomUUID();
@@ -290,6 +293,7 @@ public final class ArrivalGameTests {
      */
     @GameTest(template = "range", batch = "arrival_players")
     public static void arrivalReleasedWhenPlayersHoldPlace(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         UUID who = UUID.randomUUID();
@@ -335,6 +339,7 @@ public final class ArrivalGameTests {
      */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LIFESPAN + 100, batch = "arrival_respawn")
     public static void respawnTicketWaitsForRespawn(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO));
         UUID who = UUID.randomUUID();
@@ -376,6 +381,7 @@ public final class ArrivalGameTests {
     /** Тикет места возрождения, который никто не продлевает (игрок больше не тикает), снимается сам через аренду. */
     @GameTest(template = "range", timeoutTicks = ArrivalTickets.LEASE + 100, batch = "arrival_respawn")
     public static void respawnTicketLeaseExpires(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         ChunkPos c = new ChunkPos(h.absolutePos(BlockPos.ZERO).offset(16 * 30, 0, 0));
         UUID who = UUID.randomUUID();
@@ -404,6 +410,7 @@ public final class ArrivalGameTests {
      */
     @GameTest(template = "range", batch = "arrival_respawn_events")
     public static void respawnEventsMoveTicket(GameTestHelper h) {
+        holdWork(h);
         ServerLevel level = h.getLevel();
         BlockPos base = h.absolutePos(BlockPos.ZERO);
         BlockPos bed = base.offset(16 * 20, 0, 0);
@@ -461,6 +468,7 @@ public final class ArrivalGameTests {
             h.succeed();
             return;
         }
+        holdWork(h);
         ServerLevel level = h.getLevel();
         MinecraftServer server = level.getServer();
         BlockPos floor = RANGE_CENTER.above();
@@ -485,6 +493,15 @@ public final class ArrivalGameTests {
                             "тикет места возрождения в сетке плотов: " + held(dead) + " (точка " + dead.getRespawnPosition() + ")");
                 })
                 .thenSucceed();
+    }
+
+    /** Keep a flight area active while testing arrival priority and player handover. */
+    private static void holdWork(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos centre = new ChunkPos(h.absolutePos(RANGE_CENTER));
+        UUID flight = UUID.randomUUID();
+        StrikeGameTests.afterTest(h, () -> FlightTickets.hold(level, centre, 0, flight, false));
+        FlightTickets.hold(level, centre, 0, flight, true);
     }
 
     /** Игрок (без списка игроков и пакетов) с точкой возрождения {@code bed} (null — без неё) умер: смерть дошла до мода. */
