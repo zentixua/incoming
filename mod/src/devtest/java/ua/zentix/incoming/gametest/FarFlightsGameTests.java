@@ -35,7 +35,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-/** Отбор дальних путей без запуска полётов: настоящие Hearing, seenBy и формирование пакетов. */
+/** Far-flight selection without ticking flights: real Hearing, seenBy and packet construction. */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class FarFlightsGameTests {
@@ -56,7 +56,7 @@ public final class FarFlightsGameTests {
         @Override
         public boolean isVirtual() { return virtual; }
 
-        // В FarFlights.sample только Hearing спрашивает паспорт (полёт не тикает, ускоритель не горит).
+        // Only Hearing reads the airframe in FarFlights.sample here: flights do not tick and boosters are off.
         @Override
         public WeaponSpec.Airframe airframe() {
             hearing++;
@@ -93,7 +93,7 @@ public final class FarFlightsGameTests {
         Missile tracked = new Missile(level, eye.add(21, 0, 0));
         List<StrikeProjectile> own = List.of(audible, visible, tracked);
         var weather = Propagation.Weather.of(level);
-        h.assertTrue(Hearing.audible(audible, eye, weather) && !Hearing.audible(visible, eye, weather), "не те условия слышимости");
+        h.assertTrue(Hearing.audible(audible, eye, weather) && !Hearing.audible(visible, eye, weather), "unexpected hearing conditions");
         var map = level.getChunkSource().chunkMap;
         var entry = map.new TrackedEntity(tracked, 64, 1, true);
         entry.seenBy.add(player.connection);
@@ -101,17 +101,17 @@ public final class FarFlightsGameTests {
         h.onEachTick(() -> {
             watcher.got.clear();
             tracked.hearing = 0;
-            // Только на время настоящего обработчика отправки: объекты не тикают и не берут тикетов полёта.
+            // Register only during the real send handler: these objects never tick or acquire flight tickets.
             level.players().add(player);
             VirtualFlights.get(level).flights().addAll(own);
             map.entityMap.put(tracked.getId(), entry);
             try {
                 FarFlights.onServerTick(new ServerTickEvent.Post(() -> true, level.getServer()));
                 int tick = level.getServer().getTickCount();
-                h.assertTrue(watcher.got.stream().anyMatch(f -> f.id().equals(audible.getUUID())) == (tick % 2 == 0), "период слышимых");
-                h.assertTrue(watcher.got.stream().anyMatch(f -> f.id().equals(visible.getUUID())) == (tick % 4 == 0), "период только видимых");
+                h.assertTrue(watcher.got.stream().anyMatch(f -> f.id().equals(audible.getUUID())) == (tick % 2 == 0), "audible packet cadence");
+                h.assertTrue(watcher.got.stream().anyMatch(f -> f.id().equals(visible.getUUID())) == (tick % 4 == 0), "visible-only packet cadence");
                 h.assertTrue(watcher.got.stream().noneMatch(f -> f.id().equals(tracked.getUUID())) && tracked.hearing == 0,
-                        "отслеживаемый попал в Hearing или пакет");
+                        "tracked flight reached Hearing or the packet");
             } finally {
                 level.players().remove(player);
                 VirtualFlights.get(level).flights().removeAll(own);
@@ -131,7 +131,7 @@ public final class FarFlightsGameTests {
         List<Missile> missiles = new ArrayList<>();
         try {
             for (int i = 0; i < 120; i++) {
-                // Перемешанные расстояния, в том числе равные; дальние видны, но не слышны.
+                // Mixed distances, including ties; distant flights are visible but inaudible.
                 int distance = (i * 37 % 120) / 2;
                 Missile p = new Missile(level, eye.add(i % 4 == 0 ? 6000 + distance : 20 + distance, 0, 0));
                 p.virtual = i % 11 == 0;
@@ -144,7 +144,7 @@ public final class FarFlightsGameTests {
                 }
             }
             Propagation.Weather weather = Propagation.Weather.of(level);
-            h.assertTrue(S2C.FarFlights.PERIOD == 2 && S2C.FarFlights.FAR_PERIOD == 4, "периоды пакетов изменились");
+            h.assertTrue(S2C.FarFlights.PERIOD == 2 && S2C.FarFlights.FAR_PERIOD == 4, "packet periods changed");
             for (boolean noPlayer : new boolean[]{false, true}) {
                 for (boolean silent : new boolean[]{false, true}) {
                     List<Missile> expected = new ArrayList<>();
@@ -164,18 +164,18 @@ public final class FarFlightsGameTests {
                     missiles.forEach(p -> p.hearing = 0);
                     var got = FarFlights.sample(level, flights, eye, noPlayer ? null : player, silent);
                     h.assertTrue(got.stream().map(S2C.FarFlight::id).toList().equals(expected.stream().map(Missile::getUUID).toList()),
-                            "UUID/порядок/предел 64 изменились");
+                            "UUIDs, order or the nearest-64 limit changed");
                     int calls = missiles.stream().mapToInt(p -> p.hearing).sum();
-                    h.assertTrue(calls == candidates, "Hearing вызван " + calls + " раз вместо " + candidates);
+                    h.assertTrue(calls == candidates, "Hearing was called " + calls + " times instead of " + candidates);
                     for (Missile p : missiles) {
                         if (!noPlayer && !p.isVirtual() && map.entityMap.containsKey(p.getId()))
-                            h.assertTrue(p.hearing == 0, "Hearing считал уже отслеживаемую сущность");
+                            h.assertTrue(p.hearing == 0, "Hearing evaluated an already tracked entity");
                     }
                     for (var f : got) {
                         Missile p = missiles.stream().filter(m -> m.getUUID().equals(f.id())).findFirst().orElseThrow();
-                        h.assertTrue(f.audible() == Hearing.audible(p, eye, weather), "отметка слышимости изменилась");
+                        h.assertTrue(f.audible() == Hearing.audible(p, eye, weather), "audible flag changed");
                     }
-                    if (silent && noPlayer) h.assertTrue(got.size() == 64, "проверка не достигла предела пакета");
+                    if (silent && noPlayer) h.assertTrue(got.size() == 64, "test did not reach the packet limit");
                 }
             }
             h.succeed();

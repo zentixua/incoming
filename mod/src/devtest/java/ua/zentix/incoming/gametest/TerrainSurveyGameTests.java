@@ -192,7 +192,7 @@ public final class TerrainSurveyGameTests {
                 double expected = Terrain.estimate(nether, Heightmap.Types.MOTION_BLOCKING,
                         far.getMiddleBlockX(), far.getMiddleBlockZ(), allowed).y();
                 h.assertTrue(Terrain.relief(nether, allowed).at(far.getMiddleBlockX(), far.getMiddleBlockZ()) == expected,
-                        "пакетный датчик изменил потолок Незера");
+                        "batched sensor changed Nether ceiling handling");
             }
             h.assertTrue(Double.isInfinite(missile.sightline(to)), "потолок за разрывом закрыл прямую");
             // A real block on the near ready segment must still block the in-world sensor.
@@ -209,7 +209,7 @@ public final class TerrainSurveyGameTests {
         });
     }
 
-    /** Новый замер видит изменение блока немедленно, даже в том же тике; старые высоты не переживают полосу. */
+    /** A fresh measurement sees block changes even within the same tick; cached heights never outlive the band. */
     @GameTest(template = "range", timeoutTicks = 100, batch = "survey_reuse", skyAccess = true)
     public static void reliefBandSeesChangedChunk(GameTestHelper h) {
         BlockPos p = h.absolutePos(CENTER).above(50);
@@ -218,9 +218,9 @@ public final class TerrainSurveyGameTests {
         var before = Terrain.relief(level, Terrain.Allowed.RELIEF);
         double old = before.at(p.getX(), p.getZ());
         level.setBlockAndUpdate(p, Blocks.STONE.defaultBlockState());
-        h.assertTrue(p.getY() + 1 > old, "столбик не выше старой карты");
+        h.assertTrue(p.getY() + 1 > old, "pillar is not above the old heightmap");
         h.assertTrue(Terrain.relief(level, Terrain.Allowed.RELIEF).at(p.getX(), p.getZ()) == p.getY() + 1,
-                "новое измерение сохранило прежнюю высоту");
+                "new measurement retained an old height");
         assertReliefBand(h, p.getX(), p.getZ());
         level.setBlockAndUpdate(p, Blocks.AIR.defaultBlockState());
         assertReliefBand(h, p.getX(), p.getZ());
@@ -234,7 +234,7 @@ public final class TerrainSurveyGameTests {
             double old = Corridor.highest(track, 1.5, climb,
                     (cx, cz) -> Terrain.estimate(h.getLevel(), Heightmap.Types.MOTION_BLOCKING, cx, cz, allowed).y());
             double batched = Corridor.highest(track, 1.5, climb, Terrain.relief(h.getLevel(), allowed));
-            h.assertTrue(old == batched, "максимум полосы изменился: " + old + " → " + batched);
+            h.assertTrue(old == batched, "corridor maximum changed: " + old + " → " + batched);
         }
     }
 

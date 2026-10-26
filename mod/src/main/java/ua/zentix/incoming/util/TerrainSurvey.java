@@ -194,25 +194,22 @@ public final class TerrainSurvey {
      */
     @Nullable
     public Terrain.Surface at(ServerLevel level, Heightmap.Types type, int x, int z) {
-        View view = view(level, type, x >> 4, z >> 4);
-        return view == null ? null : new Terrain.Surface(view.height.applyAsInt(x, z), view.source);
+        Terrain.View view = view(level, type, x >> 4, z >> 4);
+        return view == null ? null : view.at(x, z);
     }
 
-    /** Вид одного чанка для синхронного измерения; не хранить между измерениями или тиками. */
-    record View(java.util.function.IntBinaryOperator height, Terrain.Source source) {}
-
-    /** Те же источники и заказ, что у {@link #at}, без Surface и поиска чанка на каждую колонку полосы. */
+    /** The same sources and requests as {@link #at}, without resolving the chunk or creating Surface per column. */
     @Nullable
-    View view(ServerLevel level, Heightmap.Types type, int cx, int cz) {
+    Terrain.View view(ServerLevel level, Heightmap.Types type, int cx, int cz) {
         long chunk = ChunkPos.asLong(cx, cz);
         if (level.dimensionType().hasCeiling()) return null;
         asked.add(type);
         LevelChunk memory = Terrain.inMemory(level, chunk);
-        if (memory != null) return new View((x, z) -> memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
+        if (memory != null) return new Terrain.View((x, z) -> memory.getHeight(type, x & 15, z & 15) + 1, Terrain.Source.DISK);
         Heights h = cached(type, chunk, level.getGameTime());
         if (h != null) {
             h.used = level.getGameTime();
-            return h.y == null ? null : new View((x, z) -> h.y[(x & 15) + (z & 15) * 16], h.source);
+            return h.y == null ? null : new Terrain.View((x, z) -> h.y[(x & 15) + (z & 15) * 16], h.source);
         }
         request(level, type, chunk, true);
         return null;

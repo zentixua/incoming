@@ -1,6 +1,8 @@
 package ua.zentix.incoming.guidance;
 
 import org.junit.jupiter.api.Test;
+import ua.zentix.incoming.util.Relief;
+import java.util.function.IntBinaryOperator;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -78,18 +80,18 @@ class CorridorTest {
         assertEquals(90, h);
     }
 
-    /** Все геометрические посещения остаются: на сгибе/повторном отрезке набор до одной колонки разный. */
+    /** Preserve every geometric visit: a bend or revisited segment gives the same column a different climb gain. */
     @Test
     void surveyReusesOnlyHeightsAndChunkViews() {
         double[][] tracks = {
-                {0.3, 0, 0.3, 256},                         // тонкий столбик
-                {-32.5, -32.5, 64.5, 64.5},                 // диагональ и отрицательные чанки
-                {0.5, 0, 0.5, 50, 50.5, 50},              // поворот
-                {0.5, 0, 0.5, 50, 50.5, 50, 0.5, 0},      // несколько отрезков и повторная колонка
-                {0.5, 0, 0.5, 50, 0.5, 0},                // возврат по той же полосе
-                {-16, -16}, {0, 0, 0, 0, 16, 16}          // точка и нулевой отрезок
+                {0.3, 0, 0.3, 256},                         // thin pillar
+                {-32.5, -32.5, 64.5, 64.5},                 // diagonal and negative chunks
+                {0.5, 0, 0.5, 50, 50.5, 50},              // turn
+                {0.5, 0, 0.5, 50, 50.5, 50, 0.5, 0},      // multiple segments and a revisited column
+                {0.5, 0, 0.5, 50, 0.5, 0},                // return along the same band
+                {-16, -16}, {0, 0, 0, 0, 16, 16}          // point and zero-length segment
         };
-        Corridor.Relief heights = (x, z) -> x == 1 && z == 100 ? 300 : 64 + Math.floorMod(x * 31 + z * 7, 90);
+        IntBinaryOperator heights = (x, z) -> x == 1 && z == 100 ? 300 : 64 + Math.floorMod(x * 31 + z * 7, 90);
         for (double[] track : tracks) {
             for (Corridor.Climb climb : new Corridor.Climb[]{Corridor.Climb.NONE, new Corridor.Climb(10, 0.3)}) {
                 Set<Long> columns = new HashSet<>(), chunks = new HashSet<>();
@@ -98,15 +100,15 @@ class CorridorTest {
                     visits[0]++;
                     columns.add(key(x, z));
                     chunks.add(key(x >> 4, z >> 4));
-                    return heights.at(x, z);
+                    return heights.applyAsInt(x, z);
                 });
-                Corridor.Survey survey = new Corridor.Survey((cx, cz) -> {
+                Relief.Survey survey = new Relief.Survey((cx, cz) -> {
                     views[0]++;
                     return (x, z) -> {
                         assertEquals(cx, x >> 4);
                         assertEquals(cz, z >> 4);
                         reads[0]++;
-                        return heights.at(x, z);
+                        return heights.applyAsInt(x, z);
                     };
                 });
                 int[] sampledVisits = {0};
@@ -115,10 +117,10 @@ class CorridorTest {
                     return survey.at(x, z);
                 });
                 assertEquals(old, batched, 0, java.util.Arrays.toString(track));
-                assertEquals(visits[0], sampledVisits[0], "геометрические отсчёты");
-                assertEquals(chunks.size(), views[0], "один вид на уникальный чанк");
-                assertEquals(columns.size(), reads[0], "одна высота на уникальную колонку");
-                assertTrue(reads[0] < visits[0], "у полосы должны быть повторные колонки");
+                assertEquals(visits[0], sampledVisits[0], "geometric visits");
+                assertEquals(chunks.size(), views[0], "one view per unique chunk");
+                assertEquals(columns.size(), reads[0], "one height read per unique column");
+                assertTrue(reads[0] < visits[0], "the band must revisit columns");
             }
         }
     }

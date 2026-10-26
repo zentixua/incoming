@@ -1,8 +1,7 @@
 package ua.zentix.incoming.guidance;
 
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-
 import ua.zentix.incoming.util.GridWalk;
+import ua.zentix.incoming.util.Relief;
 
 /**
  * Полоса над путём по земле: какой высоты рельеф надо перелететь, во всех колонках блоков, которые задевает полоса
@@ -16,59 +15,6 @@ public final class Corridor {
     static final double LANE = 0.9;
 
     private Corridor() {}
-
-    /** Высота рельефа (первый воздух над препятствиями) в колонке блоков. */
-    @FunctionalInterface
-    public interface Relief {
-        double at(int x, int z);
-    }
-
-    /** Вид высот одного чанка; координаты колонки у возвращённого вида — мировые. */
-    @FunctionalInterface
-    public interface Chunks {
-        Relief at(int chunkX, int chunkZ);
-    }
-
-    /**
-     * Только одно синхронное измерение полосы: вид чанка берётся раз, высота колонки — раз. Между измерениями
-     * объект не сохраняется: блоки, готовность чанков и ответы съёмки могли измениться. Кэшируется только высота,
-     * не «высота минус набор»: повторный проход той же колонки по другому отрезку имеет свой путь до неё.
-     */
-    public static final class Survey implements Relief {
-        private final Chunks source;
-        private final Long2ObjectOpenHashMap<Columns> chunks = new Long2ObjectOpenHashMap<>();
-
-        public Survey(Chunks source) {
-            this.source = source;
-        }
-
-        @Override
-        public double at(int x, int z) {
-            int cx = x >> 4, cz = z >> 4;
-            long key = (cx & 0xffffffffL) | ((long) cz << 32);
-            Columns columns = chunks.get(key);
-            if (columns == null) {
-                columns = new Columns(source.at(cx, cz));
-                chunks.put(key, columns);
-            }
-            int i = (x & 15) + (z & 15) * 16;
-            if (!columns.known[i]) {
-                columns.y[i] = columns.source.at(x, z);
-                columns.known[i] = true;
-            }
-            return columns.y[i];
-        }
-
-        private static final class Columns {
-            final Relief source;
-            final double[] y = new double[256];
-            final boolean[] known = new boolean[256];
-
-            Columns(Relief source) {
-                this.source = source;
-            }
-        }
-    }
 
     /**
      * Набор высоты снаряда до колонки впереди: первые {@code reaction} блоков пути — без набора (снаряд только выходит

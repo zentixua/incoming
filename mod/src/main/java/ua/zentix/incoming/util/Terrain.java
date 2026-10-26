@@ -12,11 +12,11 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.guidance.Corridor;
 
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.IntBinaryOperator;
 
 /**
  * Высота рельефа без ожидания: на сервере {@code Level.getHeight} для чанка, который загружен, но ещё не готов
@@ -259,96 +259,108 @@ public final class Terrain {
      * Не высота цели: цель бывает в воздухе (игрок в полёте, аппарат), а поверхность под ней — нет.
      */
     public static Surface estimate(Level level, Heightmap.Types type, int x, int z, Allowed allowed) {
-        return choose(new LevelColumn(level, type, x, z), allowed);
+        return choose(new LevelColumn(level, type, x >> 4, z >> 4), allowed).at(x, z);
     }
 
     /**
-     * Рельеф MOTION_BLOCKING на одно синхронное измерение полосы в потоке сервера. Разрешены только наборы датчика:
-     * готовый чанк (потолок — только в мире), затем съёмка, иначе низ мира. Ни вид чанка, ни высоты не переживают
-     * измерение; фоновые ответы по-прежнему видны только после TerrainSurvey.publish в конце тика.
+     * MOTION_BLOCKING heights for one synchronous sensor measurement. Both individual estimates and chunk views
+     * use {@link #choose}. Views and heights must not outlive the measurement; background answers still become
+     * visible only when TerrainSurvey.publish runs at the end of the world tick.
      */
-    public static Corridor.Relief relief(Level level, Allowed allowed) {
+    public static Relief relief(Level level, Allowed allowed) {
         if (allowed != Allowed.RELIEF && allowed != Allowed.VIRTUAL_RELIEF)
             throw new IllegalArgumentException("Relief survey requires a relief source set");
-        Heightmap.Types type = Heightmap.Types.MOTION_BLOCKING;
-        return new Corridor.Survey((cx, cz) -> {
-            if (level instanceof ServerLevel server) {
-                LevelChunk chunk = server.getChunkSource().getChunkNow(cx, cz);
-                Source source = level.dimensionType().hasCeiling() ? Source.CEILING : Source.CHUNK;
-                if (chunk != null && allowed.permits(source))
-                    return (x, z) -> chunk.getHeight(type, x & 15, z & 15) + 1;
-                TerrainSurvey.View view = level.dimensionType().hasCeiling() ? null : TerrainSurvey.get(server).view(server, type, cx, cz);
-                if (view != null && allowed.permits(view.source())) return (x, z) -> view.height().applyAsInt(x, z);
-                int bottom = level.getMinBuildHeight();
-                return (x, z) -> bottom;
-            }
-            return (x, z) -> estimate(level, type, x, z, allowed).y();
-        });
+        return new Relief.Survey((cx, cz) ->
+                choose(new LevelColumn(level, Heightmap.Types.MOTION_BLOCKING, cx, cz), allowed).height());
     }
 
-    /** Что мир знает о колонке — по источникам {@link Source}; {@link #generatorBase} дорог и зовётся, только если нужен. */
+    /** A selected source and its heights, resolved lazily at world column coordinates. */
+    record View(IntBinaryOperator height, Source source) {
+        Surface at(int x, int z) {
+            return new Surface(height.applyAsInt(x, z), source);
+        }
+
+        static View constant(int height, Source source) {
+            return new View((x, z) -> height, source);
+        }
+    }
+
+    /** Available sources in one chunk; the generator is expensive and must only run when selected. */
     interface Column {
-        /** Чанк колонки готов. */
         boolean ready();
 
-        /** Первый воздух над картой высот готового чанка. */
-        int chunkHeight();
+        /** First air above the ready chunk's heightmap, at world coordinates. */
+        int chunkHeight(int x, int z);
 
-        /** В мире есть потолок (карта высот — его верх). */
         boolean ceiling();
 
-        /** Есть генератор мира (сервер). */
         boolean hasGenerator();
 
         int sea();
 
-        int generatorBase();
+        int generatorBase(int x, int z);
 
-        /** Блок {@code y} вне высот мира. */
         boolean outside(int y);
 
         int bottom();
 
-        /**
-         * Ответ съёмки рельефа ({@link TerrainSurvey}: {@link Source#DISK} или {@link Source#GENERATOR}) или null —
-         * его ещё нет (съёмка заказана) или съёмки нет (клиент, мир с потолком).
-         */
+        /** Survey view, or null if pending, unavailable on the client, or excluded by a ceiling. */
         @Nullable
-        default Surface surveyed() {
+        default View surveyed() {
             return null;
         }
     }
 
-    /** Выбор источника (без Minecraft — для {@code TerrainTest}). */
-    static Surface choose(Column c, Allowed allowed) {
+    /** The single source-selection order for individual estimates and whole-chunk relief views. */
+    static View choose(Column c, Allowed allowed) {
         if (c.ready()) {
             Source chunk = c.ceiling() ? Source.CEILING : Source.CHUNK;
-            if (allowed.permits(chunk)) return new Surface(c.chunkHeight(), chunk);
+            if (allowed.permits(chunk)) return new View(c::chunkHeight, chunk);
         }
         if (allowed.survey()) {
-            Surface s = c.surveyed();
+            View s = c.surveyed();
             if (s != null && allowed.permits(s.source())) return s;
         }
         if (allowed.permits(Source.CLIENT_MAP)) {
             int top = allowed.map().orElseThrow();
-            if (!c.outside(top - 1)) return new Surface(top, Source.CLIENT_MAP);
+            if (!c.outside(top - 1)) return View.constant(top, Source.CLIENT_MAP);
         }
         if (c.hasGenerator()) {
-            if (allowed.permits(Source.GENERATOR) && !allowed.survey()) return new Surface(Math.max(c.sea(), c.generatorBase()), Source.GENERATOR);
-            if (allowed.permits(Source.SEA)) return new Surface(c.sea(), Source.SEA);
+            if (allowed.permits(Source.GENERATOR) && !allowed.survey())
+                return new View((x, z) -> Math.max(c.sea(), c.generatorBase(x, z)), Source.GENERATOR);
+            if (allowed.permits(Source.SEA)) return View.constant(c.sea(), Source.SEA);
         }
-        return new Surface(c.bottom(), Source.UNKNOWN);
+        return View.constant(c.bottom(), Source.UNKNOWN);
     }
 
-    private record LevelColumn(Level level, Heightmap.Types type, int x, int z) implements Column {
-        @Override
-        public boolean ready() {
-            return Terrain.ready(level, x >> 4, z >> 4);
+    private static final class LevelColumn implements Column {
+        private final Level level;
+        private final Heightmap.Types type;
+        private final int cx, cz;
+        @Nullable
+        private LevelChunk readyChunk;
+
+        LevelColumn(Level level, Heightmap.Types type, int cx, int cz) {
+            this.level = level;
+            this.type = type;
+            this.cx = cx;
+            this.cz = cz;
         }
 
         @Override
-        public int chunkHeight() {
-            return height(level, type, x, z);
+        public boolean ready() {
+            if (level instanceof ServerLevel server) {
+                readyChunk = server.getChunkSource().getChunkNow(cx, cz);
+                return readyChunk != null;
+            }
+            return level.hasChunk(cx, cz);
+        }
+
+        @Override
+        public int chunkHeight(int x, int z) {
+            if (level instanceof ServerLevel)
+                return readyChunk == null ? level.getMinBuildHeight() : readyChunk.getHeight(type, x & 15, z & 15) + 1;
+            return level.getHeight(type, x, z);
         }
 
         @Override
@@ -367,16 +379,16 @@ public final class Terrain {
         }
 
         @Override
-        public int generatorBase() {
+        public int generatorBase(int x, int z) {
             ServerLevel server = (ServerLevel) level;
             return generator().getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, server, server.getChunkSource().randomState());
         }
 
         @Override
         @Nullable
-        public Surface surveyed() {
+        public View surveyed() {
             if (!(level instanceof ServerLevel server) || ceiling()) return null;
-            return TerrainSurvey.get(server).at(server, type, x, z);
+            return TerrainSurvey.get(server).view(server, type, cx, cz);
         }
 
         @Override

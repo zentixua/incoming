@@ -33,7 +33,7 @@ import ua.zentix.incoming.guidance.AltitudeHold;
 import ua.zentix.incoming.guidance.Autopilot;
 import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.Craft;
-import ua.zentix.incoming.guidance.Corridor;
+import ua.zentix.incoming.util.Relief;
 import ua.zentix.incoming.guidance.FlightController;
 import ua.zentix.incoming.guidance.Mission;
 import ua.zentix.incoming.guidance.Route;
@@ -182,7 +182,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
 
         @Override
-        public Corridor.Relief reliefSurvey() {
+        public Relief reliefSurvey() {
             return Terrain.relief(level(), virtual ? Terrain.Allowed.VIRTUAL_RELIEF : Terrain.Allowed.RELIEF);
         }
 
