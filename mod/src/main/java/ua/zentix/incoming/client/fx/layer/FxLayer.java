@@ -231,6 +231,7 @@ public final class FxLayer {
         // атлас дальних моделей со всеми сетками в видеопамяти — до сбора кадра (прогрев начинает атлас заново)
         if (warmup) FarRenderer.warmup();
         FRUSTUM.set(FarDraw.viewProjection(e, view.camera(), VIEW_PROJECTION));
+        ua.zentix.incoming.client.far.SmokeVisibility.begin(VIEW_PROJECTION);
         QUADS.begin(view.left(), view.up());
         // свечение: мелкое светящееся — пятнами в пикселях прохода свечения (FxBloom.spots); 0 — свечения нет
         QUADS.glowTexel(FxBloom.texel(view.pixel(), mc.getMainRenderTarget().height));

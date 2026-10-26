@@ -275,6 +275,10 @@ Everything about it is in [Nuclear strike](nuke.md).
 
 ## What a blast looks like
 
+Blast clouds outside your view or hidden by atmospheric haze keep their age and wind drift without rebuilding their smoke
+each frame. When you turn back, they resume at their current age. In a dense raid, nearby and large clouds get
+priority. Visible clouds stay on screen between updates; turning back does not replay their old off-screen position.
+
 The size, rise, colour and light of every blast come from the charge and the fuel left in the tanks; the smoke and the
 fireball are drawn from simulations of real gas, baked in Blender, the same way up close and far away. A film curve
 keeps the bright fireball's folds and dark soot visible as it billows and cools. This changes how its light is shown,

@@ -348,6 +348,23 @@ public final class WaterBlast {
         return Math.max(1, Math.hypot(air.windX(), air.windZ()) * air.wind(surgeTop())) * Math.max(0, since);
     }
 
+    /** Ballistic spray and wind-driven mist support, without building individual jets or puffs. */
+    public void bounds(double t, SmokeBounds out, double x, double y, double z) {
+        if (t < 0) return;
+        // Ballistic endpoints are inside speed*t; use the same landing and mist laws as blobs.
+        if (t < 2 * speed / G) {
+            double r = speed * t + SmokeBounds.PUFF * jet;
+            out.box(x - r, y - SmokeBounds.PUFF * jet, z - r, x + r, y + r, z + r);
+        }
+        double since = t - landing();
+        if (since > 0 && t <= mistLife()) {
+            double r = surgeRadius(since), sv = mistSigmaV(since);
+            double pad = SmokeBounds.PUFF * Math.max(mistSigmaH(since, r), sv), lean = air.wind(surgeTop()) * since;
+            double cx = x + air.windX() * lean, cz = z + air.windZ() * lean;
+            out.box(cx - r - pad, y + sv - pad, cz - r - pad, cx + r + pad, y + sv + pad, cz + r + pad);
+        }
+    }
+
     /**
      * Клубы брызг в возрасте t от места взрыва на глади (центр от точки взрыва, м): струя каждого направления — отрезок
      * от самой медленной воды, что ещё в воздухе, до самой быстрой, круглого сечения σ {@link #jet}; упавшая вода — уже не в

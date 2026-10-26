@@ -309,6 +309,26 @@ public final class FarBlasts {
             return BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));
         }
 
+        @Override
+        public double age(double seconds) { return sourceAge(seconds); }
+
+        @Override
+        public void maintain(double seconds) { model.maintain(sourceAge(seconds)); }
+
+        @Override
+        public boolean bounds(double seconds, ua.zentix.incoming.client.fx.smoke.SmokeBounds out) {
+            double t = sourceAge(seconds);
+            model.bounds(t, level.getMinBuildHeight() - y, level.getMaxBuildHeight() - y, out);
+            model.condensationBounds(t, out);
+            if (curtain != null) curtain.bounds(t, out);
+            if (water != null) water.bounds(t, out, 0, water.depth, 0);
+            out.move(x, y, z);
+            return true;
+        }
+
+        @Override
+        public boolean budgeted() { return true; }
+
         /** Источник облака: клубы модели в мире, облако конденсации и брызги взрыва на воде. */
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
