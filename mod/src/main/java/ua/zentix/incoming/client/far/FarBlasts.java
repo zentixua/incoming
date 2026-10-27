@@ -304,6 +304,17 @@ public final class FarBlasts {
             return FarBlasts.visible(wy - y, r, hidden > 0 ? LIFT + hidden : 0);
         }
 
+        @Override
+        public void visibility(double[] out, int at) {
+            out[at] = hidden;
+        }
+
+        @Override
+        public double visible(double wy, double r, double[] saved, int at) {
+            double h = saved[at];
+            return FarBlasts.visible(wy - y, r, h > 0 ? LIFT + h : 0);
+        }
+
         private double sourceAge(double seconds) {
             // Only the fractional tick comes from SmokeGrid; its post-tick counter may already have advanced at birth.
             return BlastTime.seconds(BlastTime.ticks(), born, 20 * (seconds - SmokeGrid.seconds(0)));

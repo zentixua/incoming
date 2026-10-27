@@ -425,97 +425,639 @@ final class SmokePuffs {
         return Math.clamp(age, FIRST_FRAME + FRAME_SPREAD, last - FRAME_SPREAD) + FRAME_SPREAD * (2 * u - 1);
     }
 
-    private static final Draw DRAW = new Draw();
+    /**
+     * The render thread fills one instance with the frame's puffs, places and ribbons ({@link #sink}, {@link #tube},
+     * {@link #ribbon}). With a {@link Planner} the other instance meanwhile plans the previous frame off the client thread,
+     * and each frame draws the last completed plan at its own eye ({@link #flush}); without one the filled instance plans
+     * and draws at once.
+     */
+    private static Draw fill = new Draw(), job = new Draw();
+    /** Client thread only: the replayed plan's veil, merged and laid at the current eye. */
+    private static final Draw VEIL = new Draw();
+    /** The plan being made off the client thread, and the last completed one (drawn every frame until the next completes). */
+    private static Recording planned = new Recording(), shown = new Recording();
+    @Nullable
+    private static Planner planner;
+    private static boolean running;
+    /** Where the last frame drew: a frame without smoke inputs still draws the last plan. */
+    @Nullable
+    private static FarView lastView;
+    @Nullable
+    private static Out lastOut;
+    /** Longest wait for the previous plan; past it the frame draws the plan before it and skips its own. */
+    static final long WAIT_NANOS = 3_000_000;
+    private static final Runnable JOB = () -> {
+        long start = System.nanoTime();
+        job.flush();
+        job.record.nanos = System.nanoTime() - start;
+        job.record.complete = true;
+    };
     private static final SmokeGrid.Look[] LOOKS = SmokeGrid.Look.values();
 
     private SmokePuffs() {}
 
     /** Облака, которых объём не рисует, — в кадр. */
     static void collect(FarView view, FarSprites out) {
+        // a frame without smoke inputs still draws the last plan at its own eye
+        lastView = view;
+        lastOut = out;
         double seconds = SmokeGrid.seconds(view.partial());
         SmokeGrid.quads(seconds, view.camera().x, view.camera().y, view.camera().z,
                 b -> SmokeVisibility.visible(view, b), (s, sampledAt) -> sink(view, out, s, sampledAt));
     }
 
     /**
+     * Plan the frame off the client thread (null: plan and draw on the caller's thread, as unit tests do). Waits for the
+     * running plan before switching.
+     */
+    static void planner(@Nullable Planner next) {
+        if (planner == next) return;
+        stop();
+        planner = next;
+    }
+
+    /** Planner of the client: one named daemon thread, started with its first plan. */
+    static Planner worker() {
+        return new Worker("Incoming Smoke");
+    }
+
+    /**
      * Ждущие клубы всех источников кадра (слияние {@link #merge}, бюджет {@link #FILL_BUDGET}) и вуаль — в кадр. Зовёт тот,
      * кто брал {@link #sink}, когда все источники кадра отданы (и следы снарядов, {@code FarFlightView}: их кучки и вуали —
      * в том же кадре).
+     * <p>
+     * With a planner, the frame draws the last completed plan at its own eye: billboards, ribbons and the veil are built
+     * here, on the client thread, from the plan's world-anchored quads; then this frame's inputs go to the planner. The plan
+     * lags one frame (snapshots of clouds are refreshed every few frames anyway). If the previous plan is not done within
+     * {@link #WAIT_NANOS}, the frame draws the plan before it again and drops its own inputs.
      */
     static void flush() {
-        DRAW.flush();
+        Planner p = planner;
+        if (p == null) {
+            fill.flush();
+            report(fill, fill);
+            return;
+        }
+        FarView view = fill.frameView();
+        Out out = fill.frameOut();
+        if (view != null) {
+            lastView = view;
+            lastOut = out;
+        }
+        boolean ready = !running || p.await(WAIT_NANOS);
+        if (running && ready) collect();
+        if (lastView != null && !(shown.fits(lastView) && shown.trim(lastView, budget))) {
+            // The last plan was made for another projection (zoom), far from this eye, or a fast turn brings more of it onto
+            // the screen than the budget's fading share: this frame is planned now and drawn at once, as inline planning would.
+            boolean drained = !running || p.await(DRAIN_NANOS);
+            if (running && drained) collect();
+            shown.clear();
+            if (view == null || !drained) {
+                fill.forget();
+                fill.veilClear();
+                return;
+            }
+            start(p);
+            if (p.await(DRAIN_NANOS)) {
+                collect();
+                shown.trim(lastView, budget);
+                shown.replay(lastView, lastOut, VEIL);
+            }
+            return;
+        }
+        if (lastView != null && lastOut != null) shown.replay(lastView, lastOut, VEIL);
+        if (!ready) {
+            fill.forget();
+            fill.veilClear();
+            return;
+        }
+        start(p);
+    }
+
+    /** Longest wait for a plan the frame cannot do without (projection change, world exit): a plan's own bounded cost. */
+    static final long DRAIN_NANOS = 10_000_000_000L;
+
+    /** The finished plan becomes the drawn one. */
+    private static void collect() {
+        running = false;
+        Recording made = job.record;
+        job.record = null;
+        if (made != null && made.complete) {
+            planned = shown;
+            shown = made;
+            report(job, VEIL);
+            lastPlanNanos = made.nanos;
+        }
+    }
+
+    /** This frame's inputs go to the planner, continuing the last plan's history (merge level, cluster share, occlusion grid). */
+    private static void start(Planner p) {
+        fill.level = job.level;
+        fill.lastShare = job.lastShare;
+        fill.shareReady = job.shareReady;
+        fill.adoptOcclusion(job);
+        fill.seal(planned);
+        Draw idle = job;
+        job = fill;
+        fill = idle;
+        fill.forget();
+        fill.veilClear();
+        running = true;
+        p.start(JOB);
+    }
+
+    /**
+     * Storage for this frame's camera vectors ({@link FarRenderer#view}): the filling Draw's own, which no plan reads until it is
+     * sealed; the Camera's vectors are live until the next frame, and a fresh copy every frame would be garbage.
+     */
+    static org.joml.Vector3f[] cameraBasis() {
+        return fill.basis;
+    }
+
+    /** Statistics of the last plan (description lines, tests). */
+    private static double lastFill, lastShare = 1, lastFloor, lastRaw, lastPlaceMatter;
+    private static int lastLevel, lastVeils, lastItems, lastBlobs, lastPlaces, lastRefused, lastReused;
+    private static long lastPlanNanos;
+
+    /** Time of the last completed plan on the planner's thread, ms; 0 — planned inline. */
+    static double lastPlanMillis() {
+        return planner == null ? 0 : lastPlanNanos / 1e6;
+    }
+
+    private static void report(Draw d, Draw veil) {
+        lastFill = d.lastFill;
+        lastShare = d.lastShare;
+        lastFloor = d.lastFloor;
+        lastRaw = d.lastRaw;
+        lastLevel = d.level;
+        lastItems = d.lastItems;
+        lastBlobs = d.lastBlobs;
+        lastPlaces = d.lastPlaces;
+        lastRefused = d.lastRefused;
+        lastReused = d.lastReused;
+        lastPlaceMatter = d.lastPlaceMatter;
+        lastVeils = veil.lastVeils;
     }
 
     /** Заливка последнего кадра квадратами облаков, экранов, и доля кучки, что ей дал бюджет (замер, строки описания). */
     static double lastFill() {
-        return DRAW.lastFill;
+        return lastFill;
     }
 
     static double lastShare() {
-        return DRAW.lastShare;
+        return lastShare;
     }
 
     /** Пол кадра — по одному клубу на гаусс и место трубки, что остались квадратами, экранов: не выше бюджета. */
     static double lastFloor() {
-        return DRAW.lastFloor;
+        return lastFloor;
     }
 
     /** Пол до слияния разных источников и вуали ({@link #lastFloor} — после), экранов. */
     static double lastRaw() {
-        return DRAW.lastRaw;
+        return lastRaw;
     }
 
     /** Уровень слияния разных источников ({@link #LEVELS}; 0 — без слияния), гауссов вуали, квадратов-клубов кадра (гауссов и мест). */
     static int lastLevel() {
-        return DRAW.level;
+        return lastLevel;
     }
 
     static int lastVeils() {
-        return DRAW.lastVeils;
+        return lastVeils;
     }
 
     static int lastItems() {
-        return DRAW.lastItems;
+        return lastItems;
     }
 
     /** Клубов облаков в плане последнего кадра (после слияния внутри источников и {@link #BLOBS}) и мест трубок ({@link #PLACES}). */
     static int lastBlobs() {
-        return DRAW.lastBlobs;
+        return lastBlobs;
     }
 
     static int lastPlaces() {
-        return DRAW.lastPlaces;
+        return lastPlaces;
     }
 
     /** Мест трубок, которых в последнем кадре не дали ({@link #PLACES}): у их отрезков доли клубов в кадре не было. */
     static int lastRefused() {
-        return DRAW.lastRefused;
+        return lastRefused;
     }
 
     /** Sources whose puffs in the last frame were the same as at their previous merge and took its result. */
     static int lastReused() {
-        return DRAW.lastReused;
+        return lastReused;
     }
 
     /** Вещество мест трубок последнего кадра: ослабление всей массы клубов, м² (толща поперёк оси × √(2π)σ × кусок оси). */
     static double lastPlaceMatter() {
-        return DRAW.lastPlaceMatter;
+        return lastPlaceMatter;
     }
 
     /** Бюджет заново: план и уровень слияния (проверки, что строят кадры с разным бюджетом подряд). */
     static void resetBudget() {
-        DRAW.plans = 0;
-        DRAW.level = 0;
-        DRAW.veilLevel = 0;
-        DRAW.shareReady = false;
+        for (Draw d : new Draw[]{fill, job}) {
+            d.plans = 0;
+            d.level = 0;
+            d.veilLevel = 0;
+            d.shareReady = false;
+        }
+        VEIL.veilLevel = 0;
     }
 
-    /** Выход из мира, смена измерения: ждущие клубы и места, план, вуаль — заново. */
+    /** Выход из мира, смена измерения: ждущие клубы и места, план, вуаль — заново; the running plan is drained first. */
     static void reset() {
-        DRAW.merges.clear();
-        DRAW.forget();
-        DRAW.veilClear();
+        stop();
+        for (Draw d : new Draw[]{fill, job}) {
+            d.merges.clear();
+            d.forget();
+            d.veilClear();
+        }
+        VEIL.veilClear();
+        planned.clear();
+        shown.clear();
+        lastView = null;
+        lastOut = null;
         resetBudget();
+    }
+
+    /** Waits for the running plan and drops it: its sources and views may belong to a world being left. */
+    private static void stop() {
+        if (planner != null) planner.stop();
+        if (running) {
+            running = false;
+            job.record = null;
+            job.forget();
+            job.veilClear();
+        }
+    }
+
+    /**
+     * Runs a frame's plan off the caller's thread, one at a time ({@link #flush}). {@link #start} and {@link #await} order
+     * memory: the plan sees everything the client thread wrote before starting it, and the client thread sees the whole
+     * plan after {@link #await} returns true.
+     */
+    interface Planner {
+        /** Start the plan (the previous one is done). */
+        void start(Runnable plan);
+
+        /** Wait at most nanos for the started plan; true when it is done. */
+        boolean await(long nanos);
+
+        /** Wait for the started plan, then release the thread (a later {@link #start} starts it again). */
+        void stop();
+    }
+
+    /** One named daemon thread, started by the first plan and released by {@link #stop}; a failing plan is dropped, not drawn. */
+    static final class Worker implements Planner {
+        private final String name;
+        private final Object lock = new Object();
+        @Nullable
+        private Thread thread;
+        @Nullable
+        private Runnable task;
+        private boolean busy;
+        private boolean warned;
+
+        Worker(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public void start(Runnable plan) {
+            synchronized (lock) {
+                task = plan;
+                busy = true;
+                if (thread == null) {
+                    Thread t = new Thread(this::loop, name);
+                    t.setDaemon(true);
+                    thread = t;
+                    t.start();
+                }
+                lock.notifyAll();
+            }
+        }
+
+        private void loop() {
+            Thread self = Thread.currentThread();
+            while (true) {
+                Runnable plan;
+                synchronized (lock) {
+                    while (task == null && thread == self) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            return;
+                        }
+                    }
+                    if (thread != self) return;
+                    plan = task;
+                    task = null;
+                }
+                try {
+                    plan.run();
+                } catch (Throwable t) {
+                    if (!warned) {
+                        warned = true;
+                        ua.zentix.incoming.Incoming.LOG.error("Smoke plan failed; the frame keeps the previous plan", t);
+                    }
+                } finally {
+                    synchronized (lock) {
+                        busy = false;
+                        lock.notifyAll();
+                    }
+                }
+            }
+        }
+
+        @Override
+        public boolean await(long nanos) {
+            synchronized (lock) {
+                long end = System.nanoTime() + nanos;
+                while (busy) {
+                    long left = end - System.nanoTime();
+                    if (left <= 0) return false;
+                    try {
+                        lock.wait(left / 1_000_000, (int) (left % 1_000_000));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+
+        @Override
+        public void stop() {
+            Thread t;
+            boolean interrupted = false;
+            synchronized (lock) {
+                while (busy) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException e) {
+                        interrupted = true;
+                    }
+                }
+                t = thread;
+                thread = null;
+                task = null;
+                lock.notifyAll();
+            }
+            // idle and told to leave: it ends at once
+            if (t != null) {
+                try {
+                    t.join(1000);
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * A plan made off the client thread: its quads and ribbons as calls of {@link Out} relative to the planning eye, and its
+     * veil Gaussians. {@link #replay} anchors them at the current eye, so billboards, ribbons and the veil face the current
+     * camera; the plan's choices (merges, clusters, concealment, budget) are the previous frame's.
+     */
+    static final class Recording implements Out {
+        private static final int PUFF = 0, FLAT = 1, RIBBON = 2, STRIDE = 20;
+        /** Largest relative change of the pixel angle and frame half-diagonal, and eye step (m), a plan is drawn across. */
+        static final double PROJECTION = 0.03, STEP = 1;
+        private double[] calls = new double[64 * STRIDE];
+        private FxAtlas.Sprite[] sprites = new FxAtlas.Sprite[64];
+        private int count;
+        private double[] veils = new double[8 * VEIL_FIELDS];
+        private int veilCount;
+        private double ex, ey, ez, pixel, edge;
+        private float fx, fy, fz;
+        private boolean anchored;
+        /** Visible opacity of the plan entry whose quads are recorded next, the order {@code Draw.fit} keeps entries in. */
+        float rank;
+        /** Per call: fill at the drawn view, the keep order, and whether this frame leaves it out ({@link #trim}). */
+        private double[] fills = new double[64];
+        private long[] order = new long[64];
+        private boolean[] left = new boolean[64];
+        /** Calls the next replay leaves out ({@link #trim}). */
+        int trimmed;
+        private final double[] corners = new double[12];
+        private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
+        /** Set by the plan when it finished; an unfinished or failed plan is not drawn. Its time on the planner's thread. */
+        volatile boolean complete;
+        long nanos;
+        private final float[] joint = new float[3];
+
+        void clear() {
+            count = veilCount = trimmed = 0;
+            anchored = complete = false;
+            java.util.Arrays.fill(sprites, null);
+        }
+
+        void anchor(FarView view) {
+            Vec3 eye = view.camera();
+            ex = eye.x;
+            ey = eye.y;
+            ez = eye.z;
+            pixel = view.pixel();
+            edge = view.edge();
+            org.joml.Vector3f f = view.forward();
+            fx = f.x;
+            fy = f.y;
+            fz = f.z;
+            anchored = true;
+        }
+
+        /**
+         * Chooses what of the plan the next {@link #replay} at view leaves out so that it fills at most budget screens; false
+         * if that would be more than the budget's fading share. At the view it was planned for the plan keeps the budget
+         * ({@code Draw.drawnFill}); at another one a turn brings quads planned beside the old frame onto the screen (review of
+         * #511: a 30° turn showed 20.2 screens of a 13.3-screen plan, a 5° one 16.9 of 16.0). Each recorded quad and ribbon is
+         * measured on this screen by the plan's law; in the order {@code Draw.fit} keeps entries (most visible first) each
+         * stays if its fill still fits. Up to 1 − {@link #FIT_FADE} of the budget over, what goes is what {@code fit} fades
+         * into the veil anyway, for one frame; more, and the frame is planned for this view.
+         */
+        boolean trim(FarView view, double budget) {
+            trimmed = 0;
+            if (!anchored) return true;
+            Vec3 eye = view.camera();
+            org.joml.Vector3f f = view.forward();
+            if (eye.x == ex && eye.y == ey && eye.z == ez && f.x == fx && f.y == fy && f.z == fz && view.pixel() == pixel && view.edge() == edge)
+                return true;
+            double ox = ex - eye.x, oy = ey - eye.y, oz = ez - eye.z, total = 0;
+            double[] c = calls;
+            for (int k = 0; k < count; k++) {
+                int o = k * STRIDE;
+                int kind = (int) c[o];
+                double fill = 0;
+                if (kind == RIBBON) {
+                    joint[0] = (float) c[o + 16];
+                    joint[1] = (float) c[o + 17];
+                    joint[2] = (float) c[o + 18];
+                    boolean strip = shape.set(view.far(), f.x, f.y, f.z, c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], (float) c[o + 5],
+                            c[o + 7] + ox, c[o + 8] + oy, c[o + 9] + oz, c[o + 10], (float) c[o + 11], joint);
+                    fill = shape.fill(view, strip);
+                } else if ((float) c[o + 11] >= 0.002f) {
+                    // drawn quads only (the layer skips fainter)
+                    if (kind == PUFF) ua.zentix.incoming.client.fx.layer.PuffGeometry.face(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5],
+                            corners);
+                    else ua.zentix.incoming.client.fx.layer.PuffGeometry.flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 13],
+                            corners);
+                    fill = polygonFill(view, corners);
+                }
+                fills[k] = fill;
+                total += fill;
+            }
+            if (total <= budget) return true;
+            if (total > (2 - FIT_FADE) * budget) return false;
+            for (int k = 0; k < count; k++) order[k] = (long) Float.floatToIntBits(2 - (float) c[k * STRIDE + 19]) << 32 | k;
+            java.util.Arrays.sort(order, 0, count);
+            double sum = 0;
+            for (int k = 0; k < count; k++) {
+                int i = (int) order[k];
+                left[i] = sum + fills[i] > budget;
+                if (left[i]) trimmed++;
+                else sum += fills[i];
+            }
+            return true;
+        }
+
+        /**
+         * Whether this plan may be drawn at view: the same projection within {@link #PROJECTION} and an eye within
+         * {@link #STEP}. Fill on screen grows as the inverse square of the pixel angle (a 4× zoom: 13 → 121 screens) and as
+         * the eye nears a puff; beyond these limits {@link #trim} would leave out much of the frame, and the plan's clusters
+         * and merges were chosen for another pixel size.
+         */
+        boolean fits(FarView view) {
+            if (!anchored) return true;
+            Vec3 eye = view.camera();
+            double dx = eye.x - ex, dy = eye.y - ey, dz = eye.z - ez;
+            return Math.abs(view.pixel() / pixel - 1) <= PROJECTION && Math.abs(view.edge() / edge - 1) <= PROJECTION
+                    && dx * dx + dy * dy + dz * dz <= STEP * STEP;
+        }
+
+        private int next(FxAtlas.Sprite sprite) {
+            if (count == sprites.length) {
+                sprites = java.util.Arrays.copyOf(sprites, 2 * count);
+                calls = java.util.Arrays.copyOf(calls, 2 * count * STRIDE);
+                fills = new double[2 * count];
+                order = new long[2 * count];
+                left = new boolean[2 * count];
+            }
+            sprites[count] = sprite;
+            calls[count * STRIDE + 19] = rank;
+            return count++ * STRIDE;
+        }
+
+        @Override
+        public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r,
+                          float g, float b, float a) {
+            int o = next(sprite);
+            double[] c = calls;
+            c[o] = PUFF;
+            c[o + 1] = dx;
+            c[o + 2] = dy;
+            c[o + 3] = dz;
+            c[o + 4] = halfA;
+            c[o + 5] = halfB;
+            c[o + 6] = mix;
+            c[o + 7] = shade;
+            c[o + 8] = r;
+            c[o + 9] = g;
+            c[o + 10] = b;
+            c[o + 11] = a;
+        }
+
+        @Override
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite,
+                              float mix, float shade, float r, float g, float b, float a) {
+            int o = next(sprite);
+            double[] c = calls;
+            c[o] = FLAT;
+            c[o + 1] = dx;
+            c[o + 2] = dy;
+            c[o + 3] = dz;
+            c[o + 4] = halfA;
+            c[o + 5] = halfB;
+            c[o + 6] = mix;
+            c[o + 7] = shade;
+            c[o + 8] = r;
+            c[o + 9] = g;
+            c[o + 10] = b;
+            c[o + 11] = a;
+            c[o + 12] = soft;
+            c[o + 13] = angle;
+        }
+
+        @Override
+        public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz,
+                              double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
+            int o = next(null);
+            double[] c = calls;
+            c[o] = RIBBON;
+            c[o + 1] = ax;
+            c[o + 2] = ay;
+            c[o + 3] = az;
+            c[o + 4] = halfA;
+            c[o + 5] = alphaA;
+            c[o + 6] = lightA;
+            c[o + 7] = bx;
+            c[o + 8] = by;
+            c[o + 9] = bz;
+            c[o + 10] = halfB;
+            c[o + 11] = alphaB;
+            c[o + 12] = lightB;
+            c[o + 13] = r;
+            c[o + 14] = g;
+            c[o + 15] = b;
+            c[o + 16] = joint[0];
+            c[o + 17] = joint[1];
+            c[o + 18] = joint[2];
+            return true;
+        }
+
+        /** The plan's veil is laid on the client thread ({@link #replay}). */
+        @Override
+        public void veil(Veil veil, int light) {
+            throw new IllegalStateException("veil is laid at replay");
+        }
+
+        /** The plan's veil Gaussians, relative to the planning eye. */
+        void veil(double[] gaussians, int n) {
+            if (veils.length < n * VEIL_FIELDS) veils = new double[Math.max(n, 2 * veils.length / VEIL_FIELDS) * VEIL_FIELDS];
+            System.arraycopy(gaussians, 0, veils, 0, n * VEIL_FIELDS);
+            veilCount = n;
+        }
+
+        /**
+         * Draw at the eye of view into out: positions move by the eye's step since planning, geometry faces this camera, and
+         * what {@link #trim} chose for this view is left out.
+         */
+        void replay(FarView view, Out out, Draw veil) {
+            if (!anchored) return;
+            Vec3 cam = view.camera();
+            double ox = ex - cam.x, oy = ey - cam.y, oz = ez - cam.z;
+            double[] c = calls;
+            for (int k = 0; k < count; k++) {
+                if (trimmed > 0 && left[k]) continue;
+                int o = k * STRIDE;
+                int kind = (int) c[o];
+                if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
+                        (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                else if (kind == FLAT) out.puff6Flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 12], c[o + 13],
+                        sprites[k], (float) c[o + 6], (float) c[o + 7], (float) c[o + 8], (float) c[o + 9], (float) c[o + 10], (float) c[o + 11]);
+                else {
+                    joint[0] = (float) c[o + 16];
+                    joint[1] = (float) c[o + 17];
+                    joint[2] = (float) c[o + 18];
+                    out.ribbon(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], (float) c[o + 5], (int) c[o + 6], c[o + 7] + ox, c[o + 8] + oy,
+                            c[o + 9] + oz, c[o + 10], (float) c[o + 11], (int) c[o + 12], (float) c[o + 13], (float) c[o + 14], (float) c[o + 15], joint);
+                }
+            }
+            veil.lay(view, out, veils, veilCount, ox, oy, oz);
+        }
     }
 
     /**
@@ -540,13 +1082,13 @@ final class SmokePuffs {
      */
     static boolean ribbon(FarView view, Out out, double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by,
                           double bz, double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
-        return DRAW.holdRibbon(view, out, ax, ay, az, halfA, alphaA, lightA, bx, by, bz, halfB, alphaB, lightB, r, g, b, joint);
+        return fill.holdRibbon(view, out, ax, ay, az, halfA, alphaA, lightA, bx, by, bz, halfB, alphaB, lightB, r, g, b, joint);
     }
 
     /** Приёмник клубов источника source в кадре view в миг seconds: клубы — квадратами в out (один на поток кадра). */
     static SmokeGrid.Sink sink(FarView view, Out out, SmokeGrid.Source source, double seconds) {
-        DRAW.begin(view, out, source, seconds);
-        return DRAW;
+        fill.begin(view, out, source, seconds);
+        return fill;
     }
 
     /** Приёмник клубов одного источника: клубы — квадратами. */
@@ -589,8 +1131,12 @@ final class SmokePuffs {
                 ctxSprayAge = java.util.Arrays.copyOf(ctxSprayAge, n);
                 ctxSeed = java.util.Arrays.copyOf(ctxSeed, n);
                 ctxSprays = java.util.Arrays.copyOf(ctxSprays, n);
+                ctxVis = java.util.Arrays.copyOf(ctxVis, n);
             }
             ctxSource[contexts] = source;
+            // what visible() reads that the client tick changes: a plan made off the client thread reads it as of now
+            ctxVis[contexts] = 0;
+            source.visibility(ctxVis, contexts);
             ctxOut[contexts] = out;
             ctxView[contexts] = view;
             ctxAge[contexts] = age;
@@ -698,7 +1244,14 @@ final class SmokePuffs {
         private double[] ctxAge = new double[8], ctxSprayAge = new double[8];
         private long[] ctxSeed = new long[8];
         private boolean[] ctxSprays = new boolean[8];
-        private int contexts;
+        /** Frozen visibility state of each source ({@link SmokeGrid.Source#visibility}), and the context of the puff being planned. */
+        private double[] ctxVis = new double[8];
+        private int contexts, ctx;
+        /** Non-null while this instance plans a frame for the planner: its draw calls and veil go there. */
+        @Nullable
+        Recording record;
+        /** Camera vectors of the frame this instance fills ({@link #cameraBasis}). */
+        final org.joml.Vector3f[] basis = {new org.joml.Vector3f(), new org.joml.Vector3f(), new org.joml.Vector3f()};
         /** Места трубок кадра, что ждут плана: по {@link #PLACE_FIELDS} чисел; зерно клубов и трубка — отдельно. */
         private double[] places = new double[64 * PLACE_FIELDS];
         private long[] placeSeed = new long[64], placeTube = new long[64];
@@ -1155,6 +1708,19 @@ final class SmokePuffs {
         private double[] concealFrame = new double[64 * CONCEAL_FIELDS];
         private static final double[] RING_X = {1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476},
                 RING_Y = {0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476};
+
+        /** The next plan continues from's occlusion grid tier (its hysteresis), with storage of that size. */
+        void adoptOcclusion(Draw from) {
+            if (from.occlusionCells == occlusionCells) return;
+            occlusionCells = from.occlusionCells;
+            occlusionSide = occlusionCells + 1;
+            occlusionFace = occlusionSide * occlusionSide;
+            if (occlusion.length < 6 * occlusionFace) {
+                occlusion = new double[6 * occlusionFace];
+                occlusionNodes = new long[words(6 * occlusionFace)];
+            }
+            occlusionRays = occlusionRays();
+        }
 
         private void configureOcclusion() {
             // Target 24 cells across the projected diagonal, with a 48-cell floor for conservative core coverage.
@@ -1623,6 +2189,7 @@ final class SmokePuffs {
         /** Ждущий клуб i — в {@link #blob} с видом его источника. */
         private void held(int i) {
             int o = i * FIELDS, c = (int) held[o + 12];
+            ctx = c;
             source = ctxSource[c];
             out = ctxOut[c];
             view = ctxView[c];
@@ -1764,6 +2331,7 @@ final class SmokePuffs {
                 int e = ribbonEntry[k], o = k * RIBBON_FIELDS;
                 if (planVeil[e] >= 1) continue;
                 float keep = (float) (1 - planVeil[e]);
+                if (record != null) record.rank = (float) (planShown[e] * planSeen[e]);
                 ribbonJoint[0] = (float) ribbons[o + 15];
                 ribbonJoint[1] = (float) ribbons[o + 16];
                 ribbonJoint[2] = (float) ribbons[o + 17];
@@ -1771,6 +2339,13 @@ final class SmokePuffs {
                         (int) ribbons[o + 10], ribbons[o + 3], ribbons[o + 4], ribbons[o + 5], ribbons[o + 7], (float) ribbons[o + 9] * keep,
                         (int) ribbons[o + 11], (float) ribbons[o + 12], (float) ribbons[o + 13], (float) ribbons[o + 14], ribbonJoint);
             }
+        }
+
+        /** Tags the recorded quads of the current puff or place with its entry's visible opacity ({@link Recording#rank}). */
+        private void rankRecord() {
+            if (record == null) return;
+            int e = current >= 0 ? blobEntry[current] : placeEntry[~current];
+            record.rank = e < 0 ? 0 : (float) (planShown[e] * planSeen[e]);
         }
 
         /** Ждущее место p — в {@link #club}. */
@@ -1850,6 +2425,7 @@ final class SmokePuffs {
             double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, vary)
                     * Math.max(1, 2 * disc * point[0] / along);
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
+            rankRecord();
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = clubOffset(h, j, 7) * spread * rv * 0.5,
@@ -1897,11 +2473,59 @@ final class SmokePuffs {
             veilView = null;
         }
 
+        /** View and receiver of this frame's inputs (all contexts share them in the game); null — no inputs. */
+        @Nullable
+        FarView frameView() {
+            return contexts > 0 ? ctxView[0] : placeContexts > 0 ? placeView[0] : null;
+        }
+
+        @Nullable
+        Out frameOut() {
+            return contexts > 0 ? ctxOut[0] : placeContexts > 0 ? placeOut[0] : null;
+        }
+
+        /**
+         * The frame's inputs are complete: the last source's puffs merge here, on the client thread, and the plan's draw calls
+         * go to rec, anchored at this frame's eye.
+         */
+        void seal(Recording rec) {
+            close();
+            rec.clear();
+            FarView v = frameView();
+            if (v != null) rec.anchor(v);
+            record = rec;
+            for (int c = 0; c < contexts; c++) ctxOut[c] = rec;
+            for (int c = 0; c < placeContexts; c++) placeOut[c] = rec;
+        }
+
+        /** Client thread: a replayed plan's veil Gaussians, moved by (ox, oy, oz) to the eye of view, merged and laid into out. */
+        void lay(FarView view, Out out, double[] gaussians, int n, double ox, double oy, double oz) {
+            if (veils.length < n * VEIL_FIELDS) veils = new double[Math.max(n, 2 * veils.length / VEIL_FIELDS) * VEIL_FIELDS];
+            System.arraycopy(gaussians, 0, veils, 0, n * VEIL_FIELDS);
+            for (int o = 0; o < n * VEIL_FIELDS; o += VEIL_FIELDS) {
+                veils[o] += ox;
+                veils[o + 1] += oy;
+                veils[o + 2] += oz;
+            }
+            veilCount = n;
+            veilOut = n > 0 ? out : null;
+            veilView = view;
+            veilFlush();
+        }
+
         /**
          * Вуаль кадра — одна сетка по экрану ({@link Veil}): у каждой вершины толща по её лучу через все гауссы вуали; их больше
          * {@link #VEIL_MAX} — близкие сливаются ({@link #veilMerge}).
          */
         private void veilFlush() {
+            if (record != null) {
+                // the veil is laid at the eye of the frame that draws the plan (Recording.replay)
+                int n = veilOut != null ? veilCount : 0;
+                record.veil(veils, n);
+                lastVeils = n;
+                veilClear();
+                return;
+            }
             if (veilOut != null && veilCount > 0) {
                 if (veilCount > VEIL_MAX || veilLevel > 0) veilMerge();
                 veil.fill(veilView, veils, veilCount);
@@ -2013,7 +2637,7 @@ final class SmokePuffs {
             if (a < 0.004) return 0;
             double edge = edge(tau);
             double rh = edge * sh, rv = edge * across, rw = edge * sv, r = Math.max(rh, rw);
-            double vis = source.visible(y, r);
+            double vis = source.visible(y, r, ctxVis, ctx);
             if (vis <= 0) return 0;
             Vec3 cam = view.camera();
             long h = mix(seed * 0x9E3779B97F4A7C15L + id);
@@ -2043,7 +2667,7 @@ final class SmokePuffs {
             // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
-                veil(px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke);
+                veil(this, px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke);
             if (outside <= 0 || whole >= 1) return 0;
             // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
@@ -2086,6 +2710,7 @@ final class SmokePuffs {
             // каждый клуб берёт свою долю: по площади кучки в среднем перекрывается столько слоёв — вместе то же пропускание
             // в среднем (SmokeFillTest; середину облака кучка закрывает гуще — прежнее приближение, ревью #443)
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
+            rankRecord();
             // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали ({@code lying}):
             // квадрат лицом к камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
             for (int j = 0; j < count; j++) {
@@ -2248,8 +2873,8 @@ final class SmokePuffs {
         int k = tubeDepth(level), n = 1 << k;
         // мест кадра больше не взять ({@link #PLACES}): мест у отрезка нет, а его места идут в бюджет клубов трубок, и на следующих
         // кадрах шаг мест растёт
-        if (DRAW.placeCount + n > PLACES) {
-            DRAW.refused += n;
+        if (fill.placeCount + n > PLACES) {
+            fill.refused += n;
             return -(n + 1);
         }
         double total = tubeTotal(level);
@@ -2269,7 +2894,7 @@ final class SmokePuffs {
             long h = mix(seed * 0x9E3779B97F4A7C15L + ((long) j << (TUBE_LEVELS - k)));
             // вихри следа — порядка σ: середина клуба гуляет ({@link #meander}, ⚠ оценка), иначе ровный ряд
             double m = meander(sigma, tau);
-            drawn += DRAW.holdPlace(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, tau, full, along,
+            drawn += fill.holdPlace(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, tau, full, along,
                     cr, cg, cb, shade, age, h, shown, TUBE_CLUSTER, true, tx / len, ty / len, tz / len, tube);
         }
         return drawn;
@@ -2510,10 +3135,10 @@ final class SmokePuffs {
      * цвет вещества, что у клубов; свет — как у вещества под открытым небом (карта освещения: небо 15) и огонь кадра у глаза
      * (FxLights), как у клубов этого же вещества снаружи. Доля share — сколько клубов растаяло.
      */
-    private static void veil(double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
+    private static void veil(Draw d, double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
                              float dg, float db, double share) {
         float cr = thick(ks, kd, kw, dr), cg = thick(ks, kd, kw, dg), cb = thick(ks, kd, kw, db);
-        DRAW.veilAdd(DRAW.out, DRAW.view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
+        d.veilAdd(d.out, d.view, px, py, pz, sh, sv, ext, cr, cg, cb, share);
     }
 
     /**

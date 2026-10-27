@@ -123,6 +123,13 @@ final class Sandbox {
     private double zoom = 1;
     /** Взгляд ведёт снаряд эффекта ({@code track}). */
     private boolean track;
+    /**
+     * {@code turn <deg/s> [from s]}: from that effect second the view turns at this rate, by the effect clock (the same
+     * yaw in every run at the same effect instant); 0 — none. Effects and {@code clear} keep it; the start yaw is the view's
+     * at the effect's first frame.
+     */
+    private double turn, turnFrom;
+    private float turnYaw = Float.NaN;
     @Nullable
     private SandboxCommand lastEffect;
     /** Команда из файла, которая ещё идёт, и её файл итога. */
@@ -468,6 +475,12 @@ final class Sandbox {
                 zoom = c.number(0);
                 finish("ok");
             }
+            case TURN -> {
+                turn = c.number(0);
+                turnFrom = c.number(1, 0);
+                turnYaw = Float.NaN;
+                finish("ok");
+            }
             case SHOTS -> {
                 Path out = dir.resolve("out").resolve(c.args().getFirst());
                 try {
@@ -506,6 +519,7 @@ final class Sandbox {
     /** Снять все эффекты: у клиента — как при выходе из мира, у сервера — снаряды и огонь у точки. */
     private void clear() {
         raid.clear();
+        turnYaw = Float.NaN;
         IncomingClient.resetSession();
         server("incoming clear");
         server("kill @e[type=!minecraft:player]");
@@ -1070,6 +1084,13 @@ final class Sandbox {
     /** {@code track on}: перед кадром глаз смотрит на снаряд эффекта там, где он в этом кадре по пути. */
     private void onFrameStart(RenderFrameEvent.Pre e) {
         Minecraft mc = Minecraft.getInstance();
+        if (turn != 0 && effectTick >= 0 && mc.player != null) {
+            if (Float.isNaN(turnYaw)) turnYaw = mc.player.getYRot();
+            double t = (tick - effectTick + e.getPartialTick().getGameTimeDeltaPartialTick(true)) / 20.0;
+            float yaw = (float) (turnYaw + turn * Math.max(0, t - turnFrom));
+            mc.player.setYRot(yaw);
+            mc.player.yRotO = yaw;
+        }
         FlightTrack p = projectile;
         if (!track || p == null || mc.player == null) return;
         double[] at = new double[3];

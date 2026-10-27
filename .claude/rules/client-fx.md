@@ -710,6 +710,8 @@ paths:
   шлейфы пожаров, ножки — `SmokePuffs.tube` их не рисует, а кладёт в ожидание, `Draw.holdPlace`) ждут; близкие (ближе σ)
   клубы источника сливаются в один с той же массой и моментами (`merge`, как слияние пуфов SCIPUFF); план — сколько
   экранов закроет каждый клуб и место одним квадратом (пол) и кучкой (`cover`, сумма площадей на экране с перекрытием).
+  In the game this plan is made off the client thread one frame behind and drawn at the current eye (`client-smoke.md`,
+  frame planning).
   Frame cost is bounded at any strike count by `FILL_BUDGET` screens (16, about 4.8 ms on the 4060 at 2560×1600;
   at 8, the edge/inside views of 40 strikes already lost dark spreading clouds and plumes to smooth veil haze).
   Above that floor, first conceal occluded matter in world directions (`Draw.conceal`), then merge overlapping

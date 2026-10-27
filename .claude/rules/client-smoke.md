@@ -29,3 +29,22 @@ paths:
 - `FarTerrain.dust` shares one weakly world-owned cell cache across strikes, before every `TerrainTiles` backend
   (LSS, Voxy, DH): loaded columns for one tick, distant columns for one second, including absent heights. Switching
   to loaded chunks or rewinding invalidates cells immediately. Cache values must not retain the weak world key.
+- Frame planning runs off the client thread (`SmokePuffs.flush` with a `Planner`; the game's is one daemon thread
+  "Incoming Smoke", started by its first plan, drained and stopped by `SmokePuffs.reset` on world exit and replay seek;
+  `-Dincoming.smoke.inline=true` plans on the client thread). The client thread fills one `Draw` (snapshot replay, trail
+  places and ribbons), seals it (last source merge, outputs to a `Recording`) and hands it over; the other `Draw` plans
+  the previous frame (plan, conceal, merges, fit, clusters). Each frame draws the last completed plan: recorded quads
+  and ribbons re-anchored at the current eye, so billboards face the current camera; the veil is merged and laid on the
+  client thread (`VEIL`). The plan lags one frame; an unfinished plan after `WAIT_NANOS` keeps the previous one drawn.
+  A plan is drawn only across a small change of projection and eye (`Recording.fits`: 3% pixel angle and half-diagonal,
+  1 m): after a zoom or a jump the frame is planned at once on the worker and drawn in the same frame (a 4× zoom drew
+  121 screens from the old plan). At any other view than its own, the recorded quads and ribbons are measured on the
+  current screen by the plan's fill law (`Recording.trim`): a turn brings quads planned beside the old frame into view
+  (30°: 20.2 screens of a 13.3-screen plan). Over the budget, the most visible are kept in `fit`'s order while they fit;
+  over by more than the fade share (1 − `FIT_FADE`), the frame is planned at once. Never draw a recording without it. The alternating `Draw`s continue one history: merge level, cluster share and the
+  occlusion grid tier (`adoptOcclusion`). The camera vectors of a frame are copied into the filling `Draw`'s storage
+  (`cameraBasis`), never into one being planned, and without per-frame allocation.
+  The planning `Draw` must read only its own arrays and immutable or frozen inputs: `FarView` holds copies of the camera
+  vectors, and a source's `visible` state that ticks change is saved at `begin` (`Source.visibility`). No Level, chunk
+  or BlockState access in planning; emits (terrain) stay on the client thread. `SmokePipelineTest`: the planned frame
+  k + 1 draws exactly the inline frame k on the 100-strike raid, also on a real thread, and world exit mid-plan drains it.

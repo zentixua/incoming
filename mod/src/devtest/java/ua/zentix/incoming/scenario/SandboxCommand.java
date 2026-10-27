@@ -53,6 +53,8 @@ import java.util.Locale;
  *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
  *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
  *       который ведёт его с зумом);</li>
+ *   <li>{@code turn <deg/s> [from s]} — the view turns at this rate from that effect second, by the effect clock (camera-turn
+ *       clips; {@code turn 0} stops);</li>
  *   <li>{@code zoom <k>} — зум ×k (1–256; 1 — без зума): поле зрения в k раз уже (тангенс половины угла), как у Ok Zoomer, —
  *       последним, после всех, кто его меняет;</li>
  *   <li>{@code shots <имя> <секунды через запятую> [wav]} — кадры и звук следующего эффекта: кадры на эти секунды от
@@ -71,7 +73,7 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE }
+    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN }
 
     /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
     boolean effect() {
@@ -192,6 +194,11 @@ record SandboxCommand(Verb verb, List<String> args) {
             case ZOOM -> {
                 need(1, 1);
                 if (number(0) < 1 || number(0) > 256) throw new IllegalArgumentException("зум 1–256");
+            }
+            case TURN -> {
+                need(1, 2);
+                if (Math.abs(number(0)) > 720) throw new IllegalArgumentException("turn rate -720..720 degrees per second");
+                if (args.size() > 1 && number(1) < 0) throw new IllegalArgumentException("turn start >= 0 s");
             }
             case SHOTS -> {
                 need(2, 3);
