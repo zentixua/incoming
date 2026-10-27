@@ -29,8 +29,8 @@ import java.util.Locale;
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class LateExposureGameTests {
-    /** Pressure at the herd, psi: lethal by the injury law (checked below, not assumed). */
-    private static final double PSI = 60;
+    /** Pressure at the farthest of the herd, psi: lethal by the injury law (checked below, not assumed). */
+    private static final double PSI = 150;
     /** The detonation happened this long before the herd loads, ticks: flash and front long past. */
     private static final long AGO = 600;
 
@@ -59,7 +59,7 @@ public final class LateExposureGameTests {
         List<Mob> late = new ArrayList<>(), born = new ArrayList<>();
         for (int i = 0; i < 4; i++) late.add(h.spawn(EntityType.COW, new BlockPos(40 + 3 * i, 12, 40)));
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
-        Detonation d = burst(level, g, late.getFirst().position());
+        Detonation d = burst(level, g, late.getLast().position());
         NuclearEvents.get(level).add(d);
         for (int i = 0; i < 4; i++) born.add(h.spawn(EntityType.COW, new BlockPos(40 + 3 * i, 12, 44)));
         for (Mob m : late) {
