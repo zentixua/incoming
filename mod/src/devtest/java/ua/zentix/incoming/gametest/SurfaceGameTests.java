@@ -62,9 +62,9 @@ import java.util.function.Consumer;
  * 2σ of that addition);</li>
  * <li>Slab over a void: at least the FM 5-250 (1992) breach, table B-3: K = R³·M·C, M by R ranges (rock, good
  * masonry, concrete block), C = 1,8 (external untamped charge), ± FM rounding of 0,25 m; breached when R exceeds
- * the thickness, everything within radius R removed; otherwise FM predicts no removal. No larger than the
- * circle where the wave breaks masonry (a slab over a void is a panel, like a wall). A charge that cannot
- * breach one metre (Lancet) must not open the slab;</li>
+ * the represented material path. The geometric footprint includes block rounding and the angular resolution
+ * of the 16³ ray grid; reducing thickness does not add grazing rays. A charge that cannot breach the full
+ * material path must not open the slab;</li>
  * <li>Concrete on soil (road pavement): soil behind the slab supports it, with no free face; neither a breach
  * nor a panel, but a crater in material no softer than rock (TM 23-200: rock ×0,7) and no larger than the same
  * charge crater in soil; a block fraction in cohesive material is damaged depth, not a through hole;</li>
