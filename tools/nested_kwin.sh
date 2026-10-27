@@ -9,6 +9,8 @@
 #   - this bus starts no services (nested_kwin_bus.conf without D-Bus activation): XDG_RUNTIME_DIR is shared with
 #     desktop, and xdg-document-portal started by it would unmount host $XDG_RUNTIME_DIR/doc, preventing flatpak apps
 #     (Prism) from starting. Session only puts uniquely named sockets there (wayland-incoming-…);
+#   - no screen locker (--no-lockscreen): the session gets no input, and its own locker engaged after 5 idle minutes or
+#     at start; a lock that began mid-run pinned a full-pack client at exactly 15 FPS (raid measurement 27.10);
 #   - own XDG directories (config, data, cache, state) in mod/run/kwin/<socket>: KConfig reads and writes kwinrc
 #     and others according to XDG Base Directory spec, leaving desktop settings untouched;
 #   - no desktop window: --virtual backend renders to an offscreen buffer (GPU, through EGL), with no window
@@ -45,5 +47,5 @@ exec env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
     XDG_CACHE_HOME="$HOME_DIR/cache" XDG_STATE_HOME="$HOME_DIR/state" \
     PIPEWIRE_REMOTE="$HOME_DIR/no-audio-server" PULSE_SERVER="unix:$HOME_DIR/no-audio-server" \
     dbus-run-session --config-file="$ROOT/tools/nested_kwin_bus.conf" -- \
-    kwin_wayland --virtual --xwayland --socket "$SOCKET" --width "$WIDTH" --height "$HEIGHT" \
+    kwin_wayland --virtual --no-lockscreen --xwayland --socket "$SOCKET" --width "$WIDTH" --height "$HEIGHT" \
     --exit-with-session "$COMMAND"
