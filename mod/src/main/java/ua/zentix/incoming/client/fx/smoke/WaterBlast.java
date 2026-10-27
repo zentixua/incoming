@@ -3,114 +3,114 @@ package ua.zentix.incoming.client.fx.smoke;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
 /**
- * Обычный взрыв на воде (снаряд рвётся о гладь или под ней), без Minecraft: столб брызг (султан), его падение завесой,
- * базисная волна водяной пыли, пена и волна-кольцо на воде. Метры, секунды, килограммы ТНТ.
+ * Conventional explosion on water (projectile bursts at surface or below), without Minecraft: spray column (plume), curtain fall,
+ * mist base surge, foam and ring wave on water. Meters, seconds, kilograms TNT.
  * <ul>
- * <li><b>Размер</b> — таблица Swisdak («Explosion Effects and Properties, Part II: Explosion Effects in Water»,
- * NSWC/WOL TR 76-116, 1978, гл. 14, табл. 14): наибольшая высота и радиус столба TNT — H/W^⅓ и R/W^⅓ по приведённой
- * глубине заряда Y/W^¼ (W — кг ТНТ, Y — м под гладью). Таблица — для безопасных расстояний: «настоящий столб бывает
- * до 50 % меньше» (оговорка там же); берём ту долю, что гл. 13 того же отчёта добавляет к своей высоте струи для
- * безопасности, — высоту ÷ {@link #MARGIN_H} (1,4), радиус ÷ {@link #MARGIN_R} (1,3) (⚠ оценка внутри диапазона
- * источника). Сверка: у 500 кг на 30 м таблица даёт 56 м (пример отчёта), у 9,1 кг на 10 м — 23 м; струя заряда на дне
- * мелкой воды по гл. 13 (Milligan, Young 1954) при Y/W^¼ = 0,74 — 31·W^⅓ против 38,6/1,4 = 28·W^⅓ здесь. Удар о гладь
- * — строка Y = 0 (⚠ половина контактного заряда над водой; таблица начинается с заряда у самой глади). Шахед (50 кг) —
- * столб ~78 м, радиус ~24 м; ракета (150 кг) — ~113 м; «Град» (6,4 кг) — ~39 м.</li>
- * <li><b>Форма и время</b> — баллистика: купол над пузырём рвётся струями, которые летят дальше без сопротивления (масса
- * воды на площадь сечения — тонны на квадратный метр, торможение воздухом на десятках метров мало). H и R таблицы — что
- * видно (верх и наибольший радиус султана на снимках), поэтому на них — видимый край брызг, а не середина струй: у
- * густой струи край — там, где толща поперёк падает до порога видимости ({@link CloudModel#SEEN}), за
- * {@link #halo} σ от оси. Струя одного направления — отрезок: вода, выброшенная в один миг с разной скоростью, лежит на
- * прямой (место линейно по скорости), сечение — круглое, σ {@link #jet}. Середина самой быстрой отвесной струи
- * поднимается на H − ореол (скорость √(2g(H − ореол)), верх у шахеда ~3,7 с); веер струй — конус с полууглом θ.
- * R таблицы — наибольший видимый радиус за весь полёт, а дальше всего брызги уходят, падая: крайние быстрые струи
- * ложатся в 2H'·sin2θ от середины, и с ореолом это R (у вершины столб уже, ~¾R). Скорости — поровну от
- * {@link #SPEED_MIN} до полной: столб заполнен от воды до верха. Падают струи завесой: медленные раньше и ближе.</li>
- * <li><b>Вода</b> — та же доля энергии заряда поднимает воду столба, что у «Бейкера» (Glasstone и Dolan, §2.52: ~1 млн т
- * на 1,8 км при 23 кт): m·g·H/2 ∝ W, m = m_Б·(W/W_Б)·(H_Б/H) (⚠ допущение: доля одна у ядерного и обычного подрыва) —
- * у шахеда ~50 т;
- * ослабление брызг — капли радиуса {@link #DROP_R} м: 3/(2ρr) м²/кг (геометрическая оптика); в клуб она идёт
- * каплями сетки ({@link CloudModel#DROP_K}, капли 5 мкм) — пересчётом массы на то же ослабление. Падая, столб
- * оставляет водяную пыль — долю {@link #MIST} мелких капель ({@link #MIST_DROP_R}) кольцом базисной волны: видимый
- * край кольца — на радиусе базисной волны ({@link #surgeRadius}, закон ядерки), верх слоя — на её высоте; её сносит
- * ветром и расплывает, как облако, а капли оседают в воду через дно слоя ({@link #mistLeft}).</li>
- * <li><b>На воде</b> — пена, где упала вода (взбитая пузырями вода, ⚠ тает за {@link #FOAM_S} с — оценка), и волна от
- * полости взрыва: кольцо идёт с групповой скоростью волн длины диаметра столба у его основания, на мелкой воде — не
- * быстрее √(gD) ({@link #waveRadius}).</li>
+ * <li><b>Size</b>: Swisdak table (“Explosion Effects and Properties, Part II: Explosion Effects in Water”,
+ * NSWC/WOL TR 76-116, 1978, ch. 14, table 14): maximum TNT column height and radius, H/W^⅓ and R/W^⅓ against scaled
+ * charge depth Y/W^¼ (W in kg TNT, Y in m below surface). Table is for safe distances: “actual column may be
+ * up to 50% smaller” (same source caveat); use the share added to jet height for safety in ch. 13 of same report:
+ * height ÷ {@link #MARGIN_H} (1.4), radius ÷ {@link #MARGIN_R} (1.3) (⚠ est. within source
+ * range). Cross-check: 500 kg at 30 m gives 56 m (report example), 9.1 kg at 10 m gives 23 m; shallow-water bottom-charge jet
+ * from ch. 13 (Milligan, Young 1954) at Y/W^¼ = 0.74 gives 31·W^⅓ versus 38.6/1.4 = 28·W^⅓ here. Surface impact
+ * uses Y = 0 row (⚠ half contact charge above water; table starts with charge just at surface). Shahed (50 kg):
+ * column ~78 m, radius ~24 m; missile (150 kg): ~113 m; Grad (6.4 kg): ~39 m.</li>
+ * <li><b>Shape and timing</b>: ballistics. Dome over bubble tears into jets flying without drag (water mass
+ * per cross-section is tons per square meter; little air deceleration over tens of meters). Table H and R are visible
+ * (top and maximum plume radius in photos), so visible spray edge lies there, not jet centers: dense-jet
+ * edge is where transverse optical depth falls to visibility threshold ({@link CloudModel#SEEN}), at
+ * {@link #halo} σ from axis. One-direction jet is a segment: water emitted at one instant at differing speed lies on
+ * a straight line (position linear in speed), round cross-section σ {@link #jet}. Fastest vertical jet center
+ * rises to H − halo (speed √(2g(H − halo)), Shahed apex ~3.7 s); jet fan is a cone of half-angle θ.
+ * Table R is maximum visible radius over entire flight; spray travels farthest while falling: outer fast jets
+ * land at 2H'·sin2θ from center, plus halo gives R (at apex column is narrower, ~¾R). Speeds uniform from
+ * {@link #SPEED_MIN} to full: column filled from water to top. Jets fall as curtain: slower ones earlier and nearer.</li>
+ * <li><b>Water</b>: same charge-energy share lifts column water as at Baker (Glasstone and Dolan, §2.52: ~1 million t
+ * to 1.8 km at 23 kt): m·g·H/2 ∝ W, m = m_B·(W/W_B)·(H_B/H) (⚠ assumption: same share for nuclear and conventional bursts),
+ * ~50 t for Shahed;
+ * spray extinction from drop radius {@link #DROP_R} m: 3/(2ρr) m²/kg (geometric optics); delivered to clump as grid
+ * drops ({@link CloudModel#DROP_K}, 5 µm), mass converted to equal extinction. Falling column
+ * leaves mist, share {@link #MIST} of fine drops ({@link #MIST_DROP_R}), as base-surge ring: visible
+ * edge at base-surge radius ({@link #surgeRadius}, nuke law), layer top at its height; drifts
+ * and spreads like cloud, drops settle into water through layer bottom ({@link #mistLeft}).</li>
+ * <li><b>On water</b>: foam where water landed (bubbly water, ⚠ decays over {@link #FOAM_S} s, est.), and wave from
+ * explosion cavity: ring travels at group velocity for wavelength equal to column-base diameter, in shallow water no
+ * faster than √(gD) ({@link #waveRadius}).</li>
  * </ul>
  */
 public final class WaterBlast {
-    /** Приведённая глубина заряда Y/W^¼, м/кг^¼ (Swisdak 1978, табл. 14). */
+    /** Scaled charge depth Y/W^¼, m/kg^¼ (Swisdak 1978, table 14). */
     static final double[] DEPTH = {0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9};
-    /** Наибольший радиус столба R/W^⅓, м/кг^⅓ (там же). */
+    /** Maximum column radius R/W^⅓, m/kg^⅓ (same source). */
     static final double[] SCALED_R = {8.3, 8.3, 8.3, 10, 12.8, 12.8, 12.8, 12.8, 12.8, 11.6, 10.6, 9.5, 8.5, 7.4, 6.4, 5.4, 4.3, 3.3, 2.3};
-    /** Наибольшая высота столба H/W^⅓, м/кг^⅓ (там же; у 0,5 скан нечёток — 38,6, как у 1,0). */
+    /** Maximum column height H/W^⅓, m/kg^⅓ (same source; scan at 0.5 unclear: 38.6 as at 1.0). */
     static final double[] SCALED_H = {29.7, 38.6, 38.6, 29, 20.6, 19.7, 18.9, 18, 17.1, 16.2, 15.4, 13.6, 9.5, 5.9, 5.9, 5.9, 5.9, 5.9, 5.9};
-    /** Запас таблицы для безопасности по высоте и радиусу (гл. 13 того же отчёта: +40 % к высоте, +30 % к диаметру). */
+    /** Table safety margin for height and radius (same report ch. 13: +40% height, +30% diameter). */
     static final double MARGIN_H = 1.4, MARGIN_R = 1.3;
-    /** Заряд «Бейкера», кг ТНТ. */
+    /** Baker charge, kg TNT. */
     static final double BAKER_KG = 23e6;
-    /** Масса воды в столбе «Бейкера», кг (Glasstone, Dolan §2.52: около миллиона тонн; ⚠ по памяти) и его высота, м (§2.47). */
+    /** Baker column water mass, kg (Glasstone, Dolan §2.52: about a million tons; ⚠ from memory) and height, m (§2.47). */
     static final double BAKER_WATER_KG = 1e9, BAKER_TOP = 1800;
-    /** Радиус капель столба, м (О: брызги — миллиметры). */
+    /** Column drop radius, m (est.: millimeter spray). */
     static final double DROP_R = 0.5e-3;
-    /** Доля воды столба, что остаётся водяной пылью, когда он падает (О: 1–5 %). */
+    /** Column water share remaining as mist when falling (est.: 1–5%). */
     static final double MIST = 0.02;
     /**
-     * Радиус капель водяной пыли, м. В воздухе после падения столба висят только капли, что оседают медленнее, чем
-     * волна держится над водой: по Стоксу v = 2ρgr²/(9μ) у 50 мкм — 0,3 м/с (за 10 с — 3 м при высоте волны в метры; у
-     * Re ≈ 2 Стокс завышает на ~10 %: замер Gunn, Kinzer 1949 у капли 0,1 мм — 0,27 м/с), а миллиметровые капли столба
-     * падают со скоростью ~4 м/с и уходят в воду сразу (размер — О, по скорости оседания).
+     * Mist drop radius, m. Only drops settling slower than surge lifetime over water remain airborne after column fall:
+     * Stokes v = 2ρgr²/(9μ) gives 0.3 m/s for 50 µm (3 m over 10 s with meter-scale surge height;
+     * at Re ≈ 2 Stokes overestimates ~10%: Gunn, Kinzer 1949 measured 0.27 m/s for 0.1 mm drop); millimeter column drops
+     * fall at ~4 m/s and immediately enter water (size is est., by settling speed).
      */
     static final double MIST_DROP_R = 50e-6;
-    /** Вязкость воздуха у земли, Па·с (15 °C). */
+    /** Near-ground air viscosity, Pa·s (15 °C). */
     static final double AIR_MU = 1.81e-5;
     /**
-     * Сопротивление глади ветру: u* = √C_D·U₁₀, C_D = 1,2·10⁻³ при ветре 4–11 м/с (Large, Pond, «Open ocean momentum flux
-     * measurements in moderate to strong winds», J. Phys. Oceanogr. 11, 1981); постоянная Кармана.
+     * Wind drag on water: u* = √C_D·U₁₀, C_D = 1.2·10⁻³ at 4–11 m/s wind (Large, Pond, “Open ocean momentum flux
+     * measurements in moderate to strong winds”, J. Phys. Oceanogr. 11, 1981); Kármán constant.
      */
     static final double DRAG_WATER = 1.2e-3, KARMAN = 0.4;
     /**
-     * Число Рауза P = v/(κu*), выше которого турбулентность у глади капли не держит: взвеси нет, слой оседает сам
-     * (van Rijn, «Sediment transport, part II: suspended load transport», J. Hydraul. Eng. 110, 1984: взвесь — при
-     * P ≲ 2,5). Капли водяной пыли (0,3 м/с) при ветре 6 м/с — P ≈ 3,6: слой не растёт вверх, как газ по Бриггсу.
+     * Rouse number P = v/(κu*) above which surface turbulence cannot suspend drops: no suspension, layer settles by itself
+     * (van Rijn, “Sediment transport, part II: suspended load transport”, J. Hydraul. Eng. 110, 1984: suspension at
+     * P ≲ 2.5). Mist drops (0.3 m/s) at 6 m/s wind give P ≈ 3.6: layer does not grow upward as Briggs gas.
      */
     static final double ROUSE_SUSPENDED = 2.5;
     static final double G = 9.80665;
     /**
-     * Струи столба: наименьшая доля наибольшей скорости (вода — поровну по скорости от неё до полной; медленнее — купол
-     * над пузырём, его вода падает сразу) и доли полуугла конуса с числом струй по кругу у каждой (⚠ оценка: у
-     * настоящего столба вершина — тонкие струи, низ — купол).
+     * Column jets: minimum maximum-speed share (water uniform in speed from it to full; slower is dome
+     * over bubble, immediately falls), cone half-angle shares and jet counts around each (⚠ est.: real
+     * column has thin jets at top, dome below).
      */
     static final double SPEED_MIN = 0.35;
     static final double[] TILTS = {0, 0.5, 1};
     static final int[] AROUND = {1, 5, 7};
     /**
-     * Видимый ореол брызг одной струи (край её сечения) — такая доля радиуса столба; остальное — разлёт середин струй
-     * (⚠ оценка формы: таблица даёт только внешний край столба, R и H, а как он делится между разлётом струй и ореолом
-     * каждой, в источнике нет).
+     * Visible spray halo of one jet (cross-section edge) as column-radius share; rest is jet-center spread
+     * (⚠ shape est.: table gives only outer column edge, R and H, without partition between jet spread and each
+     * halo).
      */
     static final double JET_HALO = 0.5;
-    /** За сколько тает пена на воде, с (e-кратно; ⚠ оценка: барашки ветра — секунды, взбитая взрывом вода глубже). */
+    /** Water-foam decay time, s (e-folding; ⚠ est.: wind whitecaps last seconds, explosion-aerated water is deeper). */
     static final double FOAM_S = 15;
-    /** Клубов кольца базисной волны. */
+    /** Base-surge ring clumps. */
     static final int RING = 8;
 
-    /** Высота и радиус столба, м; время подъёма до верха, с; вода, кг; глубина заряда и воды под ним, м. */
+    /** Column height and radius, m; rise time to apex, s; water, kg; charge depth and water depth below it, m. */
     public final double height, radius, rise, water, depth, waterDepth;
-    /** Наибольшая скорость струй (у их середин), м/с; полуугол конуса струй, рад. */
+    /** Maximum jet speed (at centers), m/s; jet-cone half-angle, rad. */
     public final double speed, cone;
-    /** σ круглого сечения струи, м; видимый край её ореола у вершины, в σ (толща поперёк — до {@link CloudModel#SEEN}). */
+    /** Round jet cross-section σ, m; visible halo edge at apex, in σ (transverse optical depth down to {@link CloudModel#SEEN}). */
     public final double jet, halo;
     private final CloudModel.Air air;
-    /** Заряд, кг ТНТ. */
+    /** Charge, kg TNT. */
     private final double kg;
-    /** Сколько живёт водяная пыль, с (считается один раз). */
+    /** Mist lifetime, s (computed once). */
     private double mistLife = -1;
 
     /**
-     * @param tntKg      заряд, кг ТНТ
-     * @param depthM     заряд под гладью, м (удар о воду — 0)
-     * @param waterDepth глубина воды под местом взрыва, м (не знаем — бесконечность: глубокая)
+     * @param tntKg      charge, kg TNT
+     * @param depthM     charge below surface, m (water impact is 0)
+     * @param waterDepth water depth below explosion, m (unknown is infinity: deep)
      */
     public WaterBlast(double tntKg, double depthM, double waterDepth, CloudModel.Air air) {
         this.air = air;
@@ -121,8 +121,8 @@ public final class WaterBlast {
         height = table(SCALED_H, scaled) * cube / MARGIN_H;
         radius = table(SCALED_R, scaled) * cube / MARGIN_R;
         water = height > 0 ? BAKER_WATER_KG * tntKg / BAKER_KG * BAKER_TOP / height : 0;
-        // ореол струи: её сечение такое, что видимый край (толща поперёк до порога видимости) у вершины — доля радиуса
-        // столба; толща — у отвесной струи в вершине (в воздухе — скорости от ½ до полной, отрезок от глади до верха)
+        // jet halo: cross-section chosen so visible edge (transverse optical depth down to visibility threshold) at apex is column-radius
+        // share; optical depth for vertical jet at apex (airborne speeds from ½ to full, segment from surface to top)
         double sigma = 0, edge = 1, centre = height, tilt = 0, landing = 1;
         if (height > 0) {
             double ext = water * 3 / (2 * 1000 * DROP_R) / directions();
@@ -133,10 +133,10 @@ public final class WaterBlast {
                 sigma = JET_HALO * radius / edge;
             }
             centre = Math.max(0.5 * height, height - edge * sigma);
-            // конус — по огибающей всего полёта: R таблицы — наибольший видимый радиус султана, а дальше всего брызги
-            // уходят, когда крайние быстрые струи падают в воду — середина на 2H'·sin2θ, ореол поперёк струи (по
-            // горизонтали — ÷cos θ); вода струи на метр отрезка — ext/((1 − s₀)·v·t), к падению (t = 2·подъём·cos θ) толща
-            // поперёк — вдвое/cos θ меньше, чем в вершине
+            // cone follows whole-flight envelope: table R is maximum visible plume radius; spray travels farthest when outer
+            // fast jets land, center at 2H'·sin2θ, halo transverse to jet (horizontal
+            // ÷cos θ); jet water per segment meter is ext/((1 − s₀)·v·t); at landing (t = 2·rise·cos θ), transverse optical depth
+            // is lower by twice/cos θ than at apex
             for (int i = 0; i < 30; i++) {
                 double cos = Math.cos(tilt);
                 landing = visible(ext / ((1 - SPEED_MIN) * 2 * centre * 2 * cos) / (Math.sqrt(2 * Math.PI) * sigma));
@@ -150,12 +150,12 @@ public final class WaterBlast {
         cone = tilt;
     }
 
-    /** Видимый край гаусса толщи tau поперёк середины, в σ: где толща падает до порога видимости {@link CloudModel#SEEN}. */
+    /** Visible Gaussian edge with transverse center optical depth tau, in σ: where optical depth drops to {@link CloudModel#SEEN}. */
     static double visible(double tau) {
         return Math.sqrt(2 * Math.log(Math.max(tau, CloudModel.SEEN * Math.E) / CloudModel.SEEN));
     }
 
-    /** Значение таблицы по приведённой глубине (линейно между строками, за краем — последняя строка). */
+    /** Table value by scaled depth (linear between rows, last row beyond edge). */
     static double table(double[] values, double scaled) {
         if (scaled <= DEPTH[0]) return values[0];
         for (int i = 1; i < DEPTH.length; i++) {
@@ -167,31 +167,31 @@ public final class WaterBlast {
         return values[values.length - 1];
     }
 
-    /** Время полёта струи с долей скорости s под углом a к вертикали, с: туда и обратно до глади. */
+    /** Jet flight time for speed share s at angle a from vertical, s: out and back to surface. */
     double flight(double s, double a) {
         return 2 * s * speed * Math.cos(a) / G;
     }
 
-    /** Верх середины столба в возрасте t, м: самая быстрая отвесная струя (до вершины — вверх, потом — обратно к воде). */
+    /** Column center top at age t, m: fastest vertical jet (up to apex, then back toward water). */
     public double top(double t) {
         if (t <= 0 || t >= 2 * rise) return 0;
         return speed * t - 0.5 * G * t * t;
     }
 
     /**
-     * Доля скорости, медленнее которой вода струи под углом a к вертикали к возрасту t уже в воде (не меньше
-     * {@link #SPEED_MIN}): полёт доли s — 2·s·v·cos a / g.
+     * Speed share below which jet water at angle a from vertical has landed by age t (at least
+     * {@link #SPEED_MIN}): share s flight is 2·s·v·cos a / g.
      */
     double slowest(double t, double a) {
         return Math.max(SPEED_MIN, G * Math.max(t, 0) / (2 * Math.max(speed, 1e-9) * Math.cos(a)));
     }
 
-    /** Доля воды струи под углом a, что ещё в воздухе в возрасте t (скорости поровну от {@link #SPEED_MIN} до полной). */
+    /** Jet water share at angle a still airborne at age t (speeds uniform from {@link #SPEED_MIN} to full). */
     double share(double t, double a) {
         return Math.clamp((1 - slowest(t, a)) / (1 - SPEED_MIN), 0, 1);
     }
 
-    /** Доля воды, что ещё в воздухе в возрасте t: струи, что не упали. */
+    /** Water share still airborne at age t: jets not yet landed. */
     public double aloft(double t) {
         if (t <= 0) return 1;
         double up = 0, all = 0;
@@ -202,7 +202,7 @@ public final class WaterBlast {
         return up / all;
     }
 
-    /** Радиус на воде, куда к возрасту t уже упала вода столба, м (0 — ещё ничего): дальняя из упавших струй. */
+    /** Water-surface radius reached by fallen column water by age t, m (0 means none yet): farthest landed jet. */
     public double fallen(double t) {
         double r = 0;
         for (double tilt : TILTS) {
@@ -212,31 +212,31 @@ public final class WaterBlast {
         return r;
     }
 
-    /** Масса капель сетки (5 мкм) с тем же ослаблением, что у {@code kg} брызг столба. */
+    /** Grid drop mass (5 µm) with same extinction as {@code kg} column spray. */
     static double asGridDrops(double kg) {
         return asGridDrops(kg, DROP_R);
     }
 
-    /** То же у капель радиуса {@code r}, м: ослабление 3/(2ρr) м²/кг. */
+    /** Same for drops of radius {@code r}, m: extinction 3/(2ρr) m²/kg. */
     static double asGridDrops(double kg, double r) {
         return kg * 3 / (2 * 1000 * r) / CloudModel.DROP_K;
     }
 
-    /** Скорость оседания капель водяной пыли по Стоксу, м/с: 2ρgr²/(9μ). */
+    /** Stokes mist-drop settling speed, m/s: 2ρgr²/(9μ). */
     static double mistSettling() {
         return 2 * 1000 * G * MIST_DROP_R * MIST_DROP_R / (9 * AIR_MU);
     }
 
     /**
-     * Доля водяной пыли, что ещё в воздухе через since секунд после начала падения: капли оседают через дно слоя —
-     * поток v·c(0), c(0) — у глади; у клуба кольца (гаусс σv с серединой на высоте σv, {@link #blobs}) слой воды на
-     * единицу площади — c(0)·√(2π)·e^½·σv, поэтому dM/dt = −v·M / (√(2π)·e^½·σv(t)): в начале (верх слоя — высота
-     * базисной волны) — как перемешанный слой её высоты, e^(−v·t/h); расплываясь вверх, слой теряет капли медленнее.
-     * Испарение не считается: оно только укорачивает жизнь.
+     * Mist share still airborne since seconds after fall begins: drops settle through layer bottom,
+     * flux v·c(0), c(0) at water surface; ring clump (Gaussian σv centered at height σv, {@link #blobs}) has water layer
+     * per unit area c(0)·√(2π)·e^½·σv, hence dM/dt = −v·M / (√(2π)·e^½·σv(t)); initially (layer top at
+     * base-surge height), like mixed layer of that height, e^(−v·t/h); upward spreading slows drop loss.
+     * Evaporation not modeled: it only shortens lifetime.
      */
     double mistLeft(double since) {
         if (since <= 0) return 1;
-        // интеграл по середине 24 равных шагов: σv(t) гладкая (√(σ0² + (k·путь)²))
+        // midpoint integral over 24 equal steps: σv(t) is smooth (√(σ0² + (k·travel)²))
         int n = 24;
         double sum = 0, v = mistSettling(), depth = Math.sqrt(2 * Math.PI * Math.E);
         for (int i = 0; i < n; i++) {
@@ -246,17 +246,17 @@ public final class WaterBlast {
         return Math.exp(-sum);
     }
 
-    /** Когда вода начинает падать в воду, с: самая медленная струя. */
+    /** When water starts falling into water, s: slowest jet. */
     double landing() {
         return flight(SPEED_MIN, cone);
     }
 
     /**
-     * Базисная волна: падая, вода столба растекается кольцом брызг — тот же закон, что у ядерки ({@link WaterModel#surgeReach},
-     * {@link WaterModel#surgeTop}: доля «Бейкера» по кубическому корню), начало — когда вода начинает падать
-     * ({@link #landing}), растекается со скоростью падения √(2gH) (постоянная — предел радиуса на неё, ⚠ оценка: у
-     * «Бейкера» волна идёт ~25–30 м/с), от места, куда падает завеса (радиус столба), брызги — доля {@link #MIST} воды
-     * столба, расплываются по Бриггсу и сносятся ветром. Радиус и высота закона — видимый край кольца.
+     * Base surge: falling column water spreads as spray ring, same nuke law ({@link WaterModel#surgeReach},
+     * {@link WaterModel#surgeTop}: cube-root-scaled Baker share); starts when water begins falling
+     * ({@link #landing}), spreads at fall speed √(2gH) (time constant is radius limit divided by speed; ⚠ est.: Baker
+     * surge travels ~25–30 m/s), from curtain landing position (column radius); spray is share {@link #MIST} of column
+     * water, spreads by Briggs and drifts with wind. Law radius and height define visible ring edge.
      */
     public double surgeRadius(double since) {
         if (since <= 0) return 0;
@@ -272,7 +272,7 @@ public final class WaterBlast {
         return Math.max(1, WaterModel.surgeTop(kg / 1e6));
     }
 
-    /** Сколько живёт водяная пыль, с от взрыва: пока толща клуба кольца поперёк больше порога (с оседанием). */
+    /** Mist lifetime, s since explosion: while ring-clump transverse optical depth exceeds threshold (with settling). */
     public double mistLife() {
         if (mistLife >= 0) return mistLife;
         double lo = 0, hi = CloudModel.LIFE_MAX;
@@ -285,7 +285,7 @@ public final class WaterBlast {
         return mistLife;
     }
 
-    /** Толща клуба кольца поперёк середины через since секунд после начала падения (вся вода столба уже в воде). */
+    /** Transverse center optical depth of ring clump since seconds after fall begins (all column water already landed). */
     double mistTau(double since) {
         double ext = CloudModel.DROP_K * asGridDrops(MIST * water, MIST_DROP_R) / RING * mistLeft(since);
         double sv = mistSigmaV(since);
@@ -293,8 +293,8 @@ public final class WaterBlast {
     }
 
     /**
-     * Середина клубов кольца через since секунд после начала падения, м от оси: видимый край кольца (толща поперёк до
-     * порога видимости) — на радиусе базисной волны, середины — внутрь на столько σh; ext — ослабление клуба, м².
+     * Ring clump center since seconds after fall begins, m from axis: visible ring edge (transverse optical depth to
+     * visibility threshold) is at base-surge radius; centers inward by that many σh; ext is clump extinction, m².
      */
     double ringCentre(double since, double ext, double sv) {
         double outer = surgeRadius(since), r = 0.5 * outer;
@@ -305,16 +305,16 @@ public final class WaterBlast {
         return r;
     }
 
-    /** σh клуба кольца с серединой на r через since секунд после начала падения: шаг кольца и расплывание по Бриггсу. */
+    /** Horizontal σh of ring clump centered at r since seconds after fall begins: ring spacing and Briggs spread. */
     double mistSigmaH(double since, double r) {
         double s = CloudModel.spreadH(air.spread(), path(since)), ring = Math.PI * Math.max(r, radius / 2) / RING;
         return Math.sqrt(ring * ring + s * s);
     }
 
     /**
-     * σv клуба кольца: середина — на высоте σv, видимый верх слоя у начала — на высоте базисной волны
-     * (σ0·(1 + край) = её высота, край — у толщи клуба в начале), дальше — расплывание по Бриггсу, насколько турбулентность
-     * у глади держит капли ({@link #suspended}).
+     * Ring-clump σv: center at height σv, initial visible layer top at base-surge height
+     * (σ0·(1 + edge) equals its height, edge from initial clump optical depth); afterward Briggs spread as far as surface
+     * turbulence suspends drops ({@link #suspended}).
      */
     double mistSigmaV(double since) {
         double s = suspended() * CloudModel.spreadV(air.spread(), path(since)), s0 = surgeTop() / (1 + mistEdge0());
@@ -322,8 +322,8 @@ public final class WaterBlast {
     }
 
     /**
-     * Насколько вихри у глади поднимают капли водяной пыли, 0..1: 1 − P/{@link #ROUSE_SUSPENDED} (P — число Рауза у ветра
-     * мира над водой; ⚠ переход от взвеси к оседанию — линейная оценка между P = 0 и порогом). Без ветра — 0.
+     * How much surface eddies lift mist drops, 0..1: 1 − P/{@link #ROUSE_SUSPENDED} (P is Rouse number of world
+     * wind above water; ⚠ suspension-to-settling transition is linear est. between P = 0 and threshold). No wind gives 0.
      */
     double suspended() {
         double ustar = Math.sqrt(DRAG_WATER) * Math.hypot(air.windX(), air.windZ());
@@ -331,7 +331,7 @@ public final class WaterBlast {
         return Math.clamp(1 - mistSettling() / (KARMAN * ustar) / ROUSE_SUSPENDED, 0, 1);
     }
 
-    /** Видимый край клуба кольца в начале падения, в σ (толща — у всей водяной пыли при σ кольца и высоте волны). */
+    /** Visible initial ring-clump edge at fall start, in σ (optical depth from all mist at ring σ and surge height). */
     private double mistEdge0() {
         if (mistEdge0 < 0) {
             double ext = CloudModel.DROP_K * asGridDrops(MIST * water, MIST_DROP_R) / RING, sh = Math.PI * Math.max(radius, 1e-3) / RING;
@@ -366,10 +366,10 @@ public final class WaterBlast {
     }
 
     /**
-     * Клубы брызг в возрасте t от места взрыва на глади (центр от точки взрыва, м): струя каждого направления — отрезок
-     * от самой медленной воды, что ещё в воздухе, до самой быстрой, круглого сечения σ {@link #jet}; упавшая вода — уже не в
-     * воздухе. Водяная пыль — кольцом базисной волны, пока вода падает и после, у воды, сносится ветром. false — брызг
-     * уже нет.
+     * Spray clumps at age t relative to explosion at water surface (center relative to explosion, m): each directional jet is a segment
+     * from slowest still-airborne water to fastest, round cross-section σ {@link #jet}; landed water is no longer
+     * airborne. Mist forms base-surge ring during and after fall, near water, drifting with wind. false means no spray
+     * left.
      */
     public boolean blobs(double t, SmokeGrid.Sink out, double x, double y, double z) {
         if (t < 0) return true;
@@ -378,11 +378,11 @@ public final class WaterBlast {
             double a = TILTS[k] * cone, lo = slowest(t, a);
             if (lo >= 1) continue;
             double share = (1 - lo) / (1 - SPEED_MIN), up = Math.cos(a), side = Math.sin(a);
-            // середина отрезка и полуотрезок: место воды доли s — s·v·t вдоль струи и −gt²/2 по вертикали
+            // segment center and half-segment: water of share s is at s·v·t along jet and −gt²/2 vertically
             double mid = 0.5 * (1 + lo) * speed * t, half = 0.5 * (1 - lo) * speed * t;
             double lift = Math.max(0, 0.5 * (1 + lo) * speed * up - G * t);
             for (int i = 0; i < AROUND[k]; i++) {
-                // струи по кругу: у каждой тройки углов свой поворот (не в линию), по зерну не надо — форма одна
+                // jets around circle: each angle triplet has own rotation (not a line); no seed needed, shape is shared
                 double az = 2 * Math.PI * (i + 0.5 * k) / AROUND[k], ox = side * Math.cos(az), oz = side * Math.sin(az);
                 out.segment(x + mid * ox, y + mid * up - drop, z + mid * oz, half * ox, half * up, half * oz, jet, jet, 0, 0, each * share, 1, 1, 1,
                         CloudModel.T_AIR_K, lift);
@@ -391,7 +391,7 @@ public final class WaterBlast {
         double since = t - landing();
         if (since > 0) {
             if (t > mistLife()) return false;
-            // кольцо набирает воду, пока столб падает
+            // ring collects water while column falls
             double mist = asGridDrops(MIST * water, MIST_DROP_R) * (1 - aloft(t)) * mistLeft(since) / RING;
             double sv = mistSigmaV(since), lean = air.wind(surgeTop()) * since;
             double r = ringCentre(since, CloudModel.DROP_K * mist, sv), sh = mistSigmaH(since, r);
@@ -406,7 +406,7 @@ public final class WaterBlast {
         return true;
     }
 
-    /** Струй в столбе (направлений по всем углам и кругу). */
+    /** Column jet count (directions over all angles and circle). */
     static int directions() {
         int n = 0;
         for (int k : AROUND) n += k;
@@ -414,34 +414,34 @@ public final class WaterBlast {
     }
 
     /**
-     * Волна от полости взрыва: радиус переднего гребня в возрасте t, м. Полость — половина радиуса столба, её волны —
-     * длины λ = 2R (⚠ оценка размера); фронт группы идёт с dω/dk, ω² = gk·tanh(kD), k = 2π/λ (линейная теория
-     * гравитационных волн; WEC-Sim, Theory / Regular Wave Power,
-     * https://wec-sim.github.io/WEC-Sim/main/theory/theory.html). Предел глубокой воды — ½√(gλ/2π), мелкой — √(gD).
-     * Это модель малой волны за полостью, не нелинейного начального выброса.
+     * Explosion-cavity wave: leading-crest radius at age t, m. Cavity is half column radius, waves have
+     * wavelength λ = 2R (⚠ size est.); group front travels at dω/dk, ω² = gk·tanh(kD), k = 2π/λ (linear gravity-wave
+     * theory; WEC-Sim, Theory / Regular Wave Power,
+     * https://wec-sim.github.io/WEC-Sim/main/theory/theory.html). Deep-water limit ½√(gλ/2π), shallow √(gD).
+     * Model for small wave beyond cavity, not nonlinear initial ejection.
      */
     public double waveRadius(double t) {
         return radius / 2 + waveSpeed() * Math.max(0, t);
     }
 
-    /** Скорость фронта волны по воде, м/с. */
+    /** Water wave-front speed, m/s. */
     public double waveSpeed() {
         if (radius <= 0) return 0;
         double k = Math.PI / radius, kh = k * waterDepth;
-        // Глубокая вода: kh/sinh(2kh) → 0; отдельная ветка избегает ∞/∞ при неизвестном дне.
+        // Deep water: kh/sinh(2kh) → 0; separate branch avoids ∞/∞ with unknown bottom.
         if (kh > 20) return 0.5 * Math.sqrt(G / k);
         if (kh < 1e-6) return Math.sqrt(G * waterDepth);
         return 0.5 * Math.sqrt(G * Math.tanh(kh) / k) * (1 + 2 * kh / Math.sinh(2 * kh));
     }
 
-    /** Длина волны кольца, м. */
+    /** Ring wavelength, m. */
     public double waveLength() {
         return 2 * radius;
     }
 
     /**
-     * Высота волны кольца на радиусе r относительно у полости, 0..1: цилиндрическая волна — √(r₀/r) (энергия фронта
-     * на длину окружности), тает и вязкостью — за минуту (⚠ оценка).
+     * Ring wave height at radius r relative to cavity, 0..1: cylindrical wave √(r₀/r) (front energy
+     * per circumference), also decays by viscosity over one minute (⚠ est.).
      */
     public double waveAt(double r, double t) {
         double r0 = radius / 2;
@@ -449,18 +449,18 @@ public final class WaterBlast {
     }
 
     /**
-     * Пена на воде на расстоянии r от середины в возрасте t, 0..1: где упала вода столба (завеса ложится от середины
-     * наружу: медленные струи — ближе и раньше) — с мига падения, у самой полости (купол, ½R) — сразу; за дальностью
-     * середин струй вода струи ложится по её сечению (гаусс σ {@link #jet}); тает за {@link #FOAM_S} с.
+     * Water foam at distance r from center, age t, 0..1: where column water landed (curtain lands outward from center,
+     * slower jets nearer and earlier), from landing instant; at cavity (dome, ½R), immediately; beyond jet-center reach,
+     * jet water lands across its cross-section (Gaussian σ {@link #jet}); decays over {@link #FOAM_S} s.
      */
     public double foam(double r, double t) {
         double since, share = 1;
         if (r <= radius / 2) since = t;
         else {
-            // когда завеса дошла сюда: струя, что падает на r, — доля скорости s с s² = r / (наибольшей дальности)
+            // when curtain reached here: jet landing at r has speed share s with s² = r / (maximum reach)
             double reach = speed * speed * Math.sin(2 * cone) / G;
             if (r > reach) {
-                // за дальностью середин — вода сечения самых быстрых крайних струй
+                // beyond center reach, cross-section water of fastest outer jets
                 double off = (r - reach) / Math.max(jet, 1e-9);
                 if (off > halo) return 0;
                 share = Math.exp(-0.5 * off * off);
@@ -471,7 +471,7 @@ public final class WaterBlast {
         return since < 0 ? 0 : share * Math.exp(-since / FOAM_S);
     }
 
-    /** Сколько живёт картина на воде (пена и волна), с. */
+    /** Water appearance lifetime (foam and wave), s. */
     public double waterLife() {
         return 2 * rise + 4 * FOAM_S;
     }

@@ -28,21 +28,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Цена дыма в кадре (жалоба 23.10: в дыму налёта шахедов 8 к/с, кадр 62 мс, пики 279 мс, видеокарта 91 %, без шейдеров).
- * Налёт — 14 шахедов и 2 ракеты в квадрате 240 м вокруг глаза, возраст облаков 5–150 с, ветер 4 м/с; облака раскладывает
- * тот же приёмник слоя, что в игре ({@link SmokePuffs#sink}), квадраты пишет свой приёмник. Что видно сквозь дым —
- * пропускание по лучу взгляда, e^(−Στ), а не число слоёв: с бюджетом заливки ({@link SmokePuffs#FILL_BUDGET}) кадр
- * закрывает не больше бюджета экранов, а пропускание по экрану то же, что без бюджета.
+ * Smoke frame cost (23.10 complaint: 8 fps in Shahed raid smoke, 62 ms frame, 279 ms peaks, GPU 91%, no shaders).
+ * Raid: 14 Shaheds and 2 missiles in 240 m square around eye, cloud age 5–150 s, wind 4 m/s; same game layer sink
+ * lays clouds ({@link SmokePuffs#sink}), custom sink writes quads. Visibility through smoke is
+ * view-ray transmittance, e^(−Στ), not layer count: fill budget ({@link SmokePuffs#FILL_BUDGET}) limits frame
+ * coverage to budget screens, with same screen transmittance as without budget.
  */
 class SmokeFillTest {
     /**
-     * Кадр 16:9, 70° по вертикали на 1080 строк: пиксель и полудиагональ — как у кадра игры ({@code FarRenderer.view}:
-     * тангенс на пиксель, край — полудиагональ).
+     * 16:9 frame, 70° vertical over 1080 rows: pixel and half-diagonal as game frame ({@code FarRenderer.view}:
+     * tangent per pixel, edge is half-diagonal).
      */
     static final double H = Math.tan(Math.toRadians(35)), W = H * 16 / 9, PIXEL = 2 * H / 1080,
             EDGE = Math.atan(0.5 * PIXEL * Math.hypot(1920, 1080));
 
-    /** Облако модели — источник, как событие {@code FarBlasts.Event}. */
+    /** Model cloud as source, like {@code FarBlasts.Event}. */
     record Blast(CloudModel model, double x, double y, double z, double born, long seed) implements SmokeGrid.Source {
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -90,13 +90,13 @@ class SmokeFillTest {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
         final List<Puff> puffs = new ArrayList<>();
-        /** Многоугольники кадра: 4 вершины от глаза (12 чисел) и непрозрачность — лежащие клубы и полосы лент. */
+        /** Frame polygons: 4 eye-relative vertices (12 numbers) and opacity, flat clumps and ribbon strips. */
         final List<double[]> polygons = new ArrayList<>();
-        /** Квадраты лент лицом к камере (круг торца, вуаль «глаз в трубке»): середина, полуразмеры в тангенсах, непрозрачность. */
+        /** Camera-facing ribbon quads (end disc, eye-in-tube veil): center, tangent half-sizes, opacity. */
         final List<double[]> faces = new ArrayList<>();
         private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
         private final double[] hit = new double[2];
-        /** Вуаль кадра (сетка по экрану); null — её нет. */
+        /** Frame veil (screen grid); null if absent. */
         SmokePuffs.Veil veil;
 
         Screen(FarView view) {
@@ -141,14 +141,14 @@ class SmokeFillTest {
         @Override
         public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                               float alphaB, int lightB, float r, float g, float b, float[] joint) {
-            // лента как у FarSprites.ribbon: вуаль «глаз в трубке», круг торца, полоса по своим четырём вершинам
+            // ribbon as FarSprites.ribbon: eye-in-tube veil, end disc, strip with own four vertices
             FarSprites.RibbonShape q = shape;
             Vector3f f = view.forward();
             boolean strip = q.set(view.far(), f.x, f.y, f.z, ax, ay, az, halfA, alphaA, bx, by, bz, halfB, alphaB, joint);
             if (q.veil > 0.004f) face(f.x * SmokePuffs.VEIL_AT, f.y * SmokePuffs.VEIL_AT, f.z * SmokePuffs.VEIL_AT, SmokePuffs.VEIL_AT * 4, q.veil);
             if (q.capAlpha > 0) face(q.mx, q.my, q.mz, q.halfW * FarSprites.GLOW, q.capAlpha);
             if (strip) {
-                // [13], [14] — непрозрачность у a и у b (полоса — линейно между ними)
+                // [13], [14] are a and b opacities (linear between along strip)
                 polygons.add(new double[]{q.x0 - q.px * q.ha, q.y0 - q.py * q.ha, q.z0 - q.pz * q.ha, q.x0 + q.px * q.ha, q.y0 + q.py * q.ha,
                         q.z0 + q.pz * q.ha, q.x1 + q.nx * q.hb, q.y1 + q.ny * q.hb, q.z1 + q.nz * q.hb, q.x1 - q.nx * q.hb, q.y1 - q.ny * q.hb,
                         q.z1 - q.nz * q.hb, 0.5 * (Math.min(1, q.alphaA) + Math.min(1, q.alphaB)), Math.min(1, q.alphaA), Math.min(1, q.alphaB)});
@@ -159,7 +159,7 @@ class SmokeFillTest {
             return strip;
         }
 
-        /** Внутри ли проекции многоугольника p (4 вершины перед глазом) точка экрана (u, v). */
+        /** Whether screen point (u, v) is inside polygon p projection (4 vertices before eye). */
         boolean insideProjected(double[] p, double u, double v) {
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double[] pu = new double[4], pv = new double[4];
@@ -181,7 +181,7 @@ class SmokeFillTest {
             return true;
         }
 
-        /** Новый кадр: квадраты, многоугольники и вуаль — заново. */
+        /** New frame: reset quads, polygons and veil. */
         void clear() {
             quads.clear();
             puffs.clear();
@@ -190,7 +190,7 @@ class SmokeFillTest {
             veil = null;
         }
 
-        /** Квадрат лицом к камере с серединой (x, y, z) от глаза и полуразмером half — в кадр. */
+        /** Add camera-facing quad centered at eye-relative (x, y, z), half-size half, to frame. */
         private void face(double x, double y, double z, double half, double a) {
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             double depth = x * f.x + y * f.y + z * f.z;
@@ -211,7 +211,7 @@ class SmokeFillTest {
             return sum;
         }
 
-        /** Пропускание в точке экрана (u, v): квадраты — радиальный профиль непрозрачности кадра клуба, вуали. */
+        /** Screen point (u, v) transmittance: quads use clump-frame radial opacity profile, plus veil. */
         double transmittance(double u, double v, double[][] prof) {
             Vector3f f = view.forward(), l = view.left(), up = view.up();
             return transmittanceRay(f.x + u * l.x + v * up.x, f.y + u * l.y + v * up.y, f.z + u * l.z + v * up.z, prof);
@@ -423,7 +423,7 @@ class SmokeFillTest {
         return out;
     }
 
-    /** Лежит ли многоугольник (все вершины на одной высоте — лежащий клуб, а не полоса ленты). */
+    /** Whether polygon lies horizontally (all vertices at same height: flat clump, not ribbon strip). */
     static boolean isFlat(double[] p) {
         return p[1] == p[4] && p[4] == p[7] && p[7] == p[10];
     }
@@ -435,7 +435,7 @@ class SmokeFillTest {
                 Sight.Air.at(0, 20000));
     }
 
-    /** Налёт: 14 шахедов и 2 ракеты в квадрате 240 м, 40 % — в крыши на 10–40 м, возраст 5–150 с, ветер 4 м/с (класс D). */
+    /** Raid: 14 Shaheds and 2 missiles in 240 m square, 40% hit roofs at 10–40 m, age 5–150 s, wind 4 m/s (class D). */
     static List<Blast> raid(double now) {
         Random rnd = new Random(7);
         CloudModel.Air air = new CloudModel.Air(Stability.STANDARD_N, 4, 1, 0.15, 3, 0.5);
@@ -451,9 +451,9 @@ class SmokeFillTest {
     }
 
     /**
-     * Пропускание самого вещества налёта в точке экрана (u, v) из глаза кадра {@code view}: e^(−Στ), τ — толща по лучу
-     * через каждый гаусс облаков модели ({@link SmokePuffs#sightDepth}; ножка — гауссами трубки), без квадратов. С ним
-     * сверяются оба кадра — полный и в бюджете.
+     * Raid matter transmittance at screen point (u, v) from frame eye {@code view}: e^(−Στ), τ is ray optical depth
+     * through each model-cloud Gaussian ({@link SmokePuffs#sightDepth}; stem as tube Gaussians), without quads. Both frames,
+     * full and budgeted, are compared against it.
      */
     static double truth(List<Blast> raid, double now, FarView view, double u, double v) {
         Vector3f f = view.forward(), l = view.left(), up = view.up();
@@ -465,7 +465,7 @@ class SmokeFillTest {
             double t = now - b.born();
             if (t < 0 || t >= b.model().life) continue;
             b.model().blobs(t, (x, y, z, sh, sv, soot, dust, water, kelvin, rise) -> {
-                // светящийся газ — тело огня, не дым (как у приёмника слоя): доля дыма — у непрозрачности клуба, не у массы
+                // glowing gas is fire body, not smoke (as layer sink): smoke share applies to clump opacity, not mass
                 double smoke = SmokePuffs.smokeShare(true, kelvin, view.skyLuminance());
                 double ext = CloudModel.SOOT_K * soot + kd * dust;
                 if (ext > 0 && smoke > 0) {
@@ -477,14 +477,14 @@ class SmokeFillTest {
         return Math.exp(-tau[0]);
     }
 
-    /** Кадр налёта из глаза eye в сторону fwd с бюджетом заливки budget. */
+    /** Raid frame from eye toward fwd with fill budget budget. */
     static Screen frame(List<Blast> raid, double now, Vec3 eye, Vector3f fwd, double budget) {
         FarView v = view(eye, new Vector3f(fwd));
         Screen s = new Screen(v);
         double was = SmokePuffs.budget;
         SmokePuffs.budget = budget;
         try {
-            // два кадра: доля кучек трубок — из прошлого кадра
+            // two frames: tube cluster share comes from previous frame
             SmokePuffs.resetBudget();
             for (int frame = 0; frame < 2; frame++) {
                 s.clear();
@@ -499,10 +499,10 @@ class SmokeFillTest {
     }
 
     /**
-     * Доля дыма у тела огня — у непрозрачности, а не у массы (live 24.10): у клуба шара сотни оптических толщ, и масса × доля
-     * давала сплошную сажу уже при доле 1 % — скачок за ~0,1 с, тёмный ореол перед шаром ракеты днём. Густой клуб (τ ≈ 200
-     * поперёк) с долей дыма 10 % закрывает середину не меньше доли и не больше 0,35, а не целиком (прежде — ~1). Сверх
-     * доли — кучка: доли клубов считаются по перекрытию площадей (много × размер²), а середину накрывают все клубы кучки.
+     * Smoke share at fire body applies to opacity, not mass (live 24.10): ball clump has hundreds of optical depths, and mass × share
+     * gave solid soot already at 1%, jump over ~0.1 s, dark halo before missile ball in daytime. Thick clump (transverse τ ≈ 200)
+     * with 10% smoke share covers center by at least share and at most 0.35, not fully (previously ~1). Excess above
+     * share comes from cluster: clump shares use area overlap (count × size²), but all cluster clumps cover center.
      */
     @Test
     void glowShareScalesOpacityNotMass() throws IOException {
@@ -513,7 +513,7 @@ class SmokeFillTest {
             else hi = mid;
         }
         double kelvin = 0.5 * (lo + hi), share = SmokePuffs.smokeShare(true, kelvin, 1);
-        assertTrue(Math.abs(share - 0.1) < 1e-3, "доля дыма " + share);
+        assertTrue(Math.abs(share - 0.1) < 1e-3, "smoke share " + share);
         double sigma = 5, soot = 200 * 2 * Math.PI * sigma * sigma / CloudModel.SOOT_K;
         SmokeGrid.Source ball = new SmokeGrid.Source() {
             @Override
@@ -544,16 +544,16 @@ class SmokeFillTest {
         SmokePuffs.flush();
         SmokePuffs.resetBudget();
         double covered = 1 - s.transmittance(0, 0, PlumeContinuityTest.profiles());
-        assertTrue(covered >= share - 0.01 && covered <= 0.35, "середина клуба с долей дыма " + share + " закрыта на " + covered);
+        assertTrue(covered >= share - 0.01 && covered <= 0.35, "clump center with smoke share " + share + " covered by " + covered);
     }
 
     /**
-     * Глаз на крыше в дыму налёта и рядом с облаками, взгляд вдоль дыма. При настоящем бюджете налёт из 16 ударов в него
-     * ложится как есть — без слияния и вуали (вид прежний). Сам предел — на вчетверо меньшем бюджете: без него кадр
-     * закрывает больше двух таких бюджетов, с ним — не больше бюджета (с запасом на оценку площади кучки, 15 %; пол — по
-     * одному клубу на гаусс — не выше бюджета) и меньше вдвое; пропускание по экрану в среднем и в каждой из 18 частей кадра
-     * от пропускания самого вещества модели ({@link #truth}) — не дальше, чем у полного кадра, больше чем на 0,04 и 0,05
-     * (мельче части — подробность клубов: её бюджет и отдаёт). Налёт из 100 — {@code SmokeRaidTest}.
+     * Eye on roof in raid smoke and beside clouds, looking along smoke. At real budget, 16-strike raid fits
+     * unchanged, without merging or veil (same look). Limit itself tested at quarter budget: free frame
+     * covers over two such budgets, budgeted no more than budget (15% allowance for cluster-area estimate; floor,
+     * one clump per Gaussian, no higher than budget), and half as much; screen transmittance overall and in each of 18 regions
+     * deviates from model matter transmittance ({@link #truth}) no more than full frame plus 0.04 and 0.05
+     * (regional substructure is clump detail surrendered by budget). 100-strike raid: {@code SmokeRaidTest}.
      */
     @Test
     void raidSmokeStaysInTheFillBudgetAtTheSameDensity() throws IOException {
@@ -577,8 +577,8 @@ class SmokeFillTest {
             }
             meanFree /= n;
             meanBudget /= n;
-            // подробность клубов мельче части кадра — её бюджет и отдаёт, плотность — по частям; оба кадра — против вещества
-            // модели (без квадратов): бюджет не дальше от него, чем полный кадр, больше чем на шум подробности
+            // clump detail below region size is what budget surrenders; regional density; both frames against model
+            // matter (no quads): budget deviation no greater than full frame plus detail noise
             double floor = SmokePuffs.lastFloor();
             double[] real = new double[18];
             FarView v0 = view(eye, new Vector3f(along));
@@ -590,7 +590,7 @@ class SmokeFillTest {
             }
             double worstFree = worstBlock(free, real, prof), worst = worstBlock(budget, real, prof), meanReal = 0;
             for (double r : real) meanReal += r / real.length;
-            String got = String.format(Locale.ROOT, "глаз %s: при бюджете %.0f пол %.1f (до слияния %.1f); без бюджета %d квадратов, %.1f экранов, пропускание %.3f; с бюджетом %.0f — %d, %.1f (пол %.1f), %.3f; худшая часть против вещества: полный %.3f, в бюджете %.3f",
+            String got = String.format(Locale.ROOT, "eye %s: at budget %.0f floor %.1f (before merging %.1f); free %d quads, %.1f screens, transmittance %.3f; budget %.0f: %d, %.1f (floor %.1f), %.3f; worst region against matter: full %.3f, budgeted %.3f",
                     eye, SmokePuffs.FILL_BUDGET, whole, raw, free.quads.size(), free.fill(), meanFree, half, budget.quads.size(), budget.fill(), floor, meanBudget,
                     worstFree, worst);
             System.out.println("FILL " + got);
@@ -598,15 +598,15 @@ class SmokeFillTest {
             assertTrue(free.fill() > 2 * half, got);
             assertTrue(budget.fill() <= 1.15 * half && floor <= half + 1e-9, got);
             assertTrue(budget.fill() < free.fill() / 2, got);
-            assertTrue(Math.abs(meanBudget - meanReal) <= Math.abs(meanFree - meanReal) + 0.04, got + "; вещество в среднем " + meanReal);
+            assertTrue(Math.abs(meanBudget - meanReal) <= Math.abs(meanFree - meanReal) + 0.04, got + "; mean matter " + meanReal);
             assertTrue(worst <= worstFree + 0.05, got);
         }
     }
 
     /**
-     * Залп в грунт через полсекунды (струи завесы выброса в воздухе у каждого из 16 ударов, кадры удара в пыль): кадр — в том
-     * же бюджете заливки, что облака налёта (не больше бюджета или его пола, с тем же запасом 15 %); новых квадратов сверх
-     * бюджета завеса не даёт.
+     * Ground salvo after half a second (airborne ejecta curtain jets for each of 16 strikes, dust-impact frames): frame uses
+     * same fill budget as raid clouds (no more than budget or floor, same 15% allowance); curtain adds no quads
+     * beyond budget.
      */
     @Test
     void ejectaCurtainsStayInTheFillBudget() {
@@ -647,15 +647,15 @@ class SmokeFillTest {
                 SmokePuffs.budget = was;
                 SmokePuffs.resetBudget();
             }
-            assertTrue(!s.quads.isEmpty(), "завеса видна");
+            assertTrue(!s.quads.isEmpty(), "curtain visible");
             if (budget < Double.POSITIVE_INFINITY) {
                 double floor = SmokePuffs.lastFloor();
-                assertTrue(s.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), "заливка " + s.fill() + ", пол " + floor);
+                assertTrue(s.fill() <= 1.15 * Math.max(SmokePuffs.FILL_BUDGET, floor), "fill " + s.fill() + ", floor " + floor);
             }
         }
     }
 
-    /** Клубы разного вида (дым и завеса выброса) — разные кадры: в один гаусс не сливаются, даже лёжа друг на друге. */
+    /** Different looks (smoke and ejecta curtain) use different frames: never merge into one Gaussian, even coincident. */
     @Test
     void differentLooksDoNotMerge() {
         int f = SmokePuffs.FIELDS;
@@ -671,23 +671,23 @@ class SmokeFillTest {
         held[f + 15] = SmokeGrid.Look.EJECTA.ordinal();
         boolean[] gone = new boolean[2];
         SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
-        assertTrue(!gone[0] && !gone[1], "дым и завеса не слились");
+        assertTrue(!gone[0] && !gone[1], "smoke and curtain did not merge");
         held[f + 15] = SmokeGrid.Look.SMOKE.ordinal();
         SmokePuffs.merge(held, 0, 2, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
-        assertTrue(gone[1], "одного вида — слились");
+        assertTrue(gone[1], "same look merged");
     }
 
     /**
-     * Слияние близких гауссов держит массу и моменты: два равных клуба на расстоянии σ — один с суммой масс, серединой
-     * посередине и σ² = σ² + (σ/2)² по оси разноса (по горизонтали — половина: σh общий у двух осей); дальше 2σ — не
-     * сливаются никогда, дальше σ — только когда кадр не укладывается в бюджет.
+     * Nearby Gaussian merging preserves mass and moments: two equal clumps separated by σ become one with summed mass, center
+     * at midpoint and σ² = σ² + (σ/2)² along separation axis (horizontal gets half: σh shared by two axes); beyond 2σ never
+     * merge, beyond σ only when frame exceeds budget.
      */
     /**
-     * Подробность кучек — случайная (зерно облака): смена зерна меняет пропускание по частям кадра не больше чем на 0,08 —
-     * от этого шума и мерится, что бюджет плотность не трогает ({@link #raidSmokeStaysInTheFillBudgetAtTheSameDensity}: +0,05).
-     * Клуб — шапка облака взрыва сверху (tools/bake_fx, puff-vdb): густой диск (покрытие по хорде 0,71–0,80 полуразмера) с
-     * резким клубящимся краем, а не прежний пушистый шар (0,48–0,82), поэтому место клуба меняет пропускание части сильнее,
-     * чем прежние 0,05; против вещества модели кадр при этом ближе (худшая часть 0,20–0,23 против 0,38–0,43).
+     * Cluster detail is random (cloud seed): changing seed alters regional frame transmittance by at most 0.08;
+     * this noise defines how budget leaves density intact ({@link #raidSmokeStaysInTheFillBudgetAtTheSameDensity}: +0.05).
+     * Clump is top-down explosion-cloud cap (tools/bake_fx, puff-vdb): dense disc (chord coverage 0.71–0.80 half-size) with
+     * sharp billowing edge, not old fluffy sphere (0.48–0.82), so clump placement changes regional transmittance more than
+     * old 0.05; frame is still closer to model matter (worst region 0.20–0.23 versus 0.38–0.43).
      */
     @Test
     void clusterDetailNoise() throws IOException {
@@ -698,15 +698,15 @@ class SmokeFillTest {
         Screen a = frame(raid, now, new Vec3(0, 40, 0), new Vector3f(1, 0, 0), Double.POSITIVE_INFINITY);
         Screen b = frame(other, now, new Vec3(0, 40, 0), new Vector3f(1, 0, 0), Double.POSITIVE_INFINITY);
         double worst = worstBlock(a, b, prof);
-        assertTrue(worst <= 0.08, "зерно: худшая часть кадра " + worst);
+        assertTrue(worst <= 0.08, "seed: worst frame region " + worst);
     }
 
-    /** Наибольшая разница среднего пропускания двух кадров по 18 частям (8 × 9 узлов сетки 48×27). */
+    /** Maximum regional mean transmittance difference between two frames over 18 regions (8 × 9 nodes of 48×27 grid). */
     static double worstBlock(Screen a, Screen b, double[][] prof) {
         return worstBlock(a, blocks(b, prof), prof);
     }
 
-    /** То же против средних по частям {@code ref}. */
+    /** Same against regional means {@code ref}. */
     static double worstBlock(Screen a, double[] ref, double[][] prof) {
         double[] ba = blocks(a, prof);
         double worst = 0;
@@ -714,7 +714,7 @@ class SmokeFillTest {
         return worst;
     }
 
-    /** Среднее пропускание кадра по 18 частям. */
+    /** Mean frame transmittance over 18 regions. */
     static double[] blocks(Screen a, double[][] prof) {
         double[] ba = new double[18];
         for (int i = 0; i < 48; i++) {
@@ -740,9 +740,9 @@ class SmokeFillTest {
         }
         boolean[] gone = new boolean[3];
         SmokePuffs.merge(held, 0, 3, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
-        assertTrue(!gone[0] && gone[1] && !gone[2], "слит только близкий");
-        assertTrue(Math.abs(held[0] - 2) < 1e-9 && Math.abs(held[5] - 2) < 1e-9 && Math.abs(held[6] - 4) < 1e-9, "середина и массы");
-        assertTrue(Math.abs(held[3] - Math.sqrt(16 + 0.5 * 4)) < 1e-9, "σh² = σh² + половина разноса²: " + held[3]);
-        assertTrue(Math.abs(held[4] - 4) < 1e-9, "σv та же");
+        assertTrue(!gone[0] && gone[1] && !gone[2], "only nearby merged");
+        assertTrue(Math.abs(held[0] - 2) < 1e-9 && Math.abs(held[5] - 2) < 1e-9 && Math.abs(held[6] - 4) < 1e-9, "center and masses");
+        assertTrue(Math.abs(held[3] - Math.sqrt(16 + 0.5 * 4)) < 1e-9, "σh² = σh² + half separation²: " + held[3]);
+        assertTrue(Math.abs(held[4] - 4) < 1e-9, "same σv");
     }
 }

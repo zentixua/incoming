@@ -22,25 +22,25 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Залп «Града» по воде у камеры (финальный проход 3.7.0, сцена {@code grad-day}: на 6 с — полоса брызг с прямыми
- * вертикальными краями, на 12 с — ровно-серый экран, на 20 с — прямоугольные «простыни»). Двенадцать разрывов в воду в
- * круге 15 м через секунду, глаз — в 30 м и 14 м над водой, взгляд — на 6 м над серединой; ветер 6 м/с. Брызги
- * раскладывает тот же приёмник слоя, что в игре ({@link SmokePuffs#sink}), квадраты пишет свой приёмник.
+ * Grad salvo on water near camera (3.7.0 final pass, {@code grad-day} scene: at 6 s spray strip with straight
+ * vertical edges, at 12 s uniform gray screen, at 20 s rectangular “sheets”). Twelve water bursts in
+ * 15 m circle one second apart, eye 30 m away and 14 m above water, looking 6 m above center; wind 6 m/s. Same
+ * game layer sink lays spray ({@link SmokePuffs#sink}), custom sink writes quads.
  * <ul>
- * <li>Клуб брызг не вытянут: стоящий квадрат кадра брызг — не длиннее {@value #ROUND} раза поперёк (растянутый кадр клал
- * струю плоской полосой с прямыми боками).</li>
- * <li>Глаз — вне столбов: вуали нет (столб шире закона накрывал камеру, и вуаль заливала экран).</li>
- * <li>Через 9 с после последнего разрыва (вода упала, водяная пыль — тонким слоем у воды) брызги закрывают меньше
- * {@value #FOG_COVER} кадра хотя бы наполовину.</li>
+ * <li>Spray clump not elongated: upright spray-frame quad aspect at most {@value #ROUND} (stretched frame made
+ * jet a flat strip with straight sides).</li>
+ * <li>Eye outside columns: no veil (column wider than law covered camera, veil filled screen).</li>
+ * <li>Nine seconds after last burst (water landed, mist in thin layer near water), spray covers less than
+ * {@value #FOG_COVER} of frame at least halfway.</li>
  * </ul>
  */
 class WaterSalvoTest {
-    /** Стоящий клуб брызг — не длиннее стольких раз поперёк. */
+    /** Maximum upright spray-clump aspect ratio. */
     static final double ROUND = 1.25;
-    /** Доля кадра, закрытая брызгами больше чем наполовину, через 9 с после последнего разрыва — не больше. */
+    /** Maximum frame share covered more than halfway by spray nine seconds after last burst. */
     static final double FOG_COVER = 0.1;
 
-    /** Брызги разрыва на воде — источник, как событие {@code FarBlasts.Event} (без облака самого взрыва). */
+    /** Water-burst spray source, like {@code FarBlasts.Event} (without explosion cloud itself). */
     record Spray(WaterBlast water, double x, double y, double z, double born, long seed) implements SmokeGrid.Source {
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -75,11 +75,11 @@ class WaterSalvoTest {
         }
     }
 
-    /** Квадраты кадра на экране (тангенсы): середина, полуразмеры, непрозрачность, кадр, брызги ли, лежит ли; вуаль. */
+    /** Frame quads on screen (tangents): center, half-sizes, opacity, frame, is spray, is flat; veil. */
     static final class Screen implements SmokePuffs.Out {
         final FarView view;
         final List<double[]> quads = new ArrayList<>();
-        /** Вуаль у глаза кадра (копия сетки), null — её нет. */
+        /** Veil at frame eye (grid copy), null if absent. */
         SmokePuffs.Veil veil;
 
         Screen(FarView view) {
@@ -119,7 +119,7 @@ class WaterSalvoTest {
         @Override
         public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a) {
-            // лежащий квадрат: по высоте экрана — проекция диска
+            // flat quad: screen height is disc projection
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
             add(dx, dy, dz, halfA, halfB * Math.abs(dy) / d, sprite, a, true);
         }
@@ -129,12 +129,12 @@ class WaterSalvoTest {
             this.veil = veil.copy();
         }
 
-        /** Пропускание вуали в точке экрана (u — вправо, v — вверх, тангенсы); вуали нет — 1. */
+        /** Veil transmittance at screen point (u right, v up, tangents); 1 if no veil. */
         double through(double u, double v) {
             return veil == null ? 1 : veil.through(-u, v);
         }
 
-        /** Наибольшая непрозрачность вуали по кадру. */
+        /** Maximum veil opacity over frame. */
         double veiled() {
             double most = 0;
             for (int j = 0; j < 27; j++) {
@@ -152,7 +152,7 @@ class WaterSalvoTest {
             return false;
         }
 
-        /** Доля кадра (сетка 160 × 90), где квадраты вместе закрывают больше половины: альфа кадров атласа, как на листе. */
+        /** Frame share (160 × 90 grid) where combined quads cover more than half: atlas-frame alpha as on sheet. */
         double covered(float[][][] alpha) {
             int w = 160, h = 90, n = 0;
             for (int j = 0; j < h; j++) {
@@ -173,7 +173,7 @@ class WaterSalvoTest {
         }
     }
 
-    /** Альфа кадров клуба дыма и брызг: [брызги ли][кадр][пиксель 128 × 128]. */
+    /** Smoke and spray clump frame alpha: [is spray][frame][128 × 128 pixel]. */
     static float[][][] alpha() throws IOException {
         float[][][] out = new float[2][FxAtlas.PUFF6_FRAMES][];
         for (int k = 0; k < 2; k++) {
@@ -191,7 +191,7 @@ class WaterSalvoTest {
         return out;
     }
 
-    /** Залп: двенадцать разрывов «Града» в воду глубиной 4 м в круге 15 м вокруг (0, 0, 0) через секунду. */
+    /** Salvo: twelve Grad bursts in 4 m deep water, 15 m circle around (0, 0, 0), one second apart. */
     static List<Spray> salvo() {
         CloudModel.Air air = new CloudModel.Air(0.012, 0, -6, 0.14, 2, 1);
         Random rnd = new Random(7);
@@ -206,7 +206,7 @@ class WaterSalvoTest {
     static Screen frame(List<Spray> salvo, double now) {
         FarView v = SmokeFillTest.view(new Vec3(0, 14, 30), new Vector3f(0, -8, -30));
         Screen s = new Screen(v);
-        // два кадра: доля кучек трубок — из прошлого кадра
+        // two frames: tube cluster share from previous frame
         SmokePuffs.resetBudget();
         for (int k = 0; k < 2; k++) {
             s.quads.clear();
@@ -219,9 +219,9 @@ class WaterSalvoTest {
     }
 
     /**
-     * Клубы отрезка ждут слияния и бюджета, как клубы-точки, но друг с другом не сливаются: шаг отрезка — по меньшей σ, и у
-     * плоского ряда пыли (σh 6 м, σv 1 м, 40 м вдоль x — пыль у старта, {@code LaunchCloud}) соседи ближе σh — слитые, они
-     * собрались бы в один круглый в плане гаусс. Те же клубы точками (не отрезка) сливаются.
+     * Segment clumps wait for merging and budget like point clumps, but never merge with each other: segment spacing follows smaller σ;
+     * in flat dust row (σh 6 m, σv 1 m, 40 m along x, launch dust, {@code LaunchCloud}), neighbors closer than σh would
+     * merge into one plan-view round Gaussian. Same clumps as points (not segment) do merge.
      */
     @Test
     void segmentClubsDoNotMergeWithEachOther() {
@@ -238,7 +238,7 @@ class WaterSalvoTest {
                 held[o + 8] = 0.6;
                 held[o + 9] = 0.55;
                 held[o + 10] = 0.45;
-                // номер: у клубов отрезка — один отрезок (номер / SEGMENT_CLUBS), у точек — каждый свой
+                // number: segment clumps share one segment (number / SEGMENT_CLUBS), point clumps each have own
                 held[o + 11] = segment ? 3 * n + k : (3 + k) * n;
                 held[o + 13] = 1;
                 held[o + 14] = segment ? 1 : 0;
@@ -247,8 +247,8 @@ class WaterSalvoTest {
             SmokePuffs.merge(held, 0, n, gone, CloudModel.SOOT_K, SmokeGrid.DROP_K);
             int left = 0;
             for (boolean g : gone) if (!g) left++;
-            if (segment) assertTrue(left == n, "клубы отрезка слились: осталось " + left + " из " + n);
-            else assertTrue(left < n / 2, "точки рядом не слились: осталось " + left);
+            if (segment) assertTrue(left == n, "segment clumps merged: remaining " + left + " of " + n);
+            else assertTrue(left < n / 2, "nearby points did not merge: remaining " + left);
         }
     }
 
@@ -265,7 +265,7 @@ class WaterSalvoTest {
             }
             double cover = s.covered(alpha);
             double veil = s.veiled();
-            String got = String.format(Locale.ROOT, "%.0f с: квадратов %d, самый вытянутый клуб брызг %.2f, вуаль до %.3f, закрыто больше половины %.2f кадра",
+            String got = String.format(Locale.ROOT, "%.0f s: %d quads, most elongated spray clump %.2f, veil up to %.3f, more than half covered %.2f of frame",
                     now, s.quads.size(), worst, veil, cover);
             System.out.println("SALVO " + got);
             assertTrue(worst <= ROUND, got);
