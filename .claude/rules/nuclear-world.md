@@ -232,12 +232,15 @@ paths:
 - Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
   loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`
   with `late` (burns and prompt dose, sickness from the detonation via `RadiationTicker.addDose(…, at)`; no flash panic or
-  clothes catching fire) and `BlastBody.late` (injury law, no throw). Entity attachment `NUKE_SEEN` (`NukeSeen`: pulse and
-  blast detonation numbers, fallout account time) is set by the pulse, by front hits, by the late queue and on spawn
-  (a newly spawned body is settled for every detonation so far), and re-checked when a queued body is processed (a quick
-  reload queues it twice). `MobFallout` integrates each mob's dose since its own `falloutAt` (log-grid integral for gaps
+  clothes catching fire) and `BlastBody.late` (injury law, no throw). Entity attachment `NUKE_SEEN` (`NukeSeen`: the
+  detonation numbers whose pulse and wave the body received, each by its own number — a later pulse may come before an
+  earlier queued one; `born`, the last detonation when it spawned; fallout account time). The pulse (non-players) and
+  the front check and set it, as does the late queue, so whichever path comes first wins (a body loaded on the tick the
+  front crosses it, a quick reload queued twice). The join event only measures distances: reaches of past detonations
+  (cold after a restart) are computed in `LateExposure.work`, one per work unit, then waiting bodies are sorted, then
+  each body's detonations, one per unit. `MobFallout` integrates each mob's dose since its own `falloutAt` (log-grid integral for gaps
   over 2 passes). Worlds saved before the mark: detonations below `NuclearEvents.lateFrom` stay as they were (hit bodies
-  carry no mark). GameTest `LateExposureGameTests`, unit `MobFalloutTest`. Estimate: the late body reads the world as it
+  carry no mark). GameTest `LateExposureGameTests`, `LateExposureOrderGameTests`, unit `MobFalloutTest`. Estimate: the late body reads the world as it
   is on load (ruins may have replaced its shelter).
 - Burial: ruins bypass `setBlock`, so vanilla only detects a body inside blocks via suffocation. Burial uses a
   pre-replacement snapshot of living entities not inside blocks (`BlastBody.free`) and their bounds in blocks afterward

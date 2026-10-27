@@ -380,7 +380,7 @@ public final class NuclearWorld {
         }
         // bodies loaded after the pulse or the front passed their place: before the front and ruins of this tick
         try {
-            late.work(level, clock);
+            late.work(level, clock, pulses);
         } catch (RuntimeException e) {
             Incoming.LOG.error("Late nuclear exposure failed with an exception; queue dropped", e);
             late.clear();

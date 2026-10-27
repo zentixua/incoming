@@ -29,6 +29,7 @@ import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
+import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
@@ -145,7 +146,13 @@ public final class NuclearWarhead {
      */
     public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner, boolean late) {
         if (!living.isAlive()) return false;
-        living.setData(ModAttachments.NUKE_SEEN, living.getData(ModAttachments.NUKE_SEEN).withPulse(d.id()));
+        // once per body and detonation, whichever path comes first: the pulse list or a load after it (LateExposure;
+        // players are not caught up, so they carry no mark)
+        if (!(living instanceof Player)) {
+            NukeSeen seen = living.getData(ModAttachments.NUKE_SEEN);
+            if (seen.pulsed(d.id())) return false;
+            living.setData(ModAttachments.NUKE_SEEN, seen.withPulse(d.id()));
+        }
         // creative and spectator: no burns or dose (as with damage)
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
