@@ -5,67 +5,67 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Облака клиента и сетка дыма у камеры. Источник облака ({@link Source}: облако взрыва, облако старта, дым пожара —
- * {@link #add}) отдаёт гауссовы клубы вещества по своему закону; кто их рисует — решает масштаб. Объём сетки — одна
- * трёхмерная текстура ослабления, которую проход пелены ({@code PallPass}, {@code fx_pall}) проходит своим ходом луча, —
- * только для источника масштаба, который её клетка разрешает ({@link Source#volume}: облака в сотни метров и
- * километры), и только если каждый его клуб не уже двух клеток своего каскада ({@link #RESOLVE}). Клубы обычного оружия
- * (метры–десятки метров) клетка в 8–32 м размазала бы в кубы и мыло (3.5.0): их рисует слой эффектов запечёнными
- * клубами ({@code far/SmokePuffs}, {@link #quads}). Без Minecraft и OpenGL: здесь — кто в кадре, каскады и раскладка; в
- * видеопамять кладёт {@code fx/layer/SmokePass}.
+ * Client clouds and eye-local smoke grid. Cloud source ({@link Source}: explosion cloud, launch cloud, fire smoke,
+ * {@link #add}) emits Gaussian matter clumps by its law; scale decides rendering. Grid volume is one
+ * 3D extinction texture traversed by the pall pass ({@code PallPass}, {@code fx_pall}) in its ray march,
+ * only for sources at scales its cell resolves ({@link Source#volume}: clouds hundreds of meters to
+ * kilometers wide), and only if every clump is at least two cells of its cascade wide ({@link #RESOLVE}). Conventional weapon clumps
+ * (meters to tens of meters) would be smeared into cubes and blur by 8–32 m cells (3.5.0); effects layer renders them as baked
+ * clumps ({@code far/SmokePuffs}, {@link #quads}). Without Minecraft or OpenGL: here are frame selection, cascades and layout;
+ * {@code fx/layer/SmokePass} uploads to GPU memory.
  * <p>
- * <b>Каскады.</b> {@link #CASCADES} кубов по {@link #N}³ клеток вокруг глаза, клетка — {@link #CELL} м (2, 8, 32: у глаза
- * 128 м, дальше 512 м и 2 км), угол куба — кратен клетке (сетка стоит на месте мира, а не ездит с глазом). Клуб
- * (гаусс массы вещества) ложится ровно в один каскад: самый мелкий, где он целиком (три σ) и где он не шире
- * {@link #SPAN} клеток σ, — значит у каждого каскада свой набор клубов, и плотность в точке — сумма каскадов, в которых она
- * есть. Шва на краю каскада нет: клуб у края уже в следующем. Клеткой мельче клуба гаусс не дробится: σ клуба в каскаде
- * — √(σ² + (клетка/2)²), масса та же.
+ * <b>Cascades.</b> {@link #CASCADES} cubes of {@link #N}³ cells around eye, cell size {@link #CELL} m (2, 8, 32: near eye
+ * 128 m, then 512 m and 2 km), cube corner aligned to cell (grid fixed in world, not moving with eye). Clump
+ * (Gaussian of matter mass) occupies exactly one cascade: finest fully containing it (three σ), with σ no wider than
+ * {@link #SPAN} cells; each cascade thus has its own clumps, and point density sums cascades containing
+ * matter there. No cascade-edge seam: clump near edge already belongs to next. Finer cells do not fragment Gaussian: cascade clump σ
+ * is √(σ² + (cell/2)²), same mass.
  * <p>
- * <b>Отрезок.</b> Клуб бывает размазан по отрезку от c − a до c + a ({@link Sink#segment}): плотность — среднее гаусса по
- * его центрам на отрезке, ρ = m·G₀·e^(−q⊥²/2)·√(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)] в осях, где σ — единица
- * (A — длина a там, q∥ и q⊥ — вдоль и поперёк него; {@link #line}). След и столб дыма — несколько отрезков, а не сотни
- * клубов цепочкой: шаг цепочки больше σ давал бы бусы.
+ * <b>Segment.</b> A clump may be spread over segment c − a to c + a ({@link Sink#segment}): density averages Gaussian over
+ * its centers on segment, ρ = m·G₀·e^(−q⊥²/2)·√(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)] in axes where σ is one
+ * (A is a's length there, q∥ and q⊥ along and across; {@link #line}). Trail and smoke column use several segments, not hundreds of
+ * chained clumps: chain steps exceeding σ would create beads.
  * <p>
- * <b>Текстура</b> — RGBA16F (2N × N × N·каскады): по x — две страницы, по y (слои) — высота, по z — z мира. Страница 0:
- * ослабление сажи, пыли и капель (1/м, σ' после дельта-Эддингтона) и Σ ослабление × ΔT (кК); страница 1: Σ ослабление
- * пыли × её альбедо ω' (r, g, b) и Σ ослабление × скорость подъёма (м/с) — по ним шум клубов идёт с веществом.
- * Заполняется каждый кадр: слой за слоем, клуб — прямоугольником клеток, где он есть, сложением (шейдер
- * {@code fx_smoke_fill}); пустые слои не рисуются.
+ * <b>Texture</b> is RGBA16F (2N × N × N·cascades): x has two pages, y (layers) is height, z is world z. Page 0:
+ * soot, dust and drop extinction (1/m, σ' after delta-Eddington) and Σ extinction × ΔT (kK); page 1: Σ dust extinction
+ * × albedo ω' (r, g, b) and Σ extinction × rise speed (m/s), making clump noise follow matter.
+ * Filled each frame, layer by layer, clump as cell rectangle containing it, additively (shader
+ * {@code fx_smoke_fill}); empty layers are not drawn.
  * <p>
- * <b>Вещество</b> — оптика {@link CloudModel}: сажа (альбедо 0,25, асимметрия 0,5), пыль (альбедо — по цвету грунта,
- * асимметрия 0,6), капли (альбедо ~1, асимметрия 0,85); у шейдера — те же числа ({@code smoke.glsl}, сверяет
+ * <b>Matter</b> uses {@link CloudModel} optics: soot (albedo 0.25, asymmetry 0.5), dust (albedo from soil color,
+ * asymmetry 0.6), drops (albedo ~1, asymmetry 0.85); shader has same numbers ({@code smoke.glsl}, checked by
  * {@code SmokeGlslTest}).
  */
 public final class SmokeGrid {
-    /** Клеток по стороне каскада. */
+    /** Cells per cascade side. */
     public static final int N = 64;
-    /** Каскадов и размер их клетки, м. */
+    /** Cascades and cell sizes, m. */
     public static final int CASCADES = 3;
     public static final float[] CELL = {2, 8, 32};
-    /** Клуб шире стольких клеток σ — в каскад крупнее (у последнего — как есть). */
+    /** Clump σ wider than this many cells moves to coarser cascade (last keeps it as is). */
     public static final float SPAN = 4;
-    /** Клуб в каскаде — до стольких σ от центра. */
+    /** Clump extends this many σ from center in cascade. */
     public static final float REACH = 3;
     /**
-     * Клубов в кадре не больше (ширина таблицы клубов). Не помещаются — уходят источники дальше всех от глаза, целиком
-     * ({@link Source#placed}): их рисуют сами (квадраты {@code FarBlasts}), а не половиной облака.
+     * Maximum frame clumps (clump table width). Overflow removes sources farthest from eye, whole
+     * ({@link Source#placed}): they render themselves ({@code FarBlasts} quads), not half a cloud.
      */
     public static final int MAX_BLOBS = 512;
-    /** Клубов, что источники могут отдать за кадр до раскладки (сверх — источник не в сетке). */
+    /** Maximum clumps sources can emit per frame before layout (overflow excludes source from grid). */
     static final int STAGED = 8 * MAX_BLOBS;
-    /** Чисел на клуб в черновике: 16 параметров {@link Sink#segment} и номер источника. */
+    /** Numbers per staged clump: 16 {@link Sink#segment} parameters and source number. */
     private static final int STAGE = 17;
     /**
-     * Строк таблицы клубов: центр и σ по горизонтали; σ по вертикали и пиковые ослабления; альбедо пыли и x полуотрезка;
-     * ΔT, подъём, y и z полуотрезка.
+     * Clump table rows: center and horizontal σ; vertical σ and peak extinctions; dust albedo and half-segment x;
+     * ΔT, rise, half-segment y and z.
      */
     public static final int BLOB_ROWS = 4;
-    /** Вершин на клуб в слое: два прямоугольника (страницы) по два треугольника. */
+    /** Vertices per clump per layer: two rectangles (pages), two triangles each. */
     static final int VERTICES = 12;
-    /** Температура воздуха, K (как у модели облака). */
+    /** Air temperature, K (as cloud model). */
     public static final float AIR_K = (float) CloudModel.T_AIR;
 
-    /** Сажа, пыль, капли: альбедо ω' и асимметрия g' после дельта-Эддингтона (f = g²), ослабление на массу σ', м²/кг. */
+    /** Soot, dust, drops: albedo ω' and asymmetry g' after delta-Eddington (f = g²), mass extinction σ', m²/kg. */
     public static final float SOOT_W, SOOT_G, DUST_G, DROP_W, DROP_G;
     public static final double SOOT_K, DROP_K;
 
@@ -75,7 +75,7 @@ public final class SmokeGrid {
         SOOT_G = (float) (CloudModel.SOOT_G / (1 + CloudModel.SOOT_G));
         SOOT_K = CloudModel.SOOT_K * (1 - CloudModel.SOOT_W * f);
         DUST_G = (float) (0.6 / 1.6);
-        // капли 5 мкм почти не поглощают: ω = 0,9999 (вода в видимом), f = g²
+        // 5 µm drops barely absorb: ω = 0.9999 (water in visible spectrum), f = g²
         double fw = CloudModel.DROP_G * CloudModel.DROP_G, ww = 0.9999;
         DROP_W = (float) ((1 - fw) * ww / (1 - fw * ww));
         DROP_G = (float) (CloudModel.DROP_G / (1 + CloudModel.DROP_G));
@@ -83,8 +83,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Источник вещества: облако взрыва (здесь), облако старта, след, дым пожара (их добавляют другие части клиента).
-     * Каждый кадр отдаёт свои клубы в мировых координатах; false — иссяк, уходит из сетки.
+     * Matter source: explosion cloud (here), launch cloud, trail, fire smoke (added by other client parts).
+     * Emits clumps in world coordinates each frame; false means exhausted, leaves grid.
      */
     public interface Source {
         boolean emit(double seconds, Sink out);
@@ -101,103 +101,103 @@ public final class SmokeGrid {
         default boolean budgeted() { return false; }
 
         /**
-         * Источник того масштаба, что объём сетки разрешает (облако в сотни метров и больше): только такой идёт в сетку.
-         * Облака обычного оружия — нет: их рисуют квадраты слоя ({@link #quads}).
+         * Source at scale grid volume resolves (cloud hundreds of meters or more): only these enter grid.
+         * Conventional weapon clouds do not: effects-layer quads render them ({@link #quads}).
          */
         default boolean volume() {
             return false;
         }
 
         /**
-         * У источника есть брызги — вода, брошенная вверх и падающая обратно (взрыв на воде): клубы, где капель больше
-         * сажи и пыли, рисуются кадрами брызг ({@code FxAtlas.spray6}). Нет — все клубы кадрами дыма: вода облака старта
-         * и облака конденсации — туман, что всплывает с газом, а не падает.
+         * Source has spray: water thrown upward and falling back (water explosion); clumps with more drops than
+         * soot and dust use spray frames ({@code FxAtlas.spray6}). Otherwise all use smoke frames: launch-cloud water
+         * and condensation clouds are mist rising with gas, not falling.
          */
         default boolean sprayClubs() {
             return false;
         }
 
-        /** В возрасте seconds: после падения струй у водяного взрыва остаётся туман, ему нужны клубы без полос падения. */
+        /** At age seconds: after water-explosion jets fall, remaining mist needs clumps without falling streaks. */
         default boolean sprayClubs(double seconds) {
             return sprayClubs();
         }
 
         /**
-         * Источник сам рисует светящийся газ телом огня (облако взрыва — огненным шаром): его горячие клубы слой эффектов
-         * не рисует дымом, а проступают они дымом той же долей, что тело тает ({@code CloudModel.glowShare}). Нет —
-         * клубы рисуются дымом при любой температуре (облако старта, дым пожара).
+         * Source draws glowing gas itself as fire body (explosion cloud as fireball); effects layer does not draw hot clumps
+         * as smoke; smoke appears by same share as body fades ({@code CloudModel.glowShare}). Otherwise
+         * clumps are smoke at any temperature (launch cloud, fire smoke).
          */
         default boolean drawsGlow() {
             return false;
         }
 
-        /** Зерно клубов: места и кадры квадратов клуба у слоя эффектов. */
+        /** Clump seed: effects-layer child quad positions and frames. */
         default long seed() {
             return 0;
         }
 
         /**
-         * Во сколько раз вещество выросло с выброса (σ сейчас против σ в начале): кадр запечённого клуба у слоя эффектов —
-         * тот, где симуляция выросла во столько же ({@code FxAtlas.puffFrame}).
+         * Growth factor since emission (current σ against initial σ): baked effects-layer clump frame
+         * where simulation grew by same factor ({@code FxAtlas.puffFrame}).
          */
         default double puffGrowth(double seconds) {
             return 2;
         }
 
         /**
-         * Какая доля клуба с центром на высоте y (мир) и радиусом r видна над рельефом, что закрывает место источника вдали
-         * (в прорисовке клуб режет глубина мира): 1 — открыто.
+         * Visible share of clump centered at world height y with radius r above terrain occluding distant source
+         * (within render distance world depth clips clump): 1 means open.
          */
         default double visible(double y, double r) {
             return 1;
         }
 
         /**
-         * Итог раскладки этого кадра: true — клубы источника в сетке; false — нет ни одного (таблица полна, а он дальше
-         * других): тогда облако рисует себя само.
+         * Current frame layout result: true means source clumps in grid; false means none (table full, source farther than
+         * others); cloud then renders itself.
          */
         default void placed(boolean inGrid) {}
 
-        /** Источник иссяк и без кадра (тик сетки убирает его, даже если кадров нет). */
+        /** Source exhausted even without frames (grid tick removes it even with no frames). */
         default boolean ended() {
             return false;
         }
     }
 
     /**
-     * Чем рисуется клуб у слоя эффектов (кадры запечённой симуляции, {@code FxAtlas}): форма клуба — подача, вещество и
-     * размер — модели. {@link #SMOKE} — облако взрыва, пожара, старта (кадры шапки облака; у источника с брызгами клубы
-     * капель — брызгами, {@link Source#sprayClubs}); {@link #EJECTA} — завеса выброса грунта ({@link Ejecta}: кадры
-     * удара в пыль, JangaFX «Grenade Dust Impact»); {@link #CRUSH} — пыль дробления связного (бетон, камень, кладка, плита:
-     * кадры пыли обрушения постройки, «Building Implosion»); {@link #AIRBURST} — облако разрыва в воздухе (кадры разрыва
-     * в воздухе, «Mid-Air Explosion»).
+     * Effects-layer clump appearance (baked simulation frames, {@code FxAtlas}): shape is presentation, matter and
+     * size follow model. {@link #SMOKE}: explosion, fire, launch cloud (cloud-cap frames; source with spray renders drop
+     * clumps as spray, {@link Source#sprayClubs}); {@link #EJECTA}: soil ejecta curtain ({@link Ejecta}: dust-impact
+     * frames, JangaFX “Grenade Dust Impact”); {@link #CRUSH}: cohesive crushed dust (concrete, stone, masonry, slab:
+     * building-collapse dust frames, “Building Implosion”); {@link #AIRBURST}: airburst cloud (airburst
+     * frames, “Mid-Air Explosion”).
      */
     public enum Look { SMOKE, EJECTA, CRUSH, AIRBURST }
 
-    /** Куда источник кладёт клубы. */
+    /** Where source deposits clumps. */
     public interface Sink {
         /**
-         * Следующие клубы этого источника — вида {@code look} с кадром {@code frame} (с дробью; у {@link Look#SMOKE} кадр —
-         * по росту источника, {@link Source#puffGrowth}, и {@code frame} не берётся). Сетка вид не различает. До первого
-         * вызова у каждого источника — {@link Look#SMOKE}.
+         * Following source clumps use {@code look} and {@code frame} (fractional; {@link Look#SMOKE} frame
+         * follows source growth, {@link Source#puffGrowth}, ignoring {@code frame}). Grid ignores look. Before first
+         * call, each source uses {@link Look#SMOKE}.
          */
         default void look(Look look, double frame) {}
 
 
         /**
-         * Гауссов клуб, размазанный по отрезку от центра − (ax, ay, az) до центра + (ax, ay, az) (см. {@link SmokeGrid}):
-         * центр в мире (x, y, z), полуотрезок, м; σ по горизонтали и вертикали, м; массы сажи, пыли и капель на весь отрезок, кг;
-         * альбедо ω' пыли по каналам (после дельта-Эддингтона, {@link #dustAlbedo}); температура газа, K; подъём, м/с.
+         * Gaussian clump spread over segment center − (ax, ay, az) to center + (ax, ay, az) (see {@link SmokeGrid}):
+         * world center (x, y, z), half-segment, m; horizontal and vertical σ, m; whole-segment soot, dust and drop masses, kg;
+         * dust albedo ω' by channel (after delta-Eddington, {@link #dustAlbedo}); gas temperature, K; rise, m/s.
          */
         void segment(double x, double y, double z, double ax, double ay, double az, double sh, double sv, double soot, double dust,
                      double water, float dustR, float dustG, float dustB, double kelvin, double rise);
 
         /**
-         * Кусок трубки дыма между концами a и b (центры сечения в мире; шлейф пожара, ножка облака взрыва): у каждого конца
-         * σ по горизонтали и вертикали, м, сажи и пыли на метр оси куска (не пути по ветру), кг/м; альбедо ω' пыли по
-         * каналам; кусок без вещества — пустой (держит номер куска у приёмника); температура газа, K; подъём, м/с. Сетка берёт его отрезком со средними концов; слой эффектов рисует
-         * трубкой, как след снаряда ({@code FarFlightView.line}): σ и вещество меняются вдоль оси без ступенек, вдали —
-         * лентой. sigma0 — σ сечения у самого источника (кадр клуба — по росту σ с него).
+         * Smoke tube piece between ends a and b (world cross-section centers; fire plume, explosion-cloud stem): each end has
+         * horizontal and vertical σ, m, soot and dust per piece-axis meter (not downwind path), kg/m; dust albedo ω' by
+         * channel; matter-free piece is empty (retains piece number at sink); gas temperature, K; rise, m/s. Grid uses segment with averaged ends; effects layer renders
+         * a tube like projectile trail ({@code FarFlightView.line}): σ and matter vary smoothly along axis; distant view uses
+         * ribbon. sigma0 is cross-section σ at source itself (clump frame follows σ growth from it).
          */
         default void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
                      double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
@@ -208,28 +208,28 @@ public final class SmokeGrid {
                     0.5 * (dustA + dustB) * len, 0, albedoR, albedoG, albedoB, kelvin, rise);
         }
 
-        /** Гауссов клуб в точке (отрезок нулевой длины). */
+        /** Gaussian clump at point (zero-length segment). */
         default void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water,
                           float dustR, float dustG, float dustB, double kelvin, double rise) {
             segment(x, y, z, 0, 0, 0, sh, sv, soot, dust, water, dustR, dustG, dustB, kelvin, rise);
         }
     }
 
-    /** Кадр сетки: клубы, их каскады и слои — то, что {@code SmokePass} кладёт в видеопамять. */
+    /** Grid frame: clumps, cascades and layers, uploaded by {@code SmokePass}. */
     public static final class Frame {
-        /** Таблица клубов: {@link #BLOB_ROWS} строк по {@link #MAX_BLOBS} RGBA (строка 0 — центр от глаза и σh…). */
+        /** Clump table: {@link #BLOB_ROWS} rows of {@link #MAX_BLOBS} RGBA (row 0: eye-relative center and σh…). */
         public final float[] blobs = new float[BLOB_ROWS * MAX_BLOBS * 4];
-        /** Клубов в таблице. */
+        /** Table clump count. */
         public int count;
-        /** Каскад клуба. */
+        /** Clump cascade. */
         final int[] cascade = new int[MAX_BLOBS];
-        /** Угол каскада от глаза (x, y, z) и клетка — по каскаду; угол в мире (для кратности клетке). */
+        /** Eye-relative cascade corner (x, y, z) and cell, by cascade; world corner (for cell alignment). */
         public final float[] corner = new float[CASCADES * 4];
-        /** Рамка всего дыма от глаза; min > max — дыма нет. */
+        /** All-smoke eye-relative bounds; min > max means no smoke. */
         public final float[] min = new float[3], max = new float[3];
-        /** Коробка клубов каждого каскада от глаза (x, y, z по каскаду) внутри каскада; lo > hi — каскад пуст. */
+        /** Eye-relative clump box per cascade (x, y, z by cascade), within cascade; lo > hi means empty cascade. */
         public final float[] boxLo = new float[CASCADES * 3], boxHi = new float[CASCADES * 3];
-        /** Вершины прямоугольников клубов по слоям (x, y — NDC, z — номер клуба) и начало слоя в них (по вершинам). */
+        /** Layer clump rectangle vertices (x, y NDC, z clump number) and layer starts (vertex offsets). */
         public float[] vertices = new float[4096 * 3];
         public final int[] layerStart = new int[CASCADES * N + 1];
 
@@ -239,44 +239,44 @@ public final class SmokeGrid {
     }
 
     /**
-     * Клуб у́же стольких клеток своего каскада (σ) сетка не берёт: клетка расширяет его до √(σ² + (клетка/2)²) и рисует
-     * формой клетки, а не облака. Источник с таким клубом сетка отдаёт квадратам целиком.
+     * Grid refuses clumps narrower than this many cascade cells (σ): cell broadens to √(σ² + (cell/2)²), drawing
+     * cell shape instead of cloud. Grid gives whole source with such clump to quads.
      */
     public static final double RESOLVE = 2;
 
     private static final List<Source> SOURCES = new ArrayList<>();
     private static final SmokePreparation PREPARATION = new SmokePreparation();
-    /** Источники, чьи клубы легли в сетку этого кадра (остальных рисуют квадраты, {@link #quads}). */
+    /** Sources whose clumps entered this frame's grid (quads render others, {@link #quads}). */
     private static final java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private static final Frame FRAME = new Frame();
-    /** Часы сетки: тики клиента не на паузе. */
+    /** Grid clock: unpaused client ticks. */
     private static long ticks;
 
     private SmokeGrid() {}
 
-    /** Объём рисуется (шейдеры и сетка в порядке, {@code SmokeFrame}); нет — облака взрывов вдали и вблизи рисуют квадраты. */
+    /** Volume rendering available (shaders/grid ready, {@code SmokeFrame}); otherwise quads render near and far explosion clouds. */
     private static boolean enabled;
-    /** Проход пелены нарисовал сетку в прошлом кадре ({@code FxLayer}): нет — облака рисуют квадраты, как без объёма. */
+    /** Pall pass drew grid last frame ({@code FxLayer}); otherwise quads render clouds as without volume. */
     private static boolean drawn = true;
 
     public static void enable(boolean on) {
         enabled = on;
     }
 
-    /** Объём есть и в прошлом кадре был нарисован. */
+    /** Volume available and drawn last frame. */
     public static boolean on() {
         return enabled && drawn;
     }
 
-    /** Итог кадра слоя эффектов: сетку нарисовал проход пелены (или дыма не было — тогда объёму ничто не мешает). */
+    /** Effects-layer frame result: pall pass drew grid (or no smoke, so nothing obstructs volume). */
     public static void drawn(boolean yes) {
         drawn = yes;
     }
 
     /**
-     * Доля облака с центром (dx, dy, dz) от глаза, что рисует объём сетки: до 0,55 полустороны последнего каскада по каждой
-     * оси — вся, к 0,75 — плавно ни одной (клубы облака — до трёх σ, сотни метров, — ещё в сетке); остальное — квадраты
-     * клубов той же модели ({@code FarBlasts}).
+     * Share of cloud centered at eye-relative (dx, dy, dz) rendered by grid volume: full within 0.55 last-cascade half-side on each
+     * axis, smoothly zero at 0.75 (cloud clumps up to three σ, hundreds of meters, remain in grid); rest uses
+     * clump quads of same model ({@code FarBlasts}).
      */
     public static double volumeShare(double dx, double dy, double dz) {
         double half = 0.5 * N * CELL[CASCADES - 1], d = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
@@ -284,24 +284,24 @@ public final class SmokeGrid {
         return 1 - t * t * (3 - 2 * t);
     }
 
-    /** Новый источник вещества (облако взрыва, старта, след…). */
+    /** New matter source (explosion cloud, launch cloud, trail…). */
     public static void add(Source s) {
         SOURCES.add(s);
     }
 
-    /** Часы сетки, с: тики клиента не на паузе и доля тика. */
+    /** Grid clock, s: unpaused client ticks and tick fraction. */
     public static double seconds(float partial) {
         return (ticks + partial) / 20.0;
     }
 
-    /** Тик клиента (не на паузе); иссякшие источники уходят и без кадров (слой эффектов может не рисоваться вовсе). */
+    /** Client tick (unpaused); exhausted sources leave even without frames (effects layer might not draw at all). */
     public static void tick() {
         ticks++;
         SOURCES.removeIf(Source::ended);
         IN_GRID.removeIf(Source::ended);
     }
 
-    /** Смена мира, перемотка повтора: источников нет. */
+    /** World change, replay seek: no sources. */
     public static void reset() {
         SOURCES.clear();
         PREPARATION.reset();
@@ -313,13 +313,13 @@ public final class SmokeGrid {
         return SOURCES.size();
     }
 
-    /** Доля рассеяния вперёд пыли f = g² (асимметрия 0,6): её дельта-Эддингтон убирает из ослабления. */
+    /** Dust forward-scattering share f = g² (asymmetry 0.6), removed from extinction by delta-Eddington. */
     static final double DUST_F = 0.36;
 
     /**
-     * Ослабление пыли на массу σ' после дельта-Эддингтона, м²/кг: {@code DustModel.K_MIX}·(1 − ωf), ω — альбедо
-     * однократного рассеяния, обращённое из ω' ({@link #dustAlbedo}) среднего канала (ослабление у клуба одно на все
-     * каналы).
+     * Dust mass extinction σ' after delta-Eddington, m²/kg: {@code DustModel.K_MIX}·(1 − ωf), ω is single-scattering
+     * albedo inverted from ω' ({@link #dustAlbedo}) of mean channel (one clump extinction for all
+     * channels).
      */
     public static double dustK(float wr, float wg, float wb) {
         double wp = (wr + wg + wb) / 3.0, w = wp / (1 - DUST_F + DUST_F * wp);
@@ -327,8 +327,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Альбедо ω' пыли цвета грунта (r, g, b на экране) — обращение отражения толстого слоя двух потоков R∞ = (1 − s)/(1 + s),
-     * s² = (1 − ω')/(1 − ω'g') (замыкание по средним полусфер, как у цвета клубов слоя, {@code SmokePuffs.thick}).
+     * Dust albedo ω' from soil color (r, g, b on screen): inversion of thick-layer two-stream reflectance R∞ = (1 − s)/(1 + s),
+     * s² = (1 − ω')/(1 − ω'g') (hemispheric-mean closure, as effects-layer clump color, {@code SmokePuffs.thick}).
      */
     public static float dustAlbedo(float display) {
         double r = Math.pow(Math.max(display, 0), 2.2);
@@ -337,8 +337,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Кадр сетки у глаза (eyeX, eyeY, eyeZ) в момент {@code seconds}: источники отдают клубы, клубы — в каскады и слои.
-     * Иссякшие источники уходят. Пустой кадр — дыма нет (проход пелены его не рисует).
+     * Grid frame at eye (eyeX, eyeY, eyeZ), time {@code seconds}: sources emit clumps, assigned to cascades and layers.
+     * Exhausted sources leave. Empty frame means no smoke (pall pass skips it).
      */
     public static Frame frame(double eyeX, double eyeY, double eyeZ, double seconds) {
         Frame f = FRAME;
@@ -347,8 +347,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Источники, которых объём этого кадра не рисует ({@link Source#volume} нет, клетка не разрешает, таблица полна,
-     * объёма нет), — квадратами слоя: each получает источник и отдаёт, жив ли он (false — иссяк, уходит).
+     * Sources not rendered by this frame's volume (no {@link Source#volume}, cell cannot resolve, full table,
+     * no volume) use effects-layer quads: each receives source and returns whether alive (false means exhausted, leaves).
      */
     public static void quads(java.util.function.Predicate<Source> each) {
         for (var it = SOURCES.iterator(); it.hasNext(); ) {
@@ -366,14 +366,14 @@ public final class SmokeGrid {
         PREPARATION.draw(SOURCES, on() ? IN_GRID : java.util.Set.of(), seconds, x, y, z, visible, draw);
     }
 
-    /** Черновик клубов кадра: {@link #STAGE} чисел на клуб; источники по порядку и их ближний край. */
+    /** Staged frame clumps: {@link #STAGE} numbers per clump; sources in order and their nearest edge. */
     private static final double[] STAGE_BLOBS = new double[STAGED * STAGE];
     private static int staged;
 
-    /** Глаз кадра, что сейчас раскладывается (источники берут его в {@link Source#emit}). */
+    /** Eye of frame currently being laid out (sources read it in {@link Source#emit}). */
     private static double frameX, frameY, frameZ;
 
-    /** Глаз кадра сетки (x, y, z) — у источников в {@link Source#emit} и после. */
+    /** Grid-frame eye (x, y, z), available to sources in {@link Source#emit} and afterward. */
     public static double eyeX() {
         return frameX;
     }
@@ -386,7 +386,7 @@ public final class SmokeGrid {
         return frameZ;
     }
 
-    /** То же для своего списка источников и кадра (юнит-тест). */
+    /** Same for supplied source list and frame (unit test). */
     static void build(List<Source> sources, Frame f, double eyeX, double eyeY, double eyeZ, double seconds) {
         frameX = eyeX;
         frameY = eyeY;
@@ -407,7 +407,7 @@ public final class SmokeGrid {
             f.corner[4 * c + 2] = (float) (corner[3 * c + 2] - eyeZ);
             f.corner[4 * c + 3] = (float) cell;
         }
-        // клубы — в черновик: ближний край каждого источника и сколько клубов он дал
+        // stage clumps: nearest edge per source and emitted clump count
         staged = 0;
         int n = sources.size();
         double[] near = new double[n];
@@ -446,7 +446,7 @@ public final class SmokeGrid {
                 double reach = REACH * Math.max(sh, sv) + Math.sqrt(ax * ax + ay * ay + az * az);
                 near[src] = Math.min(near[src], Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - reach));
             };
-            // источник не того масштаба в сетку не идёт: его клубы рисуют квадраты, emit — у них
+            // wrong-scale source does not enter grid: quads render its clumps, calling emit themselves
             if (!sources.get(k).volume()) {
                 count[k] = 0;
                 over[k] = true;
@@ -455,7 +455,7 @@ public final class SmokeGrid {
             boolean alive = sources.get(k).emit(seconds, sink);
             count[k] = alive ? staged - first[k] : -1;
         }
-        // в таблицу — источники от ближнего к дальнему, пока помещаются целиком
+        // fill table with whole sources, nearest to farthest
         Integer[] order = new Integer[n];
         for (int k = 0; k < n; k++) order[k] = k;
         Arrays.sort(order, (a, b) -> Double.compare(near[a], near[b]));
@@ -463,8 +463,8 @@ public final class SmokeGrid {
         int room = MAX_BLOBS;
         for (int k : order) {
             if (count[k] <= 0 || over[k] || count[k] > room) continue;
-            // клуб источника за всеми каскадами — источник не в сетке целиком (облако рисует себя само, а не обрезком)
-            // и клуб, у́же двух клеток своего каскада, — тоже: сетка нарисовала бы клетку, а не облако
+            // clump beyond all cascades excludes entire source (cloud renders itself whole, not cut off)
+            // also clump narrower than two cells of its cascade: grid would draw cell, not cloud
             boolean all = true;
             for (int i = first[k]; i < first[k] + count[k] && all; i++) all = resolves(corner, STAGE_BLOBS, i * STAGE);
             if (!all) continue;
@@ -490,23 +490,23 @@ public final class SmokeGrid {
     }
 
     /**
-     * Клуб черновика с началом {@code at} в {@code b} ложится в каскад, и его σ (меньшая из двух) — не меньше
-     * {@link #RESOLVE} клеток этого каскада.
+     * Staged clump at {@code at} in {@code b} fits a cascade and its σ (smaller of two) is at least
+     * {@link #RESOLVE} cells of that cascade.
      */
     private static boolean resolves(double[] corner, double[] b, int at) {
         int k = cascade(corner, b, at);
         return k >= 0 && Math.min(b[at + 3], b[at + 4]) >= RESOLVE * CELL[k];
     }
 
-    /** Каскад клуба черновика с началом {@code at} в {@code b} ({@link #cascade(double[], double, double, double, double, double, double, double, double)}). */
+    /** Cascade of staged clump at {@code at} in {@code b} ({@link #cascade(double[], double, double, double, double, double, double, double, double)}). */
     private static int cascade(double[] corner, double[] b, int at) {
         return cascade(corner, b[at], b[at + 1], b[at + 2], b[at + 13], b[at + 14], b[at + 15], b[at + 3], b[at + 4]);
     }
 
     /**
-     * Каскад клуба с центром (x, y, z), полуотрезком (ax, ay, az) и σ (sh, sv): самый мелкий, где он весь (три σ, смазанный
-     * на полклетки, и отрезок) и не шире {@link #SPAN} клеток σ; последний — если центр в нём (края за ним срежет текстура);
-     * −1 — за всеми.
+     * Cascade for clump centered at (x, y, z), half-segment (ax, ay, az), σ (sh, sv): finest containing whole clump (three σ, blurred
+     * by half-cell, plus segment) with σ no wider than {@link #SPAN} cells; last if center lies within it (texture clips outer edges);
+     * −1 if beyond all.
      */
     private static int cascade(double[] corner, double x, double y, double z, double ax, double ay, double az, double sh, double sv) {
         ax = Math.abs(ax);
@@ -530,7 +530,7 @@ public final class SmokeGrid {
         return -1;
     }
 
-    /** Углы каскадов в мире у глаза (как у кадра, {@link #build}) — в out (3 числа на каскад). */
+    /** World cascade corners at eye (as frame, {@link #build}) into out (3 numbers per cascade). */
     public static void corners(double eyeX, double eyeY, double eyeZ, double[] out) {
         for (int c = 0; c < CASCADES; c++) {
             double cell = CELL[c];
@@ -541,8 +541,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Клетка каскада, в который ляжет клуб σ (sh, sv) с центром (x, y, z) в мире и полуотрезком (ax, ay, az), м, при углах
-     * каскадов corner ({@link #corners}); 0 — ни в какой.
+     * Cell size of cascade receiving clump σ (sh, sv), world center (x, y, z), half-segment (ax, ay, az), m, with cascade
+     * corners corner ({@link #corners}); 0 if none.
      */
     public static float cellFor(double[] corner, double x, double y, double z, double ax, double ay, double az, double sh, double sv) {
         int k = cascade(corner, x, y, z, ax, ay, az, sh, sv);
@@ -550,9 +550,9 @@ public final class SmokeGrid {
     }
 
     /**
-     * Доля сечения σ, что объём сетки показывает верно в каскаде с клеткой cell: клетка расширяет сечение до
-     * √(σ² + (клетка/2)²) — при σ не меньше клетки шире на ≤ 12 %, вся доля; при σ не больше полклетки — на ≥ 41 %, доли
-     * нет (тонкое рисует лента следа); между — плавно. Не настройка картинки, а предел разрешения каскада.
+     * Cross-section σ share correctly shown by volume in cascade of cell size cell: cell broadens it to
+     * √(σ² + (cell/2)²); σ at least cell gives ≤ 12% widening, full share; σ at most half-cell gives ≥ 41%, no
+     * share (thin matter uses trail ribbon); smooth between. Cascade resolution limit, not a visual setting.
      */
     public static double resolved(double sigma, double cell) {
         if (cell <= 0) return 0;
@@ -561,26 +561,26 @@ public final class SmokeGrid {
     }
 
     /**
-     * Множитель гаусса по отрезку против гаусса в точке (та же масса и σ) у точки на расстоянии q∥ вдоль отрезка от центра,
-     * в осях, где σ — единица; A — длина полуотрезка там: √(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)], к A → 0 —
-     * e^(−q∥²/2). Поперёк — свой множитель e^(−q⊥²/2). Та же формула — в {@code fx_smoke_fill} ({@code SmokeGlslTest}).
+     * Segment-Gaussian multiplier relative to point Gaussian (same mass and σ) at axial distance q∥ from center,
+     * in axes where σ is one; A is half-segment length there: √(π/2)/(2A)·[erf((A − q∥)/√2) + erf((A + q∥)/√2)], as A → 0,
+     * e^(−q∥²/2). Separate transverse multiplier e^(−q⊥²/2). Same formula in {@code fx_smoke_fill} ({@code SmokeGlslTest}).
      */
     public static double line(double a, double q) {
         if (a < LINE_POINT) return Math.exp(-0.5 * q * q);
         return Math.sqrt(Math.PI / 2) / (2 * a) * Math.max(0, erf((a - q) / Math.sqrt(2)) + erf((a + q) / Math.sqrt(2)));
     }
 
-    /** Короче этого (в σ) отрезок — точка: разность erf у коротких теряет точность в половинной точности шейдера. */
+    /** Shorter segments (in σ) become points: erf difference loses precision for short segments in shader half precision. */
     public static final double LINE_POINT = 0.05;
 
-    /** erf по Абрамовицу и Стиган 7.1.26 (ошибка ≤ 1,5·10⁻⁷), как в шейдере. */
+    /** Abramowitz and Stegun 7.1.26 erf (error ≤ 1.5·10⁻⁷), as shader. */
     public static double erf(double x) {
         double ax = Math.abs(x), t = 1 / (1 + 0.3275911 * ax);
         double y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax);
         return Math.signum(x) * y;
     }
 
-    /** Клуб — в таблицу и в свой каскад; вне всех каскадов, пустой или сверх таблицы — нет. */
+    /** Add clump to table and cascade; reject beyond all cascades, empty or table overflow. */
     private static void put(Frame f, double[] corner, double ex, double ey, double ez, double x, double y, double z, double ax, double ay,
                             double az, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                             double kelvin, double rise) {
@@ -605,7 +605,7 @@ public final class SmokeGrid {
         f.max[0] = Math.max(f.max[0], px + rx);
         f.max[1] = Math.max(f.max[1], py + ry);
         f.max[2] = Math.max(f.max[2], pz + rz);
-        // коробка каскада — в его границах (в последнем клуб может выходить за край)
+        // cascade box within bounds (last-cascade clump may exceed edge)
         double span = N * CELL[c];
         double[] lo = {x - rx, y - ry, z - rz}, hi = {x + rx, y + ry, z + rz};
         double[] eye = {ex, ey, ez};
@@ -616,7 +616,7 @@ public final class SmokeGrid {
         }
     }
 
-    /** В каскаде {@code c} кадра есть клубы. */
+    /** Frame cascade {@code c} contains clumps. */
     public static boolean occupied(Frame f, int c) {
         return f.boxLo[3 * c] <= f.boxHi[3 * c];
     }
@@ -630,8 +630,8 @@ public final class SmokeGrid {
     }
 
     /**
-     * Прямоугольники клубов по слоям: слой L = каскад·N + номер слоя по высоте; клуб — в слоях своего каскада, где он
-     * есть (три σ по вертикали), прямоугольником клеток, где он есть по горизонтали, на обеих страницах.
+     * Layer clump rectangles: layer L = cascade·N + vertical layer number; clump occupies cascade layers containing it
+     * (three vertical σ), as rectangle of horizontal cells containing it, on both pages.
      */
     static void layers(Frame f) {
         int layers = CASCADES * N;
@@ -665,7 +665,7 @@ public final class SmokeGrid {
             for (int s = lo[i]; s <= hi[i]; s++) {
                 int l = c * N + s;
                 for (int page = 0; page < 2; page++) {
-                    // NDC: страница 0 — левая половина ширины 2N, страница 1 — правая
+                    // NDC: page 0 is left half of width 2N, page 1 is right
                     float ax = (page * N + x0) / N - 1, bx = (page * N + x1) / N - 1;
                     float ay = z0 / N * 2 - 1, by = z1 / N * 2 - 1;
                     at[l] = quad(f.vertices, at[l], ax, ay, bx, by, i);

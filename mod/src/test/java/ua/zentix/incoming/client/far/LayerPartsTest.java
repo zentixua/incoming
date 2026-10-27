@@ -15,9 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Части слоя у квадратов (время на видеокарте по частям, {@code LayerTimes}): каждый рисунок дальнего пишет свои квадраты
- * своей частью и возвращает прежнюю — квадрат, записанный после, снова «прочее». Иначе время клубов ушло бы в ленты, а
- * время огня — в блик, и число назвало бы не ту причину.
+ * Effects-layer quad parts (GPU timing by part, {@code LayerTimes}): each distant drawing writes quads with
+ * its own part and restores previous part; next quad is “other” again. Otherwise clump time would be charged to ribbons,
+ * fire time to glare, and measurement would identify the wrong cause.
  */
 class LayerPartsTest {
     private final FxQuads quads = new FxQuads();
@@ -40,23 +40,23 @@ class LayerPartsTest {
         expect(EnumSet.of(FxQuads.Part.FIRE), () -> sprites.glowPlate(new Vector3f(0, 0, -15), new Vector3f(0.3f, 0, 0), new Vector3f(0, 0.3f, 0),
                 1, 0.6f, 0.2f, 15, 2));
         expect(EnumSet.of(FxQuads.Part.GLARE), () -> sprites.glow(10, 4, -200, 8, 20, 1, 0.5f, 0.2f, 0.5f));
-        // огненный шар: тело — огонь, блик и вуаль в глазу — блик
+        // fireball: body is fire, eye glare and veil are glare
         expect(EnumSet.of(FxQuads.Part.FIRE, FxQuads.Part.GLARE), () -> sprites.shaped(0, 5, -120, 6, FxAtlas.ball(0.2f), 7, 0, 3, 1, view.pixel(),
                 1, 0.7f, 0.3f, 1, 1, 1, 2, light));
         expect(EnumSet.of(FxQuads.Part.OTHER), () -> sprites.disc(-5, 3, -300, 1, 0.2f, 0.2f, 0.2f, 1));
     }
 
-    /** Рисунок пишет квадраты только частей want (каждую — хоть раз), а следующий квадрат — снова «прочее». */
+    /** Drawing writes quads only of want parts (each at least once), next quad uses previous part again. */
     private void expect(Set<FxQuads.Part> want, Runnable draw) {
         int from = quads.size();
         draw.run();
         Set<FxQuads.Part> got = EnumSet.noneOf(FxQuads.Part.class);
         for (int i = from; i < quads.size(); i++) got.add(quads.partOf(i));
-        assertEquals(want, got, "части квадратов рисунка");
+        assertEquals(want, got, "drawing quad parts");
         quads.quad(1);
         for (int k = 0; k < 4; k++) quads.vertex(k % 2, k / 2, -1, 0, 0, 0, 0, 0, 0, 0, 1, LightTexture.FULL_BRIGHT, 0);
-        assertEquals(FxQuads.Part.OTHER, quads.partOf(quads.size() - 1), "после рисунка часть — прежняя");
-        assertTrue(quads.size() > from + 1, "рисунок записал квадраты");
+        assertEquals(FxQuads.Part.OTHER, quads.partOf(quads.size() - 1), "previous part restored after drawing");
+        assertTrue(quads.size() > from + 1, "drawing wrote quads");
     }
 
     private static FarView view() {
