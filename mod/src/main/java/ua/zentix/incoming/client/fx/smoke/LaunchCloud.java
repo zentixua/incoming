@@ -244,6 +244,18 @@ public final class LaunchCloud implements SmokeGrid.Source {
         return out;
     }
 
+    /** The cloud is emitted within the shared preparation budget and drawn from its last complete snapshot. */
+    @Override
+    public boolean budgeted() {
+        return true;
+    }
+
+    /** Since feed start: a young cloud changes fastest and is refreshed first. */
+    @Override
+    public double age(double seconds) {
+        return Math.max(0, seconds - born);
+    }
+
     /** Billow seed from position and feed start (two nearby clouds have different billows). */
     @Override
     public long seed() {

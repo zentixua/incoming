@@ -48,7 +48,7 @@ public final class SmokePreparation {
     }
 
     private final IdentityHashMap<SmokeGrid.Source, Entry> entries = new IdentityHashMap<>();
-    private final ArrayList<Entry> selected = new ArrayList<>(SOURCES);
+    private final ArrayList<Entry> selected = new ArrayList<>(SOURCES), unbounded = new ArrayList<>();
     private final ArrayList<Entry> maintenance = new ArrayList<>();
     private final java.util.PriorityQueue<Entry> nearest = new java.util.PriorityQueue<>(Comparator.comparingDouble(e -> e.priority));
     private long frame;
@@ -65,6 +65,7 @@ public final class SmokePreparation {
         frame++;
         long frameDeadline = timer.getAsLong() + NANOS;
         selected.clear();
+        unbounded.clear();
         nearest.clear();
         maintenance.clear();
         for (var it = sources.iterator(); it.hasNext();) {
@@ -85,15 +86,23 @@ public final class SmokePreparation {
                 e.legacy = true;
                 continue;
             }
-            e.priority = bounded ? e.bounds.priority(x, y, z) : Double.MAX_VALUE;
+            e.age = s.age(seconds);
+            if (!bounded) {
+                // Fire plumes and launch clouds have no bounds to rank by distance: always drawn, as before, without
+                // taking any of the nearest-cloud places; their refreshes share the frame budget.
+                e.priority = Double.MAX_VALUE;
+                unbounded.add(e);
+                continue;
+            }
+            e.priority = e.bounds.priority(x, y, z);
             // Keep selected clouds across small camera movements at the capacity boundary.
             if (retained) e.priority *= 1.2;
-            e.age = s.age(seconds);
             if (nearest.size() < SOURCES) nearest.add(e);
             else if (e.priority > nearest.element().priority) { nearest.poll(); nearest.add(e); }
         }
         entries.values().removeIf(e -> e.frame != frame);
         selected.addAll(nearest);
+        selected.addAll(unbounded);
         for (Entry e : selected) {
             e.selected = true;
             // Only a return from exclusion invalidates an old snapshot. Continuously visible clouds must remain
@@ -114,12 +123,14 @@ public final class SmokePreparation {
         try {
             int updates = 0;
             for (Entry e : selected) {
+                // The refresh count limits blast clouds; plumes and launch clouds are limited by the time alone.
+                if (e.bounded && updates >= UPDATES) continue;
                 long now = timer.getAsLong();
-                if (updates >= UPDATES || now + MIN_RESERVE > visibleDeadline) break;
+                if (now + MIN_RESERVE > visibleDeadline) break;
                 // Reserve the measured source cost (with margin), not just the instant of starting emit.
                 if (now + e.estimate > visibleDeadline) continue;
                 deadline = Math.min(visibleDeadline, now + SOURCE_NANOS);
-                updates++;
+                if (e.bounded) updates++;
                 if (e.staging == null) e.staging = new Snapshot();
                 e.staging.clear();
                 try {

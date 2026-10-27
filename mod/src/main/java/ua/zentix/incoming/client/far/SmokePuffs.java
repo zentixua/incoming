@@ -492,6 +492,11 @@ final class SmokePuffs {
         return DRAW.lastRefused;
     }
 
+    /** Sources whose puffs in the last frame were the same as at their previous merge and took its result. */
+    static int lastReused() {
+        return DRAW.lastReused;
+    }
+
     /** Вещество мест трубок последнего кадра: ослабление всей массы клубов, м² (толща поперёк оси × √(2π)σ × кусок оси). */
     static double lastPlaceMatter() {
         return DRAW.lastPlaceMatter;
@@ -507,6 +512,7 @@ final class SmokePuffs {
 
     /** Выход из мира, смена измерения: ждущие клубы и места, план, вуаль — заново. */
     static void reset() {
+        DRAW.merges.clear();
         DRAW.forget();
         DRAW.veilClear();
         resetBudget();
@@ -735,7 +741,7 @@ final class SmokePuffs {
          * бюджета), и пол до слияния и вуали; доля кучек; уровень слияния; гауссов вуали; кучек-квадратов.
          */
         double lastFill, lastFloor, lastRaw, lastShare = 1;
-        int level, lastVeils, lastItems, lastBlobs, lastPlaces, lastRefused, refused;
+        int level, lastVeils, lastItems, lastBlobs, lastPlaces, lastRefused, refused, lastReused;
         double lastPlaceMatter, placeMatter;
         /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
@@ -770,33 +776,65 @@ final class SmokePuffs {
             held[o + 16] = lookFrame;
         }
 
-        /** Клубы источника, что кончился, — слиты между собой ({@link #merge}). */
+        /**
+         * Last merge of a source ({@link #close}): its pending puffs and the result. A snapshot replayed unchanged gives the
+         * same puffs, and merging them pairwise again every frame took 0.5–0.7 ms of the 100-strike raid frame.
+         */
+        private static final class Merged {
+            double[] in = new double[0], out = new double[0];
+            boolean[] gone = new boolean[0];
+            int count;
+            long frame;
+        }
+
+        private final java.util.IdentityHashMap<SmokeGrid.Source, Merged> merges = new java.util.IdentityHashMap<>();
+        private long frame;
+        private int reused;
+
+        /**
+         * Клубы источника, что кончился, — слиты между собой ({@link #merge}). Merging is a function of the pending puffs
+         * alone: the same puffs as the source's last merge take its result.
+         */
         private void close() {
             int n = holding - from;
             if (n <= 0) return;
             if (merged.length < holding) merged = java.util.Arrays.copyOf(merged, 2 * holding);
-            java.util.Arrays.fill(merged, from, holding, false);
-            merge(held, from, holding, merged, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+            int start = from * FIELDS, length = n * FIELDS, end = start + length;
+            // The frame's source number (the same for all its puffs) is not merge input; merging only carries it along.
+            double context = held[start + 12];
+            for (int o = start + 12; o < end; o += FIELDS) held[o] = -1;
+            Merged m = merges.computeIfAbsent(ctxSource[(int) context], k -> new Merged());
+            if (m.count == n && java.util.Arrays.equals(held, start, end, m.in, 0, length)) {
+                System.arraycopy(m.out, 0, held, start, length);
+                System.arraycopy(m.gone, 0, merged, from, n);
+                reused++;
+            } else {
+                if (m.in.length < length) {
+                    m.in = new double[length];
+                    m.out = new double[length];
+                    m.gone = new boolean[n];
+                }
+                System.arraycopy(held, start, m.in, 0, length);
+                java.util.Arrays.fill(merged, from, holding, false);
+                merge(held, from, holding, merged, CloudModel.SOOT_K, SmokeGrid.DROP_K);
+                System.arraycopy(held, start, m.out, 0, length);
+                System.arraycopy(merged, from, m.gone, 0, n);
+                m.count = n;
+            }
+            m.frame = frame;
+            for (int o = start + 12; o < end; o += FIELDS) held[o] = context;
             from = holding;
         }
 
-        /**
-         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their count.
-         * The plan estimates how many screens each puff or place covers with one quad (the floor) and with a cluster.
-         * If the floor exceeds the budget:
-         * <ol>
-         * <li>overlapping puffs and places from different sources merge in levels using the same mass-and-moment law as
-         * {@link #merge}, until the floor fits ({@link #mergeLevel});</li>
-         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along rays
-         * ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
-         * </ol>
-         * Clusters then take enough puffs to fit the fill limit, each retaining its center opacity. All draw as quads;
-         * the veil uses one grid.
-         */
-        void flush() {
+        /** Plan of the frame: pending puffs of the last source merged, the cloud puff limit, and each puff and place's quads. */
+        private void plan() {
             close();
+            lastReused = reused;
+            reused = 0;
+            // Merges of sources not drawn this frame are not kept.
+            merges.values().removeIf(m -> m.frame != frame);
+            frame++;
             thin();
-            double budget = SmokePuffs.budget;
             if (blobEntry.length < holding) blobEntry = new int[2 * holding];
             if (placeEntry.length < placeCount) placeEntry = new int[2 * placeCount];
             java.util.Arrays.fill(blobEntry, 0, holding, -1);
@@ -815,6 +853,24 @@ final class SmokePuffs {
             lastPlaces = placeCount;
             lastRefused = refused;
             lastPlaceMatter = placeMatter;
+        }
+
+        /**
+         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their count.
+         * The plan estimates how many screens each puff or place covers with one quad (the floor) and with a cluster.
+         * If the floor exceeds the budget:
+         * <ol>
+         * <li>overlapping puffs and places from different sources merge in levels using the same mass-and-moment law as
+         * {@link #merge}, until the floor fits ({@link #mergeLevel});</li>
+         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along rays
+         * ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
+         * </ol>
+         * Clusters then take enough puffs to fit the fill limit, each retaining its center opacity. All draw as quads;
+         * the veil uses one grid.
+         */
+        void flush() {
+            plan();
+            double budget = SmokePuffs.budget;
             if (lastRaw > budget) conceal(budget);
             int was = level;
             level = 0;
@@ -1087,7 +1143,16 @@ final class SmokePuffs {
         private static final double OCCLUSION_CORE = 0.6, OCCLUSION_INNER = 0.8;
         private double[] occlusion = new double[6 * occlusionFace];
         private double[] occlusionRays = occlusionRays();
-        private final java.util.BitSet occlusionNodes = new java.util.BitSet();
+        /** Nodes any core query reads ({@link #reserveOcclusion}), a bit per node: the only ones deposited into. */
+        private long[] occlusionNodes = new long[words(6 * occlusionFace)];
+        /** In-cell offsets of the last {@link #occlusionCell}. */
+        private double cellU, cellV;
+        /**
+         * Per entry in distance order ({@link #conceal}): position from the eye, distance, view frame (forward, horizontal
+         * across, up) and core half-axes, computed once for its queries and its deposit.
+         */
+        private static final int CONCEAL_FIELDS = 14;
+        private double[] concealFrame = new double[64 * CONCEAL_FIELDS];
         private static final double[] RING_X = {1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476},
                 RING_Y = {0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476};
 
@@ -1105,8 +1170,26 @@ final class SmokePuffs {
             occlusionFace = occlusionSide * occlusionSide;
             if (occlusion.length < 6 * occlusionFace) {
                 occlusion = new double[6 * occlusionFace];
+                occlusionNodes = new long[words(6 * occlusionFace)];
             }
             occlusionRays = occlusionRays();
+        }
+
+        private static int words(int bits) {
+            return (bits + 63) >>> 6;
+        }
+
+        /** First reserved node in [from, last], or −1. */
+        private int nextNode(int from, int last) {
+            if (from > last) return -1;
+            int w = from >>> 6, end = last >>> 6;
+            long word = occlusionNodes[w] & -1L << from;
+            while (word == 0) {
+                if (++w > end) return -1;
+                word = occlusionNodes[w];
+            }
+            int q = w << 6 | Long.numberOfTrailingZeros(word);
+            return q <= last ? q : -1;
         }
 
         private double[] occlusionRays() {
@@ -1123,45 +1206,75 @@ final class SmokePuffs {
             return rays;
         }
 
-        /** Optical depth in a direction, including between nodes and across cube-face boundaries. */
-        private double occlusion(double x, double y, double z) {
-            return occlusion(x, y, z, false);
-        }
-
-        private double occlusion(double x, double y, double z, boolean reserve) {
+        /**
+         * Bilinear cell of a direction: its base node q (the cell's nodes are q, q + 1, q + side, q + side + 1), with the
+         * in-cell offsets in {@link #cellU}, {@link #cellV}; −1 for a zero direction.
+         */
+        private int occlusionCell(double x, double y, double z) {
             double ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z), m = Math.max(ax, Math.max(ay, az));
-            if (!(m > 0)) return 0;
+            if (!(m > 0)) return -1;
             int face = m == ax ? (x > 0 ? 0 : 1) : m == ay ? (y > 0 ? 2 : 3) : (z > 0 ? 4 : 5);
             double u = (face < 2 ? y : x) / m, v = (face < 4 ? z : y) / m;
             double s = Math.clamp((u + 1) * 0.5 * occlusionCells, 0, occlusionCells),
                     t = Math.clamp((v + 1) * 0.5 * occlusionCells, 0, occlusionCells);
             int i = Math.min((int) s, occlusionCells - 1), j = Math.min((int) t, occlusionCells - 1);
-            double du = s - i, dv = t - j;
-            int q = face * occlusionFace + j * occlusionSide + i;
-            if (reserve) {
-                occlusionNodes.set(q, q + 2);
-                occlusionNodes.set(q + occlusionSide, q + occlusionSide + 2);
-                return 0;
-            }
+            cellU = s - i;
+            cellV = t - j;
+            return face * occlusionFace + j * occlusionSide + i;
+        }
+
+        /** Optical depth in a direction, including between nodes and across cube-face boundaries. */
+        private double occlusion(double x, double y, double z) {
+            int q = occlusionCell(x, y, z);
+            if (q < 0) return 0;
+            double du = cellU, dv = cellV;
             return Math.min(12, (1 - dv) * ((1 - du) * occlusion[q] + du * occlusion[q + 1])
                     + dv * ((1 - du) * occlusion[q + occlusionSide] + du * occlusion[q + occlusionSide + 1]));
         }
 
-        /** Reserve only the four nodes of each possible query: at most 36 nodes per planned puff at any zoom. */
-        private void reserveOcclusion(int e) {
-            int o = 6 * e;
-            double x = plan[o], y = plan[o + 1], z = plan[o + 2];
-            occlusion(x, y, z, true);
-            if (planNear[e] || planFlat[e] > 0) return;
-            double h = Math.hypot(x, z), d = Math.hypot(h, y), fx = x / d, fy = y / d, fz = z / d;
+        /** The entry e at distance rank k: its view frame and core, and the four nodes of each of its possible queries (at most 36 at any zoom). */
+        private void reserveOcclusion(int e, int k) {
+            int o = 6 * e, g = CONCEAL_FIELDS * k;
+            double x = plan[o], y = plan[o + 1], z = plan[o + 2], h = Math.hypot(x, z), d = Math.hypot(h, y);
+            double fx = x / d, fy = y / d, fz = z / d;
             double hx = h > 1e-9 ? z / h : 1, hz = h > 1e-9 ? -x / h : 0;
             double ux = fy * hz, uy = fz * hx - fx * hz, uz = -fy * hx;
             double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
             double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
+            double[] f = concealFrame;
+            f[g] = x;
+            f[g + 1] = y;
+            f[g + 2] = z;
+            f[g + 3] = d;
+            f[g + 4] = fx;
+            f[g + 5] = fy;
+            f[g + 6] = fz;
+            f[g + 7] = hx;
+            f[g + 8] = hz;
+            f[g + 9] = ux;
+            f[g + 10] = uy;
+            f[g + 11] = uz;
+            f[g + 12] = ra;
+            f[g + 13] = rb;
+            reserve(x, y, z);
+            if (planNear[e] || planFlat[e] > 0) return;
             for (int j = 0; j < 8; j++) {
                 double a = ra * RING_X[j], b = rb * RING_Y[j];
-                occlusion(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz, true);
+                reserve(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz);
             }
+        }
+
+        private void reserve(double x, double y, double z) {
+            int q = occlusionCell(x, y, z);
+            if (q < 0) return;
+            mark(q);
+            mark(q + 1);
+            mark(q + occlusionSide);
+            mark(q + occlusionSide + 1);
+        }
+
+        private void mark(int q) {
+            occlusionNodes[q >>> 6] |= 1L << q;
         }
 
         /**
@@ -1172,7 +1285,7 @@ final class SmokePuffs {
          */
         private void conceal(double budget) {
             configureOcclusion();
-            occlusionNodes.clear();
+            java.util.Arrays.fill(occlusionNodes, 0, words(6 * occlusionFace), 0);
             // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching the whole frame.
             double strength = smoothstep(budget, 1.25 * budget, lastRaw);
             int n = 0;
@@ -1181,20 +1294,19 @@ final class SmokePuffs {
                 int o = 6 * e;
                 double d2 = plan[o] * plan[o] + plan[o + 1] * plan[o + 1] + plan[o + 2] * plan[o + 2];
                 if (!(d2 > 0)) continue;
-                reserveOcclusion(e);
                 if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
                 order[n++] = (long) Float.floatToIntBits((float) d2) << 32 | e;
             }
             java.util.Arrays.sort(order, 0, n);
+            if (concealFrame.length < CONCEAL_FIELDS * n) concealFrame = new double[CONCEAL_FIELDS * Math.max(n, 2 * concealFrame.length / CONCEAL_FIELDS)];
+            for (int k = 0; k < n; k++) reserveOcclusion((int) order[k], k);
             java.util.Arrays.fill(occlusion, 0, 6 * occlusionFace, 0);
+            double inner = OCCLUSION_INNER * OCCLUSION_INNER;
             for (int k = 0; k < n; k++) {
-                int e = (int) order[k], o = 6 * e;
-                double x = plan[o], y = plan[o + 1], z = plan[o + 2], h = Math.hypot(x, z), d = Math.hypot(h, y);
-                double fx = x / d, fy = y / d, fz = z / d;
-                double hx = h > 1e-9 ? z / h : 1, hz = h > 1e-9 ? -x / h : 0;
-                double ux = fy * hz, uy = fz * hx - fx * hz, uz = -fy * hx;
-                double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
-                double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
+                int e = (int) order[k], g = CONCEAL_FIELDS * k;
+                double[] f = concealFrame;
+                double x = f[g], y = f[g + 1], z = f[g + 2], d = f[g + 3], fx = f[g + 4], fy = f[g + 5], fz = f[g + 6];
+                double hx = f[g + 7], hz = f[g + 8], ux = f[g + 9], uy = f[g + 10], uz = f[g + 11], ra = f[g + 12], rb = f[g + 13];
                 double least = occlusion(x, y, z);
                 planSeen[e] = 1 - strength * (1 - Math.exp(-least));
                 double hidden = 0;
@@ -1212,7 +1324,6 @@ final class SmokePuffs {
                     else placeGone[~owner] = true;
                     continue;
                 }
-                double tau = -Math.log1p(-Math.min(planOpacity[e], 0.999)) * (1 - hidden);
                 if (hidden > 0) {
                     // Visibility belongs to the draw entry, so both merging and budget selection account for it.
                     // Otherwise nearly hidden places kept their full budget priority and prevented their own merging.
@@ -1222,7 +1333,7 @@ final class SmokePuffs {
                     else places[~owner * PLACE_FIELDS + 12] *= keep;
                     planShown[e] *= keep;
                 }
-                if (!(tau > 0) || !(ra > 0) || !(rb > 0) || planFlat[e] > 0) continue;
+                if (!(ra > 0) || !(rb > 0) || planFlat[e] > 0) continue;
                 // Ray length cancels in the plane ratios. Scale the axes once and reject outside nodes before dividing.
                 double sa = d / ra, sb = d / rb;
                 double ax = sa * hx, az = sa * hz, bx = sb * ux, by = sb * uy, bz = sb * uz;
@@ -1233,12 +1344,15 @@ final class SmokePuffs {
                 // every deposited value then bounds the original kernel from below throughout its bilinear support.
                 double margin = (d + radius * radius / d) / Math.min(ra, rb) * (2 * Math.sqrt(2) / occlusionCells);
                 if (margin >= 1) continue;
+                double tau = -Math.log1p(-Math.min(planOpacity[e], 0.999)) * (1 - hidden);
+                if (!(tau > 0)) continue;
                 double remaining2 = (1 - margin) * (1 - margin);
                 radius *= 1 - margin;
                 // Core-sphere bounds on each face only limit traversal; the actual plane determines the contribution.
                 for (int face = 0; face < 6; face++) {
                     int axis = face / 2;
-                    double c = ((face & 1) == 0 ? 1 : -1) * (axis == 0 ? x : axis == 1 ? y : z);
+                    double sign = (face & 1) == 0 ? 1 : -1;
+                    double c = sign * (axis == 0 ? x : axis == 1 ? y : z);
                     if (c + radius <= 0) continue;
                     double u = axis == 0 ? y : x, v = axis == 2 ? y : z;
                     // A cube face is the pyramid |u|≤c, |v|≤c. Distance to its side plane is (|u|−c)/√2.
@@ -1256,9 +1370,36 @@ final class SmokePuffs {
                             i1 = Math.min(occlusionCells, (int) Math.ceil((u1 + 1) * 0.5 * occlusionCells)),
                             j0 = Math.max(0, (int) Math.floor((v0 + 1) * 0.5 * occlusionCells)),
                             j1 = Math.min(occlusionCells, (int) Math.ceil((v1 + 1) * 0.5 * occlusionCells));
+                    // Along a row the node ray is (row constant) + u·(face axis), so den, a and b are affine in u and the
+                    // core is the interval where a² + b² − remaining²·den² < 0. Scanning only that interval, widened by a
+                    // node on each side (far beyond rounding), visits the same deposits as the whole box.
+                    double fc, fu, fv, ac, au, av, bc, bu, bv;
+                    if (axis == 0) {
+                        fc = fx * sign; fu = fy; fv = fz; ac = ax * sign; au = 0; av = az; bc = bx * sign; bu = by; bv = bz;
+                    } else if (axis == 1) {
+                        fc = fy * sign; fu = fx; fv = fz; ac = 0; au = ax; av = az; bc = by * sign; bu = bx; bv = bz;
+                    } else {
+                        fc = fz * sign; fu = fx; fv = fy; ac = az * sign; au = ax; av = 0; bc = bz * sign; bu = bx; bv = by;
+                    }
+                    double qa = au * au + bu * bu - remaining2 * fu * fu;
+                    double scale = au * au + bu * bu + remaining2 * fu * fu + ac * ac + bc * bc + remaining2 * fc * fc + av * av + bv * bv
+                            + remaining2 * fv * fv;
+                    // A row along the cone's side has no bounded interval: scan its whole span.
+                    boolean bounded = qa > 1e-6 * scale && i1 - i0 > 3;
                     for (int j = j0; j <= j1; j++) {
-                        int first = face * occlusionFace + j * occlusionSide + i0, last = first + i1 - i0;
-                        for (int q = occlusionNodes.nextSetBit(first); q >= first && q <= last; q = occlusionNodes.nextSetBit(q + 1)) {
+                        int lo = i0, hi = i1;
+                        if (bounded) {
+                            double w = 2.0 * j / occlusionCells - 1;
+                            double d0 = fc + fv * w, a0 = ac + av * w, b0 = bc + bv * w;
+                            double qb = 2 * (a0 * au + b0 * bu - remaining2 * d0 * fu), qc = a0 * a0 + b0 * b0 - remaining2 * d0 * d0;
+                            double disc = qb * qb - 4 * qa * qc, mid = -qb / (2 * qa), half = disc > 0 ? Math.sqrt(disc) / (2 * qa) : 0;
+                            // Clamped as doubles: a far root must not overflow an int; NaN keeps the whole span.
+                            double from = Math.floor((mid - half + 1) * 0.5 * occlusionCells) - 1, to = Math.ceil((mid + half + 1) * 0.5 * occlusionCells) + 1;
+                            if (from > i0) lo = from > i1 ? i1 + 1 : (int) from;
+                            if (to < i1) hi = to < i0 ? i0 - 1 : (int) to;
+                        }
+                        int row = face * occlusionFace + j * occlusionSide, last = row + hi;
+                        for (int q = nextNode(row + lo, last); q >= 0; q = nextNode(q + 1, last)) {
                             int r = 3 * q;
                             double rx = occlusionRays[r], ry = occlusionRays[r + 1], rz = occlusionRays[r + 2];
                             double den = fx * rx + fy * ry + fz * rz;
@@ -1266,9 +1407,9 @@ final class SmokePuffs {
                             double a = ax * rx + az * rz, b = bx * rx + by * ry + bz * rz;
                             double numerator = a * a + b * b, denominator = den * den;
                             if (numerator >= denominator * remaining2) continue;
-                            double rho = Math.sqrt(numerator / denominator) + margin;
-                            double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, rho * rho);
-                            occlusion[q] += tau * weight;
+                            double rho = Math.sqrt(numerator / denominator) + margin, rho2 = rho * rho;
+                            // Inside the inner core the edge weight is exactly 1.
+                            occlusion[q] += rho2 <= inner ? tau : tau * (1 - smoothstep(inner, 1, rho2));
                         }
                     }
                 }

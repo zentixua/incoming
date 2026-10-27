@@ -211,4 +211,53 @@ class SmokePreparationTest {
             assertEquals(sources, seen);
         }
     }
+    /** A fire plume or launch cloud: no bounds, but on the preparation budget (LEAN 27.10: they emitted every frame outside it). */
+    private static class Plume extends Source {
+        final long[] nanos;
+        int drawnFrame = -1;
+        Plume(long[] nanos) { super(0); this.nanos = nanos; }
+        @Override public boolean bounds(double t, SmokeBounds out) { return false; }
+        @Override public boolean budgeted() { return true; }
+        @Override public boolean emit(double seconds, SmokeGrid.Sink out) { nanos[0] += 20_000; return super.emit(seconds, out); }
+    }
+
+    /**
+     * Plumes and launch clouds share the frame's 2 ms with blast clouds (clockless: emits advance a counting clock): the
+     * frame never runs over, the plumes take none of the nearest-cloud places, every source is refreshed oldest sample
+     * first within a bounded number of frames, a new plume is drawn from its first frame, and a non-budgeted (nuclear)
+     * source keeps emitting every frame.
+     */
+    @Test void plumesShareTheBudgetWithoutDisplacingClouds() {
+        long[] nanos = {0};
+        var sources = new ArrayList<SmokeGrid.Source>();
+        for (int i = 0; i < SmokePreparation.SOURCES; i++) sources.add(new Source(i) {
+            @Override public boolean emit(double t, SmokeGrid.Sink out) { nanos[0] += 100_000; return super.emit(t, out); }
+        });
+        var plumes = new ArrayList<Plume>();
+        for (int i = 0; i < 60; i++) plumes.add(new Plume(nanos));
+        sources.addAll(plumes);
+        var nuclear = new Source(5) { @Override public boolean bounds(double t, SmokeBounds out) { return false; } };
+        sources.add(nuclear);
+        var prep = new SmokePreparation();
+        java.util.Map<SmokeGrid.Source, Double> sampled = new java.util.IdentityHashMap<>();
+        var late = new Plume(nanos);
+        for (int f = 0; f < 80; f++) {
+            if (f == 40) sources.add(late);
+            int frame = f;
+            long before = nanos[0];
+            var drawn = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<SmokeGrid.Source, Boolean>());
+            prep.draw(sources, Set.of(), f / 20.0, 0, 0, 0, b -> true, (s, t) -> {
+                drawn.add(s);
+                sampled.put(s, t);
+                if (s instanceof Plume plume && plume.drawnFrame < 0) plume.drawnFrame = frame;
+                return DISCARD;
+            }, () -> nanos[0]);
+            assertTrue(nanos[0] - before <= SmokePreparation.NANOS, "preparation overran the frame budget");
+            assertEquals(f + 1, nuclear.calls, "a non-budgeted source emits every frame");
+            if (f < 12) continue;
+            assertEquals(SmokePreparation.SOURCES + 61 + (f >= 40 ? 1 : 0), drawn.size(), "every cloud and plume is drawn");
+            for (var e : sampled.entrySet()) assertTrue(f / 20.0 - e.getValue() <= 12 / 20.0 + 1e-9, "a snapshot fell behind");
+        }
+        assertEquals(40, late.drawnFrame, "a new plume is drawn from its first frame");
+    }
 }
