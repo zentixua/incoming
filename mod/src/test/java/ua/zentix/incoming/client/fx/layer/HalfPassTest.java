@@ -43,12 +43,20 @@ class HalfPassTest {
             for (int y = 0; y < TY; y++) {
                 for (int x = 0; x < TX; x++) {
                     int tile = y * TX + x;
-                    double layer = 0.3, frame = 0.3, target = 0, through = 1;
+                    double layer = 0.3, frame = 0.3, target = 0, through = 1, last = Double.NaN;
                     boolean laid = false;
                     for (int k = 0; k < n; k++) {
                         if (x < t[4 * k] || x > t[4 * k + 2] || y < t[4 * k + 1] || y > t[4 * k + 3]) continue;
                         layer = over(layer, k);
                         int where = plan.where[k];
+                        if (k >= plan.late) {
+                            // nearer than every soft quad: drawn over the laid target, in order
+                            assertEquals(HalfPass.Plan.LATE, where, "quad " + k + " after the last soft one");
+                            assertFalse(soft[k]);
+                            if (Double.isNaN(last)) last = target + through * frame;
+                            last = over(last, k);
+                            continue;
+                        }
                         // the frame pass keeps a fragment where the quad lies behind (or is) the tile's cut, the target the rest
                         boolean behind = k <= plan.cut[tile];
                         if (!soft[k]) {
@@ -74,8 +82,8 @@ class HalfPassTest {
                             assertTrue(x >= r[4 * k] && x <= r[4 * k + 2] && y >= r[4 * k + 1] && y <= r[4 * k + 3], "rectangle of quad " + k);
                         }
                     }
-                    // the target laid over the frame is the layer in order
-                    assertEquals(layer, target + through * frame, 1e-9, "scene " + scene + " tile " + tile);
+                    // the target laid over the frame, then the late quads, is the layer in order
+                    assertEquals(layer, Double.isNaN(last) ? target + through * frame : last, 1e-9, "scene " + scene + " tile " + tile);
                 }
             }
         }
@@ -97,5 +105,19 @@ class HalfPassTest {
         assertEquals(HalfPass.Plan.TARGET, plan.where[2], "in front of the fire: all half");
         assertEquals(HalfPass.Plan.TARGET, plan.where[3]);
         assertTrue(plan.any);
+    }
+
+    /** Glare in the eye is the nearest quad and covers the frame: it draws after the lay, the smoke behind it stays half. */
+    @Test
+    void glareInTheEyeComesAfterTheLay() {
+        boolean[] soft = {true, true, false};
+        int[] t = {0, 0, 5, 5, 3, 3, 9, 7, 0, 0, TX - 1, TY - 1};
+        HalfPass.Plan plan = new HalfPass.Plan();
+        plan.begin(TX, TY);
+        plan.classify(soft, t, 3);
+        assertEquals(2, plan.late);
+        assertEquals(HalfPass.Plan.TARGET, plan.where[0]);
+        assertEquals(HalfPass.Plan.TARGET, plan.where[1]);
+        assertEquals(HalfPass.Plan.LATE, plan.where[2]);
     }
 }

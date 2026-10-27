@@ -78,9 +78,18 @@ final class HalfPass {
      * behind some fire to full resolution.
      */
     static final class Plan {
-        /** Where a quad draws: frame whole, frame behind the cut, target whole, target in front of the cut. */
-        static final int FRAME = 1, FRAME_BEHIND = 2, TARGET = 4, TARGET_FRONT = 8;
+        /**
+         * Where a quad draws: frame whole, frame behind the cut, target whole, target in front of the cut, frame after the
+         * lay (nearer than every soft quad: glare in the eye, particles at the camera).
+         */
+        static final int FRAME = 1, FRAME_BEHIND = 2, TARGET = 4, TARGET_FRONT = 8, LATE = 16;
         int tilesX, tilesY;
+        /**
+         * First sorted place after the last soft quad: the target is laid there, and the quads from it on draw over it
+         * in order. Night glare in the eye is the nearest quad of the frame and covers most of it: with the lay at the
+         * end, every club behind it stayed at full resolution (370 of 6100 halved in the night raid of 40).
+         */
+        int late;
         /** Each tile's cut. */
         float[] cut = new float[0];
         /** Tiles holding half-resolution smoke (laid at the end). */
@@ -111,13 +120,16 @@ final class HalfPass {
                 behind = new int[4 * where.length];
                 ahead = new int[4 * where.length];
             }
-            for (int k = 0; k < n; k++) {
+            late = 0;
+            for (int k = 0; k < n; k++) if (soft[k]) late = k + 1;
+            for (int k = late; k < n; k++) where[k] = LATE;
+            for (int k = 0; k < late; k++) {
                 if (soft[k]) continue;
                 for (int y = t[4 * k + 1]; y <= t[4 * k + 3]; y++) {
                     for (int x = t[4 * k]; x <= t[4 * k + 2]; x++) cut[y * tilesX + x] = k;
                 }
             }
-            for (int k = 0; k < n; k++) {
+            for (int k = 0; k < late; k++) {
                 if (!soft[k] || t[4 * k] > t[4 * k + 2]) {
                     where[k] = FRAME;
                     continue;
@@ -273,7 +285,8 @@ final class HalfPass {
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
             GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
             layerBlend();
-            q.drawRange(s, 0, n, -1, 1, cuts[ring], TILE, rects[ring], 0);
+            int late = plan.late;
+            q.drawRange(s, 0, late, -1, 1, cuts[ring], TILE, rects[ring], 0);
             if (plan.any) {
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, accumFbo);
                 GlStateManager._viewport(0, 0, width, height);
@@ -281,12 +294,17 @@ final class HalfPass {
                 RenderSystem.enableBlend();
                 RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                         GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-                q.drawRange(s, 0, n, depth, 2, cuts[ring], TILE, rects[ring], rows);
+                q.drawRange(s, 0, late, depth, 2, cuts[ring], TILE, rects[ring], rows);
                 flush(main, scene);
                 lastFlushes = 1;
             }
+            // nearer than all smoke: over it, in order
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
+            GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+            layerBlend();
+            q.drawRange(s, late, n, -1, 0, -1, TILE);
             for (int k = 0; k < n; k++) {
-                if ((plan.where[k] & (Plan.FRAME | Plan.FRAME_BEHIND)) != 0) lastFull++;
+                if ((plan.where[k] & (Plan.FRAME | Plan.FRAME_BEHIND | Plan.LATE)) != 0) lastFull++;
                 if ((plan.where[k] & (Plan.TARGET | Plan.TARGET_FRONT)) != 0) lastLow++;
             }
         } finally {
@@ -444,13 +462,17 @@ final class HalfPass {
                     quads += r[i + 1];
                     for (int k = r[i]; k < r[i] + r[i + 1] && !target; k++) target = (PLAN.where[k] & (Plan.TARGET | Plan.TARGET_FRONT)) != 0;
                 }
+                int[] before = clip(r, 0, PLAN.late), after = clip(r, PLAN.late, n);
                 clock.begin(p);
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
                 GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
                 layerBlend();
                 q.passBegin(s, -1, 1, cuts[ring], TILE, rects[ring], 0);
-                FxQuads.multiDraw(r);
+                FxQuads.multiDraw(before);
                 q.passEnd(s, rects[ring], TILE);
+                q.passBegin(s, -1, 0, -1, TILE, -1, 0);
+                FxQuads.multiDraw(after);
+                q.passEnd(s, -1, TILE);
                 clock.half(p);
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, accumFbo);
                 GlStateManager._viewport(0, 0, width, height);
@@ -460,7 +482,7 @@ final class HalfPass {
                 RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                         GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
                 q.passBegin(s, depth, 2, cuts[ring], TILE, rects[ring], rows);
-                FxQuads.multiDraw(r);
+                FxQuads.multiDraw(before);
                 q.passEnd(s, rects[ring], TILE);
                 clock.halfDone(p);
                 if (target) flush(main, lastScene);
@@ -472,6 +494,19 @@ final class HalfPass {
             layerBlend();
         }
         return true;
+    }
+
+    /** Runs r (pairs start, length) cut to sorted places [from, to). */
+    private static int[] clip(int[] r, int from, int to) {
+        int[] out = new int[r.length];
+        int m = 0;
+        for (int i = 0; i < r.length; i += 2) {
+            int a = Math.max(r[i], from), b = Math.min(r[i] + r[i + 1], to);
+            if (b <= a) continue;
+            out[m++] = a;
+            out[m++] = b - a;
+        }
+        return Arrays.copyOf(out, m);
     }
 
     /** For the scenario line. */
