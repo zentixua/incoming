@@ -168,10 +168,17 @@ public final class LateExposureOrderGameTests {
         BlastProbe c = new BlastProbe(level);
         c.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 32))));
         level.addFreshEntity(c);
-        Detonation d = det(level, events.nextId(), c.position().add(-150, 0, 0), 600);
+        // detonation at game time 0 (a birth mark is never negative): the farthest place its front passed since, at least 2 ticks out
+        long age = level.getGameTime();
+        Detonation geometry = det(level, events.nextId(), c.position(), age);
+        double dist = 0;
+        for (double r = 150; r >= 20 && dist == 0; r -= 5) {
+            if (geometry.arrivalTicks(r) >= 2 && geometry.arrivalTicks(r) < age - 1 && geometry.blastReach() > r) dist = r;
+        }
+        h.assertTrue(dist > 0, "no place the front reached at least 2 ticks after the burst within " + age + " ticks");
+        Detonation d = det(level, geometry.id(), c.position().add(-dist, 0, 0), age);
         events.add(d);
-        double arrival = d.arrivalTicks(150);
-        h.assertTrue(arrival >= 2 && arrival < 600 && d.blastReach() > 150, "front arrival at 150 blocks: " + arrival + " ticks, reach " + d.blastReach());
+        double arrival = d.arrivalTicks(dist);
         c.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withBorn(d.gameTime() + (long) (arrival / 2)));
         LateExposure late = new LateExposure();
         try {
