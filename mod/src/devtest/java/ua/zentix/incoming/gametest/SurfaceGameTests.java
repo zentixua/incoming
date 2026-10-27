@@ -92,10 +92,10 @@ public final class SurfaceGameTests {
         SOIL("soil: podzol on the ground"),
         SAND("sand"),
         GRAVEL("gravel (embankment)"),
-        PAVED("asphalt: 1 m of black concrete on the ground"),
+        PAVED("paving: 0.20 m concrete on ground"),
         ROCK("thicker stone"),
         DECK("flooring: 1 m stone over void 6 m"),
-        ROOF("roof: 1 m concrete above the room 3 m");
+        ROOF("roof: 0.20 m concrete above a room");
 
         final String title;
 
@@ -277,8 +277,9 @@ public final class SurfaceGameTests {
         // during the inspection, debris does not lie in blocks: only those removed are considered
         noDebris(h);
         build(h, s, LO, HI, LO, HI, TOP);
-        int step = spacing(weapon), n = (HI - LO + 1) / step, first = MID - (n - 1) * step / 2;
-        h.assertTrue(n >= 3, weapon + ": less than three hits in a row, step " + step);
+        int step = s.slab() ? HI - LO + 1 : spacing(weapon);
+        int n = s.slab() ? 1 : (HI - LO + 1) / step, first = MID - (n - 1) * step / 2;
+        h.assertTrue(s.slab() || n >= 3, weapon + ": less than three hits in a row, step " + step);
         List<BlockPos> hits = new ArrayList<>();
         for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) hits.add(new BlockPos(first + step * i, TOP, first + step * k));
         for (BlockPos hit : hits) {
@@ -300,21 +301,26 @@ public final class SurfaceGameTests {
     private static Row craterRow(GameTestHelper h, WeaponType weapon, Surface s, List<BlockPos> hits, int step) {
         ServerLevel level = h.getLevel();
         int removed = 0, maxDepth = 0, holes = 0, through = 0;
-        double area = 0, damaged = 0;
+        double area = 0, damaged = 0, excavated = 0, maxMaterialDepth = 0;
         int half = (step - 1) / 2;
         for (BlockPos hit : hits) {
             int opening = 0, holeCols = 0;
             for (int dx = -half; dx <= half; dx++) {
                 for (int dz = -half; dz <= half; dz++) {
                     int depth = 0;
+                    double materialDepth = 0;
                     for (int y = TOP; y >= BASE; y--) {
                         BlockPos rel = new BlockPos(hit.getX() + dx, y, hit.getZ() + dz);
                         if (s.layer(TOP - y).isAir()) continue;
                         BlockPos absolute = h.absolutePos(rel);
                         BlockState now = level.getBlockState(absolute);
-                        damaged += ua.zentix.incoming.warhead.SurfaceDamage.depth(level, absolute);
+                        double thickness = ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(s.layer(TOP - y)).thickness();
+                        materialDepth += thickness;
+                        damaged += ua.zentix.incoming.warhead.SurfaceDamage.depth(level, absolute) * thickness;
                         if (now.isAir() || now.is(Blocks.FIRE) || !now.getFluidState().isEmpty()) {
                             removed++;
+                            excavated += thickness;
+                            maxMaterialDepth = Math.max(maxMaterialDepth, materialDepth);
                             depth = Math.max(depth, TOP - y + 1);
                         }
                     }
@@ -339,13 +345,19 @@ public final class SurfaceGameTests {
         String should;
         boolean ok;
         if (s.slab()) {
-            // FM 5-250: everything within the radius of the breach is demolished, the breach is a radius greater than the thickness (1 m); the slab above the void is also a
-//  panel - beyond the breach, the wave breaks it no further than the masonry (12 psi, Jarrett): upper limit
-//  radius along the steps of the table. B-3 ± rounding FM; not broken - there is nothing to demolish along FM (only the crater on top)
-            double r = breachRadius(tnt), rLo = Math.max(0, r - FM_ROUND), rHi = r + FM_ROUND;
+            // FM radius in material metres, mapped once to world paths. One slab strike avoids overlapping
+            // the much wider geometric contact footprints of represented thin material.
+            double thickness = ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(s.layer(0)).thickness();
+            double r = breachRadius(tnt) / thickness;
+            double rLo = Math.max(0, breachRadius(tnt) - FM_ROUND) / thickness;
+            double rHi = (breachRadius(tnt) + FM_ROUND) / thickness;
             double rPanel = BlastDamage.breakRange(BlastModel.kpa(BRICK_PSI), tnt);
             boolean breach = rLo > 1, none = rHi < 1;
-            double vLo = breach ? count * slabVolume(rLo, 1) : 0, vHi = count * slabVolume(rHi, 1);
+            // The 16³ cube-face ray grid resolves angles only to half a grid diagonal. Thin represented
+            // plates admit grazing angles between those rays: a continuous circle is not a lower bound.
+            double angularGap = Math.asin(Math.sqrt(2) / 15);
+            double resolved = breach ? 1 / Math.cos(Math.max(0, Math.acos(1 / rLo) - angularGap)) : 0;
+            double vLo = breach ? count * slabVolume(resolved, 1) : 0, vHi = count * slabVolume(rHi, 1);
             // edge of the hole - in whole blocks: ±2√V blocks for edge noise
             int lo = (int) Math.max(0, Math.floor(0.6 * vLo - 2 * Math.sqrt(vLo))), hi = (int) Math.ceil(1.45 * vHi + 2 * Math.sqrt(vHi));
             should = String.format(Locale.ROOT, "%d–%d block, breach %s (FM R %s–%s m, masonry %s m)", lo, hi,
@@ -361,10 +373,12 @@ public final class SurfaceGameTests {
             double upper = s == Surface.PAVED ? count * lawBlocks(CraterModel.chargeRadius(tnt, CraterModel.Soil.DRY),
                     CraterModel.chargeDepth(tnt, CraterModel.Soil.DRY))[0] : mean;
             int lo = (int) Math.max(0, Math.floor(0.6 * mean - 2 * sigma)), hi = (int) Math.ceil(1.45 * upper + 2 * sigma);
-            int deepest = Mth.ceil(1.3 * depth);
-            should = String.format(Locale.ROOT, "%d–%d bl. (law %s), Ø %s m, depth. ≤ %d", lo, hi, f(mean), f(2 * rc), deepest);
-            ok = removed + damaged >= lo && removed + damaged <= hi && maxDepth <= Math.max(1, deepest);
-            got += ", damaged by lobes " + f(damaged) + " m³";
+            double cap = ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(s.layer(0)).thickness();
+            // After a thin cohesive cap, loose soil still rounds up by a whole metre with its fractional probability.
+            double deepest = cap + Math.max(0, Mth.ceil(1.3 * depth - cap));
+            should = String.format(Locale.ROOT, "%d–%d material m³ (law %s), Ø %s m, material depth ≤ %s m", lo, hi, f(mean), f(2 * rc), f(deepest));
+            ok = excavated + damaged >= lo && excavated + damaged <= hi && maxMaterialDepth <= deepest + 1e-9;
+            got += ", removed material " + f(excavated) + " m³, damaged " + f(damaged) + " m³";
         }
         Row row = new Row(weapon.name(), s.title, should, got, true, ok, "");
         report("surface_" + weapon.name().toLowerCase(Locale.ROOT), List.of(row));
@@ -575,7 +589,8 @@ public final class SurfaceGameTests {
                 young += 1 / sin;
                 continue;
             }
-            young += run.through(kind(layer), youngS(layer), 1 / sin);
+            double thickness = ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(layer).thickness();
+            young += run.through(kind(layer), youngS(layer), thickness / sin) / thickness;
         }
         double path = charge.distanceTo(entry);
         boolean rocky = s == Surface.ROCK;

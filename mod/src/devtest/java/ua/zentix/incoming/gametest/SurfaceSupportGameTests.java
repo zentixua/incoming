@@ -53,12 +53,12 @@ public final class SurfaceSupportGameTests {
     }
 
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_fractional", skyAccess = true)
-    public static void lancetDamagesConcreteWithoutOpeningTheSlab(GameTestHelper h) {
+    public static void lancetDamagesSolidStoneWithoutOpeningTheSlab(GameTestHelper h) {
         fractional(h, false);
     }
 
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_fractional_ground", skyAccess = true)
-    public static void shahedDamagesSupportedPavingWithoutRemovingAMetre(GameTestHelper h) {
+    public static void shahedDamagesSupportedStoneWithoutRemovingAMetre(GameTestHelper h) {
         fractional(h, true);
     }
 
@@ -68,15 +68,15 @@ public final class SurfaceSupportGameTests {
         IncomingConfig.SERVER.debrisStay.set(false);
         StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.debrisStay.set(debris));
         BlockPos top = h.absolutePos(C.above(3));
-        BlockState concrete = Blocks.BLACK_CONCRETE.defaultBlockState();
+        BlockState stone = Blocks.STONE.defaultBlockState();
         for (BlockPos p : BlockPos.betweenClosed(top.offset(-6, -3, -6), top.offset(6, 0, 6))) {
-            level.setBlock(p, p.getY() == top.getY() ? concrete : supported ? Blocks.DIRT.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
+            level.setBlock(p, p.getY() == top.getY() ? stone : supported ? Blocks.DIRT.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
         }
         Warheads.detonate(level, supported ? WeaponType.DRONE : WeaponType.LOITER, Vec3.atBottomCenterOf(top.above()), null, null);
         h.succeedWhen(() -> {
             h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "impact unfinished");
             for (BlockPos p : BlockPos.betweenClosed(top.offset(-6, 0, -6), top.offset(6, 0, 6))) {
-                h.assertTrue(level.getBlockState(p).is(Blocks.BLACK_CONCRETE), "sub-block excavation removed slab at " + p);
+                h.assertTrue(level.getBlockState(p).is(Blocks.STONE), "sub-block excavation removed slab at " + p);
             }
             double depth = SurfaceDamage.depth(level, top);
             h.assertTrue(depth > 0 && depth < 1, "missing fractional depth: " + depth);
@@ -280,12 +280,12 @@ public final class SurfaceSupportGameTests {
     }
 
     @GameTest(template = "range", timeoutTicks = 700, batch = "blast_surface_salvo", skyAccess = true)
-    public static void concreteSalvoLeavesAtMostTheDisplayBudget(GameTestHelper h) {
+    public static void stoneSalvoLeavesAtMostTheDisplayBudget(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         for (int x = 12; x <= 52; x++) for (int z = 12; z <= 52; z++) {
             BlockPos p = h.absolutePos(new BlockPos(x, C.getY(), z));
             level.setBlock(p.below(), Blocks.DIRT.defaultBlockState(), 2);
-            level.setBlock(p, Blocks.BLACK_CONCRETE.defaultBlockState(), 2);
+            level.setBlock(p, Blocks.STONE.defaultBlockState(), 2);
         }
         for (int x = 18; x <= 46; x += 7) for (int z = 18; z <= 46; z += 7)
             Warheads.testDetonate(level, WeaponType.DRONE, h.absolutePos(new BlockPos(x, C.getY(), z)).getCenter(), null, x * 100L + z);
@@ -303,7 +303,7 @@ public final class SurfaceSupportGameTests {
                     e -> e.getType() == ua.zentix.incoming.registry.ModEntities.SURFACE_DAMAGE.get());
             h.assertTrue(displays.size() <= SurfaceDamage.DISPLAY_CAP, "salvo left " + displays.size() + " entities");
             h.assertTrue(displays.stream().noneMatch(e -> e.save(new net.minecraft.nbt.CompoundTag())), "salvo left saved rubble");
-            h.assertTrue(SurfaceDamage.depth(level, h.absolutePos(new BlockPos(18, C.getY(), 18))) > 0, "salvo never damaged concrete");
+            h.assertTrue(SurfaceDamage.depth(level, h.absolutePos(new BlockPos(18, C.getY(), 18))) > 0, "salvo never damaged stone");
         });
     }
 
