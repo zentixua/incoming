@@ -49,20 +49,25 @@ public final class ThicknessGameTests {
     @GameTest(template = "range", timeoutTicks = 30, batch = "thickness_excavation", skyAccess = true)
     public static void excavationConsumesLayersAndStoresFractionOfRemainingBlock(GameTestHelper h) {
         var level = h.getLevel();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             BlockPos top = h.absolutePos(new BlockPos(24 + i * 4, 15, 32));
             for (int y = 11; y <= 15; y++) level.setBlock(new BlockPos(top.getX(), h.absolutePos(new BlockPos(0, y, 0)).getY(), top.getZ()), Blocks.STONE.defaultBlockState(), 2);
             if (i < 2) level.setBlock(top, Blocks.GRAY_CONCRETE.defaultBlockState(), 2);
-            double depth = i == 0 ? 0.1 : 0.3;
+            if (i == 3) {
+                level.setBlock(top, Blocks.DIRT.defaultBlockState(), 2);
+                level.setBlock(top.below(), Blocks.GRAY_CONCRETE.defaultBlockState(), 2);
+            }
+            double depth = i == 0 ? 0.1 : i == 3 ? 1.3 : 0.3;
             var profile = new CraterJob.Profile() {
                 public double depth(double r) { return depth; }
                 public double rim(double r) { return 0; }
             };
             CraterJob.digColumn(level, top.getX(), top.getZ(), Vec3.atBottomCenterOf(top.above()), 1, 0, profile,
                     List.of(), null, CraterJob.Mode.DIG, RandomSource.create(1));
-            BlockPos remainder = i == 1 ? top.below() : top;
-            double expected = i == 0 ? 0.5 : i == 1 ? 0.1 : 0.3;
-            h.assertTrue(level.getBlockState(top).isAir() == (i == 1), "full represented layer removal wrong at " + top);
+            BlockPos remainder = i == 3 ? top.below(2) : i == 1 ? top.below() : top;
+            double expected = i == 0 ? 0.5 : i == 2 ? 0.3 : 0.1;
+            h.assertTrue(level.getBlockState(top).isAir() == (i == 1 || i == 3), "full represented layer removal wrong at " + top);
+            if (i == 3) h.assertTrue(level.getBlockState(top.below()).isAir(), "buried represented layer was counted as a metre");
             h.assertTrue(Math.abs(SurfaceDamage.depth(level, remainder) - expected) < 1e-9,
                     "remainder must be a fraction of its own material thickness: " + SurfaceDamage.depth(level, remainder));
         }

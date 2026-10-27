@@ -197,28 +197,32 @@ public final class CraterJob {
         if (mode == Mode.DIG) {
             BlockState surface = level.getBlockState(m.setY(ground - 1));
             if (surface.getBlock().defaultDestroyTime() < 0 || surface.getExplosionResistance(level, m, excavation) >= BLAST_PROOF) return;
-            if (relief < 0 && SurfaceBlocks.cohesive(surface)) {
+            if (relief < 0) {
                 // Consume represented material depth layer by layer. Geometry and the saved remainder stay
-                // in block units; ordinary ground (thickness 1) keeps its previous excavation law.
+                // in block units, including a thin element buried under loose ground. A loose top consumes
+                // the same one random draw and uses the same rounding direction as the original soil law.
                 double left = -relief;
+                double rounding = SurfaceBlocks.cohesive(surface) ? Double.NaN : random.nextDouble();
                 int full = 0;
                 for (int y = ground - 1; y >= level.getMinBuildHeight() && left > 1e-9; y--) {
                     BlockState layer = level.getBlockState(m.setY(y));
                     if (layer.isAir() || !layer.getFluidState().isEmpty()
                             || layer.getBlock().defaultDestroyTime() < 0
                             || layer.getExplosionResistance(level, m, excavation) >= BLAST_PROOF) break;
-                    double occupied = MaterialPath.inside(layer.getCollisionShape(level, m), m,
-                            new Vec3(x + 0.5, y + 1, z + 0.5), new Vec3(0, -1, 0), 1);
+                    boolean cohesive = SurfaceBlocks.cohesive(layer);
+                    // Loose soil is bulk column volume; cohesive shapes contribute their actual chord.
+                    double occupied = cohesive ? MaterialPath.inside(layer.getCollisionShape(level, m), m,
+                            new Vec3(x + 0.5, y + 1, z + 0.5), new Vec3(0, -1, 0), 1) : 1;
                     if (!(occupied > 0)) break;
                     double thickness = occupied * ModDataMaps.Penetrability.of(layer).thickness();
                     if (left + 1e-9 >= thickness) {
                         left -= thickness;
                         full++;
                     } else {
-                        if (SurfaceBlocks.cohesive(layer)) {
+                        if (cohesive) {
                             damagedPos = m.immutable();
                             damagedDepth = left / thickness;
-                        } else if (random.nextDouble() < left / thickness) {
+                        } else if ((Double.isNaN(rounding) ? random.nextDouble() : rounding) >= 1 - left / thickness) {
                             full++;
                         }
                         break;
