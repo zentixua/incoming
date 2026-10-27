@@ -67,6 +67,18 @@ final class SlabBreach {
      * @param radius breach radii per material group ({@link BreachModel.Material#ordinal}), m
      */
     record Origin(Vec3 at, @Nullable Vec3 open, double tolerance, double[] radius) {
+        /**
+         * World reach of a breach ray, m: the largest breach radius beyond contact plus the one cell a represented
+         * element occupies (est.: its position and orientation inside the cell are unknown). Material path alone does
+         * not bound a ray that runs along a thin element (0.04 m planks): each cell adds 0.04 m, so a 3 kg charge
+         * would open a plank roof 16 m out from the hit.
+         */
+        double reach() {
+            double r = 0;
+            for (double v : radius) r = Math.max(r, v);
+            return r + tolerance + 1;
+        }
+
         /** Ray {@code (dx, dy, dz)} enters obstacle. */
         boolean inward(double dx, double dy, double dz) {
             return open == null || dx * open.x + dy * open.y + dz * open.z < 0;
@@ -249,7 +261,8 @@ final class SlabBreach {
         Vec3 start = o.at().subtract(Vec3.atLowerCornerOf(anchor));
         // Grid traversal instead of 0.1 m samples: thin represented material can cross many world blocks.
         // The ready chunk boundary is a hard stop; no chunk is requested by a breach ray.
-        while (true) {
+        double reach = o.reach();
+        while (distance <= reach) {
             // Local coordinates avoid false void chords at distant world coordinates (GameTest uses ±15M).
             Vec3 at = start.add(direction.scale(distance));
             BlockPos local = BlockPos.containing(at.add(direction.scale(1e-7)));
@@ -286,6 +299,7 @@ final class SlabBreach {
             }
             distance += length;
         }
+        return -1;
     }
 
     /**
