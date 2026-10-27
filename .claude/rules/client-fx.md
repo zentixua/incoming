@@ -44,7 +44,9 @@ paths:
   blocks). Order: per tile (64 px) the cut is the sorted place of its last full-resolution quad (fire, glare, particles,
   a thin club); on that tile a soft quad behind the cut draws in the frame in order, one in front of it into the target —
   each tile gets its full-resolution quads in order and the half smoke on top, the layer's order exactly (fire inside
-  smoke: smoke behind it full, in front of it half). A quad over tiles on both sides draws in both passes, each fragment
+  smoke: smoke behind it full, in front of it half). The target is laid right after the last soft quad; nearer quads
+  (glare and veil of bright sources in the eye, particles at the camera) draw over it in order and set no cuts: night
+  glare covers most of the frame, and with the lay at the end 370 of 6100 clubs went half in the night raid of 40. A quad over tiles on both sides draws in both passes, each fragment
   by its tile (`HalfCut`, `quadPlace` = gl_VertexID / 4) and the quad clipped (`gl_ClipDistance`) to the bounding
   rectangle of its tiles on that side (`HalfRect`, per quad and pass); upsampling mixes only samples of tiles with the same
   cut. Two draw calls per frame plus one lay: laying the target before each fire in smoke (35–56 lays in the raid) cost
