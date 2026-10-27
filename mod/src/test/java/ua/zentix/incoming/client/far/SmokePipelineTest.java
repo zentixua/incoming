@@ -246,6 +246,49 @@ class SmokePipelineTest {
         }
     }
 
+    /**
+     * Review of #511, round 2: turning or a zoom within {@code Recording.fits} brought planned quads beside the old frame onto
+     * the screen (outside camera, 30° turn: 20.2 screens of a 13.3-screen plan; edge 5° and 15°: 16.9 and 18.3; inside, pixel
+     * angle ×0.971: 16.2). The replay measures the recorded quads and ribbons on the current screen and, as {@code fit} does,
+     * keeps the most visible while they fit. Every turn and small zoom keeps the budget on the screen oracle; a turn within
+     * it draws the last plan whole.
+     */
+    @Test
+    void turnsAndSmallZoomsKeepTheBudget() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
+        for (int camera = 0; camera < 3; camera++) {
+            FarView base = SmokeRaidTest.view(camera);
+            List<FarView> next = new ArrayList<>();
+            for (double degrees : new double[]{5, 15, 30, 60, 90})
+                next.add(SmokeFillTest.view(base.camera(), new Vector3f(base.forward()).rotateY((float) Math.toRadians(degrees))));
+            double k = 0.971;
+            next.add(new FarView(base.camera(), new Vector3f(base.forward()), new Vector3f(base.left()), new Vector3f(base.up()), 0, 1000,
+                    base.pixel() * k, Math.atan(Math.tan(base.edge()) * k), 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0, Sight.Air.at(0, 20000)));
+            for (FarView v : next) {
+                SmokePuffs.planner(DIRECT);
+                SmokePuffs.reset();
+                FarFlightView.reset();
+                for (int f = 0; f < 8; f++) frame(raid, now, base);
+                SmokeFillTest.Screen screen = new SmokeFillTest.Screen(v);
+                FarFlightView.budget();
+                for (SmokeGrid.Source b : raid) b.emit(now, SmokePuffs.sink(v, screen, b, now));
+                SmokePuffs.flush();
+                assertTrue(screen.fill() <= SmokePuffs.FILL_BUDGET + 1e-9, String.format(Locale.ROOT, "%s, forward %s, pixel %.3g: drawn fill %.3f",
+                        SmokeRaidTest.NAMES[camera], v.forward(), v.pixel(), screen.fill()));
+            }
+        }
+        // outside, a 5° turn: the last plan fits and is drawn re-anchored, one frame behind (not planned at once)
+        FarView base = SmokeRaidTest.view(0), turned = SmokeFillTest.view(base.camera(), new Vector3f(base.forward()).rotateY((float) Math.toRadians(5)));
+        List<FarView> views = new ArrayList<>();
+        for (int f = 0; f < 8; f++) views.add(base);
+        views.add(turned);
+        List<Calls> inline = run(raid, now, views, null), planned = run(raid, now, views, DIRECT);
+        // the veil is laid at the current view
+        inline.get(7).veil = planned.get(8).veil = null;
+        assertEquals(null, compare(inline.get(7), planned.get(8), 0, 0, 0, 1e-9), "the turned frame draws the last plan");
+    }
+
     /** Review of #511: the camera's vectors are copied into the filling Draw's storage, never into a Draw being planned. */
     @Test
     void cameraBasisIsNeverAPlanningDraw() {

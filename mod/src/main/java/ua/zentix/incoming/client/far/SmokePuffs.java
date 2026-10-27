@@ -506,9 +506,9 @@ final class SmokePuffs {
         }
         boolean ready = !running || p.await(WAIT_NANOS);
         if (running && ready) collect();
-        if (lastView != null && !shown.fits(lastView)) {
-            // The last plan was made for another projection (zoom) or far from this eye: its quads would not keep the fill
-            // budget here. This frame is planned now and drawn at once, as inline planning would.
+        if (lastView != null && !(shown.fits(lastView) && shown.trim(lastView, budget))) {
+            // The last plan was made for another projection (zoom), far from this eye, or a fast turn brings more of it onto
+            // the screen than the budget's fading share: this frame is planned now and drawn at once, as inline planning would.
             boolean drained = !running || p.await(DRAIN_NANOS);
             if (running && drained) collect();
             shown.clear();
@@ -520,6 +520,7 @@ final class SmokePuffs {
             start(p);
             if (p.await(DRAIN_NANOS)) {
                 collect();
+                shown.trim(lastView, budget);
                 shown.replay(lastView, lastOut, VEIL);
             }
             return;
@@ -832,14 +833,25 @@ final class SmokePuffs {
         private double[] veils = new double[8 * VEIL_FIELDS];
         private int veilCount;
         private double ex, ey, ez, pixel, edge;
+        private float fx, fy, fz;
         private boolean anchored;
+        /** Visible opacity of the plan entry whose quads are recorded next, the order {@code Draw.fit} keeps entries in. */
+        float rank;
+        /** Per call: fill at the drawn view, the keep order, and whether this frame leaves it out ({@link #trim}). */
+        private double[] fills = new double[64];
+        private long[] order = new long[64];
+        private boolean[] left = new boolean[64];
+        /** Calls the next replay leaves out ({@link #trim}). */
+        int trimmed;
+        private final double[] corners = new double[12];
+        private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
         /** Set by the plan when it finished; an unfinished or failed plan is not drawn. Its time on the planner's thread. */
         volatile boolean complete;
         long nanos;
         private final float[] joint = new float[3];
 
         void clear() {
-            count = veilCount = 0;
+            count = veilCount = trimmed = 0;
             anchored = complete = false;
             java.util.Arrays.fill(sprites, null);
         }
@@ -851,13 +863,72 @@ final class SmokePuffs {
             ez = eye.z;
             pixel = view.pixel();
             edge = view.edge();
+            org.joml.Vector3f f = view.forward();
+            fx = f.x;
+            fy = f.y;
+            fz = f.z;
             anchored = true;
+        }
+
+        /**
+         * Chooses what of the plan the next {@link #replay} at view leaves out so that it fills at most budget screens; false
+         * if that would be more than the budget's fading share. At the view it was planned for the plan keeps the budget
+         * ({@code Draw.drawnFill}); at another one a turn brings quads planned beside the old frame onto the screen (review of
+         * #511: a 30° turn showed 20.2 screens of a 13.3-screen plan, a 5° one 16.9 of 16.0). Each recorded quad and ribbon is
+         * measured on this screen by the plan's law; in the order {@code Draw.fit} keeps entries (most visible first) each
+         * stays if its fill still fits. Up to 1 − {@link #FIT_FADE} of the budget over, what goes is what {@code fit} fades
+         * into the veil anyway, for one frame; more, and the frame is planned for this view.
+         */
+        boolean trim(FarView view, double budget) {
+            trimmed = 0;
+            if (!anchored) return true;
+            Vec3 eye = view.camera();
+            org.joml.Vector3f f = view.forward();
+            if (eye.x == ex && eye.y == ey && eye.z == ez && f.x == fx && f.y == fy && f.z == fz && view.pixel() == pixel && view.edge() == edge)
+                return true;
+            double ox = ex - eye.x, oy = ey - eye.y, oz = ez - eye.z, total = 0;
+            double[] c = calls;
+            for (int k = 0; k < count; k++) {
+                int o = k * STRIDE;
+                int kind = (int) c[o];
+                double fill = 0;
+                if (kind == RIBBON) {
+                    joint[0] = (float) c[o + 16];
+                    joint[1] = (float) c[o + 17];
+                    joint[2] = (float) c[o + 18];
+                    boolean strip = shape.set(view.far(), f.x, f.y, f.z, c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], (float) c[o + 5],
+                            c[o + 7] + ox, c[o + 8] + oy, c[o + 9] + oz, c[o + 10], (float) c[o + 11], joint);
+                    fill = shape.fill(view, strip);
+                } else if ((float) c[o + 11] >= 0.002f) {
+                    // drawn quads only (the layer skips fainter)
+                    if (kind == PUFF) ua.zentix.incoming.client.fx.layer.PuffGeometry.face(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5],
+                            corners);
+                    else ua.zentix.incoming.client.fx.layer.PuffGeometry.flat(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], c[o + 13],
+                            corners);
+                    fill = polygonFill(view, corners);
+                }
+                fills[k] = fill;
+                total += fill;
+            }
+            if (total <= budget) return true;
+            if (total > (2 - FIT_FADE) * budget) return false;
+            for (int k = 0; k < count; k++) order[k] = (long) Float.floatToIntBits(2 - (float) c[k * STRIDE + 19]) << 32 | k;
+            java.util.Arrays.sort(order, 0, count);
+            double sum = 0;
+            for (int k = 0; k < count; k++) {
+                int i = (int) order[k];
+                left[i] = sum + fills[i] > budget;
+                if (left[i]) trimmed++;
+                else sum += fills[i];
+            }
+            return true;
         }
 
         /**
          * Whether this plan may be drawn at view: the same projection within {@link #PROJECTION} and an eye within
          * {@link #STEP}. Fill on screen grows as the inverse square of the pixel angle (a 4× zoom: 13 → 121 screens) and as
-         * the eye nears a puff; within these limits it stays within a few percent of the planned budget.
+         * the eye nears a puff; beyond these limits {@link #trim} would leave out much of the frame, and the plan's clusters
+         * and merges were chosen for another pixel size.
          */
         boolean fits(FarView view) {
             if (!anchored) return true;
@@ -871,8 +942,12 @@ final class SmokePuffs {
             if (count == sprites.length) {
                 sprites = java.util.Arrays.copyOf(sprites, 2 * count);
                 calls = java.util.Arrays.copyOf(calls, 2 * count * STRIDE);
+                fills = new double[2 * count];
+                order = new long[2 * count];
+                left = new boolean[2 * count];
             }
             sprites[count] = sprite;
+            calls[count * STRIDE + 19] = rank;
             return count++ * STRIDE;
         }
 
@@ -956,13 +1031,17 @@ final class SmokePuffs {
             veilCount = n;
         }
 
-        /** Draw at the eye of view into out: positions move by the eye's step since planning, geometry faces this camera. */
+        /**
+         * Draw at the eye of view into out: positions move by the eye's step since planning, geometry faces this camera, and
+         * what {@link #trim} chose for this view is left out.
+         */
         void replay(FarView view, Out out, Draw veil) {
             if (!anchored) return;
             Vec3 cam = view.camera();
             double ox = ex - cam.x, oy = ey - cam.y, oz = ez - cam.z;
             double[] c = calls;
             for (int k = 0; k < count; k++) {
+                if (trimmed > 0 && left[k]) continue;
                 int o = k * STRIDE;
                 int kind = (int) c[o];
                 if (kind == PUFF) out.puff6(c[o + 1] + ox, c[o + 2] + oy, c[o + 3] + oz, c[o + 4], c[o + 5], sprites[k], (float) c[o + 6],
@@ -2252,6 +2331,7 @@ final class SmokePuffs {
                 int e = ribbonEntry[k], o = k * RIBBON_FIELDS;
                 if (planVeil[e] >= 1) continue;
                 float keep = (float) (1 - planVeil[e]);
+                if (record != null) record.rank = (float) (planShown[e] * planSeen[e]);
                 ribbonJoint[0] = (float) ribbons[o + 15];
                 ribbonJoint[1] = (float) ribbons[o + 16];
                 ribbonJoint[2] = (float) ribbons[o + 17];
@@ -2259,6 +2339,13 @@ final class SmokePuffs {
                         (int) ribbons[o + 10], ribbons[o + 3], ribbons[o + 4], ribbons[o + 5], ribbons[o + 7], (float) ribbons[o + 9] * keep,
                         (int) ribbons[o + 11], (float) ribbons[o + 12], (float) ribbons[o + 13], (float) ribbons[o + 14], ribbonJoint);
             }
+        }
+
+        /** Tags the recorded quads of the current puff or place with its entry's visible opacity ({@link Recording#rank}). */
+        private void rankRecord() {
+            if (record == null) return;
+            int e = current >= 0 ? blobEntry[current] : placeEntry[~current];
+            record.rank = e < 0 ? 0 : (float) (planShown[e] * planSeen[e]);
         }
 
         /** Ждущее место p — в {@link #club}. */
@@ -2338,6 +2425,7 @@ final class SmokePuffs {
             double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, vary)
                     * Math.max(1, 2 * disc * point[0] / along);
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
+            rankRecord();
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = clubOffset(h, j, 7) * spread * rv * 0.5,
@@ -2622,6 +2710,7 @@ final class SmokePuffs {
             // каждый клуб берёт свою долю: по площади кучки в среднем перекрывается столько слоёв — вместе то же пропускание
             // в среднем (SmokeFillTest; середину облака кучка закрывает гуще — прежнее приближение, ревью #443)
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
+            rankRecord();
             // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали ({@code lying}):
             // квадрат лицом к камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
             for (int j = 0; j < count; j++) {

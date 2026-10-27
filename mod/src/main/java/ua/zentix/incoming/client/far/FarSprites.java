@@ -558,10 +558,27 @@ public final class FarSprites implements SmokePuffs.Out {
             org.joml.Vector3f fw = view.forward();
             if (veil > 0.004f) f += SmokePuffs.cover(view, fw.x * VEIL_AT, fw.y * VEIL_AT, fw.z * VEIL_AT, VEIL_AT * 4, VEIL_AT * 4);
             if (capAlpha > 0) f += SmokePuffs.cover(view, mx, my, mz, halfW * GLOW, halfW * GLOW);
-            if (drawn) f += SmokePuffs.polygonFill(view, new double[]{x0 - px * ha, y0 - py * ha, z0 - pz * ha, x0 + px * ha, y0 + py * ha, z0 + pz * ha,
-                    x1 + nx * hb, y1 + ny * hb, z1 + nz * hb, x1 - nx * hb, y1 - ny * hb, z1 - nz * hb});
+            if (drawn) {
+                double[] q = strip;
+                q[0] = x0 - px * ha;
+                q[1] = y0 - py * ha;
+                q[2] = z0 - pz * ha;
+                q[3] = x0 + px * ha;
+                q[4] = y0 + py * ha;
+                q[5] = z0 + pz * ha;
+                q[6] = x1 + nx * hb;
+                q[7] = y1 + ny * hb;
+                q[8] = z1 + nz * hb;
+                q[9] = x1 - nx * hb;
+                q[10] = y1 - ny * hb;
+                q[11] = z1 - nz * hb;
+                f += SmokePuffs.polygonFill(view, q);
+            }
             return f;
         }
+
+        /** The strip's four vertices for {@link #fill}, without a per-call array. */
+        private final double[] strip = new double[12];
     }
 
     /**
