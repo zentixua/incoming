@@ -165,7 +165,7 @@ class SmokeOcclusionTest {
 
         double raw() throws ReflectiveOperationException { return field(type, "floor").getDouble(draw); }
         int cells() throws ReflectiveOperationException { return field(type, "occlusionCells").getInt(draw); }
-        int reservedNodes() throws ReflectiveOperationException { return ((BitSet) field(type, "occlusionNodes").get(draw)).cardinality(); }
+        int reservedNodes() throws ReflectiveOperationException { return BitSet.valueOf((long[]) field(type, "occlusionNodes").get(draw)).cardinality(); }
         Object buffer(String name) throws ReflectiveOperationException { return field(type, name).get(draw); }
         int configure(double zoom) throws ReflectiveOperationException {
             field(type, "view").set(draw, zoomedView(zoom));
@@ -264,7 +264,7 @@ class SmokeOcclusionTest {
             }
             // With zero raw fill conceal only deposits: no budget-driven changes to puff visibility.
             conceal.invoke(draw, 16.0);
-            BitSet reserved = (BitSet) field(type, "occlusionNodes").get(draw);
+            BitSet reserved = BitSet.valueOf((long[]) field(type, "occlusionNodes").get(draw));
             assertTrue(reserved.cardinality() <= 36 * count, "Only planned core queries should reserve nodes");
             for (int face = 0; face < 6; face++) for (int j = 0; j <= cells; j++) for (int i = 0; i <= cells; i++) {
                 double u = 2.0 * i / cells - 1, v = 2.0 * j / cells - 1, sign = (face & 1) == 0 ? 1 : -1;

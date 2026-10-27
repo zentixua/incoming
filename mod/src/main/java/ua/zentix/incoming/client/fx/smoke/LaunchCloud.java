@@ -244,6 +244,18 @@ public final class LaunchCloud implements SmokeGrid.Source {
         return out;
     }
 
+    /** The cloud is emitted within the shared preparation budget and drawn from its last complete snapshot. */
+    @Override
+    public boolean budgeted() {
+        return true;
+    }
+
+    /** Since feed start: a young cloud changes fastest and is refreshed first. */
+    @Override
+    public double age(double seconds) {
+        return Math.max(0, seconds - born);
+    }
+
     /** Billow seed from position and feed start (two nearby clouds have different billows). */
     @Override
     public long seed() {
@@ -314,6 +326,25 @@ public final class LaunchCloud implements SmokeGrid.Source {
         return gone || thermal != null && SmokeGrid.seconds(0) - born >= life;
     }
 
+    /** Grid time after which the final rebuild is due (the feed has ended: two ticks without it); +∞ — none pending. */
+    double settleFrom() {
+        return !gone && thermal != null && heat > builtHeat ? lastFeed + 0.1 : Double.POSITIVE_INFINITY;
+    }
+
+    /**
+     * Client tick, beside the feed ({@code FarFlightView.tick}): of the clouds whose feed has ended, the one that ended
+     * first rebuilds its thermal from all heat fed; one per tick. A rebuild integrates the whole rise (~1 ms) and cannot
+     * yield: inside the budgeted {@link #emit} it overran the 2 ms preparation budget, and all clouds of a salvo at once
+     * would stall a tick (8 clouds ~7 ms, 100 ~90 ms; review of #509). A waiting cloud keeps its complete last thermal,
+     * built from at least 1/{@link #REBUILD} of the heat. Returns the rebuilt cloud, null — none was due.
+     */
+    public static LaunchCloud settle(Iterable<LaunchCloud> clouds, double seconds) {
+        LaunchCloud due = null;
+        for (LaunchCloud c : clouds) if (c.settleFrom() < seconds && (due == null || c.settleFrom() < due.settleFrom())) due = c;
+        if (due != null) due.build();
+        return due;
+    }
+
     /** Cloud no longer drawn (world change, rewind). */
     public void end() {
         gone = true;
@@ -327,8 +358,6 @@ public final class LaunchCloud implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         if (thermal == null) return true;
-        // feed ended (two ticks without it) — thermal from all heat
-        if (heat > builtHeat && seconds - lastFeed > 0.1) build();
         double t = Math.max(0, seconds - born);
         if (t >= life) return false;
         // cloud still dense at lifetime limit fades over final tenth of life (like blast cloud)

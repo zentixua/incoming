@@ -452,6 +452,12 @@ public final class FireSmoke implements SmokeGrid.Source {
         return Double.doubleToLongBits(start) * 31 + Double.doubleToLongBits(x) * 17 + Double.doubleToLongBits(z);
     }
 
+    /** The plume is laid within the shared preparation budget and drawn from its last complete snapshot. */
+    @Override
+    public boolean budgeted() {
+        return true;
+    }
+
     /**
      * Flame lights smoke from below in free grid-light slots (explosion/nuclear balls take the others), most noticeable first
      * (brightness × R²/d²): a visible-flame sphere ({@link FirePlume#flameLight}) of half flame-height radius above source; linear light

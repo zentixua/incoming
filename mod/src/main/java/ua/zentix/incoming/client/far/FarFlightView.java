@@ -286,6 +286,8 @@ public final class FarFlightView {
         for (FlightTrack track : FlightTracks.all()) see(track);
         // SAM missiles: trail and launch cloud follow same law as projectiles
         for (FlightTrack track : FlightTracks.interceptors()) see(track);
+        // a launch cloud whose feed ended takes all its heat here, one per tick, not in its budgeted emit
+        LaunchCloud.settle(CLOUDS, SmokeGrid.seconds(0));
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         double world = mc.options.getEffectiveRenderDistance() * 16.0;
         // world frozen: projectiles stand still, trails neither grow nor age (same-place points unnecessary)
