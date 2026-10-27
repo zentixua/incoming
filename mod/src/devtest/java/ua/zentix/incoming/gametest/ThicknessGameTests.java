@@ -1,6 +1,7 @@
 package ua.zentix.incoming.gametest;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.RandomSource;
@@ -42,6 +43,38 @@ public final class ThicknessGameTests {
         h.assertTrue(Math.abs(support.breach() - expected) < 1e-4, "material path and geometric support disagree: " + support);
         for (var block : List.of(Blocks.DIRT, Blocks.STONE, Blocks.IRON_ORE, Blocks.TERRACOTTA, Blocks.OAK_LOG)) {
             h.assertTrue(Penetrability.of(block.defaultBlockState()).thickness() == 1, "natural material was thinned: " + block);
+        }
+        h.succeed();
+    }
+
+    /** Adding thickness must not also change the former tool-based breach group of a newly mapped block. */
+    @GameTest(template = "range", timeoutTicks = 30, batch = "thickness_material", skyAccess = true)
+    public static void newEntriesPreserveLegacyMaterialFallback(GameTestHelper h) {
+        for (var block : List.of(
+                Blocks.BRICK_SLAB, Blocks.BRICK_STAIRS, Blocks.BRICK_WALL,
+                Blocks.COBBLESTONE_SLAB, Blocks.COBBLESTONE_STAIRS, Blocks.COBBLESTONE_WALL,
+                Blocks.CRACKED_DEEPSLATE_BRICKS, Blocks.CRACKED_DEEPSLATE_TILES, Blocks.CRACKED_POLISHED_BLACKSTONE_BRICKS,
+                Blocks.DEEPSLATE_BRICK_SLAB, Blocks.DEEPSLATE_BRICK_STAIRS, Blocks.DEEPSLATE_BRICK_WALL,
+                Blocks.DEEPSLATE_TILE_SLAB, Blocks.DEEPSLATE_TILE_STAIRS, Blocks.DEEPSLATE_TILE_WALL,
+                Blocks.END_STONE_BRICK_SLAB, Blocks.END_STONE_BRICK_STAIRS, Blocks.END_STONE_BRICK_WALL,
+                Blocks.MOSSY_COBBLESTONE_SLAB, Blocks.MOSSY_COBBLESTONE_STAIRS, Blocks.MOSSY_COBBLESTONE_WALL,
+                Blocks.MOSSY_STONE_BRICK_SLAB, Blocks.MOSSY_STONE_BRICK_STAIRS, Blocks.MOSSY_STONE_BRICK_WALL,
+                Blocks.MUD_BRICK_SLAB, Blocks.MUD_BRICK_STAIRS, Blocks.MUD_BRICK_WALL,
+                Blocks.NETHER_BRICK_SLAB, Blocks.NETHER_BRICK_STAIRS, Blocks.NETHER_BRICK_WALL,
+                Blocks.POLISHED_BLACKSTONE_BRICK_SLAB, Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS, Blocks.POLISHED_BLACKSTONE_BRICK_WALL,
+                Blocks.RED_NETHER_BRICK_SLAB, Blocks.RED_NETHER_BRICK_STAIRS, Blocks.RED_NETHER_BRICK_WALL,
+                Blocks.STONE_BRICK_SLAB, Blocks.STONE_BRICK_STAIRS, Blocks.STONE_BRICK_WALL,
+                Blocks.OAK_SLAB, Blocks.OAK_STAIRS, Blocks.OAK_DOOR,
+                Blocks.OAK_TRAPDOOR, Blocks.OAK_FENCE, Blocks.OAK_FENCE_GATE)) {
+            var state = block.defaultBlockState();
+            BreachModel.Material expected = state.is(BlockTags.MINEABLE_WITH_AXE) ? BreachModel.Material.POOR
+                    : state.is(BlockTags.MINEABLE_WITH_SHOVEL) || state.is(BlockTags.MINEABLE_WITH_HOE) ? BreachModel.Material.EARTH
+                    : state.is(BlockTags.MINEABLE_WITH_PICKAXE) && block.defaultDestroyTime() <= 2 ? BreachModel.Material.ROCK
+                    : BreachModel.Material.REINFORCED;
+            var entry = Penetrability.of(state);
+            h.assertTrue(entry.breaching() == expected, "new thickness entry changed the legacy breach group: " + block + " " + entry);
+            h.assertTrue(entry.kind() == ua.zentix.incoming.warhead.Penetration.Kind.ROCK && entry.s() == 1,
+                    "new thickness entry changed the legacy bomb medium: " + block + " " + entry);
         }
         h.succeed();
     }
