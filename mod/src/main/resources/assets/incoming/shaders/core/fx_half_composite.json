@@ -1,0 +1,13 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_half_composite",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" },
+        { "name": "Sampler2" },
+        { "name": "Sampler3" }
+    ],
+    "uniforms": [
+        { "name": "HalfTile", "type": "float", "count": 1, "values": [ 64.0 ] }
+    ]
+}

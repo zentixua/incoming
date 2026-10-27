@@ -153,6 +153,13 @@ public final class FxLayer {
             Incoming.LOG.error("Effects bloom shaders failed to load: fire, flashes and rocket flames without bloom", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_half_depth"), DefaultVertexFormat.POSITION), s -> HalfPass.depthShader = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_half_composite"), DefaultVertexFormat.POSITION), s -> HalfPass.composite = s);
+        } catch (IOException ex) {
+            HalfPass.depthShader = HalfPass.composite = null;
+            Incoming.LOG.error("Half-resolution smoke shaders failed to load: smoke at full resolution", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
         } catch (IOException ex) {
             SmokePass.fill = null;
@@ -347,7 +354,9 @@ public final class FxLayer {
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
             s.safeGetUniform("FxGlowPass").set(0f, 1f);
-            QUADS.draw();
+            // soft smoke with no detail finer than two pixels at half resolution, the rest in order at full (HalfPass)
+            if (QUADS.prepare()) HalfPass.draw(QUADS, s, scene, VIEW_PROJECTION, GlStateManager.Viewport.width(), GlStateManager.Viewport.height());
+            s.safeGetUniform("FxGlowPass").set(0f, 1f);
             LayerTimes.mark(LayerTimes.Pass.QUADS);
             if (drained) LayerTimes.parts(QUADS, s);
             LayerTimes.mark(LayerTimes.Pass.PROBE);
@@ -403,7 +412,7 @@ public final class FxLayer {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
                 + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
                 lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe());
+                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe() + "; " + HalfPass.describe());
     }
 
     /** F3: время слоя на видеокарте по проходам и частям (пока F3 открыт, проба идёт). */

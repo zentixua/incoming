@@ -106,7 +106,9 @@ class ShaderSourceTest {
                         // объявленный и в include, и в самом шейдере — переопределение, шейдер не собирается
                         if (!declared.add(u)) bad.add(name + ": " + file + " объявлен дважды " + u);
                         used.add(u);
-                        if (type.equals("sampler3D")) continue;
+                        // the layer binds these itself: 3D textures and the half-resolution tile cuts and quad rectangles
+                        // (FxQuads.CUT_UNIT, RECT_UNIT)
+                        if (type.equals("sampler3D") || u.equals("HalfCut") || u.equals("HalfRect")) continue;
                         if (!(type.startsWith("sampler") ? samplers : numbers).contains(u)) bad.add(name + ": " + file + " " + type + " " + u);
                     }
                 }

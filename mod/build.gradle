@@ -125,6 +125,8 @@ neoForge {
             }
             // LSS раздаёт LOD и встроенным сервером одиночной игры — своим тестовым свойством (иначе только по сети)
             if (System.getenv('INCOMING_LSS')) systemProperty 'lss.test.integratedServer', 'true'
+            // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh start
+            if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
             // паузы сборщика мусора — чтобы отличать их от медленного кода (run/scenario/logs/gc.log)
             jvmArgument "-Xlog:gc:file=${project.file("${scenarioDir}/logs/gc.log").absolutePath}:time,uptime"
             // профиль JFR по желанию: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr

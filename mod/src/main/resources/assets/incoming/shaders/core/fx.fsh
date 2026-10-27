@@ -29,6 +29,16 @@ uniform vec2 ScreenSize;
 uniform vec4 FxFogColor;
 // 1 — расстояние до мира есть
 uniform float FxScene;
+// 1 — half-resolution smoke target (HalfPass): it has no hardware depth, so the world hides smoke by its distance; the
+// composite adds the 8-bit noise
+uniform float FxHalf;
+// Split of the layer between frame and half-resolution target by tile (HalfPass): x — 0 none, 1 draw only where the quad
+// lies behind (or is) its tile's last full-resolution quad, 2 only where it lies in front; z — tile side, frame pixels.
+// HalfCut — per tile, sorted place of its last full-resolution quad (−1 — none), on its own texture unit (bound by the
+// layer, as PallOpen: the 12 named samplers are taken)
+uniform vec4 FxHalfSplit;
+uniform sampler2D HalfCut;
+flat in float quadPlace;
 
 in vec2 texCoord0;
 in vec4 vertexColor;
@@ -200,6 +210,10 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 void main() {
     // производные — до ветвления (вне его они определены у всех пикселей)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
+    if (FxHalfSplit.x > 0.5) {
+        bool behind = quadPlace <= texelFetch(HalfCut, ivec2(gl_FragCoord.xy * FxGlowPass.y / FxHalfSplit.z), 0).r;
+        if (behind != (FxHalfSplit.x < 1.5)) discard;
+    }
     float lod = 0.0;
     vec4 tex;
     bool six = nearest < -0.1 && nearest > -0.4;
@@ -283,11 +297,13 @@ void main() {
     }
     // видимая доля квадрата — у цвета и излучения одна
     float seen = 1.0;
-    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5)) {
+    if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
         // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
         if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
+        // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance
+        else if (FxHalf > 0.5 && scene < viewDistance) discard;
         // проход свечения без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
         if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;
     }
@@ -298,9 +314,11 @@ void main() {
     // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
     seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
+    // the half-resolution target is float: clamp as the 8-bit frame does before blending (NaN — nothing)
+    if (FxHalf > 0.5) fragColor = any(isnan(fragColor)) ? vec4(0.0) : clamp(fragColor, 0.0, 1.0);
     // 8 бит кадра: плавная вуаль вещества у глаза (сетка лучей, SmokePuffs.Veil) и бледные края клубов без подмешанного
     // шума идут ступенями — шум в полступени (Jimenez 2014, как у ореола), долей того, что квадрат кладёт
-    if (FxGlowPass.x < 0.5) {
+    if (FxGlowPass.x < 0.5 && FxHalf < 0.5) {
         float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
         fragColor.rgb = max(fragColor.rgb + (noise - 0.5) / 255.0 * fragColor.a, vec3(0.0));
     }
