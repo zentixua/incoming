@@ -326,13 +326,23 @@ public final class LaunchCloud implements SmokeGrid.Source {
         return gone || thermal != null && SmokeGrid.seconds(0) - born >= life;
     }
 
+    /** Grid time after which the final rebuild is due (the feed has ended: two ticks without it); +∞ — none pending. */
+    double settleFrom() {
+        return !gone && thermal != null && heat > builtHeat ? lastFeed + 0.1 : Double.POSITIVE_INFINITY;
+    }
+
     /**
-     * Once per client tick, beside the feed ({@code FarFlightView.tick}): when the feed has ended (two ticks without it),
-     * the thermal is rebuilt from all heat fed. Not in {@link #emit}: the rebuild integrates the whole rise (~1 ms), cannot
-     * yield, and emit runs within the shared 2 ms preparation budget, which it would overrun (review of #509).
+     * Client tick, beside the feed ({@code FarFlightView.tick}): of the clouds whose feed has ended, the one that ended
+     * first rebuilds its thermal from all heat fed; one per tick. A rebuild integrates the whole rise (~1 ms) and cannot
+     * yield: inside the budgeted {@link #emit} it overran the 2 ms preparation budget, and all clouds of a salvo at once
+     * would stall a tick (8 clouds ~7 ms, 100 ~90 ms; review of #509). A waiting cloud keeps its complete last thermal,
+     * built from at least 1/{@link #REBUILD} of the heat. Returns the rebuilt cloud, null — none was due.
      */
-    public void settle(double seconds) {
-        if (!gone && thermal != null && heat > builtHeat && seconds - lastFeed > 0.1) build();
+    public static LaunchCloud settle(Iterable<LaunchCloud> clouds, double seconds) {
+        LaunchCloud due = null;
+        for (LaunchCloud c : clouds) if (c.settleFrom() < seconds && (due == null || c.settleFrom() < due.settleFrom())) due = c;
+        if (due != null) due.build();
+        return due;
     }
 
     /** Cloud no longer drawn (world change, rewind). */
