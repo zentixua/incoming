@@ -60,6 +60,8 @@ uniform vec2 HeatFrontChemical;
 uniform vec4 HeatFrame;
 // shadow-pass visibility present (x > 0; otherwise no shadows)
 uniform vec4 HeatShadow;
+// largest shift, pixels: the pass runs and copies the frame only around its sources (HeatArea, margin SHIFT_REACH)
+uniform float HeatReach;
 
 const float CROSS = 0.15;
 // haze law — HeatPass constants copied (checked by HazeGlslTest)
@@ -368,6 +370,9 @@ void main() {
     }
     // front runs fullscreen on every nuclear frame: below-threshold shift leaves frame unchanged
     if (dot(front, front) >= FRONT_SHIFT_MIN * FRONT_SHIFT_MIN) shift += front;
+    // the copy covers this pixel's rectangle only this far around (shimmer is sub-pixel, conventional fronts at most 3 px)
+    float reach = length(shift);
+    if (reach > HeatReach) shift *= HeatReach / reach;
     vec2 at = here + shift;
     vec3 world = dot(shift, shift) > 0.0 ? texture(Sampler0, at / vec2(size)).rgb : texelFetch(Sampler0, ivec2(here), 0).rgb;
     ivec2 px = clamp(ivec2(floor(at)), ivec2(0), size - 1);

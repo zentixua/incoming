@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.Direction;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
@@ -218,6 +219,11 @@ public final class HeatPass {
 
         boolean frontAny() {
             return front.m03() > 0 || front.m13() > 0;
+        }
+
+        /** Front slot i holds the nuclear front. */
+        boolean nuke(int i) {
+            return frontNuke[i];
         }
 
         /**
@@ -676,9 +682,23 @@ public final class HeatPass {
         Solids.update(level, eye);
     }
 
-    /** Whether this frame needs the pass. */
-    static boolean needed(Frame f) {
-        return shader != null && (f.lit() || f.hotAny() || f.frontAny());
+    /** Pixels this frame's pass can change ({@link #needed}). */
+    private static final HeatArea AREA = new HeatArea();
+
+    /**
+     * Whether this frame needs the pass: a source whose light or shift reaches the screen ({@link HeatArea}); view and
+     * projection map eye-relative positions to clip space. Sources only off screen or too faint to move a pixel — no pass.
+     */
+    static boolean needed(Frame f, Matrix4fc view, Matrix4fc projection) {
+        if (shader == null || !(f.lit() || f.hotAny() || f.frontAny())) return false;
+        float shade = Math.min(Math.min(FACE_SHADE.x, FACE_SHADE.y), Math.min(FACE_SHADE.z, FACE_SHADE.w));
+        double visible = HeatArea.visible(OPEN_SKY.x, OPEN_SKY.y, OPEN_SKY.z, Math.max(shade, 0.05f));
+        return AREA.of(f, view, projection, f.adapted(), visible).count > 0;
+    }
+
+    /** This frame's area (after {@link #needed}; checks). */
+    static HeatArea area() {
+        return AREA;
     }
 
     /**
@@ -687,7 +707,10 @@ public final class HeatPass {
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vector4f haze, double pixel) {
         ShaderInstance s = shader;
-        if (s == null || scene < 0 || !copyFrame()) return false;
+        HeatArea area = AREA;
+        // shifted pixels read the copy up to SHIFT_REACH away; light alone reads its own pixel
+        int margin = f.hotAny() || f.frontAny() ? HeatArea.SHIFT_REACH : 0;
+        if (s == null || scene < 0 || area.count == 0 || !copyFrame(area, margin)) return false;
         VIEW_PROJECTION.set(projection).mul(view);
         VIEW_PROJECTION.invert(INVERSE);
         view.positiveZ(FORWARD).negate();
@@ -714,7 +737,8 @@ public final class HeatPass {
         s.safeGetUniform("HeatFrontShape").set(f.frontShape.x, f.frontShape.y, f.frontShape.z, f.frontShape.w);
         s.safeGetUniform("HeatFrontChemical").set(f.frontNuke[0] ? 0f : 1f, f.frontNuke[1] ? 0f : 1f);
         s.safeGetUniform("HeatFrame").set(f.frontAny() ? 1f : 0f, (float) pixel, f.lit() ? 1f : 0f, f.hotAny() ? 1f : 0f);
-        boolean drawn = quad(s);
+        s.safeGetUniform("HeatReach").set(area.whole ? 1e9f : HeatArea.SHIFT_REACH);
+        boolean drawn = quads(s, area, 0, area.count, copyW, copyH, 0);
         RenderSystem.enableDepthTest();
         return drawn;
     }
@@ -738,13 +762,24 @@ public final class HeatPass {
         s.safeGetUniform("HeatFrame").set(0f, (float) pixel, f.lit() ? 1f : 0f, 0f);
     }
 
-    /** Full bound-frame quad with shader s; false if not drawn. */
-    private static boolean quad(ShaderInstance s) {
+    /**
+     * Rectangles from..to of area a with shader s, in pixels of the bound w×h target widened by margin (the whole target
+     * for a whole-screen area); false if not drawn.
+     */
+    private static boolean quads(ShaderInstance s, HeatArea a, int from, int to, int w, int h, int margin) {
+        if (to <= from) {
+            Solids.unbind();
+            return false;
+        }
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-        b.addVertex(-1, -1, 0);
-        b.addVertex(1, -1, 0);
-        b.addVertex(1, 1, 0);
-        b.addVertex(-1, 1, 0);
+        for (int i = from; i < to; i++) {
+            a.pixels(i, w, h, margin, RECT);
+            float x0 = 2f * RECT[0] / w - 1, y0 = 2f * RECT[1] / h - 1, x1 = 2f * RECT[2] / w - 1, y1 = 2f * RECT[3] / h - 1;
+            b.addVertex(x0, y0, 0);
+            b.addVertex(x1, y0, 0);
+            b.addVertex(x1, y1, 0);
+            b.addVertex(x0, y1, 0);
+        }
         MeshData mesh = b.build();
         if (mesh == null) {
             Solids.unbind();
@@ -758,6 +793,9 @@ public final class HeatPass {
         Solids.unbind();
         return true;
     }
+
+    /** Pixel rectangle scratch: x0, y0, x1, y1. */
+    private static final int[] RECT = new int[4];
 
     @Nullable
     static ShaderInstance shadowShader;
@@ -799,7 +837,8 @@ public final class HeatPass {
         GlStateManager._viewport(0, 0, w, h);
         RenderSystem.setShaderTexture(1, scene);
         common(s, f, pixel);
-        boolean drawn = quad(s);
+        // only where balls and jets light the screen; the light pass reads up to a sample beyond its pixel
+        boolean drawn = quads(s, AREA, 0, AREA.lit, w, h, 2);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
         GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         return drawn;
@@ -820,8 +859,11 @@ public final class HeatPass {
         return EXPOSED;
     }
 
-    /** Copy of frame targeted by pass (currently bound), own texture with linear sampling. */
-    private static boolean copyFrame() {
+    /**
+     * Copy of the frame targeted by the pass (currently bound) into its own texture with linear sampling: only the area's
+     * rectangles, widened by margin (pixels the pass may read).
+     */
+    private static boolean copyFrame(HeatArea area, int margin) {
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         int w = VIEWPORT[0] + VIEWPORT[2], h = VIEWPORT[1] + VIEWPORT[3];
         if (w <= 0 || h <= 0) return false;
@@ -839,7 +881,11 @@ public final class HeatPass {
             copyW = w;
             copyH = h;
         }
-        GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        for (int i = 0; i < area.count; i++) {
+            area.pixels(i, w, h, margin, RECT);
+            int cw = RECT[2] - RECT[0], ch = RECT[3] - RECT[1];
+            if (cw > 0 && ch > 0) GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, RECT[0], RECT[1], RECT[0], RECT[1], cw, ch);
+        }
         return true;
     }
 
@@ -854,7 +900,8 @@ public final class HeatPass {
             if (i < 2 && f.front.getColumn(i, c).w > 0) n++;
             if (f.jetWeight[i] > 0) j++;
         }
-        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d front %d jets %d", l, h, n, j));
+        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "heat lights %d hot %d front %d jets %d, area %s", l, h, n, j,
+                AREA.describe()));
         for (int i = 0; i < 2; i++) {
             f.front.getColumn(i, c);
             if (c.w <= 0) continue;

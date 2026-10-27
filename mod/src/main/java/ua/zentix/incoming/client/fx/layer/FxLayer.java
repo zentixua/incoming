@@ -250,7 +250,9 @@ public final class FxLayer {
         // факелы снарядов кадра — свет на мир (в глаз — со следующего кадра)
         FarRenderer.heat(heat, air);
         heat.done();
-        boolean hot = HeatPass.needed(heat);
+        FarDraw.view(e, view.camera(), VIEW);
+        // only where a source's light or shift reaches the screen (HeatArea); none in view — no pass
+        boolean hot = HeatPass.needed(heat, VIEW, e.getProjectionMatrix());
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
             // перед глазом (проба считается, квадрат её берёт)
@@ -273,7 +275,6 @@ public final class FxLayer {
         LayerTimes.mark(LayerTimes.Pass.MODELS);
         int scene = SceneDepth.update(e.getProjectionMatrix());
         LayerTimes.mark(LayerTimes.Pass.DEPTH);
-        FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
         // кадр слива стоит ещё одни квадраты и простои: во время слоя он не идёт
