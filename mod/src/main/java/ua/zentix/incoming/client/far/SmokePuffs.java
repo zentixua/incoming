@@ -36,7 +36,7 @@ final class SmokePuffs {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a);
 
-        void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+        void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a);
 
         /** Вуаль вещества у глаза по экрану ({@link Veil}) со светом мира light (упакованный). */
@@ -157,22 +157,18 @@ final class SmokePuffs {
     /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
     static double budget = FILL_BUDGET;
     /**
-     * Уровней слияния разных источников ({@link Draw#mergeLevel}): ячейка уровня k — {@link #LOD_CELL}·2^k края клуба (на
-     * последнем — 64 края: облака налёта сходятся в несколько).
+     * Cross-source merge levels ({@link Draw#mergeLevel}): a level-k cell spans {@link #LOD_CELL}·2^k puff edges
+     * (two edges at the last level). Merging farther would turn separate clouds into one spanning the entire raid.
      */
     static final int LEVELS = 3;
-    /**
-     * Толща вещества перед сердцевиной клуба, за которой его не видно (пропускание e^(−3) — 5 %): такой не рисуется
-     * ({@code Draw.hide}).
-     */
-    static final double HIDDEN = 3;
-    /** Сердцевина клуба на экране, доля полуразмера квадрата: там диск запечённого клуба почти ровный ({@link #PUFF_DISCS}). */
-    static final double CORE = 0.6;
     static final double LOD_CELL = 0.5;
     /** Уровень слияния прошлого кадра держится, пока пол уровнем ниже не меньше этой доли бюджета. */
     static final double HYSTERESIS = 0.8;
-    /** Отобранные квадратами ({@code Draw.fit}) с этой доли бюджета по накопленной заливке тают в вуаль (лента — гаснет). */
-    static final double FIT_FADE = 0.75;
+    /**
+     * Quads selected by {@code Draw.fit} fade into the veil from this fraction of cumulative budget fill; ribbons fade out.
+     * Presentation: a 15% band keeps the transition continuous without turning an under-budget water salvo (floor 13.16) into haze.
+     */
+    static final double FIT_FADE = 0.85;
     /** Групп в ячейке слияния мест трубок: места одной трубки — в разных группах. */
     static final int SLOTS = 8;
     /**
@@ -234,7 +230,9 @@ final class SmokePuffs {
         org.joml.Vector3f f = view.forward(), l = view.left(), u = view.up();
         double diag = Math.tan(Math.min(view.edge(), 1.5)), w = diag * 16 / Math.sqrt(337), h = diag * 9 / Math.sqrt(337);
         int n = xyz.length / 3;
-        double[] a = new double[3 * (n + 1)], b;
+        PolygonScratch scratch = POLYGONS.get();
+        scratch.reserve(n + 5);
+        double[] a = scratch.a, b = scratch.b;
         // в осях глаза: (влево, вверх, глубина); обрезка ближней плоскостью
         int m = 0;
         for (int i = 0; i < n; i++) {
@@ -253,11 +251,9 @@ final class SmokePuffs {
                 a[3 * m + 1] = (va + (vb - va) * t) / NEAR_CLIP;
                 m++;
             }
-            if (m + 2 > a.length / 3) a = java.util.Arrays.copyOf(a, 2 * a.length);
         }
         // обрезка кадром: четыре полуплоскости
         for (int edge = 0; edge < 4 && m > 0; edge++) {
-            b = new double[3 * (2 * m + 1)];
             int k = 0;
             for (int i = 0; i < m; i++) {
                 int j = (i + 1) % m;
@@ -274,7 +270,9 @@ final class SmokePuffs {
                     k++;
                 }
             }
+            double[] swap = a;
             a = b;
+            b = swap;
             m = k;
         }
         double area = 0;
@@ -284,6 +282,20 @@ final class SmokePuffs {
         }
         return Math.min(1, Math.abs(area) * 0.5 / (4 * w * h));
     }
+
+    /** A convex polygon gains at most one vertex at each of the five clipping planes. */
+    private static final class PolygonScratch {
+        double[] a = new double[48], b = new double[48];
+
+        void reserve(int vertices) {
+            if (3 * vertices > a.length) {
+                a = new double[3 * vertices];
+                b = new double[3 * vertices];
+            }
+        }
+    }
+
+    private static final ThreadLocal<PolygonScratch> POLYGONS = ThreadLocal.withInitial(PolygonScratch::new);
 
     /** Ближняя плоскость обрезки многоугольника, блоков (у квадратов слоя — 0,05 блока, {@link #cover}). */
     private static final double NEAR_CLIP = 0.05;
@@ -308,6 +320,40 @@ final class SmokePuffs {
     static final double CLUSTER_PIXELS = 40;
     /** Клуб кучки — не больше этой доли видимого радиуса гаусса. */
     static final double MAX_SHARE = 0.8;
+
+    /**
+     * Transition from one puff to a cluster: the first puff stays in place and gradually gains the cluster's size, spread and frame.
+     * ceil(many) determines only the number of draw calls, not the appearance of an existing puff.
+     */
+    static double clusterBlend(double many) {
+        return smoothstep(1, 2, many);
+    }
+
+    static double clusterSize(double many) {
+        return 1 + (Math.min(MAX_SHARE, 1.6 / Math.sqrt(many)) - 1) * clusterBlend(many);
+    }
+
+    static double clubScale(double many, long seed, boolean vary) {
+        double blend = vary ? 1 : clusterBlend(many);
+        return clusterSize(many) * (1 + (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(seed >>> 21) - 1) * blend);
+    }
+
+    static double clusterFrame(double age, long seed, double many, boolean vary) {
+        double plain = clubFrame(age, 0.5, false);
+        return plain + (clubFrame(age, unit(seed >>> 28), true) - plain) * (vary ? 1 : clusterBlend(many));
+    }
+
+    /** A horizontal puff owns its axes; they do not belong to the camera. */
+    static double clubAngle(long seed) {
+        return 2 * Math.PI * unit(seed >>> 35);
+    }
+
+    /** The first puff sits at the material center; child positions form fixed pairs on opposite sides. */
+    static double clubOffset(long seed, int child, int shift) {
+        if (child == 0) return 0;
+        long pair = mix(seed + ((child + 1L) / 2) * 0x632BE59BD9B4E019L);
+        return ((child & 1) == 1 ? 1 : -1) * gauss(pair >>> shift);
+    }
     /** Клубы отрезка — через столько σ (меньшей из двух). */
     static final double SEGMENT_STEP = 1.2;
     /** Клубов на отрезок — не больше (струя столба брызг — до ~17 σ своего сечения). */
@@ -359,9 +405,10 @@ final class SmokePuffs {
         double sum = 0;
         for (int j = 0; j < count; j++) {
             long hj = mix(h + j * 0x632BE59BD9B4E019L);
-            double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
-            double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21)) * grow;
-            double disc = puffDisc(clubFrame(age, unit(hj >>> 28), vary));
+            double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = lying ? 0 : clubOffset(h, j, 7) * spread * rw * 0.5,
+                    oz = clubOffset(h, j, 14) * spread * rh * 0.5;
+            double k = clubScale(many, hj, true) * grow;
+            double disc = puffDisc(clusterFrame(age, hj, many, vary));
             double rho;
             if (lying) rho = Math.hypot(ox, oz) / (disc * rh * k);
             else rho = Math.hypot((ox * hx + oz * hz) / (disc * rh * k), (ox * ux + oy * uy + oz * uz) / (disc * rv * k));
@@ -454,6 +501,8 @@ final class SmokePuffs {
     static void resetBudget() {
         DRAW.plans = 0;
         DRAW.level = 0;
+        DRAW.veilLevel = 0;
+        DRAW.shareReady = false;
     }
 
     /** Выход из мира, смена измерения: ждущие клубы и места, план, вуаль — заново. */
@@ -472,7 +521,7 @@ final class SmokePuffs {
     static double clusterFill(FarView view, double px, double py, double pz, double ra, double rb, double most, double s) {
         double many = 1 + (most - 1) * s;
         int count = (int) Math.ceil(many - 1e-9);
-        double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many)), reach = 1 + (count == 1 ? 0 : 1 - size) * 0.5;
+        double size = clusterSize(many), reach = 1 + (1 - size) * 0.5;
         return Math.max(1, count * size * size) * cover(view, px, py, pz, ra * reach, rb * reach);
     }
 
@@ -676,7 +725,7 @@ final class SmokePuffs {
         /** Вуаль кадра: гауссы вещества у глаза ({@link #VEIL_FIELDS} чисел на гаусс); толщу по лучам считает {@link #veilFlush}. */
         private double[] veils = new double[8 * VEIL_FIELDS];
         private boolean[] veilGone = new boolean[8];
-        private int veilCount;
+        private int veilCount, veilLevel;
         @Nullable
         private Out veilOut;
         private FarView veilView;
@@ -691,6 +740,7 @@ final class SmokePuffs {
         /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
         private boolean planning;
         private double share = 1;
+        private boolean shareReady;
         /** Чей план пишется ({@link #planCluster}): клуб облака i — i, место p — ~p. */
         private int current;
         /** Пол кадра — сумма записей плана, что остались квадратами (по клубу на гаусс и место), экранов. */
@@ -731,17 +781,17 @@ final class SmokePuffs {
         }
 
         /**
-         * Кадр: ждущие клубы облаков и места трубок — квадратами в пределе заливки ({@link #FILL_BUDGET}) при любом их числе.
-         * План — сколько экранов закроет каждый клуб и место одним квадратом (пол) и кучкой. Пол выше бюджета —
+         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their count.
+         * The plan estimates how many screens each puff or place covers with one quad (the floor) and with a cluster.
+         * If the floor exceeds the budget:
          * <ol>
-         * <li>клубы и места разных источников, что лежат друг на друге, сливаются уровнями тем же законом, что {@link #merge}
-         * (масса и моменты), пока пол не уложится ({@link #mergeLevel});</li>
-         * <li>не уложился и так — крупнейшие на экране квадраты тают в вуаль у глаза (та же толща — по лучам, {@link Veil}),
-         * ровно столько, чтобы остальные легли в бюджет ({@link #fit}): крупный гаусс — ровное пятно в пол-экрана,
-         * подробности клубов на нём мало, а заливка — вся его площадь; вуаль стоит экран на всё.</li>
+         * <li>overlapping puffs and places from different sources merge in levels using the same mass-and-moment law as
+         * {@link #merge}, until the floor fits ({@link #mergeLevel});</li>
+         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along rays
+         * ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
          * </ol>
-         * Потом кучки берут столько клубов, чтобы заливка уложилась (каждая — с той же непрозрачностью середины), и всё —
-         * квадратами; вуаль — одной сеткой.
+         * Clusters then take enough puffs to fit the fill limit, each retaining its center opacity. All draw as quads;
+         * the veil uses one grid.
          */
         void flush() {
             close();
@@ -765,30 +815,37 @@ final class SmokePuffs {
             lastPlaces = placeCount;
             lastRefused = refused;
             lastPlaceMatter = placeMatter;
+            if (lastRaw > budget) conceal(budget);
             int was = level;
             level = 0;
             // уровень прошлого кадра держится и тогда, когда пол чуть под бюджетом (до {@link #HYSTERESIS} от него): иначе у
             // границы бюджета кадр за кадром слияние то шло, то нет, и кучки мигали
             if (floor > budget || was > 0 && floor > HYSTERESIS * budget) {
-                hide();
                 // уровень прошлого кадра держится, пока ниже него пол не ляжет заметно под бюджет: иначе на границе бюджета
                 // слитые клубы расходились бы и сходились кадр за кадром
                 while (level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
-                if (floor > budget) fit(budget);
             }
-            // доля кучки s — одна у всех: заливка при s по настоящей кривой каждой кучки ({@link #clusterFill}), подбор делением
+            // The last 15% of the budget fades before overflow; otherwise crossing the boundary
+            // would enable or remove the entire veil of these entries at once.
+            if (floor > FIT_FADE * budget) fit(budget);
+            // Detail stays between two fill thresholds. Turning within the remaining capacity does not rebuild clusters;
+            // after overflow, leave headroom to the next threshold. The limit is still checked against actual quads in this
+            // frame, including transitions between horizontal and upright puffs.
+            double previousFill = shareReady ? drawn(lastShare) : 0;
+            double target = shareReady && previousFill > budget ? Math.max(floor, HYSTERESIS * budget) : budget;
             double s = 1;
-            if (planned(1) > budget) {
+            if (planned(1) > target) {
                 double lo = 0, hi = 1;
                 for (int it = 0; it < 16; it++) {
                     double mid = 0.5 * (lo + hi);
-                    if (planned(mid) > budget) hi = mid;
+                    if (planned(mid) > target) hi = mid;
                     else lo = mid;
                 }
                 s = lo;
             }
             // оценка — по краю кучки; настоящие квадраты (их разброс размера и места) — проверка: больше бюджета — доля меньше
-            for (int it = 0; it < 24 && s > 0 && drawn(s) > budget; it++) s = it < 23 ? 0.8 * s : 0;
+            for (int it = 0; it < 24 && s > 0 && drawn(s) > target; it++) s = it < 23 ? 0.8 * s : 0;
+            if (shareReady && previousFill <= budget && (s <= lastShare || drawn(s) > HYSTERESIS * budget)) s = lastShare;
             planning = false;
             share = s;
             for (int i = 0; i < holding; i++) if (!merged[i]) held(i);
@@ -797,6 +854,7 @@ final class SmokePuffs {
             lastFill = drawn(s);
             lastFloor = floor;
             lastShare = s;
+            shareReady = true;
             lastItems = 0;
             for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1) lastItems++;
             share = 1;
@@ -877,49 +935,47 @@ final class SmokePuffs {
         }
 
         /**
-         * Записи плана: вид, место от глаза, полуоси края на экране (м), полное число клубов; пол записи, непрозрачность
-         * середины (у места — его доля у оси трубки: толща для {@link #hide}) и то, что видно глазу (у места — непрозрачность
-         * трубки у оси: для {@link #fit}), видная доля (что пропускает вещество перед ней), доля в вуали, у глаза ли, слита
-         * ли, чья (клуб облака i — i, место p — ~p).
+         * Plan entries: kind, position from the eye, edge half-axes (m), full puff count; entry floor, opacity
+         * (for a tube place, the entire tube on its axis, used by {@link #fit}), veil share, near-eye and merged flags.
          */
         private FarView[] planView = new FarView[64];
-        private double[] plan = new double[64 * 6], planCover0 = new double[64], planOpacity = new double[64], planShown = new double[64],
-                planSeen = new double[64], planVeil = new double[64];
-        private boolean[] planNear = new boolean[64], planDead = new boolean[64];
+        private double[] plan = new double[64 * 6], planCover0 = new double[64], planShown = new double[64],
+                planVeil = new double[64], planOpacity = new double[64], planSeen = new double[64];
         private int[] planOwner = new int[64];
+        private boolean[] planNear = new boolean[64], planDead = new boolean[64];
         /**
          * Чем квадраты кучки записи лягут на экран ({@link #drawnFill}): зерно клубов, рост квадрата пикселем (полуразмер на
          * экране / край в мире), разброс середины по вертикали (м, у клуба облака — по толщине слоя), лежит ли клуб, место ли
          * трубки (у него и одиночный клуб — со своим размером 0,8–1,2).
          */
         private long[] planSeed = new long[64];
-        private double[] planGrow = new double[64], planOffV = new double[64];
-        private boolean[] planLying = new boolean[64], planPlace = new boolean[64];
+        private double[] planGrow = new double[64], planOffV = new double[64], planFlat = new double[64];
+        private boolean[] planPlace = new boolean[64];
         private int plans;
 
         /**
-         * Кучка клуба или места {@link #current} в план кадра: место от глаза, полуоси края (м), полное число клубов; near —
-         * глаз в его краю (часть вещества — в вуали; такие не сливаются и не прячутся); opacity — непрозрачность середины на
-         * экране (у места — его доля непрозрачности трубки у оси), shown — сколько его видно (у места — вся трубка у оси).
+         * Add the cluster of puff or place {@link #current} to the frame plan: position from the eye, edge half-axes (m), full puff count.
+         * near means the eye is within its edge (some material is in the veil; these entries do not merge);
+         * shown is opacity (for a tube place, the entire tube on its axis).
          */
-        private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near, double opacity,
-                                 double shown, long seed, double grow, double offV, boolean lying, boolean place) {
+        private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near,
+                                 double opacity, double shown, long seed, double grow, double offV, double lying, boolean place) {
             if (plans == planView.length) {
                 int n = 2 * plans;
                 planView = java.util.Arrays.copyOf(planView, n);
                 plan = java.util.Arrays.copyOf(plan, 6 * n);
                 planCover0 = java.util.Arrays.copyOf(planCover0, n);
-                planOpacity = java.util.Arrays.copyOf(planOpacity, n);
                 planShown = java.util.Arrays.copyOf(planShown, n);
-                planSeen = java.util.Arrays.copyOf(planSeen, n);
                 planVeil = java.util.Arrays.copyOf(planVeil, n);
+                planOpacity = java.util.Arrays.copyOf(planOpacity, n);
+                planSeen = java.util.Arrays.copyOf(planSeen, n);
+                planOwner = java.util.Arrays.copyOf(planOwner, n);
                 planNear = java.util.Arrays.copyOf(planNear, n);
                 planDead = java.util.Arrays.copyOf(planDead, n);
-                planOwner = java.util.Arrays.copyOf(planOwner, n);
                 planSeed = java.util.Arrays.copyOf(planSeed, n);
                 planGrow = java.util.Arrays.copyOf(planGrow, n);
                 planOffV = java.util.Arrays.copyOf(planOffV, n);
-                planLying = java.util.Arrays.copyOf(planLying, n);
+                planFlat = java.util.Arrays.copyOf(planFlat, n);
                 planPlace = java.util.Arrays.copyOf(planPlace, n);
             }
             planView[plans] = view;
@@ -933,17 +989,17 @@ final class SmokePuffs {
             planSeed[plans] = seed;
             planGrow[plans] = grow;
             planOffV[plans] = offV;
-            planLying[plans] = lying;
+            planFlat[plans] = lying;
             planPlace[plans] = place;
             double c = drawnFill(plans, 0);
             planCover0[plans] = c;
-            planOpacity[plans] = opacity;
             planShown[plans] = shown;
+            planOpacity[plans] = opacity;
             planSeen[plans] = 1;
+            planOwner[plans] = current;
             planVeil[plans] = 0;
             planNear[plans] = near;
             planDead[plans] = false;
-            planOwner[plans] = current;
             if (current >= 0) blobEntry[current] = plans;
             else if (current != Integer.MIN_VALUE) placeEntry[~current] = plans;
             floor += c;
@@ -980,139 +1036,254 @@ final class SmokePuffs {
             double px = plan[o], py = plan[o + 1], pz = plan[o + 2], ra = plan[o + 3], rb = plan[o + 4], most = plan[o + 5], grow = planGrow[e];
             double many = 1 + (most - 1) * s;
             int count = (int) Math.ceil(many - 1e-9);
-            double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many)), spread = count == 1 ? 0 : 1 - size;
+            double size = clusterSize(many), spread = 1 - size;
             double rh = ra / grow, f = 0;
             for (int j = 0; j < count; j++) {
                 long hj = mix(planSeed[e] + j * 0x632BE59BD9B4E019L);
-                double k = count == 1 && !planPlace[e] ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-                double ox = gauss(hj) * spread * rh * 0.5, oy = planLying[e] ? 0 : gauss(hj >>> 7) * spread * planOffV[e] * 0.5,
-                        oz = gauss(hj >>> 14) * spread * rh * 0.5;
+                double k = clubScale(many, hj, planPlace[e]);
+                double ox = clubOffset(planSeed[e], j, 0) * spread * rh * 0.5,
+                        oy = (1 - planFlat[e]) * clubOffset(planSeed[e], j, 7) * spread * planOffV[e] * 0.5,
+                        oz = clubOffset(planSeed[e], j, 14) * spread * rh * 0.5;
                 double qx = px + ox, qy = py + oy, qz = pz + oz;
-                f += planLying[e] ? flatFill(v, qx, qy, qz, ra * k, ra * k) : cover(v, qx, qy, qz, ra * k, rb * k);
+                if (planFlat[e] > 0) f += flatFill(v, qx, qy, qz, ra * k, ra * k, clubAngle(hj));
+                if (planFlat[e] < 1) {
+                    ua.zentix.incoming.client.fx.layer.PuffGeometry.face(qx, qy, qz, ra * k, rb * k, flat);
+                    f += polygonFill(v, flat);
+                }
             }
             return f;
         }
 
         /**
-         * Лежащий клуб ({@code FxQuads.flat}: квадрат на горизонтали, оси — «влево» экрана на горизонтали и поперёк, полуразмеры
-         * a, b) с серединой (x, y, z) от глаза — доля экрана по его четырём вершинам ({@link #polygonFill}).
+         * Horizontal puff ({@code PuffGeometry.flat}: a horizontal quad at a seeded angle, half-sizes a, b),
+         * centered at (x, y, z) from the eye: screen fraction from its four vertices ({@link #polygonFill}).
          */
         private final double[] flat = new double[12];
 
-        private double flatFill(FarView v, double x, double y, double z, double a, double b) {
-            org.joml.Vector3f l = v.left();
-            double lx = l.x, lz = l.z, len = Math.sqrt(lx * lx + lz * lz);
-            if (len < 1e-6) {
-                lx = 1;
-                lz = 0;
-            } else {
-                lx /= len;
-                lz /= len;
-            }
-            double ax = lx * a, az = lz * a, bx = -lz * b, bz = lx * b;
-            double[] q = flat;
-            q[0] = x - ax - bx;
-            q[1] = y;
-            q[2] = z - az - bz;
-            q[3] = x - ax + bx;
-            q[4] = y;
-            q[5] = z - az + bz;
-            q[6] = x + ax + bx;
-            q[7] = y;
-            q[8] = z + az + bz;
-            q[9] = x + ax - bx;
-            q[10] = y;
-            q[11] = z + az - bz;
-            return polygonFill(v, q);
+        private double flatFill(FarView v, double x, double y, double z, double a, double b, double angle) {
+            ua.zentix.incoming.client.fx.layer.PuffGeometry.flat(x, y, z, a, b, angle, flat);
+            return polygonFill(v, flat);
         }
 
         /** Что зальют квадраты всех записей плана, что остались квадратами, при доле s ({@link #drawnFill}), экранов. */
         private double drawn(double s) {
             double f = 0;
-            for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1) f += plan[6 * e + 5] <= 1 ? planCover0[e] : drawnFill(e, s);
+            for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1)
+                f += s == 0 || plan[6 * e + 5] <= 1 ? planCover0[e] : drawnFill(e, s);
             return f;
         }
 
-        /** Клеток сетки скрытого по экрану (16:9). */
-        private static final int HIDE_COLS = 32, HIDE_ROWS = 18;
-        private final double[] hideTau = new double[HIDE_COLS * HIDE_ROWS];
+        /** Budget selection order. Priority belongs to the puff, not a screen cell. */
         private long[] order = new long[64];
 
         /**
-         * Скрытое не рисуется: записи — от ближних к дальним по сетке экрана {@link #HIDE_COLS}×{@link #HIDE_ROWS}, у клетки — толща
-         * вещества, уже пройденного перед ней. Клуб или место, у которого вся сердцевина ({@link #CORE} полуразмера: там
-         * запечённый клуб почти ровный диск) — в клетках толще {@link #HIDDEN} (пропускание меньше 5 %), за густым дымом не
-         * виден, и он не рисуется вовсе; у остальных — видная доля середины ({@link #planSeen}, для {@link #fit}). Толща в
-         * клетку — только из сердцевины и непрозрачностью середины: клетке не прибавляется больше, чем есть, и видное не
-         * пропадает. Глаз в краю — такой (его вещество и в вуали перед всем) не прячется.
+         * World-direction grid. Narrower projections refine it without rotating its rays with the camera.
+         * Nodes coincide at face boundaries; conservative bilinear sampling is continuous there too.
          */
-        private void hide() {
+        private static final int OCCLUSION_BASE_CELLS = 48, OCCLUSION_VIEW_CELLS = 24, OCCLUSION_MAX_CELLS = 256;
+        private int occlusionCells = OCCLUSION_BASE_CELLS, occlusionSide = occlusionCells + 1,
+                occlusionFace = occlusionSide * occlusionSide;
+        /** Presentation: map core and smooth edge band, like the previous 0.6 half-size used for screen-space occlusion. */
+        private static final double OCCLUSION_CORE = 0.6, OCCLUSION_INNER = 0.8;
+        private double[] occlusion = new double[6 * occlusionFace];
+        private double[] occlusionRays = occlusionRays();
+        private final java.util.BitSet occlusionNodes = new java.util.BitSet();
+        private static final double[] RING_X = {1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476},
+                RING_Y = {0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476};
+
+        private void configureOcclusion() {
+            // Target 24 cells across the projected diagonal, with a 48-cell floor for conservative core coverage.
+            // Only queried nodes are deposited into; the cap also bounds storage at extreme zoom.
+            double needed = OCCLUSION_VIEW_CELLS / Math.tan(view.edge());
+            int cells = OCCLUSION_BASE_CELLS;
+            while (cells < OCCLUSION_MAX_CELLS && cells < needed) cells = Math.min(OCCLUSION_MAX_CELLS, 2 * cells);
+            // Animated FOV must not rebuild arrays every frame or alternate tiers near their boundary.
+            if (cells < occlusionCells && needed > HYSTERESIS * cells) return;
+            if (cells == occlusionCells) return;
+            occlusionCells = cells;
+            occlusionSide = cells + 1;
+            occlusionFace = occlusionSide * occlusionSide;
+            if (occlusion.length < 6 * occlusionFace) {
+                occlusion = new double[6 * occlusionFace];
+            }
+            occlusionRays = occlusionRays();
+        }
+
+        private double[] occlusionRays() {
+            double[] rays = occlusionRays;
+            if (rays == null || rays.length < 18 * occlusionFace) rays = new double[18 * occlusionFace];
+            for (int face = 0; face < 6; face++) for (int j = 0; j < occlusionSide; j++) for (int i = 0; i < occlusionSide; i++) {
+                double u = 2.0 * i / occlusionCells - 1, v = 2.0 * j / occlusionCells - 1;
+                double sign = (face & 1) == 0 ? 1 : -1;
+                int axis = face / 2, q = 3 * (face * occlusionFace + j * occlusionSide + i);
+                rays[q] = axis == 0 ? sign : u;
+                rays[q + 1] = axis == 0 ? u : axis == 1 ? sign : v;
+                rays[q + 2] = axis == 2 ? sign : v;
+            }
+            return rays;
+        }
+
+        /** Optical depth in a direction, including between nodes and across cube-face boundaries. */
+        private double occlusion(double x, double y, double z) {
+            return occlusion(x, y, z, false);
+        }
+
+        private double occlusion(double x, double y, double z, boolean reserve) {
+            double ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z), m = Math.max(ax, Math.max(ay, az));
+            if (!(m > 0)) return 0;
+            int face = m == ax ? (x > 0 ? 0 : 1) : m == ay ? (y > 0 ? 2 : 3) : (z > 0 ? 4 : 5);
+            double u = (face < 2 ? y : x) / m, v = (face < 4 ? z : y) / m;
+            double s = Math.clamp((u + 1) * 0.5 * occlusionCells, 0, occlusionCells),
+                    t = Math.clamp((v + 1) * 0.5 * occlusionCells, 0, occlusionCells);
+            int i = Math.min((int) s, occlusionCells - 1), j = Math.min((int) t, occlusionCells - 1);
+            double du = s - i, dv = t - j;
+            int q = face * occlusionFace + j * occlusionSide + i;
+            if (reserve) {
+                occlusionNodes.set(q, q + 2);
+                occlusionNodes.set(q + occlusionSide, q + occlusionSide + 2);
+                return 0;
+            }
+            return Math.min(12, (1 - dv) * ((1 - du) * occlusion[q] + du * occlusion[q + 1])
+                    + dv * ((1 - du) * occlusion[q + occlusionSide] + du * occlusion[q + occlusionSide + 1]));
+        }
+
+        /** Reserve only the four nodes of each possible query: at most 36 nodes per planned puff at any zoom. */
+        private void reserveOcclusion(int e) {
+            int o = 6 * e;
+            double x = plan[o], y = plan[o + 1], z = plan[o + 2];
+            occlusion(x, y, z, true);
+            if (planNear[e] || planFlat[e] > 0) return;
+            double h = Math.hypot(x, z), d = Math.hypot(h, y), fx = x / d, fy = y / d, fz = z / d;
+            double hx = h > 1e-9 ? z / h : 1, hz = h > 1e-9 ? -x / h : 0;
+            double ux = fy * hz, uy = fz * hx - fx * hz, uz = -fy * hx;
+            double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
+            double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
+            for (int j = 0; j < 8; j++) {
+                double a = ra * RING_X[j], b = rb * RING_Y[j];
+                occlusion(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz, true);
+            }
+        }
+
+        /**
+         * Puffs run in distance order from the eye. A distant puff has nine core rays fixed by its geometry;
+         * optical depth accumulated by nearer puffs on all nine rays hides it smoothly between 2 and 3 (14% to 5% light).
+         * The grid stores total overlap from any sources, with no "first N puffs" limit. Horizontal puffs and material
+         * near the eye are not discarded. Cost is covered angular cells times a bounded number of plan entries.
+         */
+        private void conceal(double budget) {
+            configureOcclusion();
+            occlusionNodes.clear();
+            // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching the whole frame.
+            double strength = smoothstep(budget, 1.25 * budget, lastRaw);
             int n = 0;
             for (int e = 0; e < plans; e++) {
-                if (planDead[e]) continue;
-                org.joml.Vector3f f = planView[e].forward();
+                if (planDead[e] || planOwner[e] == Integer.MIN_VALUE) continue;
                 int o = 6 * e;
-                double z = plan[o] * f.x + plan[o + 1] * f.y + plan[o + 2] * f.z;
-                if (!(z > 0)) continue;
+                double d2 = plan[o] * plan[o] + plan[o + 1] * plan[o + 1] + plan[o + 2] * plan[o + 2];
+                if (!(d2 > 0)) continue;
+                reserveOcclusion(e);
                 if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
-                order[n++] = (long) Float.floatToIntBits((float) z) << 32 | e;
+                order[n++] = (long) Float.floatToIntBits((float) d2) << 32 | e;
             }
             java.util.Arrays.sort(order, 0, n);
-            java.util.Arrays.fill(hideTau, 0);
+            java.util.Arrays.fill(occlusion, 0, 6 * occlusionFace, 0);
             for (int k = 0; k < n; k++) {
                 int e = (int) order[k], o = 6 * e;
-                FarView v = planView[e];
-                org.joml.Vector3f f = v.forward(), l = v.left(), u = v.up();
-                double px = plan[o], py = plan[o + 1], pz = plan[o + 2], z = px * f.x + py * f.y + pz * f.z;
-                double diag = Math.tan(Math.min(v.edge(), 1.5)), w = diag * 16 / Math.sqrt(337), h = diag * 9 / Math.sqrt(337);
-                double cu = (px * l.x + py * l.y + pz * l.z) / z, cv = (px * u.x + py * u.y + pz * u.z) / z;
-                double hu = CORE * plan[o + 3] / z, hv = CORE * plan[o + 4] / z;
-                int i0 = Math.max(0, (int) Math.floor((cu - hu + w) / (2 * w) * HIDE_COLS)), i1 = Math.min(HIDE_COLS - 1, (int) Math.floor((cu + hu + w) / (2 * w) * HIDE_COLS));
-                int j0 = Math.max(0, (int) Math.floor((cv - hv + h) / (2 * h) * HIDE_ROWS)), j1 = Math.min(HIDE_ROWS - 1, (int) Math.floor((cv + hv + h) / (2 * h) * HIDE_ROWS));
-                // клетка середины (у мелкого сердцевина не накрывает ни одной середины клетки)
-                int ic = (int) Math.floor((cu + w) / (2 * w) * HIDE_COLS), jc = (int) Math.floor((cv + h) / (2 * h) * HIDE_ROWS);
-                boolean centre = ic >= 0 && ic < HIDE_COLS && jc >= 0 && jc < HIDE_ROWS;
-                double front = centre ? hideTau[jc * HIDE_COLS + ic] : 0, least = Double.POSITIVE_INFINITY;
-                int cells = 0;
-                for (int j = j0; j <= j1; j++) {
-                    double dv = ((j + 0.5) / HIDE_ROWS * 2 * h - h - cv) / hv;
-                    for (int i = i0; i <= i1; i++) {
-                        double du = ((i + 0.5) / HIDE_COLS * 2 * w - w - cu) / hu;
-                        if (du * du + dv * dv > 1) continue;
-                        least = Math.min(least, hideTau[j * HIDE_COLS + i]);
-                        cells++;
+                double x = plan[o], y = plan[o + 1], z = plan[o + 2], h = Math.hypot(x, z), d = Math.hypot(h, y);
+                double fx = x / d, fy = y / d, fz = z / d;
+                double hx = h > 1e-9 ? z / h : 1, hz = h > 1e-9 ? -x / h : 0;
+                double ux = fy * hz, uy = fz * hx - fx * hz, uz = -fy * hx;
+                double size = planPlace[e] ? clubScale(1, mix(planSeed[e]), true) : 1;
+                double ra = OCCLUSION_CORE * plan[o + 3] * size, rb = OCCLUSION_CORE * plan[o + 4] * size;
+                double least = occlusion(x, y, z);
+                planSeen[e] = 1 - strength * (1 - Math.exp(-least));
+                double hidden = 0;
+                if (!planNear[e] && planFlat[e] == 0) {
+                    for (int j = 0; j < 8 && least > 2; j++) {
+                        double a = ra * RING_X[j], b = rb * RING_Y[j];
+                        least = Math.min(least, occlusion(x + a * hx + b * ux, y + b * uy, z + a * hz + b * uz));
                     }
+                    hidden = strength * smoothstep(2, 3, least);
                 }
-                if (cells == 0) least = centre ? front : 0;
-                if (!planNear[e] && least >= HIDDEN) {
+                if (hidden >= 1) {
                     drop(e);
                     int owner = planOwner[e];
                     if (owner >= 0) merged[owner] = true;
                     else placeGone[~owner] = true;
                     continue;
                 }
-                planSeen[e] = Math.exp(-front);
-                double t = -Math.log1p(-Math.min(planOpacity[e], 0.999));
-                if (!(t > 0)) continue;
-                if (cells == 0 && centre) hideTau[jc * HIDE_COLS + ic] += t;
-                for (int j = j0; j <= j1 && cells > 0; j++) {
-                    double dv = ((j + 0.5) / HIDE_ROWS * 2 * h - h - cv) / hv;
-                    for (int i = i0; i <= i1; i++) {
-                        double du = ((i + 0.5) / HIDE_COLS * 2 * w - w - cu) / hu;
-                        if (du * du + dv * dv <= 1) hideTau[j * HIDE_COLS + i] += t;
+                double tau = -Math.log1p(-Math.min(planOpacity[e], 0.999)) * (1 - hidden);
+                if (hidden > 0) {
+                    // Visibility belongs to the draw entry, so both merging and budget selection account for it.
+                    // Otherwise nearly hidden places kept their full budget priority and prevented their own merging.
+                    double keep = 1 - hidden;
+                    int owner = planOwner[e];
+                    if (owner >= 0) held[owner * FIELDS + 13] *= keep;
+                    else places[~owner * PLACE_FIELDS + 12] *= keep;
+                    planShown[e] *= keep;
+                }
+                if (!(tau > 0) || !(ra > 0) || !(rb > 0) || planFlat[e] > 0) continue;
+                // Ray length cancels in the plane ratios. Scale the axes once and reject outside nodes before dividing.
+                double sa = d / ra, sb = d / rb;
+                double ax = sa * hx, az = sa * hz, bx = sb * ux, by = sb * uy, bz = sb * uz;
+                double radius = Math.max(ra, rb);
+                // The normalized ellipse radius changes by at most (d + radius^2/d)/min(ra,rb) per radian
+                // while inside the core (ray/plane Jacobian d*sec(theta)^2). A node influences directions at
+                // most 2*sqrt(2)/cells radians away, on either side of a cube seam. Erode by that footprint:
+                // every deposited value then bounds the original kernel from below throughout its bilinear support.
+                double margin = (d + radius * radius / d) / Math.min(ra, rb) * (2 * Math.sqrt(2) / occlusionCells);
+                if (margin >= 1) continue;
+                double remaining2 = (1 - margin) * (1 - margin);
+                radius *= 1 - margin;
+                // Core-sphere bounds on each face only limit traversal; the actual plane determines the contribution.
+                for (int face = 0; face < 6; face++) {
+                    int axis = face / 2;
+                    double c = ((face & 1) == 0 ? 1 : -1) * (axis == 0 ? x : axis == 1 ? y : z);
+                    if (c + radius <= 0) continue;
+                    double u = axis == 0 ? y : x, v = axis == 2 ? y : z;
+                    // A cube face is the pyramid |u|≤c, |v|≤c. Distance to its side plane is (|u|−c)/√2.
+                    // Without this check a puff near the horizon traversed both entire ±Y faces, even though it touched neither.
+                    if (Math.abs(u) - c > Math.sqrt(2) * radius || Math.abs(v) - c > Math.sqrt(2) * radius) continue;
+                    double u0 = -1, u1 = 1, v0 = -1, v1 = 1;
+                    if (c > radius) {
+                        double near = c - radius, far = c + radius;
+                        u0 = Math.min((u - radius) / near, (u - radius) / far);
+                        u1 = Math.max((u + radius) / near, (u + radius) / far);
+                        v0 = Math.min((v - radius) / near, (v - radius) / far);
+                        v1 = Math.max((v + radius) / near, (v + radius) / far);
+                    }
+                    int i0 = Math.max(0, (int) Math.floor((u0 + 1) * 0.5 * occlusionCells)),
+                            i1 = Math.min(occlusionCells, (int) Math.ceil((u1 + 1) * 0.5 * occlusionCells)),
+                            j0 = Math.max(0, (int) Math.floor((v0 + 1) * 0.5 * occlusionCells)),
+                            j1 = Math.min(occlusionCells, (int) Math.ceil((v1 + 1) * 0.5 * occlusionCells));
+                    for (int j = j0; j <= j1; j++) {
+                        int first = face * occlusionFace + j * occlusionSide + i0, last = first + i1 - i0;
+                        for (int q = occlusionNodes.nextSetBit(first); q >= first && q <= last; q = occlusionNodes.nextSetBit(q + 1)) {
+                            int r = 3 * q;
+                            double rx = occlusionRays[r], ry = occlusionRays[r + 1], rz = occlusionRays[r + 2];
+                            double den = fx * rx + fy * ry + fz * rz;
+                            if (!(den > 0)) continue;
+                            double a = ax * rx + az * rz, b = bx * rx + by * ry + bz * rz;
+                            double numerator = a * a + b * b, denominator = den * den;
+                            if (numerator >= denominator * remaining2) continue;
+                            double rho = Math.sqrt(numerator / denominator) + margin;
+                            double weight = 1 - smoothstep(OCCLUSION_INNER * OCCLUSION_INNER, 1, rho * rho);
+                            occlusion[q] += tau * weight;
+                        }
                     }
                 }
             }
         }
 
         /**
-         * Пол выше бюджета и после слияния: квадратами остаются самые видные — по непрозрачности, что дошла до глаза
-         * ({@link #planShown} × {@link #planSeen}; у места трубки — вся трубка у оси: тонкий тёмный шлейф заметен, хотя доля
-         * каждого его места мала), пока их пол ложится в бюджет; остальные (бледное, заслонённое) — в вуаль у глаза, той же толщей
-         * по лучам (лента — не рисуется). Отобранные в последней четверти бюджета ({@link #FIT_FADE}) тают в вуаль плавно (без
-         * скачка, когда клуб пересекает порог); прежде полоса шла по видности от порога вдвое, и у ровной сцены (1000 одинаковых
-         * трубок) таяли все отобранные — бюджет уходил на невидимое. Передние густые клубы — вид облака — остаются клубами; прежде в вуаль уходили крупнейшие, и
-         * стена дыма с края становилась ровной мглой. Так предел заливки держится по построению.
+         * If the floor remains above budget after merging, keep the most opaque entries as quads
+         * ({@link #planShown}; for a tube place, the entire tube on its axis: a thin dark trail is visible even when each
+         * place contributes little) while their floor fits. The rest enters the near-eye veil with the same optical depth
+         * along rays; ribbons are not drawn. Entries selected in the last 15% of the budget ({@link #FIT_FADE}) fade into
+         * the veil smoothly, without a jump at the threshold. Previously the band spanned twice the visibility threshold,
+         * so a uniform scene (1000 identical tubes) faded every selected entry and spent its budget on invisible geometry.
+         * Dense foreground puffs retain the cloud's appearance; previously the largest entries entered the veil, turning
+         * the edge of a smoke wall into uniform haze. The fill limit therefore holds by construction.
          */
         private void fit(double budget) {
             int n = 0;
@@ -1126,7 +1297,6 @@ final class SmokePuffs {
             double sum = 0;
             int cut = 0;
             while (cut < n && sum + planCover0[(int) order[cut]] <= budget) sum += planCover0[(int) order[cut++]];
-            if (cut == n) return;
             double acc = 0;
             for (int k = 0; k < n; k++) {
                 int e = (int) order[k];
@@ -1134,7 +1304,7 @@ final class SmokePuffs {
                     planVeil[e] = 1;
                     continue;
                 }
-                // последняя четверть бюджета (наименее видные из отобранных) тает плавно: клуб у порога не выпрыгивает
+                // The last 15% of the budget (the least visible selected entries) fades smoothly, so puffs do not pop at the threshold.
                 acc += planCover0[e];
                 planVeil[e] = smoothstep(FIT_FADE * budget, budget, acc);
             }
@@ -1440,7 +1610,7 @@ final class SmokePuffs {
                 current = Integer.MIN_VALUE;
                 double mx = 0.5 * (ribbons[o] + ribbons[o + 3]), my = 0.5 * (ribbons[o + 1] + ribbons[o + 4]), mz = 0.5 * (ribbons[o + 2] + ribbons[o + 5]);
                 ribbonEntry[k] = plans;
-                planCluster(v, mx, my, mz, 0, 0, 1, true, 0, ribbons[o + 20], 0, 1, 0, false, false);
+                planCluster(v, mx, my, mz, 0, 0, 1, true, 0, ribbons[o + 20], 0, 1, 0, 0, false);
                 floor -= planCover0[ribbonEntry[k]];
                 planCover0[ribbonEntry[k]] = ribbons[o + 19];
                 floor += ribbons[o + 19];
@@ -1517,10 +1687,11 @@ final class SmokePuffs {
             double screen = view.edge() / Math.max(view.pixel(), 1e-12);
             double full = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
             if (planning) {
-                // доля места в непрозрачности трубки у оси: ось накрывают 2·диск/кусок оси соседних мест
-                double shown = a * vis * point[1] * air * outside, along3 = Math.max(1, 2 * puffDisc(clubFrame(age, 0.5, vary)) * point[0] / along);
-                planCluster(view, px, py, pz, rh * grow, rv * grow, full, veiled > 0, 1 - Math.pow(1 - Math.min(shown, 0.999), 1 / along3), shown, h,
-                        grow, rv, false, true);
+                double shown = a * vis * point[1] * air * outside;
+                double along3 = Math.max(1, 2 * puffDisc(clubFrame(age, 0.5, vary)) * point[0] / along);
+                planCluster(view, px, py, pz, rh * grow, rv * grow, full, veiled > 0,
+                        1 - Math.pow(1 - Math.min(shown, 0.999), 1 / along3), shown, h,
+                        grow, rv, 0, true);
                 return;
             }
             // свет неба — яркость FarView.sky с разбросом клуба; оттенок — в шейдере у света неба (FxSkyTint)
@@ -1530,19 +1701,20 @@ final class SmokePuffs {
             // бюджет заливки кадра ({@link #FILL_BUDGET}): кучка — между одним клубом и полной
             double many = 1 + (full - 1) * share;
             int count = (int) Math.ceil(many - 1e-9);
-            double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
+            double size = clusterSize(many);
             // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
             // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
-            double disc = puffDisc(clubFrame(age, 0.5, count > 1 || vary));
-            double spread = count == 1 ? 0 : 1 - size;
-            double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, count > 1 || vary)
+            double disc = puffDisc(clusterFrame(age, h, many, vary));
+            double spread = 1 - size;
+            double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, vary)
                     * Math.max(1, 2 * disc * point[0] / along);
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
-                double ox = gauss(hj) * spread * rh * 0.5, oy = gauss(hj >>> 7) * spread * rv * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
-                double k = size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-                double frame = clubFrame(age, unit(hj >>> 28), count > 1 || vary);
+                double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = clubOffset(h, j, 7) * spread * rv * 0.5,
+                        oz = clubOffset(h, j, 14) * spread * rh * 0.5;
+                double k = clubScale(many, hj, true);
+                double frame = clusterFrame(age, hj, many, vary);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
@@ -1590,10 +1762,10 @@ final class SmokePuffs {
          */
         private void veilFlush() {
             if (veilOut != null && veilCount > 0) {
-                if (veilCount > VEIL_MAX) veilMerge();
+                if (veilCount > VEIL_MAX || veilLevel > 0) veilMerge();
                 veil.fill(veilView, veils, veilCount);
                 if (veil.any()) veilOut.veil(veil, OPEN_SKY);
-            }
+            } else veilLevel = 0;
             lastVeils = veilOut != null ? veilCount : 0;
             veilClear();
         }
@@ -1605,7 +1777,11 @@ final class SmokePuffs {
          * расстояния и октава размера; с каждым уровнем крупнее, последний — по грани: их не больше семи.
          */
         private void veilMerge() {
-            for (int level = 0; veilCount > VEIL_MAX; level++) {
+            // Keep the previous coarsening until the finer level has headroom, just like the quad budget.
+            // Otherwise 50 -> 48 finer groups removed a whole merge pass, changing 24 Gaussians to 48 at once.
+            int was = veilLevel;
+            veilLevel = 0;
+            for (int level = 0; veilCount > VEIL_MAX || level < was && veilCount > HYSTERESIS * VEIL_MAX; level++) {
                 int n = Math.max(1, 8 >> level), coarse = Math.max(0, level - 1);
                 boolean last = level >= 5;
                 if (veilGone.length < veilCount) veilGone = new boolean[2 * veilCount];
@@ -1655,6 +1831,7 @@ final class SmokePuffs {
                     k++;
                 }
                 veilCount = k;
+                veilLevel = level + 1;
             }
         }
 
@@ -1717,14 +1894,11 @@ final class SmokePuffs {
             double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
             // гаусс, чья середина впереди по взгляду, — ещё клубы ({@link #ahead}); лежащий клуб — не проекция по взгляду: его
             // квадрат лежит на горизонтали и впереди глаза, даже когда середина за спиной
-            double gate = smoothstep(0.5, 1, q), outside, veiled;
-            if (lies(sh, sv, py, d)) {
-                outside = gate;
-                veiled = 1 - gate;
-            } else {
-                outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
-                veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
-            }
+            double lying = lyingShare(sh, sv, py, d);
+            double gate = smoothstep(0.5, 1, q);
+            double facing = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
+            double outside = lying * gate + (1 - lying) * facing;
+            double veiled = lying * (1 - gate) + (1 - lying) * (gate < 1 ? 1 - front(view, px, py, pz) * facing : 0);
             // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
@@ -1751,20 +1925,19 @@ final class SmokePuffs {
             // бюджет заливки кадра ({@link #flush}): кучка — между одним клубом и полной
             double many = 1 + (most - 1) * share;
             int count = (int) Math.ceil(many - 1e-9);
-            double size = count == 1 ? 1 : Math.min(MAX_SHARE, 1.6 / Math.sqrt(many));
+            double size = clusterSize(many);
             // слоёв кучки в среднем по её площади (цена: заливка)
             double overlap = Math.max(1, many * size * size);
             // заливка: доля экрана под кругом края кучки (обрезан кадром) × перекрытие
             // плоский клуб сверху лежит: его высота на экране — проекция диска
-            boolean lying = lies(sh, sv, py, d);
-            double reach = 1 + (count == 1 ? 0 : 1 - size) * 0.5;
-            double ra = rh * grow, rb = (lying ? rh * Math.abs(py) / d : rv) * grow;
+            double reach = 1 + (1 - size) * 0.5;
+            double ra = rh * grow, rb = rv * grow;
             if (planning) {
                 planCluster(view, px, py, pz, ra, rb, most, veiled > 0, shown, shown, h, grow, rw, lying, false);
                 return 0;
             }
             double fill = overlap * cover(view, px, py, pz, ra * reach, rb * reach);
-            double spread = count == 1 ? 0 : 1 - size;
+            double spread = 1 - size;
             // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг; клуб своего вида
             // (завеса выброса, пыль дробления, облако разрыва в воздухе) — своими кадрами и своим кадром источника
             boolean own = look != SmokeGrid.Look.SMOKE, spray = !own && sprays && kw > ks + kd;
@@ -1777,34 +1950,38 @@ final class SmokePuffs {
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
                 // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
-                double ox = gauss(hj) * spread * rh * 0.5, oy = lying ? 0 : gauss(hj >>> 7) * spread * rw * 0.5, oz = gauss(hj >>> 14) * spread * rh * 0.5;
+                double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = (1 - lying) * clubOffset(h, j, 7) * spread * rw * 0.5,
+                        oz = clubOffset(h, j, 14) * spread * rh * 0.5;
                 // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
                 // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
-                double k = count == 1 ? 1 : size * (SIZE_LOW + 2 * (1 - SIZE_LOW) * unit(hj >>> 21));
-                double frame = clubFrame(clubAge, unit(hj >>> 28), count > 1 || vary);
+                double k = clubScale(many, hj, false);
+                // Frame and mirroring belong to each puff, including distant single puffs: in a raid at 3 km, all 335 old
+                // single puffs used frame 14 without mirroring, and their identical outlines combined into a wall.
+                double frame = clubFrame(clubAge, unit(hj >>> 28), true);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
-                boolean mirror = vary ? (hj >>> 40 & 1) == 1 : (j & 1) == 1;
+                boolean mirror = (hj >>> 40 & 1) == 1;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.club(look, f0, mirror);
                 // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
                 // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
                 // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
-                if (lying) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
-                        Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, sprite,
-                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, sub * last);
-                else out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
-                        cr, cg, cb, sub * last);
+                if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
+                        Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
+                        (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
+                if (lying < 1) out.puff6(px + ox, py + oy, pz + oz, rh * grow * k, rv * grow * k, sprite, (float) (frame - f0), spray ? sprayShade : shade,
+                        cr, cg, cb, opticalShare(sub * last, 1 - lying));
             }
             return fill;
         }
     }
 
-    /**
-     * Лежит ли клуб с осями (σh, σh, σv) на горизонтали, когда глаз выше или ниже его середины на dy при расстоянии d:
-     * плоский (σh &gt; 3σv) и видный сверху — проекция диска (σh·sin e) шире его толщи (σv·cos e ≈ σv).
-     */
-    static boolean lies(double sh, double sv, double dy, double d) {
-        return sh > 3 * sv && sh * Math.abs(dy) > sv * d;
+    /** The two layer views share optical depth across an angular band, so raising the eye no longer switches the whole quad in one frame. */
+    static double lyingShare(double sh, double sv, double dy, double d) {
+        return smoothstep(2.5, 3.5, sh / sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
+    }
+
+    static float opticalShare(float alpha, double share) {
+        return (float) -Math.expm1(share * Math.log1p(-Math.min(alpha, 0.999999f)));
     }
 
     /**
@@ -2042,6 +2219,8 @@ final class SmokePuffs {
          * глаза стена в нескольких метрах уже почти скрыта. ⚠ Линейный спуск вместо доли толщи перед миром — приближение.
          */
         final float[] soft = new float[N * N];
+        /** Distance to half opacity: the material location used for sorting, independent of the nearby grid geometry. */
+        final float[] depth = new float[N * N];
 
         /**
          * Где по лучу набирается половина непрозрачности вещества толщей tau, м: вещество — ровно по отрезку со средним по
@@ -2081,6 +2260,7 @@ final class SmokePuffs {
             System.arraycopy(g, 0, c.g, 0, g.length);
             System.arraycopy(b, 0, c.b, 0, b.length);
             System.arraycopy(soft, 0, c.soft, 0, soft.length);
+            System.arraycopy(depth, 0, c.depth, 0, depth.length);
             c.forward.set(forward);
             c.left.set(left);
             c.up.set(up);
@@ -2091,6 +2271,18 @@ final class SmokePuffs {
         boolean any() {
             for (double t : tau) if (-Math.expm1(-t) >= 0.002) return true;
             return false;
+        }
+
+        /** A cell blends at its material depth; transparent corners do not pull it toward the eye. */
+        float depth(int i, int j) {
+            double sum = 0, distance = 0;
+            for (int y = j; y <= j + 1; y++) for (int x = i; x <= i + 1; x++) {
+                int k = index(x, y);
+                double a = alpha(k);
+                sum += a;
+                distance += a * depth[k];
+            }
+            return sum > 0 ? (float) (distance / sum) : (float) VEIL_AT;
         }
 
         /** Место вершины (i, j) от глаза, ось {@code axis} (0 — x, 1 — y, 2 — z): на {@link #VEIL_AT} блока по взгляду. */
@@ -2111,8 +2303,9 @@ final class SmokePuffs {
             double fu = Math.clamp((u + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9), fv = Math.clamp((v + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9);
             int i = (int) fu, j = (int) fv;
             double du = fu - i, dv = fv - j;
-            double a = (1 - du) * (1 - dv) * alpha(index(i, j)) + du * (1 - dv) * alpha(index(i + 1, j)) + (1 - du) * dv * alpha(index(i, j + 1))
-                    + du * dv * alpha(index(i + 1, j + 1));
+            double a = du >= dv
+                    ? (1 - du) * alpha(index(i, j)) + (du - dv) * alpha(index(i + 1, j)) + dv * alpha(index(i + 1, j + 1))
+                    : (1 - dv) * alpha(index(i, j)) + (dv - du) * alpha(index(i, j + 1)) + du * alpha(index(i + 1, j + 1));
             return 1 - a;
         }
 
@@ -2129,6 +2322,7 @@ final class SmokePuffs {
             java.util.Arrays.fill(g, 0);
             java.util.Arrays.fill(b, 0);
             java.util.Arrays.fill(soft, 0);
+            java.util.Arrays.fill(depth, 0);
             for (int j = 0; j < N; j++) {
                 for (int i = 0; i < N; i++) {
                     double u = at(i), v = at(j);
@@ -2160,7 +2354,9 @@ final class SmokePuffs {
                         g[k] = (float) (sg / sum);
                         b[k] = (float) (sb / sum);
                         double mean = far / sum, spread = Math.sqrt(Math.max(0, far2 / sum - mean * mean));
-                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (half(sum, mean, spread) - VEIL_AT * n));
+                        double half = half(sum, mean, spread);
+                        depth[k] = (float) Math.max(VEIL_AT, half);
+                        soft[k] = (float) Math.max(VEIL_SOFT_MIN, 2 * (half - VEIL_AT * n));
                     }
                 }
             }

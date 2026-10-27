@@ -291,6 +291,9 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+Turning your head leaves the smoke clumps and ground dust anchored in the world. Their detail changes gradually as
+you approach, and distant clumps keep their own shapes instead of repeating the same outline across a raid.
+
 The light falling on the ground has an energy budget: 0.24% of the charge energy in visible light, and 30% of the
 burning fuel's energy across the whole spectrum, including the cooling glow. Both are estimates: the first extends
 [a small explosive test](https://doi.org/10.1134/S0010508214010122) to larger charges; the second uses a

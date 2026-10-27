@@ -114,10 +114,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Запечённый клуб ({@link FxAtlas#puff6}: кадр sprite, смесь со следующим mix) с центром (dx, dy, dz) от камеры,
-     * полуразмерами halfA вдоль экрана и halfB вверх: цвет (r, g, b) — вещество в свете неба у глаза, его свет по сторонам —
-     * в шейдере по картам кадра, тень в картах — в степени shade ({@link SmokePuffs#shade}); непрозрачность a (уже с дымкой
-     * воздуха). Без поворота: оси карт — оси экрана.
+     * Baked puff ({@link FxAtlas#puff6}: frame sprite, blend mix with the next frame), centered at (dx, dy, dz) from the camera,
+     * with half-sizes halfA across and halfB up. Color (r, g, b) is the material in skylight at the eye; the shader applies
+     * its directional light from the frame maps, raising their shadows to shade ({@link SmokePuffs#shade}). Opacity a
+     * already includes atmospheric haze. The plane faces the eye position with world up; map axes follow its geometry.
      */
     public void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                       float b, float a) {
@@ -125,8 +125,8 @@ public final class FarSprites implements SmokePuffs.Out {
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
-        out.billboard((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
-                (float) (halfB * unfold), 0, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
+        out.facePosition((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold),
+                (float) (halfB * unfold), sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) Math.max(halfA, halfB) * FxQuads.SOFT, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
         out.part(was);
@@ -134,19 +134,19 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Запечённый клуб плоского гаусса (слой пыли у земли), лежащий на горизонтали ({@link FxQuads#flat}): полуразмеры
-     * {@code halfA} и {@code halfB} — по горизонтали в мире; мягкость края у рельефа {@code soft} — путь луча в слое до
-     * земли (у лежащего квадрата зазор до мира за ним одинаков по всей площади, и мягкость по полуразмеру гасила бы
-     * слой целиком).
+     * Baked puff of a flat Gaussian (ground dust layer), lying horizontally ({@link FxQuads#flat}):
+     * {@code halfA} and {@code halfB} are horizontal world half-sizes. Terrain softness {@code soft} is the ray's path
+     * through the layer to the ground: the gap behind a horizontal quad is the same across its area, so softness based
+     * on its half-size would fade the entire layer. Its horizontal angle is fixed by the puff's seed.
      */
-    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+    public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                           float r, float g, float b, float a) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), unfold = FarDraw.fold(d, far);
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
         out.sixWay(mix, shade);
         out.flat((float) (dx * unfold), (float) (dy * unfold), (float) (dz * unfold), (float) d, (float) (halfA * unfold), (float) (halfB * unfold),
-                sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
+                angle, sprite, Math.min(1, r * a), Math.min(1, g * a), Math.min(1, b * a), Math.min(1, a),
                 (float) soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         out.sixWay(-1);
         out.part(was);
@@ -174,14 +174,15 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Вуаль вещества облаков у глаза ({@link SmokePuffs.Veil}): сетка клеток во весь экран на одной глубине, у каждой вершины —
-     * своя непрозрачность, цвет (толща по её лучу) и мягкость к миру (где вещество по лучу), между ними — линейно; клетки, где
-     * вуали нет, не рисуются.
+     * Veil of cloud material near the eye ({@link SmokePuffs.Veil}): a full-screen grid at one depth, with opacity,
+     * color (optical depth along its ray) and terrain softness (material location along the ray) at each vertex,
+     * interpolated linearly; empty cells are not drawn. Cells blend at the material's depth, not the nearby grid's depth:
+     * otherwise the veil from distant budget entries erased the lighting and texture of puffs in front of them.
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {
         FxAtlas.Sprite w = FxAtlas.white();
-        float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2, key = (float) SmokePuffs.VEIL_AT;
+        float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2;
         int n = SmokePuffs.Veil.N;
         FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         for (int j = 0; j + 1 < n; j++) {
@@ -189,7 +190,7 @@ public final class FarSprites implements SmokePuffs.Out {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
                         d = SmokePuffs.Veil.index(i, j + 1);
                 if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
-                out.quad(key);
+                out.quad(veil.depth(i, j));
                 veilCorner(veil, i, j, a, u, v, light);
                 veilCorner(veil, i, j + 1, d, u, v, light);
                 veilCorner(veil, i + 1, j + 1, c, u, v, light);

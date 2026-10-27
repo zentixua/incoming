@@ -67,14 +67,13 @@ layout(location = 1) out vec4 fragCover;
 // миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра
 uniform vec2 FxGlowPass;
 
-// Шестисторонний свет: a — карты справа, сверху, сзади, b — слева, снизу, спереди (линейный свет клуба от одного солнца
-// с той стороны, tools/bake_fx); свет с направления l (оси экрана, к источнику) — их доли по квадратам косинусов (в сумме
-// 1 при любом направлении: по самим косинусам солнце под 45° светило бы в √2 раз сильнее, чем прямо сбоку); mirror —
-// квадрат отражён: право и лево меняются
-float sixLight(vec3 a, vec3 b, vec3 l, float mirror) {
+// Six-way lighting: a contains right/top/back maps, b left/bottom/front (linear puff light from a sun on that side,
+// tools/bake_fx). Light direction l points toward the source in map axes; weights are squared cosines and sum to 1
+// for every direction. Unsquared cosines would make a sun at 45° sqrt(2) times brighter than one directly to the side.
+// The map basis used to obtain l already includes horizontal mirroring.
+float sixLight(vec3 a, vec3 b, vec3 l) {
     vec3 q = l * l;
-    float x = l.x * mirror;
-    float side = x > 0.0 ? a.r : b.r;
+    float side = l.x > 0.0 ? a.r : b.r;
     float vertical = l.y > 0.0 ? a.g : b.g;
     float depth = l.z < 0.0 ? a.b : b.b;
     return side * q.x + vertical * q.y + depth * q.z;
@@ -97,16 +96,19 @@ float frameInset(float span) {
 // 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
 // Места кадра клуба k и следующего на листе, сдвинутые вдоль векторов движения на долю смеси m (общие у sixFrames и
 // sixAlpha)
-void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1) {
+void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1, out float lod) {
     vec2 tile = FxSix.zw;
     vec2 cell = floor(vec2(uv.x / tile.x, (uv.y - FxSix.y) / tile.y));
     vec2 origin = vec2(cell.x * tile.x, FxSix.y + cell.y * tile.y);
     vec2 next = origin + vec2(tile.x, 0.0);
     if (cell.x > 6.5) next = vec2(0.0, origin.y + tile.y);
     vec2 local = uv - origin;
-    vec4 v = textureGrad(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), dx, dy);
-    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
+    // Isotropic atlas: reuse the original perspective footprint for all six-way samples.
     vec2 size = vec2(textureSize(Sampler0, 0)), gx = dx * size, gy = dy * size;
+    // The lower bound only avoids log2(0); retain negative LOD for sampler magnification.
+    lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-20));
+    vec4 v = textureLod(Sampler0, uv + vec2(0.0, 2.0 * FxSix.x), lod);
+    vec2 flow = (v.rg / max(v.a, 1e-3) - 0.5) * 2.0 * FxSixLight.x * tile;
     vec2 edge = frameInset(sqrt(max(dot(gx, gx), dot(gy, gy)))) / size;
     uv0 = clamp(origin + local - flow * m, origin + edge, origin + tile - edge);
     uv1 = clamp(next + local + flow * (1.0 - m), next + edge, next + tile - edge);
@@ -114,11 +116,12 @@ void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1) {
 
 void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     vec2 uv0, uv1;
-    sixPlaces(uv, dx, dy, m, uv0, uv1);
-    vec4 a0 = textureGrad(Sampler0, uv0, dx, dy), a1 = textureGrad(Sampler0, uv1, dx, dy);
+    float lod;
+    sixPlaces(uv, dx, dy, m, uv0, uv1, lod);
+    vec4 a0 = textureLod(Sampler0, uv0, lod), a1 = textureLod(Sampler0, uv1, lod);
     // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
     if (mix(a0.a, a1.a, m) < 0.002) discard;
-    vec4 b0 = textureGrad(Sampler0, uv0 + vec2(0.0, FxSix.x), dx, dy), b1 = textureGrad(Sampler0, uv1 + vec2(0.0, FxSix.x), dx, dy);
+    vec4 b0 = textureLod(Sampler0, uv0 + vec2(0.0, FxSix.x), lod), b1 = textureLod(Sampler0, uv1 + vec2(0.0, FxSix.x), lod);
     // на листе — умноженная альфа и степень 1/2,2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
     vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
@@ -129,8 +132,9 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
 // Непрозрачность кадра клуба со смесью — те же места, что у sixFrames, без карт света: проходу свечения дым только гасит
 float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 uv0, uv1;
-    sixPlaces(uv, dx, dy, m, uv0, uv1);
-    return mix(textureGrad(Sampler0, uv0, dx, dy).a, textureGrad(Sampler0, uv1, dx, dy).a, m);
+    float lod;
+    sixPlaces(uv, dx, dy, m, uv0, uv1, lod);
+    return mix(textureLod(Sampler0, uv0, lod).a, textureLod(Sampler0, uv1, lod).a, m);
 }
 
 // Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на
@@ -212,8 +216,6 @@ void main() {
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
-        float mirror = 1.0;
-        if (dx.x < 0.0) mirror = -1.0;
         // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести
         // сторонам по клубу (цвет вершины — толстый слой вещества в рассеянном свете неба, R∞): к солнцу просвечивающий
         // край ярче, со стороны солнца плотный клуб темнее (рассеяние вперёд). Огненные шары — по сторонам, в долях света
@@ -222,10 +224,10 @@ void main() {
         // байт −13…−50 в Normal.y: FxQuads.sixWay)
         // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
-        float key = pow(max(sixLight(a.rgb, b, sixKeyDir, mirror) / FxSixLight.z, 1e-6), shade);
+        float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
-        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir, mirror) / FxSixLight.z, 1e-6), shade);
+        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
         // клуб, лежащий на горизонтали (степень тени 0 — освещённый сверху верх слоя): свет шаров — в этом пикселе
         if (-nearest * 127.0 - 13.0 < 0.5) {
             vec3 bd;

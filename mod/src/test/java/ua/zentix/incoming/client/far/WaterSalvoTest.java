@@ -117,7 +117,7 @@ class WaterSalvoTest {
         }
 
         @Override
-        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix, float shade,
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                               float r, float g, float b, float a) {
             // лежащий квадрат: по высоте экрана — проекция диска
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);

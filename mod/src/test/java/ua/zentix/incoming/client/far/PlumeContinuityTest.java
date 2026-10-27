@@ -146,7 +146,7 @@ class PlumeContinuityTest {
         }
 
         @Override
-        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, FxAtlas.Sprite sprite, float mix,
+        public void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix,
                               float shade, float r, float g, float b, float a) {
             flats.add(new double[]{dx, dy, dz, halfA, halfB, Math.min(1, a), frameOf(sprite)});
         }
