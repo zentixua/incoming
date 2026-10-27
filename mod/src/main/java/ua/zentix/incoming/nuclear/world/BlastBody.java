@@ -241,6 +241,21 @@ public final class BlastBody {
         return w.wind();
     }
 
+    /**
+     * Wave that crossed the body's place while it was not in memory ({@code LateExposure}): the same injury law, without the
+     * throw and the fleeing that happen only at that moment. The world is read as it is now (estimate: ruins may already
+     * stand where the wave found walls and windows).
+     *
+     * @return whether the wave reached the body
+     */
+    public static boolean late(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
+        Wave wave = of(d);
+        Wound w = wound(level, wave, e, null);
+        if (w == null) return false;
+        harm(level, wave, e, null, owner, w.death(), w.injury(), fate(e, wave.id()));
+        return true;
+    }
+
     /** What the wave will do to the body; null — will not reach it (below 0.3 psi, enclosed). */
     @Nullable
     public static Wound wound(ServerLevel level, Detonation d, LivingEntity e, @Nullable Before before) {

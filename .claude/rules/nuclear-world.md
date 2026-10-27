@@ -229,6 +229,16 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
+- Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
+  loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`
+  with `late` (burns and prompt dose, sickness from the detonation via `RadiationTicker.addDose(…, at)`; no flash panic or
+  clothes catching fire) and `BlastBody.late` (injury law, no throw). Entity attachment `NUKE_SEEN` (`NukeSeen`: pulse and
+  blast detonation numbers, fallout account time) is set by the pulse, by front hits, by the late queue and on spawn
+  (a newly spawned body is settled for every detonation so far), and re-checked when a queued body is processed (a quick
+  reload queues it twice). `MobFallout` integrates each mob's dose since its own `falloutAt` (log-grid integral for gaps
+  over 2 passes). Worlds saved before the mark: detonations below `NuclearEvents.lateFrom` stay as they were (hit bodies
+  carry no mark). GameTest `LateExposureGameTests`, unit `MobFalloutTest`. Estimate: the late body reads the world as it
+  is on load (ruins may have replaced its shelter).
 - Burial: ruins bypass `setBlock`, so vanilla only detects a body inside blocks via suffocation. Burial uses a
   pre-replacement snapshot of living entities not inside blocks (`BlastBody.free`) and their bounds in blocks afterward
   (`ScarQueue.buried`); rubble injury queues through the front (`BlastFront.bury`) under the budget, like wave hits.
