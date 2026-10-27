@@ -33,13 +33,13 @@ including shell reads. New area rules/pitfalls go in their area file; only sessi
   need: the public docs (README, `docs/guide`, release notes, store pages) and the mod's interface (`en_us`/`ru_ru`).
   No mixing inside one file. Chat with Artem stays in Russian.
 - **Do not control the user's computer** (no computer-use or game clicks). Prepare everything so Artem only starts
-  the game: the mod arrives through a release and an open-skies pack PR (auto-update).
+  the game: the mod arrives through a release; open-skies picks it up by itself (auto-update).
 - **Minimize “check in-game” requests**; they interrupt play. Verify ourselves: unit tests, GameTest, headless client
   (`tools/client_scenario.sh`), post-game `tools/logscan.py`.
 - Never delete user worlds/saves/files. Move surplus aside (`deploy.sh` uses `incoming-backup/`).
 - **Finish without questions:** once built/tested (including GameTest), merge your PR after green Итог and review
-  (workflow below), deliver to the game: `tools/deploy.sh` for instances without pack auto-update, release/pack PR
-  for those with it. Artem should find a playable mod, not a checklist. Ask only about goal changes or irreversible
+  (workflow below), deliver to the game: `tools/deploy.sh` for instances without pack auto-update, a release for
+  those with it. Artem should find a playable mod, not a checklist. Ask only about goal changes or irreversible
   choices.
 - Public steps (GitHub release, Modrinth, YouTube) require Artem's explicit instruction.
 
@@ -75,7 +75,7 @@ Scripts using numpy/scipy/soundfile/Pillow declare dependencies in `# /// script
 CI checks each commit once, on `main` push and PR; branches without PRs get no CI, so open a draft immediately.
 Checks follow changed paths (only `tools/`, `docs/`, `*.md` skip mod build; exceptions in `tools.md`); releases run all.
 Итог decides merge, failing if any needed check fails or is canceled. Release: `mod_version`,
-`docs/releases/<version>.md`, manual `build` with `release=true`, pack PR (order in `tools.md`).
+`docs/releases/<version>.md`, manual `build` with `release=true`; the pack follows by itself (`tools.md`).
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
 from the last shipped jar bumps it if not already bumped during that release: old jars must not join new hosts
 (NeoForge reports different mod versions).
