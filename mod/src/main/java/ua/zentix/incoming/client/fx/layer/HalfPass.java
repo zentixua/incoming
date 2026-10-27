@@ -61,7 +61,9 @@ final class HalfPass {
     private static int[] tiles = new int[0];
     private static final int[] VIEWPORT = new int[4];
     /** Last frame: quads by kind and lays, for the scenario line. */
-    private static int lastLow, lastFull, lastFlushes;
+    private static int lastLow, lastFull, lastFlushes, lastScene = -1;
+    /** This frame drew through the plan (the drain frame's parts follow it). */
+    private static boolean planned;
 
     private HalfPass() {}
 
@@ -244,6 +246,7 @@ final class HalfPass {
     static void draw(FxQuads q, ShaderInstance s, int scene, Matrix4fc viewProjection, int w, int h) {
         int n = q.size();
         lastLow = lastFull = lastFlushes = 0;
+        planned = false;
         if (n == 0) return;
         if (!begin(scene, w, h)) {
             q.drawRange(s, 0, n, -1, 0, -1, TILE);
@@ -261,6 +264,8 @@ final class HalfPass {
         plan.classify(soft, tiles, n);
         uploadCut(plan);
         uploadRects(plan, n, w, h);
+        planned = true;
+        lastScene = scene;
         try {
             // the frame's quads in order, then the target's: neither reads the other until the lay. One call each: every
             // quad clips to its rectangle for the pass (empty — dropped before raster), each fragment keeps its tile's side
@@ -417,6 +422,52 @@ final class HalfPass {
         RenderSystem.setShaderTexture(1, t1);
         RenderSystem.setShaderTexture(2, t2);
         RenderSystem.setShaderTexture(3, t3);
+    }
+
+    /**
+     * Drain frame ({@link LayerTimes}): each part of the layer alone as this frame drew it — its quads in the frame behind
+     * their tiles' cuts, the rest into the target, laid onto the frame; samples of the target count four frame pixels.
+     * false — this frame drew no half-resolution smoke (the parts draw as usual).
+     */
+    static boolean drawParts(FxQuads q, ShaderInstance s, LayerTimes.PartClock clock) {
+        if (!planned) return false;
+        int n = q.size(), rows = rectRows(n);
+        int main = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int[][] runs = q.partRuns();
+        clock.start();
+        try {
+            for (int p = 0; p < runs.length; p++) {
+                int[] r = runs[p];
+                int quads = 0;
+                for (int i = 1; i < r.length; i += 2) quads += r[i];
+                clock.begin(p);
+                GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
+                GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+                layerBlend();
+                q.passBegin(s, -1, 1, cuts[ring], TILE, rects[ring], 0);
+                FxQuads.multiDraw(r);
+                q.passEnd(s, rects[ring], TILE);
+                clock.half(p);
+                GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, accumFbo);
+                GlStateManager._viewport(0, 0, width, height);
+                GlStateManager._clearColor(0, 0, 0, 1);
+                GlStateManager._clear(GL11.GL_COLOR_BUFFER_BIT, Minecraft.ON_OSX);
+                RenderSystem.enableBlend();
+                RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                        GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+                q.passBegin(s, depth, 2, cuts[ring], TILE, rects[ring], rows);
+                FxQuads.multiDraw(r);
+                q.passEnd(s, rects[ring], TILE);
+                clock.halfDone(p);
+                if (PLAN.any) flush(main, lastScene);
+                clock.end(p, quads, r.length / 2);
+            }
+        } finally {
+            GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
+            GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+            layerBlend();
+        }
+        return true;
     }
 
     /** For the scenario line. */

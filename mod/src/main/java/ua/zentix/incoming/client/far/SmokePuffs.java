@@ -3039,11 +3039,15 @@ final class SmokePuffs {
             return false;
         }
 
-        /** A cell blends at its material depth; transparent corners do not pull it toward the eye. */
-        float depth(int i, int j) {
+        /**
+         * The mesh blends at its material depth (opacity-weighted over all nodes; transparent ones do not pull it toward
+         * the eye), one key for every cell: with a key per cell, neighbouring cells sorted to opposite sides of a club
+         * between their depths, and the lighter veil over the club on one side and under it on the other drew a hard
+         * screen-aligned rectangle into the smoke (0.1 of the frame diagonal per cell; RECT, 27.10).
+         */
+        float depth() {
             double sum = 0, distance = 0;
-            for (int y = j; y <= j + 1; y++) for (int x = i; x <= i + 1; x++) {
-                int k = index(x, y);
+            for (int k = 0; k < depth.length; k++) {
                 double a = alpha(k);
                 sum += a;
                 distance += a * depth[k];

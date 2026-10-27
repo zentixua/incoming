@@ -500,6 +500,14 @@ public final class FxQuads {
     /** Same; {@code rect} ≥ 0 — clip each quad to its rectangle from that texture ({@code HalfRect}), rows from {@code row}. */
     void drawRange(net.minecraft.client.renderer.ShaderInstance s, int from, int to, int halfDepth, int split, int cut, int tile, int rect, int row) {
         if (to <= from) return;
+        passBegin(s, halfDepth, split, cut, tile, rect, row);
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (to - from) * 6, type.asGLType, (long) from * 6 * type.bytes);
+        passEnd(s, rect, tile);
+    }
+
+    /** Bind the uploaded quads and shader s for a pass of {@link #drawRange} (arguments as there). */
+    void passBegin(net.minecraft.client.renderer.ShaderInstance s, int halfDepth, int split, int cut, int tile, int rect, int row) {
         com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
         vb.bind();
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
@@ -509,7 +517,7 @@ public final class FxQuads {
         // a half-resolution pixel spans two frame pixels: frame-space lookups (world distance, pall, tiles) scale by it
         s.safeGetUniform("FxGlowPass").set(0f, half ? 2f : 1f);
         s.safeGetUniform("FxHalf").set(half ? 1f : 0f);
-        s.safeGetUniform("FxHalfSplit").set(split, from, tile, 0f);
+        s.safeGetUniform("FxHalfSplit").set(split, 0f, tile, 0f);
         s.safeGetUniform("FxHalfClip").set(rect >= 0 ? 1f : 0f, row, 0f, 0f);
         s.apply();
         if (rect >= 0) {
@@ -528,13 +536,40 @@ public final class FxQuads {
             com.mojang.blaze3d.platform.GlStateManager._activeTexture(unit);
             com.mojang.blaze3d.shaders.Uniform.uploadInteger(com.mojang.blaze3d.shaders.Uniform.glGetUniformLocation(s.getId(), "HalfCut"), CUT_UNIT);
         }
-        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
-        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (to - from) * 6, type.asGLType, (long) from * 6 * type.bytes);
+    }
+
+    /** After a pass of {@link #passBegin}: the layer's ordinary state. */
+    void passEnd(net.minecraft.client.renderer.ShaderInstance s, int rect, int tile) {
         s.clear();
         if (rect >= 0) for (int i = 0; i < 4; i++) org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL30.GL_CLIP_DISTANCE0 + i);
+        s.safeGetUniform("FxGlowPass").set(0f, 1f);
         s.safeGetUniform("FxHalf").set(0f);
         s.safeGetUniform("FxHalfSplit").set(0f, 0f, tile, 0f);
         s.safeGetUniform("FxHalfClip").set(0f, 0f, 0f, 0f);
+    }
+
+    /** Runs of each part in the uploaded order ({@link #runs}). */
+    int[][] partRuns() {
+        return runs(parts, drawn, n);
+    }
+
+    /** Sorted runs r (pairs start, length) of the uploaded quads in one call. */
+    static void multiDraw(int[] r) {
+        int count = r.length / 2;
+        if (count == 0) return;
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        java.nio.IntBuffer lengths = MemoryUtil.memAllocInt(count);
+        org.lwjgl.PointerBuffer starts = MemoryUtil.memAllocPointer(count);
+        try {
+            for (int i = 0; i < count; i++) {
+                lengths.put(r[2 * i + 1] * 6);
+                starts.put((long) r[2 * i] * 6 * type.bytes);
+            }
+            org.lwjgl.opengl.GL14.glMultiDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, lengths.flip(), type.asGLType, starts.flip());
+        } finally {
+            MemoryUtil.memFree(lengths);
+            MemoryUtil.memFree(starts);
+        }
     }
 
     /**
@@ -636,6 +671,8 @@ public final class FxQuads {
      * её цена в кадре (порядок смешивания между частями цены не меняет). Слив и метки до и после — {@code clock}.
      */
     void drawParts(net.minecraft.client.renderer.ShaderInstance s, LayerTimes.PartClock clock) {
+        // the frame split smoke at half resolution: each part as the frame drew it
+        if (HalfPass.drawParts(this, s, clock)) return;
         int[][] runs = runs(parts, drawn, n);
         com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
         vb.bind();
@@ -685,6 +722,11 @@ public final class FxQuads {
             runs[p][at[p]++] = i - from;
         }
         return runs;
+    }
+
+    /** Sort key (distance) of quad i in writing order (checks). */
+    public float key(int i) {
+        return keys[i];
     }
 
     /** Quad written at index i of the sorted place k (after {@link #prepare}). */

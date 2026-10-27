@@ -48,7 +48,7 @@ void main() {
             nearest = off;
             pick = v;
         }
-        float w = (o.x == 1 ? f.x : 1.0 - f.x) * (o.y == 1 ? f.y : 1.0 - f.y);
+        float w = mix(1.0 - f.x, f.x, float(o.x)) * mix(1.0 - f.y, f.y, float(o.y));
         sum += v * w;
         weights += w;
     }

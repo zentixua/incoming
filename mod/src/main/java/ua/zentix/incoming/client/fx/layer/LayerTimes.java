@@ -332,7 +332,10 @@ public final class LayerTimes {
      */
     static final class PartClock {
         private static final int SLOTS = 2;
-        private final int[][] marks = new int[SLOTS][PARTS + 1], samples = new int[SLOTS][PARTS];
+        private final int[][] marks = new int[SLOTS][PARTS + 1], samples = new int[SLOTS][PARTS], halfSamples = new int[SLOTS][PARTS];
+        /** The part drew into the half-resolution target ({@link HalfPass}): its samples count four frame pixels. */
+        private final boolean[][] halved = new boolean[SLOTS][PARTS];
+        private boolean counting;
         private final boolean[] issued = new boolean[SLOTS];
         private final int[][] quads = new int[SLOTS][PARTS], runs = new int[SLOTS][PARTS];
         private final double[] slotPixels = new double[SLOTS];
@@ -346,7 +349,10 @@ public final class LayerTimes {
         void create() {
             for (int s = 0; s < SLOTS; s++) {
                 for (int i = 0; i <= PARTS; i++) marks[s][i] = GL15.glGenQueries();
-                for (int i = 0; i < PARTS; i++) samples[s][i] = GL15.glGenQueries();
+                for (int i = 0; i < PARTS; i++) {
+                    samples[s][i] = GL15.glGenQueries();
+                    halfSamples[s][i] = GL15.glGenQueries();
+                }
             }
         }
 
@@ -361,10 +367,26 @@ public final class LayerTimes {
 
         void begin(int part) {
             GL15.glBeginQuery(GL15.GL_SAMPLES_PASSED, samples[at][part]);
+            counting = true;
+            halved[at][part] = false;
+        }
+
+        /** The part's half-resolution quads follow ({@link HalfPass#drawParts}): their samples apart. */
+        void half(int part) {
+            GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);
+            GL15.glBeginQuery(GL15.GL_SAMPLES_PASSED, halfSamples[at][part]);
+            halved[at][part] = true;
+        }
+
+        /** The part's half-resolution quads are drawn; laying them onto the frame is not its fill. */
+        void halfDone(int part) {
+            GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);
+            counting = false;
         }
 
         void end(int part, int quadCount, int runCount) {
-            GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);
+            if (counting) GL15.glEndQuery(GL15.GL_SAMPLES_PASSED);
+            counting = false;
             GL11.glFinish();
             GL33.glQueryCounter(marks[at][part + 1], GL33.GL_TIMESTAMP);
             quads[at][part] = quadCount;
@@ -388,7 +410,9 @@ public final class LayerTimes {
                 long t = GL33.glGetQueryObjecti64(marks[s][p + 1], GL15.GL_QUERY_RESULT);
                 ms[p] = Math.max(0, t - prev) / 1e6;
                 prev = t;
-                screens[p] = GL33.glGetQueryObjecti64(samples[s][p], GL15.GL_QUERY_RESULT) / Math.max(1, slotPixels[s]);
+                long fill = GL33.glGetQueryObjecti64(samples[s][p], GL15.GL_QUERY_RESULT);
+                if (halved[s][p]) fill += 4 * GL33.glGetQueryObjecti64(halfSamples[s][p], GL15.GL_QUERY_RESULT);
+                screens[p] = fill / Math.max(1, slotPixels[s]);
                 lastQuads[p] = quads[s][p];
                 lastRuns[p] = runs[s][p];
             }
