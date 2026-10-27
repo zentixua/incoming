@@ -5,58 +5,58 @@ import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 /**
- * Пыль, которую поднимает ветер за фронтом волны обычного взрыва, — тот же закон, что у ядерки ({@link DustModel}), без
- * Minecraft. Метры, секунды, килограммы; высоты — от точки взрыва.
+ * Dust lifted by wind behind a conventional blast front: the same law as the nuke ({@link DustModel}), without
+ * Minecraft. Meters, seconds, kilograms; heights relative to explosion point.
  * <ul>
- * <li><b>Откуда.</b> С каждой поверхности вокруг — там, где она есть (по секторам {@link #SECTORS} и радиусам
- * {@link #BANDS}: верхний блок, {@code FarBlasts.ground}), без «земля это или крыша»: в каждом кольце — слой
- * {@link DustModel#chemical} (давление, фаза и доля напора вдоль поверхности — {@link HobBlast} по высоте взрыва над
- * этой поверхностью, мощность — ядерная того же давления, {@link CloudModel#equivalentKt}): грунт уходит в воздух с
- * прихода фронта ({@link HobBlast#arrivalSeconds}) долей {@link DustModel#lifted} за положительную фазу на месте. До
- * фронта пыли нет, у разрыва высоко над поверхностью (давление ниже порога срыва) — нет совсем.</li>
- * <li><b>Поверхность.</b> Сколько пыли на ней лежит и как легко её сорвать — по материалу: голый рыхлый грунт (земля,
- * песок, гравий, снег) срывается с u* в 0,34 м/с, грунт под дёрном и листвой — от 3 м/с (Gaj &amp; Small, §2.2), у
- * твёрдого (камень, кирпич, доски, металл, лёд) рыхлого — только осевшая на нём пыль ({@code DustModel.Surface.HARD}:
- * 0,6 г/м², AP-42 §13.2.1). Крыша из камня и скала — одно и то же; дробит перекрытие сам заряд у места удара — это
- * пыль воронки в облаке ({@link CloudModel}). Вода не пылит.</li>
- * <li><b>Под шаром.</b> Пыль, сорванная под огненным шаром продуктов (он касается поверхности), — в его горячем газе и
- * поднимается с облаком, а не стоит у земли (как у ядерки: в шаре на земле пыли волны нет, {@code BlastWall.underBall}):
- * её отдаёт {@link #underBall}.</li>
- * <li><b>Высота.</b> В фазе волны — пыльный слой Kuhl (у фронта ноль, к концу фазы — {@link DustModel.Column#first},
- * десятки сантиметров у зарядов в десятки кг); дальше вспышки, что греет землю, у ВВ нет, и слой растит турбулентность
- * воздуха: σ по вертикали — Бриггс по классу Паскуилла на пути ветра, в квадратуре с верхом Kuhl (σ = верх / 2,5 —
- * ⚠ форма слоя). Слой лежит на своей поверхности — гаусс с отражением от неё: середина массы — на 0,8σ над ней.</li>
- * <li><b>Тяжесть.</b> Холодный воздух с пылью тяжелее чистого (плотность смеси растёт с массой пыли в объёме): слой —
- * гравитационное течение. Он растекается по поверхности (сток пласта постоянного объёма, Huppert &amp; Simpson 1980:
- * dR/dt = Fr·√(g′h), Fr = {@value #FR}, g′V = g·M/ρ — R² = R₀² + 2Fr·√(g·M/(πρ))·t; M — пыль, что ещё в воздухе), а
- * над перепадом вниз (край крыши, обрыв, склон) опускается к поверхности под собой — тяжёлый термик MTT той же массы
- * (Boussinesq: тот же закон, что у тёплого, с обратным знаком; {@link #fall}) или ветром за кромкой, что быстрее; по
- * склону до 45° слой идёт по поверхности вверх и вниз, на стену круче не взбирается ({@code level}).</li>
- * <li><b>Оседание.</b> Корзины {@link DustModel} выпадают из слоя со скоростью Стокса по размеру: у гаусса с отражением
- * концентрация у поверхности — масса / (1,25σ), поток вниз — v·масса / (1,25σ); по ∫dt/(1,25σ) — доля ослабления, что
- * ещё в воздухе ({@link DustModel#extinctionAloft}).</li>
- * <li><b>Ножка.</b> Подсос у оси — тот же член, что у ядерки ({@link DustModel.Column#stem}, {@link DustModel#STEM_S}):
- * из колец ближе {@code STEM_M}·∛(Y/15) он забирает stem/STEM_S их пыли в секунду, пока слой над ними — ветер уносит
- * слой из-под облака за полрадиуса подсоса. Шар обычного взрыва касается земли, поэтому пыль идёт по всей ножке до низа
- * облака сразу ({@code StemDust}, случай следа шара, ⚠ оценка), с воздухом ножки — долей
- * {@link MushroomModel#STEM_INFLOW} подъёма облака; дошедшая до низа облака — уже в облаке.</li>
- * <li><b>Снос.</b> Слой уходит с ветром на высоте своей середины (не ниже 2 м) и расплывается по Бриггсу; поток волны
- * наружу пыль не сносит — она стоит там, где её сорвало.</li>
+ * <li><b>Origin.</b> Each surrounding surface where present (sectors {@link #SECTORS} and radii
+ * {@link #BANDS}: top block, {@code FarBlasts.ground}), without “ground or roof”: each ring has a
+ * {@link DustModel#chemical} layer (pressure, phase and surface-parallel dynamic-pressure share from {@link HobBlast} at burst height above
+ * that surface, yield is nuclear with equal pressure, {@link CloudModel#equivalentKt}). Soil becomes airborne from
+ * front arrival ({@link HobBlast#arrivalSeconds}) by share {@link DustModel#lifted} over local positive phase. No dust before
+ * the front; none at all for a high burst (pressure below entrainment threshold).</li>
+ * <li><b>Surface.</b> Dust loading and ease of entrainment follow material: bare loose soil (dirt,
+ * sand, gravel, snow) entrains at u* 0.34 m/s; soil under turf and leaves from 3 m/s (Gaj &amp; Small, §2.2); on
+ * hard material (stone, brick, planks, metal, ice), only deposited dust is loose ({@code DustModel.Surface.HARD}:
+ * 0.6 g/m², AP-42 §13.2.1). Stone roof and rock are identical; the charge crushes the floor at impact, supplying
+ * crater dust in the cloud ({@link CloudModel}). Water makes no dust.</li>
+ * <li><b>Under the ball.</b> Dust lifted beneath the product fireball (touching the surface) is in its hot gas and
+ * rises with the cloud rather than staying at ground (as in nuke: no ground wave dust in the ball, {@code BlastWall.underBall});
+ * returned by {@link #underBall}.</li>
+ * <li><b>Height.</b> During wave phase, Kuhl dust layer (zero at front, {@link DustModel.Column#first} at phase end,
+ * tens of centimeters for tens-of-kg charges); afterward HE has no ground-heating flash, and air turbulence grows
+ * the layer: vertical σ is Briggs by Pasquill class over wind travel, in quadrature with Kuhl top (σ = top / 2.5,
+ * ⚠ layer shape). Layer rests on its surface: reflected Gaussian, mass center 0.8σ above it.</li>
+ * <li><b>Gravity.</b> Cold dusty air is heavier than clean air (mixture density increases with dust mass per volume): layer is
+ * a gravity current. It spreads along the surface (constant-volume slumping, Huppert &amp; Simpson 1980:
+ * dR/dt = Fr·√(g′h), Fr = {@value #FR}, g′V = g·M/ρ gives R² = R₀² + 2Fr·√(g·M/(πρ))·t; M is airborne dust), and
+ * over a drop (roof edge, cliff, slope) descends toward the surface below as an MTT heavy thermal of the same mass
+ * (Boussinesq: warm-thermal law with reversed sign; {@link #fall}) or edge-lee wind, whichever is faster; along
+ * slopes up to 45°, follows the surface up and down; cannot climb steeper walls ({@code level}).</li>
+ * <li><b>Settling.</b> {@link DustModel} bins fall from the layer at size-based Stokes speed: reflected Gaussian has
+ * surface concentration mass / (1.25σ), downward flux v·mass / (1.25σ); ∫dt/(1.25σ) gives extinction share
+ * still airborne ({@link DustModel#extinctionAloft}).</li>
+ * <li><b>Stem.</b> Axial entrainment uses the nuke's term ({@link DustModel.Column#stem}, {@link DustModel#STEM_S}):
+ * from rings within {@code STEM_M}·∛(Y/15), it takes stem/STEM_S of dust per second while the layer is over them; wind removes
+ * it from under the cloud over half the inflow radius. Conventional ball touches ground, so dust immediately fills the stem to cloud
+ * bottom ({@code StemDust}, ball-trace case, ⚠ est.), with stem air moving by share
+ * {@link MushroomModel#STEM_INFLOW} of cloud rise; dust reaching cloud bottom is already in the cloud.</li>
+ * <li><b>Drift.</b> Layer follows wind at its center height (at least 2 m) and spreads by Briggs; outward wave flow
+ * does not advect dust: it stays where lifted.</li>
  * </ul>
- * Горячие продукты взрыва и топлива всплывают и уносят то, что в них, — это облако ({@link CloudModel}), а не слой.
- * Картинке слой отдаёт кольца показа ({@link #ANNULI}: по радиусу поверхности) по секторам: у каждого — своя масса,
- * средний по массе радиус и поверхность, с которой пыль подняло; видимый край — не дальше фронта в этот миг.
+ * Hot explosive and fuel products rise, carrying their contents: the cloud ({@link CloudModel}), not the layer.
+ * For rendering, the layer supplies display rings ({@link #ANNULI}: by surface radius) by sectors: each has its own mass,
+ * mass-mean radius and source surface; visible edge never outruns the current front.
  */
 public final class GroundDust {
-    /** Секторов по направлению от точки удара: у каждого — своя поверхность ({@link Ground}). */
+    /** Directional sectors from impact point: each has its own surface ({@link Ground}). */
     public static final int SECTORS = 8;
 
-    /** Радиусы, на которых известна поверхность ({@link Ground}), м: кольцу — ближайший по логарифму. */
+    /** Known surface radii ({@link Ground}), m: ring uses nearest in log space. */
     public static final double[] BANDS = {3, 6, 12, 24, 48};
 
     /**
-     * Рельеф вокруг: высота поверхности (первый воздух над верхним блоком) над точкой взрыва в месте (x, z) от неё, м;
-     * {@link Double#NaN} — не знаем.
+     * Surrounding relief: surface height (first air above top block) above explosion point at relative (x, z), m;
+     * {@link Double#NaN} means unknown.
      */
     @FunctionalInterface
     public interface Relief {
@@ -66,16 +66,16 @@ public final class GroundDust {
     }
 
     /**
-     * Что лежит вокруг удара по секторам и радиусам ({@code [сектор][радиус BANDS]}; направление k — угол
-     * 2π(k + ½)/{@link #SECTORS} от оси x к оси z): доли голого рыхлого грунта, грунта под дёрном или листвой и твёрдого;
-     * остальное — вода (с неё пыли нет). {@code height} — высота этой поверхности над точкой взрыва, м ({@link Double#NaN}
-     * — не знаем: ровная поверхность на высоте подрыва ниже); {@code relief} — рельеф в любом месте (куда слой стекает).
+     * Surroundings by sectors and radii ({@code [sector][BANDS radius]}; direction k is angle
+     * 2π(k + ½)/{@link #SECTORS} from x toward z): shares of bare loose soil, soil under turf or leaves, and hard surface;
+     * rest is water (no dust). {@code height} is surface height above explosion point, m ({@link Double#NaN}
+     * means unknown: flat surface one burst height below); {@code relief} gives terrain anywhere (where layer drains).
      */
     public record Ground(double[][] loose, double[][] covered, double[][] hard, double[][] height, Relief relief) {
-        /** Всюду голый грунт — как у ядерки ({@code Surface.REFERENCE}); так и там, где клиент ничего не знает. */
+        /** Bare soil everywhere, as in nuke ({@code Surface.REFERENCE}); also where client knows nothing. */
         public static final Ground BARE = uniform(1, 0);
 
-        /** Рыхлое и дёрн по секторам, ровная поверхность на высоте подрыва ниже, рельефа нет. */
+        /** Loose soil and turf by sectors, flat surface one burst height below, no relief. */
         public Ground(double[][] loose, double[][] covered) {
             this(loose, covered, filled(0), filled(Double.NaN), Relief.UNKNOWN);
         }
@@ -84,7 +84,7 @@ public final class GroundDust {
             return new Ground(filled(loose), filled(covered));
         }
 
-        /** Таблица [сектор][радиус] с одним числом. */
+        /** Table [sector][radius] filled with one value. */
         public static double[][] filled(double v) {
             double[][] a = new double[SECTORS][BANDS.length];
             for (double[] row : a) java.util.Arrays.fill(row, v);
@@ -92,7 +92,7 @@ public final class GroundDust {
         }
     }
 
-    /** Радиус поверхности для кольца радиуса r: ближайший по логарифму из {@link #BANDS}. */
+    /** Surface radius for ring of radius r: nearest in log space from {@link #BANDS}. */
     static int band(double r) {
         int best = 0;
         double d = Double.MAX_VALUE, lr = Math.log(Math.max(r, 1e-3));
@@ -107,112 +107,112 @@ public final class GroundDust {
     }
 
     /**
-     * Колец счёта (по логарифму радиуса) и колец показа: кольцо показа — кольца счёта у одного радиуса поверхности
-     * ({@link #band}), у его клуба в секторе одна поверхность — та, с которой его подняло.
+     * Calculation rings (log radius) and display rings: a display ring groups calculation rings sharing a surface radius
+     * ({@link #band}); its sector clump has one surface, the one it rose from.
      */
     static final int RINGS = 24, ANNULI = BANDS.length;
-    /** Сетка времени таблиц: t_k = T0·(GROW^k − 1), с. */
+    /** Table time grid: t_k = T0·(GROW^k − 1), s. */
     static final int STEPS = 112;
     static final double T0 = 0.01, GROW = 1.12;
-    /** Внутренний край счёта и дальний — давление у поверхности, ниже которого грунт уже не срывает (psi; вынос ~0). */
+    /** Inner calculation edge and outer edge: surface pressure below which soil no longer entrains (psi; entrainment ~0). */
     static final double INNER = 0.1, OUTER_PSI = 0.3;
     /**
-     * Число Фруда головы гравитационного течения, мелкого против толщи воздуха (Huppert &amp; Simpson 1980, «The slumping
-     * of gravity currents», JFM 99: 785, по опытам — 1,19).
+     * Froude number of gravity-current head shallow relative to air depth (Huppert &amp; Simpson 1980, “The slumping
+     * of gravity currents”, JFM 99: 785; experiments give 1.19).
      */
     static final double FR = 1.19;
     /**
-     * Перепад поверхности на метр пути, с которого это край (вниз — слой над пустотой, падает) или стена (вверх — слой на
-     * неё не взбирается), м: склон до 45° из ступеней в блок слой проходит по поверхности.
+     * Surface height change per meter of travel defining an edge (down: layer over void, falls) or wall (up: cannot
+     * climb), m: follows block-step slopes up to 45° along the surface.
      */
     static final double DROP = 1;
 
     final CloudModel.Air air;
     final double yieldKt, hob;
     /**
-     * Ветер у земли (на 2 м), м/с: путь ветра — каждому клубу каждый кадр, а воздух у слоя один на всё время (корень из
-     * суммы квадратов — дорогой {@code Math.hypot}: у налёта из 100 ударов он брал восьмую часть процессора дыма).
+     * Near-ground wind (at 2 m), m/s: wind travel is needed for each clump every frame, but layer air is constant over its lifetime (root of
+     * sum of squares is expensive {@code Math.hypot}: took one eighth of smoke CPU for a 100-strike raid).
      */
     private final double groundWind;
-    /** Время, для которого посчитан узел сетки {@link #nodeAt} (один на кадр у всех таблиц слоя). */
+    /** Time of computed {@link #nodeAt} grid node (one per frame for all layer tables). */
     private double nodeT = Double.NaN, nodeAt;
-    /** Кольца счёта: середина и площадь (одни на все секторы). */
+    /** Calculation rings: center and area (shared by all sectors). */
     private final double[] r, area;
     /**
-     * По секторам и кольцам: приход фронта, фаза, поднятое (кг, доля сектора), верх к концу фазы, подсос, его начало; под
-     * шаром ли кольцо (его пыль — в облаке).
+     * By sectors and rings: front arrival, phase, lifted mass (kg, sector share), phase-end top, inflow, its start; whether
+     * ring is under ball (its dust goes into cloud).
      */
     private final double[][] arrival, positive, mass, first, stem, stemFrom;
     private final boolean[][] ball;
-    /** Высота поверхности над точкой взрыва по секторам и радиусам, м (неизвестна — ровная на {@link #hob} ниже). */
+    /** Surface height above explosion point by sectors and radii, m (unknown: flat at {@link #hob} below). */
     private final double[][] surface;
     private final Relief relief;
-    /** Юбка разрушенного: рождается на высоте точки удара и за краем стекает, а не появляется внизу готовой. */
+    /** Destroyed-material skirt: born at impact height, drains over edges rather than appearing complete below. */
     private final boolean skirt;
-    /** Радиус юбки к {@link #SKIRT_S}, м (0 — не юбка). */
+    /** Skirt radius at {@link #SKIRT_S}, m (0 means not a skirt). */
     private final double skirtR;
     private final int[] annulus;
-    /** Куда клуб сектора идёт в кольце показа (угол, рад) и какая доля дуги сектора там открыта: юбка — по улицам. */
+    /** Sector clump direction in display ring (angle, rad) and open share of sector arc there: skirt follows streets. */
     private final double[][] heading = new double[SECTORS][ANNULI], openArc = new double[SECTORS][ANNULI];
-    /** Во сколько раз дальше поля юбка сектора уходит по открытому (улица), 1 — поле. */
+    /** How much farther than open field the sector skirt travels through open space (street), 1 is field. */
     private final double[] reach = new double[SECTORS];
-    /** Стены повернули юбку ({@link #channel}); от какой высоты (м от точки взрыва) — стена. */
+    /** Walls redirected skirt ({@link #channel}); wall reference height (m relative to explosion point). */
     private boolean walled;
     private double wallFrom;
-    /** Высота стен над точкой удара, м: ниже — ветер вдоль улицы ({@link #canyon}). */
+    /** Wall height above impact, m: below it, wind follows street ({@link #canyon}). */
     private double wallTop;
-    /** Путь клуба сектора по открытому ({@link #open}): {угол, радиус, открыт ли} на каждом полуметре радиуса. */
+    /** Sector clump path through open space ({@link #open}): {angle, radius, is open} at each half-meter radius. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private final java.util.List<double[]>[][] chain = new java.util.List[SECTORS][ANNULI];
-    /** Таблицы по сетке времени: σ по вертикали и ∫dt/(1,25σ) у каждого кольца показа; подсос — доля его времени. */
+    /** Time-grid tables: vertical σ and ∫dt/(1.25σ) per display ring; inflow as time share. */
     private final double[][] sv = new double[ANNULI][STEPS], settled = new double[ANNULI][STEPS];
     private final double[] stemTime = new double[STEPS];
-    /** Пыль, ушедшая в ножку (ослабление в кг смеси {@link DustModel#K_MIX}), нарастающим итогом по сетке. */
+    /** Dust entering stem (extinction in kg of {@link DustModel#K_MIX} mixture), cumulative on grid. */
     private final double[] drawn = new double[STEPS];
-    /** Сток слоя: R² − R₀² по сетке, м²; R₀² — средний по массе квадрат радиуса, откуда пыль подняло. */
+    /** Layer slumping: R² − R₀² on grid, m²; R₀² is mass-mean squared source radius. */
     private final double[] slump = new double[STEPS];
     final double slumpFrom;
-    /** Поднятая масса у поверхности (без той, что под шаром), кг; радиус подсоса, м; сколько слой виден, с. */
+    /** Lifted surface mass (excluding under-ball mass), kg; inflow radius, m; layer visibility duration, s. */
     public final double total, stemReach;
     public final double life;
-    /** С какого возраста подсос забирает пыль в ножку, с (бесконечность — не забирает). */
+    /** Age when stem inflow starts removing dust, s (infinity means never). */
     public final double drawnFrom;
     private double boundInitialV;
     private final double[] boundRadius = new double[STEPS], boundWidth = new double[STEPS],
             windForward = new double[STEPS], windBackward = new double[STEPS];
 
     /**
-     * Слой пыли заряда {@code tntKg} кг ТНТ на высоте {@code hobM} над голым грунтом в воздухе {@code air};
-     * {@code ballM} — радиус огненного шара (касается ли он земли).
+     * Dust layer for {@code tntKg} kg TNT charge at height {@code hobM} above bare soil in {@code air};
+     * {@code ballM} is fireball radius (whether it touches ground).
      */
     GroundDust(double tntKg, double hobM, double ballM, CloudModel.Air air) {
         this(tntKg, hobM, ballM, Ground.BARE, air);
     }
 
     /**
-     * То же над поверхностью {@code ground} по секторам: у каждой — свой материал (рыхлый грунт {@code Surface.FIELD},
-     * дёрн {@code COVERED}, твёрдое {@code HARD}, вода — без пыли) и своя высота; срыв по закону над каждой — по высоте
-     * взрыва над ней (там, где высота неизвестна, — {@code hobM}).
+     * Same above {@code ground} by sectors: each has its material (loose soil {@code Surface.FIELD},
+     * turf {@code COVERED}, hard {@code HARD}, water has no dust) and height; local entrainment law uses burst height
+     * above each surface (unknown height uses {@code hobM}).
      */
     GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air) {
         this(tntKg, hobM, ballM, ground, air, 0);
     }
 
     /**
-     * Юбка пыли у земли (base surge): мелочь разрушенного {@code kg} кг, что поток газа взрыва выносит из пролома или
-     * воронки вдоль поверхностей вокруг, — не готовым слоем у точки удара. Ebersole, Vaglio-Laurin, Dvore, ASL-CR-80-32
-     * (1980): через {@value #SKIRT_S} с юбка — десятки метров (3×6,8 кг — 44×17 м, 3×55 кг — 54×30 м); радиус —
-     * {@value #SKIRT_R0}·R₀, R₀ = 2·W^⅓ м (приближения DIRTRAN там же). Кольцо получает массу по площади и встаёт, когда до
-     * него дошла юбка; дальше — тот же закон, что у пыли волны (ветер, оседание, стекание с краёв). ⚠ Оценка: верх юбки —
-     * R₀ (у замеров — облако целиком, с поднимающейся частью), раздача по площади ровная.
+     * Ground dust skirt (base surge): {@code kg} kg destroyed fines carried by explosion gas from breach or
+     * crater along surrounding surfaces, rather than a complete layer at impact. Ebersole, Vaglio-Laurin, Dvore, ASL-CR-80-32
+     * (1980): after {@value #SKIRT_S} s, skirt spans tens of meters (3×6.8 kg: 44×17 m, 3×55 kg: 54×30 m); radius is
+     * {@value #SKIRT_R0}·R₀, R₀ = 2·W^⅓ m (DIRTRAN approximations there). Ring gets mass by area and rises when
+     * skirt reaches it; afterward follows wave-dust law (wind, settling, draining over edges). ⚠ Est.: skirt top is
+     * R₀ (measurements cover whole cloud including rising part), uniform area distribution.
      */
     static GroundDust skirt(double tntKg, double hobM, double kg, Ground ground, CloudModel.Air air) {
-        // юбка идёт от точки удара: каждое кольцо рождается на её высоте, а с края (крыша, обрыв) стекает законом слоя
+        // skirt starts at impact: each ring is born at its height, draining over edges (roof, cliff) by layer law
         Ground source = new Ground(ground.loose(), ground.covered(), ground.hard(), Ground.filled(-Math.max(0, hobM)), ground.relief());
         return new GroundDust(kg > 0 ? tntKg : 0, hobM, 0, source, air, kg);
     }
 
-    /** Когда юбка доходит до своего радиуса, с, и радиус в R₀ (Ebersole и др. 1980, DIRTRAN). */
+    /** When skirt reaches its radius, s, and radius in R₀ (Ebersole et al. 1980, DIRTRAN). */
     static final double SKIRT_S = 0.5, SKIRT_R0 = 2;
 
     private GroundDust(double tntKg, double hobM, double ballM, Ground ground, CloudModel.Air air, double skirtKg) {
@@ -222,8 +222,8 @@ public final class GroundDust {
         this.hob = Math.max(0, hobM);
         this.relief = ground.relief();
         this.skirt = skirtKg > 0;
-        // высота взрыва над каждой поверхностью: снизу (крыша, улица) или сверху (стена, склон выше точки) — по наклонной
-        // дальности то же давление (⚠ отражение от поверхности над точкой — как от поверхности под ней)
+        // burst height over each surface: below (roof, street) or above (wall, slope above point), same pressure by slant
+        // range (⚠ reflection from surface above point treated as from surface below)
         surface = new double[SECTORS][BANDS.length];
         double[][] over = new double[SECTORS][BANDS.length];
         double outer = 0;
@@ -242,8 +242,8 @@ public final class GroundDust {
             for (int i = 0; i < RINGS; i++) {
                 double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), r1 = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
                 rr[i] = i == 0 ? 0.5 * r1 : Math.sqrt(lo * r1);
-                // кольцо юбки — в середине по площади той его части, что внутри юбки: масса там ровная по площади, а кольцо
-                // на краю юбки иначе стояло бы в середине всего кольца, за её краем
+                // skirt ring is at area center of its part inside skirt: mass is uniform by area; otherwise the edge ring
+                // would stand at the whole ring's center, beyond skirt edge
                 double hi = Math.min(r1, skirtR);
                 if (lo < skirtR) rr[i] = 2.0 / 3 * (hi * hi * hi - lo * lo * lo) / (hi * hi - lo * lo);
                 aa[i] = Math.PI * (r1 * r1 - lo * lo);
@@ -263,11 +263,11 @@ public final class GroundDust {
             for (int i = 0; i < RINGS; i++) {
                 int b = band(r[i]);
                 Rings f = rings(tntKg, over[k][b], ballM, DustModel.Surface.FIELD, outer), c = rings(tntKg, over[k][b], ballM, DustModel.Surface.COVERED, outer);
-                // на твёрдом рыхлого — только осевшая пыль: вынос того же закона, не больше её запаса (порог — как у грунта);
-                // на дёрне — тоже только то, что лежит на траве: грунт под ним держат корни; мелочь грунта даёт воронка (её
-                // юбка), крошку сорванной травы — FrontDust (крупная, выпадает за секунды). ⚠ Оценка: пыль на траве — как на
-                // тихой дороге (запас HARD); прежде дёрн отдавал сантиметр грунта, как голая земля, и у удара у газона в
-                // 40 м на 6 с стояла бурая стена
+                // on hard surfaces only deposited dust is loose: same entrainment law, capped by inventory (threshold as soil);
+                // on turf too, only dust on grass: roots hold soil; soil fines come from crater (its
+                // skirt); torn grass crumbs are FrontDust (coarse, settle in seconds). ⚠ Est.: grass dust loading equals
+                // quiet road (HARD inventory); previously turf supplied a centimeter of soil like bare ground, producing a brown wall at
+                // 6 s from 40 m at a lawn impact
                 double hard = Math.min(hardSupply * area[i], f.mass[i]), turf = Math.min(hardSupply * area[i], c.mass[i]);
                 mass[k][i] = (ground.loose()[k][b] * f.mass[i] + ground.covered()[k][b] * turf + ground.hard()[k][b] * hard) / SECTORS;
                 arrival[k][i] = f.arrival[i];
@@ -277,15 +277,15 @@ public final class GroundDust {
                 stemFrom[k][i] = f.stemFrom[i];
                 ball[k][i] = f.ball[i];
                 if (skirtKg > 0) {
-                    // края кольца (кольца счёта — логарифмические): доля площади диска юбки в кольце
+                    // ring edges (log calculation rings): skirt-disc area share in ring
                     double lo = i == 0 ? 0 : INNER * Math.pow(outer / INNER, (double) i / RINGS), hi = INNER * Math.pow(outer / INNER, (i + 1.0) / RINGS);
                     double in = Math.max(0, Math.min(hi, skirtR) * Math.min(hi, skirtR) - Math.min(lo, skirtR) * Math.min(lo, skirtR));
                     mass[k][i] = skirtR > 0 ? skirtKg * in / (skirtR * skirtR) / SECTORS : 0;
-                    // юбка доходит до кольца с той же скоростью и за своим краем: фронт за краем не прыгает к концу колец
+                    // skirt reaches ring at same speed even beyond its edge: front does not jump to ring end beyond edge
                     arrival[k][i] = SKIRT_S * lo / Math.max(skirtR, 1e-9);
                     positive[k][i] = Math.max(SKIRT_S * (Math.min(hi, skirtR) - Math.min(lo, skirtR)) / Math.max(skirtR, 1e-9), 0.05);
                     first[k][i] = r0;
-                    // мелочь пролома — не вовлечённая в шар и не втянутая ножкой: её не считать второй раз
+                    // breach fines are neither ball-entrained nor stem-drawn: do not count twice
                     stem[k][i] = 0;
                     ball[k][i] = false;
                 }
@@ -296,18 +296,18 @@ public final class GroundDust {
             java.util.Arrays.fill(openArc[k], 1);
             reach[k] = 1;
         }
-        // юбку несёт газ вдоль поверхностей: в сторону стены выше удара (дом у улицы) он не идёт, а уходит в открытые
-        // стороны того же кольца — в улицы; иначе на перекрёстке квартала большая часть пыли лежала бы внутри домов, где её
-        // не видно (⚠ оценка: раздача по открытой дуге ровная, стены выше удара на WALL — не пускают)
+        // gas carries skirt along surfaces: it avoids walls above impact (house beside street), redirects toward open
+        // arcs of the same ring, into streets; otherwise at a block intersection most dust would lie inside houses where
+        // it is invisible (⚠ est.: uniform distribution over open arc, walls WALL above impact block flow)
         if (skirtKg > 0 && outer > INNER) channel(-hob);
         double sum = 0;
         for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (!ball[k][i]) sum += mass[k][i];
         total = sum;
         stemReach = DustModel.STEM_M * Math.cbrt(yieldKt / 15);
-        // кольца показа — по радиусам поверхности
+        // display rings follow surface radii
         annulus = new int[RINGS];
         for (int i = 0; i < RINGS; i++) annulus[i] = band(r[i]);
-        // таблицы: σ по вертикали (верх Kuhl к концу фазы и турбулентность воздуха), оседание, подсос
+        // tables: vertical σ (Kuhl top at phase end and air turbulence), settling, inflow
         double[] top = new double[ANNULI], weight = new double[ANNULI];
         double from = Double.MAX_VALUE, r2 = 0;
         for (int k = 0; k < SECTORS; k++) {
@@ -330,7 +330,7 @@ public final class GroundDust {
             stemTime[s] = stemTime[s - 1] + (mid > from ? dt * under(mid) : 0);
         }
         for (int q = 0; q < ANNULI; q++) sv[q][0] = sigmaV(top[q], 0);
-        // ножка: ушедшее в подсос — нарастающим итогом (ослабление в кг смеси); сток слоя — по пыли, что ещё в воздухе
+        // stem: cumulative inflow (extinction in mixture kg); layer slumping follows still-airborne dust
         for (int s = 1; s < STEPS; s++) {
             double t = 0.5 * (time(s - 1) + time(s)), flux = 0, aloft = 0;
             for (int k = 0; k < SECTORS; k++) {
@@ -411,25 +411,25 @@ public final class GroundDust {
         }
     }
 
-    /** Середина кольца счёта i, м (проверки). */
+    /** Calculation-ring i center, m (checks). */
     double ring(int i) {
         return r[i];
     }
 
-    /** Поднятое кольца i сектора k, кг (проверки). */
+    /** Lifted mass of ring i, sector k, kg (checks). */
     double mass(int k, int i) {
         return mass[k][i];
     }
 
-    /** Стена выше точки удара на столько, м, юбку в свою сторону не пускает (ниже — бордюр, ступень, газ идёт поверх). */
+    /** Wall this far above impact, m, blocks skirt (lower is curb or step, gas flows over). */
     static final double WALL = 2;
 
     /**
-     * Уровень, от которого стоят стены у удара на высоте {@code source}, м от точки взрыва: нижняя четверть рельефа на
-     * кольце от края юбки до двух её радиусов (там улицы, а не яма удара), но не ниже самого удара. Удар в воронку прежнего,
-     * в канаву, в яму — стены считаются от поля вокруг, и края ямы стеной не держат (иначе пыль стояла бы в яме, пока клуб
-     * не перерос её край); удар на улице — уровень улицы (дома квартала занимают меньше трёх четвертей кольца); удар на
-     * крыше — крыша. Рельеф неизвестен — сам удар.
+     * Wall base level for impact at height {@code source}, m relative to explosion: lower quarter of relief in
+     * ring from skirt edge to twice its radius (streets, not impact pit), no lower than impact itself. Impact in an earlier crater,
+     * ditch or pit: walls measured from surrounding field, pit edges do not block as walls (otherwise dust would stay in pit until clump
+     * grew past its edge); street impact uses street level (houses cover less than three quarters of ring); roof impact uses
+     * roof. Unknown relief uses impact itself.
      */
     private double floor(double source) {
         if (skirtR <= 0) return source;
@@ -447,15 +447,15 @@ public final class GroundDust {
         return Math.max(source, h[n / 4]);
     }
 
-    /** Выборок рельефа на дуге сектора в кольце: улица в 6 м на 10 м от удара — дуга в 35°, 4 выборки из 45° сектора. */
+    /** Relief samples over sector arc in ring: a 6 m street 10 m from impact spans 35°, 4 samples of a 45° sector. */
     static final int ARC = 9;
 
     /**
-     * Юбка уходит с дуги кольца, где поверхность (рельеф на радиусе кольца, м от точки взрыва; неизвестна — открыто) выше
-     * {@code source} на {@link #WALL}, на открытую дугу того же кольца — поровну по длине; клуб сектора идёт по середине
-     * его открытой дуги и не шире её. Всё кольцо закрыто (двор, яма) — пыль остаётся, как поднята. Стена считается от
-     * земли вокруг ({@link #floor}), если удар ниже неё: края воронки и поле вокруг ямы — не стены, юбка выходит из ямы как в
-     * поле.
+     * Skirt redirects from ring arc where surface (relief at ring radius, m relative to explosion; unknown is open) exceeds
+     * {@code source} by {@link #WALL}, to open arc of same ring, uniform by length; sector clump follows its open
+     * arc center, no wider than arc. Entire ring closed (yard, pit): dust stays as lifted. Wall base is surrounding
+     * ground ({@link #floor}) if impact is lower: crater edges and field around pit are not walls; skirt exits pit as in
+     * open field.
      */
     private void channel(double source) {
         source = floor(source);
@@ -488,7 +488,7 @@ public final class GroundDust {
         }
         if (!walled) return;
         wallFrom = source + WALL;
-        // высота стен — средняя по закрытым выборкам дуг
+        // wall height averaged over blocked arc samples
         double top = 0;
         int tops = 0;
         for (int i = 0; i < RINGS; i++) {
@@ -504,7 +504,7 @@ public final class GroundDust {
         wallTop = tops > 0 ? top / tops : 0;
         for (java.util.List<double[]>[] row : chain) java.util.Arrays.fill(row, null);
         axes.clear();
-        // клуб сектора в кольце показа — середина открытой дуги его колец по массе
+        // sector clump in display ring: mass-weighted center of its rings' open arcs
         for (int k = 0; k < SECTORS; k++) {
             double[] m = new double[ANNULI], a = new double[ANNULI], o = new double[ANNULI];
             for (int i = 0; i < RINGS; i++) {
@@ -519,9 +519,9 @@ public final class GroundDust {
                 openArc[k][q] = o[q] / m[q];
             }
         }
-        // газ юбки занимает ту же площадь, что в поле: где расходиться некуда (улица меж домов), он уходит дальше —
-        // как плотный поток в канале. Сектор с долей массы m/M занимает по открытому площадь (m/M)·πR²: дальность —
-        // радиус, до которого открытая площадь сектора её набирает (⚠ оценка: глубина потока та же, что в поле; не дальше
+        // skirt gas occupies same area as in field: constrained spreading (street between houses) travels farther,
+        // like dense channel flow. Sector mass share m/M occupies open area (m/M)·πR²; reach is
+        // radius accumulating this open sector area (⚠ est.: flow depth same as in field; no farther than
         // REACH_MAX·R)
         double whole = 0;
         double[] sector = new double[SECTORS];
@@ -551,14 +551,14 @@ public final class GroundDust {
     }
 
     /**
-     * Место клуба юбки сектора k в кольце показа q, растянутого до радиуса rad (м от точки взрыва): клуб идёт от удара
-     * по открытому — на каждом полуметре радиуса угол на дуге сектора, открытый там и ближайший к углу на прошлом
-     * полуметре (в начале — к середине открытой дуги колец); открытого на дуге нет — клуб стоит на прошлом полуметре:
-     * дальше стены юбка в этой стороне не идёт. Клуб, растянутый дальностью и стоком, так остаётся в улице, а не в доме,
-     * и у удара не в середине перекрёстка, а идёт по той улице, в которую вошёл (ближайший к середине дуги угол на
-     * каждом радиусе заново перескакивал бы в соседнюю улицу: клуб прыгал на десяток метров); шаг цепочки — не дальше
-     * {@value #CHAIN_STEP} м от прошлого места, поэтому за стеной клуб не появляется. Цепочка — одна для всех
-     * кадров (не зависит от их частоты); {угол, радиус}. Снос ветром ниже крыш держит путь клуба ({@link #step}).
+     * Sector k skirt clump position in display ring q stretched to rad (m from explosion): clump travels from impact
+     * through open space, choosing at each half-meter radius the open sector-arc angle nearest its previous
+     * half-meter angle (initially rings' open-arc center); no open arc means clump stops at previous half-meter:
+     * skirt cannot pass that wall. Clump stretched by reach and slumping thus stays in street, not house,
+     * and for an off-center intersection impact follows the street it entered (choosing angle nearest arc center at
+     * each radius would jump into adjacent street, moving clump ten meters); chain step never exceeds
+     * {@value #CHAIN_STEP} m from previous position, so clump cannot appear behind wall. One chain for all
+     * frames (independent of frame rate); {angle, radius}. Clump path constrains below-roof wind drift ({@link #step}).
      */
     private double[] open(int k, int q, double rad) {
         int at = (int) Math.round(2 * rad);
@@ -576,7 +576,7 @@ public final class GroundDust {
             for (int j = 0; j < 2 * ARC; j++) {
                 double phi = from + 2 * Math.PI / SECTORS * (j + 0.5) / (2 * ARC);
                 double x = r1 * Math.cos(phi), z = r1 * Math.sin(phi);
-                // шаг пути — по открытому и рядом с прошлым местом: через стену в соседнюю улицу клуб не перескакивает
+                // path step stays open and near previous position: no jump through wall into adjacent street
                 double far = Math.hypot(x - last[1] * Math.cos(last[0]), z - last[1] * Math.sin(last[0]));
                 if (far > CHAIN_STEP || relief.at(x, z) > wallFrom) continue;
                 if (Math.abs(phi - last[0]) < gap) {
@@ -587,26 +587,26 @@ public final class GroundDust {
             c.add(next);
         }
         double[] here = c.get(at);
-        // открыто на этом полуметре — на самом радиусе, иначе — где клуб встал
+        // open at this half-meter: at actual radius, otherwise where clump stopped
         return new double[]{here[0], here[2] > 0 ? rad : here[1]};
     }
 
-    /** Шаг пути клуба по открытому ({@link #open}) не длиннее, м. */
+    /** Maximum open-space clump-path step ({@link #open}), m. */
     static final double CHAIN_STEP = 1.5;
 
-    /** Угол между осью m (шаг π/8) и направлением a, рад, без знака направления оси. */
+    /** Angle between axis m (π/8 steps) and direction a, rad, ignoring axis direction sign. */
     private static double off(int m, double a) {
         return Math.abs(Math.IEEEremainder(a - Math.PI * m / 8, Math.PI));
     }
 
     /**
-     * Сколько сноса ветром (sx, sz) за выборку пути клуба юбки с места (x, z) в возрасте tau, лежащего на уровне
-     * {@code level}, держит улица (x, z). Ниже крыш ветер в каньоне идёт вдоль улицы — поперёк его держат стены (Dobre et
-     * al. 2005, Atmos. Environ. 39:4647: составляющая вдоль каньона — проекция ветра над крышами на его ось): поперечная
-     * доля у оси улицы там ({@link #axis}) — до половины высоты стен целиком (вихрь каньона), к их верху — всё меньше.
-     * Остаток сноса упирается в стену выше и стен ({@link #wallFrom}), и середины клуба (ниже её клуб идёт над крышей) —
-     * держится весь: клуб стоит у стены. Задержка копится выборками, как у запруды, поэтому смена оси на пути место не
-     * сдвигает.
+     * How much wind drift (sx, sz) over a skirt clump path sample from (x, z) at age tau and level
+     * {@code level} is held by street (x, z). Below roofs, canyon wind follows street, walls resist crosswind (Dobre et
+     * al. 2005, Atmos. Environ. 39:4647: along-canyon component projects above-roof wind onto its axis); transverse
+     * share relative to local street axis ({@link #axis}) is fully held below half wall height (canyon vortex), less toward top.
+     * Remaining drift into a wall above both wall base ({@link #wallFrom}) and clump center (lower walls are below clump) is
+     * fully held: clump stops by wall. Delay accumulates by samples, as at a dam, so changing axis along path does not
+     * shift position.
      */
     private double[] canyon(int show, double tau, double x, double z, double sx, double sz, double level) {
         double zc = 0.8 * at(sv[show], tau), w = wallTop > 0 ? Math.clamp(2 - 2 * zc / wallTop, 0, 1) : 0, hx = 0, hz = 0;
@@ -623,11 +623,11 @@ public final class GroundDust {
     }
 
     /**
-     * Клуб юбки в (x, z), середина на высоте {@code middle}, в стене выше и стен ({@link #wallFrom}), и середины:
-     * ближайшее открытое место (кольцами через {@value #OUT_STEP} м до {@value #OUT_MAX} м, 16 направлений). Путь клуба
-     * держит снос и рост в стену сам ({@link #step}), но по выборкам: между узлами пути задержка идёт по прямой, а снос —
-     * нет, и у края улицы середина клуба бывает в стене на метр с небольшим (замер на городе теста) — здесь она выходит к
-     * ней. Дальше открытого нет — как есть.
+     * Skirt clump at (x, z), center height {@code middle}, inside a wall above both wall base ({@link #wallFrom}) and center:
+     * nearest open spot (rings every {@value #OUT_STEP} m to {@value #OUT_MAX} m, 16 directions). Clump path itself constrains
+     * drift and growth into wall ({@link #step}), but by samples: between path nodes delay is linear while drift follows
+     * nonlinearly, so near street edge the center can be a little over a meter inside a wall (test-city measurement); here it moves out to
+     * the wall. No open spot farther out: leave as is.
      */
     private double[] out(double x, double z, double middle) {
         double top = Math.max(wallFrom, middle);
@@ -641,29 +641,29 @@ public final class GroundDust {
         return new double[]{x, z};
     }
 
-    /** Шаг и предел поиска открытого места у клуба в стене ({@link #out}), м. */
+    /** Step and search limit for open spot around clump in wall ({@link #out}), m. */
     static final double OUT_STEP = 0.25, OUT_MAX = 1.5;
 
-    /** Сколько сноса до начала пути (возраст t, место клуба {@code at}) держит улица ({@link #canyon}, одной выборкой). */
+    /** Drift held by street before path start (age t, clump position {@code at}) ({@link #canyon}, single sample). */
     private double[] young(int show, double t, double[] at, double level) {
         if (!walled) return new double[]{0, 0};
         double[] d = drift(t, 0.8 * at(sv[show], t));
         return canyon(show, t, at[0] - d[0], at[1] - d[1], d[0], d[1], level);
     }
 
-    /** Оси улиц ({@link #axis}) по клеткам {@value #AXIS_CELL} м и направлению (шаг π/8). */
+    /** Street axes ({@link #axis}) by {@value #AXIS_CELL} m cells and direction (π/8 step). */
     private final java.util.HashMap<Long, Double> axes = new java.util.HashMap<>();
-    /** Клетка кэша оси улицы, м. */
+    /** Street-axis cache cell, m. */
     static final int AXIS_CELL = 2;
 
-    /** Полудлина пробы оси улицы, м. */
+    /** Street-axis probe half-length, m. */
     static final int AXIS_RUN = 8;
 
     /**
-     * Ось улицы в точке (x, z) от точки взрыва, рад: из 8 направлений (шаг π/8) — то, вдоль которого в обе стороны (до
-     * {@value #AXIS_RUN} м, полосой в 3 м) открыто дальше, чем поперёк, на больше всего (диагональ у перекрёстка открыта вдоль так же
-     * далеко, как улица, но и поперёк — тоже); из равных — ближе к направлению {@code toward}. Поперёк открыто почти так же
-     * (перекрёсток, площадь) или нигде не открыто — {@link Double#NaN}: ветер там не поворачивает.
+     * Street axis at (x, z) relative to explosion, rad: of 8 directions (π/8 step), greatest difference between open reach along both directions (up to
+     * {@value #AXIS_RUN} m, 3 m strip) and across (intersection diagonal is open as far along as
+     * street, but also across); ties favor nearest {@code toward}. Nearly equal crosswise openness
+     * (intersection, square) or nowhere open means {@link Double#NaN}: wind does not turn there.
      */
     private double axis(double x, double z, double toward) {
         long cx = Math.floorDiv((long) Math.floor(x), AXIS_CELL), cz = Math.floorDiv((long) Math.floor(z), AXIS_CELL);
@@ -671,12 +671,12 @@ public final class GroundDust {
         long key = ((cx & 0xFFFFF) << 24) | ((cz & 0xFFFFF) << 4) | bucket;
         Double known = axes.get(key);
         if (known != null) return known;
-        // ось клетки — по её середине и середине корзины направлений, а не по месту первого вопроса: иначе ответ зависел бы
-        // от того, какой кадр спросил первым (частота кадров, порядок клубов)
+        // cell axis uses cell center and direction-bin center, not first query position; otherwise answer depends on
+        // which frame asked first (frame rate, clump order)
         x = (cx + 0.5) * AXIS_CELL;
         z = (cz + 0.5) * AXIS_CELL;
         toward = Math.PI * bucket / 8;
-        // полосой из трёх линий через ±1,5 м: диагональ через угол перекрёстка одна линия проходит, полоса — нет
+        // three-line strip at ±1.5 m: a single line passes diagonally through intersection corner, a strip does not
         double[] run = new double[8];
         for (int m = 0; m < 8; m++) {
             double c = Math.cos(Math.PI * m / 8), sn = Math.sin(Math.PI * m / 8);
@@ -690,7 +690,7 @@ public final class GroundDust {
                 }
             }
         }
-        // улица — вдоль открыто далеко, поперёк — нет: больше всего разница; из равных — ближе к toward
+        // street: far open along, not across; greatest difference, ties nearest toward
         int best = 0;
         for (int m = 1; m < 8; m++) {
             double gain = run[m] - run[(m + 4) % 8], was = run[best] - run[(best + 4) % 8];
@@ -701,22 +701,22 @@ public final class GroundDust {
         return a;
     }
 
-    /** Дальше скольких радиусов поля юбка по улице не уходит (⚠ оценка: длина квартала и запас газа). */
+    /** Maximum skirt reach along street in field radii (⚠ est.: block length and gas reserve). */
     static final double REACH_MAX = 3;
 
-    /** Во сколько раз дальше поля юбка сектора k (проверки). */
+    /** Sector k skirt reach relative to field (checks). */
     double reach(int k) {
         return reach[k];
     }
 
-    /** Угол клуба сектора k в кольце показа q, рад (проверки). */
+    /** Sector k clump angle in display ring q, rad (checks). */
     double heading(int k, int q) {
         return heading[k][q];
     }
 
     /**
-     * Высота взрыва над поверхностью, округлённая для кэша колец: до 4 м — полметра, выше — шагом в 10 % (давление у
-     * поверхности от неё меняется плавно).
+     * Burst height above surface rounded for ring cache: half-meter below 4 m, 10% steps above (surface pressure
+     * varies smoothly with it).
      */
     static double rounded(double h) {
         if (h <= 4) return Math.round(2 * h) / 2.0;
@@ -724,7 +724,7 @@ public final class GroundDust {
         return Math.exp(Math.round(Math.log(h) / step) * step);
     }
 
-    /** Кольца счёта одного заряда и высоты: от воздуха не зависят (залп «Града» считает их один раз). */
+    /** Calculation rings for one charge and height: independent of air (Grad salvo computes once). */
     private record Rings(double[] mass, double[] arrival, double[] positive, double[] first, double[] stem, double[] stemFrom, boolean[] ball) {
     }
 
@@ -736,8 +736,8 @@ public final class GroundDust {
     };
 
     /**
-     * Кольца счёта заряда {@code tntKg} на высоте {@code hob} над поверхностью {@code surface} с шаром {@code ballM} до
-     * радиуса {@code outer} (из кэша; нет — считаются сейчас).
+     * Calculation rings for charge {@code tntKg} at height {@code hob} above {@code surface}, ball {@code ballM}, to
+     * radius {@code outer} (cached; otherwise computed now).
      */
     private static Rings rings(double tntKg, double hob, double ballM, DustModel.Surface surface, double outer) {
         String key = tntKg + "/" + hob + "/" + ballM + "/" + surface.threshold() + "/" + outer;
@@ -768,17 +768,17 @@ public final class GroundDust {
         return k;
     }
 
-    /** Время узла сетки s, с. */
+    /** Grid node s time, s. */
     static double time(int s) {
         return T0 * (Math.pow(GROW, s) - 1);
     }
 
-    /** Узел сетки (с дробью) для времени t. */
+    /** Grid node (fractional) for time t. */
     private static double node(double t) {
         return Math.min(STEPS - 1.0, Math.log(1 + Math.max(t, 0) / T0) / Math.log(GROW));
     }
 
-    /** Таблица a по узлам сетки в возрасте t — линейно между узлами; узел — один на возраст (логарифм — раз в кадр). */
+    /** Table a over grid nodes at age t, linear interpolation; one node per age (one logarithm per frame). */
     private double at(double[] a, double t) {
         if (t != nodeT) {
             nodeT = t;
@@ -789,31 +789,31 @@ public final class GroundDust {
         return a[i] + (a[i + 1] - a[i]) * (s - i);
     }
 
-    /** Путь ветра у земли за t, м (не меньше, чем при 1 м/с: в штиль воздух тоже перемешивается). */
+    /** Near-ground wind travel over t, m (at least 1 m/s equivalent: calm air mixes too). */
     double path(double t) {
         return Math.max(1, groundWind) * t;
     }
 
-    /** σ слоя по вертикали в возрасте t: верх Kuhl к концу фазы / 2,5 и турбулентность воздуха (Бриггс), м. */
+    /** Vertical layer σ at age t: phase-end Kuhl top / 2.5 and air turbulence (Briggs), m. */
     private double sigmaV(double top, double t) {
         double s0 = top / 2.5, s = CloudModel.spreadV(air.spread(), path(t));
         return Math.max(0.05, Math.sqrt(s0 * s0 + s * s));
     }
 
-    /** Доля слоя, что ещё над зоной подсоса (ветер уносит его за полрадиуса подсоса — подсос гаснет). */
+    /** Layer share still above inflow zone (wind removes it over half inflow radius, inflow fades). */
     private double under(double t) {
         double reach = Math.max(stemReach, 1e-3), d = groundWind * t;
         double u = Math.max(0, Math.min(1, (d - 0.5 * reach) / (0.5 * reach)));
         return 1 - u * u * (3 - 2 * u);
     }
 
-    /** Поднятая доля кольца i сектора k к возрасту t (с взрыва): с прихода фронта — по фазе на месте. */
+    /** Lifted share of ring i, sector k, by age t (since explosion): local phase from front arrival. */
     private double liftedShare(int k, int i, double t) {
         double age = t - arrival[k][i];
         return age <= 0 ? 0 : DustModel.lifted(age / Math.max(positive[k][i], 1e-6));
     }
 
-    /** Кольцо i сектора k в возрасте t: ослабление в кг смеси — поднятое, осевшее и ушедшее в подсос. */
+    /** Ring i, sector k, at age t: extinction in mixture kg after lifting, settling and inflow loss. */
     private double ringNow(int k, int i, double t) {
         double m = mass[k][i] * liftedShare(k, i, t);
         if (m <= 0) return 0;
@@ -821,7 +821,7 @@ public final class GroundDust {
         return m * DustModel.extinctionAloft(at(settled[annulus[i]], t)) * left;
     }
 
-    /** То же по массе, кг: тяжесть слоя — масса пыли в воздухе (крупная, что осела, слой уже не тянет). */
+    /** Same by mass, kg: layer gravity follows airborne dust mass (settled coarse dust no longer pulls layer). */
     private double massNow(int k, int i, double t) {
         double m = mass[k][i] * liftedShare(k, i, t);
         if (m <= 0) return 0;
@@ -829,26 +829,26 @@ public final class GroundDust {
         return m * DustModel.airborne(at(settled[annulus[i]], t)) * left;
     }
 
-    /** Верх слоя кольца i сектора k в возрасте t в фазе волны — Kuhl по пути фронта (∝ возраст^⅚ к {@code first}), м. */
+    /** Layer top in ring i, sector k, at age t during wave phase: Kuhl by front travel (∝ age^⅚ toward {@code first}), m. */
     private double waveTop(int k, int i, double t) {
         double age = t - arrival[k][i];
         if (age <= 0) return 0;
         return first[k][i] * Math.pow(Math.min(1, age / Math.max(positive[k][i], 1e-6)), 5 / 6.0);
     }
 
-    /** Пыль, сорванная под огненным шаром к возрасту t, кг (без оседания: она в облаке). */
+    /** Dust lifted under fireball by age t, kg (no settling: it is in cloud). */
     public double underBall(double t) {
         double m = 0;
         for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (ball[k][i]) m += mass[k][i] * liftedShare(k, i, t);
         return m;
     }
 
-    /** Пыль, ушедшая в подсос к возрасту t (ослабление в кг смеси). */
+    /** Dust entering inflow by age t (extinction in mixture kg). */
     public double drawn(double t) {
         return at(drawn, t);
     }
 
-    /** Фронт по поверхностям вокруг в возрасте t, м (у сектора, где он дальше всего): дальше него пыли нет. */
+    /** Front over surrounding surfaces at age t, m (farthest sector): no dust beyond it. */
     public double front(double t) {
         double f = 0;
         for (int k = 0; k < SECTORS; k++) f = Math.max(f, front(k, t));
@@ -856,12 +856,12 @@ public final class GroundDust {
     }
 
     /**
-     * Фронт по поверхности сектора k в возрасте t, м. Между кольцами — по приходу ({@link HobBlast#arrivalSeconds}), за
-     * последним — со скоростью звука.
+     * Front over sector k surface at age t, m. Between rings, follows arrival ({@link HobBlast#arrivalSeconds}); beyond
+     * last, sound speed.
      */
     double front(int k, double t) {
-        // юбка: край идёт от точки удара ровно, R = 2R₀ к SKIRT_S (Ebersole и др. 1980), за ним — с той же скоростью (пласт
-        // дальше растягивает сток, {@link #stretch}); кольца с их серединами по площади фронта не дают
+        // skirt: edge travels smoothly from impact, R = 2R₀ at SKIRT_S (Ebersole et al. 1980), same speed beyond (layer
+        // stretched farther by slumping, {@link #stretch}); area-centered rings cannot define front
         if (skirt) return skirtR * reach[k] * Math.max(0, t) / SKIRT_S;
         if (RINGS == 0 || r[RINGS - 1] <= 0 || t <= arrival[k][0]) return 0;
         for (int i = 1; i < RINGS; i++) {
@@ -870,51 +870,51 @@ public final class GroundDust {
         return r[RINGS - 1] + ua.zentix.incoming.nuclear.model.BlastModel.SOUND_SPEED * (t - arrival[k][RINGS - 1]);
     }
 
-    /** Сток слоя к возрасту t: во сколько раз вырос радиус пласта, R/R₀ (гравитационное течение, {@link #FR}). */
+    /** Layer slumping by age t: radius growth ratio R/R₀ (gravity current, {@link #FR}). */
     double stretch(double t) {
         return Math.sqrt(1 + at(slump, t) / slumpFrom);
     }
 
     /**
-     * На сколько опустился за {@code dt} с над перепадом клуб пыли массы {@code dust} кг в объёме гаусса σh, σv: тяжёлый
-     * термик MTT (как у тёплого облака, {@link Thermal}, с обратным знаком; Boussinesq — ⚠ у самого места удара пыли в
-     * воздухе по массе больше самого воздуха, и он падает быстрее): R = R₀ + αz, d(R³W)/dt = F, F = 3B/(4π), B = g·M/ρ;
-     * из покоя (R₀ + αz)⁴ = R₀⁴ + 2αF·t². Воздух нейтральный (⚠ устойчивость за десятки секунд падения на десятки метров
-     * почти не тормозит: N·t ~ 0,2). R₀ — шар объёма слоя 2πσh²·1,25σv.
+     * Descent over {@code dt} s above a drop for a clump with {@code dust} kg dust in Gaussian volume σh, σv: heavy
+     * MTT thermal (warm-cloud law, {@link Thermal}, with reversed sign; Boussinesq: ⚠ at impact dust mass in
+     * air exceeds air mass, so falls faster): R = R₀ + αz, d(R³W)/dt = F, F = 3B/(4π), B = g·M/ρ;
+     * from rest (R₀ + αz)⁴ = R₀⁴ + 2αF·t². Neutral air (⚠ stability barely slows tens-of-meters descent over tens of seconds:
+     * N·t ~ 0.2). R₀ is sphere of layer volume 2πσh²·1.25σv.
      */
     static double fall(double dust, double sh, double sv, double dt) {
         return dust <= 0 ? 0 : fall(radius(sh, sv), buoyancy(dust), dt);
     }
 
-    /** R₀ тяжёлого термика клуба σh, σv: шар объёма слоя 2πσh²·1,25σv, м. */
+    /** Heavy-thermal R₀ for clump σh, σv: sphere of layer volume 2πσh²·1.25σv, m. */
     static double radius(double sh, double sv) {
         return Math.cbrt(3 * (2 * Math.PI * sh * sh * 1.25 * sv) / (4 * Math.PI));
     }
 
-    /** F = 3B/(4π), B = g·M/ρ — у {@code dust} кг пыли, м⁴/с². */
+    /** F = 3B/(4π), B = g·M/ρ for {@code dust} kg dust, m⁴/s². */
     static double buoyancy(double dust) {
         return 3 * CloudModel.G * Math.max(dust, 0) / CloudModel.RHO / (4 * Math.PI);
     }
 
-    /** Опускание за dt термика R₀, F из покоя: ((R₀⁴ + 2αF·t²)^¼ − R₀)/α, м. */
+    /** Descent over dt for thermal R₀, F from rest: ((R₀⁴ + 2αF·t²)^¼ − R₀)/α, m. */
     static double fall(double r0, double f, double dt) {
         if (f <= 0 || dt <= 0) return 0;
         double a = CloudModel.ALPHA, r4 = r0 * r0 * r0 * r0;
         return (Math.sqrt(Math.sqrt(r4 + 2 * a * f * dt * dt)) - r0) / a;
     }
 
-    /** Видимый край клуба — не дальше стольких σ (толща в сотни: край по порогу 0,05 — до ~4σ, {@code SmokePuffs.edge}). */
+    /** Maximum visible clump edge in σ (optical depth in hundreds: edge at 0.05 threshold is up to ~4σ, {@code SmokePuffs.edge}). */
     static final double EDGE_SIGMAS = 4;
 
-    /** Приёмник клубов слоя (центр от точки взрыва, м). */
+    /** Layer clump sink (center relative to explosion, m). */
     public interface Blobs {
         void blob(double x, double y, double z, double sh, double sv, double dust);
     }
 
     /**
-     * Кольца показа в возрасте t: клубы по секторам (масса — по поверхности сектора), σ в квадратуре с расплыванием
-     * Бриггса, видимый край не дальше фронта; пласт стекает гравитационным течением и уходит с ветром на высоте середины
-     * слоя, над перепадом опускается к поверхности под собой. {@code fade} — доля, что рисуется.
+     * Display rings at age t: sector clumps (mass by sector surface), σ in quadrature with Briggs
+     * spread, visible edge no farther than front; layer slumps as gravity current and follows wind at layer
+     * center height, descends over drops toward surface below. {@code fade} is rendered share.
      */
     public void blobs(double t, double fade, Blobs out) {
         emit(t, fade, true, (x, y, z, sh, sv, dust, mass, source) -> out.blob(x, y, z, sh, sv, dust));
@@ -964,22 +964,22 @@ public final class GroundDust {
         out.box(x0 - r, floor - SmokeBounds.PUFF * width, z0 - r, x1 + r, ceiling + SmokeBounds.PUFF * width + 0.8 * v, z1 + r);
     }
 
-    /** Клуб слоя для проверок — и масса пыли в нём, кг (по ней — тяжесть слоя), и поверхность, с которой её подняло, м. */
+    /** Layer clump for checks: both dust mass, kg (for layer gravity), and source surface, m. */
     interface Probe {
         void blob(double x, double y, double z, double sh, double sv, double dust, double mass, double source);
     }
 
-    /** Клубы в возрасте t с массой ({@link Probe}). */
+    /** Clumps at age t with mass ({@link Probe}). */
     void probe(double t, Probe out) {
         emit(t, 1, true, out);
     }
 
-    /** Клубы в возрасте t; {@code levels} — где они лежат (без него — на поверхности, с которой подняло: толща слоя). */
+    /** Clumps at age t; {@code levels} gives resting surfaces (absent: source surface for layer depth). */
     private void emit(double t, double fade, boolean levels, Probe out) {
         if (total <= 0 || t <= 0) return;
-        // один проход по кольцам: у каждого кольца показа в секторе — масса, её радиус и второй момент, доля ещё в фазе волны,
-        // масса пыли в воздухе (тяжесть слоя, {@link #airborne}: тем же счётом — по кольцу показа она бралась бы заново у
-        // каждого клуба, а это всё кольца на каждое кольцо показа — у налёта из 100 ударов пятая часть процессора дыма)
+        // one ring pass: each display ring in sector gets mass, mass radius and second moment, share still in wave phase,
+        // airborne dust mass (layer gravity, {@link #airborne}, same calculation; otherwise reread per display
+        // clump, all rings for every display ring, one fifth of smoke CPU in 100-strike raid)
         double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS], mr2 = new double[ANNULI][SECTORS],
                 wt = new double[ANNULI][SECTORS], wtop = new double[ANNULI][SECTORS], aloft = new double[ANNULI][SECTORS];
         for (int k = 0; k < SECTORS; k++) {
@@ -1004,15 +1004,15 @@ public final class GroundDust {
             for (int k = 0; k < SECTORS; k++) {
                 double mass = m[a][k];
                 if (mass <= 1e-9) continue;
-                // σ по вертикали: в фазе волны — верх Kuhl той части, что ещё в фазе; потом — таблица
+                // vertical σ: during wave phase, Kuhl top of share still in phase; afterward table
                 double v = table;
                 if (wt[a][k] > 0) v = wt[a][k] / mass * Math.max(0.05, wtop[a][k] / wt[a][k] / 2.5) + (1 - wt[a][k] / mass) * v;
                 double zc = 0.8 * v;
-                // кольцо показа в секторе — клуб на среднем по массе радиусе; σ — разброс колец по радиусу, не уже дуги сектора;
-                // пласт стекает (радиус и ширина × R/R₀); видимый край (4σ) — не дальше фронта
+                // sector display ring is a clump at mass-mean radius; σ is radial ring spread, at least sector arc width;
+                // layer slumps (radius and width × R/R₀); visible edge (4σ) no farther than front
                 double source = mr[a][k] / mass, var = Math.max(0, mr2[a][k] / mass - source * source);
-                // юбка по улице — дальше: место и разброс колец по радиусу растянуты на дальность сектора, поперёк — не шире
-                // открытой дуги
+                // skirt travels farther along street: ring position and radial spread stretched by sector reach; crosswise no wider than
+                // open arc
                 double own = Math.max(Math.sqrt(var) * reach[k], Math.PI * source / SECTORS / 1.25 * openArc[k][a]);
                 source *= reach[k];
                 double mean = source * stretch;
@@ -1028,7 +1028,7 @@ public final class GroundDust {
                 }
                 double ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
-                // путь клуба в улице идёт от того же места по открытому ({@link #place}), что и он сам
+                // clump path along street starts from same open position ({@link #place}) as clump itself
                 double[] at = levels ? level(k, a, t, walled ? path : source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
                 double x = d[0] + mean * ux - at[1], z = d[1] + mean * uz - at[2];
                 if (walled) {
@@ -1042,20 +1042,20 @@ public final class GroundDust {
     }
 
     /**
-     * Середина клуба по радиусу и его σh, когда видимый край (4σ) дошёл бы дальше фронта: не дальше фронта ({@link #emit};
-     * путь клуба в улице — {@link #place} — от того же места).
+     * Clump radial center and σh when visible edge (4σ) would exceed front: stay within front ({@link #emit};
+     * street clump path, {@link #place}, starts from same position).
      */
     private static double[] edge(double mean, double sh, double own, double v, double front) {
         if (mean + EDGE_SIGMAS * sh > front) {
             sh = Math.max((front - mean) / EDGE_SIGMAS, Math.min(sh, Math.max(own, v)));
             mean = Math.max(0, Math.min(mean, front - EDGE_SIGMAS * sh));
-            // фронт ещё у самой воронки: клубы — у середины, не шире него
+            // front still at crater: clumps near center, no wider than front
             if (mean + EDGE_SIGMAS * sh > front) sh = Math.max(front / EDGE_SIGMAS, v);
         }
         return new double[]{mean, sh};
     }
 
-    /** Масса пыли в воздухе у клуба кольца показа {@code show} сектора k в возрасте t, кг. */
+    /** Airborne dust mass in display-ring {@code show} clump of sector k at age t, kg. */
     private double airborne(int k, int show, double t) {
         double m = 0;
         for (int i = 0; i < RINGS; i++) if (annulus[i] == show && !ball[k][i]) m += massNow(k, i, t);
@@ -1063,8 +1063,8 @@ public final class GroundDust {
     }
 
     /**
-     * Сетка пути клубов, с: шаг 0,25 с вначале (край крыши, приземление), потом 2 % возраста, не больше 2 с — путь
-     * клуба вдали от удара, когда он уже шире десятков метров.
+     * Clump path grid, s: 0.25 s steps initially (roof edge, landing), then 2% of age, at most 2 s, for clump
+     * far from impact when already tens of meters wide.
      */
     static final double[] PATH;
 
@@ -1075,14 +1075,14 @@ public final class GroundDust {
     }
 
     /**
-     * Состояние пути клуба в узле сетки {@link #PATH}: уровень поверхности, на которой он лежит (м от точки взрыва), и
-     * падение — с какого уровня и с какого мига, R₀ и F тяжёлого термика ({@link #fall}).
+     * Clump path state at {@link #PATH} node: resting surface level (m from explosion), and
+     * falling: initial level and time, heavy-thermal R₀ and F ({@link #fall}).
      */
     private static final class Track {
         double level, from, since, r0, f;
-        /** Последняя известная поверхность под клубом, м ({@link Double#NaN} — ещё не было). */
+        /** Last known surface below clump, m ({@link Double#NaN} if none yet). */
         double seen = Double.NaN;
-        /** Сколько сноса и стока задержала запруда (препятствие шире следа и выше слоя), м по x и z. */
+        /** Drift and slumping held by a dam (obstacle wider than footprint and higher than layer), m in x and z. */
         double heldX, heldZ;
         boolean falling;
 
@@ -1102,40 +1102,40 @@ public final class GroundDust {
     }
 
     /**
-     * Путь клуба: узел сетки, состояние в нём и в следующем — между узлами уровень идёт по прямой, так что каждый узел
-     * считается один раз (выборки рельефа — только при переходе узла).
+     * Clump path: grid node and states there and next; level is linear between nodes, so each node is
+     * computed once (relief samples only on node transition).
      */
     private static final class Path {
         int node;
         Track now, next;
     }
 
-    /** Пути клубов [кольцо показа][сектор]: ведутся вперёд с кадрами, назад (перемотка) — заново. */
+    /** Clump paths [display ring][sector]: advance with frames; rebuild backward (seek). */
     private final Path[][] paths = new Path[ANNULI][SECTORS];
 
-    /** Выборок пути на шаг {@link #PATH} не больше стольких (шаг выборки — полширины клуба, не меньше метра). */
+    /** Maximum path samples per {@link #PATH} step (sample step is clump half-width, at least one meter). */
     static final int PROBES = 16;
-    /** Узел {@link #PATH}, с которого строится путь (0,5 с): к нему фронт прошёл кольца показа, их радиус установился. */
+    /** {@link #PATH} node where path starts (0.5 s): by then front passed display rings, radii settled. */
     static final int PATH_FROM = 2;
 
     /**
-     * Уровень поверхности, на которой лежит клуб кольца показа {@code show} сектора {@code sector} в возрасте t, м от
-     * точки взрыва. Путь клуба (сток пласта вдоль {@code ux, uz} от радиуса {@code source} и снос ветром на высоте середины
-     * слоя в тот миг) идёт по сетке {@link #PATH} от поверхности, с которой пыль подняло. Тяжёлый воздух уходит в самое
-     * низкое место, до которого достаёт: поверхность под клубом — нижняя под его следом ({@link #under}: улица между
-     * домами, низ склона, улица за краем крыши), выборка — через полширины клуба (не реже метра). Вниз слой идёт по ней,
-     * пока она уходит не круче {@link #DROP} на метр пути (склон до 45°: рельеф Minecraft — ступени в блок); за краем
-     * круче — опускается быстрее из двух: тяжёлым термиком с мига, когда вышел за край (масса пыли в воздухе и размер
-     * клуба в тот миг; дальше плавучесть сохраняется — ⚠ крупная пыль, что оседает из него, её уносит), или ветром за
-     * кромкой ({@link #LEE}), — пока не ляжет на неё. Вверх — не круче 45° пройденного пути и только на подъём не выше
-     * толщи слоя (2σv: тяжёлое течение глубже препятствия переливается через него, Rottman и Simpson 1983); перед
-     * подъёмом выше (препятствие шире следа: терраса, склон, большой дом) — запруда: стоит, пока слой не станет толще (⚠
-     * обтекания нет). Где рельеф неизвестен, лежащий клуб держит уровень, падающий падает до самой
-     * низкой поверхности, известной под ним (последней, иначе — своего сектора, которую видел взрыв).
+     * Resting surface level for display ring {@code show}, sector {@code sector} clump at age t, m from
+     * explosion. Clump path (layer slumping along {@code ux, uz} from radius {@code source} and wind drift at layer center
+     * height then) follows {@link #PATH} grid from source surface. Heavy air drains to the lowest
+     * place it reaches: clump surface is lower terrain under footprint ({@link #under}: street between
+     * houses, slope bottom, street beyond roof edge), sampled every clump half-width (at least every meter). Downward layer follows it
+     * while gradient is no steeper than {@link #DROP} per meter (up to 45°: Minecraft terrain has block steps); beyond a steeper edge,
+     * descends by faster of: heavy thermal from edge-exit instant (airborne dust mass and clump
+     * size then; buoyancy retained afterward, ⚠ settling coarse dust removes some), or wind in edge
+     * lee ({@link #LEE}), until landing. Uphill no steeper than 45° traveled path and only rises no higher than
+     * layer depth (2σv: gravity current deeper than obstacle overflows it, Rottman and Simpson 1983); before
+     * a higher rise (obstacle wider than footprint: terrace, slope, large house), dam: waits until layer thickens (⚠
+     * no flow around it). Unknown relief: resting clump keeps level, falling clump falls to the lowest
+     * known surface beneath it (last known, otherwise explosion-observed sector surface).
      */
     private double[] level(int sector, int show, double t, double source, double ux, double uz, double own) {
-        // до PATH_FROM фронт ещё поднимает кольцо, и средний радиус клуба бежит наружу: путь строится потом, а пока клуб
-        // лежит, где его подняло
+        // before PATH_FROM, front still lifts ring, mass-mean clump radius moves outward; path starts later, meanwhile clump
+        // rests where lifted
         if (t < PATH[PATH_FROM]) {
             paths[show][sector] = null;
             double[] at = place(sector, show, t, source, ux, uz, own);
@@ -1145,7 +1145,7 @@ public final class GroundDust {
         }
         Path p = paths[show][sector];
         if (p == null || PATH[p.node] > t) {
-            // начало — {@link #begin}
+            // start: {@link #begin}
             p = new Path();
             p.node = PATH_FROM;
             p.now = new Track();
@@ -1175,18 +1175,18 @@ public final class GroundDust {
     }
 
     /**
-     * С какой поверхности начинается путь клуба: под его следом в его месте ({@code under}, место {@code at} от точки
-     * взрыва), если от точки полосы, где известна поверхность, с которой пыль подняло, до него по радиусу —
-     * одна поверхность (нигде не круче 45° на метр: склон, двор); если между ними стена (дом), — не выше поверхности, с
-     * которой подняло: тяжёлая пыль сама на крышу не попадает (в первые доли секунды след меньше дома, и середина кольца у
-     * улицы бывает на нём). Неизвестно — точка полосы.
+     * Clump path source surface: beneath footprint at its position ({@code under}, position {@code at} relative to explosion)
+     * if radial path from band point with known source surface to it stays on
+     * one surface (nowhere steeper than 45° per meter: slope, yard); if wall (house) lies between, no higher than
+     * source surface: heavy dust cannot reach roof by itself (in first fractions of a second footprint is smaller than house, and street
+     * ring center can lie on it). Unknown: band point.
      */
     private double begin(int sector, int show, double under, double ux, double uz, double[] at) {
         double source = surface[sector][show];
         if (Double.isNaN(under)) return source;
         if (under <= source) return skirt && under < source - DROP ? source : under;
-        // юбка идёт от самой точки удара на её высоте: стена между ней и клубом (дом у улицы) держит её внизу, даже если
-        // точка полосы уже на крыше
+        // skirt starts at impact itself and its height: wall between it and clump (house beside street) holds it below, even if
+        // band point is already on roof
         double x0 = skirt ? 0 : BANDS[show] * ux, z0 = skirt ? 0 : BANDS[show] * uz, len = Math.hypot(at[0] - x0, at[1] - z0);
         int n = (int) Math.max(1, Math.min(32, Math.ceil(len)));
         double step = Math.max(1, len / n), last = skirt ? source : relief.at(x0, z0);
@@ -1199,18 +1199,18 @@ public final class GroundDust {
         return under;
     }
 
-    /** Ширина клуба кольца показа {@code show} шириной {@code own} в возрасте t (σh), м. */
+    /** Display ring {@code show} clump width {@code own} at age t (σh), m. */
     private double width(int show, double t, double own) {
         return Math.max(Math.hypot(own * stretch(t), CloudModel.spreadH(air.spread(), path(t))), at(sv[show], t));
     }
 
-    /** Место пути клуба в возрасте t (x, z от точки взрыва). */
+    /** Clump path position at age t (x, z relative to explosion). */
     private double[] place(int sector, int show, double t, double source, double ux, double uz, double own) {
         double v = at(sv[show], t);
         double[] d = drift(t, 0.8 * v);
         double mean = source * stretch(t);
-        // в улице — с того же места, что клуб: не дальше фронта ({@link #edge}; σ — без доли фазы волны, она — доли
-        // секунды у самого удара) и по открытому ({@link #open})
+        // in street, from same position as clump: within front ({@link #edge}; σ excludes wave-phase share, which lasts fractions of
+        // a second near impact), through open space ({@link #open})
         if (walled) mean = edge(mean, width(show, t, own), own, v, front(sector, t))[0];
         if (walled && mean > 0) {
             double[] o = open(sector, show, mean);
@@ -1220,14 +1220,14 @@ public final class GroundDust {
     }
 
     /**
-     * Поверхность под клубом с серединой в (x, z) и полушириной w, м от точки взрыва: третья снизу из 13 выборок рельефа
-     * (нижние ~20 % следа) в середине и
-     * на ±w и ±0,62w по осям и на диагоналях ({@link #FOOTPRINT}: несоизмеримые шаги — след, кратный шагу кварталов, не
-     * попадает только в крыши) — тяжёлый воздух уходит в низ, до которого достаёт (столб, ствол, крыши по бокам улицы его не
-     * поднимают, дом шире клуба держит), но щель, куда попадают одна-две выборки (овраг, канава), весь клуб в себя не забирает;
-     * неизвестно всё — {@link Double#NaN}.
+     * Surface under clump centered at (x, z), half-width w, m relative to explosion: third lowest of 13 relief samples
+     * (lower ~20% of footprint), at center and
+     * ±w and ±0.62w along axes and diagonals ({@link #FOOTPRINT}: incommensurate steps prevent a footprint matching block spacing from
+     * sampling only roofs). Heavy air drains to the low it reaches (posts, trunks, roofs beside street do not
+     * lift it; house wider than clump holds it), but gap with one or two samples (ravine, ditch) does not take the entire clump;
+     * all unknown: {@link Double#NaN}.
      */
-    /** Выборки следа клуба в долях полуширины. */
+    /** Clump footprint samples as half-width fractions. */
     static final double[][] FOOTPRINT = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.62, 0}, {-0.62, 0}, {0, 0.62}, {0, -0.62},
             {0.71, 0.71}, {-0.71, 0.71}, {0.71, -0.71}, {-0.71, -0.71}};
 
@@ -1244,22 +1244,22 @@ public final class GroundDust {
     }
 
     /**
-     * За краем крыши или обрыва ветер опускает слой не круче стольких метров на метр сноса: поток за острой кромкой
-     * отрывается и прилипает к земле через ~2 высоты препятствия (куб в пограничном слое — 1,5–2,5 H, Castro &amp; Robins
-     * 1977, JFM 79; ⚠ у длинного дома и гребня — дальше).
+     * Beyond roof or cliff edge, wind lowers layer no steeper than this many meters per meter of drift: flow separates at sharp
+     * edge and reattaches after ~2 obstacle heights (cube in boundary layer: 1.5–2.5 H, Castro &amp; Robins
+     * 1977, JFM 79; ⚠ farther for long house or ridge).
      */
     static final double LEE = 0.5;
 
-    /** Шаг пути клуба от t0 до t1 ({@link #level}). */
+    /** Clump path step from t0 to t1 ({@link #level}). */
     private void step(Track tr, int sector, int show, double t0, double t1, double source, double ux, double uz, double own) {
         double[] p0 = place(sector, show, t0, source, ux, uz, own), p1 = place(sector, show, t1, source, ux, uz, own);
         double dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz), w = 0.5 * width(show, t1, own);
         int n = (int) Math.max(1, Math.min(PROBES, Math.ceil(len / Math.max(1, w))));
-        // в улице — не реже метра пути: поперечный снос и стену держит каждая выборка ({@link #canyon})
+        // in street, at least every meter traveled: each sample constrains crosswind drift and wall ({@link #canyon})
         if (walled) n = (int) Math.max(n, Math.min(PROBES, Math.ceil(len)));
         double[] w0 = drift(t0, 0.8 * at(sv[show], t0)), w1 = drift(t1, 0.8 * at(sv[show], t1));
-        // склон — не круче блока на метр пути и роста полуширины следа (растущий след сам достаёт ниже по склону — это не
-        // край); за краем ветер опускает слой на LEE метра на метр сноса
+        // slope no steeper than block per meter of travel and footprint half-width growth (growing footprint reaches farther downhill itself,
+        // not an edge); beyond edge wind lowers layer by LEE meters per meter of drift
         double grow = Math.max(0, w - 0.5 * width(show, t0, own)) / n;
         double tol = DROP * Math.max(1, len / n + grow), lee = LEE * Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) / n;
         for (int i = 1; i <= n; i++) {
@@ -1269,7 +1269,7 @@ public final class GroundDust {
                         (w1[0] - w0[0]) / n, (w1[1] - w0[1]) / n, tr.level);
                 tr.heldX += h[0];
                 tr.heldZ += h[1];
-                // рост клуба по открытому ({@link #open}) уносит в стену только снесённого ветром в другую улицу: держится
+                // clump growth through open space ({@link #open}) carries only wind-displaced clump from another street into wall: hold it
                 double top = Math.max(wallFrom, tr.level + 0.8 * at(sv[show], tau));
                 if (relief.at(p0[0] + u * dx - tr.heldX, p0[1] + u * dz - tr.heldZ) > top) {
                     tr.heldX += (dx - (w1[0] - w0[0])) / n;
@@ -1278,19 +1278,19 @@ public final class GroundDust {
             }
             double below = under(p0[0] + u * dx - tr.heldX, p0[1] + u * dz - tr.heldZ, w), before = tr.seen;
             if (Double.isNaN(below)) {
-                // рельеф неизвестен: лежащий держит уровень, падающий падает — до самой низкой поверхности, что видел взрыв
+                // unknown relief: resting keeps level, falling falls to lowest surface explosion observed
                 if (tr.falling) fallTo(tr, Math.min(Double.isNaN(tr.seen) ? lowest(sector) : tr.seen, tr.level), tau, lee);
                 continue;
             }
             if (below > tr.level) {
-                // вверх: подъём выше толщи слоя и круче склона — стоит на своём уровне; ниже — не круче 45° пути;
-                // падающий, долетев, лёг
+                // uphill: rise higher than layer and steeper than slope holds current level; lower rise, at most 45° path;
+                // falling clump reaching surface lands
                 if (below - tr.level > Math.max(tol, 2 * at(sv[show], tau))) {
-                    // запруда: перед препятствием шире следа и выше слоя тяжёлый воздух стоит — остаток сноса и стока шага
-                    // не идёт, пока слой не станет толще
+                    // dam: heavy air stops before obstacle wider than footprint and higher than layer; remaining step drift and slumping
+                    // wait until layer thickens
                     tr.heldX += (1 - (i - 1.0) / n) * dx;
                     tr.heldZ += (1 - (i - 1.0) / n) * dz;
-                    // падающий падает дальше — до поверхности там, где стоит (последней известной под ним)
+                    // falling continues to surface where stopped (last known below)
                     if (tr.falling) fallTo(tr, Math.min(Double.isNaN(tr.seen) ? lowest(sector) : tr.seen, tr.level), t1, lee);
                     return;
                 }
@@ -1301,17 +1301,17 @@ public final class GroundDust {
             }
             tr.seen = below;
             if (below >= tr.level - tol - DROP) {
-                // склон вниз (с блоком на ступенчатость рельефа), или падающий долетел до поверхности — лежит на ней
+                // downward slope (with block allowance for terrain steps), or falling clump reached surface: rests on it
                 tr.level = below;
                 tr.falling = false;
                 continue;
             }
             if (tr.falling && !Double.isNaN(before) && before - below <= tol + DROP) {
-                // падает над склоном, по которому слой мог бы идти: опускается и вместе с ним (сошёл на склон)
+                // falling over a slope layer could follow: descends with it too (lands on slope)
                 tr.level -= Math.max(0, before - below);
             }
             if (!tr.falling) {
-                // вышел за край: падает с этого мига — масса и размер клуба на краю
+                // left edge: starts falling now, with mass and size at edge
                 tr.falling = true;
                 tr.from = tr.level;
                 tr.since = t0 + (u - 0.5 / n) * (t1 - t0);
@@ -1323,8 +1323,8 @@ public final class GroundDust {
     }
 
     /**
-     * Падающий клуб в миг tau над поверхностью {@code floor}: опустился — быстрее из двух: тяжёлым термиком или ветром
-     * за кромкой ({@code lee} — на столько за эту выборку, {@link #LEE}); дошёл до неё — лёг.
+     * Falling clump at tau above {@code floor}: descent is faster of heavy thermal and edge-lee wind
+     * ({@code lee} is descent over this sample, {@link #LEE}); reaching surface lands it.
      */
     private static void fallTo(Track tr, double floor, double tau, double lee) {
         double level = Math.min(tr.from - fall(tr.r0, tr.f, tau - tr.since), tr.level - lee);
@@ -1336,7 +1336,7 @@ public final class GroundDust {
         }
     }
 
-    /** Самая низкая известная поверхность сектора, м от точки взрыва (где рельефа под падающим клубом не знаем). */
+    /** Lowest known sector surface, m relative to explosion (when relief below falling clump is unknown). */
     private double lowest(int sector) {
         double m = Double.POSITIVE_INFINITY;
         for (double h : surface[sector]) m = Math.min(m, h);
@@ -1344,22 +1344,22 @@ public final class GroundDust {
     }
 
     /**
-     * Снос слоя ветром за t, м (x и z): ветер на высоте середины слоя {@code zc} над его поверхностью, не ниже 2 м (⚠
-     * высота середины — нынешняя на весь путь: слой растёт, и вначале он шёл чуть медленнее).
+     * Layer wind drift over t, m (x and z): wind at layer-center height {@code zc} above its surface, at least 2 m (⚠
+     * current center height for whole path: layer grows, initially traveled slightly slower).
      */
     public double[] drift(double t, double zc) {
         double lean = air.wind(Math.max(2, zc)) * Math.max(t, 0);
         return new double[]{air.windX() * lean, air.windZ() * lean};
     }
 
-    /** Толща самого густого клуба слоя в возрасте t (через середину по горизонтали). */
+    /** Densest layer clump optical depth at age t (horizontal through center). */
     double tau(double t) {
         double[] max = {0};
         emit(t, 1, false, (x, y, z, sh, sv, dust, mass, source) -> max[0] = Math.max(max[0], DustModel.K_MIX * dust / (2 * Math.PI * sh * sv)));
         return max[0];
     }
 
-    /** Сколько слой виден, с: пока толща самого густого клуба больше {@link CloudModel#SEEN} (по узлам сетки). */
+    /** Layer visibility duration, s: while densest clump optical depth exceeds {@link CloudModel#SEEN} (at grid nodes). */
     private double lifeSeconds() {
         if (total <= 0) return 0;
         double last = 0;

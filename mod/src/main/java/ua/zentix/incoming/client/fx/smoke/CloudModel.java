@@ -11,236 +11,236 @@ import ua.zentix.incoming.nuclear.model.FuelFireball;
 import ua.zentix.incoming.nuclear.model.FuelPool;
 
 /**
- * Облако обычного взрыва по законам, без Minecraft: что поднялось, куда и как долго его видно — из заряда, топлива, грунта
- * и воздуха. Метры, секунды, килограммы; блок — метр. Картинку из него делают сетка дыма ({@link SmokeGrid}: облако —
- * гауссовы клубы {@link #blobs}), вспышка и дальний вид ({@code FarBlasts}).
+ * Conventional explosion cloud from laws, without Minecraft: what rises, where, and how long it stays visible follow charge, fuel, ground
+ * and air. Meters, seconds, kilograms; a block is a meter. Rendered by the smoke grid ({@link SmokeGrid}: the cloud is
+ * Gaussian clumps {@link #blobs}), the flash and distant view ({@code FarBlasts}).
  * <p>
- * <b>Тепло.</b> Облако всплывает от тепла, оставшегося в газе: у взрывчатки — {@link #HE_HEAT} на кг ТНТ, у топлива —
- * теплота сгорания без доли, ушедшей излучением огненного шара ({@link #RADIANT}). Плавучесть всего тепла Q —
- * B = g·Q / (ρ·c_p·T) (м⁴/с²).
+ * <b>Heat.</b> The cloud rises from heat left in the gas: {@link #HE_HEAT} per kg TNT for explosives; for fuel,
+ * heat of combustion minus the fireball's radiated share ({@link #RADIANT}). Buoyancy of total heat Q is
+ * B = g·Q / (ρ·c_p·T) (m⁴/s²).
  * <p>
- * <b>Подъём</b> — термик Мортона–Тейлора–Тёрнера (Proc. R. Soc. A 234, 1956; уравнения в форме Bhamidipati &amp; Woods,
- * JFM 2023, ур. 2.1–2.3): сфера радиуса R поднимается со скоростью W, подсасывая воздух через поверхность со скоростью αW
- * (α = {@value #ALPHA} — опыты MTT), ускоряется плавучестью g', а в устойчивом воздухе (частота Брента–Вяйсяля N) теряет её:
- * d(R³)/dt = 3α·R²W, d(R³W)/dt = R³g', d(R³g')/dt = −N²·R³W. У точечного источника наибольшая высота —
- * (8F/(α³N²))^¼ при F = R³g' (B = 4π/3·F), за π/N секунд; радиус — α·высоты. Дальше облако стоит на этой высоте. С первой
- * секунды его расплывает турбулентность воздуха (Паскуилл–Гиффорд, формулы Бриггса для открытой местности, по пути ветра
- * x = u·t, в квадратуре с радиусом термика), а ветер растёт с высотой: облако — стопка слоёв ({@link #LAYERS}), каждый со
- * своим ветром, — наклоняется и вытягивается по ветру. Высоту и радиус в первые секунды задаёт огненный шар: начальный объём — тот, в котором
- * тепло Q держит температуру шара ({@link #FUEL_BALL_K} или конец шара взрывчатки).
+ * <b>Rise</b> is a Morton–Taylor–Turner thermal (Proc. R. Soc. A 234, 1956; equations in Bhamidipati &amp; Woods,
+ * JFM 2023, eqs. 2.1–2.3): a sphere of radius R rises at W, entraining air through its surface at αW
+ * (α = {@value #ALPHA}, MTT experiments), accelerates from buoyancy g', and loses it in stable air (Brunt–Väisälä frequency N):
+ * d(R³)/dt = 3α·R²W, d(R³W)/dt = R³g', d(R³g')/dt = −N²·R³W. A point source's maximum height is
+ * (8F/(α³N²))^¼ with F = R³g' (B = 4π/3·F), reached in π/N seconds; radius is α·height. The cloud then stays at this height. From the first
+ * second, air turbulence spreads it (Pasquill–Gifford, Briggs open-country formulas over wind travel
+ * x = u·t, in quadrature with the thermal radius), and wind grows with height: a stack of layers ({@link #LAYERS}), each with
+ * its own wind, tilts and stretches downwind. The fireball sets height and radius in the first seconds: the initial volume is where
+ * heat Q maintains the ball temperature ({@link #FUEL_BALL_K} or the end of the explosive ball).
  * <p>
- * <b>Огненные шары.</b> Шар топлива — CCPS (1994), «Guidelines for Evaluating the Characteristics of Vapor Cloud
- * Explosions, Flash Fires and BLEVEs»: D = 5,8·M^⅓ м, горит 0,45·M^⅓ с (M &lt; 30 т; M — топливо шара без доли воронки,
- * {@link #POOL_SHARE}), центр поднимается к 0,75·D; излучает
- * 200–350 кВт/м² — чёрное тело {@value #FUEL_BALL_K} K (середина). Шар продуктов детонации — радиус 1,7·W^⅓ м, светит
- * 0,2·W^0,35 с (так было в {@code FarBlasts}; первоисточник не найден — оценка), 3000 K → 1500 K (продукты детонации —
- * 3000–5000 K, обзор Ciccarelli и др. в Shock Waves 2021; к концу — оценка). Горение кончилось — шар не гаснет, а
- * остывает подсосом воздуха: тот же термик MTT ({@link #cooling}), начатый с шара в конец горения (его радиус и
- * температура), — температура газа T = T_a/(1 − g'/g) падает, пока шар растёт; светит, пока горячее точки Дрейпера
- * ({@value #DRAPER_K} K). Спектр — Планк, но степень черноты задаёт бюджет {@link FireballRadiation}: у ВВ видимая
- * энергия, у топлива полная излучённая энергия, включая охлаждение. Размер и время этим не меняются. Дополнительное
- * радиационное охлаждение газа не считается — температура и форма временного профиля остаются приближением.
+ * <b>Fireballs.</b> Fuel ball: CCPS (1994), “Guidelines for Evaluating the Characteristics of Vapor Cloud
+ * Explosions, Flash Fires and BLEVEs”: D = 5.8·M^⅓ m, burns for 0.45·M^⅓ s (M &lt; 30 t; M is ball fuel excluding the crater share,
+ * {@link #POOL_SHARE}), center rises to 0.75·D; emits
+ * 200–350 kW/m²: a {@value #FUEL_BALL_K} K black body (midpoint). Detonation-product ball: radius 1.7·W^⅓ m, shines for
+ * 0.2·W^0.35 s (as in {@code FarBlasts}; original source not found, est.), 3000 K → 1500 K (detonation products:
+ * 3000–5000 K, Ciccarelli et al. review in Shock Waves 2021; end value is est.). After burning, the ball does not go dark;
+ * it cools by entraining air: the same MTT thermal ({@link #cooling}), starting from the ball at burn end (its radius and
+ * temperature). Gas temperature T = T_a/(1 − g'/g) falls as the ball grows; it shines while hotter than the Draper point
+ * ({@value #DRAPER_K} K). Spectrum follows Planck, but emissivity comes from the {@link FireballRadiation} budget: visible
+ * energy for HE, total radiated energy for fuel, including cooling. Size and timing stay unchanged. Additional
+ * radiative gas cooling is not modeled; temperature and temporal profile shape remain approximations.
  * <p>
- * <b>Топливо в воронке.</b> Что не разлетелось брызгами в шар, остаётся в воронке, пропитав грунт, и догорает там:
- * доля {@link #POOL_SHARE}, закон — общий с сервером {@link FuelPool} (площадь — круг воронки, выгорание тонкого слоя): у
- * шахеда ~2,5 мин по ~2 МВт, у ракеты ~16 мин по ~3 МВт. Где оно горит, решает сервер: огонь Minecraft на блоках, куда
- * топливо легло и стекло ({@code warhead/FuelFires}); над ним — шлейф Бриггса ({@link FirePlume}) с сажей топлива, пока
- * горит ({@code FireSmoke.pool}).
+ * <b>Crater fuel.</b> Fuel not sprayed into the ball remains in the crater, soaking the ground and burning out there:
+ * share {@link #POOL_SHARE}, shared server law {@link FuelPool} (area is the crater circle, thin-layer burning):
+ * ~2.5 min at ~2 MW for Shahed, ~16 min at ~3 MW for missile. The server decides where it burns: Minecraft fire on blocks where
+ * fuel landed and drained ({@code warhead/FuelFires}); above it, a Briggs plume ({@link FirePlume}) with fuel soot while
+ * it burns ({@code FireSmoke.pool}).
  * <p>
- * <b>Вещество.</b> Сажа взрывчатки — свободный углерод продуктов детонации ({@link BlastSource.Explosive#freeCarbon}), из
- * которого догорание в шаре оставляет долю {@link #SOOT_SURVIVES} (оценка); сажа топлива — выход {@link FuelPool.Fuel}.
- * Пыль воронки — разрушенное у цели ({@link BlastTarget}: чаша {@link CraterModel#chargeVolume} по грунту материала —
- * диаметр 0,65·W^⅓ м, глубина — четверть, параболоид, тот же закон, что роет сервер, у скалы и бетона — 0,7 диаметра; у
- * плиты над пустотой — пролом; × насыпная плотность вещества цели); в воздух уходит доля мелочи вещества
- * ({@link BlastTarget.Matter#fines}): у рыхлого и досок — {@link #DUST_LOFTED} (2 %, оценка), у связного (скала, бетон,
- * кладка) — {@code BlastTarget.FINES_CRUSHED} (по PM10 контактного взрыва по бетону, Costa 2025; ⚠ оценка).
- * Цвет — вещества цели ({@link BlastTarget.Matter}), а не грунта у любой цели. Мелочь — два потока: вовлечённая в горячий
- * газ поднимается с облаком; остальную поток газа выносит вдоль поверхностей вокруг юбкой у земли ({@link #crushed},
- * {@link GroundDust#skirt}). Деление — {@link #CRUSHED_HOT_SHARE}. Воронки нет у подрыва выше
- * {@link #CRATER_HOB} радиуса шара продуктов (разрыв в воздухе): пыли воронки нет.
+ * <b>Matter.</b> Explosive soot is free carbon in detonation products ({@link BlastSource.Explosive#freeCarbon}), of
+ * which afterburning leaves share {@link #SOOT_SURVIVES} (est.); fuel soot uses the {@link FuelPool.Fuel} yield.
+ * Crater dust is material destroyed at the target ({@link BlastTarget}: a {@link CraterModel#chargeVolume} bowl for the material's soil,
+ * diameter 0.65·W^⅓ m, depth one quarter, paraboloid, the same law the server digs with; rock and concrete use 0.7 diameter;
+ * a slab over void uses a breach; × target material bulk density). The material's fines share becomes airborne
+ * ({@link BlastTarget.Matter#fines}): loose material and planks use {@link #DUST_LOFTED} (2%, est.), cohesive material (rock, concrete,
+ * masonry) uses {@code BlastTarget.FINES_CRUSHED} (PM10 from contact blasts on concrete, Costa 2025; ⚠ est.).
+ * Color is the target material's ({@link BlastTarget.Matter}), rather than soil for every target. Fines split into two flows: those entrained in hot
+ * gas rise with the cloud; gas carries the rest along surrounding surfaces as a ground skirt ({@link #crushed},
+ * {@link GroundDust#skirt}). Split: {@link #CRUSHED_HOT_SHARE}. Detonations above
+ * {@link #CRATER_HOB} product-ball radii (airbursts) form no crater and have no crater dust.
  * <p>
- * <b>Пыль волны</b> — {@link GroundDust}: тот же закон, что у ядерки ({@code DustModel}: вынос ветром за фронтом, слой Kuhl,
- * корзины, подсос в ножку), с поверхностей вокруг — у каждой своя высота взрыва над ней и свой материал, — и ядерной
- * мощностью того же давления у поверхности ({@link #equivalentKt}); слой тяжелее воздуха — стекает и опускается к
- * поверхности под собой; у разрыва в воздухе пыли нет — давление у земли ниже порога срыва. Чёрч — только размер и
- * высота стабилизированного облака ({@link #HE_HEAT}).
+ * <b>Wave dust</b> is {@link GroundDust}: the nuke's law ({@code DustModel}: wind entrainment behind the front, Kuhl layer,
+ * bins, stem inflow), from surrounding surfaces, each with its own burst height and material, using the nuclear
+ * yield with the same surface pressure ({@link #equivalentKt}); the layer is heavier than air and drains and descends toward
+ * the surface below it; an airburst has no dust when ground pressure is below the entrainment threshold. Church supplies only stabilized-cloud size and
+ * height ({@link #HE_HEAT}).
  * <p>
- * <b>Оптика.</b> Ослабление на массу — сажа {@link #SOOT_K} м²/кг при альбедо 0,25 и асимметрии 0,5 (Bond, Bergstrom 2006:
- * поглощение 7,5 м²/г на 550 нм), пыль — {@code DustModel.K_MIX} (геометрическая оптика зёрен ядерной пыли; что осела
- * крупная, ослабление идёт по доле мелкой — {@code DustModel.extinctionAloft}), капли конденсации (5 мкм) — 3Q/(2ρr) =
- * 600 м²/кг. Облако видно, пока его толща поперёк больше {@link #SEEN} (порог контраста Кошмидера).
+ * <b>Optics.</b> Mass extinction: soot {@link #SOOT_K} m²/kg with albedo 0.25 and asymmetry 0.5 (Bond, Bergstrom 2006:
+ * absorption 7.5 m²/g at 550 nm); dust {@code DustModel.K_MIX} (geometric optics of nuclear dust grains; as coarse grains settle,
+ * extinction follows the fine share, {@code DustModel.extinctionAloft}); condensation drops (5 µm): 3Q/(2ρr) =
+ * 600 m²/kg. The cloud stays visible while its transverse optical depth exceeds {@link #SEEN} (Koschmieder contrast threshold).
  */
 public final class CloudModel {
     static final double G = 9.80665, RHO = 1.225, CP = 1005, T_AIR = 288.15;
-    /** Воздух вокруг облака, K. */
+    /** Ambient air around the cloud, K. */
     public static final double T_AIR_K = T_AIR;
-    /** Подсос термика (MTT 1956). */
+    /** Thermal entrainment (MTT 1956). */
     public static final double ALPHA = 0.285;
     /**
-     * Устойчивость стандартной атмосферы ISO 2533 до 11 км: N² = g/T·(dT/dz + g/c_p), градиент −6,5 К/км — N ≈ 0,0105 с⁻¹.
+     * ISO 2533 standard-atmosphere stability up to 11 km: N² = g/T·(dT/dz + g/c_p), lapse rate −6.5 K/km gives N ≈ 0.0105 s⁻¹.
      */
     public static final double N_STANDARD = Math.sqrt(G / T_AIR * (-0.0065 + G / CP));
     /**
-     * Тепло взрывчатки в газе облака, Дж на кг ТНТ — по замерам облаков: верх стабилизированного облака химического
-     * взрыва 92,6·W^0,25 м (W — кг ТНТ, «средняя атмосфера»; Church H. W., «Cloud Rise from High-Explosives Detonations»,
-     * Sandia SC-RR-68-903, 1969) — у термика MTT в стандартной атмосфере это верх (1 + α)·наибольшей высоты. Выходит
-     * 1,3 МДж/кг — 0,31 от 4,184 МДж/кг энергии ТНТ: остальное уносит ударная волна и излучение. Закон MTT сам даёт
-     * высоту ∝ W^¼, как у Чёрча.
+     * Explosive heat in cloud gas, J per kg TNT, from cloud measurements: stabilized chemical-explosion cloud top
+     * 92.6·W^0.25 m (W in kg TNT, “average atmosphere”; Church H. W., “Cloud Rise from High-Explosives Detonations”,
+     * Sandia SC-RR-68-903, 1969). For an MTT thermal in standard atmosphere this top is (1 + α)·maximum height. This gives
+     * 1.3 MJ/kg, 0.31 of TNT's 4.184 MJ/kg energy; blast wave and radiation carry the rest. The MTT law itself yields
+     * height ∝ W^¼, as in Church.
      */
     public static final double HE_HEAT;
-    /** Доля тепла огненного шара топлива, уходящая излучением: 0,25–0,4 (CCPS) — середина, оценка. */
+    /** Fuel-fireball heat share lost to radiation: 0.25–0.4 (CCPS), midpoint, est. */
     public static final double RADIANT = 0.3;
-    /** Чёрное тело шара топлива, K: 275 кВт/м² (середина 200–350 по CCPS) = σT⁴. */
+    /** Fuel-ball black body, K: 275 kW/m² (midpoint of CCPS 200–350) = σT⁴. */
     public static final double FUEL_BALL_K = Math.pow(FuelFireball.SURFACE_POWER / 5.670374e-8, 0.25);
-    /** Шар взрывчатки: в начале и в конце жизни, K (⚠ оценка: замеров видимой температуры по возрасту нет). */
+    /** Explosive ball: start and end of life, K (⚠ est.: no visible-temperature measurements by age). */
     public static final double HE_BALL_HOT = 3000, HE_BALL_END = 1500;
-    /** Сажа: ослабление на массу (до дельта-Эддингтона), м²/кг; альбедо и асимметрия. */
+    /** Soot: mass extinction (before delta-Eddington), m²/kg; albedo and asymmetry. */
     public static final double SOOT_K = 7.5e3 / (1 - 0.25), SOOT_W = 0.25, SOOT_G = 0.5;
-    /** Капли конденсации 5 мкм: 3·2/(2·1000·5·10⁻⁶), м²/кг; асимметрия. */
+    /** Condensation drops, 5 µm: 3·2/(2·1000·5·10⁻⁶), m²/kg; asymmetry. */
     public static final double DROP_K = 600, DROP_G = 0.85;
-    /** Сколько свободного углерода детонации остаётся сажей после догорания в шаре — оценка. */
+    /** Free detonation carbon remaining as soot after ball afterburning, est. */
     public static final double SOOT_SURVIVES = 0.2;
-    /** Плотность грунта, кг/м³ (воронка — {@link CraterModel#chargeVolume}). */
+    /** Soil density, kg/m³ (crater: {@link CraterModel#chargeVolume}). */
     public static final double SOIL_DENSITY = 1600;
-    /** Доля рыхлого грунта воронки, что уходит в воздух пылью мельче ~50 мкм, — оценка (у связного — {@code BlastTarget.Matter#fines}). */
+    /** Loose crater-soil share becoming airborne dust finer than ~50 µm, est. (cohesive material: {@code BlastTarget.Matter#fines}). */
     public static final double DUST_LOFTED = 0.02;
     /**
-     * Облако старта ({@link LaunchCloud}): доля пыли, сорванной струёй, что встаёт с облаком (остальное — у земли), —
-     * оценка: замеров разделения пыли у стартов нет. У взрыва пыль у земли — слой волны ({@link GroundDust}).
+     * Launch cloud ({@link LaunchCloud}): jet-entrained dust share rising with the cloud (the rest stays at ground),
+     * est.: no measured partition for launches. Explosion ground dust is the wave layer ({@link GroundDust}).
      */
     public static final double CLOUD_SHARE = 0.5;
     /**
-     * Доля мелочи разрушенного, что уходит с горячим газом облака; остальная — юбкой у земли ({@link GroundDust#skirt}).
-     * Brown и др., «SCM», ARI-RR-1384 (2004), табл. 5: η_partition 0,2–0,8, принято 0,5 (⚠ оценка: там же
-     * помечено неопределённым по нехватке данных).
+     * Destroyed-material fines share leaving with hot cloud gas; the rest forms a ground skirt ({@link GroundDust#skirt}).
+     * Brown et al., “SCM”, ARI-RR-1384 (2004), table 5: η_partition 0.2–0.8, adopted 0.5 (⚠ est.: also
+     * marked uncertain there for lack of data).
      */
     public static final double CRUSHED_HOT_SHARE = 0.5;
-    /** Юбка пыли разрушенного у земли ({@link GroundDust#skirt}): отдельно от пыли, что лежала на поверхностях. */
+    /** Destroyed-material ground dust skirt ({@link GroundDust#skirt}), separate from dust deposited on surfaces. */
     public final GroundDust crushed;
     /**
-     * Доля энергии ядерного взрыва в ударной волне — ~0,5 (Glasstone, Dolan, «The Effects of Nuclear Weapons», 1977, §1.24:
-     * около половины — волна, треть — свет, остальное — радиация); у ВВ тротиловый эквивалент — сама волна. Давление у
-     * земли заряда W кг ТНТ — как у ядерного наземного W/0,5 кг: Броуд ({@code HobBlast}) против Кинни–Грэхема
-     * ({@code BlastModel}) дают отношение мощностей 1,4–2,4 от 1 до 50 psi у 6–1000 кг (CloudModelTest).
+     * Nuclear-explosion energy share in blast: ~0.5 (Glasstone, Dolan, “The Effects of Nuclear Weapons”, 1977, §1.24:
+     * about half blast, a third light, the rest radiation); HE TNT equivalent is the blast itself. Ground pressure from
+     * W kg TNT matches a ground nuclear W/0.5 kg: Brode ({@code HobBlast}) versus Kinney–Graham
+     * ({@code BlastModel}) gives yield ratios 1.4–2.4 over 1–50 psi for 6–1000 kg (CloudModelTest).
      */
     public static final double NUCLEAR_BLAST_SHARE = 0.5;
     /**
-     * Воронки нет у подрыва выше этой доли радиуса огненного шара — тот же признак, что у ядерного
-     * ({@code CraterModel.formsCrater}: Glasstone и Dolan, 0,1 радиуса шара); у ВВ — по шару продуктов детонации
-     * ({@link #heBall}). ⚠ Порога по опытам с ВВ в наших источниках нет: у Кинни и Грэхема (1985) лишь сказано, что заряд над
-     * землёй может не дать воронки.
+     * No crater above this fireball-radius share, as for nuclear explosions
+     * ({@code CraterModel.formsCrater}: Glasstone and Dolan, 0.1 ball radius); HE uses the detonation-product ball
+     * ({@link #heBall}). ⚠ Our sources give no HE experimental threshold: Kinney and Graham (1985) only state that a charge above
+     * ground may form no crater.
      */
     public static final double CRATER_HOB = 0.1;
-    /** Облако видно, пока его толща поперёк середины больше этого (порог контраста 0,02). */
+    /** Cloud stays visible while transverse center optical depth exceeds this (contrast threshold 0.02). */
     public static final double SEEN = 0.02;
-    /** Точка Дрейпера: газ холоднее не светится, K. */
+    /** Draper point: colder gas does not glow, K. */
     public static final double DRAPER_K = 798;
     /**
-     * Газ горячее этого светится в полную силу тела огня: яркость чёрного тела 1200 K — около сотой шара топлива
-     * (по Вину на 555 нм), дальше остывающий шар — уже больше дым, чем огонь, K.
+     * Gas hotter than this fully shines as fire body: a 1200 K black body is about one hundredth of the fuel ball's brightness
+     * (by Wien at 555 nm); beyond this the cooling ball is more smoke than fire, K.
      */
     public static final double GLOW_FULL_K = 1200;
     /**
-     * Доля топлива к удару, что остаётся в воронке и догорает там (общая с сервером, {@link FuelFireball#POOL_SHARE}): шар
-     * горит остальным ({@link FuelFireball#ballKg}) — его размер, тепло подъёма облака и сажа облака; тепло и сажа воронки
-     * уходят шлейфом пожара ({@code FireSmoke.pool}).
+     * Impact fuel share remaining in the crater to burn out (shared with server, {@link FuelFireball#POOL_SHARE}): the ball
+     * burns the rest ({@link FuelFireball#ballKg}), determining its size, cloud-rise heat and soot; crater heat and soot
+     * leave in a fire plume ({@code FireSmoke.pool}).
      */
     public static final double POOL_SHARE = FuelFireball.POOL_SHARE;
-    /** Дольше этого облако не живёт, с (дальше оно — дымка над районом). */
+    /** Maximum cloud lifetime, s (beyond this it is haze over the area). */
     public static final double LIFE_MAX = 3600;
 
     static {
-        // точечный источник в стандартной атмосфере: верх (1 + α)·(8F/(α³N²))^¼ = 92,6·W^¼ → F на кг ТНТ
+        // point source in standard atmosphere: top (1 + α)·(8F/(α³N²))^¼ = 92.6·W^¼ gives F per kg TNT
         double top = 92.6 / (1 + ALPHA);
         double f = Math.pow(top, 4) * ALPHA * ALPHA * ALPHA * N_STANDARD * N_STANDARD / 8;
         HE_HEAT = 4 * Math.PI / 3 * f * RHO * CP * T_AIR / G;
     }
 
     /**
-     * Воздух в месте взрыва.
+     * Air at the explosion site.
      *
-     * @param n       частота Брента–Вяйсяля, 1/с
-     * @param windX   ветер на 10 м над полем по x, м/с (ветер мира; у земли места — с {@link #wind})
-     * @param windZ   и по z
-     * @param shear   показатель степени профиля ветра u(z) = u₁₀·(z/10)^p (0,1 днём, 0,14 — нейтрально, 0,3 ночью)
-     * @param spread  класс устойчивости Паскуилла (0 — A … 5 — F)
-     * @param humidity влажность 0..1 (облако конденсации)
-     * @param site    ветер у земли места: застройка, кроны, холм ({@link LocalWind}; поле — {@link LocalWind#OPEN})
+     * @param n       Brunt–Väisälä frequency, 1/s
+     * @param windX   x wind 10 m above open field, m/s (world wind; local near-ground wind uses {@link #wind})
+     * @param windZ   and z wind
+     * @param shear   wind-profile exponent u(z) = u₁₀·(z/10)^p (0.1 daytime, 0.14 neutral, 0.3 night)
+     * @param spread  Pasquill stability class (0 is A … 5 is F)
+     * @param humidity humidity 0..1 (condensation cloud)
+     * @param site    local near-ground wind: buildings, canopy, hill ({@link LocalWind}; field: {@link LocalWind#OPEN})
      */
     public record Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site, double lift) {
-        /** В поле. */
+        /** In open field. */
         public Air(double n, double windX, double windZ, double shear, int spread, double humidity) {
             this(n, windX, windZ, shear, spread, humidity, LocalWind.OPEN);
         }
 
-        /** С ветром у земли места {@code site}; высоты — над поверхностью взрыва. */
+        /** With local near-ground wind {@code site}; heights above the explosion surface. */
         public Air(double n, double windX, double windZ, double shear, int spread, double humidity, LocalWind site) {
             this(n, windX, windZ, shear, spread, humidity, site, 0);
         }
 
         /**
-         * Для того, кто меряет высоту от точки на {@code dz} м выше поверхности взрыва (термик разрыва в воздухе — от точки
-         * разрыва): поправка места — на его настоящей высоте над поверхностью, профиль — прежний.
+         * For callers measuring height from a point {@code dz} m above the explosion surface (airburst thermal measures from the
+         * burst point): site correction at its actual height above the surface, profile unchanged.
          */
         public Air lifted(double dz) {
             return new Air(n, windX, windZ, shear, spread, humidity, site, lift + dz);
         }
 
-        /** Стандартная атмосфера без ветра — для проверок. */
+        /** Windless standard atmosphere for checks. */
         public static final Air STANDARD = of(ua.zentix.incoming.util.Air.CALM, 0.5);
 
         /**
-         * Воздух в месте взрыва из воздуха мира ({@link ua.zentix.incoming.util.Air} — один на полёт, звук и дым): устойчивость
-         * N, показатель профиля ветра и класс расплывания — от его класса устойчивости ({@link Stability}), ветер на 10 м
-         * над землёй, влажность — его (в дождь насыщен) или 1 у воды.
+         * Air at the explosion site from world air ({@link ua.zentix.incoming.util.Air}, shared by flight, sound and smoke): stability
+         * N, wind-profile exponent and spread class from its stability class ({@link Stability}), wind at 10 m
+         * above ground, humidity from it (saturated in rain) or 1 at water.
          *
-         * @param humidity влажность в месте взрыва 0..1
+         * @param humidity humidity at the explosion site, 0..1
          */
         public static Air of(ua.zentix.incoming.util.Air air, double humidity) {
             return of(air, humidity, LocalWind.OPEN);
         }
 
-        /** То же с ветром у земли места {@code site}. */
+        /** Same with local near-ground wind {@code site}. */
         public static Air of(ua.zentix.incoming.util.Air air, double humidity, LocalWind site) {
             double c = air.stability(), u = air.wind().at(10, Stability.alpha(c));
             return new Air(air.brunt(), u * air.wind().x(), u * air.wind().z(), Stability.alpha(c), (int) Math.round(c), humidity, site);
         }
 
-        /** Ветер на высоте z (м) над поверхностью взрыва: доля ветра на 10 м над полем (с поправкой места). */
+        /** Wind at height z (m) above the explosion surface: share of wind at 10 m over field (with site correction). */
         public double wind(double z) {
             return Math.pow(Math.max(z, 1) / 10, shear) * site.factor(z + lift);
         }
     }
 
-    /** Приёмник клубов: гауссов клуб вещества (центр от точки взрыва, м; σ по горизонтали и вертикали, м). */
+    /** Clump sink: Gaussian matter clump (center relative to explosion point, m; horizontal and vertical σ, m). */
     public interface Blobs {
         /**
-         * @param x       центр от точки взрыва, м
-         * @param sh      σ по горизонтали, м
-         * @param sv      σ по вертикали, м
-         * @param soot    сажи, кг
-         * @param dust    пыли, кг
-         * @param water   капель, кг
-         * @param kelvin  температура газа, K
-         * @param rise    скорость подъёма вещества, м/с (шум клубов идёт с ним)
+         * @param x       center relative to explosion point, m
+         * @param sh      horizontal σ, m
+         * @param sv      vertical σ, m
+         * @param soot    soot, kg
+         * @param dust    dust, kg
+         * @param water   drops, kg
+         * @param kelvin  gas temperature, K
+         * @param rise    matter rise speed, m/s (clump noise follows it)
          */
         void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin, double rise);
 
         /**
-         * Кусок трубки пыли (ножка облака) между концами a и b от точки взрыва: σ сечения, пыли на метр оси у концов, кг/м.
-         * Приёмник без трубок получает гауссы того же сечения через σ вдоль оси (вещество — то же).
+         * Dust tube segment (cloud stem) between ends a and b relative to explosion point: cross-section σ, end dust per axis meter, kg/m.
+         * A sink without tubes receives Gaussians of the same cross-section spaced by σ along the axis (same matter).
          */
         /**
-         * Клуб пыли у земли, что волна сорвала с поверхностей вокруг ({@link GroundDust}): вещество поверхностей, а не цели.
-         * Приёмник без различия — обычный клуб без сажи и подъёма.
+         * Ground dust clump lifted by the wave from surrounding surfaces ({@link GroundDust}): surface matter, not target matter.
+         * A sink without this distinction receives an ordinary clump without soot or rise.
          */
         default void ground(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
             blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
         }
 
         /**
-         * Клуб юбки пыли разрушенного у земли ({@link #crushed}): цвет и кадры — вещества цели. Приёмник без различия —
-         * обычный клуб без сажи и подъёма.
+         * Destroyed-material ground dust skirt clump ({@link #crushed}): target material color and frames. A sink without this distinction receives
+         * an ordinary clump without soot or rise.
          */
         default void crushed(double x, double y, double z, double sh, double sv, double dust, double kelvin) {
             blob(x, y, z, sh, sv, 0, dust, 0, kelvin, 0);
@@ -259,117 +259,117 @@ public final class CloudModel {
 
     public final BlastSource source;
     public final Air air;
-    /** Во что попал заряд: семейство и вещество ({@link BlastTarget}). */
+    /** What the charge hit: family and matter ({@link BlastTarget}). */
     public final BlastTarget target;
-    /** Высота подрыва над землёй под точкой взрыва, м (0 — удар в поверхность). */
+    /** Burst height above ground below the explosion point, m (0 is surface impact). */
     public final double hob;
-    /** Кусков трубки ножки (изгиб по сдвигу ветра с высотой). */
+    /** Stem tube segments (bending with wind shear). */
     static final int STEM_PIECES = 6;
     /**
-     * Облако после огненной стадии — стопка слоёв по высоте: гаусс σv делится на {@value #LAYERS} гаусса σ = {@link #SLICE}·σv
-     * на высотах {@link #LAYER_Q}·σv (тот же второй момент — σv), и каждый слой несёт ветер своей
-     * высоты ({@link #shear}): верх уходит вперёд низа, облако наклоняется и вытягивается по ветру (Saffman, QJRMS 88,
-     * 1962: дисперсия облака в сдвиге ветра; так же — пуфы SCIPUFF и CALPUFF). Прежде облако было одним гауссом и
-     * сносилось целиком (жалоба 23.10: «как одно твёрдое тело»). ⚠ Вихрь термика, пока он всплывает, сдвиг частью
-     * держит — здесь нет: облако наклоняется чуть раньше настоящего.
+     * After the fire stage, the cloud is a vertical stack: Gaussian σv splits into {@value #LAYERS} Gaussians σ = {@link #SLICE}·σv
+     * at heights {@link #LAYER_Q}·σv (same second moment, σv); each layer follows wind at its
+     * height ({@link #shear}): top outruns bottom, tilting and stretching the cloud downwind (Saffman, QJRMS 88,
+     * 1962: cloud dispersion in wind shear; also SCIPUFF and CALPUFF puffs). Previously the cloud was one Gaussian and
+     * drifted as a whole (23.10 complaint: “like one rigid body”). ⚠ The rising thermal vortex partly resists shear;
+     * this is absent here, so the cloud tilts slightly earlier than in reality.
      */
     static final int LAYERS = 3;
     static final double SLICE = 0.85;
-    /** Порядок слоёв в выводе: середина (самый тяжёлый, он же клуб шара в огненной стадии) — первым. */
+    /** Output layer order: middle (heaviest, also the fire-stage ball clump) first. */
     private static final int[] LAYER_ORDER = {1, 0, 2};
     /**
-     * Высоты слоёв (в σv облака) и их доли массы: квадратура Гаусса–Эрмита на три точки для середин с дисперсией
-     * 1 − {@link #SLICE}² — 0 и ±√(3·(1 − SLICE²)), доли 2/3 и 1/6: вместе с шириной слоёв — тот же второй и четвёртый
-     * момент, что у одного гаусса σv; профиль по высоте без провалов (слой у края виден краем середины).
+     * Layer heights (in cloud σv) and mass shares: three-point Gauss–Hermite quadrature for centers with variance
+     * 1 − {@link #SLICE}²: 0 and ±√(3·(1 − SLICE²)), shares 2/3 and 1/6. Including layer width, same second and fourth
+     * moments as one σv Gaussian; no gaps in the vertical profile (edge layer is visible through the middle's edge).
      */
     static final double[] LAYER_Q = {-Math.sqrt(3 * (1 - SLICE * SLICE)), 0, Math.sqrt(3 * (1 - SLICE * SLICE))},
             LAYER_W = {1 / 6.0, 2 / 3.0, 1 / 6.0};
-    /** Пыль волны у земли и ножка. */
+    /** Ground wave dust and stem. */
     public final GroundDust ground;
-    /** Плавучесть всего тепла, м⁴/с²; F = 3B/(4π). */
+    /** Total-heat buoyancy, m⁴/s²; F = 3B/(4π). */
     public final double buoyancy;
-    /** Сажа и пыль воронки (в облаке), кг. */
+    /** Soot and crater dust (in cloud), kg. */
     public final double soot, dust;
-    /** Шар топлива: диаметр, м, и сколько горит, с (0 — топлива нет). */
+    /** Fuel ball: diameter, m, and burn duration, s (0 means no fuel). */
     public final double fuelBall, fuelBallSeconds;
-    /** Шар взрывчатки: радиус, м, и сколько светит, с. */
+    /** Explosive ball: radius, m, and glow duration, s. */
     public final double heBall, heBallSeconds;
-    /** Конец горения шаров (топлива и продуктов детонации), с. */
+    /** End of ball burning (fuel and detonation products), s. */
     public final double burnSeconds;
-    /** Конец свечения шара, с: остывший до точки Дрейпера; дальше облако — термик. */
+    /** End of ball glow, s: cooled to Draper point; afterward the cloud is a thermal. */
     public final double fireSeconds;
-    /** Излучение из энергетического бюджета: импульс ВВ и степень черноты топлива, без привыкания глаза. */
+    /** Energy-budget radiation: HE pulse and fuel emissivity, without eye adaptation. */
     final FireballRadiation radiation;
-    /** Остывание шара после горения: термик MTT от шара в конец горения ({@link #burnSeconds}). */
+    /** Ball cooling after burning: MTT thermal from the ball at burn end ({@link #burnSeconds}). */
     public final Thermal cooling;
-    /** Радиус шара в конец горения, м, и высота его центра тогда. */
+    /** Ball radius at burn end, m, and its center height then. */
     final double burnRadius, burnHeight;
     /**
-     * Топливо в воронке ({@link FuelPool}; где оно горит, решает сервер — огонь на блоках, {@code warhead/FuelFires}):
-     * закон, масса, кг; радиус, м; сколько горит, с; тепловыделение, Вт (0 — топлива нет).
+     * Crater fuel ({@link FuelPool}; server decides where it burns: fire on blocks, {@code warhead/FuelFires}):
+     * law, mass, kg; radius, m; burn duration, s; heat release, W (0 means no fuel).
      */
     public final FuelPool pool;
     public final double poolKg, poolRadius, poolSeconds, poolWatts;
-    /** Подъём облака ({@link Thermal}). */
+    /** Cloud rise ({@link Thermal}). */
     public final Thermal thermal;
-    /** Наибольшая скорость подъёма, м/с. */
+    /** Maximum rise speed, m/s. */
     final double maxRise;
-    /** Наибольшая высота центра и время, когда она достигнута, с; радиус там. */
+    /** Maximum center height and time reached, s; radius there. */
     public final double topZ, topSeconds, topR;
-    /** Сколько облако видно, с. */
+    /** Cloud visibility duration, s. */
     public final double life;
 
     public CloudModel(BlastSource source, Air air) {
         this(source, air, false);
     }
 
-    /** {@code onWater} — взрыв на воде: воронки в грунте нет, пыли нет (вода — брызгами, {@link WaterBlast}). */
+    /** {@code onWater}: water explosion, no soil crater or dust (water becomes spray, {@link WaterBlast}). */
     public CloudModel(BlastSource source, Air air, boolean onWater) {
         this(source, air, onWater, 0);
     }
 
     /**
-     * Взрыв на высоте {@code hobM} над землёй (0 — удар в поверхность; разрыв зенитной ракеты — высота над рельефом):
-     * воронка — только если заряд её роет ({@link #CRATER_HOB}), пыль волны — по давлению у земли ({@link GroundDust}).
+     * Explosion at {@code hobM} above ground (0 is surface impact; SAM burst uses height above terrain):
+     * crater only if the charge digs one ({@link #CRATER_HOB}); wave dust follows ground pressure ({@link GroundDust}).
      */
     public CloudModel(BlastSource source, Air air, boolean onWater, double hobM) {
         this(source, air, onWater, hobM, GroundDust.Ground.BARE);
     }
 
     /**
-     * То же над поверхностью {@code ground} вокруг по секторам: голый рыхлый грунт, дёрн или твёрдое, вода ({@link GroundDust}).
+     * Same above surrounding {@code ground} by sectors: bare loose soil, turf or hard surface, water ({@link GroundDust}).
      */
     public CloudModel(BlastSource source, Air air, boolean onWater, double hobM, GroundDust.Ground ground) {
-        // без сведений о цели — голый рыхлый грунт (или вода)
+        // without target information, bare loose soil (or water)
         this(source, air, BlastTarget.of(onWater ? ua.zentix.incoming.warhead.GroundMaterial.WATER : ua.zentix.incoming.warhead.GroundMaterial.DIRT,
                 source.chargeKg(), hobM), hobM, ground);
     }
 
     /**
-     * Взрыв в цель {@code target} на высоте {@code hobM} над поверхностью {@code ground}: пыль раздробленного — доля мелочи
-     * вещества ({@link BlastTarget.Matter#fines}: у рыхлого — {@link #DUST_LOFTED}, у дроблёного камня и бетона — {@link BlastTarget#FINES_CRUSHED}, меньше) массы разрушенного
-     * ({@link BlastTarget#mass}: воронка закона по грунту материала × его насыпная плотность, у плиты — пролом; тот же закон,
-     * что роет сервер), а не чаша сухого грунта у любой цели (у бетона, досок и плиты прежде выходило 1600 кг/м³ сухой
-     * почвы, physics.md фронта F).
+     * Explosion at {@code target}, height {@code hobM} above {@code ground}: crushed dust is the material's fines share
+     * ({@link BlastTarget.Matter#fines}: loose uses {@link #DUST_LOFTED}; crushed rock and concrete use {@link BlastTarget#FINES_CRUSHED}, less) of destroyed mass
+     * ({@link BlastTarget#mass}: material-soil crater law × bulk density; slab uses breach; same law
+     * the server digs with), rather than a dry-soil bowl for every target (concrete, planks and slabs previously yielded 1600 kg/m³ dry
+     * soil, front F physics.md).
      */
     public CloudModel(BlastSource source, Air air, BlastTarget target, double hobM, GroundDust.Ground ground) {
         this(source, air, target, target.dust(source.chargeKg()), 0.5, hobM, ground);
     }
 
 
-    /** Роет ли заряд {@code tntKg} кг на высоте {@code hobM} над землёй воронку ({@link #CRATER_HOB}). */
+    /** Whether a {@code tntKg} kg charge at {@code hobM} above ground digs a crater ({@link #CRATER_HOB}). */
     public static boolean digs(double tntKg, double hobM) {
         return tntKg > 0 && hobM <= CRATER_HOB * 1.7 * Math.cbrt(tntKg);
     }
 
-    /** Ядерная мощность, кт, с тем же давлением у земли, что у заряда {@code tntKg} кг ТНТ ({@link #NUCLEAR_BLAST_SHARE}). */
+    /** Nuclear yield, kt, with the same ground pressure as {@code tntKg} kg TNT ({@link #NUCLEAR_BLAST_SHARE}). */
     public static double equivalentKt(double tntKg) {
         return Math.max(0, tntKg) * 1e-6 / NUCLEAR_BLAST_SHARE;
     }
 
     /**
-     * Облако взрыва {@code source}, у которого пыль — не воронка его заряда: {@code dustKg} кг грунта в воздухе, начальный
-     * размер облака — не меньше {@code size} м (пыль, поднятая не жаром, — облако такого размера у земли).
+     * Explosion cloud {@code source} whose dust is not its charge crater: {@code dustKg} kg airborne soil, initial
+     * cloud size at least {@code size} m (dust lifted without heat starts as a cloud of this size at ground).
      */
     public CloudModel(BlastSource source, Air air, double dustKg, double size) {
         this(source, air, BlastTarget.SOIL, dustKg, size, 0, GroundDust.Ground.BARE);
@@ -381,13 +381,13 @@ public final class CloudModel {
         this.air = air;
         this.target = target;
         this.hob = Math.max(0, hobM);
-        // шаром горит топливо без доли воронки: её тепло и сажа — у шлейфа пожара над воронкой
+        // the ball burns fuel excluding the crater share; its heat and soot belong to the crater fire plume
         double ballKg = FuelFireball.ballKg(source.fuelKg());
         double fuelHeat = ballKg * source.fuel().heatJPerKg * (1 - RADIANT);
         double heat = source.chargeKg() * HE_HEAT + fuelHeat;
         buoyancy = G * heat / (RHO * CP * T_AIR);
-        // контакт — по цели (у опоры пакета его нашёл сервер; без неё — та же проверка digs по высоте), а не снова по высоте:
-        // грубая высота вдали иначе снимала бы холодную пыль у пролома, подтверждённого сервером (ревью 2 фронта F)
+        // contact follows the target (server found packet support; absent that, same height-based digs check), not another height check:
+        // coarse distant height would otherwise remove cold dust from a server-confirmed breach (front F review 2)
         boolean contact = !source.underground() && source.chargeKg() > 0 && target.family() != BlastTarget.Family.AIR;
         double cold = contact ? dustKg * (1 - CRUSHED_HOT_SHARE) : 0;
         dust = dustKg - cold;
@@ -397,34 +397,34 @@ public final class CloudModel {
         heBall = 1.7 * Math.cbrt(source.chargeKg());
         heBallSeconds = 0.2 * Math.pow(source.chargeKg(), 0.35);
         burnSeconds = Math.max(fuelBallSeconds, heBallSeconds);
-        // начальный объём: в нём тепло держит температуру шара (у ideal gas при том же давлении g' = g·(1 − T_a/T))
+        // initial volume: heat maintains ball temperature (ideal gas at equal pressure gives g' = g·(1 − T_a/T))
         double ballK = source.fuelKg() > 0 ? FUEL_BALL_K : HE_BALL_END;
-        // высоты термика — от точки взрыва: разрыв в 100 м над улицей — не затишье улицы
+        // thermal heights are relative to explosion point: a burst 100 m above a street is not in street shelter
         thermal = new Thermal(buoyancy, G * (1 - T_AIR / ballK), size, air.lifted(hob));
         maxRise = thermal.maxRise;
         topZ = thermal.topZ;
         topR = thermal.topR;
         topSeconds = thermal.topSeconds;
-        // остывание: шар в конец горения — термик того же тепла с его радиусом и температурой
+        // cooling: ball at burn end is a thermal with the same heat, its radius and temperature
         boolean fuelLast = source.fuelKg() > 0 && fuelBallSeconds >= heBallSeconds;
         burnRadius = fuelLast ? 0.5 * fuelBall : heBall;
-        // та же середина, что у горящего шара в последний миг горения ({@link #ballHeight}): у разрыва в воздухе прежде
-        // 0,45 радиуса над точкой взрыва против середины в ней же — скачок в конец горения
+        // same center as the burning ball at the last burning instant ({@link #ballHeight}); previously an airburst had
+        // 0.45 radius above explosion point versus center at that point, causing a jump at burn end
         burnHeight = onGround(burnRadius) + lift(burnSeconds);
         cooling = new Thermal(buoyancy, G * (1 - T_AIR / (fuelLast ? FUEL_BALL_K : HE_BALL_END)), Math.max(burnRadius, size), air.lifted(hob));
         fireSeconds = glowEnd();
         radiation = FireballRadiation.of(this);
-        // на воде воронки в грунте нет: топливо растекается плёнкой, а плёнка тоньше ~1 мм не держит горение — вода
-        // уносит тепло (Buist и др., «In situ burning», обзор для разливов нефти: гаснет у 1–2 мм; ⚠ по памяти)
+        // no soil crater on water: fuel spreads as a film; thinner than ~1 mm it cannot sustain burning, as water
+        // removes heat (Buist et al., “In situ burning”, oil-spill review: extinction at 1–2 mm; ⚠ from memory)
         pool = onWater ? FuelPool.NONE : FuelPool.of(source.fuel(), source.fuelKg(), source.chargeKg());
         poolKg = pool.kg();
         poolRadius = pool.radius();
         poolSeconds = pool.seconds();
         poolWatts = pool.watts();
-        // пыль волны: над водой грунта нет (брызги — WaterBlast)
+        // wave dust: no soil above water (spray is WaterBlast)
         ground = new GroundDust(onWater ? 0 : source.chargeKg(), hob, heBall, surface, air);
-        // юбка — по поверхностям вокруг (высоты — от точки взрыва, как у пыли волны); у грани, которую нашёл сервер, — от
-        // точки взрыва, а не от грубой высоты земли вдали (там, где высота поверхностей неизвестна, — ровно у грани)
+        // skirt follows surrounding surfaces (heights relative to explosion point, as wave dust); at a server-found face, from
+        // explosion point, not coarse distant ground height (unknown surface heights mean exactly at the face)
         crushed = GroundDust.skirt(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
         // The wind integral is source data, like Thermal's table, not work for an invisible source in each frame.
@@ -432,30 +432,30 @@ public final class CloudModel {
     }
 
     /**
-     * Облако бомбы, прорвавшейся наружу ({@code source} — доля её заряда, что вышла в воздух): пыль — грунт воронки выброса
-     * ({@link BuriedBlast#craterVolume}; грунта пакет не несёт — сухой, как у наземного), доля {@link #DUST_LOFTED} в воздухе.
+     * Cloud from a bomb breaching outward ({@code source} is its charge share reaching air): dust is ejecta-crater soil
+     * ({@link BuriedBlast#craterVolume}; packet carries no soil type, use dry as for surface), share {@link #DUST_LOFTED} airborne.
      */
     public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater) {
         return buried(source, air, law, onWater, GroundDust.Ground.BARE);
     }
 
-    /** То же над поверхностью {@code ground} вокруг ({@link GroundDust}). */
+    /** Same above surrounding {@code ground} ({@link GroundDust}). */
     public static CloudModel buried(BlastSource source, Air air, BuriedBlast law, boolean onWater, GroundDust.Ground ground) {
         return new CloudModel(source, air, onWater ? BlastTarget.of(ua.zentix.incoming.warhead.GroundMaterial.WATER, source.chargeKg(), 0) : BlastTarget.SOIL,
                 onWater ? 0 : law.craterVolume(CraterModel.Soil.DRY) * SOIL_DENSITY * DUST_LOFTED, 0.5, 0, ground);
     }
 
     /**
-     * Пыль без жара ({@code source} — заряд 0: звук и место берёт событие): {@code volume} м³ грунта, сорванного ударом или
-     * обвалом, доля {@link #DUST_LOFTED} — в воздухе, облако размером {@code size} м у земли расплывается и уходит с ветром.
+     * Dust without heat ({@code source} has charge 0; event supplies sound and position): {@code volume} m³ soil torn by impact or
+     * collapse, share {@link #DUST_LOFTED} airborne; ground cloud of {@code size} m spreads and drifts with wind.
      */
     public static CloudModel dust(BlastSource source, Air air, double volume, double size) {
         return new CloudModel(source, air, volume * SOIL_DENSITY * DUST_LOFTED, size);
     }
 
     /**
-     * Доля газа температуры kelvin, что светится телом огня (0 — дым): от точки Дрейпера до {@link #GLOW_FULL_K} — плавно.
-     * Тело огненного шара тает в дым и дым проступает из шара одной долей — без шва.
+     * Gas share at temperature kelvin glowing as fire body (0 is smoke): smooth from Draper point to {@link #GLOW_FULL_K}.
+     * Fireball body fades into smoke as smoke appears from the ball by the same share, without a seam.
      */
     public static double glowShare(double kelvin) {
         double u = Math.max(0, Math.min(1, (kelvin - DRAPER_K) / (GLOW_FULL_K - DRAPER_K)));
@@ -463,22 +463,22 @@ public final class CloudModel {
     }
 
     /**
-     * Свет густого дыма облака на экране в полдень, белая стена — 1: сажа отражает R∞ ~0,03, пыль ~0,3 (два потока,
-     * {@code SmokePuffs.thick}); ⚠ оценка — их среднее геометрическое 0,1. Против него видно свечение остывающего шара.
+     * Thick cloud smoke light on screen at noon, white wall is 1: soot reflects R∞ ~0.03, dust ~0.3 (two streams,
+     * {@code SmokePuffs.thick}); ⚠ est.: geometric mean 0.1. Cooling-ball glow is seen against it.
      */
     public static final double SMOKE_SEEN = 0.1;
 
     /**
-     * Доля газа температуры kelvin, что видна телом огня, когда дым освещает небо силы sky (белая стена в полдень — 1;
-     * днём 1, ночью ~8·10⁻⁴ — {@code FarView.skyLuminance}): в пикселе свечение газа B(T) и свет неба, рассеянный его
-     * дымом ({@link #SMOKE_SEEN}·sky), складываются. Огонь не виден, пока его свет ниже порога контраста ({@link #SEEN},
-     * 0,02 — Blackwell 1946) к свету дыма, и дым не виден, когда его свет ниже того же порога к свету огня; между — плавно
-     * по логарифму их отношения (при равных — половина), и не больше {@link #glowShare(double)} (светится ли газ вообще).
-     * Ровно 0 и 1 на краях — не 1 − ε: клуб шара бомбы несёт тонны пыли, и даже 0,04 % её непрозрачны (тёмный ком поверх
-     * шара днём в первую секунду, кадры F6). Привыкание глаза не входит: на экране оба умножаются на одно и то же (с
-     * привыканием к шару у глаза холодный газ рядом выходил бы ночью чёрным комом). Днём шар бомбы в 1260 K (3 с после
-     * взрыва 1,3 т, яркость ~0,009 белой стены) — уже дым, ночью — ещё огонь; по одной температуре он днём оставался сплошь
-     * оранжевым до 3,7 с (шлагбаум RV2, бомба в 150 м). ⚠ Свет огня на самом дыме не входит.
+     * Gas share at temperature kelvin visible as fire body when smoke is lit by sky strength sky (white wall at noon is 1;
+     * day 1, night ~8·10⁻⁴, {@code FarView.skyLuminance}): gas glow B(T) and sky light scattered by its
+     * smoke ({@link #SMOKE_SEEN}·sky) add in a pixel. Fire is invisible below the contrast threshold ({@link #SEEN},
+     * 0.02, Blackwell 1946) against smoke light; smoke is invisible below the same threshold against fire light; between, smooth
+     * in log ratio (half at equality), capped by {@link #glowShare(double)} (whether gas glows at all).
+     * Exactly 0 and 1 at the ends, not 1 − ε: a bomb-ball clump carries tons of dust, even 0.04% is opaque (dark lump over
+     * the ball in daytime's first second, F6 frames). Eye adaptation is excluded: both get the same screen multiplier (with
+     * adaptation to the ball at the eye, nearby cold gas would become a black lump at night). A 1260 K bomb ball in daytime (3 s after
+     * 1.3 t explosion, brightness ~0.009 white wall) is already smoke, still fire at night; temperature alone kept it fully
+     * orange in daytime until 3.7 s (RV2 look gate, bomb at 150 m). ⚠ Fire light on the smoke itself is excluded.
      */
     public static double glowShare(double kelvin, double sky) {
         double g = glowShare(kelvin);
@@ -490,8 +490,8 @@ public final class CloudModel {
     }
 
     /**
-     * Яркость чёрного тела ({@link BlackBody#luminance}) по таблице логарифмов с шагом 10 K от точки Дрейпера (холоднее —
-     * 0): доля огня считается на каждый клуб кадра, а по Вину яркость между узлами — экспонента.
+     * Black-body luminance ({@link BlackBody#luminance}) from a log table in 10 K steps from Draper point (colder is
+     * 0): fire share is computed for each frame clump; by Wien, brightness between nodes is exponential.
      */
     static double glowLuminance(double kelvin) {
         if (kelvin <= DRAPER_K) return 0;
@@ -507,10 +507,10 @@ public final class CloudModel {
     }
 
     /**
-     * Доля сажи облака в возрасте t, что уже в облаке термика, а не в остывающем шаре: 0 в конец горения, 1 — когда шар
-     * остыл до точки Дрейпера ({@link #fireSeconds}), между — гладко (у шахеда ~0,8 с, у ракеты ~1,2 с, у бомбы ~1,4 с).
-     * ⚠ Сшивка двух приближений: термик MTT облака ведётся с мига взрыва, остывающий шар — с конца горения, и середины их
-     * к этому мигу расходятся (у бомбы — на ~17 м); где сажа на самом деле, пока шар светится, — в нём.
+     * Cloud soot share at age t already in the cloud thermal rather than cooling ball: 0 at burn end, 1 when the ball
+     * cools to Draper point ({@link #fireSeconds}), smooth between (~0.8 s Shahed, ~1.2 s missile, ~1.4 s bomb).
+     * ⚠ Joining two approximations: cloud MTT thermal starts at explosion, cooling ball at burn end, and their centers
+     * diverge by then (~17 m for bomb); while the ball glows, actual soot is in it.
      */
     double handoff(double t) {
         if (t <= burnSeconds) return 0;
@@ -519,34 +519,34 @@ public final class CloudModel {
         return u * u * (3 - 2 * u);
     }
 
-    /** Температура остывающего шара в возрасте t ≥ {@link #burnSeconds}, K. */
+    /** Cooling-ball temperature at age t ≥ {@link #burnSeconds}, K. */
     double coolKelvin(double t) {
         return cooling.kelvin(t - burnSeconds);
     }
 
-    /** Когда остывающий шар холоднее точки Дрейпера, с (шаг — тик). */
+    /** When cooling ball drops below Draper point, s (step is a tick). */
     private double glowEnd() {
         double t = burnSeconds;
         while (t < burnSeconds + 120 && coolKelvin(t) > DRAPER_K) t += 0.05;
         return t;
     }
 
-    /** Высота центра облака над точкой взрыва в возрасте t, м. */
+    /** Cloud center height above explosion point at age t, m. */
     public double height(double t) {
         return thermal.height(t);
     }
 
-    /** Радиус термика (верх-хат MTT) в возрасте t, м; дальше вершины — тот же. */
+    /** Thermal radius (MTT top-hat) at age t, m; unchanged after apex. */
     public double radius(double t) {
         return thermal.radius(t);
     }
 
-    /** Скорость подъёма, м/с. */
+    /** Rise speed, m/s. */
     public double rise(double t) {
         return thermal.rise(t);
     }
 
-    /** Снос центра ветром за t, м (x и z). */
+    /** Center wind drift over t, m (x and z). */
     public double driftX(double t) {
         return thermal.driftX(t);
     }
@@ -555,15 +555,15 @@ public final class CloudModel {
         return thermal.driftZ(t);
     }
 
-    /** Шаг таблицы сдвига, с. */
+    /** Shear table step, s. */
     private static final double SHEAR_DT = 0.5;
-    /** Сдвиг слоя на σv выше середины против середины по ветру, м, по шагам {@link #SHEAR_DT} (считается при первом вызове). */
+    /** Downwind offset of layer σv above center relative to center, m, in {@link #SHEAR_DT} steps (computed on first call). */
     private double[] shearTable;
 
     /**
-     * На сколько слой на σv выше середины облака ушёл по ветру вперёд середины к возрасту t, м: ∫ ½·(u(z + σv) − u(z − σv)) dt,
-     * u — ветер на высоте над землёй (степенной профиль класса устойчивости, {@link Air#wind}), z — середина облака
-     * (над землёй — с высотой подрыва). Слой на q·σv — на q·сдвиг.
+     * How far a layer σv above cloud center outruns it downwind by age t, m: ∫ ½·(u(z + σv) − u(z − σv)) dt,
+     * u is wind at height above ground (stability-class power profile, {@link Air#wind}), z is cloud center
+     * (above ground including burst height). A layer at q·σv uses q·offset.
      */
     public double shear(double t) {
         if (t <= 0) return 0;
@@ -584,9 +584,9 @@ public final class CloudModel {
     }
 
     /**
-     * Температура газа облака в возрасте t, K: в огненной стадии — шар (шар взрывчатки остывает от {@link #HE_BALL_HOT}
-     * к {@link #HE_BALL_END}, шар топлива держит {@link #FUEL_BALL_K}), потом — остывающий шар ({@link #cooling}), дальше —
-     * термик: T = T_a / (1 − g'/g).
+     * Cloud gas temperature at age t, K: in fire stage, ball (explosive ball cools from {@link #HE_BALL_HOT}
+     * to {@link #HE_BALL_END}, fuel ball holds {@link #FUEL_BALL_K}); then cooling ball ({@link #cooling}), then
+     * thermal: T = T_a / (1 − g'/g).
      */
     public double kelvin(double t) {
         double gas = thermal.kelvin(t);
@@ -596,26 +596,26 @@ public final class CloudModel {
         return gas;
     }
 
-    /** Температура шара продуктов детонации в возрасте t, K. */
+    /** Detonation-product ball temperature at age t, K. */
     public double heBallKelvin(double t) {
         double u = Math.min(1, t / Math.max(heBallSeconds, 1e-6));
         return HE_BALL_HOT + (HE_BALL_END - HE_BALL_HOT) * u;
     }
 
     /**
-     * Радиус светящегося шара (большего из двух) в возрасте t, м: в горении — шары, потом — остывающий шар (растёт
-     * подсосом); 0 — остыл до точки Дрейпера.
+     * Glowing-ball radius (larger of the two) at age t, m: balls during burning, then cooling ball (grows by
+     * entrainment); 0 when cooled to Draper point.
      */
     public double ballRadius(double t) {
-        // остывающий шар — термик с объёма, что держит тепло при температуре шара (у шахеда с теплом боевой части он на
-        // 4 % больше шара CCPS): от радиуса шара в конец горения к нему — за остывание, без скачка размера ({@link #handoff})
+        // cooling ball is a thermal from the volume maintaining ball temperature with its heat (with warhead heat, Shahed's is
+        // 4% larger than CCPS ball): transition from ball radius at burn end over cooling, without size jump ({@link #handoff})
         if (t >= burnSeconds) return t < fireSeconds ? cooling.radius(t - burnSeconds) + (burnRadius - cooling.radius(0)) * (1 - handoff(t)) : 0;
         return Math.max(fuelBallRadius(t), heBallRadius(t));
     }
 
     /**
-     * Температура самого горячего светящегося шара, K: пока светят продукты детонации — их шар, потом — шар топлива; 0 —
-     * шары погасли.
+     * Hottest glowing-ball temperature, K: detonation-product ball while it shines, then fuel ball; 0 means
+     * balls are dark.
      */
     public double ballKelvin(double t) {
         if (t < heBallSeconds) return heBallKelvin(t);
@@ -623,23 +623,23 @@ public final class CloudModel {
         return t < fireSeconds ? coolKelvin(t) : 0;
     }
 
-    /** Радиус шара продуктов детонации в возрасте t, м (0 — погас): за первые проценты жизни почти весь, как кадры шара. */
+    /** Detonation-product ball radius at age t, m (0 when dark): almost full in first percent of life, like ball frames. */
     public double heBallRadius(double t) {
         return t < heBallSeconds ? heBall * (0.3 + 0.7 * (1 - Math.exp(-t / (0.05 * heBallSeconds)))) : 0;
     }
 
-    /** Радиус шара топлива в возрасте t, м (0 — погас): {@link FuelFireball#radius} — тот же шар жжёт сервер. */
+    /** Fuel-ball radius at age t, m (0 when dark): {@link FuelFireball#radius}, same ball causes server burns. */
     public double fuelBallRadius(double t) {
         return FuelFireball.radius(fuelBall, fuelBallSeconds, t);
     }
 
-    /** Свет одного тела для {@link #ballLight} (зовут с потока отрисовки каждый кадр — без новых массивов). */
+    /** One body's light for {@link #ballLight} (called every frame on render thread, no new arrays). */
     private final double[] light = new double[4];
 
     /**
-     * Свет поверхности светящегося шара радиуса {@link #ballRadius} в возрасте t — в {@code out} (r, g, b, яркость Y; белая
-     * стена в полдень — 1): шары продуктов детонации и топлива вместе, каждый — серое тело своей температуры с долей
-     * площади (r/R)² (поток тот же, что у двух шаров) и степенью черноты из {@link #radiation}.
+     * Surface light of glowing ball of radius {@link #ballRadius} at age t into {@code out} (r, g, b, luminance Y; white
+     * wall at noon is 1): detonation-product and fuel balls together, each a gray body at its temperature with
+     * area share (r/R)² (same flux as two balls) and emissivity from {@link #radiation}.
      */
     public void ballLight(double t, double[] out) {
         java.util.Arrays.fill(out, 0, 4, 0);
@@ -664,9 +664,9 @@ public final class CloudModel {
     }
 
     /**
-     * Свет источника в возрасте t, без экспозиции и зависимости от света неба. Плавное исчезновение у точки Дрейпера
-     * ({@link #glowShare(double)}) — подача, только уменьшает бюджет. Дневной/ночной переход тела в дым
-     * ({@link #glowShare(double, double)}) — отдельная подача на экране, не изменение потока источника.
+     * Source light at age t, without exposure or sky-light dependence. Smooth fading at Draper point
+     * ({@link #glowShare(double)}) is presentation, only reducing the budget. Day/night body-to-smoke transition
+     * ({@link #glowShare(double, double)}) is separate screen presentation, not a source-flux change.
      */
     public void emittedLight(double t, double[] out) {
         ballLight(t, out);
@@ -675,42 +675,42 @@ public final class CloudModel {
     }
 
     /**
-     * Высота центра шара топлива, м: растёт от места удара, лёжа на земле своим нынешним радиусом ({@link #onGround}), и
-     * всплывает к 0,75·D к концу горения (CCPS) — {@link #lift}. Прежде середина стояла на D/2 с первого мига, когда шар
-     * ещё в метр: огонь рождался в воздухе над воронкой, и в 0,1–0,2 с середина видимого шара прыгала на 6 м у шахеда и на
-     * 14 м у ракеты (BLASTSEQ D01).
+     * Fuel-ball center height, m: grows from impact point, resting on ground at its current radius ({@link #onGround}), and
+     * rises to 0.75·D at burn end (CCPS), {@link #lift}. Previously center was D/2 from the first instant, with the ball
+     * still one meter: fire appeared in air above the crater, and at 0.1–0.2 s visible-ball center jumped 6 m for Shahed and
+     * 14 m for missile (BLASTSEQ D01).
      */
     public double fuelBallHeight(double t) {
         double r = fuelBallRadius(t);
         return r <= 0 ? 0 : onGround(r) + lift(t);
     }
 
-    /** Высота центра шара продуктов детонации над точкой взрыва, м: на земле своим радиусом ({@link #onGround}), всплывая с шаром топлива. */
+    /** Detonation-product ball center height above explosion point, m: resting at its radius ({@link #onGround}), rising with fuel ball. */
     public double heBallHeight(double t) {
         double r = heBallRadius(t);
         return r <= 0 ? 0 : onGround(r) + lift(t);
     }
 
     /**
-     * Середина шара радиуса r, растущего от точки взрыва, над ней, м: {@link FuelFireball#onGround} (physics.md фронта F:
-     * посадка полусферой у разрыва в воздухе не обоснована).
+     * Center of ball of radius r growing from explosion point, above it, m: {@link FuelFireball#onGround} (front F physics.md:
+     * hemispherical placement at an airburst is unjustified).
      */
     double onGround(double r) {
         return FuelFireball.onGround(r, hob);
     }
 
     /**
-     * Всплытие горящего шара топлива к возрасту t, м: {@link FuelFireball#lift} (к 0,75·D в конец горения). Шар продуктов
-     * детонации внутри шара топлива всплывает с ним; без топлива — 0: подъём продуктов — остывающий шар ({@link #cooling}).
+     * Burning fuel-ball rise by age t, m: {@link FuelFireball#lift} (to 0.75·D at burn end). Detonation-product ball
+     * inside fuel ball rises with it; without fuel, 0: product rise is the cooling ball ({@link #cooling}).
      */
     double lift(double t) {
         return FuelFireball.lift(fuelBall, fuelBallSeconds, t, hob);
     }
 
     /**
-     * Высота центра светящегося тела, м: пока горят шары — середина большего ({@link #onGround} его радиуса и общее
-     * всплытие: у меньшего тот же закон, поэтому при смене большего середина не прыгает), остывая — термик остывающего
-     * шара. Её же берут картинка шара, его свет на дым и мир, жар и дым шара ({@link #blobs}).
+     * Glowing-body center height, m: while balls burn, larger ball center ({@link #onGround} at its radius and shared
+     * rise: smaller follows the same law, so swapping larger ball causes no center jump); during cooling, cooling-ball
+     * thermal. Ball image, smoke/world light, heat and ball smoke ({@link #blobs}) share it.
      */
     public double ballHeight(double t) {
         if (t >= burnSeconds) return burnHeight + cooling.height(t - burnSeconds) - cooling.height(0);
@@ -718,9 +718,9 @@ public final class CloudModel {
     }
 
     /**
-     * Снос светящегося тела ветром к возрасту t, м (x и z): тот же, что у его дыма ({@link #driftX}) — картинка шара, его
-     * свет и жар идут вместе с клубами, в которые он остывает. Прежде шар стоял над местом удара, а дым уходил по ветру: у
-     * ракеты в конец свечения при ветре 5 м/с — на 21 м, больше радиуса шара (BLASTSEQ D01).
+     * Glowing-body wind drift by age t, m (x and z): same as its smoke ({@link #driftX}); ball image,
+     * light and heat travel with the clumps it cools into. Previously the ball stayed over impact while smoke drifted: for
+     * missile at glow end with 5 m/s wind, 21 m, more than ball radius (BLASTSEQ D01).
      */
     public double ballX(double t) {
         return driftX(t);
@@ -731,15 +731,15 @@ public final class CloudModel {
     }
 
     /**
-     * Топливо в воронке в возрасте t: доля тепловыделения 0..1 ({@link FuelPool#share}); 0 — топлива нет или выгорело.
+     * Crater fuel at age t: heat-release share 0..1 ({@link FuelPool#share}); 0 means no fuel or burnt out.
      */
     public double poolShare(double t) {
         return pool.share(t);
     }
 
     /**
-     * Расплывание после вершины по Бриггсу (открытая местность, класс {@link Air#spread}), σ по горизонтали и вертикали,
-     * м, на пути x = u·t, но не короче пути с ветром 1 м/с: в штиль воздух тоже перемешивается.
+     * Post-apex Briggs spread (open country, class {@link Air#spread}), horizontal and vertical σ,
+     * m, over travel x = u·t, but no shorter than travel in 1 m/s wind: calm air mixes too.
      */
     static double spreadH(int cls, double x) {
         double[] a = {0.22, 0.16, 0.11, 0.08, 0.06, 0.04};
@@ -757,7 +757,7 @@ public final class CloudModel {
         };
     }
 
-    /** σ облака по горизонтали в возрасте t, м: термик (сфера R — σ = R/√5) и расплывание после вершины. */
+    /** Horizontal cloud σ at age t, m: thermal (sphere R gives σ = R/√5) and post-apex spread. */
     public double sigmaH(double t) {
         return thermal.sigmaH(t);
     }
@@ -767,8 +767,8 @@ public final class CloudModel {
     }
 
     /**
-     * Толща облака поперёк середины в возрасте t: горизонтальная прямая через центр 3D-гаусса массы m —
-     * Σκ'·m / (2π·σh·σv) по веществам облака (у земли — своё облако, не в счёт).
+     * Transverse cloud-center optical depth at age t: horizontal line through center of mass-m 3D Gaussian,
+     * Σκ'·m / (2π·σh·σv) over cloud substances (ground cloud is separate, excluded).
      */
     public double tau(double t) {
         double ext = SOOT_K * soot + DustModel.K_MIX * capDust(t);
@@ -776,16 +776,16 @@ public final class CloudModel {
     }
 
     /**
-     * Пыль в облаке в возрасте t (ослабление в кг смеси {@code DustModel.K_MIX}): пыль воронки и сорванная волной под
-     * огненным шаром, что не осела из облака (слой — высота его середины), и пыль ножки, что дошла до его низа.
+     * Cloud dust at age t (extinction in kg of {@code DustModel.K_MIX} mixture): crater dust and wave dust lifted under
+     * the fireball that has not settled from the cloud (layer height is its center), plus stem dust reaching its bottom.
      */
     double capDust(double t) {
         return (dust + ground.underBall(t)) * DustModel.extinctionAloft(t / Math.max(height(t), 1)) + ground.drawn(stemEntered(t));
     }
 
     /**
-     * Доля пыли облака в возрасте t, что — раздробленное вещество цели (остальное — пыль поверхностей вокруг: из-под шара и
-     * из ножки): по ослаблению, как в {@link #capDust}. Цвет пыли облака — смесь их цветов этой долей.
+     * Cloud dust share at age t that is crushed target matter (rest is surrounding surface dust from under the ball and
+     * stem): by extinction, as {@link #capDust}. Cloud dust color mixes their colors by this share.
      */
     public double capMatterShare(double t) {
         double all = capDust(t);
@@ -793,9 +793,9 @@ public final class CloudModel {
     }
 
     /**
-     * До какого возраста вошедшая в ножку пыль уже дошла до низа облака в возрасте t, с: воздух ножки идёт вверх долей
-     * {@code MushroomModel.STEM_INFLOW} подъёма облака (как у ядерки), путь пыли, вошедшей в t', —
-     * доля·(высота(t) − высота(t')); низ облака — середина − 1,5σ.
+     * Latest stem-entry age of dust already reaching cloud bottom at age t, s: stem air rises by share
+     * {@code MushroomModel.STEM_INFLOW} of cloud rise (as in nuke); travel of dust entering at t' is
+     * share·(height(t) − height(t')); cloud bottom is center − 1.5σ.
      */
     double stemEntered(double t) {
         double bottom = height(t) - 1.5 * sigmaV(t), k = ua.zentix.incoming.nuclear.model.MushroomModel.STEM_INFLOW;
@@ -810,9 +810,9 @@ public final class CloudModel {
     }
 
     /**
-     * Докуда над слоем у земли поднялась пыль ножки к возрасту t, м: самая ранняя её порция (подсос начался в
-     * {@code GroundDust.drawnFrom}) идёт вверх долей {@code MushroomModel.STEM_INFLOW} подъёма облака с того мига — тот же
-     * путь, что у {@link #stemEntered}. Прежде ножка стояла во всю высоту до облака с первого мига подсоса (BLASTSEQ D09).
+     * How high stem dust rises above ground layer by age t, m: earliest portion (entrainment began at
+     * {@code GroundDust.drawnFrom}) rises by {@code MushroomModel.STEM_INFLOW} of cloud rise since then, same
+     * path as {@link #stemEntered}. Previously stem stood full-height to the cloud from first entrainment (BLASTSEQ D09).
      */
     double stemTop(double t) {
         double from = ground.drawnFrom;
@@ -820,7 +820,7 @@ public final class CloudModel {
         return ua.zentix.incoming.nuclear.model.MushroomModel.STEM_INFLOW * Math.max(0, height(t) - height(from));
     }
 
-    /** Сколько облако видно, с: пока {@link #tau} больше {@link #SEEN}, не дольше {@link #LIFE_MAX}. */
+    /** Cloud visibility duration, s: while {@link #tau} exceeds {@link #SEEN}, no longer than {@link #LIFE_MAX}. */
     private double lifeSeconds() {
         double lo = 0, hi = LIFE_MAX;
         if (tau(hi) >= SEEN) return hi;
@@ -835,8 +835,8 @@ public final class CloudModel {
     }
 
     /**
-     * Доля вещества облака, что рисуется в возрасте t: облако, истончившееся до порога видимости, к концу жизни и так не
-     * видно — 1; облако, что дожило до {@link #LIFE_MAX} густым, уходит плавно за последнюю десятую жизни (без скачка).
+     * Cloud matter share rendered at age t: a cloud thinning to visibility threshold is already invisible at end of life,
+     * so 1; a cloud still dense at {@link #LIFE_MAX} fades smoothly over its final tenth (no jump).
      */
     double fade(double t) {
         if (t >= life) return 0;
@@ -880,26 +880,26 @@ public final class CloudModel {
     }
 
     /**
-     * Клубы облака в возрасте t (с), от точки взрыва (y — от точки удара вверх): огненный шар (горячий, в огненной
-     * стадии), облако (термик: сажа, пыль воронки и пыль ножки, дошедшая до его низа), ножка — от земли вверх, докуда
-     * дошла её пыль, не выше низа облака (пыль, что подсос забрал из слоя волны и ещё не донёс до облака), слой пыли волны у
-     * земли ({@link GroundDust}).
-     * Каждый клуб несёт массу — пыль как ослабление в кг смеси {@code DustModel.K_MIX}.
+     * Cloud clumps at age t (s), relative to explosion point (y upward from impact): fireball (hot, in fire
+     * stage), cloud (thermal: soot, crater dust and stem dust reaching its bottom), stem from ground up to where
+     * its dust has reached, no higher than cloud bottom (dust entrained from wave layer but not yet delivered to cloud), ground wave
+     * dust layer ({@link GroundDust}).
+     * Each clump carries mass; dust as extinction in kg of {@code DustModel.K_MIX} mixture.
      */
     public void blobs(double t, Blobs out) {
         if (t < 0 || t >= life) return;
         double fade = fade(t);
         double cx = driftX(t), cz = driftZ(t), cy = height(t), sh = sigmaH(t), sv = sigmaV(t);
         double k = kelvin(t), up = rise(t);
-        // ножка: пыль, что подсос забрал из слоя у земли и ещё не донёс до облака (что дошло — в облаке); снизу вверх — не
-        // выше, чем дошла самая ранняя её порция ({@link #stemTop})
+        // stem: dust entrained from ground layer but not yet delivered to cloud (arrived dust is in cloud); bottom up, no
+        // higher than the earliest portion reached ({@link #stemTop})
         double entered = stemEntered(t), stem = Math.max(0, ground.drawn(t) - ground.drawn(entered));
-        // низ облака над землёй (у разрыва в воздухе земля — на hob ниже точки взрыва)
+        // cloud bottom above ground (airburst ground is hob below explosion point)
         double bottom = cy - 1.5 * sv + hob, ss = Math.max(0.35 * sh, 1), h0 = Math.min(ss, 0.5 * bottom), top = Math.min(bottom, h0 + stemTop(t));
         boolean stemShown = bottom > 2 && stem > 0 && top > h0;
         double cloudDust = capDust(t) + (stemShown ? 0 : stem);
-        // огненная стадия: шары светят своим радиусом и температурой — шар продуктов детонации (сажа взрывчатки — вся с
-        // мига детонации), шар топлива (сажа топлива — сколько его уже сгорело, {@link #sootBurnt}); пыль облака — в большем
+        // fire stage: balls shine at their radius and temperature; detonation-product ball (all explosive soot from
+        // detonation), fuel ball (soot from fuel already burnt, {@link #sootBurnt}); cloud dust is in the larger ball
         double he = heBallRadius(t), fuel = fuelBallRadius(t);
         double heSoot = heSoot(), fuelSoot = sootBurnt(t) - heSoot;
         if (he > 0 || fuel > 0) {
@@ -915,13 +915,13 @@ public final class CloudModel {
                         Math.max(k, FUEL_BALL_K), up);
             }
         } else {
-            // слои по высоте: каждый — с ветром своей высоты (сдвиг относительно середины — вдоль ветра)
+            // height layers: each uses wind at its height (offset relative to center is downwind)
             double lean = shear(t), wx = air.windX(), wz = air.windZ(), w = Math.hypot(wx, wz);
             double ux = w > 0 ? wx / w : 0, uz = w > 0 ? wz / w : 0;
-            // Сажа остывающего шара — ещё в шаре (его середина и размер), облако термика принимает её за время остывания:
-            // одно вещество в двух приближениях (CloudModel.cooling пока шар светится, thermal — дальше). Смена разом в
-            // конец горения ставила тёмный купол за тик (ревью #426: у ракеты край +32 %, у бомбы середина на 17 м выше).
-            // Середина слоёв — первой: номер клуба держит зерно его клубов у SmokePuffs, слияние — тот же клуб шара.
+            // Cooling-ball soot remains in the ball (its center and size); cloud thermal accepts it over cooling:
+            // one substance in two approximations (CloudModel.cooling while ball glows, thermal afterward). Instant swap at
+            // burn end created a dark dome in one tick (review #426: missile edge +32%, bomb center 17 m higher).
+            // Middle layer first: clump number keeps its SmokePuffs child seeds; merging retains the same ball clump.
             double hand = handoff(t), ball = ballRadius(t) / Math.sqrt(5), by = ballHeight(t);
             for (int i = 0; i < LAYERS; i++) {
                 int j = LAYER_ORDER[i];
@@ -932,11 +932,11 @@ public final class CloudModel {
             }
         }
         if (stemShown) {
-            // ножка — трубка пыли до верха поднявшейся пыли, не выше низа облака (σ — ⚠ оценка: треть σ облака), клонится с ветром: снос на её высоте —
-            // доля сноса облака; пыль — поровну по высоте (на метр оси куска — меньше во столько, во сколько ось длиннее
-            // подъёма). Кусками трубки, а не отдельными клубами через 2σ: те шли бусами (кадры F5)
-            // низ ножки — на её σ над землёй: ниже — слой пыли волны (свои клубы), а снос по степенному профилю ветра падает к
-            // нулю только у самой земли, и кусок от точки удара до основания наклонённой ножки лёг бы полосой по земле
+            // stem is a dust tube up to risen-dust top, no higher than cloud bottom (σ: ⚠ est., third of cloud σ), leaning with wind: drift at its height is
+            // a share of cloud drift; dust uniform by height (per segment-axis meter reduced by ratio of axis length to
+            // rise). Tube segments, not separate clumps every 2σ: those made beads (F5 frames)
+            // stem bottom is its σ above ground: below is wave dust layer (own clumps), while power-profile wind drift falls to
+            // zero only at ground itself; segment from impact to tilted stem base would form a strip along ground
             double perHeight = stem * fade / (top - h0);
             double lean0 = air.wind(h0) / air.wind(cy + hob);
             double px = cx * lean0, py = h0 - hob, pz = cz * lean0;
@@ -952,21 +952,21 @@ public final class CloudModel {
                 pz = qz;
             }
         }
-        // слой пыли волны — на поверхностях, с которых его подняло, и там, куда он стёк (высоты — от точки взрыва)
+        // wave dust layer on surfaces it rose from and where it drained (heights relative to explosion point)
         ground.blobs(t, fade, (x, y, z, gh, gv, d) -> out.ground(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
         crushed.blobs(t, fade, (x, y, z, gh, gv, d) -> out.crushed(x, y, z, gh, gv, d, inBall(t, x, y, z, T_AIR)));
     }
 
-    /** Сажа взрывчатки, кг: свободный углерод детонации, что пережил догорание в шаре ({@link #SOOT_SURVIVES}). */
+    /** Explosive soot, kg: free detonation carbon surviving ball afterburning ({@link #SOOT_SURVIVES}). */
     double heSoot() {
         return source.chargeKg() * source.explosive().freeCarbon() * SOOT_SURVIVES;
     }
 
     /**
-     * Сажа облака, что уже родилась к возрасту t, кг: сажа взрывчатки — с мига детонации (микросекунды), сажа топлива — по
-     * мере того, как шар его сжигает: доля сгоревшего — доля прожитого горения (шар CCPS горит своим топливом всё своё
-     * время; ⚠ ровный расход — оценка, хода выгорания CCPS не даёт). Прежде вся будущая сажа топлива была в шаре с первого
-     * мига (BLASTSEQ D02): днём шар в метр стоял тёмным пятном в два своих радиуса.
+     * Cloud soot already born by age t, kg: explosive soot from detonation (microseconds); fuel soot as
+     * the ball burns fuel: burnt share equals elapsed burn share (CCPS ball burns its fuel throughout its
+     * duration; ⚠ uniform flow is est., CCPS gives no burn history). Previously all future fuel soot was in the ball from the first
+     * instant (BLASTSEQ D02): a one-meter ball in daytime was a dark spot twice its radius.
      */
     public double sootBurnt(double t) {
         double he = heSoot();
@@ -975,15 +975,15 @@ public final class CloudModel {
     }
 
     /**
-     * Температура вещества в (x, y, z) от точки взрыва, у которого своя — kelvin: внутри светящегося шара оно — часть шара
-     * (его пыль проступает той же долей, что шар тает), снаружи — своя, у поверхности (0,8–1,2 радиуса) — плавно. Днём по своей температуре ножка и пыль у земли внутри
-     * шара ложились тёмным комом поверх него в первую секунду (кадры F6, бомба в 150 м).
+     * Temperature of matter at (x, y, z) relative to explosion point with own temperature kelvin: inside glowing ball it is part of the ball
+     * (its dust appears by the same share as ball fades); outside, its own temperature; smooth at surface (0.8–1.2 radii). In daytime, using own temperature made stem and ground dust inside
+     * the ball a dark lump over it in the first second (F6 frames, bomb at 150 m).
      */
     private double inBall(double t, double x, double y, double z, double kelvin) {
         double ball = ballRadius(t), hot = ballKelvin(t);
         if (ball <= 0 || hot <= kelvin) return kelvin;
         double dx = x - ballX(t), dy = y - ballHeight(t), dz = z - ballZ(t), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        // у поверхности шара — плавно (0,8–1,2 радиуса): кусок, что выходит из растущего шара, не выскакивает непрозрачным
+        // smooth at ball surface (0.8–1.2 radii): a piece leaving a growing ball does not abruptly turn opaque
         double u = Math.max(0, Math.min(1, (1.2 * ball - d) / (0.4 * ball)));
         return kelvin + (hot - kelvin) * u * u * (3 - 2 * u);
     }
@@ -1013,7 +1013,7 @@ public final class CloudModel {
         return condensation;
     }
 
-    /** Толща самого густого клуба слоя пыли волны в возрасте t (через середину по горизонтали). */
+    /** Densest wave-dust-layer clump optical depth at age t (horizontal through center). */
     public double groundTauForTest(double t) {
         return ground.tau(t);
     }

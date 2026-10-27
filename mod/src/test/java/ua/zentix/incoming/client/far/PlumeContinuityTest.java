@@ -25,21 +25,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Шлейф пожара — один сплошной столб с любой дальности (жалоба 22.10: из 1–3 км дым лужи топлива шёл цепочкой отдельных
- * клубов). Шлейф раскладывает тот же код, что в игре ({@link FireSmoke#lay}), рисует тот же приёмник слоя эффектов
- * ({@link SmokePuffs#sink}: ленты и клубы, как у следа снаряда); квадраты пишет свой приёмник, и непрозрачность вдоль оси на
- * экране складывается из них: клуб — радиальный профиль непрозрачности его кадра запечённого клуба, лента — её
- * непрозрачность у оси. Разрыв — впадина: непрозрачность у оси меньше половины наименьшей из
- * наибольших по обе стороны в окне шириной в четыре σ сечения (не меньше 8 пикселей), и разница видна глазу (больше порога
- * контраста Кошмидера, {@link Sight#THRESHOLD}): так выглядит бусина за бусиной. Сплошной шлейф редеет вдоль оси плавно.
+ * Fire plume is one continuous column at any range (22.10 complaint: fuel-pool smoke from 1–3 km was a chain of separate
+ * clumps). Same game code lays plume ({@link FireSmoke#lay}), same effects-layer sink renders it
+ * ({@link SmokePuffs#sink}: ribbons and clumps, as projectile trail); custom sink writes quads, from which screen-axis
+ * opacity is composed: clump uses its baked-frame radial opacity profile; ribbon uses
+ * axial opacity. A gap is a valley: axial opacity below half the smaller of the
+ * maxima on both sides within four cross-section σ (at least 8 pixels), with eye-visible difference (above Koschmieder
+ * contrast threshold, {@link Sight#THRESHOLD}): bead after bead. Continuous plume thins smoothly along axis.
  */
 class PlumeContinuityTest {
-    /** Угол пикселя: 70° на 1080 строк. */
+    /** Pixel angle: 70° over 1080 rows. */
     private static final double PIXEL = Math.toRadians(70) / 1080;
-    /** Шаг профиля непрозрачности клуба по радиусу (доля полуразмера квадрата). */
+    /** Clump radial opacity-profile step (quad half-size share). */
     static final double BIN = 0.02;
 
-    /** Радиальные профили непрозрачности кадров клуба (по доле полуразмера квадрата, шаг {@link #BIN}). */
+    /** Clump-frame radial opacity profiles (quad half-size share, {@link #BIN} step). */
     static double[][] profiles() throws IOException {
         if (profiles != null) return profiles;
         int bins = (int) Math.round(1.5 / BIN);
@@ -64,7 +64,7 @@ class PlumeContinuityTest {
 
     private static double[][] profiles;
 
-    /** Кадр клуба по его картинке (прямой и отражённый — один кадр). */
+    /** Clump frame by image (original and mirrored count as one frame). */
     static int frameOf(FxAtlas.Sprite sprite) {
         for (int f = 0; f < FxAtlas.PUFF6_FRAMES; f++) {
             if (FxAtlas.puff6(f, false).equals(sprite) || FxAtlas.puff6(f, true).equals(sprite)) return f;
@@ -80,26 +80,26 @@ class PlumeContinuityTest {
     }
 
     /**
-     * Клубы кучки и трубки берут разные кадры и у старого облака: кадр источника растёт до последнего, и с разбросом только
-     * вперёд все клубы были бы одним кадром (отражённым) — «штамп». Разброс — {@link SmokePuffs#FRAME_SPREAD} в обе
-     * стороны, у краёв листа — внутрь него; без разброса — кадр источника.
+     * Cluster and tube clumps use different frames even for old clouds: source frame reaches last; forward-only scatter
+     * would give every clump the same (mirrored) frame, a “stamp”. Spread is {@link SmokePuffs#FRAME_SPREAD} in both
+     * directions, inward at sheet edges; zero spread uses source frame.
      */
     @Test
     void oldCloudsKeepVariedPuffs() {
         double last = FxAtlas.PUFF6_FRAMES - 1.001;
         for (double age : new double[]{0, 0.5, 3, 7.5, 14, last, 40}) {
             double lo = SmokePuffs.clubFrame(age, 0, true), hi = SmokePuffs.clubFrame(age, 1, true);
-            assertEquals(2 * SmokePuffs.FRAME_SPREAD, hi - lo, 1e-9, "разброс кадров у кадра источника " + age);
-            assertTrue(lo >= SmokePuffs.FIRST_FRAME && hi <= last, "кадры — на листе: " + age);
+            assertEquals(2 * SmokePuffs.FRAME_SPREAD, hi - lo, 1e-9, "frame spread at source frame " + age);
+            assertTrue(lo >= SmokePuffs.FIRST_FRAME && hi <= last, "frames on sheet: " + age);
             assertEquals(Math.clamp(age, SmokePuffs.FIRST_FRAME, last), SmokePuffs.clubFrame(age, 0.3, false), 1e-9);
         }
     }
 
     /**
-     * Запечённый клуб на экране — почти ровный диск: радиус ровного диска с тем же покрытием по хорде через середину
-     * (∫ средней по кольцу непрозрачности по радиусу до 1,2 полуразмера / непрозрачность середины) у кадров, что рисуют
-     * трубки, — {@link SmokePuffs#PUFF_DISCS} у каждого кадра, самый узкий — {@link SmokePuffs#PUFF_DISC_MIN}. По ним — шаг
-     * мест трубки и доля непрозрачности клуба: новые кадры симуляции — новые числа.
+     * Baked clump on screen is nearly uniform disc: uniform disc radius with same coverage along center chord
+     * (∫ ring-mean opacity over radius up to 1.2 half-size / center opacity) for frames rendering
+     * tubes is {@link SmokePuffs#PUFF_DISCS} per frame; narrowest is {@link SmokePuffs#PUFF_DISC_MIN}. These set tube-place
+     * spacing and clump opacity share: new simulation frames require new numbers.
      */
     @Test
     void puffDiscMatchesTheBakedFrames() throws IOException {
@@ -127,16 +127,16 @@ class PlumeContinuityTest {
             double half = 0;
             for (int k = 0; k < bins; k++) if (c[k] > 0) half += a[k] / c[k] / centre / 50;
             min = Math.min(min, half);
-            assertEquals(SmokePuffs.PUFF_DISCS[f], half, 0.021, "кадр " + f);
+            assertEquals(SmokePuffs.PUFF_DISCS[f], half, 0.021, "frame " + f);
         }
-        assertEquals(SmokePuffs.PUFF_DISC_MIN, min, 0.021, "самый узкий кадр");
+        assertEquals(SmokePuffs.PUFF_DISC_MIN, min, 0.021, "narrowest frame");
     }
 
-    /** Квадраты кадра: клубы (центр от глаза, полуразмеры, непрозрачность) и ленты (концы, полуширины, непрозрачности). */
+    /** Frame quads: clumps (eye-relative center, half-sizes, opacity) and ribbons (ends, half-widths, opacities). */
     private static final class Record implements SmokePuffs.Out {
-        /** Клубы лицом к камере, лежащие на горизонтали (слой пыли у земли, {@code FxQuads.flat}) и ленты. */
+        /** Camera-facing clumps, horizontal clumps (ground dust layer, {@code FxQuads.flat}), and ribbons. */
         final List<double[]> puffs = new ArrayList<>(), flats = new ArrayList<>(), ribbons = new ArrayList<>();
-        /** Вуаль кадра: крупные на экране места трубки (кадр сверх бюджета заливки) — в ней, та же толща по лучам. */
+        /** Frame veil: large on-screen tube places (frame exceeds fill budget) enter it, same ray optical depth. */
         SmokePuffs.Veil veil;
 
         @Override
@@ -166,7 +166,7 @@ class PlumeContinuityTest {
         }
     }
 
-    /** Источник для приёмника: зерно и рост клуба; светящийся газ — дымом, без брызг. */
+    /** Sink source: seed and clump growth; glowing gas as smoke, no spray. */
     private static final SmokeGrid.Source SOURCE = new SmokeGrid.Source() {
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -180,13 +180,13 @@ class PlumeContinuityTest {
     };
 
     /**
-     * Шлейф очага fuel силы 1 (горит давно и ровно) в ветре u класса stability, взгляд сбоку (поперёк ветра) из range
-     * метров с высоты 2 м над очагом: true — без разрывов вдоль оси в кадре.
+     * Plume of strength-1 fuel source (long steady burn), wind u, stability class stability, side view (crosswind) from range
+     * meters at 2 m above source: true means no screen-axis gaps.
      */
     private static boolean continuous(String name, FireSmoke.Fuel fuel, double u, double stability, double range) throws IOException {
         FirePlume plume = new FirePlume(fuel.watts(), Math.sqrt(fuel.area() / Math.PI), fuel.sootPerJoule(), u, stability);
         double far = plume.visible(FireSmoke.REACH);
-        // ось шлейфа — концы кусков трубки, как их кладёт FireSmoke; очаг — (0, 0, 0), ветер — к +z
+        // plume axis: tube-piece ends as FireSmoke lays them; source at (0, 0, 0), wind toward +z
         List<double[]> axis = new ArrayList<>();
         SmokeGrid.Sink ends = new SmokeGrid.Sink() {
             @Override
@@ -202,8 +202,8 @@ class PlumeContinuityTest {
             }
         };
         FireSmoke.lay(fuel, 0, 0, 0, 0, 1, u, stability, far, plume.size, x -> 1, x -> 1, ends);
-        assertTrue(axis.size() > 3, name + ": шлейф из кусков");
-        // глаз — сбоку от середины видимой части шлейфа в кадре (вблизи кадр берёт только часть шлейфа)
+        assertTrue(axis.size() > 3, name + ": plume made of pieces");
+        // eye beside center of visible plume portion (nearby frame contains only part of plume)
         double look = Math.min(0.5 * far, 0.5 * range);
         FarView view = view(new Vec3(-range, 2, look), at(axis, look));
         Record out = new Record();
@@ -212,7 +212,7 @@ class PlumeContinuityTest {
         return along(name, axis, view, out);
     }
 
-    /** Вид из eye на точку mid: 70° на 1080 строк, ясный воздух. */
+    /** View from eye toward mid: 70° over 1080 rows, clear air. */
     private static FarView view(Vec3 eye, double[] mid) {
         Vector3f fwd = new Vector3f((float) (mid[0] - eye.x), (float) (mid[1] - eye.y), (float) (mid[2] - eye.z)).normalize();
         Vector3f left = new Vector3f(0, 1, 0).cross(fwd, new Vector3f()).normalize(), up = fwd.cross(left, new Vector3f()).normalize();
@@ -221,18 +221,18 @@ class PlumeContinuityTest {
     }
 
     /**
-     * Непрозрачность у оси трубки (куски axis: концы и σ в мире) по квадратам out, что нарисованы в виде view: true — без
-     * разрывов в кадре.
+     * Tube-axis opacity (axis pieces: ends and σ in world) from quads out rendered in view: true means no
+     * frame gaps.
      */
     private static boolean along(String name, List<double[]> axis, FarView view, Record out) throws IOException {
-        // клубы мест трубки ждут плана кадра: кадр кончился
+        // tube-place clumps wait for frame plan: frame ended
         SmokePuffs.resetBudget();
         SmokePuffs.flush();
         Vec3 eye = view.camera();
         Vector3f fwd = view.forward(), left = view.left(), up = view.up();
         double edge = view.edge();
         double[][] prof = profiles();
-        // непрозрачность вдоль оси на экране: шаг — четверть пикселя или σ/8
+        // screen-axis opacity: quarter-pixel or σ/8 step
         List<double[]> samples = new ArrayList<>();
         double total = 0;
         for (double[] s : axis) total += Math.sqrt(sq(s[4] - s[0]) + sq(s[5] - s[1]) + sq(s[6] - s[2]));
@@ -253,7 +253,7 @@ class PlumeContinuityTest {
                 int k = (int) (r / BIN);
                 if (k < prof[0].length) clear *= 1 - q[5] * prof[(int) q[6]][k];
             }
-            // лежащий клуб — квадрат на горизонтали: луч из глаза в точку оси пересекает его плоскость (если пересекает до неё)
+            // flat clump is horizontal quad: ray from eye toward axis point intersects its plane (if intersection precedes point)
             for (double[] q : out.flats) {
                 if (Math.abs(py) < 1e-9) continue;
                 double t = q[1] / py;
@@ -263,18 +263,18 @@ class PlumeContinuityTest {
                 if (k < prof[0].length) clear *= 1 - q[5] * prof[(int) q[6]][k];
             }
             for (double[] rb : out.ribbons) clear *= 1 - ribbonAt(rb, su, sv, fwd, left, up);
-            // закон у оси — 1 − e^(−τ), τ = e/(√(2π)σ), с дымкой; только где трубку рисуют одни клубы (шире порога лент)
+            // axis law is 1 − e^(−τ), τ = e/(√(2π)σ), with haze; only where clumps alone draw tube (wider than ribbon threshold)
             double tau = p[4] / (Math.sqrt(2 * Math.PI) * sigma);
             double law = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma) >= FarFlightView.PUFFS_FULL * PIXEL * d
                     ? (1 - Math.exp(-tau)) * view.air(d, py) : Double.NaN;
             samples.add(new double[]{path, 1 - clear, Math.max(4 * sigma, 8 * PIXEL * d), law});
         }
-        assertTrue(samples.size() > 20, name + ": шлейф в кадре");
+        assertTrue(samples.size() > 20, name + ": plume in frame");
         boolean ok = true;
         int gaps = 0;
         for (double[] s : samples) {
-            // впадина: по обе стороны в окне непрозрачнее вдвое, и разница видна глазу (контраст больше порога Кошмидера);
-            // начало шлейфа у очага и его тающий конец — не разрыв
+            // valley: twice the opacity on both sides within window, eye-visible difference (contrast above Koschmieder threshold);
+            // plume beginning at source and fading end are not gaps
             double before = 0, after = 0;
             for (double[] o : samples) {
                 double dx = o[0] - s[0];
@@ -283,12 +283,12 @@ class PlumeContinuityTest {
             }
             double top = Math.min(before, after);
             if (s[1] < 0.5 * top && top - s[1] > Sight.THRESHOLD) {
-                if (gaps++ < 3) System.out.printf(Locale.ROOT, "%s: разрыв на %.0f м пути: %.3f против %.3f рядом%n", name, s[0], s[1], top);
+                if (gaps++ < 3) System.out.printf(Locale.ROOT, "%s: gap at %.0f m travel: %.3f versus %.3f nearby%n", name, s[0], s[1], top);
                 ok = false;
             }
         }
-        // непрозрачность у оси в среднем — закона (клуб берёт свою долю трубки; ⚠ диск клуба по кадрам 0,71–0,80 полуразмера —
-        // ±25 % по кадру, в среднем по оси ближе)
+        // mean axial opacity follows law (clump takes its tube share; ⚠ frame clump disc is 0.71–0.80 half-size,
+        // ±25% by frame, closer averaged over axis)
         double drawn = 0, law = 0;
         for (double[] s : samples) {
             if (Double.isNaN(s[3])) continue;
@@ -297,17 +297,17 @@ class PlumeContinuityTest {
         }
         double ratio = law > 0 ? drawn / law : 1;
         if (law > 0 && (ratio < 0.75 || ratio > 1.33)) {
-            System.out.printf(Locale.ROOT, "%s: у оси %.2f закона%n", name, ratio);
+            System.out.printf(Locale.ROOT, "%s: axis %.2f of law%n", name, ratio);
             ok = false;
         }
-        System.out.printf(Locale.ROOT, "%s: %d клубов, %d лент, %d точек оси, разрывов %d, у оси %.2f закона%n", name, out.puffs.size(),
+        System.out.printf(Locale.ROOT, "%s: %d clumps, %d ribbons, %d axis points, %d gaps, axis %.2f of law%n", name, out.puffs.size(),
                 out.ribbons.size(), samples.size(), gaps, ratio);
         return ok;
     }
 
     /**
-     * След снаряда тем же отрезком трубки ({@link FarFlightView#line}): прямой, под 40° к горизонту, 160 м (сгорание «Града»
-     * на игровой скорости), σ от 0,5 до 10 м к хвосту, ослабление на метр e; взгляд сбоку из range метров.
+     * Projectile trail with same tube segment ({@link FarFlightView#line}): straight, 40° above horizon, 160 m (Grad burning
+     * at game speed), σ from 0.5 to 10 m toward tail, extinction per meter e; side view from range meters.
      */
     private static boolean trail(String name, double e, double range) throws IOException {
         List<double[]> axis = new ArrayList<>();
@@ -330,7 +330,7 @@ class PlumeContinuityTest {
         return along(name, axis, view, out);
     }
 
-    /** Конец трубки сечения σ с ослаблением e на метр в (dx, dy, dz) от глаза — как у следа ({@code FarFlightView.end}). */
+    /** Tube end of cross-section σ with extinction e per meter at eye-relative (dx, dy, dz), as trail ({@code FarFlightView.end}). */
     private static FarFlightView.Tube end(FarView view, double dx, double dy, double dz, double sigma, double e) {
         double tau = e / (Math.sqrt(2 * Math.PI) * sigma), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double width = ua.zentix.incoming.client.fx.plume.TrailModel.width(tau, sigma);
@@ -339,7 +339,7 @@ class PlumeContinuityTest {
         return new FarFlightView.Tube().set(dx, dy, dz, sigma, e, width, rib[0], (float) ((1 - Math.exp(-tau)) * rib[1] * view.air(d, dy)), 0);
     }
 
-    /** Непрозрачность ленты в точке экрана (su, sv): у оси отрезка — её непрозрачность по месту, поперёк — до полуширины на половине. */
+    /** Ribbon opacity at screen point (su, sv): local axial opacity along segment, transverse half-opacity at half-width. */
     private static double ribbonAt(double[] rb, double su, double sv, Vector3f fwd, Vector3f left, Vector3f up) {
         double ad = rb[0] * fwd.x + rb[1] * fwd.y + rb[2] * fwd.z, bd = rb[5] * fwd.x + rb[6] * fwd.y + rb[7] * fwd.z;
         if (ad <= 0 || bd <= 0) return 0;
@@ -349,11 +349,11 @@ class PlumeContinuityTest {
         double t = len2 > 0 ? Math.clamp(((su - au) * tu + (sv - av) * tv) / len2, 0, 1) : 0;
         double off = Math.hypot(su - au - t * tu, sv - av - t * tv);
         double half = (rb[3] / ad) * (1 - t) + (rb[8] / bd) * t, alpha = rb[4] * (1 - t) + rb[9] * t;
-        // гаусс поперёк с половиной непрозрачности на полуширине (ширина ленты — на половине непрозрачности середины)
+        // transverse Gaussian with half opacity at half-width (ribbon width measured at half center opacity)
         return alpha * Math.exp(-Math.log(2) * sq(off / Math.max(half, 1e-9)));
     }
 
-    /** Точка оси на пути path вдоль кусков: x, y, z, σ и ослабление на метр оси. */
+    /** Axis point at path distance along pieces: x, y, z, σ and extinction per axis meter. */
     private static double[] at(List<double[]> axis, double path) {
         for (double[] s : axis) {
             double len = Math.sqrt(sq(s[4] - s[0]) + sq(s[5] - s[1]) + sq(s[6] - s[2]));
@@ -371,27 +371,27 @@ class PlumeContinuityTest {
         return v * v;
     }
 
-    /** Топливо в воронке шахеда: ~2,2 МВт бензина на 2 м радиуса (как {@code FireSmoke.pool}: сажа бензина 0,04 кг/кг, 43,4 МДж/кг). */
+    /** Shahed crater fuel: ~2.2 MW gasoline over 2 m radius (as {@code FireSmoke.pool}: gasoline soot 0.04 kg/kg, 43.4 MJ/kg). */
     private static final FireSmoke.Fuel POOL = new FireSmoke.Fuel(2.2e6, Math.PI * 4, 0.04 / 43.4e6);
-    /** Горящий дом: 160 блоков огня (~28 МВт). */
+    /** Burning house: 160 fire blocks (~28 MW). */
     private static final FireSmoke.Fuel HOUSE = new FireSmoke.Fuel(160 * FirePlume.BLOCK_WATTS, 160, FirePlume.SOOT_PER_JOULE);
 
     @Test
     void fuelFireIsOneColumnFromAnyDistance() throws IOException {
         boolean ok = true;
         for (double range : new double[]{50, 300, 1000, 3000}) {
-            ok &= continuous("лужа, ветер 5 м/с, D, " + range + " м", POOL, 5, Stability.D, range);
-            ok &= continuous("лужа, штиль 1,5 м/с, E, " + range + " м", POOL, 1.5, Stability.E, range);
-            ok &= continuous("лужа, вечер 1 м/с, F, " + range + " м", POOL, 1, Stability.F, range);
-            ok &= continuous("масло подстанции, 3 м/с, D, " + range + " м", FireSmoke.OIL, 3, Stability.D, range);
-            ok &= continuous("дом, 4,9 м/с, D, " + range + " м", HOUSE, 4.9, Stability.D, range);
+            ok &= continuous("pool, wind 5 m/s, D, " + range + " m", POOL, 5, Stability.D, range);
+            ok &= continuous("pool, calm 1.5 m/s, E, " + range + " m", POOL, 1.5, Stability.E, range);
+            ok &= continuous("pool, evening 1 m/s, F, " + range + " m", POOL, 1, Stability.F, range);
+            ok &= continuous("substation oil, 3 m/s, D, " + range + " m", FireSmoke.OIL, 3, Stability.D, range);
+            ok &= continuous("house, 4.9 m/s, D, " + range + " m", HOUSE, 4.9, Stability.D, range);
         }
-        assertTrue(ok, "шлейф с разрывами — подробности выше");
+        assertTrue(ok, "plume has gaps; details above");
     }
 
     /**
-     * Тот же класс — ножка облака взрыва (пыль от земли до низа облака, {@code CloudModel.blobs}): ракета, нейтральный воздух
-     * с ветром 3 м/с, через 10, 20 и 40 с, из 300 м, 1 и 3 км.
+     * Same class: explosion-cloud stem (dust from ground to cloud bottom, {@code CloudModel.blobs}): missile, neutral air
+     * with 3 m/s wind, after 10, 20 and 40 s, from 300 m, 1 and 3 km.
      */
     @Test
     void blastStemIsOneColumnFromAnyDistance() throws IOException {
@@ -412,7 +412,7 @@ class PlumeContinuityTest {
                     axis.add(new double[]{ax, ay, az, sa, bx, by, bz, sb, k * dustA, k * dustB});
                 }
             });
-            assertTrue(axis.size() > 1, "ножка через " + t + " с");
+            assertTrue(axis.size() > 1, "stem after " + t + " s");
             double[] top = axis.get(axis.size() - 1);
             for (double range : new double[]{300, 1000, 3000}) {
                 FarView view = view(new Vec3(0, 2, -range), at(axis, 0.5 * pathLength(axis)));
@@ -420,7 +420,7 @@ class PlumeContinuityTest {
                 SmokeGrid.Sink sink = SmokePuffs.sink(view, out, GLOWING, 100);
                 model.blobs(t, new CloudModel.Blobs() {
                     @Override
-                    // облако и слой пыли у земли — свои клубы, у них своё вещество: здесь — только сплошность самой ножки
+                    // cloud and ground dust layer have own clumps and matter: here only stem continuity
                     public void blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, double kelvin,
                                      double rise) {}
 
@@ -430,13 +430,13 @@ class PlumeContinuityTest {
                         sink.tube(ax, ay, az, sa, sa, 0, dustA, bx, by, bz, sb, sb, 0, dustB, albedo, albedo, albedo, kelvin, rise, sa);
                     }
                 });
-                ok &= along("ножка через " + t + " с (верх " + Math.round(top[5]) + " м), " + range + " м", axis, view, out);
+                ok &= along("stem after " + t + " s (top " + Math.round(top[5]) + " m), " + range + " m", axis, view, out);
             }
         }
-        assertTrue(ok, "ножка с разрывами — подробности выше");
+        assertTrue(ok, "stem has gaps; details above");
     }
 
-    /** Облако взрыва рисует свой огонь телом: горячее проступает дымом долей остывания. */
+    /** Explosion cloud draws own fire body: hot matter appears as smoke by cooling share. */
     private static final SmokeGrid.Source GLOWING = new SmokeGrid.Source() {
         @Override
         public boolean emit(double seconds, SmokeGrid.Sink out) {
@@ -460,13 +460,13 @@ class PlumeContinuityTest {
         return total;
     }
 
-    /** Тот же класс — след снаряда: трубка от тонкой (τ у оси ~0,05) до густой (~10) с любой дальности. */
+    /** Same class: projectile trail tube from thin (axial τ ~0.05) to thick (~10), at any range. */
     @Test
     void trailIsOneLineFromAnyDistance() throws IOException {
         boolean ok = true;
         for (double range : new double[]{50, 300, 1000, 1670, 3000}) {
-            for (double e : new double[]{0.3, 3, 30}) ok &= trail("след, e " + e + ", " + range + " м", e, range);
+            for (double e : new double[]{0.3, 3, 30}) ok &= trail("trail, e " + e + ", " + range + " m", e, range);
         }
-        assertTrue(ok, "след с разрывами — подробности выше");
+        assertTrue(ok, "trail has gaps; details above");
     }
 }
