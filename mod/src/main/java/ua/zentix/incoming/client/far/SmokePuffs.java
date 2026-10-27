@@ -505,16 +505,24 @@ final class SmokePuffs {
             lastOut = out;
         }
         boolean ready = !running || p.await(WAIT_NANOS);
-        if (running && ready) {
-            running = false;
-            Recording made = job.record;
-            job.record = null;
-            if (made.complete) {
-                planned = shown;
-                shown = made;
-                report(job, VEIL);
-                lastPlanNanos = made.nanos;
+        if (running && ready) collect();
+        if (lastView != null && !shown.fits(lastView)) {
+            // The last plan was made for another projection (zoom) or far from this eye: its quads would not keep the fill
+            // budget here. This frame is planned now and drawn at once, as inline planning would.
+            boolean drained = !running || p.await(DRAIN_NANOS);
+            if (running && drained) collect();
+            shown.clear();
+            if (view == null || !drained) {
+                fill.forget();
+                fill.veilClear();
+                return;
             }
+            start(p);
+            if (p.await(DRAIN_NANOS)) {
+                collect();
+                shown.replay(lastView, lastOut, VEIL);
+            }
+            return;
         }
         if (lastView != null && lastOut != null) shown.replay(lastView, lastOut, VEIL);
         if (!ready) {
@@ -522,10 +530,31 @@ final class SmokePuffs {
             fill.veilClear();
             return;
         }
-        // the next plan continues this one's history: merge level and cluster share hold across frames
+        start(p);
+    }
+
+    /** Longest wait for a plan the frame cannot do without (projection change, world exit): a plan's own bounded cost. */
+    static final long DRAIN_NANOS = 10_000_000_000L;
+
+    /** The finished plan becomes the drawn one. */
+    private static void collect() {
+        running = false;
+        Recording made = job.record;
+        job.record = null;
+        if (made != null && made.complete) {
+            planned = shown;
+            shown = made;
+            report(job, VEIL);
+            lastPlanNanos = made.nanos;
+        }
+    }
+
+    /** This frame's inputs go to the planner, continuing the last plan's history (merge level, cluster share, occlusion grid). */
+    private static void start(Planner p) {
         fill.level = job.level;
         fill.lastShare = job.lastShare;
         fill.shareReady = job.shareReady;
+        fill.adoptOcclusion(job);
         fill.seal(planned);
         Draw idle = job;
         job = fill;
@@ -534,6 +563,14 @@ final class SmokePuffs {
         fill.veilClear();
         running = true;
         p.start(JOB);
+    }
+
+    /**
+     * Storage for this frame's camera vectors ({@link FarRenderer#view}): the filling Draw's own, which no plan reads until it is
+     * sealed; the Camera's vectors are live until the next frame, and a fresh copy every frame would be garbage.
+     */
+    static org.joml.Vector3f[] cameraBasis() {
+        return fill.basis;
     }
 
     /** Statistics of the last plan (description lines, tests). */
@@ -787,12 +824,14 @@ final class SmokePuffs {
      */
     static final class Recording implements Out {
         private static final int PUFF = 0, FLAT = 1, RIBBON = 2, STRIDE = 20;
+        /** Largest relative change of the pixel angle and frame half-diagonal, and eye step (m), a plan is drawn across. */
+        static final double PROJECTION = 0.03, STEP = 1;
         private double[] calls = new double[64 * STRIDE];
         private FxAtlas.Sprite[] sprites = new FxAtlas.Sprite[64];
         private int count;
         private double[] veils = new double[8 * VEIL_FIELDS];
         private int veilCount;
-        private double ex, ey, ez;
+        private double ex, ey, ez, pixel, edge;
         private boolean anchored;
         /** Set by the plan when it finished; an unfinished or failed plan is not drawn. Its time on the planner's thread. */
         volatile boolean complete;
@@ -805,11 +844,27 @@ final class SmokePuffs {
             java.util.Arrays.fill(sprites, null);
         }
 
-        void anchor(Vec3 eye) {
+        void anchor(FarView view) {
+            Vec3 eye = view.camera();
             ex = eye.x;
             ey = eye.y;
             ez = eye.z;
+            pixel = view.pixel();
+            edge = view.edge();
             anchored = true;
+        }
+
+        /**
+         * Whether this plan may be drawn at view: the same projection within {@link #PROJECTION} and an eye within
+         * {@link #STEP}. Fill on screen grows as the inverse square of the pixel angle (a 4× zoom: 13 → 121 screens) and as
+         * the eye nears a puff; within these limits it stays within a few percent of the planned budget.
+         */
+        boolean fits(FarView view) {
+            if (!anchored) return true;
+            Vec3 eye = view.camera();
+            double dx = eye.x - ex, dy = eye.y - ey, dz = eye.z - ez;
+            return Math.abs(view.pixel() / pixel - 1) <= PROJECTION && Math.abs(view.edge() / edge - 1) <= PROJECTION
+                    && dx * dx + dy * dy + dz * dz <= STEP * STEP;
         }
 
         private int next(FxAtlas.Sprite sprite) {
@@ -1116,6 +1171,8 @@ final class SmokePuffs {
         /** Non-null while this instance plans a frame for the planner: its draw calls and veil go there. */
         @Nullable
         Recording record;
+        /** Camera vectors of the frame this instance fills ({@link #cameraBasis}). */
+        final org.joml.Vector3f[] basis = {new org.joml.Vector3f(), new org.joml.Vector3f(), new org.joml.Vector3f()};
         /** Места трубок кадра, что ждут плана: по {@link #PLACE_FIELDS} чисел; зерно клубов и трубка — отдельно. */
         private double[] places = new double[64 * PLACE_FIELDS];
         private long[] placeSeed = new long[64], placeTube = new long[64];
@@ -1572,6 +1629,19 @@ final class SmokePuffs {
         private double[] concealFrame = new double[64 * CONCEAL_FIELDS];
         private static final double[] RING_X = {1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476, 0, 0.7071067811865476},
                 RING_Y = {0, 0.7071067811865476, 1, 0.7071067811865476, 0, -0.7071067811865476, -1, -0.7071067811865476};
+
+        /** The next plan continues from's occlusion grid tier (its hysteresis), with storage of that size. */
+        void adoptOcclusion(Draw from) {
+            if (from.occlusionCells == occlusionCells) return;
+            occlusionCells = from.occlusionCells;
+            occlusionSide = occlusionCells + 1;
+            occlusionFace = occlusionSide * occlusionSide;
+            if (occlusion.length < 6 * occlusionFace) {
+                occlusion = new double[6 * occlusionFace];
+                occlusionNodes = new long[words(6 * occlusionFace)];
+            }
+            occlusionRays = occlusionRays();
+        }
 
         private void configureOcclusion() {
             // Target 24 cells across the projected diagonal, with a 48-cell floor for conservative core coverage.
@@ -2334,7 +2404,7 @@ final class SmokePuffs {
             close();
             rec.clear();
             FarView v = frameView();
-            if (v != null) rec.anchor(v.camera());
+            if (v != null) rec.anchor(v);
             record = rec;
             for (int c = 0; c < contexts; c++) ctxOut[c] = rec;
             for (int c = 0; c < placeContexts; c++) placeOut[c] = rec;

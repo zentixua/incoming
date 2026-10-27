@@ -93,9 +93,13 @@ public final class FarRenderer {
         double exposure = FarView.exposure(level, partial);
         Vec3 eye = FarDraw.eye(e);
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
-        // copies: the camera's vectors are live until the next frame, and the smoke planner reads this view off the client thread
-        return new FarView(eye, new org.joml.Vector3f(camera.getLookVector()), new org.joml.Vector3f(camera.getLeftVector()),
-                new org.joml.Vector3f(camera.getUpVector()), partial,
+        // copies: the camera's vectors are live until the next frame, and the smoke planner reads this view off the client
+        // thread; the storage is the filling smoke Draw's, which no plan reads until it is sealed
+        org.joml.Vector3f[] basis = SmokePuffs.cameraBasis();
+        basis[0].set(camera.getLookVector());
+        basis[1].set(camera.getLeftVector());
+        basis[2].set(camera.getUpVector());
+        return new FarView(eye, basis[0], basis[1], basis[2], partial,
                 FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }

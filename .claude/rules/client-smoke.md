@@ -36,6 +36,11 @@ paths:
   the previous frame (plan, conceal, merges, fit, clusters). Each frame draws the last completed plan: recorded quads
   and ribbons re-anchored at the current eye, so billboards face the current camera; the veil is merged and laid on the
   client thread (`VEIL`). The plan lags one frame; an unfinished plan after `WAIT_NANOS` keeps the previous one drawn.
+  A plan is drawn only across a small change of projection and eye (`Recording.fits`: 3% pixel angle and half-diagonal,
+  1 m): after a zoom or a jump the frame is planned at once on the worker and drawn in the same frame (a 4× zoom drew
+  121 screens from the old plan). The alternating `Draw`s continue one history: merge level, cluster share and the
+  occlusion grid tier (`adoptOcclusion`). The camera vectors of a frame are copied into the filling `Draw`'s storage
+  (`cameraBasis`), never into one being planned, and without per-frame allocation.
   The planning `Draw` must read only its own arrays and immutable or frozen inputs: `FarView` holds copies of the camera
   vectors, and a source's `visible` state that ticks change is saved at `begin` (`Source.visibility`). No Level, chunk
   or BlockState access in planning; emits (terrain) stay on the client thread. `SmokePipelineTest`: the planned frame

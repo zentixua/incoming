@@ -127,14 +127,17 @@ class SmokePipelineTest {
         }
     }
 
-    /** The plan's quads move with the eye: drawn at the eye of the frame that draws them, they stay where they were planned. */
+    /**
+     * The plan's quads move with the eye: drawn at the eye of the frame that draws them, they stay where they were planned. A step
+     * beyond {@code Recording.STEP} plans the frame at once instead (the old plan's fill would not hold that close).
+     */
     @Test
     void replayIsAnchoredAtTheCurrentEye() {
         double now = 1000;
         List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
         FarView first = SmokeRaidTest.view(1);
-        Vec3 step = new Vec3(3, 1, -2);
         Vector3f f = first.forward();
+        Vec3 step = new Vec3(0.5, 0.2, -0.4);
         FarView second = SmokeFillTest.view(first.camera().add(step), new Vector3f(f));
         Calls planned = run(raid, now, first, null, 1).getFirst();
         SmokePuffs.planner(DIRECT);
@@ -147,6 +150,10 @@ class SmokePipelineTest {
         // the veil is a grid in front of the current eye: it is rebuilt there, not moved
         planned.veil = drawn.veil = null;
         assertEquals(null, compare(planned, drawn, -step.x, -step.y, -step.z, 1e-9), "replayed at the moved eye");
+        // a long step: this frame is planned at the new eye
+        FarView far = SmokeFillTest.view(first.camera().add(3, 1, -2), new Vector3f(f));
+        List<Calls> inline = run(raid, now, List.of(first, far), null), jumped = run(raid, now, List.of(first, far), DIRECT);
+        assertEquals(null, compare(inline.get(1), jumped.get(1), 0, 0, 0, 0), "a long step plans at once");
     }
 
     /** A real worker thread gives the same frames; leaving the world while it plans waits for it and stops the thread. */
@@ -170,6 +177,97 @@ class SmokePipelineTest {
         Calls next = frame(raid, now, view);
         assertFalse(next.calls.isEmpty());
         assertTrue(alive());
+    }
+
+    /** A view of the edge camera with the frame half-diagonal edge (radians), pixel angle matching it. */
+    private static FarView view(double edge) {
+        FarView v = SmokeRaidTest.view(1);
+        double pixel = 2 * Math.tan(edge) / Math.hypot(1920, 1080);
+        return new FarView(v.camera(), new Vector3f(v.forward()), new Vector3f(v.left()), new Vector3f(v.up()), 0, 1000, pixel, edge, 1, 1,
+                new Vector3f(1, 1, 1), 32000, 192, 192, 0, Sight.Air.at(0, 20000));
+    }
+
+    private static List<Calls> run(List<SmokeGrid.Source> raid, double now, List<FarView> views, SmokePuffs.Planner planner) {
+        SmokePuffs.planner(planner);
+        SmokePuffs.reset();
+        FarFlightView.reset();
+        List<Calls> out = new ArrayList<>();
+        for (FarView v : views) out.add(frame(raid, now, v));
+        return out;
+    }
+
+    /**
+     * Review of #511: the two alternating plans continue one occlusion-grid history. A first frame needing 49 cells takes the
+     * 96-cell tier; a following 45 keeps it (hysteresis) — inline and planned alike, not 96 and 48 on alternate frames.
+     */
+    @Test
+    void occlusionTierCarriesAcrossPlans() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
+        List<FarView> views = new ArrayList<>();
+        views.add(view(Math.atan(24.0 / 49)));
+        for (int k = 0; k < 7; k++) views.add(view(Math.atan(24.0 / 45)));
+        List<Calls> inline = run(raid, now, views, null), planned = run(raid, now, views, DIRECT);
+        // the projection changes at frame 1: planned at once there, then one frame behind
+        assertEquals(null, compare(inline.get(1), planned.get(1), 0, 0, 0, 0), "frame 1, planned at once");
+        for (int k = 2; k < views.size(); k++) assertEquals(null, compare(inline.get(k - 1), planned.get(k), 0, 0, 0, 0), "frame " + k);
+    }
+
+    /**
+     * Review of #511: a plan made before a 4× zoom covered 121 screens drawn after it (budget 16). A projection change plans
+     * the frame at once: the zoomed frame is the inline one, within the budget, and the following ones lag one frame again.
+     */
+    @Test
+    void zoomPlansTheFrameAtOnceWithinTheBudget() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
+        for (int camera = 0; camera < 3; camera++) {
+            FarView wide = SmokeRaidTest.view(camera);
+            double pixel = wide.pixel() / 4;
+            FarView zoom = new FarView(wide.camera(), new Vector3f(wide.forward()), new Vector3f(wide.left()), new Vector3f(wide.up()), 0, 1000,
+                    pixel, Math.atan(0.5 * pixel * Math.hypot(1920, 1080)), 1, 1, new Vector3f(1, 1, 1), 32000, 192, 192, 0, Sight.Air.at(0, 20000));
+            List<FarView> views = new ArrayList<>();
+            for (int k = 0; k < 8; k++) views.add(wide);
+            for (int k = 0; k < 4; k++) views.add(zoom);
+            List<Calls> inline = run(raid, now, views, null), planned = run(raid, now, views, DIRECT);
+            for (int k = 1; k < 8; k++) assertEquals(null, compare(inline.get(k - 1), planned.get(k), 0, 0, 0, 0), "wide frame " + k);
+            assertEquals(null, compare(inline.get(8), planned.get(8), 0, 0, 0, 0), SmokeRaidTest.NAMES[camera] + ": the zoomed frame is planned at once");
+            for (int k = 9; k < views.size(); k++) assertEquals(null, compare(inline.get(k - 1), planned.get(k), 0, 0, 0, 0), "zoomed frame " + k);
+            // the zoomed frame's drawn fill, measured by the screen oracle, keeps the budget
+            SmokePuffs.planner(DIRECT);
+            SmokePuffs.reset();
+            FarFlightView.reset();
+            for (int k = 0; k < 8; k++) frame(raid, now, wide);
+            SmokeFillTest.Screen screen = new SmokeFillTest.Screen(zoom);
+            FarFlightView.budget();
+            for (SmokeGrid.Source b : raid) b.emit(now, SmokePuffs.sink(zoom, screen, b, now));
+            SmokePuffs.flush();
+            assertTrue(screen.fill() <= SmokePuffs.FILL_BUDGET + 1e-9, SmokeRaidTest.NAMES[camera] + ": zoomed fill " + screen.fill());
+        }
+    }
+
+    /** Review of #511: the camera's vectors are copied into the filling Draw's storage, never into a Draw being planned. */
+    @Test
+    void cameraBasisIsNeverAPlanningDraw() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
+        FarView v = SmokeRaidTest.view(1);
+        Runnable[] held = new Runnable[1];
+        SmokePuffs.Planner blocked = new SmokePuffs.Planner() {
+            @Override public void start(Runnable plan) { held[0] = plan; }
+            @Override public boolean await(long nanos) { return held[0] == null; }
+            @Override public void stop() { if (held[0] != null) held[0].run(); held[0] = null; }
+        };
+        SmokePuffs.planner(blocked);
+        SmokePuffs.reset();
+        Vector3f[] first = SmokePuffs.cameraBasis();
+        frame(raid, now, v);
+        Vector3f[] planning = first, filling = SmokePuffs.cameraBasis();
+        assertTrue(filling != planning, "the sealed Draw still lends its storage");
+        // the plan is still running: the next frame keeps filling the same Draw and leaves the planned one alone
+        frame(raid, now, v);
+        assertTrue(SmokePuffs.cameraBasis() == filling);
+        blocked.stop();
     }
 
     private static boolean alive() {
