@@ -439,7 +439,11 @@ final class HalfPass {
             for (int p = 0; p < runs.length; p++) {
                 int[] r = runs[p];
                 int quads = 0;
-                for (int i = 1; i < r.length; i += 2) quads += r[i];
+                boolean target = false;
+                for (int i = 0; i < r.length; i += 2) {
+                    quads += r[i + 1];
+                    for (int k = r[i]; k < r[i] + r[i + 1] && !target; k++) target = (PLAN.where[k] & (Plan.TARGET | Plan.TARGET_FRONT)) != 0;
+                }
                 clock.begin(p);
                 GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main);
                 GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
@@ -459,7 +463,7 @@ final class HalfPass {
                 FxQuads.multiDraw(r);
                 q.passEnd(s, rects[ring], TILE);
                 clock.halfDone(p);
-                if (PLAN.any) flush(main, lastScene);
+                if (target) flush(main, lastScene);
                 clock.end(p, quads, r.length / 2);
             }
         } finally {

@@ -260,6 +260,9 @@ public final class FxLayer {
         FarDraw.view(e, view.camera(), VIEW);
         // only where a source's light or shift reaches the screen (HeatArea); none in view — no pass
         boolean hot = HeatPass.needed(heat, VIEW, e.getProjectionMatrix());
+        // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра): while any source lights the world, on
+        // screen or not, so turning toward a fire finds its shadows ready
+        HeatPass.solids(heat, level, view.camera());
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
             // перед глазом (проба считается, квадрат её берёт)
@@ -301,8 +304,6 @@ public final class FxLayer {
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
             if (hot && scene >= 0) {
                 int timedHeat = HEAT.begin();
-                // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра)
-                HeatPass.solids(heat, level, view.camera());
                 HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
                 HEAT.end(timedHeat);
             }
