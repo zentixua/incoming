@@ -9,6 +9,8 @@ import ua.zentix.incoming.strike.WeaponType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Start cloud: when the products are a cloud (Morton length), how many there are, and the rise is a thermal MTT. */
@@ -125,5 +127,29 @@ class LaunchCloudTest {
             assertEquals(a * top, t.topR, 0.25 * a * top);
             assertEquals(Math.PI / n, t.topSeconds, 0.35 * Math.PI / n);
         }
+    }
+    /**
+     * The rebuild after the feed ends integrates the whole rise (~1 ms of one thread) and cannot yield: it happens in the
+     * client tick ({@link LaunchCloud#settle}), never in {@link LaunchCloud#emit}, which runs within the shared 2 ms
+     * preparation budget (review of #509: eight clouds whose feed had just ended took 2.6–2.8 ms there). The feed ends
+     * below the 1.25 rebuild step, so the last fed heat still waits for that rebuild.
+     */
+    @Test
+    void emitNeverRebuildsTheThermalTheTickDoes() {
+        Motor grad = motor(WeaponType.ROCKET);
+        double s0 = SmokeGrid.seconds(0);
+        LaunchCloud c = new LaunchCloud(CloudModel.Air.STANDARD, 64, 1, 0.4f, 0.3f, 0.2f, s0);
+        assertTrue(c.feed(grad, 0.10, s0, 0, 66.5, 0, 0, -1, 0));
+        assertTrue(c.feed(grad, 0.01, s0 + 0.05, 0, 66.5, 0, 0, -1, 0));
+        Thermal fed = c.thermal();
+        c.settle(s0 + 0.05);
+        assertSame(fed, c.thermal(), "the feed has not ended yet");
+        assertTrue(c.emit(s0 + 0.3, (x, y, z, ax, ay, az, sh, sv, soot, d, w, r, g, b, k, rise) -> {}));
+        assertSame(fed, c.thermal(), "emit rebuilt the thermal inside the preparation budget");
+        c.settle(s0 + 0.3);
+        assertNotSame(fed, c.thermal(), "the tick takes all heat once the feed has ended");
+        Thermal all = c.thermal();
+        c.settle(s0 + 0.4);
+        assertSame(all, c.thermal(), "one rebuild for the heat fed");
     }
 }

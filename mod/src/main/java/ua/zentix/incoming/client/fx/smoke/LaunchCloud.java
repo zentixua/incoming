@@ -326,6 +326,15 @@ public final class LaunchCloud implements SmokeGrid.Source {
         return gone || thermal != null && SmokeGrid.seconds(0) - born >= life;
     }
 
+    /**
+     * Once per client tick, beside the feed ({@code FarFlightView.tick}): when the feed has ended (two ticks without it),
+     * the thermal is rebuilt from all heat fed. Not in {@link #emit}: the rebuild integrates the whole rise (~1 ms), cannot
+     * yield, and emit runs within the shared 2 ms preparation budget, which it would overrun (review of #509).
+     */
+    public void settle(double seconds) {
+        if (!gone && thermal != null && heat > builtHeat && seconds - lastFeed > 0.1) build();
+    }
+
     /** Cloud no longer drawn (world change, rewind). */
     public void end() {
         gone = true;
@@ -339,8 +348,6 @@ public final class LaunchCloud implements SmokeGrid.Source {
     public boolean emit(double seconds, SmokeGrid.Sink out) {
         if (gone) return false;
         if (thermal == null) return true;
-        // feed ended (two ticks without it) — thermal from all heat
-        if (heat > builtHeat && seconds - lastFeed > 0.1) build();
         double t = Math.max(0, seconds - born);
         if (t >= life) return false;
         // cloud still dense at lifetime limit fades over final tenth of life (like blast cloud)
