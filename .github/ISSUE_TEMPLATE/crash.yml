@@ -8,7 +8,7 @@ body:
     id: versions
     attributes:
       label: Incoming, Minecraft, NeoForge and Java versions
-      placeholder: Incoming 3.9.0, Minecraft 1.21.1, NeoForge 21.1.264, Java 21
+      placeholder: Incoming 3.9.1, Minecraft 1.21.1, NeoForge 21.1.264, Java 21
     validations:
       required: true
   - type: textarea
