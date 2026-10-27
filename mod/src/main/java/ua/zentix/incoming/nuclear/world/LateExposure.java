@@ -22,7 +22,7 @@ import java.util.stream.Stream;
  * receives, once, when it loads, what its place received: burns and prompt dose by the same laws (sickness runs from the
  * detonation), and the wave injury without the throw and the flight, which belong to that moment. Marks
  * ({@link NukeSeen}) keep a body that was hit in memory from being hit again on a later load; a body spawned after a
- * detonation is marked at once.
+ * detonation within its reach is marked at once.
  * <p>
  * Estimates: the world is read as it is when the body loads — ruins may already stand in place of the walls that shaded
  * or sheltered it; the launcher is not credited. Players are left out: a player who was away is not in the city.
@@ -53,12 +53,19 @@ final class LateExposure {
     void joined(ServerLevel level, LivingEntity e, boolean fromDisk, List<PulseJob> pulses) {
         if (e instanceof Player) return;
         NuclearEvents events = NuclearEvents.get(level);
-        int last = events.lastId();
-        if (last < events.lateFrom()) return;
+        if (events.lastId() < events.lateFrom()) return;
         long now = level.getGameTime();
         NukeSeen seen = e.getExistingData(ModAttachments.NUKE_SEEN).orElse(NukeSeen.NONE);
         if (!fromDisk) {
-            e.setData(ModAttachments.NUKE_SEEN, seen.withPulse(last).withBlast(last).withFallout(now));
+            // born now: nothing to catch up on. Marked only where a detonation reached (not every mob of the world forever);
+            // the fallout account starts now wherever fallout may still fall (trails reach beyond the pulse and the wave)
+            NukeSeen born = events.detonations().isEmpty() ? seen : seen.withFallout(now);
+            for (Detonation d : (Iterable<Detonation>) Stream.concat(events.past().stream(), events.detonations().stream())::iterator) {
+                if (d.id() >= events.lateFrom() && e.position().distanceTo(d.burst()) <= Math.max(d.blastReach(), pulseRange(d))) {
+                    born = born.withPulse(d.id()).withBlast(d.id());
+                }
+            }
+            if (born != seen) e.setData(ModAttachments.NUKE_SEEN, born);
             return;
         }
         List<Due> due = null;
@@ -67,13 +74,17 @@ final class LateExposure {
             boolean listing = false;
             for (PulseJob p : pulses) listing |= p.detonation().id() == d.id() && !p.listed();
             double dist = e.position().distanceTo(d.burst());
-            boolean pulse = d.id() > seen.pulse() && !listing && dist <= pulseRange.computeIfAbsent(d.id(), id -> NuclearWarhead.exposureRange(d));
+            boolean pulse = d.id() > seen.pulse() && !listing && dist <= pulseRange(d);
             boolean blast = d.id() > seen.blast() && dist <= d.blastReach() && dist < d.frontRadius(now - d.gameTime());
             if (!pulse && !blast) continue;
             if (due == null) due = new ArrayList<>(1);
             due.add(new Due(d, pulse, blast));
         }
         if (due != null) queue.add(new Body(e, due));
+    }
+
+    private double pulseRange(Detonation d) {
+        return pulseRange.computeIfAbsent(d.id(), id -> NuclearWarhead.exposureRange(d));
     }
 
     boolean busy() {

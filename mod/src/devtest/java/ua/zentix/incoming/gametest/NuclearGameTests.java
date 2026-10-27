@@ -1870,8 +1870,10 @@ public final class NuclearGameTests {
                 long t = gains.get(i)[0], ticks = t - gains.get(i - 1)[0];
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "traversal shorter than two periods: " + ticks + " tick - check for nothing");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
-                double expected = d.falloutRate(grazing.getX(), grazing.getZ(), t - d.gameTime())
-                        * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R * ticks / 1000.0;
+                // the rate decays over a starved pass: its tick-by-tick sum, not the end rate times the pass
+                double roentgens = 0;
+                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRate(grazing.getX(), grazing.getZ(), k - d.gameTime()) / 1000.0;
+                double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }
         });
