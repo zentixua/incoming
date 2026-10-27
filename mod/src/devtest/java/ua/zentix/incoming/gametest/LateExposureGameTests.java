@@ -16,6 +16,7 @@ import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.world.BlastBody;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModEffects;
 
 import java.util.ArrayList;
@@ -58,6 +59,8 @@ public final class LateExposureGameTests {
         NuclearWorld world = NuclearWorld.get(level);
         List<Mob> late = new ArrayList<>(), born = new ArrayList<>();
         for (int i = 0; i < 4; i++) late.add(h.spawn(EntityType.COW, new BlockPos(40 + 3 * i, 12, 40)));
+        // in the world before the detonation (earlier batches' detonations gave them a birth time now)
+        for (Mob m : late) m.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, late.getLast().position());
         NuclearEvents.get(level).add(d);
@@ -114,6 +117,8 @@ public final class LateExposureGameTests {
         NuclearWorld world = NuclearWorld.get(level);
         // same distance from the burst on both sides of its axis
         Mob twice = h.spawn(EntityType.COW, new BlockPos(40, 12, 36)), once = h.spawn(EntityType.COW, new BlockPos(40, 12, 28));
+        twice.removeData(ModAttachments.NUKE_SEEN);
+        once.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, twice.position());
         NuclearEvents.get(level).add(d);

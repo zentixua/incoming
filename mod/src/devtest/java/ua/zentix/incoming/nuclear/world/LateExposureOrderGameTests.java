@@ -15,6 +15,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 
 import java.util.List;
@@ -43,6 +44,8 @@ public final class LateExposureOrderGameTests {
         Cow c = h.spawn(EntityType.COW, new BlockPos(40, 12, 32));
         c.setNoAi(true);
         c.setInvulnerable(true);
+        // in the world before the detonations: no birth time
+        c.removeData(ModAttachments.NUKE_SEEN);
         return c;
     }
 
@@ -107,6 +110,7 @@ public final class LateExposureOrderGameTests {
         BlastProbe c = new BlastProbe(level);
         c.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 32))));
         level.addFreshEntity(c);
+        c.removeData(ModAttachments.NUKE_SEEN);
         Detonation geometry = det(level, events.nextId(), c.position(), 1);
         double r = 0.5 * (geometry.frontRadius(0) + geometry.frontRadius(1));
         Detonation d = det(level, geometry.id(), c.position().add(-r, 0, 0), 1);
@@ -136,7 +140,9 @@ public final class LateExposureOrderGameTests {
         Detonation d = new Detonation(events.nextId(), burst, burst.y, 15, true, level.getGameTime() - 600, 0, 0, 20_000, 7, 0.001f, false,
                 Detonation.OLD_WAVE);
         events.add(d);
-        Cow c = cow(h);
+        Cow c = h.spawn(EntityType.COW, new BlockPos(40, 12, 32));
+        c.setNoAi(true);
+        c.setInvulnerable(true);
         LateExposure late = new LateExposure();
         try {
             h.assertTrue(c.position().distanceTo(burst) > Math.max(d.blastReach(), NuclearWarhead.exposureRange(d)), "born inside the reach");
@@ -144,6 +150,36 @@ public final class LateExposureOrderGameTests {
             late.joined(level, c, true, List.of());
             drain(level, late);
             h.assertTrue(RadiationTicker.dose(c).doseGy() == 0, "born after the detonation, reloaded in the ruins: " + RadiationTicker.dose(c).doseGy() + " Gy");
+            h.succeed();
+        } finally {
+            c.discard();
+            events.clear();
+        }
+    }
+
+    /**
+     * A body spawned after the flash but before the front reached its place, then unloaded until the front passed, gets the
+     * wave on load and not the flash.
+     */
+    @GameTest(template = "range", batch = "nuke_late_order_ahead", skyAccess = true)
+    public static void bornAheadOfFrontGetsWaveNotFlash(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        NuclearEvents events = NuclearEvents.get(level);
+        BlastProbe c = new BlastProbe(level);
+        c.setPos(Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(40, 12, 32))));
+        level.addFreshEntity(c);
+        Detonation d = det(level, events.nextId(), c.position().add(-150, 0, 0), 600);
+        events.add(d);
+        double arrival = d.arrivalTicks(150);
+        h.assertTrue(arrival >= 2 && arrival < 600 && d.blastReach() > 150, "front arrival at 150 blocks: " + arrival + " ticks, reach " + d.blastReach());
+        c.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withBorn(d.gameTime() + (long) (arrival / 2)));
+        LateExposure late = new LateExposure();
+        try {
+            late.joined(level, c, true, List.of());
+            drain(level, late);
+            // the injury law may spare it at this distance: the mark says the wave reached it
+            h.assertTrue(c.getData(ModAttachments.NUKE_SEEN).blasted(d.id()) && c.hits <= 1, "wave: " + c.getData(ModAttachments.NUKE_SEEN) + ", hits " + c.hits);
+            h.assertTrue(RadiationTicker.dose(c).doseGy() == 0, "flash dose for a body born after it: " + RadiationTicker.dose(c).doseGy() + " Gy");
             h.succeed();
         } finally {
             c.discard();
@@ -167,7 +203,7 @@ public final class LateExposureOrderGameTests {
             late.joined(level, c, true, List.of());
             h.assertTrue(late.busy() && RadiationTicker.dose(c).doseGy() == 0, "join event did the work");
             int rounds = drain(level, late);
-            h.assertTrue(rounds >= 2 * n, "rounds for " + n + " detonations: " + rounds);
+            h.assertTrue(rounds >= 2 * n, "rounds for " + n + " detonations: " + rounds + ", dose " + RadiationTicker.dose(c).doseGy() + " Gy");
             h.assertTrue(RadiationTicker.dose(c).doseGy() > 0, "no dose after catching up");
             h.succeed();
         } finally {

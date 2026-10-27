@@ -21,11 +21,12 @@ import java.util.stream.Stream;
  * receives, once, when it loads, what its place received: burns and prompt dose by the same laws (sickness runs from the
  * detonation), and the wave injury without the throw and the flight, which belong to that moment. Marks
  * ({@link NukeSeen}), checked by the pulse and the front as well, give each body each detonation's pulse and wave once,
- * whichever path comes first; a body spawned after a detonation is marked as born after it.
+ * whichever path comes first; a body spawned after the pulse or the front passed its place gets neither.
  * <p>
  * Estimates: the world is read as it is when the body loads — ruins may already stand in place of the walls that shaded
  * or sheltered it; the launcher is not credited. Players are left out: a player who was away is not in the city.
- * A body spawned ahead of a front that unloads before the front arrives and loads after it passed misses that wave.
+ * A body that moved after it was spawned is judged by where it is now. Bodies generated with new terrain after a detonation
+ * count as spawned then (the join event does not tell them from births), so they are unharmed in ruined chunks.
  * Detonations from before these marks existed ({@link NuclearEvents#lateFrom}) are left as they were: a body hit then
  * carries no mark and would be hit twice.
  */
@@ -48,7 +49,7 @@ final class LateExposure {
     private long lastLog = Long.MIN_VALUE / 2;
 
     /**
-     * Entity enters the level: from disk — queue what it missed; newly spawned — mark it born after every detonation so far.
+     * Entity enters the level: from disk — queue what it missed; newly spawned — mark its birth time.
      * Cheap (distance checks only): chunk loads bring hundreds of entities at once.
      *
      * @param pulses detonations whose pulse still runs: a body loaded before its list is taken is in it
@@ -60,7 +61,7 @@ final class LateExposure {
         if (!fromDisk) {
             // born now: nothing to catch up on; the fallout account starts now wherever fallout may still fall
             NukeSeen seen = e.getExistingData(ModAttachments.NUKE_SEEN).orElse(NukeSeen.NONE);
-            NukeSeen born = seen.withBorn(events.lastId());
+            NukeSeen born = seen.withBorn(level.getGameTime());
             if (!events.detonations().isEmpty()) born = born.withFallout(level.getGameTime());
             if (born != seen) e.setData(ModAttachments.NUKE_SEEN, born);
             return;
@@ -79,17 +80,18 @@ final class LateExposure {
         return Stream.concat(events.past().stream(), events.detonations().stream())::iterator;
     }
 
-    /** Queue what a loaded body missed: detonations after its birth whose pulse or passed front covered its place. */
+    /** Queue what a loaded body missed: pulses and passed fronts that covered its place after its birth. */
     private void sort(ServerLevel level, NuclearEvents events, LivingEntity e, List<PulseJob> pulses) {
         NukeSeen seen = e.getExistingData(ModAttachments.NUKE_SEEN).orElse(NukeSeen.NONE);
         long now = level.getGameTime();
         for (Detonation d : all(events)) {
-            if (d.id() < events.lateFrom() || seen.predates(d.id())) continue;
+            if (d.id() < events.lateFrom()) continue;
             boolean listing = false;
             for (PulseJob p : pulses) listing |= p.detonation().id() == d.id() && !p.listed();
             double dist = e.position().distanceTo(d.burst());
-            boolean pulse = !seen.pulsed(d.id()) && !listing && dist <= pulseRange.get(d.id());
-            boolean blast = !seen.blasted(d.id()) && dist <= d.blastReach() && dist < d.frontRadius(now - d.gameTime());
+            boolean pulse = !seen.pulsed(d.id()) && !seen.bornAfter(d.gameTime()) && !listing && dist <= pulseRange.get(d.id());
+            boolean blast = !seen.blasted(d.id()) && dist <= d.blastReach() && dist < d.frontRadius(now - d.gameTime())
+                    && !seen.bornAfter(d.gameTime() + d.arrivalTicks(dist));
             if (pulse || blast) queue.add(new Due(e, d, pulse, blast));
         }
     }
