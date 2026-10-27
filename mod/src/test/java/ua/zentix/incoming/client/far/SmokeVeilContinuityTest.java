@@ -89,7 +89,7 @@ class SmokeVeilContinuityTest {
         int raw = field(type, "veilCount").getInt(draw);
         double rawT = transmittance((double[]) field(type, "veils").get(draw), raw);
         invoke("veilFlush");
-        int merged = SmokePuffs.lastVeils();
+        int merged = field(type, "lastVeils").getInt(draw);
         double analytic = transmittance((double[]) field(type, "veils").get(draw), merged);
         return new Frame(raw, merged, rawT, analytic, screen.veil == null ? 1 : screen.veil.through(RAY[0], RAY[1]));
     }
@@ -105,7 +105,7 @@ class SmokeVeilContinuityTest {
         return Math.exp(-tau);
     }
 
-    private static Object draw() throws ReflectiveOperationException { return field(SmokePuffs.class, "DRAW").get(null); }
+    private static Object draw() throws ReflectiveOperationException { return field(SmokePuffs.class, "fill").get(null); }
     private static int level() throws ReflectiveOperationException { Object draw = draw(); return field(draw.getClass(), "veilLevel").getInt(draw); }
     private static void invoke(String name) throws ReflectiveOperationException {
         Object draw = draw();

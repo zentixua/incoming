@@ -29,3 +29,14 @@ paths:
 - `FarTerrain.dust` shares one weakly world-owned cell cache across strikes, before every `TerrainTiles` backend
   (LSS, Voxy, DH): loaded columns for one tick, distant columns for one second, including absent heights. Switching
   to loaded chunks or rewinding invalidates cells immediately. Cache values must not retain the weak world key.
+- Frame planning runs off the client thread (`SmokePuffs.flush` with a `Planner`; the game's is one daemon thread
+  "Incoming Smoke", started by its first plan, drained and stopped by `SmokePuffs.reset` on world exit and replay seek;
+  `-Dincoming.smoke.inline=true` plans on the client thread). The client thread fills one `Draw` (snapshot replay, trail
+  places and ribbons), seals it (last source merge, outputs to a `Recording`) and hands it over; the other `Draw` plans
+  the previous frame (plan, conceal, merges, fit, clusters). Each frame draws the last completed plan: recorded quads
+  and ribbons re-anchored at the current eye, so billboards face the current camera; the veil is merged and laid on the
+  client thread (`VEIL`). The plan lags one frame; an unfinished plan after `WAIT_NANOS` keeps the previous one drawn.
+  The planning `Draw` must read only its own arrays and immutable or frozen inputs: `FarView` holds copies of the camera
+  vectors, and a source's `visible` state that ticks change is saved at `begin` (`Source.visibility`). No Level, chunk
+  or BlockState access in planning; emits (terrain) stay on the client thread. `SmokePipelineTest`: the planned frame
+  k + 1 draws exactly the inline frame k on the 100-strike raid, also on a real thread, and world exit mid-plan drains it.

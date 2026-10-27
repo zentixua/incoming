@@ -107,7 +107,7 @@ class SmokeConcealTest {
 
         Plan() throws ReflectiveOperationException {
             type = Class.forName(SmokePuffs.class.getName() + "$Draw");
-            Field field = SmokePuffs.class.getDeclaredField("DRAW");
+            Field field = SmokePuffs.class.getDeclaredField("fill");
             field.setAccessible(true);
             draw = field.get(null);
         }

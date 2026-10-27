@@ -153,6 +153,17 @@ public final class SmokeGrid {
         }
 
         /**
+         * The state {@link #visible} reads that the client tick changes (a terrain trace), saved at {@code out[at]} when the
+         * source is drawn, so a frame planned off the client thread reads it as it was ({@link #visible(double, double, double[], int)}).
+         */
+        default void visibility(double[] out, int at) {}
+
+        /** {@link #visible} from the state {@link #visibility} saved. */
+        default double visible(double y, double r, double[] saved, int at) {
+            return visible(y, r);
+        }
+
+        /**
          * Current frame layout result: true means source clumps in grid; false means none (table full, source farther than
          * others); cloud then renders itself.
          */

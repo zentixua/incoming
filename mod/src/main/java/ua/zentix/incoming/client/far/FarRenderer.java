@@ -27,6 +27,8 @@ public final class FarRenderer {
     /** Billows, dots, lights, ribbons and models in last frame (scenario line). */
     private static final int[] LAST_FRAME = new int[6];
 
+    private static boolean smokePlanner;
+
     private FarRenderer() {}
 
     /** Client tick (unpaused). */
@@ -40,6 +42,11 @@ public final class FarRenderer {
      * sources get visibility probes for their glare and veil ({@code probes}).
      */
     public static void collect(FarView view, FxQuads out, FxLights lights, SourceProbes probes) {
+        // smoke plans off the client thread (-Dincoming.smoke.inline=true: on it, as before, for comparison)
+        if (!smokePlanner) {
+            smokePlanner = true;
+            if (!Boolean.getBoolean("incoming.smoke.inline")) SmokePuffs.planner(SmokePuffs.worker());
+        }
         SPRITES.begin(view, out, probes);
         // smoke-tube billow budget shared by projectile trails and fire plumes
         FarFlightView.budget();
@@ -86,7 +93,9 @@ public final class FarRenderer {
         double exposure = FarView.exposure(level, partial);
         Vec3 eye = FarDraw.eye(e);
         double range = Sight.range(level.getRainLevel(partial), level.getThunderLevel(partial));
-        return new FarView(eye, camera.getLookVector(), camera.getLeftVector(), camera.getUpVector(), partial,
+        // copies: the camera's vectors are live until the next frame, and the smoke planner reads this view off the client thread
+        return new FarView(eye, new org.joml.Vector3f(camera.getLookVector()), new org.joml.Vector3f(camera.getLeftVector()),
+                new org.joml.Vector3f(camera.getUpVector()), partial,
                 FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }
@@ -128,8 +137,8 @@ public final class FarRenderer {
      */
     public static String describeSmoke() {
         return String.format(java.util.Locale.ROOT,
-                "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d",
+                "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d, plan %.2f ms off-thread",
                 SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastRaw(), SmokePuffs.lastShare(),
-                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems());
+                SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis());
     }
 }
