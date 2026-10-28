@@ -21,7 +21,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operato
 
 ![A 5 kt airburst at night over Project Zearth: flash, rising cloud and blast wave](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke.webp)
 
-![The rising cloud after a 5 kt airburst at night](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
+![Mushroom cloud after a 5 kt ground burst over Newisle at night](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
 
 ### Weapons
 

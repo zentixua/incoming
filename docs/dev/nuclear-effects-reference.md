@@ -112,7 +112,7 @@ About 80 seconds after the burst, black rain starts to fall from the smoke of th
 town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
 it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
-![The rising cloud after a 5 kt airburst at night](../guide/img/nuke-cloud.jpg)
+![Mushroom cloud after a 5 kt ground burst over Newisle at night](../guide/img/nuke-cloud.jpg)
 
 The land around the burst is scorched. The light does its part within the flash itself, about a second at 15 kt, before
 the blast wave comes: it burns grass, flowers and crops in patches, leaves black char where it was strongest, melts

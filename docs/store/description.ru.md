@@ -21,7 +21,7 @@ Incoming добавляет удары с воздуха со взрывами, 
 
 ![Воздушный взрыв 5 кт ночью над Project Zearth: вспышка, растущее облако и ударная волна](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke.webp)
 
-![Растущее облако после воздушного взрыва 5 кт ночью](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
+![Гриб после наземного взрыва 5 кт над Newisle ночью](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
 
 ### Оружие
 
