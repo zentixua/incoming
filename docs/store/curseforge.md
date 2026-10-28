@@ -2,33 +2,32 @@
 
 ![Cruise missiles strike a factory](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
-Air strikes and air defense for Minecraft 1.21.1.
+Air strikes that look and feel real, from the flash to the aftermath.
 
-Call in a strike with the Strike Designator, choose a target through binoculars or on the map, and watch from the
-projectile's camera. Incoming adds drones, missiles, a bomber and nuclear weapons, along with sirens and air defense.
-At a distance, you see the explosion before you hear it.
+Incoming brings cinematic air strikes to Minecraft 1.21.1, with one block representing one meter at the target by default.
+Light arrives before sound; blast damage follows the charge, fires start from heat and fuel, and smoke rises and drifts with the wind.
+A nuclear strike unfolds from flash and rising fireball through blast wave and mushroom cloud to ruins.
 
 ## Features
 
-- **Strike Designator:** aim at blocks, mobs, players or Create Aeronautics craft. Set up a salvo or plot a flight route on the map.
+- **The impact:** the fireball lights nearby ground and walls, glass shatters, fragments strike and the blast breaks blocks according to their material and cover. Dust and smoke grow from the impact and drift with the wind; fuel left in the crater keeps burning.
+- **Blackout:** strike a transformer substation to cut electric lights in its district.
 
-![Choose a weapon and set up a salvo](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/remote.gif)
-
-- **Shahed-136:** send a drone toward a target, alone or in a salvo.
-- **Lancet:** circle above the target, look through its camera and choose where to dive.
-- **Cruise missile:** fly low over the terrain, then climb and dive into the target.
-- **Grad:** fire unguided rockets across an area.
-- **B-2:** call in a bomber with a bunker buster that penetrates the ground before exploding.
-
-![Cruise missiles strike a factory](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
-
-- **Nuclear strikes:** launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Flash, mushroom cloud and blast wave; ground bursts leave a crater and fallout downwind. Operator-only by default.
+- **Nuclear strikes:** flash, rising fireball, mushroom cloud, blast wave, fires and ruins. Ground bursts leave a crater and fallout downwind. Nuclear warheads fit the ICBM, cruise missile and B-2 bomb; operator-only by default.
 
 ![Nuclear fireball and blast wave over a city](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
 
-- **Air defense:** sirens warn players near a target. A SAM shoots down hostile drones, cruise missiles and B-2s; it cannot intercept Grad rockets or ICBMs.
-- **Fixed launchers:** load ammunition, assign a target with the designator and fire with redstone.
-- **Blackout:** strike a transformer substation to cut electric lights in its district.
+- **Air defense and sirens:** sirens warn players near a target. A SAM shoots down hostile drones, cruise missiles and B-2s; it cannot intercept Grad rockets or ICBMs.
+- **Shahed-136:** a drone for single strikes or salvos.
+- **Lancet:** circles above the target, with a camera for choosing where to dive.
+- **Cruise missile:** flies low over the terrain, then climbs and dives into the target.
+- **Grad:** fires unguided rockets across an area.
+- **B-2:** drops a bunker buster that penetrates the ground before exploding.
+- **ICBM:** carries a nuclear warhead to the target after a warning period.
+- **Fixed launchers:** load ammunition, assign a target and fire with redstone.
+- **Strike Designator:** choose targets through binoculars or on the console map, set salvos and routes, or watch through a projectile's camera.
+
+![Choose a weapon and set up a salvo](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/remote.gif)
 
 ## Requirements and dependencies
 

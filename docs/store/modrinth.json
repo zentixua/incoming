@@ -1,7 +1,7 @@
 {
   "slug": "incoming",
   "title": "Incoming: Air Strikes and Air Defense",
-  "description": "Aim with binoculars, call in drones, missiles or a bomber, and defend your base with a SAM. Includes nuclear strikes.",
+  "description": "Cinematic air strikes at real scale: blast damage, wind-driven smoke, and nuclear strikes from flash to ruins. Includes air defense.",
   "categories": [
     "equipment",
     "technology",
@@ -22,16 +22,24 @@
       "featured": true
     },
     {
-      "file": "docs/guide/img/remote.gif",
-      "title": "Choose a weapon and set up a salvo"
+      "file": "docs/guide/img/nuke-wave.jpg",
+      "title": "The nuclear blast wave reaches the city"
     },
     {
-      "file": "docs/guide/img/map.gif",
-      "title": "Pick a target and plot the approach"
+      "file": "docs/guide/img/nuke-ruins.jpg",
+      "title": "The city after a nuclear strike"
+    },
+    {
+      "file": "docs/guide/img/sam.webp",
+      "title": "SAM defending against a drone raid"
     },
     {
       "file": "docs/guide/img/weapon-shahed.jpg",
       "title": "Shahed-136 on the way to its target"
+    },
+    {
+      "file": "docs/media/still-2.jpg",
+      "title": "Cruise missile over the city"
     },
     {
       "file": "docs/guide/img/weapon-lancet-launcher.jpg",
@@ -42,32 +50,24 @@
       "title": "Grad ready for a rocket salvo"
     },
     {
-      "file": "docs/guide/img/sam.webp",
-      "title": "SAM defending against a drone raid"
-    },
-    {
-      "file": "docs/guide/img/launcher.webp",
-      "title": "A cruise missile on a fixed launcher"
-    },
-    {
-      "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "The nuclear blast wave reaches the city"
-    },
-    {
-      "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "The city after a nuclear strike"
-    },
-    {
-      "file": "docs/media/still-2.jpg",
-      "title": "Cruise missile over the city"
-    },
-    {
       "file": "docs/guide/img/weapon-b2.jpg",
       "title": "B-2 in flight"
     },
     {
       "file": "docs/guide/img/weapon-icbm.jpg",
       "title": "ICBM in flight"
+    },
+    {
+      "file": "docs/guide/img/launcher.webp",
+      "title": "A cruise missile on a fixed launcher"
+    },
+    {
+      "file": "docs/guide/img/remote.gif",
+      "title": "Choose a weapon and set up a salvo"
+    },
+    {
+      "file": "docs/guide/img/map.gif",
+      "title": "Pick a target and plot the approach"
     }
   ]
 }
