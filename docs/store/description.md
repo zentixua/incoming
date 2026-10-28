@@ -1,6 +1,6 @@
 # Incoming
 
-<img src="https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/icon.png" alt="Incoming" width="128" height="128">
+![Cruise missiles strike a factory](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
 Air strikes and air defense for Minecraft 1.21.1.
 

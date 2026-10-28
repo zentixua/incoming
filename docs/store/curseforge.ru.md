@@ -1,6 +1,6 @@
 # Incoming
 
-<img src="https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/icon.png" alt="Incoming" width="128" height="128">
+![Удар крылатых ракет по заводу](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
 Удары с воздуха и ПВО для Minecraft 1.21.1.
 

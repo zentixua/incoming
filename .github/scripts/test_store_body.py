@@ -19,6 +19,17 @@ STORE = ROOT / "docs/store"
 
 
 class StoreBodyTest(unittest.TestCase):
+    def test_store_headers_use_the_shared_banner_and_keep_the_tagline(self):
+        banner = "https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp"
+        for stem in ("description", "curseforge"):
+            for suffix, tagline in ((".md", "Air strikes and air defense for Minecraft 1.21.1."),
+                                    (".ru.md", "Удары с воздуха и ПВО для Minecraft 1.21.1.")):
+                with self.subTest(store=stem, language=suffix):
+                    header = (STORE / (stem + suffix)).read_text().split("\n\n", 3)
+                    self.assertTrue(header[1].startswith("!["))
+                    self.assertTrue(header[1].endswith(f"]({banner})"))
+                    self.assertEqual(header[2], tagline)
+
     def assemble(self, *paths):
         return subprocess.run(["bash", str(SCRIPT), *map(str, paths)],
                               capture_output=True, text=True, check=False)
