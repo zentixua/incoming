@@ -21,7 +21,7 @@ import java.util.Optional;
 
 /**
  * Contact-charge obstacle breach ({@link BreachModel}) in world blocks. From charge contact face ({@link
- * #locate}), blast ray enters obstacle; divide each block path by material breach radius (FM group from {@code
+ * #locate}), blast ray enters obstacle; multiply each shape path by represented thickness, then divide by material breach radius (FM group from {@code
  * incoming:penetration}, {@link ModDataMaps.Penetrability#breaching}). Reaching covered void ({@link #covered}:
  * room, cave, channel under deck, FM free rear face) before sum exceeds 1 removes all traversed blocks: slab
  * breached along ray, wave continues into void. Failure or open-surface exit gives no breach: crater law
@@ -30,11 +30,7 @@ import java.util.Optional;
  * charge, not hole width, which is ours.
  */
 final class SlabBreach {
-    /**
-     * Breach ray step, blocks: finer than 0.3 wave step; comparing slab path/radius with 0.3 added up to 0.3 m
-     * near oblique hole edge, making edge one block narrower than law. Repeated steps within block still read it
-     * once.
-     */
+    /** Contact tolerance at a block face, metres; geometric paths use exact shape chords. */
     static final double STEP = 0.1;
     /** Vanilla-blast-resistant block (obsidian 1200, protected mod blocks): charge does not displace it. */
     static final float BLAST_PROOF = 1200;
@@ -71,11 +67,16 @@ final class SlabBreach {
      * @param radius breach radii per material group ({@link BreachModel.Material#ordinal}), m
      */
     record Origin(Vec3 at, @Nullable Vec3 open, double tolerance, double[] radius) {
-        /** Maximum breach radius: ray stops beyond it. */
+        /**
+         * World reach of a breach ray, m: the largest breach radius beyond contact plus the one cell a represented
+         * element occupies (est.: its position and orientation inside the cell are unknown). Material path alone does
+         * not bound a ray that runs along a thin element (0.04 m planks): each cell adds 0.04 m, so a 3 kg charge
+         * would open a plank roof 16 m out from the hit.
+         */
         double reach() {
             double r = 0;
             for (double v : radius) r = Math.max(r, v);
-            return r + tolerance;
+            return r + tolerance + 1;
         }
 
         /** Ray {@code (dx, dy, dz)} enters obstacle. */
@@ -159,7 +160,7 @@ final class SlabBreach {
         }
         if (hit != null) {
             Vec3 open = new Vec3(hit.getStepX(), hit.getStepY(), hit.getStepZ());
-            return new Origin(exit(cell, centre, open), open, rc + STEP, radius);
+            return new Origin(face(level, cell, centre, open), open, rc + STEP, radius);
         }
         Vec3 sum = new Vec3(x, y, z);
         if (here == Cell.VOID) {
@@ -169,7 +170,18 @@ final class SlabBreach {
         }
         if (sum.lengthSqr() < 1e-9) return new Origin(centre, null, rc + STEP, radius);
         Vec3 open = sum.normalize();
-        return new Origin(exit(cell, centre, open), open, rc + STEP, radius);
+        return new Origin(face(level, cell, centre, open), open, rc + STEP, radius);
+    }
+
+    /** Contact face of the actual shape: a lower slab's upper face is half a block below the cell boundary. */
+    private static Vec3 face(ServerLevel level, BlockPos cell, Vec3 centre, Vec3 open) {
+        Vec3 at = exit(cell, centre, open);
+        var shape = level.getBlockState(cell).getCollisionShape(level, cell);
+        if (shape.isEmpty()) return at;
+        if (Math.abs(open.x) > 0.999) return new Vec3(cell.getX() + (open.x > 0 ? shape.max(Direction.Axis.X) : shape.min(Direction.Axis.X)), at.y, at.z);
+        if (Math.abs(open.y) > 0.999) return new Vec3(at.x, cell.getY() + (open.y > 0 ? shape.max(Direction.Axis.Y) : shape.min(Direction.Axis.Y)), at.z);
+        if (Math.abs(open.z) > 0.999) return new Vec3(at.x, at.y, cell.getZ() + (open.z > 0 ? shape.max(Direction.Axis.Z) : shape.min(Direction.Axis.Z)));
+        return at;
     }
 
     /** Distance from {@code p} in {@code cell} to face {@code d}. */
@@ -237,54 +249,55 @@ final class SlabBreach {
 
     /**
      * Same; non-null {@code used} gives sum of obstacle paths divided by respective breach radius ({@code
-     * used[0]}) and total path ({@code used[1]}, m) until exit/stop.
+     * used[0]}) and geometric shape path ({@code used[1]}, world metres) until exit/stop.
      */
     static double march(ServerLevel level, Origin o, double dx, double dy, double dz, Explosion e, ExplosionDamageCalculator damage,
                         LongArrayList path, boolean[] liquid, @Nullable double[] used) {
         path.clear();
         if (used != null) used[0] = used[1] = 0;
-        double sum = 0, r = 0;
-        long last = Long.MIN_VALUE;
+        double sum = 0, distance = 0;
+        Vec3 direction = new Vec3(dx, dy, dz).normalize();
+        BlockPos anchor = BlockPos.containing(o.at());
+        Vec3 start = o.at().subtract(Vec3.atLowerCornerOf(anchor));
+        // Grid traversal instead of 0.1 m samples: thin represented material can cross many world blocks.
+        // The ready chunk boundary is a hard stop; no chunk is requested by a breach ray.
         double reach = o.reach();
-        // Ray point is step midpoint: d − STEP/2 to d + STEP/2 belongs to its block.
-        for (double d = STEP / 2; d <= reach + STEP; d += STEP) {
-            BlockPos pos = BlockPos.containing(o.at().x + dx * d, o.at().y + dy * d, o.at().z + dz * d);
-            long key = pos.asLong();
-            if (key != last) {
-                last = key;
-                if (!level.isInWorldBounds(pos) || !Terrain.ready(level, pos)) return -1;
-                BlockState s = level.getBlockState(pos);
-                switch (cell(level, pos, s, e, damage)) {
-                    case STOP -> {
-                        return -1;
-                    }
-                    case VOID -> {
-                        if (path.isEmpty()) {
-                            if (d > o.tolerance()) return -1;
-                            continue;
-                        }
-                        // Free breach face is covered void (room, cave, channel under deck);
-                        // open surface belongs to crater law, not breach.
-                        if (!covered(level, pos)) return -1;
-                        liquid[0] = s.getBlock() instanceof LiquidBlock;
-                        return d - STEP / 2;
-                    }
-                    case SOLID -> {
-                        path.add(key);
-                        r = o.radius()[material(s).ordinal()];
-                    }
-                }
-            } else if (path.isEmpty()) {
-                if (d > o.tolerance()) return -1;
+        while (distance <= reach) {
+            // Local coordinates avoid false void chords at distant world coordinates (GameTest uses ±15M).
+            Vec3 at = start.add(direction.scale(distance));
+            BlockPos local = BlockPos.containing(at.add(direction.scale(1e-7)));
+            BlockPos pos = anchor.offset(local);
+            if (!level.isInWorldBounds(pos) || !Terrain.ready(level, pos)) return -1;
+            double length = Math.min(axisExit(at.x, direction.x, local.getX()),
+                    Math.min(axisExit(at.y, direction.y, local.getY()), axisExit(at.z, direction.z, local.getZ())));
+            if (length <= 1e-7) {
+                distance += 1e-7;
                 continue;
             }
-            if (r <= 0) return -1;
-            sum += STEP / r;
-            if (used != null) {
-                used[0] = sum;
-                used[1] += STEP;
+            BlockState state = level.getBlockState(pos);
+            Cell cell = cell(level, pos, state, e, damage);
+            if (cell == Cell.STOP) return -1;
+            double matter = cell == Cell.SOLID
+                    ? MaterialPath.inside(state.getCollisionShape(level, pos), local, at, direction, length) : 0;
+            if (matter > 1e-9) {
+                path.add(pos.asLong());
+                double radius = o.radius()[material(state).ordinal()];
+                if (!(radius > 0)) return -1;
+                sum += matter * ModDataMaps.Penetrability.of(state).thickness() / radius;
+                if (used != null) {
+                    used[0] = sum;
+                    used[1] += matter;
+                }
+                if (sum > 1 + 1e-9) return -1;
+            } else if (!path.isEmpty()) {
+                // Open-sky exits belong to excavation, as before; roof/cave/deck exits permit breach.
+                if (!covered(level, pos)) return -1;
+                liquid[0] = state.getBlock() instanceof LiquidBlock;
+                return distance;
+            } else if (distance + length > o.tolerance()) {
+                return -1;
             }
-            if (sum > 1) return -1;
+            distance += length;
         }
         return -1;
     }

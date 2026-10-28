@@ -23,6 +23,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModParticles;
 import ua.zentix.incoming.registry.ModSounds;
@@ -184,7 +185,10 @@ final class BlastFront {
             long t0 = clock.begin();
             Entity owner = h.owner() == null ? null : level.getPlayerByUUID(h.owner());
             if (h.buried()) BlastBody.bury(level, h.d(), e, owner);
-            else {
+            else if (!e.getData(ModAttachments.NUKE_SEEN).blasted(h.d().id())) {
+                // once per body and detonation: loading it later brings no second wave, and a body loaded on the tick the front
+                // crosses it and caught up first (LateExposure) is not hit again
+                e.setData(ModAttachments.NUKE_SEEN, e.getData(ModAttachments.NUKE_SEEN).withBlast(h.d().id()));
                 // ruins appeared while hit waited: remembered after front arrival
                 Int2ObjectMap<BlastBody.Before> seen = before.get(h.d().id());
                 BlastBody.Before late = h.before() != null || seen == null ? null : seen.remove(e.getId());

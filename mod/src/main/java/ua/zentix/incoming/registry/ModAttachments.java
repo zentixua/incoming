@@ -32,6 +32,14 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<RadiationDose>> RADIATION = REGISTER.register("radiation",
             () -> AttachmentType.builder(() -> RadiationDose.NONE).serialize(RadiationDose.CODEC).build());
 
+    /**
+     * Living entity: nuclear detonations whose flash, prompt radiation and wave it has received, and the time its fallout
+     * dose is accounted to ({@link ua.zentix.incoming.nuclear.world.NukeSeen}); saved with the entity.
+     */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.world.NukeSeen>> NUKE_SEEN = REGISTER.register("nuke_seen",
+            () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.world.NukeSeen.NONE)
+                    .serialize(ua.zentix.incoming.nuclear.world.NukeSeen.CODEC, s -> !s.equals(ua.zentix.incoming.nuclear.world.NukeSeen.NONE)).build());
+
     /** Player retinal burns — flash blind spots; reset on death (not copied). */
     public static final Supplier<AttachmentType<RetinaScars>> RETINA = REGISTER.register("retina",
             () -> AttachmentType.builder(() -> RetinaScars.NONE).serialize(RetinaScars.CODEC, s -> !s.isEmpty()).build());

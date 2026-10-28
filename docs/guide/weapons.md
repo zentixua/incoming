@@ -132,6 +132,19 @@ A blast is the warhead's charge in TNT, not a game explosion power. Everything f
   estimates for most of these warheads; real ones also have nose and base plates and sometimes ready-made fragments.
 - **Aircraft** of Create Aeronautics lose the blocks that the same law breaks at their distance.
 
+A building block represents an element made of its material: boarding or a masonry wall can occupy one block without being a solid metre of timber or brick. Contact breach, bomb penetration and cohesive excavation multiply the path inside the block's collision shape by `thickness` in `data/incoming/data_maps/block/penetration.json`; datapacks can replace it. The values below are assumptions about what each block depicts (est.), independent of where it is placed: there is no roof or wall recognition. Slabs and stairs contribute only their actual shape, once. A Grad can breach a one-block brick wall or plank roof; three brick layers represent 1.14 m and stop its 0.77 m contact breach. A breach reaches no farther from the hit than its largest radius plus the block it struck, so a charge on a plank roof opens a hole rather than lifting the whole roof. Natural ground and rock retain their old depths and craters; the air-wave thresholds and fragment stopping rule are unchanged.
+
+| Blocks | Metres of material per full-block path (est.) | Interpretation and source |
+|---|---:|---|
+| Planks, wooden slabs and stairs | 0.04 | Boarding: approximately two 19 mm boards; a half slab gives 20 mm. [USDA Wood Handbook, ch. 17](<https://research.fs.usda.gov/treesearch/37440>). |
+| Wooden doors and trapdoors | 0.20 | Their 3/16-block shape gives 37.5 mm, approximately a 38 mm timber section. [USDA, ch. 17](<https://research.fs.usda.gov/treesearch/37440>). |
+| Wooden fences and fence gates | 0.16 | A quarter-block post gives 40 mm; a 1/8-block rail gives 20 mm. [USDA, ch. 17](<https://research.fs.usda.gov/treesearch/37440>). |
+| Bricks, nether/red nether bricks, mud bricks, end-stone bricks, and their slabs/stairs/walls | 0.38 | Residential masonry; 380 mm is the chosen wall analogy, not a separate cavity model. [Wienerberger 380 mm wall](<https://www.wienerberger.ua/produkciya/porotherm-glinyana-cegla/katalog-blokiv-porotherm/porotherm-38-p_w.html>). |
+| Stone bricks, cobblestone, mossy variants, deepslate bricks/tiles, polished blackstone bricks, and their cracked or slab/stair/wall variants | 0.40 | Dressed or rubble stone masonry; chosen within the 350–450 mm range. [Nepal NBC 203, table 7.1(b)](<https://giwmscdnone.gov.np/media/pdf_upload/low-strength-masonry_mwykate.pdf>). |
+| All concrete colours | 0.20 | Concrete wall or floor element, rounded from 8 inches; reinforcement is not inferred. [HUD Residential Structural Design Guide, §4.3](<https://www.govinfo.gov/content/pkg/GOVPUB-HH14-PURL-gpo86806/pdf/GOVPUB-HH14-PURL-gpo86806.pdf>), typical walls 6/8/10 inches. |
+| Natural soil, rock and ores; terracotta; logs | 1.00 | Solid material, with the previous laws unchanged. |
+| Smooth stone, polished stone, quartz and prismarine; other blocks without a thickness entry | 1.00 | No unambiguous thin element is assumed. Missing material entries retain the previous mining-tool fallback for breach and rock-like bomb fallback. |
+
 Known limits: the injury thresholds are those for long nuclear pulses, so near a small charge they slightly overstate
 harm. Fragments fly in straight lines (gravity bends a dangerous fragment's path by less than a metre), do not
 ricochet and pass through Create Aeronautics aircraft. A chipped block turns cracked as a whole, while a real
@@ -237,7 +250,8 @@ gravity and drag, so it hits at about 235 m/s instead of about 510 m/s. With `sc
 
 | | Game flight speeds (≈235 m/s) | Real drop, `flight_speed` 1 (≈510 m/s) |
 |---|---|---|
-| Stone, concrete | ≈4 blocks | ≈8–9 m |
+| Natural stone | ≈4 blocks | ≈8–9 blocks |
+| Concrete (0.20 m per block) | ≈20 blocks | ≈40–45 blocks |
 | Deepslate | ≈3 blocks | ≈7 m |
 | Gravel | ≈23 blocks | ≈40–65 m |
 | Dirt and grass | ≈55 blocks | ≈100–200 m |
@@ -246,9 +260,9 @@ Dirt right under a concrete slab is twice as hard for the first 5 blocks. Water 
 and reinforced deepslate stop it. For rock the equations are good only to within a factor of two. Which block is what
 material is in the data map `incoming:penetration` (`data/incoming/data_maps/block/penetration.json`): a data pack or
 mod can add its own blocks; a block without an entry counts as brick. A thin block (carpet, slab, stairs) counts only
-as thick as it is.
+its shape path multiplied by the represented thickness above.
 
-**The fuze.** If the bomb breaks into a cave or a bunker room after at least 4 blocks of solid matter, it goes off once
+**The fuze.** If the bomb breaks into a cave or a bunker room after at least 4 metres of represented solid material, it goes off once
 it is all the way inside. Leaves, wool and powder snow barely slow it down and do not count. Otherwise it goes off where
 it stops.
 
@@ -361,8 +375,7 @@ a slab the charge cannot break looks like a hit on solid ground.
 - **A slab over empty space** (a roof, a bridge deck, a floor) that the charge breaks through: pieces fly off the face
   that was hit, and the back of the slab is punched straight out of its far side into the space behind, at any angle
   of the hit (down under a roof, sideways through a wall): the blast pushes the plate square to its face. Dust of the
-  slab's material comes out of the hole. A Shahed through a metre of planks drives the pieces behind it at about
-  30 m/s (an estimate, the upper bound of the Gurney formula). Only the crater on the face that was hit sends its dust
+  slab's material comes out of the hole. Rear-piece speeds use an estimate from the upper bound of the Gurney formula. Only the crater on the face that was hit sends its dust
   out of the hole (about a third, an estimate from tests on concrete slabs); the dust of the back goes into the room
   behind. Where the hot gas and that dust go inside a room is not modelled.
 - **Water:** the column of spray below.

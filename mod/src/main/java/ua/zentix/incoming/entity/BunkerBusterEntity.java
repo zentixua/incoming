@@ -35,6 +35,7 @@ import ua.zentix.incoming.target.Target;
 import ua.zentix.incoming.util.Air;
 import ua.zentix.incoming.util.Nbt;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.warhead.MaterialPath;
 import ua.zentix.incoming.warhead.Penetration;
 import ua.zentix.incoming.warhead.Warheads;
 
@@ -243,7 +244,7 @@ public class BunkerBusterEntity extends StrikeProjectile {
             Penetrability entry = Penetrability.find(state);
             VoxelShape shape = state.getCollisionShape(level, b);
             // Block medium: map entry (or other solid) over the axis length inside the shape; fluid in the remainder.
-            double matter = entry != null && shape.isEmpty() ? len : inside(shape, b, at, dir, len);
+            double matter = entry != null && shape.isEmpty() ? len : MaterialPath.inside(shape, b, at, dir, len);
             Penetrability medium = matter > 0 ? (entry != null ? entry : Penetrability.OTHER) : null;
             // Fluid without a map entry (modded) uses water density, not other solid material.
             Penetrability liquid = fluid.isEmpty() ? null : Penetrability.find(fluid.createLegacyBlock());
@@ -256,11 +257,13 @@ public class BunkerBusterEntity extends StrikeProjectile {
             }
             if (medium != null) {
                 hollow = 0;
-                double went = run.through(medium.kind(), medium.s(), matter);
+                // Young consumes represented material; travel/time remain world distances.
+                double materialWent = run.through(medium.kind(), medium.s(), matter * medium.thickness());
+                double went = materialWent / medium.thickness();
                 double vb = run.speed();
                 s += went;
                 t += went > 0 ? 2 * went / (va + vb) : 0;
-                if (arms(medium)) solid += went;
+                if (arms(medium)) solid += materialWent;
                 va = vb;
                 if (run.stopped()) {
                     steps.add(new Step(b, s, t, carves(medium), solid));
@@ -312,32 +315,6 @@ public class BunkerBusterEntity extends StrikeProjectile {
      */
     static boolean arms(Penetrability m) {
         return m.kind() != Penetration.Kind.FLUID && m.kind() != Penetration.Kind.STOP && m.s() < SENSOR_SOFT;
-    }
-
-    /**
-     * Path axis length from {@code at}, length {@code len} along {@code dir}, inside block {@code b}'s {@code
-     * shape}, m.
-     */
-    private static double inside(VoxelShape shape, BlockPos b, Vec3 at, Vec3 dir, double len) {
-        if (shape.isEmpty()) return 0;
-        double sum = 0;
-        for (AABB box : shape.toAabbs()) {
-            AABB w = box.move(b);
-            // Axis segment inside the box: intersection of intervals on three axes.
-            double lo = 0, hi = len;
-            double[] p = {at.x, at.y, at.z}, d = {dir.x, dir.y, dir.z}, mn = {w.minX, w.minY, w.minZ}, mx = {w.maxX, w.maxY, w.maxZ};
-            for (int k = 0; k < 3 && lo < hi; k++) {
-                if (Math.abs(d[k]) < 1e-12) {
-                    if (p[k] < mn[k] || p[k] > mx[k]) hi = lo;
-                    continue;
-                }
-                double a = (mn[k] - p[k]) / d[k], c = (mx[k] - p[k]) / d[k];
-                lo = Math.max(lo, Math.min(a, c));
-                hi = Math.min(hi, Math.max(a, c));
-            }
-            if (hi > lo) sum += hi - lo;
-        }
-        return Math.min(len, sum);
     }
 
     /** Path length from {@code at} along {@code dir} until exiting block {@code b}, m. */

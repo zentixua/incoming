@@ -61,6 +61,12 @@ public final class NuclearEvents extends SavedData {
     private final Map<Integer, Integer> craters = new LinkedHashMap<>();
     private static final Codec<Map<Integer, Integer>> CRATERS_CODEC = Codec.unboundedMap(Codec.STRING.xmap(Integer::parseInt, String::valueOf), Codec.INT);
     private int nextId = 1;
+    /**
+     * First detonation number whose flash, prompt radiation and wave reach bodies loaded later ({@code LateExposure}). A world
+     * saved before bodies were marked ({@code NukeSeen}) cannot tell a hit body from a missed one, so its earlier detonations
+     * stay as they were.
+     */
+    private int lateFrom = 1;
 
     public static NuclearEvents get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(new Factory<>(NuclearEvents::new, NuclearEvents::load, null), NAME);
@@ -69,6 +75,19 @@ public final class NuclearEvents extends SavedData {
     public int nextId() {
         setDirty();
         return nextId++;
+    }
+
+    /** Highest detonation number so far; 0 — none yet. */
+    public int lastId() {
+        int last = nextId - 1;
+        for (Detonation d : detonations) last = Math.max(last, d.id());
+        for (Detonation d : past) last = Math.max(last, d.id());
+        return last;
+    }
+
+    /** First detonation number that reaches bodies loaded later ({@link #lateFrom}). */
+    public int lateFrom() {
+        return lateFrom;
     }
 
     public List<Detonation> detonations() {
@@ -140,6 +159,7 @@ public final class NuclearEvents extends SavedData {
     private static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
         NuclearEvents e = new NuclearEvents();
         e.nextId = Math.max(1, tag.getInt("next_id"));
+        e.lateFrom = tag.contains("late_from") ? tag.getInt("late_from") : e.nextId;
         Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("detonations")).resultOrPartial(Incoming.LOG::error).ifPresent(e.detonations::addAll);
         if (tag.contains("past")) Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("past")).resultOrPartial(Incoming.LOG::error).ifPresent(e.past::addAll);
         ScheduledStrike.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("scheduled")).resultOrPartial(Incoming.LOG::error).ifPresent(e.scheduled::addAll);
@@ -150,6 +170,7 @@ public final class NuclearEvents extends SavedData {
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putInt("next_id", nextId);
+        tag.putInt("late_from", lateFrom);
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, detonations).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("detonations", t));
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, past).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("past", t));
         ScheduledStrike.CODEC.listOf().encodeStart(NbtOps.INSTANCE, scheduled).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("scheduled", t));

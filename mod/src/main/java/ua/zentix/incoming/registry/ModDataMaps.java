@@ -1,6 +1,7 @@
 package ua.zentix.incoming.registry;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Block;
@@ -53,8 +54,11 @@ public final class ModDataMaps {
      * @param kind   medium kind
      * @param s      Young penetrability S (liquid — density, kg/m³; impenetrable — 0)
      * @param breach charge-breaching material group (FM 5-250 table B-3); absent — from medium kind ({@link #breaching})
+     * @param thickness metres of material represented by one full block; multiply the path inside its shape by this
      */
-    public record Penetrability(Penetration.Kind kind, double s, Optional<BreachModel.Material> breach) {
+    public record Penetrability(Penetration.Kind kind, double s, Optional<BreachModel.Material> breach, double thickness) {
+        private static final Codec<Double> THICKNESS = Codec.DOUBLE.validate(v -> Double.isFinite(v) && v > 0
+                ? DataResult.success(v) : DataResult.error(() -> "thickness must be finite and positive"));
         private static final Codec<Penetration.Kind> KIND = Codec.STRING.xmap(n -> Penetration.Kind.valueOf(n.toUpperCase(Locale.ROOT)),
                 k -> k.name().toLowerCase(Locale.ROOT));
         private static final Codec<BreachModel.Material> BREACH = Codec.STRING.xmap(n -> BreachModel.Material.valueOf(n.toUpperCase(Locale.ROOT)),
@@ -62,16 +66,17 @@ public final class ModDataMaps {
         public static final Codec<Penetrability> CODEC = RecordCodecBuilder.create(i -> i.group(
                 KIND.fieldOf("kind").forGetter(Penetrability::kind),
                 Codec.DOUBLE.optionalFieldOf("s", 0.0).forGetter(Penetrability::s),
-                BREACH.optionalFieldOf("breach").forGetter(Penetrability::breach)).apply(i, Penetrability::new));
+                BREACH.optionalFieldOf("breach").forGetter(Penetrability::breach),
+                THICKNESS.optionalFieldOf("thickness", 1.0).forGetter(Penetrability::thickness)).apply(i, Penetrability::new));
         /**
          * Solid block without entry — brick-like, S = 1 (estimate: Young does not describe other solids — metal, glass, modded
          * blocks); kind is rock: soil behind it is no stronger, unlike behind a concrete slab. For a block without entry,
          * breaching chooses its own material group ({@code SlabBreach.material}).
          */
-        public static final Penetrability OTHER = new Penetrability(Penetration.Kind.ROCK, 1.0, Optional.empty());
+        public static final Penetrability OTHER = new Penetrability(Penetration.Kind.ROCK, 1.0, Optional.empty(), 1.0);
 
         /** Liquid without an entry (modded): water density, kg/m³. */
-        public static final Penetrability WATER = new Penetrability(Penetration.Kind.FLUID, 1000, Optional.empty());
+        public static final Penetrability WATER = new Penetrability(Penetration.Kind.FLUID, 1000, Optional.empty(), 1.0);
 
         /**
          * Charge-breaching material group: explicit or from medium kind — soil “earth”, rock “rock”, concrete and masonry “rock”

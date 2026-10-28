@@ -1,4 +1,13 @@
 {
+  "_comment": "Thickness is metres of material represented by a full block (est.), multiplied once by the path inside the collision shape. Unlisted thickness is 1.0. Natural soil/rock/ores, terracotta and logs remain solid metres. Smooth/polished stone, quartz and prismarine have no unambiguous wall/board interpretation, so retain 1.0. Existing kind/S/breach values are preserved; new shape entries retain the previous bomb fallback ROCK/S=1.",
+  "_sources": {
+    "stone_wall": "(est.) Stone masonry wall: 0.40 m, within the 350–450 mm range in Nepal NBC 203, table 7.1(b): https://giwmscdnone.gov.np/media/pdf_upload/low-strength-masonry_mwykate.pdf",
+    "concrete_element": "(est.) Concrete wall/floor element: 0.20 m, rounded 8 inches; HUD Residential Structural Design Guide (2nd ed.), sec. 4.3, typical 6/8/10-inch walls: https://www.govinfo.gov/content/pkg/GOVPUB-HH14-PURL-gpo86806/pdf/GOVPUB-HH14-PURL-gpo86806.pdf",
+    "brick_wall": "(est.) Residential masonry wall: 0.38 m; 380 mm example: https://www.wienerberger.ua/produkciya/porotherm-glinyana-cegla/katalog-blokiv-porotherm/porotherm-38-p_w.html . The block analogy does not model cavities.",
+    "timber_boarding": "(est.) Boarded timber element: 0.04 m per full block; a half slab represents 0.02 m. USDA FPL-GTR-190 (2010), ch. 17, 19 mm boards and 38 mm framing: https://research.fs.usda.gov/treesearch/37440",
+    "timber_panel": "(est.) 3/16-block panel × 0.20 = 0.0375 m timber, approximately the 38 mm timber section in USDA FPL-GTR-190, ch. 17. Shape is counted once: https://research.fs.usda.gov/treesearch/37440",
+    "timber_frame": "(est.) Quarter-block post × 0.16 = 0.04 m timber; 1/8-block rail = 0.02 m. Rounded 38/19 mm timber sections, USDA FPL-GTR-190, ch. 17: https://research.fs.usda.gov/treesearch/37440"
+  },
   "values": {
     "#minecraft:base_stone_nether": {
       "kind": "rock",
@@ -174,11 +183,15 @@
     },
     "minecraft:cobblestone": {
       "kind": "rock",
-      "s": 1.1
+      "s": 1.1,
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:mossy_cobblestone": {
       "kind": "rock",
-      "s": 1.1
+      "s": 1.1,
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "#minecraft:terracotta": {
       "kind": "rock",
@@ -203,67 +216,99 @@
     },
     "minecraft:white_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:orange_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:magenta_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:light_blue_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:yellow_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:lime_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:pink_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:gray_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:light_gray_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:cyan_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:purple_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:blue_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:brown_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:green_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:red_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:black_concrete": {
       "kind": "concrete",
-      "s": 0.84
+      "s": 0.84,
+      "thickness": 0.2,
+      "_comment": "(est.) concrete_element; see _sources. Multiply the shape path once."
     },
     "minecraft:smooth_stone": {
       "kind": "concrete",
@@ -276,41 +321,59 @@
     "minecraft:deepslate_bricks": {
       "kind": "concrete",
       "s": 0.84,
-      "breach": "dense"
+      "breach": "dense",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:deepslate_tiles": {
       "kind": "concrete",
       "s": 0.84,
-      "breach": "dense"
+      "breach": "dense",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
     },
     "#minecraft:stone_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:nether_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:red_nether_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:mud_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:polished_blackstone_bricks": {
       "kind": "concrete",
       "s": 1.0,
-      "breach": "dense"
+      "breach": "dense",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:end_stone_bricks": {
       "kind": "concrete",
-      "s": 1.0
+      "s": 1.0,
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
     },
     "minecraft:prismarine": {
       "kind": "concrete",
@@ -351,7 +414,9 @@
     "#minecraft:planks": {
       "kind": "rock",
       "s": 1.5,
-      "breach": "poor"
+      "breach": "poor",
+      "thickness": 0.04,
+      "_comment": "(est.) timber_boarding; see _sources. Multiply the shape path once."
     },
     "#minecraft:logs": {
       "kind": "rock",
@@ -402,6 +467,321 @@
     },
     "minecraft:jigsaw": {
       "kind": "stop"
+    },
+    "#minecraft:wooden_slabs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.04,
+      "_comment": "(est.) timber_boarding; see _sources. Multiply the shape path once."
+    },
+    "#minecraft:wooden_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.04,
+      "_comment": "(est.) timber_boarding; see _sources. Multiply the shape path once."
+    },
+    "#minecraft:wooden_doors": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.2,
+      "_comment": "(est.) timber_panel; see _sources. Multiply the shape path once."
+    },
+    "#minecraft:wooden_trapdoors": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.2,
+      "_comment": "(est.) timber_panel; see _sources. Multiply the shape path once."
+    },
+    "#minecraft:wooden_fences": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.16,
+      "_comment": "(est.) timber_frame; see _sources. Multiply the shape path once."
+    },
+    "#minecraft:fence_gates": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "poor",
+      "thickness": 0.16,
+      "_comment": "(est.) timber_frame; see _sources. Multiply the shape path once."
+    },
+    "minecraft:brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:nether_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:nether_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:nether_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:red_nether_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:red_nether_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:red_nether_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mud_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mud_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mud_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:end_stone_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:end_stone_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:end_stone_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.38,
+      "_comment": "(est.) brick_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:stone_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:stone_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:stone_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_stone_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_stone_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_stone_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cobblestone_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cobblestone_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cobblestone_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_cobblestone_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_cobblestone_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:mossy_cobblestone_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_tile_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_tile_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:deepslate_tile_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:polished_blackstone_brick_slab": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:polished_blackstone_brick_stairs": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:polished_blackstone_brick_wall": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cracked_deepslate_bricks": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cracked_deepslate_tiles": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "reinforced",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
+    },
+    "minecraft:cracked_polished_blackstone_bricks": {
+      "kind": "rock",
+      "s": 1.0,
+      "breach": "rock",
+      "thickness": 0.4,
+      "_comment": "(est.) stone_wall; see _sources. Multiply the shape path once."
     }
   }
 }
