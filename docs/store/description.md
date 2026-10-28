@@ -1,98 +1,104 @@
 # Incoming: Air Strikes and Air Defense
 
-Air strikes, a targeting console and defenses for Minecraft 1.21.1 on NeoForge.
+Incoming adds air strikes and air defense to Minecraft 1.21.1 on NeoForge.
 
-**Minecraft 1.21.1 · NeoForge 21.1.264+ · Java 21 · required on the server and every client.**
-No other mods are required. Use the same Incoming version on both sides.
+<!-- MEDIA-RR2-HERO: replace with the gameplay GIF/video from PR #518; existing animation until then. -->
+![Cruise missiles strike the factory](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
-![Cruise missile over a city](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/still-2.jpg)
+[Download](https://github.com/zentixua/incoming/releases/latest) · [Player guide](https://github.com/zentixua/incoming/blob/main/docs/guide/README.md)
 
-## Start a strike
+Pick a target from the ground or plan a route on the map. Watch from the projectile's camera, or stay behind and
+listen for it. At a distance, you see the explosion before you hear it.
 
-Craft a Strike Designator and munitions. Hold RMB for binoculars, choose a weapon with the mouse wheel and launch
-with LMB. Shift+RMB opens the console; `,` opens the targeting map. The map reaches 10,000 blocks by default and
-supports up to five route points for drones and cruise missiles. `N` opens the projectile camera; Shift exits.
+## Choose your strike
 
-Strikes break blocks and start fires by default. Blast damage affects the shooter too. Nuclear weapons are
-operator-only by default; the world owner controls access, destruction and fire separately for conventional and
-nuclear strikes. Check the [world rules](https://github.com/zentixua/incoming/blob/main/docs/guide/settings.md#world-settings)
-before firing near a build.
+### Shahed-136
 
-[Player guide](https://github.com/zentixua/incoming/blob/main/docs/guide/README.md) ·
-[Russian guide](https://github.com/zentixua/incoming/blob/main/docs/guide/ru/README.md) ·
-[Recipes](https://github.com/zentixua/incoming/blob/main/docs/guide/munitions.md)
+Send a drone toward a building or send several in a salvo. To follow a moving target, keep it in view through the
+drone's camera.
 
-## Weapons
+![Shahed-136 in flight](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/weapon-shahed.jpg)
 
-| Weapon | Use |
+### Lancet
+
+Circle above the target, look through the camera, then pick where to dive.
+
+![Lancet on its launch rail](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/weapon-lancet-launcher.jpg)
+
+### Cruise missile
+
+Plot a route around a hill or an air defense site. The missile flies low, climbs near the target and dives into it.
+
+![Cruise missile over the city](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/still-2.jpg)
+
+### Grad
+
+Choose an area and fire a rocket salvo. The unguided rockets spread across it; they won't chase a moving target.
+
+![Grad rocket launcher](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/weapon-grad.jpg)
+
+### B-2 and bunker buster
+
+Call in a bomber to drop a bomb that digs into the ground before exploding.
+
+![B-2 in flight](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/weapon-b2.jpg)
+
+### Nuclear ICBM
+
+Launch an ICBM and wait for the warning countdown. The flash comes first, then the blast wave rolls through the
+landscape beneath a rising mushroom cloud. A ground burst leaves a crater and radioactive fallout downwind.
+Cruise missiles and B-2 bombs can carry nuclear warheads too. Nuclear launches are operator-only by default.
+
+![ICBM in flight](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/weapon-icbm.jpg)
+
+![Nuclear fireball and blast wave over the city](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
+
+Weapons are built at one block per meter. Flight speeds are reduced by default so you can see the approach.
+The [guide](https://github.com/zentixua/incoming/blob/main/docs/guide/not-physical.md) explains the game rules and limits.
+
+## Defend your base
+
+Place a SAM under open sky and keep it supplied with interceptors. It can shoot down hostile drones, cruise
+missiles and B-2s. It cannot intercept Grad rockets or ICBMs. Stay nearby to keep it working; sirens warn players near a target.
+
+![SAM and its radar during a drone raid](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/sam.webp)
+
+For a base of your own, link a fixed launcher to the designator, load it and fire with redstone.
+Destroying a transformer substation cuts the electric lights in its district.
+
+## Your first strike
+
+1. Install **Minecraft 1.21.1, NeoForge 21.1.264+ and Java 21**. Put the [Incoming jar](https://github.com/zentixua/incoming/releases/latest) in `mods`. No other mods are required.
+2. Craft a [Strike Designator](https://github.com/zentixua/incoming/blob/main/docs/guide/designator.md#crafting): a spyglass, two iron ingots, redstone dust and a compass. Craft a [Shahed munition](https://github.com/zentixua/incoming/blob/main/docs/guide/munitions.md) and keep it in your inventory. In Creative, take the designator from the Incoming tab; ammunition is free.
+3. Find an open test area away from builds. Hold right-click, select Shahed with the mouse wheel, aim at the ground in the distance and left-click to launch.
+4. Press `N` for the projectile camera; Shift brings you back. Shift + right-click opens the console for salvos; `,` opens the targeting map.
+
+## Compatibility
+
+| Mod / platform | What you need to know |
 |---|---|
-| Shahed-136 | A drone launched from a nearby trailer; follows a moving target while you hold it in its camera. |
-| Lancet | A loitering munition: circle over the target, then choose what to hit from its camera. |
-| Cruise missile | Low flight over terrain and a final dive; can carry a nuclear warhead. |
-| Grad | A 40-tube launcher firing unguided rockets over an area. |
-| B-2 and bunker buster | A bomber drops a guided bomb that penetrates the ground and explodes underground; can carry a nuclear warhead. |
-| ICBM | A nuclear strike of 1–15 kt, with a 90 s flight timer by default. |
+| **NeoForge, Minecraft 1.21.1** | Required. Install the same Incoming version on the server and every client. |
+| Create | Optional. Adds Create-based munition recipes; without it, use vanilla ingredients. |
+| Create Aeronautics + Sable | Optional. Target flying craft; explosions can break and push them. |
+| Distant Horizons | Optional. Distant terrain on the targeting map and updates to damaged terrain. |
+| Voxy through Roxy | Optional, client only. Distant terrain for the map and for watching strikes. |
+| Iris | Optional. Nuclear effects work with shaders. |
 
-Each projectile costs one munition item; a Grad pack supplies 40 rockets. A nuclear cruise missile or B-2 bomb also
-costs one Nuclear Warhead item per projectile. A salvo is paid in full when ordered, with
-unfired munitions returned on abort or launch failure. Creative mode does not need munitions.
+See [compatible versions and setup](https://github.com/zentixua/incoming/blob/main/docs/guide/compatibility.md) before adding the optional mods.
 
-Projectile sizes use one block per meter. Blast damage follows charge and material models with approximations.
-Flight and air defense use a game model in every preset. GAME keeps full nuclear radii but slows the distant wave
-to 0.20 of the speed of sound; REAL uses reference flight speeds/heights and physical wave timing; CUSTOM can shrink
-nuclear radii. See [Not physical](https://github.com/zentixua/incoming/blob/main/docs/guide/not-physical.md).
+## FAQ
 
-## Warning and defense
+**Single-player or server?** Both, including a world opened to friends. Everyone needs the same version of Incoming.
 
-Players near the target hear a siren and see an alert. The SAM block shoots down hostile Shaheds, Lancets, cruise
-missiles and B-2s, including nuclear carriers; it cannot intercept Grad rockets or ICBMs. Its four ready rails are
-fed from two stock slots, one missile every 8 seconds by default. Supply it by hand or hopper.
+**Will it slow the game down?** Large salvos, nuclear strikes and shaders can be demanding. Start small, lower effect
+quality if needed, and see [performance help](https://github.com/zentixua/incoming/blob/main/docs/guide/faq.md#troubleshooting).
 
-A fixed launcher fires a mission on a redstone signal. Link it to the designator, assign a target and load it with
-munitions. It accepts Shaheds, Lancets, conventional cruise missiles and Grad rockets.
+**Can I protect builds?** The owner can restrict launches and disable destruction and fires; conventional and nuclear
+strikes have separate controls in [world settings](https://github.com/zentixua/incoming/blob/main/docs/guide/settings.md#world-settings). Destruction is on by default.
 
-## Nuclear strike and blackout
+## Credits
 
-A nuclear strike produces a flash, mushroom cloud and blast wave, followed by fires. Ground bursts also leave a
-crater and radioactive fallout downwind. Take cover under thick ground, avoid windows and do not look at the
-fireball. A Geiger Counter measures dose and dose rate. See
-[survival and radiation](https://github.com/zentixua/incoming/blob/main/docs/guide/nuke.md#how-to-survive).
+Made by ZentixUA. [GPL-3.0-only](https://github.com/zentixua/incoming/blob/main/LICENSE); modpacks are welcome under that license.
+[Sound credits](https://github.com/zentixua/incoming/blob/main/SOUND-CREDITS.md) · [Asset credits](https://github.com/zentixua/incoming/blob/main/tools/bake_fx/SOURCES.md) · [Report a bug](https://github.com/zentixua/incoming/issues)
 
-If nuclear weapons are allowed for ordinary players, a launch needs another nearby player's second key when
-someone else is online. The launching player cannot recall an ordered nuclear strike, even while it waits for the second key; an operator or the host can use `/incoming clear`.
-
-Destroying a transformer substation cuts electric lights in its district: by default 512 blocks, with restoration
-starting after 15 minutes and spreading over 90 seconds. Nuclear blackout needs no substation, but each outage is
-capped by `grid.max_radius` (4096 blocks by default) and has its own switch.
-
-## Optional mods
-
-- **Create:** recipes use Create parts; vanilla substitutes are provided without it.
-- **Create Aeronautics and Sable 2.0.6+:** target craft; explosions break and push their blocks. Fragments pass through craft.
-- **Distant Horizons 3.3+ with API 7:** distant targeting terrain on clients. Damage updates also need DH where the world runs (single-player, LAN host or dedicated server); supported chunks update without visiting them, through queues and asynchronous writes.
-- **Voxy through Roxy (clients only):** distant terrain for rendering, targeting, sight lines and sound. Roxy uses the original Fabric Voxy 0.2.16-beta for **Minecraft 1.21.11** on NeoForge 1.21.1; install its Sodium and Forgified Fabric API dependencies too.
-- **LOD Server Support on server and clients:** server terrain for the targeting map, sight lines and sound; it does not serve a single-player world until opened to LAN.
-- **Iris, Sound Physics Remastered and Flashback:** shader rendering, world sound and replays. Sound Physics needs a per-sound setting for Incoming.
-
-[Exact versions, official links and limits](https://github.com/zentixua/incoming#compatibility)
-
-## Server and performance
-
-The server config is `<level-name>/serverconfig/incoming-server.toml`; start once to create it, then stop, edit and
-restart. Conventional and nuclear destruction use separate switches.
-
-For slow frames, lower nuclear volume quality or shader settings. If the server tick slows for everyone, reduce
-simultaneous orders and distant targets in unexplored terrain. The server's `performance.work_ms_per_tick` budget
-is 30 ms by default (5–45): lowering it leaves more tick time for other work and makes destruction finish later.
-Memory needs depend on the modpack and scene. See the
-[FAQ](https://github.com/zentixua/incoming/blob/main/docs/guide/faq.md).
-
-## License and links
-
-[Source](https://github.com/zentixua/incoming) · [Issues](https://github.com/zentixua/incoming/issues) ·
-[Releases](https://github.com/zentixua/incoming/releases)
-
-GNU GPL-3.0-only. Sound recordings use CC0 and CC BY 4.0; authors are in
-[SOUND-CREDITS](https://github.com/zentixua/incoming/blob/main/SOUND-CREDITS.md). The jar includes sable-companion
-(MIT) and FastNoiseLite by Jordan Peck (MIT). Fireball and smoke textures use JangaFX CC0 simulations;
-[sources](https://github.com/zentixua/incoming/blob/main/tools/bake_fx/SOURCES.md).
+The jar includes sable-companion and FastNoiseLite by Jordan Peck (MIT). Fireball and smoke textures use JangaFX CC0 simulations.

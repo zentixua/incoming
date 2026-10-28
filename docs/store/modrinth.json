@@ -1,7 +1,7 @@
 {
   "slug": "incoming",
   "title": "Incoming: Air Strikes and Air Defense",
-  "description": "Air strikes and air defense: Shaheds, Lancets, cruise missiles, Grad salvos, a B-2 and nuclear weapons, aimed with one designator. Includes a SAM, fixed launchers and blackout.",
+  "description": "Aim with binoculars, call in drones, missiles or a bomber, and defend your base with a SAM. Includes nuclear strikes.",
   "categories": [
     "equipment",
     "technology",
@@ -18,44 +18,44 @@
   "gallery": [
     {
       "file": "docs/media/still-5.jpg",
-      "title": "Cruise missiles strike a factory",
+      "title": "Missiles over the factory",
       "featured": true
     },
     {
       "file": "docs/guide/img/remote.gif",
-      "title": "Strike Designator console: weapon, salvo and target"
+      "title": "Choose a weapon and set up a salvo"
     },
     {
       "file": "docs/guide/img/map.gif",
-      "title": "Targeting map and flight route"
+      "title": "Pick a target and plot the approach"
     },
     {
       "file": "docs/guide/img/weapon-shahed.jpg",
-      "title": "Shahed-136 in flight"
+      "title": "Shahed-136 on the way to its target"
     },
     {
       "file": "docs/guide/img/weapon-lancet-launcher.jpg",
-      "title": "Lancet on its launcher"
+      "title": "Lancet ready to launch"
     },
     {
       "file": "docs/guide/img/weapon-grad.jpg",
-      "title": "Grad rocket launcher"
+      "title": "Grad ready for a rocket salvo"
     },
     {
       "file": "docs/guide/img/sam.webp",
-      "title": "SAM and radar during a drone raid"
+      "title": "SAM defending against a drone raid"
     },
     {
       "file": "docs/guide/img/launcher.webp",
-      "title": "Fixed cruise missile launcher"
+      "title": "A cruise missile on a fixed launcher"
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "Fireball and blast wave over a city"
+      "title": "The nuclear blast wave reaches the city"
     },
     {
       "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "Ruins and fires after a nuclear strike"
+      "title": "The city after a nuclear strike"
     }
   ]
 }

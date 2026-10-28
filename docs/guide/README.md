@@ -2,44 +2,32 @@
 
 English · [Русский](ru/README.md)
 
-Air strikes: Shahed drones, Lancets, cruise missiles, Grad rockets, a B-2 bomber and a nuclear ICBM. All of them are
-aimed with one item, the Strike Designator. The projectiles are full size; they can be seen and heard from far away,
-and a siren sounds at the target before impact.
+Incoming lets you call in air strikes and defend against them. Start with one Shahed and an open patch of ground.
 
-What happens at the target follows the real weapon and the laws of physics: what breaks and how far, the crater,
-wounds, how big a blast is and how long it lasts, subject to model approximations and the selected nuclear scale. Flight and air defense are the mod's own game model, and by default
-speeds and heights in flight are game values ([how they fly](weapons.md#how-they-fly)). How it is shown (light,
-colour, contrast, billowing smoke, camera) can be stronger than a camera would record, so that it reads well in the game; that
-never changes what happens. The [Not physical](not-physical.md) list collects deliberate game rules, including nuclear scale and wave timing.
+![A strike through the designator's binoculars](img/scope.webp)
 
-## Getting started
+## Your first strike
 
-1. Craft a [Strike Designator](designator.md#crafting) and [munitions](munitions.md): the designator fires only what is
-   in your inventory.
-2. Hold RMB with the designator to look through its binoculars. Pick a weapon with the mouse wheel, aim, press LMB.
-3. Press `N` to watch the strike through the projectile camera. Shift exits.
+1. Install Incoming for **Minecraft 1.21.1 and NeoForge 21.1.264+**, using Java 21. Put the [jar](https://github.com/zentixua/incoming/releases/latest) in `mods`; on a server, everyone needs the same version.
+2. Craft a [Strike Designator](designator.md#crafting) and a [Shahed munition](munitions.md). Keep both in your inventory. Creative mode needs only the designator.
+3. Go somewhere away from builds. Hold right-click, choose Shahed with the wheel, aim at distant ground and left-click.
+4. Press `N` to watch from the projectile; Shift exits. Your body stays behind, so choose a safe place to stand.
 
-![Binoculars: RMB to zoom in, wheel to pick a weapon, LMB to launch](img/scope.webp)
+Strikes destroy blocks and start fires by default. The owner can change this in [world settings](settings.md#world-settings).
 
-Shift+RMB opens the console (salvo, spread, target), and `,` opens the map for strikes at long range.
+## What next?
 
-## Sections
-
-| Section | What it covers |
+| I want to… | Read |
 |---|---|
-| [Strike Designator](designator.md) | binoculars, console, projectiles on screen, abort |
-| [Targeting map](map.md) | long-range strikes, flight route, launch site |
-| [Projectile camera](camera.md) | onboard view, new target, Lancet |
-| [Weapons](weapons.md) | how each one differs and when to use it |
-| [Munitions and crafting](munitions.md) | recipes, what a launch uses |
-| [Strike rules](rules.md) | who can be struck, spotting |
-| [Defense](defense.md) | sirens, cover, SAM |
-| [Fixed launcher](launcher.md) | a block that fires on a redstone signal |
-| [Nuclear strike](nuke.md) | launch, detonation, survival, radiation |
-| [Blackout](blackout.md) | substation and power cuts |
-| [Commands](commands.md) | `/incoming` |
-| [Settings and keys](settings.md) | your settings, keys, world settings |
-| [FAQ and troubleshooting](faq.md) | what the messages mean |
+| Pick another weapon or make ammunition | [Weapons](weapons.md) · [Recipes](munitions.md) |
+| Fire a salvo or cancel a strike | [Designator and console](designator.md) |
+| Plan a route or guide a Lancet | [Map](map.md) · [Projectile camera](camera.md) |
+| Fight with friends or defend a base | [Targeting rules](rules.md) · [Air defense](defense.md) |
+| Build a redstone firing position | [Fixed launcher](launcher.md) |
+| Try a nuclear strike or survive one | [Nuclear strike](nuke.md) |
+| Cut the lights in a district | [Blackout](blackout.md) |
+| Set up the world or fix a problem | [Settings](settings.md) · [Commands](commands.md) · [FAQ](faq.md) |
+| Add other mods | [Compatibility](compatibility.md) |
 
 ## Keys
 

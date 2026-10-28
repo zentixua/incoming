@@ -29,15 +29,10 @@ version? Run `/lss clearcache` once on that server.
 
 **No sound from the mod.** Check the Ambient/Environment slider.
 
-**The game stutters during a strike.** First distinguish a slow frame from a slow server tick:
-
-- If the view stutters while the world keeps moving normally, lower "Mushroom cloud, dust wall and pall" to LOW,
-  reduce shader quality or try without shaders. Client graphics settings affect frame cost.
-- If mobs, redstone and impacts slow down for everyone, the server is behind: 20 TPS needs ticks within 50 ms.
-  Reduce simultaneous orders and avoid many far targets in unexplored terrain, which need chunk generation.
-  The owner can lower [`performance.work_ms_per_tick`](settings.md#world-settings) from its 30 ms default
-  (range 5–45); destruction and ruins then take longer to finish. It does not limit every other mod or chunk generation.
-- Memory depends on the modpack and the scene. Check actual usage and pauses before changing the allocation.
+**The game stutters during a strike.** If only the picture stutters, lower "Mushroom cloud, dust wall and pall"
+or try without shaders. If mobs and redstone slow down for everyone, reduce simultaneous strikes, especially in
+unexplored areas. The owner can also adjust [world settings](settings.md#world-settings); slower destruction gives
+the rest of the game more time. Memory needs depend on your modpack.
 
 **A launcher or SAM does not fire.** RMB on it with an empty hand shows why. A SAM needs open sky, missiles on its rails and
 a player nearby; it does not shoot down its own side's projectiles, ICBMs or Grad rockets.
