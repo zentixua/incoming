@@ -125,7 +125,9 @@ def main():
         modrinth, curseforge = store_config(args.step)
         for name, enabled in (("Modrinth", modrinth), ("CurseForge", curseforge)):
             print(f"{name}: {'configured' if enabled else 'disabled'}")
-        if not curseforge:
+        if args.step == "draft":
+            print("CurseForge is skipped in draft mode; only the private Modrinth page is updated.")
+        elif not curseforge:
             warning = "CurseForge is disabled: CURSEFORGE_ID is not set. Modrinth publishing can continue."
             print(f"::warning::{warning}")
             if os.environ.get("GITHUB_STEP_SUMMARY"):
