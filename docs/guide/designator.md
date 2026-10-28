@@ -17,7 +17,7 @@ does not fire for other players.
 
 ## Binoculars
 
-![Binoculars: RMB to zoom in, wheel to pick a weapon, LMB to launch](img/scope.webp)
+![Binoculars: RMB to zoom in, wheel to pick a weapon, LMB to launch](img/scope.png)
 
 - **RMB (hold)**: binoculars. The reticle shows what is under it and how far away it is. When it locks onto a mob, a
   player or an aircraft, the designator beeps.
@@ -32,7 +32,7 @@ countdown, and pressing LMB again cancels it.
 Shift+RMB with the designator in hand. Here you choose how many rounds to launch, how widely to spread them and where.
 The binoculars then fire with the same settings.
 
-![Console: weapon, count, spread, target, fire](img/remote.gif)
+![Console: weapon, count, spread, target, fire](img/remote.png)
 
 - **Weapon**: six buttons, each with a tooltip. The Missile and the Bomb also get a warhead button.
 - **Count and Spread**: up to 30 rounds over up to 150 blocks from the center.
@@ -48,7 +48,7 @@ dotted line. A frame stays on a moving player or mob and grows with it when you 
 than a few pixels. The projectile's number and time to impact are above its frame, the target's label below its frame,
 so text never covers what it marks, and it stays the same size at any zoom.
 
-![A Shahed salvo: the flight list in the top right and marks in the world](img/hud.webp)
+![A Shahed salvo: the flight list in the top right and the radar display](img/hud.webp)
 
 ## Abort
 

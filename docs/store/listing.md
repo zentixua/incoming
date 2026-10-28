@@ -70,7 +70,7 @@ upload list records the terrain/recipe/craft integrations above.
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
 The effect and nuclear sections lead, followed by weapons and controls. A factory impact and a 5 kt night airburst illustrate the effects.
-The factory loop is 8.5 seconds and about 3.3 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
+The factory loop is 7.3 seconds and about 3.1 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
@@ -88,14 +88,14 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
 | `docs/guide/img/launcher.webp` | Cruise missiles launch from an airport runway |
-| `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
+| `docs/guide/img/remote.png` | Choose a weapon and set up a salvo |
 | `docs/guide/img/map.png` | Targeting map of the city before the strike |
 
 The factory, nuclear and instructional effect captures were recorded with Incoming 3.10.0 on copies of Project
 Zearth and Newisle. Motion clips use Flashback exports at 30 fps; stills are plain F2 screenshots at 1920×1080 with Complementary Unbound.
 World shots hide the HUD; guide interface shots retain it. The map shows the city before the strike.
 The mushroom overview uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
-Unchanged console, binocular, recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+Unchanged recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

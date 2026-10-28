@@ -21,7 +21,7 @@ By default only operators can.
    (wider destruction) or a ground burst (crater and fallout trail). The bomb explodes underground.
 3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
 
-![Console with the nuclear warhead: yield slider and burst height](img/remote-nuke.png)
+![Console with the nuclear warhead: yield slider and burst mode](img/remote-nuke.png)
 
 The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
 
