@@ -121,6 +121,28 @@ class ContentTest(unittest.TestCase):
 
     def test_disjoint_glimpses_do_not_sum_to_continuous_approach(self):
         self.assertEqual(longest_run([True]*20+[False]+[True]*20), 20)
+        rows = self.approach()
+        rows[26]["visible"] = False
+        rows[47]["visible"] = False
+        failures, run = missile_checks(rows, 30, 38)
+        self.assertLess(run, 30)
+        self.assertTrue(any("consecutive" in x for x in failures))
+
+    def test_ground_and_cap_must_remain_visible_after_wave_arrival(self):
+        ticks = [80+i*2/3 for i in range(5581)]
+        event = {"tick": 100, "detonation": {"yieldKt": 5, "scale": 1, "dayTime": 17000, "burst": [0, 63, 0]}}
+        cameras = [{"cam": [0, 129.62, -1650, 0, -20]} for _ in ticks]
+        frames = [dict(mean=255 if 100<=t<=114 else 10, bright_fraction=1 if 100<=t<=114 else 0,
+                       cap_visible=True, cap_world_y=t, ground_in_frame=True) for t in ticks]
+        phases = {"pulse_s": .71554, "rollup_s": 9.214, "wave_s": 18.024}
+        self.assertEqual(nuclear_checks(ticks, event, cameras, frames, phases, True), [])
+        for t, frame in zip(ticks, frames):
+            frame["ground_in_frame"] = t < 100+50.8*20
+        self.assertTrue(any("source ground" in x for x in nuclear_checks(ticks, event, cameras, frames, phases, True)))
+        for t, frame in zip(ticks, frames):
+            frame["ground_in_frame"] = True
+            frame["cap_visible"] = t < 100+120*20
+        self.assertTrue(any("Developed cloud" in x for x in nuclear_checks(ticks, event, cameras, frames, phases, True)))
 
     def test_old_short_nuclear_export_with_hidden_flash_fails(self):
         ticks = [2270+i*2/3 for i in range(682)]

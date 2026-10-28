@@ -95,7 +95,7 @@ The factory, nuclear and instructional effect captures were recorded with Incomi
 Zearth and Newisle. Motion clips use Flashback exports at 30 fps; stills are native export frames or plain F2 screenshots at 1920×1080 with Complementary Unbound.
 World shots hide the HUD; guide interface shots retain it. The map shows the city before the strike.
 The nuclear sequence uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
-Unchanged recipe and Shahed images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+Unchanged recipe and interface images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

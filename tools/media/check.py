@@ -126,6 +126,12 @@ def nuclear_checks(ticks, event, cameras, frames, phases, gui, complete=True):
     tops = [f["cap_world_y"] for f in rise if f.get("cap_visible", False)]
     if not tops or max(tops) - min(tops) < 500:
         failures.append("Visible cap does not cover at least 500 m of the model's rise")
+    cloud_sequence = [f for a, f in zip(ages, frames) if a >= phases["rollup_s"]]
+    if not cloud_sequence or not all(f.get("ground_in_frame", False) for f in cloud_sequence):
+        failures.append("Cloud sequence loses the source ground or crops its base")
+    developed = [f for a, f in zip(ages, frames) if a >= 120]
+    if complete and (not developed or sum(f.get("cap_visible", False) for f in developed) < .9 * len(developed)):
+        failures.append("Developed cloud is cropped, obscured or has insufficient measured contrast")
     wave = [f for a, f in zip(ages, frames) if abs(a - phases["wave_s"]) <= 1]
     if not wave or not all(f.get("ground_in_frame", False) for f in wave):
         failures.append("Wave-arrival interval or the ground ahead of the observer is missing")
@@ -393,7 +399,8 @@ def audit(manifest, base):
                 f.update(cap_visible=bool(fits and radius >= 6 and contrast >= 10), cap_world_y=float(s["top_y"]),
                          cap_bounds=bounds, cap_contrast=contrast)
                 ground = project([float(s["ground_x"]), float(s["ground_y"]), float(s["ground_z"])], cam, rows[index]["fov"], output_width, image.shape[0])
-                f["ground_in_frame"] = ground[0] is not None and 0 < ground[0] < output_width and 0 < ground[1] < image.shape[0]
+                # Leave foreground below the source instead of accepting a base exactly on the bottom edge.
+                f["ground_in_frame"] = ground[0] is not None and 0 < ground[0] < output_width and 0 < ground[1] < .95 * image.shape[0]
             if asset["kind"] == "factory-approach":
                 s = projectile_sample(sample(ticks[index]), rows[index], impact["pos"], output_width, image.shape[0])
                 s["contrast"] = body_contrast(image, s) if s["depth"] > 0 else 0

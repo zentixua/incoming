@@ -47,8 +47,10 @@ encoding), `qa` (ReplayFilm inspection `qa.jsonl`), `plan`, `shot`, `events` (re
 - `kind: "nuclear-sequence"` also supplies `event_tick`, `jar` (the shipped mod) and `jar_sha256`. `PhaseProbe.java`
   reads the shipped jar's cloud/flash/front model; it does not implement a second cloud law. The full sequence
   must include at least 0.5 s before detonation and 180 s after it. The checker requires the recorded 5 kt/night/
-  1.6–1.7 km conditions, actual GUI state, a frame-wide flash during the pulse, visible cap rise and ground in
-  frame at wave arrival. The approximate front-arrival calculation is a diagnostic; review the actual dust wave.
+  1.6–1.7 km conditions, actual GUI state, a frame-wide flash during the pulse, visible cap rise and a visible
+  developed cap. The source ground must remain in view throughout the cloud sequence, with foreground below it,
+  not only at wave arrival. These bounds and contrast measurements do not prove the mushroom's appearance.
+  The approximate front-arrival calculation is a diagnostic; review the actual dust wave and complete cloud.
   A shorter page excerpt may name `full_sequence` (the `file` of an earlier entry). That full sequence must pass
   for the same event; the excerpt still has to contain the flash, visible rise and wave. Label excerpts accurately.
 - Optional `stills` entries name `file`, `export_frame` (the original export's zero-based frame index) and `phase`
