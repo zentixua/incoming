@@ -47,6 +47,7 @@ public final class NuclearWorld {
     private final List<FlashScorch> scorches = new ArrayList<>();
     private final List<CraterJob> craters = new ArrayList<>();
     private final MobFallout mobFallout = new MobFallout();
+    private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos;
     /**
@@ -143,7 +144,7 @@ public final class NuclearWorld {
      * do not take entire shared budget).
      */
     public boolean busy() {
-        return !pulses.isEmpty() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
+        return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
     }
 
     /** Ruin-queue jobs inspected last tick (budget tests). */
@@ -255,6 +256,14 @@ public final class NuclearWorld {
         }
     }
 
+    /**
+     * Living entity enters the level ({@code EntityJoinLevelEvent}): loaded from disk — receives what detonations did at its
+     * place while it was not in memory ({@link LateExposure}); spawned — marked as settled.
+     */
+    public void onEntityJoin(ServerLevel level, net.minecraft.world.entity.LivingEntity e, boolean fromDisk) {
+        late.joined(level, e, fromDisk, pulses);
+    }
+
     public void onChunkLoad(ServerLevel level, LevelChunk chunk) {
         // front LOD copy unnecessary: world supplies chunk ruins/LODs
         prep.loaded(chunk.getPos().toLong());
@@ -320,6 +329,7 @@ public final class NuclearWorld {
         ruins.values().forEach(RuinContext::cancelTasks);
         ruins.clear();
         pulses.clear();
+        late.clear();
         shadows.clear();
         scorches.forEach(FlashScorch::cancel);
         scorches.clear();
@@ -367,6 +377,13 @@ public final class NuclearWorld {
                 Incoming.LOG.error("Thermal pulse of detonation #{} failed with an exception; dropped", job.detonation().id(), e);
             }
             pulses.removeFirst();
+        }
+        // bodies loaded after the pulse or the front passed their place: before the front and ruins of this tick
+        try {
+            late.work(level, clock, pulses);
+        } catch (RuntimeException e) {
+            Incoming.LOG.error("Late nuclear exposure failed with an exception; queue dropped", e);
+            late.clear();
         }
         // flash silhouettes after pulse (damage more important than visuals), before wave: ruins at body position do not await them
         while (!shadows.isEmpty()) {

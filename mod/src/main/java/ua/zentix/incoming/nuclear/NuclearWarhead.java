@@ -29,7 +29,9 @@ import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.nuclear.radiation.Shielding;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
+import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.util.Wind;
@@ -134,15 +136,31 @@ public final class NuclearWarhead {
      * @return whether affected (alive and not in creative mode)
      */
     public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner) {
+        return expose(level, d, living, owner, false);
+    }
+
+    /**
+     * Same; {@code late} — the body was not in memory when the pulse passed and loads now ({@code LateExposure}): it receives
+     * the burns and dose of its place, its sickness runs from the detonation, but nothing that happens only at that moment
+     * (fleeing the flash, clothes catching fire).
+     */
+    public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner, boolean late) {
         if (!living.isAlive()) return false;
+        // once per body and detonation, whichever path comes first: the pulse list or a load after it (LateExposure;
+        // players are not caught up, so they carry no mark)
+        if (!(living instanceof Player)) {
+            NukeSeen seen = living.getData(ModAttachments.NUKE_SEEN);
+            if (seen.pulsed(d.id())) return false;
+            living.setData(ModAttachments.NUKE_SEEN, seen.withPulse(d.id()));
+        }
         // creative and spectator: no burns or dose (as with damage)
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
             if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
-            FlashBurns.burn(level, d, living, d.fluence(eye), owner);
+            FlashBurns.burn(level, d, living, d.fluence(eye), owner, !late);
             // saw flash: flee
-            MobPanic.flash(d, living, level.getGameTime());
+            if (!late) MobPanic.flash(d, living, level.getGameTime());
         }
         double rem = PromptRadiationModel.doseRem(Math.max(1, d.metres(eye.distanceTo(d.burst()))), d.yieldKt());
         // less than a rem unshielded: no shielding rays needed (players reach retinal-burn range, tens of kilometers)
@@ -154,7 +172,7 @@ public final class NuclearWarhead {
             if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy);
         } else if (IncomingConfig.SERVER.nukeMobRadiation.get()) {
             // mobs get sick like players (undead and armor stands do not)
-            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy);
+            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy, late ? d.gameTime() : level.getGameTime());
         } else if (rem >= 1000) {
             living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), Float.MAX_VALUE);
         } else if (rem >= 400) {
