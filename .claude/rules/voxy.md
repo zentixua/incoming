@@ -61,16 +61,19 @@ paths:
   dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
-  lit). All sections, including empty ones: air from a demolished tower erases it. Rate: up to 128 KiB per tick per player plus one final chunk, with connection backpressure
-  (a host opening the world to friends sends it over their own connection), queue up to 48 MiB (`VoxyLods.Viewer.drain` stops on an inactive/unwritable channel, less than 16 KiB headroom below its high watermark,
-  or more than 32 KiB pending even with a raised watermark. Only one LOD write can be outstanding (including the
-  event-loop dispatch, until `PacketSendListener` completes); an indivisible chunk may exceed the watermark once.
-  `VoxyLodsTest` covers blocked transport, delayed dispatch, large chunks and replacement at the 48 MiB cap.
-  `VoxyLods.room` gates
-  `DhUpdates`, `FarLods` and `FrontLods`, even with DH: otherwise excess updates for Voxy players would be lost); copy
-  engine light layers (`getData` fills the live layer for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD`
-  before the front, but Voxy ingests immediately — give it a “not before front” deadline
-  (`VoxyLods.send(…, notBefore)`).
+  lit). All sections, including empty ones: air from a demolished tower erases it. Delivery uses start/chunks/finish
+  batches and `C2S.LodBatchReceived`: one unacknowledged batch per connection, a single bootstrap chunk, then a
+  fractional chunks/tick quota from the client's vanilla `ChunkBatchSizeCalculator` (0.01–64, like PlayerChunkSender).
+  The three client handlers run on the same network thread, so timing includes transfer and ingestion. Calculator
+  state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
+  Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
+  raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
+  chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
+  a fresh copy replaces a waiting copy. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
+  excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
+  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
+  give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
+  and GameTest batch `voxy_backpressure`.
 - LOD Server Support (server) broadcasts chunks on save (hash, every 200 ticks), live or from disk, thus already with
   ruins, and on client entry replies “unchanged” by timestamp: it leaves the mod's copies alone. Only the client's
   first check (or after clearing its storage) overwrites them with disk chunks lacking distant ruins: the client

@@ -23,6 +23,8 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.net.S2C;
 
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Exercises the player's send wrapper and vanilla Connection write-completion callback, without a client or GPU. */
 @GameTestHolder(Incoming.MOD_ID)
@@ -33,12 +35,18 @@ public final class VoxyBackpressureGameTests {
     @GameTest(template = "range", timeoutTicks = 100, batch = "voxy_backpressure", skyAccess = true)
     public static void playerConnectionPausesAndResumesLods(GameTestHelper h) {
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
+        List<S2C.LodBatchFinished> batches = new ArrayList<>();
         // Encode only the bulk bytes here: the test is about transport completion, not payload registration/codec.
         MessageToByteEncoder<Packet<?>> encoder = new MessageToByteEncoder<>() {
             @Override
             protected void encode(ChannelHandlerContext context, Packet<?> packet, ByteBuf out) {
                 if (packet instanceof ClientboundCustomPayloadPacket custom && custom.payload() instanceof S2C.VoxyChunk lod) {
                     out.writeBytes(lod.sections());
+                } else {
+                    out.writeByte(0);
+                    if (packet instanceof ClientboundCustomPayloadPacket custom && custom.payload() instanceof S2C.LodBatchFinished end) {
+                        batches.add(end);
+                    }
                 }
             }
         };
@@ -75,11 +83,17 @@ public final class VoxyBackpressureGameTests {
             viewer.offer(1, fresh);
             channel.draining = true;
             channel.flush();
-            for (int tick = 0; tick < 8; tick++) viewer.drain(player);
+            viewer.drain(player); // complete the stalled bootstrap batch
+            h.assertTrue(batches.size() == 1, "missing bootstrap finish marker");
+            for (int tick = 0; tick < 1200; tick++) viewer.drain(player);
+            h.assertTrue(viewer.sent == 1, "write completion was mistaken for client acknowledgement");
+            h.assertTrue(viewer.flow.acknowledge(batches.getFirst().id(), 8), "matching acknowledgement rejected");
+            viewer.drain(player);
+            h.assertTrue(batches.size() == 2 && batches.getLast().chunks() == 7, "acknowledged rate did not size next batch");
             h.assertTrue(viewer.sent == 8 && viewer.bytes == 0, "Connection completion did not resume delivery");
             int received = 0;
             for (ByteBuf bytes; (bytes = channel.readOutbound()) != null; ) {
-                received++;
+                if (bytes.readableBytes() == data.length) received++;
                 bytes.release();
             }
             h.assertTrue(received == 8, "not all chunks reached the transport");
