@@ -23,7 +23,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operato
 
 ![Fireball and blast wave of a 15 kt airburst over Project Zearth](docs/guide/img/nuke-wave.jpg)
 
-![Ruins and fires after a nuclear strike](docs/guide/img/nuke-ruins.jpg)
+![Ruined city in the dust after a 15 kt airburst](docs/guide/img/nuke-ruins.jpg)
 
 ### Weapons
 

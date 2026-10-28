@@ -11,7 +11,7 @@ title and summary in English.
 
 - Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
 - CurseForge **Markdown editor**: [curseforge.md](curseforge.md), then [curseforge.ru.md](curseforge.ru.md).
-  These exports use absolute media/link URLs. A small logo and tagline lead into the introduction; feature images sit between bullet groups. The logo uses an HTML image size.
+  These exports use absolute media/link URLs. The factory-strike animation and tagline lead into the introduction; effect images sit beside their descriptions.
 - Summaries: [English](summary.md), [Russian](summary.ru.md). `modrinth.json.description` matches the English file.
   Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
 - Edit both description languages and their CurseForge exports together.
@@ -68,9 +68,9 @@ upload list records the terrain/recipe/craft integrations above.
 ## Media
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
-The first screen uses the existing logo (`docs/media/icon.png`) at 128×128, a tagline and a three-sentence introduction.
-The feature list has three illustrations: console controls, the 3.10.0 factory-strike loop and a nuclear blast.
-The factory loop is 9 seconds and about 2.23 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
+The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
+The effect and nuclear sections lead, followed by weapons and controls. A factory impact, a nuclear blast wave and a ruined city illustrate the effects.
+The factory loop is 7 seconds and about 2.3 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
@@ -78,21 +78,22 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 | File | Caption |
 |---|---|
 | `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
-| `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
-| `docs/guide/img/map.gif` | Targeting map with distant city terrain |
-| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
-| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
-| `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
-| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
-| `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
 | `docs/guide/img/nuke-wave.jpg` | Fireball and blast wave of a 15 kt airburst |
 | `docs/guide/img/nuke-ruins.jpg` | Ruined city in the dust after a 15 kt airburst |
+| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
+| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
 | `docs/media/still-2.jpg` | Cruise missiles strike a factory in Project Zearth |
+| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
+| `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
+| `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
+| `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
+| `docs/guide/img/map.png` | Targeting map along the coast |
 
 The factory, nuclear and instructional effect captures were recorded with Incoming 3.10.0 on a copy of Project
-Zearth. Unchanged console, binocular, recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+Zearth. Motion clips use Flashback exports at 30 fps; the targeting map is a plain F2 screenshot.
+Unchanged console, binocular, recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

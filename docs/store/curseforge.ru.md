@@ -21,7 +21,7 @@ Incoming добавляет удары с воздуха со взрывами, 
 
 ![Огненный шар и ударная волна воздушного взрыва 15 кт над Project Zearth](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
 
-![Руины и пожары после ядерного удара](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-ruins.jpg)
+![Руины города в пыли после воздушного взрыва 15 кт](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-ruins.jpg)
 
 ### Оружие
 
