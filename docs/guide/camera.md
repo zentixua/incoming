@@ -10,7 +10,7 @@ character.
 The camera and radar captions follow your game language: `REC` marks the camera display, `N` marks north, and
 `T-` is the countdown to impact. The camera indicator does not save a video file.
 
-![Cruise missile camera: a map at long range, onboard video closer in, the impact](img/camera.webp)
+![A cruise missile in flight over Project Zearth](img/camera.webp)
 
 - When the projectile is beyond your render distance, you see a map with its path instead of video. The video starts
   by itself once it comes closer.
@@ -26,4 +26,6 @@ The camera and radar captions follow your game language: `REC` marks the camera 
 The Lancet flies to the target and circles over it. Put the crosshair on a target below and press LMB: it dives at
 once. If you pick nothing, it dives by itself after about 25 seconds.
 
-![Lancet camera: LMB on a new target, dive, impact](img/loiter.webp)
+![Lancet camera while circling, with flight data and time to impact](img/loiter-ui.png)
+
+![A Lancet circles over the factory](img/loiter.webp)

@@ -6,7 +6,7 @@ A block that launches Shaheds, Lancets, cruise missiles and Grad rockets by itse
 sets the target; a button, a lever or any circuit gives the order to fire. Several launchers make a battery on one
 button.
 
-![A lever is pulled and the launcher fires a cruise missile](img/launcher.webp)
+![A redstone signal launches a cruise missile from a fixed launcher](img/launcher.webp)
 
 ## Loading
 

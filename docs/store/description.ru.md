@@ -1,6 +1,6 @@
 # Incoming
 
-![Удар крылатых ракет по заводу](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
+![Удар крылатых ракет по заводу в Project Zearth](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
 Удары с воздуха и ПВО для Minecraft 1.21.1.
 
@@ -19,9 +19,9 @@ Incoming добавляет удары с воздуха со взрывами, 
 Вспышка, ударная волна, гриб, пожары и руины. Наземный взрыв оставляет воронку и радиоактивный след по ветру.
 Запускай МБР или ставь ядерную боеголовку на крылатую ракету либо бомбу B-2. По умолчанию доступны только операторам.
 
-![Огненный шар и ударная волна над городом](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
+![Воздушный взрыв 5 кт ночью над Project Zearth: вспышка, растущее облако и ударная волна](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke.webp)
 
-![Руины и пожары после ядерного удара](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-ruins.jpg)
+![Гриб после наземного взрыва 5 кт над Newisle ночью](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
 
 ### Оружие
 

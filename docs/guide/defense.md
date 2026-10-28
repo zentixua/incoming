@@ -53,7 +53,7 @@ projectiles of the player who placed it, and of that player's team, alone.
 The block itself is the radar cabin. Four missile canisters stand upright on top of it, so the whole SAM is about five
 and a half blocks tall. An interceptor leaves its canister straight up, then turns toward the target in a short arc.
 
-![A SAM shooting down incoming Shaheds; the radar screen in the corner](img/sam.webp)
+![A SAM launches interceptors from a city square](img/sam.webp)
 
 - Its radar reaches 3 km and it fires from 1.5 km, one interceptor per target. These are game ranges, much shorter
   than a real system's, so that the fight happens within sight (not physical). Harder-to-detect targets are seen closer:

@@ -18,16 +18,16 @@
   "gallery": [
     {
       "file": "docs/media/still-5.jpg",
-      "title": "Missiles over the factory",
+      "title": "Cruise missiles strike a factory",
       "featured": true
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "The nuclear blast wave reaches the city"
+      "title": "Blast-wave dust approaches after a 5 kt airburst at night"
     },
     {
-      "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "The city after a nuclear strike"
+      "file": "docs/guide/img/nuke-cloud.jpg",
+      "title": "Mushroom cloud after a 5 kt ground burst over Newisle at night"
     },
     {
       "file": "docs/guide/img/sam.webp",
@@ -39,7 +39,7 @@
     },
     {
       "file": "docs/media/still-2.jpg",
-      "title": "Cruise missile over the city"
+      "title": "Cruise missiles strike a factory in Project Zearth"
     },
     {
       "file": "docs/guide/img/weapon-lancet-launcher.jpg",
@@ -59,15 +59,15 @@
     },
     {
       "file": "docs/guide/img/launcher.webp",
-      "title": "A cruise missile on a fixed launcher"
+      "title": "Cruise missiles launch from an airport runway"
     },
     {
-      "file": "docs/guide/img/remote.gif",
+      "file": "docs/guide/img/remote.png",
       "title": "Choose a weapon and set up a salvo"
     },
     {
-      "file": "docs/guide/img/map.gif",
-      "title": "Pick a target and plot the approach"
+      "file": "docs/guide/img/map.png",
+      "title": "Targeting map of the city before the strike"
     }
   ]
 }

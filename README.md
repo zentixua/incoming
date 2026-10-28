@@ -14,16 +14,16 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 - **Explosions and aftermath:** fireballs light up nearby terrain, blasts break blocks and shatter windows, and dust and smoke rise and drift with the wind. Strikes can start fires; leftover fuel burns in the crater.
 - **Blackout:** strike a transformer substation to cut electric lights in its district.
 
-![Cruise missiles strike a factory](docs/media/hero.webp)
+![Cruise missiles strike a factory in Project Zearth](docs/media/hero.webp)
 
 ### Nuclear strikes
 
 Flash, blast wave, mushroom cloud, fires and ruins. Ground bursts leave a crater and fallout downwind.
 Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operator-only by default.
 
-![Nuclear fireball and blast wave over a city](docs/guide/img/nuke-wave.jpg)
+![A 5 kt airburst at night over Project Zearth: flash, rising cloud and blast wave](docs/media/nuke.webp)
 
-![Ruins and fires after a nuclear strike](docs/guide/img/nuke-ruins.jpg)
+![Mushroom cloud after a 5 kt ground burst over Newisle at night](docs/guide/img/nuke-cloud.jpg)
 
 ### Weapons
 

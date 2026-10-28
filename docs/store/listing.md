@@ -11,7 +11,7 @@ title and summary in English.
 
 - Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
 - CurseForge **Markdown editor**: [curseforge.md](curseforge.md), then [curseforge.ru.md](curseforge.ru.md).
-  These exports use absolute media/link URLs. A small logo and tagline lead into the introduction; feature images sit between bullet groups. The logo uses an HTML image size.
+  These exports use absolute media/link URLs. The factory-strike animation and tagline lead into the introduction; effect images sit beside their descriptions.
 - Summaries: [English](summary.md), [Russian](summary.ru.md). `modrinth.json.description` matches the English file.
   Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
 - Edit both description languages and their CurseForge exports together.
@@ -68,31 +68,34 @@ upload list records the terrain/recipe/craft integrations above.
 ## Media
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
-The first screen uses the existing logo (`docs/media/icon.png`) at 128×128, a tagline and a three-sentence introduction.
-The feature list has three illustrations: console controls, the existing strike animation and a nuclear blast.
-Extra weapon screenshots are in the Gallery. PR #518 remains open, so no new footage is claimed.
+The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
+The effect and nuclear sections lead, followed by weapons and controls. A factory impact and a 5 kt night airburst illustrate the effects.
+The factory loop is 7.3 seconds and about 3.1 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-5.jpg` | Missiles over the factory (featured) |
-| `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
-| `docs/guide/img/map.gif` | Pick a target and plot the approach |
+| `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
+| `docs/guide/img/nuke-wave.jpg` | Blast-wave dust approaches after a 5 kt airburst at night |
+| `docs/guide/img/nuke-cloud.jpg` | Mushroom cloud after a 5 kt ground burst over Newisle at night |
+| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
+| `docs/media/still-2.jpg` | Cruise missiles strike a factory in Project Zearth |
 | `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
 | `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
-| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
-| `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
-| `docs/guide/img/nuke-wave.jpg` | The nuclear blast wave reaches the city |
-| `docs/guide/img/nuke-ruins.jpg` | The city after a nuclear strike |
-| `docs/media/still-2.jpg` | Cruise missile over the city |
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
+| `docs/guide/img/launcher.webp` | Cruise missiles launch from an airport runway |
+| `docs/guide/img/remote.png` | Choose a weapon and set up a salvo |
+| `docs/guide/img/map.png` | Targeting map of the city before the strike |
 
-These are existing game captures, not a fresh visual check of the current jar. Before public submission, replace
-changed effect/interface captures after the active effect and camera work has settled. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+The factory, nuclear and instructional effect captures were recorded with Incoming 3.10.0 on copies of Project
+Zearth and Newisle. Motion clips use Flashback exports at 30 fps; stills are plain F2 screenshots at 1920×1080 with Complementary Unbound.
+World shots hide the HUD; guide interface shots retain it. The map shows the city before the strike.
+The mushroom overview uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
+Unchanged recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

@@ -4,7 +4,7 @@ English · [Русский](ru/README.md)
 
 Incoming lets you call in air strikes and defend against them. Start with one Shahed and an open patch of ground.
 
-![A strike through the designator's binoculars](img/scope.webp)
+![Aiming through the designator's binoculars](img/scope.png)
 
 ## Your first strike
 

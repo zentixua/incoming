@@ -21,7 +21,7 @@ By default only operators can.
    (wider destruction) or a ground burst (crater and fallout trail). The bomb explodes underground.
 3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
 
-![Console with the nuclear warhead: yield slider and burst height](img/remote-nuke.png)
+![Console with the nuclear warhead: yield slider and burst mode](img/remote-nuke.png)
 
 The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
 
@@ -73,7 +73,7 @@ A Geiger Counter in hand clicks and shows your dose. Operators give it out.
 
 ## What happens
 
-![Mushroom cloud over a town](img/nuke.jpg)
+![Flash of a 5 kt airburst over Project Zearth at night](img/nuke.jpg)
 
 The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
@@ -82,7 +82,7 @@ Fires and thick dust can make the area hard to see through long after the strike
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
-![Ruins and fires after the strike](img/nuke-ruins.jpg)
+![Mushroom cloud after a 5 kt ground burst over Newisle at night](img/nuke-cloud.jpg)
 
 Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
