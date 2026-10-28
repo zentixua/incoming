@@ -1,6 +1,9 @@
 package ua.zentix.incoming.compat;
 
+import io.netty.channel.Channel;
 import net.minecraft.Util;
+import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -11,7 +14,6 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -31,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.BiConsumer;
 
 /**
  * World changes made by the mod, for players' Voxy LODs ({@code client/VoxyIngest}): alongside Distant Horizons through
@@ -43,7 +46,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * <ul>
  * <li>Recipients: players in the same world with Voxy within {@link FarLods#FAR_CHUNKS} chunks who do not have this chunk
  * (Voxy rebuilds chunks the player sees itself from vanilla packets).</li>
- * <li>Rate: at most {@link #BYTES_PER_TICK} per tick per player (~2.5 MiB/s before compression, ~60 chunks); player queue
+ * <li>Rate: at most {@link #BYTES_PER_TICK} per tick per player, with one final chunk allowed to cross the budget.
+ * Delivery pauses while the connection is busy; only one LOD write may be outstanding. The player queue
  * limited to {@link #QUEUE_BYTES}, a fresh copy of a chunk replaces its waiting copy. Queue space is {@link #room}:
  * {@link DhUpdates} uses it to deliver chunks even without DH.</li>
  * <li>A copy is built in the background (light from its blocks, {@link CopyLight}); a loaded chunk is snapshotted on the
@@ -60,7 +64,11 @@ public final class VoxyLods {
      * (LSS defaults to 25 MiB/s before compression, DH to 0.5 MB/s): a player hosting friends uses their own uplink.
      */
     static final int BYTES_PER_TICK = 128 * 1024;
-    /** Maximum player queue size, bytes: no new chunks are sent beyond it (and {@link #room} is 0). */
+    /** Headroom below Netty's high watermark for normal game traffic (transport policy, not a physical quantity). */
+    static final int WRITE_HEADROOM = 16 * 1024;
+    /** Even with a raised Netty watermark, do not add LODs behind more than this many pending bytes. */
+    static final int MAX_PENDING_BYTES = 32 * 1024;
+    /** Maximum waiting player queue size; this does not bound bytes already handed to the connection. */
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
     static final int CHUNK_BYTES = 40 * 1024;
@@ -71,9 +79,54 @@ public final class VoxyLods {
     static final int STALE_PER_SECOND = 256;
 
     /** Player with Voxy: their chunks in order (chunk → packet; a fresh copy replaces a waiting one in place). */
-    private static final class Viewer {
+    static final class Viewer {
         final LinkedHashMap<Long, S2C.VoxyChunk> queue = new LinkedHashMap<>();
         long bytes, sent, dropped;
+        /** Includes dispatch waiting in the Netty event loop; cleared only by the write completion callback. */
+        private volatile boolean writing;
+
+        void offer(long chunk, S2C.VoxyChunk packet) {
+            S2C.VoxyChunk was = queue.remove(chunk);
+            if (was != null) bytes -= was.sections().length;
+            if (bytes + packet.sections().length > QUEUE_BYTES) {
+                dropped++;
+                return;
+            }
+            queue.put(chunk, packet);
+            bytes += packet.sections().length;
+        }
+
+        void drain(ServerPlayer player) {
+            drain(player.connection.getConnection().channel(),
+                    (packet, listener) -> player.connection.send(new ClientboundCustomPayloadPacket(packet), listener));
+        }
+
+        /** Server-thread queue drain. Never wait for the network or scan a blocked queue. */
+        void drain(Channel channel, BiConsumer<S2C.VoxyChunk, PacketSendListener> send) {
+            int budget = BYTES_PER_TICK;
+            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && budget > 0; ) {
+                if (writing || channel == null || !channel.isActive() || !channel.isWritable()) break;
+                long room = channel.bytesBeforeUnwritable();
+                long pending = channel.config().getWriteBufferHighWaterMark() - room;
+                if (room < WRITE_HEADROOM || pending > MAX_PENDING_BYTES) break;
+                // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
+                // A single chunk may exceed the watermark. Let it through once, then await its completed write;
+                // requiring the entire chunk to fit would permanently block large, globally paletted chunks.
+                S2C.VoxyChunk packet = q.next();
+                writing = true;
+                try {
+                    send.accept(packet, PacketSendListener.thenRun(() -> writing = false));
+                } catch (RuntimeException | Error error) {
+                    writing = false;
+                    throw error;
+                }
+                q.remove();
+                bytes -= packet.sections().length;
+                budget -= packet.sections().length;
+                sent++;
+            }
+        }
+
         /** How many more LSS-overwritten chunks the player can report ({@link #stale}): {@link #STALE_PER_SECOND} per second. */
         int staleBudget = STALE_PER_SECOND;
         @Nullable
@@ -185,14 +238,7 @@ public final class VoxyLods {
         for (UUID id : b.to) {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
-            S2C.VoxyChunk was = viewer.queue.remove(b.chunk);
-            if (was != null) viewer.bytes -= was.sections().length;
-            if (viewer.bytes + b.data.length > QUEUE_BYTES) {
-                viewer.dropped++;
-                continue;
-            }
-            viewer.queue.put(b.chunk, packet);
-            viewer.bytes += b.data.length;
+            viewer.offer(b.chunk, packet);
         }
     }
 
@@ -230,15 +276,7 @@ public final class VoxyLods {
             }
             levels.add(dim);
             if (server.getTickCount() % 20 == 0) viewer.staleBudget = STALE_PER_SECOND;
-            int budget = BYTES_PER_TICK;
-            for (Iterator<S2C.VoxyChunk> q = viewer.queue.values().iterator(); q.hasNext() && budget > 0; ) {
-                S2C.VoxyChunk packet = q.next();
-                q.remove();
-                viewer.bytes -= packet.sections().length;
-                budget -= packet.sections().length;
-                viewer.sent++;
-                PacketDistributor.sendToPlayer(p, packet);
-            }
+            viewer.drain(p);
         }
         long now = server.getTickCount();
         if (now >= nextReport) {

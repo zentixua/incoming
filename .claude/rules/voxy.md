@@ -61,8 +61,12 @@ paths:
   dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
-  lit). All sections, including empty ones: air from a demolished tower erases it. Rate: 128 KiB per tick per player
-  (a host opening the world to friends sends it over their own connection), queue up to 48 MiB (`VoxyLods.room` gates
+  lit). All sections, including empty ones: air from a demolished tower erases it. Rate: up to 128 KiB per tick per player plus one final chunk, with connection backpressure
+  (a host opening the world to friends sends it over their own connection), queue up to 48 MiB (`VoxyLods.Viewer.drain` stops on an inactive/unwritable channel, less than 16 KiB headroom below its high watermark,
+  or more than 32 KiB pending even with a raised watermark. Only one LOD write can be outstanding (including the
+  event-loop dispatch, until `PacketSendListener` completes); an indivisible chunk may exceed the watermark once.
+  `VoxyLodsTest` covers blocked transport, delayed dispatch, large chunks and replacement at the 48 MiB cap.
+  `VoxyLods.room` gates
   `DhUpdates`, `FarLods` and `FrontLods`, even with DH: otherwise excess updates for Voxy players would be lost); copy
   engine light layers (`getData` fills the live layer for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD`
   before the front, but Voxy ingests immediately — give it a “not before front” deadline
