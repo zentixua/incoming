@@ -29,9 +29,11 @@ Required shots:
   contains the full sequence. Check foreground objects against the pre-strike view, not just the effect.
 - The targeting map must agree with current world data. No unexplained destruction seams or stale tiles.
   Do not accept cropping or replacing the site as a fix for a confirmed mod defect; identify the separate report.
-- Stills from the exported clip at their actual phase, or ordinary F2; native Flashback editor keyframes and
-  Export UI for motion. No film tool, generated cameras, scripted shot sequences/timers, screenshot-sequence
-  animation, retouched explosions, synthesized frames, private capture/render helper or modified mod physics.
+- Stills from the exported clip at their actual phase, or ordinary F2; Flashback's own exporter for motion.
+  Prefer native editor controls. When an isolated desktop's save dialog fails, the existing ReplayFilm path may
+  set native keyframes and invoke that exporter with explicit task authorization. Verify the stated limitation
+  and actual export provenance. No screenshot-sequence animation, retouched explosions, synthesized frames,
+  private replacement renderer or modified mod physics.
   The player's usual pack/settings in a separate copy, Complementary Unbound, 1920×1080 originals; guide UI
   visible when needed. Check the actual flash layer: F1
   suppresses Incoming's GUI-based flash as well as the HUD. Native export GUI controls must preserve the effect.
@@ -39,7 +41,7 @@ Required shots:
   cannot repair missing visual content. No store publication or release before Artem approves the new frames.
 
 After the fresh review, place key JPEG frames in the requested local review directory and report them to Artem.
-Wait for his relayed approval before merging; a passing automated or independent review does not replace it.
+Follow the task's current merge authorization; media review does not authorize a public release or store submission.
 
 Report serious content failures before optional polish. Include representative frame paths in the verdict.
 If a second review is needed after fixes, recheck every affected acceptance condition, including conditions

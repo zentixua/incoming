@@ -63,6 +63,14 @@ def timing_ok(seconds, fps):
     return bool(seconds) and all(abs((b-a)-1/fps) <= .002 for a, b in zip(seconds, seconds[1:]))
 
 
+def native_boundary(milliseconds, fps, precision_ms=2):
+    """An animation may combine identical native frames, but cannot invent an intermediate boundary."""
+    frame = milliseconds * fps / 1000
+    if milliseconds <= 0 or abs(frame-round(frame)) * 1000 / fps > precision_ms:
+        raise ValueError("Animation timing is not aligned with the native export frames")
+    return round(frame)
+
+
 def phase_ok(phase, age, pulse, rollup, wave):
     # Deliberately disjoint meanings: an orange ring at +16 s cannot be a flash.
     return {
@@ -207,7 +215,8 @@ def pixel_stats(video, width, fps):
                 duration = image.info.get("duration", 1000/fps)
                 # WebP can combine identical frames. Restore their displayed duration on the native frame clock.
                 end = elapsed + duration
-                for _ in range(round(end*fps/1000)-round(elapsed*fps/1000)):
+                boundary = native_boundary(end, fps, 5.01 if image.format == "GIF" else 2)
+                for _ in range(boundary-round(elapsed*fps/1000)):
                     yield pixels
                 elapsed = end
         return

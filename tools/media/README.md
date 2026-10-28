@@ -1,9 +1,11 @@
 # Page-media content checks
 
 Capture real gameplay using a normal multiplayer client and the player's usual pack/settings in a separate copy.
-Use the Flashback editor's own camera keyframes and Export UI, with ordinary mouse and keyboard actions. Stills
-may come from the exported clip at the correct frame, or ordinary F2. Do not drive capture with the film tool,
-generated cameras, scripted shot sequences or timed F2 scripts. The offline checks in this directory inspect capture data; they do not create or alter game effects,
+Prefer Flashback's own camera keyframes and Export UI. Stills may come from the exported clip at the correct
+frame, or ordinary F2. If the isolated desktop cannot open the native save dialog, the existing ReplayFilm tool
+may set native Flashback keyframes and invoke the same exporter; record that limitation and any task-specific
+authorization. It must not replace gameplay recording, render effects itself, or choose stills by wall-clock
+timers. The offline checks in this directory inspect capture data; they do not create or alter game effects,
 operate a server, or replace Flashback's renderer.
 
 Before recording, inspect the complete view from the planned camera, including the sky and foreground. Record
@@ -14,7 +16,7 @@ redistributable evidence; only permitted rendered media and aggregate measuremen
 Acceptance uses both game data and visible content:
 
 1. Bind every exported frame to its replay tick, and the tick to the recorded launch/impact/detonation event.
-   Save native exporter settings and frame logs. A screenshot filename or time since receiving an SSH log is
+   Save native exporter settings and the inspection frame log. A screenshot filename or time since receiving an SSH log is
    not an exact game tick. Unknown source timing fails a phase-specific still.
 2. Check the final encoded interval, not just the untrimmed source. Require the flash at detonation, the rising
    cap and wave arrival. For a factory strike, measure camera/projectile direction, projected body size and
@@ -31,7 +33,7 @@ the detonation timestamp and the rendered flash; a bright fireball alone is insu
 
 Run `uv run tools/media/check.py capture.json --out content.json` with Java 21 (`JAVA_HOME`) and FFmpeg available.
 The manifest has an `assets` array. Paths are relative to the manifest. Each entry names `file` (the delivered
-encoding), `qa` (native `qa.jsonl`), `plan`, `shot`, `events` (replayscan `events.csv.gz`), `first_frame`,
+encoding), `qa` (ReplayFilm inspection `qa.jsonl`), `plan`, `shot`, `events` (replayscan `events.csv.gz`), `first_frame`,
 `frame_count`, `fps` and `width` (the actual page display width, never greater than the file width).
 
 - `kind: "factory-approach"` also supplies `scan` (the scan directory) and `uuid`. The plan must track that same

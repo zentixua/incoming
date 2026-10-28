@@ -1,7 +1,7 @@
 """Regression cases for the content failures missed in PR #518; no game/GPU needed."""
 import unittest
 
-from check import longest_run, missile_checks, nuclear_checks, phase_ok, project, proof_matches, timing_ok
+from check import longest_run, missile_checks, native_boundary, nuclear_checks, phase_ok, project, proof_matches, timing_ok
 
 
 class ContentTest(unittest.TestCase):
@@ -17,6 +17,13 @@ class ContentTest(unittest.TestCase):
         self.assertFalse(timing_ok([0, .083, .167, .25], 30))
         self.assertFalse(timing_ok([0, .033, .1], 30))
         self.assertFalse(timing_ok([], 30))
+
+    def test_animation_timing_cannot_disguise_twelve_hz_capture(self):
+        self.assertEqual([native_boundary(t, 30) for t in [33, 67, 100]], [1, 2, 3])
+        self.assertEqual(native_boundary(200, 30), 6)  # Six identical frames may be combined.
+        for t in [0, 83, 250]:
+            with self.subTest(milliseconds=t), self.assertRaises(ValueError):
+                native_boundary(t, 30)
 
     def test_late_orange_ring_is_not_a_flash(self):
         self.assertFalse(phase_ok("flash", 16.453, .71554, 9.214, 18.024))
