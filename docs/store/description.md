@@ -64,7 +64,7 @@ missiles and B-2s. It cannot intercept Grad rockets or ICBMs. Stay nearby to kee
 ![SAM and its radar during a drone raid](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/sam.webp)
 
 For a base of your own, link a fixed launcher to the designator, load it and fire with redstone.
-Destroying a transformer substation cuts the electric lights in its district.
+A strike on a transformer substation cuts the electric lights in its district.
 
 ## Your first strike
 
