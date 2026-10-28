@@ -228,7 +228,7 @@ final class Cameras {
                     Vec3 eye = settle(lift(c.eye(), rise, w), at, w);
                     Path p = c.follow() ? follow(t -> eye, s, a, b, 3, c.fov()) : t -> Pose.look(eye, at, c.fov());
                     String name = String.format(Locale.ROOT, "fixed-%.0f", c.fov()) + (rise > 0 ? String.format(Locale.ROOT, "-r%.0f", rise) : "");
-                    out.add(new Candidate(name, p, null, false, c.fov(), true, false));
+                    out.add(new Candidate(name, p, null, c.gui(), c.fov(), true, false));
                 }
             }
             case "tripod" -> {
@@ -252,7 +252,7 @@ final class Cameras {
                             if (!Double.isNaN(w.clouds) && eye.y >= w.clouds - 2) continue;
                             Path p = c.follow() ? follow(t -> eye, s, a, b, 6, fov) : t -> Pose.look(eye, k.add(0, size * 0.25, 0), fov);
                             out.add(new Candidate(String.format(Locale.ROOT, "tripod-f%.0f-d%.0f-a%.0f-e%.0f", fov, dist, side, elev), p, null,
-                                    false, fov, false, false));
+                                    c.gui(), fov, false, false));
                         }
                     }
                 }
@@ -260,9 +260,9 @@ final class Cameras {
             case "path" -> {
                 // and higher on rise, where it is specified: the path laid out on the map goes through a high-rise building
                 for (double rise : c.keys().isEmpty() ? new double[0] : c.rise()) {
-                    List<Plan.PathKey> keys = c.keys().stream().map(k -> new Plan.PathKey(k.t(), k.eye().add(0, rise, 0), k.aim().add(0, rise, 0), k.roll())).toList();
+                    List<Plan.PathKey> keys = c.keys().stream().map(k -> new Plan.PathKey(k.t(), k.eye().add(0, rise, 0), k.aim().add(0, rise, 0), k.roll(), k.fov())).toList();
                     String name = String.format(Locale.ROOT, "path-%.0f", c.fov()) + (rise > 0 ? String.format(Locale.ROOT, "-r%.0f", rise) : "");
-                    out.add(new Candidate(name, along(keys, c.fov()), null, false, c.fov(), true, true));
+                    out.add(new Candidate(name, along(keys), null, c.gui(), c.fov(), true, true));
                 }
             }
             case "pilot" -> out.addAll(pilot(c, shot, aspect, w));
@@ -306,7 +306,7 @@ final class Cameras {
             Film.LOG.info("Film: {}: {}: {}", shot.name(), f.name(), f.why());
             Path p = Hands.humanize(pilot.path(f), shot.name().hashCode() * 31L + f.name().hashCode(), blasts,
                     shot.a() - Pilot.BEFORE, shot.b() + Pilot.AFTER);
-            out.add(new Candidate(f.name(), p, null, false, c.fov(), true, false));
+            out.add(new Candidate(f.name(), p, null, c.gui(), c.fov(), true, false));
         }
         Film.LOG.info("Film: {}: pilot planned {} flights past the hit at tick {} in {} ms", shot.name(), out.size(), main.t(),
                 (System.nanoTime() - start) / 1_000_000);
@@ -317,13 +317,14 @@ final class Cameras {
      * The camera flies along the keys of the plan: the eye and the point of view - in a straight line between adjacent keys (smooth course, course without
      *  jerks), before the first key - in the first, after the last - in the last.
      */
-    static Path along(List<Plan.PathKey> keys, double fov) {
+    static Path along(List<Plan.PathKey> keys) {
         return new Path() {
             @Override
             public Pose at(double t) {
                 Plan.PathKey[] k = around(t);
                 double u = share(k, t);
-                return Pose.look(k[0].eye().lerp(k[1].eye(), u), k[0].aim().lerp(k[1].aim(), u), fov);
+                return Pose.look(k[0].eye().lerp(k[1].eye(), u), k[0].aim().lerp(k[1].aim(), u),
+                        Mth.lerp(u, k[0].fov(), k[1].fov()));
             }
 
             @Override

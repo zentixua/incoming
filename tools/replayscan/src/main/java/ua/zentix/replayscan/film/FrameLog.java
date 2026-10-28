@@ -180,9 +180,9 @@ final class FrameLog {
         try {
             out.write(String.format(Locale.ROOT,
                     "{\"t\":%.3f,\"ready\":%b,\"pov\":%b,\"inside\":%b,\"low_out\":%b,\"in\":%b,\"x\":%.3f,\"y\":%.3f,\"share\":%.4f,\"seen\":%.2f,\"clear\":%.2f,\"cloud\":%b,"
-                            + "\"smother\":%.2f,\"fog\":%b,\"drawn\":%b,\"entity\":%b,\"engine\":%.3f,\"unknown\":%.0f,\"keys\":[%s],\"dh\":%d,\"cam\":[%.2f,%.2f,%.2f,%.1f,%.1f],\"fov\":%.2f}\n",
+                            + "\"smother\":%.2f,\"fog\":%b,\"drawn\":%b,\"entity\":%b,\"engine\":%.3f,\"unknown\":%.0f,\"keys\":[%s],\"dh\":%d,\"cam\":[%.2f,%.2f,%.2f,%.1f,%.1f],\"fov\":%.2f,\"gui\":%b}\n",
                     t, built, isPov, blocked, low, in, x, y, share, seen, clear, cloud, smother, fog, drawn, fromEntity, engine, unknown, keys, dh, eye.x, eye.y, eye.z,
-                    cam.getYRot(), cam.getXRot(), Math.toDegrees(2 * Math.atan(tanY))));
+                    cam.getYRot(), cam.getXRot(), Math.toDegrees(2 * Math.atan(tanY)), !mc.options.hideGui));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

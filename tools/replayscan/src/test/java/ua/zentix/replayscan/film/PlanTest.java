@@ -105,7 +105,7 @@ class PlanTest {
                 """);
         Plan.Camera c = Plan.read(f).shots().get(0).cameras().get(0);
         assertEquals(new Vec3(0, 120, 0), c.eye(), "eye from the earliest key");
-        Cameras.Path p = Cameras.along(c.keys(), c.fov());
+        Cameras.Path p = Cameras.along(c.keys());
         assertEquals(100, p.at(200).pos().x, 1e-9);
         assertEquals(0, p.at(50).pos().x, 1e-9, "before the first key: at that key");
         assertEquals(200, p.at(400).pos().x, 1e-9, "after the last key: at that key");
@@ -176,15 +176,67 @@ class PlanTest {
 
     @Test
     void pathRollReachesKeyframes() {
-        List<Plan.PathKey> keys = List.of(new Plan.PathKey(100, new Vec3(0, 80, 0), new Vec3(0, 70, 50), 0),
-                new Plan.PathKey(120, new Vec3(0, 80, 20), new Vec3(0, 70, 70), 20));
-        Cameras.Path path = Cameras.along(keys, 80);
+        List<Plan.PathKey> keys = List.of(new Plan.PathKey(100, new Vec3(0, 80, 0), new Vec3(0, 70, 50), 0, 80),
+                new Plan.PathKey(120, new Vec3(0, 80, 20), new Vec3(0, 70, 70), 20, 80));
+        Cameras.Path path = Cameras.along(keys);
         assertEquals(10, path.roll(110), 1e-9, "bank between keys");
         assertEquals(20, path.roll(130), 1e-9, "after the last key: its value");
         JsonObject st = JsonParser.parseString(Export.editorState(path, 100, 120, 1.62, false, -1)).getAsJsonObject();
         JsonObject cam = st.getAsJsonArray("scenes").get(0).getAsJsonObject().getAsJsonArray("keyframeTracks").get(0).getAsJsonObject()
                 .getAsJsonObject("keyframesByTick");
         assertEquals(5, cam.getAsJsonObject("105").get("roll").getAsDouble(), 1e-6);
+    }
+
+    @Test
+    void pathZoomReachesNativeFovTrackIncludingRaisedCandidates() throws Exception {
+        Path file = Files.createTempFile("camera-zoom", ".json");
+        try {
+            Files.writeString(file, """
+                    {"replay":"r.zip","out":"film","shots":[{"name":"zoom","a":100,"b":120,
+                      "cameras":[{"kind":"path","fov":80,"rise":[0,16],"keys":[
+                        {"t":100,"eye":[0,80,0],"aim":[0,80,100]},
+                        {"t":120,"eye":[0,80,0],"aim":[0,80,100],"fov":140}]}],"subject":{}}]}
+                    """);
+            Plan.Shot shot = Plan.read(file).shots().get(0);
+            for (Cameras.Candidate candidate : Cameras.of(shot.cameras().get(0), shot, 16 / 9.0, null)) {
+                Cameras.Path path = candidate.path();
+                assertEquals(80, path.at(90).fov(), "missing key FOV inherits the camera's lens");
+                assertEquals(110, path.at(110).fov(), 1e-9, "lens interpolates between keys");
+                assertEquals(140, path.at(130).fov(), "after the last key: keep that lens");
+                JsonObject state = JsonParser.parseString(Export.editorState(path, 100, 120, 1.62, false, -1)).getAsJsonObject();
+                JsonObject lenses = state.getAsJsonArray("scenes").get(0).getAsJsonObject()
+                        .getAsJsonArray("keyframeTracks").get(1).getAsJsonObject().getAsJsonObject("keyframesByTick");
+                assertEquals(110, lenses.getAsJsonObject("110").get("fov").getAsDouble(), 1e-9);
+            }
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void keyframeCameraPreservesGuiChoiceForNativeExport() throws Exception {
+        for (boolean gui : new boolean[]{false, true}) {
+            JsonObject json = JsonParser.parseString(PLAN).getAsJsonObject();
+            JsonObject shotJson = json.getAsJsonArray("shots").get(0).getAsJsonObject();
+            shotJson.add("cameras", JsonParser.parseString("""
+                    [{"kind":"path","gui":%s,"fov":65,
+                      "keys":[{"t":100,"eye":[0,80,0],"aim":[0,80,50]},
+                              {"t":260,"eye":[0,80,10],"aim":[0,100,50]}]}]
+                    """.formatted(gui)));
+            Path file = Files.createTempFile("camera-gui", ".json");
+            try {
+                Files.writeString(file, json.toString());
+                Plan.Shot shot = Plan.read(file).shots().get(0);
+                List<Cameras.Candidate> candidates = Cameras.of(shot.cameras().get(0), shot, 16 / 9.0, null);
+                assertEquals(1, candidates.size());
+                assertEquals(gui, candidates.get(0).gui(), "camera conversion must not force noGui on the exporter");
+                JsonObject state = JsonParser.parseString(Export.editorState(candidates.get(0).path(), 100, 260, 1.62,
+                        candidates.get(0).gui(), -1)).getAsJsonObject();
+                assertEquals(gui, state.getAsJsonObject("replayVisuals").get("showHotbar").getAsBoolean());
+            } finally {
+                Files.deleteIfExists(file);
+            }
+        }
     }
 
     @Test

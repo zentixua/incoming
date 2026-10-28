@@ -187,7 +187,8 @@ use diameter; without diameter, 16 blocks), `need` (thresholds; `loud` below 0 d
   lens makes an event of diameter `size` occupy `share` of frame width; `follow` tracks subject, otherwise looks
   at the site;
 - `path` — flies along `keys` `[{t, eye, aim}]` (tick, eye, look-at point; linearly between keys, at the first/last
-  key before/after them), angle `fov`; `rise` gives backup copies of the same path this many blocks higher (plan
+  key before/after them). Optional `roll` and `fov` on each key interpolate into Flashback's native camera and
+  lens tracks; a key without `fov` uses the camera's `fov`. `rise` gives backup copies of the same path this many blocks higher (plan
   order, not score): a person set the path, so it also goes where the client has no chunks (only DH renders
   terrain there), and "camera in blocks" is checked only where a chunk exists;
 - `pilot` — FPV drone pass by an impact (`subject.keys`, the one nearest the end of the projectile path), angle

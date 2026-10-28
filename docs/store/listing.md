@@ -69,21 +69,21 @@ upload list records the terrain/recipe/craft integrations above.
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
-The effect and nuclear sections lead, followed by weapons and controls. A factory impact and a 5 kt night airburst illustrate the effects.
-The factory loop is 7.3 seconds and about 3.1 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
+The effect and nuclear sections lead, followed by weapons and controls. A factory approach and impact, and a 5 kt night ground burst illustrate the effects.
+The factory loop is 9 seconds and about 4.1 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
-| `docs/guide/img/nuke-wave.jpg` | Blast-wave dust approaches after a 5 kt airburst at night |
-| `docs/guide/img/nuke-cloud.jpg` | Mushroom cloud after a 5 kt ground burst over Newisle at night |
+| `docs/media/still-5.jpg` | Cruise missile approaching a factory (featured) |
+| `docs/guide/img/nuke-wave.jpg` | Blast-wave dust arrives 17 seconds after a 5 kt ground burst at night |
+| `docs/guide/img/nuke-cloud.jpg` | Rising cloud 25 seconds after a 5 kt ground burst in Newisle at night |
 | `docs/guide/img/sam.webp` | SAM defending against a drone raid |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
-| `docs/media/still-2.jpg` | Cruise missiles strike a factory in Project Zearth |
-| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
+| `docs/media/still-2.jpg` | Cruise missile approaching a factory in Project Zearth |
+| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult on an airport runway |
 | `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
@@ -92,10 +92,10 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 | `docs/guide/img/map.png` | Targeting map of the city before the strike |
 
 The factory, nuclear and instructional effect captures were recorded with Incoming 3.10.0 on copies of Project
-Zearth and Newisle. Motion clips use Flashback exports at 30 fps; stills are plain F2 screenshots at 1920×1080 with Complementary Unbound.
+Zearth and Newisle. Motion clips use Flashback exports at 30 fps; stills are native export frames or plain F2 screenshots at 1920×1080 with Complementary Unbound.
 World shots hide the HUD; guide interface shots retain it. The map shows the city before the strike.
-The mushroom overview uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
-Unchanged recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+The nuclear sequence uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
+Unchanged recipe and interface images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

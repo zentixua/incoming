@@ -236,7 +236,7 @@ siren at the target sounds only 8 seconds before impact.
 
 ## Bomb (B-2)
 
-![B-2 with its bomb bay open](img/weapon-b2.jpg)
+![B-2 in flight](img/weapon-b2.jpg)
 
 A B-2 arrives from far away and drops a GBU-57 bunker buster. Use it on bunkers and underground bases. SAM radar
 detects the B-2 very late. Can carry a nuclear warhead.
