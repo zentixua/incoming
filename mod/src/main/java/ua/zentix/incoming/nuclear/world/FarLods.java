@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -636,6 +637,22 @@ public final class FarLods {
         sent++;
         if (b.ruined && b.scorched) sentScorch++;
         else if (b.ruined) sentRuins++;
+    }
+
+    /**
+     * A changed chunk unloaded while LOD delivery was paused: reuse the existing asynchronous disk parser without
+     * loading world chunks. Chunk storage reads pending saves too. The caller bounds concurrent requests and retries
+     * missing/unreadable data; the copy contains the saved blocks as-is, without applying a second set of ruins.
+     */
+    public static java.util.concurrent.CompletableFuture<ChunkAccess> savedCopy(ServerLevel level, long chunk) {
+        DiskShots.Format format = DiskShots.Format.of(level);
+        return DiskShots.readSections(format, new ChunkPos(chunk))
+                .thenApply(sections -> {
+                    if (sections.skip() != null && sections.skip().startsWith("read error:")) {
+                        throw new IllegalStateException(sections.skip());
+                    }
+                    return (ChunkAccess) build(format, sections, null, false, false, false).copy();
+                });
     }
 
     /**

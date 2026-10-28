@@ -158,6 +158,8 @@ class S2CGoldenTest {
                         new S2C.Blip(-150.5f, 300.25f, 45f, 1, S2C.Blip.HOSTILE | S2C.Blip.ENGAGED)))),
                 golden(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, new S2C.VoxyChunk(net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"), -3, 70000,
                         new byte[]{0, 2, 1, (byte) 0x80, 0x7f})),
+                golden(S2C.LodBatchStart.TYPE, S2C.LodBatchStart.CODEC, new S2C.LodBatchStart(300)),
+                golden(S2C.LodBatchFinished.TYPE, S2C.LodBatchFinished.CODEC, new S2C.LodBatchFinished(300, 32)),
                 golden(S2C.RetinaScars.TYPE, S2C.RetinaScars.CODEC, new S2C.RetinaScars(new RetinaScars(List.of(
                         new RetinaScars.Scar(0.125f, -0.25f, 0.0078125f), new RetinaScars.Scar(-0.5f, 0.375f, 0.015625f)))))
         );
