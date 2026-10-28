@@ -14,6 +14,10 @@ import ua.zentix.incoming.gametest.StrikeGameTests;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import java.util.concurrent.atomic.AtomicReference;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
+import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.nuclear.world.FarLods;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
@@ -146,6 +150,53 @@ public final class VoxyBackpressureGameTests {
             h.assertTrue(viewer.queue.size() == 768 && viewer.queue.get(key).sections() != old, "fresh copy did not replace waiting copy at cap");
             h.assertTrue(viewer.bytes <= VoxyLods.QUEUE_BYTES && viewer.dropped == 0, "replacement exceeded cap or was dropped");
             h.assertTrue(level.getChunkSource().getChunkNow(unloaded.x, unloaded.z) == null, "LOD refresh loaded world chunks");
+        });
+    }
+
+    /** A completed read held by backpressure must not outlive a later world change and save. */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "voxy_saved_revision", skyAccess = true)
+    public static void laterMarkInvalidatesAnOlderSavedCopy(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel();
+        BlockPos changed = h.absolutePos(new BlockPos(32, 15, 32));
+        level.setBlock(changed, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        var source = level.getChunkAt(changed);
+        ChunkPos target = new ChunkPos(source.getPos().x + 100, source.getPos().z + 100);
+        var first = ChunkSerializer.write(level, source);
+        first.putInt("xPos", target.x);
+        first.putInt("zPos", target.z);
+        first.putString("Status", ChunkStatus.FULL.getName());
+        level.getChunkSource().chunkMap.write(target, first);
+        var oldRead = FarLods.savedCopy(level, target.toLong());
+        AtomicReference<ChunkAccess> delivered = new AtomicReference<>();
+        DhUpdates.testSink(level, (world, copy) -> {
+            if (copy.getPos().equals(target)) delivered.set(copy);
+        });
+        StrikeGameTests.afterTest(h, () -> DhUpdates.testSink(level, null));
+        boolean[] prepared = {false};
+        h.onEachTick(() -> {
+            if (prepared[0] || !oldRead.isDone()) return;
+            h.assertTrue(oldRead.getNow(null) != null, "old disk snapshot missing");
+            long due = level.getGameTime() + 5;
+            DhUpdates.mark(level, target, due);
+            Long2ObjectOpenHashMap<DhUpdates.SavedRead> reads = ObfuscationReflectionHelper.getPrivateValue(
+                    DhUpdates.class, level.getData(ModAttachments.DH_UPDATES), "unloaded");
+            reads.put(target.toLong(), new DhUpdates.SavedRead(oldRead));
+            level.setBlock(changed, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+            var latest = ChunkSerializer.write(level, source);
+            latest.putInt("xPos", target.x);
+            latest.putInt("zPos", target.z);
+            latest.putString("Status", ChunkStatus.FULL.getName());
+            level.getChunkSource().chunkMap.write(target, latest);
+            DhUpdates.mark(level, target, due);
+            prepared[0] = true;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(delivered.get() != null, "latest saved revision never delivered");
+            h.assertTrue(delivered.get().getBlockState(new BlockPos(target.getMinBlockX() + (changed.getX() & 15),
+                    changed.getY(), target.getMinBlockZ() + (changed.getZ() & 15))).is(Blocks.DIAMOND_BLOCK),
+                    "later mark reused the previous save and lost the latest world change");
+            h.assertTrue(level.getChunkSource().getChunkNow(target.x, target.z) == null, "revision refresh loaded world chunks");
         });
     }
 

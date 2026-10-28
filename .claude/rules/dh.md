@@ -127,3 +127,6 @@ paths:
   saved sections through `DiskShots`. Pending saves are visible to chunk storage reads. Missing/non-final saved data
   can be discarded; I/O failure retries without blocking. GameTest `voxy_saved_update` keeps an old copy at 48 MiB,
   delays the fresh mark, then verifies disk restoration replaces the waiting copy without loading world chunks.
+  A later `mark` invalidates an older saved read, including an already-completed result held by backpressure;
+  keep the old read counted until completion before retrying, so invalidation cannot bypass the four-read cap.
+  GameTest `voxy_saved_revision` saves gold, holds that read, saves diamond and marks again; only diamond may arrive.

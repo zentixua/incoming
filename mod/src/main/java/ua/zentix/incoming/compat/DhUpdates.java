@@ -61,7 +61,14 @@ public final class DhUpdates {
     /** Чанк → тик последней отправки (старше {@link #RESEND} — забываются). */
     private final Long2LongOpenHashMap sent = new Long2LongOpenHashMap();
     /** At most four asynchronous reads; marks remain pending until a fresh copy is delivered. */
-    private final Long2ObjectOpenHashMap<CompletableFuture<ChunkAccess>> unloaded = new Long2ObjectOpenHashMap<>();
+    static final class SavedRead {
+        final CompletableFuture<ChunkAccess> future;
+        boolean obsolete;
+
+        SavedRead(CompletableFuture<ChunkAccess> future) { this.future = future; }
+    }
+
+    private final Long2ObjectOpenHashMap<SavedRead> unloaded = new Long2ObjectOpenHashMap<>();
     private final ArrayDeque<ChunkAccess> offered = new ArrayDeque<>();
     /** Чанки в {@link #offered} (сколько копий каждого ждёт отправки). */
     private final Long2IntOpenHashMap offeredCount = new Long2IntOpenHashMap();
@@ -136,6 +143,8 @@ public final class DhUpdates {
     public static void mark(ServerLevel level, ChunkPos pos, long at) {
         DhUpdates u = active(level);
         if (u == null) return;
+        SavedRead read = u.unloaded.get(pos.toLong());
+        if (read != null) read.obsolete = true; // A later change must not reuse the previous save's result.
         Long2LongLinkedOpenHashMap due = u.due;
         long key = pos.toLong();
         // повторная отметка не откладывает раннюю, а встаёт за ней: после отправки чанк ждёт и её
@@ -261,7 +270,7 @@ public final class DhUpdates {
 
     private void tick(ServerLevel level) {
         long now = level.getGameTime();
-        unloaded.long2ObjectEntrySet().removeIf(e -> e.getValue().isDone() && !due.containsKey(e.getLongKey()));
+        unloaded.long2ObjectEntrySet().removeIf(e -> e.getValue().future.isDone() && !due.containsKey(e.getLongKey()));
         if (held.waiting() > 0) {
             for (long[] a; (a = acks.poll()) != null; ) held.ack(a[0], a[1]);
             held.expire(System.nanoTime());
@@ -302,15 +311,20 @@ public final class DhUpdates {
             }
             ChunkAccess chunk = Terrain.inMemory(level, key);
             if (chunk == null) {
-                CompletableFuture<ChunkAccess> read = unloaded.get(key);
+                SavedRead read = unloaded.get(key);
                 if (read == null) {
-                    if (unloaded.size() < 4) unloaded.put(key, FarLods.savedCopy(level, key));
-                } else if (read.isDone()) {
+                    if (unloaded.size() < 4) unloaded.put(key, new SavedRead(FarLods.savedCopy(level, key)));
+                } else if (read.future.isDone()) {
                     unloaded.remove(key);
-                    if (read.isCompletedExceptionally()) {
+                    if (read.obsolete) {
+                        // Retain/count the old read until completion, then retry the newest mark in a later tick.
+                        notYet.add(key);
+                        continue;
+                    }
+                    if (read.future.isCompletedExceptionally()) {
                         e.setValue(now + 20); // Retry I/O failure; do not lose the update or block the tick.
                     } else {
-                        chunk = read.getNow(null);
+                        chunk = read.future.getNow(null);
                         if (chunk == null) {
                             // No final saved blocks exist here (markArea also covers untouched world-edge chunks).
                             it.remove();
