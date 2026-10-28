@@ -92,7 +92,7 @@ jobs:
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
-                tools/look_gate/*|tools/prod_client.py) lookgate=true ;;
+                tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;
                 tools/stand/*) stand=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
@@ -309,6 +309,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Look-gate run validity
         run: python3 -m unittest discover -s tools/look_gate -p 'test_*.py' -v
+      - name: Page-media content regressions
+        run: python3 -m unittest discover -s tools/media -p 'test_*.py' -v
 
   # Scene bench (tools/stand): harness-mod build/unit tests, parsing, planning and gate (test_gate.py), no game;
   # bench itself captured on laptop (stand.py pr), verdict is “Стенд сцен” commit status, not this job.

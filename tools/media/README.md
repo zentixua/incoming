@@ -27,5 +27,31 @@ Incoming 3.10.0 registers its full-frame nuclear flash below the vanilla crossha
 group. Hiding HUD widgets individually in Flashback's native export settings preserves the effect. Verify both
 the detonation timestamp and the rendered flash; a bright fireball alone is insufficient.
 
+Run `uv run tools/media/check.py capture.json --out content.json` with Java 21 (`JAVA_HOME`) and FFmpeg available.
+The manifest has an `assets` array. Paths are relative to the manifest. Each entry names `file` (the delivered
+encoding), `qa` (native `qa.jsonl`), `plan`, `shot`, `events` (replayscan `events.csv.gz`), `first_frame`,
+`frame_count`, `fps` and `width` (the actual page display width, never greater than the file width).
+
+- `kind: "factory-approach"` also supplies `scan` (the scan directory) and `uuid`. The plan must track that same
+  projectile. The check uses its recorded positions/orientation, actual rendered visibility and final pixels.
+  It requires at least one continuous second with an axis projection of 18 px and body diameter of 3 px, moving
+  away from the camera and toward the target after passing behind the camera. These are editorial readability
+  minimums at page size, not changes to the weapon or claims of physical accuracy.
+- `kind: "nuclear-sequence"` also supplies `event_tick`, `jar` (the shipped mod) and `jar_sha256`. `PhaseProbe.java`
+  reads the shipped jar's cloud/flash/front model; it does not implement a second cloud law. The full sequence
+  must include at least 0.5 s before detonation and 180 s after it. The checker requires the recorded 5 kt/night/
+  1.6–1.7 km conditions, actual GUI state, a frame-wide flash during the pulse, visible cap rise and ground in
+  frame at wave arrival. The approximate front-arrival calculation is a diagnostic; review the actual dust wave.
+  A shorter page excerpt may name `full_sequence` (the `file` of an earlier entry). That full sequence must pass
+  for the same event; the excerpt still has to contain the flash, visible rise and wave. Label excerpts accurately.
+- Optional `stills` entries name `file`, `source_f2`, exact `tick`, `tick_proof` and `phase` (`flash`, `rising-cap`
+  or `wave` for a nuclear shot). Save proof of the paused replay tick. Both the original F2 and delivered still
+  must match that native frame; wall-clock timings are insufficient. Retain full 1920×1080 originals.
+  `tick_proof` is JSON with `paused: true`, measured `tick`, `f2_sha256`, and `state_source` pointing to the raw
+  paused-state log or screenshot. The reviewer must inspect that source, not just the transcribed fields.
+
+The JSON report identifies failed conditions and records measurements per final frame. Missing evidence fails.
+It cannot establish visual recognizability from contrast alone: the independent review remains mandatory.
+
 Keep task-specific manifests, camera plans, frame reports and before/after evidence on an orphan `look-gate/`
 branch or in ignored run directories. Keep reusable checks and their regression tests here.

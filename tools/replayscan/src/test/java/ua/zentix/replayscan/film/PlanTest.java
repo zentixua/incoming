@@ -188,6 +188,32 @@ class PlanTest {
     }
 
     @Test
+    void keyframeCameraPreservesGuiChoiceForNativeExport() throws Exception {
+        for (boolean gui : new boolean[]{false, true}) {
+            JsonObject json = JsonParser.parseString(PLAN).getAsJsonObject();
+            JsonObject shotJson = json.getAsJsonArray("shots").get(0).getAsJsonObject();
+            shotJson.add("cameras", JsonParser.parseString("""
+                    [{"kind":"path","gui":%s,"fov":65,
+                      "keys":[{"t":100,"eye":[0,80,0],"aim":[0,80,50]},
+                              {"t":260,"eye":[0,80,10],"aim":[0,100,50]}]}]
+                    """.formatted(gui)));
+            Path file = Files.createTempFile("camera-gui", ".json");
+            try {
+                Files.writeString(file, json.toString());
+                Plan.Shot shot = Plan.read(file).shots().get(0);
+                List<Cameras.Candidate> candidates = Cameras.of(shot.cameras().get(0), shot, 16 / 9.0, null);
+                assertEquals(1, candidates.size());
+                assertEquals(gui, candidates.get(0).gui(), "camera conversion must not force noGui on the exporter");
+                JsonObject state = JsonParser.parseString(Export.editorState(candidates.get(0).path(), 100, 260, 1.62,
+                        candidates.get(0).gui(), -1)).getAsJsonObject();
+                assertEquals(gui, state.getAsJsonObject("replayVisuals").get("showHotbar").getAsBoolean());
+            } finally {
+                Files.deleteIfExists(file);
+            }
+        }
+    }
+
+    @Test
     void rollTiltsFrameLikeFlashback() {
         // southward, banked 30° left: the top of the frame tilts left (east, +x), a point on the right horizon is below center
         Cameras.View v = Cameras.View.of(new Cameras.Pose(Vec3.ZERO, 0, 0, 90), 1).rolled(30);

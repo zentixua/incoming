@@ -5,6 +5,10 @@ Read the replay events, camera poses, frame-to-tick mapping and content-check re
 author's verdict or PR description as evidence. A decodable file, a source hash or a green readiness check does
 not demonstrate that the shot shows its subject.
 
+Visually inspect every image and animation referenced by the pages, including retained assets. Ask whether this
+is what that picture is supposed to show and whether anything looks wrong to a player. The list below guides
+that judgment; it is not a substitute for looking, and passing numeric thresholds cannot overrule visible faults.
+
 For each asset, report the filename, frame/tick and what the viewer can actually see. Fail the shot when evidence
 is missing. Inspect the beginning, middle and end of every clip, including every required phase and any edit.
 
@@ -31,6 +35,9 @@ Required shots:
   suppresses Incoming's GUI-based flash as well as the HUD. Native export GUI controls must preserve the effect.
 - Accurate English and Russian captions and working references in README, guide and store drafts. A caption
   cannot repair missing visual content. No store publication or release before Artem approves the new frames.
+
+After the fresh review, place key JPEG frames in the requested local review directory and report them to Artem.
+Wait for his relayed approval before merging; a passing automated or independent review does not replace it.
 
 Report serious content failures before optional polish. Include representative frame paths in the verdict.
 If a second review is needed after fixes, recheck every affected acceptance condition, including conditions
