@@ -3,6 +3,7 @@ package ua.zentix.incoming.compat;
 import io.netty.channel.Channel;
 import net.minecraft.Util;
 import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -18,6 +19,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.net.C2S;
+import ua.zentix.incoming.net.LodBatchFlow;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.world.FarLods;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -46,8 +48,8 @@ import java.util.function.BiConsumer;
  * <ul>
  * <li>Recipients: players in the same world with Voxy within {@link FarLods#FAR_CHUNKS} chunks who do not have this chunk
  * (Voxy rebuilds chunks the player sees itself from vanilla packets).</li>
- * <li>Rate: at most {@link #BYTES_PER_TICK} per tick per player, with one final chunk allowed to cross the budget.
- * Delivery pauses while the connection is busy; only one LOD write may be outstanding. The player queue
+ * <li>Rate: acknowledged batches, sized from the client's vanilla receive-rate calculator. Only one batch may await
+ * acknowledgement, and one chunk write may be outstanding inside it. The player queue is
  * limited to {@link #QUEUE_BYTES}, a fresh copy of a chunk replaces its waiting copy. Queue space is {@link #room}:
  * {@link DhUpdates} uses it to deliver chunks even without DH.</li>
  * <li>A copy is built in the background (light from its blocks, {@link CopyLight}); a loaded chunk is snapshotted on the
@@ -59,15 +61,16 @@ import java.util.function.BiConsumer;
  * main world: server players, their queues and copies being built.
  */
 public final class VoxyLods {
-    /**
-     * Maximum chunk bytes per tick per player: 2.5 MiB/s before network compression, around 1 MiB/s after compression
-     * (LSS defaults to 25 MiB/s before compression, DH to 0.5 MB/s): a player hosting friends uses their own uplink.
-     */
-    static final int BYTES_PER_TICK = 128 * 1024;
     /** Headroom below Netty's high watermark for normal game traffic (transport policy, not a physical quantity). */
     static final int WRITE_HEADROOM = 16 * 1024;
     /** Even with a raised Netty watermark, do not add LODs behind more than this many pending bytes. */
     static final int MAX_PENDING_BYTES = 32 * 1024;
+    /**
+     * Maximum ordinary batch bytes awaiting client receipt, not a bytes/tick throttle. A proxy can complete Netty
+     * writes before its downstream drains: a chunk-count window alone could still put multiple MiB before keepalive.
+     * One indivisible chunk may exceed this safety window, but cannot share its batch with another chunk.
+     */
+    static final int BATCH_BYTES = 256 * 1024;
     /** Maximum waiting player queue size; this does not bound bytes already handed to the connection. */
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
@@ -84,6 +87,8 @@ public final class VoxyLods {
         long bytes, sent, dropped;
         /** Includes dispatch waiting in the Netty event loop; cleared only by the write completion callback. */
         private volatile boolean writing;
+        final LodBatchFlow flow = new LodBatchFlow();
+        private int batchBytes;
 
         void offer(long chunk, S2C.VoxyChunk packet) {
             S2C.VoxyChunk was = queue.remove(chunk);
@@ -102,17 +107,24 @@ public final class VoxyLods {
         }
 
         /** Server-thread queue drain. Never wait for the network or scan a blocked queue. */
-        void drain(Channel channel, BiConsumer<S2C.VoxyChunk, PacketSendListener> send) {
-            int budget = BYTES_PER_TICK;
-            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && budget > 0; ) {
-                if (writing || channel == null || !channel.isActive() || !channel.isWritable()) break;
-                long room = channel.bytesBeforeUnwritable();
-                long pending = channel.config().getWriteBufferHighWaterMark() - room;
-                if (room < WRITE_HEADROOM || pending > MAX_PENDING_BYTES) break;
+        void drain(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> send) {
+            if (!writable(channel)) return;
+            if (!flow.active()) {
+                if (queue.isEmpty() || !flow.begin()) return;
+                batchBytes = 0;
+                send.accept(new S2C.LodBatchStart(flow.id()), null);
+            }
+            if (!flow.sending()) return; // Only the client's acknowledgement opens the next batch.
+            boolean byteWindowFull = batchBytes >= BATCH_BYTES;
+            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && !byteWindowFull && writable(channel); ) {
                 // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
                 // A single chunk may exceed the watermark. Let it through once, then await its completed write;
                 // requiring the entire chunk to fit would permanently block large, globally paletted chunks.
                 S2C.VoxyChunk packet = q.next();
+                if (flow.sent() > 0 && batchBytes + packet.sections().length > BATCH_BYTES) {
+                    byteWindowFull = true;
+                    break;
+                }
                 writing = true;
                 try {
                     send.accept(packet, PacketSendListener.thenRun(() -> writing = false));
@@ -122,9 +134,26 @@ public final class VoxyLods {
                 }
                 q.remove();
                 bytes -= packet.sections().length;
-                budget -= packet.sections().length;
+                flow.chunkSent();
+                batchBytes += packet.sections().length;
+                byteWindowFull = batchBytes >= BATCH_BYTES;
                 sent++;
             }
+            if ((byteWindowFull || !flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
+                flow.finish();
+                send.accept(new S2C.LodBatchFinished(flow.id(), flow.sent()), null);
+            }
+        }
+
+        private boolean writable(@Nullable Channel channel) {
+            return !writing && transportWritable(channel);
+        }
+
+        private static boolean transportWritable(@Nullable Channel channel) {
+            if (channel == null || !channel.isActive() || !channel.isWritable()) return false;
+            long room = channel.bytesBeforeUnwritable();
+            long pending = channel.config().getWriteBufferHighWaterMark() - room;
+            return room >= WRITE_HEADROOM && pending <= MAX_PENDING_BYTES;
         }
 
         /** How many more LSS-overwritten chunks the player can report ({@link #stale}): {@link #STALE_PER_SECOND} per second. */
@@ -291,6 +320,13 @@ public final class VoxyLods {
                 v.dropped = 0;
             }
         }
+    }
+
+    /** Server-thread acknowledgement of the client's measured receive/ingest rate. */
+    public static void batchReceived(C2S.LodBatchReceived packet, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer p)) return;
+        Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
+        if (viewer != null) viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
     }
 
     /** The client reported whether it renders Voxy, into which the mod ingests chunks. Server thread. */

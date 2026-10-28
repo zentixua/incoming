@@ -3894,7 +3894,7 @@ public final class StrikeGameTests {
     /** Насколько выше полосы стоит пусковая проверок сектора, блоков: выше стен и построек соседних площадок. */
     static final int LANE_LIFT = 120;
 
-    static void gameSpeed(GameTestHelper h) {
+    public static void gameSpeed(GameTestHelper h) {
         long[] last = {System.nanoTime()};
         h.onEachTick(() -> {
             // parkNanos просыпается раньше (задачи чанков будят поток сервера): ждать до срока в цикле

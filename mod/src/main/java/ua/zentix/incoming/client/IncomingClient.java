@@ -554,6 +554,16 @@ public final class IncomingClient {
         }
 
         @Override
+        public void lodBatchStart(S2C.LodBatchStart p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+            ClientLodBatches.start(p, context);
+        }
+
+        @Override
+        public void lodBatchFinished(S2C.LodBatchFinished p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+            ClientLodBatches.finish(p, context);
+        }
+
+        @Override
         public void radarScope(S2C.RadarScope p) {
             // the screen is current state: absent during replay seeking
             Replay.event("radar", live -> {

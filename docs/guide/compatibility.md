@@ -28,7 +28,8 @@ None of these are required if you do not use Voxy.
 For LOD Server Support, Incoming targets [NeoForge 0.19.0](https://modrinth.com/mod/lod-server-support/version/ydDRzPcM).
 If the map is blank, see [map troubleshooting](map.md#if-the-map-is-empty).
 Distant damage can take time to appear; see [nuclear strikes](nuke.md#what-happens).
-Incoming pauses its Voxy terrain updates while your connection is busy and resumes them as it drains.
+Incoming sends its Voxy terrain updates in batches, waiting for your client to confirm receipt before sending the next.
+The batch size adapts to your client’s measured receive rate; delivery pauses while the connection is busy.
 On a slow connection, distant changes arrive gradually.
 These versions do not guarantee that every shader and mod combination works together.
 
