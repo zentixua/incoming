@@ -175,9 +175,14 @@ final class HalfPass {
         }
     }
 
+    /** The half pass can run this frame (shaders loaded, targets not failed, world distance present). */
+    private static boolean usable(int scene, int w, int h) {
+        return !failed && depthShader != null && composite != null && scene >= 0 && w >= 4 && h >= 4;
+    }
+
     /** Targets for a w×h frame and the half-resolution world distance from {@code scene}; false — no half pass this frame. */
     private static boolean begin(int scene, int w, int h) {
-        if (failed || depthShader == null || composite == null || scene < 0 || w < 4 || h < 4) return false;
+        if (!usable(scene, w, h)) return false;
         int hw = (w + 1) / 2, hh = (h + 1) / 2;
         int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         if (hw != width || hh != height || accum < 0) {
@@ -201,7 +206,6 @@ final class HalfPass {
             width = hw;
             height = hh;
         }
-        PLAN.begin((w + TILE - 1) / TILE, (h + TILE - 1) / TILE);
         // world distance at half resolution, then an empty target
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, depthFbo);
@@ -261,20 +265,24 @@ final class HalfPass {
         lastLow = lastFull = lastFlushes = 0;
         planned = false;
         if (n == 0) return;
-        if (!begin(scene, w, h)) {
+        Plan plan = PLAN;
+        if (usable(scene, w, h)) {
+            if (soft.length < n) {
+                soft = new boolean[Math.max(n, 2 * soft.length)];
+                tiles = new int[4 * soft.length];
+            }
+            plan.begin((w + TILE - 1) / TILE, (h + TILE - 1) / TILE);
+            q.screen(viewProjection, w, h, TILE, WIDE, soft, tiles);
+            plan.classify(soft, tiles, n);
+        }
+        // nothing for the target (or no target): the layer as it always drew, without the half pass's fixed cost
+        if (!usable(scene, w, h) || !plan.any || !begin(scene, w, h)) {
             q.drawRange(s, 0, n, -1, 0, -1, TILE);
             lastFull = n;
             return;
         }
-        if (soft.length < n) {
-            soft = new boolean[Math.max(n, 2 * soft.length)];
-            tiles = new int[4 * soft.length];
-        }
         int main = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
-        q.screen(viewProjection, w, h, TILE, WIDE, soft, tiles);
-        Plan plan = PLAN;
-        plan.classify(soft, tiles, n);
         uploadCut(plan);
         uploadRects(plan, n, w, h);
         planned = true;
@@ -434,9 +442,12 @@ final class HalfPass {
         c.safeGetUniform("HalfTile").set((float) TILE);
         c.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
+        // like every full-frame pass of the layer: the frame's depth is not the composite's business
+        RenderSystem.disableDepthTest();
         c.apply();
         BufferUploader.draw(mesh);
         c.clear();
+        RenderSystem.enableDepthTest();
         RenderSystem.setShaderTexture(0, t0);
         RenderSystem.setShaderTexture(1, t1);
         RenderSystem.setShaderTexture(2, t2);

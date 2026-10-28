@@ -668,7 +668,7 @@ public final class HeatPass {
      * light sources now. Layer calls before pass if frame has light.
      */
     static void solids(Frame f, ClientLevel level, net.minecraft.world.phys.Vec3 eye) {
-        if (!f.lit()) return;
+        if (!f.lit() || shader == null) return;
         Vector4f c = new Vector4f();
         for (int i = 0; i < 4; i++) {
             if (f.lights.getColumn(i, c).w > 0) Solids.near(eye.x + c.x, eye.y + c.y, eye.z + c.z, c.w);
