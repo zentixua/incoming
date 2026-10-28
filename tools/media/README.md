@@ -39,7 +39,10 @@ encoding), `qa` (ReplayFilm inspection `qa.jsonl`), `plan`, `shot`, `events` (re
 - `kind: "factory-approach"` also supplies `scan` (the scan directory) and `uuid`. The plan must track that same
   projectile. The check uses its recorded positions/orientation, actual rendered visibility and final pixels.
   It requires at least one continuous second with an axis projection of 18 px and body diameter of 3 px, moving
-  away from the camera and toward the target after passing behind the camera. These are editorial readability
+  along the camera’s viewing direction and toward the target after passing behind the camera. A following camera
+  may hold the missile at constant depth: the check measures its world displacement and closing target distance.
+  Body contrast is sampled along the projected axis against neighboring pixels, excluding most background pixels
+  that would dilute a thin missile in a square patch. These are editorial readability
   minimums at page size, not changes to the weapon or claims of physical accuracy.
 - `kind: "nuclear-sequence"` also supplies `event_tick`, `jar` (the shipped mod) and `jar_sha256`. `PhaseProbe.java`
   reads the shipped jar's cloud/flash/front model; it does not implement a second cloud law. The full sequence

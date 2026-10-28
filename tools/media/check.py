@@ -139,13 +139,21 @@ def missile_checks(samples, fps, impact_tick):
     behind = any(s["depth"] < -2 for s in before)
     if not behind:
         failures.append("Projectile never passes from behind the camera")
-    good = []
-    for previous, now in zip(samples, samples[1:]):
-        advancing = now["depth"] > previous["depth"] and now["target_distance"] < previous["target_distance"]
-        good.append(now["tick"] < impact_tick and now["known"] and now["visible"] and advancing
-                    and now["body_px"] >= 18 and now["width_px"] >= 3 and now["contrast"] >= 10)
+    good = [s["tick"] < impact_tick and s["known"] and s["visible"] and s["depth"] > 0
+            and s["body_px"] >= 18 and s["width_px"] >= 3 and s["contrast"] >= 10 for s in samples]
     required = math.ceil(fps)  # at least one continuous second, never zero or one lucky frame
-    count = longest_run(good)
+    # A native tracking camera can move with the missile. Relative camera depth then stays constant,
+    # although the missile travels away from the launch side. Measure world travel across each readable
+    # interval; adjacent packet samples can repeat and are not independent velocity measurements.
+    count = run = 0
+    for i, readable in enumerate(good):
+        run = run + 1 if readable else 0
+        if run < 2:
+            continue
+        first, last = samples[i-run+1], samples[i]
+        travel = sub(last["position"], first["position"])
+        if dot(travel, first["forward"]) > 5 and first["target_distance"] - last["target_distance"] > 5:
+            count = max(count, run)
     if count < required:
         failures.append(f"Only {count} consecutive readable approach frames; need {required}")
     if not samples or not samples[0]["tick"] < impact_tick < samples[-1]["tick"]:
@@ -176,6 +184,10 @@ def trajectory(directory, uuid):
     for r in table(directory / "far.csv.gz"):
         if r["uuid"] == uuid:
             p = json.loads(r["data"])
+            # The same table also contains the designator's HUD summaries. Their positions may be stale
+            # and they carry no orientation; only an actual flight pose can support body projection.
+            if "yaw" not in p or "pitch" not in p:
+                continue
             data[int(r["t"])] = [*[float(r[k]) for k in ("x", "y", "z")], float(p["yaw"]), float(p["pitch"])]
     for r in table(directory / "tracks.csv.gz"):
         if r["eid"] in ids:
@@ -207,8 +219,13 @@ def projectile_sample(pose, qa, target, width, height):
     body = math.hypot(ends[0][0]-ends[1][0], ends[0][1]-ends[1][1]) if all(e[0] is not None for e in ends) else 0
     diameter = .52 * height / (2 * math.tan(math.radians(qa["fov"])/2) * depth) if depth > 0 else 0
     # Contrast uses the actual render camera's subject projection, not the packet interpolation above.
+    camera_yaw, camera_pitch = map(math.radians, qa["cam"][3:5])
+    forward = [-math.sin(camera_yaw)*math.cos(camera_pitch), -math.sin(camera_pitch),
+               math.cos(camera_yaw)*math.cos(camera_pitch)]
     return dict(tick=qa["t"], depth=depth, target_distance=length(sub(pose[:3], target)), known=True,
+                position=pose[:3], forward=forward,
                 visible=False, body_px=body, width_px=diameter, contrast=0,
+                axis_px=[ends[1][j]-ends[0][j] for j in range(2)] if body > 0 else [0, 0],
                 x_px=(qa["x"]+1)*width/2, y_px=(1-qa["y"])*height/2)
 
 
@@ -267,6 +284,34 @@ def patch_contrast(image, x, y, radius):
     center = image[y-r:y+r+1, x-r:x+r+1].astype(float)
     outer = image[y-2*r:y+2*r+1, x-2*r:x+2*r+1].astype(float)
     return float(np.linalg.norm(center.mean(axis=(0, 1)) - outer.mean(axis=(0, 1))))
+
+
+def body_contrast(image, sample):
+    """Median contrast along the actual projected body against its two immediate sides.
+
+    A square patch averages the narrow missile together with the buildings behind it; opposite background
+    colours can cancel even when its outline is readable. Use the recorded axis and native subject center.
+    This remains a diagnostic, not object recognition or a substitute for looking at the final image.
+    """
+    import statistics
+    dx, dy = sample.get("axis_px", [0, 0])
+    size = math.hypot(dx, dy)
+    if size < 1:
+        return 0.0
+    side = max(3, sample["width_px"])
+    px, py = -dy / size * side, dx / size * side
+    height, width = image.shape[:2]
+    contrasts = []
+    for i in range(9):
+        fraction = (i-4) * .075  # Central 60% avoids nose/tail taper.
+        x, y = sample["x_px"] + dx*fraction, sample["y_px"] + dy*fraction
+        points = [(round(x+sign*px), round(y+sign*py)) for sign in (0, -1, 1)]
+        if any(not (1 <= x < width-1 and 1 <= y < height-1) for x, y in points):
+            continue
+        colours = [[sum(float(image[y+oy, x+ox][c]) for oy in (-1, 0, 1) for ox in (-1, 0, 1))/9
+                    for c in range(3)] for x, y in points]
+        contrasts.append(max(length(sub(colours[0], background)) for background in colours[1:]))
+    return statistics.median(contrasts) if len(contrasts) >= 5 else 0.0
 
 
 def audit(manifest, base):
@@ -351,7 +396,7 @@ def audit(manifest, base):
                 f["ground_in_frame"] = ground[0] is not None and 0 < ground[0] < output_width and 0 < ground[1] < image.shape[0]
             if asset["kind"] == "factory-approach":
                 s = projectile_sample(sample(ticks[index]), rows[index], impact["pos"], output_width, image.shape[0])
-                s["contrast"] = patch_contrast(image, s["x_px"], s["y_px"], max(s["width_px"], 2)) if s["depth"] > 0 else 0
+                s["contrast"] = body_contrast(image, s) if s["depth"] > 0 else 0
                 s["visible"] = bool(rows[index]["in"] and rows[index]["seen"] >= .9 and rows[index]["clear"] >= .8 and rows[index]["drawn"] and rows[index]["unknown"] < 0 and not rows[index]["fog"] and not rows[index]["cloud"])
                 samples.append(s)
                 f["projectile"] = s

@@ -1,6 +1,6 @@
 # Incoming
 
-![Cruise missiles strike a factory in Project Zearth](docs/media/hero.webp)
+![Cruise missile approaching a factory in Project Zearth](docs/media/hero.webp)
 
 Air strikes and air defense for Minecraft 1.21.1.
 
@@ -14,16 +14,16 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 - **Explosions and aftermath:** fireballs light up nearby terrain, blasts break blocks and shatter windows, and dust and smoke rise and drift with the wind. Strikes can start fires; leftover fuel burns in the crater.
 - **Blackout:** strike a transformer substation to cut electric lights in its district.
 
-![Cruise missiles strike a factory](docs/media/still-5.jpg)
+![Cruise missile approaching a factory](docs/media/still-5.jpg)
 
 ### Nuclear strikes
 
 Flash, blast wave, mushroom cloud, fires and ruins. Ground bursts leave a crater and fallout downwind.
 Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operator-only by default.
 
-![A 5 kt airburst at night over Project Zearth: flash, rising cloud and blast wave](docs/media/nuke.webp)
+![First 30 seconds of a 5 kt ground burst in Newisle at night: flash, rising cloud and blast wave](docs/media/nuke.webp)
 
-![Mushroom cloud after a 5 kt ground burst over Newisle at night](docs/guide/img/nuke-cloud.jpg)
+![Rising cloud 25 seconds after a 5 kt ground burst in Newisle at night](docs/guide/img/nuke-cloud.jpg)
 
 ### Weapons
 

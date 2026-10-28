@@ -18,16 +18,16 @@
   "gallery": [
     {
       "file": "docs/media/still-5.jpg",
-      "title": "Cruise missiles strike a factory",
+      "title": "Cruise missile approaching a factory",
       "featured": true
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "Blast-wave dust approaches after a 5 kt airburst at night"
+      "title": "Blast-wave dust arrives 17 seconds after a 5 kt ground burst at night"
     },
     {
       "file": "docs/guide/img/nuke-cloud.jpg",
-      "title": "Mushroom cloud after a 5 kt ground burst over Newisle at night"
+      "title": "Rising cloud 25 seconds after a 5 kt ground burst in Newisle at night"
     },
     {
       "file": "docs/guide/img/sam.webp",
@@ -39,11 +39,11 @@
     },
     {
       "file": "docs/media/still-2.jpg",
-      "title": "Cruise missiles strike a factory in Project Zearth"
+      "title": "Cruise missile approaching a factory in Project Zearth"
     },
     {
       "file": "docs/guide/img/weapon-lancet-launcher.jpg",
-      "title": "Lancet ready to launch"
+      "title": "Lancet catapult on an airport runway"
     },
     {
       "file": "docs/guide/img/weapon-grad.jpg",

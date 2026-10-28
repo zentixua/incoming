@@ -1,10 +1,38 @@
 """Regression cases for the content failures missed in PR #518; no game/GPU needed."""
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from check import longest_run, missile_checks, native_boundary, nuclear_checks, phase_ok, project, projected_box, proof_matches, timing_ok
+from check import body_contrast, longest_run, missile_checks, native_boundary, nuclear_checks, phase_ok, project, projected_box, proof_matches, timing_ok, trajectory
 
 
 class ContentTest(unittest.TestCase):
+    def test_body_outline_is_measured_separately_from_its_background(self):
+        class Pixels:
+            shape = (40, 80, 3)
+            def __init__(self, body):
+                self.body = body
+            def __getitem__(self, point):
+                y, x = point
+                value = self.body if 17 <= y <= 23 and 10 <= x <= 70 else 100
+                return [value]*3
+        sample = dict(axis_px=[60, 0], width_px=6, x_px=40, y_px=20)
+        self.assertEqual(body_contrast(Pixels(100), sample), 0)
+        self.assertGreater(body_contrast(Pixels(180), sample), 100)
+
+    def test_hud_summary_cannot_replace_a_recorded_flight_pose(self):
+        rows = {
+            "entities.csv.gz": [], "tracks.csv.gz": [],
+            "far.csv.gz": [
+                dict(uuid="rocket", t="10", x="1", y="2", z="3", data='{"yaw": 20, "pitch": 5}'),
+                dict(uuid="rocket", t="10", x="999", y="999", z="999", data='{"eta": 50}'),
+            ],
+        }
+        with patch("check.table", side_effect=lambda path: rows[path.name]):
+            sample = trajectory(Path("unused"), "rocket")
+        self.assertEqual(sample(10), [1, 2, 3, 20, 5])
+        self.assertIsNone(sample(11))
+
     def test_wall_clock_offset_cannot_prove_a_still_tick(self):
         self.assertFalse(proof_matches({"seconds_after_log": 16.453}, 2604, "abc"))
         proof = {"paused": True, "tick": 2604, "f2_sha256": "abc", "state_source": "paused.json"}
@@ -47,12 +75,24 @@ class ContentTest(unittest.TestCase):
 
     def approach(self, n=62):
         return [dict(tick=i*2/3, depth=i*2-10, target_distance=200-i*2, known=True,
+                     position=[0, 0, i*2], forward=[0, 0, 1],
                      visible=i>5, body_px=30, width_px=4, contrast=20) for i in range(n)]
 
     def test_normal_readable_approach_and_impact(self):
         failures, run = missile_checks(self.approach(), 30, 38)
         self.assertEqual(failures, [])
         self.assertGreaterEqual(run, 30)
+
+    def test_tracking_camera_does_not_erase_real_forward_travel(self):
+        rows = self.approach()
+        for row in rows[6:]:
+            row["depth"] = 30  # Native camera follows at a constant offset.
+        failures, run = missile_checks(rows, 30, 38)
+        self.assertEqual(failures, [])
+        self.assertGreaterEqual(run, 30)
+        for row in rows:
+            row["position"] = [0, 0, 0]
+        self.assertEqual(missile_checks(rows, 30, 38)[1], 0)
 
     def test_trim_to_first_impact_cannot_pass(self):
         rows = self.approach()
@@ -64,6 +104,7 @@ class ContentTest(unittest.TestCase):
         rows = self.approach()
         for r in rows:
             r["depth"] = 200-r["depth"]
+            r["forward"] = [0, 0, -1]
         failures, run = missile_checks(rows, 30, 38)
         self.assertEqual(run, 0)
         self.assertTrue(any("behind" in x for x in failures))
