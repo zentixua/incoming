@@ -1,0 +1,8 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_half_depth",
+    "samplers": [
+        { "name": "Sampler1" }
+    ],
+    "uniforms": []
+}

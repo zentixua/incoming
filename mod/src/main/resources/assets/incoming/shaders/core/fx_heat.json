@@ -447,6 +447,14 @@
                 0.0,
                 0.0
             ]
+        },
+        {
+            "name": "HeatReach",
+            "type": "float",
+            "count": 1,
+            "values": [
+                1000000000.0
+            ]
         }
     ]
 }

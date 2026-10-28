@@ -153,6 +153,13 @@ public final class FxLayer {
             Incoming.LOG.error("Effects bloom shaders failed to load: fire, flashes and rocket flames without bloom", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_half_depth"), DefaultVertexFormat.POSITION), s -> HalfPass.depthShader = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_half_composite"), DefaultVertexFormat.POSITION), s -> HalfPass.composite = s);
+        } catch (IOException ex) {
+            HalfPass.depthShader = HalfPass.composite = null;
+            Incoming.LOG.error("Half-resolution smoke shaders failed to load: smoke at full resolution", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
         } catch (IOException ex) {
             SmokePass.fill = null;
@@ -250,7 +257,12 @@ public final class FxLayer {
         // факелы снарядов кадра — свет на мир (в глаз — со следующего кадра)
         FarRenderer.heat(heat, air);
         heat.done();
-        boolean hot = HeatPass.needed(heat);
+        FarDraw.view(e, view.camera(), VIEW);
+        // only where a source's light or shift reaches the screen (HeatArea); none in view — no pass
+        boolean hot = HeatPass.needed(heat, VIEW, e.getProjectionMatrix());
+        // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра): while any source lights the world, on
+        // screen or not, so turning toward a fire finds its shadows ready
+        HeatPass.solids(heat, level, view.camera());
         if (warmup) {
             // невидимый квадрат: ни света, ни заслона — кадр проходит весь путь до первого настоящего, с пробой источника
             // перед глазом (проба считается, квадрат её берёт)
@@ -273,7 +285,6 @@ public final class FxLayer {
         LayerTimes.mark(LayerTimes.Pass.MODELS);
         int scene = SceneDepth.update(e.getProjectionMatrix());
         LayerTimes.mark(LayerTimes.Pass.DEPTH);
-        FarDraw.view(e, view.camera(), VIEW);
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
         // кадр слива стоит ещё одни квадраты и простои: во время слоя он не идёт
@@ -293,8 +304,6 @@ public final class FxLayer {
             // свет на мир и дрожание — по кадру с пеленой, до квадратов: дым и огонь слоя ложатся поверх
             if (hot && scene >= 0) {
                 int timedHeat = HEAT.begin();
-                // заслоны у глаза — к тени прямого света (блоки мира, а не глубина кадра)
-                HeatPass.solids(heat, level, view.camera());
                 HeatPass.draw(heat, scene, VIEW, e.getProjectionMatrix(), FOG.haze(view.range(), HAZE), view.pixel());
                 HEAT.end(timedHeat);
             }
@@ -346,7 +355,9 @@ public final class FxLayer {
             RenderSystem.enableDepthTest();
             RenderSystem.disableCull();
             s.safeGetUniform("FxGlowPass").set(0f, 1f);
-            QUADS.draw();
+            // soft smoke with no detail finer than two pixels at half resolution, the rest in order at full (HalfPass)
+            if (QUADS.prepare()) HalfPass.draw(QUADS, s, scene, VIEW_PROJECTION, GlStateManager.Viewport.width(), GlStateManager.Viewport.height());
+            s.safeGetUniform("FxGlowPass").set(0f, 1f);
             LayerTimes.mark(LayerTimes.Pass.QUADS);
             if (drained) LayerTimes.parts(QUADS, s);
             LayerTimes.mark(LayerTimes.Pass.PROBE);
@@ -402,7 +413,7 @@ public final class FxLayer {
         return String.format(Locale.ROOT, "quads %d, %.3f ms (longest in the second %.3f; without GC %.3f, CPU %.3f; frames with GC %d), "
                 + "GPU %.3f ms (longest %.3f, %d frames; heat pass %.3f, longest %.3f, %d frames — %s; %s), depth: %s; %s", lastQuads, lastMean, lastMax,
                 lastClean, Math.max(0, lastCleanCpu), lastCollected, GPU.lastMean, GPU.lastMax, GPU.lastFrames, HEAT.lastMean, HEAT.lastMax,
-                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe());
+                HEAT.lastFrames, HeatPass.describe(), FxBloom.describe(), SceneDepth.describe(), LayerTimes.describe() + "; " + HalfPass.describe());
     }
 
     /** F3: время слоя на видеокарте по проходам и частям (пока F3 открыт, проба идёт). */

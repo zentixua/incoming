@@ -459,10 +459,13 @@ public final class FxQuads {
         }
     }
 
-    /** Отсортировать и нарисовать текущим шейдером; память кадра остаётся для следующего. */
-    void draw() {
+    /**
+     * Sort the frame's quads far to near and upload them for {@link #drawRange} (and the glow pass, {@link #drawGlow});
+     * the frame's memory stays for the next frame. false — nothing to draw.
+     */
+    boolean prepare() {
         glowFrom = n;
-        if (n == 0) return;
+        if (n == 0) return false;
         int[] order = sort.sort(keys, n);
         drawn = order;
         glowFrom = glowStart(order);
@@ -471,11 +474,162 @@ public final class FxQuads {
         ByteBufferBuilder.Result result = out.build();
         if (result == null) {
             glowFrom = n;
-            return;
+            return false;
         }
-        BufferUploader.drawWithShader(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS,
-                VertexFormat.IndexType.least(n * 4))));
+        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        vb.upload(new MeshData(result, new MeshData.DrawState(FORMAT, n * 4, n * 6, VertexFormat.Mode.QUADS, VertexFormat.IndexType.least(n * 4))));
+        return true;
     }
+
+    /**
+     * Sorted quads from..to (after {@link #prepare}) with shader s and the current state: at half resolution
+     * ({@link HalfPass}) when {@code halfDepth} is that pass's world distance texture (≥ 0), otherwise as the layer;
+     * {@code split} — 0 whole quads, 1 only where they lie behind their tile's last full-resolution quad, 2 only in front
+     * (tile cut texture {@code cut}, tiles of {@code tile} frame pixels).
+     */
+    /** Texture unit of the half-resolution tile cuts in the layer program (12 named samplers take 0–11; 13, 14 are PallOpen, smoke grid). */
+    static final int CUT_UNIT = 12;
+    /** Texture unit of the quads' clip rectangles ({@code HalfRect}, vertex shader). */
+    static final int RECT_UNIT = 15;
+
+    void drawRange(net.minecraft.client.renderer.ShaderInstance s, int from, int to, int halfDepth, int split, int cut, int tile) {
+        drawRange(s, from, to, halfDepth, split, cut, tile, -1, 0);
+    }
+
+    /** Same; {@code rect} ≥ 0 — clip each quad to its rectangle from that texture ({@code HalfRect}), rows from {@code row}. */
+    void drawRange(net.minecraft.client.renderer.ShaderInstance s, int from, int to, int halfDepth, int split, int cut, int tile, int rect, int row) {
+        if (to <= from) return;
+        passBegin(s, halfDepth, split, cut, tile, rect, row);
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (to - from) * 6, type.asGLType, (long) from * 6 * type.bytes);
+        passEnd(s, rect, tile);
+    }
+
+    /** Bind the uploaded quads and shader s for a pass of {@link #drawRange} (arguments as there). */
+    void passBegin(net.minecraft.client.renderer.ShaderInstance s, int halfDepth, int split, int cut, int tile, int rect, int row) {
+        com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
+        vb.bind();
+        s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
+                com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        boolean half = halfDepth >= 0;
+        if (half) s.setSampler("Sampler1", halfDepth);
+        // a half-resolution pixel spans two frame pixels: frame-space lookups (world distance, pall, tiles) scale by it
+        s.safeGetUniform("FxGlowPass").set(0f, half ? 2f : 1f);
+        s.safeGetUniform("FxHalf").set(half ? 1f : 0f);
+        s.safeGetUniform("FxHalfSplit").set(split, 0f, tile, 0f);
+        s.safeGetUniform("FxHalfClip").set(rect >= 0 ? 1f : 0f, row, 0f, 0f);
+        s.apply();
+        if (rect >= 0) {
+            int unit = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
+            com.mojang.blaze3d.platform.GlStateManager._activeTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0 + RECT_UNIT);
+            org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, rect);
+            com.mojang.blaze3d.platform.GlStateManager._activeTexture(unit);
+            com.mojang.blaze3d.shaders.Uniform.uploadInteger(com.mojang.blaze3d.shaders.Uniform.glGetUniformLocation(s.getId(), "HalfRect"), RECT_UNIT);
+            for (int i = 0; i < 4; i++) org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL30.GL_CLIP_DISTANCE0 + i);
+        }
+        if (split > 0) {
+            // tile cuts on their own unit, the unit into the program on every bind (Veil recompiles programs; OpenAir.bind)
+            int unit = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
+            com.mojang.blaze3d.platform.GlStateManager._activeTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0 + CUT_UNIT);
+            org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, cut);
+            com.mojang.blaze3d.platform.GlStateManager._activeTexture(unit);
+            com.mojang.blaze3d.shaders.Uniform.uploadInteger(com.mojang.blaze3d.shaders.Uniform.glGetUniformLocation(s.getId(), "HalfCut"), CUT_UNIT);
+        }
+    }
+
+    /** After a pass of {@link #passBegin}: the layer's ordinary state. */
+    void passEnd(net.minecraft.client.renderer.ShaderInstance s, int rect, int tile) {
+        s.clear();
+        if (rect >= 0) for (int i = 0; i < 4; i++) org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL30.GL_CLIP_DISTANCE0 + i);
+        s.safeGetUniform("FxGlowPass").set(0f, 1f);
+        s.safeGetUniform("FxHalf").set(0f);
+        s.safeGetUniform("FxHalfSplit").set(0f, 0f, tile, 0f);
+        s.safeGetUniform("FxHalfClip").set(0f, 0f, 0f, 0f);
+    }
+
+    /** Runs of each part in the uploaded order ({@link #runs}). */
+    int[][] partRuns() {
+        return runs(parts, drawn, n);
+    }
+
+    /** Sorted runs r (pairs start, length) of the uploaded quads in one call. */
+    static void multiDraw(int[] r) {
+        int count = r.length / 2;
+        if (count == 0) return;
+        VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
+        java.nio.IntBuffer lengths = MemoryUtil.memAllocInt(count);
+        org.lwjgl.PointerBuffer starts = MemoryUtil.memAllocPointer(count);
+        try {
+            for (int i = 0; i < count; i++) {
+                lengths.put(r[2 * i + 1] * 6);
+                starts.put((long) r[2 * i] * 6 * type.bytes);
+            }
+            org.lwjgl.opengl.GL14.glMultiDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, lengths.flip(), type.asGLType, starts.flip());
+        } finally {
+            MemoryUtil.memFree(lengths);
+            MemoryUtil.memFree(starts);
+        }
+    }
+
+    /**
+     * Screen of sorted quads (after {@link #prepare}) in a w×h frame: viewProjection maps their eye-relative vertices to
+     * clip space. Per sorted place k: {@code half[k]} — a club or veil quad at least {@code wide} pixels across along
+     * both edges on screen;
+     * {@code tiles[4k..4k+3]} — tiles of {@code tile} pixels it covers (x0, y0, x1, y1 inclusive; x0 > x1 off screen).
+     * A quad reaching behind the eye covers the whole frame.
+     */
+    void screen(org.joml.Matrix4fc viewProjection, int w, int h, int tile, double wide, boolean[] half, int[] tiles) {
+        int tx = (w + tile - 1) / tile - 1, ty = (h + tile - 1) / tile - 1;
+        org.joml.Vector4f c = SCREEN;
+        float[] px = SCREEN_X, py = SCREEN_Y;
+        for (int k = 0; k < n; k++) {
+            int i = drawn[k];
+            long q = stage + (long) i * QUAD;
+            boolean behind = false;
+            float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+            for (int j = 0; j < 4; j++) {
+                long p = q + (long) j * VERTEX;
+                viewProjection.transform(c.set(MemoryUtil.memGetFloat(p), MemoryUtil.memGetFloat(p + 4), MemoryUtil.memGetFloat(p + 8), 1));
+                if (!(c.w > 1e-5f)) {
+                    behind = true;
+                    continue;
+                }
+                px[j] = (c.x / c.w + 1) * 0.5f * w;
+                py[j] = (c.y / c.w + 1) * 0.5f * h;
+                x0 = Math.min(x0, px[j]);
+                y0 = Math.min(y0, py[j]);
+                x1 = Math.max(x1, px[j]);
+                y1 = Math.max(y1, py[j]);
+            }
+            int o = 4 * k;
+            if (behind) {
+                tiles[o] = 0;
+                tiles[o + 1] = 0;
+                tiles[o + 2] = tx;
+                tiles[o + 3] = ty;
+            } else {
+                tiles[o] = Math.max(0, (int) Math.floor(x0 / tile));
+                tiles[o + 1] = Math.max(0, (int) Math.floor(y0 / tile));
+                tiles[o + 2] = Math.min(tx, (int) Math.floor(x1 / tile));
+                tiles[o + 3] = Math.min(ty, (int) Math.floor(y1 / tile));
+                if (x1 < 0 || y1 < 0 || x0 >= w || y0 >= h) tiles[o] = tx + 1;
+            }
+            int part = parts[i];
+            // clubs, the eye veil and glare in the eye (pure light with alpha 0, a smooth halo by formula; sorted by its
+            // source's distance, it would otherwise cut every tile it covers — night glare covers most of the frame)
+            boolean soft = part == Part.CLUBS.ordinal() || part == Part.VEIL.ordinal() || part == Part.GLARE.ordinal();
+            if (soft && !behind) {
+                // both quad edges wide enough on screen: a lying club seen edge-on is a few pixels thin and would break
+                // into half-resolution steps
+                soft = Math.min(Math.hypot(px[1] - px[0], py[1] - py[0]), Math.hypot(px[2] - px[1], py[2] - py[1])) >= wide;
+            }
+            half[k] = soft;
+        }
+    }
+
+    private static final org.joml.Vector4f SCREEN = new org.joml.Vector4f();
+    private static final float[] SCREEN_X = new float[4], SCREEN_Y = new float[4];
 
     /**
      * Начало прохода свечения в порядке order (от дальних): первый квадрат не дальше {@link #glowReach}. В проход идёт
@@ -519,6 +673,8 @@ public final class FxQuads {
      * её цена в кадре (порядок смешивания между частями цены не меняет). Слив и метки до и после — {@code clock}.
      */
     void drawParts(net.minecraft.client.renderer.ShaderInstance s, LayerTimes.PartClock clock) {
+        // the frame split smoke at half resolution: each part as the frame drew it
+        if (HalfPass.drawParts(this, s, clock)) return;
         int[][] runs = runs(parts, drawn, n);
         com.mojang.blaze3d.vertex.VertexBuffer vb = FORMAT.getImmediateDrawVertexBuffer();
         vb.bind();
@@ -568,6 +724,16 @@ public final class FxQuads {
             runs[p][at[p]++] = i - from;
         }
         return runs;
+    }
+
+    /** Sort key (distance) of quad i in writing order (checks). */
+    public float key(int i) {
+        return keys[i];
+    }
+
+    /** Quad written at index i of the sorted place k (after {@link #prepare}). */
+    int sortedIndex(int k) {
+        return drawn[k];
     }
 
     /** Часть квадрата i в порядке записи (проверки). */

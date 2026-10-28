@@ -176,21 +176,23 @@ public final class FarSprites implements SmokePuffs.Out {
     /**
      * Veil of cloud material near the eye ({@link SmokePuffs.Veil}): a full-screen grid at one depth, with opacity,
      * color (optical depth along its ray) and terrain softness (material location along the ray) at each vertex,
-     * interpolated linearly; empty cells are not drawn. Cells blend at the material's depth, not the nearby grid's depth:
-     * otherwise the veil from distant budget entries erased the lighting and texture of puffs in front of them.
+     * interpolated linearly; empty cells are not drawn. The mesh blends at the material's depth, not the nearby grid's
+     * depth (otherwise the veil from distant budget entries erased the lighting and texture of puffs in front of them),
+     * one depth for all its cells ({@link SmokePuffs.Veil#depth}).
      */
     @Override
     public void veil(SmokePuffs.Veil veil, int light) {
         FxAtlas.Sprite w = FxAtlas.white();
         float u = (w.u0() + w.u1()) / 2, v = (w.v0() + w.v1()) / 2;
         int n = SmokePuffs.Veil.N;
+        float depth = veil.depth();
         FxQuads.Part was = out.part(FxQuads.Part.VEIL);
         for (int j = 0; j + 1 < n; j++) {
             for (int i = 0; i + 1 < n; i++) {
                 int a = SmokePuffs.Veil.index(i, j), b = SmokePuffs.Veil.index(i + 1, j), c = SmokePuffs.Veil.index(i + 1, j + 1),
                         d = SmokePuffs.Veil.index(i, j + 1);
                 if (Math.max(Math.max(veil.alpha(a), veil.alpha(b)), Math.max(veil.alpha(c), veil.alpha(d))) < 0.002f) continue;
-                out.quad(veil.depth(i, j));
+                out.quad(depth);
                 veilCorner(veil, i, j, a, u, v, light);
                 veilCorner(veil, i, j + 1, d, u, v, light);
                 veilCorner(veil, i + 1, j + 1, c, u, v, light);

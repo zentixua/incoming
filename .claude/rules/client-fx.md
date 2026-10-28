@@ -25,6 +25,36 @@ paths:
   своими отрезками сортировки одним `glMultiDrawElements`, время и пиксели (GL_SAMPLES_PASSED) по отдельности; кадр перед
   частями копируется и потом возвращается, на экране тот же кадр. Часть квадрату даёт тот, кто его пишет
   (`FxQuads.part`, прежняя — назад: `LayerPartsTest`); новый рисунок в слое — со своей частью, иначе он «прочее».
+  With half-resolution smoke (`HalfPass`) each part draws as the frame drew it: its quads behind their tiles' cuts in the
+  frame, the rest into the target and laid; target samples count four frame pixels in the part's screens.
+- Soft smoke at half resolution — `fx/layer/HalfPass` (off-screen particles, GPU Gems 3 ch. 23; the low-resolution
+  translucency of Unreal/Unity). Club cost is the fragment count: 0.73–0.80 ms per screen of fill at 2560×1600 (RTX 4060
+  laptop, sandbox raid of 40, drain frame), of which raster and blending of the quad area ~0.2 ms per screen even with a
+  constant shader (the overdraw is local: tens of layers in a cloud's middle), the six-way light maps and powers ~0.2,
+  places and alpha the rest; a club-only program saved 7 % (not register pressure). Clubs, veil cells and glare in the
+  eye (pure light, alpha 0, a smooth halo; sorted by its source's distance, night glare would cut most tiles) at least
+  `HalfPass.WIDE` (24 px) across both edges draw into an RGBA16F half target (light premultiplied, alpha transmittance:
+  blend ONE, 1−a / ZERO, 1−a), laid once onto the frame (`fx_half_composite`, ONE, SRC_ALPHA) with depth-aware upsampling:
+  a checkerboard min/max half-resolution world distance (`fx_half_depth`) gives every 2×2 sample neighbourhood both sides of
+  a silhouette, a pixel takes bilinear where the four samples lie at its depth (10 %) and the nearest-depth sample where
+  they straddle an edge — smoke stays sharp in front of and behind a roof edge. Thinner quads (a lying dust club
+  edge-on, a few pixels thin) stay at full resolution: in half they broke into steps and holes. Clubs are mostly drawn
+  smaller than their 128-pixel frames, so the frame's finest octave was already filtered; 1:1 crops show the same
+  billows. The target has no hardware depth: smoke behind the world is hidden by the world distance (`FxHalf`: soft edge,
+  or a hard test at softness 0), outputs clamp to 0..1 as in the 8-bit frame (a NaN in the float target drew black
+  blocks). Order: per tile (64 px) the cut is the sorted place of its last full-resolution quad (fire, glare, particles,
+  a thin club); on that tile a soft quad behind the cut draws in the frame in order, one in front of it into the target —
+  each tile gets its full-resolution quads in order and the half smoke on top, the layer's order exactly (fire inside
+  smoke: smoke behind it full, in front of it half). The target is laid right after the last soft quad; nearer quads
+  (glare and veil of bright sources in the eye, particles at the camera) draw over it in order and set no cuts: night
+  glare covers most of the frame, and with the lay at the end 370 of 6100 clubs went half in the night raid of 40. A quad over tiles on both sides draws in both passes, each fragment
+  by its tile (`HalfCut`, `quadPlace` = gl_VertexID / 4) and the quad clipped (`gl_ClipDistance`) to the bounding
+  rectangle of its tiles on that side (`HalfRect`, per quad and pass); upsampling mixes only samples of tiles with the same
+  cut. Two draw calls per frame plus one lay: laying the target before each fire in smoke (35–56 lays in the raid) cost
+  ~30–40 µs each (the lay waits for the target), deciding whole quads chained nearly every club behind some fire to full
+  resolution, and a draw call per run (hundreds, each a full `apply`) starved the GPU. `HalfPassTest` composes random
+  tile scenes against the layer's order. Sandbox raid 40, 2560×1600: clubs 0.26–0.34 ms per screen, quads pass
+  5.7–6.7 → 3.0 ms (edge, 45 s), 4.8 → 1.9 ms (60 s).
 - Свои частицы (`client/fx/particle`) — не ванильный движок, а свой пул (`FxPool`) и свой слой после мира
   (`fx/layer/FxLayer`): у ванильного в слое одна очередь без сортировки (кто родился позже — тот поверх: дым пусковой
   в 10 блоках ложится за столбы попаданий в сотнях блоков), переполненная очередь молча вытесняет старые облака, а дальняя
@@ -810,10 +840,14 @@ paths:
   разбросу по толще, `sightMoments`, усечённый гаусс; у густого — ближе к началу): дом перед далёким облаком в вуали в
   него не тонет, а в густом дыме вокруг глаза стена в нескольких метрах уже почти скрыта (⚠ линейный спуск —
   approximation of the optical depth in front of the scene; formerly veil hid everything beyond 2 blocks).
-  The mesh remains near the eye, but each cell blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted
-  mean of four corners). In the projection-matched CPU trace, the old 2 m key put veil matter at 96–109 m over textured
-  clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a transmittance-only test misses it.
-  `VeilDepthTest` checks ordering between near/far clumps and retains dense eye-local matter's old order.
+  The mesh remains near the eye, but it blends at its matter's half-opacity depth (`Veil.depth`, alpha-weighted mean
+  over all nodes), one key for every cell. In the projection-matched CPU trace, the old 2 m key put veil matter at
+  96–109 m over textured clumps starting at 16–17 m, erasing their detail. Reordering preserves T, so a
+  transmittance-only test misses it. A key per cell (mean of its four corners) put neighbouring cells on opposite sides
+  of a club between their depths: the lighter veil lay over the club in one cell and under it in the next — hard
+  screen-aligned rectangles and steps in smoke, 0.1 of the frame diagonal per cell (RECT, 27.10: 51/255 in RGB at equal
+  transmittance). `VeilDepthTest` checks one key for all cells, ordering between near/far clumps and dense eye-local
+  matter's old order.
   A Gaussian enters the veil while the eye is within its edge, by the fraction its quads do not show
   — середина сбоку, позади или у самого глаза (`SmokePuffs.front`: квадрат лицом к камере весь на глубине середины и тает у
   ближней плоскости, как в `fx.fsh`), а
@@ -1099,7 +1133,16 @@ paths:
   не пикселя (`resolve`: подача, пиксель при поле 70° — 4 минуты; в бинокль — пиксель): прежнее δn·√(L/ℓ) в пикселях
   давало 0,01–0,1 px — дрожания «не было нигде» (FX 23.10). Узор — октавы шума от ℓ, газ несёт его потоком по карте (два
   слоя со сдвигом в полцикла `HeatClock`: время в float с узором, сдвинутым по месту, рвало бы струю на зерно). Копии —
-  `haze*` в `fx_heat.fsh` (`HazeGlslTest`), видимость — `HazeTest`. Прохода нет без источников. Ядерка там же (`client/nuclear/NukeHeat`): фронт ударной
+  `haze*` в `fx_heat.fsh` (`HazeGlslTest`), видимость — `HazeTest`. The pass runs only where it can change a pixel
+  (`HeatArea`): a ball or a jet reaches a sphere where its light (L·r²/d², a jet q·length/D² from its axis) still moves a
+  display channel by half an 8-bit step at the most sensitive pixel — the one equal to the face's open-sky light, the
+  darkest face shade and channel (`relit` adds light × albedo; brighter pixels move less) — hot gas and a conventional
+  front their own volume; the pass, its frame copy and its shadow rays run in the screen rectangles of those spheres
+  (merged when the union costs no more), shifts clamp to `SHIFT_REACH` (32 px; shimmer is sub-pixel, conventional fronts
+  at most 3 px) and the copy covers that margin; a nuclear front takes the whole screen. No rectangle on screen — no
+  pass: a pool fire 3 km away, nothing lit on screen, cost the full-screen pass 0.94 ms at 2560×1600 (F3, 3.9.1).
+  `HeatAreaTest`: no pixel below the threshold changes (relit replica on every 8-bit value), every visibly lit pixel of
+  random balls and jets lies inside, off-screen and faint sources draw nothing. Ядерка там же (`client/nuclear/NukeHeat`): фронт ударной
   волны — до двух сфер (`HeatPass.Frame.front`), скачок показателя по давлению модели на четырёх высотах сферы
   (Ренкин–Гюгонио, Гладстон–Дейл), путь сквозь тонкую оболочку — функция Доусона, отклонение — среднее по ширине
   пикселя там, где луч пересёк фронт (у касательной производная пути бесконечна: без среднего по пикселю кольцо шло бы

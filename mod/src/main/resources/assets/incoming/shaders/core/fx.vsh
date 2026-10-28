@@ -25,6 +25,13 @@ in vec3 Normal;
 in float Emit;
 // x: 1 — проход свечения (FxBloom); y — во сколько раз пиксель прохода крупнее пикселя кадра
 uniform vec2 FxGlowPass;
+// Half-resolution split (HalfPass): x — 1 clips each quad to its rectangle for this pass (an empty one drops it), HalfRect
+// texel (quad % 1024, quad / 1024 + y) — NDC x0, y0, x1, y1; quad = vertex / 4, the sorted place. HalfRect is on its own
+// texture unit (bound by the layer: the 12 named samplers are taken)
+uniform vec4 FxHalfClip;
+uniform sampler2D HalfRect;
+// sorted place of the quad (fx.fsh: which side of its tile's cut)
+flat out float quadPlace;
 
 uniform sampler2D Sampler2;
 // свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
@@ -132,6 +139,18 @@ float pall(vec3 p) {
 void main() {
     vec4 view = ModelViewMat * vec4(Position, 1.0);
     gl_Position = ProjMat * view;
+    vec4 clip = vec4(1.0);
+    int quad = gl_VertexID / 4;
+    quadPlace = float(quad);
+    if (FxHalfClip.x > 0.5) {
+        vec4 r = texelFetch(HalfRect, ivec2(quad % 1024, quad / 1024 + int(FxHalfClip.y)), 0);
+        clip = vec4(gl_Position.x - r.x * gl_Position.w, r.z * gl_Position.w - gl_Position.x, gl_Position.y - r.y * gl_Position.w,
+                r.w * gl_Position.w - gl_Position.y);
+    }
+    gl_ClipDistance[0] = clip.x;
+    gl_ClipDistance[1] = clip.y;
+    gl_ClipDistance[2] = clip.z;
+    gl_ClipDistance[3] = clip.w;
     texCoord0 = UV0;
     float unfold = max(float(UV1.y) / 32767.0, 1e-4);
     bool six = Normal.y < -0.1 && Normal.y > -0.4;
