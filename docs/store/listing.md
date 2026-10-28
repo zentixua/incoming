@@ -11,7 +11,7 @@ title and summary in English.
 
 - Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
 - CurseForge **Markdown editor**: [curseforge.md](curseforge.md), then [curseforge.ru.md](curseforge.ru.md).
-  These exports use absolute media/link URLs and a static JPEG poster; no HTML or animated WebP is required.
+  These exports use absolute media/link URLs. A small logo and tagline lead into the introduction; feature images sit between bullet groups. The logo uses an HTML image size.
 - Summaries: [English](summary.md), [Russian](summary.ru.md). `modrinth.json.description` matches the English file.
   Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
 - Edit both description languages and their CurseForge exports together.
@@ -57,40 +57,43 @@ Incoming's DH damage updates need DH where the world runs, including a dedicated
 
 Roxy's [0.4.1 version](https://modrinth.com/mod/roxy/version/VnJRhuAn) specifies Sodium 0.8.12 for NeoForge 1.21.1,
 Forgified Fabric API 0.116.14+2.3.0 for 1.21.1, and the Voxy jar above as required dependencies of **Roxy**. They are not
-required dependencies of Incoming. The [README](../../README.md#compatibility) links those exact files and explains
+required dependencies of Incoming. The [compatibility guide](../guide/compatibility.md) links those exact files and explains
 LSS, DH and shader limits. This list is not a claim that every combination has been tested.
 
 The optional upload list in `.github/workflows/publish.yml` uses these same seven integrations. Platform entries
 without a verified alias are explicitly skipped, rather than guessing a project or making a dependency mandatory.
-Sound Physics Remastered, Iris and Flashback are additional supported integrations described in the README; the
+Sound Physics Remastered, Iris and Flashback are additional supported integrations described in the compatibility guide; the
 upload list records the terrain/recipe/craft integrations above.
 
 ## Media
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
-The default first screen uses `docs/media/still-2.jpg` (about 188 KiB), rather than loading the 6 MiB animation.
-The original `docs/media/hero.webp` remains available by clicking the README poster. `docs/guide/img/remote.gif`
-is an existing GIF demonstration of console controls; a GIF conversion of the large hero loop is unnecessary for
-the static first screen. There is no verified finished trailer URL to embed.
+The first screen uses the existing logo (`docs/media/icon.png`) at 128×128, a tagline and a three-sentence introduction.
+The feature list has three illustrations: console controls, the existing strike animation and a nuclear blast.
+Extra weapon screenshots are in the Gallery. PR #518 remains open, so no new footage is claimed.
+There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
-| `docs/guide/img/remote.gif` | Strike Designator console: weapon, salvo and target |
-| `docs/guide/img/map.gif` | Targeting map and flight route |
-| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 in flight |
-| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet on its launcher |
-| `docs/guide/img/weapon-grad.jpg` | Grad rocket launcher |
-| `docs/guide/img/sam.webp` | SAM and radar during a drone raid |
-| `docs/guide/img/launcher.webp` | Fixed cruise missile launcher |
-| `docs/guide/img/nuke-wave.jpg` | Fireball and blast wave over a city |
-| `docs/guide/img/nuke-ruins.jpg` | Ruins and fires after a nuclear strike |
+| `docs/media/still-5.jpg` | Missiles over the factory (featured) |
+| `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
+| `docs/guide/img/map.gif` | Pick a target and plot the approach |
+| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
+| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
+| `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
+| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
+| `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
+| `docs/guide/img/nuke-wave.jpg` | The nuclear blast wave reaches the city |
+| `docs/guide/img/nuke-ruins.jpg` | The city after a nuclear strike |
+| `docs/media/still-2.jpg` | Cruise missile over the city |
+| `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
+| `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
 
 These are existing game captures, not a fresh visual check of the current jar. Before public submission, replace
-changed effect/interface captures after the active effect and camera work has settled. For CurseForge, use static
-JPEG/PNG images in the description and preview gallery animations separately. Check both language sections, image
+changed effect/interface captures after the active effect and camera work has settled. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 
 ## Authorized publishing workflow
