@@ -229,6 +229,7 @@ for game weeks. Dying or leaving the world brings your hearing back. Then the bl
 forests and towns around you: every slope that faces both the burst and you sends it back, later the farther it is. Animals around
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from
-the wave. The town keeps burning until morning: the fires roar from where they burn, as loud as the heat of what is
+the wave. Mobs in places no player was near at the time get the same burns, radiation and blast injuries when the
+area loads, and their radiation sickness counts from the burst. The town keeps burning until morning: the fires roar from where they burn, as loud as the heat of what is
 burning, so the roar grows over the first minutes as the firestorm builds and dies down with it; you also hear wind pulled
 into the fire near them, ruins collapsing nearby, and now and then an explosion in the burning blocks.

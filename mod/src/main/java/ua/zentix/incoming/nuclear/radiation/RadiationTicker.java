@@ -61,9 +61,17 @@ public final class RadiationTicker {
 
     /** Dose, Gy: prompt burst radiation or fallout. A mob with dose from 1 Gy gets sick (effect drives the course). */
     public static void addDose(LivingEntity e, float gy) {
+        addDose(e, gy, e.level().getGameTime());
+    }
+
+    /**
+     * Dose received at game time {@code at}, Gy: a body loaded after the detonation received its dose then, so its sickness
+     * stages run from then ({@code LateExposure}).
+     */
+    public static void addDose(LivingEntity e, float gy, long at) {
         RadiationDose r = dose(e);
         float total = r.doseGy() + gy;
-        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : e.level().getGameTime(), r.rate()));
+        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : Math.min(at, e.level().getGameTime()), r.rate()));
         if (!(e instanceof Player) && total >= 1 && !e.hasEffect(ModEffects.RADIATION_SICKNESS)) {
             e.addEffect(new MobEffectInstance(ModEffects.RADIATION_SICKNESS, MobEffectInstance.INFINITE_DURATION, 0, true, false, false));
         }

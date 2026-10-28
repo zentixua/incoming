@@ -47,6 +47,11 @@ final class PulseJob {
         return d;
     }
 
+    /** Whether the body list is taken: a body loaded from now on is not in it ({@link LateExposure}). */
+    boolean listed() {
+        return targets != null;
+    }
+
     /**
      * Living entities within thermal/radiation range and players within retinal burn range: players first (retinal scar
      * from gaze as close as possible to flash time, also used by the client's afterimage), then nearest entities.

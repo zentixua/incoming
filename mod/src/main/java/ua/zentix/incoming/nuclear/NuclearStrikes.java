@@ -234,6 +234,13 @@ public final class NuclearStrikes {
         }
     }
 
+    /** Living entity enters a level: what detonations did at its place while it was not in memory ({@code LateExposure}). */
+    public static void onEntityJoin(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent e) {
+        if (e.getLevel() instanceof ServerLevel level && e.getEntity() instanceof net.minecraft.world.entity.LivingEntity living) {
+            NuclearWorld.get(level).onEntityJoin(level, living, e.loadedFromDisk());
+        }
+    }
+
     public static void onChunkUnload(ChunkEvent.Unload e) {
         if (e.getLevel() instanceof ServerLevel level && e.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk chunk) {
             NuclearWorld.get(level).onChunkUnload(level, chunk);

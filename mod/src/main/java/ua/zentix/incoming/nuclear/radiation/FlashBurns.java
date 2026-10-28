@@ -64,6 +64,11 @@ public final class FlashBurns {
 
     /** Burns from fluence {@code q} cal/cm² at the eyes of an entity seeing the ball. */
     public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
+        burn(level, d, e, q, owner, true);
+    }
+
+    /** Same; {@code ignite} false — clothes do not catch fire (a body loaded long after the flash, {@code LateExposure}). */
+    public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner, boolean ignite) {
         if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || underWater(level, e)
                 || e.hasEffect(MobEffects.FIRE_RESISTANCE) || q < BurnInjury.lowest(d.yieldKt())) return;
         if (e instanceof Player victim && owner instanceof Player attacker && !victim.canHarmPlayer(attacker)) return;
@@ -83,7 +88,7 @@ public final class FlashBurns {
             if (cover == Cover.SKIN) skin += area;
             else if (BurnInjury.ignites(cover, q, d.yieldKt())) fire = Math.max(fire, cover == Cover.THIN ? THIN_FIRE_S : HEAVY_FIRE_S);
         }
-        if (fire > 0) e.igniteForSeconds(fire);
+        if (fire > 0 && ignite) e.igniteForSeconds(fire);
         int degree = BurnInjury.degree(q, d.yieldKt(), z);
         if (degree == 0 || skin <= 0 || e.getType().is(EntityTypeTags.UNDEAD)) return;
         MobEffectInstance had = e.getEffect(ModEffects.BURNS);

@@ -48,6 +48,7 @@ import ua.zentix.incoming.nuclear.world.RuinPlan;
 import ua.zentix.incoming.nuclear.world.RuinPlanner;
 import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
+import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.nuclear.world.RuinWorkers;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
@@ -1848,6 +1849,9 @@ public final class NuclearGameTests {
     public static void starvedFalloutPassKeepsFullDose(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Cow grazing = h.spawn(EntityType.COW, CENTER.west(3));
+        // accounted for up to a period ago, not since the detonation: a first round of 2000 ticks kills the cow before the second
+        // (game time starts near 0 here; an account is never negative)
+        grazing.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withFallout(Math.max(0, level.getGameTime() - MobFallout.PERIOD)));
         for (int i = 0; i < 2 * MobFallout.PERIOD + 100; i++) h.spawn(EntityType.SHEEP, CENTER.offset(-20 + i % 41, 0, 5 + i / 41));
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
@@ -1865,13 +1869,15 @@ public final class NuclearGameTests {
             last[0] = dose;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(gains.size() >= 2, "rounds with dose: " + gains.size());
+            h.assertTrue(gains.size() >= 2, "rounds with dose: " + gains.size() + (grazing.isAlive() ? "" : ", the cow died at " + RadiationTicker.dose(grazing).doseGy() + " Gy"));
             for (int i = 1; i < gains.size(); i++) {
                 long t = gains.get(i)[0], ticks = t - gains.get(i - 1)[0];
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "traversal shorter than two periods: " + ticks + " tick - check for nothing");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
-                double expected = d.falloutRate(grazing.getX(), grazing.getZ(), t - d.gameTime())
-                        * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R * ticks / 1000.0;
+                // the rate decays over a starved pass: its tick-by-tick sum, not the end rate times the pass
+                double roentgens = 0;
+                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRate(grazing.getX(), grazing.getZ(), k - d.gameTime()) / 1000.0;
+                double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }
         });

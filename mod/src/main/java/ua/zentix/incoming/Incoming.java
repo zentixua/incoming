@@ -129,6 +129,7 @@ public final class Incoming {
 
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkUnload);
+        NeoForge.EVENT_BUS.addListener(NuclearStrikes::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onChunkSent);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.flash.FlashSync::onChunkSent);
         // The block has changed even if someone canceled neighbor notification.
