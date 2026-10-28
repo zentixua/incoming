@@ -1,6 +1,6 @@
 # Incoming
 
-<img src="docs/media/icon.png" alt="Incoming" width="128" height="128">
+![Cruise missiles strike a factory in Project Zearth](docs/media/hero.webp)
 
 Air strikes and air defense for Minecraft 1.21.1.
 
@@ -14,7 +14,7 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 - **Explosions and aftermath:** fireballs light up nearby terrain, blasts break blocks and shatter windows, and dust and smoke rise and drift with the wind. Strikes can start fires; leftover fuel burns in the crater.
 - **Blackout:** strike a transformer substation to cut electric lights in its district.
 
-![Cruise missiles strike a factory in Project Zearth](docs/media/hero.webp)
+![Cruise missiles strike a factory](docs/media/still-5.jpg)
 
 ### Nuclear strikes
 
