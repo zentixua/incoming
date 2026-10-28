@@ -219,9 +219,6 @@ public final class Film {
     }
 
     private void onStage(RenderLevelStageEvent e) {
-        // The queue starts with F1 active; its first frames can render before the next client tick.
-        // Apply the requested GUI state on every export frame, including those initial frames.
-        if (current != null && Export.exporting()) mc.options.hideGui = !current.c.gui();
         if (log != null) log.onStage(e);
     }
 
@@ -400,6 +397,8 @@ public final class Film {
             case EXPORTING -> {
                 if (current.c.player() != null) watch();
                 if (Export.exporting()) {
+                    // Player GUI in frame: export window starts only without it; restore afterward
+                    if (current.c.gui()) mc.options.hideGui = false;
                     return;
                 }
                 if (!Export.jobs().isEmpty()) {

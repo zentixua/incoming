@@ -29,9 +29,11 @@ Required shots:
   contains the full sequence. Check foreground objects against the pre-strike view, not just the effect.
 - The targeting map must agree with current world data. No unexplained destruction seams or stale tiles.
   Do not accept cropping or replacing the site as a fix for a confirmed mod defect; identify the separate report.
-- Ordinary F2 screenshots for stills; native Flashback camera keyframes/export for motion. No screenshot-sequence
+- Stills from the exported clip at their actual phase, or ordinary F2; native Flashback editor keyframes and
+  Export UI for motion. No film tool, generated cameras, key-injection/timer scripts, screenshot-sequence
   animation, retouched explosions, synthesized frames, private capture/render helper or modified mod physics.
-  Complementary Unbound, 1920×1080 originals; guide UI visible when needed. Check the actual flash layer: F1
+  The player's usual pack/settings in a separate copy, Complementary Unbound, 1920×1080 originals; guide UI
+  visible when needed. Check the actual flash layer: F1
   suppresses Incoming's GUI-based flash as well as the HUD. Native export GUI controls must preserve the effect.
 - Accurate English and Russian captions and working references in README, guide and store drafts. A caption
   cannot repair missing visual content. No store publication or release before Artem approves the new frames.

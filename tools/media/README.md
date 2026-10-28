@@ -1,8 +1,10 @@
 # Page-media content checks
 
-Capture real gameplay using a normal multiplayer client and Flashback. Use Flashback's camera keyframes and
-native exporter for motion, and ordinary F2 for screenshots. The checks in this directory inspect capture data;
-they do not create or alter game effects, operate a server, or replace Flashback's renderer.
+Capture real gameplay using a normal multiplayer client and the player's usual pack/settings in a separate copy.
+Use the Flashback editor's own camera keyframes and Export UI. Stills may come from the exported clip at the correct
+frame, or ordinary F2. Do not drive capture with the film tool, generated cameras, key-injection scripts or timed
+F2 scripts. The offline checks in this directory inspect capture data; they do not create or alter game effects,
+operate a server, or replace Flashback's renderer.
 
 Before recording, inspect the complete view from the planned camera, including the sky and foreground. Record
 the unmodified site, a normal launch, and the whole event. For a nuclear sequence, record several minutes after
@@ -44,9 +46,11 @@ encoding), `qa` (native `qa.jsonl`), `plan`, `shot`, `events` (replayscan `event
   frame at wave arrival. The approximate front-arrival calculation is a diagnostic; review the actual dust wave.
   A shorter page excerpt may name `full_sequence` (the `file` of an earlier entry). That full sequence must pass
   for the same event; the excerpt still has to contain the flash, visible rise and wave. Label excerpts accurately.
-- Optional `stills` entries name `file`, `source_f2`, exact `tick`, `tick_proof` and `phase` (`flash`, `rising-cap`
-  or `wave` for a nuclear shot). Save proof of the paused replay tick. Both the original F2 and delivered still
-  must match that native frame; wall-clock timings are insufficient. Retain full 1920×1080 originals.
+- Optional `stills` entries name `file`, `export_frame` (the original export's zero-based frame index) and `phase`
+  (`flash`, `rising-cap` or `wave` for a nuclear shot). Extract the full 1920×1080 frame from that export. The
+  checker derives its tick from the frame map and compares its pixels; no wall-clock estimate is needed.
+  For an ordinary F2 instead, supply `source_f2`, exact `tick` and `tick_proof`. Both the original F2 and delivered
+  still must match that native frame; wall-clock timings are insufficient. Retain full 1920×1080 originals.
   `tick_proof` is JSON with `paused: true`, measured `tick`, `f2_sha256`, and `state_source` pointing to the raw
   paused-state log or screenshot. The reviewer must inspect that source, not just the transcribed fields.
 

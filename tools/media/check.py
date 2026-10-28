@@ -260,6 +260,12 @@ def audit(manifest, base):
         if count < 1 or len(rows) != count:
             raise ValueError(f"{asset['file']}: missing frame/tick mapping")
         ticks = [r["t"] for r in rows]
+        for still in asset.get("stills", []):
+            if "export_frame" in still:
+                index = still["export_frame"]
+                if not isinstance(index, int) or not first <= index < first+count:
+                    raise ValueError(f"{still['file']}: selected native frame is outside this export interval")
+                still["tick"] = qa[index]["t"]
         fps = asset["fps"]
         if not 30 <= fps <= 60 or any(abs((b-a) - 20/fps) > .005 for a, b in zip(ticks, ticks[1:])):
             failures.append("Native frame times are missing, discontinuous or outside 30–60 fps")
@@ -302,7 +308,7 @@ def audit(manifest, base):
             for still in asset.get("stills", []):
                 if still.get("tick") is not None and abs(still["tick"]-ticks[index]) <= 10/fps + .001:
                     from PIL import Image
-                    source = np.asarray(Image.open(base / still["source_f2"]).convert("RGB").resize((image.shape[1], image.shape[0]))).astype(float)
+                    source = np.asarray(Image.open(base / still.get("source_f2", still["file"])).convert("RGB").resize((image.shape[1], image.shape[0]))).astype(float)
                     error = float(np.abs(source-image.astype(float)).mean())
                     still_matches[still["file"]] = min(still_matches.get(still["file"], math.inf), error)
             if shapes:
@@ -344,6 +350,22 @@ def audit(manifest, base):
             raise ValueError("Unknown content kind")
         for still in asset.get("stills", []):
             tick = still.get("tick")
+            if "export_frame" in still:
+                from PIL import Image
+                with Image.open(base / still["file"]) as delivered:
+                    if delivered.size != (1920, 1080):
+                        failures.append(f"{still['file']}: retain the full 1920x1080 exported frame")
+                if still_matches.get(still["file"], math.inf) > 10:
+                    failures.append(f"{still['file']}: image does not match its stated native export frame")
+                selected = frames[still["export_frame"]-first]
+                if asset["kind"] == "nuclear-sequence":
+                    if not phase_ok(still["phase"], (tick-asset["event_tick"])/20, phases["pulse_s"], phases["rollup_s"], phases["wave_s"]):
+                        failures.append(f"{still['file']}: selected native frame is outside captioned phase")
+                    if still["phase"] == "flash" and selected["bright_fraction"] < .5:
+                        failures.append(f"{still['file']}: selected frame does not show a frame-wide flash")
+                    if still["phase"] == "rising-cap" and not selected.get("cap_visible"):
+                        failures.append(f"{still['file']}: selected frame does not contain the visible cap")
+                continue
             proof = still.get("tick_proof")
             if tick is None or not proof or not (base / proof).is_file():
                 failures.append(f"{still['file']}: exact paused replay tick is not evidenced")
