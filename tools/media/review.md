@@ -30,7 +30,7 @@ Required shots:
 - The targeting map must agree with current world data. No unexplained destruction seams or stale tiles.
   Do not accept cropping or replacing the site as a fix for a confirmed mod defect; identify the separate report.
 - Stills from the exported clip at their actual phase, or ordinary F2; native Flashback editor keyframes and
-  Export UI for motion. No film tool, generated cameras, key-injection/timer scripts, screenshot-sequence
+  Export UI for motion. No film tool, generated cameras, scripted shot sequences/timers, screenshot-sequence
   animation, retouched explosions, synthesized frames, private capture/render helper or modified mod physics.
   The player's usual pack/settings in a separate copy, Complementary Unbound, 1920×1080 originals; guide UI
   visible when needed. Check the actual flash layer: F1

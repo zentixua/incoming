@@ -1,9 +1,9 @@
 # Page-media content checks
 
 Capture real gameplay using a normal multiplayer client and the player's usual pack/settings in a separate copy.
-Use the Flashback editor's own camera keyframes and Export UI. Stills may come from the exported clip at the correct
-frame, or ordinary F2. Do not drive capture with the film tool, generated cameras, key-injection scripts or timed
-F2 scripts. The offline checks in this directory inspect capture data; they do not create or alter game effects,
+Use the Flashback editor's own camera keyframes and Export UI, with ordinary mouse and keyboard actions. Stills
+may come from the exported clip at the correct frame, or ordinary F2. Do not drive capture with the film tool,
+generated cameras, scripted shot sequences or timed F2 scripts. The offline checks in this directory inspect capture data; they do not create or alter game effects,
 operate a server, or replace Flashback's renderer.
 
 Before recording, inspect the complete view from the planned camera, including the sky and foreground. Record
