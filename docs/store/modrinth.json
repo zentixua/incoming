@@ -56,6 +56,18 @@
     {
       "file": "docs/guide/img/nuke-ruins.jpg",
       "title": "The city after a nuclear strike"
+    },
+    {
+      "file": "docs/media/still-2.jpg",
+      "title": "Cruise missile over the city"
+    },
+    {
+      "file": "docs/guide/img/weapon-b2.jpg",
+      "title": "B-2 in flight"
+    },
+    {
+      "file": "docs/guide/img/weapon-icbm.jpg",
+      "title": "ICBM in flight"
     }
   ]
 }

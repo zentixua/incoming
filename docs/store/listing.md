@@ -11,7 +11,7 @@ title and summary in English.
 
 - Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
 - CurseForge **Markdown editor**: [curseforge.md](curseforge.md), then [curseforge.ru.md](curseforge.ru.md).
-  These exports use absolute media/link URLs and lead with an animation. No HTML is required.
+  These exports use absolute media/link URLs. A small logo and tagline lead into the introduction; feature images sit between bullet groups. The logo uses an HTML image size.
 - Summaries: [English](summary.md), [Russian](summary.ru.md). `modrinth.json.description` matches the English file.
   Use the Russian summary only where an additional localized field is available; do not replace the main English summary.
 - Edit both description languages and their CurseForge exports together.
@@ -68,9 +68,10 @@ upload list records the terrain/recipe/craft integrations above.
 ## Media
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
-The first screen embeds `docs/media/hero.webp`. `MEDIA-RR2-HERO` marks its replacement slot for PR #518.
-That PR was still open when these pages were rewritten; the existing captures remain in place, with no new footage claimed.
-Use a short gameplay GIF or video here when the media work is ready. There is no verified finished trailer URL to embed.
+The first screen uses the existing logo (`docs/media/icon.png`) at 128×128, a tagline and a three-sentence introduction.
+The feature list has three illustrations: console controls, the existing strike animation and a nuclear blast.
+Extra weapon screenshots are in the Gallery. PR #518 remains open, so no new footage is claimed.
+There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
 
@@ -86,10 +87,13 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 | `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
 | `docs/guide/img/nuke-wave.jpg` | The nuclear blast wave reaches the city |
 | `docs/guide/img/nuke-ruins.jpg` | The city after a nuclear strike |
+| `docs/media/still-2.jpg` | Cruise missile over the city |
+| `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
+| `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
 
 These are existing game captures, not a fresh visual check of the current jar. Before public submission, replace
 changed effect/interface captures after the active effect and camera work has settled. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
-a GIF for the hero slot. Preview gallery animations separately. Check both language sections, image
+a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 
 ## Authorized publishing workflow
