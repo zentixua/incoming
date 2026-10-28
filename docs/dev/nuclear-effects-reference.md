@@ -4,7 +4,7 @@ Detailed presentation, timing and damage reference moved from the player guide.
 Distances assume full nuclear radii. Player instructions: [nuclear strike](../guide/nuke.md).
 
 
-![Blast-wave dust and flying debris over Project Zearth](../guide/img/nuke.jpg)
+![Flash of a 5 kt airburst over Project Zearth at night](../guide/img/nuke.jpg)
 
 Everyone within 20 km of the target hears a siren in advance. Then come the flash, the fireball and the mushroom cloud.
 The view is exposed the way a camera filming the burst would be. At the flash it turns white; within a quarter of a
@@ -96,7 +96,7 @@ minute or so and wanders across them. From about the sixth minute the fires die 
 are out, together with the smoke. A server with nuclear fires turned off (`nuclear.fires`) has no firestorm and no smoke
 haze over the town. Ash and scraps of burnt paper fall around you.
 
-![Fireball and blast wave over a town](../guide/img/nuke-wave.jpg)
+![Blast-wave dust approaches after a 5 kt airburst at night](../guide/img/nuke-wave.jpg)
 
 ### Damage and distant terrain reference
 
@@ -112,7 +112,7 @@ About 80 seconds after the burst, black rain starts to fall from the smoke of th
 town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
 it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
-![Ruined city beneath the dust pall after a 15 kt airburst](../guide/img/nuke-ruins.jpg)
+![The rising cloud after a 5 kt airburst at night](../guide/img/nuke-cloud.jpg)
 
 The land around the burst is scorched. The light does its part within the flash itself, about a second at 15 kt, before
 the blast wave comes: it burns grass, flowers and crops in patches, leaves black char where it was strongest, melts

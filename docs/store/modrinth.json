@@ -23,11 +23,11 @@
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "Fireball and blast wave of a 15 kt airburst"
+      "title": "Blast-wave dust approaches after a 5 kt airburst at night"
     },
     {
-      "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "Ruined city in the dust after a 15 kt airburst"
+      "file": "docs/guide/img/nuke-cloud.jpg",
+      "title": "The rising cloud after a 5 kt airburst at night"
     },
     {
       "file": "docs/guide/img/sam.webp",
@@ -59,7 +59,7 @@
     },
     {
       "file": "docs/guide/img/launcher.webp",
-      "title": "A cruise missile on a fixed launcher"
+      "title": "Cruise missiles launch from an airport runway"
     },
     {
       "file": "docs/guide/img/remote.gif",
@@ -67,7 +67,7 @@
     },
     {
       "file": "docs/guide/img/map.png",
-      "title": "Targeting map along the coast"
+      "title": "Targeting map of the city before the strike"
     }
   ]
 }

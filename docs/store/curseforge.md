@@ -19,9 +19,9 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 Flash, blast wave, mushroom cloud, fires and ruins. Ground bursts leave a crater and fallout downwind.
 Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operator-only by default.
 
-![Fireball and blast wave of a 15 kt airburst over Project Zearth](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
+![A 5 kt airburst at night over Project Zearth: flash, rising cloud and blast wave](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke.webp)
 
-![Ruined city in the dust after a 15 kt airburst](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-ruins.jpg)
+![The rising cloud after a 5 kt airburst at night](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
 
 ### Weapons
 
