@@ -1,7 +1,7 @@
 """Regression cases for the content failures missed in PR #518; no game/GPU needed."""
 import unittest
 
-from check import longest_run, missile_checks, native_boundary, nuclear_checks, phase_ok, project, proof_matches, timing_ok
+from check import longest_run, missile_checks, native_boundary, nuclear_checks, phase_ok, project, projected_box, proof_matches, timing_ok
 
 
 class ContentTest(unittest.TestCase):
@@ -35,6 +35,15 @@ class ContentTest(unittest.TestCase):
         self.assertEqual(project([0, 0, -5], [0, 0, 0, 0, 0], 60, 800, 450)[2], -5)
         self.assertEqual(project([0, 0, 5], [0, 0, 0, 0, 0], 60, 800, 450), (400, 225, 5))
         self.assertLess(project([0, 2, 5], [0, 0, 0, 0, 0], 60, 800, 450)[1], 225)
+
+    def test_near_cap_edge_can_be_cropped_while_axis_top_fits(self):
+        camera = [0, 0, 0, 0, -30]
+        axis_top = project([0, 10, 10], camera, 60, 800, 450)
+        self.assertGreater(axis_top[1], 0)
+        bounds = projected_box([0, 8, 10], 5, 6, 10, camera, 60, 800, 450)
+        self.assertLess(bounds[1], 0)
+        wide = projected_box([0, 8, 10], 5, 6, 10, camera, 100, 800, 450)
+        self.assertTrue(0 < wide[0] < wide[2] < 800 and 0 < wide[1] < wide[3] < 450)
 
     def approach(self, n=62):
         return [dict(tick=i*2/3, depth=i*2-10, target_distance=200-i*2, known=True,

@@ -58,6 +58,18 @@ def longest_run(values):
     return best
 
 
+def projected_box(center, radius, bottom, top, camera, fov, width, height):
+    """Conservative cap bounds: the near edge can project above its top on the central axis."""
+    points = [project([x, y, z], camera, fov, width, height)
+              for x in (center[0]-radius, center[0]+radius)
+              for y in (bottom, top)
+              for z in (center[2]-radius, center[2]+radius)]
+    if any(p[2] <= 0 for p in points):
+        return None
+    return (min(p[0] for p in points), min(p[1] for p in points),
+            max(p[0] for p in points), max(p[1] for p in points))
+
+
 def timing_ok(seconds, fps):
     """An unchanged frame may last longer, but a video must retain the native export clock."""
     return bool(seconds) and all(abs((b-a)-1/fps) <= .002 for a, b in zip(seconds, seconds[1:]))
@@ -327,11 +339,14 @@ def audit(manifest, base):
                 cam = rows[index]["cam"]
                 center = [float(s[k]) for k in ("x", "y", "z")]
                 x, y, depth = project(center, cam, rows[index]["fov"], output_width, image.shape[0])
-                top = project([center[0], float(s["top_y"]), center[2]], cam, rows[index]["fov"], output_width, image.shape[0])
-                bottom = project([center[0], float(s["bottom_y"]), center[2]], cam, rows[index]["fov"], output_width, image.shape[0])
+                bounds = projected_box(center, float(s["radius"]), float(s["bottom_y"]), float(s["top_y"]),
+                                       cam, rows[index]["fov"], output_width, image.shape[0])
                 radius = float(s["radius"]) * image.shape[0] / (2 * math.tan(math.radians(rows[index]["fov"]) / 2) * max(depth, .01))
-                fits = depth > 0 and x-radius > 0 and x+radius < output_width and top[1] is not None and bottom[1] is not None and 0 < top[1] < bottom[1] < image.shape[0]
-                f.update(cap_visible=bool(fits and radius >= 6 and patch_contrast(image, x, y, radius*.35) >= 10), cap_world_y=float(s["top_y"]))
+                fits = bounds is not None and 0 < bounds[0] < bounds[2] < output_width and 0 < bounds[1] < bounds[3] < image.shape[0]
+                # Compare the cap-sized patch with its surroundings, not two patches inside the same cloud.
+                contrast = patch_contrast(image, x, y, radius) if depth > 0 else 0
+                f.update(cap_visible=bool(fits and radius >= 6 and contrast >= 10), cap_world_y=float(s["top_y"]),
+                         cap_bounds=bounds, cap_contrast=contrast)
                 ground = project([float(s["ground_x"]), float(s["ground_y"]), float(s["ground_z"])], cam, rows[index]["fov"], output_width, image.shape[0])
                 f["ground_in_frame"] = ground[0] is not None and 0 < ground[0] < output_width and 0 < ground[1] < image.shape[0]
             if asset["kind"] == "factory-approach":
