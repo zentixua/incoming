@@ -9,12 +9,15 @@ import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.registry.ModBlocks;
+import ua.zentix.incoming.registry.ModDataMaps;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.warhead.GroundMaterial;
+import ua.zentix.incoming.warhead.MaterialPath;
 import ua.zentix.incoming.warhead.SurfaceBlocks;
 import ua.zentix.incoming.warhead.SurfaceDamage;
 
@@ -194,12 +197,37 @@ public final class CraterJob {
         if (mode == Mode.DIG) {
             BlockState surface = level.getBlockState(m.setY(ground - 1));
             if (surface.getBlock().defaultDestroyTime() < 0 || surface.getExplosionResistance(level, m, excavation) >= BLAST_PROOF) return;
-            if (relief < 0 && SurfaceBlocks.cohesive(surface)) {
-                // Cohesive material cannot lose a metre of collision shape for a 0.2 m excavation. Remove only full
-                // metres; retain and mark the fractional last block. Loose soil keeps the unbiased grain sampling.
-                double dug = -relief, full = Math.floor(dug);
-                BlockPos bottom = new BlockPos(x, ground - (int) full - 1, z);
-                if (dug > full) { damagedPos = bottom; damagedDepth = dug - full; }
+            if (relief < 0) {
+                // Consume represented material depth layer by layer. Geometry and the saved remainder stay
+                // in block units, including a thin element buried under loose ground. A loose top consumes
+                // the same one random draw and uses the same rounding direction as the original soil law.
+                double left = -relief;
+                double rounding = SurfaceBlocks.cohesive(surface) ? Double.NaN : random.nextDouble();
+                int full = 0;
+                for (int y = ground - 1; y >= level.getMinBuildHeight() && left > 1e-9; y--) {
+                    BlockState layer = level.getBlockState(m.setY(y));
+                    if (layer.isAir() || !layer.getFluidState().isEmpty()
+                            || layer.getBlock().defaultDestroyTime() < 0
+                            || layer.getExplosionResistance(level, m, excavation) >= BLAST_PROOF) break;
+                    boolean cohesive = SurfaceBlocks.cohesive(layer);
+                    // Loose soil is bulk column volume; cohesive shapes contribute their actual chord.
+                    double occupied = cohesive ? MaterialPath.inside(layer.getCollisionShape(level, m), m,
+                            new Vec3(x + 0.5, y + 1, z + 0.5), new Vec3(0, -1, 0), 1) : 1;
+                    if (!(occupied > 0)) break;
+                    double thickness = occupied * ModDataMaps.Penetrability.of(layer).thickness();
+                    if (left + 1e-9 >= thickness) {
+                        left -= thickness;
+                        full++;
+                    } else {
+                        if (cohesive) {
+                            damagedPos = m.immutable();
+                            damagedDepth = left / thickness;
+                        } else if ((Double.isNaN(rounding) ? random.nextDouble() : rounding) >= 1 - left / thickness) {
+                            full++;
+                        }
+                        break;
+                    }
+                }
                 relief = -full;
             } else if (relief > 0 && SurfaceBlocks.cohesive(surface)) {
                 // A fractional ejecta rim is rubble, not a randomly added whole metre on intact paving.
@@ -233,7 +261,7 @@ public final class CraterJob {
                 if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rimStates.get(random.nextInt(rimStates.size())));
             }
         }
-        // Full metres above the residual surface have now gone; its chips must not be hidden by those old blocks.
+        // Full blocks above the residual surface have now gone; its chips must not be hidden by those old blocks.
         if (damagedPos != null) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
     }
 

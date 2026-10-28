@@ -31,7 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Sub-block excavation in cohesive material: retain its collision shape and save the damaged depth with the chunk. */
+/** Sub-block excavation: saved depth is the damaged fraction of the block, after conversion from material metres. */
 public final class SurfaceDamage {
     public record Mark(BlockPos pos, BlockState state, double depth, List<UUID> rubble) {
         public Mark(BlockPos pos, BlockState state, double depth) { this(pos, state, depth, List.of()); }

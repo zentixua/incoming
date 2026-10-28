@@ -68,7 +68,7 @@ public final class BombGameTests {
         for (Case c : cases) column(h, c.top, 29, c.state);
         for (Case c : cases) {
             BunkerBusterEntity.Path path = down(h, c.top, c.v);
-            double expect = Penetration.depth(mop, c.s, c.v);
+            double expect = Penetration.depth(mop, c.s, c.v) / ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(c.state).thickness();
             h.assertTrue(path.end() == BunkerBusterEntity.Path.End.REST, c.name + ": bomb did not come to rest — " + path.end());
             h.assertTrue(Math.abs(path.length() - expect) < 1e-6, c.name + ": path " + m(path.length()) + ", according to Young " + m(expect));
         }
@@ -81,7 +81,8 @@ public final class BombGameTests {
         column(h, slab.below(), 28, Blocks.DIRT.defaultBlockState());
         column(h, slab, 1, Blocks.GRAY_CONCRETE.defaultBlockState());
         Penetration.Run run = new Penetration.Run(mop, 100);
-        double expect = run.through(Penetration.Kind.CONCRETE, 0.84, 1);
+        double concreteThickness = ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(Blocks.GRAY_CONCRETE.defaultBlockState()).thickness();
+        double expect = run.through(Penetration.Kind.CONCRETE, 0.84, concreteThickness) / concreteThickness;
         for (int i = 0; i < 28 && !run.stopped(); i++) expect += run.through(Penetration.Kind.SOIL, 12, 1);
         double under = down(h, slab, 100).length();
         h.assertTrue(Math.abs(under - expect) < 1e-6, "slab and earth: path " + m(under) + ", waited " + m(expect));

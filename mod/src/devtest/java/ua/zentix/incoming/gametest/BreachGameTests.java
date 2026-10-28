@@ -74,7 +74,7 @@ public final class BreachGameTests {
         double tnt = weapon.spec().charge();
         BreachModel.Material material = ModDataMaps.Penetrability.of(block).breaching();
         h.assertTrue(material != null, "the block does not have a breach group: " + block);
-        double r = material.radius(tnt, BreachModel.UNTAMPED);
+        double r = material.radius(tnt, BreachModel.UNTAMPED) / ModDataMaps.Penetrability.of(block).thickness();
         h.assertTrue(breaks == r > thickness, String.format(Locale.ROOT, "check empty: R %.2f m, plate %d m", r, thickness));
         Vec3 at = weapon == WeaponType.MISSILE ? Vec3.atBottomCenterOf(top.above()) : Vec3.atCenterOf(top);
         // package support - before the explosion: the package leaves before the rays
@@ -145,19 +145,22 @@ public final class BreachGameTests {
         slab(h, WeaponType.DRONE, 1, true);
     }
 
-    /** Shahed (50 kg): a meter of boards is broken above the void (R wood ~1,8 m) - roof: support in a package - slab. */
+    /** A full plank block depicts boarding, not a solid metre of timber. */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_drone_planks", skyAccess = true)
-    public static void droneBreachesMetreOfPlanks(GameTestHelper h) {
+    public static void droneBreachesBoardedRoof(GameTestHelper h) {
         slab(h, WeaponType.DRONE, Blocks.OAK_PLANKS.defaultBlockState(), 1, true, false);
     }
 
-    /**
-     * “Grad” (6,4 kg): a meter of boards above the void holds (R wood ~0,9 m) - the support in the package is not a slab (review of the front F: client
-     *  measured the thickness from the point of explosion, and not from the edge, and showed a gap that the server did not make).
-     */
+    /** Grad breaches a boarded roof; its client support reports the same opening. */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_rocket_planks", skyAccess = true)
-    public static void rocketDoesNotBreachMetreOfPlanks(GameTestHelper h) {
-        slab(h, WeaponType.ROCKET, Blocks.OAK_PLANKS.defaultBlockState(), 1, false, false);
+    public static void rocketBreachesBoardedRoof(GameTestHelper h) {
+        slab(h, WeaponType.ROCKET, Blocks.OAK_PLANKS.defaultBlockState(), 1, true, false);
+    }
+
+    /** Three brick layers represent 1.14 m: still thicker than Grad's 0.773 m breach radius. */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_rocket_thick", skyAccess = true)
+    public static void rocketCannotBreachThreeBrickLayers(GameTestHelper h) {
+        slab(h, WeaponType.ROCKET, Blocks.BRICKS.defaultBlockState(), 3, false, true);
     }
 
     /** Shahed: they hold two meters of stone. */
@@ -309,18 +312,18 @@ public final class BreachGameTests {
         oneDecision(h, "rocket under 45° along 2 m stone", Vec3.atBottomCenterOf(top.above()), axis, tnt, true);
     }
 
-    /** “Grad” (6,4 kg) per meter of boards, point - half a block in the roof: R boards 0,885 m - not pierced. */
+    /** Grad breaches represented boarding even when the aim point is half a block inside its geometry. */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
     public static void gradOnPlanksOneDecision(GameTestHelper h) {
         double tnt = WeaponType.ROCKET.spec().charge();
         h.assertTrue(BreachModel.Material.POOR.radius(tnt, BreachModel.UNTAMPED) < 1, "check is empty: “Grad” penetrates a meter of boards");
         roof(h, Blocks.OAK_PLANKS.defaultBlockState());
-        oneDecision(h, "\"Grad\" on the boards", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, tnt, false);
+        oneDecision(h, "\"Grad\" on the boards", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, tnt, true);
     }
 
     /**
      * Roof from lower half-blocks (review 1, B3): the client’s previous probe was not solid (the top is not a full face), there was no type of roof;
-     *  for breach, a block with a collision shape is an obstacle. Shahed - broken, "Grad" - not.
+     *  the half shape is counted once. Both Shahed and Grad breach the represented boarding.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
     public static void droneOnHalfSlabRoofOneDecision(GameTestHelper h) {
@@ -332,7 +335,15 @@ public final class BreachGameTests {
     @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
     public static void gradOnHalfSlabRoofOneDecision(GameTestHelper h) {
         roof(h, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
-        oneDecision(h, "\"Grad\" in half blocks", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, WeaponType.ROCKET.spec().charge(), false);
+        oneDecision(h, "\"Grad\" in half blocks", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN, WeaponType.ROCKET.spec().charge(), true);
+    }
+
+    /** Stone remains thickness 1: its half-block shape is 0.5 m, below Grad's 0.773 m breach radius. */
+    @GameTest(template = "range", timeoutTicks = 300, batch = "blast_breach_support", skyAccess = true)
+    public static void gradBreachesHalfMetreOfStone(GameTestHelper h) {
+        roof(h, Blocks.STONE_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        oneDecision(h, "Grad on a half metre of stone", Vec3.atCenterOf(h.absolutePos(TOP)), S2C.Blast.DOWN,
+                WeaponType.ROCKET.spec().charge(), true);
     }
 
     /** Obsidian (resistance 1200, review 1, B3 - STOP): the charge does not displace it - it is not pierced. */
