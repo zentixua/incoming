@@ -1,1 +1,1 @@
-Cinematic air strikes at real scale: blast damage, wind-driven smoke, and nuclear strikes from flash to ruins. Includes air defense.
+Aim with binoculars, call in drones, missiles or a bomber, and defend your base with a SAM. Includes nuclear strikes.
