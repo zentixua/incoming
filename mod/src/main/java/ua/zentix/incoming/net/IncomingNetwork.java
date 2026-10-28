@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "47";
+    public static final String PROTOCOL = "48";
 
     private IncomingNetwork() {}
 
@@ -54,8 +54,11 @@ public final class IncomingNetwork {
         r.playToServer(C2S.NuclearKey.TYPE, C2S.NuclearKey.CODEC, NuclearKeys::onKey);
         r.playToServer(C2S.LodMods.TYPE, C2S.LodMods.CODEC, ua.zentix.incoming.compat.VoxyLods::lodMods);
         r.playToServer(C2S.VoxyStale.TYPE, C2S.VoxyStale.CODEC, ua.zentix.incoming.compat.VoxyLods::stale);
+        r.playToServer(C2S.LodBatchReceived.TYPE, C2S.LodBatchReceived.CODEC, ua.zentix.incoming.compat.VoxyLods::batchReceived);
         // Decode sections and ingest into Voxy on network thread: game thread never waits (Voxy accepts any thread).
         event.registrar(PROTOCOL).executesOn(net.neoforged.neoforge.network.registration.HandlerThread.NETWORK)
-                .playToClient(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p));
+                .playToClient(S2C.LodBatchStart.TYPE, S2C.LodBatchStart.CODEC, (p, ctx) -> ClientHooks.get().lodBatchStart(p, ctx))
+                .playToClient(S2C.VoxyChunk.TYPE, S2C.VoxyChunk.CODEC, (p, ctx) -> ClientHooks.get().voxyChunk(p))
+                .playToClient(S2C.LodBatchFinished.TYPE, S2C.LodBatchFinished.CODEC, (p, ctx) -> ClientHooks.get().lodBatchFinished(p, ctx));
     }
 }

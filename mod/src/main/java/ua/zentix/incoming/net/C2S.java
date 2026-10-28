@@ -216,4 +216,13 @@ public final class C2S {
             return java.util.Arrays.hashCode(chunks);
         }
     }
+    /** Client-measured LOD receive/ingest rate, using vanilla ChunkBatchSizeCalculator. */
+    public record LodBatchReceived(int id, float desiredChunksPerTick) implements CustomPacketPayload {
+        public static final Type<LodBatchReceived> TYPE = new Type<>(Incoming.id("lod_batch_received"));
+        public static final StreamCodec<ByteBuf, LodBatchReceived> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, LodBatchReceived::id, ByteBufCodecs.FLOAT, LodBatchReceived::desiredChunksPerTick, LodBatchReceived::new);
+        @Override
+        public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
 }
