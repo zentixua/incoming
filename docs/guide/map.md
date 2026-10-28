@@ -5,7 +5,7 @@ English · [Русский](ru/map.md)
 The map strikes any place up to 10,000 blocks away: behind a hill, in the next town. Open it with `,` or from the
 console (target On map, then Open targeting map…).
 
-![Map: pick a place, set a route, fire, projectiles in flight](img/map.gif)
+![Targeting map over Project Zearth, with distant city terrain](img/map.gif)
 
 | Action | Key |
 |---|---|

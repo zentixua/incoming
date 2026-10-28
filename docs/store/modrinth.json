@@ -18,16 +18,16 @@
   "gallery": [
     {
       "file": "docs/media/still-5.jpg",
-      "title": "Missiles over the factory",
+      "title": "Cruise missiles strike a factory",
       "featured": true
     },
     {
       "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "The nuclear blast wave reaches the city"
+      "title": "Fireball and blast wave of a 15 kt airburst"
     },
     {
       "file": "docs/guide/img/nuke-ruins.jpg",
-      "title": "The city after a nuclear strike"
+      "title": "Ruined city in the dust after a 15 kt airburst"
     },
     {
       "file": "docs/guide/img/sam.webp",
@@ -39,7 +39,7 @@
     },
     {
       "file": "docs/media/still-2.jpg",
-      "title": "Cruise missile over the city"
+      "title": "Cruise missiles strike a factory in Project Zearth"
     },
     {
       "file": "docs/guide/img/weapon-lancet-launcher.jpg",
@@ -67,7 +67,7 @@
     },
     {
       "file": "docs/guide/img/map.gif",
-      "title": "Pick a target and plot the approach"
+      "title": "Targeting map with distant city terrain"
     }
   ]
 }

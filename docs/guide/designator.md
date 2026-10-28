@@ -48,7 +48,7 @@ dotted line. A frame stays on a moving player or mob and grows with it when you 
 than a few pixels. The projectile's number and time to impact are above its frame, the target's label below its frame,
 so text never covers what it marks, and it stays the same size at any zoom.
 
-![A salvo of Shaheds and missiles: the list in the top right and marks in the world](img/hud.webp)
+![A Shahed salvo: the flight list in the top right and marks in the world](img/hud.webp)
 
 ## Abort
 

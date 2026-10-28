@@ -69,30 +69,30 @@ upload list records the terrain/recipe/craft integrations above.
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the existing logo (`docs/media/icon.png`) at 128×128, a tagline and a three-sentence introduction.
-The feature list has three illustrations: console controls, the existing strike animation and a nuclear blast.
-Extra weapon screenshots are in the Gallery. PR #518 remains open, so no new footage is claimed.
+The feature list has three illustrations: console controls, the 3.10.0 factory-strike loop and a nuclear blast.
+The factory loop is 9 seconds and about 2.23 MiB; each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
 The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-5.jpg` | Missiles over the factory (featured) |
+| `docs/media/still-5.jpg` | Cruise missiles strike a factory (featured) |
 | `docs/guide/img/remote.gif` | Choose a weapon and set up a salvo |
-| `docs/guide/img/map.gif` | Pick a target and plot the approach |
+| `docs/guide/img/map.gif` | Targeting map with distant city terrain |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
 | `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet ready to launch |
 | `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
 | `docs/guide/img/sam.webp` | SAM defending against a drone raid |
 | `docs/guide/img/launcher.webp` | A cruise missile on a fixed launcher |
-| `docs/guide/img/nuke-wave.jpg` | The nuclear blast wave reaches the city |
-| `docs/guide/img/nuke-ruins.jpg` | The city after a nuclear strike |
-| `docs/media/still-2.jpg` | Cruise missile over the city |
+| `docs/guide/img/nuke-wave.jpg` | Fireball and blast wave of a 15 kt airburst |
+| `docs/guide/img/nuke-ruins.jpg` | Ruined city in the dust after a 15 kt airburst |
+| `docs/media/still-2.jpg` | Cruise missiles strike a factory in Project Zearth |
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
 | `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
 
-These are existing game captures, not a fresh visual check of the current jar. Before public submission, replace
-changed effect/interface captures after the active effect and camera work has settled. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
+The factory, nuclear and instructional effect captures were recorded with Incoming 3.10.0 on a copy of Project
+Zearth. Unchanged console, binocular, recipe and model images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
 a GIF for the strike feature image. Preview gallery animations separately. Check both language sections, image
 loading, tables and links in the actual Markdown editor; a local Markdown check cannot certify its preview.
 

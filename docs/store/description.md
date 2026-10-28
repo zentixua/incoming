@@ -1,6 +1,6 @@
 # Incoming
 
-![Cruise missiles strike a factory](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
+![Cruise missiles strike a factory in Project Zearth](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/hero.webp)
 
 Air strikes and air defense for Minecraft 1.21.1.
 
@@ -19,7 +19,7 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 Flash, blast wave, mushroom cloud, fires and ruins. Ground bursts leave a crater and fallout downwind.
 Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operator-only by default.
 
-![Nuclear fireball and blast wave over a city](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
+![Fireball and blast wave of a 15 kt airburst over Project Zearth](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-wave.jpg)
 
 ![Ruins and fires after a nuclear strike](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-ruins.jpg)
 

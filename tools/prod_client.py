@@ -8,6 +8,7 @@ Client runs inside nested KWin (tools/nested_kwin.sh). Instance, worlds and sett
 
   tools/prod_client.py <scenario> [--world "New World (7)"] [--dir mod/run/prod] [--prop incoming.frametimes=true]
   tools/prod_client.py --world "New World (7)" --quickplay [--without-incoming | --incoming-jar F] --seconds 180   (join, A/B, ready jar)
+  tools/prod_client.py --server host:port --incoming-jar F --user Dev --dir D   (join an existing multiplayer server)
   tools/prod_client.py commands --no-copy --dir mod/run/film/instance/minecraft --world greenfield-film \
       --prop "incoming.commands=dh pregen status;chunky"   (prepared copy without recopying: check mods with commands)
       incoming.commands separates entries by ";": commands without "/", wait:N adds N ticks, 0…72000 (to the 40-tick pause after a command and 20
@@ -167,6 +168,7 @@ def main():
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("scenario", nargs="?", help="script (incoming.scenario); without it the client simply goes to the menu or to --quickplay")
     ap.add_argument("--world", help="copy this player's world; with the script - open it")
+    ap.add_argument("--server", help="join an existing multiplayer server (host:port); no local world")
     ap.add_argument("--quickplay", action="store_true", help="immediately enter --world using the game (quickPlaySingleplayer)")
     ap.add_argument("--without-incoming", action="store_true", help="host modpack without Incoming (comparison A/B)")
     ap.add_argument("--incoming-jar", help="ready-made jar mod (build CI or release) instead of a test build; no scripts")
@@ -185,6 +187,10 @@ def main():
     a = ap.parse_args()
     if (a.without_incoming or a.incoming_jar) and a.scenario:
         ap.error("the scripts come from the test assembly Incoming: without it there is no script")
+    if a.server and (a.world or a.quickplay):
+        ap.error("--server cannot be combined with --world or --quickplay")
+    if a.server and a.scenario:
+        ap.error("--server cannot run scenarios that open local worlds")
     if a.quickplay and not a.world:
         ap.error("--quickplay needed --world")
     if a.copy_only and a.no_copy:
@@ -222,6 +228,8 @@ def main():
     game_extra = ["--width", width, "--height", height]
     if a.quickplay:
         game_extra += ["--quickPlaySingleplayer", world_name(a.world)]
+    if a.server:
+        game_extra += ["--quickPlayMultiplayer", a.server]
 
     java = os.path.join(os.environ.get("JAVA_HOME") or paths.JAVA, "bin", "java")
     argfile = os.path.join(dest, "launch.args")

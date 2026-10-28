@@ -26,4 +26,4 @@ The camera and radar captions follow your game language: `REC` marks the camera 
 The Lancet flies to the target and circles over it. Put the crosshair on a target below and press LMB: it dives at
 once. If you pick nothing, it dives by itself after about 25 seconds.
 
-![Lancet camera: LMB on a new target, dive, impact](img/loiter.webp)
+![Lancet camera: approach to the factory, dive and impact](img/loiter.webp)
