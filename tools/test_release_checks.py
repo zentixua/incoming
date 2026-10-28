@@ -145,7 +145,8 @@ class ReleaseTests(unittest.TestCase):
             env = {"MODRINTH_TOKEN": "test", "CURSEFORGE_TOKEN": token,
                    "CURSEFORGE_ID": "123" if project else "", "CURSEFORGE_API_KEY": key}
             with self.subTest(token=bool(token), project=bool(project), key=bool(key)):
-                for step in ("draft", "submit", "release"):
+                self.assertEqual((True, False), release_checks.store_config("draft", env))
+                for step in ("submit", "release"):
                     if project and not (token and key):
                         with self.assertRaises(ValueError):
                             release_checks.store_config(step, env)
