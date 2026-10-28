@@ -145,7 +145,8 @@ class ReleaseTests(unittest.TestCase):
             env = {"MODRINTH_TOKEN": "test", "CURSEFORGE_TOKEN": token,
                    "CURSEFORGE_ID": "123" if project else "", "CURSEFORGE_API_KEY": key}
             with self.subTest(token=bool(token), project=bool(project), key=bool(key)):
-                for step in ("draft", "submit", "release"):
+                self.assertEqual((True, False), release_checks.store_config("draft", env))
+                for step in ("submit", "release"):
                     if project and not (token and key):
                         with self.assertRaises(ValueError):
                             release_checks.store_config(step, env)
@@ -166,8 +167,12 @@ class ReleaseTests(unittest.TestCase):
                                         env=env, capture_output=True, text=True)
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertIn("Modrinth: configured", result.stdout)
-                self.assertIn("::warning::CurseForge is disabled", result.stdout)
-            self.assertEqual(3, summary.read_text().count("**Warning:** CurseForge is disabled"))
+                if step == "draft":
+                    self.assertIn("CurseForge is skipped in draft mode", result.stdout)
+                    self.assertNotIn("::warning::", result.stdout)
+                else:
+                    self.assertIn("::warning::CurseForge is disabled", result.stdout)
+            self.assertEqual(2, summary.read_text().count("**Warning:** CurseForge is disabled"))
 
     def test_semver_rejects_empty_or_leading_zero_identifiers(self):
         for version in ("3.8.1", "1.0.0-rc.1", "0.0.1+build.001"):
@@ -344,10 +349,11 @@ class ModrinthTests(unittest.TestCase):
                 thread.start()
                 env = os.environ | {"MODRINTH_TOKEN": "test", "MODRINTH_API": f"http://127.0.0.1:{server.server_port}",
                                     "STORE_JSON": str(root / "store.json"), "BODY_MD": str(root / "body.md"),
+                                    "BODY_RU_MD": "",
                                     "GITHUB_OUTPUT": str(root / "output"), "GITHUB_STEP_SUMMARY": str(root / "summary")}
                 try:
                     result = subprocess.run(["bash", str(ROOT / ".github/scripts/modrinth.sh"), "page", "draft", str(jar)],
-                                            env=env, capture_output=True, text=True, timeout=20)
+                                            env=env, cwd=root, capture_output=True, text=True, timeout=20)
                 finally:
                     server.shutdown()
                     thread.join()

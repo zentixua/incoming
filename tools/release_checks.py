@@ -60,14 +60,17 @@ def check_jar(path, version=None):
 
 def store_config(step, env=os.environ):
     modrinth = bool(env.get("MODRINTH_TOKEN"))
+    if step == "draft":
+        # The draft step only writes the private Modrinth page; CurseForge is never contacted.
+        if not modrinth:
+            raise ValueError("The draft step requires MODRINTH_TOKEN")
+        return True, False
     cf = [bool(env.get(key)) for key in ("CURSEFORGE_TOKEN", "CURSEFORGE_ID", "CURSEFORGE_API_KEY")]
     if cf[1] and not all(cf):
         raise ValueError("CurseForge is partially configured: set CURSEFORGE_TOKEN, CURSEFORGE_ID and "
                          "CURSEFORGE_API_KEY (read API key for duplicate checks), or unset CURSEFORGE_ID")
     if all(cf) and not re.fullmatch(r"[1-9][0-9]*", env["CURSEFORGE_ID"]):
         raise ValueError("CURSEFORGE_ID must be a positive numeric project ID")
-    if step == "draft" and not modrinth:
-        raise ValueError("The draft step requires MODRINTH_TOKEN")
     if not modrinth and not all(cf):
         raise ValueError("No store is configured")
     return modrinth, all(cf)
@@ -122,7 +125,9 @@ def main():
         modrinth, curseforge = store_config(args.step)
         for name, enabled in (("Modrinth", modrinth), ("CurseForge", curseforge)):
             print(f"{name}: {'configured' if enabled else 'disabled'}")
-        if not curseforge:
+        if args.step == "draft":
+            print("CurseForge is skipped in draft mode; only the private Modrinth page is updated.")
+        elif not curseforge:
             warning = "CurseForge is disabled: CURSEFORGE_ID is not set. Modrinth publishing can continue."
             print(f"::warning::{warning}")
             if os.environ.get("GITHUB_STEP_SUMMARY"):
