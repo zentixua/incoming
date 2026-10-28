@@ -24,7 +24,8 @@ import java.util.Arrays;
 
 /**
  * Soft smoke at half resolution (off-screen particles, GPU Gems 3 ch. 23; low-resolution translucency of Unreal and
- * Unity): the layer's clubs and eye veil at least {@link #WIDE} pixels across go into a half-resolution target, then onto
+ * Unity): the layer's clubs, eye veil and glare in the eye (a smooth halo of pure light) at least {@link #WIDE} pixels
+ * across go into a half-resolution target, then onto
  * the frame with depth-aware upsampling ({@code fx_half_composite}). Their cost is the number of fragments: 0.73–0.80 ms
  * per screen of fill at 2560×1600 (RTX 4060 laptop, sandbox raid of 40), of which raster and blending of the quad area
  * ~0.2 ms per screen even with a constant shader (the overdraw is local: tens of layers in the cloud's middle), the six-way

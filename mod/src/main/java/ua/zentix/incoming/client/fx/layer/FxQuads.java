@@ -616,7 +616,9 @@ public final class FxQuads {
                 if (x1 < 0 || y1 < 0 || x0 >= w || y0 >= h) tiles[o] = tx + 1;
             }
             int part = parts[i];
-            boolean soft = part == Part.CLUBS.ordinal() || part == Part.VEIL.ordinal();
+            // clubs, the eye veil and glare in the eye (pure light with alpha 0, a smooth halo by formula; sorted by its
+            // source's distance, it would otherwise cut every tile it covers — night glare covers most of the frame)
+            boolean soft = part == Part.CLUBS.ordinal() || part == Part.VEIL.ordinal() || part == Part.GLARE.ordinal();
             if (soft && !behind) {
                 // both quad edges wide enough on screen: a lying club seen edge-on is a few pixels thin and would break
                 // into half-resolution steps

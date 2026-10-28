@@ -31,7 +31,8 @@ paths:
   translucency of Unreal/Unity). Club cost is the fragment count: 0.73–0.80 ms per screen of fill at 2560×1600 (RTX 4060
   laptop, sandbox raid of 40, drain frame), of which raster and blending of the quad area ~0.2 ms per screen even with a
   constant shader (the overdraw is local: tens of layers in a cloud's middle), the six-way light maps and powers ~0.2,
-  places and alpha the rest; a club-only program saved 7 % (not register pressure). Clubs and veil cells at least
+  places and alpha the rest; a club-only program saved 7 % (not register pressure). Clubs, veil cells and glare in the
+  eye (pure light, alpha 0, a smooth halo; sorted by its source's distance, night glare would cut most tiles) at least
   `HalfPass.WIDE` (24 px) across both edges draw into an RGBA16F half target (light premultiplied, alpha transmittance:
   blend ONE, 1−a / ZERO, 1−a), laid once onto the frame (`fx_half_composite`, ONE, SRC_ALPHA) with depth-aware upsampling:
   a checkerboard min/max half-resolution world distance (`fx_half_depth`) gives every 2×2 sample neighbourhood both sides of

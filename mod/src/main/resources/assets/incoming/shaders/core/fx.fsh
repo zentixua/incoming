@@ -302,8 +302,9 @@ void main() {
         // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
         if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
-        // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance
-        else if (FxHalf > 0.5 && scene < viewDistance) discard;
+        // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance (glare
+        // in the eye has its probe instead, softness below zero, and is never cut by depth)
+        else if (FxHalf > 0.5 && softness == 0.0 && nearest < 0.25 && scene < viewDistance) discard;
         // проход свечения без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
         if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;
     }
