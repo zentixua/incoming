@@ -121,3 +121,9 @@ paths:
   `SCENARIO … depth:` (with frame share covered by LODs beyond render distance, showing whether DH built anything;
   it builds little in the cloud). NaN, infinite or behind-eye distance means sky (`fx_depth`, `pallScene`): near the
   far plane and with a foreign projection, LODs end up behind the eye or infinitely far away.
+
+- A loaded-chunk mark in `DhUpdates` must survive network backpressure and unloading. Use `Terrain.inMemory` for
+  lowered/pending-unload full chunks; otherwise keep the mark while at most four `FarLods.savedCopy` reads restore
+  saved sections through `DiskShots`. Pending saves are visible to chunk storage reads. Missing/non-final saved data
+  can be discarded; I/O failure retries without blocking. GameTest `voxy_saved_update` keeps an old copy at 48 MiB,
+  delays the fresh mark, then verifies disk restoration replaces the waiting copy without loading world chunks.

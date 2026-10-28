@@ -64,7 +64,13 @@ paths:
   lit). All sections, including empty ones: air from a demolished tower erases it. Delivery uses start/chunks/finish
   batches and `C2S.LodBatchReceived`: one unacknowledged batch per connection, a single bootstrap chunk, then a
   fractional chunks/tick quota from the client's vanilla `ChunkBatchSizeCalculator` (0.01–64, like PlayerChunkSender).
-  The three client handlers run on the same network thread, so timing includes transfer and ingestion. Calculator
+  Each batch also holds at most 256 KiB before acknowledgement (one larger indivisible chunk may stand alone): a
+  chunk-count window alone can leave MiB behind a fast proxy with a slow downstream. This bounds in-flight data;
+  it is not a bytes/tick throttle. `fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges` guards it.
+  The three client handlers run on the same network thread. Before ack, poll Voxy's public
+  `VoxyCommon.getInstance().getIngestService().getTaskCount()` on the event loop until its queue empties; never block
+  the network thread. Running tasks remain bounded by its worker pool. Missing counter disables Incoming delivery.
+  Timing includes transfer and background queue drain. Calculator
   state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
   Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
   raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible

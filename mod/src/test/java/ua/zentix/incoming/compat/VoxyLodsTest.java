@@ -110,6 +110,30 @@ class VoxyLodsTest {
     }
 
     @Test
+    void fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            Receiver proxy = new Receiver(); // Every local write completes immediately, as with a buffering proxy.
+            viewer.offer(0, packet(0, new byte[1024]));
+            viewer.drain(channel, proxy);
+            proxy.ack(viewer, 64);
+            byte[] data = new byte[32 * 1024];
+            for (int i = 1; i <= 64; i++) viewer.offer(i, packet(i, data));
+            for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, proxy);
+            assertTrue(channel.isWritable());
+            assertEquals(8, proxy.batches.getLast().chunks(), "64 chunks would leave 2 MiB ahead of keepalive");
+            assertEquals(256 * 1024, proxy.chunks.stream().skip(1).mapToInt(p -> p.sections().length).sum());
+            assertEquals(56, viewer.queue.size());
+            proxy.ack(viewer, 64);
+            viewer.drain(channel, proxy);
+            assertEquals(17, viewer.sent, "another bounded batch follows the client acknowledgement");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    @Test
     void eventLoopDispatchAndFailedWritesRemainBoundedInsideABatch() {
         EmbeddedChannel channel = new EmbeddedChannel();
         try {
@@ -205,7 +229,7 @@ class VoxyLodsTest {
             assertEquals(768, viewer.queue.size());
             assertEquals(48L << 20, viewer.bytes);
             Receiver client = new Receiver();
-            for (int tick = 0; tick < 100 && !viewer.queue.isEmpty(); tick++) {
+            for (int tick = 0; tick < 1000 && !viewer.queue.isEmpty(); tick++) {
                 viewer.drain(channel, client);
                 client.ack(viewer, 64);
             }

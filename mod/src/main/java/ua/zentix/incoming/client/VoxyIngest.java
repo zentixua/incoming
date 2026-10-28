@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class VoxyIngest {
     @Nullable
-    private static MethodHandle worldOf, rawIngest;
+    private static MethodHandle worldOf, rawIngest, instanceOf, ingestService, taskCount;
     /** Chunks ({@code ChunkPos.toLong}) the mod wrote to Voxy in this world. */
     private static final Set<Long> OURS = ConcurrentHashMap.newKeySet();
     /** Those overwritten by LSS: report to the server ({@link #tick}). */
@@ -62,6 +62,13 @@ public final class VoxyIngest {
             rawIngest = lookup.findStatic(ingest, "rawIngest", MethodType.methodType(boolean.class, id, LevelChunkSection.class,
                     int.class, int.class, int.class, DataLayer.class, DataLayer.class)).asType(MethodType.methodType(boolean.class, Object.class,
                     LevelChunkSection.class, int.class, int.class, int.class, DataLayer.class, DataLayer.class));
+            Class<?> common = Class.forName("me.cortex.voxy.commonImpl.VoxyCommon", false, loader);
+            Class<?> instance = Class.forName("me.cortex.voxy.commonImpl.VoxyInstance", false, loader);
+            instanceOf = lookup.findStatic(common, "getInstance", MethodType.methodType(instance)).asType(MethodType.methodType(Object.class));
+            ingestService = lookup.findVirtual(instance, "getIngestService", MethodType.methodType(ingest))
+                    .asType(MethodType.methodType(Object.class, Object.class));
+            taskCount = lookup.findVirtual(ingest, "getTaskCount", MethodType.methodType(int.class))
+                    .asType(MethodType.methodType(int.class, Object.class));
             Incoming.LOG.info("Voxy: changed chunks the client has not loaded go into its LODs (VoxelIngestService.rawIngest)");
         } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
             worldOf = null;
@@ -73,6 +80,23 @@ public final class VoxyIngest {
     /** The mod writes chunks to Voxy. */
     public static boolean available() {
         return rawIngest != null && !broken;
+    }
+
+    /** Public Voxy service counter: never acknowledge another batch while its background queue is backed up. */
+    static boolean backlogged() {
+        if (!available()) return false;
+        try {
+            Object instance = instanceOf.invoke();
+            if (instance == null) return false;
+            Object service = ingestService.invoke(instance);
+            return service != null && (int) taskCount.invoke(service) > 0;
+        } catch (LinkageError | Exception error) {
+            broken = true;
+            Incoming.LOG.warn("Voxy: cannot measure ingest backlog; stopping Incoming LOD delivery ({})", error.toString());
+            return false;
+        } catch (Throwable error) {
+            throw HandleFailures.propagate(error);
+        }
     }
 
     /** World login: tell the server whether to send chunks. */

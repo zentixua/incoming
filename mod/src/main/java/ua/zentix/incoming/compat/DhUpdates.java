@@ -5,41 +5,28 @@ import it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.registry.ModAttachments;
+import ua.zentix.incoming.nuclear.world.FarLods;
+import ua.zentix.incoming.util.Terrain;
+import java.util.concurrent.CompletableFuture;
 
 import java.util.ArrayDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Что мод изменил в мире — в LOD Distant Horizons ({@link DhChunks}), в темпе, который его очередь выдерживает, и в LOD
- * Voxy игроков ({@link VoxyLods}: тем же путём, в темпе их очередей).
- * <ul>
- * <li>Загруженные чанки, где мод менял блоки (воронки и осыпание у взрывов, руины ядерки, лампы блэкаута), —
- * {@link #mark}: чанк уходит в DH не раньше срока (порции одного взрыва идут несколько тиков — один вызов на всё)
- * и не чаще раза в {@link #RESEND} тиков: позицию, которая ещё в очереди DH, он молча пропускает, а читает чанк
- * по живой ссылке позже, так что ранний вызов уже несёт и следующие изменения. Чанк, выгруженный до срока,
- * пропускается: DH видит его сохранение при выгрузке сам.</li>
- * <li>Чанки не в мире, собранные модом с изменениями (руины ядерки вдали — с диска и по готовому плану), —
- * {@link #offer}: их ссылку DH держит, пока не разберёт; сколько ещё ждут отправки — {@link #room}.</li>
- * <li>Копии тяжёлой зоны ядерки, собранные заранее и отданные к приходу фронта, — {@link #sendHeld}: сразу, мимо
- * {@link #PER_TICK}; их темп держит окно ({@link #heldRoom}): отданных и не подтверждённых записью в базу DH — не
- * больше половины наименьшей очереди DH ({@link DhQueue}).</li>
- * </ul>
- * За тик — не больше {@link #PER_TICK} вызовов (и {@link #SCAN} просмотренных отметок): очередь DH на мир — от 1000
- * позиций на поток его разбора, переполненная выкидывает дальние (на выделенном сервере — дальние от 0 0) с одной
- * строкой «overloaded» в лог DH раз в 30 с. Чанк, отданный DH любым путём, снова уходит не раньше {@link #RESEND}
- * тиков: позицию, которая ещё в его очереди, DH молча пропускает.
- * Без DH и без игроков с Voxy ничего не копится. Несохраняемый attachment мира ({@link ModAttachments#DH_UPDATES}): перезапуск теряет
- * очередь, а чанки, ушедшие в DH, он помнит в своей базе.
+ * Mod world changes delivered to DH's terrain database and Voxy players through their shared queue.
+ * Loaded marks coalesce and resend no sooner than {@link #RESEND}; built distant copies use {@link #offer}, and
+ * front-held copies use {@link #sendHeld}. When a marked chunk unloads while delivery is paused, read its saved
+ * sections asynchronously instead of dropping the fresh update. Never load a world chunk for LOD delivery.
  */
 public final class DhUpdates {
     /** Вызовов DH за тик сервера (400 чанков в секунду). */
@@ -73,6 +60,8 @@ public final class DhUpdates {
     private final Long2LongOpenHashMap later = new Long2LongOpenHashMap();
     /** Чанк → тик последней отправки (старше {@link #RESEND} — забываются). */
     private final Long2LongOpenHashMap sent = new Long2LongOpenHashMap();
+    /** At most four asynchronous reads; marks remain pending until a fresh copy is delivered. */
+    private final Long2ObjectOpenHashMap<CompletableFuture<ChunkAccess>> unloaded = new Long2ObjectOpenHashMap<>();
     private final ArrayDeque<ChunkAccess> offered = new ArrayDeque<>();
     /** Чанки в {@link #offered} (сколько копий каждого ждёт отправки). */
     private final Long2IntOpenHashMap offeredCount = new Long2IntOpenHashMap();
@@ -133,6 +122,7 @@ public final class DhUpdates {
         u.test = sink != null;
         if (sink == null) {
             u.due.clear();
+            u.unloaded.clear();
             u.later.clear();
             u.offered.clear();
             u.offeredCount.clear();
@@ -271,6 +261,7 @@ public final class DhUpdates {
 
     private void tick(ServerLevel level) {
         long now = level.getGameTime();
+        unloaded.long2ObjectEntrySet().removeIf(e -> e.getValue().isDone() && !due.containsKey(e.getLongKey()));
         if (held.waiting() > 0) {
             for (long[] a; (a = acks.poll()) != null; ) held.ack(a[0], a[1]);
             held.expire(System.nanoTime());
@@ -309,13 +300,35 @@ public final class DhUpdates {
                 notYet.add(key);
                 continue;
             }
+            ChunkAccess chunk = Terrain.inMemory(level, key);
+            if (chunk == null) {
+                CompletableFuture<ChunkAccess> read = unloaded.get(key);
+                if (read == null) {
+                    if (unloaded.size() < 4) unloaded.put(key, FarLods.savedCopy(level, key));
+                } else if (read.isDone()) {
+                    unloaded.remove(key);
+                    if (read.isCompletedExceptionally()) {
+                        e.setValue(now + 20); // Retry I/O failure; do not lose the update or block the tick.
+                    } else {
+                        chunk = read.getNow(null);
+                        if (chunk == null) {
+                            // No final saved blocks exist here (markArea also covers untouched world-edge chunks).
+                            it.remove();
+                            later.remove(key);
+                            continue;
+                        }
+                    }
+                }
+                if (chunk == null) {
+                    notYet.add(key);
+                    continue;
+                }
+            }
             it.remove();
             if (later.containsKey(key)) {
                 long next = later.remove(key);
                 if (next > now) pending.add(key, next);
             }
-            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-            if (chunk == null) continue;
             sink.overwrite(level, chunk);
             sent.put(key, now);
             sentTotal++;

@@ -65,6 +65,12 @@ public final class VoxyLods {
     static final int WRITE_HEADROOM = 16 * 1024;
     /** Even with a raised Netty watermark, do not add LODs behind more than this many pending bytes. */
     static final int MAX_PENDING_BYTES = 32 * 1024;
+    /**
+     * Maximum ordinary batch bytes awaiting client receipt, not a bytes/tick throttle. A proxy can complete Netty
+     * writes before its downstream drains: a chunk-count window alone could still put multiple MiB before keepalive.
+     * One indivisible chunk may exceed this safety window, but cannot share its batch with another chunk.
+     */
+    static final int BATCH_BYTES = 256 * 1024;
     /** Maximum waiting player queue size; this does not bound bytes already handed to the connection. */
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
@@ -82,6 +88,7 @@ public final class VoxyLods {
         /** Includes dispatch waiting in the Netty event loop; cleared only by the write completion callback. */
         private volatile boolean writing;
         final LodBatchFlow flow = new LodBatchFlow();
+        private int batchBytes;
 
         void offer(long chunk, S2C.VoxyChunk packet) {
             S2C.VoxyChunk was = queue.remove(chunk);
@@ -104,14 +111,20 @@ public final class VoxyLods {
             if (!writable(channel)) return;
             if (!flow.active()) {
                 if (queue.isEmpty() || !flow.begin()) return;
+                batchBytes = 0;
                 send.accept(new S2C.LodBatchStart(flow.id()), null);
             }
             if (!flow.sending()) return; // Only the client's acknowledgement opens the next batch.
-            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && writable(channel); ) {
+            boolean byteWindowFull = batchBytes >= BATCH_BYTES;
+            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && !byteWindowFull && writable(channel); ) {
                 // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
                 // A single chunk may exceed the watermark. Let it through once, then await its completed write;
                 // requiring the entire chunk to fit would permanently block large, globally paletted chunks.
                 S2C.VoxyChunk packet = q.next();
+                if (flow.sent() > 0 && batchBytes + packet.sections().length > BATCH_BYTES) {
+                    byteWindowFull = true;
+                    break;
+                }
                 writing = true;
                 try {
                     send.accept(packet, PacketSendListener.thenRun(() -> writing = false));
@@ -122,9 +135,11 @@ public final class VoxyLods {
                 q.remove();
                 bytes -= packet.sections().length;
                 flow.chunkSent();
+                batchBytes += packet.sections().length;
+                byteWindowFull = batchBytes >= BATCH_BYTES;
                 sent++;
             }
-            if ((!flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
+            if ((byteWindowFull || !flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
                 flow.finish();
                 send.accept(new S2C.LodBatchFinished(flow.id(), flow.sent()), null);
             }

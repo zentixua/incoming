@@ -6,6 +6,14 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.MessageToByteEncoder;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.storage.ChunkSerializer;
+import ua.zentix.incoming.gametest.StrikeGameTests;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
@@ -75,11 +83,12 @@ public final class VoxyBackpressureGameTests {
             VoxyLods.Viewer viewer = new VoxyLods.Viewer();
             byte[] data = new byte[250 * 1024];
             var dimension = h.getLevel().dimension().location();
-            for (int i = 0; i < 8; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, data));
+            byte[] small = new byte[32 * 1024];
+            for (int i = 0; i < 8; i++) viewer.offer(i, new S2C.VoxyChunk(dimension, i, 0, i == 0 ? data : small));
             for (int tick = 0; tick < 1200; tick++) viewer.drain(player);
             h.assertTrue(viewer.sent == 1 && viewer.queue.size() == 7, "slow connection did not stop the player drain");
             h.assertFalse(channel.isWritable(), "test transport did not retain the encoded LOD");
-            S2C.VoxyChunk fresh = new S2C.VoxyChunk(dimension, 1, 0, new byte[250 * 1024]);
+            S2C.VoxyChunk fresh = new S2C.VoxyChunk(dimension, 1, 0, new byte[32 * 1024]);
             viewer.offer(1, fresh);
             channel.draining = true;
             channel.flush();
@@ -93,7 +102,7 @@ public final class VoxyBackpressureGameTests {
             h.assertTrue(viewer.sent == 8 && viewer.bytes == 0, "Connection completion did not resume delivery");
             int received = 0;
             for (ByteBuf bytes; (bytes = channel.readOutbound()) != null; ) {
-                if (bytes.readableBytes() == data.length) received++;
+                if (bytes.readableBytes() > 1) received++;
                 bytes.release();
             }
             h.assertTrue(received == 8, "not all chunks reached the transport");
@@ -102,4 +111,42 @@ public final class VoxyBackpressureGameTests {
             channel.finishAndReleaseAll();
         }
     }
+    /** The real mark-to-disk-to-queue path, with an old copy already waiting at the queue cap. */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "voxy_saved_update", skyAccess = true)
+    public static void pausedMarkSurvivesUnloadAndReplacesItsWaitingCopy(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel();
+        BlockPos changed = h.absolutePos(new BlockPos(32, 15, 32));
+        level.setBlock(changed, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        var source = level.getChunkAt(changed);
+        ChunkPos unloaded = new ChunkPos(source.getPos().x + 100, source.getPos().z + 100);
+        var data = ChunkSerializer.write(level, source);
+        data.putInt("xPos", unloaded.x);
+        data.putInt("zPos", unloaded.z);
+        data.putString("Status", ChunkStatus.FULL.getName());
+        level.getChunkSource().chunkMap.write(unloaded, data);
+        VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+        byte[] old = new byte[64 * 1024];
+        long key = unloaded.toLong();
+        for (int i = 0; i < 767; i++) viewer.offer(i, new S2C.VoxyChunk(level.dimension().location(), i, 0, old));
+        viewer.offer(key, new S2C.VoxyChunk(level.dimension().location(), unloaded.x, unloaded.z, old));
+        AtomicReference<ChunkAccess> delivered = new AtomicReference<>();
+        DhUpdates.testSink(level, (world, copy) -> {
+            if (!copy.getPos().equals(unloaded)) return;
+            delivered.set(copy);
+            byte[] fresh = LodSections.ofCopy(copy, true);
+            viewer.offer(key, new S2C.VoxyChunk(level.dimension().location(), unloaded.x, unloaded.z, fresh));
+        });
+        StrikeGameTests.afterTest(h, () -> DhUpdates.testSink(level, null));
+        DhUpdates.mark(level, unloaded, level.getGameTime() + 5);
+        h.succeedWhen(() -> {
+            h.assertTrue(delivered.get() != null, "unloaded mark was discarded instead of read from its save");
+            h.assertTrue(delivered.get().getBlockState(new BlockPos(unloaded.getMinBlockX() + (changed.getX() & 15),
+                    changed.getY(), unloaded.getMinBlockZ() + (changed.getZ() & 15))).is(Blocks.GOLD_BLOCK), "saved update is stale");
+            h.assertTrue(viewer.queue.size() == 768 && viewer.queue.get(key).sections() != old, "fresh copy did not replace waiting copy at cap");
+            h.assertTrue(viewer.bytes <= VoxyLods.QUEUE_BYTES && viewer.dropped == 0, "replacement exceeded cap or was dropped");
+            h.assertTrue(level.getChunkSource().getChunkNow(unloaded.x, unloaded.z) == null, "LOD refresh loaded world chunks");
+        });
+    }
+
 }
