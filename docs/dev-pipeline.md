@@ -63,6 +63,11 @@ Full-pack recording is reserved for checks that need the full pack, rather than 
 can reproduce a recorded moment, but seeking must preserve the replay event rules in
 [replay.md](../.claude/rules/replay.md).
 
+For page media, record the complete event in Flashback and export with its native camera and exporter. Bind
+selected frames to replay events and check the final trimmed interval against the requested scene. File validity,
+frame rate and loaded terrain do not prove that a flash, rising cloud or approaching missile is visible. Use the
+[content checklist](../tools/media/README.md) and give the independent reviewer the shot requirements and frames.
+
 ## 5. Review and merge
 
 Open a draft PR so CI can run. Keep it focused and describe the resulting behavior and relevant validation.
