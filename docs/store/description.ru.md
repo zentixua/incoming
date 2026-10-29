@@ -19,9 +19,9 @@ Incoming добавляет удары с воздуха со взрывами, 
 Вспышка, ударная волна, гриб, пожары и руины. Наземный взрыв оставляет воронку и радиоактивный след по ветру.
 Запускай МБР или ставь ядерную боеголовку на крылатую ракету либо бомбу B-2. По умолчанию доступны только операторам.
 
-![Наземный взрыв 6 кт в сумерках с неподвижной камеры у земли: вспышка, растущее облако и волна, накрывающая наблюдателя](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke.webp)
+![Наземный взрыв 6 кт в сумерках с неподвижной камеры у земли: вспышка, растущее облако и волна, накрывающая наблюдателя](https://raw.githubusercontent.com/zentixua/incoming/main/docs/media/nuke-dusk.webp)
 
-![Растущее облако наземного взрыва 6 кт в центре Newisle в сумерках, вид с земли](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-cloud.jpg)
+![Растущее облако наземного взрыва 6 кт в центре Newisle в сумерках, вид с земли](https://raw.githubusercontent.com/zentixua/incoming/main/docs/guide/img/nuke-dusk-cloud.jpg)
 
 ### Оружие
 
