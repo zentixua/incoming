@@ -26,7 +26,7 @@ bash .github/scripts/store_body.sh docs/store/curseforge.md docs/store/curseforg
 | Field | Value |
 |---|---|
 | Title | Incoming: Air Strikes & Nukes |
-| Slug | `incoming-airstrikes-nukes` |
+| Slug | `incoming` |
 | Summary | [summary.md](summary.md) |
 | Loader and game | NeoForge, Minecraft 1.21.1; NeoForge 21.1.264+; Java 21 |
 | Environment | Client & Server; client required, server required; same Incoming version |
@@ -164,7 +164,7 @@ token alone cannot perform the duplicate-file check. Submission and public relea
 
 ### Final account verification
 
-- Modrinth project `IuLUSNeU` (`incoming-airstrikes-nukes`): keep the private draft until submission is explicitly authorized.
+- Modrinth project `IuLUSNeU` (`incoming`): keep the private draft until submission is explicitly authorized.
   The draft workflow uses the stable `project_id` and applies the slug, title, summary, sides, categories, license, links,
   icon, body and gallery from the repository. A missing configured project ID fails instead of creating a second draft.
   Verify the resulting API values and gallery originals; anonymous 404 responses are expected for a hidden draft.
