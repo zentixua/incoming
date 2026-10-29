@@ -274,7 +274,12 @@ class StoreBodyTest(unittest.TestCase):
         self.assertEqual(len(hashes), len(set(hashes)))
         self.assertEqual(files[:2], ["docs/media/hero.webp", "docs/media/nuke-dusk.webp"])
         self.assertEqual(len(files), 14)
-        self.assertEqual(sum(Path(path).suffix == ".webp" for path in files), 4)
+        self.assertEqual(gallery[3], {
+            "file": "docs/media/blast-wave-dusk.webp",
+            "title": "Blast wave",
+            "description": "A dust wave rolls toward the observer beneath the mushroom cloud.",
+        })
+        self.assertEqual(sum(Path(path).suffix == ".webp" for path in files), 5)
         self.assertEqual(sum(image.get("featured", False) for image in gallery), 1)
         self.assertTrue(gallery[0]["featured"])
         listing = (STORE / "listing.md").read_text()
