@@ -67,7 +67,7 @@ import java.util.Optional;
  *          … [from x z] [via x z [x z …]]            launch position (operator) and waypoints, as on the designator map;
  *                                                     one projectile — salvo drone 1 0 …
  *   /incoming menu | clear | give [players] | help
- *   /incoming nuke [kt] [air|ground]                  ICBM where I am looking (default — airburst)
+ *   /incoming nuke [kt] [air|ground]                  ICBM where I am looking (default — surface burst)
  *   /incoming nuke at x y z [kt] [air|ground]         ICBM at a point
  *   /incoming nuke now [at x y z] [kt] [air|ground]   immediate detonation, no flight (operator only)
  *   /incoming radiation [player] | radiation clear [players]
@@ -163,10 +163,10 @@ public final class IncomingCommand {
 
     /** “[kt] [air|ground]” after any nuclear command. */
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T yieldArgs(T node, NukeAction action) {
-        return node.executes(ctx -> action.run(ctx, new Loadout.Nuke(IncomingConfig.SERVER.nukeDefaultYield.get(), true)))
+        return node.executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IncomingConfig.SERVER.nukeDefaultYield.get())))
                 .then(Commands.argument("kt", IntegerArgumentType.integer(1, Loadout.Nuke.MAX_YIELD))
-                        .executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), true)))
-                        .then(Commands.literal("air").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), true))))
+                        .executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt"))))
+                        .then(Commands.literal("air").executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt")))))
                         .then(Commands.literal("ground").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), false)))));
     }
 

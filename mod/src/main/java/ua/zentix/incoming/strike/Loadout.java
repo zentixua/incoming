@@ -27,7 +27,7 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
          * designators/saves with higher yield are clamped to this.
          */
         public static final int MAX_YIELD = 15;
-        public static final Nuke DEFAULT = new Nuke(15, true, false);
+        public static final Nuke DEFAULT = new Nuke(15, false, false);
         public static final Codec<Nuke> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.optionalFieldOf("yield", DEFAULT.yieldKt).forGetter(Nuke::yieldKt),
                 Codec.BOOL.optionalFieldOf("air_burst", DEFAULT.airBurst).forGetter(Nuke::airBurst),
