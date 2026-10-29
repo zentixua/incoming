@@ -21,9 +21,9 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 Flash, blast wave, mushroom cloud, fires and ruins. Ground bursts leave a crater and fallout downwind.
 Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operator-only by default.
 
-![A 6 kt ground burst at twilight, seen from a fixed ground camera: flash, rising cloud and the wave reaching the observer](docs/media/nuke.webp)
+![A 6 kt ground burst at dusk, seen from a fixed ground camera: flash, rising cloud and the wave reaching the observer](docs/media/nuke.webp)
 
-![Rising cloud from a 6 kt ground burst in downtown Newisle at twilight, seen from ground level](docs/guide/img/nuke-cloud.jpg)
+![Rising cloud from a 6 kt ground burst in downtown Newisle at dusk, seen from ground level](docs/guide/img/nuke-cloud.jpg)
 
 ### Weapons
 

@@ -73,7 +73,7 @@ A Geiger Counter in hand clicks and shows your dose. Operators give it out.
 
 ## What happens
 
-![Flash of a 6 kt ground burst in downtown Newisle at night, seen from ground level](img/nuke.jpg)
+![Flash of a 6 kt ground burst in downtown Newisle at dusk, seen from ground level](img/nuke.jpg)
 
 The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
@@ -82,7 +82,7 @@ Fires and thick dust can make the area hard to see through long after the strike
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
-![Rising cloud from a 6 kt ground burst in downtown Newisle at night, seen from ground level](img/nuke-cloud.jpg)
+![Rising cloud from a 6 kt ground burst in downtown Newisle at dusk, seen from ground level](img/nuke-cloud.jpg)
 
 Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
