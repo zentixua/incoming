@@ -5,6 +5,7 @@ from email import policy
 from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -25,10 +26,15 @@ class StoreBodyTest(unittest.TestCase):
             for suffix, tagline in ((".md", "Air strikes and air defense for Minecraft 1.21.1."),
                                     (".ru.md", "Удары с воздуха и ПВО для Minecraft 1.21.1.")):
                 with self.subTest(store=stem, language=suffix):
-                    header = (STORE / (stem + suffix)).read_text().split("\n\n", 3)
-                    self.assertTrue(header[1].startswith("!["))
-                    self.assertTrue(header[1].endswith(f"]({banner})"))
-                    self.assertEqual(header[2], tagline)
+                    source = (STORE / (stem + suffix)).read_text()
+                    header = source.split("\n\n", 3)
+                    if suffix == ".md":
+                        self.assertTrue(header[1].startswith("!["))
+                        self.assertTrue(header[1].endswith(f"]({banner})"))
+                        self.assertEqual(header[2], tagline)
+                    else:
+                        self.assertEqual(header[1], tagline)
+                        self.assertNotIn("![", source)
 
     def assemble(self, *paths):
         return subprocess.run(["bash", str(SCRIPT), *map(str, paths)],
@@ -246,6 +252,35 @@ class StoreBodyTest(unittest.TestCase):
         hashes = [hashlib.sha1((ROOT / image["file"]).read_bytes()).hexdigest() for image in gallery]
         self.assertEqual(len(hashes), len(set(hashes)))
         self.assertEqual(sum("factory" in image.get("title", "").lower() for image in gallery), 1)
+
+    def test_combined_store_body_and_gallery_never_repeat_image_contents(self):
+        gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
+        prefix = "https://raw.githubusercontent.com/zentixua/incoming/main/"
+        for stem in ("description", "curseforge"):
+            body = self.assemble(STORE / f"{stem}.md", STORE / f"{stem}.ru.md").stdout
+            images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", body)
+            self.assertTrue(images)
+            self.assertTrue(all(url.startswith(prefix) for url in images))
+            paths = [ROOT / url.removeprefix(prefix) for url in images]
+            paths += [ROOT / entry["file"] for entry in gallery]
+            hashes = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
+            self.assertEqual(len(hashes), len(set(hashes)), stem)
+
+    def test_curseforge_manual_settings_match_upload_configuration(self):
+        config = json.loads((STORE / "curseforge.json").read_text())
+        modrinth = json.loads((STORE / "modrinth.json").read_text())
+        for key in ("title", "license_id", "source_url", "issues_url", "wiki_url"):
+            self.assertEqual(config[key], modrinth[key])
+        self.assertEqual(config["summary"], (STORE / "summary.md").read_text().strip())
+        self.assertTrue((ROOT / config["avatar"]).is_file())
+        workflow = (ROOT / ".github/workflows/publish.yml").read_text()
+        aliases = re.findall(r"\{curseforge:([^}]+)\}", workflow)
+        self.assertCountEqual(config["optional_dependencies"], aliases)
+        for key, value in (("loaders", config["loaders"][0]),
+                           ("game-versions", config["game_versions"][0]),
+                           ("java", str(config["java_versions"][0])),
+                           ("version-type", config["release_type"])):
+            self.assertEqual(workflow.count(f"          {key}: {value}\n"), 2)
 
     def test_new_draft_gets_both_languages(self):
         result, writes = self.run_page(exists=False)

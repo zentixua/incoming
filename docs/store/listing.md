@@ -161,14 +161,15 @@ token alone cannot perform the duplicate-file check. Submission and public relea
 
 ### Final account verification
 
-- Identify the existing hidden projects, if any, from the owner account; record their IDs, URLs, owner and visibility.
-  A public API 404 does not prove that no private draft exists; a 403 does not establish a CurseForge project's state.
-- Compare the account fields, disclosure, dependency relations and assembled English/Russian body with these drafts.
-  Confirm any missing CurseForge project aliases before adding relations.
-- Check the real store preview, refresh captures affected by ongoing visual/UI work, and choose a finished trailer
-  only if one is available. Nothing here claims a new render or sound check.
-- Separately authorize any account edit, submission, visibility change or file publication. Existing GitHub Release
-  bodies that link the personal pack also need a separately authorized public edit; tracked release notes are fixed here.
+- Modrinth project `IuLUSNeU` (`incoming`): keep the private draft until submission is explicitly authorized.
+  The draft workflow applies the title, summary, categories, license, links, icon, body and gallery from the repository.
+  Verify the resulting API values and gallery originals; anonymous 404 responses are expected for a hidden draft.
+- CurseForge project `1770261`: the coordinator verifies every field in `curseforge.json` in the account, including
+  the actual gallery/Markdown preview. Do not assume that a successful file-upload workflow changes project settings.
+- Store versions must retain the upload relations listed above. Do not guess aliases for the three integrations
+  missing a verified CurseForge mapping; they are optional and already linked in the compatibility guide.
+- The Core API key and explicit authorization for submission/release remain separate owner steps. No trailer,
+  Discord invite or donation link is required when none has been supplied.
 
 Platform references: [CurseForge submission and Markdown editor](https://support.curseforge.com/support/solutions/articles/9000199552-project-submission-guide-and-tips),
 [CurseForge language/avatar rules](https://support.curseforge.com/support/solutions/articles/9000197279-moderation-policies),
