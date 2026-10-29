@@ -152,7 +152,7 @@ page() {
   # The project JSON fields above use a separate null-clears contract.
   # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
-  local retained=() removed=() matches url
+  local retained=() removed=() matches url key
   for ((i = 0; i < n; i++)); do
     file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
     if [ ! -f "$file" ]; then
@@ -167,6 +167,12 @@ page() {
       | select(((.url // "") + " " + (.raw_url // "")) | contains($s))]' "$tmp/project.json")
     existing_url=$(jq -r '.[0].url // empty' <<<"$matches")
     if [ "$(jq 'length' <<<"$matches")" -gt 1 ]; then
+      # A replacement must preserve the same absent/empty/null text semantics as PATCH.
+      for key in title description; do
+        if [ -z "$(jq -r --argjson i "$i" --arg k "$key" '.gallery[$i][$k] // empty' "$STORE_JSON")" ]; then
+          q+=$(jq -r --arg k "$key" '.[0][$k] // "" | if . == "" then "" else "&\($k)=\(. | @uri)" end' <<<"$matches")
+        fi
+      done
       # Labrinth deletes both CDN files, including a raw_url shared by another entry.
       # Remove the whole duplicate group BEFORE uploading its one replacement.
       # https://github.com/modrinth/code/blob/862c64e699b02664b289cf18f01422e356be4c2f/apps/labrinth/src/routes/v3/projects/mod.rs#L3389-L3396

@@ -63,7 +63,8 @@ class StoreBodyTest(unittest.TestCase):
         self.assertLessEqual(len(metadata["description"]), 256)
 
     def run_page(self, exists, missing_translation=False, with_gallery=False,
-                 duplicate_remote=False, duplicate_same_url=False, duplicate_local=False, repeat=False):
+                 duplicate_remote=False, duplicate_same_url=False, duplicate_local=False, repeat=False,
+                 duplicate_index=0):
         """Exercise the real page script against a loopback-only fake store."""
         writes = []
         gallery = []
@@ -97,12 +98,13 @@ class StoreBodyTest(unittest.TestCase):
                 if urlsplit(self.path).path.endswith("/gallery"):
                     if not self.valid_gallery_query():
                         return
-                    writes.append({"method": "POST", "path": self.path})
                     query = parse_qs(urlsplit(self.path).query)
                     sha = hashlib.sha1(raw).hexdigest()
                     gallery.append({"url": f"https://cdn.example/{sha}.jpg",
                                     "raw_url": f"https://cdn.example/{sha}.jpg",
-                                    "title": query.get("title", [""])[0]})
+                                    "title": query.get("title", [""])[0],
+                                    "description": query.get("description", [""])[0]})
+                    writes.append({"method": "POST", "path": self.path, "stored": gallery[-1].copy()})
                     cdn_files.add(gallery[-1]["url"])
                     self.reply(204, {})
                     return
@@ -163,7 +165,7 @@ class StoreBodyTest(unittest.TestCase):
                 configured_gallery.append({"file": str(image), "description": ""})
                 gallery.append({"url": "https://cdn.example/obsolete.jpg", "featured": True, "ordering": 0})
                 if duplicate_remote:
-                    gallery.append(gallery[0] | {"url": "https://cdn.example/duplicate.jpg"})
+                    gallery.append(gallery[duplicate_index] | {"url": "https://cdn.example/duplicate.jpg"})
                 if duplicate_same_url:
                     gallery.append(gallery[0].copy())
                 if duplicate_local:
@@ -228,6 +230,16 @@ class StoreBodyTest(unittest.TestCase):
                    for w in writes[:boundary] if w.get("method") == "DELETE"]
         self.assertEqual(removed.count("https://cdn.example/optimized-0.jpg"), 2)
         self.assertEqual([w["method"] for w in writes[boundary + 1:] if "method" in w], ["PATCH"] * 4)
+
+    def test_duplicate_replacement_preserves_omitted_empty_and_null_captions(self):
+        for index in (1, 2):
+            with self.subTest(index=index):
+                result, writes = self.run_page(exists=True, with_gallery=True, duplicate_remote=True,
+                                              duplicate_index=index, repeat=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                upload = next(w for w in writes if w.get("method") == "POST")
+                self.assertEqual(upload["stored"]["title"], "Old title")
+                self.assertEqual(upload["stored"]["description"], "Old description")
 
     def test_repository_gallery_has_unique_images_and_one_factory_approach(self):
         gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
