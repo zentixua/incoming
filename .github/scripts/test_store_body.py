@@ -247,24 +247,43 @@ class StoreBodyTest(unittest.TestCase):
                 self.assertEqual(upload["stored"]["title"], "Old title")
                 self.assertEqual(upload["stored"]["description"], "Old description")
 
-    def test_repository_gallery_has_unique_images_and_one_factory_approach(self):
+    def test_repository_gallery_contains_all_media_once(self):
         gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
-        hashes = [hashlib.sha1((ROOT / image["file"]).read_bytes()).hexdigest() for image in gallery]
+        files = [image["file"] for image in gallery]
+        self.assertEqual(len(files), len(set(files)))
+        hashes = [hashlib.sha256((ROOT / path).read_bytes()).hexdigest() for path in files]
         self.assertEqual(len(hashes), len(set(hashes)))
-        self.assertEqual(sum("factory" in image.get("title", "").lower() for image in gallery), 1)
+        self.assertEqual(files[:2], ["docs/media/hero.webp", "docs/media/nuke-dusk.webp"])
+        self.assertEqual(len(files), 14)
+        self.assertEqual(sum(Path(path).suffix == ".webp" for path in files), 4)
+        self.assertEqual(sum(image.get("featured", False) for image in gallery), 1)
+        self.assertTrue(gallery[0]["featured"])
+        listing = (STORE / "listing.md").read_text()
+        rows = re.findall(r"^\| `(docs/[^`]+)` \| ([^|]+) \| ([^|]+) \|$", listing, re.M)
+        self.assertEqual([(path, title.removesuffix(" (featured)"), description)
+                          for path, title, description in rows],
+                         [(image["file"], image["title"], image["description"]) for image in gallery])
+        curseforge = json.loads((STORE / "curseforge.json").read_text())
+        self.assertEqual(curseforge["gallery_manifest"], "docs/store/modrinth.json")
 
-    def test_combined_store_body_and_gallery_never_repeat_image_contents(self):
+    def test_page_bodies_show_only_the_two_shared_gallery_animations(self):
         gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
+        gallery_files = {entry["file"] for entry in gallery}
         prefix = "https://raw.githubusercontent.com/zentixua/incoming/main/"
+        bodies = {name: (ROOT / name).read_text() for name in ("README.md", "README.ru.md")}
         for stem in ("description", "curseforge"):
-            body = self.assemble(STORE / f"{stem}.md", STORE / f"{stem}.ru.md").stdout
-            images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", body)
-            self.assertTrue(images)
-            self.assertTrue(all(url.startswith(prefix) for url in images))
-            paths = [ROOT / url.removeprefix(prefix) for url in images]
-            paths += [ROOT / entry["file"] for entry in gallery]
-            hashes = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
-            self.assertEqual(len(hashes), len(set(hashes)), stem)
+            result = self.assemble(STORE / f"{stem}.md", STORE / f"{stem}.ru.md")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            bodies[stem] = result.stdout
+        for name, body in bodies.items():
+            with self.subTest(page=name):
+                self.assertNotRegex(body, r"(?i)<(?:img|picture|video)\b|!\[[^\]]*\]\[")
+                images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", body)
+                if name in ("description", "curseforge"):
+                    self.assertTrue(all(url.startswith(prefix) for url in images))
+                files = [url.removeprefix(prefix) for url in images]
+                self.assertEqual(files, ["docs/media/hero.webp", "docs/media/nuke-dusk.webp"])
+                self.assertTrue(set(files) <= gallery_files)
 
     def test_curseforge_manual_settings_match_upload_configuration(self):
         config = json.loads((STORE / "curseforge.json").read_text())
