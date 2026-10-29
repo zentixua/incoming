@@ -1,5 +1,5 @@
 # Manual store publishing: draft creates/updates the private Modrinth page; submit requests review;
-# release uploads a version. Pages/media use the workflow revision only when explicitly requested
+# submit and release upload the selected version only if its jar is missing. Pages/media use the workflow revision only when explicitly requested
 # (always for draft). The jar, changelog and environment come from the selected GitHub release tag;
 # The jar must also match the artifact of a successful release build for that exact tag commit.
 # No CURSEFORGE_ID disables CurseForge with a warning. A set ID requires both the upload token and
@@ -89,13 +89,14 @@ jobs:
           JAR: ${{ steps.rel.outputs.jar }}
         run: bash .github/scripts/modrinth.sh page "$STEP" "$JAR"
 
-      - name: "Modrinth: check release jar without changing the page"
+      - name: "Modrinth: check selected jar without changing the page"
         id: version
-        if: env.HAS_MODRINTH == 'true' && inputs.step == 'release' && !inputs.update_page
+        if: env.HAS_MODRINTH == 'true' && (inputs.step == 'submit' || (inputs.step == 'release' && !inputs.update_page))
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           JAR: ${{ steps.rel.outputs.jar }}
-        run: bash .github/scripts/modrinth.sh version "$JAR"
+          STEP: ${{ inputs.step }}
+        run: bash .github/scripts/modrinth.sh version "$JAR" "$STEP"
 
       # Kira-NT/mc-publish v3.3.1 pinned by commit: receives tokens; stores without tokens skipped.
       - name: "Modrinth: version"
