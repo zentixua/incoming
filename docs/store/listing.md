@@ -69,7 +69,7 @@ upload list records the terrain/recipe/craft integrations above.
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
-The effect and nuclear sections lead, followed by weapons and controls. A factory approach and impact, and a 6 kt night ground burst illustrate the effects.
+The effect and nuclear sections lead, followed by weapons and controls. A factory approach and impact, and a 6 kt ground burst at dusk illustrate the effects.
 Each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
@@ -78,7 +78,7 @@ The draft Modrinth gallery is in `modrinth.json`, in this order: four animations
 | File | Title | Description |
 |---|---|---|
 | `docs/media/hero.webp` | Factory strike (featured) | Cruise missiles fly in over the camera and hit a factory. |
-| `docs/media/nuke.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at night. |
+| `docs/media/nuke.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at dusk. |
 | `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
 | `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 | A drone on its way to the target. |
