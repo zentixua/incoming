@@ -152,7 +152,7 @@ page() {
   # The project JSON fields above use a separate null-clears contract.
   # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
-  local retained=()
+  local retained=() removed=() matches url
   for ((i = 0; i < n; i++)); do
     file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
     if [ ! -f "$file" ]; then
@@ -163,9 +163,20 @@ page() {
     q=$(jq -r --argjson i "$i" '.gallery[$i] | "ordering=\($i)&featured=\(.featured // false)"
       + (if (.title // "") != "" then "&title=\(.title | @uri)" else "" end)
       + (if (.description // "") != "" then "&description=\(.description | @uri)" else "" end)' "$STORE_JSON")
-    existing_url=$(jq -r --arg s "$sha" '[.gallery[]?
-      | select(((.url // "") + " " + (.raw_url // "")) | contains($s)) | .url][0] // empty' \
-      "$tmp/project.json")
+    matches=$(jq -c --arg s "$sha" '[.gallery[]?
+      | select(((.url // "") + " " + (.raw_url // "")) | contains($s))]' "$tmp/project.json")
+    existing_url=$(jq -r '.[0].url // empty' <<<"$matches")
+    if [ "$(jq 'length' <<<"$matches")" -gt 1 ]; then
+      # Labrinth deletes both CDN files, including a raw_url shared by another entry.
+      # Remove the whole duplicate group BEFORE uploading its one replacement.
+      # https://github.com/modrinth/code/blob/862c64e699b02664b289cf18f01422e356be4c2f/apps/labrinth/src/routes/v3/projects/mod.rs#L3389-L3396
+      while IFS= read -r url; do
+        call DELETE "/project/$id/gallery?url=$(jq -rn --arg u "$url" '$u | @uri')" 204
+        removed+=("$url")
+        echo "gallery: replacing duplicate $url"
+      done < <(jq -r '.[].url' <<<"$matches")
+      existing_url=
+    fi
     if [ -n "$existing_url" ]; then
       call PATCH "/project/$id/gallery?url=$(jq -rn --arg u "$existing_url" '$u | @uri')&$q" 204
       echo "Gallery metadata updated: $file"
@@ -179,17 +190,17 @@ page() {
 
   # Keep only the selected entry, not every old URL sharing a configured image's hash.
   # New uploads are absent from this pre-update snapshot and therefore cannot be removed here.
-  local url k found
+  local k found
   while IFS= read -r url; do
     found=false
-    for k in "${retained[@]}"; do
+    for k in "${retained[@]}" "${removed[@]}"; do
       if [ "$url" = "$k" ]; then found=true; break; fi
     done
     if [ "$found" = false ]; then
       call DELETE "/project/$id/gallery?url=$(jq -rn --arg u "$url" '$u | @uri')" 204
       echo "gallery: removed $url"
     fi
-  done < <(jq -r '[.gallery[]? | .url // empty] | unique[]' "$tmp/project.json")
+  done < <(jq -r '.gallery[]? | .url // empty' "$tmp/project.json")
 
   version "$jar" "$step"
 }

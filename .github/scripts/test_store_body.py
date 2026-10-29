@@ -63,10 +63,11 @@ class StoreBodyTest(unittest.TestCase):
         self.assertLessEqual(len(metadata["description"]), 256)
 
     def run_page(self, exists, missing_translation=False, with_gallery=False,
-                 duplicate_remote=False, duplicate_local=False, repeat=False):
+                 duplicate_remote=False, duplicate_same_url=False, duplicate_local=False, repeat=False):
         """Exercise the real page script against a loopback-only fake store."""
         writes = []
         gallery = []
+        cdn_files = set()
 
         class Store(BaseHTTPRequestHandler):
             def log_message(self, *_args):
@@ -102,6 +103,7 @@ class StoreBodyTest(unittest.TestCase):
                     gallery.append({"url": f"https://cdn.example/{sha}.jpg",
                                     "raw_url": f"https://cdn.example/{sha}.jpg",
                                     "title": query.get("title", [""])[0]})
+                    cdn_files.add(gallery[-1]["url"])
                     self.reply(204, {})
                     return
                 message = BytesParser(policy=policy.default).parsebytes(
@@ -127,7 +129,12 @@ class StoreBodyTest(unittest.TestCase):
             def do_DELETE(self):
                 writes.append({"method": "DELETE", "path": self.path})
                 url = parse_qs(urlsplit(self.path).query)["url"][0]
-                gallery[:] = [image for image in gallery if image["url"] != url]
+                # Labrinth removes both files, even when another entry shares the original.
+                image = next(image for image in gallery if image["url"] == url)
+                cdn_files.discard(image["url"])
+                cdn_files.discard(image.get("raw_url"))
+                # The API resolves one gallery item and deletes that row by its database id.
+                gallery.remove(image)
                 self.reply(204, {})
 
         with tempfile.TemporaryDirectory() as folder:
@@ -157,10 +164,14 @@ class StoreBodyTest(unittest.TestCase):
                 gallery.append({"url": "https://cdn.example/obsolete.jpg", "featured": True, "ordering": 0})
                 if duplicate_remote:
                     gallery.append(gallery[0] | {"url": "https://cdn.example/duplicate.jpg"})
+                if duplicate_same_url:
+                    gallery.append(gallery[0].copy())
                 if duplicate_local:
                     alias = folder / "same-image-another-name.jpg"
                     alias.write_bytes(Path(configured_gallery[0]["file"]).read_bytes())
                     configured_gallery.append({"file": str(alias)})
+            for image in gallery:
+                cdn_files.update(url for url in (image["url"], image.get("raw_url")) if url)
             (folder / "store.json").write_text(json.dumps({"slug": "fixture", "gallery": configured_gallery}))
             (folder / "fixture.jar").write_bytes(b"fixture jar")
             with ThreadingHTTPServer(("127.0.0.1", 0), Store) as server:
@@ -174,10 +185,15 @@ class StoreBodyTest(unittest.TestCase):
                                              str(folder / "fixture.jar")], env=env, text=True,
                                             capture_output=True, timeout=20, check=False)
                     if repeat and result.returncode == 0:
+                        self.assertTrue(all(image["url"] in cdn_files and image.get("raw_url", image["url"]) in cdn_files
+                                            for image in gallery), "Reconciliation deleted a retained CDN file")
                         writes.append({"repeat": True, "gallery": len(gallery)})
                         result = subprocess.run(["bash", str(SCRIPT.with_name("modrinth.sh")), "page", "draft",
                                                  str(folder / "fixture.jar")], env=env, text=True,
                                                 capture_output=True, timeout=20, check=False)
+                    if result.returncode == 0:
+                        self.assertTrue(all(image["url"] in cdn_files and image.get("raw_url", image["url"]) in cdn_files
+                                            for image in gallery), "A gallery entry points to a deleted CDN file")
                 finally:
                     server.shutdown()
                     thread.join()
@@ -196,9 +212,22 @@ class StoreBodyTest(unittest.TestCase):
         self.assertEqual(writes[boundary]["gallery"], 4)
         removed = [parse_qs(urlsplit(w["path"]).query)["url"][0]
                    for w in writes[:boundary] if w.get("method") == "DELETE"]
-        self.assertCountEqual(removed, ["https://cdn.example/obsolete.jpg", "https://cdn.example/duplicate.jpg"])
+        self.assertCountEqual(removed, ["https://cdn.example/obsolete.jpg", "https://cdn.example/duplicate.jpg",
+                                       "https://cdn.example/optimized-0.jpg"])
+        first_upload = next(i for i, w in enumerate(writes[:boundary]) if w.get("method") == "POST")
+        self.assertEqual([w["method"] for w in writes[1:first_upload]], ["DELETE", "DELETE"])
         second = writes[boundary + 1:]
         self.assertEqual([w["method"] for w in second if "method" in w], ["PATCH"] * 4)
+
+    def test_duplicate_identical_urls_are_replaced_once(self):
+        result, writes = self.run_page(exists=True, with_gallery=True, duplicate_same_url=True, repeat=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        boundary = next(i for i, entry in enumerate(writes) if "repeat" in entry)
+        self.assertEqual(writes[boundary]["gallery"], 4)
+        removed = [parse_qs(urlsplit(w["path"]).query)["url"][0]
+                   for w in writes[:boundary] if w.get("method") == "DELETE"]
+        self.assertEqual(removed.count("https://cdn.example/optimized-0.jpg"), 2)
+        self.assertEqual([w["method"] for w in writes[boundary + 1:] if "method" in w], ["PATCH"] * 4)
 
     def test_repository_gallery_has_unique_images_and_one_factory_approach(self):
         gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
