@@ -89,7 +89,7 @@ faster-rising cap. The gap is expected; in the first seconds, dust near the grou
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
-![Glowing cap and ground wave from a 6 kt burst at dusk](../media/nuke-dusk-wide.jpg)
+![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk.webp)
 
 Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
