@@ -17,11 +17,16 @@ By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
-   slider, any whole number from 1 kt ("tactical") to 15 kt ("Hiroshima"); for the ICBM and the missile an air burst
-   (wider destruction) or a ground burst (crater and fallout trail). The bomb explodes underground.
+   slider, any whole number from 1 kt ("tactical") to 15 kt ("Hiroshima"); for the ICBM and the missile a ground burst
+   (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
 3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
 
 ![Console with the nuclear warhead: yield slider and burst mode](img/remote-nuke.png)
+
+Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. Older versions normally
+omitted AIR from saved designator settings because it was the default, so those designators switch to GROUND after
+updating, even if you selected AIR with the button. A saved `air_burst=true` field still keeps AIR. You can select
+air burst again on the console before launching. ICBMs already scheduled keep their burst mode.
 
 The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
 
@@ -77,7 +82,8 @@ The siren warns players near the target. The flash comes first; the fireball ris
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike.
 
-With a ground burst, the dust column joins the mushroom cap. With an air burst, the column starts rising later
+With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
+at the standard burst height, the column starts rising later
 and stays below the faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide
 the short column entirely.
 

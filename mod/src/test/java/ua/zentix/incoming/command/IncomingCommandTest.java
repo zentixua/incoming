@@ -28,6 +28,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.ServerActions;
 import ua.zentix.incoming.strike.Waypoints;
@@ -150,6 +151,29 @@ class IncomingCommandTest {
                 assertEquals(1, dispatcher.execute("incoming " + alias.getKey() + " at 10.25 64.5 20.75", source(2, false, level)), alias.getKey());
                 actions.verify(() -> ServerActions.dispatch(level, "test", 0, alias.getValue(), 1, 0, aim,
                         Loadout.Nuke.DEFAULT, Waypoints.NONE, null));
+            }
+        }
+    }
+
+    @Test
+    void nuclearCommandsShareGroundDefaultAndKeepExplicitAir() throws CommandSyntaxException {
+        ServerLevel level = mock(ServerLevel.class);
+        Vec3 point = new Vec3(10.25, 64.5, 20.75);
+        ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        IncomingConfig.SERVER.nukeDefaultYield.set(6);
+        for (String suffix : List.of("", " 4", " 4 ground", " 4 air")) {
+            int yield = suffix.isEmpty() ? 6 : 4;
+            boolean air = suffix.endsWith(" air");
+            Loadout.Nuke expected = new Loadout.Nuke(yield, air);
+            try (var actions = mockStatic(ServerActions.class); var nuclear = mockStatic(NuclearStrikes.class)) {
+                actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
+                        expected, Waypoints.NONE, null)).thenReturn(true);
+                assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75" + suffix, source(2, false, level)));
+                actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
+                        expected, Waypoints.NONE, null));
+                nuclear.when(() -> NuclearStrikes.ground(level, point)).thenReturn(point);
+                assertEquals(1, dispatcher.execute("incoming nuke now at 10.25 64.5 20.75" + suffix, source(2, false, level)));
+                nuclear.verify(() -> NuclearStrikes.detonateNow(level, point, yield, air, null));
             }
         }
     }

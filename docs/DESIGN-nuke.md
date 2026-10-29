@@ -699,7 +699,9 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
 - Other carriers: `Warhead` = `Conventional(power)` | `Nuclear(yield, burst)`; all `impact()` calls
   `warhead.detonate(level, point)`. Remote missile/B-2 “Warhead” switch. B-2 airburst by barometric fuze, missile surface.
 - Burst height: `burst = air` optimal for 5 psi, `HOB = 0.24 km · Y^(1/3)` (15 kt ~590 m, 1 Mt 2.4 km, Hiroshima 600 m);
-  `ground` contact. Default `air`: less fallout, more destruction area, as used in reality.
+  `ground` contact. Default `ground` (`Loadout.Nuke.DEFAULT`); `air` remains an explicit option with less fallout
+  and a wider destruction area. Burst mode is not a server-config value. Commands use the shared default, and
+  designators retain explicitly saved modes; omitted loadout fields use the current default.
 
 ## 8. Interface, commands, settings
 

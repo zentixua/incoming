@@ -33,8 +33,8 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 | `/incoming nuke at <x y z> [kt [air\|ground]]` | ICBM at a point |
 | `/incoming nuke now [at <x y z>] [kt [air\|ground]]` | detonation at once, without a flight (operators only) |
 
-Without a number: the world's `nuclear.default_yield` (15 kt by default), air burst. `air` or `ground` only after the
-number: `/incoming nuke 15 ground`.
+Without a number: the world's `nuclear.default_yield` (15 kt by default). Without a burst mode: ground burst.
+`air` or `ground` only after the number: `/incoming nuke 15 air` selects an air burst.
 
 ## Other commands
 
