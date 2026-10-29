@@ -78,8 +78,8 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 | File | Caption |
 |---|---|
 | `docs/media/still-5.jpg` | Cruise missile salvo over a factory, seen from a fixed ground camera (featured) |
-| `docs/guide/img/nuke-wave.jpg` | Blast-wave dust arrives 17 seconds after a 5 kt ground burst at night |
-| `docs/guide/img/nuke-cloud.jpg` | Rising cloud 25 seconds after a 5 kt ground burst in Newisle at night |
+| `docs/guide/img/nuke-wave.jpg` | The blast wave approaches a fixed ground camera after a 5 kt ground burst at night |
+| `docs/guide/img/nuke-cloud.jpg` | Rising cloud from a 5 kt ground burst in Newisle at night, seen from ground level |
 | `docs/guide/img/sam.webp` | SAM defending against a drone raid |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
 | `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult on an airport runway |

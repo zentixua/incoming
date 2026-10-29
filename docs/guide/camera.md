@@ -10,7 +10,7 @@ character.
 The camera and radar captions follow your game language: `REC` marks the camera display, `N` marks north, and
 `T-` is the countdown to impact. The camera indicator does not save a video file.
 
-![A cruise missile in flight over Project Zearth](img/camera.webp)
+![Cruise missile salvo seen from a fixed ground camera](../media/hero.webp)
 
 - When the projectile is beyond your render distance, you see a map with its path instead of video. The video starts
   by itself once it comes closer.

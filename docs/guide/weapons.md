@@ -215,7 +215,7 @@ circles over the target while you pick what to hit in its
 
 ## Cruise missile
 
-![Cruise missile in flight](img/weapon-missile.jpg)
+![Cruise missile against the sky above the factory](img/weapon-missile.jpg)
 
 Flies low over the terrain and dives just before the target. A heavy strike on a target that does not move. Can carry
 a nuclear warhead. It sees the terrain along its whole route, also where nobody is near and the world is not
