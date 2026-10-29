@@ -20,9 +20,10 @@ paths:
   The clip must show missiles against the sky over the camera, their approach and impacts at different points.
   Before recording, check sight lines against the actual world blocks across the impact area: foreground houses,
   trees or walls must not hide the impacts. Inspect the real client view as well as the rays.
-- Nuclear shots use one fixed eye-height camera on flat natural ground, not a hill or roof. Use Artem's requested
-  target, yield and distance; verify the real view before launching. Choose framing once for the flash, fireball,
-  rising cloud and visibly approaching wave; record through the wave reaching and covering the camera.
+- Each nuclear clip uses one fixed eye-height camera on low natural ground, including the foot of a rise when
+  requested, never a hilltop or roof. Use Artem's requested target, yield and distance; verify the real view before
+  launching. Choose framing once for the flash, fireball, rising cloud and visibly approaching wave; record through
+  the wave reaching and covering the camera.
 - Store gallery publishing reconciles the configured set, never appends duplicates. Keep each image and shot once,
   with a caption describing what is actually visible; a repeated draft run must leave the same gallery.
 - Before merge, a fresh visual session checks the actual stills and clip frames against Artem's shot list, including
