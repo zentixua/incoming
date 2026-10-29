@@ -17,53 +17,65 @@
   "icon": "docs/media/icon.png",
   "gallery": [
     {
-      "file": "docs/media/still-5.jpg",
-      "title": "Cruise missile salvo over a factory, seen from a fixed camera on a low terrace",
+      "file": "docs/media/hero.webp",
+      "title": "Factory strike",
+      "description": "Cruise missiles fly in over the camera and hit a factory.",
       "featured": true
     },
     {
-      "file": "docs/guide/img/nuke-wave.jpg",
-      "title": "The blast wave approaches a fixed ground camera after a 6 kt ground burst at night"
-    },
-    {
-      "file": "docs/guide/img/nuke-cloud.jpg",
-      "title": "Rising cloud from a 6 kt ground burst in downtown Newisle at night, seen from ground level"
+      "file": "docs/media/nuke.webp",
+      "title": "Nuclear strike",
+      "description": "Flash, mushroom cloud and the blast wave at night."
     },
     {
       "file": "docs/guide/img/sam.webp",
-      "title": "SAM defending against a drone raid"
-    },
-    {
-      "file": "docs/guide/img/weapon-shahed.jpg",
-      "title": "Shahed-136 on the way to its target"
-    },
-    {
-      "file": "docs/guide/img/weapon-lancet-launcher.jpg",
-      "title": "Lancet catapult on an airport runway"
-    },
-    {
-      "file": "docs/guide/img/weapon-grad.jpg",
-      "title": "Grad ready for a rocket salvo"
-    },
-    {
-      "file": "docs/guide/img/weapon-b2.jpg",
-      "title": "B-2 in flight"
-    },
-    {
-      "file": "docs/guide/img/weapon-icbm.jpg",
-      "title": "ICBM in flight"
+      "title": "Air defense",
+      "description": "A SAM site shoots down a drone raid."
     },
     {
       "file": "docs/guide/img/launcher.webp",
-      "title": "Cruise missiles launch from an airport runway"
+      "title": "Missile launch",
+      "description": "Cruise missiles take off from a runway."
+    },
+    {
+      "file": "docs/guide/img/weapon-shahed.jpg",
+      "title": "Shahed-136",
+      "description": "A drone on its way to the target."
+    },
+    {
+      "file": "docs/guide/img/weapon-lancet-launcher.jpg",
+      "title": "Lancet catapult",
+      "description": "Ready to launch from an airport."
+    },
+    {
+      "file": "docs/guide/img/weapon-grad.jpg",
+      "title": "Grad MLRS",
+      "description": "Ready for a rocket salvo."
+    },
+    {
+      "file": "docs/guide/img/weapon-b2.jpg",
+      "title": "B-2 bomber",
+      "description": "On its way to drop a bunker buster."
+    },
+    {
+      "file": "docs/guide/img/weapon-icbm.jpg",
+      "title": "ICBM",
+      "description": "A ballistic missile in flight."
+    },
+    {
+      "file": "docs/guide/img/scope.png",
+      "title": "Binoculars",
+      "description": "Aim at anything you can see."
     },
     {
       "file": "docs/guide/img/remote.png",
-      "title": "Choose a weapon and set up a salvo"
+      "title": "Strike remote",
+      "description": "Pick a weapon and set up a salvo."
     },
     {
       "file": "docs/guide/img/map.png",
-      "title": "Targeting map of the city before the strike"
+      "title": "Targeting map",
+      "description": "Choose a target on the city map."
     }
   ]
 }
