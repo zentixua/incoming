@@ -87,7 +87,7 @@ class StoreBodyTest(unittest.TestCase):
 
             def do_GET(self):
                 if self.path == "/project/fixture" and exists:
-                    self.reply(200, {"id": "fixture", "status": "draft", "gallery": gallery})
+                    self.reply(200, {"id": "fixture", "slug": "fixture", "status": "draft", "gallery": gallery})
                 else:
                     self.reply(404, {})
 
@@ -131,7 +131,11 @@ class StoreBodyTest(unittest.TestCase):
                             image[key] = query[key][0]
                     writes.append({"method": "PATCH", "path": self.path, "stored": image.copy()})
                 else:
-                    writes.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+                    data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                    if data.get("slug") == "fixture":
+                        self.reply(400, {"error": "invalid_input", "description": "Slug collides with other project's id!"})
+                        return
+                    writes.append(data)
                 self.reply(204, {})
 
             def do_DELETE(self):
@@ -210,6 +214,13 @@ class StoreBodyTest(unittest.TestCase):
                     server.shutdown()
                     thread.join()
         return result, writes
+
+    def test_unchanged_slug_is_omitted_from_pinned_project_patch(self):
+        result, writes = self.run_page(exists=True, pinned=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(writes), 1)
+        self.assertNotIn("slug", writes[0])
+        self.assertIn("body", writes[0])
 
     def test_slug_change_updates_pinned_project_instead_of_creating_another(self):
         result, writes = self.run_page(exists=True, renamed=True, pinned=True)
