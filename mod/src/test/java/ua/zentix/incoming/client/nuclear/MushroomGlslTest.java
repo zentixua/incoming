@@ -80,6 +80,32 @@ class MushroomGlslTest {
         }
     }
 
+    /** A detached dust front must keep the same resolved billows as the column wall, without a planar density cut. */
+    @Test
+    void stemFrontSharesTheWallEdge() {
+        GlslFunction distance = GlslFunction.parse(GLSL, "mushStemDist"), edge = GlslFunction.parse(GLSL, "mushEdge");
+        GlslFunction density = GlslFunction.parse(GLSL, "mushStemSigma");
+        Map<String, Double> c = constants();
+        double amplitude = c.get("MUSH_STEM_LOBES"), softness = c.get("MUSH_STEM_EDGE");
+        for (double radius : new double[]{50, 200, 500}) {
+            double top = 2 * radius;
+            for (double offset : new double[]{-0.1 * radius, 0, 0.1 * radius}) {
+                double wall = distance.call(Map.of("radial", offset, "h", 0.0, "top", top));
+                double front = distance.call(Map.of("radial", -radius, "h", top + offset, "top", top));
+                assertEquals(wall, front, 1e-12, "same distance from wall and front");
+                // A protruding lobe crosses the mean front. The former height cutoff made this zero even though
+                // the same point relative to the side remained dense (6 kt AIR at 37 s: a flat 399 m lid).
+                double sigma = density.call(Map.of("h", top + offset, "capBot", 8 * radius, "tau", 200.0, "radius", radius));
+                double cover = edge.call(Map.of("d", front - amplitude * radius * 0.5, "e", softness * radius));
+                assertTrue(sigma * cover > 0, "billow above the mean front, radius " + radius);
+            }
+            double reach = c.get("MUSH_STEM_REACH") * radius;
+            double outside = distance.call(Map.of("radial", -radius, "h", top + reach + 0.01, "top", top));
+            assertEquals(0, edge.call(Map.of("d", outside - amplitude * radius * 0.675, "e", softness * radius)), 0,
+                    "no matter outside the conservative billow bound");
+        }
+    }
+
     /** The suction at the base of the stem ({@code mushFoot*}, layer profile - {@code pallProfile}) is the same as in Java ({@link MushroomField#footDensity}). */
     @Test
     void footMatchesJava() {

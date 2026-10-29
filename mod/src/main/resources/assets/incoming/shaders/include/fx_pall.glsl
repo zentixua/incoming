@@ -1139,12 +1139,14 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
     }
     if (m.stemTau > 0.0) {
         float r = mushStemAt(m, q.y), rho = length(q.xz), reach = MUSH_STEM_REACH * r;
-        float stem = mushStemSigma(m, q.y);
+        float stem = mushStemSigma(q.y, m.capBot, m.stemTau, r);
         if (stem > 0.0 && d.y < reach) {
             float l = mushLobes(vec3(q.x, 0.5 * (q.y - m.stemRise), q.z), m.stemTile, max(cone, m.stemTile), k + 4.0, MUSH_STREAKS);
             float shifted = d.y - MUSH_STEM_LOBES * r * l;
             sigma.y = stem * mushEdge(shifted, MUSH_STEM_EDGE * r);
             near = min(near, shifted - MUSH_STEM_EDGE * r);
+        } else if (stem > 0.0) {
+            near = min(near, d.y - reach);
         }
         float band = mushFootBandAt(m, q.y);
         if (band > 0.0 && q.y >= 0.0) {

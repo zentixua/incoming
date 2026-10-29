@@ -360,7 +360,14 @@ public final class MushroomField {
         double cap = Math.max(s.capY() + s.ringB() * (1 + REACH_CAP * u / Math.min(s.ringA(), s.ringB())),
                 s.domeY() + s.domeH() * (1 + REACH_CAP * u / Math.min(s.domeR(), s.domeH())));
         double skirt = s.skirtTau() > 0 ? s.skirtH() * (1 + REACH_SKIRT * skirtUnit(s) / Math.min(s.skirtW(), s.skirtH())) : 0;
-        return Math.max(1, Math.max(cap, Math.max(s.stemTop(), skirt)));
+        return Math.max(1, Math.max(cap, Math.max(stemTop(s), skirt)));
+    }
+
+    /** Transported dust front plus its existing billow/soft-edge reach, as in {@code mushGap}. */
+    static double stemTop(MushroomModel.Shape s) {
+        double flare = MushroomModel.dustFlare(s);
+        double radius = Math.max(MushroomModel.stemRadius(0, s.stemR(), flare), MushroomModel.stemRadius(1, s.stemR(), flare));
+        return s.stemTop() + REACH_STEM * radius;
     }
 
     /** Detonation water column at mushroom time; null — not a "water burst", column not yet risen or already fallen. */

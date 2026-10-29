@@ -83,9 +83,8 @@ Then the wave reaches the ground around it, breaking buildings and throwing up d
 Fires and thick dust can make the area hard to see through long after the strike.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
-at the standard burst height, the column starts rising later
-and stays below the faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide
-the short column entirely.
+at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
+faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
