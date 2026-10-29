@@ -10,6 +10,20 @@ paths:
 
 # Headless client scenarios
 
+## Page media
+- Use a fixed camera for each page clip: one position, direction and FOV throughout. Camera motion needs Artem's
+  explicit request. Record with the normal full pack and shaderpack, then use Flashback's native keyframe and export;
+  derive stills from that same exported take.
+- Factory shots are near ground level, looking slightly up, with about half sky and half target. Launch several
+  missiles roughly 1.5 km behind the camera, through a waypoint above it, with a few dozen blocks of target spread.
+  The clip must show missiles against the sky over the camera, their approach and impacts at different points.
+- Nuclear shots use one fixed ground-level eye position, 1.6–1.7 km away, at night for a 5 kt ground burst. Choose
+  framing once for the flash, fireball and rising cloud; record through the wave reaching and covering the camera.
+- Store gallery publishing reconciles the configured set, never appends duplicates. Keep each image and shot once,
+  with a caption describing what is actually visible; a repeated draft run must leave the same gallery.
+- Before merge, a fresh visual session checks the actual stills and clip frames against Artem's shot list, including
+  the camera, approach, impacts, nuclear phases and gallery. A successful export alone does not establish this.
+
 ## Scenario lines
 Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: distant visuals and last distant roll;
 `SCENARIO nuke-sound`: nuclear echo, rays, reflection delay/level, tracks, start anchor `by sound|tick`; burning city,
