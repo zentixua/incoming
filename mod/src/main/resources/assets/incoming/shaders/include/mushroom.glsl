@@ -396,8 +396,14 @@ float mushWall(Mush m, vec3 q, float rho) {
     return max(abs(rho - m.colMid) - m.colHalf, max(q.y - m.colTop, -q.y - 0.02 * m.colTop));
 }
 
-// Signed unbillowed cap/stem/skirt/water-column edge distances at body q, blocks (stem radial at this height;
-// top/bottom from mushStemSigma; absent column far away): column wall/crown one surface;
+// Stem wall and transported dust front are one surface. Presentation: both receive the same billow displacement;
+// cutting density separately at the mean front left a flat lid on an otherwise billowing airburst column.
+float mushStemDist(float radial, float h, float top) {
+    return max(radial, h - top);
+}
+
+// Signed unbillowed cap/stem/skirt/water-column edge distances at body q, blocks (stem bottom from mushStemSigma;
+// absent column far away): column wall/crown one surface;
 // crown ring with elliptical section centered on wall center (WaterModel.Column)
 vec4 mushDist(Mush m, vec3 q) {
     float rho = length(q.xz);
@@ -408,16 +414,15 @@ vec4 mushDist(Mush m, vec3 q) {
         float crown = mushEllipseDist(rho - m.colMid, q.y - m.colTop, m.crownR - m.colMid, m.crownH);
         column = mushSmin(mushWall(m, q, rho), crown, MUSH_BLEND * mushColumnUnit(m));
     }
-    return vec4(mushSmin(ring, dome, MUSH_BLEND * mushCapUnit(m)), rho - mushStemAt(m, q.y),
+    return vec4(mushSmin(ring, dome, MUSH_BLEND * mushCapUnit(m)), mushStemDist(rho - mushStemAt(m, q.y), q.y, m.stemTop),
             mushEllipseDist(rho - m.skirtR, q.y, m.skirtW, m.skirtH), column);
 }
 
-// Stem density at height h without edge share: cross-stem depth over width; fades at stem top, absent underground
-float mushStemSigma(Mush m, float h) {
-    if (h < -0.02 * m.capBot || h > m.stemTop) return 0.0;
-    // grounded sphere cap bottom below ground (capBot < 0): fade width at least one block
-    float topFade = clamp((m.stemTop - h) / max(0.05 * m.capBot + 1.0, 1.0), 0.0, 1.0);
-    return m.stemTau / (2.0 * mushStemAt(m, h)) * topFade;
+// Stem density without edge share: cross-stem depth over width, absent underground. The front fades through
+// mushStemDist and mushEdge just like the wall; an independent height cutoff would slice off its billows.
+float mushStemSigma(float h, float capBot, float tau, float radius) {
+    if (h < -0.02 * capBot) return 0.0;
+    return tau / (2.0 * radius);
 }
 
 // inflow band outside stem wall at body height h, blocks, and inflow radius: stem plus this band
@@ -461,7 +466,7 @@ float mushFootRemoved(sampler2D data, int k, Mush m, float offset) {
 vec4 mushMean(Mush m, vec3 q) {
     vec4 d = mushDist(m, q);
     float r = mushStemAt(m, q.y), rho = length(q.xz), soft = 0.5 * MUSH_STEM_LOBES * r;
-    float stem = mushStemSigma(m, q.y) * mushEdge(d.y, soft);
+    float stem = mushStemSigma(q.y, m.capBot, m.stemTau, r) * mushEdge(d.y, soft);
     // No addition above merge: avoid evaluating carpet profile at every whole-cap/stem depth sample.
     if (m.footShare > 0.0 && q.y >= 0.0 && q.y < m.footMerge) {
         float band = mushFootBandAt(m, q.y);
@@ -495,7 +500,8 @@ float mushGap(Mush m, vec3 q) {
             slope += m.footShare * (0.385 + 1.5 * max(m.footTop, 1.0) / span);
         }
         float radial = (rho - (1.0 + MUSH_STEM_REACH) * mushStemAt(m, q.y) - foot) / sqrt(1.0 + slope * slope);
-        gap = min(gap, max(radial, max(q.y - m.stemTop, -0.02 * m.capBot - q.y)));
+        float topReach = MUSH_STEM_REACH * max(mushStemAt(m, 0.0), mushStemAt(m, m.capBot));
+        gap = min(gap, max(radial, max(q.y - m.stemTop - topReach, -0.02 * m.capBot - q.y)));
     }
     if (m.skirtSigma > 0.0) {
         float u = mushSkirtUnit(m);

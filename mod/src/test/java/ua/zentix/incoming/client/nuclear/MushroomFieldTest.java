@@ -12,6 +12,26 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MushroomFieldTest {
+    /** Empty-space skipping and the outer ray interval must retain the billowed dust front above its mean height. */
+    @Test
+    void boundsHoldTheStemFrontBillows() {
+        for (int yield = 1; yield <= 15; yield++) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(yield);
+                for (double t : new double[]{10, 30, 37, 120, 300}) {
+                    MushroomModel.Shape s = MushroomModel.shape(t, yield, hob, surface, 1e9);
+                    double flare = MushroomModel.dustFlare(s);
+                    for (double h : new double[]{s.stemTop(), s.stemTop() + MushroomField.REACH_STEM * 1.3 * s.stemR()}) {
+                        double r = MushroomModel.stemRadius(h / Math.max(s.capBottom(), 1), s.stemR(), flare);
+                        double edge = s.stemTop() + MushroomField.REACH_STEM * r;
+                        assertTrue(MushroomField.stemTop(s) >= edge - 1e-9, yield + " kt, t=" + t);
+                        assertTrue(MushroomField.top(s) >= edge - 1e-9, "outer ray interval includes the front");
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * The frame of the mushroom (top and radius) are numbers for the entire life of the mushroom: the airborne one, until the front reaches the ground, does not have a skirt (there is nothing to lift it
      * ), and the zero of its cross-section does not divide the frame (NaN threw the mushroom out of the frame as a pyramid of visibility).
