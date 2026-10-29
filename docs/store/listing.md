@@ -83,7 +83,7 @@ and dusk nuclear animations also appear in the page bodies.
 | `docs/media/hero.webp` | Factory strike (featured) | A missile salvo hits the factory. |
 | `docs/media/nuke-dusk.webp` | Dusk nuclear strike | Flash, rising cloud and the blast wave reaching the observer. |
 | `docs/media/factory-aftermath.jpg` | Factory aftermath | Smoke and drifting dust after the missile salvo. |
-| `docs/media/blast-wave-dusk.webp` | Blast wave | A dust wave rolls toward the observer beneath the mushroom cloud. |
+| `docs/media/blast-wave-dusk-hq.jpg` | Blast wave | A dust wave rolls toward the observer beneath the mushroom cloud. |
 | `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
 | `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed flight | A drone on its way to the target. |
@@ -97,7 +97,7 @@ and dusk nuclear animations also appear in the page bodies.
 
 The factory and nuclear scenes were recorded with Incoming 3.10.1 on copies of Project Zearth and Newisle.
 Other instructional captures retain their Incoming 3.10.0 sources. Motion clips use Flashback exports at 30 fps. Most stills are native export frames or plain F2 screenshots at 1920×1080 with Complementary Unbound.
-The blast-wave still is a gameplay screenshot, resized proportionally to 2560×1600 and encoded as WebP without other edits.
+The blast-wave still is a gameplay screenshot, resized proportionally to 2560×1600 and encoded as JPEG at quality 99 without chroma subsampling or other edits.
 World shots hide the HUD; guide interface shots retain it. The map shows the city before the strike.
 The nuclear sequence uses [City of Newisle by Blip Noir](https://www.planetminecraft.com/project/city-of-newisle-v-07032015-solo-modern-build).
 Unchanged recipe and interface images are retained. Verify animated WebP in the CurseForge editor before publication; if unsupported, the media thread should supply
