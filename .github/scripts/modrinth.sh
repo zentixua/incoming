@@ -9,7 +9,7 @@
 # docs/store/description.md. Required media must all exist before the page is changed. Already published images
 # (file sha1 appears in their Modrinth CDN URL) too: reruns reconcile the configured gallery,
 # retaining one entry per image and removing obsolete or duplicate site entries.
-# Find project by slug with token: draft visible only to its team.
+# Find project by stable project_id (or slug for a new project): drafts are visible only to their team.
 # Environment: MODRINTH_TOKEN; MODRINTH_API (default https://api.modrinth.com/v2; test stub);
 # STORE_JSON, BODY_MD override field/text paths.
 set -euo pipefail
@@ -58,7 +58,12 @@ image() {
 }
 
 slug=$(jq -r .slug "$STORE_JSON")
-call GET "/project/$slug" "200 404"
+project_id=$(jq -r '.project_id // empty' "$STORE_JSON")
+call GET "/project/${project_id:-$slug}" "200 404"
+if [ "$code" = 404 ] && [ -n "$project_id" ]; then
+  echo "::error::Modrinth: configured project $project_id is unavailable; refusing to create another draft"
+  exit 1
+fi
 status=none
 if [ "$code" = 200 ]; then
   cp "$tmp/body" "$tmp/project.json"
@@ -120,7 +125,7 @@ page() {
     draft:draft | draft:rejected | draft:processing | release:approved | release:unlisted | release:private | \
       release:archived | release:processing)
       jq --rawfile body "$tmp/description.md" '. as $s
-        | [ "title", "description", "categories", "additional_categories", "license_id",
+        | [ "slug", "title", "description", "client_side", "server_side", "categories", "additional_categories", "license_id",
             "source_url", "issues_url", "wiki_url", "discord_url" ]
         | map(select(. as $k | $s | has($k)) | {(.): $s[.]}) | add + {body: $body}' "$STORE_JSON" > "$tmp/edit.json"
       call PATCH "/project/$(jq -r .id "$tmp/project.json")" 204 -H 'Content-Type: application/json' \

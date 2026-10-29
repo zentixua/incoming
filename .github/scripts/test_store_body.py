@@ -70,7 +70,7 @@ class StoreBodyTest(unittest.TestCase):
 
     def run_page(self, exists, missing_translation=False, with_gallery=False,
                  duplicate_remote=False, duplicate_same_url=False, duplicate_local=False, repeat=False,
-                 duplicate_index=0):
+                 duplicate_index=0, renamed=False, pinned=False):
         """Exercise the real page script against a loopback-only fake store."""
         writes = []
         gallery = []
@@ -180,7 +180,11 @@ class StoreBodyTest(unittest.TestCase):
                     configured_gallery.append({"file": str(alias)})
             for image in gallery:
                 cdn_files.update(url for url in (image["url"], image.get("raw_url")) if url)
-            (folder / "store.json").write_text(json.dumps({"slug": "fixture", "gallery": configured_gallery}))
+            metadata = {"slug": "renamed-fixture" if renamed else "fixture", "gallery": configured_gallery,
+                        "client_side": "required", "server_side": "required"}
+            if pinned:
+                metadata["project_id"] = "fixture"
+            (folder / "store.json").write_text(json.dumps(metadata))
             (folder / "fixture.jar").write_bytes(b"fixture jar")
             with ThreadingHTTPServer(("127.0.0.1", 0), Store) as server:
                 thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -206,6 +210,21 @@ class StoreBodyTest(unittest.TestCase):
                     server.shutdown()
                     thread.join()
         return result, writes
+
+    def test_slug_change_updates_pinned_project_instead_of_creating_another(self):
+        result, writes = self.run_page(exists=True, renamed=True, pinned=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(writes), 1)
+        self.assertNotIn("is_draft", writes[0])
+        self.assertEqual(writes[0]["slug"], "renamed-fixture")
+        self.assertEqual(writes[0]["client_side"], "required")
+        self.assertEqual(writes[0]["server_side"], "required")
+
+    def test_missing_pinned_project_fails_without_creating_another(self):
+        result, writes = self.run_page(exists=False, renamed=True, pinned=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing to create another draft", result.stdout)
+        self.assertEqual(writes, [])
 
     def test_duplicate_local_content_fails_before_remote_mutation(self):
         result, writes = self.run_page(exists=True, with_gallery=True, duplicate_local=True)
