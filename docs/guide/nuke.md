@@ -77,6 +77,10 @@ The siren warns players near the target. The flash comes first; the fireball ris
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike.
 
+With a ground burst, the dust column joins the mushroom cap. With an air burst, the column starts rising later
+and stays below the faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide
+the short column entirely.
+
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 

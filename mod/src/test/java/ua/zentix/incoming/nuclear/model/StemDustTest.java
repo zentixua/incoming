@@ -11,6 +11,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *  to cap from the first seconds; before the start of suction there is no airborne dust in the stem.
  */
 class StemDustTest {
+    /**
+     * A detached cap must not be mistaken for missing stem matter. Exercise every slider yield, including the
+     * reported 6 kt airburst at 436.1 m, rather than only the original 15 kt preset. NRC 1985, p. 22 describes
+     * detached dusty stems; a ground burst must still keep its continuous fireball wake.
+     */
+    @Test
+    void everyPlayerYieldKeepsItsDustyStem() {
+        for (int yield = 1; yield <= 15; yield++) {
+            for (boolean surface : new boolean[]{false, true}) {
+                double hob = surface ? 0 : Yield.optimalBurstHeight(yield);
+                StemDust dust = StemDust.of(yield, hob, surface, StemDust.CLEAR);
+                for (double t : new double[]{30, 60, 120}) {
+                    MushroomModel.Shape s = MushroomModel.shape(t, yield, hob, surface, 1e9, dust);
+                    String at = yield + " kt, surface=" + surface + ", t=" + t;
+                    assertTrue(Double.isFinite(s.stemTau()) && s.stemTau() > 1, at + ": opaque stem matter");
+                    assertTrue(Double.isFinite(s.stemTop()) && s.stemTop() > 0, at + ": dust rises above ground");
+                    if (surface) assertTrue(s.stemTop() >= s.capBottom(), at + ": wake joins the cap");
+                    else assertTrue(s.stemTop() < s.capBottom(), at + ": airborne cap remains separate");
+                }
+            }
+        }
+    }
+
     @Test
     void airBurstDustyStemDoesNotReachTheCap() {
         StemDust d = StemDust.of(15, 592, false, StemDust.CLEAR);
