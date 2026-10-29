@@ -1,0 +1,51 @@
+{
+  "project_id": 1770261,
+  "slug": "incoming",
+  "title": "Incoming: Air Strikes and Air Defense",
+  "summary": "Aim with binoculars, call in drones, missiles or a bomber, and defend your base with a SAM. Includes nuclear strikes.",
+  "game": "Minecraft",
+  "project_class": "Mods",
+  "primary_category": "Armor, Tools, and Weapons",
+  "additional_categories": [
+    "Technology"
+  ],
+  "license_id": "GPL-3.0-only",
+  "license_url": "https://github.com/zentixua/incoming/blob/main/LICENSE",
+  "source_url": "https://github.com/zentixua/incoming",
+  "issues_url": "https://github.com/zentixua/incoming/issues",
+  "wiki_url": "https://github.com/zentixua/incoming/blob/main/docs/guide/README.md",
+  "discord_url": null,
+  "avatar": "docs/media/icon-400.png",
+  "body_files": [
+    "docs/store/curseforge.md",
+    "docs/store/curseforge.ru.md"
+  ],
+  "gallery_manifest": "docs/store/modrinth.json",
+  "allow_comments": true,
+  "experimental": false,
+  "client_side": "required",
+  "server_side": "required",
+  "release_type": "release",
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "neoforge"
+  ],
+  "java_versions": [
+    21
+  ],
+  "required_dependencies": [],
+  "optional_dependencies": [
+    "create",
+    "sable",
+    "distant-horizons",
+    "roxy"
+  ],
+  "unmapped_optional_dependencies": [
+    "create-aeronautics",
+    "voxy",
+    "lod-server-support"
+  ],
+  "submission": "manual authorization required"
+}

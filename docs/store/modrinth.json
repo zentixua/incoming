@@ -17,15 +17,15 @@
   "icon": "docs/media/icon.png",
   "gallery": [
     {
-      "file": "docs/media/hero.webp",
-      "title": "Factory strike",
-      "description": "Cruise missiles fly in over the camera and hit a factory.",
+      "file": "docs/media/factory-aftermath.jpg",
+      "title": "Factory aftermath",
+      "description": "Smoke and drifting dust after the missile salvo.",
       "featured": true
     },
     {
-      "file": "docs/media/nuke-dusk.webp",
-      "title": "Nuclear strike",
-      "description": "Flash, mushroom cloud and the blast wave at dusk."
+      "file": "docs/media/nuke-dusk-wide.jpg",
+      "title": "Dusk blast wave",
+      "description": "A glowing mushroom cap above the approaching ground wave."
     },
     {
       "file": "docs/guide/img/sam.webp",
@@ -39,7 +39,7 @@
     },
     {
       "file": "docs/guide/img/weapon-shahed.jpg",
-      "title": "Shahed-136",
+      "title": "Shahed flight",
       "description": "A drone on its way to the target."
     },
     {
@@ -59,12 +59,12 @@
     },
     {
       "file": "docs/guide/img/weapon-icbm.jpg",
-      "title": "ICBM",
+      "title": "ICBM ascent",
       "description": "A ballistic missile in flight."
     },
     {
       "file": "docs/guide/img/scope.png",
-      "title": "Binoculars",
+      "title": "Binocular targeting",
       "description": "Aim at anything you can see."
     },
     {
@@ -77,5 +77,6 @@
       "title": "Targeting map",
       "description": "Choose a target on the city map."
     }
-  ]
+  ],
+  "discord_url": null
 }
