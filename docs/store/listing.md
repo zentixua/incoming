@@ -73,22 +73,22 @@ The effect and nuclear sections lead, followed by weapons and controls. A factor
 Each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
-The draft Modrinth gallery is in `modrinth.json`, in this order:
+The draft Modrinth gallery is in `modrinth.json`, in this order: four animations, then stills; each scene appears once.
 
-| File | Caption |
-|---|---|
-| `docs/media/still-5.jpg` | Cruise missile salvo over a factory, seen from a fixed camera on a low terrace (featured) |
-| `docs/guide/img/nuke-wave.jpg` | The blast wave approaches a fixed ground camera after a 6 kt ground burst at night |
-| `docs/guide/img/nuke-cloud.jpg` | Rising cloud from a 6 kt ground burst in downtown Newisle at night, seen from ground level |
-| `docs/guide/img/sam.webp` | SAM defending against a drone raid |
-| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
-| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult on an airport runway |
-| `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
-| `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
-| `docs/guide/img/weapon-icbm.jpg` | ICBM in flight |
-| `docs/guide/img/launcher.webp` | Cruise missiles launch from an airport runway |
-| `docs/guide/img/remote.png` | Choose a weapon and set up a salvo |
-| `docs/guide/img/map.png` | Targeting map of the city before the strike |
+| File | Title | Description |
+|---|---|---|
+| `docs/media/hero.webp` | Factory strike (featured) | Cruise missiles fly in over the camera and hit a factory. |
+| `docs/media/nuke.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at night. |
+| `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
+| `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |
+| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 | A drone on its way to the target. |
+| `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult | Ready to launch from an airport. |
+| `docs/guide/img/weapon-grad.jpg` | Grad MLRS | Ready for a rocket salvo. |
+| `docs/guide/img/weapon-b2.jpg` | B-2 bomber | On its way to drop a bunker buster. |
+| `docs/guide/img/weapon-icbm.jpg` | ICBM | A ballistic missile in flight. |
+| `docs/guide/img/scope.png` | Binoculars | Aim at anything you can see. |
+| `docs/guide/img/remote.png` | Strike remote | Pick a weapon and set up a salvo. |
+| `docs/guide/img/map.png` | Targeting map | Choose a target on the city map. |
 
 The factory and nuclear scenes were recorded with Incoming 3.10.1 on copies of Project Zearth and Newisle.
 Other instructional captures retain their Incoming 3.10.0 sources. Motion clips use Flashback exports at 30 fps; stills are native export frames or plain F2 screenshots at 1920×1080 with Complementary Unbound.
