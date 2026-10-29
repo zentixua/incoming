@@ -11,10 +11,10 @@ paths:
 # Headless client scenarios
 
 ## Page media
-- Use a fixed camera for each page clip: one position, direction and FOV throughout. Camera motion needs Artem's
-  explicit request. Record with the normal full pack and shaderpack, then use Flashback's native keyframe and export;
-  derive stills from that same exported take. Disable camera shake in the filming copy for fixed shots: a single
-  HOLD key does not suppress the mod's impact shake. Check the exported position, angles and FOV as well as frames.
+- Use a fixed camera for each page clip: no keyframe motion, pan or zoom unless Artem explicitly requests it.
+  The mod's own effects, including impact camera shake, stay on; page media shows how the mod normally works.
+  Record with the normal full pack and shaderpack, then use Flashback's native keyframe and export;
+  derive stills from that same exported take. Do not disable mod effects in the filming copy.
 - Factory shots are near ground level, looking slightly up, with about half sky and half target. Launch several
   missiles roughly 1.5 km behind the camera, through a waypoint above it, with a few dozen blocks of target spread.
   The clip must show missiles against the sky over the camera, their approach and impacts at different points.
