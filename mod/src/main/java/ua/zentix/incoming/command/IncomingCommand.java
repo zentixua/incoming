@@ -166,7 +166,7 @@ public final class IncomingCommand {
         return node.executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IncomingConfig.SERVER.nukeDefaultYield.get())))
                 .then(Commands.argument("kt", IntegerArgumentType.integer(1, Loadout.Nuke.MAX_YIELD))
                         .executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt"))))
-                        .then(Commands.literal("air").executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt")))))
+                        .then(Commands.literal("air").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), true))))
                         .then(Commands.literal("ground").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), false)))));
     }
 

@@ -1937,11 +1937,12 @@ public final class NuclearGameTests {
     public static void scheduledStrikeSavesAndClears(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
-        h.assertTrue(NuclearStrikes.launch(level, target, true, 15, true, null), "remote launch failed");
+        h.assertTrue(NuclearStrikes.launch(level, target, true, Loadout.Nuke.DEFAULT.yieldKt(), Loadout.Nuke.DEFAULT.airBurst(), null), "remote launch failed");
         List<NuclearEvents.ScheduledStrike> scheduled = NuclearEvents.get(level).scheduled();
         h.assertTrue(scheduled.size() == 1, "scheduled strikes: " + scheduled.size());
         NuclearEvents.ScheduledStrike s = scheduled.getFirst();
         h.assertTrue(s.surface(), "hitting a location on the map is not marked as hitting a surface");
+        h.assertFalse(s.airBurst(), "default nuclear order scheduled an airburst");
         var tag = NuclearEvents.ScheduledStrike.CODEC.encodeStart(NbtOps.INSTANCE, s).getOrThrow();
         h.assertTrue(NuclearEvents.ScheduledStrike.CODEC.parse(NbtOps.INSTANCE, tag).getOrThrow().equals(s), "the blow did not survive the save");
         Detonation d = detonation(h, CENTER, 300, 15, 0.1f);

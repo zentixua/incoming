@@ -32,8 +32,8 @@
 | `/incoming nuke at <x y z> [кт [air\|ground]]` | МБР по точке |
 | `/incoming nuke now [at <x y z>] [кт [air\|ground]]` | подрыв сразу, без полёта (только оператор) |
 
-Без числа — `nuclear.default_yield` мира (по умолчанию 15 кт), воздушный подрыв. `air` или `ground` — только после
-числа: `/incoming nuke 15 ground`.
+Без числа — `nuclear.default_yield` мира (по умолчанию 15 кт). Без типа подрыва — наземный.
+`air` или `ground` — только после числа: `/incoming nuke 15 air` выбирает воздушный подрыв.
 
 ## Прочее
 
