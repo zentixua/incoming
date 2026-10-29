@@ -71,15 +71,18 @@ upload list records the terrain/recipe/craft integrations above.
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
 The effect and nuclear sections lead, followed by weapons and controls. The body shows the factory approach/impacts and the 6 kt dusk burst as two animations.
-The gallery adds a later factory aftermath and a separately framed nuclear still, neither taken from the displayed clips.
+The gallery contains both body animations, the other animations and all stills, using the same files.
 Each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
-The gallery adds two animations and ten stills to the two body animations. No body image is repeated in the gallery.
+The shared gallery contains four animations and ten stills, with each file included once. Only the factory-strike
+and dusk nuclear animations also appear in the page bodies.
 
 | File | Title | Description |
 |---|---|---|
-| `docs/media/factory-aftermath.jpg` | Factory aftermath (featured) | Smoke and drifting dust after the missile salvo. |
+| `docs/media/hero.webp` | Factory strike (featured) | A missile salvo hits the factory. |
+| `docs/media/nuke-dusk.webp` | Dusk nuclear strike | Flash, rising cloud and the blast wave reaching the observer. |
+| `docs/media/factory-aftermath.jpg` | Factory aftermath | Smoke and drifting dust after the missile salvo. |
 | `docs/media/nuke-dusk-wide.jpg` | Dusk blast wave | A glowing mushroom cap above the approaching ground wave. |
 | `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
 | `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |

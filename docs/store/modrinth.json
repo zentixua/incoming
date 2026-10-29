@@ -17,10 +17,20 @@
   "icon": "docs/media/icon.png",
   "gallery": [
     {
+      "file": "docs/media/hero.webp",
+      "title": "Factory strike",
+      "description": "A missile salvo hits the factory.",
+      "featured": true
+    },
+    {
+      "file": "docs/media/nuke-dusk.webp",
+      "title": "Dusk nuclear strike",
+      "description": "Flash, rising cloud and the blast wave reaching the observer."
+    },
+    {
       "file": "docs/media/factory-aftermath.jpg",
       "title": "Factory aftermath",
-      "description": "Smoke and drifting dust after the missile salvo.",
-      "featured": true
+      "description": "Smoke and drifting dust after the missile salvo."
     },
     {
       "file": "docs/media/nuke-dusk-wide.jpg",
