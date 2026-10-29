@@ -18,8 +18,11 @@ paths:
 - Factory shots are near ground level, looking slightly up, with about half sky and half target. Launch several
   missiles roughly 1.5 km behind the camera, through a waypoint above it, with a few dozen blocks of target spread.
   The clip must show missiles against the sky over the camera, their approach and impacts at different points.
-- Nuclear shots use one fixed ground-level eye position, 1.6–1.7 km away, at night for a 5 kt ground burst. Choose
-  framing once for the flash, fireball and rising cloud; record through the wave reaching and covering the camera.
+  Before recording, check sight lines against the actual world blocks across the impact area: foreground houses,
+  trees or walls must not hide the impacts. Inspect the real client view as well as the rays.
+- Nuclear shots use one fixed eye-height camera on flat natural ground, not a hill or roof. Use Artem's requested
+  target, yield and distance; verify the real view before launching. Choose framing once for the flash, fireball,
+  rising cloud and visibly approaching wave; record through the wave reaching and covering the camera.
 - Store gallery publishing reconciles the configured set, never appends duplicates. Keep each image and shot once,
   with a caption describing what is actually visible; a repeated draft run must leave the same gallery.
 - Before merge, a fresh visual session checks the actual stills and clip frames against Artem's shot list, including
