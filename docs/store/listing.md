@@ -77,12 +77,11 @@ The draft Modrinth gallery is in `modrinth.json`, in this order:
 
 | File | Caption |
 |---|---|
-| `docs/media/still-5.jpg` | Cruise missile approaching a factory (featured) |
+| `docs/media/still-5.jpg` | Cruise missile salvo over a factory, seen from a fixed ground camera (featured) |
 | `docs/guide/img/nuke-wave.jpg` | Blast-wave dust arrives 17 seconds after a 5 kt ground burst at night |
 | `docs/guide/img/nuke-cloud.jpg` | Rising cloud 25 seconds after a 5 kt ground burst in Newisle at night |
 | `docs/guide/img/sam.webp` | SAM defending against a drone raid |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 on the way to its target |
-| `docs/media/still-2.jpg` | Cruise missile approaching a factory in Project Zearth |
 | `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult on an airport runway |
 | `docs/guide/img/weapon-grad.jpg` | Grad ready for a rocket salvo |
 | `docs/guide/img/weapon-b2.jpg` | B-2 in flight |
@@ -138,8 +137,9 @@ than the current workflow revision.
 - `submit`: sends the Modrinth draft for review and uploads the jar to CurseForge, where a first file can trigger review.
 - `release`: uploads a later version; the Modrinth page/media change only when `update_page` is explicitly enabled.
 
-All configured media must exist before a page changes. Removed gallery entries are removed remotely on an
-applicable page update. The stores handle upload results independently. CurseForge checks file hashes and a durable
+All configured media must exist before a page changes. Duplicate image contents are rejected before any remote
+change. Page updates reconcile the gallery: one entry per configured image, obsolete and duplicate entries removed;
+repeating the update leaves the same gallery. The stores handle upload results independently. CurseForge checks file hashes and a durable
 GitHub deployment receipt before uploading; an uncertain prior submission stops for owner reconciliation instead
 of uploading again during moderation. Automatic CurseForge upload retries are disabled. A CurseForge project is
 created in the account, not by this workflow.

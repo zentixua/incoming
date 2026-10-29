@@ -62,7 +62,8 @@ class StoreBodyTest(unittest.TestCase):
         self.assertEqual(metadata["description"], (STORE / "summary.md").read_text().strip())
         self.assertLessEqual(len(metadata["description"]), 256)
 
-    def run_page(self, exists, missing_translation=False, with_gallery=False):
+    def run_page(self, exists, missing_translation=False, with_gallery=False,
+                 duplicate_remote=False, duplicate_local=False, repeat=False):
         """Exercise the real page script against a loopback-only fake store."""
         writes = []
         gallery = []
@@ -96,6 +97,11 @@ class StoreBodyTest(unittest.TestCase):
                     if not self.valid_gallery_query():
                         return
                     writes.append({"method": "POST", "path": self.path})
+                    query = parse_qs(urlsplit(self.path).query)
+                    sha = hashlib.sha1(raw).hexdigest()
+                    gallery.append({"url": f"https://cdn.example/{sha}.jpg",
+                                    "raw_url": f"https://cdn.example/{sha}.jpg",
+                                    "title": query.get("title", [""])[0]})
                     self.reply(204, {})
                     return
                 message = BytesParser(policy=policy.default).parsebytes(
@@ -120,6 +126,8 @@ class StoreBodyTest(unittest.TestCase):
 
             def do_DELETE(self):
                 writes.append({"method": "DELETE", "path": self.path})
+                url = parse_qs(urlsplit(self.path).query)["url"][0]
+                gallery[:] = [image for image in gallery if image["url"] != url]
                 self.reply(204, {})
 
         with tempfile.TemporaryDirectory() as folder:
@@ -147,6 +155,12 @@ class StoreBodyTest(unittest.TestCase):
                 image.write_bytes(b"new fixture image")
                 configured_gallery.append({"file": str(image), "description": ""})
                 gallery.append({"url": "https://cdn.example/obsolete.jpg", "featured": True, "ordering": 0})
+                if duplicate_remote:
+                    gallery.append(gallery[0] | {"url": "https://cdn.example/duplicate.jpg"})
+                if duplicate_local:
+                    alias = folder / "same-image-another-name.jpg"
+                    alias.write_bytes(Path(configured_gallery[0]["file"]).read_bytes())
+                    configured_gallery.append({"file": str(alias)})
             (folder / "store.json").write_text(json.dumps({"slug": "fixture", "gallery": configured_gallery}))
             (folder / "fixture.jar").write_bytes(b"fixture jar")
             with ThreadingHTTPServer(("127.0.0.1", 0), Store) as server:
@@ -159,10 +173,38 @@ class StoreBodyTest(unittest.TestCase):
                     result = subprocess.run(["bash", str(SCRIPT.with_name("modrinth.sh")), "page", "draft",
                                              str(folder / "fixture.jar")], env=env, text=True,
                                             capture_output=True, timeout=20, check=False)
+                    if repeat and result.returncode == 0:
+                        writes.append({"repeat": True, "gallery": len(gallery)})
+                        result = subprocess.run(["bash", str(SCRIPT.with_name("modrinth.sh")), "page", "draft",
+                                                 str(folder / "fixture.jar")], env=env, text=True,
+                                                capture_output=True, timeout=20, check=False)
                 finally:
                     server.shutdown()
                     thread.join()
         return result, writes
+
+    def test_duplicate_local_content_fails_before_remote_mutation(self):
+        result, writes = self.run_page(exists=True, with_gallery=True, duplicate_local=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate gallery image", result.stdout)
+        self.assertEqual(writes, [])
+
+    def test_gallery_reconciliation_removes_duplicates_and_is_idempotent(self):
+        result, writes = self.run_page(exists=True, with_gallery=True, duplicate_remote=True, repeat=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        boundary = next(i for i, entry in enumerate(writes) if "repeat" in entry)
+        self.assertEqual(writes[boundary]["gallery"], 4)
+        removed = [parse_qs(urlsplit(w["path"]).query)["url"][0]
+                   for w in writes[:boundary] if w.get("method") == "DELETE"]
+        self.assertCountEqual(removed, ["https://cdn.example/obsolete.jpg", "https://cdn.example/duplicate.jpg"])
+        second = writes[boundary + 1:]
+        self.assertEqual([w["method"] for w in second if "method" in w], ["PATCH"] * 4)
+
+    def test_repository_gallery_has_unique_images_and_one_factory_approach(self):
+        gallery = json.loads((STORE / "modrinth.json").read_text())["gallery"]
+        hashes = [hashlib.sha1((ROOT / image["file"]).read_bytes()).hexdigest() for image in gallery]
+        self.assertEqual(len(hashes), len(set(hashes)))
+        self.assertEqual(sum("factory" in image.get("title", "").lower() for image in gallery), 1)
 
     def test_new_draft_gets_both_languages(self):
         result, writes = self.run_page(exists=False)
