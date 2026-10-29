@@ -14,7 +14,7 @@ It includes six weapons, air defense and sirens, with a designator for choosing 
 - **Explosions and aftermath:** fireballs light up nearby terrain, blasts break blocks and shatter windows, and dust and smoke rise and drift with the wind. Strikes can start fires; leftover fuel burns in the crater.
 - **Blackout:** strike a transformer substation to cut electric lights in its district.
 
-![Cruise missile above the factory, seen from a fixed camera on a low terrace](docs/media/still-5.jpg)
+![Smoke and dust over the factory after the salvo](docs/media/factory-aftermath.jpg)
 
 ### Nuclear strikes
 
@@ -23,7 +23,7 @@ Launch an ICBM or fit a nuclear warhead to a cruise missile or B-2 bomb. Operato
 
 ![A 6 kt ground burst at dusk, seen from a fixed ground camera: flash, rising cloud and the wave reaching the observer](docs/media/nuke-dusk.webp)
 
-![Rising cloud from a 6 kt ground burst in downtown Newisle at dusk, seen from ground level](docs/guide/img/nuke-dusk-cloud.jpg)
+![Glowing mushroom cap and approaching ground wave at dusk](docs/media/nuke-dusk-wide.jpg)
 
 ### Weapons
 

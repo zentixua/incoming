@@ -4,8 +4,6 @@ English · [Русский](ru/README.md)
 
 Incoming lets you call in air strikes and defend against them. Start with one Shahed and an open patch of ground.
 
-![Aiming through the designator's binoculars](img/scope.png)
-
 ## Your first strike
 
 1. Install Incoming for **Minecraft 1.21.1 and NeoForge 21.1.264+**, using Java 21. Put the [jar](https://github.com/zentixua/incoming/releases/latest) in `mods`; on a server, everyone needs the same version.

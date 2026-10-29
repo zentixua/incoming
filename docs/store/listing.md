@@ -6,7 +6,8 @@ Account fields and storefront previews require a separate authorized step.
 ## Text and fields
 
 Public text stays in separate language files. English goes first when assembling a store body, followed by a
-separator and the complete Russian text. Both platforms permit additional languages after English; keep the main
+separator and the complete Russian text. Illustrations appear once in the English section; the Russian section
+translates the text without embedding the same images again. Both platforms permit additional languages after English; keep the main
 title and summary in English.
 
 - Modrinth: [description.md](description.md), then [description.ru.md](description.ru.md).
@@ -69,24 +70,25 @@ upload list records the terrain/recipe/craft integrations above.
 
 The Modrinth icon is `docs/media/icon.png` (512×512); the CurseForge avatar is `docs/media/icon-400.png` (400×400 PNG).
 The first screen uses the factory-strike animation (`docs/media/hero.webp`), a tagline and a three-sentence introduction.
-The effect and nuclear sections lead, followed by weapons and controls. A factory approach and impact, and a 6 kt ground burst at dusk illustrate the effects.
+The effect and nuclear sections lead, followed by weapons and controls. The body shows the factory approach/impacts and the 6 kt dusk burst as two animations.
+The gallery adds a later factory aftermath and a separately framed nuclear still, neither taken from the displayed clips.
 Each refreshed animation is below 5 MB. Extra weapon screenshots are in the Gallery.
 There is no verified finished video URL, so the description has no video section or video placeholder.
 
-The draft Modrinth gallery is in `modrinth.json`, in this order: four animations, then stills; each scene appears once.
+The gallery adds two animations and ten stills to the two body animations. No body image is repeated in the gallery.
 
 | File | Title | Description |
 |---|---|---|
-| `docs/media/hero.webp` | Factory strike (featured) | Cruise missiles fly in over the camera and hit a factory. |
-| `docs/media/nuke-dusk.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at dusk. |
+| `docs/media/factory-aftermath.jpg` | Factory aftermath (featured) | Smoke and drifting dust after the missile salvo. |
+| `docs/media/nuke-dusk-wide.jpg` | Dusk blast wave | A glowing mushroom cap above the approaching ground wave. |
 | `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
 | `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |
-| `docs/guide/img/weapon-shahed.jpg` | Shahed-136 | A drone on its way to the target. |
+| `docs/guide/img/weapon-shahed.jpg` | Shahed flight | A drone on its way to the target. |
 | `docs/guide/img/weapon-lancet-launcher.jpg` | Lancet catapult | Ready to launch from an airport. |
 | `docs/guide/img/weapon-grad.jpg` | Grad MLRS | Ready for a rocket salvo. |
 | `docs/guide/img/weapon-b2.jpg` | B-2 bomber | On its way to drop a bunker buster. |
-| `docs/guide/img/weapon-icbm.jpg` | ICBM | A ballistic missile in flight. |
-| `docs/guide/img/scope.png` | Binoculars | Aim at anything you can see. |
+| `docs/guide/img/weapon-icbm.jpg` | ICBM ascent | A ballistic missile in flight. |
+| `docs/guide/img/scope.png` | Binocular targeting | Aim at anything you can see. |
 | `docs/guide/img/remote.png` | Strike remote | Pick a weapon and set up a salvo. |
 | `docs/guide/img/map.png` | Targeting map | Choose a target on the city map. |
 
@@ -144,7 +146,20 @@ GitHub deployment receipt before uploading; an uncertain prior submission stops 
 of uploading again during moderation. Automatic CurseForge upload retries are disabled. A CurseForge project is
 created in the account, not by this workflow.
 
-## Needs Artem before a public store step
+## Account settings and remaining release steps
+
+[CurseForge settings](curseforge.json) is the complete manual project-field payload; the workflow uploads files,
+not these settings. Project 1770261 already exists. The coordinator applies and verifies its title, summary,
+categories, GPL license, 400 px avatar, source/issues/wiki links, comments enabled, experimental disabled,
+assembled bilingual body and the gallery above. There is no public Discord invite or donation URL to add.
+Verify any platform AI disclosure field (AI-assisted code/text; media is actual gameplay), visibility and the
+rendered Markdown/animated WebP in the account. Do not submit as part of this setup.
+
+The version upload path already declares NeoForge, Minecraft 1.21.1, Java 21, release type and the optional
+relations above. CurseForge needs its separate Core API key (`CURSEFORGE_API_KEY`) before upload; the upload
+token alone cannot perform the duplicate-file check. Submission and public release each need Artem’s word.
+
+### Final account verification
 
 - Identify the existing hidden projects, if any, from the owner account; record their IDs, URLs, owner and visibility.
   A public API 404 does not prove that no private draft exists; a 403 does not establish a CurseForge project's state.
