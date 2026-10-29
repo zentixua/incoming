@@ -23,9 +23,10 @@ By default only operators can.
 
 ![Console with the nuclear warhead: yield slider and burst mode](img/remote-nuke.png)
 
-Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. A designator with an
-explicitly saved air-burst setting keeps it; missing settings use the new ground default. You can switch modes on
-the console before launching.
+Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. Older versions normally
+omitted AIR from saved designator settings because it was the default, so those designators switch to GROUND after
+updating, even if you selected AIR with the button. A saved `air_burst=true` field still keeps AIR. You can select
+air burst again on the console before launching. ICBMs already scheduled keep their burst mode.
 
 The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
 
