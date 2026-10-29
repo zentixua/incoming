@@ -78,7 +78,7 @@ The draft Modrinth gallery is in `modrinth.json`, in this order: four animations
 | File | Title | Description |
 |---|---|---|
 | `docs/media/hero.webp` | Factory strike (featured) | Cruise missiles fly in over the camera and hit a factory. |
-| `docs/media/nuke.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at dusk. |
+| `docs/media/nuke-dusk.webp` | Nuclear strike | Flash, mushroom cloud and the blast wave at dusk. |
 | `docs/guide/img/sam.webp` | Air defense | A SAM site shoots down a drone raid. |
 | `docs/guide/img/launcher.webp` | Missile launch | Cruise missiles take off from a runway. |
 | `docs/guide/img/weapon-shahed.jpg` | Shahed-136 | A drone on its way to the target. |
