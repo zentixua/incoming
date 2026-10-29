@@ -4,6 +4,7 @@
 #                                   only while project hidden (draft, rejected, processing)
 #   modrinth.sh page release <jar>  same for reviewed project (not draft/rejected); never creates a new one
 #   modrinth.sh submit              send draft (or rejected project) for review: status processing
+#   modrinth.sh version <jar> [submit|release]  check the selected jar before submission or release
 # page writes project ID and upload=true to GITHUB_OUTPUT if jar (by sha1) is not yet in project.
 # Fields: docs/store/modrinth.json (missing key leaves site field unchanged, null clears it); page text:
 # docs/store/description.md. Required media must all exist before the page is changed. Already published images
@@ -124,10 +125,13 @@ page() {
       ;;
     draft:draft | draft:rejected | draft:processing | release:approved | release:unlisted | release:private | \
       release:archived | release:processing)
-      jq --rawfile body "$tmp/description.md" '. as $s
+      # Re-sending an unchanged slug can collide with another project's ID in Labrinth.
+      # Keep intentional renames, and always address this project by its permanent ID.
+      jq --rawfile body "$tmp/description.md" --slurpfile current "$tmp/project.json" '. as $s
         | [ "slug", "title", "description", "client_side", "server_side", "categories", "additional_categories", "license_id",
             "source_url", "issues_url", "wiki_url", "discord_url" ]
-        | map(select(. as $k | $s | has($k)) | {(.): $s[.]}) | add + {body: $body}' "$STORE_JSON" > "$tmp/edit.json"
+        | map(select(. as $k | $s | has($k)) | {(.): $s[.]}) | add + {body: $body}
+        | if .slug == $current[0].slug then del(.slug) else . end' "$STORE_JSON" > "$tmp/edit.json"
       call PATCH "/project/$(jq -r .id "$tmp/project.json")" 204 -H 'Content-Type: application/json' \
         --data-binary @"$tmp/edit.json"
       ;;
@@ -248,6 +252,6 @@ version() {
 case ${1:-} in
   page) page "${2:?draft or release}" "${3:?jar}" ;;
   submit) submit ;;
-  version) version "${2:?jar}" ;;
-  *) echo "usage: $0 page draft|release <jar> | submit" >&2; exit 2 ;;
+  version) version "${2:?jar}" "${3:-release}" ;;
+  *) echo "usage: $0 page draft|release <jar> | version <jar> [submit|release] | submit" >&2; exit 2 ;;
 esac
