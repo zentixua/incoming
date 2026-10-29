@@ -7,8 +7,8 @@
 # page writes project ID and upload=true to GITHUB_OUTPUT if jar (by sha1) is not yet in project.
 # Fields: docs/store/modrinth.json (missing key leaves site field unchanged, null clears it); page text:
 # docs/store/description.md. Required media must all exist before the page is changed. Already published images
-# (file sha1 appears in their Modrinth CDN URL) too: reruns add only new images and remove site images
-# no longer present in the list.
+# (file sha1 appears in their Modrinth CDN URL) too: reruns reconcile the configured gallery,
+# retaining one entry per image and removing obsolete or duplicate site entries.
 # Find project by slug with token: draft visible only to its team.
 # Environment: MODRINTH_TOKEN; MODRINTH_API (default https://api.modrinth.com/v2; test stub);
 # STORE_JSON, BODY_MD override field/text paths.
@@ -94,6 +94,16 @@ page() {
   done < <(jq -r '(.icon // empty), (.gallery[]?.file)' "$STORE_JSON")
   file=$(jq -r '.icon // empty' "$STORE_JSON")
   if [ -n "$file" ]; then image "$file" 524288; fi
+  # Different paths can contain the same image. Reject them before any remote mutation.
+  local -A gallery_files=()
+  while IFS= read -r file; do
+    sha=$(sha1sum "$file" | cut -d' ' -f1)
+    if [ -n "${gallery_files[$sha]:-}" ]; then
+      echo "::error::Modrinth: duplicate gallery image: $file and ${gallery_files[$sha]}"
+      exit 1
+    fi
+    gallery_files[$sha]=$file
+  done < <(jq -r '.gallery[]?.file' "$STORE_JSON")
   bash "$(dirname "$0")/store_body.sh" "$BODY_MD" "$BODY_RU_MD" > "$tmp/description.md"
   case "$step:$status" in
     draft:none)
@@ -142,6 +152,7 @@ page() {
   # The project JSON fields above use a separate null-clears contract.
   # https://docs.modrinth.com/api/operations/modifygalleryimage/
   n=$(jq '.gallery // [] | length' "$STORE_JSON")
+  local retained=() removed=() matches url key
   for ((i = 0; i < n; i++)); do
     file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
     if [ ! -f "$file" ]; then
@@ -152,12 +163,30 @@ page() {
     q=$(jq -r --argjson i "$i" '.gallery[$i] | "ordering=\($i)&featured=\(.featured // false)"
       + (if (.title // "") != "" then "&title=\(.title | @uri)" else "" end)
       + (if (.description // "") != "" then "&description=\(.description | @uri)" else "" end)' "$STORE_JSON")
-    existing_url=$(jq -r --arg s "$sha" '[.gallery[]?
-      | select(((.url // "") + " " + (.raw_url // "")) | contains($s)) | .url][0] // empty' \
-      "$tmp/project.json")
+    matches=$(jq -c --arg s "$sha" '[.gallery[]?
+      | select(((.url // "") + " " + (.raw_url // "")) | contains($s))]' "$tmp/project.json")
+    existing_url=$(jq -r '.[0].url // empty' <<<"$matches")
+    if [ "$(jq 'length' <<<"$matches")" -gt 1 ]; then
+      # A replacement must preserve the same absent/empty/null text semantics as PATCH.
+      for key in title description; do
+        if [ -z "$(jq -r --argjson i "$i" --arg k "$key" '.gallery[$i][$k] // empty' "$STORE_JSON")" ]; then
+          q+=$(jq -r --arg k "$key" '.[0][$k] // "" | if . == "" then "" else "&\($k)=\(. | @uri)" end' <<<"$matches")
+        fi
+      done
+      # Labrinth deletes both CDN files, including a raw_url shared by another entry.
+      # Remove the whole duplicate group BEFORE uploading its one replacement.
+      # https://github.com/modrinth/code/blob/862c64e699b02664b289cf18f01422e356be4c2f/apps/labrinth/src/routes/v3/projects/mod.rs#L3389-L3396
+      while IFS= read -r url; do
+        call DELETE "/project/$id/gallery?url=$(jq -rn --arg u "$url" '$u | @uri')" 204
+        removed+=("$url")
+        echo "gallery: replacing duplicate $url"
+      done < <(jq -r '.[].url' <<<"$matches")
+      existing_url=
+    fi
     if [ -n "$existing_url" ]; then
       call PATCH "/project/$id/gallery?url=$(jq -rn --arg u "$existing_url" '$u | @uri')&$q" 204
       echo "Gallery metadata updated: $file"
+      retained+=("$existing_url")
       continue
     fi
     image "$file" 5242880
@@ -165,22 +194,19 @@ page() {
     echo "gallery: $file"
   done
 
-  # Site gallery exactly matches modrinth.json: remove images whose sha1 is absent from listed files.
-  local keep=() url raw_url k found
-  for ((i = 0; i < n; i++)); do
-    file=$(jq -r ".gallery[$i].file" "$STORE_JSON")
-    if [ -f "$file" ]; then keep+=("$(sha1sum "$file" | cut -d' ' -f1)"); fi
-  done
-  while IFS=$'\t' read -r url raw_url; do
+  # Keep only the selected entry, not every old URL sharing a configured image's hash.
+  # New uploads are absent from this pre-update snapshot and therefore cannot be removed here.
+  local k found
+  while IFS= read -r url; do
     found=false
-    for k in "${keep[@]}"; do
-      case "$url $raw_url" in *"$k"*) found=true ;; esac
+    for k in "${retained[@]}" "${removed[@]}"; do
+      if [ "$url" = "$k" ]; then found=true; break; fi
     done
     if [ "$found" = false ]; then
       call DELETE "/project/$id/gallery?url=$(jq -rn --arg u "$url" '$u | @uri')" 204
       echo "gallery: removed $url"
     fi
-  done < <(jq -r '.gallery[]? | select(.url != null) | [.url, (.raw_url // "")] | @tsv' "$tmp/project.json")
+  done < <(jq -r '.gallery[]? | .url // empty' "$tmp/project.json")
 
   version "$jar" "$step"
 }
