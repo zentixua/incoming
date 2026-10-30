@@ -138,7 +138,7 @@ paths:
 - «Что изменилось» в `build.yml`: правка только `tools/` (кроме `fetch_runtime_mods.py`, `paths.py`), `docs/`, `*.md`
   мод не собирает и GameTest не гоняет (`tools/replayscan` — своя сборка и юнит-тесты, `tools/look_gate` — тест
   годности прогона, `tools/stand` — сборка обвязки, её юнит-тесты и test_gate.py); страницы магазинов (`docs/store`,
-  `docs/media`, README, `.github/scripts`, `publish.yml`) — только их проверка `test_store*.py`; `mod/`, CI и
+  `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) — только их проверка `test_store*.py`; `mod/`, CI и
   незнакомые пути — проверка целиком, ручной запуск (релиз) — всегда целиком. jar — артефакт `incoming-jar`.
 - Пуск в `main` и релиз не проверяют заново дерево, которое уже целиком прошло успешный прогон этого репозитория
   (PR, влитый без сдвига `main`, даёт то же дерево): «Что изменилось» находит метку `tested-tree-<дерево>`

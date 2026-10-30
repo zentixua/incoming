@@ -102,8 +102,8 @@ jobs:
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;
                 tools/stand/*) stand=true ;;
-                # Store publishing (publish.yml) and the pages it uploads: page/body regressions only (test_store*.py).
-                .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|README.md|README.ru.md) store=true ;;
+                # Store publishing (publish.yml) and the pages and gallery it uploads (guide images too): test_store*.py only.
+                .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|docs/guide/*|README.md|README.ru.md) store=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
                 *) mod=true ;;
@@ -123,7 +123,8 @@ jobs:
         if: steps.diff.outputs.mod == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release && inputs.gametest_only == ''))
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/ci_reuse.py find "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+        # An API failure only costs the full checks, not the run.
+        run: python3 tools/ci_reuse.py find "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT" || echo 'run=' >> "$GITHUB_OUTPUT"
 
   build:
     name: Сборка
