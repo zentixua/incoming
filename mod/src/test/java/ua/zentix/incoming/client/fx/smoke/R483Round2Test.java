@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.strike.WeaponType;
@@ -9,6 +10,8 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Regression cases from review R483 round 2; source cost uses a deterministic clock for CI. */
+// One of the three slowest unit test classes (1–3 min): CI runs each in its own JVM (build.gradle, testGroup).
+@Tag("slow")
 class R483Round2Test {
     static final class Blast implements SmokeGrid.Source {
         final CloudModel model; final double born, x; final long[] clock;

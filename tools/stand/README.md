@@ -2,8 +2,9 @@
 
 The bench captures one Incoming version in identical scenes of real strikes, comparing it with a baseline
 (PRs: `main` head with a green build; acceptance and one-off comparisons: a release) captured as a pair in
-the same session: CPU/GPU frame time by render stage, server tick, reviewer frames. An effect change cannot
-merge if frame time at 100 strikes is worse than `main` (CLAUDE.md, "Visuals and sound"; Artem, 24.10).
+the same session: CPU/GPU frame time by render stage, server tick, reviewer frames. A change that can alter
+frame cost (render/FX code, shaders, particle or draw counts) cannot merge if frame time at 100 strikes is worse than
+`main` (AGENTS.md, Workflow; Artem, 24.10); the bench runs once on its final head, and other changes skip it (Artem, 30.10).
 Below, "accepted" means the pair baseline. The sandbox (`tools/sandbox.sh`) remains for frames during work;
 the bench is for PRs and releases.
 

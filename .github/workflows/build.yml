@@ -1,9 +1,12 @@
 # Build, unit tests and GameTest (server with Create, Sable, Aeronautics from Modrinth); jar in run artifacts.
 # Check changed areas: tools-only (tools/, except GameTest mods) and text-only (docs/, *.md) edits
 # skip mod build/GameTest (tools/replayscan replay analysis and tools/stand scene bench have their own build and
-# unit tests); changes to mod,
-# GameTest mods or CI run full checks. GameTest runs
-# in shards on six machines alongside build/unit tests (devtest GameTestShards). Combined result: “Итог”.
+# unit tests); store pages and their scripts run only the store checks; changes to mod,
+# GameTest mods or CI run full checks. Jar build, unit tests (two machines, parallel JVMs) and GameTest shards on six machines
+# run side by side (devtest GameTestShards). Combined result: “Итог”.
+# A main push or release whose tree a successful same-repository run already checked in full (the PR's merge
+# commit is the squash result when main did not move) reuses that run's jar instead of building and testing the
+# same files again (tools/ci_reuse.py).
 # Open Skies pack and Almighty game-master bridge have separate repositories (zentixua/open-skies, zentixua/almighty).
 # Manual run on main (or claude/release-* to release exactly a tested commit) with release=true:
 # full checks, then GitHub release v<mod_version> with this jar and docs/releases/<mod_version>.md notes.
@@ -49,7 +52,12 @@ jobs:
     name: Что изменилось
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
+      reuse: ${{ steps.reuse.outputs.run }}
+      store: ${{ steps.diff.outputs.store }}
       mod: ${{ steps.diff.outputs.mod }}
       rig: ${{ steps.diff.outputs.rig }}
       replayscan: ${{ steps.diff.outputs.replayscan }}
@@ -75,10 +83,10 @@ jobs:
             *) base= ;;
           esac
           if [ -z "$base" ]; then
-            mod=true; rig=true; replayscan=true; lookgate=true; stand=true
+            mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true
             echo "Full checks ($GITHUB_EVENT_NAME)" >> "$GITHUB_STEP_SUMMARY"
           else
-            mod=false; rig=false; replayscan=false; lookgate=false; stand=false
+            mod=false; rig=false; replayscan=false; lookgate=false; stand=false; store=false
             # --no-renames: moving out of mod/ is also deletion within mod/.
             files=$(git diff --name-only --no-renames "$base" HEAD)
             while IFS= read -r f; do
@@ -87,30 +95,40 @@ jobs:
                 mod/gradlew|mod/gradle/*) mod=true; replayscan=true; stand=true ;;
                 # Probe log lines parsed by tools/look_gate/check.py.
                 mod/src/devtest/java/ua/zentix/incoming/scenario/ProbeScenario.java) mod=true; lookgate=true ;;
-                tools/release_checks.py|tools/prepare_publish.py|tools/test_release_checks.py) mod=true; rig=true ;;
+                tools/release_checks.py|tools/prepare_publish.py|tools/test_release_checks.py|tools/ci_reuse.py|tools/test_ci_reuse.py) mod=true; rig=true ;;
                 mod/*|tools/fetch_runtime_mods.py|tools/paths.py|tools/clean_install.py) mod=true ;;
                 tools/rig_procs.sh|tools/test_rig_procs.sh|tools/gpu_lease.sh|tools/test_gpu_lease.sh|tools/laptop_job.sh|tools/sandbox.sh|tools/test_sandbox.sh|tools/nested_kwin.sh|tools/stress.sh|tools/mp_scenario.sh) rig=true ;;
                 tools/replayscan/*) replayscan=true ;;
                 # prod_client.py prepares look-gate client instance copy (no Dynamic FPS idle; tested there too).
                 tools/look_gate/*|tools/media/*|tools/prod_client.py) lookgate=true ;;
                 tools/stand/*) stand=true ;;
-                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true ;;
+                # Store publishing (publish.yml) and the pages it uploads: page/body regressions only (test_store*.py).
+                .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|README.md|README.ru.md) store=true ;;
+                .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true ;;
                 tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"
-            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "Mod (build, unit tests, GameTest): $mod; rig shutdown: $rig; replay analysis: $replayscan; look gate: $lookgate; scene bench: $stand; store pages: $store"; echo; echo '```'; echo "$files"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "mod=$mod" >> "$GITHUB_OUTPUT"
           echo "rig=$rig" >> "$GITHUB_OUTPUT"
           echo "replayscan=$replayscan" >> "$GITHUB_OUTPUT"
           echo "lookgate=$lookgate" >> "$GITHUB_OUTPUT"
           echo "stand=$stand" >> "$GITHUB_OUTPUT"
+          echo "store=$store" >> "$GITHUB_OUTPUT"
+      # Main push or release: the same tree may already have passed every mod check.
+      - name: Already checked tree
+        id: reuse
+        if: steps.diff.outputs.mod == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release && inputs.gametest_only == ''))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci_reuse.py find "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Сборка и юнит-тесты
+    name: Сборка
     needs: changes
-    if: needs.changes.outputs.mod == 'true'
+    if: needs.changes.outputs.mod == 'true' && needs.changes.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -129,16 +147,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
 
       # Prepare GameTest launch (server classpath, assets) here too: setup-gradle removes untouched task files from cache.
-      - name: Store draft regression checks
-        run: python3 -m unittest discover -s ../.github/scripts -p 'test_store*.py' -v
-
-      - name: Build and unit tests
-        run: ./gradlew build prepareGameTestServerRun --console=plain
+      # Unit tests run in their own job beside this one, so the clean installation starts as soon as the jar exists.
+      - name: Build
+        run: ./gradlew assemble prepareGameTestServerRun --console=plain
 
       - uses: actions/upload-artifact@v6
         with:
           name: incoming-jar
           path: mod/build/libs/*.jar
+          if-no-files-found: error
+
+      # Marks this tree as built here; the run's success (all checks) makes it reusable (tools/ci_reuse.py).
+      - name: Tested tree marker
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "$GITHUB_SHA" > build/tested-tree
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+        id: tree
+      - uses: actions/upload-artifact@v6
+        with:
+          name: tested-tree-${{ steps.tree.outputs.tree }}
+          path: mod/build/tested-tree
           if-no-files-found: error
 
       - name: Failure reports
@@ -149,10 +178,95 @@ jobs:
           path: mod/build/reports/
           if-no-files-found: ignore
 
+  # Unit tests in parallel JVMs: in one JVM they took 8 of the 12 CI minutes, two classes alone 6 of them. The three
+  # slowest classes (@Tag("slow")) get a machine and a JVM each, the rest share another machine's four (build.gradle).
+  unit:
+    name: Юнит-тесты (${{ matrix.group }})
+    needs: changes
+    if: needs.changes.outputs.mod == 'true' && needs.changes.outputs.reuse == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: slow
+            forks: 3
+          - group: rest
+            forks: 4
+    defaults:
+      run:
+        working-directory: mod
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Only the build job writes main's Gradle cache.
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: Unit tests
+        run: ./gradlew check -PtestGroup=${{ matrix.group }} -PtestForks=${{ matrix.forks }} --console=plain
+
+      - name: Failure reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: reports-${{ matrix.group }}
+          path: mod/build/reports/
+          if-no-files-found: ignore
+
+  # Same tree already passed every mod check in a successful run: its jar becomes this run's incoming-jar
+  # (scene bench `ci:main`, release), without building and testing the same files again.
+  reuse:
+    name: Сборка из проверенного прогона
+    needs: changes
+    if: needs.changes.outputs.reuse != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: incoming-jar
+          path: jar
+          run-id: ${{ needs.changes.outputs.reuse }}
+          github-token: ${{ github.token }}
+      - name: Source run
+        env:
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ needs.changes.outputs.reuse }}
+        run: |
+          ls jar
+          echo "Tree $(echo '${{ github.sha }}' | cut -c1-8) was built and checked in full by $RUN; its jar is reused." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: incoming-jar
+          path: jar/*.jar
+          if-no-files-found: error
+
+  # Store pages, their assembly and publishing scripts (publish.yml); no Java, seconds.
+  store:
+    name: Страницы магазинов
+    needs: changes
+    if: needs.changes.outputs.store == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Store draft regression checks
+        run: python3 -m unittest discover -s .github/scripts -p 'test_store*.py' -v
+
   clean_install:
     name: Clean NeoForge installation
     needs: [changes, build]
-    if: needs.changes.outputs.mod == 'true'
+    if: needs.changes.outputs.mod == 'true' && needs.changes.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -190,7 +304,7 @@ jobs:
   gametest:
     name: GameTest ${{ matrix.part }}/${{ strategy.job-total }}
     needs: changes
-    if: needs.changes.outputs.mod == 'true'
+    if: needs.changes.outputs.mod == 'true' && needs.changes.outputs.reuse == ''
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.gametest_only != '' && 120 || 25 }}
     strategy:
@@ -276,6 +390,8 @@ jobs:
         run: tools/test_sandbox.sh
       - name: Release workflow regression checks
         run: python3 -m unittest discover -s tools -p 'test_release_checks.py' -v
+      - name: Checked-tree reuse
+        run: python3 -m unittest discover -s tools -p 'test_ci_reuse.py' -v
 
   # Flashback replay analysis (tools/replayscan): analysis-mod build and unit tests, no game.
   replayscan:
@@ -338,7 +454,7 @@ jobs:
   # One status per commit: everything required passed; unnecessary checks skipped.
   ci:
     name: Итог
-    needs: [changes, build, gametest, clean_install, rig, replayscan, lookgate, stand]
+    needs: [changes, build, unit, gametest, clean_install, reuse, store, rig, replayscan, lookgate, stand]
     # Runs after failed/skipped/canceled jobs too: skipped jobs count as success, so “Итог” skipped
     # in a canceled run would be green without build/GameTest — instead it runs and fails in canceled runs.
     if: always()
@@ -347,10 +463,15 @@ jobs:
     steps:
       - name: Required checks passed
         run: |
-          echo 'changes: ${{ needs.changes.result }}; build: ${{ needs.build.result }}; GameTest: ${{ needs.gametest.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
+          echo 'changes: ${{ needs.changes.result }}; build: ${{ needs.build.result }}; unit tests: ${{ needs.unit.result }}; GameTest: ${{ needs.gametest.result }}; clean install: ${{ needs.clean_install.result }}; reused checked run: ${{ needs.reuse.result }}; store pages: ${{ needs.store.result }}; rig shutdown: ${{ needs.rig.result }}; replay analysis: ${{ needs.replayscan.result }}; look gate: ${{ needs.lookgate.result }}; scene bench: ${{ needs.stand.result }}'
           [ '${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}' = false ]
+          # Release: every check ran here, except mod checks reused from the run that passed them on this very tree.
           if [ '${{ github.event_name == 'workflow_dispatch' && inputs.release }}' = true ]; then
-            [ '${{ contains(needs.*.result, 'skipped') }}' = false ]
+            for result in '${{ needs.store.result }}' '${{ needs.rig.result }}' '${{ needs.replayscan.result }}' '${{ needs.lookgate.result }}' '${{ needs.stand.result }}'; do
+              [ "$result" != skipped ]
+            done
+            [ '${{ needs.reuse.result }}' = success ] || \
+              [ '${{ needs.build.result }} ${{ needs.unit.result }} ${{ needs.gametest.result }} ${{ needs.clean_install.result }}' = 'success success success success' ]
           fi
 
   release:

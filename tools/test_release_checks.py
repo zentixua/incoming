@@ -181,27 +181,41 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(release_checks.valid_version(version), version)
 
     def test_release_inherits_every_aggregate_dependency(self):
-        workflow = (ROOT / ".github/workflows/build.yml").read_text()
+        workflow = (ROOT / ".github/workflows/build.yml").read_text().split("\njobs:\n", 1)[1]
         jobs = dict(re.findall(r"^  (\w+):\n(.*?)(?=^  \w+:\n|\Z)", workflow, re.M | re.S))
         self.assertRegex(jobs["ci"], r"needs: \[[^\]]*clean_install")
         self.assertRegex(jobs["release"], r"needs: ci\n")
         self.assertIn("needs.ci.result == 'success'", jobs["release"])
-        self.assertIn("contains(needs.*.result, 'skipped')", jobs["ci"])
+        needs = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])[1].split(", ")
+        self.assertEqual(set(needs) - {"changes"}, set(jobs) - {"changes", "ci", "release"})
         script = textwrap.dedent(jobs["ci"].split("run: |\n", 1)[1])
-        for release, outcome in itertools.product((False, True), ("success", "failure", "cancelled", "skipped")):
+        mod = ("build", "unit", "gametest", "clean_install")
+
+        def passes(release, results):
             def expression(match):
-                value = match[1]
+                value = match[1].strip()
                 if "'failure'" in value:
-                    return str(outcome in ("failure", "cancelled")).lower()
-                if "'skipped'" in value:
-                    return str(outcome == "skipped").lower()
+                    return str(any(r in ("failure", "cancelled") for r in results.values())).lower()
                 if "inputs.release" in value:
                     return str(release).lower()
-                return outcome
+                job = re.fullmatch(r"needs\.(\w+)\.result", value)
+                return results[job[1]] if job else "unknown"
             expanded = re.sub(r"\$\{\{(.*?)\}\}", expression, script)
-            result = subprocess.run(["bash", "-e", "-c", expanded], capture_output=True)
-            expected = outcome == "success" or (outcome == "skipped" and not release)
-            self.assertEqual(expected, result.returncode == 0, (release, outcome))
+            return subprocess.run(["bash", "-e", "-c", expanded], capture_output=True).returncode == 0
+
+        checked = {job: "success" for job in needs} | {"reuse": "skipped"}
+        reused = checked | {job: "skipped" for job in mod} | {"reuse": "success"}
+        for release in (False, True):
+            self.assertTrue(passes(release, checked), release)
+            self.assertTrue(passes(release, reused), release)
+            for job in needs:
+                for outcome in ("failure", "cancelled"):
+                    self.assertFalse(passes(release, checked | {job: outcome}), (release, job, outcome))
+        for job in needs:
+            if job not in ("changes", "reuse"):
+                # Outside a release any check may be unnecessary; a release skips only mod checks it reused.
+                self.assertTrue(passes(False, checked | {job: "skipped"}), job)
+                self.assertFalse(passes(True, (reused if job not in mod else checked) | {job: "skipped"}), job)
 
     def test_local_client_is_rejected_before_touching_files(self):
         with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}):

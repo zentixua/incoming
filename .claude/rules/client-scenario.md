@@ -49,8 +49,9 @@ not per PR. One visual session at a time: one GPU. Tool-improvement options (own
 on JBR; scenarios as sandbox command lists): [evaluating tool changes](../../docs/dev-pipeline.md#7-evaluating-tool-changes).
 Scene bench (`tools/stand`, Artem's decision 24.10) differs from sandbox: sandbox gives work-in-progress frames in
 this tree's dev client; bench runs identical real strikes with any Incoming 3.4.1+ jar (release/CI artifact) beside
-accepted release, measuring frame time and frames; visual PR merge condition is frame time at 100 strikes (status
-“Стенд сцен”). Scenes compared with release belong in bench `scenes.json`, not sandbox. During work, sample bench
+accepted release, measuring frame time and frames; merge condition for a PR that can change frame cost (render/FX
+code, shaders, particle or draw counts; Artem, 30.10) is frame time at 100 strikes (status “Стенд сцен”), run once on
+the final head; other visual changes (colors, textures, sounds, text) skip the bench. Scenes compared with release belong in bench `scenes.json`, not sandbox. During work, sample bench
 with `--packs none --scenes 100`.
 Laptop measurement 22.10: sandbox start 19–24 s (build 5–8 s, JVM-to-world client 13–15 s); with Iris/shaderpack 39 s
 (client 30 s); method-body/shader edit → frame at effect second 3 takes 10 s (Gradle/replacement 5–7 s), also 10 s

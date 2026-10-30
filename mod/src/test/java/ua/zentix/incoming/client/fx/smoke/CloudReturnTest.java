@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.strike.WeaponType;
@@ -9,6 +10,8 @@ import java.util.ArrayList;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
+// One of the three slowest unit test classes (1–3 min): CI runs each in its own JVM (build.gradle, testGroup).
+@Tag("slow")
 class CloudReturnTest {
     private static final SmokeGrid.Sink DISCARD = (x,y,z,ax,ay,az,sh,sv,s,d,w,r,g,b,k,rise) -> {};
     private static final WeaponType[] WEAPONS = {WeaponType.MISSILE, WeaponType.DRONE, WeaponType.ROCKET, WeaponType.LOITER};
