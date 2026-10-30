@@ -197,7 +197,7 @@ actually works, fix the real cause.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
 - **One review round** by the other vendor's model (Claude PRs → Codex, Codex PRs → Claude), at the effort the change
-  needs (high for routine code, more for physics/render/performance); max only after xhigh missed a serious error.
+  needs (high for routine code, xhigh for physics/render/performance); max only after xhigh missed one.
   Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
