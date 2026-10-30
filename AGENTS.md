@@ -196,11 +196,12 @@ actually works, fix the real cause.
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
-- **One review round**, model that did not write code: Claude PRs → Codex GPT-6 Astra (effort max), Codex PRs → Claude.
+- **One review round** by the other vendor's model (Claude PRs → Codex, Codex PRs → Claude), at the effort the change
+  needs (high for routine code, more for physics/render/performance); max only after xhigh missed a serious error.
   Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
-  for serious first-round fixes, no third. Parallel tasks/measurements: Codex GPT-6.1 Sol (effort max).
+  for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
 - **Author merges:** green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
